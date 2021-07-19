@@ -2195,18 +2195,19 @@ SQL: select /*+leading(tt t5) use_nl(t5)*/* from (select max(c1) from t1) tt, t5
 ---------------------------------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN     |           |300      |479 |
 |1 | SUBPLAN SCAN                  |tt         |1        |38  |
-|2 |  SCALAR GROUP BY              |           |1        |37  |
+|2 |  SCALAR GROUP BY              |           |1        |38  |
 |3 |   SUBPLAN SCAN                |VIEW1      |1        |37  |
 |4 |    LIMIT                      |           |1        |37  |
 |5 |     PX COORDINATOR MERGE SORT |           |1        |37  |
 |6 |      EXCHANGE OUT DISTR       |:EX10000   |1        |37  |
-|7 |       SORT                    |           |1        |37  |
-|8 |        PX PARTITION ITERATOR  |           |1        |36  |
-|9 |         TABLE SCAN            |t1(Reverse)|1        |36  |
-|10| PX COORDINATOR                |           |300      |247 |
-|11|  EXCHANGE OUT DISTR           |:EX20000   |300      |205 |
-|12|   PX PARTITION ITERATOR       |           |300      |205 |
-|13|    TABLE SCAN                 |t5         |300      |205 |
+|7 |       LIMIT                   |           |1        |37  |
+|8 |        TOP-N SORT             |           |1        |37  |
+|9 |         PX PARTITION ITERATOR |           |1        |36  |
+|10|          TABLE SCAN           |t1(Reverse)|1        |36  |
+|11| PX COORDINATOR                |           |300      |247 |
+|12|  EXCHANGE OUT DISTR           |:EX20000   |300      |205 |
+|13|   PX PARTITION ITERATOR       |           |300      |205 |
+|14|    TABLE SCAN                 |t5         |300      |205 |
 ===============================================================
 
 Outputs & filters: 
@@ -2222,19 +2223,20 @@ Outputs & filters:
   4 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   5 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC])
   6 - output([t1.c1]), filter(nil), dop=1
-  7 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), local merge sort
-  8 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  7 - output([t1.c1]), filter(nil), limit(1), offset(nil)
+  8 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), topn(1), local merge sort
   9 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  10 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  10 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
-  11 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), dop=1
-  12 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
-      force partition granule, asc.
+  11 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
+  12 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), dop=1
   13 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
+      force partition granule, asc.
+  14 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t5.c2], [t5.c3]), range(MIN,MIN ; MAX,MAX)always true
@@ -2274,6 +2276,7 @@ Optimization Info:
 
 
 
+
 t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1], pruned_index_name[idx_t1_c2]
 
 
@@ -2299,14 +2302,15 @@ SQL: select /*+leading(t5 tt) use_nl(tt)*/* from (select max(c1) from t1) tt, t5
 |4 |    TABLE SCAN                  |t5         |300      |205 |
 |5 | MATERIAL                       |           |1        |38  |
 |6 |  SUBPLAN SCAN                  |tt         |1        |38  |
-|7 |   SCALAR GROUP BY              |           |1        |37  |
+|7 |   SCALAR GROUP BY              |           |1        |38  |
 |8 |    SUBPLAN SCAN                |VIEW1      |1        |37  |
 |9 |     LIMIT                      |           |1        |37  |
 |10|      PX COORDINATOR MERGE SORT |           |1        |37  |
 |11|       EXCHANGE OUT DISTR       |:EX20000   |1        |37  |
-|12|        SORT                    |           |1        |37  |
-|13|         PX PARTITION ITERATOR  |           |1        |36  |
-|14|          TABLE SCAN            |t1(Reverse)|1        |36  |
+|12|        LIMIT                   |           |1        |37  |
+|13|         TOP-N SORT             |           |1        |37  |
+|14|          PX PARTITION ITERATOR |           |1        |36  |
+|15|           TABLE SCAN           |t1(Reverse)|1        |36  |
 ================================================================
 
 Outputs & filters: 
@@ -2331,10 +2335,11 @@ Outputs & filters:
   9 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   10 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC])
   11 - output([t1.c1]), filter(nil), dop=1
-  12 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), local merge sort
-  13 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  12 - output([t1.c1]), filter(nil), limit(1), offset(nil)
+  13 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), topn(1), local merge sort
   14 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  15 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -2371,6 +2376,7 @@ Optimization Info:
 
 
 t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:0, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t5], pruned_index_name[idx_t5_c2,idx_t5_c3]
+
 
 
 

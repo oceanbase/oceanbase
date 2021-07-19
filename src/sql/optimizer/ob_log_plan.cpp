@@ -6461,11 +6461,13 @@ int ObLogPlan::classify_rownum_exprs(const ObIArray<ObRawExpr*>& rownum_exprs, O
   ObItemType limit_rownum_type = T_INVALID;
   limit_expr = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < rownum_exprs.count(); i++) {
-    ObRawExpr* rownum_expr = rownum_exprs.at(i);
-    ObRawExpr* const_expr = NULL;
+    ObRawExpr *rownum_expr = rownum_exprs.at(i);
+    ObRawExpr *dummy = NULL;
+    ObRawExpr *const_expr = NULL;
     ObItemType expr_type = T_INVALID;
     bool dummy_flag = false;
-    if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(rownum_expr, expr_type, const_expr, dummy_flag))) {
+    if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(
+                  rownum_expr, expr_type, dummy, const_expr, dummy_flag))) {
       LOG_WARN("failed to check is rownum expr used as filter", K(ret));
     } else if (OB_FAIL(
                    classify_rownum_expr(expr_type, rownum_expr, const_expr, filter_exprs, start_exprs, limit_expr))) {

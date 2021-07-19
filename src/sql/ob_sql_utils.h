@@ -216,6 +216,7 @@ public:
   static int filter_hint_in_query_sql(common::ObIAllocator& allocator, const ObSQLSessionInfo& session,
       const common::ObString& sql, common::ObString& param_sql);
   static int filter_head_space(ObString& sql);
+  static char find_first_empty_char(const ObString &sql);
   static int construct_outline_sql(common::ObIAllocator& allocator, const ObSQLSessionInfo& session,
       const common::ObString& outline_content, const common::ObString& orig_sql, bool is_need_filter_hint,
       common::ObString& outline_sql);

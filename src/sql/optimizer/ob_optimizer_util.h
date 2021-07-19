@@ -465,7 +465,7 @@ public:
   static int flip_op_type(const ObItemType expr_type, ObItemType& rotated_expr_type);
 
   static int get_rownum_filter_info(
-      ObRawExpr* rownum_expr, ObItemType& expr_type, ObRawExpr*& const_expr, bool& is_const_filter);
+      ObRawExpr* rownum_expr, ObItemType& expr_type, ObRawExpr*& rownum, ObRawExpr*& const_expr, bool& is_const_filter);
 
   static int convert_rownum_filter_as_offset(ObRawExprFactory& expr_factory, ObSQLSessionInfo* session_info,
       const ObItemType filter_type, ObRawExpr* const_expr, ObRawExpr*& offset_int_expr);

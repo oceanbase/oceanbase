@@ -3618,27 +3618,35 @@ int ObTransformPreProcess::try_transform_common_rownum_as_limit(ObDMLStmt* stmt,
 {
   int ret = OB_SUCCESS;
   limit_expr = NULL;
-  ObRawExpr* limit_value = NULL;
+  ObRawExpr *my_rownum = NULL;
+  ObRawExpr *limit_value = NULL;
   ObItemType op_type = T_INVALID;
   bool is_valid = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_rownum_expr(my_rownum))) {
+    LOG_WARN("failed to get my rownum expr", K(ret));
   } else {
     ObIArray<ObRawExpr*>& conditions = stmt->get_condition_exprs();
     int64_t expr_idx = -1;
     bool is_eq_cond = false;
     bool is_const_filter = false;
     for (int64_t i = 0; OB_SUCC(ret) && !is_eq_cond && i < conditions.count(); ++i) {
-      ObRawExpr* cond_expr = NULL;
-      ObRawExpr* const_expr = NULL;
+      ObRawExpr *cond_expr = NULL;
+      ObRawExpr *const_expr = NULL;
+      ObRawExpr *rownum_expr = NULL;
       ObItemType expr_type = T_INVALID;
       if (OB_ISNULL(cond_expr = conditions.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("condition expr is null", K(ret), K(i));
-      } else if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(cond_expr, expr_type, const_expr, is_const_filter))) {
+      } else if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(cond_expr,
+                                                                 expr_type,
+                                                                 rownum_expr,
+                                                                 const_expr,
+                                                                 is_const_filter))) {
         LOG_WARN("failed to check is filter rownum", K(ret));
-      } else if (!is_const_filter) {
+      } else if (!is_const_filter || rownum_expr != my_rownum) {
         // do nothing
       } else if (T_OP_LE == expr_type || T_OP_LT == expr_type) {
         limit_value = const_expr;

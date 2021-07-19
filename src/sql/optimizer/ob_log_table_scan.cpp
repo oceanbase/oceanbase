@@ -681,6 +681,7 @@ int ObLogTableScan::extract_access_exprs(
           expr = static_cast<ObColumnRefRawExpr*>(raw_expr);
         } else if (OB_FAIL(ObRawExprUtils::build_column_expr(opt_ctx->get_expr_factory(), *column_schema, expr))) {
           LOG_WARN("build column expr failed", K(ret));
+        } else if (FALSE_IT(expr->set_table_id(get_table_id()))) {
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is null", K(col_idx), K(ret));

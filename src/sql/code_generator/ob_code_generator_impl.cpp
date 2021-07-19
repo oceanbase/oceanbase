@@ -1976,7 +1976,17 @@ int ObCodeGeneratorImpl::convert_normal_table_scan(
           LOG_WARN("check is table get failed", K(ret));
         } else if (!is_get) {
           ObTableLocation part_filter;
-          if (OB_FAIL(part_filter.init_table_location_with_rowkey(*schema_guard, filter_table_id, *session))) {
+          ObDMLStmt *root_stmt = NULL;
+          bool is_dml_table = false;
+          if (OB_ISNULL(root_stmt = op.get_plan()->get_optimizer_context().get_root_stmt())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("root stmt is invalid", K(ret), K(root_stmt));
+          } else if (FALSE_IT(is_dml_table = root_stmt->check_table_be_modified(filter_table_id))) {
+            // do nothing
+          } else if (OB_FAIL(part_filter.init_table_location_with_rowkey(*schema_guard,
+                                                                         filter_table_id,
+                                                                         *session,
+                                                                         is_dml_table))) {
             LOG_WARN("init table location with rowkey failed", K(ret), K(filter_table_id));
           } else if (OB_FAIL(phy_op->set_part_filter(part_filter))) {
             LOG_WARN("set part filter failed", K(ret));
@@ -6111,13 +6121,17 @@ int ObCodeGeneratorImpl::convert_duplicate_key_scan_info(
     RowDesc& row_desc, ObLogicalOperator* log_scan_op, ObUniqueIndexScanInfo& scan_info)
 {
   int ret = OB_SUCCESS;
-  ObLogPlan* log_plan = NULL;
-  ObPhyOperator* scan_root = NULL;
-  ObSqlSchemaGuard* schema_guard = NULL;
-  ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(log_scan_op) || OB_ISNULL(phy_plan_) || OB_ISNULL(log_plan = log_scan_op->get_plan()) ||
-      OB_ISNULL(session_info = log_plan->get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
+  ObLogPlan *log_plan = NULL;
+  ObPhyOperator *scan_root = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObDMLStmt *root_stmt = NULL;
+  if (OB_ISNULL(log_scan_op)
+      || OB_ISNULL(phy_plan_)
+      || OB_ISNULL(log_plan = log_scan_op->get_plan())
+      || OB_ISNULL(session_info = log_plan->get_optimizer_context().get_session_info())
+      || OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())
+      || OB_ISNULL(root_stmt = log_plan->get_optimizer_context().get_root_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(log_scan_op), K(phy_plan_), K(log_plan), K(session_info), K(schema_guard));
   } else if (OB_UNLIKELY(!log_scan_op->is_duplicated_checker_op())) {
@@ -6157,8 +6171,12 @@ int ObCodeGeneratorImpl::convert_duplicate_key_scan_info(
       LOG_WARN("allocate table location buffer failed", K(ret), K(sizeof(ObTableLocation)));
     } else {
       scan_info.index_location_ = new (buf) ObTableLocation(phy_plan_->get_allocator());
+      bool is_dml_table = root_stmt->check_table_be_modified(scan_info.index_tid_);
       if (OB_FAIL(scan_info.index_location_->init_table_location_with_rowkey(
-              *schema_guard, scan_info.index_tid_, *session_info))) {
+                                            *schema_guard,
+                                            scan_info.index_tid_,
+                                            *session_info,
+                                            is_dml_table))) {
         LOG_WARN("init index location failed", K(ret), KPC(log_scan_op));
       } else {
         scan_info.index_location_->set_table_id(scan_info.table_id_);
@@ -6897,9 +6915,10 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   RowDesc* out_row_desc = NULL;
   PhyOpsDesc table_scan_child_ops;
   PhyOpsDesc table_scan_out_ops;
-  ObSchemaGetterGuard* schema_guard = NULL;
-  const ObTableSchema* table_schema = NULL;
-  ObSQLSessionInfo* my_session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObSQLSessionInfo *my_session = NULL;
+  ObDMLStmt *root_stmt = NULL;
   if (OB_ISNULL(op.get_index_back_scan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null table scan operator", K(ret));
@@ -6921,7 +6940,8 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   } else if (OB_FAIL(copy_row_desc(*table_scan_out_ops.at(0).second, *out_row_desc))) {
     LOG_WARN("failed to copy row desc", K(ret), K(*child_ops.at(0).second));
   } else if (OB_ISNULL(op.get_plan()) ||
-             OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_schema_guard())) {
+             OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_schema_guard()) ||
+             OB_ISNULL(root_stmt = op.get_plan()->get_optimizer_context().get_root_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get unexpected null", K(schema_guard), K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(op.get_ref_table_id(), table_schema))) {
@@ -6951,11 +6971,13 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
     if (OB_SUCC(ret)) {
       ObTableLocation& partition_id_getter = table_lookup->get_part_id_getter();
       // the other function may be more effective, TODO
+      bool is_dml_table = root_stmt->check_table_be_modified(lookup_info.table_id_);
       if (OB_FAIL(partition_id_getter.init_table_location_with_row_desc(
-              *op.get_plan()->get_optimizer_context().get_sql_schema_guard(),
-              lookup_info.ref_table_id_,
-              *child_ops.at(0).second,
-              *my_session))) {
+          *op.get_plan()->get_optimizer_context().get_sql_schema_guard(),
+          lookup_info.ref_table_id_,
+          *child_ops.at(0).second,
+          *my_session,
+          is_dml_table))) {
         LOG_WARN("the partition id init failed", K(ret));
       } else {
         partition_id_getter.set_table_id(op.get_table_id());

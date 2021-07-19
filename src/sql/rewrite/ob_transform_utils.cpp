@@ -916,23 +916,32 @@ int ObTransformUtils::replace_expr(
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(expr)) {
-    ObRawExpr* temp_expr = NULL;
+    ObRawExpr *temp_old_expr = NULL;
     int64_t idx = -1;
-    if (!ObOptimizerUtil::find_item(other_exprs, expr, &idx)) {
-      /*do nothing*/
-    } else if (OB_UNLIKELY(idx < 0 || idx >= new_exprs.count()) || OB_ISNULL(new_exprs.at(idx))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid index", K(ret), K(idx), K(new_exprs.count()), K(new_exprs));
-    } else {
-      expr = new_exprs.at(idx);
-      temp_expr = other_exprs.at(idx);
-      const_cast<ObIArray<ObRawExpr*>&>(other_exprs).at(idx) = NULL;
+    if (ObOptimizerUtil::find_item(other_exprs, expr, &idx)) {
+      if (OB_UNLIKELY(idx < 0 || idx >= new_exprs.count()) ||
+          OB_ISNULL(new_exprs.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid index", K(ret), K(idx), K(new_exprs.count()), K(new_exprs));
+      } else {
+        expr = new_exprs.at(idx);
+        temp_old_expr = other_exprs.at(idx);
+        const_cast<ObIArray<ObRawExpr*>&>(other_exprs).at(idx) = NULL;
+      }
+    } else if (ObOptimizerUtil::find_item(new_exprs, expr, &idx)) {
+      if (OB_UNLIKELY(idx < 0 || idx >= other_exprs.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid index", K(ret), K(idx), K(new_exprs), K(other_exprs));
+      } else {
+        temp_old_expr = other_exprs.at(idx);
+        const_cast<ObIArray<ObRawExpr*>&>(other_exprs).at(idx) = NULL;
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(expr->replace_expr(other_exprs, new_exprs))) {
         LOG_WARN("failed to replace expr", K(ret));
-      } else if (NULL != temp_expr) {
-        const_cast<ObIArray<ObRawExpr*>&>(other_exprs).at(idx) = temp_expr;
+      } else if (NULL != temp_old_expr) {
+        const_cast<ObIArray<ObRawExpr*>&>(other_exprs).at(idx) = temp_old_expr;
       }
     }
   }

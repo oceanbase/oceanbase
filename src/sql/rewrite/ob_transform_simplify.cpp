@@ -921,6 +921,9 @@ int ObTransformSimplify::extract_null_expr(
       LOG_WARN("failed to check is question mark pre param", K(ret));
     } else if (!is_pre_param) {
       // do nothing
+    } else if (OB_UNLIKELY(value.get_unknown() < 0 || value.get_unknown() >= param_store.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param index", K(ret), K(value.get_unknown()), K(param_store.count()));
     } else if (param_store.at(value.get_unknown()).is_null()) {
       if (OB_FAIL(null_expr_lists.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));

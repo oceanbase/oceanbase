@@ -533,50 +533,50 @@ int ObTransformAggrSubquery::deduce_query_values(ObDMLStmt& stmt, TransformParam
   int ret = OB_SUCCESS;
   ObRawExpr* not_null_expr = param.not_null_expr_;
   ObIArray<bool>& is_null_prop = param.is_null_prop_;
+  const bool is_outer_join = use_outer_join(param.pullup_flag_);
   if (OB_ISNULL(ctx_->session_info_) || OB_UNLIKELY(is_null_prop.count() > view_select.count()) ||
       OB_UNLIKELY(is_null_prop.count() > view_columns.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid session or invalid array size", K(ret));
-  } else if (OB_FAIL(real_values.assign(view_columns))) {
-    LOG_WARN("failed to assign real values", K(ret));
-  } else if (use_outer_join(param.pullup_flag_)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < is_null_prop.count(); ++i) {
-      // replace_columns_and_aggrs() may change expr result type, e.g.: sum() from ObNumberType
-      // to ObNullType. This may cause operand implicit cast be added twice, so we erase it first.
-      ObRawExpr* default_expr = NULL;
-      if (is_null_prop.at(i)) {
-        continue;
-      } else if (OB_ISNULL(not_null_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("not null expr is null", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::copy_expr(
-                     *ctx_->expr_factory_, view_select.at(i), default_expr, COPY_REF_DEFAULT))) {
-        LOG_WARN("failed to copy select expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(default_expr, default_expr))) {
-        LOG_WARN("remove operand implicit cast failed", K(ret));
-      } else if (OB_FAIL(replace_columns_and_aggrs(default_expr, ctx_))) {
-        LOG_WARN("failed to replace variables", K(ret));
-      }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < is_null_prop.count(); ++i) {
+    // replace_columns_and_aggrs() may change expr result type, e.g.: sum() from ObNumberType
+    // to ObNullType. This may cause operand implicit cast be added twice, so we erase it first.
+    ObRawExpr* default_expr = NULL;
+    if (OB_FAIL(real_values.push_back(view_columns.at(i)))) {
+      LOG_WARN("failed to push back view columns", K(ret));
+    } else if (is_null_prop.at(i) || !is_outer_join) {
+      continue;
+    } else if (OB_ISNULL(not_null_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not null expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
+                *ctx_->expr_factory_, view_select.at(i), default_expr, COPY_REF_DEFAULT))) {
+      LOG_WARN("failed to copy select expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(default_expr, default_expr))) {
+      LOG_WARN("remove operand implicit cast failed", K(ret));
+    } else if (OB_FAIL(replace_columns_and_aggrs(default_expr, ctx_))) {
+      LOG_WARN("failed to replace variables", K(ret));
+    }
 
-      if (OB_SUCC(ret) && ctx_->session_info_->use_static_typing_engine()) {
-        // After replace, result type of %default_expr may differ with original expr,
-        // may cause unexpected implicit cast be added too, cast to original expr type first.
-        if (OB_FAIL(default_expr->formalize(ctx_->session_info_))) {
-          LOG_WARN("formalize expr failed", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                       ctx_->session_info_,
-                       *default_expr,
-                       view_select.at(i)->get_result_type(),
-                       default_expr))) {
-          LOG_WARN("try add cast expr failed", K(ret));
-        }
+    if (OB_SUCC(ret) && ctx_->session_info_->use_static_typing_engine()) {
+      // After replace, result type of %default_expr may differ with original expr,
+      // may cause unexpected implicit cast be added too, cast to original expr type first.
+      if (OB_FAIL(default_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("formalize expr failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
+                                                                 ctx_->session_info_,
+                                                                 *default_expr,
+                                                                 view_select.at(i)->get_result_type(),
+                                                                 default_expr))) {
+        LOG_WARN("try add cast expr failed", K(ret));
       }
+    }
 
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObTransformUtils::build_case_when_expr(
-                stmt, not_null_expr, view_columns.at(i), default_expr, real_values.at(i), ctx_))) {
-          LOG_WARN("failed to build case when expr", K(ret));
-        }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObTransformUtils::build_case_when_expr(
+                  stmt, not_null_expr, view_columns.at(i), default_expr, real_values.at(i), ctx_))) {
+        LOG_WARN("failed to build case when expr", K(ret));
       }
     }
   }
@@ -1392,6 +1392,10 @@ int ObTransformAggrSubquery::is_const_null_value(
       LOG_WARN("failed to check is question mark pre param", K(ret));
     } else if (OB_UNLIKELY(!is_pre_param)) {
       // do nothing pre-calc expr
+    } else if (OB_UNLIKELY(value.get_unknown() < 0 ||
+                           value.get_unknown() >= plan_ctx->get_param_store().count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param index is invalid", K(ret), K(value.get_unknown()), K(plan_ctx->get_param_store().count()));
     } else if (plan_ctx->get_param_store().at(value.get_unknown()).is_null()) {
       // do nothing null param expr
     } else {

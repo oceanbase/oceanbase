@@ -1591,12 +1591,9 @@ int ObSql::generate_physical_plan(ParseResult& parse_result, ObPlanCacheCtx* pc_
                        result.get_exec_context(),
                        stmt))) {  // rewrite stmt
           LOG_WARN("Failed to transforme stmt", K(ret));
-          //        } else if (!optctx.use_default_stat() &&
-          //                   OB_FAIL(analyze_table_stat_version(
-          //                             sql_ctx.schema_guard_, optctx.get_opt_stat_manager(), *stmt))) {
-          //          LOG_WARN("Failed to analyze table stat version", K(ret));
-        } else if (OB_FAIL(
-                       optimize_stmt(optimizer, *(sql_ctx.session_info_), *stmt, logical_plan))) {  // gen logical plan
+        } else if (OB_FALSE_IT(optctx.set_root_stmt(stmt))) {
+        } else if (OB_FAIL(optimize_stmt(optimizer, *(sql_ctx.session_info_),
+                                         *stmt, logical_plan))) { //gen logical plan
           LOG_WARN("Failed to optimizer stmt", K(ret));
         } else if (OB_ISNULL(logical_plan)) {
           ret = OB_INVALID_ARGUMENT;

@@ -112,8 +112,8 @@ int ObExprRelationAnalyzer::init_expr_info(ObRawExpr& expr)
         LOG_WARN("failed to add relation ids", K(ret));
       }
     }
-  } else if (OB_FAIL(expr.is_query_ref_expr())) {
-    ObQueryRefRawExpr& query = static_cast<ObQueryRefRawExpr&>(expr);
+  } else if (expr.is_query_ref_expr()) {
+    ObQueryRefRawExpr &query = static_cast<ObQueryRefRawExpr &>(expr);
     if (OB_FAIL(query_exprs_.push_back(&query))) {
       LOG_WARN("failed to push back query ref", K(ret));
     } else if (OB_UNLIKELY(!query.is_ref_stmt())) {

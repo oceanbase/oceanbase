@@ -88,6 +88,8 @@ public:
     return has_union_child_;
   }
   virtual int est_cost() override;
+  virtual int allocate_granule_pre(AllocGIContext &ctx);
+  virtual int allocate_granule_post(AllocGIContext &ctx);
   virtual int allocate_exchange_post(AllocExchContext* ctx);
   virtual int transmit_op_ordering() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;

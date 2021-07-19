@@ -1807,15 +1807,13 @@ int ObSQLUtils::construct_outline_sql(ObIAllocator& allocator, const ObSQLSessio
     LOG_WARN("fail to filter head space", K(ret));
   }
   if (OB_SUCC(ret)) {
-    ObString first_token = filter_sql.split_on(' ');
-    if (OB_FAIL(sql_helper.assign_fmt("%.*s %.*s%.*s",
-            first_token.length(),
-            first_token.ptr(),
-            outline_content.length(),
-            outline_content.ptr(),
-            filter_sql.length(),
-            filter_sql.ptr()))) {
-      LOG_WARN("failed to construct new sql", K(first_token), K(orig_sql), K(filter_sql), K(outline_content), K(ret));
+    char empty_split = find_first_empty_char(filter_sql);
+    ObString first_token = filter_sql.split_on(empty_split);
+    if (OB_FAIL(sql_helper.assign_fmt("%.*s %.*s%.*s", first_token.length(), first_token.ptr(),
+                                      outline_content.length(), outline_content.ptr(),
+                                      filter_sql.length(), filter_sql.ptr()))) {
+       LOG_WARN("failed to construct new sql", K(first_token), K(orig_sql),
+                                 K(filter_sql), K(outline_content), K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, sql_helper.string(), outline_sql))) {
       LOG_WARN("failed to write string", K(first_token), K(orig_sql), K(filter_sql), K(outline_content), K(ret));
     } else { /*do nothing*/
@@ -1841,8 +1839,21 @@ int ObSQLUtils::filter_head_space(ObString& sql)
   return ret;
 }
 
-int ObSQLUtils::reconstruct_sql(
-    ObIAllocator& allocator, const ObStmt* stmt, ObString& sql, ObObjPrintParams print_params)
+char ObSQLUtils::find_first_empty_char(const ObString &sql)
+{
+  char empty_char = ' '; // default split
+  for (int64_t i = 0; i < sql.length(); ++i) {
+    char ch = sql[i];
+    if (' ' == ch || '\r' == ch || '\n' == ch || '\t' == ch || '\f' == ch) {
+      empty_char = ch;
+      break;
+    }
+  }
+  return empty_char;
+}
+
+int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
+                                ObObjPrintParams print_params)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {

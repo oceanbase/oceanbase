@@ -3568,33 +3568,43 @@ int ObOptimizerUtil::flip_op_type(const ObItemType expr_type, ObItemType& rotate
   return ret;
 }
 
-int ObOptimizerUtil::get_rownum_filter_info(
-    ObRawExpr* rownum_expr, ObItemType& expr_type, ObRawExpr*& const_expr, bool& is_const_filter)
+int ObOptimizerUtil::get_rownum_filter_info(ObRawExpr *rownum_cond,
+                                            ObItemType &expr_type,
+                                            ObRawExpr *&rownum_expr,
+                                            ObRawExpr *&const_expr,
+                                            bool &is_const_filter)
 {
   int ret = OB_SUCCESS;
   is_const_filter = false;
-  ObRawExpr* first_param = NULL;
-  ObRawExpr* second_param = NULL;
-  if (OB_ISNULL(rownum_expr)) {
+  ObRawExpr *first_param = NULL;
+  ObRawExpr *second_param = NULL;
+  if (OB_ISNULL(rownum_cond)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (rownum_expr->is_op_expr() && 2 == rownum_expr->get_param_count() &&
-             (IS_RANGE_CMP_OP(rownum_expr->get_expr_type()) || T_OP_EQ == rownum_expr->get_expr_type())) {
-    first_param = rownum_expr->get_param_expr(0);
-    second_param = rownum_expr->get_param_expr(1);
+  } else if (rownum_cond->is_op_expr() && 2 == rownum_cond->get_param_count() &&
+             (IS_RANGE_CMP_OP(rownum_cond->get_expr_type())
+              || T_OP_EQ == rownum_cond->get_expr_type())) {
+    first_param = rownum_cond->get_param_expr(0);
+    second_param = rownum_cond->get_param_expr(1);
     if (OB_ISNULL(first_param) || OB_ISNULL(second_param)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expr", K(ret), K(first_param), K(second_param));
-    } else if (first_param->has_flag(IS_ROWNUM) && second_param->has_flag(IS_CONST) &&
-               (second_param->get_result_type().is_int() || second_param->get_result_type().is_number())) {
-      expr_type = rownum_expr->get_expr_type();
+    } else if (first_param->has_flag(IS_ROWNUM) &&
+               second_param->has_flag(IS_CONST) &&
+               (second_param->get_result_type().is_int()
+                || second_param->get_result_type().is_number())) {
+      expr_type = rownum_cond->get_expr_type();
+      rownum_expr = first_param;
       const_expr = second_param;
       is_const_filter = true;
-    } else if (first_param->has_flag(IS_CONST) && second_param->has_flag(IS_ROWNUM) &&
-               (first_param->get_result_type().is_int() || first_param->get_result_type().is_number())) {
-      if (OB_FAIL(flip_op_type(rownum_expr->get_expr_type(), expr_type))) {
+    } else if (first_param->has_flag(IS_CONST) &&
+               second_param->has_flag(IS_ROWNUM) &&
+               (first_param->get_result_type().is_int()
+                || first_param->get_result_type().is_number())) {
+      if (OB_FAIL(flip_op_type(rownum_cond->get_expr_type(), expr_type))) {
         LOG_WARN("failed to retate rownum_expr type", K(ret));
       } else {
+        rownum_expr = second_param;
         const_expr = first_param;
         is_const_filter = true;
       }
