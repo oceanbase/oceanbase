@@ -1201,6 +1201,18 @@ int ObTmpFileManager::remove_tenant_file(const uint64_t tenant_id)
   return ret;
 }
 
+int ObTmpFileManager::get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
+  } else if (OB_FAIL(OB_TMP_FILE_STORE.get_all_tenant_id(tenant_ids))) {
+    STORAGE_LOG(WARN, "fail to get all tenant ids", K(ret));
+  }
+  return ret;
+}
+
 int ObTmpFileManager::sync(const int64_t fd, const int64_t timeout_ms)
 {
   int ret = OB_SUCCESS;

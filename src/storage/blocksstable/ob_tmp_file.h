@@ -352,6 +352,8 @@ public:
   int remove(const int64_t fd);
   int remove_tenant_file(const uint64_t tenant_id);
 
+  int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
+
   int sync(const int64_t fd, const int64_t timeout_ms);
 
   void destroy();
