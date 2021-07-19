@@ -155,6 +155,7 @@ struct ObSSTableScheduleMergeParam {
 };
 
 class ObMergeParameter;
+//TODO such a massive context!
 struct ObSSTableMergeCtx {
   ObSSTableMergeCtx();
   virtual ~ObSSTableMergeCtx();
@@ -250,18 +251,28 @@ struct ObSSTableMergeCtx {
   int64_t merge_log_ts_;
   int64_t trans_table_end_log_ts_;
   int64_t trans_table_timestamp_;
-  int64_t read_base_version_;  // use for major merge
+  // we would push up last_replay_log_ts if the correspoding memtable has been merged,
+  // but this memtable may not be released due to the warming-up table_store
+  // if a new index is created, the schedule will also trigger a mini merge for it with the old frozen memtable
+  // now we get a table store with old end_log_ts within the pg which has a larger last_replay_log_ts
+  // so we need use last_replay_log_ts to prevent such uselsess mini merge happenning
+  int64_t pg_last_replay_log_ts_;
+  int64_t read_base_version_; // use for major merge
 
-  TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version), K_(base_schema_version),
-      K_(schema_version), K_(dump_memtable_timestamp), KP_(table_schema), K_(is_full_merge), K_(stat_sampling_ratio),
-      K_(merge_level), K_(progressive_merge_num), K_(progressive_merge_start_version), K_(parallel_merge_ctx),
-      K_(checksum_method), K_(result_code), KP_(data_table_schema), KP_(mv_dep_table_schema), K_(index_stats),
-      "tables_handle count", tables_handle_.get_count(), K_(index_stats), K_(is_in_progressive_new_checksum),
-      K_(store_column_checksum_in_micro), K_(progressive_merge_round), K_(progressive_merge_step),
-      K_(use_new_progressive), K_(tables_handle), K_(base_table_handle), K_(create_sstable_for_large_snapshot),
-      K_(logical_data_version), K_(log_ts_range), K_(merge_log_ts), K_(trans_table_end_log_ts),
-      K_(trans_table_timestamp), K_(read_base_version));
-
+  TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
+               K_(base_schema_version), K_(schema_version), K_(dump_memtable_timestamp),
+               KP_(table_schema), K_(is_full_merge), K_(stat_sampling_ratio), K_(merge_level),
+               K_(progressive_merge_num), K_(progressive_merge_start_version),
+               K_(parallel_merge_ctx), K_(checksum_method), K_(result_code),
+               KP_(data_table_schema), KP_(mv_dep_table_schema),
+               K_(index_stats),
+               "tables_handle count", tables_handle_.get_count(), K_(index_stats),
+               K_(is_in_progressive_new_checksum), K_(store_column_checksum_in_micro),
+               K_(progressive_merge_round),
+               K_(progressive_merge_step), K_(use_new_progressive),
+               K_(tables_handle), K_(base_table_handle), K_(create_sstable_for_large_snapshot),
+               K_(logical_data_version), K_(log_ts_range), K_(merge_log_ts), K_(trans_table_end_log_ts),
+               K_(trans_table_timestamp), K_(pg_last_replay_log_ts), K_(read_base_version));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMergeCtx);
 };

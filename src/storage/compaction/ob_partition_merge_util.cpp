@@ -1662,15 +1662,16 @@ int ObPartitionMergeUtil::merge_partition(memtable::ObIMemtableCtxFactory* memct
           if (0 == minimum_iters.count()) {
             ret = OB_ITER_END;
           } else if (1 == minimum_iters.count() && NULL == minimum_iters.at(0)->get_curr_row()) {
-            ObMacroRowIterator* iter = minimum_iters.at(0);
-            const storage::ObMacroBlockDesc& block_desc = iter->get_curr_macro_block();
-            if (!iter->macro_block_opened() &&
-                ((rewrite_block_cnt < need_rewrite_block_cnt && ctx.need_rewrite_macro_block(block_desc)) ||
-                    (iter->need_rewrite_current_macro_block()))) {
+            ObMacroRowIterator *iter = minimum_iters.at(0);
+            const storage::ObMacroBlockDesc &block_desc = iter->get_curr_macro_block();
+            if (!iter->macro_block_opened()
+                && ((rewrite_block_cnt < need_rewrite_block_cnt
+                    && ctx.need_rewrite_macro_block(block_desc))
+                  || (iter->need_rewrite_current_macro_block()))) {
               if (!ctx.param_.is_major_merge()) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_ERROR("only major merge can call rewrite_macro_block", K(ret), K(ctx), KPC(iter));
-              } else if (OB_FAIL(rewrite_macro_block(minimum_iters, ctx.merge_level_, partition_fuser, processor))) {
+              } else if (OB_FAIL(rewrite_macro_block(minimum_iters, partition_fuser, processor))) {
                 LOG_WARN("rewrite_macro_block failed", K(ret), K(ctx));
               } else {
                 ++rewrite_block_cnt;
@@ -2237,8 +2238,10 @@ int ObPartitionMergeUtil::get_macro_block_count_to_rewrite(const storage::ObSSTa
   return ret;
 }
 
-int ObPartitionMergeUtil::rewrite_macro_block(ObIPartitionMergeFuser::MERGE_ITER_ARRAY& minimum_iters,
-    const storage::ObMergeLevel& merge_level, ObIPartitionMergeFuser* partition_fuser, ObIStoreRowProcessor& processor)
+int ObPartitionMergeUtil::rewrite_macro_block(
+      ObIPartitionMergeFuser::MERGE_ITER_ARRAY &minimum_iters,
+      ObIPartitionMergeFuser *partition_fuser,
+      ObIStoreRowProcessor &processor)
 {
   int ret = OB_SUCCESS;
   ObMacroRowIterator* iter = static_cast<ObMacroRowIterator*>(minimum_iters.at(0));
@@ -2253,7 +2256,8 @@ int ObPartitionMergeUtil::rewrite_macro_block(ObIPartitionMergeFuser::MERGE_ITER
   } else {
     while (OB_SUCC(ret) && iter->macro_block_opened()) {
       // open the micro block if needed
-      if (MICRO_BLOCK_MERGE_LEVEL == merge_level && !iter->micro_block_opened()) {
+      if (MICRO_BLOCK_MERGE_LEVEL == iter->get_merge_level()
+          && !iter->micro_block_opened()) {
         if (OB_FAIL(iter->open_curr_micro_block())) {
           LOG_WARN("open_curr_micro_block failed", K(ret));
         }

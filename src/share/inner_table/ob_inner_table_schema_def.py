@@ -5644,6 +5644,7 @@ def_table_schema(
       ('replica_type', 'int', 'false', '0'),
       ('last_replay_log_id', 'int', 'false', '0'),
       ('schema_version', 'int', 'false', '0'),
+      ('last_replay_log_ts', 'int', 'false', '0'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )

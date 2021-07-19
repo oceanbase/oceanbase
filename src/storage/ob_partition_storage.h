@@ -690,6 +690,7 @@ private:
       const common::ObNewRow& row, ObLockFlag lock_flag, RowReshape*& row_reshape);
   int lock_rows_(
       const ObStoreCtx& ctx, const ObTableScanParam& scan_param, const common::ObNewRow& row, RowReshape*& row_reshape);
+  int check_useless_index_mini_merge(const storage::ObSSTableMergeCtx &ctx);
   int dump_error_info(ObSSTable& main_sstable, ObSSTable& index_sstable);
   // disallow copy;
   DISALLOW_COPY_AND_ASSIGN(ObPartitionStorage);

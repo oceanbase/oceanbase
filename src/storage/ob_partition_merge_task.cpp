@@ -594,6 +594,7 @@ ObSSTableMergeCtx::ObSSTableMergeCtx()
       merge_log_ts_(INT_MAX),
       trans_table_end_log_ts_(0),
       trans_table_timestamp_(0),
+    pg_last_replay_log_ts_(0),
       read_base_version_(0)
 {}
 
@@ -1037,8 +1038,11 @@ int ObSSTableMergePrepareTask::process()
                  storage = static_cast<ObPartitionStorage*>(ctx->partition_guard_.get_pg_partition()->get_storage()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The partition storage must not NULL", K(ret), K(ctx));
-  } else if (ctx->param_.is_multi_version_minor_merge() &&
-             OB_FAIL(pg->get_pg_storage().get_trans_table_end_log_ts_and_timestamp(
+  } else if (ctx->param_.is_mini_merge()
+             && OB_FAIL(pg->get_pg_storage().get_last_replay_log_ts(ctx->pg_last_replay_log_ts_))) {
+    LOG_WARN("failed to get pg last replay log ts", K(ret), K(ctx->param_));
+  } else if (ctx->param_.is_mini_merge()
+             && OB_FAIL(pg->get_pg_storage().get_trans_table_end_log_ts_and_timestamp(
                  ctx->trans_table_end_log_ts_, ctx->trans_table_timestamp_))) {
     LOG_WARN("failed to get trans_table end_log_ts and timestamp", K(ret), K(ctx->param_));
   } else if (OB_FAIL(storage->build_merge_ctx(*ctx))) {

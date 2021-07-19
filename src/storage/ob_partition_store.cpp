@@ -2687,7 +2687,7 @@ int ObPartitionStore::write_drop_index_trans(const common::ObPartitionKey& pkey,
     ret = OB_PARTITION_IS_REMOVED;
     LOG_WARN("partition is removed", K(ret));
   } else if (OB_FAIL(SLOGGER.begin(OB_LOG_PARTITION_DROP_INDEX))) {
-    STORAGE_LOG(WARN, "Fail to begin daily merge log, ", K(ret));
+    STORAGE_LOG(WARN, "Fail to begin daily merge log", K(ret));
   } else {
     int64_t subcmd = ObIRedoModule::gen_subcmd(OB_REDO_LOG_PARTITION, REDO_LOG_DROP_INDEX_SSTABLE_OF_STORE);
     const ObStorageLogAttribute log_attr(
@@ -2696,7 +2696,7 @@ int ObPartitionStore::write_drop_index_trans(const common::ObPartitionKey& pkey,
     if (OB_FAIL(SLOGGER.write_log(subcmd, log_attr, log_entry))) {
       STORAGE_LOG(WARN, "Failed to write_drop_index_trans", K(ret));
     } else if (OB_FAIL(SLOGGER.commit(lsn))) {
-      STORAGE_LOG(ERROR, "Fail to commit logger, ", K(ret));
+      STORAGE_LOG(ERROR, "Fail to commit logger", K(ret));
     } else {
       ObTaskController::get().allow_next_syslog();
       LOG_INFO("succeed to wrtite drop index trans log", K(lsn), K(log_entry), K(common::lbt()));
@@ -4046,10 +4046,38 @@ int ObPartitionStore::get_physical_flashback_publish_version(const int64_t flash
   return ret;
 }
 
-void ObPartitionStore::replace_store_map(TableStoreMap& store_map)
+int ObPartitionStore::remove_unneed_store_within_trans(const TableStoreMap &new_store_map)
 {
-  bool found = false;
-  TableStoreMap* cur_store_map = nullptr;
+  int ret = OB_SUCCESS;
+  ObMultiVersionTableStore *table_store = nullptr;
+  TCRLockGuard lock_guard(lock_);
+  for (TableStoreMap::iterator it = store_map_->begin();
+      OB_SUCC(ret) && it != store_map_->end();
+      ++it) {
+    const int64_t index_id = it->second->get_table_id();
+    if (OB_SUCC(new_store_map.get(index_id, table_store))) {
+      // exist in new table store map
+    } else if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("Failed to get table store", K(ret), K(index_id));
+    } else {
+      int64_t subcmd = ObIRedoModule::gen_subcmd(OB_REDO_LOG_PARTITION, REDO_LOG_DROP_INDEX_SSTABLE_OF_STORE);
+      const ObStorageLogAttribute log_attr(pg_memtable_mgr_->get_pkey().get_tenant_id(),
+          pg_->get_pg_storage().get_storage_file()->get_file_id());
+      ObDropIndexSSTableLogEntry log_entry;
+      log_entry.pkey_ = meta_->pkey_;
+      log_entry.index_id_ = index_id;
+      log_entry.pg_key_ = pg_memtable_mgr_->get_pkey();
+      if (OB_FAIL(SLOGGER.write_log(subcmd, log_attr, log_entry))) {
+        STORAGE_LOG(WARN, "Failed to write_drop_index_trans", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+void ObPartitionStore::replace_store_map(TableStoreMap &store_map)
+{
+  TableStoreMap *cur_store_map = nullptr;
   {
     TCWLockGuard lock_guard(lock_);
     cur_store_map = store_map_;

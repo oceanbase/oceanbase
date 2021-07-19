@@ -199,6 +199,7 @@ public:
   int get_all_saved_info(ObSavedStorageInfoV2& info) const;
   int get_saved_clog_info(common::ObBaseStorageInfo& clog_info) const;
   int get_saved_data_info(ObDataStorageInfo& data_info) const;
+  int get_last_replay_log_ts(int64_t &last_replay_log_ts) const;
   int set_pg_storage_info(const ObSavedStorageInfoV2& info);
   int set_pg_clog_info(const ObBaseStorageInfo& clog_info, const bool replica_with_data);
   // build index
@@ -588,6 +589,9 @@ private:
   int create_trans_sstable(
       const ObCreatePartitionParam& create_partition_param, const bool in_slog_trans, ObTablesHandle& sstables_handle);
   int prepare_partition_store_map_(const ObPartitionMigrateCtx& ctx, ObPartitionStore::TableStoreMap*& new_store_map);
+  int remove_unneed_table_store_within_trans(
+      const common::ObIArray<ObPartitionMigrateCtx> &part_ctx_array,
+      ObPartitionStore::TableStoreMap **store_maps);
   int do_replace_store_map_(
       const common::ObIArray<ObPartitionMigrateCtx>& part_ctx_array, ObPartitionStore::TableStoreMap** store_maps);
   int get_freeze_info_(const common::ObVersion& version, ObFreezeInfoSnapshotMgr::FreezeInfo& freeze_info);

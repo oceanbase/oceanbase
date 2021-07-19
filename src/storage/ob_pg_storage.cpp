@@ -2397,6 +2397,22 @@ int ObPGStorage::get_saved_data_info(ObDataStorageInfo& data_info) const
   return ret;
 }
 
+int ObPGStorage::get_last_replay_log_ts(int64_t &last_replay_log_ts) const
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("pg is not inited", K(ret));
+  } else {
+    TCRLockGuard lock_guard(lock_);
+    last_replay_log_ts = meta_->storage_info_.get_data_info().get_last_replay_log_ts();
+  }
+
+  return ret;
+}
+
+
 int ObPGStorage::append_local_sort_data(
     const ObPartitionKey& pkey, const share::ObBuildIndexAppendLocalDataParam& param, ObNewRowIterator& iter)
 {
@@ -7286,9 +7302,10 @@ int ObPGStorage::batch_replace_store_map(const ObIArray<ObPartitionMigrateCtx>& 
       LOG_WARN("trans table seq has changed", K(ret), K(old_trans_table_seq), K_(trans_table_seq));
     } else if (OB_FAIL(SLOGGER.begin(OB_LOG_BATCH_REPLACE_STORE_MAP))) {
       LOG_WARN("failed to begin slog trans", K(ret));
-    } else if (OB_FAIL(create_pg_partition_if_need_(part_ctx_array, schema_version, is_restore))) {
-      LOG_WARN("failed to create pg partition", K(ret), K(part_ctx_array));
     } else {
+      if (OB_FAIL(create_pg_partition_if_need_(part_ctx_array, schema_version, is_restore))) {
+        LOG_WARN("failed to create pg partition", K(ret), K(part_ctx_array));
+      }
       for (int i = 0; OB_SUCC(ret) && i < part_ctx_array.count(); ++i) {
         const ObPartitionMigrateCtx& part_ctx = part_ctx_array.at(i);
         ObPartitionStore::TableStoreMap* store_map = nullptr;
@@ -7298,6 +7315,11 @@ int ObPGStorage::batch_replace_store_map(const ObIArray<ObPartitionMigrateCtx>& 
           } else {
             store_maps[i] = store_map;
           }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(remove_unneed_table_store_within_trans(part_ctx_array, store_maps))) {
+          LOG_ERROR("failed to remove unneed table store within slog trans", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -7351,6 +7373,35 @@ int ObPGStorage::prepare_partition_store_map_(
   }
   return ret;
 }
+
+int ObPGStorage::remove_unneed_table_store_within_trans(
+    const common::ObIArray<ObPartitionMigrateCtx> &part_ctx_array,
+    ObPartitionStore::TableStoreMap **store_maps)
+{
+  int ret = OB_SUCCESS;
+  ObPGPartition *partition = nullptr;
+  ObPartitionStorage *storage = nullptr;
+  ObPartitionStore::TableStoreMap *store_map = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_ctx_array.count(); ++i) {
+    const ObPartitionMigrateCtx &ctx = part_ctx_array.at(i);
+    if (OB_NOT_NULL(store_map = store_maps[i])) {
+      ObPGPartitionGuard part_guard(ctx.copy_info_.meta_.pkey_, *(pg_->get_pg_partition_map()));
+      if (OB_ISNULL(partition = part_guard.get_pg_partition())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get pg partition failed", K(ret), K(ctx));
+      } else if (OB_ISNULL(storage = static_cast<ObPartitionStorage *>(partition->get_storage()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get partition storage failed", K(ret), K(ctx));
+      } else if (OB_FAIL(storage->get_partition_store().remove_unneed_store_within_trans(*store_map))) {
+        LOG_WARN("Failed to remove unneed table store within trans", K(ret));
+      } else {
+        LOG_INFO("Succ to replace store map", KP(store_map));
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObPGStorage::do_replace_store_map_(
     const common::ObIArray<ObPartitionMigrateCtx>& part_ctx_array, ObPartitionStore::TableStoreMap** store_maps)

@@ -285,6 +285,7 @@ private:
   int inner_physical_flashback(
       const bool is_data_table, const int64_t flashback_scn, ObMultiVersionTableStore* multi_table_store);
 
+  int remove_unneed_store_within_trans(const TableStoreMap &new_store_map);
   void replace_store_map(TableStoreMap& store_map);
   int prepare_new_store_map(const ObTablesHandle& sstables, const int64_t max_kept_major_version_number,
       const bool need_reuse_local_minor, TableStoreMap*& new_store_map);

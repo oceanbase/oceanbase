@@ -12503,7 +12503,7 @@ int ObMigrateUtil::wait_trans_table_merge_finish(ObMigrateCtx& ctx)
     do {
       if (OB_FAIL(ObDagScheduler::get_instance().check_dag_exist(&fake_dag, exist))) {
         LOG_WARN("failed to check dag exist", K(ret), K(fake_dag));
-      } else if (!exist) {
+      } else if (exist) {
         if (ObTimeUtility::current_time() - start_ts > WAIT_TIMEOUT) {
           ret = OB_WAIT_TRANS_TABLE_MERGE_TIMEOUT;
           LOG_WARN("wait trans table merge finish timeout", K(ret), K(fake_dag));
