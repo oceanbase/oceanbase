@@ -250,10 +250,20 @@ int ObTransformPreProcess::transform_for_grouping_sets_and_multi_rollup(ObDMLStm
       ObSelectStmt* view_stmt = NULL;
       ObSelectStmt* transform_stmt = NULL;
       ObSelectStmt* set_view_stmt = NULL;
+      bool is_correlated = false;
+      int32_t stmt_level = select_stmt->get_current_level();
       // step 1, creating spj stmt
       if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, select_stmt, view_stmt))) {
         LOG_WARN("failed to create spj view.", K(ret));
         // step 2, creating temp table
+      } else if (stmt_level > 0 &&
+                 OB_FAIL(ObTransformUtils::is_correlated_subquery(view_stmt,
+                                                                  stmt_level-1,
+                                                                  is_correlated))) {
+        LOG_WARN("failed to check is correlated subquery", K(ret));
+      } else if (is_correlated) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("correlated temp table is not support now!", K(ret));
       } else if (OB_FAIL(add_generated_table_as_temp_table(ctx_, select_stmt))) {
         LOG_WARN("failed to add generated table as temp table", K(ret));
         // setp 3, creating set stmt

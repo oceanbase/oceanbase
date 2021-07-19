@@ -5165,10 +5165,11 @@ int ObStaticEngineCG::recursive_get_column_expr(const ObColumnRefRawExpr*& colum
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (!table_item->is_generated_table()) {
-        column = inner_column;
-      } else if (OB_FAIL(recursive_get_column_expr(column, *table_item))) {
+      } else if (table_item->is_generated_table() &&
+                 OB_FAIL(recursive_get_column_expr(inner_column, *table_item))) {
         LOG_WARN("faield to recursive get column expr", K(ret));
+      } else {
+        column = inner_column;
       }
     }
   }

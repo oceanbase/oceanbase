@@ -83,6 +83,10 @@ private:
 public:
   static int is_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_correlated);
 
+  static int is_correlated_subquery(ObSelectStmt* subquery,
+                                    int32_t correlated_level,
+                                    bool &is_correlated);
+
   static int is_direct_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_direct_correlated);
 
   static int has_current_level_column(const ObRawExpr* expr, int32_t curlevel, bool& has);

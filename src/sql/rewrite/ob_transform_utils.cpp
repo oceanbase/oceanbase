@@ -61,6 +61,43 @@ int ObTransformUtils::is_correlated_expr(const ObRawExpr* expr, int32_t correlat
   return ret;
 }
 
+int ObTransformUtils::is_correlated_subquery(ObSelectStmt* subquery,
+                                            int32_t correlated_level,
+                                            bool &is_correlated)
+{
+  int ret = OB_SUCCESS;
+  is_correlated = false;
+  ObArray<ObRawExpr*> relation_exprs;
+  ObArray<ObSelectStmt*> child_stmts;
+  if (OB_ISNULL(subquery)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(subquery->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("get relation exprs failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < relation_exprs.count(); ++i) {
+    if (OB_FAIL(is_correlated_expr(relation_exprs.at(i),
+                                   correlated_level,
+                                   is_correlated))) {
+      LOG_WARN("failed to check is correlated expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(subquery->get_child_stmts(child_stmts))) {
+      LOG_WARN("get from subquery stmts failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !is_correlated && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(is_correlated_subquery(child_stmts.at(i),
+                                                    correlated_level,
+                                                    is_correlated)))) {
+        LOG_WARN("failed to check is correlated subquery", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObTransformUtils::is_direct_correlated_expr(
     const ObRawExpr* expr, int32_t correlated_level, bool& is_direct_correlated)
 {

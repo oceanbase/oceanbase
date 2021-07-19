@@ -49,6 +49,9 @@ private:
   int add_limit_order_for_union(const common::ObIArray<ObParentDMLStmt>& parent_stmts, ObSelectStmt*& stmt);
   int check_can_pre_push(ObSelectStmt* stmt, ObSelectStmt* upper_stmt, bool& can_push);
 
+  int replace_select_expr_for_set_op(ObSelectStmt *stmt,
+                                    ObRawExpr *cur_expr,
+                                    ObRawExpr *&find_expr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformSetOp);
 };

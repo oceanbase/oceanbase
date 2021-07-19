@@ -1590,12 +1590,12 @@ int ObLogPlan::pushdown_on_conditions(
       if (OB_ISNULL(qual = joined_table->join_conditions_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(qual), K(ret));
-      } else if (RIGHT_OUTER_JOIN == join_type && !qual->get_relation_ids().is_empty() &&
+      } else if (RIGHT_OUTER_JOIN == join_type && 
                  qual->get_relation_ids().is_subset(left_table_set)) {
         if (OB_FAIL(left_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
-      } else if (LEFT_OUTER_JOIN == join_type && !qual->get_relation_ids().is_empty() &&
+      } else if (LEFT_OUTER_JOIN == join_type && 
                  qual->get_relation_ids().is_subset(right_table_set)) {
         if (OB_FAIL(right_quals.push_back(qual))) {
           LOG_WARN("failed to push back expr", K(ret));
