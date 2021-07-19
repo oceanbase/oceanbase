@@ -1987,6 +1987,59 @@ TEST_F(TestMicroBlockRowScanner, test_magic_row)
   scanner_iter.reset();
 }
 
+TEST_F(TestMicroBlockRowScanner, test_estimate_with_magic_row)
+{
+  GCONF._enable_sparse_row = false;
+  const int64_t rowkey_cnt = 4;
+  const int64_t micro_cnt = 2;
+  const char* micro_data[micro_cnt];
+  int index = 0;
+  micro_data[index++] = "bigint   var   bigint  bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                        "1        var1   -1     -1      9        NOP     EXIST   U trans_id_1\n";
+  micro_data[index++] = "bigint   var   bigint  bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                        "1        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n";
+
+  prepare_data(micro_data, index, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+
+  // minor
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 0;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  prepare_query_param(trans_version_range, true, false);
+
+  ObStoreRange range;
+  const char var1[] = "var1";
+  ObObj start_val[2];
+  ObObj end_val[2];
+  start_val[0].set_int(1);
+  start_val[1].set_varchar(var1, 4);
+  start_val[1].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  end_val[0].set_int(2);
+  end_val[1].set_varchar(var1, 4);
+  end_val[1].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ObStoreRowkey start_key(start_val, 2);
+  ObStoreRowkey end_key(end_val, 2);
+  range.table_id_ = combine_id(TENANT_ID, TABLE_ID);
+  range.start_key_ = start_key;
+  range.end_key_ = end_key;
+
+  common::ObQueryFlag query_flag;
+  ObExtStoreRange ext_range;
+  ext_range.reset();
+  ext_range.get_range() = range;
+  ASSERT_EQ(OB_SUCCESS, ext_range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
+  ObPartitionEst cost_metrics;
+  cost_metrics.reset();
+
+  // (1 : 2) -> (1,-max : 2,max) would cover 1 micro block
+  // but if not converts to multiversion, (1 : 2) is same with (1,-max : 2,max) would cover 2 micro blocks
+  int ret = sstable_.estimate_scan_row_count(context_.query_flag_, range.table_id_, ext_range, cost_metrics);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, cost_metrics.logical_row_count_);
+  ASSERT_EQ(0, cost_metrics.physical_row_count_);
+}
+
 TEST_F(TestMicroBlockRowScanner, minor_merge_lob_reuse_allocator)
 {
   const int64_t rowkey_cnt = 4;
