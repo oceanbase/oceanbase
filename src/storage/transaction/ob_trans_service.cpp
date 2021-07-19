@@ -6746,7 +6746,9 @@ int ObTransService::iterate_trans_stat(const common::ObPartitionKey& partition, 
   } else {
     // do nothing
   }
-  sche_trans_ctx_mgr_.print_all_ctx(PRINT_SCHE_COUNT);
+  if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+    sche_trans_ctx_mgr_.print_all_ctx(PRINT_SCHE_COUNT);
+  }
 
   return ret;
 }
