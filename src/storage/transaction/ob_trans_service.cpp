@@ -9537,10 +9537,8 @@ void ObThreadLocalTransCtx::destroy()
   if (memtable_ctx_.get_ctx_descriptor() > 0) {
     if (OB_ISNULL(memtable_ctx_.get_ctx_map())) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "unexpected mem ctx", K(ret));
     } else {
       memtable_ctx_.get_ctx_map()->erase(memtable_ctx_.get_ctx_descriptor());
-      TRANS_LOG(INFO, "thread local mem ctx erase id", K(memtable_ctx_.get_ctx_descriptor()));
     }
   }
 }
