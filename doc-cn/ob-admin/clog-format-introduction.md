@@ -2,7 +2,7 @@
 
 通常 clog 文件中包含多种类型的日志，其中 OB_LOG_SUBMIT 为主要的日志类型，表示对应的 clog 日志为其他模块（非 clog 模块）提交的日志，包含事务模块向 clog 提交的事务日志。本节介绍事务日志的打印格式。
 
-事务日志的打印格式主要包含三部分：摘要（abstract）、头部（header）、主体（content）。日志形式如下所示：
+事务日志的打印格式主要包含三部分：摘要（abstract）、头部（header）和主体（content）。日志形式如下所示：
 
 ```bash
 $$$abstract |header |||   |||content

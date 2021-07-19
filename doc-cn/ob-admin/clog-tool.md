@@ -2,6 +2,8 @@
 
 OceanBase 数据库的 clog 日志类似于传统数据库的 Redo 日志。clog 日志负责在事务提交时持久化事务数据。clog_tool 用于解析并打印 clog 文件。目前，clog_tool 集成在 ob_admin 工具中，您可以通过执行 `ob_admin` 命令调用 clog_tool。
 
+<!-- 为了保证高可用和一致性，OceanBase 数据库采用了 Paxos 协议对影响数据库状态的操作进行持久化。持久化产生的一致性日志文件即为 clog 日志。 -->
+
 ## clog_tool 命令
 
 下表列出了 clog_tool 的命令。
@@ -143,7 +145,7 @@ ob_admin clog_tool stat_clog <clog_file_name>
 
 ### 事务标识符（Transaction ID）
 
-事务标识符用于区分 ObServer 内部的不同事务。因此，事务标识符需要具有**唯一性**，即不同事务具有不同的事务标识符。
+事务标识符用于区分 OBServer 内部的不同事务。因此，事务标识符需要具有**唯一性**，即不同事务具有不同的事务标识符。
 
 为了实现事务标识符的唯一性，事务标识符的结构如下所示：
 
@@ -161,12 +163,12 @@ class ObTransID
 
 | 字段名 | 说明 |
 | --- | --- |
-| server_ | 维护该事务标识符的 ObServer 的 IP 地址 |
-| inc_ | ObServer 维护的单调递增值，在 ObServer 重启后重新计数 |
+| server_ | 维护该事务标识符的 OBServer 的 IP 地址 |
+| inc_ | OBServer 维护的单调递增值，在 OBServer 重启后重新计数 |
 | timestamp_ | 创建该事务标志符时的本地物理时钟值（Unix 时间戳） |
-| hv_ | 根据以上三个字段计算得到的 hash 值 |
+| hv_ | 根据以上三个字段计算得到的 Hash 值 |
 
-由于 OceanBase 数据库采用了 64 位 hash 值，两个不同事务标识符的 hash 值产生冲突的概率极低。因此，在大多数情况下，可以使用 hash 值来区分不同事务。
+由于 OceanBase 数据库采用了 64 位 Hash 值，两个不同事务标识符的 Hash 值产生冲突的概率极低。因此，在大多数情况下，可以使用 Hash 值来区分不同事务。
 
 ### 事务类型
 
