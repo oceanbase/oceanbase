@@ -4750,8 +4750,10 @@ int ObRelationalExprOperator::cg_row_cmp_expr(const int row_dimension, ObIAlloca
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret));
       }
-
-      if (OB_UNLIKELY(left_row->arg_cnt_ != right_row->arg_cnt_)) {
+      if (OB_ISNULL(right_row)) {
+        ARCHIVE_LOG(ERROR, "right_row is NULL");
+        ret = OB_ERR_UNEXPECTED;
+      }else if (OB_UNLIKELY(left_row->arg_cnt_ != right_row->arg_cnt_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected row cnt", K(left_row->arg_cnt_), K(right_row->arg_cnt_));
       }
