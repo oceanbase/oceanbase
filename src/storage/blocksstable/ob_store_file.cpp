@@ -1036,7 +1036,9 @@ void ObStoreFile::free_block(const uint32_t block_idx, bool& is_freed)
     free_block_push_pos_ = (free_block_push_pos_ + 1) % store_file_system_->get_total_macro_block_count();
     ++free_block_cnt_;
 
-    // punch hole
+    // FALLOC_FL_PUNCH_HOLE is only supported after glibc-2.17
+    // https://bugzilla.redhat.com/show_bug.cgi?id=1476120
+# if __linux && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 17))
     if (is_fs_support_punch_hole_ && GCONF._enable_block_file_punch_hole) {
       const int64_t len = store_file_system_->get_macro_block_size();
       const int64_t offset = store_file_system_->get_macro_block_size() * block_idx;
@@ -1056,6 +1058,7 @@ void ObStoreFile::free_block(const uint32_t block_idx, bool& is_freed)
         SHARE_LOG(INFO, "Punch hole success", K(block_idx), K(offset), K(len));
       }
     }
+#endif
   }
 }
 
