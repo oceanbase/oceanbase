@@ -675,10 +675,10 @@ int ObWhereSubQueryPullup::check_correlated_where_expr_can_pullup(
   if (OB_FAIL(ObOptimizerUtil::get_groupby_win_func_common_exprs(subquery, common_part_exprs, is_valid))) {
     LOG_WARN("failed to get common exprs", K(ret));
   }
-  ObIArray<ObRawExpr*>& where_exprs = subquery.get_condition_exprs();
-  for (int64_t i = 0; OB_SUCC(ret) && i < where_exprs.count(); ++i) {
-    ObSEArray<ObRawExpr*, 4> column_exprs;
-    ObRawExpr* expr = where_exprs.at(i);
+  ObIArray<ObRawExpr*> &where_exprs = subquery.get_condition_exprs();
+  for (int64_t i = 0; OB_SUCC(ret) && can_pullup && i < where_exprs.count(); ++i) {
+    ObSEArray<ObRawExpr *, 4> column_exprs;
+    ObRawExpr *expr = where_exprs.at(i);
     bool is_correlated = false;
     if (OB_FAIL(ObTransformUtils::is_correlated_expr(expr, subquery.get_current_level() - 1, is_correlated))) {
       LOG_WARN("failed to check is correlated expr", K(ret));
@@ -1075,8 +1075,9 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(
   ObSEArray<ObRawExpr*, 4> right_hand_exprs;
   ObSEArray<ObRawExpr*, 4> new_conditions;
   ObSEArray<ObRawExpr*, 4> correlated_conds;
-  SemiInfo* info = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(subquery) || OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
+  SemiInfo *info = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(subquery) || OB_ISNULL(expr) || OB_ISNULL(ctx_)
+      || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(subquery), K(expr));
   } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, stmt, subquery, right_table))) {
@@ -1106,22 +1107,30 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(
     LOG_WARN("failed to append exprs", K(ret));
   } else {
     ObSqlBitSet<> table_set;
-    ObSEArray<ObDMLStmt*, 4> ignore_stmts;
+    ObSEArray<ObRawExpr*, 4> origin_correlated_conds;
+    ObSEArray<ObDMLStmt *, 4> ignore_stmts;
     ObSEArray<ObRawExpr*, 4> column_exprs;
     ObSEArray<ObRawExpr*, 4> upper_column_exprs;
-    if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*subquery, subquery->get_table_items(), table_set))) {
+    if (OB_FAIL(subquery->get_table_rel_ids(subquery->get_table_items(), table_set))) {
       LOG_WARN("failed to get rel ids", K(ret));
-    } else if (OB_FAIL(get_correlated_conditions(*subquery, correlated_conds))) {
+    } else if (OB_FAIL(get_correlated_conditions(*subquery, origin_correlated_conds))) {
       LOG_WARN("failed to get semi conditions", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::remove_item(subquery->get_condition_exprs(), correlated_conds))) {
+    } else if (OB_FAIL(ObOptimizerUtil::remove_item(subquery->get_condition_exprs(),
+                                                    origin_correlated_conds))) {
       LOG_WARN("failed to remove condition expr", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::extract_column_exprs(
-                   correlated_conds, subquery->get_current_level(), table_set, ignore_stmts, column_exprs))) {
+    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(*ctx_->expr_factory_, origin_correlated_conds,
+                                                  correlated_conds, COPY_REF_DEFAULT))) {
+      LOG_WARN("failed to copy exprs", K(ret));
+    } else if(OB_FAIL(ObTransformUtils::extract_column_exprs(correlated_conds,
+                                                             subquery->get_current_level(),
+                                                             table_set, ignore_stmts,
+                                                             column_exprs))) {
       LOG_WARN("extract column exprs failed", K(ret));
-    } else if (column_exprs.empty()) {
-      /* do nothing */
     } else if (OB_FALSE_IT(subquery->get_select_items().reset())) {
-    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, column_exprs, subquery))) {
+    } else if (column_exprs.empty()) {
+      ret = ObTransformUtils::create_dummy_select_item(*subquery, ctx_);
+    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, column_exprs,
+                                                            subquery))) {
       LOG_WARN("failed to create select item", K(ret));
     } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *right_table, stmt, upper_column_exprs))) {
       LOG_WARN("failed to create columns for view", K(ret));
@@ -1246,7 +1255,7 @@ int ObWhereSubQueryPullup::fill_semi_left_table_ids(ObDMLStmt* stmt, SemiInfo* i
     } else if (OB_FAIL(left_rel_ids.del_member(right_idx))) {
       LOG_WARN("failed to delete members", K(ret));
     } else if (!left_rel_ids.is_empty()) {
-      ret = ObTransformUtils::relids_to_table_ids(stmt, left_rel_ids, info->left_table_ids_);
+      ret = stmt->relids_to_table_ids(left_rel_ids, info->left_table_ids_);
     } else if (OB_UNLIKELY(0 == stmt->get_from_item_size()) ||
                OB_ISNULL(table = stmt->get_table_item(stmt->get_from_item(0)))) {
       ret = OB_ERR_UNEXPECTED;

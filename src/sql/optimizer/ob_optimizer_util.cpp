@@ -4961,28 +4961,38 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator* allocator, ObSQLSessionInfo
     ObExprResType res_type;
     const int64_t child_num = child_querys.count();
     const int64_t select_num = select_stmt->get_select_item_size();
-    ObRawExpr* expr = NULL;
-    for (int64_t i = 1; OB_SUCC(ret) && i < child_num; ++i) {
-      if (OB_ISNULL(child_querys.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected set stmt", K(ret), K(child_querys), K(select_stmt));
-      } else if (OB_UNLIKELY(select_num != child_querys.at(i)->get_select_item_size())) {
-        ret = OB_ERR_COLUMN_SIZE;
-        LOG_WARN("The used SELECT statements have a different number of columns",
-            K(select_num),
-            K(select_stmt->get_select_item_size()));
-      }
-    }
+    ObSelectStmt *cur_stmt = NULL;
+    bool is_all_not_null = true;
+    bool is_on_null_side = false;
+    ObColumnRefRawExpr *col_expr = NULL;
+    ObRawExpr *expr = NULL;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < select_num; ++idx) {
-      bool is_all_not_null = true;
+      types.reuse();
+      is_all_not_null = true;
+      res_type.unset_result_flag(NOT_NULL_FLAG);
       for (int64_t i = 0; OB_SUCC(ret) && i < child_num; ++i) {
-        types.reuse();
-        if (OB_ISNULL(expr = select_stmt->get_select_item(idx).expr_)) {
+        if (OB_ISNULL(cur_stmt = child_querys.at(i)) ||
+            OB_UNLIKELY(idx >= cur_stmt->get_select_item_size()) ||
+            OB_ISNULL(expr = cur_stmt->get_select_item(idx).expr_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null", K(ret), K(expr));
+          LOG_WARN("unexpected child stmt", K(ret), K(cur_stmt), K(expr));
         } else if (OB_FAIL(add_var_to_array_no_dup(types, expr->get_result_type()))) {
-          LOG_WARN("unexpected null", K(ret), K(expr->get_result_type()));
-        } else if (is_all_not_null && !expr->get_result_type().has_result_flag(OB_MYSQL_NOT_NULL_FLAG)) {
+          LOG_WARN("failed to add var", K(ret), K(expr->get_result_type()));
+        } else if (!is_all_not_null) {
+          /* do nothing */
+        } else if (!expr->is_column_ref_expr()) {
+          is_all_not_null = false;
+        } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(expr))) {
+        } else if (!col_expr->get_result_type().has_result_flag(NOT_NULL_FLAG)) {
+          is_all_not_null = false;
+        } else if (NULL == cur_stmt->get_table_item_by_id(col_expr->get_table_id())) {
+          // column expr from upper stmt, ignore NOT NULL FLAG
+          is_all_not_null = false;
+        } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(cur_stmt,
+                                                                  col_expr->get_table_id(),
+                                                                  is_on_null_side))) {
+          LOG_WARN("check is table on null side failed", K(ret));
+        } else if (is_on_null_side) {
           is_all_not_null = false;
         }
       }
@@ -5006,9 +5016,11 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator* allocator, ObSQLSessionInfo
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(res_types.empty())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected empty", K(ret), K(types.empty()));
-      } else if (!is_all_not_null) {
-        res_types.at(res_types.count() - 1).unset_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+        LOG_WARN("unexpected empty", K(ret), K(res_types.empty()));
+      } else if (is_all_not_null) {
+        res_types.at(res_types.count()-1).set_result_flag(NOT_NULL_FLAG);
+      } else {
+        res_types.at(res_types.count()-1).unset_result_flag(NOT_NULL_FLAG);
       }
     }
   }
@@ -5093,7 +5105,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator* allocator, ObS
         }
         const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(types.push_back(left_type) || OB_FAIL(types.push_back(right_type)))) {
+        } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
         } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
           LOG_WARN("failed to get collation connection", K(ret));

@@ -3596,6 +3596,8 @@ public:
   virtual int replace_expr(
       const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
 
+  bool same_as(const Bound &other, ObExprEqualCheckContext *check_context) const;
+
   BoundType type_;
   bool is_preceding_;
   bool is_nmb_literal_;
@@ -3628,11 +3630,11 @@ public:
   {
     lower_ = lower;
   }
-  inline WindowType get_window_type()
+  inline WindowType get_window_type() const
   {
     return win_type_;
   }
-  inline bool is_between()
+  inline bool is_between() const
   {
     return is_between_;
   }

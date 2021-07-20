@@ -291,6 +291,7 @@ public:
     INDEX_STORE_RELATED = -2,  // has column not index column, but storing column
     MUL_INDEX_COL = -1,        // has more than one index columns in expr not row.some case present not prefix filter
   };
+
   static int get_subquery_id(const ObDMLStmt* upper_stmt, const ObSelectStmt* stmt, uint64_t& id);
 
   static int get_child_corresponding_exprs(const ObDMLStmt* upper_stmt, const ObSelectStmt* stmt,

@@ -2063,6 +2063,7 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
   int ret = OB_SUCCESS;
   bool need_copy = true;
   bool copy_share_expr = (COPY_REF_SHARED == copy_types) || use_new_allocator;
+  bool is_stack_overflow = false;
   if (NULL == origin) {
     need_copy = false;
     dest = NULL;
@@ -2076,7 +2077,13 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
     need_copy = false;
   }
 
-  if (OB_SUCC(ret) && need_copy) {
+  if (OB_FAIL(ret) || !need_copy) {
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else {
     // deep copy here
     ObRawExpr::ExprClass expr_class = origin->get_expr_class();
     switch (expr_class) {

@@ -2579,9 +2579,11 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode* node, ObRawExpr*& e
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid node children", K(node->num_child_));
   } else {
-    ctx_.parents_expr_info_.add_member(IS_AGG);
+    bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     AggNestedCheckerGuard agg_guard(ctx_);
-    if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+    if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+      LOG_WARN("failed to add member", K(ret));
+    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
       LOG_WARN("failed to check agg nested.", K(ret));
     } else if (T_FUN_COUNT == node->type_ && 1 == node->num_child_) {
       if (OB_UNLIKELY(T_STAR != node->children_[0]->type_)) {
@@ -2692,11 +2694,12 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode* node, ObRawExpr*& e
       // add invalid table bit index, avoid aggregate function expressions are used as filters
       if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
         LOG_WARN("failed to add member", K(ret));
+      } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
       }
     }
-    ctx_.parents_expr_info_.del_member(IS_AGG);
   }
   // set the expr in nested agg.
   if (OB_SUCC(ret) && is_in_nested_aggr) {
@@ -2726,10 +2729,12 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode* node, ObRawE
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inalid group concat node", K(ret), K(node->children_));
   } else {
-    ctx_.parents_expr_info_.add_member(IS_AGG);
-    ParseNode* expr_list_node = node->children_[1];
+    bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
+    ParseNode *expr_list_node = node->children_[1];
     AggNestedCheckerGuard agg_guard(ctx_);
-    if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+    if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+      LOG_WARN("failed to add member", K(ret));
+    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
       LOG_WARN("failed to check agg nested.", K(ret));
     } else if (share::is_mysql_mode() && is_in_nested_aggr) {
       ret = OB_ERR_INVALID_GROUP_FUNC_USE;
@@ -2810,8 +2815,11 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode* node, ObRawE
       }
     }
     if (OB_SUCC(ret)) {
-      ctx_.parents_expr_info_.del_member(IS_AGG);
-      expr = agg_expr;
+      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
+      } else {
+        expr = agg_expr;
+      }
     }
   }
   if (OB_SUCC(ret) && is_in_nested_aggr) {
@@ -2847,9 +2855,11 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode* node, ObRawEx
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inalid group concat node", K(ret), K(node->children_));
   } else {
-    ctx_.parents_expr_info_.add_member(IS_AGG);
+    bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     AggNestedCheckerGuard agg_guard(ctx_);
-    if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+    if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+      LOG_WARN("failed to add member", K(ret));
+    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
       LOG_WARN("failed to check agg nested.", K(ret));
     } else if (NULL != node->children_[0] && T_DISTINCT == node->children_[0]->type_) {
       ret = OB_DISTINCT_NOT_ALLOWED;
@@ -2897,8 +2907,11 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode* node, ObRawEx
       }
     }
     if (OB_SUCC(ret)) {
-      ctx_.parents_expr_info_.del_member(IS_AGG);
-      expr = agg_expr;
+      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
+      } else {
+        expr = agg_expr;
+      }
     }
   }
   if (OB_SUCC(ret) && is_in_nested_aggr) {
@@ -4345,14 +4358,17 @@ int ObRawExprResolverImpl::check_and_canonicalize_window_expr(ObRawExpr* expr)
       }
     }
 
+    if (OB_SUCC(ret) && share::is_mysql_mode() && w_expr->has_frame_orig() &&
+        WINDOW_RANGE == win_type && 0 == order_items.count()) {
+      ret = OB_ERR_MISS_ORDER_BY_EXPR;
+      LOG_WARN("missing ORDER BY expression in the window specification", K(ret));
+    }
+
     // reset frame
-    if (OB_SUCC(ret)) {
-      if (0 == order_items.count() ||
-          (ObRawExprResolverImpl::should_not_contain_window_clause(func_type) && win_type != WINDOW_MAX)) {
-        win_type = WINDOW_MAX;
-        upper = Bound();
-        lower = Bound();
-      }
+    if (OB_SUCC(ret) && win_type != WINDOW_MAX && should_not_contain_window_clause(func_type)) {
+      win_type = WINDOW_MAX;
+      upper = Bound();
+      lower = Bound();
     }
 
     if (OB_SUCC(ret)) {
@@ -4641,7 +4657,10 @@ int ObRawExprResolverImpl::process_agg_udf_node(
   ctx_.parents_expr_info_.add_member(IS_AGG);
   AggNestedCheckerGuard agg_guard(ctx_);
   bool is_in_nested_aggr = false;
-  if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+  bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
+  if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+    LOG_WARN("failed to add member", K(ret));
+  } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
     LOG_WARN("failed to check agg nested.", K(ret));
   } else if (is_in_nested_aggr) {
     ret = OB_ERR_INVALID_GROUP_FUNC_USE;
@@ -4673,13 +4692,12 @@ int ObRawExprResolverImpl::process_agg_udf_node(
     // add invalid table bit index, avoid aggregate function expressions are used as filters
     if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
       LOG_WARN("failed to add member", K(ret));
+    } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
     } else {
       expr = agg_expr;
     }
   }
-
-  // FIXME WHY?
-  ctx_.parents_expr_info_.del_member(IS_AGG);
   return ret;
 }
 

@@ -98,7 +98,7 @@ struct InitStrCmpArray {
     funcs[IDX][0][0] = StrCmp<0, 0>::defined_ ? &StrCmp<0, 0>::cmp : NULL;
     funcs[IDX][0][1] = StrCmp<0, 1>::defined_ ? &StrCmp<0, 1>::cmp : NULL;
     funcs[IDX][1][0] = StrCmp<1, 0>::defined_ ? &StrCmp<1, 0>::cmp : NULL;
-    funcs[IDX][1][1] = StrCmp<1, 1>::defined_ ? &StrCmp<1, 0>::cmp : NULL;
+    funcs[IDX][1][1] = StrCmp<1, 1>::defined_ ? &StrCmp<1, 1>::cmp : NULL;
   }
 };
 

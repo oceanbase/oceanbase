@@ -1593,7 +1593,7 @@ int ObCharset::aggregate_collation(const ObCollationLevel collation_level1, cons
   if (OB_UNLIKELY(CS_LEVEL_INVALID == collation_level1 || CS_LEVEL_INVALID == collation_level2 ||
                   CS_TYPE_INVALID == collation_type1 || CS_TYPE_INVALID == collation_type2)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid collation level or type",
+    LOG_WARN("invalid collation level or type",
         K(ret),
         K(collation_level1),
         K(collation_type1),

@@ -3,14 +3,15 @@ SQL: select * from t1, t2 where t1.c1 > 10 and t1.c1 in (select c2 from t2);
 ====================================================
 |ID|OPERATOR                  |NAME |EST. ROWS|COST|
 ----------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN|     |5100     |4078|
+|0 |NESTED-LOOP JOIN CARTESIAN|     |5100     |4152|
 |1 | TABLE SCAN               |t2   |100      |92  |
-|2 | MATERIAL                 |     |51       |324 |
-|3 |  MERGE SEMI JOIN         |     |51       |306 |
+|2 | MATERIAL                 |     |51       |345 |
+|3 |  MERGE JOIN              |     |51       |317 |
 |4 |   TABLE SCAN             |t1   |100      |90  |
-|5 |   SORT                   |     |51       |165 |
-|6 |    SUBPLAN SCAN          |VIEW1|51       |114 |
-|7 |     TABLE SCAN           |t2   |51       |107 |
+|5 |   SUBPLAN SCAN           |VIEW2|51       |176 |
+|6 |    MERGE DISTINCT        |     |51       |169 |
+|7 |     SORT                 |     |51       |158 |
+|8 |      TABLE SCAN          |t2   |51       |107 |
 ====================================================
 
 Outputs & filters: 
@@ -21,26 +22,28 @@ Outputs & filters:
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
   2 - output([t1.c1], [t1.c2]), filter(nil)
   3 - output([t1.c1], [t1.c2]), filter(nil), 
-      equal_conds([t1.c1 = VIEW1.c2]), other_conds(nil)
+      equal_conds([t1.c1 = VIEW2.VIEW1.c2]), other_conds(nil)
   4 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0)
-  5 - output([VIEW1.c2]), filter(nil), sort_keys([VIEW1.c2, ASC])
-  6 - output([VIEW1.c2]), filter(nil), 
-      access([VIEW1.c2])
-  7 - output([t2.c2]), filter([t2.c2 > ?]), 
+  5 - output([VIEW2.VIEW1.c2]), filter(nil), 
+      access([VIEW2.VIEW1.c2])
+  6 - output([t2.c2]), filter(nil), 
+      distinct([t2.c2])
+  7 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  8 - output([t2.c2]), filter([t2.c2 > ?]), 
       access([t2.c2]), partitions(p0)
 
 Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$1" ("opt.t2"@"SEL$1" ("opt.t1"@"SEL$1" "VIEW1"@"SEL$1" )))
-      USE_NL(@"SEL$1" ("opt.t1"@"SEL$1" "VIEW1"@"SEL$1" ))
-      USE_NL_MATERIALIZATION(@"SEL$1" ("opt.t1"@"SEL$1" "VIEW1"@"SEL$1" ))
-      FULL(@"SEL$1" "opt.t2"@"SEL$1")
-      USE_MERGE(@"SEL$1" ("VIEW1"@"SEL$1" ))
-      FULL(@"SEL$1" "opt.t1"@"SEL$1")
-      FULL(@"SEL$2" "opt.t2"@"SEL$2")
+      LEADING(@"SEL$4" ("opt.t2"@"SEL$4" ("opt.t1"@"SEL$4" "VIEW2"@"SEL$4" )))
+      USE_NL(@"SEL$4" ("opt.t1"@"SEL$4" "VIEW2"@"SEL$4" ))
+      USE_NL_MATERIALIZATION(@"SEL$4" ("opt.t1"@"SEL$4" "VIEW2"@"SEL$4" ))
+      FULL(@"SEL$4" "opt.t2"@"SEL$4")
+      USE_MERGE(@"SEL$4" ("VIEW2"@"SEL$4" ))
+      FULL(@"SEL$4" "opt.t1"@"SEL$4")
+      FULL(@"SEL$3" "opt.t2"@"SEL$3")
       END_OUTLINE_DATA
   */
 

@@ -233,6 +233,7 @@ struct ObReplicaOpArg {
   bool is_physical_restore() const;
   bool is_physical_restore_leader() const;
   bool is_physical_restore_follower() const;
+  bool is_FtoL() const;
   bool is_standby_restore() const;
   const char* get_replica_op_type_str() const;
   TO_STRING_KV(K_(key), K_(dst), K_(src), K_(data_src), K_(quorum), "type", get_replica_op_type_str(), K_(base_version),

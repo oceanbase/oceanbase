@@ -605,15 +605,15 @@ int ObTransformPreProcess::replace_with_set_stmt_view(
     ObSelectStmt* origin_stmt, ObSelectStmt* set_view_stmt, ObSelectStmt*& union_stmt)
 {
   int ret = OB_SUCCESS;
-  ObRelIds rel_ids;
-  TableItem* view_table_item = NULL;
-  ObSEArray<ObRawExpr*, 4> old_exprs;
-  ObSEArray<ObRawExpr*, 4> new_exprs;
+  ObSqlBitSet<> rel_ids;
+  TableItem *view_table_item = NULL;
+  ObSEArray<ObRawExpr *, 4> old_exprs;
+  ObSEArray<ObRawExpr *, 4> new_exprs;
   ObSEArray<ColumnItem, 4> temp_column_items;
   if (OB_ISNULL(origin_stmt) || OB_ISNULL(set_view_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("origin stmt is null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_from_tables(*origin_stmt, rel_ids))) {
+  } else if (OB_FAIL(origin_stmt->get_from_tables(rel_ids))) {
     LOG_WARN("failed to get from tables.", K(ret));
   } else if (FALSE_IT(origin_stmt->get_table_items().reset())) {
   } else if (FALSE_IT(origin_stmt->get_from_items().reset())) {
@@ -1157,14 +1157,11 @@ int ObTransformPreProcess::create_connect_by_view(ObSelectStmt& stmt)
   // 5. finish creating the child stmts
   if (OB_SUCC(ret)) {
     // create select list
-    ObSEArray<ObRawExpr*, 4> columns;
-    ObRelIds rel_ids;
+    ObSEArray<ObRawExpr *, 4> columns;
     ObSqlBitSet<> from_tables;
     ObSEArray<ObRawExpr*, 16> shared_exprs;
-    if (OB_FAIL(ObTransformUtils::get_from_tables(*view_stmt, rel_ids))) {
+    if (OB_FAIL(view_stmt->get_from_tables(from_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-      LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(view_stmt->get_column_exprs(columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*view_stmt, columns, from_tables, select_list))) {
@@ -1287,15 +1284,12 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt& stmt)
   // 4. finish creating the left child stmts
   if (OB_SUCC(ret)) {
     // create select list
-    ObSEArray<ObRawExpr*, 4> columns;
-    ObSEArray<ObQueryRefRawExpr*, 4> query_refs;
-    ObRelIds rel_ids;
+    ObSEArray<ObRawExpr *, 4> columns;
+    ObSEArray<ObQueryRefRawExpr *, 4> query_refs;
     ObSqlBitSet<> from_tables;
     ObSEArray<ObRawExpr*, 16> shared_exprs;
-    if (OB_FAIL(ObTransformUtils::get_from_tables(*left_view_stmt, rel_ids))) {
+    if (OB_FAIL(left_view_stmt->get_from_tables(from_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-      LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(left_view_stmt->get_column_exprs(columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*left_view_stmt, columns, from_tables, select_list))) {
@@ -1452,8 +1446,10 @@ int ObTransformPreProcess::is_cond_in_one_from_item(ObSelectStmt& stmt, ObRawExp
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(
-                   stmt, table->is_joined_table() ? *(static_cast<JoinedTable*>(table)) : *table, table_ids))) {
+    } else if (OB_FAIL(stmt.get_table_rel_ids(table->is_joined_table() ? 
+                                              *(static_cast<JoinedTable*>(table)) :
+                                              *table,
+                                              table_ids))) {
       LOG_WARN("failed to get table rel ids", K(ret));
     } else if (expr->get_relation_ids().is_subset(table_ids)) {
       in_from_item = true;

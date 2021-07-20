@@ -856,10 +856,10 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt& stmt, bool& is_valid)
   int ret = OB_SUCCESS;
   is_valid = true;
   int32_t bit_id = OB_INVALID_INDEX;
-  ObRelIds output_rel_ids;
+  ObSqlBitSet<> output_rel_ids;
   if (stmt.is_set_stmt() || stmt.is_hierarchical_query() || !stmt.is_sel_del_upd()) {
     is_valid = false;
-  } else if (OB_FAIL(ObTransformUtils::get_from_tables(stmt, output_rel_ids))) {
+  } else if (OB_FAIL(stmt.get_from_tables(output_rel_ids))) {
     LOG_WARN("failed to get output rel ids", K(ret));
   }
   // check all output table is basic table
@@ -1057,17 +1057,15 @@ int ObTransformAggrSubquery::do_join_first_transform(
     ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr)
 {
   int ret = OB_SUCCESS;
-  ObQueryRefRawExpr* query_ref_expr = NULL;
-  ObSelectStmt* subquery = NULL;
-  ObRawExprFactory* expr_factory = NULL;
-  ObRelIds from_tables;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(root_expr) ||
-      OB_ISNULL(expr_factory = ctx_->expr_factory_) || OB_ISNULL(query_ref_expr = trans_param.ja_query_ref_) ||
-      OB_ISNULL(subquery = trans_param.ja_query_ref_->get_ref_stmt())) {
+  ObQueryRefRawExpr *query_ref_expr = NULL;
+  ObSelectStmt *subquery = NULL;
+  ObRawExprFactory *expr_factory = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(root_expr)
+      || OB_ISNULL(expr_factory = ctx_->expr_factory_)
+      || OB_ISNULL(query_ref_expr = trans_param.ja_query_ref_)
+      || OB_ISNULL(subquery = trans_param.ja_query_ref_->get_ref_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(ctx_), K(root_expr), K(query_ref_expr), K(subquery));
-  } else if (OB_FAIL(ObTransformUtils::get_from_tables(select_stmt, from_tables))) {
-    LOG_WARN("failed to get output rel ids", K(ret));
   } else if (OB_FAIL(get_unique_keys(select_stmt, select_stmt.get_group_exprs()))) {
     LOG_WARN("failed to get unique exprs", K(ret));
   }
@@ -1143,10 +1141,10 @@ int ObTransformAggrSubquery::do_join_first_transform(
 int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys)
 {
   int ret = OB_SUCCESS;
-  ObRelIds from_tables;
-  ObSEArray<ObRawExpr*, 2> tmp_pkeys;
+  ObSqlBitSet<> from_tables;
+  ObSEArray<ObRawExpr *, 2> tmp_pkeys;
   int32_t bit_id = OB_INVALID_INDEX;
-  if (OB_FAIL(ObTransformUtils::get_from_tables(stmt, from_tables))) {
+  if (OB_FAIL(stmt.get_from_tables(from_tables))) {
     LOG_WARN("failed to get from table set", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_items().count(); ++i) {

@@ -1128,7 +1128,7 @@ int ObLogPlan::generate_semi_join_detectors(const ObIArray<SemiInfo*>& semi_info
       LOG_WARN("unexpect null conflict detector", K(ret));
     } else if (OB_FAIL(detector->L_DS_.add_members(left_rel_ids))) {
       LOG_WARN("failed to add members", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, info->right_table_id_, right_rel_ids))) {
+    } else if (OB_FAIL(stmt->get_table_rel_ids(info->right_table_id_, right_rel_ids))) {
       LOG_WARN("failed to get table ids", K(ret));
     } else if (OB_FAIL(detector->R_DS_.add_members(right_rel_ids))) {
       LOG_WARN("failed to add members", K(ret));
@@ -2382,7 +2382,7 @@ int ObLogPlan::init_leading_info_from_tables(
     right_rel_ids.reuse();
     if (OB_ISNULL(semi_info)) {
       LOG_WARN("unexpect null semi info", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, semi_info->right_table_id_, right_rel_ids))) {
+    } else if (OB_FAIL(stmt->get_table_rel_ids(semi_info->right_table_id_, right_rel_ids))) {
       LOG_WARN("failed to get table ids", K(ret));
     } else if (OB_FAIL(hint_info.left_table_set_.add_members(leading_tables_))) {
       LOG_WARN("failed to add table ids", K(ret));

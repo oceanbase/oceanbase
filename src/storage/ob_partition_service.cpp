@@ -11917,6 +11917,13 @@ bool ObReplicaOpArg::is_physical_restore_follower() const
   return RESTORE_FOLLOWER_REPLICA_OP == type_ && RESTORE_VERSION_1 == restore_version_;
 }
 
+bool ObReplicaOpArg::is_FtoL() const
+{
+  return CHANGE_REPLICA_OP == type_
+      && ObReplicaType::REPLICA_TYPE_FULL == src_.get_replica_type()
+      && ObReplicaType::REPLICA_TYPE_LOGONLY == dst_.get_replica_type();
+}
+
 bool ObReplicaOpArg::is_standby_restore() const
 {
   return RESTORE_STANDBY_OP == type_;

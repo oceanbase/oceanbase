@@ -9972,7 +9972,7 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                         "precision":11,
                         "scale":0
                       },
-                      "flag":16387,
+                      "flag":16386,
                       "calc_type": {
                         "type":"NULL",
                         "collation":"invalid_type",
@@ -10577,7 +10577,7 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                     "precision":11,
                     "scale":0
                   },
-                  "flag":16387,
+                  "flag":16386,
                   "calc_type": {
                     "type":"NULL",
                     "collation":"invalid_type",
@@ -11182,7 +11182,7 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
                 "precision":11,
                 "scale":0
               },
-              "flag":16387,
+              "flag":16386,
               "calc_type": {
                 "type":"NULL",
                 "collation":"invalid_type",
@@ -11803,7 +11803,7 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
             "precision":11,
             "scale":0
           },
-          "flag":16387,
+          "flag":16386,
           "calc_type": {
             "type":"NULL",
             "collation":"invalid_type",
@@ -11870,7 +11870,7 @@ SQL: select * from v limit 10 union select * from v limit 10 union select * from
             "precision":11,
             "scale":0
           },
-          "flag":16387,
+          "flag":16386,
           "calc_type": {
             "type":"NULL",
             "collation":"invalid_type",
@@ -13766,7 +13766,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                         "precision":11,
                         "scale":0
                       },
-                      "flag":16387,
+                      "flag":16386,
                       "calc_type": {
                         "type":"NULL",
                         "collation":"invalid_type",
@@ -13833,7 +13833,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                         "precision":11,
                         "scale":0
                       },
-                      "flag":16387,
+                      "flag":16386,
                       "calc_type": {
                         "type":"NULL",
                         "collation":"invalid_type",
@@ -14454,7 +14454,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                     "precision":11,
                     "scale":0
                   },
-                  "flag":16387,
+                  "flag":16386,
                   "calc_type": {
                     "type":"NULL",
                     "collation":"invalid_type",
@@ -14521,7 +14521,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                     "precision":11,
                     "scale":0
                   },
-                  "flag":16387,
+                  "flag":16386,
                   "calc_type": {
                     "type":"NULL",
                     "collation":"invalid_type",
@@ -15142,7 +15142,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                 "precision":11,
                 "scale":0
               },
-              "flag":16387,
+              "flag":16386,
               "calc_type": {
                 "type":"NULL",
                 "collation":"invalid_type",
@@ -15209,7 +15209,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
                 "precision":11,
                 "scale":0
               },
-              "flag":16387,
+              "flag":16386,
               "calc_type": {
                 "type":"NULL",
                 "collation":"invalid_type",
@@ -15830,7 +15830,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
             "precision":11,
             "scale":0
           },
-          "flag":16387,
+          "flag":16386,
           "calc_type": {
             "type":"NULL",
             "collation":"invalid_type",
@@ -15897,7 +15897,7 @@ SQL: select * from v order by c1 union select * from v order by c1 union select 
             "precision":11,
             "scale":0
           },
-          "flag":16387,
+          "flag":16386,
           "calc_type": {
             "type":"NULL",
             "collation":"invalid_type",
@@ -17793,7 +17793,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                         "precision":11,
                         "scale":0
                       },
-                      "flag":16387,
+                      "flag":16386,
                       "calc_type": {
                         "type":"NULL",
                         "collation":"invalid_type",
@@ -17860,7 +17860,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                         "precision":11,
                         "scale":0
                       },
-                      "flag":16387,
+                      "flag":16386,
                       "calc_type": {
                         "type":"NULL",
                         "collation":"invalid_type",
@@ -18481,7 +18481,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                     "precision":11,
                     "scale":0
                   },
-                  "flag":16387,
+                  "flag":16386,
                   "calc_type": {
                     "type":"NULL",
                     "collation":"invalid_type",
@@ -18548,7 +18548,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                     "precision":11,
                     "scale":0
                   },
-                  "flag":16387,
+                  "flag":16386,
                   "calc_type": {
                     "type":"NULL",
                     "collation":"invalid_type",
@@ -19169,7 +19169,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                 "precision":11,
                 "scale":0
               },
-              "flag":16387,
+              "flag":16386,
               "calc_type": {
                 "type":"NULL",
                 "collation":"invalid_type",
@@ -19236,7 +19236,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
                 "precision":11,
                 "scale":0
               },
-              "flag":16387,
+              "flag":16386,
               "calc_type": {
                 "type":"NULL",
                 "collation":"invalid_type",
@@ -19857,7 +19857,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
             "precision":11,
             "scale":0
           },
-          "flag":16387,
+          "flag":16386,
           "calc_type": {
             "type":"NULL",
             "collation":"invalid_type",
@@ -19924,7 +19924,7 @@ SQL: select * from v order by c1 union all select * from v order by c1 union all
             "precision":11,
             "scale":0
           },
-          "flag":16387,
+          "flag":16386,
           "calc_type": {
             "type":"NULL",
             "collation":"invalid_type",

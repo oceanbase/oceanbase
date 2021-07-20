@@ -358,7 +358,7 @@ int ObTransformOuterJoinLimitPushDown::find_target_table(
       while (OB_SUCC(ret) && OB_NOT_NULL(table) && !found) {
         // find target joined_table based on order by column relation_ids
         ObSqlBitSet<> cur_table_ids;
-        if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*select_stmt, *table, cur_table_ids))) {
+        if (OB_FAIL(select_stmt->get_table_rel_ids(*table, cur_table_ids))) {
           LOG_WARN("failed to get table rel ids", K(ret));
         } else if (cur_table_ids.equal(table_ids)) {
           found = true;

@@ -11623,9 +11623,12 @@ int ObMigrateFinishTask::create_pg_partition_if_need()
   } else if (ctx_->is_copy_index()) {
     // no need to replace store map, just skip it.
     LOG_INFO("replica op tyoe is no need batch replace sstable, skip it");
-  } else {
-    const ObSavedStorageInfoV2& saved_storage_info = ctx_->pg_meta_.storage_info_;
-    if (OB_FAIL(pg->get_pg_storage().batch_replace_store_map(ctx_->part_ctx_array_,
+  } else if (!ctx_->is_copy_index()) {
+    const ObSavedStorageInfoV2 &saved_storage_info = ctx_->pg_meta_.storage_info_;
+    if (ctx_->replica_op_arg_.is_FtoL()) {
+      // no need to replace store map, just skip.
+    } else if (OB_FAIL(pg->get_pg_storage().batch_replace_store_map(
+            ctx_->part_ctx_array_,
             saved_storage_info.get_data_info().get_schema_version(),
             ctx_->is_restore_,
             ctx_->old_trans_table_seq_))) {

@@ -27107,7 +27107,7 @@ Outputs & filters:
       access([t3.c1], [t3.c3]), partitions(p[0-1]), 
       is_index_back=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true
-  15 - output([t2.c1], [t2.c2], [t2.c3], [t1.c1 + ?]), filter(nil), 
+  15 - output([t1.c1], [t2.c1], [t2.c2], [t2.c3], [t1.c1 + ?]), filter(nil), 
       conds([lnnvl(t1.c1 + ? = t2.c2)]), nl_params_(nil), batch_join=false
   16 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
   17 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), dop=1
