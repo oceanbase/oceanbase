@@ -61,7 +61,7 @@ int ObExprUid::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
     const uint64_t sess_uid = session_info->get_user_id();
     // result.set_uint64_value(sess_uid);
     number::ObNumber num;
-    num.from(sess_uid, *(expr_ctx.calc_buf_));
+    ret = num.from(sess_uid, *(expr_ctx.calc_buf_));
     result.set_number(num);
   }
   return ret;
