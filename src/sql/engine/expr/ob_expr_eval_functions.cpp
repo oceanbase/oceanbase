@@ -41,6 +41,7 @@
 #include "ob_expr_int2ip.h"
 #include "ob_expr_int_div.h"
 #include "ob_expr_ip2int.h"
+#include "ob_expr_inet.h"
 #include "ob_expr_is.h"
 #include "ob_expr_last_exec_id.h"
 #include "ob_expr_last_trace_id.h"
@@ -651,7 +652,14 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprToMultiByte::calc_to_multi_byte,            /* 397 */
     NULL,                                             // ObExprDllUdf::eval_dll_udf,                                /* 398 */
     NULL,                                             // ObExprRawtonhex::calc_rawtonhex_expr,                      /* 399 */
-    ObExprPi::eval_pi                                 /* 400 */
+    ObExprPi::eval_pi,                                /* 400 */
+    ObExprInetAton::calc_inet_aton,                /* 401 */
+    ObExprInet6Ntoa::calc_inet6_ntoa,              /* 402 */
+    ObExprInet6Aton::calc_inet6_aton,              /* 403 */
+    ObExprIsIpv4::calc_is_ipv4,                    /* 404 */
+    ObExprIsIpv6::calc_is_ipv6,                    /* 405 */
+    ObExprIsIpv4Mapped::calc_is_ipv4_mapped,       /* 406 */
+    ObExprIsIpv4Compat::calc_is_ipv4_compat        /* 406 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

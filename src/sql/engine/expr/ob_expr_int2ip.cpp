@@ -73,6 +73,7 @@ int ObExprInt2ip::int2ip(ObObj& result, const int64_t int_val, ObExprStringBuf& 
     } else {
       in_addr addr;
       addr.s_addr = htonl(static_cast<uint32_t>(int_val));
+      // Fix me,The problem with inet_ntop() is that it is available starting from Windows Vista, but the minimum supported version is Windows 2000.
       const char* iret = inet_ntop(AF_INET, &addr, buf, 16);
       if (OB_ISNULL(iret)) {
         ret = OB_ERR_UNEXPECTED;

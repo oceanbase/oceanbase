@@ -667,6 +667,9 @@ int ObRawExprUtils::function_alias(ObRawExprFactory& expr_factory, ObSysFunRawEx
   } else if (0 == expr->get_func_name().case_compare("ws")) {
     // ws is synonym for word_segment
     expr->set_func_name("word_segment");
+  } else if (0 == expr->get_func_name().case_compare("inet_ntoa")) {
+    // inet_ntoa is synonym for int2ip
+    expr->set_func_name("int2ip");
   } else {
   }
   return ret;

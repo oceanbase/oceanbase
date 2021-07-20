@@ -1412,7 +1412,7 @@ int ObRelationalExprOperator::compare_nullsafe(int64_t& result, const ObObj& obj
 }
 
 bool ObRelationalExprOperator::can_cmp_without_cast(
-    ObExprResType type1, ObExprResType type2, ObCmpOp cmp_op, const ObSQLSessionInfo& session)
+    const ObExprResType& type1, const ObExprResType& type2, ObCmpOp cmp_op, const ObSQLSessionInfo& session)
 {
   bool need_no_cast = false;
   if (ob_is_enum_or_set_type(type1.get_type()) && ob_is_enum_or_set_type(type2.get_type())) {
@@ -2222,10 +2222,7 @@ int ObSubQueryRelationalExpr::calc_resultN(
       tmp_row.count_ = param_num - 1;
       left_row = &tmp_row;
       const ObObj& idx_obj = param_array[param_num - 1];
-      if (OB_ISNULL(left_row)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("left_row is null", K(left_row), K(ret));
-      } else if (OB_FAIL(idx_obj.get_int(subquery_idx))) {
+      if (OB_FAIL(idx_obj.get_int(subquery_idx))) {
         LOG_WARN("get subquery index failed", K(ret));
       } else if (T_WITH_ALL == subquery_key_) {
         if (OB_FAIL(calc_result_with_all(result, *left_row, subquery_idx, expr_ctx))) {
@@ -3395,8 +3392,11 @@ int ObBitwiseExprOperator::calc_(
           LOG_WARN("failed to get int64", K(obj2), K(ret));
         } else {
           ObNumber result;
-          result.from((int64_v1 & int64_v2), *expr_ctx.calc_buf_);
-          res.set_number(result);
+          if (OB_FAIL(result.from((int64_v1 & int64_v2), *expr_ctx.calc_buf_))) {
+            LOG_WARN("get ObNumber from int64 failed", K(ret), K(int64_v1 & int64_v2));
+          } else {
+            res.set_number(result);
+          }
         }
       }
     }
