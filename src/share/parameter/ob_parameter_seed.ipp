@@ -735,10 +735,6 @@ DEF_INT(clog_disk_usage_limit_percentage, OB_CLUSTER_PARAMETER, "95", "[80, 100]
     "clog_disk_utilization_threshold. "
     "Range: [80, 100]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(clog_usage_limit_size, OB_CLUSTER_PARAMETER, "2048G", "[256MB,)",
-    "the size of the total clog file size limited per server. "
-    "Range: [256M,)",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(clog_disk_utilization_threshold, OB_CLUSTER_PARAMETER, "80", "[10, 100)",
     "clog disk utilization threshold before reuse clog files, should be less than clog_disk_usage_limit_percentage. "
     "Range: [10, 100)",
