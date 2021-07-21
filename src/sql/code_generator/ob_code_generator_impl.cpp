@@ -3574,6 +3574,7 @@ int ObCodeGeneratorImpl::convert_set(ObLogSet& op, const PhyOpsDesc& child_ops, 
 
       const ObIArray<OrderItem>& search_order = op.get_search_ordering();
       OZ(r_union->search_by_col_lists_.init(search_order.count()));
+      OZ(r_union->init_op_schema_obj(search_order.count()));
       ARRAY_FOREACH(search_order, i)
       {
         const ObRawExpr* raw_expr = search_order.at(i).expr_;
@@ -3667,6 +3668,8 @@ int ObCodeGeneratorImpl::convert_internal_sort(
   int ret = OB_SUCCESS;
   if (OB_FAIL(sort.init_sort_columns(sort_column.count()))) {
     SQL_CG_LOG(WARN, "fail to init sort columns.", K(ret));
+  } else if (OB_FAIL(sort.init_op_schema_obj(sort_column.count()))) {
+    LOG_WARN("fail to init sort schema obj array", K(ret));
   }
   ARRAY_FOREACH(sort_column, i)
   {
@@ -8715,6 +8718,9 @@ int ObCodeGeneratorImpl::fill_sort_columns(const ColumnIndexProviderImpl& idx_pr
   int64_t sort_idx = OB_INVALID_INDEX;
   if (OB_FAIL(merge_receive.init_sort_columns(sort_keys.count()))) {
     LOG_WARN("fail to init sort column", K(ret));
+  } else if (NULL != phy_op && 
+      OB_FAIL(phy_op->init_op_schema_obj(sort_keys.count()))) {
+    LOG_WARN("fail to get op schema obj array", K(ret));
   }
   ARRAY_FOREACH(sort_keys, i)
   {

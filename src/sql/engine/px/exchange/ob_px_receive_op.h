@@ -123,7 +123,7 @@ public:
   }
 
   int64_t get_sqc_id();
-
+  int erase_dtl_interm_result();
 public:
   void reset_for_rescan()
   {

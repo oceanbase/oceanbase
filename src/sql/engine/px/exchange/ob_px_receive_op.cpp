@@ -302,6 +302,24 @@ int ObPxReceiveOp::active_all_receive_channel()
   }
   return ret;
 }
+
+int ObPxReceiveOp::erase_dtl_interm_result()
+{
+  int ret = OB_SUCCESS;
+  dtl::ObDtlChannelInfo ci;
+  ObDTLIntermResultKey key;
+  for (int i = 0; i < get_ch_set().count(); ++i) {
+    if (OB_FAIL(get_ch_set().get_channel_info(i, ci))) {
+      LOG_WARN("fail get channel info", K(ret));
+    } else {
+      key.channel_id_ = ci.chid_;
+      if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+        LOG_TRACE("fail to release recieve internal result", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 //------------- end ObPxReceiveOp-----------------
 
 ObPxFifoReceiveOp::ObPxFifoReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
@@ -316,26 +334,14 @@ int ObPxFifoReceiveOp::inner_open()
 int ObPxFifoReceiveOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  int release_channel_ret = common::OB_SUCCESS;
   /* we must release channel even if there is some error happen before */
   if (channel_linked_) {
-    int release_channel_ret = ObPxChannelUtil::flush_rows(task_channels_);
+    release_channel_ret = ObPxChannelUtil::flush_rows(task_channels_);
     if (release_channel_ret != common::OB_SUCCESS) {
       LOG_WARN("release dtl channel failed", K(release_channel_ret));
     }
-    ObDTLIntermResultKey key;
-    ObDtlBasicChannel *channel = NULL;
     int64_t recv_cnt = 0;
-    for (int i = 0; i < task_channels_.count(); ++i) {
-      channel = static_cast<ObDtlBasicChannel*>(task_channels_.at(i));
-      key.channel_id_ = channel->get_id();
-      recv_cnt += channel->get_recv_buffer_cnt();
-      if (channel->use_interm_result()) {
-        release_channel_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key);
-        if (release_channel_ret != common::OB_SUCCESS) {
-          LOG_WARN("fail to release recieve internal result", K(ret));
-        }
-      }
-    }
     op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::DTL_SEND_RECV_COUNT;
     op_monitor_info_.otherstat_3_value_ = recv_cnt;
     release_channel_ret = msg_loop_.unregister_all_channel();
@@ -347,6 +353,11 @@ int ObPxFifoReceiveOp::inner_close()
     if (release_channel_ret != common::OB_SUCCESS) {
       LOG_WARN("release dtl channel failed", K(release_channel_ret));
     }
+  }
+  // must erase after unlink channel
+  release_channel_ret = erase_dtl_interm_result();
+  if (release_channel_ret != common::OB_SUCCESS) {
+    LOG_TRACE("release interm result failed", KR(release_channel_ret));
   }
   return ret;
 }

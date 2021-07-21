@@ -207,6 +207,7 @@ void ObGranuleIterator::ObGranuleIteratorCtx::destroy()
   ranges_.reset();
   pkeys_.reset();
   rescan_tasks_.reset();
+  pwj_rescan_task_infos_.reset();
 }
 
 int ObGranuleIterator::ObGranuleIteratorCtx::parameters_init(const ObGIInput* input)
@@ -323,9 +324,17 @@ int ObGranuleIterator::rescan(ObExecContext& ctx) const
       gi_ctx->state_ = GI_GET_NEXT_GRANULE_TASK;
     }
   } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("the partition wise join GI rescan not supported", K(ret));
+    // 在partition_wise_join的情况, 按woker第一次完整执行所抢占的任务执行.
+    // 在执行过程中缓存住了自己的任务队列.
+    if (GI_UNINITIALIZED == gi_ctx->state_ || GI_PREPARED == gi_ctx->state_) {
+      /*do nothing*/
+    } else {
+      gi_ctx->is_rescan_ = true;
+      gi_ctx->rescan_task_idx_ = 0;
+      gi_ctx->state_ = GI_GET_NEXT_GRANULE_TASK;
+    }
   }
+ 
   return ret;
 }
 
@@ -570,11 +579,23 @@ int ObGranuleIterator::do_get_next_granule_task(
         }
       }
     }
-    if (OB_FAIL(fetch_full_pw_tasks(exec_ctx, gi_task_infos, op_ids))) {
+    if (OB_FAIL(ret)) {
+    } else if (gi_ctx.is_rescan_) {
+      if (gi_ctx.rescan_task_idx_ >= gi_ctx.pwj_rescan_task_infos_.count()) {
+        ret = OB_ITER_END;
+        gi_ctx.state_ = GI_END;
+      }
+    } else if (OB_FAIL(fetch_full_pw_tasks(exec_ctx, gi_task_infos, op_ids))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("try fetch task failed", K(ret));
       } else {
         gi_ctx.state_ = GI_END;
+      }
+    } else {
+      for (int i = 0; i < gi_task_infos.count() && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(gi_ctx.pwj_rescan_task_infos_.push_back(gi_task_infos.at(i)))) {
+          LOG_WARN("fail to rescan pwj task info", K(ret));
+        }
       }
     }
     ARRAY_FOREACH_X(op_ids, idx, cnt, OB_SUCC(ret))
@@ -585,7 +606,16 @@ int ObGranuleIterator::do_get_next_granule_task(
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(gi_prepare_map->set_refactored(op_ids.at(idx), gi_task_infos.at(idx)))) {
+        if (gi_ctx.is_rescan_) {
+          if (gi_ctx.rescan_task_idx_ >= gi_ctx.pwj_rescan_task_infos_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("rescan task idx is unexpected", K(gi_ctx.rescan_task_idx_), 
+                K(gi_ctx.pwj_rescan_task_infos_.count()), K(cnt));
+          } else if (OB_FAIL(gi_prepare_map->set_refactored(op_ids.at(idx), 
+              gi_ctx.pwj_rescan_task_infos_.at(gi_ctx.rescan_task_idx_++)))) {
+            LOG_WARN("reset table scan's ranges failed", K(ret));
+          }
+        } else if (OB_FAIL(gi_prepare_map->set_refactored(op_ids.at(idx), gi_task_infos.at(idx)))) {
           LOG_WARN("reset table scan's ranges failed", K(ret));
         }
         LOG_DEBUG("produce a gi task(PWJ)", K(op_ids.at(idx)), K(gi_task_infos.at(idx)));

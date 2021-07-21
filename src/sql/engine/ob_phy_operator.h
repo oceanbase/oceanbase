@@ -829,6 +829,7 @@ public:
     return op_schema_objs_;
   }
 
+  int init_op_schema_obj(int64_t count);
 private:
   static const int64_t CHECK_STATUS_MASK = 0x3FF;  // check_status for each 1024 rows
 protected:
@@ -856,8 +857,7 @@ protected:
   bool is_exact_rows_;
   ObPhyOperatorType type_;  // for GDB debug purpose, no need to serialize
   int32_t plan_depth_;      // for plan cache explain
-  common::ObSEArray<ObOpSchemaObj, 8> op_schema_objs_;
-
+  common::ObFixedArray<ObOpSchemaObj, common::ObIAllocator> op_schema_objs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhyOperator);
 };

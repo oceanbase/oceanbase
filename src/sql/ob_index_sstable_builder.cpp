@@ -931,7 +931,10 @@ int ObIndexSSTableBuilder::gen_build_macro(ObPhysicalPlan& phy_plan, ObPhyOperat
   } else {
     sort->set_column_count(columns.count());
     if (OB_FAIL(sort->init_sort_columns(index_table_->get_rowkey_column_num()))) {
-      LOG_WARN("init sort column failed", K(ret), "rowkey_cnt", index_table_->get_rowkey_column_num());
+      LOG_WARN("init sort column failed",
+          K(ret), "rowkey_cnt", index_table_->get_rowkey_column_num());
+    } else if (OB_FAIL(sort->init_op_schema_obj(index_table_->get_rowkey_column_num()))) {
+      LOG_WARN("fail to init op schema obj", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < index_table_->get_rowkey_column_num(); i++) {
         const bool ascending = true;

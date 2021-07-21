@@ -119,7 +119,8 @@ public:
           all_task_fetched_(false),
           is_rescan_(false),
           rescan_taskset_(nullptr),
-          rescan_task_idx_(0)
+          rescan_task_idx_(0),
+          pwj_rescan_task_infos_()
     {}
     virtual ~ObGranuleIteratorCtx()
     {
@@ -146,6 +147,7 @@ public:
     const ObGITaskSet* rescan_taskset_ = NULL;
     common::ObSEArray<ObGITaskSet::Pos, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_;
     int64_t rescan_task_idx_;
+    common::ObSEArray<ObGranuleTaskInfo, 2> pwj_rescan_task_infos_;
   };
 
 public:

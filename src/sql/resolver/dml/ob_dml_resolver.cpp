@@ -2006,6 +2006,9 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id, c
             K(params_.contain_dml_),
             K(is_inner_table(tschema->get_table_id())),
             K(session_info_->is_inner()));
+      } else if (!GCONF._ob_enable_px_for_inner_sql &&
+                 ObSQLSessionInfo::USER_SESSION != session_info_->get_session_type()) {
+        stmt->get_query_ctx()->forbid_use_px_ = true;
       } else {
         // use px, including PL, inner sql, inner connection sql triggered by CMD
       }

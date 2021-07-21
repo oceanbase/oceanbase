@@ -167,8 +167,8 @@ int ObInitTaskP::after_process()
   return OB_NOT_SUPPORTED;
 }
 
-void ObFastInitSqcReportQCMessageCall::operator()(
-    hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry)
+void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterruptibleTaskID,
+      ObInterruptCheckerNode *> &entry)
 {
   UNUSED(entry);
   if (OB_NOT_NULL(sqc_)) {
@@ -299,7 +299,7 @@ int ObFastInitSqcCB::deal_with_rpc_timeout_err_safely()
   int ret = OB_SUCCESS;
   ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_);
   call.ret_ = OB_TIMEOUT;
-  ObGlobalInterruptManager* manager = ObGlobalInterruptManager::getInstance();
+  ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   if (OB_NOT_NULL(manager)) {
     if (OB_FAIL(manager->get_map().atomic_refactored(interrupt_id_, call))) {
       LOG_WARN("fail to deal with rpc timeout call", K(interrupt_id_));
