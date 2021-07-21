@@ -727,8 +727,11 @@ int ObLoadDataImpl::take_record_for_failed_rows(ObPhysicalPlanCtx& plan_ctx, ObL
   return ret;
 }
 
-int ObLoadDataBase::memory_wait_local(
-    ObExecContext& ctx, const ObPartitionKey& part_key, ObAddr& server_addr, int64_t& total_wait_secs)
+int ObLoadDataBase::memory_wait_local(ObExecContext &ctx,
+                                      const ObPartitionKey &part_key,
+                                      ObAddr &server_addr,
+                                      int64_t &total_wait_secs,
+                                      bool &is_leader_changed)
 {
   int ret = OB_SUCCESS;
   static const int64_t WAIT_INTERVAL_US = 1 * 1000 * 1000;  // 1s
@@ -811,6 +814,9 @@ int ObLoadDataBase::memory_wait_local(
       if (leader_addr != server_addr) {
         LOG_INFO("LOAD DATA location change", K(part_key), "old_addr", server_addr, "new_addr", leader_addr);
         server_addr = leader_addr;
+        is_leader_changed = true;
+      } else {
+        is_leader_changed = false;
       }
       LOG_INFO("LOAD DATA is resumed", "waited_seconds", wait_secs, K(total_wait_secs));
     }
@@ -3180,12 +3186,22 @@ int ObLoadDataSPImpl::handle_returned_insert_task(
     ObAddr& addr = part_mgr->get_leader_addr();
     bool found = (OB_SUCCESS == box.server_last_available_ts.get(addr, last_ts));
     if (insert_task.result_recv_ts_ > last_ts) {
-      if (OB_FAIL(memory_wait_local(ctx, part_mgr->get_part_key(), addr, box.wait_secs_for_mem_release))) {
+      bool is_leader_changed = false;
+      if (OB_FAIL(memory_wait_local(ctx, part_mgr->get_part_key(),
+                                    addr, box.wait_secs_for_mem_release,
+                                    is_leader_changed))) {
         LOG_WARN("fail to memory_wait_local", K(ret));
       } else {
         int64_t curr_time = ObTimeUtil::current_time();
+        if (is_leader_changed) {
+          found = (OB_SUCCESS == box.server_last_available_ts.get(addr, last_ts));
+        }
         ret = found ? box.server_last_available_ts.update(addr, curr_time)
                     : box.server_last_available_ts.insert(addr, curr_time);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failt to update server_last_available_ts",
+                   K(ret), K(addr), K(found), K(is_leader_changed));
+        }
       }
     }
   }
@@ -3214,45 +3230,41 @@ int ObLoadDataSPImpl::handle_returned_insert_task(
 
   if (OB_SUCC(ret)) {
     switch (task_status) {
-      case TASK_SUCC:
-        box.affected_rows += insert_task.row_count_;
-        box.insert_rt_sum += insert_task.process_us_;
-        /* RESERVE FOR DEBUG
-        box.handle_returned_insert_task_count++;
-        if (insert_task.row_count_ != DEFAULT_BUFFERRED_ROW_COUNT) {
-          LOG_WARN("LOAD DATA task return",
-                   "task_id", insert_task.task_id_,
-                   "affected_rows", box.affected_rows,
-                   "row_count", insert_task.row_count_);
-        }
-        */
-        break;
-      case TASK_NEED_RETRY:
-        insert_task.retry_times_++;
-        need_retry = true;
-        LOG_WARN("LOAD DATA task need retry",
-            "task_id",
-            insert_task.task_id_,
-            "ret",
-            result.exec_ret_,
-            "row_count",
-            insert_task.row_count_);
-        break;
-      case TASK_FAILED:
-        if (OB_SUCCESS != log_failed_insert_task(box, insert_task)) {
-          LOG_WARN("fail to log failed insert task");
-        }
-        LOG_WARN("LOAD DATA task failed",
-            "task_id",
-            insert_task.task_id_,
-            "ret",
-            result.exec_ret_,
-            "row_count",
-            insert_task.row_count_);
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        break;
+    case TASK_SUCC:
+      box.affected_rows += insert_task.row_count_;
+      box.insert_rt_sum += insert_task.process_us_;
+      /* RESERVE FOR DEBUG
+      box.handle_returned_insert_task_count++;
+      if (insert_task.row_count_ != DEFAULT_BUFFERRED_ROW_COUNT) {
+        LOG_WARN("LOAD DATA task return",
+                 "task_id", insert_task.task_id_,
+                 "affected_rows", box.affected_rows,
+                 "row_count", insert_task.row_count_);
+      }
+      */
+      break;
+    case TASK_NEED_RETRY:
+      insert_task.retry_times_++;
+      need_retry = true;
+      LOG_WARN("LOAD DATA task need retry",
+               "execute server", server_info->addr,
+               "task_id", insert_task.task_id_,
+               "ret", result.exec_ret_,
+               "row_count", insert_task.row_count_);
+      break;
+    case TASK_FAILED:
+      if (OB_SUCCESS != log_failed_insert_task(box, insert_task)) {
+        LOG_WARN("fail to log failed insert task");
+      }
+      LOG_WARN("LOAD DATA task failed",
+               "execute server", server_info->addr,
+               "task_id", insert_task.task_id_,
+               "ret", result.exec_ret_,
+               "row_count", insert_task.row_count_);
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      break;
     }
   }
 
@@ -3429,6 +3441,10 @@ int ObLoadDataSPImpl::insert_task_gen_and_dispatch(ObExecContext& ctx, ToolBox& 
       LOG_WARN("fail to on task finish", K(ret));
     } else if (OB_FAIL(box.insert_task_reserve_queue.push_back(insert_task))) {
       LOG_WARN("fail to push back", K(ret));
+    } else if (OB_ISNULL(insert_task)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      insert_task->reuse();
     }
   }
 
@@ -4136,11 +4152,11 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext& ctx, ObLoadDataStmt& load_stm
   if (OB_SUCC(ret)) {
     if (OB_FAIL(shuffle_task_controller.init(parallel))) {
       LOG_WARN("fail to init shuffle task controller", K(ret));
-    } else if (OB_FAIL(shuffle_task_reserve_queue.init(parallel))) {
+    } else if (OB_FAIL(shuffle_task_reserve_queue.init(parallel + 1))) {
       LOG_WARN("fail to init shuffle_task_reserve_queue", K(ret));
     } else if (OB_FAIL(insert_task_controller.init(parallel * server_infos.count()))) {
       LOG_WARN("fail to init insert task controller", K(ret));
-    } else if (OB_FAIL(insert_task_reserve_queue.init(parallel * server_infos.count()))) {
+    } else if (OB_FAIL(insert_task_reserve_queue.init(parallel * server_infos.count() + 1))) {
       LOG_WARN("fail to init insert_task_reserve_queue", K(ret));
     } else if (OB_FAIL(ctx_allocators.reserve(parallel))) {
       LOG_WARN("fail to pre alloc allocators", K(ret));

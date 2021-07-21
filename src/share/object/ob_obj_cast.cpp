@@ -198,6 +198,8 @@ static int convert_string_collation(const ObString& in, const ObCollationType in
       ObCharset::charset_type_by_coll(out_collation) == CHARSET_BINARY ||
       (ObCharset::charset_type_by_coll(in_collation) == ObCharset::charset_type_by_coll(out_collation))) {
     out = in;
+  } else if (in.empty()) {
+    out.reset();
   } else {
     char* buf = NULL;
     const int32_t CharConvertFactorNum = 4;

@@ -417,7 +417,8 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
       }
     }
     if (OB_SUCC(ret) && has_generated_column) {
-      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(allocator_, expr_ctx_))) {
+      uint64_t tenant_id = extract_tenant_id(merge_param.table_schema_->get_table_id());
+      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator_, expr_ctx_))) {
         STORAGE_LOG(WARN, "Failed to make default expr context ", K(ret));
       }
     }

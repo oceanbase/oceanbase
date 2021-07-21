@@ -176,6 +176,8 @@
 #include "ob_expr_format.h"
 #include "ob_expr_quarter.h"
 #include "ob_expr_bit_length.h"
+#include "ob_expr_to_single_byte.h"
+#include "ob_expr_to_multi_byte.h"
 
 namespace oceanbase {
 using namespace common;
@@ -645,8 +647,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                             // ObExprAsciistr::calc_asciistr_expr,                        /* 393 */
     NULL,                                             // ObExprAtTimeZone::eval_at_time_zone,                       /* 394 */
     NULL,                                             // ObExprAtLocal::eval_at_local,                              /* 395 */
-    NULL,                                             // ObExprToSingleByte::calc_to_single_byte,                   /* 396 */
-    NULL,                                             // ObExprToMultiByte::calc_to_multi_byte,                     /* 397 */
+    ObExprToSingleByte::calc_to_single_byte,          /* 396 */
+    ObExprToMultiByte::calc_to_multi_byte,            /* 397 */
     NULL,                                             // ObExprDllUdf::eval_dll_udf,                                /* 398 */
     NULL,                                             // ObExprRawtonhex::calc_rawtonhex_expr,                      /* 399 */
     ObExprPi::eval_pi                                 /* 400 */

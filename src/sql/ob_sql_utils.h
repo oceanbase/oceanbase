@@ -169,7 +169,7 @@ public:
       const share::schema::ObTableSchema& schema, const share::schema::ObColumnSchemaV2& gen_col,
       const common::ObIArray<share::schema::ObColDesc>& col_ids, common::ObIAllocator& allocator,
       common::ObISqlExpression*& expression, const bool make_column_expression);
-  static int make_default_expr_context(ObIAllocator& allocator, ObExprCtx& expr_ctx);
+  static int make_default_expr_context(uint64_t tenant_id, ObIAllocator& allocator, ObExprCtx& expr_ctx);
   static int calc_sql_expression(const ObISqlExpression* expr, const share::schema::ObTableSchema& schema,
       const ObIArray<share::schema::ObColDesc>& col_ids, const ObNewRow& row, ObIAllocator& allocator,
       ObExprCtx& expr_ctx, ObObj& result);

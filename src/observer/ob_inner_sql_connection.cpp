@@ -411,7 +411,7 @@ int ObInnerSQLConnection::process_retry(
                  is_get_location_timeout_error(last_ret) || is_try_lock_row_err(last_ret) ||
                  is_has_no_readable_replica_err(last_ret) || is_select_dup_follow_replic_err(last_ret) ||
                  is_trans_stmt_need_retry_error(last_ret) || is_transaction_set_violation_err(last_ret) ||
-                 is_snapshot_discarded_err(last_ret))) {
+                 is_snapshot_discarded_err(last_ret) || OB_AUTOINC_SERVICE_BUSY == last_ret)) {
     need_retry = true;
     const uint64_t* trace_id = ObCurTraceId::get();
     bool sql_trigger_by_user_req = (NULL != trace_id && 0 != trace_id[0] && 0 != trace_id[1]);

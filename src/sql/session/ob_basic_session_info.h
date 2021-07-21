@@ -2282,7 +2282,8 @@ inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() co
 // oracle SYS user actual nls_length_semantics is always BYTE
 inline ObLengthSemantics ObBasicSessionInfo::get_actual_nls_length_semantics() const
 {
-  return (is_oracle_sys_user() ? LS_BYTE : sys_vars_cache_.get_nls_length_semantics());
+  return OB_ORA_SYS_DATABASE_ID == extract_pure_id(get_database_id()) ?
+          LS_BYTE : sys_vars_cache_.get_nls_length_semantics();
 }
 
 inline int64_t ObBasicSessionInfo::get_local_ob_org_cluster_id() const

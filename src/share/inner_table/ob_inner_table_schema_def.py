@@ -9972,6 +9972,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15177', True, all_
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15179', True, all_def_keywords['__all_res_mgr_consumer_group']))
 
 
+
 ################################################################################
 # System View (20000,30000]
 # MySQL System View (20000, 25000]
@@ -15886,7 +15887,10 @@ SELECT
         'UNDEFINED') as VARCHAR2(128)) as  DATA_TYPE,
   cast(NULL as VARCHAR2(3)) as  DATA_TYPE_MOD,
   cast(NULL as VARCHAR2(128)) as  DATA_TYPE_OWNER,
-  cast(c.data_length as NUMBER) as  DATA_LENGTH,
+  cast(c.data_length * CASE WHEN c.data_type in (22,23,30,43,44,46) and c.data_precision = 1
+                            THEN decode(c.collation_type, 63, 1, 249, 4, 248, 4, 87, 2, 28, 2, 55, 4, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1)
+                            ELSE 1 END
+                            as NUMBER) as DATA_LENGTH,
   cast(CASE WHEN c.data_type in (11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
             ELSE CASE WHEN c.data_precision < 0 THEN NULL ELSE c.data_precision END
@@ -15907,19 +15911,24 @@ SELECT
   cast(NULL as NUMBER) as  NUM_BUCKETS,
   cast(NULL as DATE) as  LAST_ANALYZED,
   cast(NULL as NUMBER) as  SAMPLE_SIZE,
-  cast(NULL as VARCHAR2(44)) as  CHARACTER_SET_NAME,
+  cast(decode(c.data_type,
+         22, 'CHAR_CS',
+         23, 'CHAR_CS',
+         30, decode(c.collation_type, 63, 'NULL', 'CHAR_CS'),
+         43, 'NCHAR_CS',
+         44, 'NCHAR_CS',
+         '') as VARCHAR2(44)) as CHARACTER_SET_NAME,
   cast(NULL as NUMBER) as  CHAR_COL_DECL_LENGTH,
   cast(NULL as VARCHAR2(3)) as  GLOBAL_STATS,
   cast(NULL as VARCHAR2(3)) as  USER_STATS,
   cast(NULL as VARCHAR2(80)) as  NOTES,
   cast(NULL as NUMBER) as  AVG_COL_LEN,
-  cast(decode(c.data_type,
-         22, c.data_length,
-         23, c.data_length,
-         0) as NUMBER) as  CHAR_LENGTH,
+  cast(CASE WHEN c.data_type in (22,23,43,44) THEN c.data_length ELSE 0 END as NUMBER) as  CHAR_LENGTH,
   cast(decode(c.data_type,
          22, decode(c.data_precision, 1, 'C', 'B'),
          23, decode(c.data_precision, 1, 'C', 'B'),
+         43, decode(c.data_precision, 1, 'C', 'B'),
+         44, decode(c.data_precision, 1, 'C', 'B'),
          NULL) as VARCHAR2(1)) as  CHAR_USED,
   cast(NULL as VARCHAR2(3)) as  V80_FMT_IMAGE,
   cast(NULL as VARCHAR2(3)) as  DATA_UPGRADED,
@@ -16031,7 +16040,10 @@ SELECT
         'UNDEFINED') as VARCHAR2(128)) as  DATA_TYPE,
   cast(NULL as VARCHAR2(3)) as  DATA_TYPE_MOD,
   cast(NULL as VARCHAR2(128)) as  DATA_TYPE_OWNER,
-  cast(c.data_length as NUMBER) as  DATA_LENGTH,
+  cast(c.data_length * CASE WHEN c.data_type in (22,23,30,43,44,46) and c.data_precision = 1
+                            THEN decode(c.collation_type, 63, 1, 249, 4, 248, 4, 87, 2, 28, 2, 55, 4, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1)
+                            ELSE 1 END
+                            as NUMBER) as  DATA_LENGTH,
   cast(CASE WHEN c.data_type in (11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
             ELSE CASE WHEN c.data_precision < 0 THEN NULL ELSE c.data_precision END
@@ -16052,19 +16064,24 @@ SELECT
   cast(NULL as NUMBER) as  NUM_BUCKETS,
   cast(NULL as DATE) as  LAST_ANALYZED,
   cast(NULL as NUMBER) as  SAMPLE_SIZE,
-  cast(NULL as VARCHAR2(44)) as  CHARACTER_SET_NAME,
+  cast(decode(c.data_type,
+         22, 'CHAR_CS',
+         23, 'CHAR_CS',
+         30, decode(c.collation_type, 63, 'NULL', 'CHAR_CS'),
+         43, 'NCHAR_CS',
+         44, 'NCHAR_CS',
+         '') as VARCHAR2(44)) as  CHARACTER_SET_NAME,
   cast(NULL as NUMBER) as  CHAR_COL_DECL_LENGTH,
   cast(NULL as VARCHAR2(3)) as  GLOBAL_STATS,
   cast(NULL as VARCHAR2(3)) as  USER_STATS,
   cast(NULL as VARCHAR2(80)) as  NOTES,
   cast(NULL as NUMBER) as  AVG_COL_LEN,
-  cast(decode(c.data_type,
-         22, c.data_length,
-         23, c.data_length,
-         0) as NUMBER) as  CHAR_LENGTH,
+  cast(CASE WHEN c.data_type in (22,23,43,44) THEN c.data_length ELSE 0 END as NUMBER) as  CHAR_LENGTH,
   cast(decode(c.data_type,
          22, decode(c.data_precision, 1, 'C', 'B'),
          23, decode(c.data_precision, 1, 'C', 'B'),
+         43, decode(c.data_precision, 1, 'C', 'B'),
+         44, decode(c.data_precision, 1, 'C', 'B'),
          NULL) as VARCHAR2(1)) as  CHAR_USED,
   cast(NULL as VARCHAR2(3)) as  V80_FMT_IMAGE,
   cast(NULL as VARCHAR2(3)) as  DATA_UPGRADED,
@@ -16173,7 +16190,10 @@ SELECT
         'UNDEFINED') as VARCHAR2(128)) as  DATA_TYPE,
   cast(NULL as VARCHAR2(3)) as  DATA_TYPE_MOD,
   cast(NULL as VARCHAR2(128)) as  DATA_TYPE_OWNER,
-  cast(c.data_length as NUMBER) as  DATA_LENGTH,
+  cast(c.data_length * CASE WHEN c.data_type in (22,23,30,43,44,46) and c.data_precision = 1
+                            THEN decode(c.collation_type, 63, 1, 249, 4, 248, 4, 87, 2, 28, 2, 55, 4, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1)
+                            ELSE 1 END
+                            as NUMBER) as  DATA_LENGTH,
   cast(CASE WHEN c.data_type in (11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
             ELSE CASE WHEN c.data_precision < 0 THEN NULL ELSE c.data_precision END
@@ -16194,19 +16214,24 @@ SELECT
   cast(NULL as NUMBER) as  NUM_BUCKETS,
   cast(NULL as DATE) as  LAST_ANALYZED,
   cast(NULL as NUMBER) as  SAMPLE_SIZE,
-  cast(NULL as VARCHAR2(44)) as  CHARACTER_SET_NAME,
+  cast(decode(c.data_type,
+         22, 'CHAR_CS',
+         23, 'CHAR_CS',
+         30, decode(c.collation_type, 63, 'NULL', 'CHAR_CS'),
+         43, 'NCHAR_CS',
+         44, 'NCHAR_CS',
+         '') as VARCHAR2(44)) as  CHARACTER_SET_NAME,
   cast(NULL as NUMBER) as  CHAR_COL_DECL_LENGTH,
   cast(NULL as VARCHAR2(3)) as  GLOBAL_STATS,
   cast(NULL as VARCHAR2(3)) as  USER_STATS,
   cast(NULL as VARCHAR2(80)) as  NOTES,
   cast(NULL as NUMBER) as  AVG_COL_LEN,
-  cast(decode(c.data_type,
-         22, c.data_length,
-         23, c.data_length,
-         0) as NUMBER) as  CHAR_LENGTH,
+  cast(CASE WHEN c.data_type in (22,23,43,44) THEN c.data_length ELSE 0 END as NUMBER) as  CHAR_LENGTH,
   cast(decode(c.data_type,
          22, decode(c.data_precision, 1, 'C', 'B'),
          23, decode(c.data_precision, 1, 'C', 'B'),
+         43, decode(c.data_precision, 1, 'C', 'B'),
+         44, decode(c.data_precision, 1, 'C', 'B'),
          NULL) as VARCHAR2(1)) as  CHAR_USED,
   cast(NULL as VARCHAR2(3)) as  V80_FMT_IMAGE,
   cast(NULL as VARCHAR2(3)) as  DATA_UPGRADED,

@@ -93,6 +93,8 @@ private:
   virtual ~ObCharset(){};
 
 public:
+  static const int32_t MAX_MB_LEN = 5;
+  static const int32_t MIN_MB_LEN = 1;
   static const int64_t CHARSET_WRAPPER_COUNT = 2;
   static const int64_t COLLATION_WRAPPER_COUNT = 3;
 
@@ -306,7 +308,8 @@ public:
   ObStringScanner(const ObString& str, common::ObCollationType collation_type)
       : str_(str), collation_type_(collation_type)
   {}
-  int next_character(ObString& encoding, int32_t& wchar);
+  int next_character(ObString &encoding, int32_t &wchar);
+  bool next_character(ObString &encoding, int32_t &wchar, int &ret);
   TO_STRING_KV(K_(str), K_(collation_type));
 
 private:

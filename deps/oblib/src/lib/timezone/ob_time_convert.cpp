@@ -3183,16 +3183,13 @@ int ObTimeConverter::str_to_ob_time_oracle_dfm(
     // 2. set default value for ob_time
     if (OB_SUCC(ret)) {
       int64_t utc_curr_time = ObTimeUtility::current_time();
+      int64_t utc_curr_time_copy = utc_curr_time;
       int32_t cur_date = 0;
       if (OB_ISNULL(cvrt_ctx.tz_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session timezone info is null", K(ret));
-      } else if (sub_timezone_offset(*(cvrt_ctx.tz_info_),
-                     ObString(),
-                     utc_curr_time,
-                     session_tz_offset,
-                     session_tz_id,
-                     session_tran_type_id)) {
+      } else if (sub_timezone_offset(*(cvrt_ctx.tz_info_), ObString(),
+                                     utc_curr_time_copy, session_tz_offset, session_tz_id, session_tran_type_id)) {
         LOG_WARN("get session timezone offset failed", K(ret));
       } else if (OB_FAIL(datetime_to_date(utc_curr_time, cvrt_ctx.tz_info_, cur_date))) {
         LOG_WARN("timestamp to date failed", K(ret));

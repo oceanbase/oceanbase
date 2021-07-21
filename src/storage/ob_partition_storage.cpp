@@ -5526,7 +5526,8 @@ int ObPartitionStorage::local_sort_index_by_range(
     // extend col_ids for generated column
     ObArray<ObColDesc> extended_col_ids;
     ObArray<ObColDesc> org_extended_col_ids;
-    ObArray<ObISqlExpression*> dependent_exprs;
+    ObArray<ObISqlExpression *> dependent_exprs;
+    ObArray<const ObColumnSchemaV2 *> gen_col_schemas;
     ObExprCtx expr_ctx;
     if (OB_SUCC(ret)) {
       ObArray<ObColDesc> index_table_columns;
@@ -5618,11 +5619,14 @@ int ObPartitionStorage::local_sort_index_by_range(
                       K(ret));
                 } else if (OB_FAIL(dependent_exprs.push_back(expr))) {
                   STORAGE_LOG(WARN, "push back error", K(ret));
-                } else { /*do nothing*/
+                } else if (OB_FAIL(gen_col_schemas.push_back(column_schema))) {
+                  STORAGE_LOG(WARN, "push back error", K(ret));
                 }
               }
             } else {
               if (OB_FAIL(dependent_exprs.push_back(NULL))) {
+                STORAGE_LOG(WARN, "push back error", K(ret));
+              } else if (OB_FAIL(gen_col_schemas.push_back(NULL))) {
                 STORAGE_LOG(WARN, "push back error", K(ret));
               }
             }
@@ -5751,7 +5755,8 @@ int ObPartitionStorage::local_sort_index_by_range(
       int64_t t2 = 0;
       int64_t t3 = 0;
       int64_t t4 = 0;
-      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(allocator, expr_ctx))) {
+      uint64_t tenant_id = extract_tenant_id(table_schema->get_table_id());
+      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator, expr_ctx))) {
         STORAGE_LOG(WARN, "failed to make default expr context ", K(ret));
       }
       tables_handle.reset();
@@ -5784,8 +5789,16 @@ int ObPartitionStorage::local_sort_index_by_range(
                         calc_buf,
                         expr_ctx,
                         tmp_row.row_val_.cells_[k]))) {
-                  STORAGE_LOG(
-                      WARN, "failed to calc expr", K(row->row_val_), K(org_col_ids), K(dependent_exprs.at(k)), K(ret));
+                  STORAGE_LOG(WARN, "failed to calc expr", K(row->row_val_), K(org_col_ids),
+                      K(dependent_exprs.at(k)), K(ret));
+                } else if (OB_UNLIKELY(!tmp_row.row_val_.cells_[k].is_null()
+                                       && !sql::ObSQLUtils::is_same_type_for_compare(
+                                                gen_col_schemas.at(k)->get_meta_type(),
+                                                tmp_row.row_val_.cells_[k].get_meta()))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("result type is not consistent with schema, please check expr result",
+                           K(ret), "column schema type", gen_col_schemas.at(k)->get_meta_type(),
+                           "result", tmp_row.row_val_.cells_[k]);
                 }
               } else {
                 tmp_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];
