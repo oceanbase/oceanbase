@@ -130,6 +130,7 @@
 #define N_ACOS "acos"
 #define N_ATAN "atan"
 #define N_ATAN2 "atan2"
+#define N_COT "cot"
 #define N_PUMP_ROW_DESC "pump_row_desc"
 #define N_ROOT_ROW_DESC "root_row_desc"
 #define N_PSEUDO_COLUMN_ROW_DESC "pseudo_column_row_desc"

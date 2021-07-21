@@ -422,7 +422,7 @@ typedef enum ObItemType {
   T_FUN_SYS_MAKETIME = 707,
   T_FUN_SYS_MONTH_NAME = 708,
   T_FUN_SYS_FORMAT = 709,
-  // T_FUN_SYS_COT = 710, 710 has ben taken on master
+  T_FUN_SYS_COT = 710,
   T_FUN_SYS_QUARTER = 711,
   T_FUN_SYS_BIT_LENGTH = 712,
   T_FUN_SYS_PI = 713,

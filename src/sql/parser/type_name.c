@@ -439,6 +439,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_ACOS : return "T_FUN_SYS_ACOS";
 	case T_FUN_SYS_ATAN : return "T_FUN_SYS_ATAN";
 	case T_FUN_SYS_ATAN2 : return "T_FUN_SYS_ATAN2";
+	case T_FUN_SYS_COT : return "T_FUN_SYS_COT";
 	case T_FUN_SYS_REGEXP_COUNT : return "T_FUN_SYS_REGEXP_COUNT";
 	case T_FUN_NVL2 : return "T_FUN_NVL2";
 	case T_FUN_SYS_TO_BINARY_FLOAT : return "T_FUN_SYS_TO_BINARY_FLOAT";

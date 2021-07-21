@@ -1591,7 +1591,7 @@ int ObExprOperator::calc_trig_function_result_type1(
     type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][type.get_type()].get_precision());
   }
   type1.set_calc_type(type.get_type());
-  ObExprOperator::calc_result_flag1(type, type1);
+  //no need add not null check for trig/ln/e funciotn in mysql mode
   return ret;
 }
 

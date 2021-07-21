@@ -105,6 +105,7 @@
 #include "sql/engine/expr/ob_expr_sinh.h"
 #include "sql/engine/expr/ob_expr_cosh.h"
 #include "sql/engine/expr/ob_expr_tanh.h"
+#include "sql/engine/expr/ob_expr_cot.h"
 #include "sql/engine/expr/ob_expr_trim.h"
 #include "sql/engine/expr/ob_expr_inner_trim.h"
 #include "sql/engine/expr/ob_expr_unhex.h"
@@ -638,6 +639,10 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprBool);
   REG_OP(ObExprSin);
   REG_OP(ObExprTan);
+  REG_OP(ObExprCos);
+  REG_OP(ObExprCot);
+  REG_OP(ObExprAsin);
+  REG_OP(ObExprAcos);
   REG_OP(ObExprCalcPartitionId);
   REG_OP(ObExprPartIdPseudoColumn);
   REG_OP(ObExprStmtId);

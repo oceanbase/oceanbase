@@ -195,6 +195,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_tan.cpp
   engine/expr/ob_expr_atan.cpp
   engine/expr/ob_expr_atan2.cpp
+  engine/expr/ob_expr_cot.cpp
   engine/expr/ob_expr_between.cpp
   engine/expr/ob_expr_bit_and.cpp
   engine/expr/ob_expr_bit_count.cpp
