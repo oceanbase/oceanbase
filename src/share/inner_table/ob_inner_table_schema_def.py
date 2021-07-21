@@ -10111,7 +10111,7 @@ def_table_schema(
                    case t.collation_type when 45 then 'utf8mb4' else 'NONE' end AS CHARACTER_SET_CLIENT,
                    case t.collation_type when 45 then 'utf8mb4_general_ci' else 'NONE' end AS COLLATION_CONNECTION
                    from oceanbase.__all_virtual_table as t join oceanbase.__all_virtual_database as d on t.tenant_id = effective_tenant_id() and d.tenant_id = effective_tenant_id() and t.database_id = d.database_id
-                   where (t.table_type = 1 or t.table_type = 4) and d.in_recyclebin = 0 and d.database_name != '__recyclebin' and d.database_name != 'information_schema' and d.database_name != 'oceanbase'
+                   where (t.table_type = 1 or t.table_type = 4) and d.in_recyclebin = 0 and d.database_name != '__recyclebin' and d.database_name != 'information_schema' and d.database_name != 'oceanbase' and 0 = sys_privilege_check('table_acc', effective_tenant_id(), d.database_name, t.table_name)
 """.replace("\n", " "),
 
 
@@ -10154,7 +10154,7 @@ def_table_schema(
                     inner join oceanbase.__all_virtual_database b on a.database_id = b.database_id
                     left join oceanbase.__all_virtual_tenant_partition_meta_table c on a.table_id = c.table_id and c.tenant_id = effective_tenant_id() and a.tenant_id = c.tenant_id and c.role = 1
                     inner join oceanbase.__all_collation d on a.collation_type = d.id
-                    where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and a.table_type != 5 and b.database_name != '__recyclebin' and b.in_recyclebin = 0
+                    where a.tenant_id = effective_tenant_id() and b.tenant_id = effective_tenant_id() and a.table_type != 5 and b.database_name != '__recyclebin' and b.in_recyclebin = 0 and 0 = sys_privilege_check('table_acc', effective_tenant_id(), b.database_name, a.table_name)
                     group by a.table_id, b.database_name, a.table_name, a.table_type, a.gmt_create, a.gmt_modified, d.collation, a.comment
 """.replace("\n", " "),
 
@@ -12022,7 +12022,7 @@ def_table_schema(
                     PRIVILEGES,
                     COLUMN_COMMENT,
                     GENERATION_EXPRESSION
-  		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS""",
+  		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS where 0 = sys_privilege_check('table_acc', effective_tenant_id(), table_schema, table_name)""",
   in_tenant_space = True,
   normal_columns = [ ],
 )

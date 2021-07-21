@@ -265,6 +265,7 @@ TEST_F(TestInformationSchemaService, partitions)
   partitions_iter.set_schema_guard(&schema_guard);
   partitions_iter.set_tenant_id(real_tenant_id);
   partitions_iter.set_allocator(&allocator_);
+  partitions_iter.set_session(&session_info_);
   add_output_column_ids(partitions_iter, share::ObInnerTableSchema::partitions_schema, table);
   partitions_iter.set_table_schema(&table);
   share::FakePartPropertyGetter property_getter;
@@ -288,6 +289,7 @@ TEST_F(TestInformationSchemaService, partitions)
   partitions_iter.set_schema_guard(&schema_guard);
   partitions_iter.set_tenant_id(real_tenant_id);
   partitions_iter.set_allocator(&allocator_);
+  partitions_iter.set_session(&session_info_);
   partitions_iter.set_table_schema(&null_table_schema);
   row = NULL;
   partitions_iter.set_reserved_column_cnt(25);
@@ -310,6 +312,7 @@ TEST_F(TestInformationSchemaService, partitions)
   partitions_iter.set_schema_guard(&schema_guard);
   partitions_iter.set_tenant_id(real_tenant_id);
   partitions_iter.set_allocator(&allocator_);
+  partitions_iter.set_session(&session_info_);
   partitions_iter.set_table_schema(&table_schema_1);
   row = NULL;
   partitions_iter.set_reserved_column_cnt(25);

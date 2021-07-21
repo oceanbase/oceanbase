@@ -499,5 +499,42 @@ int ObVirtualTableIterator::close()
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+// level_str support: db_acc, table_acc
+// reference: ob_expr_sys_privilege_check.cpp:calc_resultN
+int ObVirtualTableIterator::check_priv(const ObString &level_str,
+                                       const ObString &db_name,
+                                       const ObString &table_name,
+                                       int64_t tenant_id,
+                                       bool &passed)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSessionPrivInfo session_priv;
+  CK (OB_NOT_NULL(session_) && OB_NOT_NULL(schema_guard_));
+  OX (session_->get_session_priv_info(session_priv));
+  // bool allow_show = true;
+  if (OB_SUCC(ret)) {
+    //tenant_id in table is static casted to int64_t,
+    //and use statis_cast<uint64_t> for retrieving(same with schema_service)
+    // schema拆分后，普通租户schema表的tenant_id为0，此时鉴权取session_priv.tenant_id_
+    if (session_priv.tenant_id_ != static_cast<uint64_t>(tenant_id)
+        && OB_INVALID_TENANT_ID != tenant_id) {
+      //not current tenant's row
+    } else if (0 == level_str.case_compare("db_acc")) {
+      if (OB_FAIL(schema_guard_->check_db_show(session_priv, db_name, passed))) {
+          LOG_WARN("Check db show failed", K(ret));
+      }
+    } else if (0 == level_str.case_compare("table_acc")) {
+      //if (OB_FAIL(priv_mgr.check_table_show(session_priv,
+      if (OB_FAIL(schema_guard_->check_table_show(session_priv, db_name, table_name, passed))) {
+        LOG_WARN("Check table show failed", K(ret));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Check priv level error", K(ret));
+    }
+  }
+  return ret;
+}
+
+}// common
+}// oceanbase

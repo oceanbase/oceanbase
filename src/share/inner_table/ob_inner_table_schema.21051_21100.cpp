@@ -757,7 +757,7 @@ int ObInnerTableSchema::columns_schema(ObTableSchema &table_schema)
                     PRIVILEGES,
                     COLUMN_COMMENT,
                     GENERATION_EXPRESSION
-  		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS)__"))) {
+  		    FROM OCEANBASE.__ALL_VIRTUAL_INFORMATION_COLUMNS where 0 = sys_privilege_check('table_acc', effective_tenant_id(), table_schema, table_name))__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
