@@ -543,11 +543,19 @@ private:
       const int64_t submit_timestamp, ObISubmitLogCb* cb);
   int try_freeze_aggre_buffer_(const uint64_t log_id);
   int submit_freeze_aggre_buffer_task_(const uint64_t log_id);
-  int submit_aggre_log_(ObAggreBuffer* buffer, const uint64_t log_id, const int64_t submit_timestamp);
-  int try_update_submit_timestamp(const int64_t base_ts) override;
-  bool is_confirm_match_(const uint64_t log_id, const int64_t log_data_checksum, const int64_t log_epoch_id,
-      const int64_t confirmed_info_data_checksum, const int64_t confirmed_info_epoch_id);
-  int receive_log_(const ObLogEntry& log_entry, const common::ObAddr& server, const int64_t cluster_id);
+  int submit_aggre_log_(ObAggreBuffer *buffer,
+                        const uint64_t log_id,
+                        const int64_t submit_timestamp);
+  int try_update_submit_timestamp(const int64_t base_ts);
+  bool is_confirm_match_(const uint64_t log_id,
+                         const int64_t log_data_checksum,
+                         const int64_t log_epoch_id,
+                         const int64_t log_submit_timestamp,
+                         const int64_t confirmed_info_data_checksum,
+                         const int64_t confirmed_info_epoch_id,
+                         const int64_t confirmed_info_submit_timestamp);
+  int receive_log_(const ObLogEntry &log_entry, const common::ObAddr &server,
+                   const int64_t cluster_id);
   void update_max_log_id_(const uint64_t log_id);
   int submit_to_sliding_window_(const ObLogEntryHeader& header, const char* buff, ObISubmitLogCb* cb,
       const bool need_replay, const bool send_slave, const common::ObAddr& server, const int64_t cluster_id,

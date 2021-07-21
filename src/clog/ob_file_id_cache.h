@@ -52,26 +52,21 @@ class ObIlogAccessor;
 // p3 -> [(50,f1), (5000,f3)]
 //
 // When querying (p2, 170), first find the ordered list corresponding to p2, and then, use binary search.
-class Log2File {
+class Log2File
+{
 public:
-  Log2File()
-      : file_id_(common::OB_INVALID_FILE_ID),
-        // For version after 2.1(include 2.1), start_offset correspond to the offset
-        // of the first ilog of this partition in ilog file
-        // For version before 2.1, the start_offset correspond to the start_offset_index
-        // of the first ilog of this partition in ilog cache
-        start_offset_(OB_INVALID_OFFSET),
-        min_log_id_(common::OB_INVALID_ID),
-        max_log_id_(common::OB_INVALID_ID),
-        min_log_timestamp_(common::OB_INVALID_TIMESTAMP),
-        max_log_timestamp_(common::OB_INVALID_TIMESTAMP)
-  {}
+  Log2File() : file_id_(common::OB_INVALID_FILE_ID),
+               // For version after 2.1(include 2.1), start_offset correspond to the offset
+               // of the first ilog of this partition in ilog file
+               // For version before 2.1, the start_offset correspond to the start_offset_index
+               // of the first ilog of this partition in ilog cache
+               start_offset_(OB_INVALID_OFFSET),
+               min_log_id_(common::OB_INVALID_ID),
+               max_log_id_(common::OB_INVALID_ID),
+               min_log_timestamp_(common::OB_INVALID_TIMESTAMP),
+               max_log_timestamp_(common::OB_INVALID_TIMESTAMP) {}
 
-  ~Log2File()
-  {
-    reset();
-  }
-
+  ~Log2File() { reset(); }
 public:
   file_id_t get_file_id() const
   {
@@ -228,7 +223,7 @@ public:
   }
 
   // Determine whether target_item is the next consecutive item
-  bool is_preceding_to(const Log2File& target_item) const
+  bool is_preceding_to(const Log2File &target_item) const
   {
     bool bool_ret = false;
     if (common::OB_INVALID_ID != get_max_log_id() && common::OB_INVALID_ID != target_item.min_log_id_) {
@@ -316,7 +311,8 @@ private:
   ObFileIdCache& file_id_cache_;
 };
 
-class ObFileIdList {
+class ObFileIdList
+{
 public:
   class BackFillFunctor {
   public:
@@ -336,7 +332,8 @@ public:
     offset_t start_offset_;
   };
 
-  class IPurgeChecker {
+  class IPurgeChecker
+  {
   public:
     virtual bool should_purge(const Log2File& log_2_file) const = 0;
     virtual bool is_valid() const = 0;
@@ -344,7 +341,8 @@ public:
   };
   // purge min
   // should_purge return true if min_log_id > top_item.file_id_
-  class PurgeChecker : public IPurgeChecker {
+  class PurgeChecker : public IPurgeChecker
+  {
   public:
     explicit PurgeChecker(const common::ObPartitionKey& pkey, ObIFileIdCachePurgeStrategy& purge_strategy)
         : partition_key_(pkey), purge_strategy_(purge_strategy)
@@ -364,7 +362,8 @@ public:
   // should_purge return true if top_item.file_id_ == broken_file_id_
   // Because loading an InfoBlock involves multiple partitions, if only load a part of them,
   // then all of this load must be cleaned up
-  class ClearBrokenFunctor : public IPurgeChecker {
+  class ClearBrokenFunctor : public IPurgeChecker
+  {
   public:
     explicit ClearBrokenFunctor(const file_id_t file_id) : broken_file_id_(file_id)
     {}
@@ -414,8 +413,11 @@ public:
   static const int64_t NEED_USE_SEG_ARRAY_THRESHOLD = 50;
 
 private:
-  int purge_(const bool is_front_end, IPurgeChecker& checker, bool& empty);
-  int purge_preceding_items_(const common::ObPartitionKey& pkey, const Log2File& last_item);
+  int purge_(const bool is_front_end,
+             IPurgeChecker &checker,
+             bool &empty);
+  int purge_preceding_items_(const ObPartitionKey &pkey,
+                             const Log2File &last_item);
   // The caller guarantees that the function will not be executed concurrently
   int prepare_container_();
   int move_item_to_seg_array_(common::ObISegArray<Log2File>* tmp_container_ptr) const;
@@ -424,7 +426,7 @@ private:
   bool is_inited_;
   bool use_seg_array_;
   uint64_t min_continuous_log_id_;
-  ObFileIdCache* file_id_cache_;
+  ObFileIdCache *file_id_cache_;
   ObLogBasePos base_pos_;
 
   common::ObISegArray<Log2File>* container_ptr_;
@@ -446,27 +448,29 @@ public:
   int init(const int64_t server_seq, const common::ObAddr& addr, ObIlogAccessor* ilog_accessor);
   void destroy();
 
-  int locate(const common::ObPartitionKey& pkey, const int64_t target_value, const bool locate_by_log_id,
-      Log2File& prev_item, Log2File& next_item);
-  int append(const file_id_t file_id, IndexInfoBlockMap& index_info_block_map);
-  int backfill(const common::ObPartitionKey& pkey, const uint64_t min_log_id, const file_id_t file_id,
-      const offset_t start_offset);
-  int purge(ObIFileIdCachePurgeStrategy& purge_strategy);
-  int ensure_log_continuous(const common::ObPartitionKey& pkey, const uint64_t log_id);
-  int add_partition_needed(const common::ObPartitionKey& pkey, const uint64_t last_replay_log_id);
-  file_id_t get_curr_max_file_id() const
-  {
-    return ATOMIC_LOAD(&curr_max_file_id_);
-  }
-  int64_t get_next_can_purge_log2file_timestamp() const
-  {
-    return ATOMIC_LOAD(&next_can_purge_log2file_timestamp_);
-  }
-  int get_clog_base_pos(const common::ObPartitionKey& pkey, file_id_t& file_id, offset_t& offset) const;
-  // Attention: this interface doesn't consider the format of version which before 2.1
-  int get_cursor_from_file(
-      const common::ObPartitionKey& pkey, const uint64_t log_id, const Log2File& item, ObLogCursorExt& log_cursor);
-
+  int locate(const common::ObPartitionKey &pkey,
+             const int64_t target_value,
+             const bool locate_by_log_id,
+             Log2File &prev_item,
+             Log2File &next_item);
+  int append(const file_id_t file_id,
+             IndexInfoBlockMap &index_info_block_map);
+  int backfill(const common::ObPartitionKey &pkey,
+               const uint64_t min_log_id,
+               const file_id_t file_id,
+               const offset_t start_offset);
+  int purge(ObIFileIdCachePurgeStrategy &purge_strategy);
+  int ensure_log_continuous(const common::ObPartitionKey &pkey,
+                            const uint64_t log_id);
+  int add_partition_needed(const common::ObPartitionKey &pkey,
+                           const uint64_t last_replay_log_id);
+  file_id_t get_curr_max_file_id() const {return ATOMIC_LOAD(&curr_max_file_id_);}
+  int64_t get_next_can_purge_log2file_timestamp() const {return ATOMIC_LOAD(&next_can_purge_log2file_timestamp_);}
+  int get_clog_base_pos(const ObPartitionKey &pkey, file_id_t &file_id,
+                        offset_t &offset) const;
+  //Attention: this interface doesn't consider the format of version which before 2.1
+  int get_cursor_from_file(const ObPartitionKey &pkey, const uint64_t log_id,
+                           const Log2File &item, ObLogCursorExt &log_cursor);
 private:
   class AppendInfoFunctor {
   public:
@@ -484,7 +488,8 @@ private:
     ObFileIdCache* cache_;
   };
   // Ensure that the loading process is atomic
-  class ObUndoAppendFunctor {
+  class ObUndoAppendFunctor
+  {
   public:
     explicit ObUndoAppendFunctor(const file_id_t broken_file_id) : broken_file_id_(broken_file_id)
     {}
@@ -499,7 +504,8 @@ private:
     file_id_t broken_file_id_;
     common::ObPartitionArray dead_pkeys_;
   };
-  class ObPurgeFunctor {
+  class ObPurgeFunctor
+  {
   public:
     explicit ObPurgeFunctor(ObIFileIdCachePurgeStrategy& purge_strategy)
         : purge_strategy_(purge_strategy), next_can_purge_log2file_timestamp_(common::OB_INVALID_TIMESTAMP)
@@ -595,7 +601,7 @@ private:
   common::ObSmallAllocator seg_item_allocator_;       // allocator for Log2File items(seg)
   common::ObSmallAllocator log2file_list_allocator_;  // allocator for Log2FileList
   common::ObSmallAllocator list_item_allocator_;      // allocator for Log2File items(list)
-  common::ObLinearHashMap<common::ObPartitionKey, ObFileIdList*> map_;
+  common::ObLinearHashMap<common::ObPartitionKey, ObFileIdList *> map_;
   common::ObLinearHashMap<common::ObPartitionKey, uint64_t> filter_map_;
 
 private:

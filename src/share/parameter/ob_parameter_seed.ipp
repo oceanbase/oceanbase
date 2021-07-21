@@ -753,12 +753,13 @@ DEF_INT(clog_max_unconfirmed_log_count, OB_TENANT_PARAMETER, "1500", "[100, 5000
     "Range: [100, 50000]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_ob_clog_timeout_to_force_switch_leader, OB_CLUSTER_PARAMETER, "0s", "[0s, 60m]",
-    "When log sync is blocking, leader need wait this interval before revoke."
-    "The default value is 0s, use 0s to close this function. Range: [0s, 60m]",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_ob_clog_disk_buffer_cnt, OB_CLUSTER_PARAMETER, "64", "[1, 2000]", "clog disk buffer cnt. Range: [1, 2000]",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ob_clog_timeout_to_force_switch_leader, OB_CLUSTER_PARAMETER, "10s", "[0s, 60m]",
+         "When log sync is blocking, leader need wait this interval before revoke."
+         "The default value is 0s, use 0s to close this function. Range: [0s, 60m]",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ob_clog_disk_buffer_cnt, OB_CLUSTER_PARAMETER, "64", "[1, 2000]",
+        "clog disk buffer cnt. Range: [1, 2000]",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
     "transaction rpc timeout(s). Range: [0s, 3600s]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

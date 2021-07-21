@@ -398,8 +398,9 @@ int ObLogSlidingWindow::send_confirmed_info_to_standby_children_(const uint64_t 
     const int64_t data_checksum = log_task->get_data_checksum();
     const int64_t accum_checksum = log_task->get_accum_checksum();
     const int64_t epoch_id = log_task->get_epoch_id();
+    const int64_t submit_timestamp = log_task->get_submit_timestamp();
     const bool batch_committed = log_task->is_batch_committed();
-    if (OB_FAIL(confirmed_info.init(data_checksum, epoch_id, accum_checksum))) {
+    if (OB_FAIL(confirmed_info.init(data_checksum, epoch_id, accum_checksum, submit_timestamp))) {
       CLOG_LOG(ERROR, "confirmed_info init failed", K_(partition_key), K(ret));
     } else if (OB_FAIL(submit_confirmed_info_to_standby_children_(log_id, confirmed_info, batch_committed))) {
       CLOG_LOG(WARN,
@@ -1246,8 +1247,10 @@ int ObLogSlidingWindow::need_update_log_task_(
   } else if (OB_ISNULL(state_mgr_) || OB_ISNULL(buff)) {
     ret = OB_INVALID_ARGUMENT;
   } else if (task.is_log_confirmed()) {
-    if (is_confirm_match_(
-            log_id, header.get_data_checksum(), header.get_epoch_id(), task.get_data_checksum(), task.get_epoch_id())) {
+    if (is_confirm_match_(log_id,
+                          header.get_data_checksum(), header.get_epoch_id(),
+                          header.get_submit_timestamp(), task.get_data_checksum(),
+                          task.get_epoch_id(), task.get_submit_timestamp())) {
       CLOG_LOG(DEBUG, "receive submit log after confirm log, match", K(header), K_(partition_key), K(task));
     } else {
       ret = OB_INVALID_LOG;
@@ -1803,16 +1806,11 @@ int ObLogSlidingWindow::submit_confirmed_info_(
        */
       if (log_task->is_submit_log_exist()) {
         if (!is_confirm_match_(log_id,
-                log_task->get_data_checksum(),
-                log_task->get_epoch_id(),
-                confirmed_info.get_data_checksum(),
-                confirmed_info.get_epoch_id())) {
-          CLOG_LOG(INFO,
-              "log_task and confirmed_info not match, reset",
-              K_(partition_key),
-              K(log_id),
-              K(*log_task),
-              K(confirmed_info));
+                               log_task->get_data_checksum(), log_task->get_epoch_id(),
+                               log_task->get_submit_timestamp(), confirmed_info.get_data_checksum(),
+                               confirmed_info.get_epoch_id(), confirmed_info.get_submit_timestamp())) {
+          CLOG_LOG(INFO, "log_task and confirmed_info not match, reset", K_(partition_key),
+                   K(log_id), K(*log_task), K(confirmed_info));
           log_task->reset_log();
           log_task->reset_log_cursor();
         }
@@ -2739,19 +2737,22 @@ int ObLogSlidingWindow::get_log(const uint64_t log_id, const uint32_t log_attr, 
   return ret;
 }
 
-bool ObLogSlidingWindow::is_confirm_match_(const uint64_t log_id, const int64_t log_data_checksum,
-    const int64_t log_epoch_id, const int64_t confirmed_info_data_checksum, const int64_t confirmed_info_epoch_id)
+bool ObLogSlidingWindow::is_confirm_match_(const uint64_t log_id,
+                                           const int64_t log_data_checksum,
+                                           const int64_t log_epoch_id,
+                                           const int64_t log_submit_timestamp,
+                                           const int64_t confirmed_info_data_checksum,
+                                           const int64_t confirmed_info_epoch_id,
+                                           const int64_t confirmed_info_submit_timestamp)
 {
   bool bret = false;
-  if ((log_data_checksum != confirmed_info_data_checksum) || (log_epoch_id != confirmed_info_epoch_id)) {
-    CLOG_LOG(WARN,
-        "confirm log not match",
-        K_(partition_key),
-        K(log_id),
-        K(log_data_checksum),
-        K(log_epoch_id),
-        K(confirmed_info_data_checksum),
-        K(confirmed_info_epoch_id));
+  if (log_data_checksum != confirmed_info_data_checksum
+      || log_epoch_id != confirmed_info_epoch_id
+      || (OB_INVALID_TIMESTAMP != confirmed_info_submit_timestamp
+          && log_submit_timestamp != confirmed_info_submit_timestamp)) {
+    CLOG_LOG(WARN, "confirm log not match", K_(partition_key), K(log_id), K(log_data_checksum),
+             K(log_epoch_id), K(log_submit_timestamp), K(confirmed_info_data_checksum),
+             K(confirmed_info_epoch_id), K(confirmed_info_submit_timestamp));
   } else {
     bret = true;
   }
@@ -2862,9 +2863,10 @@ int ObLogSlidingWindow::leader_submit_confirmed_info_(
     log_task->lock();
     const int64_t data_checksum = log_task->get_data_checksum();
     const int64_t epoch_id = log_task->get_epoch_id();
+    const int64_t submit_timestamp = log_task->get_submit_timestamp();
     const bool batch_committed = log_task->is_batch_committed();
     log_task->unlock();
-    if (OB_FAIL(confirmed_info.init(data_checksum, epoch_id, accum_checksum))) {
+    if (OB_FAIL(confirmed_info.init(data_checksum, epoch_id, accum_checksum, submit_timestamp))) {
       CLOG_LOG(ERROR, "confirmed_info init failed", K_(partition_key), K(ret));
     } else if (OB_FAIL(submit_confirmed_info_(log_id, confirmed_info, true, batch_committed))) {
       CLOG_LOG(WARN,
@@ -2902,9 +2904,10 @@ int ObLogSlidingWindow::standby_leader_transfer_confirmed_info_(const uint64_t l
     const int64_t data_checksum = log_task->get_data_checksum();
     const int64_t epoch_id = log_task->get_epoch_id();
     const int64_t accum_checksum = log_task->get_accum_checksum();
+    const int64_t submit_timestamp = log_task->get_submit_timestamp();
     const bool batch_committed = log_task->is_batch_committed();
     log_task->unlock();
-    if (OB_FAIL(confirmed_info.init(data_checksum, epoch_id, accum_checksum))) {
+    if (OB_FAIL(confirmed_info.init(data_checksum, epoch_id, accum_checksum, submit_timestamp))) {
       CLOG_LOG(ERROR, "confirmed_info init failed", K_(partition_key), K(ret));
     } else if (OB_FAIL(submit_confirmed_info_to_net_(log_id, confirmed_info, batch_committed))) {
       CLOG_LOG(WARN,
@@ -3803,9 +3806,19 @@ int ObLogSlidingWindow::do_fetch_log(const uint64_t start_id, const uint64_t end
   int ret = OB_SUCCESS;
   bool need_check_rebuild = false;
   is_fetched = false;
+// the follow code is used to test case clog/3050_rebuild_when_leader_reconfirm.test
+// don't delete it
+// user needs add this configuration to share/parameter/ob_parameter_seed.ipp
+// DEF_BOOL(_enable_fetch_log, OB_CLUSTER_PARAMETER, "true",
+//         "enabl fetch log", ObParameterAttr(Section::OBSERVER, Source::DEFAULT
+//         , EditLevel::DYNAMIC_EFFECTIVE));
+// const bool can_fetch_log = GCONF._enable_fetch_log;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (start_id <= 0 || end_id <= 0 || start_id >= end_id || OB_ISNULL(state_mgr_) || OB_ISNULL(log_engine_)) {
+//  } else if (!can_fetch_log) {
+//    CLOG_LOG(INFO, "can't fetch log", K(ret), K(partition_key_), K(start_id), K(end_id));
+  } else if (start_id <= 0 || end_id <= 0 || start_id >= end_id || OB_ISNULL(state_mgr_)
+             || OB_ISNULL(log_engine_)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(partition_key_), K(start_id), K(end_id));
   } else if (!check_need_fetch_log_(start_id, need_check_rebuild)) {
@@ -5179,7 +5192,10 @@ int ObLogSlidingWindow::set_confirmed_info_without_lock_(
 {
   int ret = OB_SUCCESS;
   ObConfirmedInfo confirmed_info;
-  if (OB_FAIL(confirmed_info.init(header.get_data_checksum(), header.get_epoch_id(), accum_checksum))) {
+  if (OB_FAIL(confirmed_info.init(header.get_data_checksum(),
+                                  header.get_epoch_id(),
+                                  accum_checksum,
+                                  header.get_submit_timestamp()))) {
     CLOG_LOG(ERROR, "confirmed_info init failed", K_(partition_key), K(header), KR(ret));
   } else {
     log_task.set_confirmed_info(confirmed_info);

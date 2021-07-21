@@ -567,7 +567,6 @@ int ObIlogAccessor::check_partition_ilog_can_be_purged(const common::ObPartition
   can_purge = false;
   uint64_t last_replay_log_id = OB_INVALID_ID;
   int64_t unused_ts = OB_INVALID_TIMESTAMP;
-  storage::ObIPartitionGroupGuard guard;
   if (false == inited_) {
     ret = OB_NOT_INIT;
     CSR_LOG(ERROR, "ObIlogAccessor is not init", K(ret));

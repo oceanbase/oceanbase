@@ -84,7 +84,6 @@ int ObIlogMemstore::check_need_freeze(
   int64_t clog_size_trigger_cfg = CLOG_SIZE_TRIGGER;
 #ifdef ERRSIM
   freeze_trigger_us = ObServerConfig::get_instance().ilog_flush_trigger_time;
-  cursor_size_trigger_cfg = 128;
 #endif
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -172,31 +171,26 @@ int ObIlogMemstore::timer_check_need_freeze(bool& need_freeze) const
   return ret;
 }
 
-int ObIlogMemstore::check_need_switch_file(bool& need_switch_file) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CSR_LOG(ERROR, "ObIlogMemstore is not inited", K(ret));
-  } else {
-    int64_t cursor_size_trigger_cfg = CURSOR_SIZE_TRIGGER;
-#ifdef ERRSIM
-    cursor_size_trigger_cfg = 128;
-#endif
-    need_switch_file =
-        (ATOMIC_LOAD(&cursor_size_) >= cursor_size_trigger_cfg || ATOMIC_LOAD(&clog_size_) >= CLOG_SIZE_TRIGGER);
-  }
-  return ret;
-}
-
-int ObIlogMemstore::get_cursor_size(int64_t& cursor_size) const
+int ObIlogMemstore::get_cursor_size(int64_t &cursor_size) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "get_cursor_size failed", K(ret));
   } else {
-    cursor_size = cursor_size_;
+    cursor_size = ATOMIC_LOAD(&cursor_size_);
+  }
+  return ret;
+}
+
+int ObIlogMemstore::get_clog_size(int64_t &clog_size) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "get_clog_size failed", K(ret));
+  } else {
+    clog_size = ATOMIC_LOAD(&clog_size_);
   }
   return ret;
 }

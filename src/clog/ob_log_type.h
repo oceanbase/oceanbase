@@ -24,36 +24,23 @@ class ObConfirmedInfo {
   OB_UNIS_VERSION(1);
 
 public:
-  ObConfirmedInfo() : data_checksum_(0), epoch_id_(common::OB_INVALID_TIMESTAMP), accum_checksum_(0)
-  {}
-  ~ObConfirmedInfo()
-  {}
-
+  ObConfirmedInfo() : data_checksum_(0), epoch_id_(common::OB_INVALID_TIMESTAMP),
+                      accum_checksum_(0), submit_timestamp_(common::OB_INVALID_TIMESTAMP) {}
+  ~ObConfirmedInfo() {}
 public:
-  int init(const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum);
-  int64_t get_data_checksum() const
-  {
-    return data_checksum_;
-  }
-  int64_t get_epoch_id() const
-  {
-    return epoch_id_;
-  }
-  int64_t get_accum_checksum() const
-  {
-    return accum_checksum_;
-  }
-  void reset()
-  {
-    data_checksum_ = 0;
-    epoch_id_ = common::OB_INVALID_TIMESTAMP;
-    accum_checksum_ = 0;
-  }
-  void deep_copy(const ObConfirmedInfo& confirmed_info)
+  int init(const int64_t data_checksum, const int64_t epoch_id,
+           const int64_t accum_checksum, const int64_t submit_timestamp_);
+  int64_t get_data_checksum() const { return data_checksum_; }
+  int64_t get_epoch_id() const { return epoch_id_; }
+  int64_t get_accum_checksum() const { return accum_checksum_; }
+  int64_t get_submit_timestamp() const { return submit_timestamp_; }
+  void reset() { data_checksum_ = 0; epoch_id_ = common::OB_INVALID_TIMESTAMP; accum_checksum_ = 0; }
+  void deep_copy(const ObConfirmedInfo &confirmed_info)
   {
     data_checksum_ = confirmed_info.data_checksum_;
     epoch_id_ = confirmed_info.epoch_id_;
     accum_checksum_ = confirmed_info.accum_checksum_;
+    submit_timestamp_ = confirmed_info.submit_timestamp_;
   }
   friend bool operator==(const ObConfirmedInfo& lhs, const ObConfirmedInfo& rhs);
   TO_STRING_KV(K_(data_checksum), K_(epoch_id), K_(accum_checksum));
@@ -62,7 +49,7 @@ private:
   int64_t data_checksum_;
   int64_t epoch_id_;
   int64_t accum_checksum_;
-
+  int64_t submit_timestamp_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfirmedInfo);
 };
@@ -70,7 +57,7 @@ private:
 inline bool operator==(const ObConfirmedInfo& lhs, const ObConfirmedInfo& rhs)
 {
   return (lhs.data_checksum_ == rhs.data_checksum_) && (lhs.epoch_id_ == rhs.epoch_id_) &&
-         (lhs.accum_checksum_ == rhs.accum_checksum_);
+         (lhs.accum_checksum_ == rhs.accum_checksum_) && (lhs.submit_timestamp_ == rhs.submit_timestamp_);
 }
 
 class ObMembershipLog {

@@ -2922,15 +2922,8 @@ int ObPartitionLogService::fetch_log_from_ilog_storage_(const uint64_t log_id, c
     CLOG_LOG(INFO, "this replica need rebuild", K(ret), K(server), K(partition_key_), K(log_id), K(read_from_clog));
     uint64_t last_replay_log_id = OB_INVALID_ID;
     if (OB_FAIL(get_storage_last_replay_log_id_(last_replay_log_id))) {
-      CLOG_LOG(ERROR,
-          "get_storage_last_replay_log_id_ failed",
-          K(ret),
-          K(partition_key_),
-          K(log_id),
-          K(fetch_type),
-          K(proposal_id),
-          K(server),
-          K(need_send_confirm_info));
+      CLOG_LOG(WARN, "get_storage_last_replay_log_id_ failed", K(ret), K(partition_key_), K(log_id), K(fetch_type),
+          K(proposal_id), K(server), K(need_send_confirm_info));
     } else if (log_id > last_replay_log_id) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR,
@@ -5897,9 +5890,10 @@ int ObPartitionLogService::send_confirm_info_(const common::ObAddr& server, cons
   } else {
     const uint64_t log_id = log_entry.get_header().get_log_id();
     ObConfirmedInfo confirmed_info;
-    if (OB_SUCCESS !=
-        (ret = confirmed_info.init(
-             log_entry.get_header().get_data_checksum(), log_entry.get_header().get_epoch_id(), accum_checksum))) {
+    if (OB_SUCCESS != (ret = confirmed_info.init(log_entry.get_header().get_data_checksum(),
+                                                 log_entry.get_header().get_epoch_id(),
+                                                 accum_checksum,
+                                                 log_entry.get_header().get_submit_timestamp()))) {
       CLOG_LOG(WARN, "confirmed_info init failed", K_(partition_key), K(ret));
     } else if (OB_SUCCESS != (ret = log_engine_->submit_confirmed_info(
                                   list, partition_key_, log_id, confirmed_info, batch_committed))) {
@@ -8277,7 +8271,8 @@ int ObPartitionLogService::check_and_try_leader_revoke(const ObElection::RevokeT
       CLOG_LOG(ERROR, "check_majority_replica_clog_disk_full_ failed", K(ret));
     } else {
       need_revoke = !majority_is_clog_disk_full;
-      CLOG_LOG(INFO, "partition may need revoke, ", "need revoke is ", need_revoke, "and revoke type is ", revoke_type);
+      CLOG_LOG(INFO, "partition may need revoke, ", "need revoke is ", need_revoke,
+               "and revoke type is ", revoke_type);
     }
   }
 
@@ -8465,5 +8460,5 @@ int ObPartitionLogService::get_role_and_leader_epoch_unlock_(
   return ret;
 }
 
-}  // namespace clog
-}  // namespace oceanbase
+} // namespace clog
+} // namespace oceanbase

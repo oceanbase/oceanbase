@@ -16,18 +16,25 @@
 
 namespace oceanbase {
 using namespace common;
-namespace clog {
-int ObConfirmedInfo::init(const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum)
+namespace clog
+{
+int ObConfirmedInfo::init(const int64_t data_checksum,
+                          const int64_t epoch_id,
+                          const int64_t accum_checksum,
+                          const int64_t submit_timestamp)
 {
   int ret = OB_SUCCESS;
   data_checksum_ = data_checksum;
   epoch_id_ = epoch_id;
   accum_checksum_ = accum_checksum;
+  submit_timestamp_ = submit_timestamp;
   return ret;
 }
 
 // used for RPC
-OB_SERIALIZE_MEMBER(ObConfirmedInfo, data_checksum_, epoch_id_, accum_checksum_);
+OB_SERIALIZE_MEMBER(ObConfirmedInfo, data_checksum_,
+                    epoch_id_, accum_checksum_,
+                    submit_timestamp_);
 
 ObMembershipLog::ObMembershipLog()
     : version_(MS_LOG_VERSION),

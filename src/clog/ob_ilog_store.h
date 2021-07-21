@@ -99,6 +99,7 @@ public:
   // return value
   // 1) OB_SUCCESS, query success
   // 2) OB_PARTITION_NOT_EXIST, partition not exist
+  //
   // query the min_log_id and min_log_ts in the partition
   int get_memstore_min_log_id_and_ts(
       const common::ObPartitionKey& partition_key, uint64_t& ret_min_log_id, int64_t& ret_min_log_ts) const;
@@ -112,7 +113,7 @@ public:
 
 private:
   const static int64_t DEFAULT_MEMSTORE_COUNT = 16;
-  const static int64_t TIMER_TASK_INTERVAL = 2 * 1000 * 1000;
+  const static int64_t TIMER_TASK_INTERVAL = 1000;
   // PINNED_MEMORY_SIZE should set as ObIlogMemstore::CURSOR_SIZE_TRIGGER(32MB)
   // however, in concurrent secenarios, it will causes that the size of
   // ObIlogMemstore will exceed than ObIlogMemstore::CURSOR_SIZE_TRIGGER.
@@ -144,9 +145,8 @@ private:
 
   // this function return the range of ObIlogMemstore which can be merged
   // end_idx is the last index of ObIlogMemstore which can be merged
-  // is_ilog_not_continous_trigger means that the next ObIlogMemstore after
-  // end_idx is whether trigger by OB_ILOG_NOT_CONTINOUS.
-  int get_merge_range_(int64_t& end_idx, bool& is_ilog_not_continous_trigger);
+  // need_switch_file means that whether we need switch ilog file
+  int get_merge_range_(int64_t& end_idx, bool& need_switch_file);
 
   // merge all ObIlogMemstore in [0, end_idx] to merge_after_memstore
   // end_idx is the last index of frozen_memstore_array_
@@ -175,8 +175,9 @@ private:
   //    after doing merge
   bool need_merge_frozen_memstore_array_by_trigger_type_(const ObIlogFreezeTriggerType& trigger_type) const;
 
-  int do_merge_frozen_memstore_(const FrozenMemstoreArray& frozen_memstore_array, bool is_ilog_not_continous_trigger,
-      FrozenMemstore& memstore_after_merge);
+  int do_merge_frozen_memstore_(const FrozenMemstoreArray& frozen_memstore_array,
+                                bool need_switch_file,
+                                FrozenMemstore& memstore_after_merge);
 
   void alloc_memstore_(ObIlogMemstore*& memstore);
 

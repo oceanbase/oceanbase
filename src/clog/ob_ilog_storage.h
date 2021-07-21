@@ -151,12 +151,16 @@ public:
   // Return value
   // 1) OB_SUCCESS
   // 2) OB_ENTRY_NOT_EXIST
-  int get_file_id_range(file_id_t& min_file_id, file_id_t& max_file_id) const;
+  int get_file_id_range(file_id_t &min_file_id, file_id_t &max_file_id) const;
 
-  int locate_by_timestamp(const common::ObPartitionKey& partition_key, const int64_t start_ts, uint64_t& target_log_id,
-      int64_t& target_log_timestamp);
-  int locate_ilog_file_by_log_id(
-      const common::ObPartitionKey& pkey, const uint64_t start_log_id, uint64_t& end_log_id, file_id_t& ilog_id);
+  int locate_by_timestamp(const common::ObPartitionKey &partition_key,
+                          const int64_t start_ts,
+                          uint64_t &target_log_id,
+                          int64_t &target_log_timestamp);
+  int locate_ilog_file_by_log_id(const common::ObPartitionKey &pkey,
+                                 const uint64_t start_log_id,
+                                 uint64_t &end_log_id,
+                                 file_id_t &ilog_id);
   int wash_ilog_cache();
   int purge_stale_file();
   int purge_stale_ilog_index();

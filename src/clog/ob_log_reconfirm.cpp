@@ -798,8 +798,8 @@ int ObLogReconfirm::confirm_log_()
             if (OB_FAIL(try_update_nop_or_truncate_timestamp(*header))) {
               CLOG_LOG(WARN, "try_update_nop_or_truncate_timestamp fail", K(ret), K_(partition_key));
             } else if (OB_FAIL(sw_->submit_log(log_ptr->get_header(), log_ptr->get_buf(), NULL))) {
-              CLOG_LOG(
-                  ERROR, "submit log failed", K_(partition_key), K(ret), K_(next_id), K_(start_id), K_(max_flushed_id));
+              CLOG_LOG(WARN, "submit log failed", K_(partition_key), K(ret), K_(next_id),
+                       K_(start_id), K_(max_flushed_id));
               break;
             } else {
               CLOG_LOG(TRACE, "submit log success", K_(partition_key), K_(next_id), K_(start_id), K_(max_flushed_id));
@@ -814,15 +814,37 @@ int ObLogReconfirm::confirm_log_()
           next_id_++;
         }
       }
-    }  // end while
-    if (OB_SUCC(ret) && next_id_ <= max_flushed_id_ && next_id_ >= log_info_array_.get_end_id()) {
+    } // end while
+
+    // In case of rebuild in leader reconfirm:
+    // 1. when majority has already recycled specified log, the follower
+    //    will trigger rebuild for leader, leader will advance the base
+    //    storage info and truncate the sliding window, therefore, the log
+    //    of next_id will not be majority, however, the start id of sliding
+    //    window has greater than next_id.
+    // 2. when majority has specified log, but others has already recycled
+    //    specified log, so these followers will trigger rebuild for leader,
+    //    leader will advance the next_id until submit_log return
+    //    OB_ERROR_OUT_OF_RANGE
+    // We need to ensure that next_id can be advanced correctly in above
+    // two scenarios.
+    if (OB_SUCC(ret) || OB_ERROR_OUT_OF_RANGE == ret) {
+      const uint64_t new_start_id = sw_->get_start_id();
+      if (new_start_id > next_id_) {
+        next_id_ = new_start_id;
+        CLOG_LOG(INFO, "there may execute a rebuild operation in\
+            leader reconfirm", K(ret), K(new_start_id), K(next_id_));
+      }
+      ret = OB_SUCCESS;
+    }
+
+    if (OB_SUCC(ret)
+        && next_id_ <= max_flushed_id_
+        && next_id_ >= log_info_array_.get_end_id()) {
       // process next log_range
       if (OB_EAGAIN == (ret = init_log_info_range_(next_id_))) {
-        // ret is EAGAIN when some log has slide out, need update next_id_ and retry
-        const uint64_t new_start_id = sw_->get_start_id();
-        if (new_start_id > next_id_) {
-          next_id_ = new_start_id;
-        }
+        // ret is EAGAIN when some log has slide out, need update next_id_
+        // and retry
       } else if (OB_FAIL(ret)) {
         CLOG_LOG(WARN, "init_log_info_range_ failed", K_(partition_key), K(ret));
       } else {
