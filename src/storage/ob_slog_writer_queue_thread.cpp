@@ -27,6 +27,7 @@ ObMsInfoTask& ObMsInfoTask::operator=(const ObMsInfoTask& rv)
     this->set_cluster_id(rv.get_cluster_id());
     this->set_ms_log_id(rv.get_ms_log_id());
     this->set_mc_timestamp(rv.get_mc_timestamp());
+    this->set_gen_ts(rv.get_gen_ts());
     this->set_replica_num(rv.get_replica_num());
     this->set_ms_proposal_id(rv.get_ms_proposal_id());
     (void)this->update_prev_member_list(rv.get_prev_member_list());
@@ -64,6 +65,11 @@ void ObMsInfoTask::set_ms_log_id(const uint64_t ms_log_id)
 void ObMsInfoTask::set_mc_timestamp(const int64_t mc_timestamp)
 {
   mc_timestamp_ = mc_timestamp;
+}
+
+void ObMsInfoTask::set_gen_ts(const int64_t gen_ts)
+{
+  gen_ts_ = gen_ts;
 }
 
 void ObMsInfoTask::set_replica_num(const int64_t replica_num)

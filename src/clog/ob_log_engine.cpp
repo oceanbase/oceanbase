@@ -95,11 +95,11 @@ int ObLogEnv::init(const Config& cfg, const ObAddr& self_addr, ObIInfoBlockHandl
     ret = OB_INIT_FAIL;
     CLOG_LOG(WARN, "create file store failed.", K(ret));
   } else if (OB_FAIL(direct_reader_.init(cfg.log_dir_,
-                                         nullptr/*no shared memory*/,
-                                         use_log_cache,
-                                         &log_cache_,
-                                         &log_tail_,
-                                         write_pool_type))) {
+                 nullptr /*no shared memory*/,
+                 use_log_cache,
+                 &log_cache_,
+                 &log_tail_,
+                 write_pool_type))) {
     CLOG_LOG(WARN, "direct reader init error", K(ret), K(enable_log_cache), K(write_pool_type));
   } else if (OB_FAIL(init_log_file_writer(cfg.log_dir_, file_store_))) {
     CLOG_LOG(WARN, "Fail to init log file writer ", K(ret));
@@ -338,7 +338,7 @@ bool ObLogEnv::cluster_version_before_2000_() const
   return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000;
 }
 
-int ObLogEnv::init_log_file_writer(const char *log_dir, const ObILogFileStore *file_store)
+int ObLogEnv::init_log_file_writer(const char* log_dir, const ObILogFileStore* file_store)
 {
   int ret = OB_SUCCESS;
   if (nullptr ==
@@ -763,12 +763,7 @@ int ObLogEngine::init(const ObLogEnv::Config& cfg, const ObAddr& self_addr, obrp
                  self_addr, cfg.index_cache_name_, cfg.index_cache_priority_, ilog_hot_cache_size))) {
     CLOG_LOG(WARN, "failed to init ilog_log_cache", K(ret));
   } else if (OB_FAIL(ilog_storage_.init(
-      cfg.index_log_dir_,
-      server_seq,
-      self_addr,
-      &ilog_log_cache_,
-      partition_service,
-      &clog_env_))) {
+                 cfg.index_log_dir_, server_seq, self_addr, &ilog_log_cache_, partition_service, &clog_env_))) {
     CLOG_LOG(WARN, "ilog_storage_ init failed", K(ret));
   } else {
     batch_rpc_ = batch_rpc;
@@ -1017,7 +1012,7 @@ static bool is_need_batch(int pcode)
          OB_REREGISTER_MSG == pcode || OB_CHECK_REBUILD_REQ == pcode || OB_FAKE_ACK_LOG == pcode ||
          OB_RESTORE_LEADER_TAKEOVER_MSG == pcode || OB_RESTORE_ALIVE_REQ == pcode || OB_RESTORE_ALIVE_RESP == pcode ||
          OB_RENEW_MS_CONFIRMED_INFO_REQ == pcode || OB_RENEW_MS_LOG_ACK == pcode || OB_FAKE_PUSH_LOG == pcode ||
-         OB_SYNC_LOG_ARCHIVE_PROGRESS == pcode;
+         OB_SYNC_LOG_ARCHIVE_PROGRESS == pcode || OB_RESTORE_CHECK_REQ == pcode;
 }
 
 template <typename Req>
@@ -1296,6 +1291,23 @@ int ObLogEngine::fetch_log_from_leader(const common::ObAddr& server, const int64
           K(proposal_id),
           K(max_confirmed_log_id));
     }
+  }
+  return ret;
+}
+
+int ObLogEngine::send_restore_check_rqst(const common::ObAddr& server, const int64_t dst_cluster_id,
+    const common::ObPartitionKey& key, const ObRestoreCheckType restore_type)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = OB_SERVER_TENANT_ID;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!server.is_valid() || !key.is_valid() || OB_INVALID_CLUSTER_ID == dst_cluster_id) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(server), K(key), K(dst_cluster_id));
+  } else {
+    ObRestoreCheckReq req(restore_type);
+    ret = post_packet(tenant_id, server, dst_cluster_id, key, OB_RESTORE_CHECK_REQ, req);
   }
   return ret;
 }
@@ -1715,6 +1727,25 @@ int ObLogEngine::send_restore_alive_resp(
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       CLOG_LOG(INFO, "send_restore_alive_resp", K(server), K(partition_key), K(now));
     }
+  }
+  return ret;
+}
+
+int ObLogEngine::send_query_restore_end_id_resp(const common::ObAddr& server, const int64_t cluster_id,
+    const common::ObPartitionKey& partition_key, const uint64_t last_restore_log_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!server.is_valid() || OB_INVALID_ID == last_restore_log_id || !partition_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(server), K(partition_key), K(last_restore_log_id), K(ret));
+  } else {
+    const uint64_t tenant_id = OB_SERVER_TENANT_ID;
+    ObQueryRestoreEndIdResp req(last_restore_log_id);
+    ret = post_packet(tenant_id, server, cluster_id, partition_key, OB_QUERY_RESTORE_END_ID_RESP, req);
+    CLOG_LOG(
+        DEBUG, "send_query_restore_end_id_resp finished", K(ret), K(server), K(partition_key), K(last_restore_log_id));
   }
   return ret;
 }

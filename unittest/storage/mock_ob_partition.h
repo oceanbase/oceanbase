@@ -236,12 +236,7 @@ public:
     UNUSED(role);
     return OB_NOT_SUPPORTED;
   }
-  int get_role_for_partition_table(common::ObRole& role) const
-  {
-    UNUSED(role);
-    return OB_NOT_SUPPORTED;
-  }
-  int get_leader_curr_member_list(common::ObMemberList& member_list) const
+  int get_leader_curr_member_list(common::ObMemberList &member_list) const
   {
     UNUSED(member_list);
     return OB_NOT_SUPPORTED;

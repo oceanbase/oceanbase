@@ -256,7 +256,6 @@ public:
 
   // leader or follower
   virtual int get_role(common::ObRole& role) const = 0;
-  virtual int get_role_for_partition_table(common::ObRole& role) const = 0;
   virtual int get_role_unsafe(common::ObRole& role) const = 0;
   virtual int get_leader_curr_member_list(common::ObMemberList& member_list) const = 0;
   virtual int get_leader(common::ObAddr& leader) const = 0;

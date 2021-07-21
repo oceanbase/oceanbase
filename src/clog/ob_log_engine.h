@@ -143,7 +143,7 @@ protected:
   // the clog_writer is returned to be busy
   static const int64_t BUFFER_ITEM_CONGESTED_PERCENTAGE = 50;
   bool cluster_version_before_2000_() const;
-  int init_log_file_writer(const char *log_dir, const ObILogFileStore *file_store);
+  int init_log_file_writer(const char* log_dir, const ObILogFileStore* file_store);
 
   bool is_inited_;
   Config config_;
@@ -434,6 +434,8 @@ public:
       const common::ObProposalID proposal_id) override;
   int broadcast_info(const common::ObMemberList& mem_list, const common::ObPartitionKey& key,
       const common::ObReplicaType& replica_type, const uint64_t max_confirmed_log_id) override;
+  int send_restore_check_rqst(const common::ObAddr& server, const int64_t dst_cluster_id,
+      const common::ObPartitionKey& key, const ObRestoreCheckType restore_type);
   // confirmed_info msg is special that no need compare proposal_id
   int submit_confirmed_info(const share::ObCascadMemberList& mem_list, const common::ObPartitionKey& key,
       const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed) override;
@@ -473,6 +475,8 @@ public:
       bool& remote_replica_is_normal) override;
   int get_remote_mc_ctx_array(
       const common::ObAddr& server, const common::ObPartitionArray& partition_array, McCtxArray& mc_ctx_array);
+  int send_query_restore_end_id_resp(const common::ObAddr& server, const int64_t cluster_id,
+      const common::ObPartitionKey& partition_key, const uint64_t last_restore_log_id);
   int update_min_using_file_id();
   uint32_t get_clog_min_using_file_id() const override;
   uint32_t get_clog_min_file_id() const override;

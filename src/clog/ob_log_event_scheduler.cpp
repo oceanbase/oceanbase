@@ -26,15 +26,17 @@ ObLogEventScheduler::~ObLogEventScheduler()
 int ObLogEventScheduler::init()
 {
   int ret = common::OB_SUCCESS;
-  const char* CLOG_EVENT_TIME_WHEEL_NAME = "ClogEventTimeWheel";
+  const char *CLOG_EVENT_TIME_WHEEL_NAME = "ClogEventTimeWheel";
+  const int64_t thread_num = get_time_wheel_thread_num_();
   if (IS_INIT) {
     ret = common::OB_INIT_TWICE;
     CLOG_LOG(ERROR, "ObLogEventScheduler init twice", K(ret));
-  } else if (OB_FAIL(time_wheel_.init(
-                 CLOG_EVENT_TIME_WHEEL_PRECISION, get_time_wheel_thread_num_(), CLOG_EVENT_TIME_WHEEL_NAME))) {
+  } else if (OB_FAIL(time_wheel_.init(CLOG_EVENT_TIME_WHEEL_PRECISION,
+                                      thread_num, CLOG_EVENT_TIME_WHEEL_NAME))) {
     CLOG_LOG(ERROR, "ObTimeWheel init fail", K(ret));
   } else {
     is_inited_ = true;
+    CLOG_LOG(INFO, "ObTimeWheel init success", K(thread_num));
   }
   return ret;
 }
@@ -103,7 +105,10 @@ int ObLogEventScheduler::schedule_task_(ObLogStateEventTaskV2* task, const int64
 
 int64_t ObLogEventScheduler::get_time_wheel_thread_num_() const
 {
-  int64_t thread_num = MAX(common::get_cpu_num() / 4, 4);
+  int64_t thread_num = MAX(common::get_cpu_num()/2, 4);
+  if (thread_num > common::ObTimeWheel::MAX_THREAD_NUM) {
+    thread_num = common::ObTimeWheel::MAX_THREAD_NUM;
+  }
   return thread_num;
 }
 }  // namespace clog

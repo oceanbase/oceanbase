@@ -234,6 +234,8 @@ private:
   int init_log_info_range_(const uint64_t range_start_id);
   int try_update_last_ts_(const int64_t log_ts);
   int try_update_failover_truncate_log_id_(ObLogEntryHeader* header);
+  bool is_log_task_waiting_standby_ack_(const uint64_t start_id);
+  int primary_leader_try_notify_sync_standby_();
 
 private:
   static const int64_t BUF_SIZE = 2048;
@@ -270,6 +272,8 @@ private:
   int64_t last_renew_sync_standby_loc_ts_;
   uint64_t failover_truncate_log_id_;
   int64_t max_membership_version_;
+  uint64_t last_check_start_id_;
+  int64_t last_notify_sync_standby_time_;
   bool is_standby_reconfirm_;
   bool receive_previous_max_log_ts_;
   bool is_inited_;

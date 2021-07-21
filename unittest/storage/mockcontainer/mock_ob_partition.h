@@ -92,7 +92,6 @@ public:
 
   // leader or follower
   MOCK_CONST_METHOD1(get_role, int(common::ObRole& role));
-  MOCK_CONST_METHOD1(get_role_for_partition_table, int(common::ObRole& role));
   MOCK_CONST_METHOD1(get_role_unsafe, int(common::ObRole& role));
   MOCK_CONST_METHOD1(get_leader_curr_member_list, int(common::ObMemberList& member_list));
   MOCK_CONST_METHOD1(get_leader, int(common::ObAddr& addr));

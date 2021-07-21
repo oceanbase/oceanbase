@@ -83,7 +83,7 @@ public:
   virtual int set_candidate(
       const int64_t replica_num, const common::ObMemberList& curr_mlist, const int64_t membership_version) = 0;
   virtual int change_leader_async(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) = 0;
-  virtual int change_leader_to_self_async() = 0;
+  virtual int change_leader_to_self() = 0;
   virtual int force_leader_async() = 0;
   virtual int get_curr_candidate(common::ObMemberList& mlist) const = 0;
   virtual int get_valid_candidate(common::ObMemberList& mlist) const = 0;
@@ -168,7 +168,7 @@ public:
   int set_candidate(
       const int64_t replica_num, const common::ObMemberList& curr_mlist, const int64_t membership_version) override;
   int change_leader_async(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) override;
-  int change_leader_to_self_async() override;
+  int change_leader_to_self() override;
   int force_leader_async() override;
   int get_curr_candidate(common::ObMemberList& mlist) const override;
   int get_valid_candidate(common::ObMemberList& mlist) const override;
@@ -240,21 +240,19 @@ public:
     LEASE_EXPIRED = 0,
     NOT_CANDIDATE,
     DISK_ERROR,
-    RECONFIRM_TIMEOUT,                // CLOG reconfirm timeout
-    CLOG_SW_TIMEOUT,                  // CLOG sliding window timeout
-    ROLE_CHANGE_TIMEOUT,              // CLOG role change timeout
-    REPLICA_TYPE_DISALLOW,            // replica_type now allow to be leader
-    MEMBER_LIST_DISALLOW,             // member_list not contain self
-    PS_LEADER_ACTIVE_FAIL,            // partition_service leader_active fail
-    CLUSTER_ROLE_SWITCH,              // all leader revoke when cluster role switching
-    OFS_MIGRATE_REVOKE_SRC,           // src server's leader revoke in OFS mode
-    TRANS_CB_ERROR,                   // leader need revoke when CLOG call transation's callback failed
-    STANDBY_RESTORE_FAIL,             // standby restore fail
-    SUBMIT_LOG_MEMORY_ALLOC_FAIL,     // submit_log memory alloc fail
-    RESTORE_LEADER_SUBMIT_TASK_FAIL,  // standby restore fail`
-    CLOG_DISK_FULL,                   // CLOG disk full
-    CLOG_DISK_HANG,                   // CLOG DISK HANG
-    SHARED_STORAGE_LEASE_EXPIRED,     // lease expired in shared storage mode
+    RECONFIRM_TIMEOUT,             // CLOG reconfirm timeout
+    CLOG_SW_TIMEOUT,               // CLOG sliding window timeout
+    ROLE_CHANGE_TIMEOUT,           // CLOG role change timeout
+    REPLICA_TYPE_DISALLOW,         // replica_type now allow to be leader
+    MEMBER_LIST_DISALLOW,          // member_list not contain self
+    PS_LEADER_ACTIVE_FAIL,         // partition_service leader_active fail
+    CLUSTER_ROLE_SWITCH,           // all leader revoke when cluster role switching
+    TRANS_CB_ERROR,                // leader need revoke when CLOG call transation's callback failed
+    STANDBY_RESTORE_FAIL,          // standby restore fail
+    SUBMIT_LOG_MEMORY_ALLOC_FAIL,  // submit_log memory alloc fail
+    CLOG_DISK_FULL,                // CLOG disk full
+    CLOG_DISK_HANG,                // CLOG DISK HANG
+    EPOCH_NOT_CHANGE,              // takeover with same epoch
     REVOKE_TYPE_MAX
   };
   static const char* const REVOKE_REASON_STR[RevokeType::REVOKE_TYPE_MAX];

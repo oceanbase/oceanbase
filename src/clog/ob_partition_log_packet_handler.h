@@ -73,6 +73,8 @@ protected:
   static int replace_sick_child(LogService* log_service, Context& ctx);
   static int process_leader_max_log_msg(LogService* log_service, Context& ctx);
   static int process_check_rebuild_req(LogService* log_service, Context& ctx);
+  static int process_restore_check_req(LogService* log_service, Context& ctx);
+  static int process_query_restore_end_id_resp(LogService* log_service, Context& ctx);
 
 private:
   storage::ObPartitionService* partition_service_;

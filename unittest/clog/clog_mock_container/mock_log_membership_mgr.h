@@ -91,6 +91,10 @@ public:
   {
     return 3;
   }
+  bool is_single_member_mode() const
+  {
+    return false;
+  }
   common::ObReplicaType get_replica_type() const
   {
     return REPLICA_TYPE_MAX;

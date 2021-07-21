@@ -435,16 +435,7 @@ int ObPartitionGroup::get_role(common::ObRole& role) const
   return ret;
 }
 
-int ObPartitionGroup::get_role_for_partition_table(common::ObRole& role) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_SUCCESS == (ret = check_init_(pls_, "partition log service"))) {
-    ret = pls_->get_role_for_partition_table(role);
-  }
-  return ret;
-}
-
-int ObPartitionGroup::get_role_unsafe(common::ObRole& role) const
+int ObPartitionGroup::get_role_unsafe(common::ObRole &role) const
 {
   int ret = OB_SUCCESS;
   if (OB_SUCCESS == (ret = check_init_(pls_, "partition log service"))) {

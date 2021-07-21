@@ -79,7 +79,7 @@ public:
   {
     return 0;
   }
-  virtual int change_leader_to_self_async() override
+  virtual int change_leader_to_self() override
   {
     return 0;
   }

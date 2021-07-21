@@ -177,8 +177,6 @@ public:
       int(const int64_t cmd_type, const ObPartitionKey &pkey));
   MOCK_CONST_METHOD2(get_role,
       int(const common::ObPartitionKey &pkey, common::ObRole &role));
-  MOCK_CONST_METHOD2(get_role_for_partition_table,
-      int(const common::ObPartitionKey &pkey, common::ObRole &role));
   MOCK_CONST_METHOD2(get_leader_curr_member_list,
       int(const common::ObPartitionKey &pkey, common::ObMemberList &member_list));
   MOCK_METHOD2(change_leader,

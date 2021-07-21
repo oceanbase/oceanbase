@@ -635,5 +635,37 @@ DEF_TO_STRING(ObCheckRebuildReq)
 
 OB_SERIALIZE_MEMBER(ObCheckRebuildReq, start_id_);
 
+void ObRestoreCheckReq::reset()
+{
+  restore_type_ = OB_CHECK_UNKNOWN;
+}
+
+DEF_TO_STRING(ObRestoreCheckReq)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("restore_type", restore_type_);
+  J_OBJ_END();
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObRestoreCheckReq, restore_type_);
+
+void ObQueryRestoreEndIdResp::reset()
+{
+  last_restore_log_id_ = OB_INVALID_ID;
+}
+
+DEF_TO_STRING(ObQueryRestoreEndIdResp)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("last_restore_log_id", last_restore_log_id_);
+  J_OBJ_END();
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObQueryRestoreEndIdResp, last_restore_log_id_);
+
 };  // end namespace clog
 };  // end namespace oceanbase

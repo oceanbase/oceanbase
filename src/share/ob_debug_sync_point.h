@@ -269,6 +269,7 @@ class ObString;
   ACT(BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG, )                    \
   ACT(SLOW_TXN_DURING_2PC_COMMIT_PHASE_FOR_PHYSICAL_BACKUP_1055, ) \
   ACT(BEFORE_FORCE_DROP_SCHEMA, )                                  \
+  ACT(BLOCK_CLOG_PRIMARY_RECONFIRM,)                               \
   ACT(MAX_DEBUG_SYNC_POINT, )
 
 DECLARE_ENUM(ObDebugSyncPoint, debug_sync_point, OB_DEBUG_SYNC_POINT_DEF);

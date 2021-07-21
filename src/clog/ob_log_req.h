@@ -72,8 +72,11 @@ enum ObLogReqType {
   OB_STANDBY_ACK_LOG = 43,
   OB_STANDBY_QUERY_SYNC_START_ID = 44,
   OB_STANDBY_SYNC_START_ID_RESP = 45,
+  OB_RESTORE_CHECK_REQ = 46,
+
+  OB_QUERY_RESTORE_END_ID_RESP = 50,
   // sentry req
-  OB_LOG_MAX_REQ_TYPE_ID = 46,
+  OB_LOG_MAX_REQ_TYPE_ID = 51,
 };
 
 inline bool is_batch_submit_msg(const ObLogReqType type)
@@ -784,6 +787,36 @@ public:
   {}
   ObPGLogArchiveStatus status_;
   TO_STRING_KV(K_(status));
+};
+
+struct ObRestoreCheckReq : public ObINetReq {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRestoreCheckReq() : restore_type_(OB_CHECK_UNKNOWN)
+  {}
+  explicit ObRestoreCheckReq(const ObRestoreCheckType restore_type) : restore_type_(restore_type)
+  {}
+  ~ObRestoreCheckReq()
+  {}
+  void reset();
+  DECLARE_TO_STRING;
+  ObRestoreCheckType restore_type_;
+};
+
+struct ObQueryRestoreEndIdResp : public ObINetReq {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObQueryRestoreEndIdResp() : last_restore_log_id_(OB_INVALID_ID)
+  {}
+  explicit ObQueryRestoreEndIdResp(const uint64_t last_restore_log_id) : last_restore_log_id_(last_restore_log_id)
+  {}
+  ~ObQueryRestoreEndIdResp()
+  {}
+  void reset();
+  DECLARE_TO_STRING;
+  uint64_t last_restore_log_id_;
 };
 
 };  // end namespace clog

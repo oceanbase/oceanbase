@@ -554,7 +554,6 @@ public:
       const uint64_t table_id, const common::ObAddr& server, DupReplicaType& dup_replica_type);
   VIRTUAL_FOR_UNITTEST int get_replica_status(const common::ObPartitionKey& pkey, share::ObReplicaStatus& status) const;
   VIRTUAL_FOR_UNITTEST int get_role(const common::ObPartitionKey& pkey, common::ObRole& role) const;
-  VIRTUAL_FOR_UNITTEST int get_role_for_partition_table(const common::ObPartitionKey& pkey, common::ObRole& role) const;
   VIRTUAL_FOR_UNITTEST int get_role_unsafe(const common::ObPartitionKey& pkey, common::ObRole& role) const;
   VIRTUAL_FOR_UNITTEST int get_leader_curr_member_list(
       const common::ObPartitionKey& pkey, common::ObMemberList& member_list) const;
@@ -997,6 +996,7 @@ private:
       common::ObIArray<obrpc::ObCreatePartitionArg>& target_batch_arg, common::ObIArray<int>& batch_res);
   void free_partition_list(ObArray<ObIPartitionGroup*>& partition_list);
   void submit_pt_update_task_(const ObPartitionKey& pkey, const bool need_report_checksum = true);
+  int submit_pg_pt_update_task_(const ObPartitionKey &pkey);
   int try_inc_total_partition_cnt(const int64_t new_partition_cnt, const bool need_check);
   int physical_flashback();
   int clean_all_clog_files_();

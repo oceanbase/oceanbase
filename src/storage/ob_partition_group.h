@@ -140,7 +140,6 @@ public:
       const common::ObNewRow& row, ObLockFlag lock_flag) override;
 
   virtual int get_role(common::ObRole& role) const;
-  virtual int get_role_for_partition_table(common::ObRole& role) const;
   virtual int get_role_unsafe(common::ObRole& role) const;
   virtual int get_leader_curr_member_list(common::ObMemberList& member_list) const;
   virtual int get_leader(common::ObAddr& leader) const;

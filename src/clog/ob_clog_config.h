@@ -126,6 +126,7 @@ const int64_t FAKE_ACK_MSG_VALID_TIME = CLOG_LEADER_ACTIVE_SYNC_TIMEOUT;
 const int64_t CLOG_LEADER_RECONFIRM_SYNC_TIMEOUT = 10 * 1000 * 1000;
 // time interval for requesting max_log_id during leader reconfirming.
 const int64_t CLOG_RECONFIRM_FETCH_MAX_LOG_ID_INTERVAL = 2 * 1000 * 1000;
+const int64_t CLOG_RECONFIRM_PRIMARY_NOTIFY_STANDBY_INTERVAL = 2 * 1000 * 1000;
 const int64_t CLOG_AIO_WRITE_TIMEOUT = 30 * 1000 * 1000;  // 30s
 const int64_t RECONFIRM_LOG_ARRAY_LENGTH = 128;           // log array size for reconfirm
 
