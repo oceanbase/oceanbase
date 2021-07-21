@@ -1,12 +1,12 @@
 # clog_tool
 
-OceanBase 数据库的 clog 日志类似于传统数据库的 Redo 日志。clog 日志负责在事务提交时持久化事务数据。clog_tool 用于解析并打印 clog 文件。目前，clog_tool 集成在 ob_admin 工具中，您可以通过执行 `ob_admin` 命令调用 clog_tool。
+OceanBase 数据库的 clog 日志类似于传统数据库的 Redo 日志。clog 日志负责在事务提交时持久化事务数据。事务数据是事务对数据库的修改记录。clog_tool 用于解析并打印 clog 文件。目前，clog_tool 集成在 ob_admin 工具中，您可以通过执行 `ob_admin` 命令调用 clog_tool。
 
 <!-- 为了保证高可用和一致性，OceanBase 数据库采用了 Paxos 协议对影响数据库状态的操作进行持久化。持久化产生的一致性日志文件即为 clog 日志。 -->
 
 ## clog_tool 命令
 
-下表列出了 clog_tool 的命令。
+下表列出了 clog_tool 的常用命令。
 
 | 命令名 | 说明 |
 | --- | --- |
@@ -163,7 +163,7 @@ class ObTransID
 
 | 字段名 | 说明 |
 | --- | --- |
-| server_ | 维护该事务标识符的 OBServer 的 IP 地址 |
+| server_ | 维护该事务标识符的 OBServer 的物理地址（包括 IP 地址和端口号） |
 | inc_ | OBServer 维护的单调递增值，在 OBServer 重启后重新计数 |
 | timestamp_ | 创建该事务标志符时的本地物理时钟值（Unix 时间戳） |
 | hv_ | 根据以上三个字段计算得到的 Hash 值 |
