@@ -396,8 +396,8 @@ public:
   // get partition iterator
   int iterate_partition(ObPartitionIterator& partition_iter);
   int iterate_partition_mgr_stat(ObTransPartitionMgrStatIterator& partition_mgr_stat_iter);
-  // get transaction stat iterator by partition
-  int iterate_trans_stat(const common::ObPartitionKey& partition, ObTransStatIterator& trans_stat_iter);
+  // get transaction stat iterator without partition
+  int iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter);
   int print_all_trans_ctx(const common::ObPartitionKey& partition);
   // get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator& mem_stat_iter);

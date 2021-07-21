@@ -1121,25 +1121,6 @@ void ObPartitionTransCtxMgr::reset_elr_statistic()
   ATOMIC_STORE(&end_trans_by_self_count_, 0);
 }
 
-int ObPartitionTransCtxMgr::iterate_trans_stat(ObTransStatIterator& trans_stat_iter)
-{
-  int ret = OB_SUCCESS;
-
-  RLockGuard guard(rwlock_);
-
-  if (IS_NOT_INIT) {
-    TRANS_LOG(WARN, "ObPartitionTransCtxMgr not inited");
-    ret = OB_NOT_INIT;
-  } else {
-    IterateTransStatFunctor fn(trans_stat_iter);
-    if (OB_FAIL(ctx_map_mgr_.foreach_ctx(fn))) {
-      TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
-    }
-  }
-
-  return ret;
-}
-
 int ObPartitionTransCtxMgr::set_last_restore_log_id(const uint64_t last_restore_log_id)
 {
   int ret = OB_SUCCESS;
@@ -4139,26 +4120,35 @@ int ObPartTransCtxMgr::check_ctx_create_timestamp_elapsed(const ObPartitionKey& 
   return ret;
 }
 
-int ObPartTransCtxMgr::iterate_trans_stat(const ObPartitionKey& partition, ObTransStatIterator& trans_stat_iter)
+//iterate_trans_stat_without_partition achieves complete transaction information at the server level without partition
+int ObPartTransCtxMgr::iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter)
 {
   int ret = OB_SUCCESS;
-  ObPartitionTransCtxMgr* ctx_mgr = NULL;
+  ObTimeGuard tg("ObPartTransCtxMgr iterate_trans_stat_without_partition", 5000000);
 
   DRWLock::RDLockGuard guard(rwlock_);
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtxMgr not inited");
     ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(!partition.is_valid())) {
-    TRANS_LOG(WARN, "invalid argument", K(partition));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_ISNULL(ctx_mgr = get_partition_trans_ctx_mgr(partition))) {
-    TRANS_LOG(WARN, "get partition transaction context manager error", K(partition));
+  } else if (OB_ISNULL(ctx_map_)) {
+    TRANS_LOG(WARN, "get partition transaction context manager error");
     ret = OB_PARTITION_NOT_EXIST;
-  } else if (OB_FAIL(ctx_mgr->iterate_trans_stat(trans_stat_iter))) {
-    TRANS_LOG(WARN, "iterate transaction stat error", KR(ret), K(partition));
   } else {
-    TRANS_LOG(DEBUG, "ObTransStatIterator set ready success", K(partition));
+    //Traverse 64 map memory
+    for (int i=0; i<CONTEXT_MAP_COUNT; i++) {
+      CtxMap *tmp_ctx = ctx_map_ + i;
+      if (OB_NOT_NULL(tmp_ctx)) {
+        IterateTransStatForKeyFunctor fn(trans_stat_iter);
+        if (OB_SUCCESS != (ret = tmp_ctx->for_each(fn))) {
+          TRANS_LOG(WARN, "iterate transaction stat for each error", KR(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCCESS == ret) {
+    tg.click();
+    TRANS_LOG(DEBUG, "ObTransStatIterator set ready success");
   }
 
   return ret;

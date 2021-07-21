@@ -51,6 +51,7 @@ void ObGVTransStat::destroy()
 int ObGVTransStat::prepare_start_to_read_()
 {
   int ret = OB_SUCCESS;
+  trans_stat_iter_.reset();
   if (NULL == allocator_ || NULL == trans_service_) {
     SERVER_LOG(WARN,
         "invalid argument, allocator_ or trans_service_ is null",
@@ -59,12 +60,9 @@ int ObGVTransStat::prepare_start_to_read_()
         "trans_service",
         OB_P(trans_service_));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_SUCCESS != (ret = trans_service_->iterate_partition(partition_iter_))) {
-    TRANS_LOG(WARN, "iterate partition error", K(ret));
-  } else if (!partition_iter_.is_ready()) {
-    TRANS_LOG(WARN, "ObPartitionIterator is not ready");
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_SUCCESS != (ret = trans_stat_iter_.set_ready())) {  // set ready for the first count
+  } else if (OB_SUCCESS != (ret = trans_service_->iterate_trans_stat_without_partition(trans_stat_iter_))) {
+    TRANS_LOG(WARN, "iterate transaction stat error", K(ret));
+  }  else if (OB_SUCCESS != (ret = trans_stat_iter_.set_ready())) { // set ready for the first count
     TRANS_LOG(WARN, "ObTransStatIterator set ready error", K(ret));
   } else {
     start_to_read_ = true;
@@ -75,27 +73,9 @@ int ObGVTransStat::prepare_start_to_read_()
 
 int ObGVTransStat::get_next_trans_info_(ObTransStat& trans_stat)
 {
-  int ret = OB_SUCCESS;
   ObTransStat tmp_trans_stat;
-  ObPartitionKey partition;
-  bool bool_ret = true;
 
-  while (bool_ret && OB_SUCCESS == ret) {
-    if (OB_ITER_END == (ret = trans_stat_iter_.get_next(tmp_trans_stat))) {
-      if (OB_SUCCESS != (ret = partition_iter_.get_next(partition))) {
-        if (OB_ITER_END != ret) {
-          TRANS_LOG(WARN, "ObPartitionIterator get next partition error", K(ret));
-        }
-      } else {
-        trans_stat_iter_.reset();
-        if (OB_SUCCESS != (ret = trans_service_->iterate_trans_stat(partition, trans_stat_iter_))) {
-          TRANS_LOG(WARN, "iterate transaction stat error", K(ret), K(partition));
-        }
-      }
-    } else {
-      bool_ret = false;
-    }
-  }
+  int ret = trans_stat_iter_.get_next(tmp_trans_stat);
 
   if (OB_SUCC(ret)) {
     trans_stat = tmp_trans_stat;

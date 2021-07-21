@@ -671,17 +671,17 @@ public:
   }
 };
 
-class IterateTransStatFunctor {
+class IterateTransStatForKeyFunctor {
 public:
-  explicit IterateTransStatFunctor(ObTransStatIterator& trans_stat_iter) : trans_stat_iter_(trans_stat_iter)
+  explicit IterateTransStatForKeyFunctor(ObTransStatIterator& trans_stat_iter) : trans_stat_iter_(trans_stat_iter)
   {}
-  bool operator()(const ObTransID& trans_id, ObTransCtx* ctx_base)
+  bool operator()(const ObTransKey& trans_key, ObTransCtx* ctx_base)
   {
     int tmp_ret = common::OB_SUCCESS;
     bool bool_ret = false;
 
-    if (!trans_id.is_valid() || OB_ISNULL(ctx_base)) {
-      TRANS_LOG(WARN, "invalid argument", K(trans_id), "ctx", OB_P(ctx_base));
+    if (!trans_key.is_valid() || OB_ISNULL(ctx_base)) {
+      TRANS_LOG(WARN, "invalid argument", K(trans_key), "ctx", OB_P(ctx_base));
       tmp_ret = OB_INVALID_ARGUMENT;
       // If you encounter a situation where part_ctx has not been init yet,
       // skip it directly, there will be a background thread retry
@@ -747,7 +747,7 @@ public:
         if (OB_SUCCESS != (tmp_ret = part_ctx->get_participants_copy(participants_arr))) {
           TRANS_LOG(WARN, "ObTransStat get participants copy error", K(tmp_ret));
         } else if (OB_SUCCESS != (tmp_ret = trans_stat.init(part_ctx->addr_,
-                                      trans_id,
+                                      trans_key.get_trans_id(),
                                       part_ctx->tenant_id_,
                                       part_ctx->is_exiting_,
                                       part_ctx->is_readonly_,
@@ -777,7 +777,7 @@ public:
               "ObTransStat init error",
               K(tmp_ret),
               K(has_decided),
-              K(trans_id),
+              K(trans_key.get_trans_id()),
               "addr",
               part_ctx->addr_,
               "tenant_id",

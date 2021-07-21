@@ -268,7 +268,6 @@ public:
     return ATOMIC_LOAD(&end_trans_by_self_count_);
   }
   void reset_elr_statistic();
-  int iterate_trans_stat(ObTransStatIterator& trans_stat_iter);
   int iterate_trans_lock_stat(ObTransLockStatIterator& trans_lock_stat_iter);
   int iterate_trans_result_info_in_TRIM(ObTransResultInfoStatIterator& iter);
   int iterate_trans_table(const uint64_t end_log_id, blocksstable::ObMacroBlockWriter& writer);
@@ -757,6 +756,7 @@ private:
 };
 
 class ObTransCtxMgrImpl {
+protected:
   enum { CACHE_NUM = 17313, CONTEXT_MAP_COUNT = 1 << 6 };
 
 public:
@@ -926,8 +926,8 @@ public:
   int iterate_partition(ObPartitionIterator& partition_iter);
   int iterate_partition(ObELRStatSummary& elr_stat);
   int iterate_partition_mgr_stat(ObTransPartitionMgrStatIterator& partition_mgr_stat_iter, const ObAddr& addr);
-  // get transaction stat iterator by partition
-  int iterate_trans_stat(const common::ObPartitionKey& partition, ObTransStatIterator& trans_stat_iter);
+  // get transaction stat iterator without partition
+  int iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter);
   int print_all_trans_ctx(const common::ObPartitionKey& partition);
   // get transaction lock stat iterator by partition
   int iterate_trans_lock_stat(const common::ObPartitionKey& partition, ObTransLockStatIterator& trans_lock_stat_iter);

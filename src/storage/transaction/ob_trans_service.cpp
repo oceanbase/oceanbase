@@ -6733,7 +6733,7 @@ int ObTransService::clear_all_ctx(const common::ObPartitionKey& partition)
   return ret;
 }
 
-int ObTransService::iterate_trans_stat(const common::ObPartitionKey& partition, ObTransStatIterator& trans_stat_iter)
+int ObTransService::iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter)
 {
   int ret = OB_SUCCESS;
   const int64_t PRINT_SCHE_COUNT = 128;
@@ -6744,17 +6744,10 @@ int ObTransService::iterate_trans_stat(const common::ObPartitionKey& partition, 
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
     ret = OB_NOT_RUNNING;
-  } else if (!partition.is_valid()) {
-    TRANS_LOG(WARN, "invalid argument", K(partition));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(part_trans_ctx_mgr_.iterate_trans_stat(partition, trans_stat_iter))) {
-    TRANS_LOG(WARN, "iterate transaction stat error", KR(ret), K(partition));
-  } else if (OB_FAIL(slave_part_trans_ctx_mgr_.iterate_trans_stat(partition, trans_stat_iter))) {
-    TRANS_LOG(WARN, "iterate slave transaction stat error", KR(ret), K(partition));
-  } else if (OB_FAIL(trans_stat_iter.set_ready())) {
-    TRANS_LOG(WARN, "ObTransStatIterator set ready error", KR(ret), K(partition));
   } else {
-    // do nothing
+    if (OB_FAIL(part_trans_ctx_mgr_.iterate_trans_stat_without_partition(trans_stat_iter))) {
+      TRANS_LOG(WARN, "iterate transaction stat error", KR(ret));
+    }
   }
   if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
     sche_trans_ctx_mgr_.print_all_ctx(PRINT_SCHE_COUNT);

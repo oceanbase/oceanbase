@@ -593,7 +593,7 @@ public:
 
 class ObDistTransCtx : public ObTransCtx {
   friend class CtxLock;
-  friend class IterateTransStatFunctor;
+  friend class IterateTransStatForKeyFunctor;
 
 public:
   explicit ObDistTransCtx(const char* ctx_type_str, const int64_t ctx_type)

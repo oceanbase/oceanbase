@@ -89,7 +89,7 @@ private:
 
 // participant transaction context
 class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
-  friend class IterateTransStatFunctor;
+  friend class IterateTransStatForKeyFunctor;
 
 public:
   ObPartTransCtx()
