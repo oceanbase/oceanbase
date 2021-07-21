@@ -52,8 +52,16 @@ static TransObjFactory<TransRpcTask> trans_rpc_task_factory("OB_TRANS_RPC_TASK")
 
 #define OB_FREE(object, ...) ob_free(object)
 #define RP_FREE(object, LABEL) rp_free(object, LABEL)
-#define OB_ALLOC(object, LABEL) new (ob_malloc(sizeof(object), LABEL)) object()
+#define OB_ALLOC(object, LABEL) object##alloc()
 #define RP_ALLOC(object, LABEL) rp_alloc(object, LABEL)
+
+#define MAKE_OB_ALLOC(object_name, LABEL)  \
+  object_name *object_name##alloc() \
+  {  \
+    object_name *object = NULL;  \
+    object = (object_name*)ob_malloc(sizeof(object_name), ObModIds::LABEL);  \
+    return object == NULL ? object : new(object) object_name(); \
+  }  \
 
 #define MAKE_FACTORY_CLASS_IMPLEMENT(object_name, LABEL, allocator_type, arg...)   \
   int64_t object_name##Factory::alloc_count_ = 0;                                  \
@@ -280,6 +288,10 @@ const char* TransRpcTaskFactory::get_mod_type()
 {
   return trans_rpc_task_factory.get_mod_type();
 }
+
+MAKE_OB_ALLOC(ObDupTablePartitionMgr, OB_DUP_TABLE_PARTITION_MGR)
+MAKE_OB_ALLOC(ObGtsRpcProxy, OB_GTS_RPC_PROXY)
+MAKE_OB_ALLOC(ObGtsRequestRpc, OB_GTS_REQUEST_RPC)
 
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ClogBuf, OB_TRANS_CLOG_BUF)
 MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(MutatorBuf, OB_TRANS_MUTATOR_BUF)

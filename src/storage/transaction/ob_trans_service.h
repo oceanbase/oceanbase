@@ -733,9 +733,12 @@ private:
 
   int do_dist_rollback_(
       ObTransDesc& trans_desc, const int64_t sql_no, const common::ObPartitionArray& rollback_partitions);
-  int alloc_tmp_sche_ctx_(ObTransDesc& trans_desc, bool& use_tmp_sche_ctx);
-  void free_tmp_sche_ctx_(ObTransDesc& trans_desc);
-
+  int acquire_sche_ctx_(ObTransDesc &trans_desc,
+                        ObScheTransCtx *&sche_ctx,
+                        bool &use_tmp_sche_ctx);
+  void release_sche_ctx_(ObTransDesc &trans_desc,
+                         ObScheTransCtx *sche_ctx,
+                         const bool use_tmp_sche_ctx);
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
   // max task count in message process queue

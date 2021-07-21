@@ -1136,7 +1136,11 @@ void ObPartitionService::rollback_partition_register(const ObPartitionKey& pkey,
   } else {
     if (rb_rp_eg) {
       if (OB_SUCCESS != (err = rp_eg_->remove_partition(pkey))) {
-        STORAGE_LOG(ERROR, "rollback partition from replay engine failed", K(pkey), K(err));
+        if (OB_PARTITION_NOT_EXIST != err) {
+          STORAGE_LOG(WARN, "rollback partition already been removed", K(err), K(pkey));
+        } else if (OB_NOT_RUNNING != err) {
+          STORAGE_LOG(ERROR, "rollback partition from replay engine failed", K(pkey), K(err));
+        }
       }
     }
     if (rb_txs) {
@@ -1144,7 +1148,7 @@ void ObPartitionService::rollback_partition_register(const ObPartitionKey& pkey,
       if (OB_SUCCESS != (err = txs_->remove_partition(pkey, graceful))) {
         if (OB_PARTITION_NOT_EXIST == err) {
           STORAGE_LOG(WARN, "rollback partition already been removed", K(err), K(pkey));
-        } else {
+        } else if (OB_NOT_RUNNING != err) {
           STORAGE_LOG(ERROR, "rollback partition from transaction service failed", K(pkey), K(err), K(graceful));
         }
       }
@@ -1871,6 +1875,7 @@ int ObPartitionService::create_batch_pg_partitions(
   batch_res.reuse();
   int64_t start_timestamp = ObTimeUtility::current_time();
   const int64_t CLOG_TIMEOUT = 10 * 1000 * 1000;
+  bool revert_cnt = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1885,6 +1890,7 @@ int ObPartitionService::create_batch_pg_partitions(
     STORAGE_LOG(WARN, "partition group not master, need retry", K(batch_arg));
   } else if (OB_FAIL(try_inc_total_partition_cnt(target_batch_arg.count(), true /*need_check*/))) {
     LOG_WARN("failed to inc total_partition_cnt", K(ret));
+  } else if (FALSE_IT(revert_cnt = true)) {
   } else if (OB_FAIL(partitions.reserve(target_batch_arg.count()))) {
     STORAGE_LOG(WARN, "reserve array failed", K(ret), "count", target_batch_arg.count());
   } else if (OB_FAIL(log_id_arr.reserve(target_batch_arg.count()))) {
@@ -1939,11 +1945,17 @@ int ObPartitionService::create_batch_pg_partitions(
                        add_partition_to_pg_log_id,
                        sstables_handle))) {
           STORAGE_LOG(WARN, "create pg partition failed.", K(ret));
+        } else {
+          revert_cnt = false;
         }
       }
     }
   }
   tg.click();
+
+  if (OB_FAIL(ret) && revert_cnt) {
+    try_inc_total_partition_cnt(-target_batch_arg.count(), false /*need check*/);
+  }
 
   STORAGE_LOG(INFO,
       "batch create partition to pg result.",
@@ -2084,6 +2096,7 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
   ObIPartitionGroup* pg = NULL;
   common::ObReplicaType replica_type;
   bool can_replay = true;
+  bool revert_cnt = false;
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -2111,6 +2124,7 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
     STORAGE_LOG(INFO, "no need to replay this log", K(arg), K(log_id));
   } else if (OB_FAIL(try_inc_total_partition_cnt(1, false /*need check*/))) {
     LOG_ERROR("failed to inc total partition cnt", K(ret), K(arg), K(log_id));
+  } else if (FALSE_IT(revert_cnt = true)) {
   } else if (OB_FAIL(batch_arg.push_back(arg))) {
     STORAGE_LOG(WARN, "batch arg push back error", K(ret), K(arg), K(log_id));
   } else if (OB_FAIL(pg->get_pg_storage().get_replica_type(replica_type))) {
@@ -2160,6 +2174,8 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
                   log_id,
                   sstables_handle))) {
             STORAGE_LOG(WARN, "failed to create pg partition", K(ret));
+          } else {
+            revert_cnt = false;
           }
         } else {
           tg.click();
@@ -2173,6 +2189,8 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
                   log_id,
                   handle))) {
             STORAGE_LOG(WARN, "failed to create pg partition", K(ret));
+          } else {
+            revert_cnt = false;
           }
           tg.click();
         }
@@ -2185,6 +2203,9 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
     tg.click();
   } else {
     FLOG_WARN("replay add partition to pg clog error", K(arg), "cost", ObTimeUtility::current_time() - start_timestamp);
+    if (revert_cnt) {
+      try_inc_total_partition_cnt(-1, false /*need check*/);
+    }
   }
   return ret;
 }
@@ -4172,6 +4193,7 @@ int ObPartitionService::inner_add_partition(
     LOG_WARN("failed to inc total_partition_cnt", K(ret));
   } else if (OB_FAIL(pg_mgr_.add_pg(partition, need_check_tenant, allow_multi_value))) {
     STORAGE_LOG(WARN, "add partition group error", K(ret));
+    try_inc_total_partition_cnt(-new_partition_cnt, false /*need check*/);
   } else if (partition.is_pg()) {
     // do nothing
   } else {

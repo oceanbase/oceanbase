@@ -27,6 +27,7 @@ ObPGSSTableGCTask::~ObPGSSTableGCTask()
 void ObPGSSTableGCTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
+  disable_timeout_check();
   storage::ObIPartitionGroupIterator* partition_iter = nullptr;
   ObIPartitionGroup* partition_group = nullptr;
   int64_t left_recycle_cnt = ONE_ROUND_RECYCLE_COUNT_THRESHOLD;

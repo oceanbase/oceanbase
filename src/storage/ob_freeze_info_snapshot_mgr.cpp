@@ -355,12 +355,9 @@ int ObFreezeInfoSnapshotMgr::inner_get_neighbour_major_freeze(
       if (snapshot_version < next_info.freeze_ts) {
         found = true;
         if (0 == i) {
-          if (!GCTX.is_standby_cluster()) {
-            ret = OB_ERR_SYS;
-            LOG_ERROR("cannot get neighbour major freeze before bootstrap", K(ret), K(snapshot_version), K(next_info));
-          } else {
-            ret = OB_ENTRY_NOT_EXIST;
-          }
+          ret = OB_ENTRY_NOT_EXIST;
+          STORAGE_LOG(WARN, "cannot get neighbour major freeze before bootstrap",
+                      K(ret), K(snapshot_version), K(next_info));
         } else {
           info.next = next_info;
           info.prev = info_list.at(i - 1);
@@ -1133,6 +1130,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::init(ObISQLClient& sql_proxy)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to alloc head node", K(ret));
   } else {
+    p->reset();
     head_ = tail_ = p;
     sql_proxy_ = &sql_proxy;
     inited_ = true;
@@ -1368,6 +1366,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::update_freeze_schema(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to alloc schema node", K(ret));
     } else {
+      p->reset();
       p->set(tenant_id, freeze_version, schema_version);
       insert(p);
       cnt_++;

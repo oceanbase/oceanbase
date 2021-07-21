@@ -363,7 +363,6 @@ void ObPartTransCtx::reset()
   is_dup_table_prepare_ = false;
   dup_table_syncing_log_id_ = UINT64_MAX;
   dup_table_syncing_log_ts_ = INT64_MAX;
-  async_applying_log_id_ = UINT64_MAX;
   async_applying_log_ts_ = INT64_MAX;
   is_prepare_leader_revoke_ = false;
   is_local_trans_ = true;
@@ -940,17 +939,17 @@ int ObPartTransCtx::end_task_(
   } else if (OB_UNLIKELY(is_exiting_)) {
     TRANS_LOG(WARN, "transaction is exiting", "context", *this);
     ret = OB_TRANS_IS_EXITING;
+  } else if (stmt_info_.stmt_expired(sql_no)) {
+    ret = OB_TRANS_SQL_SEQUENCE_ILLEGAL;
+    TRANS_LOG(WARN, "sql sequence is illegal", KR(ret), "context", *this, K(sql_no), K_(stmt_info));
+  } else if (FALSE_IT(stmt_info_.end_task())) {
   } else if (OB_UNLIKELY(for_replay_)) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "invalid state, transaction is replaying", KR(ret), "context", *this);
   } else if (is_in_2pc_()) {
     TRANS_LOG(WARN, "transaction is in 2pc", "context", *this);
     ret = OB_TRANS_HAS_DECIDED;
-  } else if (stmt_info_.stmt_expired(sql_no)) {
-    ret = OB_TRANS_SQL_SEQUENCE_ILLEGAL;
-    TRANS_LOG(WARN, "sql sequence is illegal", KR(ret), "context", *this, K(sql_no), K_(stmt_info));
   } else {
-    stmt_info_.end_task();
     if (is_sp_trans_()) {
       if (is_rollback) {
         --commit_task_count_;
@@ -1002,7 +1001,9 @@ int ObPartTransCtx::end_task_(
   if (OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
 
-    if (is_changing_leader_ && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::STATEMENT_NOT_FINISH) {
+    if (is_changing_leader_
+        && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::STATEMENT_NOT_FINISH
+        && stmt_info_.is_task_match()) {
       if (0 == submit_log_count_) {
         if (OB_SUCCESS != (tmp_ret = submit_log_incrementally_(true /*need state log*/))) {
           TRANS_LOG(WARN,
@@ -1623,7 +1624,6 @@ int ObPartTransCtx::callback_big_trans(
         TRANS_LOG(WARN, "unexpected log type", K(log_type), K(log_id), K(timestamp), "context", *this);
       }
 
-      async_applying_log_id_ = UINT64_MAX;
       async_applying_log_ts_ = INT64_MAX;
     }
   }
@@ -1754,7 +1754,7 @@ int ObPartTransCtx::on_sync_log_success(
         if (redo_log_no_ > 1) {
           ret = submit_big_trans_callback_task_(log_type, log_id, timestamp);
         } else {
-          if (OB_FAIL(on_sp_commit_(commit))) {
+          if (OB_FAIL(on_sp_commit_(commit, timestamp))) {
             TRANS_LOG(WARN, "ObPartTransCtx on sp commit error", KR(ret), K(commit), "context", *this);
           }
         }
@@ -2055,7 +2055,6 @@ int ObPartTransCtx::submit_big_trans_callback_task_(
 {
   int ret = OB_SUCCESS;
 
-  async_applying_log_id_ = log_id;
   async_applying_log_ts_ = timestamp;
 
   if (OB_FAIL(big_trans_worker_->submit_big_trans_callback_task(self_, log_type, log_id, timestamp, this))) {
@@ -5545,7 +5544,11 @@ int ObPartTransCtx::fill_trans_state_log_(char* buf, const int64_t size, int64_t
   ObTimeGuard timeguard("fill_trans_state_log", 10 * 1000);
 
   const int64_t available_capacity = size - OB_TRANS_REDO_LOG_RESERVE_SIZE;
-  if (OB_FAIL(ctx_dependency_wrap_.get_prev_trans_arr_guard(guard))) {
+  if (OB_UNLIKELY(!stmt_info_.is_task_match())) {
+    ret = OB_ERR_UNEXPECTED;
+    need_print_trace_log_ = true;
+    TRANS_LOG(ERROR, "fill trans state log when task not match", KR(ret), K(*this));
+  } else if (OB_FAIL(ctx_dependency_wrap_.get_prev_trans_arr_guard(guard))) {
     TRANS_LOG(WARN, "get prev trans arr guard error", KR(ret), K(*this));
   } else if (OB_FAIL(log.init(OB_LOG_TRANS_STATE,
                  self_,
@@ -6047,6 +6050,7 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const int64_t gts
         }
         need_revert_ctx = true;
         is_gts_waiting_ = false;
+        async_applying_log_ts_ = INT64_MAX;
       }
     }
     REC_TRANS_TRACE_EXT(tlog_, gts_elapse_callback, Y(ret), OB_ID(srr), srr.mts_, Y(gts));
@@ -8827,7 +8831,7 @@ int ObPartTransCtx::on_dist_abort_()
 }
 
 // Need to wait for gts has pushed over the gts
-int ObPartTransCtx::on_sp_commit_(const bool commit)
+int ObPartTransCtx::on_sp_commit_(const bool commit, const int64_t timestamp)
 {
   int ret = OB_SUCCESS;
   ObITsMgr* ts_mgr = get_ts_mgr_();
@@ -8845,6 +8849,9 @@ int ObPartTransCtx::on_sp_commit_(const bool commit)
     if (OB_FAIL(ts_mgr->wait_gts_elapse(self_.get_tenant_id(), global_trans_version_, this, need_wait))) {
       TRANS_LOG(WARN, "wait gts elapse failed", KR(ret), "context", *this);
     } else if (need_wait) {
+      if (OB_INVALID_TIMESTAMP != timestamp) {
+        async_applying_log_ts_ = timestamp;
+      }
       is_gts_waiting_ = true;
       gts_request_ts_ = ObTimeUtility::current_time();
       if (OB_FAIL(partition_mgr_->acquire_ctx_ref(trans_id_))) {

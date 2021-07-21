@@ -333,19 +333,22 @@ private:
       schema_node* prev;
       schema_node* next;
 
-      schema_node()
-          : tenant_id(common::OB_INVALID_ID),
-            freeze_version(common::OB_INVALID_VERSION),
-            schema_version(common::OB_INVALID_VERSION),
-            prev(NULL),
-            next(NULL)
-      {}
+      schema_node() { reset(); }
 
       void set(const uint64_t tenant, const int64_t freeze, const int64_t schema)
       {
         tenant_id = tenant;
         freeze_version = freeze;
         schema_version = schema;
+      }
+
+      void reset()
+      {
+        tenant_id = common::OB_INVALID_ID;
+        freeze_version = common::OB_INVALID_VERSION;
+        schema_version = common::OB_INVALID_VERSION;
+        prev = NULL;
+        next = NULL;
       }
 
       TO_STRING_KV(K(tenant_id), K(freeze_version), K(schema_version));

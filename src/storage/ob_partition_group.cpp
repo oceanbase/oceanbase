@@ -3823,7 +3823,10 @@ int ObPartitionGroup::freeze_log_and_data_v2_(const bool emergency, const bool f
       STORAGE_LOG(WARN, "fail to freeze log", K(ret), K(pkey_));
     }
   } else if (OB_FAIL(check_range_changed_(old_handle, is_leader, changed))) {
-    if (OB_EAGAIN != ret) {
+    if (OB_STATE_NOT_MATCH == ret) {
+      STORAGE_LOG(INFO, "skip freeze due to clog state", K(ret), K(pkey_));
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
       STORAGE_LOG(WARN, "failed to check log_id or version range changed", K(ret), K(old_handle));
     }
   } else if (!changed) {

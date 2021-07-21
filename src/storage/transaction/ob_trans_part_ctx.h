@@ -485,7 +485,7 @@ private:
   int do_clear_();
   int on_prepare_redo_();  // after redo/prepare log written
   int on_prepare_(const bool batch_committed, const int64_t timestamp);
-  int on_sp_commit_(const bool commit);
+  int on_sp_commit_(const bool commit, const int64_t timestamp = OB_INVALID_TIMESTAMP);
   int on_dist_commit_();
   int on_dist_abort_();
   int on_clear_(const bool need_response);
@@ -672,7 +672,6 @@ private:
   bool is_dup_table_prepare_;
   uint64_t dup_table_syncing_log_id_;
   int64_t dup_table_syncing_log_ts_;
-  uint64_t async_applying_log_id_;
   int64_t async_applying_log_ts_;
   ObTransUndoStatus undo_status_;
   int32_t max_durable_sql_no_;
