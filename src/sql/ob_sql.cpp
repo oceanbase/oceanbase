@@ -975,6 +975,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo& remote_sql_info, ObSqlCtx&
         context,
         exec_ctx,
         tenant_id);
+    pc_ctx->is_remote_executor_ = true;
     if (remote_sql_info.use_ps_) {
       // the execution plan of the ps mode and the ordinary text protocol cannot be reused,
       // it is necessary to distinguish here to avoid some problems when querying the plan
@@ -2536,7 +2537,12 @@ int ObSql::execute_get_plan(ObPlanCache& plan_cache, ObPlanCacheCtx& pc_ctx, ObP
         LOG_WARN("fail to get physical plan", K(ret));
       }
     }
-    if (OB_SQL_PC_NOT_EXIST == ret && session->use_static_typing_engine()) {
+    // 如果是新引擎执行时出现get不到的情况, 则关闭新引擎, 重新再一次get, 避免出现因为新
+    // 引擎本身不支持的计划时, 生成的新计划是老的执行计划并加入到了plan cache,
+    // 而get时总get 不到老计划的情况
+    if (OB_SQL_PC_NOT_EXIST == ret
+        && session->use_static_typing_engine()
+        && !pc_ctx.is_remote_executor_) {
       ret = OB_SUCCESS;
       session->set_use_static_typing_engine(false);
       ObPhysicalPlanCtx* pctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();

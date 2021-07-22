@@ -469,7 +469,8 @@ struct ObPlanCacheCtx {
         should_add_plan_(true),
         must_be_positive_index_(),
         multi_stmt_fp_results_(allocator),
-        handle_id_(MAX_HANDLE)
+        handle_id_(MAX_HANDLE),
+      is_remote_executor_(false)
   {
     bl_key_.tenant_id_ = tenant_id;
     fp_result_.pc_key_.is_ps_mode_ = is_ps_mode_;
@@ -548,6 +549,7 @@ struct ObPlanCacheCtx {
   // used for store fp results for multi_stmt optimization
   common::ObFixedArray<ObFastParserResult, common::ObIAllocator> multi_stmt_fp_results_;
   CacheRefHandleID handle_id_;
+  bool is_remote_executor_;
 };
 
 struct ObPlanCacheStat {
