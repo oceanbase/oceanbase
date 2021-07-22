@@ -11672,10 +11672,24 @@ int ObPartitionService::check_all_partition_sync_state(const int64_t switchover_
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "get_log_service return NULL");
       } else {
+        int64_t local_schema_version = OB_INVALID_VERSION;
+        int64_t pg_create_schema_version = OB_INVALID_VERSION;
         const common::ObPartitionKey pkey = partition->get_partition_key();
+        const uint64_t tenant_id_for_get_schema = is_inner_table(pkey.get_table_id()) ? OB_SYS_TENANT_ID : pkey.get_tenant_id();
         int tmp_ret = OB_SUCCESS;
         bool is_sync = false;
-        if (!ObMultiClusterUtil::is_cluster_private_table(pkey.get_table_id())) {
+
+        if (OB_FAIL(partition->get_pg_storage().get_create_schema_version(pg_create_schema_version))) {
+          if (REACH_TIME_INTERVAL(1000 * 1000)) {
+            STORAGE_LOG(WARN, "fail to get create schema version for pg", K(ret), K(pkey));
+          }
+        } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_for_get_schema, local_schema_version))) {
+          STORAGE_LOG(WARN, "fail to get schema version", K(ret), K(pkey), K(tenant_id_for_get_schema));
+        } else if (pg_create_schema_version > local_schema_version
+                   || !share::schema::ObSchemaService::is_formal_version(local_schema_version)) {
+          STORAGE_LOG(INFO, "new partition group, schema is not flushed", K(pkey),
+                      K(local_schema_version), K(pg_create_schema_version));
+        } else if (! ObMultiClusterUtil::is_cluster_private_table(pkey.get_table_id())) {
           // The replica to be synchronized across clusters must also check switchover_epoch
           if (OB_SUCCESS != (tmp_ret = pls->is_log_sync_with_primary(switchover_epoch, is_sync))) {
             STORAGE_LOG(WARN, "is_log_sync_with_primary failed", K(tmp_ret), K(pkey));
@@ -11684,39 +11698,40 @@ int ObPartitionService::check_all_partition_sync_state(const int64_t switchover_
           // The replica that does not need to be synchronized across clusters
           is_sync = true;
         }
-        if (!is_sync) {
-          STORAGE_LOG(INFO, "this partition is not sync with leader, need check schema", K(pkey));
-        }
 
-        bool is_dropped = false;
-        bool check_dropped_partition = true;
-        if (!is_sync) {
-          // check whether the partition has been dropped during unsync
-          ObPartitionArray pkeys;
-          if (OB_SUCCESS != (tmp_ret = partition->get_all_pg_partition_keys(pkeys))) {
-            STORAGE_LOG(WARN, "get all pg partition keys error", K(tmp_ret), K(pkey));
-          } else if (!partition->is_pg()) {
-            // dealing with stand alone partition
-            if (OB_SUCCESS !=
-                (tmp_ret = schema_guard.check_partition_can_remove(
-                     pkey.get_table_id(), pkey.get_partition_id(), check_dropped_partition, is_dropped))) {
-              STORAGE_LOG(WARN, "fail to check partition exist", K(tmp_ret), K(pkey));
-            }
-          } else {
-            // The deletion of PG will only be judged after all the partitions in PG are completed by gc
-            if (OB_SUCCESS !=
-                (tmp_ret = schema_guard.check_partition_can_remove(
-                     pkey.get_tablegroup_id(), pkey.get_partition_group_id(), check_dropped_partition, is_dropped))) {
-              STORAGE_LOG(WARN, "fail to check partition group exist", K(tmp_ret), K(pkey));
+        if (OB_SUCC(ret)) {
+          if (!is_sync) {
+            STORAGE_LOG(INFO, "this partition is not sync with leader, need check schema", K(pkey), K(ret));
+          }
+
+          bool is_dropped = false;
+          bool check_dropped_partition = true;
+          if (!is_sync) {
+            // check whether the partition has been dropped during unsync
+            ObPartitionArray pkeys;
+            if (OB_SUCCESS != (tmp_ret = partition->get_all_pg_partition_keys(pkeys))) {
+              STORAGE_LOG(WARN, "get all pg partition keys error", K(tmp_ret), K(pkey));
+            } else if (!partition->is_pg()) {
+              // dealing with stand alone partition
+              if (OB_SUCCESS != (tmp_ret = schema_guard.check_partition_can_remove(
+                      pkey.get_table_id(), pkey.get_partition_id(), check_dropped_partition, is_dropped))) {
+                STORAGE_LOG(WARN, "fail to check partition exist", K(tmp_ret), K(pkey));
+              }
+            } else {
+              // The deletion of PG will only be judged after all the partitions in PG are completed by gc
+              if (OB_SUCCESS != (tmp_ret = schema_guard.check_partition_can_remove(
+                      pkey.get_tablegroup_id(), pkey.get_partition_group_id(), check_dropped_partition, is_dropped))) {
+                STORAGE_LOG(WARN, "fail to check partition group exist", K(tmp_ret), K(pkey));
+              }
             }
           }
-        }
 
-        if (!is_sync) {
-          if (is_dropped) {
-            STORAGE_LOG(INFO, "this unsync partition has been dropped, ignore", K(pkey));
-          } else {
-            fail_count++;
+          if (!is_sync) {
+            if (is_dropped) {
+              STORAGE_LOG(INFO, "this unsync partition has been dropped, ignore", K(pkey));
+            } else {
+              fail_count++;
+            }
           }
         }
       }
