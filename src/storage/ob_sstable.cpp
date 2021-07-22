@@ -26,6 +26,7 @@
 #include "ob_partition_scheduler.h"
 #include "ob_warm_up_request.h"
 #include "ob_multiple_merge.h"
+#include "ob_pg_sstable_garbage_collector.h"
 #include "storage/ob_sstable_row_exister.h"
 #include "storage/ob_sstable_row_multi_exister.h"
 #include "storage/ob_sstable_row_getter.h"
@@ -3314,7 +3315,21 @@ int ObSSTable::convert_add_macro_block_meta(
   return ret;
 }
 
-int ObSSTable::serialize_schema_map(char* buf, int64_t data_len, int64_t& pos) const
+int64_t ObSSTable::dec_ref()
+{
+  int64_t ref_cnt = ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+
+  if (0 == ref_cnt) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObPGSSTableGarbageCollector::get_instance().push_sstable_into_gc_queue(key_))) {
+      LOG_WARN("fail to push sstable into gc queue", K(ret), K(key_));
+    }
+  }
+
+  return ref_cnt;
+}
+
+int ObSSTable::serialize_schema_map(char *buf, int64_t data_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(serialization::encode_i64(buf, data_len, pos, schema_map_.size()))) {

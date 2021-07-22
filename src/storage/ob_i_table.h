@@ -243,10 +243,12 @@ public:
   {
     ATOMIC_INC(&ref_cnt_);
   }
-  inline int64_t dec_ref()
-  {
-    return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+  
+  virtual int64_t dec_ref() 
+  { 
+    return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); 
   }
+  
   inline int64_t get_ref() const
   {
     return ATOMIC_LOAD(&ref_cnt_);

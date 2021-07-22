@@ -6368,6 +6368,15 @@ int ObPGStorage::recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t&
   return ret;
 }
 
+int ObPGStorage::recycle_sstable(const ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sstable_mgr_.recycle_sstable(table_key))) {
+    STORAGE_LOG(WARN, "fail to recycle sstable", K(ret), K(table_key));
+  }
+  return ret;
+}
+
 int ObPGStorage::alloc_file_for_old_replay()
 {
   int ret = OB_SUCCESS;

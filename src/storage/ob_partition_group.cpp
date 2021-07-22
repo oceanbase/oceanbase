@@ -5820,7 +5820,16 @@ int ObPartitionGroup::recycle_unused_sstables(const int64_t max_recycle_cnt, int
   return ret;
 }
 
-int ObPartitionGroup::set_meta_block_list(const common::ObIArray<blocksstable::MacroBlockId>& meta_block_list)
+int ObPartitionGroup::recycle_sstable(const ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pg_storage_.recycle_sstable(table_key))) {
+    STORAGE_LOG(WARN, "fail to recycle sstable", K(ret), K(table_key));
+  }
+  return ret;
+}
+
+int ObPartitionGroup::set_meta_block_list(const common::ObIArray<blocksstable::MacroBlockId> &meta_block_list)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {

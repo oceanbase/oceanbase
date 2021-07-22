@@ -391,6 +391,7 @@ public:
   virtual int get_checkpoint_info(common::ObArenaAllocator& allocator, ObPGCheckpointInfo& pg_checkpoint_info) override;
   virtual int acquire_sstable(const ObITable::TableKey& table_key, ObTableHandle& table_handle) override;
   virtual int recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t& recycled_cnt) override;
+  virtual int recycle_sstable(const ObITable::TableKey &table_key) override;
   virtual int check_can_free(bool& can_free) override;
 
   virtual bool need_replay_redo() const;

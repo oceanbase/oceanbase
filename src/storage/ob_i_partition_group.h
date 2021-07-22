@@ -513,6 +513,7 @@ public:
   virtual int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId>& meta_block_list) const = 0;
   virtual int get_all_tables(ObTablesHandle& tables_handle) = 0;
   virtual int recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t& recycled_cnt) = 0;
+  virtual int recycle_sstable(const ObITable::TableKey &table_key) = 0;
   virtual int check_can_free(bool& can_free) = 0;
   virtual int get_merge_log_ts(int64_t& freeze_ts) = 0;
   virtual int get_table_store_cnt(int64_t& table_cnt) const = 0;

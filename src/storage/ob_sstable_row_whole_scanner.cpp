@@ -368,7 +368,7 @@ int ObSSTableRowWholeScanner::open_macro_block()
     const ObMicroBlockIndexMgr* index_mgr = NULL;
     const char* buf = NULL;
     if (OB_FAIL(scan_handle->macro_io_handle_.wait(io_timeout_ms))) {
-      LOG_ERROR("failed to read macro block from io", K(ret), K(io_timeout_ms));
+      LOG_WARN("failed to read macro block from io", K(ret), K(io_timeout_ms));
     } else if (OB_ISNULL(buf = scan_handle->macro_io_handle_.get_buffer())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, the buffer must not be NULL", K(ret));

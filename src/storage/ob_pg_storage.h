@@ -330,6 +330,7 @@ public:
   int replay_remove_sstable(const ObITable::TableKey& table_key);
   int acquire_sstable(const ObITable::TableKey& table_key, ObTableHandle& table_handle);
   int recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t& recycled_cnt);
+  int recycle_sstable(const ObITable::TableKey &table_key);
   int check_can_free(bool& can_free);
 
   int get_min_frozen_memtable_base_version(int64_t& min_base_version);
