@@ -108,7 +108,22 @@ public:
     bool is_inited_;
   };
 
-  class ObRefreshTime {
+  class ObRefreshNetworkSpeedTask: public common::ObTimerTask
+  {
+  public:
+    ObRefreshNetworkSpeedTask();
+    virtual ~ObRefreshNetworkSpeedTask() {}
+    int init(ObServer *observer, int tg_id);
+    void destroy();
+    virtual void runTimerTask() override;
+  private:
+    const static int64_t REFRESH_INTERVAL = 1L * 1000L * 1000L;//1hr
+    ObServer *obs_;
+    bool is_inited_;
+  };
+
+
+class ObRefreshTime {
   public:
     explicit ObRefreshTime(ObServer* obs) : obs_(obs)
     {}
@@ -257,10 +272,13 @@ private:
   int wait_gts();
   int init_gts_cache_mgr();
   int init_storage();
-  int init_bandwidth_throttle();
   int init_gc_partition_adapter();
-  int reload_bandwidth_throttle_limit();
   int init_loaddata_global_stat();
+  int init_bandwidth_throttle();
+  int reload_bandwidth_throttle_limit(int64_t network_speed);
+  int get_network_speed_from_sysfs(int64_t &network_speed);
+  int get_network_speed_from_config_file(int64_t &network_speed);
+  int refresh_network_speed();
 
   int clean_up_invalid_tables();
   int init_ctas_clean_up_task();  // Regularly clean up the residuals related to querying and building tables and
@@ -268,6 +286,7 @@ private:
   int refresh_temp_table_sess_active_time();
   int init_refresh_active_time_task();  // Regularly update the sess_active_time of the temporary table created by the
                                         // proxy connection sess
+  int init_refresh_network_speed_task();
   int set_running_mode();
   int check_server_can_start_service();
 
@@ -394,6 +413,7 @@ private:
   storage::ObPurgeCompletedMonitorInfoTask long_ops_task_;
   ObCTASCleanUpTask ctas_clean_up_task_;        // repeat & no retry
   ObRefreshTimeTask refresh_active_time_task_;  // repeat & no retry
+  ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
   ObSignalWorker sig_worker_;

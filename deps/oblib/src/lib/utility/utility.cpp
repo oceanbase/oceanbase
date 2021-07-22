@@ -576,13 +576,17 @@ int get_ethernet_speed(const ObString& devname, int64_t& speed)
   int rc = OB_SUCCESS;
   bool exist = false;
   char path[OB_MAX_FILE_NAME_LENGTH];
+  static int dev_file_exist = 1;
   if (0 == devname.length()) {
     _OB_LOG(WARN, "empty devname");
     rc = OB_INVALID_ARGUMENT;
   } else {
     IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s", devname.length(), devname.ptr());
     if (OB_SUCCESS != (rc = FileDirectoryUtils::is_exists(path, exist)) || !exist) {
+      if (dev_file_exist) {
       _OB_LOG(WARN, "path %s not exist", path);
+       dev_file_exist = 0;
+      }
       rc = OB_FILE_NOT_EXIST;
     }
   }
