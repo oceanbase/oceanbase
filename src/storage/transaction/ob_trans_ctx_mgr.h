@@ -137,7 +137,8 @@ public:
 public:
   // alloc transaction context if alloc is set true when transaction context not exist
   int get_trans_ctx(const ObTransID& trans_id, const bool for_replay, const bool is_readonly,
-      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx);
+      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc,
+      ObTransCtx*& ctx, const bool wait_init = true);
   int revert_trans_ctx(ObTransCtx* ctx);
   int acquire_ctx_ref(const ObTransID& trans_id)
   {
@@ -394,7 +395,8 @@ private:
     return ATOMIC_LOAD(&total_ctx_count_);
   }
   int get_trans_ctx_(const ObTransID& trans_id, const bool for_replay, const bool is_readonly,
-      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx);
+      const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc,
+      ObTransCtx*& ctx, const bool wait_init = true);
   bool has_valid_compact_mode_();
   int set_compact_mode_(const int compact_mode);
   int get_compact_mode_() const
@@ -687,6 +689,8 @@ public:
   // hold lock before revert or release trans_ctx
   int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
       const bool is_readonly, bool& alloc, ObTransCtx*& ctx);
+  int get_trans_ctx(const common::ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
+      const bool is_readonly, bool& alloc, ObTransCtx*& ctx, const bool wait_init);
   // unlock transaction context
   int revert_trans_ctx(ObTransCtx* ctx);
   int inactive_tenant(const uint64_t tenant_id);

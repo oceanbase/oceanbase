@@ -3050,10 +3050,8 @@ int ObPartTransCtx::leader_revoke(const bool first_check, bool& need_release, Ob
     TRANS_LOG(WARN, "submit log pending or gts waiting, need retry", KR(ret), "context", *this);
     // Update the location cache information of the local partition leader
   } else {
-    if (is_xa_local_trans() && in_xa_prepare_state_) {
-      // The XA txn should not set the prepare version in memtable_ctx before XA COMMIT
-      // TODO: remove it for the correctness of XA txn
-    } else if (ObTransVersion::INVALID_TRANS_VERSION != state_.get_prepare_version()) {
+    // after 3.1, preapre version in mt_ctx should be set for xa trans when leader revoke
+    if (ObTransVersion::INVALID_TRANS_VERSION != state_.get_prepare_version()) {
       mt_ctx_.set_prepare_version(state_.get_prepare_version());
     } else if (ObTransVersion::INVALID_TRANS_VERSION != global_trans_version_) {
       mt_ctx_.set_prepare_version(global_trans_version_);
@@ -6197,6 +6195,25 @@ int ObPartTransCtx::retry_submit_log_(const int64_t log_type)
       if (OB_FAIL(submit_log_impl_(log_type, false, false, has_redo_log))) {
         TRANS_LOG(WARN, "submit log error", KR(ret), K(log_type), "context", *this);
       }
+    } else if (OB_LOG_TRANS_PREPARE == log_type && is_xa_local_trans()) {
+      // for xa prepare version
+      if (OB_FAIL(alloc_local_trans_version_(log_type))) {
+        if (OB_EAGAIN != ret) {
+          TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this);
+        } else {
+          ret = OB_SUCCESS;
+          inc_submit_log_pending_count_();
+          inc_submit_log_count_();
+        }
+      } else {
+        if (OB_FAIL(do_prepare_(OB_SUCCESS))) {
+          TRANS_LOG(WARN, "do prepare error", KR(ret), "context", *this);
+        } else if (OB_FAIL(submit_log_impl_(log_type, false, false, has_redo_log))) {
+          TRANS_LOG(WARN, "submit log error", KR(ret), K(log_type), "context", *this);
+        } else {
+          is_xa_trans_prepared_ = true;
+        }
+      }
     } else {
       if (OB_FAIL(alloc_local_trans_version_(log_type))) {
         if (OB_EAGAIN != ret) {
@@ -7425,20 +7442,13 @@ int ObPartTransCtx::handle_2pc_prepare_redo_request_raw_(int status)
         } else {
           bool unused = false;
           if (OB_SUCCESS != get_status_() || OB_SUCCESS != status) {
-            if (OB_FAIL(alloc_local_trans_version_(OB_LOG_TRANS_REDO_WITH_PREPARE))) {
-              if (OB_EAGAIN != ret) {
-                TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this);
-              } else {
-                ret = OB_SUCCESS;
-                inc_submit_log_pending_count_();
-                inc_submit_log_count_();
-              }
-            } else if (OB_FAIL(do_prepare_(status))) {
+            if (OB_FAIL(do_prepare_(status))) {
               TRANS_LOG(WARN, "do prepare error", KR(ret), "context", *this);
-            } else if (OB_FAIL(submit_log_async_(OB_LOG_TRANS_PREPARE, unused))) {
-              TRANS_LOG(WARN, "submit prepare log error", KR(ret), "context", *this);
+            } else if (OB_FAIL(post_2pc_response_(coordinator_, OB_TRANS_2PC_PREPARE_RESPONSE))) {
+              TRANS_LOG(WARN, "submit 2pc response error", KR(ret), K(*this));
             } else {
-              // do nothing
+              TRANS_LOG(INFO, "submit response for prepare redo due to error status",
+                  KR(ret), K(*this));
             }
           } else {
             bool can_alloc_log = false;

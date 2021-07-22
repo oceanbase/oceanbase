@@ -476,7 +476,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
   }
   return ret;
 }
-int ObSQLSessionInfo::drop_temp_tables(const bool is_sess_disconn_const)
+int ObSQLSessionInfo::drop_temp_tables(const bool is_sess_disconn_const, const bool is_xa_trans)
 {
   int ret = OB_SUCCESS;
   bool ac = false;
@@ -484,7 +484,7 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_sess_disconn_const)
   obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;
   if (OB_FAIL(get_autocommit(ac))) {
     LOG_WARN("get autocommit error", K(ret), K(ac));
-  } else if ((get_has_temp_table_flag() || get_trans_desc().is_trx_level_temporary_table_involved()) &&
+  } else if ((get_has_temp_table_flag() || get_trans_desc().is_trx_level_temporary_table_involved() || is_xa_trans) &&
              (!get_is_deserialized() || ac)) {
     bool need_drop_temp_table = false;
     if (!is_oracle_mode()) {

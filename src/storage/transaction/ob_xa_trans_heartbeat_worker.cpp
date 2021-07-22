@@ -55,6 +55,7 @@ void ObXATransHeartbeatWorker::run1()
   int64_t loop_count = 0;
   int64_t total_time = 0;
 
+  lib::set_thread_name("ObXAHbWorker");
   while (!has_set_stop()) {
     int64_t start_time = ObTimeUtility::current_time();
     loop_count++;

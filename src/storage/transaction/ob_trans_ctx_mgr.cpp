@@ -278,13 +278,20 @@ void ObPartitionTransCtxMgr::StateHelper::restore_state()
 }
 
 int ObPartitionTransCtxMgr::get_trans_ctx(const ObTransID& trans_id, const bool for_replay, const bool is_readonly,
-    const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx)
+    const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx,
+    const bool wait_init /*true*/)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
 
-  if (OB_FAIL(get_trans_ctx_(
-          trans_id, for_replay, is_readonly, is_bounded_staleness_read, need_completed_dirty_txn, alloc, ctx))) {
+  if (OB_FAIL(get_trans_ctx_(trans_id,
+          for_replay,
+          is_readonly,
+          is_bounded_staleness_read,
+          need_completed_dirty_txn,
+          alloc,
+          ctx,
+          wait_init))) {
     TRANS_LOG(DEBUG, "get transaction context error", K(trans_id), K(for_replay), K(is_readonly), K(alloc));
   } else {
     // do nothing
@@ -377,7 +384,8 @@ int ObPartitionTransCtxMgr::remove_mem_ctx_for_trans_ctx(memtable::ObMemtable* m
 }
 
 int ObPartitionTransCtxMgr::get_trans_ctx_(const ObTransID& trans_id, const bool for_replay, const bool is_readonly,
-    const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx)
+    const bool is_bounded_staleness_read, const bool need_completed_dirty_txn, bool& alloc, ObTransCtx*& ctx,
+    const bool wait_init /*true*/)
 {
   int ret = OB_SUCCESS;
   ObTransCtx* tmp_ctx = NULL;
@@ -418,7 +426,7 @@ int ObPartitionTransCtxMgr::get_trans_ctx_(const ObTransID& trans_id, const bool
       } else {
         // FIXME
         bool is_inited = tmp_ctx->is_inited();
-        while (!is_inited && count < MAX_LOOP_COUNT) {
+        while (!is_inited && wait_init && count < MAX_LOOP_COUNT) {
           count++;
           ObTransCond::usleep(1);
           is_inited = tmp_ctx->is_inited();
@@ -426,7 +434,7 @@ int ObPartitionTransCtxMgr::get_trans_ctx_(const ObTransID& trans_id, const bool
             tmp_ctx->set_partition(partition_);
           }
         }
-        if (!is_inited) {
+        if (!is_inited && wait_init) {
           TRANS_LOG(WARN, "get transaction context not inited", K(trans_id));
         }
 
@@ -482,12 +490,12 @@ int ObPartitionTransCtxMgr::get_trans_ctx_(const ObTransID& trans_id, const bool
           } else {
             // FIXME
             bool is_inited = tmp_ctx->is_inited();
-            while (!is_inited && count < MAX_LOOP_COUNT) {
+            while (!is_inited && wait_init && count < MAX_LOOP_COUNT) {
               count++;
               ObTransCond::usleep(1);
               is_inited = tmp_ctx->is_inited();
             }
-            if (!is_inited) {
+            if (!is_inited && wait_init) {
               TRANS_LOG(WARN, "get transaction context not inited", K(trans_id));
             }
             ctx = tmp_ctx;
@@ -2855,6 +2863,53 @@ int ObScheTransCtxMgr::get_trans_ctx(const ObPartitionKey& partition, const ObTr
                    alloc,
                    ctx))) {
       TRANS_LOG(WARN, "get transaction context error", KR(ret), K(partition), K(trans_id), K(for_replay), K(alloc));
+    } else if (OB_ISNULL(ctx)) {
+      TRANS_LOG(WARN, "transaction context is null", K(partition), K(trans_id));
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      TRANS_LOG(DEBUG, "get transaction context success", K(partition), K(trans_id));
+    }
+  }
+
+  return ret;
+}
+
+int ObScheTransCtxMgr::get_trans_ctx(const ObPartitionKey& partition, const ObTransID& trans_id, const bool for_replay,
+    const bool is_readonly, bool& alloc, ObTransCtx*& ctx, const bool wait_init)
+{
+  int ret = OB_SUCCESS;
+  const bool is_bounded_staleness_read = false;
+  const bool need_completed_dirty_txn = false;
+
+  DRWLock::RDLockGuard guard(rwlock_);
+
+  if (IS_NOT_INIT) {
+    TRANS_LOG(WARN, "ObScheTransCtxMgr not inited");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!partition.is_valid() || !trans_id.is_valid())) {
+    TRANS_LOG(WARN, "invalid argument", K(partition), K(trans_id));
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    ObPartitionTransCtxMgr* ctx_mgr = get_partition_trans_ctx_mgr_(partition);
+    if (OB_ISNULL(ctx_mgr)) {
+      TRANS_LOG(WARN, "get partition transaction context mgr error", K(partition));
+      ret = OB_PARTITION_NOT_EXIST;
+    } else if (OB_FAIL(ctx_mgr->get_trans_ctx(trans_id,
+                   for_replay,
+                   is_readonly,
+                   is_bounded_staleness_read,
+                   need_completed_dirty_txn,
+                   alloc,
+                   ctx,
+                   wait_init))) {
+      TRANS_LOG(WARN,
+          "get transaction context error",
+          KR(ret),
+          K(partition),
+          K(trans_id),
+          K(for_replay),
+          K(alloc),
+          K(wait_init));
     } else if (OB_ISNULL(ctx)) {
       TRANS_LOG(WARN, "transaction context is null", K(partition), K(trans_id));
       ret = OB_ERR_UNEXPECTED;

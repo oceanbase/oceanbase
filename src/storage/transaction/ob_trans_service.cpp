@@ -2506,14 +2506,17 @@ int ObTransService::end_stmt(bool is_rollback, bool is_incomplete, const ObParti
     TRANS_LOG(WARN, "end statement failed", KR(ret), K(trans_desc), K(is_rollback), K(tmp_rollback));
   }
   if (trans_desc.is_xa_local_trans()) {
-    if (OB_FAIL(xa_release_lock_(trans_desc))) {
-      if (OB_TRANS_XA_BRANCH_FAIL == ret || OB_TRANS_CTX_NOT_EXIST == ret) {
+    if (OB_SUCCESS != (tmp_ret = xa_release_lock_(trans_desc))) {
+      if (OB_TRANS_XA_BRANCH_FAIL == tmp_ret || OB_TRANS_CTX_NOT_EXIST == tmp_ret) {
         trans_desc.get_sche_ctx()->set_terminated();
         need_delete_xa_all_tightly_branch = true;
+        // rewrite ret, branch fail is returned first
         ret = OB_TRANS_XA_BRANCH_FAIL;
         TRANS_LOG(INFO, "original scheduler has terminated", K(ret), K(trans_desc));
       } else {
-        TRANS_LOG(WARN, "xa releasee lock failed", K(ret), K(trans_desc));
+        TRANS_LOG(WARN, "xa releasee lock failed", K(ret), K(tmp_ret), K(trans_desc));
+        // error code of end stmt is returned first
+        ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
       }
     }
   }

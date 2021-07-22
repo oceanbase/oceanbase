@@ -392,7 +392,7 @@ public:
   VIRTUAL_FOR_UNITTEST int xa_prepare(
       const transaction::ObXATransID& xid, const uint64_t tenant_id, const int64_t stmt_expired_time);
   VIRTUAL_FOR_UNITTEST int xa_end_trans(const transaction::ObXATransID& xid, const bool is_rollback,
-      const int64_t flags, transaction::ObTransDesc& trans_desc);
+      const int64_t flags, transaction::ObTransDesc& trans_desc, bool& access_temp_table);
   VIRTUAL_FOR_UNITTEST int get_xa_trans_state(int32_t& state, transaction::ObTransDesc& trans_desc);
   // partition storage interfaces
   virtual int table_scan(ObVTableScanParam& vparam, common::ObNewRowIterator*& result) override;
@@ -1363,13 +1363,13 @@ OB_INLINE int ObPartitionService::xa_prepare(
 }
 
 OB_INLINE int ObPartitionService::xa_end_trans(const transaction::ObXATransID& xid, const bool is_rollback,
-    const int64_t flags, transaction::ObTransDesc& trans_desc)
+    const int64_t flags, transaction::ObTransDesc& trans_desc, bool& access_temp_table)
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(check_init(txs_, "transaction service"))) {
     STORAGE_LOG(WARN, "ObTransService check init error");
   } else {
-    ret = txs_->xa_end_trans_v2(xid, is_rollback, flags, trans_desc);
+    ret = txs_->xa_end_trans_v2(xid, is_rollback, flags, trans_desc, access_temp_table);
   }
   return ret;
 }

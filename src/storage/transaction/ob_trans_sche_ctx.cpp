@@ -160,7 +160,6 @@ void ObScheTransCtx::reset()
   is_xa_readonly_ = false;
   xa_trans_state_ = ObXATransState::NON_EXISTING;
   is_xa_one_phase_ = false;
-  trans_desc_ = NULL;
   tmp_trans_desc_ = NULL;
   xa_rpc_ = NULL;
   stmt_rollback_req_timeout_ = GCONF._ob_trans_rpc_timeout / 3;
@@ -172,6 +171,9 @@ void ObScheTransCtx::reset()
   lock_xid_.reset();
   if (OB_NOT_NULL(xa_branch_info_)) {
     xa_branch_info_->reset();
+  }
+  if (OB_NOT_NULL(trans_desc_)) {
+    trans_desc_->reset();
   }
   is_terminated_ = false;
 }

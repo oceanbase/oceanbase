@@ -451,7 +451,8 @@ public:
       const uint64_t tenant_id, const ObXATransID& xid, const int32_t state, int64_t& affected_rows);
   int delete_xa_branch(const uint64_t tenant_id, const ObXATransID& xid, const bool is_tightly_coupled);
   int delete_xa_all_tightly_branch(const uint64_t tenant_id, const ObXATransID& xid);
-  int xa_end_trans_v2(const ObXATransID& xid, const bool is_rollback, const int64_t flags, ObTransDesc& trans_desc);
+  int xa_end_trans_v2(const ObXATransID& xid, const bool is_rollback, const int64_t flags, ObTransDesc& trans_desc,
+      bool& access_temp_table);
   int gc_invalid_xa_record(const uint64_t tenant_id);
 
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
@@ -619,7 +620,7 @@ private:
   int handle_trans_ask_scheduler_status_request_(const ObTransMsg& msg, const int status);
   int query_xa_trans_(const ObXATransID& xid, const uint64_t tenant_id, ObPartitionKey& coordinator,
       ObTransID& trans_id, bool& is_xa_readonly);
-  int xa_commit_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
+  int xa_commit_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc, bool& access_temp_table);
   int xa_rollback_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
   int two_phase_rollback_(
       const uint64_t tenant_id, const ObXATransID& xid, const ObTransID& trans_id, const ObTransDesc& trans_desc);
