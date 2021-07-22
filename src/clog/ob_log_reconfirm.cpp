@@ -1134,7 +1134,7 @@ int ObLogReconfirm::reconfirm()
                 max_flushed_id_ + 1);
             state_ = START_WORKING;
             if (OB_INVALID_TIMESTAMP != last_ts_ && OB_FAIL(sw_->try_update_submit_timestamp(last_ts_))) {
-              CLOG_LOG(ERROR, "sw update timestamp error", K(ret), K(last_ts_));
+              CLOG_LOG(ERROR, "sw update timestamp error", K(ret), K_(partition_key), K(last_ts_));
             } else {
               ret = mm_->write_start_membership(OB_LOG_START_MEMBERSHIP);
             }

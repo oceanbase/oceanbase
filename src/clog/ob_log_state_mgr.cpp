@@ -2038,7 +2038,8 @@ bool ObLogStateMgr::is_reconfirm_role_change_or_sync_timeout_()
         if (OB_SUCCESS != (tmp_ret = partition_service_->check_partition_exist(partition_key_, is_exist))) {
           CLOG_LOG(WARN, "check_partition_exist failed", K_(partition_key), K(tmp_ret));
         }
-        if (is_exist) {
+        if (is_exist || (OB_SUCCESS != tmp_ret)) {
+          // partition exists or check_partition_exist failed
           CLOG_LOG(ERROR,
               "is_reconfirm_role_change_or_sync_timeout_",
               K_(partition_key),
