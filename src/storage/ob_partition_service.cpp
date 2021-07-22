@@ -10358,6 +10358,7 @@ int ObPartitionService::check_can_start_service(
   ObPartitionKey tmp_key;
   int64_t timestamp = 0;
   bool is_all_unreachable_partition = true;
+  can_start_service = true;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -10365,6 +10366,9 @@ int ObPartitionService::check_can_start_service(
   } else if (!is_running_) {
     ret = OB_NOT_RUNNING;
     TRANS_LOG(WARN, "partition service not running", K(ret));
+  } else if (is_service_started()) {
+    // already start service
+    can_start_service = true;
   } else if (is_empty()) {
     // observer is starting...
     can_start_service = true;
