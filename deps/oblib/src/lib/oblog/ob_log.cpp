@@ -864,7 +864,6 @@ void ObLogger::log_data(const char* mod_name, int32_t level, LogLocation locatio
       last_msg_time = e_ts - b_ts;
     }
   }
-  this_routine::check();
 }
 
 void ObLogger::rotate_log(

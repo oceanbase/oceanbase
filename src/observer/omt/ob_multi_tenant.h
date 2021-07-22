@@ -31,6 +31,13 @@ class ObRequest;
 }
 
 namespace omt {
+#define VIRTUAL_TENANTS_CPU_RESERVED_QUOTA \
+  (GCONF.system_cpu_quota \
+  + GCONF.election_cpu_quota \
+  + GCONF.user_location_cpu_quota() + GCONF.sys_location_cpu_quota() \
+  + GCONF.root_location_cpu_quota() + GCONF.core_location_cpu_quota() \
+  + EXT_LOG_TENANT_CPU + OB_MONITOR_CPU \
+  + OB_SVR_BLACKLIST_CPU + OB_DATA_CPU + OB_DTL_CPU + OB_RS_CPU + OB_DIAG_CPU)
 
 struct ObCtxMemConfig {
   ObCtxMemConfig() : ctx_id_(0), idle_size_(0)

@@ -89,6 +89,8 @@ ObThWorker* ObWorkerPool::alloc()
         worker = nullptr;
         LOG_ERROR("create worker fail", K(ret));
       }
+    } else {
+      LOG_ERROR("worker cnt larger than max cnt", K(worker_cnt_), K(max_cnt_));
     }
   }
   return worker;

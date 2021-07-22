@@ -403,6 +403,9 @@ int ObTenant::init()
       LOG_ERROR("tenant base init failed", K_(id), K(ret));
     }
   }
+  if (OB_SUCCESS != ret && nullptr != multi_level_queue_) {
+    common::ob_delete(multi_level_queue_);
+  }
   return ret;
 }
 
@@ -525,6 +528,9 @@ void ObTenant::destroy()
     LOG_WARN("remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
   ObTenantBase::destory();
+  if (nullptr != multi_level_queue_) {
+    common::ob_delete(multi_level_queue_);
+  }
 }
 
 void ObTenant::set_unit_max_cpu(double cpu)
