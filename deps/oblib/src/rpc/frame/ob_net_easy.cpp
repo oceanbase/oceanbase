@@ -156,7 +156,7 @@ void ObNetEasy::update_eio_sql_tcp_keepalive(easy_io_t* eio, int64_t user_timeou
     eio->tcp_keepintvl = max(tcp_keepintvl / 1000000, 1);
     eio->tcp_keepcnt = tcp_keepcnt;
     eio->conn_timeout = user_timeout / 1000;
-    eio->ack_timeout = user_timeout / 1000;
+    eio->ack_timeout = 0;
   }
 }
 

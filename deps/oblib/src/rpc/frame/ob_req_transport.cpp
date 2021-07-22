@@ -59,6 +59,7 @@ int async_cb(easy_request_t* r)
       // 3. destination responses but can't fulfilled as a single packet until timeout
       // We set easy error so that return EASY_ERROR to easy.
       easy_err = cb->get_error();
+      cb->set_error(easy_err);
       ret = cb->on_error(easy_err);
       if (OB_ERROR == ret) {
         /*
@@ -72,16 +73,33 @@ int async_cb(easy_request_t* r)
     } else if (OB_FAIL(cb->decode(r->ipacket))) {
       cb->on_invalid();
       LOG_DEBUG("decode failed", K(ret));
+    } else if (OB_PACKET_CLUSTER_ID_NOT_MATCH == cb->get_rcode()) {
+      LOG_ERROR("wrong cluster id", K(ret));
+      cb->set_error(EASY_ERROR);
+      ret = cb->on_error(EASY_ERROR);
+      if (OB_ERROR == ret) {
+        /*
+         * The derived classe has not overwrite thie own on_error callback. We still use
+         * on_timeout for For backward compatibility.
+         */
+        cb->on_timeout();
+      }
     } else {
       after_decode_time = ObTimeUtility::current_time();
       ObRpcPacket* pkt = reinterpret_cast<ObRpcPacket*>(r->ipacket);
       pcode = pkt->get_pcode();
+      bool cb_cloned = cb->get_cloned();
 
       EVENT_INC(RPC_PACKET_IN);
       EVENT_ADD(RPC_PACKET_IN_BYTES, pkt->get_clen() + pkt->get_header_size() + OB_NET_HEADER_LENGTH);
 
       if (OB_FAIL(cb->process())) {
         LOG_DEBUG("process failed", K(ret));
+      }
+
+      if (cb_cloned) {
+        LOG_DEBUG("reset rcode", K(cb_cloned));
+        cb->reset_rcode();
       }
     }
   } else {
@@ -115,11 +133,6 @@ int async_cb(easy_request_t* r)
   }
 
   return EASY_OK;
-}
-
-int ObReqTransport::AsyncCB::get_error() const
-{
-  return NULL != req_ ? ((easy_session_t*)req_->ms)->error : EASY_ERROR;
 }
 
 int ObReqTransport::AsyncCB::on_error(int)
@@ -198,6 +211,10 @@ int ObReqTransport::create_session(easy_session_t*& session, const ObAddr& addr,
       session->r.user_data = *newcb;
       if (!*newcb) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        if (cb != *newcb) {
+          (*newcb)->set_cloned(true);
+        }
       }
     }
     if (NULL == cb) {
