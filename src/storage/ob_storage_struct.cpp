@@ -880,6 +880,7 @@ int ObCreatePartitionParam::replace_tenant_id(const uint64_t new_tenant_id)
 /**********************ObRecoveryPointSchemaFilter***********************/
 ObRecoveryPointSchemaFilter::ObRecoveryPointSchemaFilter()
     : is_inited_(false),
+      is_restore_point_(false),
       tenant_id_(OB_INVALID_ID),
       tenant_recovery_point_schema_version_(OB_INVALID_VERSION),
       tenant_current_schema_version_(OB_INVALID_VERSION),
@@ -896,7 +897,7 @@ bool ObRecoveryPointSchemaFilter::is_inited() const
   return is_inited_;
 }
 
-int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const int64_t tenant_recovery_point_schema_version,
+int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const bool is_restore_point, const int64_t tenant_recovery_point_schema_version,
     const int64_t tenant_current_schema_version)
 {
   int ret = OB_SUCCESS;
@@ -926,6 +927,7 @@ int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const int64_t ten
                    tenant_id, schema_service, tenant_current_schema_version, current_schema_guard_))) {
       STORAGE_LOG(WARN, "failed to get tenant current schema guard", K(ret), K(tenant_current_schema_version));
     } else {
+      is_restore_point_ = is_restore_point;
       tenant_id_ = tenant_id;
       tenant_recovery_point_schema_version_ = tenant_recovery_point_schema_version;
       tenant_current_schema_version_ = tenant_current_schema_version;
@@ -1046,7 +1048,7 @@ int ObRecoveryPointSchemaFilter::check_table_exist_(
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
     STORAGE_LOG(WARN, "failed to get table schema", K(ret), K(table_id));
   } else if (OB_FAIL(
-                 ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(table_schema, need_skip))) {
+                 ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(table_schema, need_skip, is_restore_point_))) {
     LOG_WARN("failed to check backup restore need skip table", K(ret), K(table_id));
   } else if (!need_skip) {
     // do nothing
@@ -1246,7 +1248,7 @@ int ObRecoveryPointSchemaFilter::get_table_ids_in_pg_(const ObPartitionKey& pgke
 
 /***********************ObBackupRestoreTableSchemaChecker***************************/
 int ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(
-    const share::schema::ObTableSchema* table_schema, bool& need_skip)
+    const share::schema::ObTableSchema* table_schema, bool& need_skip, const bool is_restore_point)
 {
   int ret = OB_SUCCESS;
   ObIndexStatus index_status;
@@ -1260,8 +1262,12 @@ int ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(
   } else if (table_schema->is_dropped_schema()) {
     STORAGE_LOG(INFO, "table is dropped, skip it", K(table_id));
   } else if (FALSE_IT(index_status = table_schema->get_index_status())) {
-  } else if (table_schema->is_index_table() && ObIndexStatus::INDEX_STATUS_AVAILABLE != index_status) {
-    STORAGE_LOG(INFO, "restore table is not available index, skip it", K(index_status), K(*table_schema));
+  } else if (table_schema->is_index_table()
+             && (is_restore_point ?
+                 !is_final_index_status(index_status, table_schema->is_dropped_schema()) :
+                 ObIndexStatus::INDEX_STATUS_AVAILABLE != index_status)) {
+    STORAGE_LOG(INFO, "restore table index is not expected status, skip it",
+                K(is_restore_point), K(index_status), K(*table_schema));
   } else {
     need_skip = false;
   }

@@ -12612,6 +12612,7 @@ int ObRestoreTailoredPrepareTask::schedule_restore_tailored_task(ObRestoreTailor
   ObIPartitionGroup* partition_group = NULL;
   ObPartitionArray pkeys;
   const bool include_trans_table = false;
+  const bool is_restore_point = false;
   const int64_t restore_schema_version = OB_INVALID_VERSION;
   const int64_t current_schema_version = OB_INVALID_VERSION;
   ObRecoveryPointSchemaFilter schema_filter;
@@ -12626,7 +12627,7 @@ int ObRestoreTailoredPrepareTask::schedule_restore_tailored_task(ObRestoreTailor
     LOG_WARN("partition group should not be NULL", K(ret), KP(partition_group));
   } else if (OB_FAIL(partition_group->get_all_pg_partition_keys(pkeys, include_trans_table))) {
     LOG_WARN("failed to get all pg partition keys", K(ret), "pg key", ctx_->replica_op_arg_.key_);
-  } else if (OB_FAIL(schema_filter.init(tenant_id, restore_schema_version, current_schema_version))) {
+  } else if (OB_FAIL(schema_filter.init(tenant_id, is_restore_point, restore_schema_version, current_schema_version))) {
     LOG_WARN("failed to init schema filter", K(ret), K(tenant_id), K(restore_schema_version));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {

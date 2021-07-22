@@ -223,6 +223,11 @@ int ObSavedStorageInfoV2::update_last_replay_log_info_(const ObPartitionKey& pke
         STORAGE_LOG(WARN, "base storage info copy failed", K(ret));
       }
     }
+    // Here we need update clog_info_'s member_list info, because member_list and last_replay_log_id
+    // may be updated seprately.
+    // fix issue #35065166
+  } else if (OB_FAIL(clog_info_.try_update_member_list_info(old_clog_info))) {
+    STORAGE_LOG(WARN, "clog_info_.try_update_member_list_info failed", K(ret), K(old_clog_info));
   } else if (OB_FAIL(query_log_info_with_log_id(
                  pkey, clog_info_.get_last_replay_log_id(), timeout, accum_checksum, submit_timestamp, epoch_id))) {
     STORAGE_LOG(WARN, "failed to query accum checksum", K(ret), K(pkey), K(*this));

@@ -609,7 +609,7 @@ private:
   int compat_fill_log_ts(ObArray<ObSSTable*>& replay_tables);
 
   int replay_for_compat_(ObSSTable* sstable, int64_t& fill_log_ts);
-  int get_restore_point_tables_(const int64_t snapshot_version, const int64_t schema_version,
+  int get_restore_point_tables_(const int64_t snapshot_version, const int64_t schema_version, const bool is_restore_point,
       ObPartitionGroupMeta& pg_meta, ObIArray<ObPGPartitionStoreMeta>& partition_metas, ObTablesHandle& handle,
       bool& is_ready, bool& is_need);
   int alloc_meta_(ObPartitionGroupMeta*& meta);

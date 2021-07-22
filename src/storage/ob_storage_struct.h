@@ -610,7 +610,7 @@ public:
   ObRecoveryPointSchemaFilter();
   virtual ~ObRecoveryPointSchemaFilter();
   bool is_inited() const;
-  int init(const int64_t tenant_id, const int64_t tenant_recovery_point_schema_version,
+  int init(const int64_t tenant_id, const bool is_restore_point, const int64_t tenant_recovery_point_schema_version,
       const int64_t tenant_current_schema_version);
   // check pg/partition exist
   int check_partition_exist(const common::ObPartitionKey pkey, bool& is_exist);
@@ -634,6 +634,7 @@ private:
 
 private:
   bool is_inited_;
+  bool is_restore_point_;
   int64_t tenant_id_;
   int64_t tenant_recovery_point_schema_version_;
   int64_t tenant_current_schema_version_;
@@ -645,7 +646,7 @@ private:
 
 class ObBackupRestoreTableSchemaChecker {
 public:
-  static int check_backup_restore_need_skip_table(const share::schema::ObTableSchema* table_schema, bool& need_skip);
+  static int check_backup_restore_need_skip_table(const share::schema::ObTableSchema* table_schema, bool& need_skip, const bool is_restore_point = false);
 };
 
 class ObRebuildListener {
