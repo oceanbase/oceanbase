@@ -729,9 +729,6 @@ public:
   bool is_force_allows() const;
   void check_reset_force_allows();
 
-  int64_t get_reimbursation_time();
-  int64_t get_wait_us(const int32_t level);
-
   //@brief thread buffer for printing log
   LogBuffer* get_thread_buffer();
 

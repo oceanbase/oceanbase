@@ -308,6 +308,7 @@ target_link_libraries(observer
   oceanbase_static
   -static-libgcc
   -static-libstdc++
+  malloc_hook
   ${LGPL_DEPS}
   )
 execute_process(

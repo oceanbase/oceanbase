@@ -256,7 +256,6 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"leaves", LEAVES},
     {"leak", LEAK},
     {"leak_mod", LEAK_MOD},
-    {"leak_rate", LEAK_RATE},
     {"less", LESS},
     {"level", LEVEL},
     {"linestring", LINESTRING},

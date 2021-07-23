@@ -232,7 +232,7 @@ END_P SET_VAR DELIMITER
 
         KEY_BLOCK_SIZE KEY_VERSION KVCACHE
 
-        LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LINESTRING LIST_
+        LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LINESTRING LIST_
         LISTAGG LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
         LEVEL LN LOG
 
@@ -10752,13 +10752,6 @@ SET OPTION LEAK_MOD COMP_EQ STRING_VALUE
   malloc_non_terminal_node($$, result->malloc_pool_, T_DUMP_MEMORY, 1, $$);
 }
 |
-SET OPTION LEAK_RATE COMP_EQ INTNUM
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_TEMPORARY, 1, $5);
-  $$->value_ = 6;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DUMP_MEMORY, 1, $$);
-}
-|
 DUMP MEMORY LEAK
 {
   malloc_terminal_node($$, result->malloc_pool_, T_TEMPORARY);
@@ -12805,7 +12798,6 @@ ACCOUNT
 |       LEADER
 |       LEAK
 |       LEAK_MOD
-|       LEAK_RATE
 |       LEAVES
 |       LESS
 |       LEVEL

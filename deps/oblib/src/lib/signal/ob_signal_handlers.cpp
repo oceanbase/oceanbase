@@ -65,7 +65,7 @@ void ob_signal_handler(int sig, siginfo_t* si, void*)
 void coredump_cb(int sig, siginfo_t* si)
 {
   send_request_and_wait(VERB_LEVEL_2, syscall(SYS_gettid) /*exclude_id*/);
-#define MINICORE 1
+#define MINICORE 0
 #if MINICORE
   int pid = 0;
   if ((pid = fork()) != 0) {
@@ -107,6 +107,7 @@ void coredump_cb(int sig, siginfo_t* si)
 #if MINICORE
   } else {
     // child
+    prctl(PR_SET_NAME, "minicoredump");
     int64_t total_size = 0;
     if (lib::g_mem_cutter != nullptr) {
       lib::g_mem_cutter->cut(total_size);

@@ -367,7 +367,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_MAKETIME : return "T_FUN_SYS_MAKETIME";
 	case T_FUN_SYS_MONTH_NAME : return "T_FUN_SYS_MONTH_NAME";
 	case T_FUN_SYS_FORMAT : return "T_FUN_SYS_FORMAT";
-  //	case T_FUN_SYS_COT : return "T_FUN_SYS_COT"; 710 has ben taken on master
+	case T_FUN_SYS_COT : return "T_FUN_SYS_COT";
 	case T_FUN_SYS_QUARTER : return "T_FUN_SYS_QUARTER";
 	case T_FUN_SYS_BIT_LENGTH : return "T_FUN_SYS_BIT_LENGTH";
 	case T_FUN_SYS_PI : return "T_FUN_SYS_PI";
@@ -439,7 +439,6 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_ACOS : return "T_FUN_SYS_ACOS";
 	case T_FUN_SYS_ATAN : return "T_FUN_SYS_ATAN";
 	case T_FUN_SYS_ATAN2 : return "T_FUN_SYS_ATAN2";
-	case T_FUN_SYS_COT : return "T_FUN_SYS_COT";
 	case T_FUN_SYS_REGEXP_COUNT : return "T_FUN_SYS_REGEXP_COUNT";
 	case T_FUN_NVL2 : return "T_FUN_NVL2";
 	case T_FUN_SYS_TO_BINARY_FLOAT : return "T_FUN_SYS_TO_BINARY_FLOAT";

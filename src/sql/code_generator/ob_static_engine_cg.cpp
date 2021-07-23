@@ -2318,6 +2318,9 @@ int ObStaticEngineCG::generate_spec(ObLogUpdate& op, ObMultiPartUpdateSpec& spec
     const TableColumns& table_columns = all_table_columns->at(i);
     const ObTableAssignment& ta = tas->at(i);
     OZ(convert_global_index_update_info(op, table_columns, subplan_roots, table_dml_info));
+    auto &dst_assign_cols = spec.table_dml_infos_.at(i).assign_columns_;
+    OX(dst_assign_cols.old_row_.set_allocator(&phy_plan_->get_allocator()));
+    OX(dst_assign_cols.new_row_.set_allocator(&phy_plan_->get_allocator()));
     OZ(spec.add_table_dml_info(i, table_dml_info));
   }
   if (OB_FAIL(ret)) {

@@ -158,11 +158,6 @@ void reset_mem_leak_checker_label(const char* str)
   get_mem_leak_checker().reset();
 }
 
-void reset_mem_leak_checker_rate(int64_t rate)
-{
-  get_mem_leak_checker().set_rate(rate);
-}
-
 const ObCtxInfo& get_global_ctx_info()
 {
   static ObCtxInfo info;

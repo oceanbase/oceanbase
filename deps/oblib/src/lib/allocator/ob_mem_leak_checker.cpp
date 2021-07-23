@@ -13,9 +13,10 @@
 #include "lib/allocator/ob_mem_leak_checker.h"
 
 using namespace oceanbase::lib;
-namespace oceanbase {
-namespace common {
-lib::ObSimpleRateLimiter ObMemLeakChecker::rl_ = {INT64_MAX};
+namespace oceanbase
+{
+namespace common
+{
 
 }  // end of namespace common
 }  // end of namespace oceanbase
