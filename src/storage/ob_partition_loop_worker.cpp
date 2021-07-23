@@ -343,9 +343,9 @@ int ObPartitionLoopWorker::gene_checkpoint_()
       } else if (last_max_trans_version < max_trans_version) {
         ATOMIC_STORE(&last_max_trans_version_, max_trans_version);
       } else if (last_max_trans_version == max_trans_version) {
-        if (last_checkpoint <= max_trans_version ||
-            ((cur_checkpoint - last_checkpoint_value_) > COLD_PARTITION_CHECKPOINT_INTERVAL &&
-                REACH_COUNT_PER_SEC(COLD_PARTITION_CHECKPOINT_PS_LIMIT))) {
+        if (last_checkpoint <= max_trans_version
+            || ((cur_checkpoint - last_checkpoint_value_) > COLD_PARTITION_CHECKPOINT_INTERVAL
+                && EXECUTE_COUNT_PER_SEC(COLD_PARTITION_CHECKPOINT_PS_LIMIT))) {
           if (OB_FAIL(write_checkpoint_(cur_checkpoint))) {
             STORAGE_LOG(WARN, "write checkpoint failed", K(ret), K_(pkey), K(cur_checkpoint));
           } else {
