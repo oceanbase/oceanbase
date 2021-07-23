@@ -93,12 +93,9 @@ private:
 
 class ObEmbedFixedQueue {
 public:
-  ObEmbedFixedQueue() : push_(0), pop_(0), capacity_(0)
-  {}
-  ~ObEmbedFixedQueue()
-  {}
-  void init(uint32_t capacity)
-  {
+  ObEmbedFixedQueue(): push_(0), pop_(0), capacity_(0) {}
+  ~ObEmbedFixedQueue() {}
+  void init(uint64_t capacity) {
     capacity_ = capacity;
     memset(data_, 0, sizeof(void*) * capacity);
   }
@@ -120,9 +117,9 @@ public:
   }
 
 private:
-  uint32_t push_ CACHE_ALIGNED;
-  uint32_t pop_ CACHE_ALIGNED;
-  uint32_t capacity_ CACHE_ALIGNED;
+  uint64_t push_ CACHE_ALIGNED;
+  uint64_t pop_ CACHE_ALIGNED;
+  uint64_t capacity_ CACHE_ALIGNED;
   void* data_[];
 };
 
