@@ -107,10 +107,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPriorityQueue);
 };
 
-template <int HIGH_PRIOS, int LOW_PRIOS>
+template <int HIGH_HIGH_PRIOS, int HIGH_PRIOS=0, int LOW_PRIOS=0>
 class ObPriorityQueue2 {
 public:
-  enum { PRIO_CNT = HIGH_PRIOS + LOW_PRIOS };
+  enum { PRIO_CNT = HIGH_HIGH_PRIOS + HIGH_PRIOS + LOW_PRIOS };
 
   ObPriorityQueue2() : queue_(), size_(0), limit_(INT64_MAX)
   {}
@@ -150,37 +150,17 @@ public:
     } else if (OB_FAIL(queue_[priority].push(data))) {
       // do nothing
     } else {
-      cond_.signal();
-      // if (priority < HIGH_PRIOS) {
-      //   high_cond_.signal();
-      // }
+      if (priority < HIGH_HIGH_PRIOS) {
+        cond_.signal(1, 0);
+      } else if (priority < HIGH_PRIOS + HIGH_HIGH_PRIOS) {
+        cond_.signal(1, 1);
+      } else {
+        cond_.signal(1, 2);
+      }
     }
 
     if (OB_FAIL(ret)) {
       (void)ATOMIC_FAA(&size_, -1);
-    }
-    return ret;
-  }
-
-  inline int do_pop(ObLink*& data, int64_t plimit, int64_t timeout_us)
-  {
-    int ret = OB_ENTRY_NOT_EXIST;
-    if (OB_UNLIKELY(timeout_us < 0)) {
-      ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(ERROR, "timeout is invalid", K(ret), K(timeout_us));
-    } else {
-      cond_.prepare();
-      for (int i = 0; OB_ENTRY_NOT_EXIST == ret && i < plimit; i++) {
-        if (OB_SUCCESS == queue_[i].pop(data)) {
-          ret = OB_SUCCESS;
-        }
-      }
-      if (OB_FAIL(ret)) {
-        cond_.wait(timeout_us);
-        data = NULL;
-      } else {
-        (void)ATOMIC_FAA(&size_, -1);
-      }
     }
     return ret;
   }
@@ -195,8 +175,42 @@ public:
     return do_pop(data, HIGH_PRIOS, timeout_us);
   }
 
+  int pop_high_high(ObLink*& data, int64_t timeout_us)
+  {
+    return do_pop(data, HIGH_HIGH_PRIOS, timeout_us);
+  }
+
 private:
-  SCond cond_;
+  inline int do_pop(ObLink*& data, int64_t plimit, int64_t timeout_us)
+  {
+    int ret = OB_ENTRY_NOT_EXIST;
+    if (OB_UNLIKELY(timeout_us < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(ERROR, "timeout is invalid", K(ret), K(timeout_us));
+    } else {
+      if (plimit <= HIGH_HIGH_PRIOS) {
+        cond_.prepare(0);
+      } else if (plimit <= HIGH_PRIOS + HIGH_HIGH_PRIOS) {
+        cond_.prepare(1);
+      } else {
+        cond_.prepare(2);
+      }
+      for (int i = 0; OB_ENTRY_NOT_EXIST == ret  && i < plimit; i++) {
+        if (OB_SUCCESS == queue_[i].pop(data)) {
+          ret = OB_SUCCESS;
+        }
+      }
+      if (OB_FAIL(ret)) {
+        cond_.wait(timeout_us);
+        data = NULL;
+      } else {
+        (void)ATOMIC_FAA(&size_, -1);
+      }
+    }
+    return ret;
+  }
+
+  SCondTemp<3> cond_;
   ObLinkQueue queue_[PRIO_CNT];
   int64_t size_ CACHE_ALIGNED;
   int64_t limit_ CACHE_ALIGNED;

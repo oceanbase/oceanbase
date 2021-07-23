@@ -558,7 +558,7 @@ protected:
 
   /// tenant task queue,
   // 'hp' for high priority and 'np' for normal priority
-  common::ObPriorityQueue2<QQ_MAX_PRIO, RQ_MAX_PRIO - QQ_MAX_PRIO> req_queue_;
+  common::ObPriorityQueue2<1, QQ_MAX_PRIO - 1, RQ_MAX_PRIO - QQ_MAX_PRIO> req_queue_;
   common::ObLinkQueue large_req_queue_;
 
   // Create a request queue for each level of nested requests
