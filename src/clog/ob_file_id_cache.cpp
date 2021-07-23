@@ -481,13 +481,9 @@ int ObFileIdList::locate(const ObPartitionKey& pkey, const int64_t target_value,
 }
 
 // max_log_id,max_log_timestamp,start_offset may be invalid
-int ObFileIdList::append(const ObPartitionKey &pkey,
-                         const file_id_t file_id,
-                         const offset_t start_offset,
-                         const uint64_t min_log_id,
-                         const uint64_t max_log_id,
-                         const int64_t min_log_timestamp,
-                         const int64_t max_log_timestamp)
+int ObFileIdList::append(const ObPartitionKey& pkey, const file_id_t file_id, const offset_t start_offset,
+    const uint64_t min_log_id, const uint64_t max_log_id, const int64_t min_log_timestamp,
+    const int64_t max_log_timestamp)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -686,9 +682,7 @@ int ObFileIdList::purge(const common::ObPartitionKey& pkey, ObIFileIdCachePurgeS
 }
 
 // The caller guarantees that the function will not be executed concurrently
-int ObFileIdList::purge_(const bool is_front_end,
-                         IPurgeChecker &checker,
-                         bool &empty)
+int ObFileIdList::purge_(const bool is_front_end, IPurgeChecker& checker, bool& empty)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1076,11 +1070,8 @@ void ObFileIdCache::destroy()
 // 4. OB_PARTITION_NOT_EXIST              partiiton not exist, prev_item and next_item are both invalid
 // 5. OB_NEED_RETRY                       need retrym prev_item and next_item are both invalid
 // 6. Others
-int ObFileIdCache::locate(const ObPartitionKey &pkey,
-                          const int64_t target_value,
-                          const bool locate_by_log_id,
-                          Log2File &prev_item,
-                          Log2File &next_item)
+int ObFileIdCache::locate(const ObPartitionKey& pkey, const int64_t target_value, const bool locate_by_log_id,
+    Log2File& prev_item, Log2File& next_item)
 {
   int ret = OB_SUCCESS;
   ObFileIdList* list = NULL;
@@ -1297,8 +1288,7 @@ int ObFileIdCache::AppendInfoFunctor::init(const file_id_t file_id, ObFileIdCach
 }
 
 // For compatibility, allow max_log_id and max_log_timestamp to be invalid
-bool ObFileIdCache::AppendInfoFunctor::operator()(const ObPartitionKey &pkey,
-                                                  const IndexInfoBlockEntry &entry)
+bool ObFileIdCache::AppendInfoFunctor::operator()(const ObPartitionKey& pkey, const IndexInfoBlockEntry& entry)
 {
   if (OB_UNLIKELY(!pkey.is_valid()) || OB_UNLIKELY(!entry.is_valid())) {
     err_ = OB_ERR_UNEXPECTED;
@@ -1466,13 +1456,9 @@ int ObFileIdCache::append_new_list_(const ObPartitionKey& pkey, const file_id_t 
 }
 
 // For compatibility, allow max_log_id and max_log_timestamp to be invalid
-int ObFileIdCache::do_append_(const ObPartitionKey &pkey,
-                              const file_id_t file_id,
-                              const offset_t start_offset,
-                              const uint64_t min_log_id,
-                              const uint64_t max_log_id,
-                              const int64_t min_log_timestamp,
-                              const int64_t max_log_timestamp)
+int ObFileIdCache::do_append_(const ObPartitionKey& pkey, const file_id_t file_id, const offset_t start_offset,
+    const uint64_t min_log_id, const uint64_t max_log_id, const int64_t min_log_timestamp,
+    const int64_t max_log_timestamp)
 {
   int ret = OB_SUCCESS;
   ObFileIdList* list = NULL;

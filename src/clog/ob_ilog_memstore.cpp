@@ -171,7 +171,7 @@ int ObIlogMemstore::timer_check_need_freeze(bool& need_freeze) const
   return ret;
 }
 
-int ObIlogMemstore::get_cursor_size(int64_t &cursor_size) const
+int ObIlogMemstore::get_cursor_size(int64_t& cursor_size) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -183,7 +183,7 @@ int ObIlogMemstore::get_cursor_size(int64_t &cursor_size) const
   return ret;
 }
 
-int ObIlogMemstore::get_clog_size(int64_t &clog_size) const
+int ObIlogMemstore::get_clog_size(int64_t& clog_size) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

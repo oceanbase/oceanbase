@@ -594,9 +594,8 @@ int ObLogMembershipTaskMgr::submit_confirmed_info_(const uint64_t log_id, const 
     int64_t confirmed_info_epoch_id = confirmed_info.get_epoch_id();
     int64_t confirmed_info_submit_timestamp = confirmed_info.get_submit_timestamp();
 
-    if (log_id != cur_renew_log_id
-        || ms_proposal_id != cur_ms_proposal_id
-        || ms_proposal_id != log_task.get_proposal_id()) {
+    if (log_id != cur_renew_log_id || ms_proposal_id != cur_ms_proposal_id ||
+        ms_proposal_id != log_task.get_proposal_id()) {
       ret = OB_STATE_NOT_MATCH;
       CLOG_LOG(WARN,
           "log_id or ms_proposal_id not match with cur_renew_ms_task",
@@ -625,12 +624,16 @@ int ObLogMembershipTaskMgr::submit_confirmed_info_(const uint64_t log_id, const 
       if (log_task.is_confirmed_info_exist()) {
       } else {
         if (log_task.is_submit_log_exist()) {
-          if ((log_task.get_data_checksum() != confirmed_info_data_checksum)
-              || (log_task.get_epoch_id() != confirmed_info_epoch_id)
-              || (OB_INVALID_TIMESTAMP != confirmed_info_submit_timestamp
-                  && log_task.get_submit_timestamp() != confirmed_info_submit_timestamp)) {
-            CLOG_LOG(INFO, "log_task and confirmed_info not match, reset", K_(partition_key),
-                     K(log_id), K(log_task), K(confirmed_info));
+          if ((log_task.get_data_checksum() != confirmed_info_data_checksum) ||
+              (log_task.get_epoch_id() != confirmed_info_epoch_id) ||
+              (OB_INVALID_TIMESTAMP != confirmed_info_submit_timestamp &&
+                  log_task.get_submit_timestamp() != confirmed_info_submit_timestamp)) {
+            CLOG_LOG(INFO,
+                "log_task and confirmed_info not match, reset",
+                K_(partition_key),
+                K(log_id),
+                K(log_task),
+                K(confirmed_info));
             log_task.reset_log();
             log_task.reset_state(false);
             log_task.reset_log_cursor();

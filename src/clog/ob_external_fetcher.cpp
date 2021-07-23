@@ -291,17 +291,13 @@ int ObExtLogFetcher::handle_log_not_exist(
   return ret;
 }
 
-int ObExtLogFetcher::after_partition_fetch_log(ObStreamItem &stream_item,
-                                               const uint64_t beyond_upper_log_id,
-                                               const int64_t beyond_upper_log_ts,
-                                               const int64_t fetched_log_count,
-                                               ObLogStreamFetchLogResp &resp,
-                                               const ObLogCursorExt *cursor_ext,
-                                               clog::ObReadCost &read_cost)
+int ObExtLogFetcher::after_partition_fetch_log(ObStreamItem& stream_item, const uint64_t beyond_upper_log_id,
+    const int64_t beyond_upper_log_ts, const int64_t fetched_log_count, ObLogStreamFetchLogResp& resp,
+    const ObLogCursorExt* cursor_ext, clog::ObReadCost& read_cost)
 {
   int ret = OB_SUCCESS;
   int64_t upper_log_ts = beyond_upper_log_ts;
-  const ObPartitionKey &pkey = stream_item.pkey_;
+  const ObPartitionKey& pkey = stream_item.pkey_;
   // 1. dealing with heartbeat hollow
   if ((0 == fetched_log_count) && OB_INVALID_ID != beyond_upper_log_id) {
     // log hole problem:
@@ -317,7 +313,8 @@ int ObExtLogFetcher::after_partition_fetch_log(ObStreamItem &stream_item,
         LOG_WARN("resp get_aggre_log_min_timestamp error", K(ret), KPC(cursor_ext), K(upper_log_ts));
       } else if (upper_log_ts != cursor_ext->get_submit_timestamp()) {
         LOG_TRACE("next log is aggregate log, update first log id as beyond_upper_log_ts",
-		  K(upper_log_ts), K(cursor_ext->get_submit_timestamp()));
+            K(upper_log_ts),
+            K(cursor_ext->get_submit_timestamp()));
       }
     }
     ObLogStreamFetchLogResp::FetchLogHeartbeatItem hbp;
@@ -335,23 +332,21 @@ int ObExtLogFetcher::after_partition_fetch_log(ObStreamItem &stream_item,
   return ret;
 }
 
-int ObExtLogFetcher::get_aggre_log_min_timestamp(const ObPartitionKey &pkey,
-						 const clog::ObLogCursorExt &cursor_ext,
-                                                 int64_t &first_log_ts,
-                                                 ObReadCost &read_cost)
+int ObExtLogFetcher::get_aggre_log_min_timestamp(
+    const ObPartitionKey& pkey, const clog::ObLogCursorExt& cursor_ext, int64_t& first_log_ts, ObReadCost& read_cost)
 {
   int ret = OB_SUCCESS;
   bool fetch_log_from_hot_cache = true;
   int64_t log_entry_size = 0;
-  int64_t end_tstamp = INT64_MAX; // no need for timeout limit
+  int64_t end_tstamp = INT64_MAX;  // no need for timeout limit
   ObReadParam param;
   param.offset_ = cursor_ext.get_offset();
   param.read_len_ = cursor_ext.get_size();
   param.file_id_ = cursor_ext.get_file_id();
   ObReadBufGuard guard(ObModIds::OB_LOG_DECRYPT_ID);
-  ObReadBuf &rbuf = guard.get_read_buf();
-  if (OB_FAIL(fetch_log_entry_(pkey, param, rbuf.buf_, rbuf.buf_len_, end_tstamp,
-                               read_cost, fetch_log_from_hot_cache, log_entry_size))) {
+  ObReadBuf& rbuf = guard.get_read_buf();
+  if (OB_FAIL(fetch_log_entry_(
+          pkey, param, rbuf.buf_, rbuf.buf_len_, end_tstamp, read_cost, fetch_log_from_hot_cache, log_entry_size))) {
     LOG_WARN("failed to fetch log entry", K(ret), K(param), K(pkey));
   } else {
     clog::ObLogEntry log_entry;
@@ -359,7 +354,7 @@ int ObExtLogFetcher::get_aggre_log_min_timestamp(const ObPartitionKey &pkey,
     if (OB_FAIL(log_entry.deserialize(rbuf.buf_, rbuf.buf_len_, log_entry_pos))) {
       LOG_WARN("failed to deserialize log entry", K(ret), K(rbuf), K(log_entry_pos));
     } else if (OB_LOG_AGGRE == log_entry.get_header().get_log_type()) {
-      const char *data_buf = log_entry.get_buf();
+      const char* data_buf = log_entry.get_buf();
       const int64_t data_len = log_entry.get_header().get_data_len();
       int32_t next_log_offset = 0;
       int64_t pos = 0;
@@ -369,8 +364,13 @@ int ObExtLogFetcher::get_aggre_log_min_timestamp(const ObPartitionKey &pkey,
         // update first log ts as aggre log ts
         LOG_WARN("serialization::decode_i64 failed", K(ret), K(data_len), K(pos), KP(data_buf));
       } else {
-        LOG_TRACE("get_aggre_log_min_timestamp", K(ret), K(data_len), K(pos), KP(data_buf), 
-                                                 K(first_log_ts), K(next_log_offset));
+        LOG_TRACE("get_aggre_log_min_timestamp",
+            K(ret),
+            K(data_len),
+            K(pos),
+            KP(data_buf),
+            K(first_log_ts),
+            K(next_log_offset));
       }
     } else {
       // not aggregate log, no need to update
@@ -380,13 +380,9 @@ int ObExtLogFetcher::get_aggre_log_min_timestamp(const ObPartitionKey &pkey,
 }
 
 // Get single log entry
-int ObExtLogFetcher::partition_fetch_log_entry_(const ObLogCursorExt &cursor_ext,
-    const ObPartitionKey &pkey,
-    const int64_t end_tstamp,
-    ObReadCost &read_cost,
-    ObLogStreamFetchLogResp &resp,
-    bool &fetch_log_from_hot_cache,
-    int64_t &log_entry_size)
+int ObExtLogFetcher::partition_fetch_log_entry_(const ObLogCursorExt& cursor_ext, const ObPartitionKey& pkey,
+    const int64_t end_tstamp, ObReadCost& read_cost, ObLogStreamFetchLogResp& resp, bool& fetch_log_from_hot_cache,
+    int64_t& log_entry_size)
 {
   int ret = OB_SUCCESS;
   int64_t remain_size = 0;
@@ -540,7 +536,7 @@ int ObExtLogFetcher::partition_fetch_log(ObStreamItem& stream_item, FetchRunTime
   const ObPartitionKey& pkey = stream_item.pkey_;
   uint64_t beyond_upper_log_id = OB_INVALID_ID;
   int64_t beyond_upper_log_ts = OB_INVALID_TIMESTAMP;
-  const ObLogCursorExt *next_cursor = NULL;
+  const ObLogCursorExt* next_cursor = NULL;
 
   // Note: After the optimization of step by step, the count of logs fetched in each round of
   // each partition will be "suddenly reduced". It is possible to get only a few logs per round,
@@ -627,8 +623,8 @@ int ObExtLogFetcher::partition_fetch_log(ObStreamItem& stream_item, FetchRunTime
   }
 
   if (OB_SUCCESS == ret) {
-    if (OB_FAIL(after_partition_fetch_log(stream_item, beyond_upper_log_id, beyond_upper_log_ts,
-                                          log_count, resp, next_cursor, frt.read_cost_))) {
+    if (OB_FAIL(after_partition_fetch_log(
+            stream_item, beyond_upper_log_id, beyond_upper_log_ts, log_count, resp, next_cursor, frt.read_cost_))) {
       LOG_WARN("after partition fetch log error",
           K(ret),
           K(stream_item),

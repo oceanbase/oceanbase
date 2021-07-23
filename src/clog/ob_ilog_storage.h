@@ -40,10 +40,7 @@ public:
   virtual void destroy();
 
 public:
-  int init(const char *dir_name,
-           const int64_t server_seq,
-           const common::ObAddr &addr,
-           ObLogCache *log_cache);
+  int init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache);
 
   int add_partition_needed_to_file_id_cache(
       const common::ObPartitionKey& partition_key, const uint64_t last_replay_log_id);
@@ -102,12 +99,8 @@ public:
   ~ObIlogStorage();
 
 public:
-  int init(const char *dir_name,
-           const int64_t server_seq,
-           const common::ObAddr &addr,
-           ObLogCache *log_cache,
-           storage::ObPartitionService *partition_service,
-           ObCommitLogEnv *commit_log_env);
+  int init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache,
+      storage::ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env);
   void destroy();
   int start();
   void stop();
@@ -151,16 +144,12 @@ public:
   // Return value
   // 1) OB_SUCCESS
   // 2) OB_ENTRY_NOT_EXIST
-  int get_file_id_range(file_id_t &min_file_id, file_id_t &max_file_id) const;
+  int get_file_id_range(file_id_t& min_file_id, file_id_t& max_file_id) const;
 
-  int locate_by_timestamp(const common::ObPartitionKey &partition_key,
-                          const int64_t start_ts,
-                          uint64_t &target_log_id,
-                          int64_t &target_log_timestamp);
-  int locate_ilog_file_by_log_id(const common::ObPartitionKey &pkey,
-                                 const uint64_t start_log_id,
-                                 uint64_t &end_log_id,
-                                 file_id_t &ilog_id);
+  int locate_by_timestamp(const common::ObPartitionKey& partition_key, const int64_t start_ts, uint64_t& target_log_id,
+      int64_t& target_log_timestamp);
+  int locate_ilog_file_by_log_id(
+      const common::ObPartitionKey& pkey, const uint64_t start_log_id, uint64_t& end_log_id, file_id_t& ilog_id);
   int wash_ilog_cache();
   int purge_stale_file();
   int purge_stale_ilog_index();

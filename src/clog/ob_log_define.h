@@ -141,7 +141,7 @@ enum ObReplicaMsgType {
   OB_REPLICA_MSG_TYPE_NOT_CHILD = 3,       // I'm not your child
   OB_REPLICA_MSG_TYPE_NOT_EXIST = 4,       // partition not exist
   OB_REPLICA_MSG_TYPE_DISABLED_STATE = 5,  // server in disabled state
-  OB_REPLICA_MSG_TYPE_QUICK_REGISTER= 6,   // quick register to me
+  OB_REPLICA_MSG_TYPE_QUICK_REGISTER = 6,  // quick register to me
 };
 
 enum ObRegRespMsgType {
@@ -161,16 +161,14 @@ enum ObFetchLogType {
   OB_FETCH_LOG_TYPE_MAX,
 };
 
-enum ObRestoreCheckType
-{
+enum ObRestoreCheckType {
   OB_CHECK_UNKNOWN = 0,
   OB_CHECK_STANDBY_RESTORE = 1,
   OB_CHECK_RESTORE_END_ID = 2,
   OB_CHECK_MAX,
 };
 
-enum ReceiveLogType
-{
+enum ReceiveLogType {
   RL_TYPE_UNKNOWN = 0,
   PUSH_LOG = 1,
   FETCH_LOG = 2,

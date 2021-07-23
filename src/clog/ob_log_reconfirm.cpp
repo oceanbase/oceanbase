@@ -798,8 +798,8 @@ int ObLogReconfirm::confirm_log_()
             if (OB_FAIL(try_update_nop_or_truncate_timestamp(*header))) {
               CLOG_LOG(WARN, "try_update_nop_or_truncate_timestamp fail", K(ret), K_(partition_key));
             } else if (OB_FAIL(sw_->submit_log(log_ptr->get_header(), log_ptr->get_buf(), NULL))) {
-              CLOG_LOG(WARN, "submit log failed", K_(partition_key), K(ret), K_(next_id),
-                       K_(start_id), K_(max_flushed_id));
+              CLOG_LOG(
+                  WARN, "submit log failed", K_(partition_key), K(ret), K_(next_id), K_(start_id), K_(max_flushed_id));
               break;
             } else {
               CLOG_LOG(TRACE, "submit log success", K_(partition_key), K_(next_id), K_(start_id), K_(max_flushed_id));
@@ -814,7 +814,7 @@ int ObLogReconfirm::confirm_log_()
           next_id_++;
         }
       }
-    } // end while
+    }  // end while
 
     // In case of rebuild in leader reconfirm:
     // 1. when majority has already recycled specified log, the follower
@@ -832,15 +832,17 @@ int ObLogReconfirm::confirm_log_()
       const uint64_t new_start_id = sw_->get_start_id();
       if (new_start_id > next_id_) {
         next_id_ = new_start_id;
-        CLOG_LOG(INFO, "there may execute a rebuild operation in\
-            leader reconfirm", K(ret), K(new_start_id), K(next_id_));
+        CLOG_LOG(INFO,
+            "there may execute a rebuild operation in\
+            leader reconfirm",
+            K(ret),
+            K(new_start_id),
+            K(next_id_));
       }
       ret = OB_SUCCESS;
     }
 
-    if (OB_SUCC(ret)
-        && next_id_ <= max_flushed_id_
-        && next_id_ >= log_info_array_.get_end_id()) {
+    if (OB_SUCC(ret) && next_id_ <= max_flushed_id_ && next_id_ >= log_info_array_.get_end_id()) {
       // process next log_range
       if (OB_EAGAIN == (ret = init_log_info_range_(next_id_))) {
         // ret is EAGAIN when some log has slide out, need update next_id_

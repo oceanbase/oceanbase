@@ -116,7 +116,6 @@ void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(ObLogReqStartLogIdByTsProcessor, gctx_.par_ser_);
   RPC_PROCESSOR(ObLogReqStartPosByLogIdProcessor, gctx_.par_ser_);
   RPC_PROCESSOR(ObLogExternalFetchLogProcessor, gctx_.par_ser_);
-  RPC_PROCESSOR(ObLogReqHeartbeatInfoProcessor, gctx_.par_ser_);
   RPC_PROCESSOR(ObLogReqStartLogIdByTsProcessorWithBreakpoint, gctx_.par_ser_);
   RPC_PROCESSOR(ObLogReqStartPosByLogIdProcessorWithBreakpoint, gctx_.par_ser_);
   RPC_PROCESSOR(ObLogOpenStreamProcessor, gctx_.par_ser_);

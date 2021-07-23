@@ -1192,7 +1192,7 @@ int ObIlogStore::get_merge_range_(int64_t& end_idx, bool& need_switch_file)
     end_idx = 0;
     // limit each ilog file should less than ObIlogMemstore::CURSOR_SIZE_TRIGGER
     while (end_idx < size && false == need_switch_file && OB_SUCC(ret)) {
-      ObIlogMemstore *memstore = frozen_memstore_array_[end_idx].memstore_;
+      ObIlogMemstore* memstore = frozen_memstore_array_[end_idx].memstore_;
       ObIlogFreezeTriggerType trigger_type = frozen_memstore_array_[end_idx].trigger_type_;
       // In normal case, when end_idx is 0, trigger_type mustn't be OB_ILOG_NOT_CONTINOUS_TRIGGER_TYPE
       if (frozen_memstore_array_[end_idx].trigger_type_ == OB_ILOG_NOT_CONTINOUS_TRIGGER_TYPE) {
@@ -1206,8 +1206,8 @@ int ObIlogStore::get_merge_range_(int64_t& end_idx, bool& need_switch_file)
         CLOG_LOG(ERROR, "get_clog_size failed", K(ret));
         // Try to ensure the total size of each file does not exceed 32MB,
         // because of the ilog memstore may exceed 32MB in concurrent case.
-      } else if (true == (total_clog_size >= ObIlogMemstore::CLOG_SIZE_TRIGGER
-          || total_cursor_size >= ObIlogMemstore::CURSOR_SIZE_TRIGGER)) {
+      } else if (true == (total_clog_size >= ObIlogMemstore::CLOG_SIZE_TRIGGER ||
+                             total_cursor_size >= ObIlogMemstore::CURSOR_SIZE_TRIGGER)) {
         need_switch_file = true;
         break;
       } else {
@@ -1253,9 +1253,8 @@ int ObIlogStore::merge_frozen_memstore_(int64_t& end_idx, FrozenMemstore& memsto
         }
       } while (0);
 
-      if (OB_SUCC(ret) && OB_FAIL(do_merge_frozen_memstore_(tmp_frozen_memstore_array,
-                                                            need_switch_file,
-                                                            memstore_after_merge))) {
+      if (OB_SUCC(ret) &&
+          OB_FAIL(do_merge_frozen_memstore_(tmp_frozen_memstore_array, need_switch_file, memstore_after_merge))) {
         if (ret == OB_EAGAIN) {
           CLOG_LOG(WARN, "log not continous in do_merge_frozen_memstore_", K(tmp_frozen_memstore_array));
         } else {
@@ -1384,9 +1383,8 @@ bool ObIlogStore::need_merge_frozen_memstore_array_by_trigger_type_(const ObIlog
   return trigger_type == OB_TIMER_TRIGGER_TYPE;
 }
 
-int ObIlogStore::do_merge_frozen_memstore_(const FrozenMemstoreArray& tmp_frozen_memstore_array,
-                                           bool need_switch_file,
-                                           FrozenMemstore& memstore_after_merge)
+int ObIlogStore::do_merge_frozen_memstore_(
+    const FrozenMemstoreArray& tmp_frozen_memstore_array, bool need_switch_file, FrozenMemstore& memstore_after_merge)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1408,23 +1406,29 @@ int ObIlogStore::do_merge_frozen_memstore_(const FrozenMemstoreArray& tmp_frozen
       if (false == frozen_memstore.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "unexpect error, invalid frozen_memstore", K(ret), K(frozen_memstore));
-      } else if (OB_FAIL(merge_container.merge_ilog_memstore_to_container(frozen_memstore.memstore_))
-                 && OB_EAGAIN != ret) {
+      } else if (OB_FAIL(merge_container.merge_ilog_memstore_to_container(frozen_memstore.memstore_)) &&
+                 OB_EAGAIN != ret) {
         CLOG_LOG(ERROR, "merge ilog memstore failed", K(ret), K(frozen_memstore), K(tmp_frozen_memstore_array));
       } else if (OB_EAGAIN == ret) {
         if (i == 0) {
           ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "unexpected error, there is no possiblity for merging frozen memstore\
-                   failed because ilog not continous when i is 0", K(ret));
+          CLOG_LOG(ERROR,
+              "unexpected error, there is no possiblity for merging frozen memstore\
+                   failed because ilog not continous when i is 0",
+              K(ret));
         } else if (ret == OB_EAGAIN) {
           WLockGuard guard(lock_);
-          frozen_memstore_array_[i-1].trigger_type_ = OB_ILOG_NOT_CONTINOUS_TRIGGER_TYPE;
-          CLOG_LOG(WARN, "log not continous in merge_frozen_memstore, need modify its trigger_type", K(ret),
-                   K(frozen_memstore), K(tmp_frozen_memstore_array));
+          frozen_memstore_array_[i - 1].trigger_type_ = OB_ILOG_NOT_CONTINOUS_TRIGGER_TYPE;
+          CLOG_LOG(WARN,
+              "log not continous in merge_frozen_memstore, need modify its trigger_type",
+              K(ret),
+              K(frozen_memstore),
+              K(tmp_frozen_memstore_array));
         } else {
           CLOG_LOG(ERROR, "ilog_memstore_merge failed", K(ret), K(frozen_memstore), K(tmp_frozen_memstore_array));
         }
-      } else {}
+      } else {
+      }
     }
 
     if (OB_SUCC(ret) && OB_FAIL(merge_container.transfer_to_ilog_memstore(memstore))) {
@@ -1436,13 +1440,12 @@ int ObIlogStore::do_merge_frozen_memstore_(const FrozenMemstoreArray& tmp_frozen
     }
 
     if (OB_SUCC(ret)) {
-      int64_t seq = tmp_frozen_memstore_array[tmp_size-1].seq_;
-      ObIlogFreezeTriggerType trigger_type = (true == need_switch_file ? OB_MERGE_NEED_SWITCH_FILE_TRIGGER_TYPE :
-          OB_TIMER_TRIGGER_TYPE);
+      int64_t seq = tmp_frozen_memstore_array[tmp_size - 1].seq_;
+      ObIlogFreezeTriggerType trigger_type =
+          (true == need_switch_file ? OB_MERGE_NEED_SWITCH_FILE_TRIGGER_TYPE : OB_TIMER_TRIGGER_TYPE);
 
-      if(OB_FAIL(memstore_after_merge.set_frozen_memstore(trigger_type, memstore, seq))) {
-        CLOG_LOG(ERROR, "set_frozen_memstore failed", K(memstore_after_merge), K(trigger_type),
-                 K(memstore), K(seq));
+      if (OB_FAIL(memstore_after_merge.set_frozen_memstore(trigger_type, memstore, seq))) {
+        CLOG_LOG(ERROR, "set_frozen_memstore failed", K(memstore_after_merge), K(trigger_type), K(memstore), K(seq));
       }
     }
 

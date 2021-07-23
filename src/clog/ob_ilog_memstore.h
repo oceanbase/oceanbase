@@ -32,8 +32,7 @@ enum ObIlogFreezeTriggerType {
   OB_INVALID_TRIGGER_TYPE = 6,
 };
 
-class ObIlogMemstore
-{
+class ObIlogMemstore {
   friend ObIlogFileBuilder;
 
 public:
@@ -78,26 +77,21 @@ public:
   // Return value:
   //  1) OB_SUCCESS, query success
   //  2) OB_PARTITION_NOT_EXIST, partition not exist
-  int get_min_log_id_and_ts(const common::ObPartitionKey &partition_key,
-                            uint64_t &ret_min_log_id,
-                            int64_t &ret_min_log_ts) const;
+  int get_min_log_id_and_ts(
+      const common::ObPartitionKey& partition_key, uint64_t& ret_min_log_id, int64_t& ret_min_log_ts) const;
   // Return value:
   //  1) OB_SUCCESS, query success
   //  2) OB_PARTITION_NOT_EXIST, partition not exist
-  int get_log_id_range(const common::ObPartitionKey &partition_key,
-                       uint64_t &ret_min_log_id,
-                       uint64_t &ret_max_log_id) const;
+  int get_log_id_range(
+      const common::ObPartitionKey& partition_key, uint64_t& ret_min_log_id, uint64_t& ret_max_log_id) const;
 
-  int get_cursor_size(int64_t &cursor_size) const;
-  int get_clog_size(int64_t &clog_size) const;
-  int insert_partition_meta_info(const common::ObPartitionKey &pkey,
-                                 const IndexInfoBlockEntry &entry);
-  int insert_partition_memberlist_info(const common::ObPartitionKey &pkey,
-                                       const MemberListInfo &member_list);
-  int insert_partition_log_cursor_ext_info(const ObPartitionLogInfo &log_info,
-                                           const ObLogCursorExt &log_cursor);
-  template<class Function>
-  int operate_partition_meta_info(Function &fn)
+  int get_cursor_size(int64_t& cursor_size) const;
+  int get_clog_size(int64_t& clog_size) const;
+  int insert_partition_meta_info(const common::ObPartitionKey& pkey, const IndexInfoBlockEntry& entry);
+  int insert_partition_memberlist_info(const common::ObPartitionKey& pkey, const MemberListInfo& member_list);
+  int insert_partition_log_cursor_ext_info(const ObPartitionLogInfo& log_info, const ObLogCursorExt& log_cursor);
+  template <class Function>
+  int operate_partition_meta_info(Function& fn)
   {
     int ret = common::OB_SUCCESS;
     if (OB_FAIL(partition_meta_info_.for_each(fn))) {

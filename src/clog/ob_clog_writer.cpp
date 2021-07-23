@@ -179,7 +179,7 @@ void ObCLogWriter::set_clog_writer_thread_name()
 void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt)
 {
   int ret = OB_SUCCESS;
-  ObICLogItem *item = NULL;
+  ObICLogItem* item = NULL;
   int64_t cur_time = 0;
   int64_t io_time = 0;
   int64_t flush_time = 0;
@@ -205,7 +205,7 @@ void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64
     const bool is_idempotent = false;
     const uint64_t write_len = block_meta_len + item->get_data_len();
     const int64_t warning_value = GCONF.data_storage_warning_tolerance_time;
-    ObCLogDiskErrorCB *cb = NULL;
+    ObCLogDiskErrorCB* cb = NULL;
 
     lib::ObMutexGuard guard(file_mutex_);
     BG_NEW_CALLBACK(cb, ObCLogDiskErrorCB, this);
@@ -257,7 +257,7 @@ void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64
 
     if (OB_SUCC(ret)) {
       io_time = ObTimeUtility::current_time() - cur_time;
-      //log flush succeed, invoke callback when disk sync
+      // log flush succeed, invoke callback when disk sync
       after_flush(item, block_meta_len, ret, flush_start_offset, finish_cnt);
       flush_time = ObTimeUtility::current_time() - cur_time - io_time;
 
@@ -378,8 +378,7 @@ ObCLogDiskErrorCB::ObCLogDiskErrorCB(ObCLogWriter* host) : host_(host)
 {}
 
 ObCLogDiskErrorCB::~ObCLogDiskErrorCB()
-{
-}
+{}
 
 int ObCLogDiskErrorCB::callback()
 {
@@ -405,11 +404,8 @@ void ObCLogDiskErrorCB::destroy()
   }
 }
 
-int locate_clog_tail(const int64_t timeout,
-                     ObILogFileStore *file_store,
-                     ObLogDirectReader *reader,
-                     file_id_t &file_id,
-                     offset_t &offset)
+int locate_clog_tail(
+    const int64_t timeout, ObILogFileStore* file_store, ObLogDirectReader* reader, file_id_t& file_id, offset_t& offset)
 {
   ObLogFileTailLocatorImpl<ObLogEntry, ObIRawLogIterator> impl;
   return impl.locate_tail(timeout, file_store, reader, file_id, offset);

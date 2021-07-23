@@ -427,7 +427,6 @@ public:
   int submit_replay_task(const bool need_async, bool& is_replayed, bool& is_replay_failed) override;
   void destroy();
   int alloc_log_id(const int64_t base_timestamp, uint64_t& log_id, int64_t& submit_timestamp) override;
-  int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts);
   int get_next_served_log_info_by_next_replay_log_info(uint64_t& next_served_log_id, int64_t& next_served_log_ts);
   bool is_inited() const
   {
@@ -543,19 +542,12 @@ private:
       const int64_t submit_timestamp, ObISubmitLogCb* cb);
   int try_freeze_aggre_buffer_(const uint64_t log_id);
   int submit_freeze_aggre_buffer_task_(const uint64_t log_id);
-  int submit_aggre_log_(ObAggreBuffer *buffer,
-                        const uint64_t log_id,
-                        const int64_t submit_timestamp);
+  int submit_aggre_log_(ObAggreBuffer* buffer, const uint64_t log_id, const int64_t submit_timestamp);
   int try_update_submit_timestamp(const int64_t base_ts);
-  bool is_confirm_match_(const uint64_t log_id,
-                         const int64_t log_data_checksum,
-                         const int64_t log_epoch_id,
-                         const int64_t log_submit_timestamp,
-                         const int64_t confirmed_info_data_checksum,
-                         const int64_t confirmed_info_epoch_id,
-                         const int64_t confirmed_info_submit_timestamp);
-  int receive_log_(const ObLogEntry &log_entry, const common::ObAddr &server,
-                   const int64_t cluster_id);
+  bool is_confirm_match_(const uint64_t log_id, const int64_t log_data_checksum, const int64_t log_epoch_id,
+      const int64_t log_submit_timestamp, const int64_t confirmed_info_data_checksum,
+      const int64_t confirmed_info_epoch_id, const int64_t confirmed_info_submit_timestamp);
+  int receive_log_(const ObLogEntry& log_entry, const common::ObAddr& server, const int64_t cluster_id);
   void update_max_log_id_(const uint64_t log_id);
   int submit_to_sliding_window_(const ObLogEntryHeader& header, const char* buff, ObISubmitLogCb* cb,
       const bool need_replay, const bool send_slave, const common::ObAddr& server, const int64_t cluster_id,
@@ -624,7 +616,6 @@ private:
   int generate_backfill_log_task_(const ObLogEntryHeader& header, const char* buff, const ObLogCursor& log_cursor,
       ObISubmitLogCb* submit_cb, const bool need_replay, const bool need_copy, const bool need_pinned,
       ObLogTask*& task);
-  int get_log_submit_tstamp_from_task_(const uint64_t log_id, int64_t& log_tstamp);
   int check_pre_barrier_(ObLogType log_type) const;
   void* alloc_log_task_buf_();
   int need_replay_for_data_or_log_replica_(const bool is_trans_log, bool& need_replay) const;

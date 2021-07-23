@@ -1237,11 +1237,10 @@ int ObIInfoBlockHandler::CheckPartitionNeedFreezeFunctor::do_check_full_partitio
       // 2. INVALID, means that archive may be had started or stopped, cann't reclaime the log file, need
       // wati next round
       // 3. STOPING and STOPED, means that archive has stopped
-    } else if (ObLogArchiveStatus::STATUS::BEGINNING == info.status_.status_
-               || ObLogArchiveStatus::STATUS::DOING == info.status_.status_) {
-      if (OB_FAIL(pls->get_last_archived_log_id(info.status_.incarnation_,
-                                                info.status_.round_,
-                                                last_archived_log_id))) {
+    } else if (ObLogArchiveStatus::STATUS::BEGINNING == info.status_.status_ ||
+               ObLogArchiveStatus::STATUS::DOING == info.status_.status_) {
+      if (OB_FAIL(
+              pls->get_last_archived_log_id(info.status_.incarnation_, info.status_.round_, last_archived_log_id))) {
         CLOG_LOG(WARN, "failed to get_log_archive_backup_info", K(partition_key), K(info), KR(ret));
       } else if (OB_INVALID_ID == last_archived_log_id || last_archived_log_id < max_log_id) {
         can_skip_ = false;

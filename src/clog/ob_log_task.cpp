@@ -660,12 +660,9 @@ void ObLogTask::set_confirmed_info(const ObConfirmedInfo& confirmed_info)
   const int64_t arg_submit_timestamp = confirmed_info.get_submit_timestamp();
   if (is_submit_log_exist()) {
     // check data_checksum_ and epoch_id_ when log exists
-    if (data_checksum_ != arg_data_checksum
-        || epoch_id_ != arg_epoch_id
-        || (OB_INVALID_TIMESTAMP != arg_submit_timestamp
-           && submit_timestamp_ != arg_submit_timestamp)) {
-      CLOG_LOG(ERROR, "set_confirmed_info meta info not match", K(data_checksum_),
-          K(epoch_id_), K(confirmed_info));
+    if (data_checksum_ != arg_data_checksum || epoch_id_ != arg_epoch_id ||
+        (OB_INVALID_TIMESTAMP != arg_submit_timestamp && submit_timestamp_ != arg_submit_timestamp)) {
+      CLOG_LOG(ERROR, "set_confirmed_info meta info not match", K(data_checksum_), K(epoch_id_), K(confirmed_info));
     }
   }
   epoch_id_ = arg_epoch_id;

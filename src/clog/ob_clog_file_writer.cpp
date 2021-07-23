@@ -27,15 +27,15 @@ using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace clog {
-ObCLogBaseFileWriter::ObCLogBaseFileWriter() :
-    is_inited_(false),
-    aligned_data_buf_(nullptr),
-    buf_write_pos_(0),
-    file_offset_(0),
-    buf_padding_size_(0),
-    align_size_(0),
-    store_(NULL),
-    file_id_(0)
+ObCLogBaseFileWriter::ObCLogBaseFileWriter()
+    : is_inited_(false),
+      aligned_data_buf_(nullptr),
+      buf_write_pos_(0),
+      file_offset_(0),
+      buf_padding_size_(0),
+      align_size_(0),
+      store_(NULL),
+      file_id_(0)
 {
   log_dir_[0] = '\0';
 }
@@ -45,8 +45,7 @@ ObCLogBaseFileWriter::~ObCLogBaseFileWriter()
   destroy();
 }
 
-int ObCLogBaseFileWriter::init(const char *log_dir,
-    const uint32_t align_size, const ObILogFileStore *file_store)
+int ObCLogBaseFileWriter::init(const char* log_dir, const uint32_t align_size, const ObILogFileStore* file_store)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -55,8 +54,8 @@ int ObCLogBaseFileWriter::init(const char *log_dir,
   } else if (OB_ISNULL(log_dir) || OB_ISNULL(file_store)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid param", K(ret), K(log_dir), K(align_size), KP(file_store));
-  } else if (OB_ISNULL(aligned_data_buf_ = (char*) ob_malloc_align(
-      align_size, CLOG_MAX_WRITE_BUFFER_SIZE, "CLogFileWriter"))) {
+  } else if (OB_ISNULL(aligned_data_buf_ =
+                           (char*)ob_malloc_align(align_size, CLOG_MAX_WRITE_BUFFER_SIZE, "CLogFileWriter"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "get log buf failed", K(ret), K(log_dir));
   } else {
@@ -126,14 +125,13 @@ int ObCLogLocalFileWriter::load_file(uint32_t& file_id, uint32_t& offset, bool e
     if (need_align()) {
       buf_write_pos_ = offset % align_size_;
       int64_t read_size = 0;
-      if (buf_write_pos_ > 0
-          && OB_FAIL(store_->read(aligned_data_buf_, align_size_, lower_align(offset, align_size_), read_size))) {
+      if (buf_write_pos_ > 0 &&
+          OB_FAIL(store_->read(aligned_data_buf_, align_size_, lower_align(offset, align_size_), read_size))) {
         CLOG_LOG(ERROR, "Fail to read data from log file, ", K(ret), K(buf_write_pos_), K(offset));
       } else if (read_size != align_size_) {
         CLOG_LOG(INFO, "Log file size is not aligned. ", K(read_size), K(align_size_));
       } else {
-        CLOG_LOG(INFO, "Read data from log file to shared memory buffer, ", K(buf_write_pos_),
-            K(file_id), K(offset));
+        CLOG_LOG(INFO, "Read data from log file to shared memory buffer, ", K(buf_write_pos_), K(file_id), K(offset));
       }
     } else {
       reset_buf();
@@ -159,19 +157,22 @@ int ObCLogBaseFileWriter::append_trailer_entry(const uint32_t info_block_offset)
 
   // build trailer from last 512 byte offset (4096-512)
   int64_t trailer_pos = CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
-  char *buf = aligned_data_buf_ + trailer_pos;
+  char* buf = aligned_data_buf_ + trailer_pos;
   reset_buf();
 
-  if (CLOG_TRAILER_OFFSET != file_offset_) { //Defense code
+  if (CLOG_TRAILER_OFFSET != file_offset_) {  // Defense code
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "file_offset_ mismatch trailer offset", K(ret), K_(file_offset),
-        LITERAL_K(CLOG_TRAILER_OFFSET));
-  } else if (OB_FAIL(trailer.build_serialized_trailer(buf, CLOG_TRAILER_SIZE, info_block_offset,
-      phy_file_id, pos))) {
-    CLOG_LOG(WARN, "build_serialized_trailer fail", K(ret), LITERAL_K(CLOG_DIO_ALIGN_SIZE),
-        K(info_block_offset), K_(file_id), K(phy_file_id));
+    CLOG_LOG(WARN, "file_offset_ mismatch trailer offset", K(ret), K_(file_offset), LITERAL_K(CLOG_TRAILER_OFFSET));
+  } else if (OB_FAIL(trailer.build_serialized_trailer(buf, CLOG_TRAILER_SIZE, info_block_offset, phy_file_id, pos))) {
+    CLOG_LOG(WARN,
+        "build_serialized_trailer fail",
+        K(ret),
+        LITERAL_K(CLOG_DIO_ALIGN_SIZE),
+        K(info_block_offset),
+        K_(file_id),
+        K(phy_file_id));
   } else {
-    buf_write_pos_ += (uint32_t) CLOG_DIO_ALIGN_SIZE;
+    buf_write_pos_ += (uint32_t)CLOG_DIO_ALIGN_SIZE;
   }
 
   return ret;
@@ -180,7 +181,7 @@ int ObCLogBaseFileWriter::append_trailer_entry(const uint32_t info_block_offset)
 int ObCLogBaseFileWriter::flush_trailer_entry()
 {
   int ret = OB_SUCCESS;
-  if (CLOG_TRAILER_OFFSET != file_offset_) { // Defense code
+  if (CLOG_TRAILER_OFFSET != file_offset_) {  // Defense code
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "file offset mismatch", K_(file_offset), LITERAL_K(CLOG_TRAILER_OFFSET));
   } else if (CLOG_DIO_ALIGN_SIZE != buf_write_pos_) {
@@ -188,8 +189,13 @@ int ObCLogBaseFileWriter::flush_trailer_entry()
     CLOG_LOG(WARN, "buf write position mismatch", K_(buf_write_pos), LITERAL_K(CLOG_DIO_ALIGN_SIZE));
   } else if (OB_FAIL(store_->write(aligned_data_buf_, buf_write_pos_, CLOG_TRAILER_ALIGN_WRITE_OFFSET))) {
     // no retry
-    CLOG_LOG(ERROR, "write fail", K(ret), K(buf_write_pos_), K_(file_offset),
-        LITERAL_K(CLOG_TRAILER_ALIGN_WRITE_OFFSET), K(errno));
+    CLOG_LOG(ERROR,
+        "write fail",
+        K(ret),
+        K(buf_write_pos_),
+        K_(file_offset),
+        LITERAL_K(CLOG_TRAILER_ALIGN_WRITE_OFFSET),
+        K(errno));
   }
   return ret;
 }
@@ -198,7 +204,7 @@ int ObCLogBaseFileWriter::append_info_block_entry(ObIInfoBlockHandler* info_gett
 {
   int ret = OB_SUCCESS;
   ObLogBlockMetaV2 meta;
-  const uint32_t block_meta_len = (uint32_t) meta.get_serialize_size();
+  const uint32_t block_meta_len = (uint32_t)meta.get_serialize_size();
   const int64_t buf_len = CLOG_MAX_WRITE_BUFFER_SIZE - block_meta_len;
   int64_t data_len = 0;
   int64_t pos = 0;
@@ -211,7 +217,8 @@ int ObCLogBaseFileWriter::append_info_block_entry(ObIInfoBlockHandler* info_gett
     // build_info_block will reset flying info_block for next file
     CLOG_LOG(WARN, "read partition meta fail", K(ret), KP(buf), K(buf_len), K_(file_offset), K_(buf_padding_size));
 
-  } else if (OB_FAIL(meta.build_serialized_block(aligned_data_buf_, block_meta_len, buf, data_len, OB_INFO_BLOCK, pos))) {
+  } else if (OB_FAIL(
+                 meta.build_serialized_block(aligned_data_buf_, block_meta_len, buf, data_len, OB_INFO_BLOCK, pos))) {
     CLOG_LOG(WARN, "build serialized block fail", K(ret), K_(file_offset), K_(buf_padding_size));
   } else {
     buf_write_pos_ += (block_meta_len + (uint32_t)data_len);
@@ -266,8 +273,12 @@ int ObCLogBaseFileWriter::append_padding_entry(const uint32_t padding_size)
 
     if (buf_write_pos_ + padding_size > CLOG_MAX_WRITE_BUFFER_SIZE) {
       ret = OB_BUF_NOT_ENOUGH;
-      CLOG_LOG(WARN, "padding entry size over buf length", K(ret), K(padding_size),
-          K_(buf_write_pos), LITERAL_K(CLOG_MAX_WRITE_BUFFER_SIZE));
+      CLOG_LOG(WARN,
+          "padding entry size over buf length",
+          K(ret),
+          K(padding_size),
+          K_(buf_write_pos),
+          LITERAL_K(CLOG_MAX_WRITE_BUFFER_SIZE));
     } else if (OB_FAIL(padding_entry.set_entry_size(padding_size))) {
       CLOG_LOG(WARN, "padding entry set size error", K(ret), K(padding_size));
     } else if (OB_FAIL(padding_entry.serialize(buf, padding_size, serialize_pos))) {
@@ -280,7 +291,7 @@ int ObCLogBaseFileWriter::append_padding_entry(const uint32_t padding_size)
   return ret;
 }
 
-int ObCLogBaseFileWriter::cache_buf(ObLogCache *log_cache, const char *buf, const uint32_t buf_len)
+int ObCLogBaseFileWriter::cache_buf(ObLogCache* log_cache, const char* buf, const uint32_t buf_len)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || 0 == buf_len) {
@@ -310,9 +321,9 @@ int ObCLogBaseFileWriter::append_log_entry(const char* item_buf, const uint32_t 
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "file not start", K_(file_id), K(ret));
   } else {
-    //copy log to memory buffer
+    // copy log to memory buffer
     memcpy(aligned_data_buf_ + buf_write_pos_, item_buf, len);
-    buf_write_pos_ += (uint32_t) len;
+    buf_write_pos_ += (uint32_t)len;
 
     if (OB_FAIL(align_buf())) {
       CLOG_LOG(ERROR, "fail to add padding, ", K(ret));
@@ -359,8 +370,7 @@ int ObCLogLocalFileWriter::align_buf()
 }
 
 ///            ObCLogLocalFileWriter             ///
-int ObCLogLocalFileWriter::init(const char* log_dir,
-    const uint32_t align_size, const ObILogFileStore* file_store)
+int ObCLogLocalFileWriter::init(const char* log_dir, const uint32_t align_size, const ObILogFileStore* file_store)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -554,7 +564,7 @@ int ObCLogLocalFileWriter::end_current_file(ObIInfoBlockHandler* info_getter, Ob
 
   // - Flush trailer entry to log file
   // - Cache trailer entry to log cache
-  char *trailer_buf = aligned_data_buf_ + CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
+  char* trailer_buf = aligned_data_buf_ + CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(append_trailer_entry(info_block_offset))) {
       CLOG_LOG(WARN, "fail to add trailer", K(ret));

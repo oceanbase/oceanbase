@@ -155,7 +155,10 @@ public:
     }
     return log_ts;
   }
-  void set_submit_timestamp(const int64_t ts) { submit_timestamp_ = ts; }
+  void set_submit_timestamp(const int64_t ts)
+  {
+    submit_timestamp_ = ts;
+  }
   bool is_batch_committed() const
   {
     bool bool_ret = false;
@@ -182,7 +185,7 @@ public:
   }
 
   // Serialize submit_timestamp at specified offset
-  int serialize_submit_timestamp(char *buf, const int64_t buf_len, int64_t &pos);
+  int serialize_submit_timestamp(char* buf, const int64_t buf_len, int64_t& pos);
 
   static bool check_magic_number(const int16_t magic_number)
   {

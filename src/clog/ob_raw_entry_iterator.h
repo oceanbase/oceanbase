@@ -102,9 +102,8 @@ inline int parse_log_item_type(const char* buf, const int64_t len, ObCLogItemTyp
 // or the magic of this block is a ilog entry or clog entry), we need to read all subsequent contents of this
 // file, check whether there is a valid block and the timestamp recorded in the block header is greater than
 // or equal to last_block_ts, if not, the end of the file is read.
-template<class Type, class Interface>
-class ObRawEntryIterator: public Interface
-{
+template <class Type, class Interface>
+class ObRawEntryIterator : public Interface {
 public:
   ObRawEntryIterator();
   virtual ~ObRawEntryIterator();
@@ -150,7 +149,7 @@ private:
   //
   // Since our log disk space is large enough, log files will not be reused within two seconds,
   // so this constant is safe in the scenario of reusing files.
-  static const int64_t CHECK_LAST_BLOCK_TS_INTERVAL = 2000 * 1000; // 2s
+  static const int64_t CHECK_LAST_BLOCK_TS_INTERVAL = 2000 * 1000;  // 2s
 private:
   bool is_inited_;
   ObILogDirectReader* reader_;
@@ -716,10 +715,9 @@ int ObRawEntryIterator<Type, Interface>::next_entry(Type& entry, ObReadParam& pa
 // last_block_ts must be vaild, because of this:
 // 1. Write file header is atomic, therefore, the last_block_ts is valid
 // 2. else, file header is ObNewLogFileBuf
-template<class Type, class Interface>
-bool ObRawEntryIterator<Type, Interface>::check_last_block_(const file_id_t file_id,
-                                                            const offset_t start_offset,
-                                                            const int64_t last_block_ts) const
+template <class Type, class Interface>
+bool ObRawEntryIterator<Type, Interface>::check_last_block_(
+    const file_id_t file_id, const offset_t start_offset, const int64_t last_block_ts) const
 {
   int ret = common::OB_SUCCESS;
   bool bool_ret = false;

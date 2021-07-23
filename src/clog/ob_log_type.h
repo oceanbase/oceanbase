@@ -24,18 +24,41 @@ class ObConfirmedInfo {
   OB_UNIS_VERSION(1);
 
 public:
-  ObConfirmedInfo() : data_checksum_(0), epoch_id_(common::OB_INVALID_TIMESTAMP),
-                      accum_checksum_(0), submit_timestamp_(common::OB_INVALID_TIMESTAMP) {}
-  ~ObConfirmedInfo() {}
+  ObConfirmedInfo()
+      : data_checksum_(0),
+        epoch_id_(common::OB_INVALID_TIMESTAMP),
+        accum_checksum_(0),
+        submit_timestamp_(common::OB_INVALID_TIMESTAMP)
+  {}
+  ~ObConfirmedInfo()
+  {}
+
 public:
-  int init(const int64_t data_checksum, const int64_t epoch_id,
-           const int64_t accum_checksum, const int64_t submit_timestamp_);
-  int64_t get_data_checksum() const { return data_checksum_; }
-  int64_t get_epoch_id() const { return epoch_id_; }
-  int64_t get_accum_checksum() const { return accum_checksum_; }
-  int64_t get_submit_timestamp() const { return submit_timestamp_; }
-  void reset() { data_checksum_ = 0; epoch_id_ = common::OB_INVALID_TIMESTAMP; accum_checksum_ = 0; }
-  void deep_copy(const ObConfirmedInfo &confirmed_info)
+  int init(const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum,
+      const int64_t submit_timestamp_);
+  int64_t get_data_checksum() const
+  {
+    return data_checksum_;
+  }
+  int64_t get_epoch_id() const
+  {
+    return epoch_id_;
+  }
+  int64_t get_accum_checksum() const
+  {
+    return accum_checksum_;
+  }
+  int64_t get_submit_timestamp() const
+  {
+    return submit_timestamp_;
+  }
+  void reset()
+  {
+    data_checksum_ = 0;
+    epoch_id_ = common::OB_INVALID_TIMESTAMP;
+    accum_checksum_ = 0;
+  }
+  void deep_copy(const ObConfirmedInfo& confirmed_info)
   {
     data_checksum_ = confirmed_info.data_checksum_;
     epoch_id_ = confirmed_info.epoch_id_;
@@ -50,6 +73,7 @@ private:
   int64_t epoch_id_;
   int64_t accum_checksum_;
   int64_t submit_timestamp_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfirmedInfo);
 };

@@ -189,7 +189,7 @@ const uint64_t DEFAULT_CLOG_APPEND_TIMEOUT_US = 365ull * 24 * 3600 * 1000 * 1000
 const uint64_t DEFAULT_WRITER_MAX_BUFFER_ITEM_CNT = 4 * 1024;
 // the buffer size of membership log
 const int64_t MS_LOG_BUFFER_SIZE = 2048;
-} // namespace clog
-} // namespace oceanbase
+}  // namespace clog
+}  // namespace oceanbase
 
 #endif  // OCEANBASE_CLOG_OB_CLOG_CONFIG_H_

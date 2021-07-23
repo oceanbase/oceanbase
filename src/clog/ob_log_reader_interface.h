@@ -16,14 +16,11 @@
 #include "ob_log_entry.h"
 #include "ob_log_file_pool.h"
 
-namespace oceanbase
-{
-namespace clog
-{
+namespace oceanbase {
+namespace clog {
 // Used to set the parameters of reading files, the purpose is to add
 // parameters int the future without changing the interface
-struct ObReadParam
-{
+struct ObReadParam {
   file_id_t file_id_;
   offset_t offset_;
   common::ObPartitionKey partition_key_;

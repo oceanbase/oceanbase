@@ -175,9 +175,8 @@ private:
   //    after doing merge
   bool need_merge_frozen_memstore_array_by_trigger_type_(const ObIlogFreezeTriggerType& trigger_type) const;
 
-  int do_merge_frozen_memstore_(const FrozenMemstoreArray& frozen_memstore_array,
-                                bool need_switch_file,
-                                FrozenMemstore& memstore_after_merge);
+  int do_merge_frozen_memstore_(
+      const FrozenMemstoreArray& frozen_memstore_array, bool need_switch_file, FrozenMemstore& memstore_after_merge);
 
   void alloc_memstore_(ObIlogMemstore*& memstore);
 

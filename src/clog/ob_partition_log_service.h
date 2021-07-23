@@ -381,7 +381,6 @@ public:
   virtual int force_set_parent(const common::ObAddr& new_parent) = 0;
   virtual int force_reset_parent() = 0;
   virtual int force_set_server_list(const obrpc::ObServerList& server_list, const int64_t replica_num) = 0;
-  virtual int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts) = 0;
   virtual int get_next_served_log_info_for_leader(uint64_t& next_served_log_id, int64_t& next_served_log_ts) = 0;
   virtual uint64_t get_next_index_log_id() const = 0;
   virtual int get_pls_epoch(int64_t& pls_epoch) const = 0;
@@ -663,7 +662,6 @@ public:
   virtual int flush_cb(const ObLogFlushCbArg& arg) override;
   virtual int on_get_election_priority(election::ObElectionPriority& priority) override;
   virtual int on_change_leader_retry(const common::ObAddr& server, ObTsWindows& changing_leader_windows) override;
-  virtual int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts) override;
   virtual int get_next_served_log_info_for_leader(uint64_t& next_served_log_id, int64_t& next_served_log_ts) override;
   virtual uint64_t get_next_index_log_id() const override
   {

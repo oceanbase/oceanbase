@@ -18,7 +18,6 @@
 #include "ob_external_fetcher.h"
 #include "ob_archive_log_fetcher.h"
 #include "ob_external_start_log_locator.h"
-#include "ob_external_heartbeat_handler.h"
 #include "ob_external_leader_heartbeat_handler.h"
 #include "ob_log_line_cache.h"  // ObLogLineCache
 
@@ -39,8 +38,6 @@ namespace logservice {
  * >  ObExtStartLogLocator: Given a timestamp (specified when liboblog restart) to determine
  *                          from which log_id each partition will be pulled.
  * >  ObExtLogFetcher: streaming pull operator
- * >  ObExtHeartbeatHandler: The old version of Heartbeat (supports querying the timestamp of older logs)
- *                           is obsolete and is reserved for compatibility consideration.
  * >  ObExtLeaderHeartbeatHandler: The new version of the heartbeat, called LeaderHeartbeat,
  *                                 returns the next log and forecast timestamp.
  */
@@ -105,7 +102,6 @@ public:
         log_archive_line_cache_(),
         locator_(),
         fetcher_(),
-        hb_handler_(),
         leader_hb_handler_()
   {}
   ~ObExtLogService()
@@ -126,8 +122,6 @@ public:
   // for log archive
   int archive_fetch_log(
       const common::ObPGKey& pg_key, const clog::ObReadParam& param, clog::ObReadBuf& rbuf, clog::ObReadRes& res);
-  int req_heartbeat_info(
-      const obrpc::ObLogReqHeartbeatInfoRequest& req_msg, obrpc::ObLogReqHeartbeatInfoResponse& response);
   int leader_heartbeat(const obrpc::ObLogLeaderHeartbeatReq& req_msg, obrpc::ObLogLeaderHeartbeatResp& resp);
   int wash_expired_stream();
   int report_all_stream();
@@ -151,7 +145,6 @@ private:
   ObExtStartLogLocator locator_;
   ObExtLogFetcher fetcher_;
   ObArchiveLogFetcher archive_log_fetcher_;
-  ObExtHeartbeatHandler hb_handler_;
   ObExtLeaderHeartbeatHandler leader_hb_handler_;
 };
 
