@@ -1321,7 +1321,7 @@ DEF_TIME(_backup_idle_time, OB_CLUSTER_PARAMETER, "5m", "[10s,]",
     "the time interval between the schedules of physical backup task. "
     "Range: [10s, +∞)",
     ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_ob_enable_prepared_statement, OB_CLUSTER_PARAMETER, "True", "control if enable prepared statement",
+DEF_BOOL(_ob_enable_prepared_statement, OB_CLUSTER_PARAMETER, "False", "control if enable prepared statement",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(_upgrade_stage, OB_CLUSTER_PARAMETER, "NONE", common::ObConfigUpgradeStageChecker,
     "specifies the upgrade stage. "
