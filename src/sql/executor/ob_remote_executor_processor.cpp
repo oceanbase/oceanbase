@@ -295,7 +295,9 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext& exec_ctx, const ObP
       bool need_flush = false;
       if (is_static_engine) {
         bool added = false;
-        if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_, exec_ctx.get_eval_ctx(), added))) {
+        if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_,
+                                        exec_ctx.get_eval_ctx(),
+                                        added))) {
           LOG_WARN("fail add row to scanner", K(ret));
         } else if (!added) {
           need_flush = true;
@@ -1178,7 +1180,8 @@ int ObRpcRemoteASyncExecuteP::send_result_to_controller(ObExecContext& exec_ctx,
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("failed to get next row", K(ret));
           }
-        } else if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_, exec_ctx.get_eval_ctx(), added))) {
+        } else if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_,
+                                               exec_ctx.get_eval_ctx(), added))) {
           LOG_WARN("fail add row to scanner", K(ret));
         } else if (!added) {
           buffer_enough = true;

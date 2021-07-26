@@ -789,6 +789,9 @@ int ObIndexSSTableBuilder::gen_data_exchange(ObPhysicalPlan& phy_plan, ObPhyOper
           if (OB_FAIL(
                   transmit->get_range_locations().push_back(ObTaskInfo::ObRangeLocation(phy_plan.get_allocator())))) {
             LOG_WARN("array push back failed", K(ret));
+          } else if (FALSE_IT(transmit->get_range_locations().at(
+                      transmit->get_range_locations().count() - 1).part_locs_.set_allocator(
+                          &phy_plan.get_allocator()))) {
           } else if (OB_FAIL(transmit->get_range_locations().at(idx).part_locs_.init(1))) {
             LOG_WARN("init fix array failed", K(ret));
           } else {
@@ -1025,6 +1028,9 @@ int ObIndexSSTableBuilder::gen_macro_exchange(ObPhysicalPlan& phy_plan, ObPhyOpe
       for (int64_t i = 0; OB_SUCC(ret) && i < index_keys.get_partition_num(); i++) {
         if (OB_FAIL(range_locations.push_back(ObTaskInfo::ObRangeLocation(phy_plan.get_allocator())))) {
           LOG_WARN("array push back failed", K(ret));
+        } else if (FALSE_IT(
+                range_locations.at(range_locations.count() - 1).part_locs_.set_allocator(
+                    &phy_plan.get_allocator()))) {
         } else {
           auto& ranges = index_ranges_.at(std::min(i, index_ranges_.count() - 1));
           ObPartitionKey pkey;
@@ -1145,6 +1151,9 @@ int ObIndexSSTableBuilder::gen_sstable_exchange(ObPhysicalPlan& phy_plan, ObPhyO
       for (int64_t i = 0; OB_SUCC(ret) && i < index_keys.get_partition_num(); i++) {
         if (OB_FAIL(range_locations.push_back(ObTaskInfo::ObRangeLocation(phy_plan.get_allocator())))) {
           LOG_WARN("array push back failed", K(ret));
+        } else if (FALSE_IT(
+                range_locations.at(range_locations.count() - 1).part_locs_.set_allocator(
+                    &phy_plan.get_allocator()))) {
         } else {
           auto& range_location = range_locations.at(i);
           if (OB_FAIL(range_location.part_locs_.init(1))) {
