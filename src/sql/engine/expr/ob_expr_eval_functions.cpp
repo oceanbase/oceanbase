@@ -69,6 +69,7 @@
 #include "ob_expr_regexp_replace.h"
 #include "ob_expr_regexp_substr.h"
 #include "ob_expr_repeat.h"
+#include "ob_expr_export_set.h"
 #include "ob_expr_replace.h"
 #include "ob_expr_func_dump.h"
 #include "ob_expr_func_part_hash.h"
@@ -649,7 +650,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                             // ObExprToMultiByte::calc_to_multi_byte,                     /* 397 */
     NULL,                                             // ObExprDllUdf::eval_dll_udf,                                /* 398 */
     NULL,                                             // ObExprRawtonhex::calc_rawtonhex_expr,                      /* 399 */
-    ObExprPi::eval_pi                                 /* 400 */
+    ObExprPi::eval_pi,                                /* 400 */
+    ObExprExportSet::eval_export_set,                 /* 401 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));
