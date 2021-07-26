@@ -3493,6 +3493,7 @@ public:
     need_checksum_ = false;
     prepare_log_id_ = 0;
     prepare_log_timestamp_ = 0;
+    clear_log_base_ts_ = 0;
   }
   void destroy()
   {
@@ -3537,6 +3538,7 @@ public:
   bool need_checksum_;
   int64_t prepare_log_id_;
   int64_t prepare_log_timestamp_;
+  int64_t clear_log_base_ts_;
 };
 
 struct CtxInfo final {

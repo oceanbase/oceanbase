@@ -6653,7 +6653,8 @@ int ObPGStorage::restore_mem_trans_table()
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
   } else if (FALSE_IT(restore_state = get_restore_state())) {
-  } else if (!has_memstore() && REPLICA_NOT_RESTORE == restore_state) {
+  } else if ((!has_memstore() && REPLICA_NOT_RESTORE == restore_state) ||
+              ObReplicaTypeCheck::is_log_replica(meta_->replica_type_)) {
     // do nothing
     FLOG_INFO("no need to restore mem trans table", K_(pkey), K(restore_state));
   } else if (OB_FAIL(trans_table_pkey.generate_trans_table_pkey(pkey_))) {

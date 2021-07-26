@@ -1564,6 +1564,7 @@ int ObPartitionService::log_new_partition(ObIPartitionGroup* partition, const in
     } else if (OB_FAIL(partition->get_pg_storage().restore_mem_trans_table())) {
       LOG_WARN("failed to restore_mem_trans_table", K(pkey), K(ret));
     } else {
+      partition->get_pg_storage().online();
       STORAGE_LOG(INFO, "log new partition success", K(pkey));
     }
   }
@@ -2510,6 +2511,10 @@ void ObPartitionService::free_partition_list(ObArray<ObIPartitionGroup*>& partit
 int ObPartitionService::remove_duplicate_partitions(const ObIArray<ObCreatePartitionArg>& batch_arg)
 {
   int ret = OB_SUCCESS;
+  const int MAX_RETRY_TIMES = 50;
+  const int USLEEP_TIME = 1000 * 100; // 100 ms
+  bool need_retry = true;
+  int retry_times = 0;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2524,6 +2529,31 @@ int ObPartitionService::remove_duplicate_partitions(const ObIArray<ObCreateParti
         STORAGE_LOG(ERROR, "pg_key not equal to pkey", K(ret), K(pkey), K(arg.pg_key_));
       } else if (arg.ignore_member_list_ && is_partition_exist(pkey) && OB_FAIL(remove_partition(pkey))) {
         STORAGE_LOG(WARN, "fail to remove duplicate partition", K(ret), K(pkey));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      while (need_retry && retry_times < MAX_RETRY_TIMES) {
+        need_retry = false;
+        for (int i = 0; i < batch_arg.count(); ++i) {
+          const ObCreatePartitionArg &arg = batch_arg.at(i);
+          const ObPartitionKey &pkey = arg.partition_key_;
+          if (arg.ignore_member_list_
+              && (OB_ENTRY_EXIST == partition_map_.contains_key(pkey))) {
+            need_retry = true;
+            if (REACH_TIME_INTERVAL(100 * 1000)) {
+              STORAGE_LOG(WARN, "partition still exist, need retry. ", K(pkey));
+            }
+            break;
+          }
+        }
+        if (need_retry) {
+          usleep(USLEEP_TIME); // 100 ms
+        }
+        retry_times++;
+      }
+      if (need_retry && retry_times == MAX_RETRY_TIMES) {
+        ret = OB_EAGAIN;
       }
     }
   }
@@ -12857,7 +12887,7 @@ int ObPartitionService::wait_schema_version(const int64_t tenant_id, int64_t sch
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(schema_version), K(query_end_time));
   } else {
     ret = OB_EAGAIN;
-    while (OB_EAGAIN == ret) {
+    while (OB_EAGAIN == ret || OB_TENANT_SCHEMA_NOT_FULL == ret) {
       if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("failed to get_tenant_full_schema_guard", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, local_version))) {

@@ -61,6 +61,8 @@ public:
     need_output_row_with_nop_ = false;
   }
   virtual int switch_iterator(const int64_t range_array_idx) override;
+  int refresh_table_on_demand();
+  virtual int release_table_ref();
 
 protected:
   int open();
@@ -125,7 +127,6 @@ private:
   int project2output_exprs(ObStoreRow& unprojected_row, ObStoreRow& cur_row);
   // destruct all iterators and reuse iter array
   int prepare_read_tables();
-  int refresh_table_on_demand();
   int check_need_refresh_table(bool& need_refresh);
   int save_curr_rowkey();
   int reset_tables();
@@ -166,7 +167,7 @@ protected:
   ObTableStoreStat table_stat_;
   bool skip_refresh_table_;
   bool read_memtable_only_;
-
+  bool is_tables_reset_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleMerge);

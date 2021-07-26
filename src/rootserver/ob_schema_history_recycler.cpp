@@ -675,6 +675,20 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
                  KR(ret), K(tenant_id), K(schema_version));
       }
     }
+    if (OB_SUCC(ret)) {
+      int64_t schema_version = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+        const uint64_t tenant_id = tenant_ids.at(i);
+        if (OB_FAIL(storage::ObFreezeInfoMgrWrapper::get_instance().
+            get_restore_point_min_schema_version(tenant_id, schema_version))) {
+          LOG_WARN("fail to get restore point min_schema_version", K(ret), K(tenant_id));
+        } else if (INT64_MAX != schema_version && OB_FAIL(fill_recycle_schema_versions(
+                   tenant_id, schema_version, recycle_schema_versions))) {
+          LOG_WARN("fail to fill recycle schema versions",
+                   KR(ret), K(tenant_id), K(schema_version));
+        }
+      }
+    }
   }
   return ret;
 }

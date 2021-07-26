@@ -392,6 +392,7 @@ void ObPartTransCtx::reset()
   tmp_scheduler_.reset();
   last_redo_log_mutator_size_ = 0;
   has_write_or_replay_mutator_redo_log_ = false;
+  is_in_redo_with_prepare_ = false;
 }
 
 int ObPartTransCtx::construct_context(const ObTransMsg& msg)
@@ -3815,7 +3816,11 @@ int ObPartTransCtx::replay_redo_log(const ObTransRedoLog& log, const int64_t tim
     }
   }
   if (OB_SUCC(ret)) {
-    update_durable_log_id_ts_(OB_LOG_TRANS_REDO, log_id, timestamp);
+    if (with_prepare) {
+      is_in_redo_with_prepare_ = true;
+    } else {
+      update_durable_log_id_ts_(OB_LOG_TRANS_REDO, log_id, timestamp);
+    }
   }
   const int64_t end = ObTimeUtility::fast_current_time();
   ObTransStatistic::get_instance().add_redo_log_replay_count(tenant_id_, 1);
@@ -3877,6 +3882,10 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
   } else if (OB_FAIL(set_xid_(log.get_xid()))) {
     TRANS_LOG(WARN, "set xid error", K(ret), K(log));
   } else {
+    bool is_state_durable = false;
+    if (max_durable_log_ts_ >= timestamp) {
+      is_state_durable = true;
+    }
     if (can_elr_ != log.is_can_elr()) {
       TRANS_LOG(WARN, "different can elr state", K(log), K(*this));
     }
@@ -3911,7 +3920,9 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
     // During the replay of prepare log, we need gurantee the
     // local_trans_version is assigned before prepare state, otherwise the slave
     // read timestamp may be miscompyed
-    set_state_(Ob2PCState::PREPARE);
+    if (!is_state_durable) {
+      set_state_(Ob2PCState::PREPARE);
+    }
     is_xa_trans_prepared_ = true;
     if (batch_commit_trans_) {
       if (OB_ISNULL(partition_mgr_)) {
@@ -3958,6 +3969,7 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "replay prepare log error", KR(ret), "context", *this, K(log));
   } else {
+    is_in_redo_with_prepare_ = false;
     // When 1pc txns replay the prepare log, we need fill in the end_log_ts_ for
     // trans table garbage colloection. While the minor merge cannot be
     // permitted until checkpoint confirms the 1pc txn's state
@@ -4032,10 +4044,14 @@ int ObPartTransCtx::replay_commit_log(const ObTransCommitLog& log, const int64_t
   } else if (OB_FAIL(partition_log_info_arr_.assign(log.get_partition_log_info_array()))) {
     TRANS_LOG(WARN, "partition log array assign error", KR(ret), K(log));
   } else {
+    bool is_state_durable = false;
+    if (max_durable_log_ts_ > timestamp) {
+      is_state_durable = true;
+    }
     submit_log_count_ = 0;
     update_durable_log_id_ts_(OB_LOG_TRANS_COMMIT, log_id, timestamp);
     log_type_ = log.get_log_type();
-    const uint64_t checksum = (need_checksum_ ? log.get_checksum() : 0);
+    const uint64_t checksum = ((need_checksum_ && !is_state_durable) ? log.get_checksum() : 0);
     global_trans_version_ = log.get_global_trans_version();
     clear_log_base_ts_ = timestamp;
     if (OB_FAIL(trans_replay_commit_(global_trans_version_, checksum))) {
@@ -10418,6 +10434,7 @@ int ObPartTransCtx::recover_from_trans_sstable_durable_ctx_info(ObTransSSTableDu
     need_checksum_ = ctx_info.need_checksum_;
     prepare_log_id_ = ctx_info.prepare_log_id_;
     prepare_log_timestamp_ = ctx_info.prepare_log_timestamp_;
+    clear_log_base_ts_ = ctx_info.clear_log_base_ts_;
 
     (void)mark_dirty_trans();
 
@@ -10454,7 +10471,10 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
   CtxLockGuard guard(lock_);
   ObElrTransArrGuard prev_trans_guard;
 
-  if (OB_FAIL(get_trans_table_status_info_(log_ts, info.trans_table_info_))) {
+  if (is_in_redo_with_prepare_) {
+    ret = OB_EAGAIN;
+    TRANS_LOG(WARN, "is_in_redo_with_preapre, cannot merge", K(ret), K(*this));
+  } else if (OB_FAIL(get_trans_table_status_info_(log_ts, info.trans_table_info_))) {
     TRANS_LOG(WARN, "get trans table status", K(ret), K(*this));
   } else if (OB_FAIL(info.participants_.assign(participants_))) {
     TRANS_LOG(WARN, "assign participants failed", K(ret), K(*this));
@@ -10494,6 +10514,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.need_checksum_ = need_checksum_;
     info.prepare_log_id_ = prepare_log_id_;
     info.prepare_log_timestamp_ = prepare_log_timestamp_;
+    info.clear_log_base_ts_ = clear_log_base_ts_;
   }
 
   return ret;

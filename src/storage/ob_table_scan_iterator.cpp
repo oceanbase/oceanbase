@@ -557,6 +557,17 @@ int ObTableScanStoreRowIterator::switch_iterator(const int64_t range_array_idx)
   return ret;
 }
 
+int ObTableScanStoreRowIterator::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  if (NULL != main_iter_) {
+    if (OB_FAIL(main_iter_->release_table_ref())) {
+      STORAGE_LOG(WARN, "failed to release table ref", K(ret));
+    }
+  }
+  return ret;
+}
+
 ObTableScanRangeArrayRowIterator::ObTableScanRangeArrayRowIterator()
     : is_inited_(false), row_iter_(NULL), cur_row_(NULL), curr_range_array_idx_(0), is_reverse_scan_(false)
 {}
@@ -644,6 +655,16 @@ int ObTableScanRangeArrayRowIterator::set_range_array_idx(const int64_t range_ar
   }
   return ret;
 }
+
+int ObTableScanRangeArrayRowIterator::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(row_iter_->release_table_ref())) {
+    STORAGE_LOG(WARN, "failed to refresh table on demand", K(ret));
+  }
+  return ret;
+}
+
 constexpr const char ObTableScanIterIterator::LABEL[];
 constexpr const char ObTableScanIterator::LABEL[];
 
@@ -728,6 +749,15 @@ void ObTableScanIterIterator::reset()
   is_reverse_scan_ = false;
 }
 
+int ObTableScanIterIterator::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(store_row_iter_.release_table_ref())) {
+    STORAGE_LOG(WARN, "failed to refresh table on demand", K(ret));
+  }
+  return ret;
+}
+
 ObTableScanIterator::ObTableScanIterator()
     : ObNewRowIterator(ObNewRowIterator::ObTableScanIterator), iter_(), row_iter_(NULL)
 {}
@@ -793,6 +823,15 @@ void ObTableScanIterator::reset()
 {
   iter_.reset();
   row_iter_ = NULL;
+}
+
+int ObTableScanIterator::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(iter_.release_table_ref())) {
+    STORAGE_LOG(WARN, "failed to refresh table on demand", K(ret));
+  }
+  return ret;
 }
 
 ObTableScanNewRowIterator::ObTableScanNewRowIterator(ObNewIterIterator& iter) : iter_(iter), row_iter_(NULL)

@@ -437,9 +437,11 @@ static inline int is_snapshot_related_to_table(
   if (!snapshot.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(snapshot));
-  } else if ((snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT && !is_inner_table(table_id)) ||
-             snapshot.snapshot_type_ == share::SNAPSHOT_FOR_BACKUP_POINT) {
-    if (extract_tenant_id(table_id) == snapshot.tenant_id_) {
+  } else if (snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT
+      || snapshot.snapshot_type_ == share::SNAPSHOT_FOR_BACKUP_POINT) {
+    if (snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT && is_inner_table(table_id)) {
+      related = false;
+    } else if (extract_tenant_id(table_id) == snapshot.tenant_id_) {
       related = true;
       bool is_complete = false;
       if (create_schema_version > snapshot.schema_version_ && !is_inner_table(table_id)) {

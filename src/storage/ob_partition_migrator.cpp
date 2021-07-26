@@ -967,6 +967,8 @@ int ObMigratePrepareTask::create_new_partition(const ObAddr& src_server, ObRepli
                                                  partition->get_pg_storage().is_restoring_standby()))) {
     } else if (need_create_memtable && OB_FAIL(partition->create_memtable(in_slog_trans))) {
       STORAGE_LOG(WARN, "fail to create memtable", K(ret));
+    // pause it to make sure the sstable upper trans version is update after migration finished.
+    } else if (need_create_memtable && OB_FALSE_IT(partition->get_pg_storage().pause())) {
     } else {
       file_handle.reset();
       // create new partition need set schema_version in pg meta in order to prevent gc

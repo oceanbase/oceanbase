@@ -721,6 +721,7 @@ private:
   int64_t last_redo_log_mutator_size_;
   bool is_xa_trans_prepared_;
   bool has_write_or_replay_mutator_redo_log_;
+  bool is_in_redo_with_prepare_;
 };
 
 #if defined(__x86_64__)

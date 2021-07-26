@@ -283,7 +283,7 @@ void ObGarbageCollector::run1()
     int ret = OB_SUCCESS;
     TenantSet gc_tenant_set;
     ObGCCandidateArray gc_candidates;
-    const int64_t gc_interval = GC_INTERVAL;
+    int64_t gc_interval = GC_INTERVAL;
 #ifdef ERRSIM
     gc_interval = std::min(gc_interval, (int64_t)ObServerConfig::get_instance().schema_drop_gc_delay_time);
 #endif

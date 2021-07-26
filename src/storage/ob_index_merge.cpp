@@ -157,5 +157,25 @@ int ObIndexMerge::switch_iterator(const int64_t range_array_idx)
   return table_iter_.switch_iterator(range_array_idx);
 }
 
-}  // namespace storage
-}  // namespace oceanbase
+int ObIndexMerge::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  if (NULL != main_iter_) {
+    if (OB_FAIL(main_iter_->release_table_ref())) {
+      STORAGE_LOG(WARN, "failed to refresh table on demand", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (NULL != index_iter_) {
+      if (OB_FAIL(index_iter_->release_table_ref())) {
+        STORAGE_LOG(WARN, "failed to refresh table on demand", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+
+} // namespace storage
+} // namespace oceanbase

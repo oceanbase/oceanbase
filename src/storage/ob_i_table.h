@@ -479,6 +479,7 @@ public:
   int get_all_minor_sstables(common::ObIArray<ObSSTable*>& sstables);
   int get_all_memtables(common::ObIArray<memtable::ObMemtable*>& memtables);
   void reset();
+  void reset_tables();
   int reserve(const int64_t count);
   void set_retire_check();
   bool check_store_expire() const;
