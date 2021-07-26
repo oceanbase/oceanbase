@@ -3452,6 +3452,13 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode* node, ObRawExpr
         name = ObString::make_string("ora_decode");
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (0 == name.case_compare("nextval")) {
+        ret = OB_ERR_FUNCTION_UNKNOWN;
+      }
+    }
+
     if (OB_FAIL(ret)) {
       /*^-^*/
     } else if (OB_FAIL(ob_write_string(ctx_.expr_factory_.get_allocator(), name, func_name))) {
