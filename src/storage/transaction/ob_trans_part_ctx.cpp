@@ -10389,8 +10389,6 @@ int ObPartTransCtx::get_trans_table_status_info_(const int64_t log_ts, ObTransTa
     } else if (OB_FAIL(info.set(
                    status, trans_version, undo_status_, terminate_log_ts, checksum, mt_ctx_.get_checksum_log_ts()))) {
       TRANS_LOG(WARN, "get trans table status info error", K(ret), K(*this));
-    } else {
-      TRANS_LOG(INFO, "trans table status when dump trans table", K(*this), K(info), K(log_ts));
     }
   }
 
@@ -10515,6 +10513,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.prepare_log_id_ = prepare_log_id_;
     info.prepare_log_timestamp_ = prepare_log_timestamp_;
     info.clear_log_base_ts_ = clear_log_base_ts_;
+    TRANS_LOG(INFO, "trans table status when dump trans table", K(*this), K(info), K(log_ts));
   }
 
   return ret;
