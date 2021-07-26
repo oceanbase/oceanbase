@@ -980,33 +980,29 @@ int ObParallelDfoScheduler::dispatch_sqc(
     } else {
       LOG_WARN("fail to wait all async init sqc", K(ret), K(exec_ctx));
     }
-  }
-  int saved_ret = ret;
-  ret = OB_SUCCESS;
-  const ObArray<ObSqcAsyncCB*>& callbacks = proxy.get_callbacks();
-  ARRAY_FOREACH(callbacks, idx)
-  {
-    const ObSqcAsyncCB* cb = callbacks.at(idx);
-    const ObPxRpcInitSqcResponse& resp = (*cb).get_result();
-    ObPxSqcMeta& sqc = *sqcs.at(idx);
-    if (sqc.need_report() && !fast_sqc) {
-      ObPxInitSqcResultMsg pkt;
-      pkt.dfo_id_ = sqc.get_dfo_id();
-      pkt.sqc_id_ = sqc.get_sqc_id();
-      pkt.rc_ = resp.rc_;
-      pkt.task_count_ = resp.reserved_thread_count_;
-      if (resp.reserved_thread_count_ < sqc.get_max_task_count()) {
-        LOG_INFO("SQC do not have enough thread, Downgraded thread allocation", K(resp), K(sqc));
-      }
-      if (OB_FAIL(pkt.partitions_info_.assign(resp.partitions_info_))) {
-        LOG_WARN("Failed to assign partition info", K(ret));
-      } else if (OB_FAIL(proc_.on_sqc_init_msg(exec_ctx, pkt))) {
-        LOG_WARN("fail to do sqc init callback", K(resp), K(pkt), K(ret));
+  } else {
+    const ObArray<ObSqcAsyncCB*>& callbacks = proxy.get_callbacks();
+    ARRAY_FOREACH(callbacks, idx) {
+      const ObSqcAsyncCB* cb = callbacks.at(idx);
+      const ObPxRpcInitSqcResponse& resp = (*cb).get_result();
+      ObPxSqcMeta& sqc = *sqcs.at(idx);
+      sqc.set_need_report(true);
+      if (!fast_sqc) {
+        ObPxInitSqcResultMsg pkt;
+        pkt.dfo_id_ = sqc.get_dfo_id();
+        pkt.sqc_id_ = sqc.get_sqc_id();
+        pkt.rc_ = resp.rc_;
+        pkt.task_count_ = resp.reserved_thread_count_;
+        if (resp.reserved_thread_count_ < sqc.get_max_task_count()) {
+          LOG_INFO("SQC do not have enough thread, Downgraded thread allocation", K(resp), K(sqc));
+        }
+        if (OB_FAIL(pkt.partitions_info_.assign(resp.partitions_info_))) {
+          LOG_WARN("Failed to assign partition info", K(ret));
+        } else if (OB_FAIL(proc_.on_sqc_init_msg(exec_ctx, pkt))) {
+          LOG_WARN("fail to do sqc init callback", K(resp), K(pkt), K(ret));
+        }
       }
     }
-  }
-  if (saved_ret != OB_SUCCESS) {
-    ret = saved_ret;
   }
 
   return ret;

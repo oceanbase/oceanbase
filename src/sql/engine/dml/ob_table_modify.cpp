@@ -405,7 +405,6 @@ OB_DEF_SERIALIZE(ObTableModify)
   }
   OB_UNIS_ENCODE(is_pdml_index_maintain_);
   OB_UNIS_ENCODE(table_location_uncertain_);
-  OB_UNIS_ENCODE(is_pdml_index_maintain_);
   return ret;
 }
 
@@ -487,7 +486,6 @@ OB_DEF_DESERIALIZE(ObTableModify)
   OB_UNIS_DECODE_EXPR_DLIST(ObSqlExpression, tsc_virtual_column_exprs_, my_phy_plan_);
   OB_UNIS_DECODE(is_pdml_index_maintain_);
   OB_UNIS_DECODE(table_location_uncertain_);
-  OB_UNIS_DECODE(is_pdml_index_maintain_);
   return ret;
 }
 
@@ -532,7 +530,6 @@ OB_DEF_SERIALIZE_SIZE(ObTableModify)
   len += get_dlist_serialize_size(tsc_virtual_column_exprs_);
   OB_UNIS_ADD_LEN(is_pdml_index_maintain_);
   OB_UNIS_ADD_LEN(table_location_uncertain_);
-  OB_UNIS_ADD_LEN(is_pdml_index_maintain_);
   return len;
 }
 

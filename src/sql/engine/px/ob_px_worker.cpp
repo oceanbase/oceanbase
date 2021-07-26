@@ -261,6 +261,7 @@ int ObPxThreadWorker::run_at(ObPxRpcInitTaskArgs& task_arg, omt::ObPxPool& px_po
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("fail increase thread count. abort!", K(tmp_ret), K(ret));
             ret = tmp_ret;
+            break;
           }
         }
         usleep(5000);

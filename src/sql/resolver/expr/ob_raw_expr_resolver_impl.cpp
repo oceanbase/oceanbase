@@ -3390,6 +3390,7 @@ int ObRawExprResolverImpl::process_lnnvl_node(const ParseNode* node, ObRawExpr*&
   switch (param_type) {
     case T_FUN_SYS_LNNVL:
     case T_FUN_SYS_REGEXP_LIKE:
+    case T_OP_EXISTS:
     case T_OP_IS:
     case T_OP_IS_NOT:
     case T_OP_LIKE:

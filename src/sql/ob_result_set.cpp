@@ -1096,6 +1096,19 @@ int ObResultSet::init_cmd_exec_context(ObExecContext& exec_ctx)
   return ret;
 }
 
+void ObResultSet::refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock, int err)
+{
+  if (OB_NOT_MASTER == err || OB_PARTITION_NOT_EXIST == err || is_server_down_error(err)) {
+    int err2 = ObTaskExecutorCtxUtil::refresh_location_cache(task_exec_ctx,
+                                                             is_nonblock);
+    if (OB_SUCCESS != err2) {
+      LOG_WARN("fail to refresh location cache", K(err2), K(is_nonblock), K(err));
+    }
+    LOG_TRACE("partition change or not master or no response, refresh location cache", K(err));
+  }
+}
+
+// obmp_query中重试整个SQL之前，可能需要调用本接口来刷新Location，以避免总是发给了错误的服务器
 int ObResultSet::refresh_location_cache(bool is_nonblock)
 {
   return ObTaskExecutorCtxUtil::refresh_location_cache(get_exec_context().get_task_exec_ctx(), is_nonblock);

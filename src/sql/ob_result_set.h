@@ -188,6 +188,7 @@ public:
   stmt::StmtType get_inner_stmt_type() const;
   stmt::StmtType get_literal_stmt_type() const;
   int64_t get_query_string_id() const;
+  static void refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock, int err);
   int refresh_location_cache(bool is_nonblock);
   int check_and_nonblock_refresh_location_cache();
   bool need_execute_remote_sql_async() const

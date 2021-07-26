@@ -200,7 +200,6 @@ int ObPxSqcAsyncProxy::wait_all()
           } else {
             results_.at(idx) = &cb_result;
           }
-          sqcs_.at(idx)->set_need_report(true);
         } else {
           // RPC framework error, need no retry
           ret = callback.get_ret_code().rcode_;
@@ -272,10 +271,6 @@ void ObPxSqcAsyncProxy::fail_process()
           return_cb_count_++;
           LOG_DEBUG("async sql fails, wait all callbacks", K(return_cb_count_), K(callbacks_.count()));
           callback.set_visited(true);
-        }
-        // same condition with ObPxSqcAsyncProxy::wait_all().
-        if (callback.get_ret_code().rcode_ == OB_SUCCESS && callback.is_processed()) {
-          sqcs_.at(idx)->set_need_report(true);
         }
       }
     }
