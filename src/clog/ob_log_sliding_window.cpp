@@ -2217,6 +2217,10 @@ void ObLogSlidingWindow::try_update_next_replay_log_info(
     LOAD128(last, &next_replay_log_id_info_);
     if (next.hi <= last.hi && next.lo <= last.lo) {
       break;
+    } else if (is_nop_or_truncate_log && next.hi > last.hi && next.lo < last.lo) {
+      // last.lo has been pulled up with keepalive message; need to update log_id
+      next.hi = log_id;
+      next.lo = last.lo;
     } else if (next.hi < last.hi || next.lo < last.lo) {
       if (!is_nop_or_truncate_log) {
         CLOG_LOG(ERROR,
@@ -2228,7 +2232,12 @@ void ObLogSlidingWindow::try_update_next_replay_log_info(
             K(next.lo));
       }
       break;
-    } else if (CAS128(&next_replay_log_id_info_, last, next)) {
+    } else {
+      //(next.hi >= last.hi && next.lo > last.lo) || (next.hi > last.hi && next.lo >= last.lo)
+      // need update
+    }
+    // need update
+    if (CAS128(&next_replay_log_id_info_, last, next)) {
       break;
     } else {
       PAUSE();
