@@ -172,7 +172,7 @@ public:
 
   int pop_high(ObLink*& data, int64_t timeout_us)
   {
-    return do_pop(data, HIGH_PRIOS, timeout_us);
+    return do_pop(data, HIGH_HIGH_PRIOS + HIGH_PRIOS, timeout_us);
   }
 
   int pop_high_high(ObLink*& data, int64_t timeout_us)
