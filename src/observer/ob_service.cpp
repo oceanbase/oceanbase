@@ -916,7 +916,7 @@ int ObService::submit_pt_update_role_task(const ObPartitionKey& pkey)
 }
 
 int ObService::submit_pt_update_task(
-    const ObPartitionKey& part_key, const bool need_report_checksum, const bool with_role)
+    const ObPartitionKey& part_key, const bool need_report_checksum)
 {
   int ret = OB_SUCCESS;
   const bool is_remove = false;
@@ -927,7 +927,7 @@ int ObService::submit_pt_update_task(
   } else if (!part_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(part_key), K(ret));
-  } else if (OB_FAIL(partition_table_updater_.async_update(part_key, with_role))) {
+  } else if (OB_FAIL(partition_table_updater_.async_update(part_key, false/*with_role*/))) {
     LOG_WARN("async_update failed", K(part_key), K(ret));
   } else if (need_report_checksum) {
     if (part_key.is_pg()) {
@@ -2050,7 +2050,6 @@ int ObService::report_replica(const obrpc::ObReportSingleReplicaArg& arg)
   int ret = OB_SUCCESS;
   LOG_INFO("receive report replica request", K(arg.partition_key_));
   const bool need_report_checksum = false;
-  const bool with_role_report = true;
   ObPartitionArray pkeys;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -2079,8 +2078,10 @@ int ObService::report_replica(const obrpc::ObReportSingleReplicaArg& arg)
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(submit_pt_update_task(arg.partition_key_, need_report_checksum, with_role_report))) {
+    if (OB_FAIL(submit_pt_update_task(arg.partition_key_, need_report_checksum))) {
       LOG_WARN("async_update failed", K(arg.partition_key_), K(ret));
+    } else if (OB_FAIL(submit_pt_update_role_task(arg.partition_key_))) {
+      LOG_WARN("fail to submit pt update role task", K(ret), "pkey", arg.partition_key_);
     }
     // update partition meta table, ignore failed
     submit_pg_pt_update_task(pkeys);
@@ -2904,7 +2905,7 @@ int ObService::report_replica()
             ret = OB_SUCCESS;
           }
         } else if (OB_FAIL(submit_pt_update_task(
-                       partition->get_partition_key(), true /*need report checksum*/, true /*with role report*/))) {
+                       partition->get_partition_key(), true /*need report checksum*/))) {
           if (OB_PARTITION_NOT_EXIST == ret) {
             // The GC thread is already working,
             // and deleted during traversal, the replica has been deleted needs to be avoided blocking the start process
@@ -2914,6 +2915,10 @@ int ObService::report_replica()
             LOG_WARN(
                 "submit partition table update task failed", K(ret), "partition_key", partition->get_partition_key());
           }
+        } else if (OB_FAIL(submit_pt_update_role_task(
+                partition->get_partition_key()))) {
+          LOG_WARN("fail to submit pt update role task", K(ret),
+                   "pkey", partition->get_partition_key());
         } else {
           // Update partition meta table without concern for error codes
           submit_pg_pt_update_task(pkeys);

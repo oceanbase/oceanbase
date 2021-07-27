@@ -2577,7 +2577,7 @@ public:
   int build_remove_member_rpc_arg(obrpc::ObMemberChangeBatchArg& arg) const;
   int add_remove_member_task_info(const ObRemoveMemberTaskInfo& task_info);
   int assign(const ObRemoveMemberTask& that);
-
+  void clear_task_info();
 private:
   common::ObArray<ObRemoveMemberTaskInfo> task_infos_;
   bool admin_force_;

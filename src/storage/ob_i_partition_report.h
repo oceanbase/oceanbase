@@ -36,7 +36,7 @@ public:
   virtual ~ObIPartitionReport()
   {}
   virtual int submit_pt_update_task(
-      const common::ObPartitionKey& part_key, const bool need_report_checksum = true, const bool with_role = false) = 0;
+      const common::ObPartitionKey& part_key, const bool need_report_checksum = true) = 0;
   virtual int submit_pt_update_role_task(const common::ObPartitionKey& pkey) = 0;
   virtual void submit_pg_pt_update_task(const common::ObPartitionArray& pg_partitions) = 0;
   virtual int submit_checksum_update_task(const common::ObPartitionKey& pkey, const uint64_t sstable_id,

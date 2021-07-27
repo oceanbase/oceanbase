@@ -1802,7 +1802,7 @@ int ObLogStateMgr::on_leader_takeover_()
     // only LEADER need call on_leader_takeover
     role_change_time_ = ObTimeUtility::current_time();
     if (OB_FAIL(partition_service_->submit_pt_update_role_task(partition_key_))) {
-      CLOG_LOG(WARN, "ps_cb->submit_pt_update_task failed", K_(partition_key), K(ret));
+      CLOG_LOG(WARN, "ps_cb submit pt update role task failed", K_(partition_key), K(ret));
     }
   } else {
     int64_t before_takeover = ObTimeUtility::current_time();
@@ -1872,7 +1872,7 @@ int ObLogStateMgr::on_leader_revoke_()
     // only LEADER need call on_leader_revoke
     role_change_time_ = ObTimeUtility::current_time();
     if (OB_FAIL(partition_service_->submit_pt_update_role_task(partition_key_))) {
-      CLOG_LOG(WARN, "ps_cb->submit_pt_update_task failed", K_(partition_key), K(ret));
+      CLOG_LOG(WARN, "ps_cb submit pt update role task failed", K_(partition_key), K(ret));
     }
   } else {
     int64_t before_revoke = ObTimeUtility::current_time();

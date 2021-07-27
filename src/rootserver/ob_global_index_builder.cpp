@@ -921,13 +921,13 @@ int ObGlobalIndexBuilder::update_partition_leader_array(common::ObIArray<Partiti
         // transaction on the partition not finish, wait and retry
       } else if (OB_NOT_MASTER == ret_code || OB_PARTITION_NOT_EXIST == ret_code) {
         int64_t part_array_idx = invalid_snapshot_id_array.at(i);
-        if (part_array_idx >= invalid_snapshot_id_array.count()) {
+        if (part_array_idx >= partition_leader_array.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("part array id unexpected",
               K(ret),
               K(part_array_idx),
               "invalid snapshot id array count",
-              invalid_snapshot_id_array.count());
+              partition_leader_array.count());
         } else {
           const ObPartitionKey& pkey = partition_leader_array.at(part_array_idx).pkey_;
           ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);

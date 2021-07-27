@@ -101,8 +101,8 @@ public:
 
   ////////////////////////////////////////////////////////////////
   // ObIPartitionReport interface
-  virtual int submit_pt_update_task(const common::ObPartitionKey& part_key, const bool need_report_checksum = true,
-      const bool with_role = false) override;
+  virtual int submit_pt_update_task(const common::ObPartitionKey& part_key,
+      const bool need_report_checksum = true) override;
   virtual int submit_pt_update_role_task(const common::ObPartitionKey& part_key) override;
   virtual void submit_pg_pt_update_task(const common::ObPartitionArray& pg_partitions) override;
   virtual int submit_checksum_update_task(const common::ObPartitionKey& part_key, const uint64_t sstable_id,
