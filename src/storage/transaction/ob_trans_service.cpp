@@ -2421,8 +2421,10 @@ int ObTransService::end_stmt(bool is_rollback, bool is_incomplete, const ObParti
     // or which no need for creating context (has_epoch)
     if (!is_rollback) {
       for (int64_t i = 0; OB_SUCC(ret) && i < cur_stmt_all_participants.count(); i++) {
+        // if participant is pg, merge commit list immediately
         if (is_contain(epoch_participants, cur_stmt_all_participants.at(i)) &&
-            !is_contain(discard_participants, cur_stmt_all_participants.at(i))) {
+            (cur_stmt_all_participants.at(i).is_pg() ||
+                !is_contain(discard_participants, cur_stmt_all_participants.at(i)))) {
           if (OB_FAIL(real_stmt_participants.push_back(cur_stmt_all_participants.at(i)))) {
             TRANS_LOG(WARN, "push back error", KR(ret), K(cur_stmt_all_participants), K(trans_desc));
           }
