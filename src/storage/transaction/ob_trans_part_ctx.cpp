@@ -7030,6 +7030,32 @@ int ObPartTransCtx::post_stmt_response_(
       } else {
         // do nothing
       }
+    } else if (OB_TRANS_STMT_ROLLBACK_RESPONSE == msg_type) {
+      if (OB_FAIL(msg.init(tenant_id_,
+              trans_id_,
+              msg_type,
+              trans_expired_time_,
+              self_,
+              SCHE_PARTITION_ID,
+              trans_param_,
+              addr_,
+              sql_no,
+              status,
+              request_id_))) {
+        TRANS_LOG(WARN, "message init error", K(ret), K_(scheduler), K_(tmp_scheduler), K(msg_type));
+        // 将request的发送时间戳记录到response中，用于scheduler对消息超时的校验
+      } else if (OB_FAIL(msg.set_msg_timeout(request_timeout))) {
+        TRANS_LOG(INFO,
+            "set message start timestamp error",
+            K(ret),
+            K(msg_type),
+            K(sql_no),
+            K(status),
+            K(request_timeout),
+            K(*this));
+      } else {
+        // do nothing
+      }
     } else if (OB_TRANS_SAVEPOINT_ROLLBACK_RESPONSE == msg_type) {
       if (OB_FAIL(msg.init(tenant_id_,
               trans_id_,
