@@ -22,9 +22,15 @@ namespace sql {
 struct IndexDMLInfo {
 public:
   IndexDMLInfo()
-  {
-    reset();
-  }
+      : table_id_(common::OB_INVALID_ID),
+        loc_table_id_(common::OB_INVALID_ID),
+        index_tid_(common::OB_INVALID_ID),
+        rowkey_cnt_(0),
+        part_cnt_(common::OB_INVALID_ID),
+        all_part_num_(0),
+        need_filter_null_(false),
+        distinct_algo_(T_DISTINCT_NONE)
+  {}
   inline void reset()
   {
     table_id_ = common::OB_INVALID_ID;

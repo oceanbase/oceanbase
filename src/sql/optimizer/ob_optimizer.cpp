@@ -307,20 +307,16 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt& stmt, const ObSQL
     LOG_TRACE("dml has constraint, old engine, disable pdml", K(ret));
     is_use_pdml = false;
   } else {
-    // check global unique index, update(row movement)
-    int global_index_cnt = pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.count();
-    for (int idx = 0; idx < global_index_cnt && OB_SUCC(ret) && is_use_pdml; idx++) {
-      const ObIArray<ObColumnRefRawExpr*>& column_exprs =
-          pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.at(idx).column_exprs_;
-      bool has_unique_index = false;
-      LOG_TRACE("check pdml unique index", K(column_exprs));
-      if (OB_FAIL(check_unique_index(column_exprs, has_unique_index))) {
-        LOG_WARN("failed to check has unique index", K(ret));
-      } else if (has_unique_index) {
-        LOG_TRACE("dml has unique index, disable pdml", K(ret));
-        is_use_pdml = false;
-        break;
-      }
+    // check enabling parallel with local unique index
+    //  1. disable parallel insert. because parallel unique check not supported
+    //  2. disable parallel update. only if the unqiue column is updated.
+    //     for now, we blinedly disable PDML if table has unique local index
+    uint64_t main_table_tid = pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.at(0).index_tid_;
+    bool with_unique_local_idx = false;
+    if (OB_FAIL(schema_guard->check_has_local_unique_index(main_table_tid, with_unique_local_idx))) {
+      LOG_WARN("fail check if table with local unqiue index", K(main_table_tid), K(ret));
+    } else if (with_unique_local_idx) {
+      is_use_pdml = false;
     }
   }
   LOG_TRACE("check use all pdml feature", K(ret), K(is_use_pdml));

@@ -387,6 +387,8 @@ public:
   ObRawExprFactory* get_expr_factory();
 
   int check_status();
+  int fast_check_status(const int64_t n = 0xFF);
+
   void set_outline_params_wrapper(const share::schema::ObOutlineParamsWrapper* params)
   {
     outline_params_wrapper_ = params;
@@ -807,8 +809,8 @@ protected:
   int64_t fixed_id_;  // fixed part id or fixed subpart ids
   // for expr values op use
   int64_t expr_partition_id_;
-
   ObSEArray<common::ObNewRowIterator*, 1, common::ObIAllocator&> iters_;
+  int64_t check_status_times_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

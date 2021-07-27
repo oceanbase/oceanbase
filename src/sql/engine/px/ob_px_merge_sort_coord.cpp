@@ -183,7 +183,7 @@ int ObPxMergeSortCoord::inner_get_next_row(ObExecContext& ctx, const common::ObN
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("phy plan ctx NULL", K(ret));
     } else if (FALSE_IT(timeout_us = phy_plan_ctx->get_timeout_timestamp() - px_ctx->get_timestamp())) {
-    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    } else if (OB_FAIL(ctx.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
     } else if (OB_FAIL(loop.process_one_if(&px_ctx->receive_order_, timeout_us, nth_channel))) {
       if (OB_EAGAIN == ret) {

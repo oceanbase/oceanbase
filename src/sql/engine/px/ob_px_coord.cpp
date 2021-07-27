@@ -725,7 +725,7 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
       } else if (all_dfo_terminate) {
         wait_msg = false;
         LOG_TRACE("all dfo has been terminate", K(ret));
-      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+      } else if (OB_FAIL(ctx.fast_check_status())) {
         LOG_WARN("fail check status, maybe px query timeout", K(ret));
       } else if (OB_FAIL(loop.process_one_if(&control_channels, timeout_us, nth_channel))) {
         if (OB_EAGAIN == ret) {

@@ -222,7 +222,8 @@ ObExecContext::ObExecContext()
       calc_type_(CALC_NORMAL),
       fixed_id_(OB_INVALID_ID),
       expr_partition_id_(OB_INVALID_ID),
-      iters_(256, allocator_)
+      iters_(256, allocator_),
+      check_status_times_(0)
 {}
 
 ObExecContext::~ObExecContext()
@@ -744,6 +745,15 @@ int ObExecContext::check_status()
     if (share::ObWorker::WS_OUT_OF_THROTTLE == THIS_WORKER.check_wait()) {
       ret = OB_KILLED_BY_THROTTLING;
     }
+  }
+  return ret;
+}
+
+int ObExecContext::fast_check_status(const int64_t n)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((check_status_times_++ & n) == n)) {
+    ret = check_status();
   }
   return ret;
 }

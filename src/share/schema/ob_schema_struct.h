@@ -206,8 +206,15 @@ enum ObIndexType {
   INDEX_TYPE_UNIQUE_GLOBAL = 4,
   INDEX_TYPE_PRIMARY = 5,
   INDEX_TYPE_DOMAIN_CTXCAT = 6,
+  /* create table t1(c1 int primary key, c2 int);
+   * create index i1 on t1(c2)
+   * i1 is a global index.
+   * But we regard i1 as a local index for better access performance.
+   * Since it is non-partitioned, it's safe to do so.
+   */
   INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE = 7,
   INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE = 8,
+
   INDEX_TYPE_MAX = 9,
 };
 
