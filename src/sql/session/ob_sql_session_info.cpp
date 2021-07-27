@@ -1227,7 +1227,7 @@ void ObSQLSessionInfo::refresh_tenant_config()
   const bool change_tenant = (saved_tenant_info_ != effective_tenant_id);
   if (change_tenant || cur_ts - last_check_ec_ts_ > 5000000) {
     if (change_tenant) {
-      LOG_INFO("refresh tenant config where tenant changed", K_(saved_tenant_info), K(effective_tenant_id));
+      LOG_DEBUG("refresh tenant config where tenant changed", K_(saved_tenant_info), K(effective_tenant_id));
       ATOMIC_STORE(&saved_tenant_info_, effective_tenant_id);
     }
     is_external_consistent_ = transaction::ObTsMgr::get_instance().is_external_consistent(effective_tenant_id);
