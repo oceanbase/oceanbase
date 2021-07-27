@@ -75,6 +75,46 @@ inline int ObExprDateFormat::calc_result_type2(
 
   return ret;
 }
+
+
+class ObExprGetFormat : public ObStringExprOperator
+{
+public:
+  explicit  ObExprGetFormat(common::ObIAllocator &alloc);
+  virtual ~ObExprGetFormat();
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &unit,
+                                ObExprResType &format,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int calc_result2(common::ObObj &result,
+                           const common::ObObj &unit,
+                           const common::ObObj &format,
+                           common::ObExprCtx &expr_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int calc_get_format(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+private:
+  enum Format
+  {
+    FORMAT_EUR = 0,
+    FORMAT_INTERNAL = 1,
+    FORMAT_ISO = 2,
+    FORMAT_JIS = 3,
+    FORMAT_USA = 4,
+    FORMAT_MAX = 5,
+  };
+  // disallow copy
+  static const int64_t GET_FORMAT_MAX_LENGTH = 17;
+  static const char* FORMAT_STR[FORMAT_MAX];
+  static const char* DATE_FORMAT[FORMAT_MAX + 1];
+  static const char* TIME_FORMAT[FORMAT_MAX + 1];
+  static const char* DATETIME_FORMAT[FORMAT_MAX + 1];
+  DISALLOW_COPY_AND_ASSIGN(ObExprGetFormat);
+
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 

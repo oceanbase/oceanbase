@@ -43,7 +43,7 @@ namespace common {
 #define CM_SET_MIN_IF_OVERFLOW (1ULL << 9)
 // when casting string to integer, round if not set this flag, otherwise trunc.
 // but ceil will always round to +inf, and floor will always round to -inf.
-#define CM_STRING_INTEGER_TRUNC (1ULL << 9)
+#define CM_STRING_INTEGER_TRUNC (1ULL << 57)
 #define CM_COLUMN_CONVERT (1ULL << 58)
 #define CM_ENABLE_BLOB_CAST (1ULL << 59)
 #define CM_EXPLICIT_CAST (1ULL << 60)

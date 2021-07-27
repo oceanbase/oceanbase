@@ -3072,6 +3072,32 @@ int ObStringExprOperator::convert_result_collation(
   return ret;
 }
 
+// for calc result type and length for function date_format and time_format.
+void ObStringExprOperator::calc_temporal_format_result_length(
+      ObExprResType &type, const ObExprResType &format) const
+{
+  const int64_t VARCHAR_RES_MAX_PARAM_LENGTH = 17;
+  const int64_t TEXT_RES_MAX_PARAM_LENGTH = 728;
+  const int64_t MAX_VARCHAR_BUFFER_SIZE = 256;
+  if (ob_is_string_tc(format.get_type())) {
+    // consistent with Mysql, result_length / format_length = 30
+    const int64_t ratio = 30;
+    if (format.get_length() <= VARCHAR_RES_MAX_PARAM_LENGTH) {
+      type.set_varchar();
+      type.set_length(format.get_length() * ratio);
+    } else if (format.get_length() < TEXT_RES_MAX_PARAM_LENGTH) {
+      type.set_type(ObTextType);
+    } else {
+      type.set_type(ObLongTextType);
+    }
+  } else if (ob_is_text_tc(format.get_type())) {
+    type.set_type(ObTinyTextType == format.get_type() ? ObTextType : ObLongTextType);
+  } else {
+    type.set_varchar();
+    type.set_length(MAX_VARCHAR_BUFFER_SIZE);
+  }
+}
+
 ObObjType ObStringExprOperator::get_result_type_mysql(int64_t char_length) const
 {
   /*

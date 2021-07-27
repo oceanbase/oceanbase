@@ -808,6 +808,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_date(time_val);
           val.set_scale(0);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
         }
         break;
       }
@@ -821,6 +822,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_time(time_val);
           val.set_scale(scale);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(MYSQL_LITERAL_PREFIX_TIME);
         }
         break;
       }
@@ -833,8 +835,8 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
         } else {
           val.set_datetime(time_val);
           val.set_scale(OB_MAX_DATE_PRECISION);
-          literal_prefix = ObString::make_string(ORALCE_LITERAL_PREFIX_DATE);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
         }
         break;
       }
@@ -849,6 +851,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_datetime(time_val);
           val.set_scale(scale);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_TIMESTAMP);
         }
         break;
       }
@@ -864,7 +867,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           /* use max scale bug:#18093350 */
           val.set_otimestamp_value(value_type, tz_value);
           val.set_scale(OB_MAX_TIMESTAMP_TZ_PRECISION);
-          literal_prefix = ObString::make_string(ORALCE_LITERAL_PREFIX_TIMESTAMP);
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_TIMESTAMP);
           val.set_param_meta(val.get_meta());
         }
         break;

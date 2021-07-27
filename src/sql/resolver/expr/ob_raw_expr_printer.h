@@ -97,6 +97,7 @@ private:
   int print(ObPseudoColumnRawExpr* expr);
 
   int print_date_unit(ObRawExpr* expr);
+  int print_get_format_unit(ObRawExpr* expr);
   int print_cast_type(ObRawExpr* expr);
 
   int print_partition_exprs(ObWinFunRawExpr* expr);

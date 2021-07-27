@@ -308,7 +308,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt
 %type <node> create_restore_point_stmt drop_restore_point_stmt
 %type <node> create_resource_stmt drop_resource_stmt alter_resource_stmt
-%type <node> cur_timestamp_func cur_time_func cur_date_func now_synonyms_func utc_timestamp_func sys_interval_func sysdate_func
+%type <node> cur_timestamp_func cur_time_func cur_date_func now_synonyms_func utc_timestamp_func utc_time_func utc_date_func sys_interval_func sysdate_func
 %type <node> opt_create_resource_pool_option_list create_resource_pool_option alter_resource_pool_option_list alter_resource_pool_option
 %type <node> opt_shrink_unit_option unit_id_list
 %type <node> opt_resource_unit_option_list resource_unit_option
@@ -424,7 +424,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_savepoint_stmt rollback_savepoint_stmt release_savepoint_stmt
 %type <node> opt_qb_name
 %type <node> opt_force_purge
-%type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
+%type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric get_format_unit
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -2126,6 +2126,14 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
+| utc_time_func
+{
+  $$ = $1;
+}
+| utc_date_func
+{
+  $$ = $1;
+}
 | CAST '(' expr AS cast_data_type ')'
 {
   //cast_data_type is a T_CAST_ARGUMENT rather than a T_INT to avoid being parameterized automatically
@@ -2202,6 +2210,13 @@ MOD '(' expr ',' expr ')'
   make_name_node($$, result->malloc_pool_, "time");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
 }
+| TIMESTAMP '(' expr ')'
+{
+  ParseNode *params = NULL;
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $3);
+  make_name_node($$, result->malloc_pool_, "timestamp");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
 | MONTH '(' expr ')'
 {
   ParseNode *params = NULL;
@@ -2235,6 +2250,13 @@ MOD '(' expr ',' expr ')'
   ParseNode *params = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $3);
   make_name_node($$, result->malloc_pool_, "second");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
+| GET_FORMAT '(' get_format_unit ',' expr ')'
+{
+  ParseNode *params = NULL;
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 2, $3, $5);
+  make_name_node($$, result->malloc_pool_, "get_format");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
 }
 | MINUTE '(' expr ')'
@@ -2482,7 +2504,11 @@ INTERVAL '(' expr ',' expr ')'
 ;
 
 utc_timestamp_func:
-UTC_TIMESTAMP '(' ')'
+UTC_TIMESTAMP
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_TIMESTAMP, 1, NULL);
+}
+| UTC_TIMESTAMP '(' ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_TIMESTAMP, 1, NULL);
 }
@@ -2491,6 +2517,33 @@ UTC_TIMESTAMP '(' ')'
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_TIMESTAMP, 1, $3);
 }
 ;
+
+utc_time_func:
+UTC_TIME
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_TIME, 1, NULL);
+}
+| UTC_TIME '(' ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_TIME, 1, NULL);
+}
+| UTC_TIME '(' INTNUM ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_TIME, 1, $3);
+}
+;
+
+utc_date_func:
+UTC_DATE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_DATE, 1, NULL);
+}
+| UTC_DATE '(' ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_DATE, 1, NULL);
+}
+;
+
 
 sysdate_func:
 SYSDATE '(' ')'
@@ -4234,6 +4287,24 @@ cast_datetime_type_i:
 DATETIME    { $$[0] = T_DATETIME; $$[1] = 0; }
 | DATE        { $$[0] = T_DATE; $$[1] = 0; }
 | TIME        { $$[0] = T_TIME; $$[1] = 0; }
+;
+
+get_format_unit:
+DATETIME
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = GET_FORMAT_DATETIME;
+}
+| DATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = GET_FORMAT_DATE;
+}
+| TIME
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = GET_FORMAT_TIME;
+}
 ;
 
 data_type:

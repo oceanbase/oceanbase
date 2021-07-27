@@ -21,8 +21,7 @@ namespace oceanbase {
 namespace lib {
 RLOCAL(bool, ContextTLOptGuard::enable_tl_opt);
 
-int64_t __MemoryContext__::g_seq_id = 0;
-__MemoryContext__ &__MemoryContext__::root()
+__MemoryContext__& __MemoryContext__::root()
 {
   static __MemoryContext__ *root = nullptr;
   if (OB_UNLIKELY(nullptr == root)) {

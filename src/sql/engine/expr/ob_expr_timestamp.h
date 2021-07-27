@@ -84,6 +84,23 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToTimestampTZ);
 };
 
+class ObExprTimestamp : public ObFuncExprOperator
+{
+public:
+  explicit ObExprTimestamp(common::ObIAllocator &alloc);
+  virtual ~ObExprTimestamp();
+  virtual int calc_result_type1(ObExprResType &type,
+                                ObExprResType &type1,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int calc_result1(common::ObObj &result,
+                           const common::ObObj &time,
+                           common::ObExprCtx &expr_ctx) const;
+  virtual common::ObCastMode get_cast_mode() const { return CM_NULL_ON_WARN;}
+private :
+  //disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprTimestamp);
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 

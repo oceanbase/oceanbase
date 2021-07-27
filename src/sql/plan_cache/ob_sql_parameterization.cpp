@@ -257,6 +257,8 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode* tree)
     ret_bool = true;
   } else if (T_FUN_SYS_UTC_TIMESTAMP == tree->type_) {
     ret_bool = true;
+  } else if (T_FUN_SYS_UTC_TIME == tree->type_) {
+    ret_bool = true;
   } else if (T_FUN_SYS_SYSDATE == tree->type_) {
     ret_bool = true;
   } else if (T_FUN_SYS_SYSTIMESTAMP == tree->type_) {

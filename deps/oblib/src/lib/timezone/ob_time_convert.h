@@ -143,6 +143,7 @@ extern const int64_t USECS_PER_MIN;
 #define MIN_TO_USEC(min) ((min)*SECS_PER_MIN * USECS_PER_SEC)
 #define TIMESTAMP_MAX_VAL 253402272000
 #define DATETIME_MAX_VAL 253402300799999999
+#define DATE_MAX_VAL 2932896
 #define DATETIME_MIN_VAL -62167132800000000
 #define ORACLE_DATETIME_MIN_VAL -62135596800000000  // start from '0001-1-1 00:00:00'
 #define TIME_MAX_HOUR 838
@@ -293,6 +294,38 @@ public:
   static const ObString COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
   static const ObString COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT;
 
+private:
+  struct ObYearWeekWdayElems {
+    enum ElemSetState
+    {
+      NOT_SET = 0,
+      UPPER_SET = 1,
+      LOWER_SET = 2
+    };
+
+    ObYearWeekWdayElems() :
+      year_set_state_(NOT_SET), year_value_(INT32_MAX),
+      week_set_state_(NOT_SET), week_u_set_(true), week_value_(INT32_MAX),
+      weekday_set_(false), weekday_value_(INT32_MAX)
+    {}
+    bool is_year_set() const { return NOT_SET != year_set_state_; }
+    bool is_week_u_set() const { return NOT_SET != week_set_state_ && week_u_set_; }
+    bool is_week_v_set() const { return NOT_SET != week_set_state_ && !week_u_set_; }
+    bool is_upper_week_set() const {return UPPER_SET == week_set_state_; }
+    bool is_weekday_set() const { return weekday_set_; }
+
+    VIRTUAL_TO_STRING_KV(K(year_set_state_), K(year_value_), K(week_set_state_), K(week_u_set_),
+        K(week_value_), K(weekday_set_), K(weekday_value_));
+    ElemSetState year_set_state_;
+    int32_t year_value_;
+
+    ElemSetState week_set_state_;
+    bool week_u_set_;   // week is set -> true: %u is set. false: %v is set.
+    int32_t week_value_;
+
+    bool weekday_set_;
+    int32_t weekday_value_;
+  };
 public:
   // int / double / string -> datetime(timestamp) / interval / date / time / year.
   static int int_to_datetime(int64_t int_part, int64_t dec_part, const ObTimeConvertCtx& cvrt_ctx, int64_t& value);
@@ -383,7 +416,7 @@ public:
       const ObTimeZoneInfo* tz_info, const int64_t nmonth, ObOTimestampData& result_value);
   static int otimestamp_add_nsecond(const ObOTimestampData ori_value, const int64_t nsecond,
       const int32_t fractional_second, ObOTimestampData& result_value);
-  static int calc_last_date_of_the_month(const int64_t ori_date_value, int64_t& result_date_value);
+  static int calc_last_date_of_the_month(const int64_t ori_date_value, int64_t& result_date_value, const ObObjType dest_type);
   static int calc_next_date_of_the_wday(
       const int64_t ori_date_value, const ObString& wday_name, int64_t& result_date_value);
   static int calc_days_and_months_between_dates(
@@ -401,6 +434,8 @@ public:
       const ObObjType target_type, ObTime& ob_time, ObScale& scale);
   static int str_to_ob_time_oracle_strict(const ObString& str, const ObTimeConvertCtx& cvrt_ctx,
       const bool is_timestamp_literal, ObTime& ob_time, ObScale& scale);
+  static int calc_date_with_year_week_wday(const ObYearWeekWdayElems &elements, ObTime& ot);
+  static int handle_year_week_wday(const ObYearWeekWdayElems& elements, ObTime& ot);
   static int str_to_ob_interval(const ObString& str, ObDateUnitType unit_type, ObInterval& ob_interval);
   static int usec_to_ob_time(int64_t usecs, ObTime& ob_time);
   static int datetime_to_ob_time(int64_t value, const ObTimeZoneInfo* tz_info, ObTime& ob_time);
@@ -459,6 +494,9 @@ public:
   static int decode_interval_ds(const char* data, const int64_t len, ObIntervalDSValue& value, ObScale& scale);
   static int encode_interval_ds(
       char* buf, const int64_t len, int64_t& pos, const ObIntervalDSValue& value, const ObScale scale);
+  static int data_fmt_nd(char* buffer, int64_t buf_len, int64_t& pos, const int64_t n, int64_t target);
+  static int data_fmt_d(char* buffer, int64_t buf_len, int64_t& pos, int64_t target);
+  static int data_fmt_s(char* buffer, int64_t buf_len, int64_t& pos, const char* ptr);
 
 public:
   // other functions.
@@ -543,9 +581,6 @@ private:
       int32_t& offset_min, int32_t& tz_id, int32_t& tran_type_id);
   static int get_str_array_idx(const ObString& str, const ObTimeConstStr* array, int32_t count, int32_t& idx);
 
-  static int data_fmt_nd(char* buffer, int64_t buf_len, int64_t& pos, const int64_t n, int64_t target);
-  static int data_fmt_d(char* buffer, int64_t buf_len, int64_t& pos, int64_t target);
-  static int data_fmt_s(char* buffer, int64_t buf_len, int64_t& pos, const char* ptr);
   static int get_day_and_month_from_year_day(const int32_t yday, const int32_t year, int32_t& month, int32_t& day);
   static int set_ob_time_year_may_conflict(
       ObTime& ob_time, int32_t& julian_year_value, int32_t check_year, int32_t set_year, bool overwrite);

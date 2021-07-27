@@ -620,11 +620,20 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
         }
 
         case T_FUN_SYS_UTC_TIMESTAMP: {
-          ObString err_info("now");
+          ObString err_info("utc_timestamp");
           if (OB_FAIL(process_timestamp_node(node, err_info, expr))) {
             LOG_WARN("fail to process timestamp node", K(ret), K(node));
           } else {
             static_cast<ObSysFunRawExpr*>(expr)->set_func_name(ObString::make_string(N_UTC_TIMESTAMP));
+          }
+          break;
+        }
+        case T_FUN_SYS_UTC_TIME: {
+          ObString err_info("utc_time");
+          if (OB_FAIL(process_timestamp_node(node, err_info, expr))) {
+            LOG_WARN("fail to process timestamp node", K(ret), K(node));
+          } else {
+            static_cast<ObSysFunRawExpr*>(expr)->set_func_name(ObString::make_string(N_UTC_TIME));
           }
           break;
         }
@@ -700,6 +709,16 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
             LOG_WARN("fail to create raw expr", K(ret));
           } else {
             f_expr->set_func_name(ObString::make_string(N_CUR_DATE));
+            expr = f_expr;
+          }
+          break;
+        }
+        case T_FUN_SYS_UTC_DATE: {
+          ObSysFunRawExpr* f_expr = NULL;
+          if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_UTC_DATE, f_expr))) {
+            LOG_WARN("fail to create raw expr", K(ret));
+          } else {
+            f_expr->set_func_name(ObString::make_string(N_UTC_DATE));
             expr = f_expr;
           }
           break;

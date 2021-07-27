@@ -569,6 +569,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
     if (OB_SUCC(ret)) {
       if (T_FUN_SYS_CUR_TIMESTAMP == expr.get_expr_type() || T_FUN_SYS_CUR_TIME == expr.get_expr_type() ||
           T_FUN_SYS_CUR_DATE == expr.get_expr_type() || T_FUN_SYS_UTC_TIMESTAMP == expr.get_expr_type() ||
+          T_FUN_SYS_UTC_TIME == expr.get_expr_type() || T_FUN_SYS_UTC_DATE == expr.get_expr_type() ||
           T_FUN_SYS_LOCALTIMESTAMP == expr.get_expr_type() ||
           (T_FUN_SYS_SYSDATE == expr.get_expr_type() && lib::is_oracle_mode()) ||
           T_FUN_SYS_SYSTIMESTAMP == expr.get_expr_type() ||

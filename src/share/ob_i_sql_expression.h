@@ -217,6 +217,8 @@ private:
   // In the type inference, the expression can set cast_mode to control the behavior of each parameter for type
   // conversion Just add your own special cast mode, some regular modes will be automatically added before putting in
   // the cast expr
+  // Set cast_mode of type_ctx when calc_result_type works for static engine.
+  // Usually need to override get_cast_mode() of ObExprOperator which works for non_static engine
   common::ObCastMode cast_mode_;
   sql::ObRawExpr* raw_expr_;
 };

@@ -418,7 +418,7 @@ int ObRawExprDeduceType::calc_result_type(
 
     if (OB_SUCC(ret)) {
       ObItemType item_type = expr.get_expr_type();
-      if (T_FUN_SYS_UTC_TIMESTAMP == item_type || T_FUN_SYS_CUR_TIMESTAMP == item_type ||
+      if (T_FUN_SYS_UTC_TIME == item_type || T_FUN_SYS_UTC_TIMESTAMP == item_type || T_FUN_SYS_CUR_TIMESTAMP == item_type ||
           T_FUN_SYS_LOCALTIMESTAMP == item_type || T_FUN_SYS_CUR_TIME == item_type || T_FUN_SYS_SYSDATE == item_type ||
           T_FUN_SYS_SYSTIMESTAMP == item_type) {
         /*

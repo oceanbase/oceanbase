@@ -308,7 +308,12 @@ class __MemoryContext__
   friend class MemoryContext;
   constexpr static uint64_t MAGIC_CODE = 0xfddf13244231dfdf;
 public:
-  static int64_t g_seq_id;
+  static int64_t gen_seq_id()
+  {
+    static __thread uint32_t local_id = 0;
+    return common::get_itid() << 32 | local_id++;
+  }
+
 public:
   __MemoryContext__(const bool need_free, const DynamicInfo &di, __MemoryContext__ *parent,
                 ContextParam &param, const int static_id)
@@ -519,9 +524,8 @@ public:
         free(ptr);
       }
     } else {
-      const int64_t seq_id = ATOMIC_AAF(&__MemoryContext__::g_seq_id, 1);
       ref_context->magic_code_ = MAGIC_CODE;
-      ref_context->seq_id_ = seq_id;
+      ref_context->seq_id_ = gen_seq_id();
       context = ref_context;
     }
     return ret;
@@ -541,9 +545,8 @@ public:
     if (OB_FAIL(ret)) {
       ref_context.deinit();
     } else {
-      const int64_t seq_id = ATOMIC_AAF(&__MemoryContext__::g_seq_id, 1);
       ref_context.magic_code_ = MAGIC_CODE;
-      ref_context.seq_id_ = seq_id;
+      ref_context.seq_id_ = gen_seq_id();
       context = &ref_context;
     }
 
