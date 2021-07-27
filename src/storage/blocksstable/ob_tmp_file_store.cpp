@@ -1331,7 +1331,30 @@ int ObTmpFileStore::get_macro_block_list(ObIArray<TenantTmpBlockCntPair>& tmp_bl
   return ret;
 }
 
-int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStore*& store)
+int ObTmpFileStore::get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret));
+  } else {
+    tenant_ids.reset();
+    TenantFileStoreMap::iterator iter;
+    SpinRLockGuard guard(lock_);
+    for (iter = tenant_file_stores_.begin(); OB_SUCC(ret) && iter != tenant_file_stores_.end();
+        ++iter) {
+      if (OB_ISNULL(iter->second)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "fail to iterate tmp tenant file store", K(ret));
+      } else if (OB_FAIL(tenant_ids.push_back(iter->first))) {
+        STORAGE_LOG(WARN, "fail to push back tmp_block_cnt_pairs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTmpFileStore::get_store(const uint64_t tenant_id, ObTmpTenantFileStore *&store)
 {
   int ret = OB_SUCCESS;
   void* buf = NULL;

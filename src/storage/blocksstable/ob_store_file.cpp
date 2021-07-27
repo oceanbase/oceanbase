@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
+#include <linux/falloc.h>
 #include "ob_store_file.h"
 #include "lib/file/file_directory_utils.h"
 #include "share/config/ob_server_config.h"
@@ -410,7 +411,9 @@ ObStoreFile::ObStoreFile()
       store_file_system_(NULL),
       is_mark_sweep_enabled_(false),
       is_doing_mark_sweep_(false),
-      cond_()
+      cond_(),
+      is_fs_support_punch_hole_(true),
+      block_file_fd_(OB_INVALID_FD)
 {
   MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
 }
@@ -430,6 +433,7 @@ int ObStoreFile::init(const ObStorageEnv& storage_env, ObStoreFileSystem* store_
 {
   int ret = OB_SUCCESS;
   ObLogCursor replay_start_cursor;
+  ObLocalFileSystem *local_fs = nullptr;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -446,8 +450,16 @@ int ObStoreFile::init(const ObStorageEnv& storage_env, ObStoreFileSystem* store_
     STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret), K_(print_buffer_size));
   } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT))) {
     STORAGE_LOG(WARN, "fail to init thread cond", K(ret));
+  } else if (FALSE_IT(local_fs = dynamic_cast<ObLocalFileSystem*>(store_file_system))) {
   } else {
     store_file_system_ = store_file_system;
+
+    if (nullptr != local_fs) {
+      block_file_fd_ = local_fs->get_block_file_fd();
+      is_fs_support_punch_hole_ = true;
+    } else {
+      is_fs_support_punch_hole_ = false;
+    }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(alloc_memory(store_file_system_->get_total_macro_block_count(),
@@ -580,6 +592,8 @@ void ObStoreFile::destroy()
   is_mark_sweep_enabled_ = false;
   is_doing_mark_sweep_ = false;
   cond_.destroy();
+  is_fs_support_punch_hole_ = true;
+  block_file_fd_ = OB_INVALID_FD;
 }
 
 void ObStoreFile::stop()
@@ -1021,6 +1035,30 @@ void ObStoreFile::free_block(const uint32_t block_idx, bool& is_freed)
     free_block_array_[free_block_push_pos_] = block_idx;
     free_block_push_pos_ = (free_block_push_pos_ + 1) % store_file_system_->get_total_macro_block_count();
     ++free_block_cnt_;
+
+    // FALLOC_FL_PUNCH_HOLE is only supported after glibc-2.17
+    // https://bugzilla.redhat.com/show_bug.cgi?id=1476120
+# if __linux && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 17))
+    if (is_fs_support_punch_hole_ && GCONF._enable_block_file_punch_hole) {
+      const int64_t len = store_file_system_->get_macro_block_size();
+      const int64_t offset = store_file_system_->get_macro_block_size() * block_idx;
+      const int sys_ret = ::fallocate(block_file_fd_, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, offset, len);
+      if (sys_ret < 0) {
+        const int sys_err = errno;
+        if (EOPNOTSUPP == sys_err) {
+          // The file system containing the file referred to by fd does
+          // not support this operation; or the mode is not supported
+          // by the file system containing the file referred to by fd.
+          is_fs_support_punch_hole_ = false;
+          SHARE_LOG(WARN, "Punch hole not support", K(block_idx), K(offset), K(len), K(sys_ret), K(sys_err), KERRMSG);
+        } else {
+          SHARE_LOG(ERROR, "Punch hole fail", K(block_idx), K(offset), K(len), K(sys_ret), K(sys_err), KERRMSG);
+        }
+      } else {
+        SHARE_LOG(INFO, "Punch hole success", K(block_idx), K(offset), K(len));
+      }
+    }
+#endif
   }
 }
 

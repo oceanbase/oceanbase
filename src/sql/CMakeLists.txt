@@ -195,6 +195,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_tan.cpp
   engine/expr/ob_expr_atan.cpp
   engine/expr/ob_expr_atan2.cpp
+  engine/expr/ob_expr_cot.cpp
   engine/expr/ob_expr_between.cpp
   engine/expr/ob_expr_bit_and.cpp
   engine/expr/ob_expr_bit_count.cpp
@@ -346,6 +347,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_repeat.cpp
   engine/expr/ob_expr_replace.cpp
   engine/expr/ob_expr_translate.cpp
+  engine/expr/ob_expr_pi.cpp
+  engine/expr/ob_expr_pi.h
   engine/expr/ob_expr_radians.cpp
   engine/expr/ob_expr_res_type_map.cpp
   engine/expr/ob_expr_result_type_util.cpp

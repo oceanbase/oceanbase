@@ -301,14 +301,15 @@ SQL: select max(c1) from pt2;
 ==============================================================
 |ID|OPERATOR                     |NAME        |EST. ROWS|COST|
 --------------------------------------------------------------
-|0 |SCALAR GROUP BY              |            |1        |37  |
+|0 |SCALAR GROUP BY              |            |1        |38  |
 |1 | SUBPLAN SCAN                |VIEW1       |1        |37  |
 |2 |  LIMIT                      |            |1        |37  |
 |3 |   PX COORDINATOR MERGE SORT |            |1        |37  |
 |4 |    EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
-|5 |     SORT                    |            |1        |37  |
-|6 |      PX PARTITION ITERATOR  |            |1        |36  |
-|7 |       TABLE SCAN            |pt2(Reverse)|1        |36  |
+|5 |     LIMIT                   |            |1        |37  |
+|6 |      TOP-N SORT             |            |1        |37  |
+|7 |       PX PARTITION ITERATOR |            |1        |36  |
+|8 |        TABLE SCAN           |pt2(Reverse)|1        |36  |
 ==============================================================
 
 Outputs & filters: 
@@ -320,9 +321,10 @@ Outputs & filters:
   2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
   4 - output([pt2.c1]), filter(nil), dop=1
-  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
-  6 - output([pt2.c1]), filter(nil)
-  7 - output([pt2.c1]), filter(nil), 
+  5 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  6 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), topn(1), local merge sort
+  7 - output([pt2.c1]), filter(nil)
+  8 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
 
@@ -331,14 +333,15 @@ SQL: select max(c1) as max from pt2;
 ==============================================================
 |ID|OPERATOR                     |NAME        |EST. ROWS|COST|
 --------------------------------------------------------------
-|0 |SCALAR GROUP BY              |            |1        |37  |
+|0 |SCALAR GROUP BY              |            |1        |38  |
 |1 | SUBPLAN SCAN                |VIEW1       |1        |37  |
 |2 |  LIMIT                      |            |1        |37  |
 |3 |   PX COORDINATOR MERGE SORT |            |1        |37  |
 |4 |    EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
-|5 |     SORT                    |            |1        |37  |
-|6 |      PX PARTITION ITERATOR  |            |1        |36  |
-|7 |       TABLE SCAN            |pt2(Reverse)|1        |36  |
+|5 |     LIMIT                   |            |1        |37  |
+|6 |      TOP-N SORT             |            |1        |37  |
+|7 |       PX PARTITION ITERATOR |            |1        |36  |
+|8 |        TABLE SCAN           |pt2(Reverse)|1        |36  |
 ==============================================================
 
 Outputs & filters: 
@@ -350,9 +353,10 @@ Outputs & filters:
   2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
   4 - output([pt2.c1]), filter(nil), dop=1
-  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
-  6 - output([pt2.c1]), filter(nil)
-  7 - output([pt2.c1]), filter(nil), 
+  5 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  6 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), topn(1), local merge sort
+  7 - output([pt2.c1]), filter(nil)
+  8 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
 
@@ -361,14 +365,15 @@ SQL: select min(c1) from pt2;
 ==========================================================
 |ID|OPERATOR                     |NAME    |EST. ROWS|COST|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY              |        |1        |37  |
+|0 |SCALAR GROUP BY              |        |1        |38  |
 |1 | SUBPLAN SCAN                |VIEW1   |1        |37  |
 |2 |  LIMIT                      |        |1        |37  |
 |3 |   PX COORDINATOR MERGE SORT |        |1        |37  |
 |4 |    EXCHANGE OUT DISTR       |:EX10000|1        |37  |
-|5 |     SORT                    |        |1        |37  |
-|6 |      PX PARTITION ITERATOR  |        |1        |36  |
-|7 |       TABLE SCAN            |pt2     |1        |36  |
+|5 |     LIMIT                   |        |1        |37  |
+|6 |      TOP-N SORT             |        |1        |37  |
+|7 |       PX PARTITION ITERATOR |        |1        |36  |
+|8 |        TABLE SCAN           |pt2     |1        |36  |
 ==========================================================
 
 Outputs & filters: 
@@ -380,9 +385,10 @@ Outputs & filters:
   2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
   4 - output([pt2.c1]), filter(nil), dop=1
-  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
-  6 - output([pt2.c1]), filter(nil)
-  7 - output([pt2.c1]), filter(nil), 
+  5 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  6 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), topn(1), local merge sort
+  7 - output([pt2.c1]), filter(nil)
+  8 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
 
@@ -391,14 +397,15 @@ SQL: select min(c1) as min from pt2;
 ==========================================================
 |ID|OPERATOR                     |NAME    |EST. ROWS|COST|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY              |        |1        |37  |
+|0 |SCALAR GROUP BY              |        |1        |38  |
 |1 | SUBPLAN SCAN                |VIEW1   |1        |37  |
 |2 |  LIMIT                      |        |1        |37  |
 |3 |   PX COORDINATOR MERGE SORT |        |1        |37  |
 |4 |    EXCHANGE OUT DISTR       |:EX10000|1        |37  |
-|5 |     SORT                    |        |1        |37  |
-|6 |      PX PARTITION ITERATOR  |        |1        |36  |
-|7 |       TABLE SCAN            |pt2     |1        |36  |
+|5 |     LIMIT                   |        |1        |37  |
+|6 |      TOP-N SORT             |        |1        |37  |
+|7 |       PX PARTITION ITERATOR |        |1        |36  |
+|8 |        TABLE SCAN           |pt2     |1        |36  |
 ==========================================================
 
 Outputs & filters: 
@@ -410,9 +417,10 @@ Outputs & filters:
   2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
   4 - output([pt2.c1]), filter(nil), dop=1
-  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
-  6 - output([pt2.c1]), filter(nil)
-  7 - output([pt2.c1]), filter(nil), 
+  5 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  6 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), topn(1), local merge sort
+  7 - output([pt2.c1]), filter(nil)
+  8 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
 
@@ -421,14 +429,15 @@ SQL: select * from (select max(c1) from pt2) as tmp_table;
 ==============================================================
 |ID|OPERATOR                     |NAME        |EST. ROWS|COST|
 --------------------------------------------------------------
-|0 |SCALAR GROUP BY              |            |1        |37  |
+|0 |SCALAR GROUP BY              |            |1        |38  |
 |1 | SUBPLAN SCAN                |VIEW1       |1        |37  |
 |2 |  LIMIT                      |            |1        |37  |
 |3 |   PX COORDINATOR MERGE SORT |            |1        |37  |
 |4 |    EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
-|5 |     SORT                    |            |1        |37  |
-|6 |      PX PARTITION ITERATOR  |            |1        |36  |
-|7 |       TABLE SCAN            |pt2(Reverse)|1        |36  |
+|5 |     LIMIT                   |            |1        |37  |
+|6 |      TOP-N SORT             |            |1        |37  |
+|7 |       PX PARTITION ITERATOR |            |1        |36  |
+|8 |        TABLE SCAN           |pt2(Reverse)|1        |36  |
 ==============================================================
 
 Outputs & filters: 
@@ -440,9 +449,10 @@ Outputs & filters:
   2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
   4 - output([pt2.c1]), filter(nil), dop=1
-  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
-  6 - output([pt2.c1]), filter(nil)
-  7 - output([pt2.c1]), filter(nil), 
+  5 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  6 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), topn(1), local merge sort
+  7 - output([pt2.c1]), filter(nil)
+  8 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
 
@@ -453,15 +463,16 @@ SQL: select * from t2 where t2.c1 > (select max(c1) from pt2);
 ----------------------------------------------------------------
 |0 |NESTED-LOOP JOIN               |            |34       |102 |
 |1 | SUBPLAN SCAN                  |VIEW1       |1        |38  |
-|2 |  SCALAR GROUP BY              |            |1        |37  |
+|2 |  SCALAR GROUP BY              |            |1        |38  |
 |3 |   SUBPLAN SCAN                |VIEW2       |1        |37  |
 |4 |    LIMIT                      |            |1        |37  |
 |5 |     PX COORDINATOR MERGE SORT |            |1        |37  |
 |6 |      EXCHANGE OUT DISTR       |:EX10000    |1        |37  |
-|7 |       SORT                    |            |1        |37  |
-|8 |        PX PARTITION ITERATOR  |            |1        |36  |
-|9 |         TABLE SCAN            |pt2(Reverse)|1        |36  |
-|10| TABLE SCAN                    |t2          |34       |43  |
+|7 |       LIMIT                   |            |1        |37  |
+|8 |        TOP-N SORT             |            |1        |37  |
+|9 |         PX PARTITION ITERATOR |            |1        |36  |
+|10|          TABLE SCAN           |pt2(Reverse)|1        |36  |
+|11| TABLE SCAN                    |t2          |34       |43  |
 ================================================================
 
 Outputs & filters: 
@@ -477,12 +488,13 @@ Outputs & filters:
   4 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC])
   6 - output([pt2.c1]), filter(nil), dop=1
-  7 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), local merge sort
-  8 - output([pt2.c1]), filter(nil)
-  9 - output([pt2.c1]), filter(nil), 
+  7 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  8 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, DESC]), topn(1), local merge sort
+  9 - output([pt2.c1]), filter(nil)
+  10 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
-  10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+  11 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
 
 ***************   Case 20   ***************
@@ -490,14 +502,15 @@ SQL: select * from (select min(c1) as min from pt2) as tmp_table;
 ==========================================================
 |ID|OPERATOR                     |NAME    |EST. ROWS|COST|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY              |        |1        |37  |
+|0 |SCALAR GROUP BY              |        |1        |38  |
 |1 | SUBPLAN SCAN                |VIEW1   |1        |37  |
 |2 |  LIMIT                      |        |1        |37  |
 |3 |   PX COORDINATOR MERGE SORT |        |1        |37  |
 |4 |    EXCHANGE OUT DISTR       |:EX10000|1        |37  |
-|5 |     SORT                    |        |1        |37  |
-|6 |      PX PARTITION ITERATOR  |        |1        |36  |
-|7 |       TABLE SCAN            |pt2     |1        |36  |
+|5 |     LIMIT                   |        |1        |37  |
+|6 |      TOP-N SORT             |        |1        |37  |
+|7 |       PX PARTITION ITERATOR |        |1        |36  |
+|8 |        TABLE SCAN           |pt2     |1        |36  |
 ==========================================================
 
 Outputs & filters: 
@@ -509,9 +522,10 @@ Outputs & filters:
   2 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   3 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
   4 - output([pt2.c1]), filter(nil), dop=1
-  5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
-  6 - output([pt2.c1]), filter(nil)
-  7 - output([pt2.c1]), filter(nil), 
+  5 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  6 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), topn(1), local merge sort
+  7 - output([pt2.c1]), filter(nil)
+  8 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
 
@@ -522,15 +536,16 @@ SQL: select * from t2 where t2.c1 > (select min(c1) as min from pt2);
 ------------------------------------------------------------
 |0 |NESTED-LOOP JOIN               |        |34       |102 |
 |1 | SUBPLAN SCAN                  |VIEW1   |1        |38  |
-|2 |  SCALAR GROUP BY              |        |1        |37  |
+|2 |  SCALAR GROUP BY              |        |1        |38  |
 |3 |   SUBPLAN SCAN                |VIEW2   |1        |37  |
 |4 |    LIMIT                      |        |1        |37  |
 |5 |     PX COORDINATOR MERGE SORT |        |1        |37  |
 |6 |      EXCHANGE OUT DISTR       |:EX10000|1        |37  |
-|7 |       SORT                    |        |1        |37  |
-|8 |        PX PARTITION ITERATOR  |        |1        |36  |
-|9 |         TABLE SCAN            |pt2     |1        |36  |
-|10| TABLE SCAN                    |t2      |34       |43  |
+|7 |       LIMIT                   |        |1        |37  |
+|8 |        TOP-N SORT             |        |1        |37  |
+|9 |         PX PARTITION ITERATOR |        |1        |36  |
+|10|          TABLE SCAN           |pt2     |1        |36  |
+|11| TABLE SCAN                    |t2      |34       |43  |
 ============================================================
 
 Outputs & filters: 
@@ -546,12 +561,13 @@ Outputs & filters:
   4 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
   5 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC])
   6 - output([pt2.c1]), filter(nil), dop=1
-  7 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), local merge sort
-  8 - output([pt2.c1]), filter(nil)
-  9 - output([pt2.c1]), filter(nil), 
+  7 - output([pt2.c1]), filter(nil), limit(1), offset(nil)
+  8 - output([pt2.c1]), filter(nil), sort_keys([pt2.c1, ASC]), topn(1), local merge sort
+  9 - output([pt2.c1]), filter(nil)
+  10 - output([pt2.c1]), filter(nil), 
       access([pt2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
-  10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+  11 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
 
 ***************   Case 22   ***************

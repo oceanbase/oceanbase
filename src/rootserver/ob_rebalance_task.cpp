@@ -4784,6 +4784,9 @@ int ObRebalanceSqlBKGTask::log_execute_result(const common::ObIArray<int>& rc_ar
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ret code count not match", K(ret), "ret_code_count", rc_array.count());
   } else {
+    if (OB_SUCCESS != rc_array.at(0) && task_infos_.count() > 0) {
+      notify_sql_scheduler(rc_array.at(0));
+    }
     for (int64_t i = 0; i < task_infos_.count(); i++) {
       const sql::ObSchedBKGDDistTask& info = task_infos_.at(i).get_sql_bkgd_task();
       ROOTSERVICE_EVENT_ADD("balancer",
@@ -5342,14 +5345,19 @@ int ObValidateTask::assign(const ObValidateTask& that)
 
 void ObRebalanceSqlBKGTask::notify_cancel() const
 {
+  notify_sql_scheduler(OB_CANCELED);
+}
+
+void ObRebalanceSqlBKGTask::notify_sql_scheduler(const int rc) const
+{
   int tmp_ret = OB_SUCCESS;
   if (1 != task_infos_.count()) {
     tmp_ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should be one task info", K(tmp_ret), K(task_infos_.count()));
-  } else if (OB_SUCCESS !=
-             (tmp_ret = sql::ObRpcBKGDTaskCompleteP::notify_error(task_infos_.at(0).get_sql_bkgd_task().get_task_id(),
-                  task_infos_.at(0).get_sql_bkgd_task().get_scheduler_id(),
-                  OB_CANCELED))) {
+  } else if (OB_SUCCESS != (tmp_ret = sql::ObRpcBKGDTaskCompleteP::notify_error(
+      task_infos_.at(0).get_sql_bkgd_task().get_task_id(),
+      task_infos_.at(0).get_sql_bkgd_task().get_scheduler_id(),
+      rc))) {
     LOG_WARN("notify task canceled filed", K(tmp_ret));
   }
 }
@@ -5829,6 +5837,7 @@ int ObRebalanceSqlBKGTask::check_before_execute(
       }
     }
   }
+  ret = E(EventTable::EN_BALANCE_TASK_EXE_ERR) OB_SUCCESS;
   return ret;
 }
 

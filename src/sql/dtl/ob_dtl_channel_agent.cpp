@@ -350,7 +350,7 @@ int ObDtlChanAgent::switch_buffer(int64_t need_size)
   if (OB_SUCC(ret)) {
     current_buffer_->set_bcast();
     dtl_buf_encoder_.set_new_buffer(current_buffer_);
-  } else {
+  } else if (nullptr != current_buffer_) {
     dtl_buf_allocator_.free_buf(*bcast_ch, current_buffer_);
   }
 
@@ -429,23 +429,26 @@ int ObDtlChanAgent::send_last_buffer(ObDtlLinkedBuffer*& last_buffer)
   return ret;
 }
 
-void ObDtlChanAgent::destroy()
+int ObDtlChanAgent::destroy()
 {
+  int ret = OB_SUCCESS;
   if (nullptr != bcast_channel_ && nullptr != current_buffer_) {
     dtl_buf_allocator_.free_buf(*bcast_channel_, current_buffer_);
   }
-  for (int64_t i = 0; i < bc_services_.count(); ++i) {
-    common::ObArray<SendMsgResponse*>& resp = bc_services_.at(i)->resps_;
-    for (int64_t j = 0; j < resp.count(); ++j) {
-      if (OB_ISNULL(resp.at(j))) {
-        LOG_WARN("response is null");
-      } else if (resp.at(j)->is_in_process()) {
-        int temp_ret = resp.at(j)->wait();
-        if (OB_SUCCESS != temp_ret) {
-          LOG_WARN("send previous message fail", K(temp_ret));
-        }
-      }
+  for (int64_t i = 0; i < local_channels_.count(); ++i) {
+    int temp_ret = local_channels_.at(i)->wait_response();
+    if (OB_SUCCESS != temp_ret) {
+      ret = temp_ret;
     }
+  }
+  for (int64_t i = 0; i < rpc_channels_.count(); ++i) {
+    int temp_ret = rpc_channels_.at(i)->wait_response();
+    if (OB_SUCCESS != temp_ret) {
+      ret = temp_ret;
+    }
+  }
+  for (int64_t i = 0; i < bc_services_.count(); ++i) {
     bc_services_.at(i)->~ObDtlBcastService();
   }
+  return ret;
 }

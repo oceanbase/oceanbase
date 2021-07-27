@@ -833,9 +833,19 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString& expr_
   int ret = OB_SUCCESS;
   const bool make_column_expression = false;  // return ObSqlExpression
   ObSQLSessionInfo default_session;
-  if (OB_FAIL(default_session.init(0, 0, 0, &allocator))) {
+  uint64_t tenant_id = extract_tenant_id(schema.get_table_id());
+  const ObTenantSchema *tenant_schema = nullptr;
+  ObSchemaGetterGuard guard;
+  
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(default_session.init(0, 0, 0, &allocator))) {
     LOG_WARN("init empty session failed", K(ret));
-  } else if (OB_FAIL(default_session.load_default_sys_variable(false, false))) {
+  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant_schema", K(ret));
+  } else if (OB_FAIL(default_session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
+    LOG_WARN("fail to init", K(ret));
+  } else if (OB_FAIL(default_session.load_all_sys_vars(guard))) {
     LOG_WARN("session load default system variable failed", K(ret));
   } else if (OB_FAIL(make_generated_expression_from_str(
                  expr_str, default_session, schema, gen_col, col_ids, allocator, expression, make_column_expression))) {
@@ -938,19 +948,26 @@ int ObSQLUtils::make_generated_expression_from_str(const common::ObString& expr_
   return ret;
 }
 
-int ObSQLUtils::make_default_expr_context(ObIAllocator& allocator, ObExprCtx& expr_ctx)
+int ObSQLUtils::make_default_expr_context(uint64_t tenant_id, ObIAllocator &allocator, ObExprCtx &expr_ctx)
 {
   int ret = OB_SUCCESS;
-
-  ObSQLSessionInfo* default_session = static_cast<ObSQLSessionInfo*>(allocator.alloc(sizeof(ObSQLSessionInfo)));
+  ObSchemaGetterGuard guard;
+  const ObTenantSchema *tenant_schema = nullptr;
+  ObSQLSessionInfo *default_session = static_cast<ObSQLSessionInfo*>(allocator.alloc(sizeof(ObSQLSessionInfo)));
   if (OB_ISNULL(default_session)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
   } else {
     default_session = new (default_session) ObSQLSessionInfo();
     if (OB_FAIL(default_session->init(0, 0, 0, &allocator))) {
       LOG_WARN("init default session failed", K(ret));
-    } else if (OB_FAIL(default_session->load_default_sys_variable(false, false))) {
+    } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
+      LOG_WARN("fail to get tenant_schema", K(ret));
+    } else if (OB_FAIL(default_session->init_tenant(tenant_schema->get_tenant_name_str(), tenant_id))) {
+      LOG_WARN("fail to init", K(ret));
+    } else if (OB_FAIL(default_session->load_all_sys_vars(guard))) {
       LOG_WARN("load default system variable to session failed", K(ret));
     } else {
       expr_ctx.my_session_ = default_session;
@@ -1025,6 +1042,9 @@ int ObSQLUtils::calc_sql_expression(const ObISqlExpression* expr, const share::s
     const ObIArray<share::schema::ObColDesc>& col_ids, const ObNewRow& row, ObIAllocator& allocator,
     ObExprCtx& expr_ctx, ObObj& result)
 {
+  UNUSED(schema);
+  UNUSED(allocator);
+  UNUSED(col_ids);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1035,6 +1055,7 @@ int ObSQLUtils::calc_sql_expression(const ObISqlExpression* expr, const share::s
   } else {
     ObNewRow pad_row;
     bool need_pad = false;
+    /*
     if (is_pad_char_to_full_length(expr_ctx.my_session_->get_sql_mode())) {
       ObSEArray<int32_t, 16> whitespace_length;
       for (int64_t i = 0; OB_SUCC(ret) && i < col_ids.count(); ++i) {
@@ -1092,10 +1113,11 @@ int ObSQLUtils::calc_sql_expression(const ObISqlExpression* expr, const share::s
         }
       }
     }
+    */
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(expr->calc(expr_ctx, need_pad ? pad_row : row, result))) {
-        LOG_WARN("Fail to calc value", K(*expr), K(row), K(ret));
+        LOG_WARN("Fail to calc value", K(ret), K(*expr), K(row), K(need_pad), K(pad_row));
       }
     }
   }
@@ -1807,15 +1829,13 @@ int ObSQLUtils::construct_outline_sql(ObIAllocator& allocator, const ObSQLSessio
     LOG_WARN("fail to filter head space", K(ret));
   }
   if (OB_SUCC(ret)) {
-    ObString first_token = filter_sql.split_on(' ');
-    if (OB_FAIL(sql_helper.assign_fmt("%.*s %.*s%.*s",
-            first_token.length(),
-            first_token.ptr(),
-            outline_content.length(),
-            outline_content.ptr(),
-            filter_sql.length(),
-            filter_sql.ptr()))) {
-      LOG_WARN("failed to construct new sql", K(first_token), K(orig_sql), K(filter_sql), K(outline_content), K(ret));
+    char empty_split = find_first_empty_char(filter_sql);
+    ObString first_token = filter_sql.split_on(empty_split);
+    if (OB_FAIL(sql_helper.assign_fmt("%.*s %.*s%.*s", first_token.length(), first_token.ptr(),
+                                      outline_content.length(), outline_content.ptr(),
+                                      filter_sql.length(), filter_sql.ptr()))) {
+       LOG_WARN("failed to construct new sql", K(first_token), K(orig_sql),
+                                 K(filter_sql), K(outline_content), K(ret));
     } else if (OB_FAIL(ob_write_string(allocator, sql_helper.string(), outline_sql))) {
       LOG_WARN("failed to write string", K(first_token), K(orig_sql), K(filter_sql), K(outline_content), K(ret));
     } else { /*do nothing*/
@@ -1841,8 +1861,21 @@ int ObSQLUtils::filter_head_space(ObString& sql)
   return ret;
 }
 
-int ObSQLUtils::reconstruct_sql(
-    ObIAllocator& allocator, const ObStmt* stmt, ObString& sql, ObObjPrintParams print_params)
+char ObSQLUtils::find_first_empty_char(const ObString &sql)
+{
+  char empty_char = ' '; // default split
+  for (int64_t i = 0; i < sql.length(); ++i) {
+    char ch = sql[i];
+    if (' ' == ch || '\r' == ch || '\n' == ch || '\t' == ch || '\f' == ch) {
+      empty_char = ch;
+      break;
+    }
+  }
+  return empty_char;
+}
+
+int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
+                                ObObjPrintParams print_params)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {

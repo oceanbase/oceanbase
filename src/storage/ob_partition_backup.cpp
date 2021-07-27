@@ -130,11 +130,14 @@ int ObPartGroupBackupTask::check_partition_validation()
     ret = OB_NOT_INIT;
     STORAGE_LOG(ERROR, "not inited", K(ret));
   } else {
+    const bool is_restore_point = false;
     ObRecoveryPointSchemaFilter backup_filter;
-    const ObPhysicalBackupArg& backup_arg = task_list_[0].arg_.backup_arg_;
-    if (OB_FAIL(backup_filter.init(backup_arg.tenant_id_,
-            backup_arg.backup_schema_version_, /*backup_schema_version*/
-            backup_arg.backup_schema_version_ /*current_schema_version*/))) {
+    const ObPhysicalBackupArg &backup_arg = task_list_[0].arg_.backup_arg_;
+    if (OB_FAIL(backup_filter.init(
+        backup_arg.tenant_id_,
+        is_restore_point,
+        backup_arg.backup_schema_version_, /*backup_schema_version*/
+        backup_arg.backup_schema_version_ /*current_schema_version*/))) {
       STORAGE_LOG(WARN, "backup schema filter init fail", K(ret));
     }
 

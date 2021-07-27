@@ -350,6 +350,7 @@ public:
   {
     return meta_.has_compact_row_;
   }
+  int64_t dec_ref() override;
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
   INHERIT_TO_STRING_KV(
       "ObITable", ObITable, KP(this), K_(status), K_(meta), K_(file_handle), K_(dump_memtable_timestamp));

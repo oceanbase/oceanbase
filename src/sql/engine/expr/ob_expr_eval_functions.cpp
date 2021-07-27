@@ -169,12 +169,15 @@
 #include "ob_expr_user_can_access_obj.h"
 #include "ob_expr_empty_lob.h"
 #include "ob_expr_radians.h"
+#include "ob_expr_pi.h"
 #include "ob_expr_maketime.h"
 #include "ob_expr_to_blob.h"
 #include "ob_expr_to_outfile_row.h"
 #include "ob_expr_format.h"
 #include "ob_expr_quarter.h"
 #include "ob_expr_bit_length.h"
+#include "ob_expr_to_single_byte.h"
+#include "ob_expr_to_multi_byte.h"
 
 namespace oceanbase {
 using namespace common;
@@ -629,16 +632,26 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprNlsLower::calc_lower,                       /* 378 */
     ObExprNlsUpper::calc_upper,                       /* 379 */
     ObExprToOutfileRow::to_outfile_str,               /* 380 */
-    NULL,                                     // ObExprIs::calc_is_infinite,                                /* 381 */
-    NULL,                                     // ObExprIs::calc_is_nan,                                     /* 382 */
-    NULL,                                     // ObExprIsNot::calc_is_not_infinite,                         /* 383 */
-    NULL,                                     // ObExprIsNot::calc_is_not_nan,                              /* 384 */
-    ObExprOracleNullif::eval_nullif_not_null, /* 385 */
-    NULL,                                     // ObExprNaNvl::eval_nanvl,                                   /* 386 */
-    ObExprFormat::calc_format_expr,           /* 387 */
-    calc_translate_using_expr,                /* 388 */
-    ObExprQuarter::calc_quater,               /* 389 */
-    ObExprBitLength::calc_bit_length          /* 390 */
+    NULL,                                             // ObExprIs::calc_is_infinite,                                /* 381 */
+    NULL,                                             // ObExprIs::calc_is_nan,                                     /* 382 */
+    NULL,                                             // ObExprIsNot::calc_is_not_infinite,                         /* 383 */
+    NULL,                                             // ObExprIsNot::calc_is_not_nan,                              /* 384 */
+    ObExprOracleNullif::eval_nullif_not_null,         /* 385 */
+    NULL,                                             // ObExprNaNvl::eval_nanvl,                                   /* 386 */
+    ObExprFormat::calc_format_expr,                   /* 387 */
+    calc_translate_using_expr,                        /* 388 */
+    ObExprQuarter::calc_quater,                       /* 389 */
+    ObExprBitLength::calc_bit_length,                 /* 390 */
+    NULL,                                             // ObExprConvertOracle::calc_convert_oracle_expr,             /* 391 */
+    NULL,                                             // ObExprUnistr::calc_unistr_expr,                            /* 392 */
+    NULL,                                             // ObExprAsciistr::calc_asciistr_expr,                        /* 393 */
+    NULL,                                             // ObExprAtTimeZone::eval_at_time_zone,                       /* 394 */
+    NULL,                                             // ObExprAtLocal::eval_at_local,                              /* 395 */
+    ObExprToSingleByte::calc_to_single_byte,          /* 396 */
+    ObExprToMultiByte::calc_to_multi_byte,            /* 397 */
+    NULL,                                             // ObExprDllUdf::eval_dll_udf,                                /* 398 */
+    NULL,                                             // ObExprRawtonhex::calc_rawtonhex_expr,                      /* 399 */
+    ObExprPi::eval_pi                                 /* 400 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

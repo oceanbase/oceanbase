@@ -147,8 +147,7 @@ public:
   int flush();
   int init(dtl::ObDtlFlowControl& dfc, ObPxTaskChSet& task_ch_set, common::ObIArray<ObDtlChannel*>& channels,
       int64_t tenant_id, int64_t timeout_ts);
-  void destroy();
-
+  int destroy();
 private:
   int switch_buffer(int64_t need_size);
   int send_last_buffer(ObDtlLinkedBuffer*& last_buffer);

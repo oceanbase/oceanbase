@@ -1593,7 +1593,7 @@ int ObCharset::aggregate_collation(const ObCollationLevel collation_level1, cons
   if (OB_UNLIKELY(CS_LEVEL_INVALID == collation_level1 || CS_LEVEL_INVALID == collation_level2 ||
                   CS_TYPE_INVALID == collation_type1 || CS_TYPE_INVALID == collation_type2)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid collation level or type",
+    LOG_WARN("invalid collation level or type",
         K(ret),
         K(collation_level1),
         K(collation_type1),
@@ -2397,5 +2397,21 @@ int ObStringScanner::next_character(ObString& encoding, int32_t& wchar)
   return ret;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+bool ObStringScanner::next_character(ObString &encoding, int32_t &wchar, int &ret)
+{
+  bool has_next = false;
+  ret = next_character(encoding, wchar);
+  if (OB_ITER_END == ret) {
+    has_next = false;
+    ret = OB_SUCCESS;
+  } else if (OB_SUCC(ret)) {
+    has_next = true;
+  } else {
+    LOG_WARN("fail to get next character", K(ret), K(*this));
+    has_next = false;
+  }
+  return has_next;
+}
+
+} // namespace common
+} // namespace oceanbase

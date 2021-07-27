@@ -648,7 +648,7 @@ public:
   int init_table_location(ObSqlSchemaGuard& schema_guard, uint64_t table_id, uint64_t ref_table_id, ObDMLStmt& stmt,
       RowDesc& row_desc, const bool is_dml_table, const ObOrderDirection& direction = default_asc_direction());
   int init_table_location_with_rowkey(ObSqlSchemaGuard& schema_guard, uint64_t table_id, ObSQLSessionInfo& session_info,
-      const bool is_dml_table = false);
+      const bool is_dml_table = true);
   int calculate_partition_ids_by_row(ObExecContext& exec_ctx, ObPartMgr* part_mgr, const common::ObNewRow& row,
       ObIArray<int64_t>& part_ids, int64_t& part_idx) const;
   int calculate_partition_id_by_row(
@@ -817,7 +817,8 @@ public:
       const ObSqlExpression* gen_col_expr = NULL) const;
 
   int init_table_location_with_row_desc(
-      ObSqlSchemaGuard& schema_guard, uint64_t table_id, RowDesc& input_row_desc, ObSQLSessionInfo& session_info);
+      ObSqlSchemaGuard& schema_guard, uint64_t table_id, RowDesc& input_row_desc, ObSQLSessionInfo& session_info,
+      const bool is_dml_table);
 
   int generate_row_desc_from_row_desc(ObDMLStmt& stmt, const uint64_t data_table_id, ObRawExprFactory& expr_factory,
       const RowDesc& input_row_desc, RowDesc& row_desc);

@@ -150,8 +150,7 @@ bool ObExprOperator::is_default_expr_cg() const
   } func_val;
   static_assert(sizeof(int64_t) * 2 == sizeof(CGFunc), "size mismatch");
   func_val.func_ = &ObExprOperator::cg_expr;
-  // virtual member function pointer is vtable absolute offset + 1 (to avoid null)
-  const int64_t func_idx = (func_val.val_ - 1) / sizeof(void*);
+  const int64_t func_idx = func_val.val_ / sizeof(void *);
   return (*(void***)(&base))[func_idx] == (*(void***)(this))[func_idx];
 }
 
@@ -849,6 +848,8 @@ int ObExprOperator::aggregate_result_type_for_case(ObExprResType& type, const Ob
             need_merge_type,
             skip_null))) {
       LOG_WARN("fail to aggregate result type", K(ret));
+    } else if (ObFloatType == type.get_type() && !is_oracle_mode) {
+      type.set_type(ObDoubleType);
     }
   }
   return ret;
@@ -877,7 +878,6 @@ int ObExprOperator::aggregate_result_type_for_merge(ObExprResType& type, const O
         LOG_WARN("invalid argument. wrong type for merge", K(i), K(types[i].get_type()), K(ret));
       }
     }
-
     if (OB_SUCC(ret)) {
       type.set_type(res_type);
       if (ob_is_numeric_type(res_type)) {
@@ -1591,7 +1591,7 @@ int ObExprOperator::calc_trig_function_result_type1(
     type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][type.get_type()].get_precision());
   }
   type1.set_calc_type(type.get_type());
-  ObExprOperator::calc_result_flag1(type, type1);
+  //no need add not null check for trig/ln/e funciotn in mysql mode
   return ret;
 }
 

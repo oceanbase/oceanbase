@@ -89,7 +89,7 @@ int ObTransformFullOuterJoin::recursively_eliminate_full_join(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null.", K(ret));
   } else if (table_item->type_ == TableItem::JOINED_TABLE) {
-    bool has_equal = false;
+    bool is_valid = false;
     JoinedTable* joined_table = static_cast<JoinedTable*>(table_item);
     if (OB_ISNULL(joined_table->left_table_) || OB_ISNULL(joined_table->right_table_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -100,11 +100,9 @@ int ObTransformFullOuterJoin::recursively_eliminate_full_join(
       LOG_WARN("failed to transform full nl join.", K(ret));
     } else if (OB_FAIL(ObTransformUtils::adjust_single_table_ids(joined_table))) {
       LOG_WARN("failed to adjust single table ids.", K(ret));
-    } else if (!joined_table->is_full_join()) {
-      /* do nothing */
-    } else if (OB_FAIL(check_join_condition(stmt, joined_table, has_equal))) {
+    } else if (OB_FAIL(check_full_nl_valid(*stmt, joined_table, is_valid))) {
       LOG_WARN("failed to check join condition", K(ret));
-    } else if (has_equal) {
+    } else if (!is_valid) {
       /* do nothing */
     } else if (OB_FAIL(create_view_for_full_nl_join(stmt, joined_table, table_item))) {
       LOG_WARN("failed to create view for full nl join.", K(ret));
@@ -118,17 +116,54 @@ int ObTransformFullOuterJoin::recursively_eliminate_full_join(
   return ret;
 }
 
-int ObTransformFullOuterJoin::check_join_condition(ObDMLStmt* stmt, JoinedTable* table, bool& has_equal)
+int ObTransformFullOuterJoin::check_full_nl_valid(ObDMLStmt &stmt, TableItem* table_item, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null joined table.", K(ret));
+  } else if (table_item->type_ != TableItem::JOINED_TABLE) {
+    is_valid = false;
+  } else {
+    JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
+    bool has_euqal = false;
+    bool has_subquery = false;
+    if (FULL_OUTER_JOIN != joined_table->joined_type_) {
+      is_valid = false;
+    } else if (OB_FAIL(check_join_condition(&stmt,
+                                            joined_table,
+                                            has_euqal,
+                                            has_subquery))) {
+      LOG_WARN("failed to check join condition", K(ret));
+    } else if (has_euqal) {
+      is_valid = false;
+    } else if (has_subquery) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("full join on subquery not support now!", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformFullOuterJoin::check_join_condition(ObDMLStmt* stmt,
+                                                   JoinedTable* table,
+                                                   bool &has_equal,
+                                                   bool &has_subquery)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 8> left_tables;
   ObSEArray<uint64_t, 8> right_tables;
   ObSEArray<uint64_t, 8> table_ids;
-  TableItem* left_table = NULL;
-  TableItem* right_table = NULL;
+  ObSEArray<uint64_t, 8> left_table_ids;
+  ObSEArray<uint64_t, 8> right_table_ids;
+  TableItem *left_table = NULL;
+  TableItem *right_table = NULL;
   has_equal = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(table) || OB_ISNULL(left_table = table->left_table_) ||
-      OB_ISNULL(right_table = table->right_table_)) {
+  has_subquery = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table) ||
+       OB_ISNULL(left_table = table->left_table_) ||
+       OB_ISNULL(right_table = table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
   } else if (left_table->is_joined_table() &&
@@ -146,17 +181,38 @@ int ObTransformFullOuterJoin::check_join_condition(ObDMLStmt* stmt, JoinedTable*
     ObRawExpr* cond = table->join_conditions_.at(i);
     table_ids.reuse();
     if (OB_ISNULL(cond)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null condition", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(cond, table_ids))) {
-      LOG_WARN("failed to extract table ids", K(ret));
-    } else if (table_ids.empty()) {
-      // do nothing
-    } else if (cond->has_flag(IS_JOIN_COND) && ObOptimizerUtil::overlap(table_ids, left_tables) &&
-               ObOptimizerUtil::overlap(table_ids, right_tables)) {
-      has_equal = true;
+       ret = OB_ERR_UNEXPECTED;
+       LOG_WARN("unexpect null condition", K(ret));
+    } else if (cond->has_flag(CNT_SUB_QUERY)) {
+      has_subquery = true;
     }
-  }
+    if (OB_FAIL(ret)) {
+     } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(cond, table_ids))) {
+       LOG_WARN("failed to extract table ids", K(ret));
+     } else if (table_ids.empty()) {
+       //do nothing
+    } else if (cond->has_flag(IS_JOIN_COND)) {
+      ObRawExpr *left_param = NULL;
+      ObRawExpr *right_param = NULL;
+      left_table_ids.reuse();
+      right_table_ids.reuse();
+      if (cond->get_param_count() != 2 ||
+          OB_ISNULL(left_param = cond->get_param_expr(0)) ||
+          OB_ISNULL(right_param = cond->get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null param", K(ret));    
+      } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(left_param, left_table_ids))) {
+        LOG_WARN("failed to extract table ids", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(right_param, right_table_ids))) {
+        LOG_WARN("failed to extract table ids", K(ret));
+      } else if ((ObOptimizerUtil::is_subset(left_table_ids, left_tables) && 
+                  ObOptimizerUtil::is_subset(right_table_ids, right_tables)) ||
+                (ObOptimizerUtil::is_subset(left_table_ids, right_tables) &&
+                  ObOptimizerUtil::is_subset(right_table_ids, left_tables))) {
+        has_equal = true;            
+      }
+     }
+   }
   return ret;
 }
 

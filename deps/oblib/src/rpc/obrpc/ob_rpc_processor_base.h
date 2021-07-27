@@ -67,6 +67,7 @@ public:
     return send_timestamp_;
   }
 
+  virtual int check_cluster_id();
   int64_t get_src_cluster_id() const
   {
     int64_t cluster_id = common::OB_INVALID_CLUSTER_ID;

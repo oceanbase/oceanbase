@@ -56,8 +56,15 @@ int ObRemoteScheduler::schedule(ObExecContext& ctx, ObPhysicalPlan* phy_plan)
         LOG_WARN("execute with sql failed", K(ret));
       }
     }
-  } else if (OB_FAIL(execute_with_plan(ctx, phy_plan))) {
-    LOG_WARN("execute with plan failed", K(ret));
+  } else {
+    if (NULL != phy_plan->get_root_op_spec()) {
+      // Remote execution under the static engine does not support sending plans
+      // so here is a fallback to the old engine
+      ret = STATIC_ENG_NOT_IMPLEMENT;
+      LOG_WARN("static engine not support remote execute with send plan, will retry", K(ret));
+    } else if (OB_FAIL(execute_with_plan(ctx, phy_plan))) {
+      LOG_WARN("execute with plan failed", K(ret));
+    }
   }
   return ret;
 }

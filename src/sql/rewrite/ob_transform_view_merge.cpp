@@ -371,15 +371,12 @@ int ObTransformViewMerge::check_can_be_unnested(
   }
   if (OB_FAIL(ret) || !can_be) {
     /*do nothing*/
-  } else if (helper.need_check_null_propagate) {
-    ObSEArray<ObRawExpr*, 4> columns;
-    ObRelIds rel_ids;
+  } else if (helper.need_check_null_propagate){
+    ObSEArray<ObRawExpr *, 4> columns;
     ObSqlBitSet<> from_tables;
     ObSEArray<ObRawExpr*, 4> column_exprs;
-    if (OB_FAIL(ObTransformUtils::get_from_tables(*child_stmt, rel_ids))) {
+    if (OB_FAIL(child_stmt->get_from_tables(from_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-      LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(child_stmt->get_column_exprs(columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*child_stmt, columns, from_tables, column_exprs))) {
@@ -781,14 +778,11 @@ int ObTransformViewMerge::wrap_case_when_if_necessary(
     ObSelectStmt& child_stmt, ViewMergeHelper& helper, ObIArray<ObRawExpr*>& exprs)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 4> columns;
-  ObRelIds rel_ids;
+  ObSEArray<ObRawExpr *, 4> columns;
   ObSqlBitSet<> from_tables;
   ObSEArray<ObRawExpr*, 4> column_exprs;
-  if (OB_FAIL(ObTransformUtils::get_from_tables(child_stmt, rel_ids))) {
+  if (OB_FAIL(child_stmt.get_from_tables(from_tables))) {
     LOG_WARN("failed to get from tables", K(ret));
-  } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-    LOG_WARN("failed to add members", K(ret));
   } else if (OB_FAIL(child_stmt.get_column_exprs(columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(child_stmt, columns, from_tables, column_exprs))) {

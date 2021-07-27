@@ -355,12 +355,9 @@ int ObFreezeInfoSnapshotMgr::inner_get_neighbour_major_freeze(
       if (snapshot_version < next_info.freeze_ts) {
         found = true;
         if (0 == i) {
-          if (!GCTX.is_standby_cluster()) {
-            ret = OB_ERR_SYS;
-            LOG_ERROR("cannot get neighbour major freeze before bootstrap", K(ret), K(snapshot_version), K(next_info));
-          } else {
-            ret = OB_ENTRY_NOT_EXIST;
-          }
+          ret = OB_ENTRY_NOT_EXIST;
+          STORAGE_LOG(WARN, "cannot get neighbour major freeze before bootstrap",
+                      K(ret), K(snapshot_version), K(next_info));
         } else {
           info.next = next_info;
           info.prev = info_list.at(i - 1);
@@ -440,9 +437,11 @@ static inline int is_snapshot_related_to_table(
   if (!snapshot.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(snapshot));
-  } else if ((snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT && !is_inner_table(table_id)) ||
-             snapshot.snapshot_type_ == share::SNAPSHOT_FOR_BACKUP_POINT) {
-    if (extract_tenant_id(table_id) == snapshot.tenant_id_) {
+  } else if (snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT
+      || snapshot.snapshot_type_ == share::SNAPSHOT_FOR_BACKUP_POINT) {
+    if (snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT && is_inner_table(table_id)) {
+      related = false;
+    } else if (extract_tenant_id(table_id) == snapshot.tenant_id_) {
       related = true;
       bool is_complete = false;
       if (create_schema_version > snapshot.schema_version_ && !is_inner_table(table_id)) {
@@ -560,7 +559,22 @@ int ObFreezeInfoSnapshotMgr::get_reserve_points(const int64_t tenant_id, const s
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::get_latest_freeze_version(int64_t& freeze_version)
+int ObFreezeInfoSnapshotMgr::get_restore_point_min_schema_version(const int64_t tenant_id, int64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  schema_version = INT64_MAX;
+  RLockGuard lock_guard(lock_);
+  ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
+  for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
+    const ObSnapshotInfo &snapshot = snapshots.at(i);
+    if (snapshot.snapshot_type_ == SNAPSHOT_FOR_RESTORE_POINT && tenant_id == snapshot.tenant_id_) {
+      schema_version = std::min(snapshot.schema_version_, schema_version);
+    }
+  }
+  return ret;
+}
+
+int ObFreezeInfoSnapshotMgr::get_latest_freeze_version(int64_t &freeze_version)
 {
   int ret = OB_SUCCESS;
 
@@ -1118,6 +1132,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::init(ObISQLClient& sql_proxy)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to alloc head node", K(ret));
   } else {
+    p->reset();
     head_ = tail_ = p;
     sql_proxy_ = &sql_proxy;
     inited_ = true;
@@ -1353,6 +1368,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::update_freeze_schema(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to alloc schema node", K(ret));
     } else {
+      p->reset();
       p->set(tenant_id, freeze_version, schema_version);
       insert(p);
       cnt_++;

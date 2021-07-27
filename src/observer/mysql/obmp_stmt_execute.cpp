@@ -709,7 +709,12 @@ int ObMPStmtExecute::do_process(
           bool first_record = (0 == audit_record.try_cnt_);
           ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
         }
-        if (OB_FAIL(ret) && !async_resp_used && need_response_error && conn_valid_ && !THIS_WORKER.need_retry()) {
+        if (OB_FAIL(ret)
+            && !async_resp_used
+            && need_response_error
+            && conn_valid_
+            && !THIS_WORKER.need_retry()
+            && !retry_ctrl_.need_retry()) {
           LOG_WARN("query failed", K(ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
           bool is_partition_hit = session.partition_hit().get_bool();
           int err = send_error_packet(ret, NULL, is_partition_hit, (void*)(&ctx_.reroute_info_));

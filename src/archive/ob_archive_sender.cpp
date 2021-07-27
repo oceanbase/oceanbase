@@ -314,8 +314,8 @@ int ObArchiveSender::handle_task_list(ObArchiveTaskStatus* status)
     }
   }
 
-  // if io error or alloc memory fail or io limit, sleep 100ms
-  if (is_io_error_(ret) || OB_ALLOCATE_MEMORY_FAILED == ret) {
+  // if memory or IO failed, sleep 100ms
+  if (is_io_error(ret) || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret) {
     usleep(100 * 1000L);
   }
 
@@ -902,28 +902,30 @@ int ObArchiveSender::do_archive_log_(ObPGArchiveTask& pg_archive_task, const int
         ret = OB_IO_ERROR;
       }
 
-      if (is_io_error_(ret)) {
+      if (is_io_error(ret)) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS !=
             (tmp_ret = pg_archive_task.set_file_force_switch(epoch, incarnation_, round, LOG_ARCHIVE_FILE_TYPE_DATA))) {
           ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
           ret = tmp_ret;
-          // rewrite ret
         } else {
           ARCHIVE_LOG(INFO, "fake archive data corrupted", KR(ret), K(pg_archive_task));
         }
       }
     }
   }
+}
 #endif
 
-  // 7. write data file
-  if (OB_SUCC(ret) && !has_inject_fault) {
-    ObString storage_info(archive_round_mgr_->storage_info_);
-    ObArchiveIO archive_io(storage_info);
-    if (OB_FAIL(archive_io.push_log(file_path, buf_size, buffer, need_switch_file, compatible, is_data_file, epoch))) {
-      ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
+// 7. write data file
+if (OB_SUCC(ret) && !has_inject_fault) {
+  ObString storage_info(archive_round_mgr_->storage_info_);
+  ObArchiveIO archive_io(storage_info);
+  if (OB_FAIL(archive_io.push_log(file_path, buf_size, buffer, need_switch_file, compatible, is_data_file, epoch))) {
+    ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
 
+    // Do not switch file if returned error is not IO error.
+    if (is_io_error(ret)) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS !=
           (tmp_ret = pg_archive_task.set_file_force_switch(epoch, incarnation, round, LOG_ARCHIVE_FILE_TYPE_DATA))) {
@@ -932,34 +934,35 @@ int ObArchiveSender::do_archive_log_(ObPGArchiveTask& pg_archive_task, const int
       }
     }
   }
+}
 
-  if (NULL != buffer) {
-    ob_archive_free(buffer);
+if (NULL != buffer) {
+  ob_archive_free(buffer);
+}
+
+// 8. record min_log/offset
+if (OB_SUCC(ret)) {
+  ObArchiveSendTask* task = array[0];
+  uint64_t min_log_id = task->start_log_id_;
+  int64_t min_log_ts = task->start_log_ts_;
+  if (OB_ARCHIVE_TASK_TYPE_KICKOFF == task->task_type_) {
+    min_log_id = task->start_log_id_ - 1;
+  } else if (OB_ARCHIVE_TASK_TYPE_CHECKPOINT == task->task_type_) {
+    // need send only if non-checkpoint log is included
+    min_log_id = task->start_log_id_ + 1;
   }
-
-  // 8. record min_log/offset
-  if (OB_SUCC(ret)) {
-    ObArchiveSendTask* task = array[0];
-    uint64_t min_log_id = task->start_log_id_;
-    int64_t min_log_ts = task->start_log_ts_;
-    if (OB_ARCHIVE_TASK_TYPE_KICKOFF == task->task_type_) {
-      min_log_id = task->start_log_id_ - 1;
-    } else if (OB_ARCHIVE_TASK_TYPE_CHECKPOINT == task->task_type_) {
-      // need send only if non-checkpoint log is included
-      min_log_id = task->start_log_id_ + 1;
-    }
-    if (OB_FAIL(update_data_file_info_(epoch, incarnation, round, min_log_id, min_log_ts, pg_archive_task, buf_size))) {
-      ARCHIVE_LOG(WARN, "update_data_file_info_ fail", KR(ret), K(pg_archive_task));
-    }
+  if (OB_FAIL(update_data_file_info_(epoch, incarnation, round, min_log_id, min_log_ts, pg_archive_task, buf_size))) {
+    ARCHIVE_LOG(WARN, "update_data_file_info_ fail", KR(ret), K(pg_archive_task));
   }
+}
 
-  // 9. statistic
-  if (OB_SUCC(ret)) {
-    const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-    statistic(array, cost_ts);
-  }
+// 9. statistic
+if (OB_SUCC(ret)) {
+  const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+  statistic(array, cost_ts);
+}
 
-  return ret;
+return ret;
 }
 
 int ObArchiveSender::record_index_info(
@@ -1085,40 +1088,39 @@ int ObArchiveSender::record_index_info_(ObPGArchiveTask& pg_archive_task, const 
         ret = OB_IO_ERROR;
       }
 
-      if (is_io_error_(ret)) {
+      if (is_io_error(ret)) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = pg_archive_task.set_file_force_switch(
                                epoch, incarnation_, round, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
           ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
           ret = tmp_ret;
-          // rewrite ret
         } else {
           ARCHIVE_LOG(INFO, "fake archive index corrupted", KR(ret), K(pg_archive_task));
         }
       }
     }
   }
+}
 #endif
-  // 4. write index file
-  if (OB_SUCC(ret) && !has_inject_fault) {
-    ObString storage_info(archive_round_mgr_->storage_info_);
-    ObArchiveIO archive_io(storage_info);
-    if (OB_FAIL(
-            archive_io.push_log(file_path, buffer_len, buffer, need_switch_file, compatible, is_data_file, epoch))) {
-      ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
+// 4. write index file
+if (OB_SUCC(ret) && !has_inject_fault) {
+  ObString storage_info(archive_round_mgr_->storage_info_);
+  ObArchiveIO archive_io(storage_info);
+  if (OB_FAIL(archive_io.push_log(file_path, buffer_len, buffer, need_switch_file, compatible, is_data_file, epoch))) {
+    ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
 
-      if (is_io_error_(ret)) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = pg_archive_task.set_file_force_switch(
-                               epoch, incarnation_, round, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
-          ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
-          ret = tmp_ret;
-        }
+    if (is_io_error(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS !=
+          (tmp_ret = pg_archive_task.set_file_force_switch(epoch, incarnation_, round, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
+        ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
+        ret = tmp_ret;
       }
     }
   }
+}
 
-  return ret;
+return ret;
 }
 
 // check leader before switch file
@@ -1235,8 +1237,8 @@ int ObArchiveSender::handle_archive_error_(const ObPGKey& pg_key, const int64_t 
   int ret = OB_SUCCESS;
   bool io_error_trigger = false;
 
-  // statistic IO error
-  if (is_io_error_(ret_code)) {
+  // mark IO failed
+  if (is_io_error(ret_code)) {
     io_error_trigger = task_status.mark_io_error();
   }
 
@@ -1252,9 +1254,10 @@ int ObArchiveSender::handle_archive_error_(const ObPGKey& pg_key, const int64_t 
         K(epoch),
         K(incarnation),
         K(round));
-  } else if ((is_not_leader_error_(ret_code) || is_io_error_(ret_code) || OB_ALLOCATE_MEMORY_FAILED == ret_code) &&
+  } else if ((is_not_leader_error_(ret_code) || is_io_error(ret_code) || OB_ALLOCATE_MEMORY_FAILED == ret_code ||
+                 OB_IO_LIMIT == ret_code) &&
              !io_error_trigger) {
-    // not leader or IO error, skip it
+    // skip IO error and not leader error code
     ARCHIVE_LOG(WARN,
         "obsolete task or alloc memory fail or io error, skip it",
         KR(ret_code),
@@ -1289,11 +1292,6 @@ int ObArchiveSender::handle_archive_error_(const ObPGKey& pg_key, const int64_t 
   }
 
   return ret;
-}
-
-bool ObArchiveSender::is_io_error_(const int ret_code)
-{
-  return OB_IO_ERROR == ret_code || OB_OSS_ERROR == ret_code;
 }
 
 bool ObArchiveSender::is_not_leader_error_(const int ret_code)

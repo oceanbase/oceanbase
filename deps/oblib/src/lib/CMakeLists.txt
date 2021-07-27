@@ -67,7 +67,6 @@ ob_set_subtarget(oblib_lib common
   allocator/ob_thread_mempool.cpp
   allocator/ob_page_manager.cpp
   alloc/block_set.cpp
-  alloc/malloc_hook.cpp
   alloc/object_set.cpp
   alloc/ob_malloc_allocator.cpp
   alloc/ob_tenant_ctx_allocator.cpp
@@ -472,3 +471,7 @@ ob_lib_add_pchs(lib
   hash/ob_concurrent_hash_map.h
 )
 
+add_library(malloc_hook STATIC
+  alloc/malloc_hook.cpp
+  alloc/malloc_hook.h)
+target_link_libraries(malloc_hook oblib_base)

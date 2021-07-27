@@ -244,7 +244,7 @@ int ObExprExtract::calc_oracle(T& result, const int64_t date_unit, const T& date
     if (OB_SUCC(ret)) {
       switch (ob_obj_type_class(type)) {
         case ObDateTimeTC:
-          if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(date.get_datetime(), get_timezone_info(session), ob_time))) {
+          if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(date.get_datetime(), NULL, ob_time))) {
             LOG_WARN("fail to convert date to ob time", K(ret), K(date));
           }
           break;

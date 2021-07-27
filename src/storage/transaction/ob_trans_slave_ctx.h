@@ -40,7 +40,7 @@ class ObIPartitionGroupGuard;
 namespace transaction {
 // slave participant transaction context
 class ObSlaveTransCtx : public ObDistTransCtx {
-  friend class IterateTransStatFunctor;
+  friend class IterateTransStatForKeyFunctor;
 
 public:
   ObSlaveTransCtx() : ObDistTransCtx("slave_participant", ObTransCtxType::SLAVE_PARTICIPANT), mt_ctx_()

@@ -29,6 +29,7 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "storage/transaction/ob_weak_read_util.h"  //ObWeakReadUtil
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -129,8 +130,18 @@ ObBasicSessionInfo::~ObBasicSessionInfo()
 
 bool ObBasicSessionInfo::is_server_status_in_transaction() const
 {
-  bool result = get_in_transaction() ||
-                (!get_local_autocommit() && trans_desc_.get_standalone_stmt_desc().is_snapshot_version_valid());
+  /*!
+   * readonly sql not in transaction, for compatible, we also need send in trans flag to proxy.
+   * for now,
+   * we use ob_proxy_readonly_transaction_routing_policy parameter decide to send in trans or not.
+   */
+  bool result = get_in_transaction();
+  if (!result
+      && !get_local_autocommit()
+      && trans_desc_.get_standalone_stmt_desc().is_snapshot_version_valid()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(get_effective_tenant_id()));
+    result = is_isolation_serializable() || tenant_config->ob_proxy_readonly_transaction_routing_policy;
+  }
   return result;
 }
 
@@ -937,7 +948,7 @@ int ObBasicSessionInfo::update_query_sensitive_system_variable(ObSchemaGetterGua
   return ret;
 }
 
-// used for bootstarp, in which we can not get system variables from inner table.
+// used for bootstrap, in which we can not get system variables from inner table.
 int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant)
 {
   int ret = OB_SUCCESS;

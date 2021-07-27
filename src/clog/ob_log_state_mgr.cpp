@@ -59,6 +59,7 @@ ObLogStateMgr::ObLogStateMgr()
       prepared_primary_leader_(),
       region_(DEFAULT_REGION_NAME),
       leader_epoch_(OB_INVALID_TIMESTAMP),
+      prev_leader_epoch_(OB_INVALID_TIMESTAMP),
       self_(),
       lock_(ObLatchIds::CLOG_STAT_MGR_LOCK),
       region_lock_(ObLatchIds::CLOG_LOCALITY_LOCK),
@@ -67,7 +68,8 @@ ObLogStateMgr::ObLogStateMgr()
       start_role_change_time_(OB_INVALID_TIMESTAMP),
       last_check_start_id_(OB_INVALID_ID),
       last_check_start_id_time_(OB_INVALID_TIMESTAMP),
-      // FIXME(): Need to define a separate id
+      last_check_restore_state_time_(OB_INVALID_TIMESTAMP),
+      last_check_standby_ms_time_(OB_INVALID_TIMESTAMP),
       fetch_state_lock_(ObLatchIds::CLOG_STAT_MGR_LOCK),
       curr_fetch_log_interval_(CLOG_FETCH_LOG_INTERVAL_LOWER_BOUND),
       curr_round_first_fetch_(true),
@@ -145,6 +147,7 @@ int ObLogStateMgr::init(ObILogSWForStateMgr* sw, ObILogReconfirm* reconfirm, ObI
     prepared_primary_leader_.reset();
     region_ = DEFAULT_REGION_NAME;
     leader_epoch_ = OB_INVALID_TIMESTAMP;
+    prev_leader_epoch_ = OB_INVALID_TIMESTAMP;
     self_ = self;
     freeze_version_ = freeze_version;
     start_role_change_time_ = OB_INVALID_TIMESTAMP;
@@ -945,17 +948,42 @@ int ObLogStateMgr::switch_state(bool& need_retry)
   return ret;
 }
 
+int ObLogStateMgr::standby_follower_try_trigger_restore_()
+{
+  // caller guarantees to hold state lock
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(!restore_mgr_->is_standby_restore_state())) {
+    // no need check
+  } else if (!leader_.is_valid()) {
+    // leader is invalid, skip
+  } else if (OB_INVALID_TIMESTAMP == last_check_restore_state_time_ ||
+             now - last_check_restore_state_time_ >= CHECK_STANDBY_RESTORE_STATE_INTERVAL) {
+    if (OB_FAIL(log_engine_->send_restore_check_rqst(
+            leader_.get_server(), leader_.get_cluster_id(), partition_key_, OB_CHECK_STANDBY_RESTORE))) {
+      CLOG_LOG(WARN, "send_restore_check_rqst failed", K(ret), K_(partition_key), K_(leader));
+    } else {
+      last_check_restore_state_time_ = now;
+    }
+  } else {
+  }
+  return ret;
+}
+
 bool ObLogStateMgr::check_sliding_window_state()
 {
   bool state_changed = false;
   const int64_t now = ObTimeUtility::current_time();
   if (!restore_mgr_->is_archive_restoring()) {
-    share::ObCascadMember new_primary_leader;
+    ObCascadMember new_leader;
+    ObCascadMember new_primary_leader;
     if (is_follower_replay_()) {
       state_changed = follower_replay_need_switch_();
     } else if (is_leader_revoking_() || is_standby_leader_revoking_()) {
       state_changed = leader_revoking_need_switch_();
-    } else if (need_update_leader_()) {
+    } else if (need_update_leader_(new_leader)) {
       state_changed = true;
     } else if (need_update_primary_leader_(new_primary_leader)) {
       state_changed = true;
@@ -974,10 +1002,22 @@ bool ObLogStateMgr::check_sliding_window_state()
       }
     } else if (is_follower_active_()) {
       (void)check_and_try_fetch_log_();
+      // standby follower try trigger restore
+      if (restore_mgr_->is_standby_restore_state()) {
+        (void)standby_follower_try_trigger_restore_();
+      }
     } else if (is_standby_leader_active_()) {
       (void)check_and_try_fetch_log_();
-      if (GCTX.is_in_flashback_state() || GCTX.is_primary_cluster() || GCTX.is_in_cleanup_state()) {
+      // check if standby_leader need switch role
+      bool is_error = false;
+      if (leader_active_need_switch_(is_error)) {
         state_changed = true;
+      }
+      // standby_leader check whether renew_ms_log has been sent to all follower
+      (void)standby_leader_check_renew_ms_log_state_();
+      if (GCTX.is_sync_level_on_standby()) {
+        // 处于强同步模式的备库leader需要check protection_level
+        (void)standby_leader_check_protection_level_();
       }
     } else {
       // do nothing;
@@ -1359,10 +1399,13 @@ void ObLogStateMgr::destroy()
   region_.reset();
   idc_.reset();
   leader_epoch_ = OB_INVALID_TIMESTAMP;
+  prev_leader_epoch_ = OB_INVALID_TIMESTAMP;
   self_.reset();
   freeze_version_ = ObVersion();
   last_check_start_id_ = OB_INVALID_ID;
   last_check_start_id_time_ = OB_INVALID_TIMESTAMP;
+  last_check_restore_state_time_ = OB_INVALID_TIMESTAMP;
+  last_check_standby_ms_time_ = OB_INVALID_TIMESTAMP;
   curr_fetch_log_interval_ = CLOG_FETCH_LOG_INTERVAL_LOWER_BOUND;
   curr_round_first_fetch_ = true;
   curr_round_fetch_begin_time_ = OB_INVALID_TIMESTAMP;
@@ -1458,7 +1501,9 @@ int ObLogStateMgr::replay_to_follower_active_()
     ret = OB_ERR_UNEXPECTED;
     ;
     CLOG_LOG(ERROR, "election_ is NULL", K_(partition_key), K(ret));
-  } else if (ObReplicaTypeCheck::is_paxos_replica_V2(mm_->get_replica_type()) && !election_started_) {
+  } else if (ObReplicaTypeCheck::is_paxos_replica_V2(mm_->get_replica_type()) && !election_started_ &&
+             !restore_mgr_->is_archive_restoring()) {  // physical restore replica cannot start election before set
+                                                       // member_list
     int64_t before_start_partition = common::ObTimeUtility::current_time();
     if (OB_FAIL(election_->start())) {
       CLOG_LOG(WARN, "election_ start failed", K_(partition_key), K(ret));
@@ -1525,17 +1570,28 @@ int ObLogStateMgr::follower_active_to_reconfirm_(const int64_t new_leader_epoch,
       leader_ = new_leader;
       previous_leader_ = previous_leader;
       leader_epoch_ = new_leader_epoch;
-      last_leader_active_time_ = ObTimeUtility::current_time();
       start_role_change_time_ = common::ObTimeUtility::current_time();
       (void)standby_update_protection_level();
       (void)mm_->reset_renew_ms_log_task();
-      if (OB_FAIL(partition_service_->submit_pt_update_role_task(partition_key_))) {
-        CLOG_LOG(WARN, "ps_cb->submit_pt_update_task failed", K_(partition_key), K(ret));
-      }
     }
     CLOG_LOG(INFO, "follower_active_to_reconfirm, switch role to STANDBY_LEADER", K_(partition_key), K_(role));
   } else {
-    if (OB_FAIL(sw_->clean_log())) {
+    // firstly check whether leader_epoch is changed
+    if (OB_INVALID_TIMESTAMP != prev_leader_epoch_ && prev_leader_epoch_ >= new_leader_epoch) {
+      // switchover/failover mutiple times may lead to this case
+      ret = OB_EAGAIN;
+      CLOG_LOG(INFO,
+          "new_leader_epoch is not greater than previous, need change leader to self and retry",
+          K_(partition_key),
+          K(ret),
+          K_(prev_leader_epoch),
+          K(new_leader_epoch));
+      // change leader to self, which can increase epoch
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = election_->change_leader_to_self())) {
+        CLOG_LOG(WARN, "change_leader_to_self failed", K(tmp_ret), K_(partition_key));
+      }
+    } else if (OB_FAIL(sw_->clean_log())) {
       CLOG_LOG(ERROR, "clean sliding window failed", K_(partition_key), K(ret));
     } else {
       reset_status_();
@@ -1545,11 +1601,7 @@ int ObLogStateMgr::follower_active_to_reconfirm_(const int64_t new_leader_epoch,
       leader_ = new_leader;
       previous_leader_ = previous_leader;
       leader_epoch_ = new_leader_epoch;
-      last_leader_active_time_ = ObTimeUtility::current_time();
       start_role_change_time_ = common::ObTimeUtility::current_time();
-      if (OB_FAIL(partition_service_->submit_pt_update_role_task(partition_key_))) {
-        CLOG_LOG(WARN, "ps_cb->submit_pt_update_task failed", K_(partition_key), K(ret));
-      }
       (void)try_renew_sync_standby_location();
     }
   }
@@ -1642,11 +1694,10 @@ int ObLogStateMgr::taking_over_to_leader_active_()
 {
   int ret = OB_SUCCESS;
   const int64_t reconfirm_to_active_cost = ObTimeUtility::current_time() - reconfirm_start_time_;
-  bool is_standby_tbl = is_can_elect_standby_leader();
 
   if (OB_FAIL(on_leader_active_())) {
     CLOG_LOG(WARN, "on_leader_active_ failed, try again", K_(partition_key), K(ret));
-  } else if (!is_standby_tbl && OB_FAIL(sw_->leader_active())) {
+  } else if (common::is_strong_leader(role_) && OB_FAIL(sw_->leader_active())) {
     CLOG_LOG(ERROR, "sw leader_active failed", K(ret), K(partition_key_));
   } else {
     // do nothing
@@ -1659,6 +1710,7 @@ int ObLogStateMgr::taking_over_to_leader_active_()
     }
     // role_ = LEADER;
     state_ = ACTIVE;
+    last_leader_active_time_ = ObTimeUtility::current_time();
     start_role_change_time_ = OB_INVALID_TIMESTAMP;
   }
 
@@ -1667,8 +1719,7 @@ int ObLogStateMgr::taking_over_to_leader_active_()
       K(ret),
       K_(partition_key),
       K(reconfirm_to_active_cost),
-      K(last_leader_active_time_),
-      K(is_standby_tbl));
+      K(last_leader_active_time_));
   return ret;
 }
 
@@ -1694,6 +1745,8 @@ int ObLogStateMgr::leader_active_to_revoking_()
     } else if (OB_FAIL(on_leader_revoke_())) {
       CLOG_LOG(WARN, "on_leader_revoke_ failed, try again", K_(partition_key), K(ret));
     } else {
+      // record current leader_epoch
+      prev_leader_epoch_ = leader_epoch_;
       reset_status_();
     }
   } else {
@@ -1726,6 +1779,8 @@ void ObLogStateMgr::reset_status_()
   mm_->reset_status();
   last_check_start_id_ = sw_->get_start_id();
   last_check_start_id_time_ = ObClockGenerator::getClock();
+  last_check_restore_state_time_ = OB_INVALID_TIMESTAMP;
+  last_check_standby_ms_time_ = OB_INVALID_TIMESTAMP;
   reset_fetch_state();
   last_wait_standby_ack_start_time_ = OB_INVALID_TIMESTAMP;
   last_check_pending_replay_cnt_ = 0;
@@ -1875,8 +1930,13 @@ bool ObLogStateMgr::leader_revoking_need_switch_()
 bool ObLogStateMgr::follower_active_need_switch_()
 {
   bool state_changed = false;
-  if (need_update_leader_()) {
+  ObCascadMember new_leader;
+  if (need_update_leader_(new_leader)) {
     state_changed = true;
+  } else if (new_leader.is_valid() && self_ == new_leader.get_server()) {
+    // Self is new_leader, but my role_ is FOLLOWER, need update role_.
+    state_changed = true;
+  } else {
   }
   return state_changed;
 }
@@ -1922,7 +1982,8 @@ int ObLogStateMgr::get_pending_replay_count_(int64_t& pending_replay_cnt) const
 bool ObLogStateMgr::is_reconfirm_role_change_or_sync_timeout_()
 {
   bool bool_ret = false;
-  if (need_update_leader_()) {
+  ObCascadMember new_leader;
+  if (need_update_leader_(new_leader)) {
     bool_ret = true;
   } else {
     const uint64_t start_id = sw_->get_start_id();
@@ -1934,7 +1995,8 @@ bool ObLogStateMgr::is_reconfirm_role_change_or_sync_timeout_()
     } else {
       int tmp_ret = OB_SUCCESS;
       bool is_waiting_standby_ack = false;
-      // 1) primary leader counts the time waiting for the standby ack
+      // 1) Primary leader counts the time waiting for the standby ack.
+      //    If is_waiting_standby_ack is true, primary leader need wait until standby ack arrives.
       bool unused_bool = false;
       (void)primary_leader_check_start_log_state_(start_id, is_waiting_standby_ack, unused_bool);
       // 2) check if log sync timeout
@@ -1942,11 +2004,9 @@ bool ObLogStateMgr::is_reconfirm_role_change_or_sync_timeout_()
       bool is_sw_timeout = false;
       int64_t pending_replay_cnt = 0;
       if (now - last_check_start_id_time_ > CLOG_LEADER_RECONFIRM_SYNC_TIMEOUT) {
-        // start log is waiting more than 10s
-        if (!sw_->is_empty()) {
-          // sw is not empty, start log sync timeout
-          is_sw_timeout = true;
-        }
+        // start log of sw is timeout,
+        // standby reconfirm timeout can be ditected even though sw is empty.
+        is_sw_timeout = true;
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = get_pending_replay_count_(pending_replay_cnt))) {
           CLOG_LOG(ERROR, "get_pending_replay_count_ failed", K_(partition_key), K(tmp_ret));
@@ -1978,19 +2038,24 @@ bool ObLogStateMgr::is_reconfirm_role_change_or_sync_timeout_()
         if (OB_SUCCESS != (tmp_ret = partition_service_->check_partition_exist(partition_key_, is_exist))) {
           CLOG_LOG(WARN, "check_partition_exist failed", K_(partition_key), K(tmp_ret));
         }
-        if (is_exist) {
+        if (is_exist || (OB_SUCCESS != tmp_ret)) {
+          // partition exists or check_partition_exist failed
           CLOG_LOG(ERROR,
               "is_reconfirm_role_change_or_sync_timeout_",
               K_(partition_key),
+              K_(role),
               K(now),
               K(last_check_start_id_time_),
               K(max_log_id),
               K(start_id),
               K(is_wait_replay));
         } else {
+          // partition does not exist, it no need revoke
+          bool_ret = false;
           CLOG_LOG(WARN,
               "is_reconfirm_role_change_or_sync_timeout_, partition has been dropped",
               K_(partition_key),
+              K_(role),
               K(now),
               K(last_check_start_id_time_),
               K(max_log_id),
@@ -2003,6 +2068,7 @@ bool ObLogStateMgr::is_reconfirm_role_change_or_sync_timeout_()
           CLOG_LOG(INFO,
               "leader reconfirm need wait",
               K_(partition_key),
+              K_(role),
               K(last_check_pending_replay_cnt_),
               K(pending_replay_cnt),
               K(now),
@@ -2077,8 +2143,9 @@ bool ObLogStateMgr::leader_taking_over_need_switch_()
 bool ObLogStateMgr::leader_active_need_switch_(bool& is_error)
 {
   bool state_changed = false;
+  ObCascadMember new_leader;
   is_error = false;
-  if (need_update_leader_()) {
+  if (need_update_leader_(new_leader)) {
     state_changed = true;
   } else if (LEADER == role_) {
     bool need_switch_leader_to_self = false;
@@ -2087,7 +2154,7 @@ bool ObLogStateMgr::leader_active_need_switch_(bool& is_error)
       is_error = true;
     } else {
       // state_changed is false, check cluster type and status
-      // if primary cluster switches to standby, clog need do role chagne: leader->follower->standby_leader
+      // if primary cluster switches to standby，clog need do role chagne: leader->follower->standby_leader
       if (!ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) &&
           GCTX.is_in_standby_active_state()) {
         state_changed = true;
@@ -2099,8 +2166,8 @@ bool ObLogStateMgr::leader_active_need_switch_(bool& is_error)
       // primary leader switch leader to self, trigger start log reach majority after
       // mode degraded (max_availability).
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = election_->change_leader_to_self_async())) {
-        CLOG_LOG(WARN, "change_leader_to_self_async failed", K(tmp_ret), K_(partition_key));
+      if (OB_SUCCESS != (tmp_ret = election_->change_leader_to_self())) {
+        CLOG_LOG(WARN, "change_leader_to_self failed", K(tmp_ret), K_(partition_key));
       }
     }
   } else if (STANDBY_LEADER == role_) {
@@ -2116,8 +2183,9 @@ bool ObLogStateMgr::leader_active_need_switch_(bool& is_error)
 void ObLogStateMgr::primary_leader_check_start_log_state_(
     const uint64_t start_id, bool& is_waiting_standby_ack, bool& need_switch_leader_to_self)
 {
-  // primary leader check if log sync timeout because of standby cluster in max availablility mode
-  if (LEADER == role_ && GCTX.is_in_max_availability_mode() &&
+  // 1) Primary leader check if log sync timeout because of standby cluster in max availablility mode
+  // 2) If it is in max protection mode, assign value for is_waiting_standby_ack.
+  if (LEADER == role_ && (GCTX.need_sync_to_standby() || GCTX.is_in_max_availability_mode()) &&
       !ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id())) {
     const int64_t* ref = NULL;
     ObLogTask* log_task = NULL;
@@ -2126,7 +2194,11 @@ void ObLogStateMgr::primary_leader_check_start_log_state_(
 
       if (GCTX.need_sync_to_standby() && log_task->is_local_majority_flushed() &&
           !log_task->is_standby_majority_finished()) {
+        // max_protect or max_availability mode
         is_waiting_standby_ack = true;
+      }
+
+      if (is_waiting_standby_ack && GCTX.need_sync_to_standby() && GCTX.is_in_max_availability_mode()) {
         const int64_t net_timeout = GCTX.get_sync_standby_net_timeout();
         const int64_t now = ObTimeUtility::current_time();
         if (OB_INVALID_TIMESTAMP == last_wait_standby_ack_start_time_) {
@@ -2155,7 +2227,8 @@ void ObLogStateMgr::primary_leader_check_start_log_state_(
             K(*log_task),
             K_(last_wait_standby_ack_start_time));
       }
-      if (!GCTX.need_sync_to_standby() && log_task->is_local_majority_flushed()) {
+
+      if (!GCTX.need_sync_to_standby() && GCTX.is_in_max_availability_mode() && log_task->is_local_majority_flushed()) {
         // primary leader in max_availability mode, already degraded to max_perf level
         // start log reach majority, need swtich leader to self
         need_switch_leader_to_self = true;
@@ -2192,6 +2265,14 @@ int ObLogStateMgr::primary_process_protect_mode_switch()
       last_check_start_id_time_ = now;
     }
     last_wait_standby_ack_start_time_ = OB_INVALID_TIMESTAMP;
+    // check if need re-takeover
+    if (!GCTX.need_sync_to_standby() && mm_->is_single_member_mode() && !sw_->is_empty()) {
+      // single member primary leader switch leader to self when it switches to async mode and its sw is not empty,
+      // which can trigger start log reach majority after mode switch.
+      if (OB_FAIL(election_->change_leader_to_self())) {
+        CLOG_LOG(WARN, "change_leader_to_self failed", K(ret), K_(partition_key));
+      }
+    }
   }
   return ret;
 }
@@ -2233,14 +2314,36 @@ bool ObLogStateMgr::check_leader_sliding_window_not_slide_(bool& need_switch_lea
             }
           } else {
             state_changed = true;
-            CLOG_LOG(ERROR,
-                "leader_active_need_switch_",
-                K_(partition_key),
-                K(now),
-                K(last_check_start_id_time_),
-                "sw max_log_id",
-                sw_->get_max_log_id(),
-                K(start_id));
+            // log sync timeout, check if partition exist
+            bool is_exist = true;
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (tmp_ret = partition_service_->check_partition_exist(partition_key_, is_exist))) {
+              CLOG_LOG(WARN, "check_partition_exist failed", K_(partition_key), K(tmp_ret));
+            }
+            if (is_exist) {
+              CLOG_LOG(ERROR,
+                  "leader_active_need_switch_",
+                  K_(partition_key),
+                  K(now),
+                  K(last_check_start_id_time_),
+                  "sw max_log_id",
+                  sw_->get_max_log_id(),
+                  K(start_id));
+            } else {
+              // partition does not exist, it no need revoke
+              state_changed = false;
+              // When partition is doing gc, initial leader may destroy firstly,
+              // new elected leader may takeover success and generate checkpoint log,
+              // but if other followers have destroyed, checkpoint log sync will timeout.
+              CLOG_LOG(WARN,
+                  "leader_active_need_switch_, but partition has been dropped",
+                  K_(partition_key),
+                  K(now),
+                  K(last_check_start_id_time_),
+                  "sw max_log_id",
+                  sw_->get_max_log_id(),
+                  K(start_id));
+            }
             report_start_id_trace(start_id);
           }
         } else {
@@ -2292,7 +2395,7 @@ bool ObLogStateMgr::check_leader_sliding_window_not_slide_(bool& need_switch_lea
           }
         }
       }
-      // 2) primary leader count time for waiting standby ack in max protection mode
+      // 2) primary leader check timeout for max availability mode
       bool unused_bool = false;
       (void)primary_leader_check_start_log_state_(start_id, unused_bool, need_switch_leader_to_self);
     }
@@ -2372,11 +2475,10 @@ bool ObLogStateMgr::need_update_primary_leader_(share::ObCascadMember& new_prima
   return bool_ret;
 }
 
-bool ObLogStateMgr::need_update_leader_()
+bool ObLogStateMgr::need_update_leader_(ObCascadMember& new_leader)
 {
   bool bool_ret = false;
   int ret = OB_SUCCESS;
-  ObCascadMember new_leader;
   ObAddr new_elect_real_leader;  // ignore it
   ObAddr previous_leader;        // ignore it
   int64_t new_leader_epoch = OB_INVALID_TIMESTAMP;
@@ -2389,10 +2491,26 @@ bool ObLogStateMgr::need_update_leader_()
     if (leader_.is_valid()) {
       // leader is valid now but get failed, return true
       bool_ret = true;
+      CLOG_LOG(WARN,
+          "get_elect_leader_ failed, leader_ is valid, need update",
+          K(ret),
+          K_(partition_key),
+          K_(self),
+          K(leader_),
+          K(bool_ret));
     }
   } else {
     if (new_leader.get_server() != leader_.get_server() || new_leader_epoch != leader_epoch_) {
       bool_ret = true;
+      CLOG_LOG(WARN,
+          "leader or epoch has changed, need update",
+          K_(partition_key),
+          K(bool_ret),
+          K(new_leader),
+          K(new_leader_epoch),
+          K(leader_),
+          K(leader_epoch_),
+          K_(self));
     }
   }
 
@@ -2703,7 +2821,9 @@ int ObLogStateMgr::try_update_leader_from_loc_cache()
   int tmp_ret = OB_SUCCESS;
   const int64_t now = ObTimeUtility::current_time();
 
-  if (STANDBY_LEADER == role_) {
+  if (LEADER == role_) {
+    // self is LEADER, no need check location cache
+  } else if (STANDBY_LEADER == role_) {
     // standby_leader refresh primary leader
     if (need_renew && (OB_INVALID_TIMESTAMP == last_renew_primary_leader_time_ ||
                           now - last_renew_primary_leader_time_ >= RENEW_LOCATION_TIME_INTERVAL)) {
@@ -2745,9 +2865,11 @@ int ObLogStateMgr::try_update_leader_from_loc_cache()
         CLOG_LOG(WARN, "nonblock_get_leader_by_election_from_loc_cache failed", K_(partition_key), K(tmp_ret));
       }
     } else {
+      ObCascadMember old_leader = leader_;
       new_cluster_id = get_self_cluster_id();
       ObCascadMember new_leader_member(new_leader, new_cluster_id);
       leader_ = new_leader_member;
+      CLOG_LOG(INFO, "update leader according to location cache", K(old_leader), "new leader", leader_);
     }
   }
 
@@ -3128,6 +3250,7 @@ int ObLogStateMgr::standby_set_election_leader(const common::ObAddr& leader, con
     if (OB_INVALID_TIMESTAMP != leader_epoch) {
       if (leader == self_) {
         leader_epoch_ = leader_epoch;
+        is_new_created_leader_ = true;
       } else {
         leader_epoch_ = OB_INVALID_TIMESTAMP;
       }
@@ -3221,7 +3344,26 @@ int ObLogStateMgr::try_send_sync_start_id_request_()
   return ret;
 }
 
-int ObLogStateMgr::standby_leader_check_protection_level()
+int ObLogStateMgr::standby_leader_check_renew_ms_log_state_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(STANDBY_LEADER != role_)) {
+    // self is not STANDBY_LEADER, skip
+  } else if (ATOMIC_LOAD(&last_check_standby_ms_time_) == OB_INVALID_TIMESTAMP ||
+             now - ATOMIC_LOAD(&last_check_standby_ms_time_) >= STANDBY_CHECK_MS_INTERVAL) {
+    last_check_standby_ms_time_ = now;
+    if (OB_FAIL(mm_->check_renew_ms_log_sync_state())) {
+      CLOG_LOG(WARN, "check_renew_ms_log_sync_state failed", K(ret), K_(partition_key));
+    }
+  } else {
+  }
+  return ret;
+}
+
+int ObLogStateMgr::standby_leader_check_protection_level_()
 {
   int ret = OB_SUCCESS;
 

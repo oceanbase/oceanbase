@@ -162,10 +162,13 @@ protected:
   int register_first_buffer_cache(ObExecContext& ctx, ObPxCoordCtx& px_ctx, ObDfo* root_dfo) const;
   void unregister_first_buffer_cache(ObExecContext& ctx, ObPxCoordCtx& px_ctx) const;
 
-  int check_all_sqc(common::ObIArray<ObDfo*>& active_dfos, bool& all_dfo_terminate) const;
-
   int calc_allocated_worker_count(
       int64_t px_expected, int64_t query_expected, int64_t query_allocated, int64_t& allocated_worker_count) const;
+
+  int check_all_sqc(common::ObIArray<ObDfo *> &active_dfos, 
+      int64_t time_offset,
+      bool &all_dfo_terminate,
+      int64_t &cur_timestamp) const;
 
   int register_interrupt(ObPxCoordCtx* px_ctx) const;
   void clear_interrupt(ObPxCoordCtx* px_ctx) const;

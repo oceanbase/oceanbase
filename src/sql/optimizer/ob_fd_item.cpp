@@ -112,6 +112,8 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr* expr, const EqualSets& e
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null expr", K(ret));
+  } else if (expr->has_flag(CNT_AGG)) {
+    //do nothing
   } else if (expr->get_expr_levels().has_member(stmt_level_)) {
     if (child_tables_.is_superset(expr->get_relation_ids())) {
       is_in_child = true;

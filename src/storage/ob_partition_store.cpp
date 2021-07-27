@@ -749,7 +749,16 @@ int ObPartitionStore::create_multi_version_store_(
     if (OB_HASH_EXIST != ret) {
       LOG_WARN("failed to set table store to map", K(ret), K(table_id));
     } else {
-      ret = OB_ENTRY_EXIST;
+      ObMultiVersionTableStore *get_table_store = nullptr;
+      if (OB_FAIL(store_map_->get(table_id, get_table_store))) {
+        LOG_WARN("get store map failed", K(ret), K(table_id));
+      } else if (OB_ISNULL(get_table_store)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, get table store must not be nullptr", K(ret));
+      } else {
+        get_table_store->set_create_schema_version(schema_version);
+        ret = OB_ENTRY_EXIST;
+      }
     }
   } else {
     LOG_INFO("succeed to create multi version table store", KPC(tmp_table_store), KP(tmp_table_store), K(table_id));
@@ -766,7 +775,7 @@ int ObPartitionStore::create_multi_version_store_(
   return ret;
 }
 
-int ObPartitionStore::get_index_status(const int64_t schema_version,
+int ObPartitionStore::get_index_status(const int64_t schema_version, const bool is_physical_restore,
     common::ObIArray<share::schema::ObIndexTableStat>& index_status,
     common::ObIArray<uint64_t>& deleted_and_error_index_ids)
 {
@@ -807,7 +816,8 @@ int ObPartitionStore::get_index_status(const int64_t schema_version,
     LOG_WARN("failed to get full tenant schema guard", K(ret), K(fetch_tenant_id), K(pkey_));
   } else if (OB_FAIL(schema_guard.get_schema_version(fetch_tenant_id, latest_schema_version))) {
     LOG_WARN("failed to get schema version", K(ret), K(fetch_tenant_id), K(pkey_));
-  } else if (latest_schema_version > save_schema_version) {
+  } else if (latest_schema_version > save_schema_version
+      || (is_physical_restore && latest_schema_version >= save_schema_version)) {
     // befor check the delete status of index, we should make sure the schema guard is refreshed
     for (int64_t i = 0; OB_SUCC(ret) && i < index_status.count(); ++i) {
       const share::schema::ObTableSchema* table_schema = NULL;
@@ -2677,7 +2687,7 @@ int ObPartitionStore::write_drop_index_trans(const common::ObPartitionKey& pkey,
     ret = OB_PARTITION_IS_REMOVED;
     LOG_WARN("partition is removed", K(ret));
   } else if (OB_FAIL(SLOGGER.begin(OB_LOG_PARTITION_DROP_INDEX))) {
-    STORAGE_LOG(WARN, "Fail to begin daily merge log, ", K(ret));
+    STORAGE_LOG(WARN, "Fail to begin daily merge log", K(ret));
   } else {
     int64_t subcmd = ObIRedoModule::gen_subcmd(OB_REDO_LOG_PARTITION, REDO_LOG_DROP_INDEX_SSTABLE_OF_STORE);
     const ObStorageLogAttribute log_attr(
@@ -2686,7 +2696,7 @@ int ObPartitionStore::write_drop_index_trans(const common::ObPartitionKey& pkey,
     if (OB_FAIL(SLOGGER.write_log(subcmd, log_attr, log_entry))) {
       STORAGE_LOG(WARN, "Failed to write_drop_index_trans", K(ret));
     } else if (OB_FAIL(SLOGGER.commit(lsn))) {
-      STORAGE_LOG(ERROR, "Fail to commit logger, ", K(ret));
+      STORAGE_LOG(ERROR, "Fail to commit logger", K(ret));
     } else {
       ObTaskController::get().allow_next_syslog();
       LOG_INFO("succeed to wrtite drop index trans log", K(lsn), K(log_entry), K(common::lbt()));
@@ -3218,8 +3228,8 @@ int ObPartitionStore::get_kept_multi_version_start(
   return ret;
 }
 
-int ObPartitionStore::check_all_merged(
-    memtable::ObMemtable& memtable, const int64_t schema_version, bool& is_all_merged, bool& can_release)
+int ObPartitionStore::check_all_merged(memtable::ObMemtable& memtable, const int64_t schema_version,
+    const bool is_physical_restore, bool& is_all_merged, bool& can_release)
 {
   int ret = OB_SUCCESS;
   is_all_merged = false;
@@ -3232,7 +3242,8 @@ int ObPartitionStore::check_all_merged(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_index_status(schema_version, index_status, deleted_and_error_index_ids))) {
+  } else if (OB_FAIL(
+                 get_index_status(schema_version, is_physical_restore, index_status, deleted_and_error_index_ids))) {
     if (OB_EAGAIN != ret && OB_TABLE_IS_DELETED != ret) {
       LOG_WARN("failed to get index ids", K(ret));
     } else if (OB_TABLE_IS_DELETED == ret) {
@@ -4035,10 +4046,38 @@ int ObPartitionStore::get_physical_flashback_publish_version(const int64_t flash
   return ret;
 }
 
-void ObPartitionStore::replace_store_map(TableStoreMap& store_map)
+int ObPartitionStore::remove_unneed_store_within_trans(const TableStoreMap &new_store_map)
 {
-  bool found = false;
-  TableStoreMap* cur_store_map = nullptr;
+  int ret = OB_SUCCESS;
+  ObMultiVersionTableStore *table_store = nullptr;
+  TCRLockGuard lock_guard(lock_);
+  for (TableStoreMap::iterator it = store_map_->begin();
+      OB_SUCC(ret) && it != store_map_->end();
+      ++it) {
+    const int64_t index_id = it->second->get_table_id();
+    if (OB_SUCC(new_store_map.get(index_id, table_store))) {
+      // exist in new table store map
+    } else if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("Failed to get table store", K(ret), K(index_id));
+    } else {
+      int64_t subcmd = ObIRedoModule::gen_subcmd(OB_REDO_LOG_PARTITION, REDO_LOG_DROP_INDEX_SSTABLE_OF_STORE);
+      const ObStorageLogAttribute log_attr(pg_memtable_mgr_->get_pkey().get_tenant_id(),
+          pg_->get_pg_storage().get_storage_file()->get_file_id());
+      ObDropIndexSSTableLogEntry log_entry;
+      log_entry.pkey_ = meta_->pkey_;
+      log_entry.index_id_ = index_id;
+      log_entry.pg_key_ = pg_memtable_mgr_->get_pkey();
+      if (OB_FAIL(SLOGGER.write_log(subcmd, log_attr, log_entry))) {
+        STORAGE_LOG(WARN, "Failed to write_drop_index_trans", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+void ObPartitionStore::replace_store_map(TableStoreMap &store_map)
+{
+  TableStoreMap *cur_store_map = nullptr;
   {
     TCWLockGuard lock_guard(lock_);
     cur_store_map = store_map_;

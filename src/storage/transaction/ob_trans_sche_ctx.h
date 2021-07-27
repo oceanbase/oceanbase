@@ -62,6 +62,7 @@ public:
         cur_stmt_unreachable_partitions_(ObModIds::OB_TRANS_PARTITION_ARRAY, OB_MALLOC_NORMAL_BLOCK_SIZE),
         stmt_rollback_participants_(ObModIds::OB_TRANS_PARTITION_ARRAY, OB_MALLOC_NORMAL_BLOCK_SIZE),
         trans_location_cache_(ObModIds::OB_TRANS_LOCATION_CACHE, OB_MALLOC_NORMAL_BLOCK_SIZE),
+        trans_desc_(NULL),
         xa_stmt_lock_(),
         xa_branch_info_(NULL)
   {

@@ -35,7 +35,12 @@ private:
 
   int transform_full_outer_join(ObDMLStmt*& stmt, bool& trans_happened);
 
-  int check_join_condition(ObDMLStmt* stmt, JoinedTable* table, bool& has_equal);
+  int check_full_nl_valid(ObDMLStmt &stmt, TableItem* table_item, bool &is_valid);
+
+  int check_join_condition(ObDMLStmt *stmt,
+                            JoinedTable *table,
+                            bool &has_equal,
+                            bool &has_subquery);
 
   int recursively_eliminate_full_join(ObDMLStmt* stmt, TableItem*& table_item, bool& trans_happened);
 

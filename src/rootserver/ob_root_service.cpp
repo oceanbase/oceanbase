@@ -2269,9 +2269,10 @@ int ObRootService::schedule_inspector_task()
 {
   int ret = OB_SUCCESS;
   int64_t inspect_interval = ObInspector::INSPECT_INTERVAL;
-#ifdef ERRSIM
+#ifdef DEBUG
   inspect_interval = ObServerConfig::get_instance().schema_drop_gc_delay_time;
 #endif
+
   int64_t delay = 1 * 60 * 1000 * 1000;
   int64_t purge_interval = GCONF._recyclebin_object_purge_frequency;
   int64_t expire_time = GCONF.recyclebin_object_expire_time;
@@ -6357,6 +6358,9 @@ int ObRootService::create_outline(const ObCreateOutlineArg& arg)
     const ObDatabaseSchema* db_schema = NULL;
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
+      // if not specify database, set default database name and database id;
+      outline_info.set_database_id(OB_OUTLINE_DEFAULT_DATABASE_ID);
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -10155,7 +10159,22 @@ int ObRootService::get_tenant_schema_versions(
         ObRefreshSchemaStatus schema_status;
         schema_status.tenant_id_ = GCTX.is_schema_splited() ? tenant_id : OB_INVALID_TENANT_ID;
         int64_t version_in_inner_table = OB_INVALID_VERSION;
-        if (OB_FAIL(schema_service_->get_schema_version_in_inner_table(
+        bool is_restore = false;
+        if (OB_FAIL(schema_service_->check_tenant_is_restore(&schema_guard, tenant_id, is_restore))) {
+          LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id));
+        } else if (is_restore) {
+          ObSchemaStatusProxy* schema_status_proxy = GCTX.schema_status_proxy_;
+          if (OB_ISNULL(schema_status_proxy)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("schema_status_proxy is null", KR(ret));
+          } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id, schema_status))) {
+            LOG_WARN("failed to get tenant refresh schema status", KR(ret), K(tenant_id));
+          } else if (OB_INVALID_VERSION != schema_status.readable_schema_version_) {
+            ret = OB_EAGAIN;
+            LOG_WARN("tenant's sys replicas are not restored yet, try later", KR(ret), K(tenant_id));
+          }
+        }
+        if (FAILEDx(schema_service_->get_schema_version_in_inner_table(
                 sql_proxy_, schema_status, version_in_inner_table))) {
           // failed tenant creation, inner table is empty, return OB_CORE_SCHEMA_VERSION
           if (OB_EMPTY_RESULT == ret) {
@@ -10685,7 +10704,7 @@ int ObRootService::update_table_schema_version(const ObUpdateTableSchemaVersionA
       LOG_WARN("invalid schema service", KR(ret), KP(schema_service));
     } else if (!schema_service->is_in_bootstrap()) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("not allow to update table schema while not in bootstarp");
+      LOG_WARN("not allow to update table schema while not in bootstrap");
     } else if (OB_FAIL(
                    ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
       LOG_WARN("get_schema_guard with version in inner table failed", K(ret), K(arg));

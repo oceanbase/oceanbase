@@ -442,7 +442,7 @@ public:
   }
 
 private:
-  ObSegmentBitSet<> bits_;
+  ObSegmentBitSet<common::OB_MALLOC_BIG_BLOCK_SIZE> bits_;
   int64_t cnt_;  // power of 2
   int64_t h2_shift_;
 };

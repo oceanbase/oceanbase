@@ -345,7 +345,7 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt* select_s
   } else if (OB_FAIL(check_select_item_subquery(*select_stmt, *view_stmt, check_status))) {
     LOG_WARN("failed to check select item has subquery", K(ret));
   } else if (!check_status) {
-    can_be = false;  
+    can_be = false;
   } else if (view_stmt->is_contains_assignment() || select_stmt->is_contains_assignment()) {
     can_be = false;
   } else if (OB_FAIL(is_select_item_same(select_stmt, view_stmt, check_status, select_offset, const_select_items))) {

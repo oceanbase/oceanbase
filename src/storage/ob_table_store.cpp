@@ -1224,9 +1224,9 @@ int ObTableStore::refine_mini_minor_merge_result(ObGetMergeTablesResult& result)
             K(result),
             K(minor_sstable_count));
       } else if (1 == mini_tables.count()) {
-        // only one mini sstable, and 1 L1 sstable at last, no need mini minor merge
-        LOG_INFO("minor refine, only one mini sstable, no need to do mini minor merge", K(result));
-        result.handle_.reset();
+        // only one mini sstable, and 1 L1 sstable at last, we need minor merge
+        result.suggest_merge_type_ = MINOR_MERGE;
+        LOG_INFO("minor refine, only one mini sstable, we need do a full minor merge", K(result));
       } else if (minor_sstable_count == 0 && mini_sstable_size > min_minor_sstable_row_count) {
         result.suggest_merge_type_ = MINOR_MERGE;
         LOG_INFO("minor refine, mini minor merge sstable refine to minor merge",
@@ -1667,14 +1667,9 @@ int ObTableStore::find_mini_merge_tables(const ObGetMergeTablesParam& param,
           K(param),
           KPC(memtable));
       break;
-    } else if ((OB_FAIL(is_memtable_need_merge(*memtable, need_merge)))) {
-      LOG_WARN("Failed to check memtable need merge", K(i), K(need_merge), KPC(memtable));
-    } else if (!need_merge) {
-      LOG_DEBUG("memtable wait to release", K(i), K(param), KPC(memtable));
-      continue;
-    } else if (result.handle_.get_count() > 0) {
-      if (result.log_ts_range_.end_log_ts_ < memtable->get_start_log_ts() ||
-          result.log_ts_range_.max_log_ts_ > memtable->get_end_log_ts()) {
+    } else if (result.handle_.get_count() > 0 ) {
+      if (result.log_ts_range_.end_log_ts_ < memtable->get_start_log_ts()
+          || result.log_ts_range_.max_log_ts_ > memtable->get_end_log_ts()) {
         FLOG_INFO("log id not continues, reset previous minor merge tables",
             K(i),
             "last_end_log_ts",
@@ -1694,6 +1689,11 @@ int ObTableStore::find_mini_merge_tables(const ObGetMergeTablesParam& param,
             KPC(memtable));
         break;
       }
+    } else if ((OB_FAIL(is_memtable_need_merge(*memtable, need_merge)))) {
+      LOG_WARN("Failed to check memtable need merge", K(i), K(need_merge), KPC(memtable));
+    } else if (!need_merge) {
+      LOG_DEBUG("memtable wait to release", K(i), K(param), KPC(memtable));
+      continue;
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(add_minor_merge_result(memtable, result))) {
@@ -1746,8 +1746,8 @@ int ObTableStore::find_mini_minor_merge_tables(const ObGetMergeTablesParam& para
       continue;
     } else if (table->get_base_version() < min_snapshot_version) {
       continue;
-    } else if (is_multi_version_break(table->get_version_range(), result.version_range_.snapshot_version_) &&
-               table->get_multi_version_start() >= expect_multi_version) {
+    } else if (is_multi_version_break(table->get_version_range(), result.version_range_.snapshot_version_)
+               && table->get_multi_version_start() > expect_multi_version) {
       if (result.handle_.get_count() > 1) {
         // do not involve sstable with bigger uncontinue multi version than max_snapshot_version
         FLOG_INFO("Multi version start larger than max snapshot, stop find more minor sstables",
@@ -1870,7 +1870,7 @@ int ObTableStore::refine_mini_merge_result_in_reboot_phase(ObITable& last_table,
           K(last_end_log_ts),
           K(PRETTY_TS(*this)));
     }
-  } else if (result.version_range_.snapshot_version_ <= last_snapshot_version) {
+  } else if (result.version_range_.snapshot_version_ < last_snapshot_version) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR(
         "Unexpected chaos snapshot_version and log_ts", K(ret), K(result), K(last_end_log_ts), K(PRETTY_TS(*this)));

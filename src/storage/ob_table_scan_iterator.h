@@ -47,7 +47,7 @@ public:
   virtual void reset();
   int rescan(const ObRangeArray& key_ranges, const ObPosArray& range_array_pos);
   int switch_iterator(const int64_t range_array_idx);
-
+  int release_table_ref();
 private:
   static const int64_t LOOP_RESCAN_BUFFER_SIZE = 8 * 1024;  // 8K
   int prepare_table_param();
@@ -100,7 +100,7 @@ public:
   }
   virtual void reset();
   int set_range_array_idx(const int64_t range_array_idx);
-
+  virtual int release_table_ref();
 private:
   bool is_inited_;
   ObTableScanStoreRowIterator* row_iter_;
@@ -122,7 +122,7 @@ public:
       ObPartitionStore& partition_store);
   int rescan(ObTableScanParam& scan_param);
   virtual void reset();
-
+  int release_table_ref();
 private:
   int get_next_range();
 
@@ -152,7 +152,7 @@ public:
       ObPartitionStore& partition_store);
   int rescan(ObTableScanParam& scan_param);
   virtual void reset() override;
-
+  virtual int release_table_ref();
 private:
   ObTableScanIterIterator iter_;
   ObNewRowIterator* row_iter_;

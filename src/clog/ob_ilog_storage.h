@@ -40,8 +40,7 @@ public:
   virtual void destroy();
 
 public:
-  int init(const char* dir_name, const char* shm_path, const int64_t server_seq, const common::ObAddr& addr,
-      ObLogCache* log_cache);
+  int init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache);
 
   int add_partition_needed_to_file_id_cache(
       const common::ObPartitionKey& partition_key, const uint64_t last_replay_log_id);
@@ -100,8 +99,8 @@ public:
   ~ObIlogStorage();
 
 public:
-  int init(const char* dir_name, const char* shm_path, const int64_t server_seq, const common::ObAddr& addr,
-      ObLogCache* log_cache, storage::ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env);
+  int init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache,
+      storage::ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env);
   void destroy();
   int start();
   void stop();

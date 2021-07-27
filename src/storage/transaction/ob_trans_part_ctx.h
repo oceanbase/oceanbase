@@ -89,7 +89,7 @@ private:
 
 // participant transaction context
 class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
-  friend class IterateTransStatFunctor;
+  friend class IterateTransStatForKeyFunctor;
 
 public:
   ObPartTransCtx()
@@ -392,7 +392,8 @@ public:
       K_(forbidden_sql_no), K(is_dirty_), K_(undo_status), K_(max_durable_sql_no), K_(max_durable_log_ts),
       K(mt_ctx_.get_checksum_log_ts()), K_(is_changing_leader), K_(has_trans_state_log),
       K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx), K(mt_ctx_.get_callback_count()),
-      K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id));
+      K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
+      K_(is_xa_trans_prepared));
 
 public:
   static const int64_t OP_LOCAL_NUM = 16;
@@ -485,7 +486,7 @@ private:
   int do_clear_();
   int on_prepare_redo_();  // after redo/prepare log written
   int on_prepare_(const bool batch_committed, const int64_t timestamp);
-  int on_sp_commit_(const bool commit);
+  int on_sp_commit_(const bool commit, const int64_t timestamp = OB_INVALID_TIMESTAMP);
   int on_dist_commit_();
   int on_dist_abort_();
   int on_clear_(const bool need_response);
@@ -672,7 +673,6 @@ private:
   bool is_dup_table_prepare_;
   uint64_t dup_table_syncing_log_id_;
   int64_t dup_table_syncing_log_ts_;
-  uint64_t async_applying_log_id_;
   int64_t async_applying_log_ts_;
   ObTransUndoStatus undo_status_;
   int32_t max_durable_sql_no_;
@@ -721,6 +721,7 @@ private:
   int64_t last_redo_log_mutator_size_;
   bool is_xa_trans_prepared_;
   bool has_write_or_replay_mutator_redo_log_;
+  bool is_in_redo_with_prepare_;
 };
 
 #if defined(__x86_64__)

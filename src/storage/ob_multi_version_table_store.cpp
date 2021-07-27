@@ -1432,9 +1432,6 @@ int ObMultiVersionTableStore::get_schema_version(int64_t& schema_version)
     if (OB_FAIL(table_store->get_schema_version(schema_version))) {
       LOG_WARN("failed to get_schema_version", K(ret));
     }
-  } else if (create_schema_version_ <= 0) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("create_schema_version should be valid when no table exist", K(ret));
   } else {
     schema_version = create_schema_version_;
   }

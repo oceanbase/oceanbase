@@ -134,24 +134,26 @@ Outputs & filters:
 
 SQL: select c1 from t1 limit 100; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |100      |107 |
-|1 | PX COORDINATOR         |        |100      |93  |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|100      |88  |
-|3 |   PX PARTITION ITERATOR|        |100      |88  |
-|4 |    TABLE SCAN          |t1      |100      |88  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |100      |120 |
+|1 | PX COORDINATOR          |        |100      |107 |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|100      |102 |
+|3 |   LIMIT                 |        |100      |102 |
+|4 |    PX PARTITION ITERATOR|        |100      |88  |
+|5 |     TABLE SCAN          |t1      |100      |88  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1]), filter(nil)
   2 - output([t1.c1]), filter(nil), dop=1
-  3 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1]), filter(nil), limit(100), offset(nil)
   4 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  5 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -163,24 +165,26 @@ Outputs & filters:
 
 SQL: select * from t1 limit 100; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |100      |113 |
-|1 | PX COORDINATOR         |        |100      |100 |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|100      |90  |
-|3 |   PX PARTITION ITERATOR|        |100      |90  |
-|4 |    TABLE SCAN          |t1      |100      |90  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |100      |127 |
+|1 | PX COORDINATOR          |        |100      |113 |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|100      |104 |
+|3 |   LIMIT                 |        |100      |104 |
+|4 |    PX PARTITION ITERATOR|        |100      |90  |
+|5 |     TABLE SCAN          |t1      |100      |90  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
   4 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  5 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -195,12 +199,13 @@ SQL: select * from t1 order by c1,c2 limit 100;
 ========================================================
 |ID|OPERATOR                   |NAME    |EST. ROWS|COST|
 --------------------------------------------------------
-|0 |LIMIT                      |        |100      |241 |
-|1 | PX COORDINATOR MERGE SORT |        |100      |227 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|100      |217 |
-|3 |   SORT                    |        |100      |217 |
-|4 |    PX PARTITION ITERATOR  |        |100      |90  |
-|5 |     TABLE SCAN            |t1      |100      |90  |
+|0 |LIMIT                      |        |100      |254 |
+|1 | PX COORDINATOR MERGE SORT |        |100      |241 |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|100      |231 |
+|3 |   LIMIT                   |        |100      |231 |
+|4 |    TOP-N SORT             |        |100      |217 |
+|5 |     PX PARTITION ITERATOR |        |100      |90  |
+|6 |      TABLE SCAN           |t1      |100      |90  |
 ========================================================
 
 Outputs & filters: 
@@ -208,10 +213,11 @@ Outputs & filters:
   0 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), topn(100), local merge sort
   5 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -226,12 +232,13 @@ SQL: select c1 from t1 order by c1 limit 100;
 ========================================================
 |ID|OPERATOR                   |NAME    |EST. ROWS|COST|
 --------------------------------------------------------
-|0 |LIMIT                      |        |100      |214 |
-|1 | PX COORDINATOR MERGE SORT |        |100      |200 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|100      |196 |
-|3 |   SORT                    |        |100      |196 |
-|4 |    PX PARTITION ITERATOR  |        |100      |88  |
-|5 |     TABLE SCAN            |t1      |100      |88  |
+|0 |LIMIT                      |        |100      |228 |
+|1 | PX COORDINATOR MERGE SORT |        |100      |214 |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|100      |209 |
+|3 |   LIMIT                   |        |100      |209 |
+|4 |    TOP-N SORT             |        |100      |196 |
+|5 |     PX PARTITION ITERATOR |        |100      |88  |
+|6 |      TABLE SCAN           |t1      |100      |88  |
 ========================================================
 
 Outputs & filters: 
@@ -239,10 +246,11 @@ Outputs & filters:
   0 - output([t1.c1]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
   2 - output([t1.c1]), filter(nil), dop=1
-  3 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  4 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1]), filter(nil), limit(100), offset(nil)
+  4 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), topn(100), local merge sort
   5 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -257,12 +265,13 @@ SQL: select c1 from t1 order by c2 limit 100;
 =============================================================
 |ID|OPERATOR                   |NAME         |EST. ROWS|COST|
 -------------------------------------------------------------
-|0 |LIMIT                      |             |100      |241 |
-|1 | PX COORDINATOR MERGE SORT |             |100      |227 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000     |100      |217 |
-|3 |   SORT                    |             |100      |217 |
-|4 |    PX PARTITION ITERATOR  |             |100      |90  |
-|5 |     TABLE SCAN            |t1(idx_t1_c2)|100      |90  |
+|0 |LIMIT                      |             |100      |254 |
+|1 | PX COORDINATOR MERGE SORT |             |100      |241 |
+|2 |  EXCHANGE OUT DISTR       |:EX10000     |100      |231 |
+|3 |   LIMIT                   |             |100      |231 |
+|4 |    TOP-N SORT             |             |100      |217 |
+|5 |     PX PARTITION ITERATOR |             |100      |90  |
+|6 |      TABLE SCAN           |t1(idx_t1_c2)|100      |90  |
 =============================================================
 
 Outputs & filters: 
@@ -270,10 +279,11 @@ Outputs & filters:
   0 - output([t1.c1]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(100), local merge sort
   5 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -288,12 +298,13 @@ SQL: select c1 from t1 where c1 > 0 order by c2 limit 100;
 =============================================================
 |ID|OPERATOR                   |NAME         |EST. ROWS|COST|
 -------------------------------------------------------------
-|0 |LIMIT                      |             |100      |257 |
-|1 | PX COORDINATOR MERGE SORT |             |100      |243 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000     |100      |234 |
-|3 |   SORT                    |             |100      |234 |
-|4 |    PX PARTITION ITERATOR  |             |100      |107 |
-|5 |     TABLE SCAN            |t1(idx_t1_c2)|100      |107 |
+|0 |LIMIT                      |             |100      |271 |
+|1 | PX COORDINATOR MERGE SORT |             |100      |257 |
+|2 |  EXCHANGE OUT DISTR       |:EX10000     |100      |248 |
+|3 |   LIMIT                   |             |100      |248 |
+|4 |    TOP-N SORT             |             |100      |234 |
+|5 |     PX PARTITION ITERATOR |             |100      |107 |
+|6 |      TABLE SCAN           |t1(idx_t1_c2)|100      |107 |
 =============================================================
 
 Outputs & filters: 
@@ -301,10 +312,11 @@ Outputs & filters:
   0 - output([t1.c1]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(100), local merge sort
+  5 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  5 - output([t1.c1], [t1.c2]), filter([t1.c1 > ?]), 
+  6 - output([t1.c1], [t1.c2]), filter([t1.c1 > ?]), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, filter_before_indexback[false], 
@@ -319,12 +331,13 @@ SQL: select c1 from t1 where c1 > 0 and c2 < 0 order by c2 limit 100;
 =============================================================
 |ID|OPERATOR                   |NAME         |EST. ROWS|COST|
 -------------------------------------------------------------
-|0 |LIMIT                      |             |10       |437 |
-|1 | PX COORDINATOR MERGE SORT |             |10       |436 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000     |10       |435 |
-|3 |   SORT                    |             |10       |435 |
-|4 |    PX PARTITION ITERATOR  |             |10       |426 |
-|5 |     TABLE SCAN            |t1(idx_t1_c2)|10       |426 |
+|0 |LIMIT                      |             |10       |439 |
+|1 | PX COORDINATOR MERGE SORT |             |10       |437 |
+|2 |  EXCHANGE OUT DISTR       |:EX10000     |10       |437 |
+|3 |   LIMIT                   |             |10       |437 |
+|4 |    TOP-N SORT             |             |10       |435 |
+|5 |     PX PARTITION ITERATOR |             |10       |426 |
+|6 |      TABLE SCAN           |t1(idx_t1_c2)|10       |426 |
 =============================================================
 
 Outputs & filters: 
@@ -332,10 +345,11 @@ Outputs & filters:
   0 - output([t1.c1]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(100), local merge sort
+  5 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  5 - output([t1.c1], [t1.c2]), filter([t1.c1 > ?]), 
+  6 - output([t1.c1], [t1.c2]), filter([t1.c1 > ?]), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, filter_before_indexback[false], 
@@ -446,24 +460,26 @@ Outputs & filters:
 
 SQL: select c1, c1 + c2 from t1 where c1 > 0 limit 100; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |100      |113 |
-|1 | PX COORDINATOR         |        |100      |100 |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|100      |90  |
-|3 |   PX PARTITION ITERATOR|        |100      |90  |
-|4 |    TABLE SCAN          |t1      |100      |90  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |100      |127 |
+|1 | PX COORDINATOR          |        |100      |113 |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|100      |104 |
+|3 |   LIMIT                 |        |100      |104 |
+|4 |    PX PARTITION ITERATOR|        |100      |90  |
+|5 |     TABLE SCAN          |t1      |100      |90  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1], [t1.c1 + t1.c2]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
   4 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  5 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -1272,23 +1288,26 @@ Outputs & filters:
 
 SQL: select t1.c1 from t1, (select * from t2 where c2>1 order by c1 limit 10) as t where t1.c1=t.c1; 
 
-================================================================
-|ID|OPERATOR                           |NAME    |EST. ROWS|COST|
-----------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |10       |412 |
-|1 | EXCHANGE OUT DISTR                |:EX10002|10       |411 |
-|2 |  NESTED-LOOP JOIN                 |        |10       |411 |
-|3 |   EXCHANGE IN DISTR               |        |10       |44  |
-|4 |    EXCHANGE OUT DISTR (PKEY)      |:EX10001|10       |44  |
-|5 |     SUBPLAN SCAN                  |t       |10       |44  |
-|6 |      LIMIT                        |        |10       |42  |
-|7 |       EXCHANGE IN MERGE SORT DISTR|        |10       |41  |
-|8 |        EXCHANGE OUT DISTR         |:EX10000|10       |40  |
-|9 |         PX PARTITION ITERATOR     |        |10       |40  |
-|10|          TABLE SCAN               |t2      |10       |40  |
-|11|   PX PARTITION ITERATOR           |        |1        |36  |
-|12|    TABLE GET                      |t1      |1        |36  |
-================================================================
+=================================================================
+|ID|OPERATOR                            |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------------
+|0 |PX COORDINATOR                      |        |10       |425 |
+|1 | EXCHANGE OUT DISTR                 |:EX10002|10       |424 |
+|2 |  NESTED-LOOP JOIN                  |        |10       |424 |
+|3 |   EXCHANGE IN DISTR                |        |10       |57  |
+|4 |    EXCHANGE OUT DISTR (PKEY)       |:EX10001|10       |57  |
+|5 |     MATERIAL                       |        |10       |57  |
+|6 |      SUBPLAN SCAN                  |t       |10       |55  |
+|7 |       LIMIT                        |        |10       |54  |
+|8 |        EXCHANGE IN MERGE SORT DISTR|        |10       |52  |
+|9 |         EXCHANGE OUT DISTR         |:EX10000|10       |51  |
+|10|          LIMIT                     |        |10       |51  |
+|11|           TOP-N SORT               |        |10       |50  |
+|12|            PX PARTITION ITERATOR   |        |10       |40  |
+|13|             TABLE SCAN             |t2      |10       |40  |
+|14|   PX PARTITION ITERATOR            |        |1        |36  |
+|15|    TABLE GET                       |t1      |1        |36  |
+=================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -1298,21 +1317,24 @@ Outputs & filters:
       conds(nil), nl_params_([t.c1]), batch_join=false
   3 - output([t.c1], [PARTITION_ID]), filter(nil)
   4 - (#keys=1, [t.c1]), output([t.c1], [PARTITION_ID]), filter(nil), is_single, dop=1
-  5 - output([t.c1]), filter(nil), 
+  5 - output([t.c1]), filter(nil)
+  6 - output([t.c1]), filter(nil), 
       access([t.c1])
-  6 - output([t2.c1]), filter(nil), limit(10), offset(nil)
-  7 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC]), Local Order
-  8 - output([t2.c1]), filter(nil), dop=1
-  9 - output([t2.c1]), filter(nil), 
+  7 - output([t2.c1]), filter(nil), limit(10), offset(nil)
+  8 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC])
+  9 - output([t2.c1]), filter(nil), dop=1
+  10 - output([t2.c1]), filter(nil), limit(10), offset(nil)
+  11 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC]), topn(10), local merge sort
+  12 - output([t2.c1]), filter(nil), 
       force partition granule, asc.
-  10 - output([t2.c1]), filter([t2.c2 > ?]), 
+  13 - output([t2.c1]), filter([t2.c2 > ?]), 
       access([t2.c1], [t2.c2]), partitions(p[0-2]), 
       limit(10), offset(nil), 
       is_index_back=false, filter_before_indexback[false], 
       range_key([t2.c1]), range(MIN ; MAX)always true
-  11 - output([t1.c1]), filter(nil), 
+  14 - output([t1.c1]), filter(nil), 
       affinitize, force partition granule, asc.
-  12 - output([t1.c1]), filter(nil), 
+  15 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX), 
@@ -1606,24 +1628,26 @@ Outputs & filters:
 
 SQL: select c1, c1+c2 from t1 where c1 > 100 limit 1, 10; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |10       |41  |
-|1 | PX COORDINATOR         |        |11       |39  |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|11       |38  |
-|3 |   PX PARTITION ITERATOR|        |11       |38  |
-|4 |    TABLE SCAN          |t1      |11       |38  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |10       |42  |
+|1 | PX COORDINATOR          |        |10       |41  |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|10       |40  |
+|3 |   LIMIT                 |        |10       |40  |
+|4 |    PX PARTITION ITERATOR|        |11       |38  |
+|5 |     TABLE SCAN          |t1      |11       |38  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1], [t1.c1 + t1.c2]), filter(nil), limit(10), offset(?)
   1 - output([t1.c1], [t1.c2]), filter(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(10 + ?), offset(nil)
   4 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  5 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(10 + ?), offset(nil), 
       is_index_back=false, 
@@ -2259,25 +2283,25 @@ Outputs & filters:
 
 SQL: select * from t1 left join t2 t on 1=1 where false; 
 
-========================================================
-|ID|OPERATOR                 |NAME    |EST. ROWS|COST  |
---------------------------------------------------------
-|0 |NESTED-LOOP OUTER JOIN   |        |150000   |127547|
-|1 | PX COORDINATOR          |        |500      |389   |
-|2 |  EXCHANGE OUT DISTR     |:EX10000|500      |342   |
-|3 |   PX PARTITION ITERATOR |        |500      |342   |
-|4 |    TABLE SCAN           |t1      |500      |342   |
-|5 | MATERIAL                |        |300      |621   |
-|6 |  PX COORDINATOR         |        |300      |290   |
-|7 |   EXCHANGE OUT DISTR    |:EX20000|300      |205   |
-|8 |    PX PARTITION ITERATOR|        |300      |205   |
-|9 |     TABLE SCAN          |t       |300      |205   |
-========================================================
+===============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST  |
+---------------------------------------------------------------
+|0 |NESTED-LOOP OUTER JOIN CARTESIAN|        |150000   |115014|
+|1 | PX COORDINATOR                 |        |500      |389   |
+|2 |  EXCHANGE OUT DISTR            |:EX10000|500      |342   |
+|3 |   PX PARTITION ITERATOR        |        |500      |342   |
+|4 |    TABLE SCAN                  |t1      |500      |342   |
+|5 | MATERIAL                       |        |300      |646   |
+|6 |  PX COORDINATOR                |        |300      |315   |
+|7 |   EXCHANGE OUT DISTR           |:EX20000|300      |230   |
+|8 |    PX PARTITION ITERATOR       |        |300      |230   |
+|9 |     TABLE SCAN                 |t       |300      |230   |
+===============================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([0]), 
-      conds([1]), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), batch_join=false
   1 - output([t1.c1], [t1.c2]), filter(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   3 - output([t1.c1], [t1.c2]), filter(nil), 
@@ -2291,7 +2315,7 @@ Outputs & filters:
   7 - output([t.c1], [t.c2], [t.c3]), filter(nil), dop=1
   8 - output([t.c1], [t.c2], [t.c3]), filter(nil), 
       force partition granule, asc.
-  9 - output([t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([0]), 
+  9 - output([t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([1], [0]), 
       access([t.c1], [t.c2], [t.c3]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t.c1]), range(MIN ; MAX)always true
@@ -2690,12 +2714,13 @@ SQL: select c1, repeat('ob', 2) as db_name from t1 order by c2 limit 100;
 =============================================================
 |ID|OPERATOR                   |NAME         |EST. ROWS|COST|
 -------------------------------------------------------------
-|0 |LIMIT                      |             |100      |241 |
-|1 | PX COORDINATOR MERGE SORT |             |100      |227 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000     |100      |217 |
-|3 |   SORT                    |             |100      |217 |
-|4 |    PX PARTITION ITERATOR  |             |100      |90  |
-|5 |     TABLE SCAN            |t1(idx_t1_c2)|100      |90  |
+|0 |LIMIT                      |             |100      |254 |
+|1 | PX COORDINATOR MERGE SORT |             |100      |241 |
+|2 |  EXCHANGE OUT DISTR       |:EX10000     |100      |231 |
+|3 |   LIMIT                   |             |100      |231 |
+|4 |    TOP-N SORT             |             |100      |217 |
+|5 |     PX PARTITION ITERATOR |             |100      |90  |
+|6 |      TABLE SCAN           |t1(idx_t1_c2)|100      |90  |
 =============================================================
 
 Outputs & filters: 
@@ -2703,10 +2728,11 @@ Outputs & filters:
   0 - output([t1.c1], [?]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(100), offset(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(100), local merge sort
   5 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -2801,12 +2827,13 @@ SQL: select c1, 1 + 1 from t1 order by c1 limit 100;
 ========================================================
 |ID|OPERATOR                   |NAME    |EST. ROWS|COST|
 --------------------------------------------------------
-|0 |LIMIT                      |        |100      |214 |
-|1 | PX COORDINATOR MERGE SORT |        |100      |200 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|100      |196 |
-|3 |   SORT                    |        |100      |196 |
-|4 |    PX PARTITION ITERATOR  |        |100      |88  |
-|5 |     TABLE SCAN            |t1      |100      |88  |
+|0 |LIMIT                      |        |100      |228 |
+|1 | PX COORDINATOR MERGE SORT |        |100      |214 |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|100      |209 |
+|3 |   LIMIT                   |        |100      |209 |
+|4 |    TOP-N SORT             |        |100      |196 |
+|5 |     PX PARTITION ITERATOR |        |100      |88  |
+|6 |      TABLE SCAN           |t1      |100      |88  |
 ========================================================
 
 Outputs & filters: 
@@ -2814,10 +2841,11 @@ Outputs & filters:
   0 - output([t1.c1], [?]), filter(nil), limit(100), offset(nil)
   1 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
   2 - output([t1.c1]), filter(nil), dop=1
-  3 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  4 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1]), filter(nil), limit(100), offset(nil)
+  4 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), topn(100), local merge sort
   5 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
@@ -3403,20 +3431,21 @@ SQL: (select c1 from t1 order by c2 limit 2) union (select c1 from t2 order by c
 ==============================================================
 |ID|OPERATOR                    |NAME         |EST. ROWS|COST|
 --------------------------------------------------------------
-|0 |HASH UNION DISTINCT         |             |4        |363 |
+|0 |HASH UNION DISTINCT         |             |4        |364 |
 |1 | LIMIT                      |             |2        |39  |
-|2 |  PX COORDINATOR MERGE SORT |             |2        |38  |
+|2 |  PX COORDINATOR MERGE SORT |             |2        |39  |
 |3 |   EXCHANGE OUT DISTR       |:EX10000     |2        |38  |
-|4 |    SORT                    |             |2        |38  |
-|5 |     PX PARTITION ITERATOR  |             |2        |37  |
-|6 |      TABLE SCAN            |t1(idx_t1_c2)|2        |37  |
-|7 | LIMIT                      |             |2        |321 |
-|8 |  PX COORDINATOR MERGE SORT |             |2        |321 |
-|9 |   EXCHANGE OUT DISTR       |:EX20000     |2        |320 |
-|10|    LIMIT                   |             |2        |320 |
-|11|     TOP-N SORT             |             |2        |320 |
-|12|      PX PARTITION ITERATOR |             |300      |198 |
-|13|       TABLE SCAN           |t2           |300      |198 |
+|4 |    LIMIT                   |             |2        |38  |
+|5 |     TOP-N SORT             |             |2        |38  |
+|6 |      PX PARTITION ITERATOR |             |2        |37  |
+|7 |       TABLE SCAN           |t1(idx_t1_c2)|2        |37  |
+|8 | LIMIT                      |             |2        |321 |
+|9 |  PX COORDINATOR MERGE SORT |             |2        |321 |
+|10|   EXCHANGE OUT DISTR       |:EX20000     |2        |320 |
+|11|    LIMIT                   |             |2        |320 |
+|12|     TOP-N SORT             |             |2        |320 |
+|13|      PX PARTITION ITERATOR |             |300      |198 |
+|14|       TABLE SCAN           |t2           |300      |198 |
 ==============================================================
 
 Outputs & filters: 
@@ -3425,22 +3454,23 @@ Outputs & filters:
   1 - output([t1.c1]), filter(nil), limit(2), offset(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   3 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  5 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  4 - output([t1.c1], [t1.c2]), filter(nil), limit(2), offset(nil)
+  5 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(2), local merge sort
   6 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  7 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(2), offset(nil), 
       is_index_back=false, 
       range_key([t1.c2], [t1.c1]), range(MIN,MIN ; MAX,MAX)always true
-  7 - output([t2.c1]), filter(nil), limit(2), offset(nil)
-  8 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
-  9 - output([t2.c1], [t2.c2]), filter(nil), dop=1
-  10 - output([t2.c1], [t2.c2]), filter(nil), limit(2), offset(nil)
-  11 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(2)
-  12 - output([t2.c1], [t2.c2]), filter(nil), 
-      force partition granule, asc.
+  8 - output([t2.c1]), filter(nil), limit(2), offset(nil)
+  9 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  10 - output([t2.c1], [t2.c2]), filter(nil), dop=1
+  11 - output([t2.c1], [t2.c2]), filter(nil), limit(2), offset(nil)
+  12 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(2)
   13 - output([t2.c1], [t2.c2]), filter(nil), 
+      force partition granule, asc.
+  14 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -3454,20 +3484,21 @@ SQL: (select c1 from t1 order by c2 limit 2) union all (select c1 from t2 order 
 ==============================================================
 |ID|OPERATOR                    |NAME         |EST. ROWS|COST|
 --------------------------------------------------------------
-|0 |UNION ALL                   |             |4        |360 |
+|0 |UNION ALL                   |             |4        |361 |
 |1 | LIMIT                      |             |2        |39  |
-|2 |  PX COORDINATOR MERGE SORT |             |2        |38  |
+|2 |  PX COORDINATOR MERGE SORT |             |2        |39  |
 |3 |   EXCHANGE OUT DISTR       |:EX10000     |2        |38  |
-|4 |    SORT                    |             |2        |38  |
-|5 |     PX PARTITION ITERATOR  |             |2        |37  |
-|6 |      TABLE SCAN            |t1(idx_t1_c2)|2        |37  |
-|7 | LIMIT                      |             |2        |321 |
-|8 |  PX COORDINATOR MERGE SORT |             |2        |321 |
-|9 |   EXCHANGE OUT DISTR       |:EX20000     |2        |320 |
-|10|    LIMIT                   |             |2        |320 |
-|11|     TOP-N SORT             |             |2        |320 |
-|12|      PX PARTITION ITERATOR |             |300      |198 |
-|13|       TABLE SCAN           |t2           |300      |198 |
+|4 |    LIMIT                   |             |2        |38  |
+|5 |     TOP-N SORT             |             |2        |38  |
+|6 |      PX PARTITION ITERATOR |             |2        |37  |
+|7 |       TABLE SCAN           |t1(idx_t1_c2)|2        |37  |
+|8 | LIMIT                      |             |2        |321 |
+|9 |  PX COORDINATOR MERGE SORT |             |2        |321 |
+|10|   EXCHANGE OUT DISTR       |:EX20000     |2        |320 |
+|11|    LIMIT                   |             |2        |320 |
+|12|     TOP-N SORT             |             |2        |320 |
+|13|      PX PARTITION ITERATOR |             |300      |198 |
+|14|       TABLE SCAN           |t2           |300      |198 |
 ==============================================================
 
 Outputs & filters: 
@@ -3476,22 +3507,23 @@ Outputs & filters:
   1 - output([t1.c1]), filter(nil), limit(2), offset(nil)
   2 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   3 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  5 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  4 - output([t1.c1], [t1.c2]), filter(nil), limit(2), offset(nil)
+  5 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(2), local merge sort
   6 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  7 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(2), offset(nil), 
       is_index_back=false, 
       range_key([t1.c2], [t1.c1]), range(MIN,MIN ; MAX,MAX)always true
-  7 - output([t2.c1]), filter(nil), limit(2), offset(nil)
-  8 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
-  9 - output([t2.c1], [t2.c2]), filter(nil), dop=1
-  10 - output([t2.c1], [t2.c2]), filter(nil), limit(2), offset(nil)
-  11 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(2)
-  12 - output([t2.c1], [t2.c2]), filter(nil), 
-      force partition granule, asc.
+  8 - output([t2.c1]), filter(nil), limit(2), offset(nil)
+  9 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  10 - output([t2.c1], [t2.c2]), filter(nil), dop=1
+  11 - output([t2.c1], [t2.c2]), filter(nil), limit(2), offset(nil)
+  12 - output([t2.c1], [t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(2)
   13 - output([t2.c1], [t2.c2]), filter(nil), 
+      force partition granule, asc.
+  14 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -3565,37 +3597,38 @@ SQL: (select /*+no_use_px*/ c1 from t1) union (select c2 from t1) union (select 
 =======================================================================
 |ID|OPERATOR                             |NAME         |EST. ROWS|COST|
 -----------------------------------------------------------------------
-|0 |LIMIT                                |             |100      |1694|
-|1 | MERGE UNION DISTINCT                |             |100      |1680|
-|2 |  LIMIT                              |             |100      |903 |
-|3 |   MERGE UNION DISTINCT              |             |100      |890 |
-|4 |    LIMIT                            |             |100      |214 |
-|5 |     PX COORDINATOR MERGE SORT       |             |100      |200 |
-|6 |      EXCHANGE OUT DISTR             |:EX10000     |100      |196 |
-|7 |       SORT                          |             |100      |196 |
-|8 |        PX PARTITION ITERATOR        |             |100      |88  |
-|9 |         TABLE SCAN                  |t1           |100      |88  |
-|10|    LIMIT                            |             |100      |610 |
-|11|     PX COORDINATOR MERGE SORT       |             |100      |596 |
-|12|      EXCHANGE OUT DISTR             |:EX20001     |100      |587 |
-|13|       LIMIT                         |             |100      |587 |
-|14|        MERGE DISTINCT               |             |100      |573 |
-|15|         EXCHANGE IN MERGE SORT DISTR|             |100      |462 |
-|16|          EXCHANGE OUT DISTR (HASH)  |:EX20000     |100      |453 |
-|17|           PX PARTITION ITERATOR     |             |100      |453 |
-|18|            MERGE DISTINCT           |             |100      |453 |
-|19|             TABLE SCAN              |t1(idx_t1_c2)|500      |342 |
-|20|  LIMIT                              |             |100      |712 |
-|21|   PX COORDINATOR MERGE SORT         |             |100      |698 |
-|22|    EXCHANGE OUT DISTR               |:EX30001     |100      |689 |
-|23|     LIMIT                           |             |100      |689 |
-|24|      TOP-N SORT                     |             |100      |675 |
-|25|       HASH DISTINCT                 |             |100      |548 |
-|26|        EXCHANGE IN DISTR            |             |100      |378 |
-|27|         EXCHANGE OUT DISTR (HASH)   |:EX30000     |100      |368 |
-|28|          HASH DISTINCT              |             |100      |368 |
-|29|           PX PARTITION ITERATOR     |             |300      |198 |
-|30|            TABLE SCAN               |t2           |300      |198 |
+|0 |LIMIT                                |             |100      |1708|
+|1 | MERGE UNION DISTINCT                |             |100      |1694|
+|2 |  LIMIT                              |             |100      |917 |
+|3 |   MERGE UNION DISTINCT              |             |100      |903 |
+|4 |    LIMIT                            |             |100      |228 |
+|5 |     PX COORDINATOR MERGE SORT       |             |100      |214 |
+|6 |      EXCHANGE OUT DISTR             |:EX10000     |100      |209 |
+|7 |       LIMIT                         |             |100      |209 |
+|8 |        TOP-N SORT                   |             |100      |196 |
+|9 |         PX PARTITION ITERATOR       |             |100      |88  |
+|10|          TABLE SCAN                 |t1           |100      |88  |
+|11|    LIMIT                            |             |100      |610 |
+|12|     PX COORDINATOR MERGE SORT       |             |100      |596 |
+|13|      EXCHANGE OUT DISTR             |:EX20001     |100      |587 |
+|14|       LIMIT                         |             |100      |587 |
+|15|        MERGE DISTINCT               |             |100      |573 |
+|16|         EXCHANGE IN MERGE SORT DISTR|             |100      |462 |
+|17|          EXCHANGE OUT DISTR (HASH)  |:EX20000     |100      |453 |
+|18|           PX PARTITION ITERATOR     |             |100      |453 |
+|19|            MERGE DISTINCT           |             |100      |453 |
+|20|             TABLE SCAN              |t1(idx_t1_c2)|500      |342 |
+|21|  LIMIT                              |             |100      |712 |
+|22|   PX COORDINATOR MERGE SORT         |             |100      |698 |
+|23|    EXCHANGE OUT DISTR               |:EX30001     |100      |689 |
+|24|     LIMIT                           |             |100      |689 |
+|25|      TOP-N SORT                     |             |100      |675 |
+|26|       HASH DISTINCT                 |             |100      |548 |
+|27|        EXCHANGE IN DISTR            |             |100      |378 |
+|28|         EXCHANGE OUT DISTR (HASH)   |:EX30000     |100      |368 |
+|29|          HASH DISTINCT              |             |100      |368 |
+|30|           PX PARTITION ITERATOR     |             |300      |198 |
+|31|            TABLE SCAN               |t2           |300      |198 |
 =======================================================================
 
 Outputs & filters: 
@@ -3607,44 +3640,45 @@ Outputs & filters:
   4 - output([t1.c1]), filter(nil), limit(100), offset(nil)
   5 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
   6 - output([t1.c1]), filter(nil), dop=1
-  7 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  8 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  7 - output([t1.c1]), filter(nil), limit(100), offset(nil)
+  8 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), topn(100), local merge sort
   9 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  10 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(100), offset(nil), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  10 - output([t1.c2]), filter(nil), limit(100), offset(nil)
-  11 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
-  12 - output([t1.c2]), filter(nil), dop=1
-  13 - output([t1.c2]), filter(nil), limit(100), offset(nil)
-  14 - output([t1.c2]), filter(nil), 
+  11 - output([t1.c2]), filter(nil), limit(100), offset(nil)
+  12 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
+  13 - output([t1.c2]), filter(nil), dop=1
+  14 - output([t1.c2]), filter(nil), limit(100), offset(nil)
+  15 - output([t1.c2]), filter(nil), 
       distinct([t1.c2])
-  15 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), Local Order
-  16 - (#keys=1, [t1.c2]), output([t1.c2]), filter(nil), dop=1
-  17 - output([t1.c2]), filter(nil), 
-      force partition granule, asc.
+  16 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), Local Order
+  17 - (#keys=1, [t1.c2]), output([t1.c2]), filter(nil), dop=1
   18 - output([t1.c2]), filter(nil), 
-      distinct([t1.c2])
+      force partition granule, asc.
   19 - output([t1.c2]), filter(nil), 
+      distinct([t1.c2])
+  20 - output([t1.c2]), filter(nil), 
       access([t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c2], [t1.c1]), range(MIN,MIN ; MAX,MAX)always true
-  20 - output([t2.c2]), filter(nil), limit(100), offset(nil)
-  21 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
-  22 - output([t2.c2]), filter(nil), dop=1
-  23 - output([t2.c2]), filter(nil), limit(100), offset(nil)
-  24 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(100)
-  25 - output([t2.c2]), filter(nil), 
+  21 - output([t2.c2]), filter(nil), limit(100), offset(nil)
+  22 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC])
+  23 - output([t2.c2]), filter(nil), dop=1
+  24 - output([t2.c2]), filter(nil), limit(100), offset(nil)
+  25 - output([t2.c2]), filter(nil), sort_keys([t2.c2, ASC]), topn(100)
+  26 - output([t2.c2]), filter(nil), 
       distinct([t2.c2])
-  26 - output([t2.c2]), filter(nil)
-  27 - (#keys=1, [t2.c2]), output([t2.c2]), filter(nil), dop=1
-  28 - output([t2.c2]), filter(nil), 
-      distinct([t2.c2])
+  27 - output([t2.c2]), filter(nil)
+  28 - (#keys=1, [t2.c2]), output([t2.c2]), filter(nil), dop=1
   29 - output([t2.c2]), filter(nil), 
-      force partition granule, asc.
+      distinct([t2.c2])
   30 - output([t2.c2]), filter(nil), 
+      force partition granule, asc.
+  31 - output([t2.c2]), filter(nil), 
       access([t2.c2]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -4048,24 +4082,26 @@ Outputs & filters:
 
 SQL: select distinct 1, 2 from t1; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |1        |37  |
-|1 | PX COORDINATOR         |        |1        |36  |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|1        |36  |
-|3 |   PX PARTITION ITERATOR|        |1        |36  |
-|4 |    TABLE SCAN          |t1      |1        |36  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |1        |37  |
+|1 | PX COORDINATOR          |        |1        |37  |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|1        |37  |
+|3 |   LIMIT                 |        |1        |37  |
+|4 |    PX PARTITION ITERATOR|        |1        |36  |
+|5 |     TABLE SCAN          |t1      |1        |36  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([?], [?]), filter(nil), limit(1), offset(nil)
   1 - output([1]), filter(nil)
   2 - output([1]), filter(nil), dop=1
-  3 - output([1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([1]), filter(nil), limit(1), offset(nil)
   4 - output([1]), filter(nil), 
+      force partition granule, asc.
+  5 - output([1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -4464,7 +4500,7 @@ SQL: select * from t5 where c2 = 5 and c3 = 7;
 Outputs & filters: 
 -------------------------------------
   0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
-  1 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
+  1 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
   2 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p2), 
       is_index_back=false, 
@@ -4488,7 +4524,7 @@ SQL: select * from t5 where c2 = 6 and c3 = 7;
 Outputs & filters: 
 -------------------------------------
   0 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
-  1 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
+  1 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil)
   2 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
       access([t5.c2], [t5.c3], [t5.c1]), partitions(p2), 
       is_index_back=false, 
@@ -5763,24 +5799,26 @@ Outputs & filters:
 
 SQL: select @@sql_mode, c1 from t1 limit 1; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |1        |37  |
-|1 | PX COORDINATOR         |        |1        |36  |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|1        |36  |
-|3 |   PX PARTITION ITERATOR|        |1        |36  |
-|4 |    TABLE SCAN          |t1      |1        |36  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |1        |37  |
+|1 | PX COORDINATOR          |        |1        |37  |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|1        |37  |
+|3 |   LIMIT                 |        |1        |37  |
+|4 |    PX PARTITION ITERATOR|        |1        |36  |
+|5 |     TABLE SCAN          |t1      |1        |36  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([?], [t1.c1]), filter(nil), limit(1), offset(nil)
   1 - output([t1.c1]), filter(nil)
   2 - output([t1.c1]), filter(nil), dop=1
-  3 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   4 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  5 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -6610,20 +6648,21 @@ Outputs & filters:
 
 SQL: select * from t1 where exists (select * from t2 limit 0); 
 
-======================================================
-|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
-------------------------------------------------------
-|0 |SUBPLAN FILTER           |        |250      |458 |
-|1 | PX COORDINATOR          |        |500      |389 |
-|2 |  EXCHANGE OUT DISTR     |:EX10000|500      |342 |
-|3 |   PX PARTITION ITERATOR |        |500      |342 |
-|4 |    TABLE SCAN           |t1      |500      |342 |
-|5 | LIMIT                   |        |0        |0   |
-|6 |  PX COORDINATOR         |        |0        |0   |
-|7 |   EXCHANGE OUT DISTR    |:EX20000|0        |0   |
-|8 |    PX PARTITION ITERATOR|        |0        |0   |
-|9 |     TABLE SCAN          |t2      |0        |0   |
-======================================================
+=======================================================
+|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
+-------------------------------------------------------
+|0 |SUBPLAN FILTER            |        |250      |458 |
+|1 | PX COORDINATOR           |        |500      |389 |
+|2 |  EXCHANGE OUT DISTR      |:EX10000|500      |342 |
+|3 |   PX PARTITION ITERATOR  |        |500      |342 |
+|4 |    TABLE SCAN            |t1      |500      |342 |
+|5 | LIMIT                    |        |0        |0   |
+|6 |  PX COORDINATOR          |        |0        |0   |
+|7 |   EXCHANGE OUT DISTR     |:EX20000|0        |0   |
+|8 |    LIMIT                 |        |0        |0   |
+|9 |     PX PARTITION ITERATOR|        |0        |0   |
+|10|      TABLE SCAN          |t2      |0        |0   |
+=======================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -6640,9 +6679,10 @@ Outputs & filters:
   5 - output([1]), filter(nil), limit(0), offset(nil)
   6 - output([1]), filter(nil)
   7 - output([1]), filter(nil), dop=1
-  8 - output([1]), filter(nil), 
-      force partition granule, asc.
+  8 - output([1]), filter(nil), limit(0), offset(nil)
   9 - output([1]), filter(nil), 
+      force partition granule, asc.
+  10 - output([1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       limit(0), offset(nil), 
       is_index_back=false, 
@@ -6945,11 +6985,12 @@ SQL: select * from t1 order by c1 limit 2;
 |ID|OPERATOR                   |NAME    |EST. ROWS|COST|
 --------------------------------------------------------
 |0 |LIMIT                      |        |2        |39  |
-|1 | PX COORDINATOR MERGE SORT |        |2        |38  |
+|1 | PX COORDINATOR MERGE SORT |        |2        |39  |
 |2 |  EXCHANGE OUT DISTR       |:EX10000|2        |38  |
-|3 |   SORT                    |        |2        |38  |
-|4 |    PX PARTITION ITERATOR  |        |2        |37  |
-|5 |     TABLE SCAN            |t1      |2        |37  |
+|3 |   LIMIT                   |        |2        |38  |
+|4 |    TOP-N SORT             |        |2        |38  |
+|5 |     PX PARTITION ITERATOR |        |2        |37  |
+|6 |      TABLE SCAN           |t1      |2        |37  |
 ========================================================
 
 Outputs & filters: 
@@ -6957,10 +6998,11 @@ Outputs & filters:
   0 - output([t1.c1], [t1.c2]), filter(nil), limit(2), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(2), offset(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), topn(2), local merge sort
   5 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(2), offset(nil), 
       is_index_back=false, 
@@ -6976,11 +7018,12 @@ SQL: select * from t1 order by c2 limit 2;
 |ID|OPERATOR                   |NAME         |EST. ROWS|COST|
 -------------------------------------------------------------
 |0 |LIMIT                      |             |2        |39  |
-|1 | PX COORDINATOR MERGE SORT |             |2        |38  |
+|1 | PX COORDINATOR MERGE SORT |             |2        |39  |
 |2 |  EXCHANGE OUT DISTR       |:EX10000     |2        |38  |
-|3 |   SORT                    |             |2        |38  |
-|4 |    PX PARTITION ITERATOR  |             |2        |37  |
-|5 |     TABLE SCAN            |t1(idx_t1_c2)|2        |37  |
+|3 |   LIMIT                   |             |2        |38  |
+|4 |    TOP-N SORT             |             |2        |38  |
+|5 |     PX PARTITION ITERATOR |             |2        |37  |
+|6 |      TABLE SCAN           |t1(idx_t1_c2)|2        |37  |
 =============================================================
 
 Outputs & filters: 
@@ -6988,10 +7031,11 @@ Outputs & filters:
   0 - output([t1.c1], [t1.c2]), filter(nil), limit(2), offset(nil)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  4 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1], [t1.c2]), filter(nil), limit(2), offset(nil)
+  4 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(2), local merge sort
   5 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(2), offset(nil), 
       is_index_back=false, 
@@ -7007,11 +7051,12 @@ SQL: select * from t2 order by c1 limit 2;
 |ID|OPERATOR                   |NAME    |EST. ROWS|COST|
 --------------------------------------------------------
 |0 |LIMIT                      |        |2        |41  |
-|1 | PX COORDINATOR MERGE SORT |        |2        |40  |
+|1 | PX COORDINATOR MERGE SORT |        |2        |41  |
 |2 |  EXCHANGE OUT DISTR       |:EX10000|2        |40  |
-|3 |   SORT                    |        |2        |40  |
-|4 |    PX PARTITION ITERATOR  |        |2        |37  |
-|5 |     TABLE SCAN            |t2      |2        |37  |
+|3 |   LIMIT                   |        |2        |40  |
+|4 |    TOP-N SORT             |        |2        |40  |
+|5 |     PX PARTITION ITERATOR |        |2        |37  |
+|6 |      TABLE SCAN           |t2      |2        |37  |
 ========================================================
 
 Outputs & filters: 
@@ -7019,10 +7064,11 @@ Outputs & filters:
   0 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), limit(2), offset(nil)
   1 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), sort_keys([t2.c1, ASC])
   2 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), dop=1
-  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), sort_keys([t2.c1, ASC]), local merge sort
-  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), limit(2), offset(nil)
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), sort_keys([t2.c1, ASC]), topn(2), local merge sort
   5 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p[0-2]), 
       limit(2), offset(nil), 
       is_index_back=false, 
@@ -7359,24 +7405,26 @@ Outputs & filters:
 
 SQL: select c1 from (select c1, c2 from t1 limit 1) t; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |1        |37  |
-|1 | PX COORDINATOR         |        |1        |36  |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|1        |36  |
-|3 |   PX PARTITION ITERATOR|        |1        |36  |
-|4 |    TABLE SCAN          |t1      |1        |36  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |1        |37  |
+|1 | PX COORDINATOR          |        |1        |37  |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|1        |37  |
+|3 |   LIMIT                 |        |1        |37  |
+|4 |    PX PARTITION ITERATOR|        |1        |36  |
+|5 |     TABLE SCAN          |t1      |1        |36  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   1 - output([t1.c1]), filter(nil)
   2 - output([t1.c1]), filter(nil), dop=1
-  3 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   4 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  5 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -8500,7 +8548,7 @@ SQL: select * from t1 X, t1 Y where X.c1 = Y.c1 and X.c1 = 1 and Y.c1 = 1;
 Outputs & filters: 
 -------------------------------------
   0 - output([X.c1], [X.c2], [X.c1], [X.c2]), filter(nil)
-  1 - output([X.c1], [X.c2]), filter(nil)
+  1 - output([X.c1], [X.c2], [X.c1], [X.c2]), filter(nil)
   2 - output([X.c1], [X.c2]), filter(nil), 
       access([X.c1], [X.c2]), partitions(p1), 
       is_index_back=false, 
@@ -9053,18 +9101,19 @@ SQL: SELECT (select max(t1.c1) from t1) as field from t1 group by field;
 |0 |HASH GROUP BY                   |           |1        |880 |
 |1 | NESTED-LOOP JOIN CARTESIAN     |           |500      |715 |
 |2 |  SUBPLAN SCAN                  |VIEW4      |1        |38  |
-|3 |   SCALAR GROUP BY              |           |1        |37  |
+|3 |   SCALAR GROUP BY              |           |1        |38  |
 |4 |    SUBPLAN SCAN                |VIEW5      |1        |37  |
 |5 |     LIMIT                      |           |1        |37  |
 |6 |      PX COORDINATOR MERGE SORT |           |1        |37  |
 |7 |       EXCHANGE OUT DISTR       |:EX10000   |1        |37  |
-|8 |        SORT                    |           |1        |37  |
-|9 |         PX PARTITION ITERATOR  |           |1        |36  |
-|10|          TABLE SCAN            |t1(Reverse)|1        |36  |
-|11|  PX COORDINATOR                |           |500      |354 |
-|12|   EXCHANGE OUT DISTR           |:EX20000   |500      |331 |
-|13|    PX PARTITION ITERATOR       |           |500      |331 |
-|14|     TABLE SCAN                 |t1         |500      |331 |
+|8 |        LIMIT                   |           |1        |37  |
+|9 |         TOP-N SORT             |           |1        |37  |
+|10|          PX PARTITION ITERATOR |           |1        |36  |
+|11|           TABLE SCAN           |t1(Reverse)|1        |36  |
+|12|  PX COORDINATOR                |           |500      |354 |
+|13|   EXCHANGE OUT DISTR           |:EX20000   |500      |331 |
+|14|    PX PARTITION ITERATOR       |           |500      |331 |
+|15|     TABLE SCAN                 |t1         |500      |331 |
 ================================================================
 
 Outputs & filters: 
@@ -9082,19 +9131,20 @@ Outputs & filters:
   5 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   6 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC])
   7 - output([t1.c1]), filter(nil), dop=1
-  8 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), local merge sort
-  9 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  8 - output([t1.c1]), filter(nil), limit(1), offset(nil)
+  9 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), topn(1), local merge sort
   10 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  11 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  11 - output([1]), filter(nil)
-  12 - output([1]), filter(nil), dop=1
-  13 - output([1]), filter(nil), 
-      force partition granule, asc.
+  12 - output([1]), filter(nil)
+  13 - output([1]), filter(nil), dop=1
   14 - output([1]), filter(nil), 
+      force partition granule, asc.
+  15 - output([1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -9823,7 +9873,7 @@ SQL: select * from t14 partition(p1) where (c1, c2) =(1, 2) or (c1, c2) = (2, 3)
 Outputs & filters: 
 -------------------------------------
   0 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
-  1 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil)
+  1 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
   2 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil), 
       access([t14.c3], [t14.c1], [t14.c2]), partitions(p1), 
       is_index_back=false, 
@@ -9847,7 +9897,7 @@ SQL: select/*+index(t14 primary)*/* from t14  partition(p1) where (c1, c2) =(1, 
 Outputs & filters: 
 -------------------------------------
   0 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
-  1 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil)
+  1 - output([t14.c1], [t14.c2], [t14.c3]), filter(nil)
   2 - output([t14.c3], [t14.c1], [t14.c2]), filter(nil), 
       access([t14.c3], [t14.c1], [t14.c2]), partitions(p1), 
       is_index_back=false, 
@@ -10053,20 +10103,21 @@ Outputs & filters:
 
 SQL: select c1 from t1 where (1, 2) in (select distinct t1.c1, t1.c2 from t2 where t1.c1); 
 
-=======================================================
-|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
--------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN|        |1        |53  |
-|1 | PX COORDINATOR           |        |1        |53  |
-|2 |  EXCHANGE OUT DISTR      |:EX10000|1        |53  |
-|3 |   TABLE GET              |t1      |1        |53  |
-|4 | SUBPLAN SCAN             |VIEW2   |1        |37  |
-|5 |  LIMIT                   |        |1        |37  |
-|6 |   PX COORDINATOR         |        |1        |36  |
-|7 |    EXCHANGE OUT DISTR    |:EX20000|1        |36  |
-|8 |     PX PARTITION ITERATOR|        |1        |36  |
-|9 |      TABLE SCAN          |t2      |1        |36  |
-=======================================================
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN |        |1        |53  |
+|1 | PX COORDINATOR            |        |1        |53  |
+|2 |  EXCHANGE OUT DISTR       |:EX10000|1        |53  |
+|3 |   TABLE GET               |t1      |1        |53  |
+|4 | SUBPLAN SCAN              |VIEW2   |1        |37  |
+|5 |  LIMIT                    |        |1        |37  |
+|6 |   PX COORDINATOR          |        |1        |37  |
+|7 |    EXCHANGE OUT DISTR     |:EX20000|1        |37  |
+|8 |     LIMIT                 |        |1        |37  |
+|9 |      PX PARTITION ITERATOR|        |1        |36  |
+|10|       TABLE SCAN          |t2      |1        |36  |
+========================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -10084,9 +10135,10 @@ Outputs & filters:
   5 - output([1]), filter(nil), limit(1), offset(nil)
   6 - output([1]), filter(nil)
   7 - output([1]), filter(nil), dop=1
-  8 - output([1]), filter(nil), 
-      force partition granule, asc.
+  8 - output([1]), filter(nil), limit(1), offset(nil)
   9 - output([1]), filter(nil), 
+      force partition granule, asc.
+  10 - output([1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -10098,22 +10150,23 @@ Outputs & filters:
 
 SQL: select c2 from t1 where exists (select * from t2 where t1.c1 and t1.c2 limit 1); 
 
-========================================================
-|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
---------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |        |485      |850 |
-|1 | PX COORDINATOR            |        |485      |471 |
-|2 |  EXCHANGE OUT DISTR       |:EX10000|485      |426 |
-|3 |   PX PARTITION ITERATOR   |        |485      |426 |
-|4 |    TABLE SCAN             |t1      |485      |426 |
-|5 | MATERIAL                  |        |1        |37  |
-|6 |  SUBPLAN SCAN             |VIEW2   |1        |37  |
-|7 |   LIMIT                   |        |1        |37  |
-|8 |    PX COORDINATOR         |        |1        |36  |
-|9 |     EXCHANGE OUT DISTR    |:EX20000|1        |36  |
-|10|      PX PARTITION ITERATOR|        |1        |36  |
-|11|       TABLE SCAN          |t2      |1        |36  |
-========================================================
+=========================================================
+|ID|OPERATOR                    |NAME    |EST. ROWS|COST|
+---------------------------------------------------------
+|0 |NESTED-LOOP JOIN CARTESIAN  |        |485      |850 |
+|1 | PX COORDINATOR             |        |485      |471 |
+|2 |  EXCHANGE OUT DISTR        |:EX10000|485      |426 |
+|3 |   PX PARTITION ITERATOR    |        |485      |426 |
+|4 |    TABLE SCAN              |t1      |485      |426 |
+|5 | MATERIAL                   |        |1        |37  |
+|6 |  SUBPLAN SCAN              |VIEW2   |1        |37  |
+|7 |   LIMIT                    |        |1        |37  |
+|8 |    PX COORDINATOR          |        |1        |37  |
+|9 |     EXCHANGE OUT DISTR     |:EX20000|1        |37  |
+|10|      LIMIT                 |        |1        |37  |
+|11|       PX PARTITION ITERATOR|        |1        |36  |
+|12|        TABLE SCAN          |t2      |1        |36  |
+=========================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -10133,9 +10186,10 @@ Outputs & filters:
   7 - output([1]), filter(nil), limit(1), offset(nil)
   8 - output([1]), filter(nil)
   9 - output([1]), filter(nil), dop=1
-  10 - output([1]), filter(nil), 
-      force partition granule, asc.
+  10 - output([1]), filter(nil), limit(1), offset(nil)
   11 - output([1]), filter(nil), 
+      force partition granule, asc.
+  12 - output([1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -10563,26 +10617,26 @@ SQL: select * from t1, t2 where t1.c1 > any(select t3.c2 from t2,t3 where t2.c1 
 =========================================================================
 |ID|OPERATOR                            |NAME         |EST. ROWS|COST   |
 -------------------------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN          |             |50000    |2913831|
+|0 |NESTED-LOOP JOIN CARTESIAN          |             |50000    |2913872|
 |1 | PX COORDINATOR                     |             |300      |290    |
 |2 |  EXCHANGE OUT DISTR                |:EX10000     |300      |205    |
 |3 |   PX PARTITION ITERATOR            |             |300      |205    |
 |4 |    TABLE SCAN                      |t2           |300      |205    |
-|5 | MATERIAL                           |             |167      |2877637|
-|6 |  NESTED-LOOP SEMI JOIN             |             |167      |2877576|
+|5 | MATERIAL                           |             |167      |2877679|
+|6 |  NESTED-LOOP SEMI JOIN             |             |167      |2877617|
 |7 |   PX COORDINATOR                   |             |500      |389    |
 |8 |    EXCHANGE OUT DISTR              |:EX20000     |500      |342    |
 |9 |     PX PARTITION ITERATOR          |             |500      |342    |
 |10|      TABLE SCAN                    |t1           |500      |342    |
-|11|   MATERIAL                         |             |20000    |57043  |
-|12|    SUBPLAN SCAN                    |VIEW2        |20000    |53368  |
-|13|     NESTED-LOOP JOIN CARTESIAN     |             |20000    |50607  |
+|11|   MATERIAL                         |             |20000    |57084  |
+|12|    SUBPLAN SCAN                    |VIEW2        |20000    |53409  |
+|13|     NESTED-LOOP JOIN CARTESIAN     |             |20000    |50649  |
 |14|      PX COORDINATOR                |             |200      |163    |
 |15|       EXCHANGE OUT DISTR           |:EX30000     |200      |144    |
 |16|        PX PARTITION ITERATOR       |             |200      |144    |
 |17|         TABLE SCAN                 |t3           |200      |144    |
-|18|      MATERIAL                      |             |100      |36292  |
-|19|       NESTED-LOOP SEMI JOIN        |             |100      |36273  |
+|18|      MATERIAL                      |             |100      |36333  |
+|19|       NESTED-LOOP SEMI JOIN        |             |100      |36315  |
 |20|        PX COORDINATOR              |             |300      |206    |
 |21|         EXCHANGE OUT DISTR         |:EX40000     |300      |192    |
 |22|          PX PARTITION ITERATOR     |             |300      |192    |
@@ -10597,10 +10651,11 @@ SQL: select * from t1, t2 where t1.c1 > any(select t3.c2 from t2,t3 where t2.c1 
 |31|           MATERIAL                 |             |34       |48     |
 |32|            TABLE SCAN              |t4           |34       |42     |
 |33|          LIMIT                     |             |1        |37     |
-|34|           PX COORDINATOR           |             |1        |36     |
-|35|            EXCHANGE OUT DISTR      |:EX60000     |1        |36     |
-|36|             PX PARTITION ITERATOR  |             |1        |36     |
-|37|              TABLE SCAN            |t2           |1        |36     |
+|34|           PX COORDINATOR           |             |1        |37     |
+|35|            EXCHANGE OUT DISTR      |:EX60000     |1        |37     |
+|36|             LIMIT                  |             |1        |37     |
+|37|              PX PARTITION ITERATOR |             |1        |36     |
+|38|               TABLE SCAN           |t2           |1        |36     |
 =========================================================================
 
 Outputs & filters: 
@@ -10673,9 +10728,10 @@ Outputs & filters:
   33 - output([1]), filter(nil), limit(1), offset(nil)
   34 - output([1]), filter(nil)
   35 - output([1]), filter(nil), dop=1
-  36 - output([1]), filter(nil), 
-      force partition granule, asc.
+  36 - output([1]), filter(nil), limit(1), offset(nil)
   37 - output([1]), filter(nil), 
+      force partition granule, asc.
+  38 - output([1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -13437,17 +13493,18 @@ Outputs & filters:
 
 SQL: select * from (select * from t1 where c1 > 0 limit 1) as v order by v.c2; 
 
-=======================================================
-|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
--------------------------------------------------------
-|0 |SORT                      |        |1        |38  |
-|1 | SUBPLAN SCAN             |v       |1        |37  |
-|2 |  LIMIT                   |        |1        |37  |
-|3 |   PX COORDINATOR         |        |1        |37  |
-|4 |    EXCHANGE OUT DISTR    |:EX10000|1        |36  |
-|5 |     PX PARTITION ITERATOR|        |1        |36  |
-|6 |      TABLE SCAN          |t1      |1        |36  |
-=======================================================
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |SORT                       |        |1        |38  |
+|1 | SUBPLAN SCAN              |v       |1        |37  |
+|2 |  LIMIT                    |        |1        |37  |
+|3 |   PX COORDINATOR          |        |1        |37  |
+|4 |    EXCHANGE OUT DISTR     |:EX10000|1        |37  |
+|5 |     LIMIT                 |        |1        |37  |
+|6 |      PX PARTITION ITERATOR|        |1        |36  |
+|7 |       TABLE SCAN          |t1      |1        |36  |
+========================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -13457,9 +13514,10 @@ Outputs & filters:
   2 - output([t1.c1], [t1.c2]), filter(nil), limit(1), offset(nil)
   3 - output([t1.c1], [t1.c2]), filter(nil)
   4 - output([t1.c1], [t1.c2]), filter(nil), dop=1
-  5 - output([t1.c1], [t1.c2]), filter(nil), 
-      force partition granule, asc.
+  5 - output([t1.c1], [t1.c2]), filter(nil), limit(1), offset(nil)
   6 - output([t1.c1], [t1.c2]), filter(nil), 
+      force partition granule, asc.
+  7 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -13603,14 +13661,15 @@ SQL: select min(c1) from t1 having false;
 ==========================================================
 |ID|OPERATOR                     |NAME    |EST. ROWS|COST|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY              |        |0        |37  |
+|0 |SCALAR GROUP BY              |        |0        |38  |
 |1 | SUBPLAN SCAN                |VIEW1   |1        |37  |
 |2 |  LIMIT                      |        |1        |37  |
 |3 |   PX COORDINATOR MERGE SORT |        |1        |37  |
 |4 |    EXCHANGE OUT DISTR       |:EX10000|1        |37  |
-|5 |     SORT                    |        |1        |37  |
-|6 |      PX PARTITION ITERATOR  |        |1        |36  |
-|7 |       TABLE SCAN            |t1      |1        |36  |
+|5 |     LIMIT                   |        |1        |37  |
+|6 |      TOP-N SORT             |        |1        |37  |
+|7 |       PX PARTITION ITERATOR |        |1        |36  |
+|8 |        TABLE SCAN           |t1      |1        |36  |
 ==========================================================
 
 Outputs & filters: 
@@ -13622,10 +13681,11 @@ Outputs & filters:
   2 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   3 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
   4 - output([t1.c1]), filter(nil), dop=1
-  5 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  6 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  5 - output([t1.c1]), filter(nil), limit(1), offset(nil)
+  6 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), topn(1), local merge sort
   7 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  8 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -13988,28 +14048,29 @@ Outputs & filters:
 
 SQL: select c1 from t1 where c1 in (select c1 from t2 where c2 >= some(select c1 from t3 where t1.c2=t3.c1)); 
 
-============================================================
-|ID|OPERATOR                     |NAME    |EST. ROWS|COST  |
-------------------------------------------------------------
-|0 |SUBPLAN FILTER               |        |250      |197449|
-|1 | PX COORDINATOR              |        |500      |389   |
-|2 |  EXCHANGE OUT DISTR         |:EX10000|500      |342   |
-|3 |   PX PARTITION ITERATOR     |        |500      |342   |
-|4 |    TABLE SCAN               |t1      |500      |342   |
-|5 | NESTED-LOOP JOIN            |        |100      |381   |
-|6 |  SUBPLAN SCAN               |VIEW1   |1        |37    |
-|7 |   SCALAR GROUP BY           |        |1        |37    |
-|8 |    SUBPLAN SCAN             |VIEW2   |1        |37    |
-|9 |     LIMIT                   |        |1        |37    |
-|10|      PX COORDINATOR         |        |1        |36    |
-|11|       EXCHANGE OUT DISTR    |:EX20000|1        |36    |
-|12|        PX PARTITION ITERATOR|        |1        |36    |
-|13|         TABLE GET           |t3      |1        |36    |
-|14|  PX COORDINATOR             |        |300      |227   |
-|15|   EXCHANGE OUT DISTR        |:EX30000|300      |198   |
-|16|    PX PARTITION ITERATOR    |        |300      |198   |
-|17|     TABLE SCAN              |t2      |300      |198   |
-============================================================
+=============================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST  |
+-------------------------------------------------------------
+|0 |SUBPLAN FILTER                |        |250      |197518|
+|1 | PX COORDINATOR               |        |500      |389   |
+|2 |  EXCHANGE OUT DISTR          |:EX10000|500      |342   |
+|3 |   PX PARTITION ITERATOR      |        |500      |342   |
+|4 |    TABLE SCAN                |t1      |500      |342   |
+|5 | NESTED-LOOP JOIN             |        |100      |381   |
+|6 |  SUBPLAN SCAN                |VIEW1   |1        |37    |
+|7 |   SCALAR GROUP BY            |        |1        |37    |
+|8 |    SUBPLAN SCAN              |VIEW2   |1        |37    |
+|9 |     LIMIT                    |        |1        |37    |
+|10|      PX COORDINATOR          |        |1        |37    |
+|11|       EXCHANGE OUT DISTR     |:EX20000|1        |37    |
+|12|        LIMIT                 |        |1        |37    |
+|13|         PX PARTITION ITERATOR|        |1        |36    |
+|14|          TABLE GET           |t3      |1        |36    |
+|15|  PX COORDINATOR              |        |300      |227   |
+|16|   EXCHANGE OUT DISTR         |:EX30000|300      |198   |
+|17|    PX PARTITION ITERATOR     |        |300      |198   |
+|18|     TABLE SCAN               |t2      |300      |198   |
+=============================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -14034,19 +14095,20 @@ Outputs & filters:
   9 - output([t3.c1]), filter(nil), limit(1), offset(nil)
   10 - output([t3.c1]), filter(nil)
   11 - output([t3.c1]), filter(nil), dop=1
-  12 - output([t3.c1]), filter(nil), 
-      force partition granule, asc.
+  12 - output([t3.c1]), filter(nil), limit(1), offset(nil)
   13 - output([t3.c1]), filter(nil), 
+      force partition granule, asc.
+  14 - output([t3.c1]), filter(nil), 
       access([t3.c1]), partitions(p[0-1]), 
       limit(1), offset(nil), 
       is_index_back=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true, 
       range_cond([? = t3.c1])
-  14 - output([t2.c1], [t2.c2]), filter(nil)
-  15 - output([t2.c1], [t2.c2]), filter(nil), dop=1
-  16 - output([t2.c1], [t2.c2]), filter(nil), 
-      force partition granule, asc.
+  15 - output([t2.c1], [t2.c2]), filter(nil)
+  16 - output([t2.c1], [t2.c2]), filter(nil), dop=1
   17 - output([t2.c1], [t2.c2]), filter(nil), 
+      force partition granule, asc.
+  18 - output([t2.c1], [t2.c2]), filter(nil), 
       access([t2.c1], [t2.c2]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -16225,31 +16287,28 @@ Outputs & filters:
 
 SQL: select * from t1 left join t2 on (1 = 0 or t1.c1 = t2.c1) left join t3 on (1=2 and t2.c1 = t3.c1); 
 
-==============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST |
---------------------------------------------------------------
-|0 |NESTED-LOOP OUTER JOIN          |        |500      |35573|
-|1 | PX COORDINATOR                 |        |500      |1725 |
-|2 |  EXCHANGE OUT DISTR            |:EX10001|500      |1536 |
-|3 |   MERGE OUTER JOIN             |        |500      |1536 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |500      |389  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|500      |342  |
-|6 |      PX PARTITION ITERATOR     |        |500      |342  |
-|7 |       TABLE SCAN               |t1      |500      |342  |
-|8 |    SORT                        |        |300      |859  |
-|9 |     PX PARTITION ITERATOR      |        |300      |205  |
-|10|      TABLE SCAN                |t2      |300      |205  |
-|11| MATERIAL                       |        |200      |426  |
-|12|  PX COORDINATOR                |        |200      |205  |
-|13|   EXCHANGE OUT DISTR           |:EX20000|200      |149  |
-|14|    PX PARTITION ITERATOR       |        |200      |149  |
-|15|     TABLE SCAN                 |t3      |200      |149  |
-==============================================================
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |NESTED-LOOP OUTER JOIN CARTESIAN|        |500      |1825|
+|1 | PX COORDINATOR                 |        |500      |1725|
+|2 |  EXCHANGE OUT DISTR            |:EX10001|500      |1536|
+|3 |   MERGE OUTER JOIN             |        |500      |1536|
+|4 |    EXCHANGE IN MERGE SORT DISTR|        |500      |389 |
+|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|500      |342 |
+|6 |      PX PARTITION ITERATOR     |        |500      |342 |
+|7 |       TABLE SCAN               |t1      |500      |342 |
+|8 |    SORT                        |        |300      |859 |
+|9 |     PX PARTITION ITERATOR      |        |300      |205 |
+|10|      TABLE SCAN                |t2      |300      |205 |
+|11| MATERIAL                       |        |0        |101 |
+|12|  TABLE SCAN                    |t3      |0        |101 |
+=============================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3], [t3.c1], [t3.c2], [t3.c3]), filter(nil), 
-      conds([0]), nl_params_(nil), batch_join=false
+      conds(nil), nl_params_(nil), batch_join=false
   1 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil)
   2 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), dop=1
   3 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), 
@@ -16270,14 +16329,10 @@ Outputs & filters:
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
   11 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil)
-  12 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil)
-  13 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), dop=1
-  14 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
-      force partition granule, asc.
-  15 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
-      access([t3.c1], [t3.c2], [t3.c3]), partitions(p[0-1]), 
+  12 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), startup_filter([0]), 
+      access([t3.c1], [t3.c2], [t3.c3]), partitions(p0), 
       is_index_back=false, 
-      range_key([t3.c1]), range(MIN ; MAX)always true
+      range_key([t3.c1]), range(MAX ; MIN)always false
 
 *************** Case 472(end)  ************** 
 
@@ -19641,17 +19696,18 @@ Outputs & filters:
 
 SQL: select min(1) from t1; 
 
-=======================================================
-|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
--------------------------------------------------------
-|0 |SCALAR GROUP BY           |        |1        |37  |
-|1 | SUBPLAN SCAN             |VIEW1   |1        |37  |
-|2 |  LIMIT                   |        |1        |37  |
-|3 |   PX COORDINATOR         |        |1        |36  |
-|4 |    EXCHANGE OUT DISTR    |:EX10000|1        |36  |
-|5 |     PX PARTITION ITERATOR|        |1        |36  |
-|6 |      TABLE SCAN          |t1      |1        |36  |
-=======================================================
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |SCALAR GROUP BY            |        |1        |37  |
+|1 | SUBPLAN SCAN              |VIEW1   |1        |37  |
+|2 |  LIMIT                    |        |1        |37  |
+|3 |   PX COORDINATOR          |        |1        |37  |
+|4 |    EXCHANGE OUT DISTR     |:EX10000|1        |37  |
+|5 |     LIMIT                 |        |1        |37  |
+|6 |      PX PARTITION ITERATOR|        |1        |36  |
+|7 |       TABLE SCAN          |t1      |1        |36  |
+========================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -19662,9 +19718,10 @@ Outputs & filters:
   2 - output([?]), filter(nil), limit(1), offset(nil)
   3 - output([1]), filter(nil)
   4 - output([1]), filter(nil), dop=1
-  5 - output([1]), filter(nil), 
-      force partition granule, asc.
+  5 - output([1]), filter(nil), limit(1), offset(nil)
   6 - output([1]), filter(nil), 
+      force partition granule, asc.
+  7 - output([1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -19676,17 +19733,18 @@ Outputs & filters:
 
 SQL: select max(1) from t1; 
 
-=======================================================
-|ID|OPERATOR                  |NAME    |EST. ROWS|COST|
--------------------------------------------------------
-|0 |SCALAR GROUP BY           |        |1        |37  |
-|1 | SUBPLAN SCAN             |VIEW1   |1        |37  |
-|2 |  LIMIT                   |        |1        |37  |
-|3 |   PX COORDINATOR         |        |1        |36  |
-|4 |    EXCHANGE OUT DISTR    |:EX10000|1        |36  |
-|5 |     PX PARTITION ITERATOR|        |1        |36  |
-|6 |      TABLE SCAN          |t1      |1        |36  |
-=======================================================
+========================================================
+|ID|OPERATOR                   |NAME    |EST. ROWS|COST|
+--------------------------------------------------------
+|0 |SCALAR GROUP BY            |        |1        |37  |
+|1 | SUBPLAN SCAN              |VIEW1   |1        |37  |
+|2 |  LIMIT                    |        |1        |37  |
+|3 |   PX COORDINATOR          |        |1        |37  |
+|4 |    EXCHANGE OUT DISTR     |:EX10000|1        |37  |
+|5 |     LIMIT                 |        |1        |37  |
+|6 |      PX PARTITION ITERATOR|        |1        |36  |
+|7 |       TABLE SCAN          |t1      |1        |36  |
+========================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -19697,9 +19755,10 @@ Outputs & filters:
   2 - output([?]), filter(nil), limit(1), offset(nil)
   3 - output([1]), filter(nil)
   4 - output([1]), filter(nil), dop=1
-  5 - output([1]), filter(nil), 
-      force partition granule, asc.
+  5 - output([1]), filter(nil), limit(1), offset(nil)
   6 - output([1]), filter(nil), 
+      force partition granule, asc.
+  7 - output([1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -23460,24 +23519,26 @@ Outputs & filters:
 
 SQL: select c1 from (select c1, c2 from t1 limit 1) ta group by ta.c1; 
 
-=====================================================
-|ID|OPERATOR                |NAME    |EST. ROWS|COST|
------------------------------------------------------
-|0 |LIMIT                   |        |1        |37  |
-|1 | PX COORDINATOR         |        |1        |36  |
-|2 |  EXCHANGE OUT DISTR    |:EX10000|1        |36  |
-|3 |   PX PARTITION ITERATOR|        |1        |36  |
-|4 |    TABLE SCAN          |t1      |1        |36  |
-=====================================================
+======================================================
+|ID|OPERATOR                 |NAME    |EST. ROWS|COST|
+------------------------------------------------------
+|0 |LIMIT                    |        |1        |37  |
+|1 | PX COORDINATOR          |        |1        |37  |
+|2 |  EXCHANGE OUT DISTR     |:EX10000|1        |37  |
+|3 |   LIMIT                 |        |1        |37  |
+|4 |    PX PARTITION ITERATOR|        |1        |36  |
+|5 |     TABLE SCAN          |t1      |1        |36  |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   1 - output([t1.c1]), filter(nil)
   2 - output([t1.c1]), filter(nil), dop=1
-  3 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   4 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  5 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -23675,9 +23736,10 @@ SQL: select * from (select c1 from t1 order by c1) ta limit 1;
 |0 |LIMIT                      |        |1        |37  |
 |1 | PX COORDINATOR MERGE SORT |        |1        |37  |
 |2 |  EXCHANGE OUT DISTR       |:EX10000|1        |37  |
-|3 |   SORT                    |        |1        |37  |
-|4 |    PX PARTITION ITERATOR  |        |1        |36  |
-|5 |     TABLE SCAN            |t1      |1        |36  |
+|3 |   LIMIT                   |        |1        |37  |
+|4 |    TOP-N SORT             |        |1        |37  |
+|5 |     PX PARTITION ITERATOR |        |1        |36  |
+|6 |      TABLE SCAN           |t1      |1        |36  |
 ========================================================
 
 Outputs & filters: 
@@ -23685,10 +23747,11 @@ Outputs & filters:
   0 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   1 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC])
   2 - output([t1.c1]), filter(nil), dop=1
-  3 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  4 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  3 - output([t1.c1]), filter(nil), limit(1), offset(nil)
+  4 - output([t1.c1]), filter(nil), sort_keys([t1.c1, ASC]), topn(1), local merge sort
   5 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  6 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -23940,14 +24003,15 @@ SQL: select count(1) from (select * from t1 order by c2 limit 10) t;
 ===============================================================
 |ID|OPERATOR                     |NAME         |EST. ROWS|COST|
 ---------------------------------------------------------------
-|0 |SCALAR GROUP BY              |             |1        |54  |
-|1 | SUBPLAN SCAN                |t            |10       |52  |
-|2 |  LIMIT                      |             |10       |50  |
-|3 |   PX COORDINATOR MERGE SORT |             |10       |49  |
-|4 |    EXCHANGE OUT DISTR       |:EX10000     |10       |48  |
-|5 |     SORT                    |             |10       |48  |
-|6 |      PX PARTITION ITERATOR  |             |10       |38  |
-|7 |       TABLE SCAN            |t1(idx_t1_c2)|10       |38  |
+|0 |SCALAR GROUP BY              |             |1        |55  |
+|1 | SUBPLAN SCAN                |t            |10       |53  |
+|2 |  LIMIT                      |             |10       |52  |
+|3 |   PX COORDINATOR MERGE SORT |             |10       |50  |
+|4 |    EXCHANGE OUT DISTR       |:EX10000     |10       |49  |
+|5 |     LIMIT                   |             |10       |49  |
+|6 |      TOP-N SORT             |             |10       |48  |
+|7 |       PX PARTITION ITERATOR |             |10       |38  |
+|8 |        TABLE SCAN           |t1(idx_t1_c2)|10       |38  |
 ===============================================================
 
 Outputs & filters: 
@@ -23959,10 +24023,11 @@ Outputs & filters:
   2 - output([1]), filter(nil), limit(10), offset(nil)
   3 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC])
   4 - output([t1.c2]), filter(nil), dop=1
-  5 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), local merge sort
-  6 - output([t1.c2]), filter(nil), 
-      force partition granule, asc.
+  5 - output([t1.c2]), filter(nil), limit(10), offset(nil)
+  6 - output([t1.c2]), filter(nil), sort_keys([t1.c2, ASC]), topn(10), local merge sort
   7 - output([t1.c2]), filter(nil), 
+      force partition granule, asc.
+  8 - output([t1.c2]), filter(nil), 
       access([t1.c2]), partitions(p[0-4]), 
       limit(10), offset(nil), 
       is_index_back=false, 
@@ -25551,30 +25616,31 @@ SQL: select count(t12.c1) from t1 t12,t2 t22 where t12.c1>SOME(select c3 from t1
 |ID|OPERATOR                              |NAME                 |EST. ROWS|COST|
 --------------------------------------------------------------------------------
 |0 |SCALAR GROUP BY                       |                     |1        |230 |
-|1 | NESTED-LOOP JOIN                     |                     |14       |227 |
+|1 | NESTED-LOOP JOIN                     |                     |14       |228 |
 |2 |  SUBPLAN SCAN                        |VIEW3                |1        |38  |
 |3 |   SCALAR GROUP BY                    |                     |1        |38  |
 |4 |    SUBPLAN SCAN                      |VIEW4                |1        |38  |
-|5 |     LIMIT                            |                     |1        |37  |
+|5 |     LIMIT                            |                     |1        |38  |
 |6 |      PX COORDINATOR MERGE SORT       |                     |1        |37  |
 |7 |       EXCHANGE OUT DISTR             |:EX10000             |1        |37  |
-|8 |        SORT                          |                     |1        |37  |
-|9 |         PX PARTITION ITERATOR        |                     |1        |36  |
-|10|          TABLE SCAN                  |t1(idx_t1_c2,Reverse)|1        |36  |
-|11|  PX COORDINATOR                      |                     |42       |174 |
-|12|   EXCHANGE OUT DISTR                 |:EX20002             |42       |154 |
-|13|    NESTED-LOOP JOIN                  |                     |42       |154 |
-|14|     EXCHANGE IN DISTR                |                     |1        |93  |
-|15|      EXCHANGE OUT DISTR (BC2HOST)    |:EX20001             |1        |93  |
-|16|       MATERIAL                       |                     |1        |93  |
-|17|        NESTED-LOOP JOIN              |                     |1        |92  |
-|18|         EXCHANGE IN DISTR            |                     |1        |90  |
-|19|          EXCHANGE OUT DISTR (BC2HOST)|:EX20000             |1        |90  |
-|20|           TABLE GET                  |t1                   |1        |90  |
-|21|         PX PARTITION ITERATOR        |                     |75       |109 |
-|22|          TABLE SCAN                  |t22                  |75       |109 |
-|23|     PX PARTITION ITERATOR            |                     |56       |46  |
-|24|      TABLE SCAN                      |t12                  |56       |46  |
+|8 |        LIMIT                         |                     |1        |37  |
+|9 |         TOP-N SORT                   |                     |1        |37  |
+|10|          PX PARTITION ITERATOR       |                     |1        |36  |
+|11|           TABLE SCAN                 |t1(idx_t1_c2,Reverse)|1        |36  |
+|12|  PX COORDINATOR                      |                     |42       |174 |
+|13|   EXCHANGE OUT DISTR                 |:EX20002             |42       |154 |
+|14|    NESTED-LOOP JOIN                  |                     |42       |154 |
+|15|     EXCHANGE IN DISTR                |                     |1        |93  |
+|16|      EXCHANGE OUT DISTR (BC2HOST)    |:EX20001             |1        |93  |
+|17|       MATERIAL                       |                     |1        |93  |
+|18|        NESTED-LOOP JOIN              |                     |1        |92  |
+|19|         EXCHANGE IN DISTR            |                     |1        |90  |
+|20|          EXCHANGE OUT DISTR (BC2HOST)|:EX20000             |1        |90  |
+|21|           TABLE GET                  |t1                   |1        |90  |
+|22|         PX PARTITION ITERATOR        |                     |75       |109 |
+|23|          TABLE SCAN                  |t22                  |75       |109 |
+|24|     PX PARTITION ITERATOR            |                     |56       |46  |
+|25|      TABLE SCAN                      |t12                  |56       |46  |
 ================================================================================
 
 Outputs & filters: 
@@ -25592,41 +25658,42 @@ Outputs & filters:
   5 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   6 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC])
   7 - output([t1.c1]), filter(nil), dop=1
-  8 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), local merge sort
-  9 - output([t1.c1]), filter(nil), 
-      force partition granule, asc.
+  8 - output([t1.c1]), filter(nil), limit(1), offset(nil)
+  9 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), topn(1), local merge sort
   10 - output([t1.c1]), filter(nil), 
+      force partition granule, asc.
+  11 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil), 
       is_index_back=false, 
       range_key([t1.c2], [t1.c1]), range(3,MIN ; 3,MAX), 
       range_cond([t1.c2 = ?], [t1.c2 < ?])
-  11 - output([t12.c1], [t12.c2]), filter(nil)
-  12 - output([t12.c1], [t12.c2]), filter(nil), dop=1
-  13 - output([t12.c1], [t12.c2]), filter(nil), 
+  12 - output([t12.c1], [t12.c2]), filter(nil)
+  13 - output([t12.c1], [t12.c2]), filter(nil), dop=1
+  14 - output([t12.c1], [t12.c2]), filter(nil), 
       conds(nil), nl_params_([t22.c3]), batch_join=false
-  14 - output([t22.c3]), filter(nil)
-  15 - output([t22.c3]), filter(nil), dop=1
-  16 - output([t22.c3]), filter(nil)
-  17 - output([t22.c3]), filter(nil), 
+  15 - output([t22.c3]), filter(nil)
+  16 - output([t22.c3]), filter(nil), dop=1
+  17 - output([t22.c3]), filter(nil)
+  18 - output([t22.c3]), filter(nil), 
       conds(nil), nl_params_([t1.c2]), batch_join=false
-  18 - output([t1.c2]), filter(nil)
-  19 - output([t1.c2]), filter(nil), is_single, dop=1
-  20 - output([t1.c2]), filter(nil), 
+  19 - output([t1.c2]), filter(nil)
+  20 - output([t1.c2]), filter(nil), is_single, dop=1
+  21 - output([t1.c2]), filter(nil), 
       access([t1.c2]), partitions(p0), 
       is_index_back=false, 
       range_key([t1.c1]), range(MAX ; MIN)always false, 
       range_cond([t1.c1 = ?], [t1.c1 = ?])
-  21 - output([t22.c3]), filter(nil), 
+  22 - output([t22.c3]), filter(nil), 
       access all, force partition granule, asc.
-  22 - output([t22.c3]), filter([t22.c2 >= ?]), 
+  23 - output([t22.c3]), filter([t22.c2 >= ?]), 
       access([t22.c3], [t22.c2]), partitions(p[0-2]), 
       is_index_back=false, filter_before_indexback[false], 
       range_key([t22.c1]), range(MIN ; MAX), 
       range_cond([? >= t22.c1])
-  23 - output([t12.c1], [t12.c2]), filter(nil), 
-      access all, force partition granule, asc.
   24 - output([t12.c1], [t12.c2]), filter(nil), 
+      access all, force partition granule, asc.
+  25 - output([t12.c1], [t12.c2]), filter(nil), 
       access([t12.c1], [t12.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t12.c1]), range(MIN ; MAX), 
@@ -26746,7 +26813,7 @@ SQL: select * from t1, t2 where t1.c1 > exists(select c1 from t2 where t2.c1 = t
 ===========================================================
 |ID|OPERATOR                   |NAME    |EST. ROWS|COST   |
 -----------------------------------------------------------
-|0 |SUBPLAN FILTER             |        |50000    |5563672|
+|0 |SUBPLAN FILTER             |        |50000    |5584376|
 |1 | NESTED-LOOP JOIN CARTESIAN|        |150000   |108575 |
 |2 |  PX COORDINATOR           |        |300      |290    |
 |3 |   EXCHANGE OUT DISTR      |:EX10000|300      |205    |
@@ -26758,10 +26825,11 @@ SQL: select * from t1, t2 where t1.c1 > exists(select c1 from t2 where t2.c1 = t
 |9 |     PX PARTITION ITERATOR |        |500      |342    |
 |10|      TABLE SCAN           |t1      |500      |342    |
 |11| LIMIT                     |        |1        |37     |
-|12|  PX COORDINATOR           |        |1        |36     |
-|13|   EXCHANGE OUT DISTR      |:EX30000|1        |36     |
-|14|    PX PARTITION ITERATOR  |        |1        |36     |
-|15|     TABLE GET             |t2      |1        |36     |
+|12|  PX COORDINATOR           |        |1        |37     |
+|13|   EXCHANGE OUT DISTR      |:EX30000|1        |37     |
+|14|    LIMIT                  |        |1        |37     |
+|15|     PX PARTITION ITERATOR |        |1        |36     |
+|16|      TABLE GET            |t2      |1        |36     |
 ===========================================================
 
 Outputs & filters: 
@@ -26790,9 +26858,10 @@ Outputs & filters:
   11 - output([1]), filter(nil), limit(1), offset(nil)
   12 - output([1]), filter(nil)
   13 - output([1]), filter(nil), dop=1
-  14 - output([1]), filter(nil), 
-      force partition granule, asc.
+  14 - output([1]), filter(nil), limit(1), offset(nil)
   15 - output([1]), filter(nil), 
+      force partition granule, asc.
+  16 - output([1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -26820,10 +26889,11 @@ SQL: select * from t1 where (select c1 from t2 limit 1)+1 in (select 2 from t3 w
 |9 |      PX PARTITION ITERATOR     |        |200      |140 |
 |10|       TABLE SCAN               |t3      |200      |140 |
 |11| LIMIT                          |        |1        |37  |
-|12|  PX COORDINATOR                |        |1        |36  |
-|13|   EXCHANGE OUT DISTR           |:EX20000|1        |36  |
-|14|    PX PARTITION ITERATOR       |        |1        |36  |
-|15|     TABLE SCAN                 |t2      |1        |36  |
+|12|  PX COORDINATOR                |        |1        |37  |
+|13|   EXCHANGE OUT DISTR           |:EX20000|1        |37  |
+|14|    LIMIT                       |        |1        |37  |
+|15|     PX PARTITION ITERATOR      |        |1        |36  |
+|16|      TABLE SCAN                |t2      |1        |36  |
 =============================================================
 
 Outputs & filters: 
@@ -26852,9 +26922,10 @@ Outputs & filters:
   11 - output([t2.c1]), filter(nil), limit(1), offset(nil)
   12 - output([t2.c1]), filter(nil)
   13 - output([t2.c1]), filter(nil), dop=1
-  14 - output([t2.c1]), filter(nil), 
-      force partition granule, asc.
+  14 - output([t2.c1]), filter(nil), limit(1), offset(nil)
   15 - output([t2.c1]), filter(nil), 
+      force partition granule, asc.
+  16 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil), 
       is_index_back=false, 
@@ -27036,7 +27107,7 @@ Outputs & filters:
       access([t3.c1], [t3.c3]), partitions(p[0-1]), 
       is_index_back=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true
-  15 - output([t2.c1], [t2.c2], [t2.c3], [t1.c1 + ?]), filter(nil), 
+  15 - output([t1.c1], [t2.c1], [t2.c2], [t2.c3], [t1.c1 + ?]), filter(nil), 
       conds([lnnvl(t1.c1 + ? = t2.c2)]), nl_params_(nil), batch_join=false
   16 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil)
   17 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), dop=1

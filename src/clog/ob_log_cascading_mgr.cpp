@@ -219,15 +219,6 @@ int ObLogCascadingMgr::set_parent_(const common::ObAddr& new_parent_addr, const 
         K(new_parent),
         K(cur_parent),
         K(leader));
-  } else if (STANDBY_LEADER == state_mgr_->get_role() && GCTX.is_sync_level_on_standby() && primary_leader.is_valid() &&
-             new_parent_addr != primary_leader) {
-    // in max protection mode, the parent of standby leader must be primary leader
-    CLOG_LOG(WARN,
-        "standby_leader is in max_protection mode, but new_parent is not primary_leader",
-        K_(partition_key),
-        K(new_parent),
-        K(cur_parent),
-        K(primary_leader));
   } else if (self_ == new_parent_addr) {
     // ignore self
   } else if (cur_parent == new_parent) {
@@ -241,8 +232,15 @@ int ObLogCascadingMgr::set_parent_(const common::ObAddr& new_parent_addr, const 
     prev_parent_ = parent_;
     parent_ = new_parent;
     if (partition_reach_time_interval(60 * 1000 * 1000, update_parent_warn_time_)) {
-      CLOG_LOG(
-          INFO, "update parent", K_(partition_key), K(cur_parent), K(new_parent), K(prev_parent_), K_(children_list));
+      CLOG_LOG(INFO,
+          "update parent",
+          K_(partition_key),
+          K(cur_parent),
+          K(new_parent),
+          K(prev_parent_),
+          K_(children_list),
+          K(leader),
+          K(primary_leader));
     }
   }
   if (parent_.get_server().is_valid()) {
@@ -376,7 +374,8 @@ int ObLogCascadingMgr::reject_server(
   return ret;
 }
 
-int ObLogCascadingMgr::process_reject_msg(const common::ObAddr& server, const int32_t msg_type)
+int ObLogCascadingMgr::process_reject_msg(
+    const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -434,6 +433,14 @@ int ObLogCascadingMgr::process_reject_msg(const common::ObAddr& server, const in
             K(server),
             "leader",
             state_mgr_->get_leader());
+      }
+    } else if (OB_REPLICA_MSG_TYPE_QUICK_REGISTER == msg_type) {
+      ObRegion self_region = DEFAULT_REGION_NAME;
+      if (OB_FAIL(get_server_region_(self_, self_region))) {
+        CLOG_LOG(WARN, "get_server_region_ failed", K_(partition_key), K(ret));
+      } else if (OB_FAIL(fetch_register_server(server, cluster_id, self_region, state_mgr_->get_idc(), true, false))) {
+        CLOG_LOG(WARN, "fetch_register_server failed", K(ret), K(partition_key_));
+      } else {
       }
     } else {
       // do nothing
@@ -561,13 +568,17 @@ int ObLogCascadingMgr::primary_process_protect_mode_switch()
     if (old_sync_child.is_valid() && OB_FAIL(try_add_child_unlock_(old_sync_child))) {
       CLOG_LOG(WARN, "try_add_child_unlock_ failed", K_(partition_key), K(ret), K(old_sync_child));
     }
+    // reset sync_standby_child_
     sync_standby_child_.reset();
   } else if (GCTX.need_sync_to_standby()) {
     // changed to sync mode(max protection/max availability), try to update sync child
     int64_t sync_cluster_id = OB_INVALID_CLUSTER_ID;
     ObAddr dst_standby_child;
-    if (OB_FAIL(get_sync_standby_cluster_id(sync_cluster_id)) || OB_INVALID_CLUSTER_ID == sync_cluster_id) {
+    if (OB_FAIL(get_sync_standby_cluster_id(sync_cluster_id))) {
       CLOG_LOG(WARN, "get_sync_standby_cluster_id failed", K_(partition_key), K(ret));
+    } else if (OB_INVALID_CLUSTER_ID == sync_cluster_id) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "sync_cluster_id returned by GCTX is invalid", K_(partition_key), K(sync_cluster_id), K(ret));
     } else if (has_async_standby_child_(sync_cluster_id, dst_standby_child)) {
       // if it is aysnc child, change it to sync child
       if (OB_FAIL(async_standby_children_.remove_server(dst_standby_child))) {
@@ -579,6 +590,8 @@ int ObLogCascadingMgr::primary_process_protect_mode_switch()
         CLOG_LOG(INFO, "update sync_standby_child_ success", K_(partition_key), K_(sync_standby_child));
       }
     } else {
+      // reset sync_standby_child_
+      sync_standby_child_.reset();
       // need get sync stadnby_leader from location cache, it may returns -4023, just ignore
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = leader_try_update_sync_standby_child_unlock_(true))) {

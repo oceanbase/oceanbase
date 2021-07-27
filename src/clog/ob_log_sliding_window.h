@@ -99,7 +99,6 @@ public:
   virtual void start_fetch_log_from_leader(bool& is_fetched) = 0;
   virtual int get_next_replay_log_timestamp(int64_t& next_replay_log_timestamp) const = 0;
   virtual uint64_t get_next_index_log_id() const = 0;
-  virtual int64_t get_next_index_log_ts() = 0;
   virtual int leader_active() = 0;
   virtual int leader_takeover() = 0;
   virtual int leader_revoke() = 0;
@@ -129,6 +128,7 @@ public:
   virtual int try_update_submit_timestamp(const int64_t base_ts) = 0;
   virtual int64_t get_last_submit_timestamp() const = 0;
   virtual uint64_t get_max_confirmed_log_id() const = 0;
+  virtual bool is_empty() const = 0;
 };
 
 class ObILogSWForMS {
@@ -151,7 +151,6 @@ public:
       const bool is_batch_commited) = 0;
   virtual int alloc_log_id(const int64_t base_timestamp, uint64_t& log_id, int64_t& submit_timestamp) = 0;
   virtual uint64_t get_next_index_log_id() const = 0;
-  virtual int64_t get_next_index_log_ts() = 0;
   virtual int do_fetch_log(const uint64_t start_id, const uint64_t end_id,
       const enum ObFetchLogExecuteType& fetch_log_execute_type, bool& is_fetched) = 0;
   virtual int set_log_confirmed(const uint64_t log_id, const bool batch_committed) = 0;
@@ -425,14 +424,9 @@ public:
   {
     return ATOMIC_LOAD(&next_index_log_id_);
   }
-  int64_t get_next_index_log_ts() override
-  {
-    return ATOMIC_LOAD(&next_index_log_ts_);
-  }
   int submit_replay_task(const bool need_async, bool& is_replayed, bool& is_replay_failed) override;
   void destroy();
   int alloc_log_id(const int64_t base_timestamp, uint64_t& log_id, int64_t& submit_timestamp) override;
-  int get_next_timestamp(const uint64_t last_log_id, int64_t& res_ts);
   int get_next_served_log_info_by_next_replay_log_info(uint64_t& next_served_log_id, int64_t& next_served_log_ts);
   bool is_inited() const
   {
@@ -549,9 +543,10 @@ private:
   int try_freeze_aggre_buffer_(const uint64_t log_id);
   int submit_freeze_aggre_buffer_task_(const uint64_t log_id);
   int submit_aggre_log_(ObAggreBuffer* buffer, const uint64_t log_id, const int64_t submit_timestamp);
-  int try_update_submit_timestamp(const int64_t base_ts) override;
+  int try_update_submit_timestamp(const int64_t base_ts);
   bool is_confirm_match_(const uint64_t log_id, const int64_t log_data_checksum, const int64_t log_epoch_id,
-      const int64_t confirmed_info_data_checksum, const int64_t confirmed_info_epoch_id);
+      const int64_t log_submit_timestamp, const int64_t confirmed_info_data_checksum,
+      const int64_t confirmed_info_epoch_id, const int64_t confirmed_info_submit_timestamp);
   int receive_log_(const ObLogEntry& log_entry, const common::ObAddr& server, const int64_t cluster_id);
   void update_max_log_id_(const uint64_t log_id);
   int submit_to_sliding_window_(const ObLogEntryHeader& header, const char* buff, ObISubmitLogCb* cb,
@@ -608,7 +603,7 @@ private:
   int handle_succeeding_index_log_(const uint64_t log_id, const bool need_check_succeeding_log, const bool do_pop);
 
   int submit_index_log_(const uint64_t log_id, const ObLogTask* log_task, int64_t& accum_checksum);
-  bool test_and_set_index_log_submitted_(ObLogTask* log_task);
+  bool test_and_set_index_log_submitted_(const uint64_t log_id, ObLogTask* log_task);
   bool test_and_submit_index_log_(const uint64_t log_id, ObLogTask* log_task, int& ret);
   int try_submit_mc_success_cb_(const ObLogType& log_type, const uint64_t log_id, const char* log_buf,
       const int64_t log_buf_len, const common::ObProposalID& proposal_id);
@@ -621,7 +616,6 @@ private:
   int generate_backfill_log_task_(const ObLogEntryHeader& header, const char* buff, const ObLogCursor& log_cursor,
       ObISubmitLogCb* submit_cb, const bool need_replay, const bool need_copy, const bool need_pinned,
       ObLogTask*& task);
-  int get_log_submit_tstamp_from_task_(const uint64_t log_id, int64_t& log_tstamp);
   int check_pre_barrier_(ObLogType log_type) const;
   void* alloc_log_task_buf_();
   int need_replay_for_data_or_log_replica_(const bool is_trans_log, bool& need_replay) const;
@@ -664,13 +658,13 @@ private:
   uint64_t next_index_log_id_;
   uint64_t scan_next_index_log_id_;
   uint64_t last_flushed_log_id_;
-  int64_t next_index_log_ts_;
   mutable common::ObSpinLock switchover_info_lock_;  // protect leader_max_log_info_
   LeaderMaxLogInfo leader_max_log_info_;
   LogIdTsPair last_replay_log_;
   FakeAckInfoMgr fake_ack_info_mgr_;
   file_id_t last_slide_fid_;
   mutable int64_t check_can_receive_larger_log_warn_time_;
+  mutable int64_t set_index_log_submitted_debug_time_;
   mutable int64_t insert_log_try_again_warn_time_;
   mutable int64_t receive_confirmed_info_warn_time_;
   mutable int64_t get_end_log_id_warn_time_;

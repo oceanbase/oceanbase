@@ -68,8 +68,8 @@ DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,100]",
 DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "65536", "[1024,]",
     "the size of the task queue for each tenant. Range: [1024,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0", common::ObConfigMemoryLimitChecker, "[0M,)",
-    "the size of the memory reserved for internal use(for testing purpose). Range: [0M,)",
+DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0", common::ObConfigMemoryLimitChecker, "0, [8G,)",
+    "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. Range: 0, [8G,)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(rootservice_memory_limit, OB_CLUSTER_PARAMETER, "2G", "[2G,)",
     "max memory size which can be used by rs tenant The default value is 2G. Range: [2G,)",
@@ -735,10 +735,6 @@ DEF_INT(clog_disk_usage_limit_percentage, OB_CLUSTER_PARAMETER, "95", "[80, 100]
     "clog_disk_utilization_threshold. "
     "Range: [80, 100]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(clog_usage_limit_size, OB_CLUSTER_PARAMETER, "2048G", "[256MB,)",
-    "the size of the total clog file size limited per server. "
-    "Range: [256M,)",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(clog_disk_utilization_threshold, OB_CLUSTER_PARAMETER, "80", "[10, 100)",
     "clog disk utilization threshold before reuse clog files, should be less than clog_disk_usage_limit_percentage. "
     "Range: [10, 100)",
@@ -757,12 +753,13 @@ DEF_INT(clog_max_unconfirmed_log_count, OB_TENANT_PARAMETER, "1500", "[100, 5000
     "Range: [100, 50000]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_ob_clog_timeout_to_force_switch_leader, OB_CLUSTER_PARAMETER, "0s", "[0s, 60m]",
-    "When log sync is blocking, leader need wait this interval before revoke."
-    "The default value is 0s, use 0s to close this function. Range: [0s, 60m]",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_ob_clog_disk_buffer_cnt, OB_CLUSTER_PARAMETER, "64", "[1, 2000]", "clog disk buffer cnt. Range: [1, 2000]",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ob_clog_timeout_to_force_switch_leader, OB_CLUSTER_PARAMETER, "10s", "[0s, 60m]",
+         "When log sync is blocking, leader need wait this interval before revoke."
+         "The default value is 0s, use 0s to close this function. Range: [0s, 60m]",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ob_clog_disk_buffer_cnt, OB_CLUSTER_PARAMETER, "64", "[1, 2000]",
+        "clog disk buffer cnt. Range: [1, 2000]",
+        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
     "transaction rpc timeout(s). Range: [0s, 3600s]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -820,6 +817,12 @@ DEF_TIME(location_cache_refresh_min_interval, OB_CLUSTER_PARAMETER, "100ms", "[0
     "the time interval in which no request for location cache renewal will be executed. "
     "The default value is 100 milliseconds. [0s, +∞)",
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(location_cache_refresh_rpc_timeout, OB_CLUSTER_PARAMETER, "500ms", "[1ms,)",
+    "The timeout used for refreshing location cache by RPC. Range: [1ms, +∞)",
+    ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(location_cache_refresh_sql_timeout, OB_CLUSTER_PARAMETER, "1s", "[1ms,)",
+    "The timeout used for refreshing location cache by SQL. Range: [1ms, +∞)",
+    ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(all_server_list, OB_CLUSTER_PARAMETER, "", "all server addr in cluster",
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -874,6 +877,15 @@ DEF_INT(user_iort_up_percentage, OB_CLUSTER_PARAMETER, "100", "[0,)",
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "120s", "[5s,600s]",
     "io timeout for data storage, Range [5s,600s]. "
     "The default value is 120s",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(data_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "30s", "[10s,300s]",
+    "time to tolerate disk read failure, after that, the disk status will be set warning. Range [10s,300s]. The "
+    "default value is 30s",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME_WITH_CHECKER(data_storage_error_tolerance_time, OB_CLUSTER_PARAMETER, "300s",
+    common::ObDataStorageErrorToleranceTimeChecker, "[10s,7200s]",
+    "time to tolerate disk read failure, after that, the disk status will be set error. Range [10s,7200s]. The default "
+    "value is 300s",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(data_disk_usage_limit_percentage, OB_CLUSTER_PARAMETER, "90", "[50,100]",
     "the safe use percentage of data disk"
@@ -1434,3 +1446,14 @@ DEF_TIME(ilog_index_expire_time, OB_CLUSTER_PARAMETER, "7d", "[0s, 60d]",
 DEF_BOOL(_auto_drop_tenant_if_restore_failed, OB_CLUSTER_PARAMETER, "True",
     "auto drop restoring tenant if physical restore fails",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(ob_proxy_readonly_transaction_routing_policy, OB_TENANT_PARAMETER, "true",
+    "Proxy route policy for readonly sql",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_block_file_punch_hole, OB_CLUSTER_PARAMETER, "False",
+    "specifies whether to punch whole when free blocks in block_file",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_enable_px_for_inner_sql, OB_CLUSTER_PARAMETER, "true",
+         "specifies whether inner sql uses px. "
+         "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

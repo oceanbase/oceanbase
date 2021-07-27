@@ -180,6 +180,7 @@ protected:
       ObPxTaskChSet& ch_set, common::ObIArray<dtl::ObDtlChannel*>& channels, dtl::ObDtlFlowControl* dfc = nullptr);
   int get_sqc_id(ObExecContext& ctx, int64_t& sqc_id) const;
 
+  int erase_dtl_interm_result(ObExecContext &ctx) const;
 private:
   /* functions */
   /* variables */

@@ -51,8 +51,8 @@ void ObIlogAccessor::destroy()
   inited_ = false;
 }
 
-int ObIlogAccessor::init(const char* dir_name, const char* shm_path, const int64_t server_seq,
-    const common::ObAddr& addr, ObLogCache* log_cache)
+int ObIlogAccessor::init(
+    const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache)
 {
   int ret = OB_SUCCESS;
   const bool use_log_cache = true;
@@ -69,8 +69,12 @@ int ObIlogAccessor::init(const char* dir_name, const char* shm_path, const int64
     CSR_LOG(ERROR, "file_store_ init failed", K(ret));
   } else if (OB_FAIL(file_id_cache_.init(server_seq, addr, this))) {
     CSR_LOG(ERROR, "file_id_cache_ init failed", K(ret));
-  } else if (OB_FAIL(direct_reader_.init(
-                 dir_name, shm_path, use_log_cache, log_cache, &log_tail_, ObLogWritePoolType::ILOG_WRITE_POOL))) {
+  } else if (OB_FAIL(direct_reader_.init(dir_name,
+                 nullptr /*no shared memory*/,
+                 use_log_cache,
+                 log_cache,
+                 &log_tail_,
+                 ObLogWritePoolType::ILOG_WRITE_POOL))) {
     CSR_LOG(ERROR, "direct_reader_ init failed", K(ret));
   } else if (OB_FAIL(buffer_.init(OB_MAX_LOG_BUFFER_SIZE, CLOG_DIO_ALIGN_SIZE, ObModIds::OB_CLOG_INFO_BLK_HNDLR))) {
     CSR_LOG(ERROR, "buffer init failed", K(ret));
@@ -564,7 +568,6 @@ int ObIlogAccessor::check_partition_ilog_can_be_purged(const common::ObPartition
   can_purge = false;
   uint64_t last_replay_log_id = OB_INVALID_ID;
   int64_t unused_ts = OB_INVALID_TIMESTAMP;
-  storage::ObIPartitionGroupGuard guard;
   if (false == inited_) {
     ret = OB_NOT_INIT;
     CSR_LOG(ERROR, "ObIlogAccessor is not init", K(ret));
@@ -717,9 +720,8 @@ ObIlogStorage::~ObIlogStorage()
   destroy();
 }
 
-int ObIlogStorage::init(const char* dir_name, const char* shm_path, const int64_t server_seq,
-    const common::ObAddr& addr, ObLogCache* log_cache, ObPartitionService* partition_service,
-    ObCommitLogEnv* commit_log_env)
+int ObIlogStorage::init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr,
+    ObLogCache* log_cache, ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env)
 {
   int ret = OB_SUCCESS;
 
@@ -742,7 +744,7 @@ int ObIlogStorage::init(const char* dir_name, const char* shm_path, const int64_
         KP(commit_log_env),
         K(server_seq),
         K(addr));
-  } else if (OB_FAIL(ObIlogAccessor::init(dir_name, shm_path, server_seq, addr, log_cache))) {
+  } else if (OB_FAIL(ObIlogAccessor::init(dir_name, server_seq, addr, log_cache))) {
     CSR_LOG(ERROR, "failed to init ObIlogAccessor", K(ret));
   } else if (OB_FAIL(init_next_ilog_file_id_(next_ilog_file_id))) {
     CSR_LOG(ERROR, "get_next_ilog_file_id failed", K(ret));

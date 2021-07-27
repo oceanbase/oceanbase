@@ -111,6 +111,8 @@ int ObServerReloadConfig::operator()()
     // In the 2.x version, reuse the sys_bkgd_io_timeout configuration item to indicate the data disk io timeout time
     // After version 3.1, use the data_storage_io_timeout configuration item.
     io_config.data_storage_io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+    io_config.data_storage_warning_tolerance_time_ = GCONF.data_storage_warning_tolerance_time;
+    io_config.data_storage_error_tolerance_time_ = GCONF.data_storage_error_tolerance_time;
     if (OB_FAIL(ObIOManager::get_instance().set_io_config(io_config))) {
       real_ret = ret;
       LOG_WARN("reload io manager config fail, ", K(ret));

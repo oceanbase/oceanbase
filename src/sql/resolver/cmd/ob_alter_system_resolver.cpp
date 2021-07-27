@@ -1477,6 +1477,9 @@ int check_backup_dest(const ObString& backup_dest)
     LOG_ERROR("cannot set backup dest with old backup data", K(ret), K(backup_dest_buf), K(last_status));
   }
 
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "please wait backup enhance patch, recently backup ");
+  LOG_ERROR("not support backup now, please wait backup enhance code patch");
   return ret;
 }
 

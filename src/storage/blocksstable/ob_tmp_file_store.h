@@ -321,6 +321,7 @@ public:
   int free_tenant_file_store(const uint64_t tenant_id);
   int get_macro_block_list(common::ObIArray<MacroBlockId>& macro_id_list);
   int get_macro_block_list(common::ObIArray<TenantTmpBlockCntPair>& tmp_block_cnt_pairs);
+  int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
 
   OB_INLINE int64_t get_mblk_page_nums() const
   {

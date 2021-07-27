@@ -2348,7 +2348,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                       new_table_schema.get_charset_type(),
                       new_table_schema.get_collation_type()))) {
                 RS_LOG(WARN, "failed to fill column charset info");
-              } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+              } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(
+                             *alter_column_schema, origin_table_schema.get_table_id()))) {
                 RS_LOG(WARN, "failed to check text or blob column length");
               }
             } else if (ObEnumSetTC == col_tc) {
@@ -2568,7 +2569,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                         new_table_schema.get_charset_type(),
                         new_table_schema.get_collation_type()))) {
                   RS_LOG(WARN, "failed to fill column charset info");
-                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(
+                               *alter_column_schema, origin_table_schema.get_table_id()))) {
                   RS_LOG(WARN, "failed to check text or blob column length");
                 }
               }
@@ -2775,7 +2777,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                         new_table_schema.get_charset_type(),
                         new_table_schema.get_collation_type()))) {
                   RS_LOG(WARN, "failed to fill column charset info");
-                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(
+                               *alter_column_schema, origin_table_schema.get_table_id()))) {
                   RS_LOG(WARN, "failed to check text or blob column length");
                 }
               }
@@ -4017,7 +4020,8 @@ int ObDDLOperator::drop_table_for_inspection(const ObTableSchema& orig_table_sch
   } else if (OB_FAIL(schema_service->get_table_sql_service().drop_table_for_inspection(
                  trans, orig_table_schema, new_schema_version))) {
     LOG_WARN("drop table for inspection failed", K(ret));
-  } else if (orig_table_schema.is_in_recyclebin()) {
+  } else if (OB_RECYCLEBIN_SCHEMA_ID == extract_pure_id(orig_table_schema.get_database_id())) {
+    // FIXME: remove [!is_dropped_schema()] from ObSimpleTableSchemaV2::is_in_recyclebin()
     ObRecycleObject::RecycleObjType recycle_type = ObRecycleObject::get_type_by_table_schema(orig_table_schema);
     const ObRecycleObject* recycle_obj = NULL;
     ObArray<ObRecycleObject> recycle_objs;
@@ -5160,9 +5164,10 @@ int ObDDLOperator::check_is_delay_delete(const int64_t tenant_id, bool& is_delay
   if (OB_SUCC(ret)) {
     int64_t reserved_schema_version = -1;
     ObBackupInfoMgr& bk_info = ObBackupInfoMgr::get_instance();
-
-    if (OB_FAIL(bk_info.get_delay_delete_schema_version(
-            tenant_id, schema_service_, is_delay_delete, reserved_schema_version))) {
+    if (OB_SYS_TENANT_ID == tenant_id) {
+      // sys tenant won't backup or restore
+    } else if (OB_FAIL(bk_info.get_delay_delete_schema_version(
+                   tenant_id, schema_service_, is_delay_delete, reserved_schema_version))) {
       LOG_WARN("get delay delete snaptshot version failed", KR(ret));
     }
   }

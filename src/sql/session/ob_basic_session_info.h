@@ -855,7 +855,15 @@ public:
   void set_session_in_retry(ObSessionRetryStatus is_retry)
   {
     LockGuard lock_guard(thread_data_mutex_);
-    thread_data_.is_in_retry_ = is_retry;
+    if (OB_LIKELY(SESS_NOT_IN_RETRY == is_retry ||
+                  SESS_IN_RETRY_FOR_DUP_TBL != thread_data_.is_in_retry_)) {
+      thread_data_.is_in_retry_ = is_retry;
+    } else {
+      // if the last retry is for duplicate table
+      // and the SQL is retried again
+      // we still keep the retry for dup table status.
+      thread_data_.is_in_retry_ = SESS_IN_RETRY_FOR_DUP_TBL;
+    }
   }
 
   void set_session_in_retry(bool is_retry, int ret)
@@ -868,8 +876,7 @@ public:
     } else {
       status = SESS_IN_RETRY;
     }
-    LockGuard lock_guard(thread_data_mutex_);
-    thread_data_.is_in_retry_ = status;
+    set_session_in_retry(status);
   }
   bool get_is_in_retry()
   {
@@ -2275,7 +2282,8 @@ inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() co
 // oracle SYS user actual nls_length_semantics is always BYTE
 inline ObLengthSemantics ObBasicSessionInfo::get_actual_nls_length_semantics() const
 {
-  return (is_oracle_sys_user() ? LS_BYTE : sys_vars_cache_.get_nls_length_semantics());
+  return OB_ORA_SYS_DATABASE_ID == extract_pure_id(get_database_id()) ?
+          LS_BYTE : sys_vars_cache_.get_nls_length_semantics();
 }
 
 inline int64_t ObBasicSessionInfo::get_local_ob_org_cluster_id() const

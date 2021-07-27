@@ -256,7 +256,7 @@ int ObIKVCacheStore<MBWrapper>::alloc_kvpair(ObKVCacheInst& inst, const int64_t 
       if (OB_SUCC(ret)) {
         MBWrapper* new_mb_wrapper = NULL;
         if (OB_FAIL(alloc(inst, policy, block_size, new_mb_wrapper))) {
-          COMMON_LOG(ERROR, "alloc failed", K(ret), K(block_size));
+          COMMON_LOG(WARN, "alloc failed", K(ret), K(block_size));
         } else if (ATOMIC_BCAS(
                        (uint64_t*)(&get_curr_mb(inst, policy)), (uint64_t)mb_wrapper, (uint64_t)new_mb_wrapper)) {
           if (NULL != mb_wrapper) {

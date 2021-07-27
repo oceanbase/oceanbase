@@ -150,8 +150,7 @@ class ObStoreRowSingleScanEstimator : public ObISSTableEstimator {
 public:
   ObStoreRowSingleScanEstimator();
   virtual ~ObStoreRowSingleScanEstimator();
-  int set_context(ObSSTableEstimateContext& context);
-  int open();
+  int check_bf(blocksstable::ObMacroBlockCtx& macro_block_ctx);
   void reset();
   virtual int estimate_row_count(ObPartitionEst& part_est);
 

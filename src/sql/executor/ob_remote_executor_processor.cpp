@@ -295,7 +295,9 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext& exec_ctx, const ObP
       bool need_flush = false;
       if (is_static_engine) {
         bool added = false;
-        if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_, exec_ctx.get_eval_ctx(), added))) {
+        if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_,
+                                        exec_ctx.get_eval_ctx(),
+                                        added))) {
           LOG_WARN("fail add row to scanner", K(ret));
         } else if (!added) {
           need_flush = true;
@@ -686,7 +688,11 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask& task)
   ObPhysicalPlan* plan = nullptr;
   ObPhysicalPlanCtx* plan_ctx = nullptr;
   CacheRefHandleID cache_handle_id = MAX_HANDLE;
-  if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
+  int inject_err_no = EVENT_CALL(EventTable::EN_REMOTE_EXEC_ERR);
+  if (0 != inject_err_no) {
+    ret = inject_err_no;
+    LOG_WARN("Injection OB_LOCATION_NOT_EXIST error", K(ret));
+  } else if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session is NULL", K(ret), K(task));
   } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(exec_ctx_))) {
@@ -1174,7 +1180,8 @@ int ObRpcRemoteASyncExecuteP::send_result_to_controller(ObExecContext& exec_ctx,
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("failed to get next row", K(ret));
           }
-        } else if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_, exec_ctx.get_eval_ctx(), added))) {
+        } else if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_,
+                                               exec_ctx.get_eval_ctx(), added))) {
           LOG_WARN("fail add row to scanner", K(ret));
         } else if (!added) {
           buffer_enough = true;

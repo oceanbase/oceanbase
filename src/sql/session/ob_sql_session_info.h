@@ -350,7 +350,7 @@ public:
   {
     return has_temp_table_flag_;
   };
-  int drop_temp_tables(const bool is_sess_disconn = true);
+  int drop_temp_tables(const bool is_sess_disconn = true, const bool is_xa_trans = false);
   void refresh_temp_tables_sess_active_time();
   int drop_reused_oracle_temp_tables();
   int delete_from_oracle_temp_tables(const obrpc::ObDropTableArg& const_drop_table_arg);

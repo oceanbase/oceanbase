@@ -681,6 +681,8 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       LOG_WARN("create my session failed", K(ret), K(tenant_id));
     } else {
       session_info_ = exec_ctx_->get_my_session();
+      ObSQLSessionInfo::LockGuard query_guard(session_info_->get_query_lock());
+      ObSQLSessionInfo::LockGuard data_guard(session_info_->get_thread_data_lock());
       OB_UNIS_DECODE(*session_info_);
       OB_UNIS_DECODE(remote_sql_info_->is_batched_stmt_);
     }

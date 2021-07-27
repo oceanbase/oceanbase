@@ -81,5 +81,11 @@ bool is_valid_archive_compressor_type(const common::ObCompressorType compressor_
 {
   return ((LZ4_COMPRESSOR == compressor_type) || (ZSTD_1_3_8_COMPRESSOR == compressor_type));
 }
+
+bool is_io_error(const int ret_code)
+{
+  return OB_IO_ERROR == ret_code || OB_OSS_ERROR == ret_code;
+}
+
 }  // namespace archive
 }  // namespace oceanbase

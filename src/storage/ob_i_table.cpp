@@ -485,7 +485,15 @@ void ObTablesHandle::reset()
   memstore_retired_ = NULL;
 }
 
-int ObTablesHandle::check_continues(const ObLogTsRange* log_ts_range)
+void ObTablesHandle::reset_tables()
+{
+  for (int64_t i = 0; i < tables_.count(); ++i) {
+    ObTableMgr::get_instance().release_table(tables_.at(i));
+  }
+  tables_.reset();
+}
+
+int ObTablesHandle::check_continues(const ObLogTsRange *log_ts_range)
 {
   int ret = OB_SUCCESS;
   bool is_all_contain = false;

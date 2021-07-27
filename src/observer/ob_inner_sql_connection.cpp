@@ -411,7 +411,7 @@ int ObInnerSQLConnection::process_retry(
                  is_get_location_timeout_error(last_ret) || is_try_lock_row_err(last_ret) ||
                  is_has_no_readable_replica_err(last_ret) || is_select_dup_follow_replic_err(last_ret) ||
                  is_trans_stmt_need_retry_error(last_ret) || is_transaction_set_violation_err(last_ret) ||
-                 is_snapshot_discarded_err(last_ret))) {
+                 is_snapshot_discarded_err(last_ret) || OB_AUTOINC_SERVICE_BUSY == last_ret)) {
     need_retry = true;
     const uint64_t* trace_id = ObCurTraceId::get();
     bool sql_trigger_by_user_req = (NULL != trace_id && 0 != trace_id[0] && 0 != trace_id[1]);
@@ -473,6 +473,10 @@ int ObInnerSQLConnection::process_retry(
   if (need_retry) {
     LOG_WARN("need retry, set ret to OB_SUCCESS", K(ret), K(last_ret), K(retry_cnt));
     retry_info.set_last_query_retry_err(last_ret);
+    if (OB_ISNULL(extern_session_)) {
+    } else {
+      extern_session_->get_retry_info_for_update().set_last_query_retry_err(last_ret);
+    }
     ret = OB_SUCCESS;
   }
   return ret;
@@ -790,9 +794,11 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor& executor, ObInnerSQLResu
               local_sys_schema_version);
         }
 
+        int ret_code = OB_SUCCESS;
         if (OB_FAIL(ret)) {
           // do nothing
         } else if (OB_FAIL(SMART_CALL(do_query(executor, res)))) {
+          ret_code = ret;
           LOG_WARN("execute failed", K(ret), K(executor), K(retry_cnt));
           int tmp_ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);
           if (OB_SUCCESS != tmp_ret) {
@@ -805,6 +811,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor& executor, ObInnerSQLResu
             LOG_WARN("failed to close result", K(close_ret), K(ret));
           }
         }
+        get_session().set_session_in_retry(need_retry, ret_code);
         execute_start_timestamp_ = res.get_execute_start_ts();
         execute_end_timestamp_ = res.get_execute_end_ts();
 

@@ -2308,6 +2308,10 @@ public:
   {
     return state >= NON_EXISTING && state <= PREPARING;
   }
+  static bool is_prepared(const int32_t state)
+  {
+    return state == PREPARED;
+  }
   static bool can_convert(const int32_t src_state, const int32_t dst_state);
   static const char* to_string(int32_t state)
   {
@@ -2357,6 +2361,8 @@ public:
     TMSUCCESS = 0x4000000,
     TMRESUME = 0x8000000,
     TMONEPHASE = 0x40000000,
+    // non-standard xa protocol, to denote temp table xa trans
+    TEMPTABLE = 0x100000000,
   };
 
 public:
@@ -2406,6 +2412,10 @@ public:
   static bool is_tmonephase(const int64_t flag)
   {
     return flag == TMONEPHASE;
+  }
+  static bool contain_temptable(const int64_t flag)
+  {
+    return flag & TEMPTABLE;
   }
 };
 
@@ -3483,6 +3493,7 @@ public:
     need_checksum_ = false;
     prepare_log_id_ = 0;
     prepare_log_timestamp_ = 0;
+    clear_log_base_ts_ = 0;
   }
   void destroy()
   {
@@ -3527,6 +3538,7 @@ public:
   bool need_checksum_;
   int64_t prepare_log_id_;
   int64_t prepare_log_timestamp_;
+  int64_t clear_log_base_ts_;
 };
 
 struct CtxInfo final {

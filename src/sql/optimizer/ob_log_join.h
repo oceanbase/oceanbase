@@ -323,6 +323,7 @@ private:
   virtual int allocate_granule_pre(AllocGIContext& ctx) override;
   int get_candidate_join_distribution_method(ObLogPlan& log_plan, const EqualSets& equal_sets,
       const common::ObIArray<ObRawExpr*>& left_join_keys, const common::ObIArray<ObRawExpr*>& right_join_keys,
+      const bool exchange_allocator,
       uint64_t& candidate_method);
   int check_if_match_join_partition_wise(ObLogPlan& log_plan, const EqualSets& equal_sets,
       const common::ObIArray<ObRawExpr*>& left_keys, const common::ObIArray<ObRawExpr*>& right_keys,

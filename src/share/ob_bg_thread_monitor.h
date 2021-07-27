@@ -164,7 +164,8 @@ public:
     return ret;
   }
   void destroy()
-  {}
+  {
+  }
 
 private:
   common::ObString function_name_;

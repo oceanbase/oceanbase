@@ -143,6 +143,12 @@ int ObMergeLogPlan::allocate_merge_subquery()
     LOG_WARN("failed to allocate delete condition subquery", K(ret));
   } else if (OB_FAIL(merge_stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt expr reference", K(ret));
+  } else if (condition_subquery_exprs.empty() && target_subquery_exprs.empty() &&
+             delete_subquery_exprs.empty() && !merge_stmt->get_match_condition_exprs().empty()) {
+    // alloc subplan filter for subquery in match condition
+    if (OB_FAIL(candi_allocate_subplan_filter(merge_stmt->get_match_condition_exprs(), false))) {
+      LOG_WARN("failed to allocate subplan filter", K(ret));
+    }
   } else if (!condition_subquery_exprs.empty() &&
              OB_FAIL(candi_allocate_subplan_filter(condition_subquery_exprs, false))) {
     LOG_WARN("failed to allocate subplan filter", K(ret));

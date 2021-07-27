@@ -2848,7 +2848,133 @@ int ObDMLStmt::set_table_bit_index(uint64_t table_id)
   return tables_hash_.add_column_desc(table_id, OB_INVALID_ID);
 }
 
-ColumnItem* ObDMLStmt::get_column_item(uint64_t table_id, const ObString& col_name)
+int ObDMLStmt::relids_to_table_ids(const ObSqlBitSet<> &table_set,
+                                   ObIArray<uint64_t> &table_ids) const
+{
+  int ret = OB_SUCCESS;
+  TableItem *table = NULL;
+  int64_t idx = OB_INVALID_INDEX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); ++i) {
+    if (OB_ISNULL(table = table_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (OB_UNLIKELY((idx = get_table_bit_index(table->table_id_)) == OB_INVALID_INDEX)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get table item invalid idx", K(idx), K(table->table_id_));
+    } else if (table_set.has_member(idx)) {
+      ret = table_ids.push_back(table->table_id_);
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const TableItem &target,
+                                 ObSqlBitSet<> &table_set) const
+{
+  int ret = OB_SUCCESS;
+  if (target.is_joined_table()) {
+    const JoinedTable &cur_table = static_cast<const JoinedTable &>(target);
+    for (int64_t i = 0; OB_SUCC(ret) && i < cur_table.single_table_ids_.count(); ++i) {
+      if (OB_FAIL(table_set.add_member(get_table_bit_index(cur_table.single_table_ids_.at(i))))) {
+        LOG_WARN("failed to add member", K(ret), K(cur_table.single_table_ids_.at(i)));
+      }
+    }
+  } else if (OB_FAIL(table_set.add_member(get_table_bit_index(target.table_id_)))) {
+    LOG_WARN("failed to add member", K(ret), K(target.table_id_));
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const ObIArray<uint64_t> &table_ids,
+                                 ObSqlBitSet<> &table_set) const
+{
+  int ret = OB_SUCCESS;
+  int32_t idx = OB_INVALID_INDEX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+    idx = get_table_bit_index(table_ids.at(i));
+    if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect idx", K(ret));
+    } else if (OB_FAIL(table_set.add_member(idx))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const uint64_t table_id,
+                                 ObSqlBitSet<> &table_set) const
+{
+  int ret = OB_SUCCESS;
+  int32_t idx = get_table_bit_index(table_id);
+  if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect idx", K(ret));
+  } else if (OB_FAIL(table_set.add_member(idx))) {
+    LOG_WARN("failed to add members", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const ObIArray<TableItem*> &tables,
+                                 ObSqlBitSet<> &table_set) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+    if (OB_ISNULL(tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null", K(ret));
+    } else if (OB_FAIL(get_table_rel_ids(*tables.at(i), table_set))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_from_tables(ObRelIds &table_set) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlBitSet<> tmp_table_set;
+  if (OB_FAIL(get_from_tables(tmp_table_set))) {
+    LOG_WARN("failed to get from tables", K(ret));
+  } else if (OB_FAIL(table_set.add_members(tmp_table_set))) {
+    LOG_WARN("failed to add members", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_from_tables(ObSqlBitSet<> &table_set) const
+{
+  int ret = OB_SUCCESS;
+  int32_t bit_id = OB_INVALID_INDEX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_items_.count(); ++i) {
+    if (from_items_.at(i).is_joined_) {
+      const JoinedTable *table = get_joined_table(from_items_.at(i).table_id_);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get joined table", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < table->single_table_ids_.count(); ++j) {
+        uint64_t table_id = table->single_table_ids_.at(j);
+        if (OB_UNLIKELY(OB_INVALID_INDEX == (bit_id = get_table_bit_index(table_id)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid table bit index", K(ret), K(table_id), K(bit_id));
+        } else if (OB_FAIL(table_set.add_member(bit_id))) {
+          LOG_WARN("failed to add member", K(ret));
+        }
+      }
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX ==
+                                  (bit_id = get_table_bit_index(from_items_.at(i).table_id_)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid table bit index", K(ret), K(from_items_.at(i).table_id_), K(bit_id));
+    } else if (OB_FAIL(table_set.add_member(bit_id))) {
+      LOG_WARN("failed to add member", K(ret));
+    }
+  }
+  return ret;
+}
+
+ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, const ObString &col_name)
 {
   ColumnItem* item = NULL;
   common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
@@ -3082,23 +3208,6 @@ bool ObDMLStmt::has_link_table() const
     }
   }
   return bret;
-}
-
-int ObDMLStmt::get_table_rel_ids(const TableItem &target,
-                                 ObSqlBitSet<> &table_set) const
-{
-  int ret = OB_SUCCESS;
-  if (target.is_joined_table()) {
-    const JoinedTable &cur_table = static_cast<const JoinedTable &>(target);
-    for (int64_t i = 0; OB_SUCC(ret) && i < cur_table.single_table_ids_.count(); ++i) {
-      if (OB_FAIL(table_set.add_member(get_table_bit_index(cur_table.single_table_ids_.at(i))))) {
-        LOG_WARN("failed to add member", K(ret), K(cur_table.single_table_ids_.at(i)));
-      }
-    }
-  } else if (OB_FAIL(table_set.add_member(get_table_bit_index(target.table_id_)))) {
-    LOG_WARN("failed to add member", K(ret), K(target.table_id_));
-  }
-  return ret;
 }
 
 int ObDMLStmt::get_relation_exprs(ObIArray<ObRawExpr*>& rel_array, int32_t ignore_scope /* = 0*/) const

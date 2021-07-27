@@ -92,7 +92,6 @@ public:
 
   // leader or follower
   MOCK_CONST_METHOD1(get_role, int(common::ObRole& role));
-  MOCK_CONST_METHOD1(get_role_for_partition_table, int(common::ObRole& role));
   MOCK_CONST_METHOD1(get_role_unsafe, int(common::ObRole& role));
   MOCK_CONST_METHOD1(get_leader_curr_member_list, int(common::ObMemberList& member_list));
   MOCK_CONST_METHOD1(get_leader, int(common::ObAddr& addr));
@@ -376,6 +375,7 @@ public:
   MOCK_CONST_METHOD1(get_meta_block_list, int(common::ObIArray<blocksstable::MacroBlockId>& meta_block_list));
   MOCK_METHOD1(get_all_tables, int(ObTablesHandle& tables_handle));
   MOCK_METHOD2(recycle_unused_sstables, int(const int64_t max_recycle_cnt, int64_t& recycled_cnt));
+  MOCK_METHOD1(recycle_sstable, int(const ObITable::TableKey &table_key));
   MOCK_METHOD1(check_can_free, int(bool& can_free));
   MOCK_METHOD0(clear, void());
   MOCK_METHOD1(get_merge_log_ts, int(int64_t& merge_log_ts));

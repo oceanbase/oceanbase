@@ -628,6 +628,8 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct& op, ObMergeDistinctSpec& spec
     LOG_WARN("merge distinct has no block mode", K(op.get_algo()), K(op.get_block_mode()), K(ret));
   } else if (OB_FAIL(spec.cmp_funcs_.init(op.get_distinct_exprs().count()))) {
     LOG_WARN("failed to init sort functions", K(ret));
+  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count()))) {
+    LOG_WARN("failed to init distinct exprs", K(ret));
   } else {
     ObExpr* expr = nullptr;
     ARRAY_FOREACH(op.get_distinct_exprs(), i)
@@ -665,6 +667,8 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct& op, ObHashDistinctSpec& spec,
     LOG_WARN("failed to init sort functions", K(ret));
   } else if (OB_FAIL(spec.sort_collations_.init(op.get_distinct_exprs().count()))) {
     LOG_WARN("failed to init sort functions", K(ret));
+  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count()))) {
+    LOG_WARN("failed to init distinct exprs", K(ret));
   } else {
     ObExpr* expr = nullptr;
     int64_t dist_cnt = 0;
@@ -2314,6 +2318,9 @@ int ObStaticEngineCG::generate_spec(ObLogUpdate& op, ObMultiPartUpdateSpec& spec
     const TableColumns& table_columns = all_table_columns->at(i);
     const ObTableAssignment& ta = tas->at(i);
     OZ(convert_global_index_update_info(op, table_columns, subplan_roots, table_dml_info));
+    auto &dst_assign_cols = spec.table_dml_infos_.at(i).assign_columns_;
+    OX(dst_assign_cols.old_row_.set_allocator(&phy_plan_->get_allocator()));
+    OX(dst_assign_cols.new_row_.set_allocator(&phy_plan_->get_allocator()));
     OZ(spec.add_table_dml_info(i, table_dml_info));
   }
   if (OB_FAIL(ret)) {
@@ -5161,10 +5168,11 @@ int ObStaticEngineCG::recursive_get_column_expr(const ObColumnRefRawExpr*& colum
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (!table_item->is_generated_table()) {
-        column = inner_column;
-      } else if (OB_FAIL(recursive_get_column_expr(column, *table_item))) {
+      } else if (table_item->is_generated_table() &&
+                 OB_FAIL(recursive_get_column_expr(inner_column, *table_item))) {
         LOG_WARN("faield to recursive get column expr", K(ret));
+      } else {
+        column = inner_column;
       }
     }
   }
@@ -6016,11 +6024,10 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr& raw_expr, ObExpr& expr, Ob
       if (OB_SUCC(ret) && !raw_expr.get_order_items().empty()) {
         aggr_info.has_order_by_ = true;
         if (OB_FAIL(fil_sort_info(raw_expr.get_order_items(),
-                all_param_exprs,
-                NULL,
-                aggr_info.sort_collations_,
-                aggr_info.sort_cmp_funcs_,
-                raw_expr.get_expr_type()))) {
+                                  all_param_exprs,
+                                  NULL,
+                                  aggr_info.sort_collations_,
+                                  aggr_info.sort_cmp_funcs_))) {
           LOG_WARN("failed to fil_sort_info", K(ret));
         } else { /*do nothing*/
         }
@@ -6267,9 +6274,9 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr*>& all_expr, ObWinFunRawExpr&
   return ret;
 }
 
-int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem>& sort_keys, ObIArray<ObExpr*>& all_exprs,
-    ObIArray<ObExpr*>* sort_exprs, ObSortCollations& sort_collations, ObSortFuncs& sort_cmp_funcs,
-    const ObItemType aggr_type)
+int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
+    ObIArray<ObExpr *> &all_exprs, ObIArray<ObExpr *> *sort_exprs,
+    ObSortCollations &sort_collations, ObSortFuncs &sort_cmp_funcs)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sort_collations.init(sort_keys.count()))) {
@@ -6303,20 +6310,11 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem>& sort_keys, ObIArr
             order_item.is_ascending(),
             (order_item.is_null_first() ^ order_item.is_ascending()) ? NULL_LAST : NULL_FIRST);
         ObSortCmpFunc cmp_func;
-        if (lib::is_oracle_mode() && ObDatumFuncs::is_string_type(expr->datum_meta_.type_) &&
-            T_FUN_GROUP_PERCENTILE_DISC == aggr_type) {
-          cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
-              expr->datum_meta_.type_,
-              field_collation.null_pos_,
-              field_collation.cs_type_,
-              false);
-        } else {
-          cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
-              expr->datum_meta_.type_,
-              field_collation.null_pos_,
-              field_collation.cs_type_,
-              lib::is_oracle_mode());
-        }
+        cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
+                                                                 expr->datum_meta_.type_,
+                                                                 field_collation.null_pos_,
+                                                                 field_collation.cs_type_,
+                                                                 lib::is_oracle_mode());
         if (OB_ISNULL(cmp_func.cmp_func_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("cmp_func is null, check datatype is valid", K(ret));

@@ -409,9 +409,14 @@ int ObTransformWinMagic::transform_child_stmt(ObDMLStmt& stmt, ObSelectStmt& sub
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> new_condition_list;
   ObSEArray<FromItem, 4> new_from_list;
-  if (OB_UNLIKELY(map_info.cond_map_.count() != subquery.get_condition_size()) ||
-      OB_UNLIKELY(map_info.from_map_.count() != subquery.get_from_item_size()) ||
-      OB_UNLIKELY(map_info.table_map_.count() != subquery.get_table_size())) {
+  ObRawExprFactory *expr_factory = NULL;
+  ObRawExpr *expr = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx_), K(expr_factory));
+  } else if (OB_UNLIKELY(map_info.cond_map_.count() != subquery.get_condition_size()) ||
+             OB_UNLIKELY(map_info.from_map_.count() != subquery.get_from_item_size()) ||
+             OB_UNLIKELY(map_info.table_map_.count() != subquery.get_table_size())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid map size",
         K(ret),
@@ -441,7 +446,14 @@ int ObTransformWinMagic::transform_child_stmt(ObDMLStmt& stmt, ObSelectStmt& sub
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_condition_size(); ++i) {
     if (!push_down_filter_ids.has_member(i)) {
       // do nothing
-    } else if (OB_FAIL(new_condition_list.push_back(stmt.get_condition_expr(i)))) {
+    } else if (OB_FAIL(ObRawExprUtils::copy_expr(*expr_factory, stmt.get_condition_expr(i),
+                                                 expr, COPY_REF_DEFAULT))) {
+      // condition expr may be shared in stmt, copy it here.
+      LOG_WARN("failed to copy expr", K(ret), K(expr));
+    } else if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(expr));
+    } else if (OB_FAIL(new_condition_list.push_back(expr))) {
       LOG_WARN("failed to push back new condition", K(ret));
     }
   }

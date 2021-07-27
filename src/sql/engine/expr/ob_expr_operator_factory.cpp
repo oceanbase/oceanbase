@@ -105,6 +105,7 @@
 #include "sql/engine/expr/ob_expr_sinh.h"
 #include "sql/engine/expr/ob_expr_cosh.h"
 #include "sql/engine/expr/ob_expr_tanh.h"
+#include "sql/engine/expr/ob_expr_cot.h"
 #include "sql/engine/expr/ob_expr_trim.h"
 #include "sql/engine/expr/ob_expr_inner_trim.h"
 #include "sql/engine/expr/ob_expr_unhex.h"
@@ -256,6 +257,7 @@
 #include "sql/engine/expr/ob_expr_user_can_access_obj.h"
 #include "sql/engine/expr/ob_expr_empty_lob.h"
 #include "sql/engine/expr/ob_expr_radians.h"
+#include "sql/engine/expr/ob_expr_pi.h"
 #include "sql/engine/expr/ob_expr_to_outfile_row.h"
 #include "sql/engine/expr/ob_expr_format.h"
 #include "sql/engine/expr/ob_expr_quarter.h"
@@ -637,6 +639,10 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprBool);
   REG_OP(ObExprSin);
   REG_OP(ObExprTan);
+  REG_OP(ObExprCos);
+  REG_OP(ObExprCot);
+  REG_OP(ObExprAsin);
+  REG_OP(ObExprAcos);
   REG_OP(ObExprCalcPartitionId);
   REG_OP(ObExprPartIdPseudoColumn);
   REG_OP(ObExprStmtId);
@@ -645,6 +651,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprAtan2);
   REG_OP(ObExprToOutfileRow);
   REG_OP(ObExprFormat);
+  REG_OP(ObExprLog);
+  REG_OP(ObExprPi);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);

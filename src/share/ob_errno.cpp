@@ -6873,7 +6873,7 @@ static struct ObStrErrorInit {
     ORACLE_STR_USER_ERROR[-OB_ERR_BAD_FT_COLUMN] =
         "ORA-00600: internal error code, arguments: -5288, Column '%.*s' cannot be part of FULLTEXT index";
     ERROR_NAME[-OB_ERR_KEY_DOES_NOT_EXISTS] = "OB_ERR_KEY_DOES_NOT_EXISTS";
-    MYSQL_ERRNO[-OB_ERR_KEY_DOES_NOT_EXISTS] = ER_KEY_DOES_NOT_EXISTS;
+    MYSQL_ERRNO[-OB_ERR_KEY_DOES_NOT_EXISTS] = OB_ERR_KEY_DOES_NOT_EXISTS;
     SQLSTATE[-OB_ERR_KEY_DOES_NOT_EXISTS] = "42000";
     STR_ERROR[-OB_ERR_KEY_DOES_NOT_EXISTS] = "key does not exist in table";
     STR_USER_ERROR[-OB_ERR_KEY_DOES_NOT_EXISTS] = "Key '%.*s' doesn't exist in table '%.*s'";
@@ -11214,9 +11214,9 @@ static struct ObStrErrorInit {
     MYSQL_ERRNO[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] = -1;
     SQLSTATE[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] = "HY000";
     STR_ERROR[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] =
-        "only pure functions can be specified in a virtual column expression";
+        "Expression of generated column contains a disallowed function";
     STR_USER_ERROR[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] =
-        "only pure functions can be specified in a virtual column expression";
+        "Expression of generated column contains a disallowed function";
     ORACLE_ERRNO[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] = 54002;
     ORACLE_STR_ERROR[-OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION] =
         "ORA-54002: only pure functions can be specified in a virtual column expression";
@@ -13281,6 +13281,14 @@ static struct ObStrErrorInit {
         "ORA-02266: unique/primary keys in table referenced by enabled foreign keys";
     ORACLE_STR_USER_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] =
         "ORA-02266: unique/primary keys in table referenced by enabled foreign keys";
+    ERROR_NAME[-OB_IO_LIMIT] = "OB_IO_LIMIT";
+    MYSQL_ERRNO[-OB_IO_LIMIT] = -1;
+    SQLSTATE[-OB_IO_LIMIT] = "HY000";
+    STR_ERROR[-OB_IO_LIMIT] = "IO limit";
+    STR_USER_ERROR[-OB_IO_LIMIT] = "IO limit";
+    ORACLE_ERRNO[-OB_IO_LIMIT] = 600;
+    ORACLE_STR_ERROR[-OB_IO_LIMIT] = "ORA-00600: internal error code, arguments: -9061, IO limit";
+    ORACLE_STR_USER_ERROR[-OB_IO_LIMIT] = "ORA-00600: internal error code, arguments: -9061, IO limit";
     ERROR_NAME[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "OB_NO_SUCH_FILE_OR_DIRECTORY";
     MYSQL_ERRNO[-OB_NO_SUCH_FILE_OR_DIRECTORY] = -1;
     SQLSTATE[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "HY000";

@@ -163,6 +163,7 @@ public:
 private:
   static uint64_t calc_n_cond(uint64_t capacity)
   {
+    OB_ASSERT(0ULL != capacity);
     return std::min(1024ULL, 1ULL << (63 - __builtin_clzll(capacity)));
   }
   uint64_t push_bounded(void* p, uint64_t limit)

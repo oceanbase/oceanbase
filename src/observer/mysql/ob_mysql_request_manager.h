@@ -71,7 +71,7 @@ public:
   static const int32_t BATCH_RELEASE_COUNT = 50000;
   static const int32_t MAX_RELEASE_TIME = 5 * 1000;  // 5ms
   static const int64_t US_PER_HOUR = 3600000000;
-  static const int64_t MAX_QUEUE_SIZE = 1000000;           // 100w
+  static const int64_t MAX_QUEUE_SIZE = 10000000;           // 10m
   static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 100000;  // 10w
   // start to eliminate when sql_audit more than 9 millions records
   static const int64_t HIGH_LEVEL_EVICT_SIZE = 9000000;  // 900w

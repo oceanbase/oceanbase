@@ -36,11 +36,12 @@ public:
         replica_num_(0),
         prev_member_list_(),
         curr_member_list_(),
-        ms_proposal_id_()
+        ms_proposal_id_(),
+        gen_ts_(OB_INVALID_TIMESTAMP)
   {}
   ObMsInfoTask(const common::ObPartitionKey& pkey, const common::ObAddr& server, const int64_t cluster_id,
       const clog::ObLogType log_type, const uint64_t ms_log_id, const int64_t mc_timestamp, const int64_t replica_num,
-      const common::ObProposalID& ms_proposal_id)
+      const common::ObProposalID& ms_proposal_id, const int64_t gen_ts)
       : pkey_(pkey),
         server_(server),
         cluster_id_(cluster_id),
@@ -48,13 +49,14 @@ public:
         ms_log_id_(ms_log_id),
         mc_timestamp_(mc_timestamp),
         replica_num_(replica_num),
-        ms_proposal_id_(ms_proposal_id)
+        ms_proposal_id_(ms_proposal_id),
+        gen_ts_(gen_ts)
   {}
   ~ObMsInfoTask()
   {}
   bool is_valid() const
   {
-    return pkey_.is_valid();
+    return (pkey_.is_valid() && OB_INVALID_TIMESTAMP != gen_ts_);
   }
   common::ObPartitionKey get_pkey() const
   {
@@ -103,15 +105,24 @@ public:
   void set_ms_log_id(const uint64_t ms_log_id);
   void set_mc_timestamp(const int64_t mc_timestamp);
   void set_replica_num(const int64_t replica_num);
-  void set_ms_proposal_id(const common::ObProposalID& ms_proposal_id);
-  int update_prev_member_list(const common::ObMemberList& prev_member_list);
-  int update_curr_member_list(const common::ObMemberList& curr_member_list);
-  ObMsInfoTask& operator=(const ObMsInfoTask& rv);
+  void set_ms_proposal_id(const common::ObProposalID &ms_proposal_id);
+  int update_prev_member_list(const common::ObMemberList &prev_member_list);
+  int update_curr_member_list(const common::ObMemberList &curr_member_list);
+  void set_gen_ts(const int64_t gen_ts);
+  int64_t get_gen_ts() const { return gen_ts_; }
+  ObMsInfoTask &operator=(const ObMsInfoTask &rv);
 
-  TO_STRING_KV(N_KEY, pkey_, "server", server_, "cluster_id", cluster_id_, "log_type", log_type_, "ms_log_id",
-      ms_log_id_, "mc_timestamp", mc_timestamp_, "replica_num", replica_num_, "prev_member_list", prev_member_list_,
-      "curr_member_list", curr_member_list_, "ms_proposal_id", ms_proposal_id_);
-
+  TO_STRING_KV(N_KEY, pkey_,
+               "server", server_,
+               "cluster_id", cluster_id_,
+               "log_type", log_type_,
+               "ms_log_id", ms_log_id_,
+               "mc_timestamp", mc_timestamp_,
+               "replica_num", replica_num_,
+               "prev_member_list", prev_member_list_,
+               "curr_member_list", curr_member_list_,
+               "ms_proposal_id", ms_proposal_id_,
+               "gen_ts", gen_ts_);
 private:
   common::ObPartitionKey pkey_;
   common::ObAddr server_;
@@ -123,12 +134,14 @@ private:
   common::ObMemberList prev_member_list_;
   common::ObMemberList curr_member_list_;
   common::ObProposalID ms_proposal_id_;
+  int64_t gen_ts_;
 };
 
 class ObSlogWriterQueueThread : public lib::TGTaskHandler {
 public:
   static const int64_t QUEUE_THREAD_NUM = 4;
   static const int64_t MINI_MODE_QUEUE_THREAD_NUM = 2;
+  static const int64_t SLOG_FLUSH_TASK_TIMEOUT_THRESHOLD = clog::CLOG_LEADER_RECONFIRM_SYNC_TIMEOUT;
   ObSlogWriterQueueThread();
   virtual ~ObSlogWriterQueueThread();
 

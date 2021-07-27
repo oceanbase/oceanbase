@@ -58,6 +58,7 @@ public:
   virtual int change_quorum(const common::ObMemberList& curr_member_list, const int64_t curr_quorum,
       const int64_t new_quorum, obrpc::ObMCLogInfo& log_info) = 0;
   virtual int64_t get_replica_num() const = 0;
+  virtual bool is_single_member_mode() const = 0;
   virtual common::ObReplicaType get_replica_type() const = 0;
   virtual common::ObReplicaProperty get_replica_property() const = 0;
   virtual const common::ObMemberList& get_curr_member_list() const = 0;
@@ -114,6 +115,10 @@ public:
       const int64_t new_quorum, obrpc::ObMCLogInfo& log_info) override;
   virtual int64_t get_replica_num() const override;
   virtual common::ObReplicaType get_replica_type() const override;
+  virtual bool is_single_member_mode() const
+  {
+    return (1 == replica_num_);
+  }
   virtual common::ObReplicaProperty get_replica_property() const override;
   virtual const common::ObMemberList& get_curr_member_list() const override;
   virtual int receive_log(const ObLogEntry& log_entry, const common::ObAddr& server, const int64_t cluster_id,

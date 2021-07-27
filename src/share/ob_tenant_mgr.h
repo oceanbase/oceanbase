@@ -275,6 +275,11 @@ private:
   int check_and_do_freeze_by_total_limit();
   int print_tenant_node(
       ObTenantInfo& node, char* print_buf, int64_t buf_len, int64_t& pos, int64_t& total_active_memstore_hold);
+  int check_memory_used(const int64_t tenant_id,
+                        const double mem_active_memstore_used,
+                        const double mem_minor_freeze_trigger,
+                        const double mem_memstore_limit,
+                        bool &use_too_much_memory);
 
   struct ObTenantBucket {
     ObDList<ObTenantInfo> info_list_;

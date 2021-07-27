@@ -1014,7 +1014,7 @@ int ObRawExprUtils::parse_bool_expr_node_from_str(
 
 int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawExprFactory& expr_factory,
     const ObSQLSessionInfo& session_info, ObRawExpr*& expr, ObIArray<ObQualifiedName>& columns,
-    const ObSchemaChecker* schema_checker)
+    const ObSchemaChecker* schema_checker, const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   const ParseNode* node = NULL;
@@ -1023,15 +1023,73 @@ int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawE
   } else if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null");
-  } else if (OB_FAIL(build_generated_column_expr(expr_factory, session_info, *node, expr, columns, schema_checker))) {
+  } else if (OB_FAIL(build_generated_column_expr(
+                 expr_factory, session_info, *node, expr, columns, schema_checker, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExprUtils::check_deterministic(
+    const ObRawExpr* expr, ObIAllocator& allocator, const ObResolverUtils::PureFunctionCheckStatus check_status)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(expr));
+  CK(expr->get_children_count() >= 0);
+  ObList<const ObRawExpr*, ObIAllocator> expr_queue(allocator);
+  OZ(expr_queue.push_back(expr));
+  const ObRawExpr* cur_expr = NULL;
+  while (OB_SUCC(ret) && expr_queue.size() > 0) {
+    OZ(expr_queue.pop_front(cur_expr));
+    CK(OB_NOT_NULL(cur_expr));
+    OZ(check_deterministic_single(cur_expr, check_status));
+    for (int i = 0; OB_SUCC(ret) && i < cur_expr->get_param_count(); ++i) {
+      OZ(expr_queue.push_back(cur_expr->get_param_expr(i)));
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::check_deterministic_single(
+    const ObRawExpr* expr, const ObResolverUtils::PureFunctionCheckStatus check_status)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(expr));
+  if (OB_SUCC(ret) && ObResolverUtils::DISABLE_CHECK != check_status) {
+    if (expr->is_sys_func_expr()) {
+      if (expr->is_non_pure_sys_func_expr()) {
+        if (ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION;
+        } else if (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+        }
+        LOG_WARN("only pure sys function can be indexed", K(ret), K(check_status), K(*expr));
+      } else if (T_FUN_SYS_ROWNUM == expr->get_expr_type()) {
+        ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+        LOG_WARN("ROWNUM is not allowed", K(ret), K(*expr));
+      }
+    } else if (expr->is_pseudo_column_expr()) {
+      if (expr->is_specified_pseudocolumn_expr()) {
+        ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+        LOG_WARN("not allowed pesudo column", K(ret), K(*expr));
+      }
+    } else if (expr->is_udf_expr()) {
+      if (lib::is_mysql_mode()) {
+        ret = OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION;
+        LOG_WARN("user-defined functions are not allowd in generated column", K(ret), K(*expr));
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("user-defined function is not supported", K(ret), K(*expr));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "The user-defined function");
+      }
+    }
   }
   return ret;
 }
 
 int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawExprFactory& expr_factory,
     const ObSQLSessionInfo& session_info, const ObTableSchema& table_schema, ObRawExpr*& expr,
-    const ObSchemaChecker* schema_checker)
+    const ObSchemaChecker* schema_checker, const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   const ParseNode* node = NULL;
@@ -1042,9 +1100,11 @@ int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawE
   } else if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null");
-  } else if (OB_FAIL(build_generated_column_expr(expr_factory, session_info, *node, expr, columns, schema_checker))) {
+  } else if (OB_FAIL(build_generated_column_expr(
+                 expr_factory, session_info, *node, expr, columns, schema_checker, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret), K(expr_str));
   }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
     const ObQualifiedName& q_name = columns.at(i);
     if (OB_UNLIKELY(!q_name.database_name_.empty())) {
@@ -1121,7 +1181,8 @@ int ObRawExprUtils::build_check_constraint_expr(ObRawExprFactory& expr_factory, 
 }
 
 int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info,
-    const ParseNode& node, ObRawExpr*& expr, ObIArray<ObQualifiedName>& columns, const ObSchemaChecker* schema_checker)
+    const ParseNode& node, ObRawExpr*& expr, ObIArray<ObQualifiedName>& columns, const ObSchemaChecker* schema_checker,
+    const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   ObArray<ObVarInfo> sys_vars;
@@ -1187,6 +1248,10 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory& expr_factory, 
       columns.reuse();
       OZ(columns.assign(real_columns), real_columns);
     }
+  }
+  // check whether the expression is deterministic recursively
+  if (OB_SUCC(ret) && ObResolverUtils::DISABLE_CHECK != check_status) {
+    OZ(check_deterministic(expr, expr_factory.get_allocator(), check_status));
   }
   return ret;
 }
@@ -1259,12 +1324,14 @@ int ObRawExprUtils::build_raw_expr(ObRawExprFactory& expr_factory, const ObSQLSe
 
 int ObRawExprUtils::build_generated_column_expr(const ObString& expr_str, ObRawExprFactory& expr_factory,
     const ObSQLSessionInfo& session_info, uint64_t table_id, const ObTableSchema& table_schema,
-    const ObColumnSchemaV2& gen_col_schema, ObRawExpr*& expr, const ObSchemaChecker* schema_checker)
+    const ObColumnSchemaV2& gen_col_schema, ObRawExpr*& expr, const ObSchemaChecker* schema_checker,
+    const ObResolverUtils::PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   ObArray<ObQualifiedName> columns;
   const ObColumnSchemaV2* col_schema = NULL;
-  if (OB_FAIL(build_generated_column_expr(expr_str, expr_factory, session_info, expr, columns, schema_checker))) {
+  if (OB_FAIL(build_generated_column_expr(
+          expr_str, expr_factory, session_info, expr, columns, schema_checker, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
@@ -1996,6 +2063,7 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
   int ret = OB_SUCCESS;
   bool need_copy = true;
   bool copy_share_expr = (COPY_REF_SHARED == copy_types) || use_new_allocator;
+  bool is_stack_overflow = false;
   if (NULL == origin) {
     need_copy = false;
     dest = NULL;
@@ -2009,7 +2077,13 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
     need_copy = false;
   }
 
-  if (OB_SUCC(ret) && need_copy) {
+  if (OB_FAIL(ret) || !need_copy) {
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else {
     // deep copy here
     ObRawExpr::ExprClass expr_class = origin->get_expr_class();
     switch (expr_class) {

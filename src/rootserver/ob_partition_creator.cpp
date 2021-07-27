@@ -741,9 +741,11 @@ int ObPartitionCreator::batch_create_partitions(DestArgMap& dest_arg_map, const 
   common::ObArray<obrpc::ObCreatePartitionBatchArg*> inactive_args;
 
   proxy_batch_.reuse();
-  const int64_t log_sync_time = 10 * 1000 * 3;  // 3 times of sata disk sync time
-  const int64_t log_sync_count = 3;             //  1 slog + 2 clog
-  int64_t max_timeout_us = GCONF.rpc_timeout + replica_cnt * (log_sync_time * log_sync_count);
+  const int64_t log_sync_time = 10 * 1000 * 3; // 3 times of sata disk sync time
+  const int64_t log_sync_count = 3; //  1 slog + 2 clog
+  const int64_t wait_remove_dup_pg_time = 5 * 1000 * 1000;
+  int64_t max_timeout_us = GCONF.rpc_timeout + wait_remove_dup_pg_time +
+                           + replica_cnt * (log_sync_time * log_sync_count);
   // update partition table one by one, count update partition table time.
   const int64_t update_partition_table_time = 200 * 1000;  // 200ms
   max_timeout_us += update_partition_table_time * replica_cnt;

@@ -219,6 +219,8 @@ int ObOutlineExecutor::generate_logical_plan(
                  ctx,
                  outline_stmt))) {
     LOG_WARN("fail to transform outline stmt", K(ret));
+  } else if (FALSE_IT(opt_ctx.set_root_stmt(outline_stmt))) {
+    // do nothing
   } else if (OB_FAIL(ObSql::optimize_stmt(optimizer, *session_info, *outline_stmt, logical_plan))) {
     LOG_WARN("fail to optimize stmt", K(ret));
   } else { /*do nothing*/

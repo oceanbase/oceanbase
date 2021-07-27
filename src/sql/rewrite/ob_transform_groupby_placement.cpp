@@ -288,7 +288,7 @@ int ObTransformGroupByPlacement::compute_push_down_param(
     if (OB_ISNULL(joined_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("joined table is null", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *joined_table, table_bit_set))) {
+    } else if (OB_FAIL(stmt->get_table_rel_ids(*joined_table, table_bit_set))) {
       LOG_WARN("failed to convert table id array to bit set", K(ret));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && !should_merge && j < params.count(); ++j) {
@@ -378,7 +378,7 @@ int ObTransformGroupByPlacement::get_null_side_tables(
     null_table = &joined_table;
   }
   if (OB_SUCC(ret) && NULL != null_table) {
-    if (OB_FAIL(ObTransformUtils::get_table_rel_ids(stmt, *null_table, table_set))) {
+    if (OB_FAIL(stmt.get_table_rel_ids(*null_table, table_set))) {
       LOG_WARN("failed to get table relation ids", K(ret));
     }
   }
@@ -702,9 +702,9 @@ int ObTransformGroupByPlacement::distribute_joined_on_conds(
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *joined_table->left_table_, left_table_set))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*joined_table->left_table_, left_table_set))) {
     LOG_WARN("failed to get left table set", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *joined_table->right_table_, right_table_set))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*joined_table->right_table_, right_table_set))) {
     LOG_WARN("failed to get right table set", K(ret));
   }
   ObSEArray<ObRawExpr*, 4> filter_conds;
@@ -1503,8 +1503,8 @@ int ObTransformGroupByPlacement::check_groupby_pullup_validity(ObDMLStmt* stmt, 
     if (OB_ISNULL(stmt->get_semi_infos().at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("semi info is null", K(ret), K(stmt->get_semi_infos().at(i)));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(
-                   *stmt, stmt->get_semi_infos().at(i)->left_table_ids_, ignore_tables))) {
+    } else if (OB_FAIL(stmt->get_table_rel_ids(stmt->get_semi_infos().at(i)->left_table_ids_,
+                                               ignore_tables))) {
       LOG_WARN("failed to get table rel ids", K(ret));
     }
   }
@@ -1758,16 +1758,13 @@ int ObTransformGroupByPlacement::check_null_propagate(
   if (OB_ISNULL(child_stmt) || OB_ISNULL(parent_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (helper.need_check_null_propagate_) {
-    ObRelIds rel_ids;
+  } else if (helper.need_check_null_propagate_){
     ObSqlBitSet<> from_tables;
     ObColumnRefRawExpr* col_expr = NULL;
     ObSEArray<ObRawExpr*, 4> columns;
     ObSEArray<ObRawExpr*, 4> column_exprs;
-    if (OB_FAIL(ObTransformUtils::get_from_tables(*child_stmt, rel_ids))) {
+    if (OB_FAIL(child_stmt->get_from_tables(from_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-      LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(child_stmt->get_column_exprs(columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*child_stmt, columns, from_tables, column_exprs))) {
@@ -2066,17 +2063,14 @@ int ObTransformGroupByPlacement::wrap_case_when_if_necessary(
     ObSelectStmt& child_stmt, PullupHelper& helper, ObIArray<ObRawExpr*>& exprs)
 {
   int ret = OB_SUCCESS;
-  ObRelIds rel_ids;
   ObSqlBitSet<> from_tables;
   ObRawExpr* not_null_column = NULL;
   ObSEArray<ObRawExpr*, 4> columns;
   ObSEArray<ObRawExpr*, 4> column_exprs;
   if (helper.not_null_column_id_ == OB_INVALID) {
-    // do nothing
-  } else if (OB_FAIL(ObTransformUtils::get_from_tables(child_stmt, rel_ids))) {
+    //do nothing
+  } else if (OB_FAIL(child_stmt.get_from_tables(from_tables))) {
     LOG_WARN("failed to get from tables", K(ret));
-  } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-    LOG_WARN("failed to add members", K(ret));
   } else if (OB_FAIL(child_stmt.get_column_exprs(columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(child_stmt, columns, from_tables, column_exprs))) {

@@ -142,8 +142,14 @@ public:
   static const int64_t DEFAULT_TABLE_DOP = 1;
   explicit ObDDLResolver(ObResolverParams& params);
   virtual ~ObDDLResolver();
-  static int check_text_length(
-      ObCharsetType cs_type, ObCollationType co_type, const char* name, ObObjType& type, int32_t& length);
+  static int check_text_length(ObCharsetType cs_type,
+                               ObCollationType co_type,
+                               const char* name,
+                               ObObjType& type,
+                               int32_t& length,
+                               bool need_rewrite_length);
+
+  static int rewrite_text_length_mysql(ObObjType &type, int32_t &length);
   static int check_uniq_allow(
       share::schema::ObTableSchema& table_schema, obrpc::ObCreateIndexArg& index_arg, bool& allow);
   static int get_primary_key_default_value(common::ObObjType type, common::ObObj& default_value);
@@ -181,7 +187,7 @@ public:
   static int cast_enum_or_set_default_value(
       const share::schema::ObColumnSchemaV2& column, common::ObObjCastParams& params, common::ObObj& def_val);
   int check_partition_name_duplicate(ParseNode* node, bool is_oracle_modle = false);
-  static int check_text_column_length_and_promote(share::schema::ObColumnSchemaV2& column);
+  static int check_text_column_length_and_promote(share::schema::ObColumnSchemaV2& column, int64_t table_id);
   static int get_enable_split_partition(const int64_t tenant_id, bool& enable_split_partition);
   typedef common::hash::ObPlacementHashSet<share::schema::ObIndexNameHashWrapper, common::OB_MAX_COLUMN_NUMBER>
       IndexNameSet;
@@ -250,6 +256,7 @@ protected:
   int set_table_name(const common::ObString& table_name);
   int set_database_name(const common::ObString& database_name);
   int set_encryption_name(const common::ObString& encryption);
+  int resolve_table_id_pre(ParseNode *node);
   int resolve_table_options(ParseNode* node, bool is_index_option);
   int resolve_table_option(const ParseNode* node, const bool is_index_option);
   int resolve_column_definition_ref(

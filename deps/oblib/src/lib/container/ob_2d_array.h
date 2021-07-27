@@ -531,7 +531,7 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT>
         const int64_t current_blocks = get_block_count();
         for (int64_t i = current_blocks; OB_SUCC(ret) && i < need_blocks; ++i) {
           if (OB_FAIL(new_block())) {
-            LIB_LOG(WARN, "failed: new_block()", K(ret));
+            LIB_LOG(WARN, "failed: new_block()", K(ret), K(need_blocks), K(capacity));
           }
         }
       }

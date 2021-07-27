@@ -36,10 +36,9 @@ class ObDumpTaskGenerator {
     CONTEXT = 1,
     CHUNK_ALL = 2,
     CHUNK_OF_TENANT_CTX = 3,
-    CHUNK = 4,
-    SET_LEAK_MOD = 5,
-    SET_LEAK_RATE = 6,
-    MEMORY_LEAK = 7,
+    CHUNK               = 4,
+    SET_LEAK_MOD        = 5,
+    MEMORY_LEAK         = 7,
   };
 
 public:

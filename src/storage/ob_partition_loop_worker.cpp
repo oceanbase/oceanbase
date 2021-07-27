@@ -123,6 +123,10 @@ int ObPartitionLoopWorker::gen_readable_info_with_memtable_(ObPartitionReadableI
   if (OB_ISNULL(pls_) || OB_ISNULL(txs_) || OB_ISNULL(replay_status_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "not inited", K(ret), K(pkey_), KP_(pls), KP_(txs), KP_(replay_status));
+  } else if (!replay_status_->is_enabled()) {
+    //current replay_status is disable, return specific errcode
+    ret = OB_STATE_NOT_MATCH;
+    STORAGE_LOG(WARN, "replay status is disable", K(ret), K(pkey_), KP_(pls), KP_(txs), KP_(replay_status));
   } else if (OB_FAIL(pls_->get_next_replay_log_info(next_replay_log_id, readable_info.min_log_service_ts_))) {
     if (OB_STATE_NOT_MATCH == ret) {
       // print one log per minute
@@ -339,9 +343,9 @@ int ObPartitionLoopWorker::gene_checkpoint_()
       } else if (last_max_trans_version < max_trans_version) {
         ATOMIC_STORE(&last_max_trans_version_, max_trans_version);
       } else if (last_max_trans_version == max_trans_version) {
-        if (last_checkpoint <= max_trans_version ||
-            ((cur_checkpoint - last_checkpoint_value_) > COLD_PARTITION_CHECKPOINT_INTERVAL &&
-                REACH_COUNT_PER_SEC(COLD_PARTITION_CHECKPOINT_PS_LIMIT))) {
+        if (last_checkpoint <= max_trans_version
+            || ((cur_checkpoint - last_checkpoint_value_) > COLD_PARTITION_CHECKPOINT_INTERVAL
+                && EXECUTE_COUNT_PER_SEC(COLD_PARTITION_CHECKPOINT_PS_LIMIT))) {
           if (OB_FAIL(write_checkpoint_(cur_checkpoint))) {
             STORAGE_LOG(WARN, "write checkpoint failed", K(ret), K_(pkey), K(cur_checkpoint));
           } else {

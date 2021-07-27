@@ -148,30 +148,51 @@ public:
   int64_t get_latest_frozen_timestamp();
 
   // no schema version is returned if you do not give the tenant id
-  int get_freeze_info_by_major_version(const int64_t major_version, FreezeInfoLite& freeze_info);
-  int get_freeze_info_by_major_version(const uint64_t table_id, const int64_t major_version, FreezeInfo& freeze_info);
-  int get_freeze_info_by_major_version(
-      const int64_t major_version, FreezeInfoLite& freeze_info, bool& is_first_major_version);
-  int get_freeze_info_behind_major_version(const int64_t major_version, common::ObIArray<FreezeInfoLite>& freeze_infos);
+  int get_freeze_info_by_major_version(const int64_t major_version,
+                                       FreezeInfoLite &freeze_info);
+  int get_freeze_info_by_major_version(const uint64_t table_id,
+                                       const int64_t major_version,
+                                       FreezeInfo &freeze_info);
+  int get_freeze_info_by_major_version(const int64_t major_version,
+                                       FreezeInfoLite &freeze_info,
+                                       bool &is_first_major_version);
+  int get_freeze_info_behind_major_version(const int64_t major_version,
+                                           common::ObIArray<FreezeInfoLite> &freeze_infos);
 
-  int get_tenant_freeze_info_by_major_version(
-      const uint64_t tenant_id, const int64_t major_version, FreezeInfo& freeze_info);
+  int get_tenant_freeze_info_by_major_version(const uint64_t tenant_id,
+                                              const int64_t major_version,
+                                              FreezeInfo &freeze_info);
 
-  int get_freeze_info_by_snapshot_version(const int64_t snapshot_version, FreezeInfoLite& freeze_info);
-  int get_freeze_info_by_snapshot_version(
-      const uint64_t table_id, const int64_t snapshot_version, FreezeInfo& freeze_info);
+  int get_freeze_info_by_snapshot_version(const int64_t snapshot_version,
+                                          FreezeInfoLite &freeze_info);
+  int get_freeze_info_by_snapshot_version(const uint64_t table_id,
+                                          const int64_t snapshot_version,
+                                          FreezeInfo &freeze_info);
 
-  int get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfoLite& info);
-  int get_neighbour_major_freeze(const uint64_t table_id, const int64_t snapshot_version, NeighbourFreezeInfo& info);
+  int get_neighbour_major_freeze(const int64_t snapshot_version,
+                                 NeighbourFreezeInfoLite &info);
+  int get_neighbour_major_freeze(const uint64_t table_id,
+                                 const int64_t snapshot_version,
+                                 NeighbourFreezeInfo &info);
 
-  int get_min_reserved_snapshot(const common::ObPartitionKey& pkey, const int64_t merged_version,
-      const int64_t schema_version, int64_t& snapshot_version, int64_t& backup_snapshot_version);
-  int get_reserve_points(const int64_t tenant_id, const share::ObSnapShotType snapshot_type,
-      common::ObIArray<share::ObSnapshotInfo>& restore_points, int64_t& snapshot_gc_ts);
-  int update_info(const int64_t snapshot_gc_ts, const common::ObIArray<SchemaPair>& gc_schema_version,
-      const common::ObIArray<FreezeInfoLite>& info_list, const common::ObIArray<share::ObSnapshotInfo>& snapshots,
-      const int64_t backup_snapshot_version, const int64_t delay_delete_snapshot_version,
-      const int64_t min_major_version, bool& changed);
+  int get_min_reserved_snapshot(const common::ObPartitionKey &pkey,
+                                const int64_t merged_version,
+                                const int64_t schema_version,
+                                int64_t &snapshot_version,
+                                int64_t &backup_snapshot_version);
+  int get_reserve_points(const int64_t tenant_id,
+                         const share::ObSnapShotType snapshot_type,
+                         common::ObIArray<share::ObSnapshotInfo> &restore_points,
+                         int64_t &snapshot_gc_ts);
+  int get_restore_point_min_schema_version(const int64_t tenant_id, int64_t &schema_version);
+  int update_info(const int64_t snapshot_gc_ts,
+                  const common::ObIArray<SchemaPair> &gc_schema_version,
+                  const common::ObIArray<FreezeInfoLite> &info_list,
+                  const common::ObIArray<share::ObSnapshotInfo> &snapshots,
+                  const int64_t backup_snapshot_version,
+                  const int64_t delay_delete_snapshot_version,
+                  const int64_t min_major_version,
+                  bool& changed);
 
   int64_t get_snapshot_gc_ts();
   int get_local_backup_snapshot_version(int64_t& backup_snapshot_version);
@@ -312,19 +333,22 @@ private:
       schema_node* prev;
       schema_node* next;
 
-      schema_node()
-          : tenant_id(common::OB_INVALID_ID),
-            freeze_version(common::OB_INVALID_VERSION),
-            schema_version(common::OB_INVALID_VERSION),
-            prev(NULL),
-            next(NULL)
-      {}
+      schema_node() { reset(); }
 
       void set(const uint64_t tenant, const int64_t freeze, const int64_t schema)
       {
         tenant_id = tenant;
         freeze_version = freeze;
         schema_version = schema;
+      }
+
+      void reset()
+      {
+        tenant_id = common::OB_INVALID_ID;
+        freeze_version = common::OB_INVALID_VERSION;
+        schema_version = common::OB_INVALID_VERSION;
+        prev = NULL;
+        next = NULL;
       }
 
       TO_STRING_KV(K(tenant_id), K(freeze_version), K(schema_version));

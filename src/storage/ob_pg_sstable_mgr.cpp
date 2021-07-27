@@ -655,6 +655,57 @@ int ObPGSSTableMgr::recycle_unused_sstables(const int64_t max_recycle_cnt, int64
   return ret;
 }
 
+int ObPGSSTableMgr::recycle_sstable(const ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPGSSTableMgr has not been inited", K(ret));
+  } else if (!enable_write_log_) {
+    LOG_INFO("do not recycle unused sstable now");
+  } else if (OB_UNLIKELY(!table_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_key));
+  } else {
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, table_key.hash());
+    ObITable *sstable = NULL;
+    if (OB_FAIL(table_map_.get(table_key, sstable))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS; // maybe this sstable has be removed.
+      } else {
+        LOG_WARN("fail to get sstable", K(ret), K(table_key));
+      }
+    } else if (OB_ISNULL(sstable)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("error sys, table must not be null", K(ret), KP(sstable));
+    } else if (OB_UNLIKELY(sstable->get_ref() > 0)) {
+      // do nothing.
+    } else {
+      int64_t lsn = 0;
+      if (OB_FAIL(SLOGGER.begin(OB_LOG_TABLE_MGR))) {
+        LOG_WARN("fail to begin transaction", K(ret));
+      } else if (OB_FAIL(write_remove_sstable_log(sstable->get_key()))) {
+        LOG_WARN("fail to write remove sstable log", K(ret), K(sstable->get_key()));
+      } else if (OB_FAIL(SLOGGER.commit(lsn))) {
+        LOG_WARN("fail to commit slog", K(ret));
+      } else if (OB_FAIL(table_map_.erase(sstable->get_key()))) {
+        LOG_WARN("fail to erase from table map", K(ret), K(sstable->get_key()));
+        abort();
+      } else {
+        free_sstable(static_cast<ObSSTable *>(sstable));
+      }
+
+      if (OB_FAIL(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = SLOGGER.abort())) {
+          LOG_WARN("fail to abort slog", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int64_t ObPGSSTableMgr::get_serialize_size()
 {
   int ret = OB_SUCCESS;

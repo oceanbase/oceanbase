@@ -2731,6 +2731,8 @@ public:
   int assign(const ObRebalanceSqlBKGTask& that);
 
 private:
+  void notify_sql_scheduler(const int rc) const;
+
   common::ObArray<ObSqlBKGDDistTaskInfo> task_infos_;
 };
 

@@ -316,17 +316,20 @@ int ObPartitionMetaStorageReader::read_table_keys()
         OB_LOG(WARN, "fail to deserialize table key size", K(ret), K(table_idx), K(table_count), K(read_size));
       } else if (OB_FAIL(table_key.deserialize(read_buf, read_size, pos))) {
         OB_LOG(WARN, "fail to deserialize table key", K(ret), K(table_idx), K(table_count), K(read_size));
-      } else if (serialize_size != table_key.get_serialize_size()) {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "table keys serialize size is not match", K(ret), K(serialize_size), K(table_key));
       } else if (OB_FAIL(table_keys_array_.push_back(table_key))) {
         OB_LOG(WARN, "fail to push backup table key", K(ret), K(table_key));
       } else {
         OB_LOG(DEBUG, "succ to add table key meta", K(read_size), K(pos), K(table_key));
       }
     }
-  }
 
+    if (OB_SUCC(ret)) {
+      if (pos != read_size) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "table keys serialize size is not match", K(ret), K(pos), K(read_size));
+      }
+    }
+  }
   return ret;
 }
 

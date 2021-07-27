@@ -542,6 +542,9 @@ protected:
   inline static bool is_lt_1_(const Desc d) __attribute__((always_inline));
   inline static int exp_check_(const ObNumber::Desc& desc, const bool is_oracle_mode = false)
       __attribute__((always_inline));
+  inline static bool is_valid_sci_tail_(const char *str, 
+                                        const int64_t length, 
+                                        const int64_t e_pos) __attribute__((always_inline));
 
 public:
   bool is_int64() const;

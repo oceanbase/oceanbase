@@ -395,7 +395,7 @@ private:
 
   int fill_wf_info(ObIArray<ObExpr*>& all_expr, ObWinFunRawExpr& win_expr, WinFuncInfo& wf_info);
   int fil_sort_info(const ObIArray<OrderItem>& sort_keys, ObIArray<ObExpr*>& all_exprs, ObIArray<ObExpr*>* sort_exprs,
-      ObSortCollations& sort_collations, ObSortFuncs& sort_cmp_funcs, const ObItemType aggr_type = T_INVALID);
+      ObSortCollations& sort_collations, ObSortFuncs& sort_cmp_funcs);
   int get_pdml_partition_id_column_idx(const ObIArray<ObExpr*>& dml_exprs, int64_t& idx);
 
   int do_gi_partition_pruning(ObLogJoin& op, ObBasicNestedLoopJoinSpec& spec);

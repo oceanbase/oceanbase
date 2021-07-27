@@ -24,7 +24,6 @@ extern const ObCtxInfo& get_global_ctx_info();
 extern void print_malloc_stats(bool print_glibc_malloc_stats);
 extern void ob_purge_memory_pool();
 void reset_mem_leak_checker_label(const char* str);
-void reset_mem_leak_checker_rate(int64_t rate);
 extern ObMemLeakChecker& get_mem_leak_checker();
 
 /// set the memory as read-only

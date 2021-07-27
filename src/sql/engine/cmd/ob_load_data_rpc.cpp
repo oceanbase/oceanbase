@@ -138,11 +138,19 @@ int ObRpcLoadDataShuffleTaskExecuteP::process()
       LOG_WARN("LOAD DATA shuffle task timeout", K(ret), K(task));
     } else if (OB_FAIL(task.shuffle_task_handle_.get_arg(handle))) {  // check identifier
       LOG_ERROR("fail to get arg", K(ret));
-    } else if (OB_FAIL(ObLoadDataSPImpl::exec_shuffle(task.task_id_, handle))) {
-      LOG_WARN("fail to exec shuffle task", K(ret));
+    } else if (OB_ISNULL(handle)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("handle is null", K(ret));
+    } else  {
+      if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("LOAD DATA shuffle task timeout", K(ret), K(task));
+      } else if (OB_FAIL(ObLoadDataSPImpl::exec_shuffle(task.task_id_, handle))) {
+        LOG_WARN("fail to exec shuffle task", K(ret));
+      }
+      handle->result.exec_ret_ = ret;
     }
-    handle->result.exec_ret_ = ret;
-    MEM_BARRIER();  // use handle ptr before release job ref
+    MEM_BARRIER(); //use handle ptr before release job ref
     job_status->release();
   }
 

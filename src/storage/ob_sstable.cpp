@@ -26,6 +26,7 @@
 #include "ob_partition_scheduler.h"
 #include "ob_warm_up_request.h"
 #include "ob_multiple_merge.h"
+#include "ob_pg_sstable_garbage_collector.h"
 #include "storage/ob_sstable_row_exister.h"
 #include "storage/ob_sstable_row_multi_exister.h"
 #include "storage/ob_sstable_row_getter.h"
@@ -602,6 +603,8 @@ int ObSSTable::close()
       STORAGE_LOG(WARN, "fail to build block meta map", K(ret));
     } else if (OB_FAIL(build_logic_block_id_map())) {
       STORAGE_LOG(WARN, "failed to build block id set", K(ret));
+    } else if (OB_FAIL(check_collation_free_valid())) {
+      STORAGE_LOG(WARN, "fail to check collation free valid", K(ret));
     } else if (OB_FAIL(check_logical_data_version(macro_meta_array_))) {
       STORAGE_LOG(WARN, "fail to check logical data version for sstable for data block", K(ret), K_(meta));
     } else if (OB_FAIL(check_logical_data_version(lob_macro_meta_array_))) {
@@ -2796,33 +2799,33 @@ int ObSSTable::get_concurrent_cnt(int64_t tablet_size, int64_t& concurrent_cnt)
 int ObSSTable::check_collation_free_valid()
 {
   int ret = OB_SUCCESS;
-  ObFullMacroBlockMeta full_meta;
+  const ObMacroBlockMetaV2 *meta = nullptr;
   bool is_collation_free_valid = false;
 
   exist_invalid_collation_free_meta_ = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !exist_invalid_collation_free_meta_ && i < meta_.macro_block_array_.count();
-       i++) {
-    if (OB_FAIL(get_meta(meta_.macro_block_array_.at(i), full_meta))) {
-      STORAGE_LOG(WARN, "fail to get meta", K(ret), K(meta_.macro_block_array_.at(i)));
-    } else if (!full_meta.is_valid()) {
+  for (int64_t i = 0; OB_SUCC(ret) && !exist_invalid_collation_free_meta_ && i < macro_meta_array_.count(); i++) {
+    if (OB_ISNULL(meta = macro_meta_array_.at(i).meta_)) {
+      ret = OB_ERR_SYS;
+      STORAGE_LOG(WARN, "error sys, block meta must not be null", K(ret));
+    } else if (!meta->is_valid()) {
       ret = OB_ERR_SYS;
       STORAGE_LOG(WARN, "Unexpected null macro meta", K(ret), K(i));
-    } else if (OB_FAIL(full_meta.meta_->check_collation_free_valid(is_collation_free_valid))) {
-      STORAGE_LOG(WARN, "fail to check collation free is valid", K(ret), K(full_meta));
+    } else if (OB_FAIL(meta->check_collation_free_valid(is_collation_free_valid))) {
+      STORAGE_LOG(WARN, "fail to check collation free is valid", K(ret), K(meta));
     } else if (!is_collation_free_valid) {
       exist_invalid_collation_free_meta_ = true;
     }
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && !exist_invalid_collation_free_meta_ && i < meta_.lob_macro_block_array_.count();
-       i++) {
-    if (OB_FAIL(get_meta(meta_.lob_macro_block_array_.at(i), full_meta))) {
-      STORAGE_LOG(WARN, "fail to get meta", K(ret), K(meta_.lob_macro_block_array_.at(i)));
-    } else if (!full_meta.is_valid()) {
+  for (int64_t i = 0; OB_SUCC(ret) && !exist_invalid_collation_free_meta_ && i < lob_macro_meta_array_.count(); i++) {
+    if (OB_ISNULL(meta = lob_macro_meta_array_.at(i).meta_)) {
+      ret = OB_ERR_SYS;
+      STORAGE_LOG(WARN, "error sys, block meta must not be null", K(ret));
+    } else if (!meta->is_valid()) {
       ret = OB_ERR_SYS;
       STORAGE_LOG(WARN, "Unexpected null macro meta", K(ret), K(i));
-    } else if (OB_FAIL(full_meta.meta_->check_collation_free_valid(is_collation_free_valid))) {
-      STORAGE_LOG(WARN, "fail to check collation free is valid", K(ret), K(full_meta));
+    } else if (OB_FAIL(meta->check_collation_free_valid(is_collation_free_valid))) {
+      STORAGE_LOG(WARN, "fail to check collation free is valid", K(ret), K(meta));
     } else if (!is_collation_free_valid) {
       exist_invalid_collation_free_meta_ = true;
     }
@@ -3312,7 +3315,21 @@ int ObSSTable::convert_add_macro_block_meta(
   return ret;
 }
 
-int ObSSTable::serialize_schema_map(char* buf, int64_t data_len, int64_t& pos) const
+int64_t ObSSTable::dec_ref()
+{
+  int64_t ref_cnt = ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+
+  if (0 == ref_cnt) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObPGSSTableGarbageCollector::get_instance().push_sstable_into_gc_queue(key_))) {
+      LOG_WARN("fail to push sstable into gc queue", K(ret), K(key_));
+    }
+  }
+
+  return ref_cnt;
+}
+
+int ObSSTable::serialize_schema_map(char *buf, int64_t data_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(serialization::encode_i64(buf, data_len, pos, schema_map_.size()))) {

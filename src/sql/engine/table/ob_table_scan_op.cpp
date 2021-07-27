@@ -866,6 +866,8 @@ int ObTableScanOp::inner_close()
 
   if (MY_SPEC.batch_scan_flag_ ? NULL == bnl_iters_ : NULL == result_) {
     // this is normal case, so we need NOT set ret or LOG_WARN.
+  } else if (OB_FAIL(ctx_.remove_iter(result_))) {
+    LOG_WARN("fail to remove iter", K(ret));
   } else {
     if (OB_FAIL(fill_storage_feedback_info())) {
       LOG_WARN("failed to fill storage feedback info", K(ret));
@@ -1480,6 +1482,14 @@ inline int ObTableScanOp::do_table_scan(bool is_rescan, bool need_prepare /*=tru
       } else {
         LOG_DEBUG("table_scan begin", K(scan_param_), K(*result_), "op_id", MY_SPEC.id_);
         LOG_DEBUG("debug trans", K(*scan_param_.trans_desc_), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(result_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result should not be NULL", K(ret), K(scan_param_));
+      } else if (OB_FAIL(ctx_.push_back_iter(result_))) {
+        LOG_WARN("failed to push back iter", K(ret), K(scan_param_));
       }
     }
   }

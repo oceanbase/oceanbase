@@ -33,9 +33,7 @@ public:
   ObShuffleService(ObIAllocator& allocator)
       : allocator_(allocator),
         row_cache_(),
-        current_cell_count_(-1),
-        part_idx_to_part_id_(NULL),
-        subpart_idx_to_subpart_id_(NULL)
+        current_cell_count_(-1)
   {}
 
   ~ObShuffleService() = default;
@@ -45,16 +43,6 @@ public:
       const ObSqlExpression& subpart_partition_func, const ObIArray<ObTransmitRepartColumn>& repart_columns,
       const ObIArray<ObTransmitRepartColumn>& repart_sub_columns, int64_t& part_idx, int64_t& subpart_idx,
       bool& no_match_partiton);
-
-  inline void set_part_idx_to_part_id_map(PartIdx2PartIdMap* map)
-  {
-    part_idx_to_part_id_ = map;
-  }
-
-  inline void set_subpart_idx_to_subpart_id_map(SubPartIdx2SubPartIdMap* map)
-  {
-    subpart_idx_to_subpart_id_ = map;
-  }
 
   // This interface is only used under the px framework,
   // non-px please use the above interface.
@@ -118,11 +106,6 @@ private:
       const ObIArray<ObTransmitRepartColumn>& repart_columns, common::ObNewRow& out_row, bool hash_part,
       bool is_hash_v2);
 
-  int get_hash_part_id(const common::ObNewRow& row, const int64_t part_num, common::ObIArray<int64_t>& part_ids,
-      const PartIdx2PartIdMap& part_map);
-  int get_hash_subpart_id(const common::ObNewRow& row, const int64_t subpart_num,
-      common::ObIArray<int64_t>& subpart_ids, const SubPartIdx2SubPartIdMap& subpart_map);
-
 public:
   constexpr static int64_t NO_MATCH_PARTITION = -2;
 
@@ -133,8 +116,6 @@ private:
   // Expr calculation context
   ObExprCtx expr_ctx_;
 
-  PartIdx2PartIdMap* part_idx_to_part_id_;
-  SubPartIdx2SubPartIdMap* subpart_idx_to_subpart_id_;
 };
 
 }  // namespace sql

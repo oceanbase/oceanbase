@@ -250,10 +250,20 @@ int ObTransformPreProcess::transform_for_grouping_sets_and_multi_rollup(ObDMLStm
       ObSelectStmt* view_stmt = NULL;
       ObSelectStmt* transform_stmt = NULL;
       ObSelectStmt* set_view_stmt = NULL;
+      bool is_correlated = false;
+      int32_t stmt_level = select_stmt->get_current_level();
       // step 1, creating spj stmt
       if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, select_stmt, view_stmt))) {
         LOG_WARN("failed to create spj view.", K(ret));
         // step 2, creating temp table
+      } else if (stmt_level > 0 &&
+                 OB_FAIL(ObTransformUtils::is_correlated_subquery(view_stmt,
+                                                                  stmt_level-1,
+                                                                  is_correlated))) {
+        LOG_WARN("failed to check is correlated subquery", K(ret));
+      } else if (is_correlated) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("correlated temp table is not support now!", K(ret));
       } else if (OB_FAIL(add_generated_table_as_temp_table(ctx_, select_stmt))) {
         LOG_WARN("failed to add generated table as temp table", K(ret));
         // setp 3, creating set stmt
@@ -595,15 +605,15 @@ int ObTransformPreProcess::replace_with_set_stmt_view(
     ObSelectStmt* origin_stmt, ObSelectStmt* set_view_stmt, ObSelectStmt*& union_stmt)
 {
   int ret = OB_SUCCESS;
-  ObRelIds rel_ids;
-  TableItem* view_table_item = NULL;
-  ObSEArray<ObRawExpr*, 4> old_exprs;
-  ObSEArray<ObRawExpr*, 4> new_exprs;
+  ObSqlBitSet<> rel_ids;
+  TableItem *view_table_item = NULL;
+  ObSEArray<ObRawExpr *, 4> old_exprs;
+  ObSEArray<ObRawExpr *, 4> new_exprs;
   ObSEArray<ColumnItem, 4> temp_column_items;
   if (OB_ISNULL(origin_stmt) || OB_ISNULL(set_view_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("origin stmt is null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_from_tables(*origin_stmt, rel_ids))) {
+  } else if (OB_FAIL(origin_stmt->get_from_tables(rel_ids))) {
     LOG_WARN("failed to get from tables.", K(ret));
   } else if (FALSE_IT(origin_stmt->get_table_items().reset())) {
   } else if (FALSE_IT(origin_stmt->get_from_items().reset())) {
@@ -1147,14 +1157,11 @@ int ObTransformPreProcess::create_connect_by_view(ObSelectStmt& stmt)
   // 5. finish creating the child stmts
   if (OB_SUCC(ret)) {
     // create select list
-    ObSEArray<ObRawExpr*, 4> columns;
-    ObRelIds rel_ids;
+    ObSEArray<ObRawExpr *, 4> columns;
     ObSqlBitSet<> from_tables;
     ObSEArray<ObRawExpr*, 16> shared_exprs;
-    if (OB_FAIL(ObTransformUtils::get_from_tables(*view_stmt, rel_ids))) {
+    if (OB_FAIL(view_stmt->get_from_tables(from_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-      LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(view_stmt->get_column_exprs(columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*view_stmt, columns, from_tables, select_list))) {
@@ -1277,15 +1284,12 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt& stmt)
   // 4. finish creating the left child stmts
   if (OB_SUCC(ret)) {
     // create select list
-    ObSEArray<ObRawExpr*, 4> columns;
-    ObSEArray<ObQueryRefRawExpr*, 4> query_refs;
-    ObRelIds rel_ids;
+    ObSEArray<ObRawExpr *, 4> columns;
+    ObSEArray<ObQueryRefRawExpr *, 4> query_refs;
     ObSqlBitSet<> from_tables;
     ObSEArray<ObRawExpr*, 16> shared_exprs;
-    if (OB_FAIL(ObTransformUtils::get_from_tables(*left_view_stmt, rel_ids))) {
+    if (OB_FAIL(left_view_stmt->get_from_tables(from_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(from_tables.add_members2(rel_ids))) {
-      LOG_WARN("failed to add members", K(ret));
     } else if (OB_FAIL(left_view_stmt->get_column_exprs(columns))) {
       LOG_WARN("failed to get column exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(*left_view_stmt, columns, from_tables, select_list))) {
@@ -1442,8 +1446,10 @@ int ObTransformPreProcess::is_cond_in_one_from_item(ObSelectStmt& stmt, ObRawExp
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(
-                   stmt, table->is_joined_table() ? *(static_cast<JoinedTable*>(table)) : *table, table_ids))) {
+    } else if (OB_FAIL(stmt.get_table_rel_ids(table->is_joined_table() ? 
+                                              *(static_cast<JoinedTable*>(table)) :
+                                              *table,
+                                              table_ids))) {
       LOG_WARN("failed to get table rel ids", K(ret));
     } else if (expr->get_relation_ids().is_subset(table_ids)) {
       in_from_item = true;
@@ -3618,27 +3624,35 @@ int ObTransformPreProcess::try_transform_common_rownum_as_limit(ObDMLStmt* stmt,
 {
   int ret = OB_SUCCESS;
   limit_expr = NULL;
-  ObRawExpr* limit_value = NULL;
+  ObRawExpr *my_rownum = NULL;
+  ObRawExpr *limit_value = NULL;
   ObItemType op_type = T_INVALID;
   bool is_valid = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_rownum_expr(my_rownum))) {
+    LOG_WARN("failed to get my rownum expr", K(ret));
   } else {
     ObIArray<ObRawExpr*>& conditions = stmt->get_condition_exprs();
     int64_t expr_idx = -1;
     bool is_eq_cond = false;
     bool is_const_filter = false;
     for (int64_t i = 0; OB_SUCC(ret) && !is_eq_cond && i < conditions.count(); ++i) {
-      ObRawExpr* cond_expr = NULL;
-      ObRawExpr* const_expr = NULL;
+      ObRawExpr *cond_expr = NULL;
+      ObRawExpr *const_expr = NULL;
+      ObRawExpr *rownum_expr = NULL;
       ObItemType expr_type = T_INVALID;
       if (OB_ISNULL(cond_expr = conditions.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("condition expr is null", K(ret), K(i));
-      } else if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(cond_expr, expr_type, const_expr, is_const_filter))) {
+      } else if (OB_FAIL(ObOptimizerUtil::get_rownum_filter_info(cond_expr,
+                                                                 expr_type,
+                                                                 rownum_expr,
+                                                                 const_expr,
+                                                                 is_const_filter))) {
         LOG_WARN("failed to check is filter rownum", K(ret));
-      } else if (!is_const_filter) {
+      } else if (!is_const_filter || rownum_expr != my_rownum) {
         // do nothing
       } else if (T_OP_LE == expr_type || T_OP_LT == expr_type) {
         limit_value = const_expr;

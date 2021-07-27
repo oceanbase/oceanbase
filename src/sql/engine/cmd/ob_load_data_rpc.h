@@ -22,6 +22,7 @@
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
+#include "lib/lock/ob_spin_lock.h"
 
 namespace oceanbase {
 namespace observer {
@@ -279,7 +280,7 @@ public:
   ~ObConcurrentFixedCircularArray()
   {
     if (data_ != NULL) {
-      ob_free_align(static_cast<void*>(data_));
+      ob_free_align((void *)(data_));
     }
   }
   int init(int64_t array_size)
@@ -294,8 +295,8 @@ public:
     }
     return ret;
   }
-  OB_INLINE int push_back(const T& obj)
-  {
+  OB_INLINE int push_back(const T &obj) {
+    common::ObSpinLockGuard guard(lock_);
     int ret = common::OB_SUCCESS;
     // push optimistically
     int64_t pos = ATOMIC_FAA(&head_pos_, 1);
@@ -303,12 +304,13 @@ public:
     if (OB_UNLIKELY(pos - ATOMIC_LOAD(&tail_pos_) >= array_size_)) {
       ret = common::OB_SIZE_OVERFLOW;
     } else {
-      ATOMIC_SET(&data_[pos % array_size_], obj);
+      ATOMIC_STORE(&data_[pos % array_size_], obj);
     }
     return ret;
   }
   OB_INLINE int pop(T& output)
   {
+    common::ObSpinLockGuard guard(lock_);
     int ret = common::OB_SUCCESS;
     // pop optimistically
     int64_t pos = ATOMIC_FAA(&tail_pos_, 1);
@@ -316,7 +318,8 @@ public:
     if (OB_UNLIKELY(pos >= ATOMIC_LOAD(&head_pos_))) {
       ret = common::OB_ARRAY_OUT_OF_RANGE;
     } else {
-      output = ATOMIC_LOAD(&data_[pos % array_size_]);
+      //output = ATOMIC_LOAD(&data_[pos % array_size_]);
+      output = ATOMIC_SET(&data_[pos % array_size_], NULL);
     }
     return ret;
   }
@@ -328,9 +331,10 @@ public:
 private:
   // data members
   int64_t array_size_;
-  T* volatile data_;
+  volatile T * data_;
   volatile int64_t head_pos_;
   volatile int64_t tail_pos_;
+  common::ObSpinLock lock_;
 };
 
 typedef ObConcurrentFixedCircularArray<ObLoadbuffer*> CompleteTaskArray;

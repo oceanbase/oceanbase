@@ -183,12 +183,13 @@ int ObServerConnectionPool::init_dblink(uint64_t dblink_id, const ObAddr& server
     LOG_WARN("db param buffer is not enough", K(ret), K(dblink_id), K(db_tenant), K(db_user), K(db_pass), K(db_name));
   } else {
     dblink_id_ = dblink_id;
-    (void)snprintf(db_user_, sizeof(db_user_), "%s@%s", db_user.ptr(), db_tenant.ptr());
-    (void)snprintf(db_pass_, sizeof(db_pass_), "%s", db_pass.ptr());
+    (void)snprintf(
+        db_user_, sizeof(db_user_), "%.*s@%.*s", db_user.length(), db_user.ptr(), db_tenant.length(), db_tenant.ptr());
+    (void)snprintf(db_pass_, sizeof(db_pass_), "%.*s", db_pass.length(), db_pass.ptr());
     // https://baike.baidu.com/item/mysql_real_connect/4007597
     // if db is NULL, the default database is used.
     if (!db_name.empty()) {
-      (void)snprintf(db_name_, sizeof(db_name_), "%s", db_name.ptr());
+      (void)snprintf(db_name_, sizeof(db_name_), "%.*s", db_name.length(), db_name.ptr());
     }
   }
   return ret;

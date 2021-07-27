@@ -344,7 +344,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_null_reject(
   } else if (OB_ISNULL(right_table = joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("right table is null", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *(joined_table->right_table_), right_table_ids))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*(joined_table->right_table_), right_table_ids))) {
     LOG_WARN("failed to get right table relation ids", K(ret));
   }
 
@@ -394,10 +394,10 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(
                  is_simple_condition))) {
     LOG_WARN("check is simple join condition failed", K(ret));
   } else if (!is_simple_condition) {
-    // do nothing
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *(joined_table->left_table_), left_table_ids))) {
+    /*on condition不是简单的列相等连接，不能消除，do nothing*/
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*(joined_table->left_table_),left_table_ids))) {
     LOG_WARN("failed to get left table rel ids", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *(joined_table->right_table_), right_table_ids))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*(joined_table->right_table_), right_table_ids))) {
     LOG_WARN("failed to get right table relation ids", K(ret));
   } else if (OB_FAIL(extract_columns_from_join_conditions(
                  joined_table->join_conditions_, left_table_ids, stmt->get_current_level(), left_col_exprs))) {

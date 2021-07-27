@@ -864,7 +864,6 @@ void ObLogger::log_data(const char* mod_name, int32_t level, LogLocation locatio
       last_msg_time = e_ts - b_ts;
     }
   }
-  this_routine::check();
 }
 
 void ObLogger::rotate_log(
@@ -1814,21 +1813,6 @@ void ObLogger::check_reset_force_allows()
   }
 }
 
-int64_t ObLogger::get_reimbursation_time()
-{
-  int64_t ret_time = 0;
-  int64_t task_level = 0;
-  if (tl_type_ >= 0 && tl_type_ < 5) {
-    for (int64_t i = 0; i < 5; ++i) {
-      if (ATOMIC_LOAD(current_written_count_ + tl_type_) < ATOMIC_LOAD(current_written_count_ + i)) {
-        ++task_level;
-      }
-    }
-  }
-  ret_time = POP_COMPENSATED_TIME[task_level];  // 0, 1, 2, 3, 4us
-  return ret_time;
-}
-
 int ObLogger::async_log_data_body(ObPLogItem& log_item, const char* info_string, const int64_t string_len)
 {
   int ret = OB_SUCCESS;
@@ -2033,39 +2017,6 @@ void ObLogger::async_log_message(const char* mod_name, const int32_t level, cons
   }
 }
 
-int64_t ObLogger::get_wait_us(const int32_t level)
-{
-  int64_t ret_timeout_us = 0;
-  if (is_force_allows()) {
-    // if force allows, wait 100us
-    ret_timeout_us = 100;  // 100us
-  } else {
-    switch (level) {
-      case OB_LOG_LEVEL_ERROR: {
-        ret_timeout_us = 100;  // 100us
-        break;
-      }
-      case OB_LOG_LEVEL_WARN: {
-        ret_timeout_us = 10;                             // 10us
-        ret_timeout_us += 2 * get_reimbursation_time();  // double it
-        break;
-      }
-      case OB_LOG_LEVEL_INFO:
-      case OB_LOG_LEVEL_TRACE: {
-        ret_timeout_us = 2;  // 2us
-        ret_timeout_us += get_reimbursation_time();
-        break;
-      }
-      default: {
-        ret_timeout_us = 0;  // 0us
-        break;
-        // do nothing
-      }
-    }
-  }
-  return ret_timeout_us;
-}
-
 int ObLogger::alloc_log_item(const int32_t level, const int32_t size, ObPLogItem*& log_item)
 {
   UNUSED(level);
@@ -2078,18 +2029,8 @@ int ObLogger::alloc_log_item(const int32_t level, const int32_t size, ObPLogItem
       ret = OB_NOT_INIT;
       LOG_STDERR("uninit error, ret=%d, level=%d\n", ret, level);
     } else if (OB_UNLIKELY(nullptr == (buf = (char*)p_alloc->alloc(size)))) {
-      int64_t wait_us = get_wait_us(level);
-      const int64_t per_us = MIN(wait_us, 10);
-      while (wait_us > 0) {
-        if (nullptr != (buf = (char*)p_alloc->alloc(size))) {
-          break;
-        } else {
-          usleep(per_us);
-          wait_us -= per_us;
-        }
-      }
-      if (nullptr == buf) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      if (TC_REACH_TIME_INTERVAL(1 * 1000L * 1000L)) { // every sec
         LOG_STDERR("alloc_log_item error, ret=%d level=%d\n", ret, level);
       }
     }

@@ -403,6 +403,9 @@ int ObTenant::init()
       LOG_ERROR("tenant base init failed", K_(id), K(ret));
     }
   }
+  if (OB_SUCCESS != ret && nullptr != multi_level_queue_) {
+    common::ob_delete(multi_level_queue_);
+  }
   return ret;
 }
 
@@ -525,6 +528,9 @@ void ObTenant::destroy()
     LOG_WARN("remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
   ObTenantBase::destory();
+  if (nullptr != multi_level_queue_) {
+    common::ob_delete(multi_level_queue_);
+  }
 }
 
 void ObTenant::set_unit_max_cpu(double cpu)
@@ -641,7 +647,7 @@ int ObTenant::get_new_request(ObThWorker& w, int64_t timeout, rpc::ObRequest*& r
         if (OB_UNLIKELY(only_high_high_prio)) {
           // We must ensure at least one worker can process the highest
           // priority task.
-          ret = req_queue_.do_pop(task, QQ_HIGH + 1, timeout);
+          ret = req_queue_.pop_high_high(task, timeout);
         } else if (OB_UNLIKELY(only_high_prio)) {
           // We must ensure at least number of tokens of workers which don't
           // process low priority task.
@@ -650,7 +656,9 @@ int ObTenant::get_new_request(ObThWorker& w, int64_t timeout, rpc::ObRequest*& r
           // If large requests exist and this worker doesn't have LQT but
           // can acquire, do it.
           ATOMIC_INC(&pop_normal_cnt_);
-          if (large_req_queue_.size() > 0 && !w.has_lq_token() && acquire_lq_token()) {
+          if (large_req_queue_.size() > 0 &&
+              !w.has_lq_token() &&
+              acquire_lq_token()) {
             w.set_lq_token();
           }
           if (OB_LIKELY(!w.has_lq_token())) {

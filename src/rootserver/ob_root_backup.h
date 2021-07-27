@@ -309,6 +309,7 @@ private:
   int check_standalone_table_need_backup(const share::schema::ObTableSchema* table_schema, bool& need_backup);
   int commit_trans(ObMySQLTransaction& trans);
   int start_trans(ObTimeoutCtx& timeout_ctx, ObMySQLTransaction& trans);
+  int cancel_pending_pg_tasks(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans);
 
 private:
   static const int64_t MAX_CHECK_INTERVAL = 10 * 1000 * 1000;  // 10s

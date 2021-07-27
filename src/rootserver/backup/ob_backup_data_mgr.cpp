@@ -259,9 +259,12 @@ int ObBackupListDataMgr::get_clog_pkey_list(common::ObIArray<ObPartitionKey>& pk
                  cluster_backup_dest_, tenant_id_, log_archive_round_, path))) {
     LOG_WARN("failed to get tenant clog data path", K(ret), K(cluster_backup_dest_));
   } else if (OB_FAIL(util.get_pkeys_from_dir(path.get_ptr(), cluster_backup_dest_.get_storage_info(), pkey_list))) {
-    LOG_WARN("failed to get pkeys from dir", K(ret), K(path));
+    if (OB_DIR_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get pkeys from dir", K(ret), K(path));
+    }
   }
-
   LOG_INFO("get clog pkey list count", K(pkey_list.count()));
   return ret;
 }

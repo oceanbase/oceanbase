@@ -2397,6 +2397,22 @@ int ObPGStorage::get_saved_data_info(ObDataStorageInfo& data_info) const
   return ret;
 }
 
+int ObPGStorage::get_last_replay_log_ts(int64_t &last_replay_log_ts) const
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("pg is not inited", K(ret));
+  } else {
+    TCRLockGuard lock_guard(lock_);
+    last_replay_log_ts = meta_->storage_info_.get_data_info().get_last_replay_log_ts();
+  }
+
+  return ret;
+}
+
+
 int ObPGStorage::append_local_sort_data(
     const ObPartitionKey& pkey, const share::ObBuildIndexAppendLocalDataParam& param, ObNewRowIterator& iter)
 {
@@ -2872,7 +2888,8 @@ int ObPGStorage::set_pg_storage_info(const ObSavedStorageInfoV2& info)
     STORAGE_LOG(ERROR, "cannot set storage info when memtable count not zero", K(ret), K(*this));
   } else if (meta_->storage_info_.get_data_info().get_publish_version() > info.get_data_info().get_publish_version() &&
              ObReplicaRestoreStatus::REPLICA_RESTORE_DATA != meta_->is_restore_ &&
-             ObReplicaRestoreStatus::REPLICA_RESTORE_CUT_DATA != meta_->is_restore_) {
+             ObReplicaRestoreStatus::REPLICA_RESTORE_CUT_DATA != meta_->is_restore_ &&
+             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY != meta_->is_restore_) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "new storage info's publish version should not smaller than local", K(ret), K(*meta_), K(info));
   } else if (OB_FAIL(alloc_meta_(next_meta_ptr))) {
@@ -3470,6 +3487,8 @@ int ObPGStorage::check_can_release_pg_memtable_(ObTablesHandle& memtable_merged,
   int64_t timestamp = 0;
   memtable_merged.reset();
   memtable_to_release.reset();
+  // outside hold the lock
+  const bool is_physical_restore = meta_->is_restore_ > REPLICA_NOT_RESTORE && meta_->is_restore_ < REPLICA_RESTORE_MAX;
 
   if (OB_FAIL(get_all_pg_partition_keys_(partitions))) {
     STORAGE_LOG(WARN, "failed to get all pg partition keys", K(ret));
@@ -3506,7 +3525,7 @@ int ObPGStorage::check_can_release_pg_memtable_(ObTablesHandle& memtable_merged,
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "partition storage is null", K(ret), K(pkey));
           } else if (OB_FAIL(storage->get_partition_store().check_all_merged(
-                         *memtable, schema_version, part_all_merged, part_can_release))) {
+                         *memtable, schema_version, is_physical_restore, part_all_merged, part_can_release))) {
             STORAGE_LOG(WARN, "failed to check if partition merged", K(ret), K(pkey));
           } else {
             pg_all_merged = pg_all_merged && part_all_merged;
@@ -6349,6 +6368,15 @@ int ObPGStorage::recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t&
   return ret;
 }
 
+int ObPGStorage::recycle_sstable(const ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sstable_mgr_.recycle_sstable(table_key))) {
+    STORAGE_LOG(WARN, "fail to recycle sstable", K(ret), K(table_key));
+  }
+  return ret;
+}
+
 int ObPGStorage::alloc_file_for_old_replay()
 {
   int ret = OB_SUCCESS;
@@ -6625,7 +6653,8 @@ int ObPGStorage::restore_mem_trans_table()
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
   } else if (FALSE_IT(restore_state = get_restore_state())) {
-  } else if (!has_memstore() && REPLICA_NOT_RESTORE == restore_state) {
+  } else if ((!has_memstore() && REPLICA_NOT_RESTORE == restore_state) ||
+              ObReplicaTypeCheck::is_log_replica(meta_->replica_type_)) {
     // do nothing
     FLOG_INFO("no need to restore mem trans table", K_(pkey), K(restore_state));
   } else if (OB_FAIL(trans_table_pkey.generate_trans_table_pkey(pkey_))) {
@@ -7283,9 +7312,10 @@ int ObPGStorage::batch_replace_store_map(const ObIArray<ObPartitionMigrateCtx>& 
       LOG_WARN("trans table seq has changed", K(ret), K(old_trans_table_seq), K_(trans_table_seq));
     } else if (OB_FAIL(SLOGGER.begin(OB_LOG_BATCH_REPLACE_STORE_MAP))) {
       LOG_WARN("failed to begin slog trans", K(ret));
-    } else if (OB_FAIL(create_pg_partition_if_need_(part_ctx_array, schema_version, is_restore))) {
-      LOG_WARN("failed to create pg partition", K(ret), K(part_ctx_array));
     } else {
+      if (OB_FAIL(create_pg_partition_if_need_(part_ctx_array, schema_version, is_restore))) {
+        LOG_WARN("failed to create pg partition", K(ret), K(part_ctx_array));
+      }
       for (int i = 0; OB_SUCC(ret) && i < part_ctx_array.count(); ++i) {
         const ObPartitionMigrateCtx& part_ctx = part_ctx_array.at(i);
         ObPartitionStore::TableStoreMap* store_map = nullptr;
@@ -7295,6 +7325,11 @@ int ObPGStorage::batch_replace_store_map(const ObIArray<ObPartitionMigrateCtx>& 
           } else {
             store_maps[i] = store_map;
           }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(remove_unneed_table_store_within_trans(part_ctx_array, store_maps))) {
+          LOG_ERROR("failed to remove unneed table store within slog trans", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -7348,6 +7383,35 @@ int ObPGStorage::prepare_partition_store_map_(
   }
   return ret;
 }
+
+int ObPGStorage::remove_unneed_table_store_within_trans(
+    const common::ObIArray<ObPartitionMigrateCtx> &part_ctx_array,
+    ObPartitionStore::TableStoreMap **store_maps)
+{
+  int ret = OB_SUCCESS;
+  ObPGPartition *partition = nullptr;
+  ObPartitionStorage *storage = nullptr;
+  ObPartitionStore::TableStoreMap *store_map = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_ctx_array.count(); ++i) {
+    const ObPartitionMigrateCtx &ctx = part_ctx_array.at(i);
+    if (OB_NOT_NULL(store_map = store_maps[i])) {
+      ObPGPartitionGuard part_guard(ctx.copy_info_.meta_.pkey_, *(pg_->get_pg_partition_map()));
+      if (OB_ISNULL(partition = part_guard.get_pg_partition())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get pg partition failed", K(ret), K(ctx));
+      } else if (OB_ISNULL(storage = static_cast<ObPartitionStorage *>(partition->get_storage()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get partition storage failed", K(ret), K(ctx));
+      } else if (OB_FAIL(storage->get_partition_store().remove_unneed_store_within_trans(*store_map))) {
+        LOG_WARN("Failed to remove unneed table store within trans", K(ret));
+      } else {
+        LOG_INFO("Succ to replace store map", KP(store_map));
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObPGStorage::do_replace_store_map_(
     const common::ObIArray<ObPartitionMigrateCtx>& part_ctx_array, ObPartitionStore::TableStoreMap** store_maps)
@@ -7931,6 +7995,7 @@ int ObPGStorage::update_restore_points(
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 1> snapshot_versions;
+  const bool is_restore_point = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
@@ -7951,7 +8016,7 @@ int ObPGStorage::update_restore_points(
         LOG_WARN("failed to check restore point exist", K(ret), K_(pkey), K(restore_points));
       } else if (!is_exist) {
         if (OB_FAIL(
-                get_restore_point_tables_(snapshot_ts, schema_version, pg_meta, metas, handle, is_ready, is_need))) {
+                get_restore_point_tables_(snapshot_ts, schema_version, is_restore_point, pg_meta, metas, handle, is_ready, is_need))) {
           LOG_WARN("failed to get restore point sstables", K(ret), K_(pkey), K(snapshot_ts));
         } else if (!is_need) {
           // do nothing
@@ -7983,6 +8048,7 @@ int ObPGStorage::update_backup_points(
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 1> snapshot_versions;
+  const bool is_restore_point = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_points.count(); i++) {
     const int64_t snapshot_ts = backup_points.at(i);
     const int64_t schema_version = schema_versions.at(i);
@@ -7995,7 +8061,7 @@ int ObPGStorage::update_backup_points(
     if (OB_FAIL(recovery_point_data_mgr_.check_backup_point_exist(snapshot_ts, is_exist))) {
       LOG_WARN("failed to check restore point exist", K(ret), K_(pkey), K(backup_points));
     } else if (!is_exist) {
-      if (OB_FAIL(get_restore_point_tables_(snapshot_ts, schema_version, pg_meta, metas, handle, is_ready, is_need))) {
+      if (OB_FAIL(get_restore_point_tables_(snapshot_ts, schema_version, is_restore_point, pg_meta, metas, handle, is_ready, is_need))) {
         LOG_WARN("failed to get restore point sstables", K(ret), K_(pkey), K(snapshot_ts));
       } else if (!is_need) {
         // do nothing
@@ -8042,7 +8108,7 @@ int ObPGStorage::get_backup_partition_meta_data(const ObPartitionKey& pkey, cons
   return ret;
 }
 
-int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const int64_t schema_version,
+int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const int64_t schema_version, const bool is_restore_point,
     ObPartitionGroupMeta& pg_meta, ObIArray<ObPGPartitionStoreMeta>& partition_metas, ObTablesHandle& handle,
     bool& is_ready, bool& is_need)
 {
@@ -8088,7 +8154,7 @@ int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const
   } else if (FALSE_IT(minor_schema_version = minor_schema_version < max_sstable_schema_version
                                                  ? max_sstable_schema_version
                                                  : minor_schema_version)) {
-  } else if (OB_FAIL(schema_filter.init(tenant_id, real_schema_version, minor_schema_version))) {
+  } else if (OB_FAIL(schema_filter.init(tenant_id, is_restore_point, real_schema_version, minor_schema_version))) {
     LOG_WARN("failed to init backup schema checker",
         K(ret),
         K(pkey_),

@@ -763,7 +763,7 @@ protected:
       common::ObIArray<ObITable::TableKey>& local_major_tables, common::ObIArray<ObITable::TableKey>& local_inc_tables,
       common::ObIArray<ObITable::TableKey>& remote_major_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables,
-      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables);
+      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables, ObPartitionMigrateCtx& part_ctx);
   int build_migrate_major_sstable_(common::ObIArray<ObITable::TableKey>& local_major_tables,
       common::ObIArray<ObITable::TableKey>& local_inc_tables, common::ObIArray<ObITable::TableKey>& remote_major_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables,
@@ -772,7 +772,7 @@ protected:
       common::ObIArray<ObITable::TableKey>& local_major_tables, common::ObIArray<ObITable::TableKey>& local_inc_tables,
       common::ObIArray<ObITable::TableKey>& remote_major_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables,
-      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables);
+      common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables, ObPartitionMigrateCtx& part_ctx);
   int build_migrate_minor_sstable(const bool need_reuse_local_minor, common::ObIArray<ObITable::TableKey>& local_tables,
       common::ObIArray<ObITable::TableKey>& remote_inc_tables, ObIArray<ObITable::TableKey>& remote_gc_inc_sstables,
       common::ObIArray<ObMigrateTableInfo::SSTableInfo>& copy_sstables);

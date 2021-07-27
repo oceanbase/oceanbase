@@ -161,7 +161,7 @@ int ObBuildIndexBaseTask::check_partition_need_build_index(const ObPartitionKey&
   const ObTableSchema* new_index_schema = NULL;
   ObSchemaGetterGuard schema_guard;
   bool is_partition_exist = false;
-  bool check_dropped_partition = true;
+  bool check_dropped_partition = false;
   bool is_split_finished = true;
   need_build = false;
   if (OB_UNLIKELY(!is_inited_)) {

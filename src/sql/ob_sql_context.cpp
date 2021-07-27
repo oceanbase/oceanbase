@@ -510,6 +510,10 @@ int ObQueryCtx::generate_stmt_name(ObIAllocator* allocator)
     LOG_WARN("Allocator should not be NULL", K(ret));
   } else if (stmt_id_name_map_.count() > 0) {
     std::sort(stmt_id_name_map_.begin(), stmt_id_name_map_.end());
+    int64_t start_ids[5];
+    for (int64_t i = 0; i < 5; ++i) {
+      start_ids[i] = 1;
+    }
     for (int64_t idx = 0; OB_SUCC(ret) && idx < stmt_id_name_map_.count(); ++idx) {
       IdNamePair& id_name_pair = stmt_id_name_map_.at(idx);
       if (!id_name_pair.origin_name_.empty()) {
@@ -518,9 +522,21 @@ int ObQueryCtx::generate_stmt_name(ObIAllocator* allocator)
                  stmt::T_REPLACE == id_name_pair.stmt_type_ || stmt::T_DELETE == id_name_pair.stmt_type_ ||
                  stmt::T_UPDATE == id_name_pair.stmt_type_) {
         int64_t pos = 0;
+        int64_t* start_id = NULL;
+        if (stmt::T_SELECT == id_name_pair.stmt_type_) {
+          start_id = &start_ids[0];
+        } else if (stmt::T_INSERT == id_name_pair.stmt_type_) {
+          start_id = &start_ids[1];
+        } else if (stmt::T_REPLACE == id_name_pair.stmt_type_) {
+          start_id = &start_ids[2];
+        } else if (stmt::T_DELETE == id_name_pair.stmt_type_) {
+          start_id = &start_ids[3];
+        } else if (stmt::T_UPDATE == id_name_pair.stmt_type_) {
+          start_id = &start_ids[4];
+        }
         if (OB_FAIL(get_dml_stmt_name(id_name_pair.stmt_type_, buf, OB_MAX_QB_NAME_LENGTH, pos))) {
           LOG_WARN("Get dml stmt name", K(ret));
-        } else if (OB_FAIL(append_id_to_stmt_name(buf, OB_MAX_QB_NAME_LENGTH, pos))) {
+        } else if (OB_FAIL(append_id_to_stmt_name(buf, OB_MAX_QB_NAME_LENGTH, pos, *start_id))) {
           LOG_WARN("Failed to append id to stmt name", K(ret));
         } else {
           ObString generate_name(pos, buf);
@@ -592,7 +608,7 @@ int ObQueryCtx::get_dml_stmt_name(stmt::StmtType stmt_type, char* buf, int64_t b
   return ret;
 }
 
-int ObQueryCtx::append_id_to_stmt_name(char* buf, int64_t buf_len, int64_t& pos)
+int ObQueryCtx::append_id_to_stmt_name(char* buf, int64_t buf_len, int64_t& pos, int64_t& id_start)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf)) {
@@ -603,7 +619,7 @@ int ObQueryCtx::append_id_to_stmt_name(char* buf, int64_t buf_len, int64_t& pos)
     LOG_WARN("Buf size not enough", K(ret));
   } else {
     bool find_unique = false;
-    int64_t id = 1;
+    int64_t id = id_start;
     int64_t old_pos = pos;
     while (!find_unique && OB_SUCC(ret)) {
       pos = old_pos;
@@ -620,6 +636,9 @@ int ObQueryCtx::append_id_to_stmt_name(char* buf, int64_t buf_len, int64_t& pos)
         find_unique = !find_dup;
         ++id;
       }
+    }
+    if (OB_SUCC(ret) && find_unique) {
+      id_start = id;
     }
   }
   return ret;

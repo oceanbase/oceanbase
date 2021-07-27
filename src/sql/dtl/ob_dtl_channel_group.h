@@ -24,7 +24,7 @@ namespace dtl {
 class ObDtlTask;
 class ObDtlChannel;
 class ObDtlChSet;
-class ObDtlChannelInfo;
+struct ObDtlChannelInfo;
 class ObDtlFlowControl;
 
 // Channel group is a bunch of channels than support communication

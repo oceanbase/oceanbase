@@ -53,7 +53,7 @@ ObPhyOperator::ObPhyOperator(ObIAllocator& alloc)
       is_exact_rows_(false),
       type_(PHY_INVALID),
       plan_depth_(0),
-      op_schema_objs_()
+      op_schema_objs_(alloc)
 {}
 
 ObPhyOperator::~ObPhyOperator()
@@ -1165,6 +1165,15 @@ int ObPhyOperator::try_open_and_get_operator_ctx(
     }
   } else if (OB_NOT_NULL(has_been_opened)) {
     *has_been_opened = true;
+  }
+  return ret;
+}
+
+int ObPhyOperator::init_op_schema_obj(int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(op_schema_objs_.init(count))) {
+    LOG_WARN("fail to init op schema obj", K(ret), K(count));
   }
   return ret;
 }

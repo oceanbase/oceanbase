@@ -161,7 +161,8 @@ ObExecContext::ObExecContext(ObIAllocator& allocator)
       pwj_map_(nullptr),
       calc_type_(CALC_NORMAL),
       fixed_id_(OB_INVALID_ID),
-      expr_partition_id_(OB_INVALID_ID)
+      expr_partition_id_(OB_INVALID_ID),
+      iters_(256, allocator)
 {}
 
 ObExecContext::ObExecContext()
@@ -220,7 +221,8 @@ ObExecContext::ObExecContext()
       pwj_map_(nullptr),
       calc_type_(CALC_NORMAL),
       fixed_id_(OB_INVALID_ID),
-      expr_partition_id_(OB_INVALID_ID)
+      expr_partition_id_(OB_INVALID_ID),
+      iters_(256, allocator_)
 {}
 
 ObExecContext::~ObExecContext()
@@ -252,6 +254,7 @@ ObExecContext::~ObExecContext()
     DESTROY_CONTEXT(lob_fake_allocator_);
     lob_fake_allocator_ = NULL;
   }
+  iters_.reset();
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -265,6 +268,30 @@ void ObExecContext::clean_resolve_ctx()
     stmt_factory_ = nullptr;
   }
   sql_ctx_ = nullptr;
+}
+
+int ObExecContext::push_back_iter(common::ObNewRowIterator *iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(iters_.push_back(iter))) {
+    LOG_WARN("failed to push back iter", K(ret));
+  }
+  return ret;
+}
+
+int ObExecContext::remove_iter(common::ObNewRowIterator *iter)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); i++) {
+    if (iters_.at(i) == iter) {
+      if (OB_FAIL(iters_.remove(i))) {
+        LOG_WARN("failed to remove iter", K(ret), K(i));
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
 }
 
 uint64_t ObExecContext::get_ser_version() const
@@ -707,6 +734,8 @@ int ObExecContext::check_status()
     LOG_WARN("session info is null");
   } else if (my_session_->is_terminate(ret)) {
     LOG_WARN("execution was terminated", K(ret));
+  } else if (OB_FAIL(release_table_ref())) {
+    LOG_WARN("failed to refresh table on demand", K(ret));
   } else if (IS_INTERRUPTED()) {
     ObInterruptCode& ic = GET_INTERRUPT_CODE();
     ret = ic.code_;
@@ -1012,6 +1041,23 @@ int ObExecContext::get_pwj_map(PWJPartitionIdMap*& pwj_map)
     }
   } else {
     pwj_map = pwj_map_;
+  }
+  return ret;
+}
+
+// Currently, there are some limitations
+// Only iterator in ITER_END can be released because of memory allocation problem
+// iterator in merge sort join cannot work properly,
+// because iterator may not go to end
+int ObExecContext::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); i++) {
+    if (OB_FAIL(iters_.at(i)->release_table_ref())) {
+      LOG_WARN("failed to release table ref", K(ret), K(i));
+    } else {
+      LOG_DEBUG("succ to release_table_ref");
+    }
   }
   return ret;
 }

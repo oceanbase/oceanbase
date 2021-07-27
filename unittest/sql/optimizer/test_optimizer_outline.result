@@ -206,15 +206,16 @@ SQL: select * from t4 where c1 in (select max(c1) from t1);
 ---------------------------------------------------------------
 |0 |NESTED-LOOP JOIN               |           |1        |74  |
 |1 | SUBPLAN SCAN                  |VIEW1      |1        |38  |
-|2 |  SCALAR GROUP BY              |           |1        |37  |
+|2 |  SCALAR GROUP BY              |           |1        |38  |
 |3 |   SUBPLAN SCAN                |VIEW2      |1        |37  |
 |4 |    LIMIT                      |           |1        |37  |
 |5 |     PX COORDINATOR MERGE SORT |           |1        |37  |
 |6 |      EXCHANGE OUT DISTR       |:EX10000   |1        |37  |
-|7 |       SORT                    |           |1        |37  |
-|8 |        PX PARTITION ITERATOR  |           |1        |36  |
-|9 |         TABLE SCAN            |t1(Reverse)|1        |36  |
-|10| TABLE SCAN                    |t4         |1        |36  |
+|7 |       LIMIT                   |           |1        |37  |
+|8 |        TOP-N SORT             |           |1        |37  |
+|9 |         PX PARTITION ITERATOR |           |1        |36  |
+|10|          TABLE SCAN           |t1(Reverse)|1        |36  |
+|11| TABLE SCAN                    |t4         |1        |36  |
 ===============================================================
 
 Outputs & filters: 
@@ -230,12 +231,13 @@ Outputs & filters:
   4 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   5 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC])
   6 - output([t1.c1]), filter(nil), dop=1
-  7 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), local merge sort
-  8 - output([t1.c1]), filter(nil)
-  9 - output([t1.c1]), filter(nil), 
+  7 - output([t1.c1]), filter(nil), limit(1), offset(nil)
+  8 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), topn(1), local merge sort
+  9 - output([t1.c1]), filter(nil)
+  10 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       limit(1), offset(nil)
-  10 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
+  11 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
       access([t4.c1], [t4.c2], [t4.c3]), partitions(p0)
 
 Outline Data:
@@ -971,25 +973,27 @@ SQL: select * from t8, (select count(*) from t1 where t1.c1 > any (select t2.c1 
 |ID|OPERATOR                                 |NAME    |EST. ROWS|COST|
 ----------------------------------------------------------------------
 |0 |NESTED-LOOP JOIN CARTESIAN               |        |100      |498 |
-|1 | SUBPLAN SCAN                            |tt      |1        |343 |
+|1 | SUBPLAN SCAN                            |tt      |1        |344 |
 |2 |  SCALAR GROUP BY                        |        |1        |343 |
-|3 |   PX COORDINATOR                        |        |1        |311 |
-|4 |    EXCHANGE OUT DISTR                   |:EX10002|1        |311 |
-|5 |     MERGE GROUP BY                      |        |1        |311 |
-|6 |      NESTED-LOOP JOIN                   |        |167      |279 |
-|7 |       EXCHANGE IN DISTR                 |        |1        |37  |
-|8 |        EXCHANGE OUT DISTR (BC2HOST)     |:EX10001|1        |37  |
-|9 |         SUBPLAN SCAN                    |VIEW1   |1        |37  |
-|10|          SCALAR GROUP BY                |        |1        |37  |
+|3 |   PX COORDINATOR                        |        |1        |312 |
+|4 |    EXCHANGE OUT DISTR                   |:EX10002|1        |312 |
+|5 |     MERGE GROUP BY                      |        |1        |312 |
+|6 |      NESTED-LOOP JOIN                   |        |167      |280 |
+|7 |       EXCHANGE IN DISTR                 |        |1        |38  |
+|8 |        EXCHANGE OUT DISTR (BC2HOST)     |:EX10001|1        |38  |
+|9 |         SUBPLAN SCAN                    |VIEW1   |1        |38  |
+|10|          SCALAR GROUP BY                |        |1        |38  |
 |11|           SUBPLAN SCAN                  |VIEW2   |1        |37  |
 |12|            LIMIT                        |        |1        |37  |
-|13|             EXCHANGE IN MERGE SORT DISTR|        |1        |36  |
-|14|              EXCHANGE OUT DISTR         |:EX10000|1        |36  |
-|15|               PX PARTITION ITERATOR     |        |1        |36  |
-|16|                TABLE SCAN               |t2      |1        |36  |
-|17|       PX PARTITION ITERATOR             |        |167      |134 |
-|18|        TABLE SCAN                       |t1      |167      |134 |
-|19| TABLE SCAN                              |t8      |100      |90  |
+|13|             EXCHANGE IN MERGE SORT DISTR|        |1        |37  |
+|14|              EXCHANGE OUT DISTR         |:EX10000|1        |37  |
+|15|               LIMIT                     |        |1        |37  |
+|16|                TOP-N SORT               |        |1        |37  |
+|17|                 PX PARTITION ITERATOR   |        |1        |36  |
+|18|                  TABLE SCAN             |t2      |1        |36  |
+|19|       PX PARTITION ITERATOR             |        |167      |134 |
+|20|        TABLE SCAN                       |t1      |167      |134 |
+|21| TABLE SCAN                              |t8      |100      |90  |
 ======================================================================
 
 Outputs & filters: 
@@ -1015,16 +1019,18 @@ Outputs & filters:
   11 - output([VIEW2.c1]), filter(nil), 
       access([VIEW2.c1])
   12 - output([t2.c1]), filter(nil), limit(1), offset(nil)
-  13 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC]), Local Order
+  13 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC])
   14 - output([t2.c1]), filter(nil), dop=1
-  15 - output([t2.c1]), filter(nil)
-  16 - output([t2.c1]), filter(nil), 
+  15 - output([t2.c1]), filter(nil), limit(1), offset(nil)
+  16 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC]), topn(1), local merge sort
+  17 - output([t2.c1]), filter(nil)
+  18 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       limit(1), offset(nil)
-  17 - output([1]), filter(nil)
-  18 - output([1]), filter(nil), 
+  19 - output([1]), filter(nil)
+  20 - output([1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4])
-  19 - output([t8.c1], [t8.c2]), filter(nil), 
+  21 - output([t8.c1], [t8.c2]), filter(nil), 
       access([t8.c1], [t8.c2]), partitions(p0)
 
 Outline Data:

@@ -53,7 +53,7 @@ int ObExprAsin::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ct
   } else if (obj.is_double()) {
     double arg = obj.get_double();
     if (arg > 1 || arg < -1) {
-      ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
+      result.set_null();
     } else {
       double res = asin(arg);
       result.set_double(res);

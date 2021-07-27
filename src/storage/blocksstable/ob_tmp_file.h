@@ -126,6 +126,7 @@ private:
   char* buf_;
   int64_t size_;  // has read or to write size.
   bool is_read_;
+  bool has_wait_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
@@ -350,6 +351,8 @@ public:
   //   of block leak.
   int remove(const int64_t fd);
   int remove_tenant_file(const uint64_t tenant_id);
+
+  int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
 
   int sync(const int64_t fd, const int64_t timeout_ms);
 

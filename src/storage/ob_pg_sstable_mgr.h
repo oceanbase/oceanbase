@@ -41,6 +41,7 @@ public:
   int add_sstables(const bool in_slog_trans, ObTablesHandle& tables_handle);
   int add_sstable(const bool in_slog_trans, ObTableHandle& table_handle);
   int recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t& recycled_cnt);
+  int recycle_sstable(const ObITable::TableKey &table_key);
   int serialize(common::ObIAllocator& allocator, char*& buf, int64_t& serialize_size, ObTablesHandle* tables_handle);
   int deserialize(const char* buf, const int64_t buf_len, int64_t& pos);
   int replay_add_sstable(ObSSTable& replay_sstable);

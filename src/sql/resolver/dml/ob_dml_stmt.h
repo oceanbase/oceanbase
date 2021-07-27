@@ -887,7 +887,6 @@ public:
   virtual int clear_sharable_expr_reference();
   virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*>& child_stmts) const;
   int is_referred_by_partitioning_expr(const ObRawExpr* expr, bool& is_referred);
-  int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
   int64_t get_table_size() const
   {
     return table_items_.count();
@@ -994,6 +993,15 @@ public:
   TableItem* get_table_item(const FromItem item);
   const TableItem* get_table_item(const FromItem item) const;
   int get_table_item_idx(const TableItem* child_table, int64_t& idx) const;
+
+  int relids_to_table_ids(const ObSqlBitSet<> &table_set, ObIArray<uint64_t> &table_ids) const;
+  int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const uint64_t table_id, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObSqlBitSet<> &table_set) const;
+  int get_from_tables(ObRelIds &table_set) const;
+  int get_from_tables(ObSqlBitSet<> &table_set) const;
+
   int add_table_item(const ObSQLSessionInfo* session_info, TableItem* table_item);
   int add_table_item(const ObSQLSessionInfo* session_info, ObIArray<TableItem*>& table_items);
   int add_table_item(const ObSQLSessionInfo* session_info, TableItem* table_item, bool& have_same_table_name);

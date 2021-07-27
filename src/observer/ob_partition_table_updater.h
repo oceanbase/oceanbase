@@ -228,9 +228,10 @@ private:
   int reput_to_queue(const common::ObIArray<ObPTUpdateRoleTask>& tasks);
 
   int check_if_tenant_has_been_dropped(const uint64_t tenant_id, bool& has_dropped);
-  int do_batch_execute(const common::ObIArray<ObPTUpdateTask>& tasks,
+  int do_batch_execute(const int64_t start_time, const common::ObIArray<ObPTUpdateTask>& tasks,
       const common::ObIArray<share::ObPartitionReplica>& replicas, const bool with_role);
-  int do_batch_execute(const common::ObIArray<share::ObPartitionReplica>& tasks, const common::ObRole new_role);
+  int do_batch_execute(const int64_t start_time, const common::ObIArray<ObPTUpdateRoleTask>& tasks,
+      const common::ObIArray<share::ObPartitionReplica>& replicas, const common::ObRole new_role);
 
 private:
   bool inited_;

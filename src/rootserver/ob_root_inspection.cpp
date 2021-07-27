@@ -984,6 +984,7 @@ int ObForceDropSchemaChecker::force_drop_schema(
     const uint64_t tenant_id, const int64_t recycle_schema_version, int64_t& task_cnt)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_FORCE_DROP_SCHEMA);
   // drop schema according to the dependency of schema:
   // 1. data table schema is dropped defore index schema.
   // 2. table schema in tablegroup is dropped before tablegroup schema.
@@ -1652,9 +1653,10 @@ int ObForceDropSchemaTask::process()
   int ret = OB_SUCCESS;
   const int64_t FAST_INTERVAL = 10 * 1000 * 1000;  // 10s
   int64_t delay = ObInspector::INSPECT_INTERVAL;
-#ifdef ERRSIM
+#ifdef DEBUG
   delay = ObServerConfig::get_instance().schema_drop_gc_delay_time;
 #endif
+
   ObForceDropSchemaChecker drop_schema_checker(root_service_,
       root_service_.get_schema_service(),
       root_service_.get_common_rpc_proxy(),

@@ -220,7 +220,8 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext& exec_ctx, const ObOpSpec
       all_task_fetched_(false),
       is_rescan_(false),
       rescan_taskset_(nullptr),
-      rescan_task_idx_(0)
+      rescan_task_idx_(0),
+      pwj_rescan_task_infos_()
 {}
 
 void ObGranuleIteratorOp::destroy()
@@ -228,6 +229,7 @@ void ObGranuleIteratorOp::destroy()
   ranges_.reset();
   pkeys_.reset();
   rescan_tasks_.reset();
+  pwj_rescan_task_infos_.reset();
 }
 
 int ObGranuleIteratorOp::parameters_init()
@@ -360,8 +362,15 @@ int ObGranuleIteratorOp::rescan()
       state_ = GI_GET_NEXT_GRANULE_TASK;
     }
   } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("the partition wise join GI rescan not supported", K(ret));
+    // 在partition_wise_join的情况, 按woker第一次完整执行所抢占的任务执行.
+    // 在执行过程中缓存住了自己的任务队列.
+    if (GI_UNINITIALIZED == state_ || GI_PREPARED == state_) {
+      /*do nothing*/
+    } else {
+      is_rescan_ = true;
+      rescan_task_idx_ = 0;
+      state_ = GI_GET_NEXT_GRANULE_TASK;
+    }
   }
   return ret;
 }
@@ -512,11 +521,23 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool prepare /* = false */)
         }
       }
     }
-    if (OB_FAIL(fetch_full_pw_tasks(gi_task_infos, op_ids))) {
+    if (OB_FAIL(ret)) {
+    } else if (is_rescan_) {
+      if (rescan_task_idx_ >= pwj_rescan_task_infos_.count()) {
+        ret = OB_ITER_END;
+        state_ = GI_END;
+      }
+    } else if (OB_FAIL(fetch_full_pw_tasks(gi_task_infos, op_ids))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("try fetch task failed", K(ret));
       } else {
         state_ = GI_END;
+      }
+    } else {
+      for (int i = 0; i < gi_task_infos.count() && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(pwj_rescan_task_infos_.push_back(gi_task_infos.at(i)))) {
+          LOG_WARN("fail to rescan pwj task info", K(ret));
+        }
       }
     }
 
@@ -527,11 +548,21 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool prepare /* = false */)
           LOG_WARN("failed to erase task", K(ret));
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(gi_prepare_map->set_refactored(op_ids.at(idx), gi_task_infos.at(idx)))) {
-        LOG_WARN("reset table scan's ranges failed", K(ret));
+       if (OB_SUCC(ret)) {
+        if (is_rescan_) {
+          if (rescan_task_idx_ >= pwj_rescan_task_infos_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("rescan task idx is unexpected", K(rescan_task_idx_),
+                K(pwj_rescan_task_infos_.count()), K(cnt));
+          } else if (OB_FAIL(gi_prepare_map->set_refactored(op_ids.at(idx),
+              pwj_rescan_task_infos_.at(rescan_task_idx_++)))) {
+            LOG_WARN("reset table scan's ranges failed", K(ret));
+          }
+        } else if (OB_FAIL(gi_prepare_map->set_refactored(op_ids.at(idx), gi_task_infos.at(idx)))) {
+          LOG_WARN("reset table scan's ranges failed", K(ret));
+        }
+        LOG_DEBUG("produce a gi task(PWJ)", K(op_ids.at(idx)), K(gi_task_infos.at(idx)));
       }
-      LOG_DEBUG("produce a gi task(PWJ)", K(op_ids.at(idx)), K(gi_task_infos.at(idx)));
     }
 
     if (OB_SUCC(ret)) {

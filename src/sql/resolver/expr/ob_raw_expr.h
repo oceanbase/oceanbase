@@ -1351,6 +1351,8 @@ public:
   {
     return T_FUN_PL_ASSOCIATIVE_INDEX == get_expr_type();
   }
+  bool is_non_pure_sys_func_expr() const;
+  bool is_specified_pseudocolumn_expr() const;
   void set_alias_column_name(const common::ObString& alias_name)
   {
     alias_column_name_ = alias_name;
@@ -3594,6 +3596,8 @@ public:
   virtual int replace_expr(
       const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs);
 
+  bool same_as(const Bound &other, ObExprEqualCheckContext *check_context) const;
+
   BoundType type_;
   bool is_preceding_;
   bool is_nmb_literal_;
@@ -3626,11 +3630,11 @@ public:
   {
     lower_ = lower;
   }
-  inline WindowType get_window_type()
+  inline WindowType get_window_type() const
   {
     return win_type_;
   }
-  inline bool is_between()
+  inline bool is_between() const
   {
     return is_between_;
   }

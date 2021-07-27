@@ -183,6 +183,13 @@ int ObDtlBasicChannel::wait_response()
     if (OB_FAIL(msg_response_.wait())) {
       LOG_WARN("send previous message fail", K(ret));
     }
+    if (OB_HASH_NOT_EXIST == ret) {
+      if (is_drain()) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
+      }
+    }
   }
   return ret;
 }
@@ -190,10 +197,8 @@ int ObDtlBasicChannel::wait_response()
 int ObDtlBasicChannel::clear_response_block()
 {
   int ret = OB_SUCCESS;
-  if (msg_response_.is_in_process()) {
-    if (OB_FAIL(msg_response_.wait())) {
-      LOG_WARN("send previous message fail", K(ret));
-    }
+  if (OB_FAIL(wait_response())) {
+    LOG_WARN("failed to wait response", K(ret));
   }
   msg_response_.reset_block();
   return ret;
@@ -684,7 +689,7 @@ int ObDtlBasicChannel::send1(std::function<int(const ObDtlLinkedBuffer&)>& proc,
   return ret;
 }
 
-int ObDtlBasicChannel::flush(bool force_flush, bool wait_response)
+int ObDtlBasicChannel::flush(bool force_flush, bool wait_resp)
 {
   int ret = OB_SUCCESS;
   if (force_flush == true) {
@@ -724,16 +729,9 @@ int ObDtlBasicChannel::flush(bool force_flush, bool wait_response)
       }
     } while (OB_SUCC(ret));
   }
-  if (OB_SUCC(ret) && force_flush && wait_response && msg_response_.is_in_process()) {
-    if (OB_FAIL(msg_response_.wait())) {
+  if (OB_SUCC(ret) && force_flush && wait_resp) {
+    if (OB_FAIL(wait_response())) {
       LOG_WARN("send previous message fail", K(ret), K(peer_), K(peer_id_), K(lbt()));
-    }
-  }
-  if (OB_HASH_NOT_EXIST == ret) {
-    if (is_drain()) {
-      ret = OB_SUCCESS;
-    } else {
-      ret = OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER;
     }
   }
   return ret;
@@ -795,6 +793,10 @@ int ObDtlBasicChannel::wait_unblocking()
     } else if (OB_FAIL(channel_loop_->find(this, idx))) {
       LOG_WARN("channel not exists in channel loop", K(ret));
     } else {
+      int64_t start_t = ObTimeUtility::current_time();
+      int64_t interval_t = 1 * 60 * 1000000; // 1min
+      int64_t last_t = 0;
+      int64_t print_log_t = 10 * 60 * 1000000;
       block_proc_.set_ch_idx_var(&idx);
       LOG_TRACE("wait unblocking", K(ret), K(dfc_->is_block()), KP(id_), K(peer_));
       do {
@@ -809,7 +811,8 @@ int ObDtlBasicChannel::wait_unblocking()
                        &block_proc_, timeout_ts - ObTimeUtility::current_time(), got_channel_idx))) {
           // no msg, then don't process
           if (OB_EAGAIN == ret) {
-            if (ObTimeUtility::current_time() > timeout_ts) {
+            int64_t end_t = ObTimeUtility::current_time();
+            if (end_t > timeout_ts) {
               ret = OB_TIMEOUT;
               LOG_WARN("get row from channel timeout", K(ret), K(timeout_ts));
             } else {
@@ -818,6 +821,18 @@ int ObDtlBasicChannel::wait_unblocking()
                 ret = tmp_ret;
                 LOG_WARN("worker interrupt", K(tmp_ret), K(ret));
                 break;
+              }
+              if (end_t - start_t > print_log_t) {
+                bool print_log = false;
+                if (0 == last_t || end_t - last_t > interval_t) {
+                  print_log = true;
+                  last_t = end_t;
+                }
+                if (print_log) {
+                  LOG_INFO("wait unblocking", K(id_), K(peer_id_), K(peer_id_),
+                    K(recv_buffer_cnt_), K(processed_buffer_cnt_), K(send_buffer_cnt_),
+                    K(idx), K(got_channel_idx));
+                }
               }
               ret = OB_SUCCESS;
             }

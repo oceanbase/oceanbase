@@ -123,7 +123,7 @@ private:
   int find_trans_node_below_version(const int64_t read_snapshot, const bool is_safe_read);
   int check_trans_node_readable(const int64_t read_snapshot);
   void print_conflict_trace_log();
-  void mark_trans_node_for_elr(const int64_t read_snapshot, const bool is_prewarm);
+  int mark_trans_node_for_elr(const int64_t read_snapshot, const bool is_prewarm);
 
   void move_to_next_node();
 

@@ -732,7 +732,8 @@ public:
 
   static int memory_check_remote(uint64_t tenant_id, bool& need_wait_minor_freeze);
   static int memory_wait_local(
-      ObExecContext& ctx, const ObPartitionKey& part_key, ObAddr& server_addr, int64_t& total_wait_secs);
+      ObExecContext& ctx, const ObPartitionKey& part_key, ObAddr& server_addr,
+      int64_t& total_wait_secs, bool &is_leader_changed);
 
   virtual int execute(ObExecContext& ctx, ObLoadDataStmt& load_stmt) = 0;
 };

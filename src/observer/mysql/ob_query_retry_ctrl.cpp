@@ -450,7 +450,10 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext& gctx, co
   }
 
   if (RETRY_TYPE_NONE != retry_type_) {
-    session->get_retry_info_for_update().set_last_query_retry_err(err);
+    // STATIC_ENG_NOT_IMPLEMENT myabe cover the orign err code, so not save STATIC_ENG_NOT_IMPLEMENT
+    if (STATIC_ENG_NOT_IMPLEMENT != err) {
+      session->get_retry_info_for_update().set_last_query_retry_err(err);
+    }
     if (OB_UNLIKELY(err != client_ret)) {
       LOG_ERROR("when need retry, client_ret must be equal to err", K(client_ret), K(err), K(retry_type_));
     }

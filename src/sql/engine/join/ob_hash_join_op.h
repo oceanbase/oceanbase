@@ -307,6 +307,8 @@ private:
 
     void set_part_count(int64_t part_shift, int64_t level1_part_count, int64_t level2_part_count)
     {
+      OB_ASSERT(0 != level1_part_count);
+      OB_ASSERT(0 != level2_part_count);
       part_shift_ = part_shift;
       level_one_part_count_ = level1_part_count;
       level_two_part_count_ = level2_part_count;

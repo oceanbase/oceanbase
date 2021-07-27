@@ -102,8 +102,12 @@ int ObLogJoin::allocate_exchange_post(AllocExchContext* ctx)
     LOG_WARN("failed to get calc types", K(ret));
   } else if (OB_FAIL(get_sharding_input_equal_sets(sharding_input_esets))) {
     LOG_WARN("failed to get sharding input esets", K(ret));
-  } else if (OB_FAIL(get_candidate_join_distribution_method(
-                 *get_plan(), sharding_input_esets, left_join_keys, right_join_keys, candidate_method))) {
+  } else if (OB_FAIL(get_candidate_join_distribution_method(*get_plan(),
+                                                            sharding_input_esets,
+                                                            left_join_keys,
+                                                            right_join_keys,
+                                                            ctx->exchange_allocated_,
+                                                            candidate_method))) {
     LOG_WARN("failed to get valid dist method", K(ret));
   } else if (OB_FAIL(choose_best_distribution_method(
                  *ctx, candidate_method, pq_map_hint_, join_dist_algo_, slave_mapping_type_))) {
@@ -1688,8 +1692,12 @@ int ObLogJoin::is_left_unique(bool& left_unique) const
   return ret;
 }
 
-int ObLogJoin::get_candidate_join_distribution_method(ObLogPlan& log_plan, const EqualSets& equal_sets,
-    const ObIArray<ObRawExpr*>& left_join_keys, const ObIArray<ObRawExpr*>& right_join_keys, uint64_t& candidate_method)
+int ObLogJoin::get_candidate_join_distribution_method(ObLogPlan &log_plan,
+                                                      const EqualSets &equal_sets,
+                                                      const ObIArray<ObRawExpr*> &left_join_keys,
+                                                      const ObIArray<ObRawExpr*> &right_join_keys,
+                                                      const bool exchange_allocated,
+                                                      uint64_t &candidate_method)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator* left_child = NULL;
@@ -1701,17 +1709,24 @@ int ObLogJoin::get_candidate_join_distribution_method(ObLogPlan& log_plan, const
     LOG_WARN("get unexpected null", K(left_child), K(right_child), K(ret));
   } else if (is_nlj_with_param_down()) {
     add_join_dist_flag(candidate_method, DIST_PULL_TO_LOCAL);
-    add_join_dist_flag(candidate_method, DIST_PARTITION_WISE);
-    add_join_dist_flag(candidate_method, DIST_PARTITION_NONE);
-    bool is_table_scan = false;
-    if (OB_FAIL(check_is_table_scan(*right_child, is_table_scan))) {
-      LOG_WARN("failed to check is table scan", K(ret));
-    } else if (INNER_JOIN == join_type_ && is_table_scan) {
-      /*
+    bool has_exch = false;
+    if (exchange_allocated && OB_FAIL(right_child->check_has_exchange_below(has_exch))) {
+      LOG_WARN("failed to check has exchange below", K(ret));
+    } else if (!has_exch) {
+      add_join_dist_flag(candidate_method, DIST_PARTITION_WISE);
+      add_join_dist_flag(candidate_method, DIST_PARTITION_NONE);
+    }
+    if (OB_SUCC(ret)) {
+      bool is_table_scan = false;
+      if (OB_FAIL(check_is_table_scan(*right_child, is_table_scan))) {
+        LOG_WARN("failed to check is table scan", K(ret));
+      } else if (INNER_JOIN == join_type_ && is_table_scan) {
+        /*
        * todo we should use strategy to choose
        * between DIST_BC2HOST_NONE and DIST_BROADCAST_NONE in future
        */
-      add_join_dist_flag(candidate_method, DIST_BC2HOST_NONE);
+        add_join_dist_flag(candidate_method, DIST_BC2HOST_NONE);
+      }
     }
   } else {
     // without BC2HOST

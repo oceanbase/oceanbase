@@ -892,6 +892,7 @@ public:
     UNUSED(range_array_idx);
     return common::OB_NOT_SUPPORTED;
   }
+  virtual int release_table_ref() { return OB_SUCCESS; }
   VIRTUAL_TO_STRING_KV(K_(type));
 
 public:

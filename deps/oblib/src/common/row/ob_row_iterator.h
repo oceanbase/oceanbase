@@ -69,6 +69,7 @@ public:
     return type_;
   }
 
+  virtual int release_table_ref() { return OB_SUCCESS; }
 private:
   const IterType type_;
 };

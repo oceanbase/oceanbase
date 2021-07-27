@@ -662,6 +662,8 @@ public:
     return expr_partition_id_;
   }
 
+  int push_back_iter(common::ObNewRowIterator *iter);
+  int remove_iter(common::ObNewRowIterator *iter);
 private:
   int set_phy_op_ctx_ptr(uint64_t index, void* phy_op);
   void* get_phy_op_ctx_ptr(uint64_t index) const;
@@ -675,7 +677,7 @@ private:
   int serialize_operator_input_recursively(const ObPhyOperator* op, char*& buf, int64_t buf_len, int64_t& pos,
       int32_t& real_input_count, bool is_full_tree) const;
   int serialize_operator_input_len_recursively(const ObPhyOperator* op, int64_t& len, bool is_full_tree) const;
-
+  int release_table_ref();
 protected:
   /**
    * @brief the memory of exec context.
@@ -806,6 +808,7 @@ protected:
   // for expr values op use
   int64_t expr_partition_id_;
 
+  ObSEArray<common::ObNewRowIterator*, 1, common::ObIAllocator&> iters_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

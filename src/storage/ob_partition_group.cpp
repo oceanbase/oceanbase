@@ -435,16 +435,7 @@ int ObPartitionGroup::get_role(common::ObRole& role) const
   return ret;
 }
 
-int ObPartitionGroup::get_role_for_partition_table(common::ObRole& role) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_SUCCESS == (ret = check_init_(pls_, "partition log service"))) {
-    ret = pls_->get_role_for_partition_table(role);
-  }
-  return ret;
-}
-
-int ObPartitionGroup::get_role_unsafe(common::ObRole& role) const
+int ObPartitionGroup::get_role_unsafe(common::ObRole &role) const
 {
   int ret = OB_SUCCESS;
   if (OB_SUCCESS == (ret = check_init_(pls_, "partition log service"))) {
@@ -3823,7 +3814,10 @@ int ObPartitionGroup::freeze_log_and_data_v2_(const bool emergency, const bool f
       STORAGE_LOG(WARN, "fail to freeze log", K(ret), K(pkey_));
     }
   } else if (OB_FAIL(check_range_changed_(old_handle, is_leader, changed))) {
-    if (OB_EAGAIN != ret) {
+    if (OB_STATE_NOT_MATCH == ret) {
+      STORAGE_LOG(INFO, "skip freeze due to clog state", K(ret), K(pkey_));
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN != ret) {
       STORAGE_LOG(WARN, "failed to check log_id or version range changed", K(ret), K(old_handle));
     }
   } else if (!changed) {
@@ -4038,7 +4032,7 @@ int ObPartitionGroup::get_curr_clog_info_(
   if (OB_FAIL(get_base_storage_info_(clog_info))) {
     STORAGE_LOG(WARN, "fail to get base storage info", K(ret), K(pkey_));
   } else if (0 == clog_info.get_last_replay_log_id()) {
-    // skip fetching log_archive_status
+    // do nothing
   } else if (ObServerConfig::get_instance().enable_log_archive && !is_sys_tenant && !is_restore &&
              src_cluster_id == self_cluster_id) {
     // Only the requests from the database itself need to obtain the archive point if the archive is enabled.
@@ -5826,7 +5820,16 @@ int ObPartitionGroup::recycle_unused_sstables(const int64_t max_recycle_cnt, int
   return ret;
 }
 
-int ObPartitionGroup::set_meta_block_list(const common::ObIArray<blocksstable::MacroBlockId>& meta_block_list)
+int ObPartitionGroup::recycle_sstable(const ObITable::TableKey &table_key)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pg_storage_.recycle_sstable(table_key))) {
+    STORAGE_LOG(WARN, "fail to recycle sstable", K(ret), K(table_key));
+  }
+  return ret;
+}
+
+int ObPartitionGroup::set_meta_block_list(const common::ObIArray<blocksstable::MacroBlockId> &meta_block_list)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {

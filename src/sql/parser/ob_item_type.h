@@ -422,9 +422,10 @@ typedef enum ObItemType {
   T_FUN_SYS_MAKETIME = 707,
   T_FUN_SYS_MONTH_NAME = 708,
   T_FUN_SYS_FORMAT = 709,
-  // T_FUN_SYS_COT = 710, 710 has ben taken on master
+  T_FUN_SYS_COT = 710,
   T_FUN_SYS_QUARTER = 711,
   T_FUN_SYS_BIT_LENGTH = 712,
+  T_FUN_SYS_PI = 713,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -1085,6 +1086,7 @@ typedef enum ObItemType {
 
   T_SFU_INT,
   T_SFU_DECIMAL,
+  T_SFU_DOUBLE,
   T_FOR_UPDATE,
   T_DEFAULT_INT,
   T_DEFAULT_NULL,

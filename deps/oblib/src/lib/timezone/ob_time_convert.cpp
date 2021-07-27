@@ -897,6 +897,7 @@ int ObTimeConverter::datetime_to_double(int64_t value, const ObTimeZoneInfo* tz_
   return ret;
 }
 
+// ObDatetimeType: tz_info = NULL. ObTimestampType: tz_info != NULL.
 int ObTimeConverter::datetime_to_str(int64_t value, const ObTimeZoneInfo* tz_info, const ObString& nls_format,
     int16_t scale, char* buf, int64_t buf_len, int64_t& pos, bool with_delim)
 {
@@ -1077,12 +1078,6 @@ int ObTimeConverter::datetime_to_timestamp(int64_t dt_value, const ObTimeZoneInf
   bool is_timestamp = (tz_info != NULL);
   if (OB_FAIL(sub_timezone_offset(tz_info, is_timestamp, ObString(), ts_value))) {
     LOG_WARN("failed to adjust value with time zone offset", K(ret));
-    // timestamp less than 0000-01-02 00:00:00 utc or greater than 9999-12-30 23:59:59 utc is invalid.
-    // when cast datetime to timestamp, local time of timestamp is equal to origi datetime value.
-    // so we need to compare result of sub_timezone_offset with MAX/MIN time.
-  } else if (ts_value > MYSQL_TIMESTAMP_MAX_VAL || ts_value < MYSQL_TIMESTAMP_MIN_VAL) {
-    ret = OB_INVALID_DATE_VALUE;
-    LOG_WARN("invalid timestamp", K(ret), K(ts_value));
   }
   return ret;
 }
@@ -2660,7 +2655,11 @@ int ObTimeConverter::ob_time_to_str(
     if (HAS_TYPE_DATE(mode)) {
       if (OB_UNLIKELY(parts[DT_YEAR] > 9999) || OB_UNLIKELY(parts[DT_YEAR] < 0) || OB_UNLIKELY(parts[DT_MON] > 12) ||
           OB_UNLIKELY(parts[DT_MON] < 0) || OB_UNLIKELY(parts[DT_MDAY] > 31) || OB_UNLIKELY(parts[DT_MDAY] < 0)) {
-        ret = OB_ERR_UNEXPECTED;
+        if (parts[DT_YEAR] > 9999 || parts[DT_YEAR] < 0) {
+          ret = OB_ERR_DATETIME_INTERVAL_INTERNAL_ERROR;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+        }
         LOG_WARN("Unexpected time", K(ret), K(parts[DT_YEAR]), K(parts[DT_MON]), K(parts[DT_MDAY]));
       } else if (OB_LIKELY(with_delim && (buf_len - pos) > 10)        // format 0000-00-00
                  || OB_LIKELY(!with_delim && (buf_len - pos) > 8)) {  // format yyyymmdd
@@ -3184,16 +3183,13 @@ int ObTimeConverter::str_to_ob_time_oracle_dfm(
     // 2. set default value for ob_time
     if (OB_SUCC(ret)) {
       int64_t utc_curr_time = ObTimeUtility::current_time();
+      int64_t utc_curr_time_copy = utc_curr_time;
       int32_t cur_date = 0;
       if (OB_ISNULL(cvrt_ctx.tz_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session timezone info is null", K(ret));
-      } else if (sub_timezone_offset(*(cvrt_ctx.tz_info_),
-                     ObString(),
-                     utc_curr_time,
-                     session_tz_offset,
-                     session_tz_id,
-                     session_tran_type_id)) {
+      } else if (sub_timezone_offset(*(cvrt_ctx.tz_info_), ObString(),
+                                     utc_curr_time_copy, session_tz_offset, session_tz_id, session_tran_type_id)) {
         LOG_WARN("get session timezone offset failed", K(ret));
       } else if (OB_FAIL(datetime_to_date(utc_curr_time, cvrt_ctx.tz_info_, cur_date))) {
         LOG_WARN("timestamp to date failed", K(ret));
@@ -4756,11 +4752,6 @@ int ObTimeConverter::ob_time_to_datetime(ObTime& ob_time, const ObTimeConvertCtx
       tz_id_pos_map->revert(literal_tz_info);
       tz_id_pos_map = NULL;
       literal_tz_info = NULL;
-    }
-    if (OB_SUCC(ret) && cvrt_ctx.is_timestamp_ &&
-        (value > MYSQL_TIMESTAMP_MAX_VAL || value < MYSQL_TIMESTAMP_MIN_VAL)) {
-      ret = OB_INVALID_DATE_VALUE;
-      LOG_WARN("invalid timestamp", K(ret), K(value));
     }
   }
   return ret;

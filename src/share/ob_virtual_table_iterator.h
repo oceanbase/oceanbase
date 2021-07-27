@@ -102,6 +102,8 @@ public:
   {
     return common::ObQueryFlag::Reverse == scan_flag_.scan_order_;
   }
+  virtual int check_priv(const ObString &level_str, const ObString &db_name,
+                         const ObString &table_name, int64_t tenant_id, bool &passed);
   VIRTUAL_TO_STRING_KV(K_(output_column_ids));
 
 private:

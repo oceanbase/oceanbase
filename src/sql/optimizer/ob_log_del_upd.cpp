@@ -1009,6 +1009,8 @@ int ObLogDelUpd::calculate_table_location(uint64_t loc_table_id, uint64_t ref_ta
     const common::ObDataTypeCastParams dtc_params =
         ObBasicSessionInfo::create_dtc_params(my_plan_->get_optimizer_context().get_session_info());
     ObTaskExecutorCtx* task_exec_ctx = my_plan_->get_optimizer_context().get_task_exec_ctx();
+    ObArray<ObRawExpr *> correlated_filters;
+    ObArray<ObRawExpr *> uncorrelated_filters;
     // initialized the table location
     if (OB_ISNULL(schema_guard) || OB_ISNULL(sql_schema_guard) || OB_ISNULL(stmt) || OB_ISNULL(exec_ctx) ||
         OB_ISNULL(task_exec_ctx) || OB_ISNULL(params) || OB_ISNULL(location_cache)) {
@@ -1022,10 +1024,16 @@ int ObLogDelUpd::calculate_table_location(uint64_t loc_table_id, uint64_t ref_ta
           K(task_exec_ctx),
           K(params),
           K(location_cache));
+    } else if (OB_FAIL(ObOptimizerUtil::extract_parameterized_correlated_filters(
+                is_first_dml_op_ ? stmt->get_condition_exprs() : get_filter_exprs(),
+                params->count(),
+                correlated_filters,
+                uncorrelated_filters))) {
+      LOG_WARN("Failed to extract correlated filters", K(ret));
     } else if (OB_FAIL(table_partition_info.init_table_location(*sql_schema_guard,
                    *stmt,
                    exec_ctx->get_my_session(),
-                   is_first_dml_op_ ? stmt->get_condition_exprs() : get_filter_exprs(),
+                   uncorrelated_filters,
                    loc_table_id,
                    ref_table_id,
                    part_hint,
@@ -1061,8 +1069,8 @@ int ObLogDelUpd::alloc_partition_id_expr(ObAllocExprContext& ctx)
 int ObLogDelUpd::alloc_shadow_pk_column_for_pdml(ObAllocExprContext& ctx)
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  for (int64_t i = 0; i < ctx.expr_producers_.count() && OB_SUCC(ret) && !found; i++) {
+  for (int64_t i = 0; i < ctx.expr_producers_.count() && OB_SUCC(ret); i++) {
+    bool found = false;
     ExprProducer expr_producer = ctx.expr_producers_.at(i);
     if (expr_producer.consumer_id_ == id_ && expr_producer.expr_->is_column_ref_expr()) {
       ObColumnRefRawExpr* column_ref_expr = (ObColumnRefRawExpr*)(expr_producer.expr_);

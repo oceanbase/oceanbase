@@ -254,9 +254,6 @@ int ObPxReceiveOp::rescan()
 int ObPxReceiveOp::drain_exch()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  const ObNewRow* row = NULL;
-  ObPxReceiveOpInput* recv_input = NULL;
   uint64_t version = -1;
   if (OB_FAIL(try_open())) {
     LOG_WARN("get operator ctx failed", K(ret));
@@ -296,11 +293,28 @@ int ObPxReceiveOp::drain_exch()
 int ObPxReceiveOp::active_all_receive_channel()
 {
   int ret = OB_SUCCESS;
-  const int batch = 10;
   while (!dfc_.is_all_channel_act() && OB_SUCC(ret)) {
     if (OB_FAIL(inner_get_next_row())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to get next row", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxReceiveOp::erase_dtl_interm_result()
+{
+  int ret = OB_SUCCESS;
+  dtl::ObDtlChannelInfo ci;
+  ObDTLIntermResultKey key;
+  for (int i = 0; i < get_ch_set().count(); ++i) {
+    if (OB_FAIL(get_ch_set().get_channel_info(i, ci))) {
+      LOG_WARN("fail get channel info", K(ret));
+    } else {
+      key.channel_id_ = ci.chid_;
+      if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+        LOG_TRACE("fail to release recieve internal result", K(ret));
       }
     }
   }
@@ -320,25 +334,16 @@ int ObPxFifoReceiveOp::inner_open()
 int ObPxFifoReceiveOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  int release_channel_ret = common::OB_SUCCESS;
   /* we must release channel even if there is some error happen before */
   if (channel_linked_) {
-    int release_channel_ret = ObPxChannelUtil::flush_rows(task_channels_);
+    release_channel_ret = ObPxChannelUtil::flush_rows(task_channels_);
     if (release_channel_ret != common::OB_SUCCESS) {
       LOG_WARN("release dtl channel failed", K(release_channel_ret));
     }
-    ObDTLIntermResultKey key;
-    ObDtlBasicChannel* channel = NULL;
-    for (int i = 0; i < task_channels_.count(); ++i) {
-      channel = static_cast<ObDtlBasicChannel*>(task_channels_.at(i));
-      key.channel_id_ = channel->get_id();
-      if (channel->use_interm_result()) {
-        release_channel_ret = ObDTLIntermResultManager::getInstance().erase_interm_result_info(key);
-        if (release_channel_ret != common::OB_SUCCESS) {
-          LOG_WARN("fail to release recieve internal result", K(ret));
-        }
-      }
-    }
-
+    int64_t recv_cnt = 0;
+    op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::DTL_SEND_RECV_COUNT;
+    op_monitor_info_.otherstat_3_value_ = recv_cnt;
     release_channel_ret = msg_loop_.unregister_all_channel();
     if (release_channel_ret != common::OB_SUCCESS) {
       // the following unlink actions is not safe is any unregister failure happened
@@ -348,6 +353,11 @@ int ObPxFifoReceiveOp::inner_close()
     if (release_channel_ret != common::OB_SUCCESS) {
       LOG_WARN("release dtl channel failed", K(release_channel_ret));
     }
+  }
+  // must erase after unlink channel
+  release_channel_ret = erase_dtl_interm_result();
+  if (release_channel_ret != common::OB_SUCCESS) {
+    LOG_TRACE("release interm result failed", KR(release_channel_ret));
   }
   return ret;
 }
@@ -378,6 +388,10 @@ int ObPxFifoReceiveOp::inner_get_next_row()
         LOG_DEBUG("Got one row from channel", K(ret));
         break;  // got one row
       } else if (OB_ITER_END == ret) {
+        if (GCONF.enable_sql_audit) {
+          op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
+          op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
+        }
         metric_.mark_last_out();
         LOG_TRACE("Got eof row from channel", K(ret));
         break;

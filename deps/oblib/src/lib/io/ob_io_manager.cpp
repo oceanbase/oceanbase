@@ -81,6 +81,14 @@ int ObIOHandle::wait(const int64_t timeout_ms)
         COMMON_LOG(ERROR, "fail to guard master condition", K(ret));
       } else if (!master_->has_finished_ && OB_FAIL(master_->cond_.wait(real_wait_timeout))) {
         COMMON_LOG(WARN, "fail to wait master condition", K(ret), K(real_wait_timeout), K(*master_));
+        if (OB_TIMEOUT == ret) {
+          for (int64_t i = 0; i < master_->io_info_.batch_count_; ++i) { // ignore ret
+            ObIORequest *req = master_->requests_[i];
+            if (nullptr != req && nullptr != req->get_disk()) {
+              req->get_disk()->record_io_failure(*req, DEFAULT_IO_WAIT_TIME_MS);
+            }
+          }
+        }
       }
     } else {
       ret = OB_TIMEOUT;

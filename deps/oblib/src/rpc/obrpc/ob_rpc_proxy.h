@@ -90,7 +90,22 @@ public:
     using Response = typename pcodeStruct::Response;
 
   public:
-    int decode(void* pkt);
+    AsyncCB() { cloned_ = false; }
+    virtual ~AsyncCB() { reset_rcode(); }
+    int decode(void *pkt);
+    void reset_rcode()
+    {
+      rcode_.reset();
+    }
+    void set_cloned(bool cloned)
+    {
+      cloned_ = cloned;
+    }
+    bool get_cloned()
+    {
+      return cloned_;
+    }
+    int get_rcode();
 
     virtual void do_first();
     virtual void set_args(const Request& arg) = 0;
@@ -101,6 +116,15 @@ public:
     void check_request_rt(const bool force_print = false);
 
   protected:
+    /*
+     * When the variable 'clone_' is true, it indicates that the derived class of AsyncCB realloctes
+     * new memory and clone itself in its overwriten 'clone' virtual function. But in some cases, the
+     * derived class reuses its original memory which is maintained by up-layer modules, and the value
+     * of 'clone_' is false. Further, rcode_.warnings_ may reallocate and enlarge it internal memory
+     * space when rpc packets deserealized. When clone_is false, the relocated memory in rcode_.warnings_
+     * has to be freed in the destructor of class AsyncCB.
+     */
+    bool cloned_;
     Response result_;
     ObRpcResultCode rcode_;
   };

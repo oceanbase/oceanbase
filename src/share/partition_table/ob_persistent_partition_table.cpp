@@ -483,8 +483,9 @@ int ObPersistentPartitionTable::execute(ObPartitionTableProxy* proxy, const ObPa
             LOG_WARN("data_version must > 0 for leader replica", K(ret), K(replica));
           } else if (replica.to_leader_time_ <= 0) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("change to leader time must > 0 for leader replica", K(ret), K(replica));
-          } else if (OB_FAIL(GCTX.par_ser_->get_role_for_partition_table(replica.partition_key(), new_role))) {
+            LOG_WARN("change to leader time must > 0 for leader replica",
+                     K(ret), K(replica));
+          } else if (OB_FAIL(GCTX.par_ser_->get_role(replica.partition_key(), new_role))) {
             ret = OB_SUCCESS;
             new_replica.role_ = FOLLOWER;
           } else if (is_follower(new_role)) {

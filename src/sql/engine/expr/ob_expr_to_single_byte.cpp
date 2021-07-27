@@ -48,69 +48,127 @@ int ObExprToSingleByte::calc_result_type1(ObExprResType& type, ObExprResType& ty
   return ret;
 }
 
-int ObExprToSingleByte::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
+int calc_to_single_byte_expr(const ObString &input, const ObCollationType cs_type,
+                             char *buf, const int64_t buf_len, int32_t &pos)
 {
   int ret = OB_SUCCESS;
+  int64_t min_char_width = 0;
+
+  if (OB_FAIL(ObCharset::get_mbminlen_by_coll(cs_type, min_char_width))) {
+    LOG_WARN("fail to get mbminlen", K(ret));
+  } else if (min_char_width > 1) {
+    ObDataBuffer allocator(buf, buf_len);
+    ObString output;
+
+    if (OB_FAIL(ob_write_string(allocator, input, output))) {
+      LOG_WARN("invalid input value", K(ret), K(buf_len), K(input));
+    } else {
+      pos = output.length();
+    }
+  } else {
+    ObStringScanner scanner(input, cs_type);
+    ObString encoding;
+    int32_t wc = 0;
+    char *ptr = buf;
+
+    while (OB_SUCC(ret)
+           && scanner.next_character(encoding, wc, ret)) {
+      int32_t length = 0;
+
+      if (wc == 0x3000) { //处理空格
+        wc = 0x20;
+      //smart quote not support https://gerry.lamost.org/blog/?p=295757
+      //} else if (wc == 0x201D) { // ” --> " smart double quote
+      //  wc = 0x22;
+      //} else if (wc == 0x2019) { // ’ --> ' smart single quote
+      //  wc = 0x27;
+      } else if (wc >= 0xFF01 && wc <= 0xFF5E) {
+        wc -= 65248;
+      } else {
+        //do nothing
+      }
+      OZ (ObCharset::wc_mb(cs_type, wc, ptr, buf + buf_len - ptr, length));
+      ptr += length;
+      LOG_DEBUG("process char", K(ret), K(wc));
+    }
+    pos = ptr - buf;
+  }
+
+  return ret;
+}
+
+int ObExprToSingleByte::calc_result1(ObObj &result,
+                                     const ObObj &obj,
+                                     ObExprCtx &expr_ctx) const
+{
+  int ret = OB_SUCCESS;
+  ObString src_string;
+  ObCollationType src_collation = obj.get_collation_type();
 
   if (obj.is_null_oracle()) {
     result.set_null();
   } else {
-    ObString src_string;
-    ObString dst_string;
-    ObCollationType src_collation = obj.get_collation_type();
-    int64_t min_char_width = 0;
-    char* buff = NULL;
-    int64_t buff_len = 0;
-
-    CK(OB_NOT_NULL(expr_ctx.calc_buf_));
-    OZ(obj.get_string(src_string));
+    CK (OB_NOT_NULL(expr_ctx.calc_buf_));
+    OZ (obj.get_string(src_string));
     if (OB_SUCC(ret)) {
-      buff_len = src_string.length();
+      char* buff = NULL;
+      int64_t buff_len = src_string.length();
+      int32_t pos = 0;
+
       if (OB_ISNULL(buff = static_cast<char*>(expr_ctx.calc_buf_->alloc(buff_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate buffer", K(ret), K(buff_len));
+      } else if (OB_FAIL(calc_to_single_byte_expr(src_string, src_collation, buff, buff_len, pos))) {
+        LOG_WARN("fail to calc", K(ret));
       } else {
-        dst_string.assign_buffer(buff, buff_len);
+        result.set_common_value(ObString(pos, buff));
+        result.set_meta_type(result_type_);
       }
     }
-    OZ(ObCharset::get_mbminlen_by_coll(src_collation, min_char_width));
-
-    if (min_char_width > 1) {
-      OX(dst_string.write(src_string.ptr(), src_string.length()));
-    } else {
-      const char* src_ptr = src_string.ptr();
-      int64_t src_pos = 0;
-      char* dst_ptr = buff;
-      int64_t dst_pos = 0;
-
-      int32_t length = 0;
-      int32_t wc = 0;
-      while (OB_SUCC(ret) && src_pos < src_string.length()) {
-        OZ(ObCharset::mb_wc(src_collation, src_ptr + src_pos, src_string.length() - src_pos, length, wc));
-        OX(src_pos += length);
-        int32_t wc_before_process = wc;
-        if (wc == 0x3000) {
-          wc = 0x20;
-          // smart quote not support https://gerry.lamost.org/blog/?p=295757
-          //} else if (wc == 0x201D) { // " --> " smart double quote
-          //  wc = 0x22;
-          //} else if (wc == 0x2019) { // ' --> ' smart single quote
-          //  wc = 0x27;
-        } else if (wc >= 0xFF01 && wc <= 0xFF5E) {
-          wc -= 65248;
-        } else {
-          // do nothing
-        }
-        OZ(ObCharset::wc_mb(src_collation, wc, dst_ptr + dst_pos, buff_len - dst_pos, length));
-        OX(dst_pos += length);
-        LOG_DEBUG("process char", K(ret), K(src_pos), K(wc_before_process), K(wc));
-      }
-      OX(dst_string.assign_ptr(dst_ptr, dst_pos));
-    }
-    OX(result.set_common_value(dst_string));
-    OX(result.set_meta_type(result_type_));
   }
 
+  return ret;
+}
+
+int ObExprToSingleByte::cg_expr(ObExprCGCtx &op_cg_ctx,
+                                const ObRawExpr &raw_expr,
+                                ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(op_cg_ctx);
+  UNUSED(raw_expr);
+  rt_expr.eval_func_ = calc_to_single_byte;
+  return ret;
+}
+
+int ObExprToSingleByte::calc_to_single_byte(const ObExpr &expr,
+                                            ObEvalCtx &ctx,
+                                            ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *src_param = NULL;
+  if (expr.args_[0]->eval(ctx, src_param)) {
+    LOG_WARN("eval arg failed", K(ret));
+  } else {
+    if (src_param->is_null()) {
+      res_datum.set_null();
+    } else {
+      ObString src = src_param->get_string();
+      char *buf = NULL;
+      int64_t buf_len = src.length();
+      int32_t length = 0;
+
+      if (OB_ISNULL(buf = static_cast<char*>(expr.get_str_res_mem(ctx, buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(ret), K(src));
+      } else if (OB_FAIL(calc_to_single_byte_expr(src, expr.args_[0]->datum_meta_.cs_type_,
+                                                  buf, buf_len, length))) {
+         LOG_WARN("fail to calc unistr", K(ret));
+      } else {
+        res_datum.set_string(buf, length);
+      }
+    }
+  }
   return ret;
 }
 

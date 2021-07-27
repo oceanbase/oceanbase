@@ -233,6 +233,7 @@ struct ObReplicaOpArg {
   bool is_physical_restore() const;
   bool is_physical_restore_leader() const;
   bool is_physical_restore_follower() const;
+  bool is_FtoL() const;
   bool is_standby_restore() const;
   const char* get_replica_op_type_str() const;
   TO_STRING_KV(K_(key), K_(dst), K_(src), K_(data_src), K_(quorum), "type", get_replica_op_type_str(), K_(base_version),
@@ -391,7 +392,7 @@ public:
   VIRTUAL_FOR_UNITTEST int xa_prepare(
       const transaction::ObXATransID& xid, const uint64_t tenant_id, const int64_t stmt_expired_time);
   VIRTUAL_FOR_UNITTEST int xa_end_trans(const transaction::ObXATransID& xid, const bool is_rollback,
-      const int64_t flags, transaction::ObTransDesc& trans_desc);
+      const int64_t flags, transaction::ObTransDesc& trans_desc, bool& access_temp_table);
   VIRTUAL_FOR_UNITTEST int get_xa_trans_state(int32_t& state, transaction::ObTransDesc& trans_desc);
   // partition storage interfaces
   virtual int table_scan(ObVTableScanParam& vparam, common::ObNewRowIterator*& result) override;
@@ -553,7 +554,6 @@ public:
       const uint64_t table_id, const common::ObAddr& server, DupReplicaType& dup_replica_type);
   VIRTUAL_FOR_UNITTEST int get_replica_status(const common::ObPartitionKey& pkey, share::ObReplicaStatus& status) const;
   VIRTUAL_FOR_UNITTEST int get_role(const common::ObPartitionKey& pkey, common::ObRole& role) const;
-  VIRTUAL_FOR_UNITTEST int get_role_for_partition_table(const common::ObPartitionKey& pkey, common::ObRole& role) const;
   VIRTUAL_FOR_UNITTEST int get_role_unsafe(const common::ObPartitionKey& pkey, common::ObRole& role) const;
   VIRTUAL_FOR_UNITTEST int get_leader_curr_member_list(
       const common::ObPartitionKey& pkey, common::ObMemberList& member_list) const;
@@ -996,6 +996,7 @@ private:
       common::ObIArray<obrpc::ObCreatePartitionArg>& target_batch_arg, common::ObIArray<int>& batch_res);
   void free_partition_list(ObArray<ObIPartitionGroup*>& partition_list);
   void submit_pt_update_task_(const ObPartitionKey& pkey, const bool need_report_checksum = true);
+  int submit_pg_pt_update_task_(const ObPartitionKey &pkey);
   int try_inc_total_partition_cnt(const int64_t new_partition_cnt, const bool need_check);
   int physical_flashback();
   int clean_all_clog_files_();
@@ -1362,13 +1363,13 @@ OB_INLINE int ObPartitionService::xa_prepare(
 }
 
 OB_INLINE int ObPartitionService::xa_end_trans(const transaction::ObXATransID& xid, const bool is_rollback,
-    const int64_t flags, transaction::ObTransDesc& trans_desc)
+    const int64_t flags, transaction::ObTransDesc& trans_desc, bool& access_temp_table)
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(check_init(txs_, "transaction service"))) {
     STORAGE_LOG(WARN, "ObTransService check init error");
   } else {
-    ret = txs_->xa_end_trans_v2(xid, is_rollback, flags, trans_desc);
+    ret = txs_->xa_end_trans_v2(xid, is_rollback, flags, trans_desc, access_temp_table);
   }
   return ret;
 }

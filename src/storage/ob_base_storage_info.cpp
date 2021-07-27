@@ -143,8 +143,8 @@ int ObBaseStorageInfo::deep_copy(const ObBaseStorageInfo& base_storage_info)
 {
   int ret = OB_SUCCESS;
   if (!base_storage_info.is_valid()) {
-    COMMON_LOG(WARN, "invalid arguments", K(base_storage_info));
     ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arguments", K(ret), K(base_storage_info));
   } else {
     version_ = base_storage_info.version_;
     epoch_id_ = base_storage_info.epoch_id_;
@@ -164,6 +164,28 @@ int ObBaseStorageInfo::deep_copy(const ObBaseStorageInfo& base_storage_info)
 OB_SERIALIZE_MEMBER(ObBaseStorageInfo, version_, epoch_id_, proposal_id_, last_replay_log_id_, last_submit_timestamp_,
     accumulate_checksum_, replica_num_, membership_timestamp_, membership_log_id_, curr_member_list_, ms_proposal_id_);
 
+int ObBaseStorageInfo::try_update_member_list_info(const ObBaseStorageInfo& base_storage_info)
+{
+  int ret = OB_SUCCESS;
+  if (!base_storage_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arguments", K(ret), K(base_storage_info));
+  } else if (OB_FAIL(try_update_member_list(base_storage_info.membership_log_id_,
+                 base_storage_info.membership_timestamp_,
+                 base_storage_info.replica_num_,
+                 base_storage_info.curr_member_list_,
+                 base_storage_info.ms_proposal_id_))) {
+    if (OB_ENTRY_EXIST == ret) {
+      // This ret code means no need update, so we rewrite it to OB_SUCCESS.
+      ret = OB_SUCCESS;
+    } else {
+      COMMON_LOG(WARN, "try_update_member_list failed", K(ret), K(base_storage_info));
+    }
+  } else {
+  }
+  return ret;
+}
+
 int ObBaseStorageInfo::try_update_member_list(const uint64_t ms_log_id, const int64_t mc_timestamp,
     const int64_t replica_num, const ObMemberList& mlist, const common::ObProposalID& ms_proposal_id)
 {
@@ -171,18 +193,21 @@ int ObBaseStorageInfo::try_update_member_list(const uint64_t ms_log_id, const in
   if (mc_timestamp == membership_timestamp_) {
     ret = OB_ENTRY_EXIST;
   } else if (mc_timestamp > membership_timestamp_) {
-    membership_log_id_ = ms_log_id;
-    membership_timestamp_ = mc_timestamp;
-    replica_num_ = replica_num;
-    curr_member_list_ = mlist;
-    ms_proposal_id_ = ms_proposal_id;
-    COMMON_LOG(INFO,
-        "ObBaseStorageInfo update member list success",
-        K(ms_log_id),
-        K(mc_timestamp),
-        K(replica_num),
-        K(mlist),
-        K(ms_proposal_id));
+    if (OB_FAIL(curr_member_list_.deep_copy(mlist))) {
+      COMMON_LOG(WARN, "try_update_member_list failed", K(ret));
+    } else {
+      membership_log_id_ = ms_log_id;
+      membership_timestamp_ = mc_timestamp;
+      replica_num_ = replica_num;
+      ms_proposal_id_ = ms_proposal_id;
+      COMMON_LOG(INFO,
+          "ObBaseStorageInfo update member list success",
+          K(ms_log_id),
+          K(mc_timestamp),
+          K(replica_num),
+          K(mlist),
+          K(ms_proposal_id));
+    }
   }
   return ret;
 }

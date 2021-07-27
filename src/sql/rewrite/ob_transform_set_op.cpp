@@ -366,23 +366,62 @@ int ObTransformSetOp::is_calc_found_rows_for_union(
 }
 
 int ObTransformSetOp::recursive_adjust_order_by(ObSelectStmt* stmt, ObRawExpr* cur_expr, ObRawExpr*& find_expr)
+ {
+   int ret = OB_SUCCESS;
+   if (OB_ISNULL(stmt) || OB_ISNULL(cur_expr)) {
+     ret = OB_INVALID_ARGUMENT;
+     LOG_WARN("invalid argument, expr is NULL", K(ret));
+  } else if (cur_expr->is_set_op_expr()) {
+    ret = replace_select_expr_for_set_op(stmt, cur_expr, find_expr);
+  } else {
+    ObRawExpr *new_expr = NULL;
+    ObRawExprFactory *expr_factory = NULL;
+    if (OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+        OB_ISNULL(ctx_->session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params have null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::copy_expr(
+                  *expr_factory, cur_expr, new_expr, COPY_REF_DEFAULT))) {
+      LOG_WARN("failed to copy expr", K(ret));
+    } else if (OB_FAIL(replace_select_expr_for_set_op(
+                          stmt, new_expr, find_expr))) {
+      LOG_WARN("failed to replace expr", K(ret));
+    } else if (OB_FAIL(find_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else if (OB_FAIL(find_expr->pull_relation_id_and_levels(stmt->get_current_level()))) {
+      LOG_WARN("failed to pull relation id and levels", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformSetOp::replace_select_expr_for_set_op(ObSelectStmt *stmt,
+                                                    ObRawExpr *cur_expr,
+                                                    ObRawExpr *&find_expr)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr* set_expr = NULL;
-  int64_t idx = -1;
   if (OB_ISNULL(stmt) || OB_ISNULL(cur_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, expr is NULL", K(ret));
-  } else if (OB_ISNULL(set_expr = ObTransformUtils::get_expr_in_cast(cur_expr)) ||
-             OB_UNLIKELY(!set_expr->is_set_op_expr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected set expr", K(ret), K(set_expr));
-  } else if (OB_FALSE_IT(idx = static_cast<ObSetOpRawExpr*>(set_expr)->get_idx())) {
-  } else if (idx < 0 || idx >= stmt->get_select_item_size()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("union expr param count is wrong", K(ret), K(idx), K(stmt->get_select_item_size()));
-  } else {
-    find_expr = stmt->get_select_item(idx).expr_;
+  } else if (cur_expr->is_set_op_expr()) {
+    int64_t idx = static_cast<ObSetOpRawExpr*>(cur_expr)->get_idx();
+    if (idx < 0 || idx >= stmt->get_select_item_size()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("union expr param count is wrong", K(ret), K(idx), K(stmt->get_select_item_size()));
+    } else {
+      find_expr = stmt->get_select_item(idx).expr_;
+    }
+   } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cur_expr->get_param_count(); ++i) {
+      ObRawExpr *&expr = cur_expr->get_param_expr(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(SMART_CALL(replace_select_expr_for_set_op(stmt, expr, expr)))) {
+        LOG_WARN("failed to replace select expr", K(ret));
+      }
+    }
+    find_expr = cur_expr;
   }
   return ret;
 }

@@ -18,6 +18,7 @@ namespace oceanbase {
 using namespace common;
 using namespace blocksstable;
 namespace storage {
+const int64_t MACRO_BLOCK_COUNT_THRESHOLD = 1024;
 
 ObSSTableEstimateContext::ObSSTableEstimateContext() : sstable_(NULL), rowkeys_(NULL)
 {}
@@ -118,50 +119,34 @@ ObStoreRowSingleScanEstimator::ObStoreRowSingleScanEstimator()
 ObStoreRowSingleScanEstimator::~ObStoreRowSingleScanEstimator()
 {}
 
-int ObStoreRowSingleScanEstimator::set_context(ObSSTableEstimateContext& context)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObISSTableEstimator::set_context(context))) {
-    STORAGE_LOG(WARN, "failed to set context", K(ret));
-  } else if (OB_FAIL(context_.sstable_->find_macros(*context_.range_, context_.macro_blocks_))) {
-    STORAGE_LOG(WARN, "fail to find macros", K(ret));
-  }
-  return ret;
-}
-
-int ObStoreRowSingleScanEstimator::open()
+int ObStoreRowSingleScanEstimator::check_bf(ObMacroBlockCtx& macro_block_ctx)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  if (1 == context_.macro_blocks_.count()) {
-    // check bloom filter to identify if the scan is empty
-    const MacroBlockId& macro_block_id = context_.macro_blocks_.at(0).get_macro_block_id();
-    ObStoreRowkey rowkey;
-
-    ObStorageFileHandle file_handle;
-    ObStorageFile* file = nullptr;
-    if (OB_FAIL(file_handle.assign(context_.sstable_->get_storage_file_handle()))) {
-      STORAGE_LOG(WARN, "fail to get file handle", K(ret), K(context_.sstable_->get_storage_file_handle()));
-    } else if (OB_ISNULL(file = file_handle.get_storage_file())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "fail to get pg file", K(ret), K(file_handle));
-    } else if (OB_FAIL(get_common_rowkey(context_.range_->get_range(), rowkey))) {
-      STORAGE_LOG(WARN, "failed to get common rowkey", K(ret), K(context_.range_));
-    } else if (rowkey.get_obj_cnt() > 0) {
-      // allow check contain fail, should not overwrite ret
-      bool is_contain = false;
-      if (OB_SUCCESS !=
-          (tmp_ret = context_.cache_context_.bf_cache_->may_contain(
-               context_.sstable_->get_table_id(), macro_block_id, file->get_file_id(), rowkey, is_contain))) {
-        if (OB_ENTRY_NOT_EXIST != tmp_ret) {
-          STORAGE_LOG(WARN, "failed to check may contain", K(tmp_ret), K_(context), K(macro_block_id), K(rowkey));
-        }
-      } else if (!is_contain) {
-        is_empty_scan_ = true;
+  // check bloom filter to identify if the scan is empty
+  const MacroBlockId& macro_block_id = macro_block_ctx.get_macro_block_id();
+  ObStoreRowkey rowkey;
+  ObStorageFileHandle file_handle;
+  ObStorageFile* file = nullptr;
+  if (OB_FAIL(file_handle.assign(context_.sstable_->get_storage_file_handle()))) {
+    STORAGE_LOG(WARN, "fail to get file handle", K(ret), K(context_.sstable_->get_storage_file_handle()));
+  } else if (OB_ISNULL(file = file_handle.get_storage_file())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "fail to get pg file", K(ret), K(file_handle));
+  } else if (OB_FAIL(get_common_rowkey(context_.range_->get_range(), rowkey))) {
+    STORAGE_LOG(WARN, "failed to get common rowkey", K(ret), K(context_.range_));
+  } else if (rowkey.get_obj_cnt() > 0) {
+    // allow check contain fail, should not overwrite ret
+    bool is_contain = false;
+    if (OB_SUCCESS !=
+        (tmp_ret = context_.cache_context_.bf_cache_->may_contain(
+             context_.sstable_->get_table_id(), macro_block_id, file->get_file_id(), rowkey, is_contain))) {
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        STORAGE_LOG(WARN, "failed to check may contain", K(tmp_ret), K_(context), K(macro_block_id), K(rowkey));
       }
+    } else if (!is_contain) {
+      is_empty_scan_ = true;
     }
-  } else if (0 == context_.macro_blocks_.count()) {
-    is_empty_scan_ = true;
   }
 
   return ret;
@@ -177,31 +162,51 @@ void ObStoreRowSingleScanEstimator::reset()
 int ObStoreRowSingleScanEstimator::estimate_row_count(ObPartitionEst& part_est)
 {
   int ret = OB_SUCCESS;
+  int64_t total_macro_block_count = 0;
+  ObMacroBlockIterator macro_iter;
 
-  if (OB_FAIL(open())) {
-    STORAGE_LOG(WARN, "failed to open single scan estimator", K(ret));
+  if (!context_.range_->get_range().is_valid()) {
+  } else if (context_.range_->get_range().is_whole_range()) {
+    part_est.logical_row_count_ = context_.sstable_->get_meta().row_count_;
+    part_est.physical_row_count_ = part_est.logical_row_count_;
+  } else if (OB_FAIL(macro_iter.open(*context_.sstable_, *context_.range_))) {
+    STORAGE_LOG(WARN, "fail to open macro iter,", K(ret));
+  } else if (OB_FAIL(macro_iter.get_macro_block_count(total_macro_block_count))) {
+    STORAGE_LOG(WARN, "fail to get macro block count,", K(ret));
+  } else if (0 == total_macro_block_count) {
+  } else if (total_macro_block_count > MACRO_BLOCK_COUNT_THRESHOLD) {
+    // there are too many block, do estimate in fast way
+    part_est.logical_row_count_ = (double)total_macro_block_count / context_.sstable_->get_meta().macro_block_count_ *
+                                  context_.sstable_->get_meta().row_count_;
+    part_est.physical_row_count_ = part_est.logical_row_count_;
   } else {
-    // do calculate cost metrics by macro block scan.
-    int64_t total_macro_block_count = context_.macro_blocks_.count();
-
-    if (context_.range_->get_range().is_whole_range()) {
-      part_est.logical_row_count_ += context_.sstable_->get_meta().row_count_;
-    } else if (!is_empty_scan_) {
-      MacroBlockId macro_block_id;
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < total_macro_block_count; ++i) {
-        const bool is_start_block = (0 == i);
-        const bool is_last_block = (total_macro_block_count - 1 == i);
-        const ObMacroBlockCtx& macro_block_ctx = context_.macro_blocks_.at(i);
-        if (OB_FAIL(estimate_macro_row_count(macro_block_ctx, is_start_block, is_last_block, part_est))) {
+    // do estimate by macro block scan
+    ObMacroBlockCtx macro_block_ctx;
+    int64_t idx = 0;
+    while (OB_SUCC(ret)) {
+      bool is_start_block = 0 == idx;
+      bool is_last_block = total_macro_block_count - 1 == idx;
+      if (OB_FAIL(macro_iter.get_next_macro_block(macro_block_ctx))) {
+        if (OB_ITER_END != ret) {
+          STORAGE_LOG(WARN, "fail to get next macro block, ", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else {
+        if (1 == total_macro_block_count && OB_FAIL(check_bf(macro_block_ctx))) {
+          STORAGE_LOG(WARN, "failed to open single scan estimator", K(ret));
+        } else if (is_empty_scan_) {
+        } else if (OB_FAIL(estimate_macro_row_count(macro_block_ctx, is_start_block, is_last_block, part_est))) {
           STORAGE_LOG(WARN,
               "cannot estimate cost of macro block.",
               K(ret),
               K(macro_block_ctx),
-              K(i),
+              K(idx),
               K(total_macro_block_count));
         }
       }
+      idx++;
     }
     part_est.physical_row_count_ = part_est.logical_row_count_;
   }
@@ -626,7 +631,7 @@ int ObMultiVersionSingleScanEstimator::estimate_macro_row_count(const blocksstab
         int64_t logical_row_count = 0, physical_row_count = 0;
         if (OB_FAIL(context_.cache_context_.block_index_cache_->get_micro_infos(context_.sstable_->get_table_id(),
                 macro_block_ctx,
-                context_.range_->get_range(),
+                context_.multi_version_range_.get_range(),
                 is_left_border,
                 is_right_border,
                 micro_infos))) {
@@ -637,7 +642,7 @@ int ObMultiVersionSingleScanEstimator::estimate_macro_row_count(const blocksstab
           }
         } else if (1 != micro_infos.count()) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "unexpected error, should only 1 micro block, ", K(ret));
+          STORAGE_LOG(WARN, "unexpected error, should only 1 micro block, ", K(ret), K(micro_infos.count()));
         } else if (OB_FAIL(estimate_border_row_count(
                        micro_infos.at(0), macro_block_ctx, true, logical_row_count, physical_row_count))) {
           STORAGE_LOG(WARN, "failed to estimate_border_row_count for multi version, ", K(ret));

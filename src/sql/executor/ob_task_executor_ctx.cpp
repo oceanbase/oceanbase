@@ -46,7 +46,7 @@ int ObTaskExecutorCtx::CalcVirtualPartitionIdParams::init(uint64_t ref_table_id)
 }
 
 OB_SERIALIZE_MEMBER(ObTaskExecutorCtx, table_locations_, retry_times_, min_cluster_version_, expected_worker_cnt_,
-    allocated_worker_cnt_);
+    allocated_worker_cnt_, query_tenant_begin_schema_version_, query_sys_begin_schema_version_);
 
 ObTaskExecutorCtx::ObTaskExecutorCtx(ObExecContext& exec_context)
     : task_resp_handler_(NULL),

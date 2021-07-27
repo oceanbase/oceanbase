@@ -128,7 +128,6 @@ int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const ui
     } else {
       ARCHIVE_LOG(WARN, "search_log_id_in_index_file_ fail", K(ret), K(pg_key), K(log_id));
     }
-  } else if (max_valid_index_info.min_log_id_ == log_id) {
   } else {
     ARCHIVE_LOG(INFO, "locate_file_by_log_id  succ", K(pg_key), K(log_id), K(file_id));
   }
@@ -140,24 +139,25 @@ int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const ui
       bool exist_file_unrecord = false;
       uint64_t max_file_id = 0;
       if (OB_SUCCESS !=
-              (tmp_ret = get_max_data_file_unrecord_(pg_key, storage_info, max_file_id, exist_file_unrecord)) &&
-          OB_ERR_UNEXPECTED != tmp_ret) {
-        ARCHIVE_LOG(WARN, "get_max_data_file_unrecord_ fail", K(tmp_ret), K(pg_key), K(storage_info));
-      } else if (OB_ERR_UNEXPECTED == tmp_ret) {
+          (tmp_ret = get_max_data_file_unrecord_(pg_key, storage_info, max_file_id, exist_file_unrecord))) {
+        ARCHIVE_LOG(WARN, "get_max_data_file_unrecord_ fail", KR(tmp_ret), K(pg_key), K(storage_info));
         // overwrite ret
         ret = tmp_ret;
-        ARCHIVE_LOG(ERROR, "get_max_data_file_unrecord_ fail", K(ret), K(pg_key));
       } else if (exist_file_unrecord) {
         file_id = max_file_id;
         ret = OB_SUCCESS;
-        ARCHIVE_LOG(INFO, "no valid index info, return max data file id", K(ret), K(pg_key), K(log_id), K(file_id));
+        ARCHIVE_LOG(INFO, "no valid index info, return max data file id", KR(ret), K(pg_key), K(log_id), K(file_id));
       }
     }
     // 2. min log id in index info > the log id
     else if (max_valid_index_info.min_log_id_ > log_id) {
       ret = OB_ERR_UNEXPECTED;
-      ARCHIVE_LOG(
-          ERROR, "max_valid_index_info min_log_id_ bigger than log_id", K(pg_key), K(log_id), K(max_valid_index_info));
+      ARCHIVE_LOG(ERROR,
+          "max_valid_index_info min_log_id_ bigger than log_id",
+          KR(ret),
+          K(pg_key),
+          K(log_id),
+          K(max_valid_index_info));
     }
     // 3. max log id in index info < the log id
     else if (max_valid_index_info.max_log_id_ < log_id) {
@@ -165,9 +165,8 @@ int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const ui
       file_id = max_valid_index_info.data_file_id_;
       if (max_valid_index_info.max_log_id_ + 1 < log_id) {
         int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS !=
-            (tmp_ret = check_file_exist_(pg_key, max_valid_index_info.data_file_id_ + 1, LOG_ARCHIVE_FILE_TYPE_DATA))) {
-          ARCHIVE_LOG(WARN, "check_file_exist_ fail", KR(ret), K(pg_key), K(max_valid_index_info));
+        if (OB_SUCCESS != (tmp_ret = check_file_exist_(pg_key, file_id + 1, LOG_ARCHIVE_FILE_TYPE_DATA))) {
+          ARCHIVE_LOG(WARN, "check_file_exist_ fail", KR(tmp_ret), K(pg_key), K(max_valid_index_info));
         } else {
           file_id = max_valid_index_info.data_file_id_ + 1;
         }

@@ -504,9 +504,10 @@ private:
   static bool need_open_right(int64_t cmp_ret);
   static int purge_minimum_iters(common::ObIArray<ObMacroRowIterator*>& minimum_iters, ObMacroRowIterator* base_iter);
 
-  static int rewrite_macro_block(ObIPartitionMergeFuser::MERGE_ITER_ARRAY& minimum_iters,
-      const storage::ObMergeLevel& merge_level, ObIPartitionMergeFuser* partition_fuser,
-      ObIStoreRowProcessor& processor);
+  static int rewrite_macro_block(
+      ObIPartitionMergeFuser::MERGE_ITER_ARRAY &minimum_iters,
+      ObIPartitionMergeFuser *partition_fuser,
+      ObIStoreRowProcessor &processor);
 
   static int fuse_row(const storage::ObSSTableMergeCtx& ctx,
       const common::ObIArray<ObMacroRowIterator*>& macro_row_iters, ObRowFuseInfo& row_fuse_info,

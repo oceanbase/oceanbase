@@ -82,6 +82,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
         retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
         LOG_WARN("result response failed, check if need retry", K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
         ret = cli_ret;
+      } else {
+        ObResultSet::refresh_location_cache(result.get_exec_context().get_task_exec_ctx(), true, ret);
       }
       // After judging whether you need to retry, we won't judge whether to retry later
       THIS_WORKER.disable_retry();

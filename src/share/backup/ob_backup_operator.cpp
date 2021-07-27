@@ -1162,6 +1162,36 @@ int ObPGBackupTaskOperator::update_result_and_status_and_statics(
   return ret;
 }
 
+int ObPGBackupTaskOperator::cancel_pending_tasks(const uint64_t tenant_id, const int64_t incarnation,
+    const int64_t backup_set_id, const int64_t limit_num, common::ObISQLClient& sql_proxy)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  const int32_t result = OB_CANCELED;
+
+  if (OB_INVALID_ID == tenant_id || incarnation < 0 || backup_set_id < 0 || limit_num <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("update addr get invalid argument", K(ret), K(tenant_id), K(incarnation), K(backup_set_id), K(limit_num));
+  } else if (OB_FAIL(sql.append_fmt(
+                 "UPDATE %s SET status = 'FINISH', result ='%d', end_time = now(6) "
+                 "WHERE tenant_id = %lu AND incarnation = %ld and backup_set_id = %ld and status = 'PENDING' LIMIT %ld",
+                 OB_ALL_TENANT_PG_BACKUP_TASK_TNAME,
+                 result,
+                 tenant_id,
+                 incarnation,
+                 backup_set_id,
+                 limit_num))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql));
+  } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to execute sql", K(ret));
+  } else if (affected_rows < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected rows unexpected", K(ret), K(affected_rows));
+  }
+  return ret;
+}
+
 template <typename T>
 int ObTenantBackupInfoOperation::set_info_item(const char* name, const char* info_str, T& info)
 {

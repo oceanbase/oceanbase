@@ -806,6 +806,7 @@ int ObMacroBlockWriter::check_order(const ObStoreRow& row)
         }
       } else if (!row.row_type_flag_.is_uncommitted_row()) {  // update max commit version
         micro_writer_->update_max_merged_trans_version(-cur_row_version);
+        row.row_val_.cells_[sql_sequence_col_idx].set_int(0); // make sql sequence = 0
       } else {  // not committed
         micro_writer_->set_contain_uncommitted_row();
         LOG_TRACE("meet uncommited trans row", K(row));

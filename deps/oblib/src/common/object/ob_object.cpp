@@ -570,7 +570,30 @@ int ObObj::deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& p
   return ret;
 }
 
-bool ObObj::can_compare(const ObObj& other) const
+void* ObObj::get_deep_copy_obj_ptr()
+{
+  void * ptr = NULL;
+  if (ob_is_string_type(this->get_type())) {
+    // val_len_ == 0 is empty string, and it may point to unexpected address
+    // Therefore, reset it to NULL
+    if (val_len_ != 0) {
+      ptr = (void *)v_.string_;
+    }
+  } else if (ob_is_raw(this->get_type())) {
+    ptr = (void *)v_.string_;
+  } else if (ob_is_number_tc(this->get_type())) {
+    ptr = (void *)v_.nmb_digits_;
+  } else if (ob_is_rowid_tc(this->get_type())) {
+    ptr = (void *)v_.string_;
+  } else if (ob_is_lob_locator(this->get_type())) {
+    ptr = (void *)&v_.lob_locator_;
+  } else {
+    // do nothing
+  }
+  return ptr;
+}
+
+bool ObObj::can_compare(const ObObj &other) const
 {
   obj_cmp_func cmp_func = NULL;
   return (is_min_value() || is_max_value() || other.is_min_value() || other.is_max_value() ||

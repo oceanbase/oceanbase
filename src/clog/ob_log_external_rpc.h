@@ -40,8 +40,6 @@ class ObLogReqStartPosByLogIdRequest;
 class ObLogReqStartPosByLogIdResponse;
 class ObLogExternalFetchLogRequest;
 class ObLogExternalFetchLogResponse;
-class ObLogReqHeartbeatInfoRequest;
-class ObLogReqHeartbeatInfoResponse;
 
 // for request with breakpoint
 class ObLogReqStartLogIdByTsRequestWithBreakpoint;
@@ -72,10 +70,6 @@ public:
 
   // fetch_log()
   RPC_S(@PR5 fetch_log, OB_LOG_FETCH_LOG_EXTERNAL, (ObLogExternalFetchLogRequest), ObLogExternalFetchLogResponse);
-
-  // req_last_log_serv_info()
-  RPC_S(@PR5 req_heartbeat_info, OB_LOG_REQUEST_HEARTBEAT_INFO, (ObLogReqHeartbeatInfoRequest),
-      ObLogReqHeartbeatInfoResponse);
 
   // for request with breakpoint
   RPC_S(@PR5 req_start_log_id_by_ts_with_breakpoint, OB_LOG_REQ_START_LOG_ID_BY_TS_WITH_BREAKPOINT,
@@ -430,95 +424,6 @@ public:
   ObLogExternalFetchLogProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   ~ObLogExternalFetchLogProcessor()
-  {
-    partition_service_ = NULL;
-  }
-
-protected:
-  int process();
-
-private:
-  storage::ObPartitionService* partition_service_;
-};
-
-// Request heartbeat information of given partitions.
-// Err:
-//  - OB_SUCCESS
-//  - OB_NEED_RETRY: can't generate heartbeat info
-//  - OB_ERR_SYS: observer internal error
-class ObLogReqHeartbeatInfoRequest {
-  static const int64_t CUR_RPC_VER = 1;
-  static const int64_t ITEM_CNT_LMT = 10000;  // Around 300kb for cur version.
-public:
-  struct Param {
-    common::ObPartitionKey pkey_;
-    uint64_t log_id_;
-    void reset();
-    TO_STRING_KV(K_(pkey), K_(log_id));
-    OB_UNIS_VERSION(1);
-  };
-  typedef common::ObSEArray<Param, 16> ParamArray;
-
-public:
-  ObLogReqHeartbeatInfoRequest();
-  ~ObLogReqHeartbeatInfoRequest();
-
-public:
-  void reset();
-  bool is_valid() const;
-  int set_params(const ParamArray& params);
-  int append_param(const Param& param);
-  const ParamArray& get_params() const;
-  int64_t rpc_ver() const;
-  TO_STRING_KV(K_(rpc_ver), K_(params));
-  OB_UNIS_VERSION(1);
-
-private:
-  int64_t rpc_ver_;
-  ParamArray params_;
-};
-
-class ObLogReqHeartbeatInfoResponse {
-  static const int64_t CUR_RPC_VER = 1;
-  static const int64_t ITEM_CNT_LMT = 10000;  // Around 300kb for cur version.
-public:
-  struct Result {
-    int err_;
-    int64_t tstamp_;
-    void reset();
-    TO_STRING_KV(K_(err), K_(tstamp));
-    OB_UNIS_VERSION(1);
-  };
-  typedef common::ObSEArray<Result, 16> ResultArray;
-
-public:
-  ObLogReqHeartbeatInfoResponse();
-  ~ObLogReqHeartbeatInfoResponse();
-
-public:
-  void reset();
-  void set_err(const int err);
-  int set_results(const ResultArray& results);
-  int append_result(const Result& result);
-  int get_err() const;
-  const ResultArray& get_results() const;
-  int64_t rpc_ver() const;
-  void set_rpc_ver(const int64_t ver);
-  TO_STRING_KV(K_(rpc_ver), K_(err), K_(res));
-  OB_UNIS_VERSION(1);
-
-private:
-  int64_t rpc_ver_;
-  int err_;
-  ResultArray res_;
-};
-
-class ObLogReqHeartbeatInfoProcessor
-    : public ObRpcProcessor<ObLogExternalProxy::ObRpc<OB_LOG_REQUEST_HEARTBEAT_INFO> > {
-public:
-  ObLogReqHeartbeatInfoProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
-  {}
-  ~ObLogReqHeartbeatInfoProcessor()
   {
     partition_service_ = NULL;
   }

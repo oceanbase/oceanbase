@@ -472,6 +472,37 @@ int ObRawExpr::set_enum_set_values(const common::ObIArray<common::ObString>& val
   return ret;
 }
 
+bool ObRawExpr::is_non_pure_sys_func_expr() const
+{
+  if (lib::is_oracle_mode()) {
+    if (T_FUN_SYS_LOCALTIMESTAMP == type_ || T_FUN_SYS_SESSIONTIMEZONE == type_ || T_FUN_SYS_DBTIMEZONE == type_ ||
+        T_FUN_SYS_SYSDATE == type_ || T_FUN_SYS_SYSTIMESTAMP == type_ || T_FUN_SYS_UID == type_ ||
+        T_FUN_SYS_USER == type_ || T_FUN_SYS_CUR_TIMESTAMP == type_ || T_FUN_SYS_GUID == type_ ||
+        T_FUN_SYS_CUR_DATE == type_ || T_FUN_SYS_USERENV == type_ || T_FUN_SYS_REGEXP_REPLACE == type_) {
+      return true;
+    }
+  } else {
+    if (T_FUN_SYS_CONNECTION_ID == type_ || T_FUN_SYS_VERSION == type_ || T_FUN_SYS_CURRENT_USER == type_ ||
+        T_FUN_SYS_USER == type_ || T_FUN_SYS_DATABASE == type_ || T_FUN_SYS_SYSDATE == type_ ||
+        T_FUN_SYS_CUR_DATE == type_ || T_FUN_SYS_CUR_TIME == type_ || T_FUN_SYS_CUR_TIMESTAMP == type_ ||
+        T_FUN_SYS_UNIX_TIMESTAMP == type_ || T_FUN_SYS_UTC_TIMESTAMP == type_ || T_FUN_SYS_RAND == type_ ||
+        T_FUN_SYS_UUID == type_ || T_FUN_SYS_SLEEP == type_ || T_FUN_SYS_LAST_INSERT_ID == type_ ||
+        T_FUN_SYS_ROW_COUNT == type_ || T_FUN_SYS_FOUND_ROWS == type_ || T_FUN_SYS_REGEXP_INSTR == type_ ||
+        T_FUN_SYS_REGEXP_LIKE == type_ || T_FUN_SYS_REGEXP_REPLACE == type_ || T_FUN_SYS_REGEXP_SUBSTR == type_) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ObRawExpr::is_specified_pseudocolumn_expr() const
+{
+  if (T_FUN_SYS_ROWNUM == type_ || T_LEVEL == type_ || T_CONNECT_BY_ISCYCLE == type_ || T_CONNECT_BY_ISLEAF == type_) {
+    return true;
+  }
+  return false;
+}
+
 ////////////////////////////////////////////////////////////////
 int ObConstRawExpr::assign(const ObConstRawExpr& other)
 {
@@ -3425,7 +3456,45 @@ int Bound::replace_expr(const common::ObIArray<ObRawExpr*>& other_exprs, const c
   return ret;
 }
 
-int ObFrame::assign(const ObFrame& other)
+bool Bound::same_as(const Bound &other, ObExprEqualCheckContext *check_context) const
+{
+  bool bret = true;
+  if (type_ != other.type_ ||
+      is_preceding_ != other.is_preceding_ ||
+      is_nmb_literal_ != other.is_nmb_literal_) {
+    bret = false;
+  }
+  if (bret) {
+    if ((interval_expr_ == NULL && other.interval_expr_ == NULL) ||
+        (interval_expr_ != NULL && other.interval_expr_ != NULL &&
+         interval_expr_->same_as(*(other.interval_expr_), check_context))) {
+      bret = true;
+    } else {
+      bret = false;
+    }
+  }
+  if (bret) {
+    if ((date_unit_expr_ == NULL && other.date_unit_expr_ == NULL) ||
+        (date_unit_expr_ != NULL && other.date_unit_expr_ != NULL &&
+         date_unit_expr_->same_as(*(other.date_unit_expr_), check_context))) {
+      bret = true;
+    } else {
+      bret = false;
+    }
+  }
+  for (int64_t i = 0; bret && i < BOUND_EXPR_MAX; ++i) {
+    if ((exprs_[i] == NULL && other.exprs_[i] == NULL) ||
+        (exprs_[i] != NULL && other.exprs_[i] != NULL &&
+         exprs_[i]->same_as(*(other.exprs_[i]), check_context))) {
+      bret = true;
+    } else {
+      bret = false;
+    }
+  }
+  return bret;
+}
+
+int ObFrame::assign(const ObFrame &other)
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(this != &other)) {
@@ -3569,8 +3638,10 @@ bool ObWinFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
   bool bret = false;
   if (expr.is_win_func_expr()) {
     bret = true;
-    const ObWinFunRawExpr& other_ma = static_cast<const ObWinFunRawExpr&>(expr);
-    if (other_ma.get_func_type() != get_func_type()) {
+    const ObWinFunRawExpr &other_ma = static_cast<const ObWinFunRawExpr&>(expr);
+    if (other_ma.get_func_type() != get_func_type() ||
+        other_ma.get_window_type() != get_window_type() ||
+        other_ma.is_between() != is_between()) {
       bret = false;
       // Because name window will construct a window function of count(1) over,
       // here we need to compare the name of name Windows
@@ -3590,21 +3661,42 @@ bool ObWinFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
     } else { /* do nothing. */
     }
 
-    if (bret &&
-        (other_ma.get_param_count() != get_param_count() || other_ma.func_params_.count() != func_params_.count() ||
-            other_ma.partition_exprs_.count() != partition_exprs_.count() ||
-            other_ma.order_items_.count() != order_items_.count())) {
+    if (!bret) {
+    } else if (other_ma.get_param_count() != get_param_count()
+               || other_ma.func_params_.count() != func_params_.count()
+               || other_ma.partition_exprs_.count() != partition_exprs_.count()
+               || other_ma.order_items_.count() != order_items_.count()
+               || !other_ma.upper_.same_as(upper_, check_context)
+               || !other_ma.lower_.same_as(lower_, check_context)) {
       bret = false;
     } else {
-      for (int64_t i = 0; bret && i < other_ma.get_param_count(); ++i) {
-        if (OB_ISNULL(other_ma.get_param_expr(i)) || OB_ISNULL(get_param_expr(i))) {
-          bret = false;
+      if (bret) {
+        if ((agg_expr_ == NULL && other_ma.agg_expr_ == NULL) ||
+            (agg_expr_ != NULL && other_ma.agg_expr_ != NULL &&
+            agg_expr_->same_as(*other_ma.agg_expr_, check_context))) {
+          bret = true;
         } else {
-          bret = get_param_expr(i)->same_as(*(other_ma.get_param_expr(i)), check_context);
+          bret = false;
+        }
+      }
+      for (int64_t i = 0; bret && i < other_ma.func_params_.count(); ++i) {
+        if (other_ma.func_params_.at(i) == NULL || func_params_.at(i) == NULL ||
+            !other_ma.func_params_.at(i)->same_as(*func_params_.at(i), check_context)) {
+          bret = false;
+        }
+      }
+      for (int64_t i = 0; bret && i < other_ma.partition_exprs_.count(); ++i) {
+        if (other_ma.partition_exprs_.at(i) == NULL || partition_exprs_.at(i) == NULL ||
+            !other_ma.partition_exprs_.at(i)->same_as(*partition_exprs_.at(i), check_context)) {
+          bret = false;
         }
       }
       for (int64_t i = 0; bret && i < other_ma.order_items_.count(); ++i) {
         if (other_ma.order_items_.at(i).order_type_ != order_items_.at(i).order_type_) {
+          bret = false;
+        } else if (other_ma.order_items_.at(i).expr_ == NULL || order_items_.at(i).expr_ == NULL ||
+                   !other_ma.order_items_.at(i).expr_->same_as(*order_items_.at(i).expr_,
+                                                               check_context)) {
           bret = false;
         }
       }

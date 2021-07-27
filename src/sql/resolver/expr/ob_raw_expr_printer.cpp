@@ -411,6 +411,10 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
       case T_OP_GT:
       case T_OP_SQ_GT:
         SET_SYMBOL_IF_EMPTY(">");
+      case T_OP_BIT_LEFT_SHIFT:
+        SET_SYMBOL_IF_EMPTY("<<");
+      case T_OP_BIT_RIGHT_SHIFT:
+        SET_SYMBOL_IF_EMPTY(">>");
       case T_OP_NE:
       case T_OP_SQ_NE:
         SET_SYMBOL_IF_EMPTY("<>");
@@ -541,6 +545,8 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
           PRINT_EXPR(expr->get_param_expr(0));
           DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
           PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(" escape ");
+          PRINT_EXPR(expr->get_param_expr(2));
           DATA_PRINTF(")");
         }
         break;
@@ -1234,12 +1240,13 @@ int ObRawExprPrinter::print(ObSysFunRawExpr* expr)
         break;
       }
       case T_FUN_SYS_LNNVL: {
-        DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+        DATA_PRINTF("(%.*s", LEN_AND_PTR(func_name));
         if (1 != expr->get_param_count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("param count should be equal 1", K(ret), K(expr->get_param_count()));
         } else {
           PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF(")");
         }
         break;
       }

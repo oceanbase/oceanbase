@@ -320,7 +320,11 @@ int ObCLogMgr::create_partition_(const ObPartitionKey& partition_key, const int6
              OB_FAIL(pls->set_offline())) {
     // physical restore data phase need set clog offline
     STORAGE_LOG(WARN, "fail to set_offline", K(ret), K(partition_key));
-  } else if (archive_restore_state >= share::REPLICA_RESTORE_DATA && OB_FAIL(pls->set_scan_disk_log_finished())) {
+  } else if ((archive_restore_state >= share::REPLICA_RESTORE_DATA
+                 // For two-phase-created non-paxos replica, because it won't execute set_election_leader or
+                 // set_member_list, so it need set_scan_disk_log_finished here.
+                 || !ObReplicaTypeCheck::is_paxos_replica(replica_type)) &&
+             OB_FAIL(pls->set_scan_disk_log_finished())) {
     // partitions created with physical restore flag need skip scan disk log stage, similar with add_partition
     // standby replica will always run here.
     CLOG_LOG(WARN, "set_scan_disk_log_finished failed", K(ret), K(partition_key));

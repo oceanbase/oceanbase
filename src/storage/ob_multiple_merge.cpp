@@ -57,8 +57,10 @@ ObMultipleMerge::ObMultipleMerge()
       relocate_cnt_(0),
       table_stat_(),
       skip_refresh_table_(false),
-      read_memtable_only_(false)
-{}
+      read_memtable_only_(false),
+      is_tables_reset_(false)
+{
+}
 
 ObMultipleMerge::~ObMultipleMerge()
 {
@@ -130,6 +132,7 @@ int ObMultipleMerge::init(
     cur_row_.row_val_.count_ = access_param_->iter_param_.out_cols_project_->count();
     skip_refresh_table_ = false;
     read_memtable_only_ = false;
+    is_tables_reset_ = false;
     for (int64_t i = cur_row_.row_val_.count_; i < max(param.reserve_cell_cnt_, param.out_col_desc_param_.count());
          ++i) {
       cur_row_.row_val_.cells_[i].set_nop_value();
@@ -267,7 +270,7 @@ int ObMultipleMerge::deal_with_tables(ObTableAccessContext& context, ObTablesHan
         read_memtable_only_ = true;
       }
       if (result_tables.count() != tables_handle_.get_count()) {
-        tables_handle_.reset();
+        tables_handle_.reset_tables();
         if (OB_FAIL(tables_handle_.add_tables(result_tables))) {
           STORAGE_LOG(WARN, "failed to push result tables into tables handle", K(ret), K(result_tables));
         }
@@ -521,6 +524,7 @@ void ObMultipleMerge::reset()
   out_cols_projector_ = NULL;
   skip_refresh_table_ = false;
   read_memtable_only_ = false;
+  is_tables_reset_ = false;
 }
 
 void ObMultipleMerge::reuse()
@@ -556,6 +560,13 @@ int ObMultipleMerge::open()
     ObMultipleMerge::reuse();
     scan_cnt_ = 0;
     filt_cnt_ = 0;
+    if (is_tables_reset_) {
+      if (OB_FAIL(prepare_read_tables())) {
+        STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
+      } else {
+        is_tables_reset_ = false;
+      }
+    }
   }
   return ret;
 }
@@ -949,7 +960,29 @@ int ObMultipleMerge::refresh_table_on_demand()
   return ret;
 }
 
-int ObMultipleMerge::check_need_refresh_table(bool& need_refresh)
+int ObMultipleMerge::release_table_ref()
+{
+  int ret = OB_SUCCESS;
+  bool need_refresh = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObMultipleMerge has not been inited", K(ret));
+  } else if (!skip_refresh_table_) {
+    STORAGE_LOG(DEBUG, "no need to release table ref", "table_id", access_param_->iter_param_.table_id_);
+  } else if (OB_FAIL(check_need_refresh_table(need_refresh))) {
+    STORAGE_LOG(WARN, "fail to check need refresh table", K(ret));
+  } else if (need_refresh) {
+    tables_handle_.reset();
+    reuse_iter_array();
+    is_tables_reset_ = true;
+    STORAGE_LOG(INFO, "table need to be released", "table_id", access_param_->iter_param_.table_id_,
+        K(*access_param_), K(curr_scan_index_));
+  }
+  return ret;
+
+}
+
+int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -960,6 +993,7 @@ int ObMultipleMerge::check_need_refresh_table(bool& need_refresh)
                                ? false
                                : access_ctx_->store_ctx_->mem_ctx_->get_relocate_cnt() > relocate_cnt_;
     const bool memtable_retired = tables_handle_.check_store_expire();
+    const int64_t relocate_cnt = access_ctx_->store_ctx_->mem_ctx_->get_relocate_cnt();
     need_refresh = relocated || memtable_retired;
 #ifdef ERRSIM
     ret = E(EventTable::EN_FORCE_REFRESH_TABLE) ret;

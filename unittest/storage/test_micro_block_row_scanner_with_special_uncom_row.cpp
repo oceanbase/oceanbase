@@ -1987,6 +1987,59 @@ TEST_F(TestMicroBlockRowScanner, test_magic_row)
   scanner_iter.reset();
 }
 
+TEST_F(TestMicroBlockRowScanner, test_estimate_with_magic_row)
+{
+  GCONF._enable_sparse_row = false;
+  const int64_t rowkey_cnt = 4;
+  const int64_t micro_cnt = 2;
+  const char* micro_data[micro_cnt];
+  int index = 0;
+  micro_data[index++] = "bigint   var   bigint  bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                        "1        var1   -1     -1      9        NOP     EXIST   U trans_id_1\n";
+  micro_data[index++] = "bigint   var   bigint  bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                        "1        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n";
+
+  prepare_data(micro_data, index, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+
+  // minor
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 0;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  prepare_query_param(trans_version_range, true, false);
+
+  ObStoreRange range;
+  const char var1[] = "var1";
+  ObObj start_val[2];
+  ObObj end_val[2];
+  start_val[0].set_int(1);
+  start_val[1].set_varchar(var1, 4);
+  start_val[1].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  end_val[0].set_int(2);
+  end_val[1].set_varchar(var1, 4);
+  end_val[1].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ObStoreRowkey start_key(start_val, 2);
+  ObStoreRowkey end_key(end_val, 2);
+  range.table_id_ = combine_id(TENANT_ID, TABLE_ID);
+  range.start_key_ = start_key;
+  range.end_key_ = end_key;
+
+  common::ObQueryFlag query_flag;
+  ObExtStoreRange ext_range;
+  ext_range.reset();
+  ext_range.get_range() = range;
+  ASSERT_EQ(OB_SUCCESS, ext_range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
+  ObPartitionEst cost_metrics;
+  cost_metrics.reset();
+
+  // (1 : 2) -> (1,-max : 2,max) would cover 1 micro block
+  // but if not converts to multiversion, (1 : 2) is same with (1,-max : 2,max) would cover 2 micro blocks
+  int ret = sstable_.estimate_scan_row_count(context_.query_flag_, range.table_id_, ext_range, cost_metrics);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, cost_metrics.logical_row_count_);
+  ASSERT_EQ(0, cost_metrics.physical_row_count_);
+}
+
 TEST_F(TestMicroBlockRowScanner, minor_merge_lob_reuse_allocator)
 {
   const int64_t rowkey_cnt = 4;
@@ -2192,8 +2245,235 @@ TEST_F(TestMicroBlockRowScanner, test_bug)
   ASSERT_TRUE(res_iter.equals(scanner_iter, false));
 }
 
-}  // namespace unittest
-}  // namespace oceanbase
+TEST_F(TestMicroBlockRowScanner, test_bug2)
+{
+  const int64_t rowkey_cnt = 4;
+  const int64_t micro_cnt = 1;
+  const char *micro_data[micro_cnt];
+  micro_data[0] =
+      "bigint   var   bigint   bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+      "-10      var1  -1       -1      9        NOP     EXIST   L trans_id_0\n"
+      "-2       var1   -4     -1      5        NOP     EXIST   CL trans_id_0\n"
+      "-1       var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "0        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "1        var1   MIN     -1      9        NOP     EXIST   U trans_id_1\n"
+      "1        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "2        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "3        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "4        var1   MIN     -9      1        NOP     EXIST   U trans_id_2\n"
+      "4        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "5        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "6        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "7        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "8        var1   MIN     -9      3        NOP     EXIST   U trans_id_2\n"
+      "8        var1   MAGIC   MAGIC   NOP      NOP     EXIST   LM trans_id_0\n"
+      "10        var1  -1       -1      9        NOP     EXIST   L trans_id_0\n";
+  prepare_data(micro_data, 1, rowkey_cnt, 9);
+
+  ObMultiVersionMicroBlockRowScanner m_scanner;
+  ObVersionRange trans_version_range;
+  ObMockIterator micro_iter;
+  ObMockIterator res_iter;
+  ObMicroBlockData block_data;
+  ObMicroBlockData payload_data;
+  common::ObExtStoreRange range;
+  common::ObExtStoreRange new_range;
+  ObMockIterator scanner_iter;
+
+  // minor
+  trans_version_range.base_version_ = 0;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  prepare_query_param(trans_version_range, true, false);
+
+  const char var1[] = "var1";
+  ObObj start_val[2];
+  ObObj end_val[2];
+  start_val[0].set_int(1);
+  start_val[1].set_varchar(var1, 4);
+  start_val[1].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  end_val[0].set_int(8);
+  end_val[1].set_varchar(var1, 4);
+  end_val[1].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ObStoreRowkey start_key(start_val, 2);
+  ObStoreRowkey end_key(end_val, 2);
+  range.get_range().table_id_ = combine_id(1, 3001);
+  range.get_range().start_key_ = start_key;
+  range.get_range().end_key_ = end_key;
+  range.get_range().set_right_closed();
+  range.get_range().set_left_closed();
+
+  OK(ObVersionStoreRangeConversionHelper::range_to_multi_version_range(range, trans_version_range, allocator_, new_range));
+  STORAGE_LOG(INFO, "chaser debug range", K(range), K(new_range));
+
+  test_trans_part_ctx_.clear_all();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(test_trans_part_ctx_.add_transaction_status(transaction::ObTransTableStatusType::COMMIT, 10))) {
+    STORAGE_LOG(ERROR, "add transaction status failed", K(ret));
+  } else if (OB_FAIL(test_trans_part_ctx_.add_transaction_status(transaction::ObTransTableStatusType::COMMIT, 10))) {
+    STORAGE_LOG(ERROR, "add transaction status failed", K(ret));
+  }
+
+  OK(m_scanner.init(param_, context_, &sstable_));
+  OK(m_scanner.set_range(new_range.get_range()));
+
+  const char *result1 =
+      "bigint   var    bigint   bigint  flag\n"
+      //"-2        var1   5        NOP       EXIST\n"
+      "1        var1   9        NOP       EXIST\n"
+      "4        var1   1        NOP       EXIST\n"
+      "8        var1   3        NOP       EXIST\n";
+
+  const ObStoreRow *row = NULL;
+  bool is_left_border = true;
+  bool is_right_border = true;
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    ret = OB_SUCCESS;
+    micro_iter.reset();
+    OK(micro_iter.from(micro_data[i]));
+    build_micro_block_data(micro_iter, block_data, payload_data, end_key);
+    MacroBlockId macro_id(0, 0, 1, ObStoreFileSystem::RESERVED_MACRO_BLOCK_INDEX);
+    ObFullMacroBlockMeta full_meta;
+    OK(sstable_.get_meta(macro_id, full_meta));
+    const_cast<oceanbase::blocksstable::ObMacroBlockMetaV2 *>(full_meta.meta_)->contain_uncommitted_row_ = true;
+    OK(m_scanner.open(macro_id, full_meta, payload_data, is_left_border, is_right_border)) << "i: " << i;
+    while (OB_SUCCESS == ret) {
+      ret = m_scanner.get_next_row(row);
+      if (OB_SUCCESS == ret) {
+        ASSERT_TRUE(NULL != row) << "i: " << i;
+        OK(scanner_iter.add_row(const_cast<ObStoreRow *>(row)));
+        STORAGE_LOG(INFO, "test", "this row", to_cstring(*row));
+      } else if (OB_ITER_END != ret) {
+        ASSERT_EQ(OB_SUCCESS, ret);
+      }
+    }
+  }
+  res_iter.reset();
+  OK(res_iter.from(result1));
+  ASSERT_TRUE(res_iter.equals(scanner_iter, false));
+  scanner_iter.reset();
+
+  m_scanner.reset();
+  context_.query_flag_.scan_order_ = common::ObQueryFlag::Reverse;
+  OK(m_scanner.init(param_, context_, &sstable_));
+  OK(m_scanner.set_range(new_range.get_range()));
+
+  const char *result2 =
+      "bigint   var    bigint   bigint  flag\n"
+      "8        var1   3        NOP       EXIST\n"
+      "4        var1   1        NOP     EXIST\n"
+      "1        var1   9        NOP     EXIST\n";
+      //"-2       var1   5        NOP     EXIST\n";
+
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    ret = OB_SUCCESS;
+    micro_iter.reset();
+    OK(micro_iter.from(micro_data[i]));
+    build_micro_block_data(micro_iter, block_data, payload_data, end_key);
+    MacroBlockId macro_id(0, 0, 1, ObStoreFileSystem::RESERVED_MACRO_BLOCK_INDEX);
+    ObFullMacroBlockMeta full_meta;
+    OK(sstable_.get_meta(macro_id, full_meta));
+    const_cast<oceanbase::blocksstable::ObMacroBlockMetaV2 *>(full_meta.meta_)->contain_uncommitted_row_ = true;
+    OK(m_scanner.open(macro_id, full_meta, payload_data, is_left_border, is_right_border)) << "i: " << i;
+    while (OB_SUCCESS == ret) {
+      ret = m_scanner.get_next_row(row);
+      if (OB_SUCCESS == ret) {
+        ASSERT_TRUE(NULL != row) << "i: " << i;
+        OK(scanner_iter.add_row(const_cast<ObStoreRow *>(row)));
+        STORAGE_LOG(INFO, "test", "this row", to_cstring(*row));
+      } else if (OB_ITER_END != ret) {
+        ASSERT_EQ(OB_SUCCESS, ret);
+      }
+    }
+  }
+  res_iter.reset();
+  OK(res_iter.from(result2));
+  ASSERT_TRUE(res_iter.equals(scanner_iter, false));
+  scanner_iter.reset();
+
+
+  start_val[0].set_int(-2);
+  end_val[0].set_int(7);
+  new_range.reset();
+  context_.query_flag_.scan_order_ = common::ObQueryFlag::Forward;
+  OK(ObVersionStoreRangeConversionHelper::range_to_multi_version_range(range, trans_version_range, allocator_, new_range));
+  STORAGE_LOG(INFO, "chaser debug range", K(range), K(new_range));
+  const char *result3 =
+      "bigint   var    bigint   bigint  flag\n"
+      "-2        var1   5        NOP       EXIST\n"
+      "1        var1   9        NOP       EXIST\n"
+      "4        var1   1        NOP       EXIST\n";
+  m_scanner.reset();
+  OK(m_scanner.init(param_, context_, &sstable_));
+  OK(m_scanner.set_range(new_range.get_range()));
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    ret = OB_SUCCESS;
+    micro_iter.reset();
+    OK(micro_iter.from(micro_data[i]));
+    build_micro_block_data(micro_iter, block_data, payload_data, end_key);
+    MacroBlockId macro_id(0, 0, 1, ObStoreFileSystem::RESERVED_MACRO_BLOCK_INDEX);
+    ObFullMacroBlockMeta full_meta;
+    OK(sstable_.get_meta(macro_id, full_meta));
+    const_cast<oceanbase::blocksstable::ObMacroBlockMetaV2 *>(full_meta.meta_)->contain_uncommitted_row_ = true;
+    OK(m_scanner.open(macro_id, full_meta, payload_data, is_left_border, is_right_border)) << "i: " << i;
+    while (OB_SUCCESS == ret) {
+      ret = m_scanner.get_next_row(row);
+      if (OB_SUCCESS == ret) {
+        ASSERT_TRUE(NULL != row) << "i: " << i;
+        OK(scanner_iter.add_row(const_cast<ObStoreRow *>(row)));
+        STORAGE_LOG(INFO, "test", "this row", to_cstring(*row));
+      } else if (OB_ITER_END != ret) {
+        ASSERT_EQ(OB_SUCCESS, ret);
+      }
+    }
+  }
+  res_iter.reset();
+  OK(res_iter.from(result3));
+  ASSERT_TRUE(res_iter.equals(scanner_iter, false));
+  scanner_iter.reset();
+
+  start_val[0].set_int(1);
+  end_val[0].set_int(8);
+  range.get_range().set_left_open();
+  range.get_range().set_right_open();
+  new_range.reset();
+  context_.query_flag_.scan_order_ = common::ObQueryFlag::Forward;
+  OK(ObVersionStoreRangeConversionHelper::range_to_multi_version_range(range, trans_version_range, allocator_, new_range));
+  STORAGE_LOG(INFO, "chaser debug range", K(range), K(new_range));
+  const char *result4 =
+      "bigint   var    bigint   bigint  flag\n"
+      "4        var1   1        NOP       EXIST\n";
+  m_scanner.reset();
+  OK(m_scanner.init(param_, context_, &sstable_));
+  OK(m_scanner.set_range(new_range.get_range()));
+  for (int64_t i = 0; i < micro_cnt; ++i) {
+    ret = OB_SUCCESS;
+    micro_iter.reset();
+    OK(micro_iter.from(micro_data[i]));
+    build_micro_block_data(micro_iter, block_data, payload_data, end_key);
+    MacroBlockId macro_id(0, 0, 1, ObStoreFileSystem::RESERVED_MACRO_BLOCK_INDEX);
+    ObFullMacroBlockMeta full_meta;
+    OK(sstable_.get_meta(macro_id, full_meta));
+    const_cast<oceanbase::blocksstable::ObMacroBlockMetaV2 *>(full_meta.meta_)->contain_uncommitted_row_ = true;
+    OK(m_scanner.open(macro_id, full_meta, payload_data, is_left_border, is_right_border)) << "i: " << i;
+    while (OB_SUCCESS == ret) {
+      ret = m_scanner.get_next_row(row);
+      if (OB_SUCCESS == ret) {
+        ASSERT_TRUE(NULL != row) << "i: " << i;
+        OK(scanner_iter.add_row(const_cast<ObStoreRow *>(row)));
+        STORAGE_LOG(INFO, "test", "this row", to_cstring(*row));
+      } else if (OB_ITER_END != ret) {
+        ASSERT_EQ(OB_SUCCESS, ret);
+      }
+    }
+  }
+  res_iter.reset();
+  OK(res_iter.from(result4));
+  ASSERT_TRUE(res_iter.equals(scanner_iter, false));
+}
+
+}
+}
 
 int main(int argc, char** argv)
 {

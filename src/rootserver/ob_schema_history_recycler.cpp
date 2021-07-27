@@ -17,6 +17,7 @@
 #include "rootserver/ob_schema_history_recycler.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "storage/ob_freeze_info_snapshot_mgr.h"
 
 namespace oceanbase {
 namespace rootserver {
@@ -472,7 +473,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_standby_cluster(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_status_proxy is null", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.at(i); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
         const uint64_t tenant_id = tenant_ids.at(i);
         int64_t recycle_schema_version = OB_INVALID_VERSION;
         ObRefreshSchemaStatus schema_status;
@@ -656,6 +657,36 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
             K(tenant_id),
             K(is_backup),
             K(reserved_schema_version));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // step 4. restore point
+      int64_t schema_version = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+        const uint64_t tenant_id = tenant_ids.at(i);
+        if (OB_FAIL(storage::ObFreezeInfoMgrWrapper::get_instance().get_restore_point_min_schema_version(
+                tenant_id, schema_version))) {
+          LOG_WARN("fail to get restore point min_schema_version", K(ret), K(tenant_id));
+        } else if (INT64_MAX != schema_version &&
+                   OB_FAIL(fill_recycle_schema_versions(tenant_id, schema_version, recycle_schema_versions))) {
+          LOG_WARN("fail to fill recycle schema versions", KR(ret), K(tenant_id), K(schema_version));
+        }
+        LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version by restore point",
+                 KR(ret), K(tenant_id), K(schema_version));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int64_t schema_version = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+        const uint64_t tenant_id = tenant_ids.at(i);
+        if (OB_FAIL(storage::ObFreezeInfoMgrWrapper::get_instance().
+            get_restore_point_min_schema_version(tenant_id, schema_version))) {
+          LOG_WARN("fail to get restore point min_schema_version", K(ret), K(tenant_id));
+        } else if (INT64_MAX != schema_version && OB_FAIL(fill_recycle_schema_versions(
+                   tenant_id, schema_version, recycle_schema_versions))) {
+          LOG_WARN("fail to fill recycle schema versions",
+                   KR(ret), K(tenant_id), K(schema_version));
+        }
       }
     }
   }

@@ -435,3 +435,22 @@ int ObPGBackupTaskUpdater::update_status_and_result(const common::ObIArray<commo
   }
   return ret;
 }
+
+int ObPGBackupTaskUpdater::cancel_pending_tasks(
+    const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_LIMIT_NUM = 1024;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("pg backup task updater do not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || incarnation < 0 || backup_set_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cancel pending tasks get invalid argument", K(ret), K(tenant_id), K(incarnation), K(backup_set_id));
+  } else if (OB_FAIL(ObPGBackupTaskOperator::cancel_pending_tasks(
+                 tenant_id, incarnation, backup_set_id, MAX_LIMIT_NUM, *sql_proxy_))) {
+    LOG_WARN("failed to cancel pending tasks", K(ret), K(tenant_id), K(incarnation), K(backup_set_id));
+  }
+  return ret;
+}

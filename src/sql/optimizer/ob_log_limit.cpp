@@ -75,6 +75,16 @@ int ObLogLimit::allocate_exchange_post(AllocExchContext* ctx)
   return ret;
 }
 
+int ObLogLimit::allocate_granule_pre(AllocGIContext &ctx)
+{
+  return pw_allocate_granule_pre(ctx);
+}
+
+int ObLogLimit::allocate_granule_post(AllocGIContext &ctx)
+{
+  return pw_allocate_granule_post(ctx);
+}
+
 int ObLogLimit::transmit_op_ordering()
 {
   int ret = OB_SUCCESS;

@@ -325,7 +325,7 @@ int ObDMLResolver::resolve_columns_field_list_first(
         } else if (select_item_expr->is_column_ref_expr()) {
           ObColumnRefRawExpr* column_ref_expr = static_cast<ObColumnRefRawExpr*>(select_item_expr);
           if (ObCharset::case_insensitive_equal(sel_stmt->get_select_item(j).is_real_alias_
-                                                    ? column_ref_expr->get_alias_column_name()
+                                                    ? sel_stmt->get_select_item(j).alias_name_
                                                     : column_ref_expr->get_column_name(),
                   columns.at(i).col_name_)) {
             if (found) {
@@ -1120,7 +1120,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode& parse_tree, TableItem*& 
       } else if (table_schema->is_vir_table() && !stmt->is_select_stmt()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "DML operation on Virtual Table/Temporary Table");
-      } else if (params_.is_from_create_view_ && table_schema->is_mysql_tmp_table()) {
+      } else if ((params_.is_from_create_view_ || params_.is_from_create_table_) && table_schema->is_mysql_tmp_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
       } else if (OB_FAIL(resolve_table_partition_expr(*table_item, *table_schema))) {
@@ -2006,6 +2006,9 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id, c
             K(params_.contain_dml_),
             K(is_inner_table(tschema->get_table_id())),
             K(session_info_->is_inner()));
+      } else if (!GCONF._ob_enable_px_for_inner_sql &&
+                 ObSQLSessionInfo::USER_SESSION != session_info_->get_session_type()) {
+        stmt->get_query_ctx()->forbid_use_px_ = true;
       } else {
         // use px, including PL, inner sql, inner connection sql triggered by CMD
       }
@@ -4242,8 +4245,6 @@ int ObDMLResolver::do_resolve_subquery_info(const ObSubQueryInfo& subquery_info,
     LOG_WARN("Unknown statement type in subquery", "stmt_type", subquery_info.sub_query_->type_);
   } else if (OB_FAIL(child_resolver.resolve_child_stmt(*(subquery_info.sub_query_)))) {
     LOG_WARN("resolve select subquery failed", K(ret));
-  } else if (OB_FAIL(try_add_remove_const_epxr(*child_resolver.get_child_stmt()))) {
-    LOG_WARN("try add subquery value expr failed", K(ret));
   } else {
     sub_stmt = child_resolver.get_child_stmt();
     subquery_info.ref_expr_->set_output_column(sub_stmt->get_select_item_size());
@@ -4281,22 +4282,7 @@ int ObDMLResolver::try_add_remove_const_epxr(ObSelectStmt& stmt)
   int ret = OB_SUCCESS;
   CK(NULL != session_info_);
   CK(NULL != params_.expr_factory_);
-  // do not add remove_const for select ... from dual.
-  bool is_from_dual = false;
-  ObSelectStmt* ref_query = NULL;
-  if (0 == stmt.get_having_expr_size() && 0 == stmt.get_condition_size()) {
-    if (0 == stmt.get_from_item_size()) {
-      is_from_dual = true;
-    } else if (stmt.is_single_table_stmt() && OB_NOT_NULL(stmt.get_table_item(0)) &&
-               stmt.get_table_item(0)->is_generated_table() &&
-               OB_NOT_NULL(ref_query = stmt.get_table_item(0)->ref_query_) && 0 == ref_query->get_from_item_size() &&
-               0 == ref_query->get_having_expr_size() && 0 == ref_query->get_condition_size() &&
-               1 == ref_query->get_select_item_size() && OB_NOT_NULL(ref_query->get_select_item(0).expr_) &&
-               ref_query->get_select_item(0).expr_->is_const_expr()) {
-      is_from_dual = true;
-    }
-  }
-  if (OB_SUCC(ret) && session_info_->use_static_typing_engine() && !is_from_dual) {
+  if (OB_SUCC(ret) && session_info_->use_static_typing_engine()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_select_item_size(); ++i) {
       ObRawExpr*& expr = stmt.get_select_item(i).expr_;
       CK(NULL != expr);

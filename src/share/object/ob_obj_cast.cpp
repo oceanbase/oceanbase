@@ -198,6 +198,8 @@ static int convert_string_collation(const ObString& in, const ObCollationType in
       ObCharset::charset_type_by_coll(out_collation) == CHARSET_BINARY ||
       (ObCharset::charset_type_by_coll(in_collation) == ObCharset::charset_type_by_coll(out_collation))) {
     out = in;
+  } else if (in.empty()) {
+    out.reset();
   } else {
     char* buf = NULL;
     const int32_t CharConvertFactorNum = 4;
@@ -2305,22 +2307,33 @@ static int number_date(
 {
   int ret = OB_SUCCESS;
   ObObj int64;
-  int64_t int_value = 0;
+  int32_t value = 0;
   if (OB_UNLIKELY(ObNumberTC != in.get_type_class() || ObDateTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(in.get_number().extract_valid_int64_with_trunc(int_value))) {
-    if (OB_DATA_OUT_OF_RANGE == ret) {
-      ret = OB_SUCCESS;
-      int_value = INT64_MAX;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    int64_t int_part = 0;
+    int64_t dec_part = 0;
+    const number::ObNumber nmb = in.get_number();
+    if (nmb.is_negative()) {
+      ret = OB_INVALID_DATE_VALUE;
+      LOG_WARN("invalid date value", K(ret), K(nmb));
+    } else if (!nmb.is_int_parts_valid_int64(int_part, dec_part)) {
+      ret = OB_INVALID_DATE_VALUE;
+      LOG_WARN("invalid date format", K(ret), K(nmb));
     } else {
-      LOG_WARN("extract valid int64 failed", K(ret), K(in));
+      ret = ObTimeConverter::int_to_date(int_part, value);
+      if (OB_SUCC(ret) && OB_UNLIKELY(dec_part > 0)) {
+        LOG_WARN("invalid date value with decimal part", K(ret));
+        if (!CM_IS_WARN_ON_FAIL(cast_mode)) {
+          ret = OB_INVALID_DATE_VALUE;
+        }
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    int64.set_int(int_value);
-    if (CAST_FAIL(int_date(expect_type, params, int64, out, cast_mode))) {
-      LOG_WARN("int to date failed", K(ret));
+    if (CAST_FAIL(ret)) {
+    } else {
+      SET_RES_DATE(out);
     }
   }
   return ret;
@@ -2598,17 +2611,8 @@ static int datetime_datetime(
   } else {
     int64_t value = in.get_datetime();
     if (ObDateTimeType == in.get_type() && ObTimestampType == expect_type) {
-      if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(in.get_datetime(), params.dtc_params_.tz_info_, value))) {
-        LOG_WARN("datetime to timestamp failed", K(ret), K(in), K(value));
-        if (OB_ERR_UNEXPECTED_TZ_TRANSITION == ret) {
-          ret = OB_INVALID_DATE_VALUE;
-        } else if (OB_INVALID_DATE_VALUE == ret) {
-          if (CM_IS_WARN_ON_FAIL(cast_mode)) {
-            params.warning_ = OB_INVALID_DATE_VALUE;
-            ret = OB_SUCCESS;
-          }
-        }
-      }
+      ret = ObTimeConverter::datetime_to_timestamp(in.get_datetime(), params.dtc_params_.tz_info_, value);
+      ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
     } else if (ObTimestampType == in.get_type() && ObDateTimeType == expect_type) {
       ret = ObTimeConverter::timestamp_to_datetime(in.get_datetime(), params.dtc_params_.tz_info_, value);
     }
@@ -3150,6 +3154,26 @@ static int time_datetime(
   return ret;
 }
 
+static int time_date(
+    const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  const ObTimeZoneInfo* tz_info = params.dtc_params_.tz_info_;
+  int32_t value = 0;
+  if (OB_UNLIKELY(ObTimeTC != in.get_type_class() || ObDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::datetime_to_date(params.cur_time_, tz_info, value))) {
+    LOG_WARN("datetime_to_date failed", K(ret), K(params.cur_time_));
+  } else {
+    out.set_date(value);
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
+  UNUSED(cast_mode);
+  return ret;
+}
+
 static int time_string(
     const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
 {
@@ -3315,6 +3339,27 @@ static int year_number(
   } else if (OB_FAIL(int_number(expect_type, params, obj_int, out, cast_mode))) {
   }
   // has set accuracy in prev int_number
+  return ret;
+}
+
+static int year_date(
+    const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t in_value = 0;
+  if (OB_UNLIKELY(ObYearTC != in.get_type_class() || ObDateTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::year_to_int(in.get_year(), in_value))) {
+  } else {
+    int32_t value = 0;
+    if (CAST_FAIL(ObTimeConverter::int_to_date(in_value, value))) {
+    } else {
+      SET_RES_DATE(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_DATE, DEFAULT_LENGTH_FOR_TEMPORAL);
   return ret;
 }
 
@@ -3759,6 +3804,10 @@ static int string_year(
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cast to blob type");
   } else if (OB_FAIL(string_int(
                  ObIntType, params, in, int64, CM_UNSET_STRING_INTEGER_TRUNC(CM_SET_WARN_ON_FAIL(cast_mode))))) {
+  } else if (0 == int64.get_int()) {
+    const uint8_t base_year = 100;
+    uint8_t value = 4 == in.get_string().length() ? ObTimeConverter::ZERO_YEAR : base_year;
+    SET_RES_YEAR(out);
   } else if (CAST_FAIL(int_year(ObYearType, params, int64, out, cast_mode))) {
   } else if (CAST_FAIL(params.warning_)) {
   }
@@ -5784,7 +5833,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         time_double,             /*double*/
         time_number,             /*number*/
         time_datetime,           /*datetime*/
-        cast_not_support,        /*date*/
+        time_date,               /*date*/
         cast_identity,           /*time*/
         cast_not_support,        /*year*/
         time_string,             /*string*/
@@ -5809,7 +5858,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         year_double,             /*double*/
         year_number,             /*number*/
         cast_not_support,        /*datetime*/
-        cast_not_support,        /*date*/
+        year_date,               /*date*/
         cast_not_support,        /*time*/
         cast_identity,           /*year*/
         year_string,             /*string*/
@@ -8253,6 +8302,21 @@ int ob_obj_to_ob_time_with_date(
       }
       break;
     }
+    case ObNumberTC: {
+      int64_t int_part = 0;
+      int64_t dec_part = 0;
+      const number::ObNumber num = obj.get_number();
+      if (num.is_negative()) {
+        ret = OB_INVALID_DATE_FORMAT;
+        LOG_WARN("invalid date format", K(ret), K(num));
+      } else if (!num.is_int_parts_valid_int64(int_part, dec_part)) {
+        ret = OB_INVALID_DATE_FORMAT;
+        LOG_WARN("invalid date format", K(ret), K(num));
+      } else {
+        ret = ObTimeConverter::int_to_ob_time_with_date(int_part, ob_time, is_dayofmonth);
+      }
+      break;
+    }
     default: {
       ret = OB_NOT_SUPPORTED;
     }
@@ -8306,6 +8370,17 @@ int ob_obj_to_ob_time_without_date(const ObObj& obj, const ObTimeZoneInfo* tz_in
         STORAGE_LOG(WARN, "Failed to get payload from lob locator", K(ret), K(obj));
       } else {
         ret = ObTimeConverter::str_to_ob_time_without_date(payload, ob_time);
+      }
+      break;
+    }
+    case ObNumberTC: {
+      const char *num_format = obj.get_number().format();
+      if (OB_ISNULL(num_format)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("number format value is null", K(ret));
+      } else {
+        ObString num_str(num_format);
+        ret = ObTimeConverter::str_to_ob_time_without_date(num_str, ob_time);
       }
       break;
     }

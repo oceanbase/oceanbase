@@ -54,6 +54,7 @@ public:
   int get_one_pg_task(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id,
       ObPGBackupTaskInfo& pg_task_info);
   int update_status_and_result_and_statics(const common::ObIArray<ObPGBackupTaskInfo>& pg_task_info_array);
+  int cancel_pending_tasks(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id);
 
 private:
   static const int64_t MAX_BATCH_COUNT = 1024;

@@ -387,7 +387,7 @@ int ObTransCallbackList::mark_frozen_data(
     TRANS_LOG(WARN, "memtable is null", KP(frozen_memtable), KP(active_memtable), K(ret));
   } else if (FALSE_IT(first_memtable = get_first_memtable())) {
   } else if (OB_ISNULL(first_memtable) || first_memtable == active_memtable) {
-    TRANS_LOG(INFO,
+    TRANS_LOG(DEBUG,
         "skip mark frozen data",
         K(callback_mgr_.get_ctx()),
         KP(first_memtable),
@@ -415,11 +415,11 @@ int ObTransCallbackList::mark_frozen_data(
     if (!marked) {
       int64_t i = 0;
       for (ObITransCallback* iter = start; NULL != iter && iter != end; iter = iter->get_prev()) {
-        TRANS_LOG(INFO, "debug: iter callback", K(*iter));
+        TRANS_LOG(DEBUG, "debug: iter callback", K(*iter));
       }
     }
 
-    TRANS_LOG(INFO, "iterate callbacks", K(callback_mgr_.get_ctx()), K(iter_cnt), K(cb_cnt), K(marked));
+    TRANS_LOG(DEBUG, "iterate callbacks", K(callback_mgr_.get_ctx()), K(iter_cnt), K(cb_cnt), K(marked));
   }
 
   return ret;

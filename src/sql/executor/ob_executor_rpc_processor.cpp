@@ -81,8 +81,8 @@ int ObDistExecuteBaseP::param_preprocess(ObTask& task)
   ObTaskExecutorCtx& executor_ctx = exec_ctx_.get_task_exec_ctx();
   int64_t tenant_local_version = -1;
   int64_t sys_local_version = -1;
-  int64_t sys_schema_version = executor_ctx.get_query_tenant_begin_schema_version();
-  int64_t tenant_schema_version = executor_ctx.get_query_sys_begin_schema_version();
+  int64_t tenant_schema_version = executor_ctx.get_query_tenant_begin_schema_version();
+  int64_t sys_schema_version = executor_ctx.get_query_sys_begin_schema_version();
 
   LOG_DEBUG("task submit", K(task), "ob_task_id", task.get_ob_task_id());
   if (OB_ISNULL(gctx_.schema_service_) || OB_ISNULL(gctx_.sql_engine_)) {
@@ -1011,8 +1011,8 @@ int ObMiniTaskBaseP::prepare_task_env(ObMiniTask& task)
   ObTaskExecutorCtx& executor_ctx = exec_ctx_.get_task_exec_ctx();
   int64_t tenant_local_version = -1;
   int64_t sys_local_version = -1;
-  int64_t sys_schema_version = executor_ctx.get_query_tenant_begin_schema_version();
-  int64_t tenant_schema_version = executor_ctx.get_query_sys_begin_schema_version();
+  int64_t tenant_schema_version = executor_ctx.get_query_tenant_begin_schema_version();
+  int64_t sys_schema_version = executor_ctx.get_query_sys_begin_schema_version();
   process_timestamp_ = ObTimeUtility::current_time();
 
   if (OB_ISNULL(gctx_.schema_service_) || OB_ISNULL(gctx_.sql_engine_)) {

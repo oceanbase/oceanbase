@@ -3967,6 +3967,8 @@ int ObPartitionStorage::build_merge_ctx(storage::ObSSTableMergeCtx& ctx)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_schemas_to_merge(ctx))) {
     LOG_WARN("Fail to get schemas to merge, ", K(ret), K_(pkey), K(ctx));
+  } else if (OB_FAIL(check_useless_index_mini_merge(ctx))) {
+    STORAGE_LOG(WARN, "Failed to check useless index mini merge", K(ret), K_(pkey), K(ctx));
   } else {
     if (OB_SUCC(ret)) {
       if (ctx.param_.is_major_merge()) {
@@ -3983,6 +3985,53 @@ int ObPartitionStorage::build_merge_ctx(storage::ObSSTableMergeCtx& ctx)
 
   if (OB_SUCC(ret)) {
     FLOG_INFO("succeed to build merge ctx", K(pkey_), K(ctx));
+  }
+
+  return ret;
+}
+
+int ObPartitionStorage::check_useless_index_mini_merge(const storage::ObSSTableMergeCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(ctx.table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected null table schema", K(ret), K(ctx));
+  } else if (!ctx.param_.is_mini_merge()) {
+  } else if (ctx.log_ts_range_.end_log_ts_ < ctx.pg_last_replay_log_ts_) {
+    ObSEArray<uint64_t, 16> active_table_ids;
+    const uint64_t index_id = ctx.param_.index_id_;
+    ObMemtable *memtable = nullptr;
+    ObITable *table = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx.tables_handle_.get_count(); i++) {
+      if (OB_ISNULL(table = ctx.tables_handle_.get_table(i))) {
+        ret = OB_ERR_SYS;
+        STORAGE_LOG(ERROR, "Unexpected null table", K(ret), K(i), K(ctx.tables_handle_));
+      } else if (!table->is_memtable()) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(ERROR, "Unexpected situation, new create table/index should not has sstable",
+            K(ret), K(ctx));
+      } else if (FALSE_IT(memtable = reinterpret_cast<ObMemtable *>(table))) {
+      } else if (OB_FAIL(memtable->get_active_table_ids(active_table_ids))) {
+        STORAGE_LOG(WARN, "Failed to get active table ids of memtable", K(ret), KPC(memtable));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < active_table_ids.count(); j++) {
+          if (index_id == active_table_ids.at(j)) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(ERROR, "new create effective index should not has data within old frozen memtable",
+                K(ret), K(index_id), K(ctx.tables_handle_), K(ctx.pg_last_replay_log_ts_), K(ctx.log_ts_range_),
+                K(j), KPC(memtable));
+          }
+        }
+        active_table_ids.reset();
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      ret = OB_NO_NEED_MERGE;
+      STORAGE_LOG(WARN, "new create index should not mini for old memtable with lager last replay log ts",
+          K(ret), K(index_id), K(ctx.tables_handle_), K(ctx.pg_last_replay_log_ts_), K(ctx.log_ts_range_));
+    }
   }
 
   return ret;
@@ -5477,7 +5526,8 @@ int ObPartitionStorage::local_sort_index_by_range(
     // extend col_ids for generated column
     ObArray<ObColDesc> extended_col_ids;
     ObArray<ObColDesc> org_extended_col_ids;
-    ObArray<ObISqlExpression*> dependent_exprs;
+    ObArray<ObISqlExpression *> dependent_exprs;
+    ObArray<const ObColumnSchemaV2 *> gen_col_schemas;
     ObExprCtx expr_ctx;
     if (OB_SUCC(ret)) {
       ObArray<ObColDesc> index_table_columns;
@@ -5569,11 +5619,14 @@ int ObPartitionStorage::local_sort_index_by_range(
                       K(ret));
                 } else if (OB_FAIL(dependent_exprs.push_back(expr))) {
                   STORAGE_LOG(WARN, "push back error", K(ret));
-                } else { /*do nothing*/
+                } else if (OB_FAIL(gen_col_schemas.push_back(column_schema))) {
+                  STORAGE_LOG(WARN, "push back error", K(ret));
                 }
               }
             } else {
               if (OB_FAIL(dependent_exprs.push_back(NULL))) {
+                STORAGE_LOG(WARN, "push back error", K(ret));
+              } else if (OB_FAIL(gen_col_schemas.push_back(NULL))) {
                 STORAGE_LOG(WARN, "push back error", K(ret));
               }
             }
@@ -5702,7 +5755,8 @@ int ObPartitionStorage::local_sort_index_by_range(
       int64_t t2 = 0;
       int64_t t3 = 0;
       int64_t t4 = 0;
-      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(allocator, expr_ctx))) {
+      uint64_t tenant_id = extract_tenant_id(table_schema->get_table_id());
+      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator, expr_ctx))) {
         STORAGE_LOG(WARN, "failed to make default expr context ", K(ret));
       }
       tables_handle.reset();
@@ -5735,8 +5789,16 @@ int ObPartitionStorage::local_sort_index_by_range(
                         calc_buf,
                         expr_ctx,
                         tmp_row.row_val_.cells_[k]))) {
-                  STORAGE_LOG(
-                      WARN, "failed to calc expr", K(row->row_val_), K(org_col_ids), K(dependent_exprs.at(k)), K(ret));
+                  STORAGE_LOG(WARN, "failed to calc expr", K(row->row_val_), K(org_col_ids),
+                      K(dependent_exprs.at(k)), K(ret));
+                } else if (OB_UNLIKELY(!tmp_row.row_val_.cells_[k].is_null()
+                                       && !sql::ObSQLUtils::is_same_type_for_compare(
+                                                gen_col_schemas.at(k)->get_meta_type(),
+                                                tmp_row.row_val_.cells_[k].get_meta()))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("result type is not consistent with schema, please check expr result",
+                           K(ret), "column schema type", gen_col_schemas.at(k)->get_meta_type(),
+                           "result", tmp_row.row_val_.cells_[k]);
                 }
               } else {
                 tmp_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];

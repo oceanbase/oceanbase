@@ -50,7 +50,8 @@ const char* const ObElection::REVOKE_REASON_STR[REVOKE_TYPE_MAX] = {"leader leas
     "standby replica restore failed",
     "memory alloc failed when submit_log",
     "clog disk full",
-    "clog disk hang"};
+    "clog disk hang",
+    "takeover with old epoch"};
 
 void ObElection::reset()
 {
@@ -1424,7 +1425,7 @@ int ObElection::change_leader_async(const ObAddr& leader, ObTsWindows& changing_
 }
 
 // This function can be used to trigger self revoke->takeover, and update leader_epoch.
-int ObElection::change_leader_to_self_async()
+int ObElection::change_leader_to_self()
 {
   int ret = OB_SUCCESS;
   const ObAddr new_leader = self_;

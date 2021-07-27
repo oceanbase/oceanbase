@@ -159,6 +159,7 @@ private:
   int is_valid_group_by(const ObSelectStmt& subquery, bool& is_valid);
   int extract_no_rewrite_select_exprs(ObDMLStmt*& stmt);
   int extract_no_rewrite_expr(ObRawExpr* expr);
+  int check_subquery_semi_conditions(ObSelectStmt &subquery, bool &is_valid);
 
 private:
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;

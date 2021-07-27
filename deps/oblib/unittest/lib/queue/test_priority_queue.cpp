@@ -15,9 +15,11 @@
 #include "lib/queue/ob_priority_queue.h"
 #include "lib/coro/co.h"
 #include "lib/thread/thread_pool.h"
+#include <iostream>
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
+using namespace std;
 
 class TestQueue : public ThreadPool {
 public:
@@ -31,16 +33,18 @@ public:
     {}
     int64_t val_;
   };
-  typedef ObPriorityQueue<3> Queue;
-  TestQueue() : seq_(0)
+  typedef ObPriorityQueue2<1, 2> Queue;
+  TestQueue(): push_seq_(0), pop_seq_(0)
   {
-    limit_ = atoll(getenv("limit") ?: "1000000");
+    limit_ = atoll(getenv("limit")?: "1000000");
   }
   virtual ~TestQueue()
   {}
   void do_stress()
   {
     set_thread_count(atoi(getenv("n_thread") ?: "8"));
+    n_pusher_ = atoi(getenv("n_pusher")?: "4");
+    queue_.set_limit(65536);
     int ret = OB_SUCCESS;
     if (OB_FAIL(start())) {
       LIB_LOG(ERROR, "start fail", K(ret), K(errno));
@@ -51,59 +55,78 @@ public:
   }
   void print()
   {
-    int64_t last_seq = ATOMIC_LOAD(&seq_);
-    while (ATOMIC_LOAD(&seq_) < limit_) {
+    int64_t last_seq = ATOMIC_LOAD(&pop_seq_);
+    while (ATOMIC_LOAD(&pop_seq_) < limit_) {
       sleep(1);
-      int64_t cur_seq = ATOMIC_LOAD(&seq_);
+      int64_t cur_seq = ATOMIC_LOAD(&pop_seq_);
       LIB_LOG(INFO, "queue", "tps", BATCH * (cur_seq - last_seq));
       last_seq = cur_seq;
     }
   }
-  int64_t get_seq()
+  int64_t get_seq(int64_t &seq)
   {
-    return ATOMIC_FAA(&seq_, 1);
+    return ATOMIC_FAA(&seq, 1);
   }
   int insert(int64_t seq)
   {
     int err = 0;
     QData* data = new QData(seq);
-    err = queue_.push(data, (int)data->val_ % 3);
+    err = queue_.push(data, data->val_ % 3);
     return err;
   }
-  int del(int64_t seq)
+  int del(uint64_t idx)
   {
-    UNUSED(seq);
     int err;
     QData* data = NULL;
-    err = queue_.pop((ObLink*&)data, 500);
+    if (idx == 0) {
+      err = queue_.pop_high_high((ObLink*&)data, 10000);
+    } else {
+      err = queue_.pop((ObLink*&)data, 10000);
+    }
+    // auto now = ObTimeUtility::current_time();
+    // if (data) {
+    //   if (now - data->val_ > 100) {
+    //     cout << now - data->val_ << endl;
+    //   }
+    //   usleep(500);
+    // }
     delete data;
     return err;
   }
+
   void run1() override
   {
     int ret = OB_SUCCESS;
     int64_t seq = 0;
     const uint64_t idx = get_thread_idx();
-    while ((seq = get_seq()) < limit_) {
-      if (0 == (idx % 2)) {
+    cout << "idx: " << idx << endl;
+    if (idx >= get_thread_count() - n_pusher_) {
+      while ((seq = get_seq(push_seq_)) < limit_) {
         for (int i = 0; i < BATCH; i++) {
+          //::usleep(10000);
+          auto now = ObTimeUtility::current_time();
           do {
-            ret = insert(i);
+            ret = insert(now);
           } while (OB_FAIL(ret));
         }
-      } else {
+      }
+    } else {
+      while ((seq = get_seq(pop_seq_)) < limit_) {
         for (int i = 0; i < BATCH; i++) {
           do {
-            ret = del(i);
+            ret = del(idx);
           } while (OB_FAIL(ret));
         }
       }
     }
+    std::cout << idx << " finished" << std::endl;
   }
 
 private:
-  int64_t seq_ CACHE_ALIGNED;
+  int64_t push_seq_ CACHE_ALIGNED;
+  int64_t pop_seq_ CACHE_ALIGNED;
   int64_t limit_;
+  int64_t n_pusher_;
   Queue queue_;
 };  // end of class Consumer
 

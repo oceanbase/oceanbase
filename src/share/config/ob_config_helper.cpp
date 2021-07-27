@@ -269,7 +269,7 @@ bool ObConfigMemoryLimitChecker::check(const ObConfigItem& t) const
   bool is_valid = false;
   int64_t value = ObConfigCapacityParser::get(t.str(), is_valid);
   if (is_valid) {
-    is_valid = value >= lib::ObRunningModeConfig::instance().MINI_MEM_LOWER;
+    is_valid = 0 == value || value >= lib::ObRunningModeConfig::instance().MINI_MEM_LOWER;
   }
   return is_valid;
 }
@@ -298,6 +298,17 @@ bool ObConfigPartitionBalanceStrategyFuncChecker::check(const ObConfigItem& t) c
     if (0 == ObString::make_string(balance_strategy[i]).case_compare(t.str())) {
       is_valid = true;
     }
+  }
+  return is_valid;
+}
+
+bool ObDataStorageErrorToleranceTimeChecker::check(const ObConfigItem& t) const
+{
+  bool is_valid = false;
+  int64_t value = ObConfigTimeParser::get(t.str(), is_valid);
+  if (is_valid) {
+    const int64_t warning_value = GCONF.data_storage_warning_tolerance_time;
+    is_valid = value >= warning_value;
   }
   return is_valid;
 }

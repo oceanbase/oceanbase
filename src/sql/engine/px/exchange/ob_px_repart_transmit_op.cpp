@@ -117,9 +117,7 @@ int ObPxRepartTransmitOp::do_repart_transmit(ObRepartSliceIdxCalc& repart_slice_
 {
   int ret = OB_SUCCESS;
   // init the ObRepartSliceIdxCalc cache map
-  if (OB_FAIL(repart_slice_calc.init_partition_cache_map())) {
-    LOG_WARN("failed to repart_slice_calc init partiiton cache map", K(ret));
-  } else if (OB_FAIL(repart_slice_calc.init())) {
+  if (OB_FAIL(repart_slice_calc.init())) {
     LOG_WARN("failed to init repart slice calc", K(ret));
   } else if (OB_FAIL(send_rows(repart_slice_calc))) {
     LOG_WARN("failed to send rows", K(ret));

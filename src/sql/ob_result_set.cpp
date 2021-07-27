@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_SESSION
+#define USING_LOG_PREFIX SQL
 #include "sql/ob_result_set.h"
 #include "lib/oblog/ob_trace_log.h"
 #include "lib/container/ob_id_set.h"
@@ -128,12 +128,6 @@ OB_INLINE int ObResultSet::open_plan()
         }
       }
     }
-
-    if (OB_FAIL(ret)) {
-      physical_plan_->set_is_last_open_succ(false);
-    } else {
-      physical_plan_->set_is_last_open_succ(true);
-    }
   }
   return ret;
 }
@@ -143,6 +137,19 @@ int ObResultSet::sync_open()
   int ret = OB_SUCCESS;
   OZ(execute());
   OZ(open());
+
+  if (OB_NOT_NULL(cmd_)) {
+    // cmd not set
+  } else if (ret == OB_NOT_INIT) {
+    // phy plan not init, do nothing
+  } else if (OB_ISNULL(physical_plan_)) {
+    LOG_WARN("empty physical plan"); 
+  } else if (OB_FAIL(ret)) {
+    physical_plan_->set_is_last_exec_succ(false);
+  } else {
+    physical_plan_->set_is_last_exec_succ(true);
+  }
+
   return ret;
 }
 
@@ -478,12 +485,15 @@ OB_INLINE int ObResultSet::end_participant(const bool is_rollback)
 int ObResultSet::get_next_row(const common::ObNewRow*& row)
 {
   int& ret = errcode_;
-  if (OB_LIKELY(NULL != physical_plan_)) {  // take this branch more frequently
+  // last_exec_succ default values is true
+  if (OB_LIKELY(NULL != physical_plan_)) { // take this branch more frequently
     if (OB_ISNULL(exec_result_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exec result is null", K(ret));
     } else if (OB_FAIL(exec_result_->get_next_row(get_exec_context(), row))) {
       if (OB_ITER_END != ret) {
+        // marked last execute status
+        physical_plan_->set_is_last_exec_succ(false);
         LOG_WARN("get next row from exec result failed", K(ret));
       }
     } else {
@@ -1086,6 +1096,19 @@ int ObResultSet::init_cmd_exec_context(ObExecContext& exec_ctx)
   return ret;
 }
 
+void ObResultSet::refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock, int err)
+{
+  if (OB_NOT_MASTER == err || OB_PARTITION_NOT_EXIST == err || is_server_down_error(err)) {
+    int err2 = ObTaskExecutorCtxUtil::refresh_location_cache(task_exec_ctx,
+                                                             is_nonblock);
+    if (OB_SUCCESS != err2) {
+      LOG_WARN("fail to refresh location cache", K(err2), K(is_nonblock), K(err));
+    }
+    LOG_TRACE("partition change or not master or no response, refresh location cache", K(err));
+  }
+}
+
+// obmp_query中重试整个SQL之前，可能需要调用本接口来刷新Location，以避免总是发给了错误的服务器
 int ObResultSet::refresh_location_cache(bool is_nonblock)
 {
   return ObTaskExecutorCtxUtil::refresh_location_cache(get_exec_context().get_task_exec_ctx(), is_nonblock);

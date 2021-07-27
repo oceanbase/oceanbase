@@ -373,7 +373,10 @@ int ObRawExprDeduceType::calc_result_type(
 
     LOG_DEBUG("debug for expr params calc meta", K(types));
 
-    if (OB_SUCC(ret) && share::is_oracle_mode() && !my_session_->use_static_typing_engine()) {
+    if (OB_SUCC(ret)
+        && share::is_oracle_mode()
+        && expr.get_expr_type() != T_FUN_SYS_NVL
+        && !my_session_->use_static_typing_engine()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < types.count(); i++) {
         ObExprResType& param = types.at(i);
         if (param.get_calc_meta().is_character_type()) {

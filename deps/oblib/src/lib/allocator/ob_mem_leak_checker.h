@@ -12,6 +12,7 @@
 
 #ifndef __OB_MEM_LEAK_CHECKER_H__
 #define __OB_MEM_LEAK_CHECKER_H__
+#include "lib/utility/ob_defer.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/alloc/alloc_struct.h"
 #include "lib/utility/ob_simple_rate_limiter.h"
@@ -51,7 +52,7 @@ class ObMemLeakChecker {
 
 public:
   typedef hash::ObHashMap<Info, std::pair<int64_t, int64_t>> mod_info_map_t;
-  using TCharArray = char[lib::AOBJECT_LABEL_SIZE + 1];
+  using TCharArray = char[2 * lib::AOBJECT_LABEL_SIZE + 1];
 
   ObMemLeakChecker()
   {
@@ -100,10 +101,15 @@ public:
   // One copy is encoded according to the same rules as AObject, used for memory compare to accelerate matching
   void set_str(const char* str)
   {
+    // disable leak check under current function
+    ct_ = NOCHECK;
+    CheckType tmp_ct = NOCHECK;
+    DEFER(ct_ = tmp_ct);
+
     _OB_LOG(INFO, "leak mod to check: %s", str);
     if (nullptr == str || 0 == STRLEN(str) || 0 == STRNCMP(str, "NONE", STRLEN("NONE"))) {
       origin_str_[0] = '\0';
-      ct_ = NOCHECK;
+      tmp_ct = NOCHECK;
     } else {
       STRNCPY(origin_str_, str, sizeof(origin_str_));
       origin_str_[sizeof(origin_str_) - 1] = '\0';
@@ -111,12 +117,12 @@ public:
       MEMCPY(cpy, origin_str_, sizeof(origin_str_));
       char* end = (char*)memchr(cpy, '@', strlen(cpy));
       if (end != nullptr) {
-        ct_ = CONTEXT_CHECK;
+        tmp_ct = CONTEXT_CHECK;
         static_id_ = atoi(end + 1);
         *end = '\0';
         is_wildcard_ = 0 == STRCMP("*", cpy);
       } else {
-        ct_ = LABEL_CHECK;
+        tmp_ct = LABEL_CHECK;
       }
       const int64_t mod_id = ObModSet::instance().get_mod_id(cpy);
       if (is_valid_mod_id(mod_id)) {
@@ -149,16 +155,11 @@ public:
     malloc_info_.reuse();
   }
 
-  void set_rate(int64_t rate)
-  {
-    _OB_LOG(INFO, "leak rate, current: %ld, new: %ld", rl_.rate(), rate);
-    rl_.set_rate(rate);
-  }
-
-  void on_alloc(lib::AObject& obj)
+  void on_alloc(lib::AObject &obj)
   {
     obj.on_leak_check_ = false;
-    if (is_label_check() && label_match(obj) && (OB_SUCCESS == rl_.try_acquire()) &&
+    if (is_label_check() &&
+        label_match(obj) &&
         malloc_info_.size() < MAP_SIZE_LIMIT) {
       Info info;
       info.bytes_ = obj.alloc_bytes_;
@@ -256,7 +257,7 @@ public:
 
 private:
   // Limit the memory used by hashmap
-  static constexpr int MEMORY_LIMIT = 128L << 20;
+  static constexpr int MEMORY_LIMIT = 1L << 30;
   static constexpr int MAP_SIZE_LIMIT = MEMORY_LIMIT / sizeof(Info);
   enum CheckType {
     NOCHECK,
@@ -274,16 +275,13 @@ private:
       };
       char data_[0];
     };
-    TCharArray label_;
+    char label_[lib::AOBJECT_LABEL_SIZE + 1];
   };
   CheckType ct_;
   int static_id_;
   bool is_wildcard_;
   int len_;
   mod_alloc_info_t malloc_info_;
-
-private:
-  static lib::ObSimpleRateLimiter rl_;
 };
 };  // end namespace common
 };  // end namespace oceanbase

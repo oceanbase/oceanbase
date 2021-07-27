@@ -62,6 +62,8 @@ inline int ObExprTimeDiff::calc_result_type2(
   if (ob_is_enumset_tc(left.get_type())) {
     left.set_calc_type(common::ObVarcharType);
     scale = common::MAX_SCALE_FOR_TEMPORAL;
+  } else if (ob_is_real_type(left.get_type())) {
+    left.set_calc_type(common::ObNumberType);
   }
   if (ob_is_enumset_tc(right.get_type())) {
     right.set_calc_type(common::ObVarcharType);

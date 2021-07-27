@@ -579,7 +579,7 @@ int ObKVCacheStore::alloc_mbhandle(
   } else if (NULL ==
              (buf = static_cast<char*>(alloc_mb(*inst.mb_list_handle_.get_resource_handle(), tenant_id, block_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    COMMON_LOG(ERROR, "Fail to allocate memory, ", K(block_size), K(ret));
+    COMMON_LOG(WARN, "Fail to allocate memory, ", K(block_size), K(ret));
   }
 
   if (NULL != buf) {

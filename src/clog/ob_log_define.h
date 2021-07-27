@@ -44,6 +44,7 @@ const int64_t CLOG_CACHE_SIZE = 64 * 1024;
 const int64_t CLOG_REPLAY_CHECKSUM_WINDOW_SIZE = 1 << 9;
 const int64_t CLOG_INFO_BLOCK_SIZE_LIMIT = 1 << 22;
 const offset_t OB_INVALID_OFFSET = -1;
+const int64_t CLOG_MAX_WRITE_BUFFER_SIZE = 2 << 20;
 
 inline bool is_valid_log_id(const uint64_t log_id)
 {
@@ -140,6 +141,7 @@ enum ObReplicaMsgType {
   OB_REPLICA_MSG_TYPE_NOT_CHILD = 3,       // I'm not your child
   OB_REPLICA_MSG_TYPE_NOT_EXIST = 4,       // partition not exist
   OB_REPLICA_MSG_TYPE_DISABLED_STATE = 5,  // server in disabled state
+  OB_REPLICA_MSG_TYPE_QUICK_REGISTER = 6,  // quick register to me
 };
 
 enum ObRegRespMsgType {
@@ -157,6 +159,13 @@ enum ObFetchLogType {
   OB_FETCH_LOG_STANDBY_RESTORE = 4,
   OB_FETCH_LOG_STANDBY_REPLICA = 5,
   OB_FETCH_LOG_TYPE_MAX,
+};
+
+enum ObRestoreCheckType {
+  OB_CHECK_UNKNOWN = 0,
+  OB_CHECK_STANDBY_RESTORE = 1,
+  OB_CHECK_RESTORE_END_ID = 2,
+  OB_CHECK_MAX,
 };
 
 enum ReceiveLogType {
