@@ -9843,7 +9843,7 @@ int ObDMLResolver::fill_index_column_convert_exprs(bool use_static_engine, const
     }
     if (is_shadow_pk_column && use_static_engine) {
       ObColumnRefRawExpr* column_ref_expr = column_exprs.at(i);
-      if (OB_FAIL(column_convert_exprs.push_back(column_ref_expr))) {
+      if (OB_FAIL(column_convert_exprs.push_back(column_ref_expr->get_dependant_expr()))) {
         LOG_WARN("failed to push back to column convert exprs", K(ret));
       }
     } else if (is_shadow_pk_column) {

@@ -5585,26 +5585,15 @@ int ObStaticEngineCG::generate_pdml_insert_exprs(const ObIArray<ObColumnRefRawEx
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the count is not equal", K(ret), K(index_exprs.count()), K(index_dml_conv_columns.count()));
   } else {
-    for (int i = 0; i < index_exprs.count() && OB_SUCC(ret); i++) {
-      CK(OB_NOT_NULL(index_exprs.at(i)));
-      const ObColumnRefRawExpr* index_expr = index_exprs.at(i);
-      if (OB_SUCC(ret)) {
-        if (is_shadow_column(index_expr->get_column_id())) {
-          const ObRawExpr* spk_expr = index_expr->get_dependant_expr();
-          CK(OB_NOT_NULL(spk_expr));
-          OZ(generate_rt_expr(*spk_expr, expr));
-          OZ(pdml_insert_exprs.push_back(expr));
-        } else {
-          ObRawExpr* conv_expr = index_dml_conv_columns.at(i);
-          if (OB_ISNULL(conv_expr)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(ret));
-          } else if (OB_FAIL(generate_rt_expr(*conv_expr, expr))) {
-            LOG_WARN("fail to push cur op expr", K(ret), K(index_exprs));
-          } else if (OB_FAIL(pdml_insert_exprs.push_back(expr))) {
-            LOG_WARN("fail to push expr", K(ret));
-          }
-        }
+    for (int i = 0; i < index_dml_conv_columns.count() && OB_SUCC(ret); i++) {
+      ObRawExpr* conv_expr = index_dml_conv_columns.at(i);
+      if (OB_ISNULL(conv_expr)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*conv_expr, expr))) {
+        LOG_WARN("fail to push cur op expr", K(ret), K(index_exprs));
+      } else if (OB_FAIL(pdml_insert_exprs.push_back(expr))) {
+        LOG_WARN("fail to push expr", K(ret));
       }
     }
   }

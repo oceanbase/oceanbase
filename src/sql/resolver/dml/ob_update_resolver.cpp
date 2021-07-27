@@ -232,7 +232,8 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
 
   if (OB_SUCC(ret)) {
     // Distribute the centralized assignment information to each index, and do assignment updates for each index
-    if (OB_FAIL(update_stmt->refill_index_assignment_info())) {
+    if (OB_FAIL(update_stmt->refill_index_assignment_info(
+            *params_.expr_factory_, session_info_->use_static_typing_engine()))) {
       LOG_WARN("init index assignment info failed", K(ret));
     }
   }

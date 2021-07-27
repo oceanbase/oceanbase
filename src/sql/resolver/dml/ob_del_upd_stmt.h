@@ -50,7 +50,8 @@ public:
     calc_part_id_exprs_.reset();
   }
   int64_t to_explain_string(char* buf, int64_t buf_len, ExplainType type) const;
-  int init_assignment_info(const ObAssignments& assignments);
+  int init_assignment_info(
+      const ObAssignments& assignments, ObRawExprFactory& expr_factory, bool use_static_typing_engine);
   int add_spk_assignment_info(ObRawExprFactory& expr_factory);
 
   int deep_copy(ObRawExprFactory& expr_factory, const IndexDMLInfo& other);

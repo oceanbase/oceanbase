@@ -1190,12 +1190,13 @@ void ObTableLocation::reset()
 }
 
 int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_t table_id, uint64_t ref_table_id,
-    ObDMLStmt& stmt, RowDesc& row_desc, const bool is_dml_table, /*whether the ref_table is modified*/
+    ObDMLStmt& stmt, const RowDesc& row_desc, const bool is_dml_table, /*whether the ref_table is modified*/
     const ObOrderDirection& direction)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema* table_schema = NULL;
   const ObRawExpr* part_raw_expr = NULL;
+  RowDesc loc_row_desc;
 
   table_id_ = table_id;
   ref_table_id_ = ref_table_id;
@@ -1239,6 +1240,10 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
   } else if (0 >= (part_num_ = table_schema->get_part_option().get_part_num())) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("partitioned virtual table's part num should > 0", K(ret), K(part_num_));
+  } else if (OB_FAIL(loc_row_desc.init())) {
+    LOG_WARN("init loc row desc failed", K(ret));
+  } else if (OB_FAIL(loc_row_desc.assign(row_desc))) {
+    LOG_WARN("assign location row desc failed", K(ret));
   } else {
     if (OB_ISNULL(part_raw_expr = get_related_part_expr(stmt, PARTITION_LEVEL_ONE, table_id, ref_table_id_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1249,10 +1254,10 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
     } else if (FALSE_IT(is_col_part_expr_ = part_raw_expr->is_column_ref_expr())) {
       // never reach
     } else if (OB_FAIL(ObExprGeneratorImpl::gen_expression_with_row_desc(
-                   sql_expression_factory_, expr_op_factory_, row_desc, part_raw_expr, part_expr_))) {
+                   sql_expression_factory_, expr_op_factory_, loc_row_desc, part_raw_expr, part_expr_))) {
       LOG_WARN("gen expression with row desc failed", K(ret));
     } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type_ || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type_) {
-      if (OB_FAIL(part_projector_.init_part_projector(part_raw_expr, row_desc))) {
+      if (OB_FAIL(part_projector_.init_part_projector(part_raw_expr, loc_row_desc))) {
         LOG_WARN("init part projector failed", K(ret));
       }
     } else {
@@ -1278,17 +1283,17 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
                    can_get_part_by_range_for_range_columns(subpart_raw_expr, is_valid_range_columns_subpart_range_))) {
       LOG_WARN("failed to check can get part by range for range columns", K(ret));
     } else if (OB_FAIL(ObExprGeneratorImpl::gen_expression_with_row_desc(
-                   sql_expression_factory_, expr_op_factory_, row_desc, subpart_raw_expr, subpart_expr_))) {
+                   sql_expression_factory_, expr_op_factory_, loc_row_desc, subpart_raw_expr, subpart_expr_))) {
       LOG_WARN("gen expression with row desc failed", K(ret));
     } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == subpart_type_ ||
                PARTITION_FUNC_TYPE_LIST_COLUMNS == subpart_type_) {
-      if (OB_FAIL(part_projector_.init_subpart_projector(subpart_raw_expr, row_desc))) {
+      if (OB_FAIL(part_projector_.init_subpart_projector(subpart_raw_expr, loc_row_desc))) {
         LOG_WARN("init subpart projector failed", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    part_projector_.set_column_cnt(row_desc.get_column_num());
+    part_projector_.set_column_cnt(loc_row_desc.get_column_num());
     bool check_dropped_schema = false;
     ObTablePartitionKeyIter iter(*table_schema, check_dropped_schema);
     int64_t partition_id = -1;

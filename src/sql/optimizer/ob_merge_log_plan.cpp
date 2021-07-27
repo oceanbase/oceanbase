@@ -67,12 +67,10 @@ int ObMergeLogPlan::generate_plan()
     if (OB_SUCC(ret) && OB_LIKELY(table_assign.count() == 1)) {
       ObIArray<IndexDMLInfo>& index_infos = table_columns.at(0).index_dml_infos_;
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); i++) {
-        if (OB_FAIL(index_infos.at(i).init_assignment_info(table_assign.at(0).assignments_))) {
+        bool use_static_typing_engine = optimizer_context_.get_session_info()->use_static_typing_engine();
+        if (OB_FAIL(index_infos.at(i).init_assignment_info(
+                table_assign.at(0).assignments_, optimizer_context_.get_expr_factory(), use_static_typing_engine))) {
           LOG_WARN("init index assignment info failed", K(ret));
-        } else if (optimizer_context_.get_session_info()->use_static_typing_engine()) {
-          if (OB_FAIL(index_infos.at(i).add_spk_assignment_info(optimizer_context_.get_expr_factory()))) {
-            LOG_WARN("fail to add spk assignment info", K(ret));
-          }
         }
       }
     }

@@ -40,7 +40,6 @@ public:
 
   virtual uint64_t hash(uint64_t seed) const;
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
   virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
   virtual const char* get_name() const;
   void set_update_set(bool update_set)

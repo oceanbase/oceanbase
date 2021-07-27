@@ -575,7 +575,8 @@ int64_t IndexDMLInfo::to_explain_string(char* buf, int64_t buf_len, ExplainType 
   return pos;
 }
 
-int IndexDMLInfo::init_assignment_info(const ObAssignments& assignments)
+int IndexDMLInfo::init_assignment_info(
+    const ObAssignments& assignments, ObRawExprFactory& expr_factory, bool use_static_typing_engine)
 {
   int ret = OB_SUCCESS;
   assignments_.reset();
@@ -584,6 +585,11 @@ int IndexDMLInfo::init_assignment_info(const ObAssignments& assignments)
       if (OB_FAIL(assignments_.push_back(assignments.at(i)))) {
         LOG_WARN("add assignment index to assign info failed", K(ret));
       }
+    }
+  }
+  if (OB_SUCC(ret) && use_static_typing_engine) {
+    if (OB_FAIL(add_spk_assignment_info(expr_factory))) {
+      LOG_WARN("fail to add spk assignment info", K(ret));
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(init_column_convert_expr(assignments_))) {

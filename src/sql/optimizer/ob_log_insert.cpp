@@ -291,13 +291,6 @@ int ObLogInsert::allocate_expr_post(ObAllocExprContext& ctx)
     }
   }
 
-  if (OB_SUCC(ret) && is_pdml() && is_index_maintenance()) {
-    // handle shadow pk column
-    if (OB_FAIL(alloc_shadow_pk_column_for_pdml(ctx))) {
-      LOG_WARN("failed alloc generated column for pdml index maintain", K(ret));
-    }
-  }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObLogDelUpd::allocate_expr_post(ctx))) {
       LOG_WARN("failed to allocate expr post", K(ret));

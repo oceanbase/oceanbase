@@ -220,6 +220,7 @@ public:
   static int extract_column_exprs(const ObRawExpr* raw_expr, common::ObIArray<ObRawExpr*>& column_exprs);
   static int extract_column_exprs(
       const common::ObIArray<ObRawExpr*>& exprs, common::ObIArray<ObRawExpr*>& column_exprs);
+  static int mark_column_explicited_reference(ObRawExpr& expr);
   static int extract_column_ids(const ObIArray<ObRawExpr*>& exprs, common::ObIArray<uint64_t>& column_ids);
   static int extract_column_ids(const ObRawExpr* raw_expr, common::ObIArray<uint64_t>& column_ids);
   static int extract_table_ids(const ObRawExpr* raw_expr, common::ObIArray<uint64_t>& table_ids);

@@ -32,8 +32,6 @@ public:
    */
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
 
-  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
-
   virtual int est_cost();
 
   virtual int copy_without_child(ObLogicalOperator*& out)

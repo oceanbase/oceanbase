@@ -646,7 +646,7 @@ public:
       share::schema::ObSchemaGetterGuard& schema_guard, uint64_t table_id, const common::ObIArray<ObRowkey>& rowkeys,
       common::ObIArray<int64_t>& part_ids, common::ObIArray<RowkeyArray>& rowkey_lists);
   int init_table_location(ObSqlSchemaGuard& schema_guard, uint64_t table_id, uint64_t ref_table_id, ObDMLStmt& stmt,
-      RowDesc& row_desc, const bool is_dml_table, const ObOrderDirection& direction = default_asc_direction());
+      const RowDesc& row_desc, const bool is_dml_table, const ObOrderDirection& direction = default_asc_direction());
   int init_table_location_with_rowkey(ObSqlSchemaGuard& schema_guard, uint64_t table_id, ObSQLSessionInfo& session_info,
       const bool is_dml_table = true);
   int calculate_partition_ids_by_row(ObExecContext& exec_ctx, ObPartMgr* part_mgr, const common::ObNewRow& row,
