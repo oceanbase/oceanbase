@@ -1857,7 +1857,8 @@ int ObSqlTransControl::start_standalone_stmt(
         is_local_single_partition_stmt ? in_pla.get_partitions().at(0) : ObPartitionKey()));
   }
   if (OB_FAIL(ret)) {
-  } else if (standalone_stmt_desc.is_bounded_staleness_read() && !ObWeakReadUtil::check_weak_read_service_available()) {
+  } else if (standalone_stmt_desc.is_bounded_staleness_read() &&
+             !ObWeakReadUtil::enable_monotonic_weak_read(session_info.get_effective_tenant_id())) {
     if (ObSqlTransUtil::plan_can_start_trans(session_info.get_local_autocommit(), session_info.get_in_transaction())) {
       OZ(implicit_start_trans(exec_ctx, is_remote));
     }
