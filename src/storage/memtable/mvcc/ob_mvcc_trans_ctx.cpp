@@ -1141,6 +1141,10 @@ int ObMvccRowCallback::trans_commit(const bool for_replay)
           if (value_.total_trans_node_cnt_ >= MAX_TRANS_NODE_CNT) {
             ctx_.set_contain_hotspot_row();
           }
+          //print debug log when total trans node cnt great to 200 * 10000;
+          if (value_.total_trans_node_cnt_ > 2000000 && REACH_TIME_INTERVAL(120 * 1000 * 1000)) {
+            TRANS_LOG(INFO, "[FF] trans commit succ", K_(ctx), K_(value));
+          }
           (void)ATOMIC_FAA(&value_.update_since_compact_, 1);
           if (value_.need_compact(for_read, for_replay)) {
             if (for_replay) {

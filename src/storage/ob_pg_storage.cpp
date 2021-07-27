@@ -1901,7 +1901,11 @@ int ObPGStorage::check_active_mt_hotspot_row_exist(bool& has_hotspot_row, const 
   } else if (OB_FAIL(get_all_pg_partition_keys_(pkeys))) {
     STORAGE_LOG(WARN, "get all pg partition keys error", K(ret), K(pkey_), K(pkeys));
   } else if (pkeys.count() <= 0 || ObTimeUtility::current_time() < last_freeze_ts_ + fast_freeze_interval) {
-    // do nothing
+    if (REACH_TIME_INTERVAL(120 * 1000 * 1000)) {
+      TRANS_LOG(INFO, "[FF] no need to check active hotspot row", K_(pkey),
+                                                                  K_(last_freeze_ts),
+                                                                  K(fast_freeze_interval));
+    }
   } else {
     ObTableHandle handle;
     memtable::ObMemtable* memtable = NULL;
@@ -1918,6 +1922,9 @@ int ObPGStorage::check_active_mt_hotspot_row_exist(bool& has_hotspot_row, const 
       STORAGE_LOG(ERROR, " memtable is NULL", K(ret), K(pkey_));
     } else {
       has_hotspot_row = memtable->has_hotspot_row();
+      if (has_hotspot_row && REACH_TIME_INTERVAL(120 * 1000 * 1000)) {
+        TRANS_LOG(INFO, "[FF] current memtable has hotspot row", K(pkey_), K(*memtable), K(fast_freeze_interval));
+      }
     }
   }
 
