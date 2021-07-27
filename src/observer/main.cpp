@@ -158,7 +158,7 @@ static void get_opts_setting(struct option long_opts[], char short_opts[], const
       {"rs_list", 'r', 1},
       {"mode", 'm', 1},
       {"scn", 'f', 1},
-      {"version", 'V', 0},
+      {"version", 'v', 0},
       {"ipv6", '6', 0},
   };
 
