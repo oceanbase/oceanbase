@@ -278,11 +278,6 @@ void ObPartTransCtx::destroy()
       coord_ctx_ = NULL;
     }
     REC_TRANS_TRACE_EXT(tlog_, destroy, OB_ID(arg1), (int64_t)(&submit_log_cb_));
-    // [DEBUG_ONLY] print the trace and call stack if the clog is invoking the
-    // txn callback during destroying the participant context
-    if (submit_log_cb_.is_callbacking()) {
-      TRANS_LOG(ERROR, "some BUG may happen !!!", K(lbt()), K(*this), K_(trans_id));
-    }
     if (mt_ctx_.get_ref() != 0) {
       TRANS_LOG(ERROR, "memtable_ctx ref not match!!!", K(mt_ctx_.get_ref()), K(*this), K(mt_ctx_), K(&mt_ctx_));
     }
@@ -9050,7 +9045,7 @@ int ObPartTransCtx::on_clear_(const bool need_response)
         TRANS_LOG(WARN, "submit 2pc commit clear response error", "ret", tmp_ret, "context", *this);
       }
     } else if (enable_new_1pc_) {
-      if (NULL != coord_ctx_) {
+      if (NULL != coord_ctx_ && !submit_log_cb_.is_commit_log_callbacking()) {
         trans_service_->get_coord_trans_ctx_mgr().revert_trans_ctx(coord_ctx_);
         coord_ctx_ = NULL;
       }
