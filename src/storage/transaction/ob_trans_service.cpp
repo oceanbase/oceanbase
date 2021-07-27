@@ -1059,6 +1059,9 @@ int ObTransService::end_trans(
     if (is_rollback && OB_TRANS_TIMEOUT == ret) {
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = end_trans_callback_(cb, OB_SUCCESS, tenant_id)))) {
         ret = tmp_ret;
+      } else {
+        // overwrite retcode when rollback timeout
+        ret = OB_SUCCESS;
       }
     } else {
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = end_trans_callback_(cb, ret, tenant_id)))) {
