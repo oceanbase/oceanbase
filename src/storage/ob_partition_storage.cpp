@@ -1806,6 +1806,8 @@ int ObPartitionStorage::multi_get_rows(const ObStoreCtx& store_ctx, const ObTabl
             if (OB_ISNULL(access_param.op_)) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid argument", K(ret), KP(access_param.op_));
+            } else {
+              access_param.op_->clear_evaluated_flag();
             }
             for (int64_t i = 0; OB_SUCC(ret) && i < access_param.output_exprs_->count(); i++) {
               ObDatum* datum = NULL;

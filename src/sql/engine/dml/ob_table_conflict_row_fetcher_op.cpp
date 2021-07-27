@@ -202,6 +202,7 @@ int ObTableConflictRowFetcherOp::inner_get_next_row()
         LOG_DEBUG("fetch conflict row iterator end");
       } else {
         ObNewRowIterator* dup_row_iter = dup_row_iter_arr_.at(cur_row_idx_);
+        clear_evaluated_flag();
         if (OB_ISNULL(dup_row_iter)) {
           find_next_iter = true;
         } else if (OB_FAIL(dup_row_iter->get_next_row(dup_row))) {
