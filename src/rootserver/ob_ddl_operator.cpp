@@ -4023,26 +4023,21 @@ int ObDDLOperator::drop_table_for_inspection(const ObTableSchema& orig_table_sch
   } else if (OB_RECYCLEBIN_SCHEMA_ID == extract_pure_id(orig_table_schema.get_database_id())) {
     // FIXME: remove [!is_dropped_schema()] from ObSimpleTableSchemaV2::is_in_recyclebin()
     ObRecycleObject::RecycleObjType recycle_type = ObRecycleObject::get_type_by_table_schema(orig_table_schema);
-    const ObRecycleObject* recycle_obj = NULL;
     ObArray<ObRecycleObject> recycle_objs;
-    if (NULL == recycle_obj) {
-      if (OB_FAIL(schema_service->fetch_recycle_object(orig_table_schema.get_tenant_id(),
-              orig_table_schema.get_table_name_str(),
-              recycle_type,
-              trans,
-              recycle_objs))) {
-        LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
-      } else if (recycle_objs.size() != 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
-      } else {
-        recycle_obj = &recycle_objs.at(0);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(schema_service->delete_recycle_object(orig_table_schema.get_tenant_id(), *recycle_obj, trans))) {
-        LOG_WARN("delete_recycle_object failed", K(ret), K(*recycle_obj));
-      }
+    if (OB_FAIL(schema_service->fetch_recycle_object(orig_table_schema.get_tenant_id(),
+            orig_table_schema.get_table_name_str(),
+            recycle_type,
+            trans,
+            recycle_objs))) {
+      LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
+    } else if (0 == recycle_objs.size()) {
+      // bugfix: https://work.aone.alibaba-inc.com/issue/35723010
+    } else if (recycle_objs.size() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
+    } else if (OB_FAIL(schema_service->delete_recycle_object(
+                   orig_table_schema.get_tenant_id(), recycle_objs.at(0), trans))) {
+      LOG_WARN("delete_recycle_object failed", K(ret), K(recycle_objs.at(0)));
     }
   }
   if (OB_FAIL(ret)) {
