@@ -5914,18 +5914,17 @@ int ObMigratePrepareTask::try_hold_local_partition()
     LOG_WARN("failed to get leader", K(ret), "arg", ctx_->replica_op_arg_);
   } else if (OB_FAIL(partition->get_role(role))) {
     LOG_WARN("failed to get partition role", K(ret), "arg", ctx_->replica_op_arg_);
-  } else if (leader.is_valid()
-      && leader == MYADDR
-      // support rebuild in leader reconfirm
-      && is_strong_leader(role)
-      //TODO(wait yanmu)
-      //&& is_strong_leader(role)
-      && (ADD_REPLICA_OP == ctx_->replica_op_arg_.type_
-          || MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_
-          || FAST_MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_
-          || REBUILD_REPLICA_OP == ctx_->replica_op_arg_.type_
-          || CHANGE_REPLICA_OP == ctx_->replica_op_arg_.type_
-          || LINK_SHARE_MAJOR_OP == ctx_->replica_op_arg_.type_)) {
+  } else if (leader.is_valid() &&
+             leader == MYADDR
+             // support rebuild in leader reconfirm
+             && partition->get_log_service()->is_leader_active()
+             // TODO(wait yanmu)
+             //&& is_strong_leader(role)
+             && (ADD_REPLICA_OP == ctx_->replica_op_arg_.type_ || MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                    FAST_MIGRATE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                    REBUILD_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                    CHANGE_REPLICA_OP == ctx_->replica_op_arg_.type_ ||
+                    LINK_SHARE_MAJOR_OP == ctx_->replica_op_arg_.type_)) {
     if (REBUILD_REPLICA_OP == ctx_->replica_op_arg_.type_) {
       if (OB_FAIL(MIGRATOR.get_partition_service()->turn_off_rebuild_flag(ctx_->replica_op_arg_))) {
         LOG_WARN("Failed to report_rebuild_replica off", K(ret), "arg", ctx_->replica_op_arg_);
@@ -8112,9 +8111,11 @@ int ObMigratePostPrepareTask::deal_with_rebuild_partition()
     LOG_WARN("failed to get leader", K(ret), "arg", ctx_->replica_op_arg_);
   } else if (OB_FAIL(partition->get_role(role))) {
     LOG_WARN("failed to get real role", K(ret), "arg", ctx_->replica_op_arg_);
-  } else if (leader.is_valid() && leader == MYADDR
-      // support rebuild in leader reconfirm
-      && is_strong_leader(role)) {
+  } else if (leader.is_valid() &&
+             leader == MYADDR
+             // support rebuild in leader reconfirm
+             &&
+             partition->get_log_service()->is_leader_active()) {  // TODO(wait for yanmu) //&& is_strong_leader(role)) {
     if (OB_FAIL(MIGRATOR.get_partition_service()->turn_off_rebuild_flag(ctx_->replica_op_arg_))) {
       LOG_WARN("Failed to report_rebuild_replica off", K(ret), "arg", ctx_->replica_op_arg_);
     } else {
