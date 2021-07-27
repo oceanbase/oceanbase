@@ -343,7 +343,7 @@ END_P SET_VAR DELIMITER
 %type <node> index_hint_definition index_hint_list
 %type <node> tracing_num_list
 %type <node> qb_name_option
-%type <node> join_condition inner_join_type opt_inner outer_join_type opt_outer natural_join_type
+%type <node> join_condition inner_join_type opt_inner outer_join_type opt_outer natural_join_type except_full_outer_join_type opt_full_table_factor
 %type <ival> string_length_i opt_string_length_i opt_string_length_i_v2 opt_int_length_i opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i opt_time_func_fsp_i
 %type <node> opt_float_precision opt_number_precision
 %type <node> opt_equal_mark opt_default_mark read_only_or_write not not2 opt_disk_alias
@@ -8692,29 +8692,67 @@ joined_table:
 /**
  * ref: https://dev.mysql.com/doc/refman/8.0/en/join.html
  */
-table_reference inner_join_type table_factor %prec LOWER_ON
+table_reference inner_join_type opt_full_table_factor %prec LOWER_ON
 {
   JOIN_MERGE_NODES($1, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, NULL, NULL);
 }
-| table_reference inner_join_type table_factor ON expr
+| table_reference inner_join_type opt_full_table_factor ON expr
 {
   JOIN_MERGE_NODES($1, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, $5, NULL);
 }
-| table_reference inner_join_type table_factor USING '(' column_list ')'
+| table_reference inner_join_type opt_full_table_factor USING '(' column_list ')'
 {
   JOIN_MERGE_NODES($1, $3);
   ParseNode *condition_node = NULL;
   merge_nodes(condition_node, result, T_COLUMN_LIST, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, condition_node, NULL);
 }
-| table_reference outer_join_type table_factor join_condition
+| table_reference except_full_outer_join_type opt_full_table_factor join_condition
 {
   JOIN_MERGE_NODES($1, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, $4, NULL);
 }
-| table_reference natural_join_type table_factor
+| table_reference FULL JOIN opt_full_table_factor join_condition
+{
+  JOIN_MERGE_NODES($1, $4);
+  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_FULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $$, $1, $4, $5, NULL);
+}
+| table_reference FULL OUTER JOIN opt_full_table_factor join_condition
+{
+  JOIN_MERGE_NODES($1, $5);
+  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_FULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $$, $1, $5, $6, NULL);
+}
+| table_reference FULL %prec LOWER_COMMA
+{
+  if ($1->type_ == T_ORG) {
+    ParseNode *name_node = NULL;
+    make_name_node(name_node, result->malloc_pool_, "full");
+    malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
+    for (int i = 0; i <= $1->num_child_; ++i) {
+      if (i == 0) {
+        $$->children_[i] = $1->children_[i];
+      } else if (i == 1) {
+        $$->children_[i] = name_node;
+      } else {
+        $$->children_[i] = $1->children_[i - 1];
+      }
+    }
+  } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
+             strlen($1->children_[1]->str_value_) == 0) {
+    ParseNode *name_node = NULL;
+    make_name_node(name_node, result->malloc_pool_, "full");
+    $1->children_[1] = name_node;
+    $$ = $1;
+  } else {
+    yyerror(&@2, result, "occur multi alias name\n");
+    YYERROR;
+  }
+}
+| table_reference natural_join_type opt_full_table_factor
 {
   JOIN_MERGE_NODES($1, $3);
 
@@ -8722,6 +8760,39 @@ table_reference inner_join_type table_factor %prec LOWER_ON
   malloc_terminal_node(join_attr, result->malloc_pool_, T_NATURAL_JOIN);
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, NULL, join_attr);
+}
+;
+
+opt_full_table_factor:
+table_factor %prec LOWER_COMMA
+{
+  $$ = $1;
+}
+| table_factor FULL
+{
+  if ($1->type_ == T_ORG) {
+    ParseNode *name_node = NULL;
+    make_name_node(name_node, result->malloc_pool_, "full");
+    malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
+    for (int i = 0; i <= $1->num_child_; ++i) {
+      if (i == 0) {
+        $$->children_[i] = $1->children_[i];
+      } else if (i == 1) {
+        $$->children_[i] = name_node;
+      } else {
+        $$->children_[i] = $1->children_[i - 1];
+      }
+    }
+  } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
+             strlen($1->children_[1]->str_value_) == 0) {
+    ParseNode *name_node = NULL;
+    make_name_node(name_node, result->malloc_pool_, "full");
+    $1->children_[1] = name_node;
+    $$ = $1;
+  } else {
+    yyerror(&@2, result, "occur multi alias name\n");
+    YYERROR;
+  }
 }
 ;
 
@@ -8777,6 +8848,22 @@ FULL opt_outer JOIN
   malloc_terminal_node($$, result->malloc_pool_, T_JOIN_RIGHT);
 }
 ;
+
+except_full_outer_join_type:
+LEFT opt_outer JOIN
+{
+  /* make bison mute */
+  (void)($2);
+  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_LEFT);
+}
+| RIGHT opt_outer JOIN
+{
+  /* make bison mute */
+  (void)($2);
+  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_RIGHT);
+}
+;
+
 
 opt_outer:
 OUTER                    { $$ = NULL; }
