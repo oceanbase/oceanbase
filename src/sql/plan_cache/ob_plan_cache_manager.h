@@ -82,6 +82,7 @@ public:
   ObPlanCache* get_or_create_plan_cache(uint64_t tenant_id, const ObPCMemPctConf& pc_mem_conf);
   ObPsCache* get_or_create_ps_cache(const uint64_t tenant_id, const ObPCMemPctConf& pc_mem_conf);
 
+  int validate_plan_cache(const uint64_t& tenant_id);
   int revert_plan_cache(const uint64_t& tenant_id);
   int revert_ps_cache(const uint64_t& tenant_id);
   int flush_all_plan_cache();

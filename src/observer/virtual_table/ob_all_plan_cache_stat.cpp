@@ -334,6 +334,8 @@ int ObAllPlanCacheStat::get_row_from_tenants()
       ObPlanCache* plan_cache = pcm_->get_plan_cache(tenant_id);
       if (OB_UNLIKELY(NULL == plan_cache)) {
         SERVER_LOG(WARN, "invalid plan cache", K(ret), K(tenant_id));
+      } else if (!plan_cache->is_valid()) {
+        // do nothing
       } else {
         if (OB_FAIL(fill_cells(*plan_cache))) {
           SERVER_LOG(WARN, "fail to fill cells", K(ret), K(cur_row_));

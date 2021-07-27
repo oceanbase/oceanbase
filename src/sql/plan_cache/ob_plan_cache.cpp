@@ -1080,7 +1080,9 @@ void ObPlanCache::dec_ref_count()
   if (ref_count > 0) {
   } else if (0 == ref_count) {
     // delete
-    this->~ObPlanCache();
+    this->set_valid(false);
+    destroy();
+    // this->~ObPlanCache();
   } else if (ref_count < 0) {
     BACKTRACE(ERROR, true, "Plan Cache %p ref count < 0, ref_count = %ld", this, ref_count);
   }

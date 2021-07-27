@@ -611,7 +611,7 @@ void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo& s
 ObPlanCache* ObSQLSessionInfo::get_plan_cache()
 {
   if (OB_LIKELY(NULL != plan_cache_manager_)) {
-    if (OB_NOT_NULL(plan_cache_) && plan_cache_->is_valid()) {
+    if (OB_NOT_NULL(plan_cache_)) {
       // do nothing
     } else {
       // release old plancache and get new
