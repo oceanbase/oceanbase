@@ -1231,7 +1231,7 @@ int ObLoadDataImpl::handle_one_line(ObExecContext& ctx, ObPhysicalPlanCtx& plan_
   return ret;
 }
 
-const char* ObCSVParser::ZERO_STRING = "0";
+const char* ObCSVParser::ZERO_STRING = "\xFF\xFF";
 
 int ObCSVParser::init(
     int64_t file_column_nums, const ObCSVFormats& formats, const common::ObBitSet<>& string_type_column)
@@ -1355,7 +1355,7 @@ void ObCSVParser::deal_with_empty_field(ObString& field_str, int64_t index)
 {
   if (formats_.null_column_fill_zero_string_ && !string_type_column_.has_member(index)) {
     // a non-string value will be set to "0", "0" will be cast to zero value of target types
-    field_str.assign_ptr(ZERO_STRING, 1);
+    field_str.assign_ptr(ZERO_STRING, 2);
   } else {
     // a string value will be set to ''
     field_str.reset();
@@ -2831,6 +2831,8 @@ int ObLoadDataSPImpl::exec_insert(ObInsertTask& task, ObInsertResult& result)
         }
         if (ObLoadDataUtils::is_null_field(single_row_values[c])) {
           OZ(sql_str.append(ObString(ObLoadDataUtils::NULL_STRING)));
+        } else if (ObLoadDataUtils::is_zero_field(single_row_values[c])) {
+          OZ(sql_str.append("0"));
         } else {
           if (is_string_column) {
             OZ(sql_str.append("'", 1));
