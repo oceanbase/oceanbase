@@ -6636,7 +6636,12 @@ int ObDDLService::binding_table_partitions(const share::schema::ObTableSchema& t
         int64_t part_cnt = -1;
         common::ObPGKey pg_key;
         if (OB_FAIL(pg_info.get_partition_cnt(part_cnt))) {
-          LOG_WARN("fail to get partition cnt", K(ret));
+          if (OB_PARTITION_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            // because of don't wait leader, here maybe all replica is FLAG_REPLICA
+          } else {
+            LOG_WARN("fail to get partition cnt", KR(ret));
+          }
         } else if (OB_FAIL(pg_key.init(pg_info.get_table_id(), pg_info.get_partition_id(), part_cnt))) {
           LOG_WARN("fail to init pg key", K(ret));
         } else if (OB_FAIL(pg_info.find_leader_v2(leader_replica))) {

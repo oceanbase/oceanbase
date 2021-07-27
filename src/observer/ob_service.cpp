@@ -1497,7 +1497,12 @@ int ObService::sync_report_replica_info(
 
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(gctx_.sql_proxy_)) {
+  DEBUG_SYNC(SYNC_REPORT);
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_PREVENT_SYNC_REPORT) OB_SUCCESS;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(gctx_.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
   } else {

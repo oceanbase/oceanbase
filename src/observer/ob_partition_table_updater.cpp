@@ -634,7 +634,11 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateTask>&
   bool skip_to_reput_tasks = false;
   const int64_t start_time = ObTimeUtility::current_time();
   ObCurTraceId::init(GCONF.self_addr_);
-  if (OB_ISNULL(GCTX.pt_operator_) || OB_ISNULL(GCTX.ob_service_)) {
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_PREVENT_ASYNC_REPORT) OB_SUCCESS;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(GCTX.pt_operator_) || OB_ISNULL(GCTX.ob_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(GCTX.pt_operator_));
   } else if (OB_UNLIKELY(batch_tasks.count() <= 0)) {
