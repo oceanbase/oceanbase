@@ -151,7 +151,7 @@ public:
     {
       table_allocator_ = alloc;
     }
-    inline void set_scan_iterator_mementity(lib::MemoryContext* mem)
+    inline void set_scan_iterator_mementity(lib::MemoryContext mem)
     {
       scan_param_.iterator_mementity_ = mem;
       scan_param_.allocator_ = &mem->get_arena_allocator();

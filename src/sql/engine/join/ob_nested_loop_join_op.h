@@ -97,7 +97,7 @@ private:
 public:
   ObJoinState state_;
   // for bnl join
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   ObChunkDatumStore left_store_;
   ObChunkDatumStore::Iterator left_store_iter_;
   bool is_left_end_;

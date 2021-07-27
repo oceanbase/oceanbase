@@ -293,7 +293,7 @@ int ObSeInsertRowIterator::setup_row_copy_mem()
         .set_mem_attr(
             ctx_.get_my_session()->get_effective_tenant_id(), ObModIds::OB_SQL_INSERT, ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(row_copy_mem_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(row_copy_mem_, param))) {
       LOG_WARN("create memory entity failed", K(ret));
     }
   }

@@ -288,7 +288,7 @@ ObQueryRangeTest::ObQueryRangeTest()
       column_id3_(18),
       allocator_(ObModIds::TEST),
       expr_factory_(allocator_),
-      params_((ObWrapperAllocator(CURRENT_CONTEXT.get_arena_allocator()))),
+      params_((ObWrapperAllocator(CURRENT_CONTEXT->get_arena_allocator()))),
       ref_col_(table_id_, column_id1_, T_REF_COLUMN)
 {}
 
@@ -501,7 +501,7 @@ void ObQueryRangeTest::get_query_range(const char* sql_expr, const char*& json_e
   ObGetMethodArray get_methods;
   ObRawExpr* expr = NULL;
   ObArray<ColumnItem> range_columns;
-  ParamStore params((ObWrapperAllocator(CURRENT_CONTEXT.get_arena_allocator())));
+  ParamStore params((ObWrapperAllocator(CURRENT_CONTEXT->get_arena_allocator())));
   ObArenaAllocator allocator(ObModIds::TEST);
   const ObDataTypeCastParams dtc_params;
   ObQueryRange pre_query_range;
@@ -570,7 +570,7 @@ void ObQueryRangeTest::get_query_range_filter(
   ObGetMethodArray get_methods;
   ObRawExpr* expr = NULL;
   ObArray<ColumnItem> range_columns;
-  ParamStore params((ObWrapperAllocator(CURRENT_CONTEXT.get_arena_allocator())));
+  ParamStore params((ObWrapperAllocator(CURRENT_CONTEXT->get_arena_allocator())));
   ObArenaAllocator allocator(ObModIds::TEST);
   const ObDataTypeCastParams dtc_params;
   ObQueryRange pre_query_range;
@@ -623,7 +623,7 @@ void ObQueryRangeTest::get_query_range_collation(const char* sql_expr, const cha
   char var[100][100];
   ObQueryRangeArray ranges;
   ObGetMethodArray get_methods;
-  ParamStore params((ObWrapperAllocator(CURRENT_CONTEXT.get_arena_allocator())));
+  ParamStore params((ObWrapperAllocator(CURRENT_CONTEXT->get_arena_allocator())));
   const ObDataTypeCastParams dtc_params;
   char final_sql[100];
   get_final_sql(sql_expr, final_sql, params, var);

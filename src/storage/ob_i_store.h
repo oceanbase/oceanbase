@@ -1363,7 +1363,7 @@ struct ObTableAccessContext {
   int init(const common::ObQueryFlag& query_flag, const ObStoreCtx& ctx, common::ObArenaAllocator& allocator,
       const common::ObVersionRange& trans_version_range);
   TO_STRING_KV(K_(is_inited), K_(timeout), K_(pkey), K_(query_flag), K_(sql_mode), KP_(store_ctx), KP_(expr_ctx),
-      KP_(limit_param), KP_(stmt_allocator), KP_(allocator), KP_(stmt_mem), KP_(scan_mem), KP_(table_scan_stat),
+      KP_(limit_param), KP_(stmt_allocator), KP_(allocator), KP_(table_scan_stat),
       KP_(block_cache_ws), K_(out_cnt), K_(is_end), K_(trans_version_range), KP_(row_filter), K_(merge_log_ts),
       K_(read_out_type), K_(lob_locator_helper));
 
@@ -1383,8 +1383,8 @@ public:
   common::ObArenaAllocator* stmt_allocator_;
   // storage scan/rescan interface level allocator, will be reclaimed in every scan/rescan call
   common::ObArenaAllocator* allocator_;
-  lib::MemoryContext* stmt_mem_;  // sql statement level memory entity, only for query
-  lib::MemoryContext* scan_mem_;  // scan/rescan level memory entity, only for query
+  lib::MemoryContext stmt_mem_;  // sql statement level memory entity, only for query
+  lib::MemoryContext scan_mem_;  // scan/rescan level memory entity, only for query
   common::ObTableScanStatistic* table_scan_stat_;
   blocksstable::ObBlockCacheWorkingSet* block_cache_ws_;
   ObTableAccessStat access_stat_;
@@ -1512,7 +1512,7 @@ public:
 
 private:
   common::ObStoreRowkey min_key_;
-  lib::MemoryContext* scan_mem_;  // scan/rescan level memory entity, only for query
+  lib::MemoryContext scan_mem_;  // scan/rescan level memory entity, only for query
   int64_t delete_count_;
   bool collation_free_transformed_;
   int16_t rowkey_column_num_;

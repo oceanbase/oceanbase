@@ -180,7 +180,7 @@ private:
     AChunk** chunks_;
   };
   uint64_t* tenant_ids_;
-  lib::MemoryContext* dump_context_;
+  lib::MemoryContext dump_context_;
   LabelMap lmap_;
   common::ObLatch iter_lock_;
   Stat* r_stat_;

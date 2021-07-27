@@ -124,7 +124,7 @@ private:
   int64_t estimate_rows_;
   int64_t row_count_;
   int64_t index_;
-  lib::MemoryContext* row_copy_mem_;
+  lib::MemoryContext row_copy_mem_;
 };
 
 }  // end namespace sql

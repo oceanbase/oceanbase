@@ -276,7 +276,7 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
   exception.pos_ = pos;
   exception.error_code_ = static_cast<uint16_t>(ob_errpkt_errno(error_code, lib::is_oracle_mode()));
 
-  ObIAllocator& alloc = CURRENT_CONTEXT.get_arena_allocator();
+  ObIAllocator& alloc = CURRENT_CONTEXT->get_arena_allocator();
 
   const ObWarningBuffer* wb = common::ob_get_tsi_warning_buffer();
   if (OB_LIKELY(NULL != wb) && wb->get_err_code() == error_code) {
@@ -341,7 +341,7 @@ int ObMPStmtExecute::before_process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid request", K(ret), K_(*req));
   } else {
-    ObIAllocator& alloc = CURRENT_CONTEXT.get_arena_allocator();
+    ObIAllocator& alloc = CURRENT_CONTEXT->get_arena_allocator();
     if (OB_ISNULL(params_ = static_cast<ParamStore*>(alloc.alloc(sizeof(ParamStore))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));

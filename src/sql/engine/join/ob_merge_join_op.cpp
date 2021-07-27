@@ -671,7 +671,7 @@ int ObMergeJoinOp::trans_to_fill_cache()
       lib::ContextParam param;
       param.set_mem_attr(tenant_id, ObModIds::OB_SQL_MERGE_JOIN, ObCtxIds::WORK_AREA)
           .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-      if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
         LOG_WARN("create entity failed", K(ret));
       } else if (OB_ISNULL(mem_context_)) {
         ret = OB_ERR_UNEXPECTED;

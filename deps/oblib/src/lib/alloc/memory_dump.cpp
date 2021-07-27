@@ -101,8 +101,8 @@ int ObMemoryDump::init()
   } else if (OB_FAIL(queue_.init(TASK_NUM, "memdumpqueue"))) {
     LOG_WARN("task queue init failed", K(ret));
   } else {
-    MemoryContext* context = nullptr;
-    int ret = ROOT_CONTEXT.CREATE_CONTEXT(context, ContextParam().set_label("MemDumpContext"));
+    MemoryContext context = nullptr;
+    int ret = ROOT_CONTEXT->CREATE_CONTEXT(context, ContextParam().set_label("MemDumpContext"));
     PreAllocMemory* pre_mem = nullptr;
     if (OB_FAIL(ret)) {
       LOG_WARN("create context failed", K(ret));
@@ -546,7 +546,7 @@ void ObMemoryDump::handle(void* task)
       print_pos += m_task->to_string(print_buf_ + print_pos, PRINT_BUF_LEN - print_pos);
       ret = databuff_printf(print_buf_, PRINT_BUF_LEN, print_pos, "\n");
       if (DUMP_CONTEXT == m_task->type_) {
-        MemoryContext* context = reinterpret_cast<MemoryContext*>(m_task->p_context_);
+        __MemoryContext__ *context = reinterpret_cast<__MemoryContext__*>(m_task->p_context_);
         auto func = [&] {
           const char* str = to_cstring(*context);
           ::write(fd, str, strlen(str));

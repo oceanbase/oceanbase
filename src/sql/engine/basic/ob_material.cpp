@@ -212,7 +212,7 @@ int ObMaterial::get_all_row_from_child(ObMaterialCtx& mat_ctx, ObSQLSessionInfo&
     lib::ContextParam param;
     param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mat_ctx.mem_context_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mat_ctx.mem_context_, param))) {
       LOG_WARN("create entity failed", K(ret));
     } else if (OB_ISNULL(mat_ctx.mem_context_)) {
       ret = OB_ERR_UNEXPECTED;

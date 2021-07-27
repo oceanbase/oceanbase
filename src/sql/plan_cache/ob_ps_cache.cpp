@@ -87,7 +87,7 @@ int ObPsCache::init(const int64_t hash_bucket, const common::ObAddr addr,
                    ObModIds::OB_HASH_NODE_PS_INFO,
                    tenant_id))) {
       LOG_WARN("FAILED TO INIT sql_plan_map", K(ret));
-    } else if (OB_FAIL(ROOT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       LOG_WARN("create memory entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
       ret = OB_ERR_UNEXPECTED;

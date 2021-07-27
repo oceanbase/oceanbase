@@ -69,7 +69,7 @@ public:
         cur_ = 0;
       }
       TO_STRING_KV(K_(nbuckets), K_(buf_cnt), K_(cur));
-      lib::MemoryContext* mem_context_;
+      lib::MemoryContext mem_context_;
       using RowArray = common::ObSegmentArray<HashRow*, OB_MALLOC_BIG_BLOCK_SIZE, common::ModulePageAllocator>;
       RowArray buckets_;
       int64_t nbuckets_;
@@ -174,7 +174,7 @@ public:
     // bool it_in_mem_; //iterate rows in mem
     HashTable* hash_tab_;
     ObChunkRowStore* ha_row_store_;
-    lib::MemoryContext* mem_context_ = nullptr;
+    lib::MemoryContext mem_context_ = nullptr;
     bool ha_is_full_;
     bool bkt_created_;
     bool child_finished_;

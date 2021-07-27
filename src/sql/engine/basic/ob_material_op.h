@@ -69,7 +69,7 @@ private:
   }
 
 private:
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator datum_store_it_;
   friend class ObValues;

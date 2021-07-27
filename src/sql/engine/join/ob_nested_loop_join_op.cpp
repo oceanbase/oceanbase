@@ -233,7 +233,7 @@ int ObNestedLoopJoinOp::group_read_left_operate()
         lib::ContextParam param;
         param.set_mem_attr(tenant_id, ObModIds::OB_SQL_NLJ_CACHE, ObCtxIds::WORK_AREA)
             .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-        if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+        if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
           LOG_WARN("create entity failed", K(ret));
         } else if (OB_ISNULL(mem_context_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -326,7 +326,7 @@ int ObNestedLoopJoinOp::deep_copy_dynamic_obj()
   ParamStore& param_store = plan_ctx->get_param_store_for_update();
   if (OB_ISNULL(mem_context_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("mem entity not init", KP(mem_context_), K(ret));
+    LOG_WARN("mem entity not init", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
     const ObDynamicParamSetter& rescan_param = get_spec().rescan_params_.at(i);

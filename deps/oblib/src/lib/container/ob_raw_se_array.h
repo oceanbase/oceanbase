@@ -222,7 +222,7 @@ private:
   {
     if (OB_UNLIKELY(!has_alloc_)) {
       if (auto_free) {
-        mem_context_ = &CURRENT_CONTEXT;
+        mem_context_ = CURRENT_CONTEXT;
         block_allocator_ = BlockAllocatorT(mem_context_->get_allocator());
       }
       has_alloc_ = true;
@@ -253,7 +253,7 @@ private:
   int error_;
   BlockAllocatorT block_allocator_;
   bool has_alloc_;
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
 };
 
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT, bool auto_free>

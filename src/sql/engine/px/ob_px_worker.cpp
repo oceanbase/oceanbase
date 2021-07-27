@@ -118,7 +118,7 @@ void PxWorkerFunctor::operator()()
 {
   int ret = OB_SUCCESS;
   ObPxSqcHandler* sqc_handler = task_arg_.get_sqc_handler();
-  lib::MemoryContext* mem_context = nullptr;
+  lib::MemoryContext mem_context = nullptr;
   const bool enable_trace_log = lib::is_trace_log_enabled();
 
   if (OB_NOT_NULL(sqc_handler) && OB_NOT_NULL(env_arg_.get_trace_id())) {
@@ -139,7 +139,7 @@ void PxWorkerFunctor::operator()()
     {
       CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, sqc_handler->get_tenant_id())
       {
-        if (OB_FAIL(ROOT_CONTEXT.CREATE_CONTEXT(
+        if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(
                 mem_context, lib::ContextParam().set_mem_attr(lib::current_tenant_id(), ObModIds::OB_SQL_PX)))) {
           LOG_WARN("create memory entity failed", K(ret));
         } else {
@@ -147,7 +147,7 @@ void PxWorkerFunctor::operator()()
           {
             lib::ContextTLOptGuard guard(true);
             ObPxRpcInitTaskArgs runtime_arg;
-            if (OB_FAIL(runtime_arg.init_deserialize_param(*mem_context, *env_arg_.get_gctx()))) {
+            if (OB_FAIL(runtime_arg.init_deserialize_param(mem_context, *env_arg_.get_gctx()))) {
               LOG_WARN("fail to init args", K(ret));
             } else if (OB_FAIL(runtime_arg.deep_copy_assign(task_arg_, mem_context->get_arena_allocator()))) {
               (void)ObInterruptUtil::interrupt_qc(task_arg_.task_, ret);

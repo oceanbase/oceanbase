@@ -179,7 +179,7 @@ private:
 private:
   class MemEntifyDestroyGuard {
   public:
-    MemEntifyDestroyGuard(lib::MemoryContext*& entity) : ref_(entity)
+    MemEntifyDestroyGuard(lib::MemoryContext& entity) : ref_(entity)
     {}
     ~MemEntifyDestroyGuard()
     {
@@ -190,7 +190,7 @@ private:
     }
 
   private:
-    lib::MemoryContext*& ref_;
+    lib::MemoryContext& ref_;
   };
 
   typedef common::hash::ObHashMap<common::ObString, int64_t, common::hash::NoPthreadDefendMode> ColumnMap;
@@ -198,7 +198,7 @@ private:
   mutable bool column_indexed_;
   mutable ColumnMap column_map_;
 
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   // Memory of memory entity may referenced by sql_ctx_, use the guard to make
   // sure memory entity destroyed after sql_ctx_ destructed.
   MemEntifyDestroyGuard mem_context_destroy_guard_;

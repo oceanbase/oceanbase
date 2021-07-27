@@ -340,7 +340,7 @@ private:
 private:
   ObJoinState state_;
 
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   ObChunkDatumStore right_cache_;
   ObChunkDatumStore::Iterator right_cache_iter_;
   ObStoredJoinRow* stored_row_;

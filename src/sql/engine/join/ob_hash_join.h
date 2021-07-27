@@ -467,7 +467,7 @@ public:
     PartHashJoinTable hash_table_;
     HashTableCell* cur_tuple_;       // null or last matched tuple
     common::ObNewRow cur_left_row_;  // like cur_row_ in operator, get row from rowstore
-    lib::MemoryContext* mem_context_;
+    lib::MemoryContext mem_context_;
     common::ObIAllocator* alloc_;  // for buckets
     bool need_cache_info_;
     common::ObSEArray<EqualConditionInfo*, 16> equal_cond_info_;
@@ -625,7 +625,7 @@ inline int ObHashJoin::ObPartHashJoinCtx::init_mem_context(uint64_t tenant_id)
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_mem_attr(tenant_id, common::ObModIds::OB_ARENA_HASH_JOIN, common::ObCtxIds::WORK_AREA);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));

@@ -135,7 +135,7 @@ inline bool Worker::has_req_flag()
 
 inline ObIAllocator& Worker::get_sql_arena_allocator()
 {
-  return CURRENT_CONTEXT.get_arena_allocator();
+  return CURRENT_CONTEXT->get_arena_allocator();
 }
 
 inline ObIAllocator& Worker::get_allocator()

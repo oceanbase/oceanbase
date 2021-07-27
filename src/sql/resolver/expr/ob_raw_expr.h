@@ -707,7 +707,7 @@ private:
       ret = OB_INIT_TWICE;
       SQL_RESV_LOG(WARN, "init twice", K(ret));
     } else if (auto_free) {
-      block_allocator_ = &CURRENT_CONTEXT.get_arena_allocator();
+      block_allocator_ = &CURRENT_CONTEXT->get_arena_allocator();
     } else {
       void* alloc_buf = NULL;
       if (OB_ISNULL(alloc_buf = ob_malloc(sizeof(ObArenaAllocator), ObModIds::OB_BIT_SET))) {

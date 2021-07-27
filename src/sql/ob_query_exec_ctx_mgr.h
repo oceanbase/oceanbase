@@ -74,7 +74,7 @@ public:
 private:
   ObQueryExecCtx(ObSQLSessionInfo& session, lib::MemoryContext& mem_context)
       : mem_context_(mem_context),
-        result_set_(session, mem_context.get_arena_allocator()),
+        result_set_(session, mem_context->get_arena_allocator()),
         ref_count_(0),
         cur_task_ctx_(nullptr),
         cache_schema_info_(NULL)
@@ -83,7 +83,7 @@ private:
   {}
 
 private:
-  lib::MemoryContext& mem_context_;
+  lib::MemoryContext mem_context_;
   observer::ObMySQLResultSet result_set_;
   volatile int64_t ref_count_;
   ObITaskExecCtx* cur_task_ctx_;

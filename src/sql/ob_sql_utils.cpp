@@ -630,7 +630,7 @@ int ObSQLUtils::calc_const_expr(ObSQLSessionInfo* session, const ObRawExpr* expr
       .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
   CREATE_WITH_TEMP_CONTEXT(param)
   {
-    ObIAllocator& tmp_allocator = CURRENT_CONTEXT.get_arena_allocator();
+    ObIAllocator& tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
     ObPhysicalPlanCtx phy_plan_ctx(tmp_allocator);
     for (int i = 0; OB_SUCC(ret) && i < params.count(); i++) {
       if (OB_FAIL(phy_plan_ctx.get_param_store_for_update().push_back(params.at(i)))) {

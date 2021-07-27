@@ -753,7 +753,7 @@ inline int decode(const char* buf, const int64_t data_len, int64_t& pos, const O
       array.data_ = NULL;
     } else {
       const int64_t alloc_size = sizeof(*array.data_) * array.cnt_;
-      array.data_ = static_cast<T*>(CURRENT_CONTEXT.get_arena_allocator().alloc(alloc_size));
+      array.data_ = static_cast<T*>(CURRENT_CONTEXT->get_arena_allocator().alloc(alloc_size));
       if (OB_ISNULL(array.data_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "alloc memory failed", K(ret), K(alloc_size));

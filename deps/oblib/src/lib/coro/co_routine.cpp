@@ -126,7 +126,7 @@ void CoRoutine::__start(transfer_t from)
   routine.set_run_status(RunStatus::RUNNING);
   routine.at_create();
   int ret = OB_SUCCESS;
-  MemoryContext** mem_context = GET_TSI0(MemoryContext*);
+  MemoryContext* mem_context = GET_TSI0(MemoryContext);
   // Thread has ensured the thread-local mem_context is created successfully
   assert(mem_context != nullptr && *mem_context != nullptr);
   WITH_CONTEXT(*mem_context)

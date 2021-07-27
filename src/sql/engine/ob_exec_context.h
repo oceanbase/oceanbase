@@ -604,11 +604,11 @@ public:
   {
     return eval_ctx_;
   }
-  lib::MemoryContext* get_eval_res_mem()
+  lib::MemoryContext get_eval_res_mem()
   {
     return eval_res_mem_;
   }
-  lib::MemoryContext* get_eval_tmp_mem()
+  lib::MemoryContext get_eval_tmp_mem()
   {
     return eval_tmp_mem_;
   }
@@ -788,8 +788,8 @@ protected:
   ObOpKitStore op_kit_store_;
 
   // expression evaluating memory and context.
-  lib::MemoryContext* eval_res_mem_;
-  lib::MemoryContext* eval_tmp_mem_;
+  lib::MemoryContext eval_res_mem_;
+  lib::MemoryContext eval_tmp_mem_;
   ObEvalCtx* eval_ctx_;
   ObQueryExecCtx* query_exec_ctx_;
   ObSEArray<ObSqlTempTableCtx, 1> temp_ctx_;
@@ -798,7 +798,7 @@ protected:
   ObGIPruningInfo gi_pruning_info_;
 
   ObSchedInfo sched_info_;
-  lib::MemoryContext* lob_fake_allocator_;
+  lib::MemoryContext lob_fake_allocator_;
 
   // serialize operator inputs of %root_op_ subplan if root_op_ is not NULL
   const ObPhyOperator* root_op_;

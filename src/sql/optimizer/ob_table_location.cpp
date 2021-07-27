@@ -1693,7 +1693,7 @@ int ObTableLocation::calculate_partition_ids_fast_for_non_insert(
             K(query_range.get_table_grapth().key_part_head_->pos_.column_type_.get_collation_type()));
       } else {
         if (type1 != type2 && ob_is_string_tc(type1) == ob_is_string_tc(type2)) {
-          ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+          ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
           allocator.set_label("CalcNoInsert");
           ObExprCtx expr_ctx;
           const ObObj* cast_result = NULL;
@@ -1785,7 +1785,7 @@ int ObTableLocation::calculate_partition_ids_fast_for_insert(
               K(key_cvt_item.get_expr_operator()->get_result_type().get_collation_type()));
         } else {
           if (type1 != type2 && ob_is_string_tc(type1) == ob_is_string_tc(type2)) {
-            ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+            ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
             allocator.set_label("CalcInsert");
             ObExprCtx expr_ctx;
             const ObObj* cast_result = NULL;
@@ -2178,7 +2178,7 @@ int ObTableLocation::calc_partition_ids_by_in_expr(ObExecContext& exec_ctx, comm
       LOG_WARN("Failed to push back partition id", K(ret));
     }
   } else {
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("CalcByInExpr");
     ObExprCtx expr_ctx;
     ObNewRow part_row;
@@ -3561,7 +3561,7 @@ int ObTableLocation::calc_query_range_partition_ids(ObExecContext& exec_ctx, com
   } else {
     all_part = false;
     ObQueryRangeArray query_ranges;
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("CalcQRPartIds");
     bool is_all_single_value_ranges = true;
     if (OB_FAIL(calc_node->pre_query_range_.get_tablet_ranges(
@@ -3635,7 +3635,7 @@ int ObTableLocation::calc_func_value_partition_ids(ObExecContext& exec_ctx, comm
       }
       if (OB_SUCC(ret)) {
         ObObj tmp;
-        ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+        ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
         allocator.set_label("CalcFVPartIds");
         ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, calc_node->res_type_.get_collation_type());
         ObExprCtx expr_ctx;
@@ -3692,7 +3692,7 @@ int ObTableLocation::calc_column_value_partition_ids(ObExecContext& exec_ctx, co
     if (OB_SUCC(ret)) {
       ObObj tmp;
       ObExprCtx expr_ctx;
-      ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+      ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
       allocator.set_label("CalcCVPartIds");
       ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, calc_node->res_type_.get_collation_type());
       bool is_strict = false;
@@ -3746,7 +3746,7 @@ int ObTableLocation::calc_partition_ids_by_stored_expr(ObExecContext& exec_ctx, 
         K_(part_level),
         K(subkey_conv_exprs_.count()));
   } else {
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("CalcStoredExpr");
     ObExprCtx expr_ctx;
     ObNewRow part_row;
@@ -3919,7 +3919,7 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext& exec_ctx, commo
         LOG_WARN("Failed to get part ids by ranges", K(ret));
       }
     } else {
-      ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+      ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
       allocator.set_label("CalcByRanges");
       ObExprCtx expr_ctx;
       if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type_, exec_ctx, allocator, expr_ctx))) {
@@ -4284,7 +4284,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
   int ret = OB_SUCCESS;
   ObObj func_result;
   ObTaskExecutorCtx* tctx = NULL;
-  ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+  ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
   allocator.set_label("CalcByRow");
   ObExprCtx expr_ctx;
   if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type_, exec_ctx, allocator, expr_ctx))) {
@@ -4911,7 +4911,7 @@ int ObTableLocation::calc_up_key_exprs_partition_id(ObExecContext& exec_ctx, ObP
   int ret = OB_SUCCESS;
   const int64_t key_count = key_exprs.count();
   cross_part = false;
-  ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+  ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
   allocator.set_label("CalcUpKey");
   ObNewRow part_row;
   ObExprCtx expr_ctx;

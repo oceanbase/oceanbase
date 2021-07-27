@@ -531,11 +531,11 @@ public:
     use_static_typing_engine_ = use;
   }
 
-  void set_ctx_mem_context(lib::MemoryContext* ctx_mem_context)
+  void set_ctx_mem_context(lib::MemoryContext ctx_mem_context)
   {
     ctx_mem_context_ = ctx_mem_context;
   }
-  lib::MemoryContext* get_ctx_mem_context()
+  lib::MemoryContext get_ctx_mem_context()
   {
     return ctx_mem_context_;
   }
@@ -700,7 +700,7 @@ private:
 
   ObSessionStat session_stat_;
 
-  lib::MemoryContext* ctx_mem_context_;
+  lib::MemoryContext ctx_mem_context_;
   common::ObSEArray<uint64_t, 8> enable_role_array_;
   ObTenantCachedSchemaGuardInfo cached_schema_guard_info_;
   bool in_definer_named_proc_;

@@ -47,8 +47,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext& mem_context /* = CURRENT_CONTEXT *
       root_op_spec_(NULL),
       param_count_(0),
       signature_(0),
-      field_columns_(mem_context.get_arena_allocator()),
-      param_columns_(mem_context.get_arena_allocator()),
+      field_columns_(mem_context->get_arena_allocator()),
+      param_columns_(mem_context->get_arena_allocator()),
       autoinc_params_(allocator_),
       stmt_need_privs_(allocator_),
       stmt_ora_need_privs_(allocator_),
@@ -404,7 +404,7 @@ int ObPhysicalPlan::set_field_columns(const ColumnsFieldArray& fields)
 {
   int ret = OB_SUCCESS;
   ObField field;
-  WITH_CONTEXT(&mem_context_)
+  WITH_CONTEXT(mem_context_)
   {
     int64_t N = fields.count();
     if (N > 0 && OB_FAIL(field_columns_.reserve(N))) {
@@ -439,7 +439,7 @@ int ObPhysicalPlan::set_param_fields(const common::ParamsFieldArray& params)
 {
   int ret = OB_SUCCESS;
   int64_t N = params.count();
-  WITH_CONTEXT(&mem_context_)
+  WITH_CONTEXT(mem_context_)
   {
     if (N > 0 && OB_FAIL(param_columns_.reserve(N))) {
       LOG_WARN("failed to reserved param field", K(ret));

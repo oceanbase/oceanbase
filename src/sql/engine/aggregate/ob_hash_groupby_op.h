@@ -179,7 +179,7 @@ private:
   int64_t curr_group_id_;
 
   // memory allocator for group by partitions
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   ObDList<DatumStoreLinkPartition> dumped_group_parts_;
   ObChunkDatumStore group_store_;
 

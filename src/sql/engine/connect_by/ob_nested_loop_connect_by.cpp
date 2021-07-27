@@ -346,7 +346,7 @@ int ObConnectBy::inner_open(ObExecContext& exec_ctx) const
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(join_ctx->mem_context_, param))) {
+  } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(join_ctx->mem_context_, param))) {
     LOG_WARN("create entity failed", K(ret));
   } else if (OB_ISNULL(join_ctx->mem_context_)) {
     ret = OB_ERR_UNEXPECTED;

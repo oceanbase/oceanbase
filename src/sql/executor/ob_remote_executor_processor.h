@@ -24,7 +24,7 @@ public:
   ObRemoteBaseExecuteP(const observer::ObGlobalContext& gctx, bool is_execute_remote_plan = false)
       : obrpc::ObRpcProcessor<T>(),
         gctx_(gctx),
-        exec_ctx_(CURRENT_CONTEXT.get_arena_allocator(), gctx.session_mgr_),
+        exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
         vt_iter_factory_(*gctx_.vt_iter_creator_),
         sql_ctx_(),
         trans_state_(),

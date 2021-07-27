@@ -441,9 +441,9 @@ int ObExecContext::init_eval_ctx()
     CK(NULL == eval_tmp_mem_);
     CK(NULL != my_session_);
 
-    lib::MemoryContext& current_context =
+    lib::MemoryContext current_context =
         (query_exec_ctx_ != nullptr ? query_exec_ctx_->get_mem_context() : CURRENT_CONTEXT);
-    WITH_CONTEXT(&current_context)
+    WITH_CONTEXT(current_context)
     {
       lib::ContextParam param;
       param.set_properties(!use_remote_sql() ? lib::USE_TL_PAGE_OPTIONAL : lib::DEFAULT_PROPERTIES)
@@ -456,10 +456,10 @@ int ObExecContext::init_eval_ctx()
       if (OB_ISNULL(mem = allocator_.alloc(sizeof(*eval_ctx_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
-      } else if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(eval_res_mem_, param))) {
+      } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(eval_res_mem_, param))) {
         LOG_WARN("create memory entity failed", K(ret));
         eval_res_mem_ = NULL;
-      } else if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(eval_tmp_mem_, param))) {
+      } else if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(eval_tmp_mem_, param))) {
         LOG_WARN("create memory entity failed", K(ret));
         eval_tmp_mem_ = NULL;
       } else {
@@ -810,7 +810,7 @@ int ObExecContext::get_lob_fake_allocator(ObArenaAllocator*& allocator)
           .set_mem_attr(my_session_->get_effective_tenant_id(),
               common::ObModIds::OB_SQL_EXPR_CALC,
               common::ObCtxIds::DEFAULT_CTX_ID);
-      if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(lob_fake_allocator_, param))) {
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(lob_fake_allocator_, param))) {
         SQL_ENG_LOG(WARN, "create entity failed", K(ret));
       }
     }

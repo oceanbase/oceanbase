@@ -104,7 +104,7 @@ private:
     }
 
   private:
-    lib::MemoryContext* mem_context_;
+    lib::MemoryContext mem_context_;
     ObChunkRowStore row_store_;
     ObChunkRowStore::Iterator row_store_it_;
     int64_t row_id_;

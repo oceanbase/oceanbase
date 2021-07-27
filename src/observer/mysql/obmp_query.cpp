@@ -1076,7 +1076,7 @@ OB_INLINE int ObMPQuery::response_result(ObQueryExecCtx& query_ctx, bool force_s
   if (OB_LIKELY(NULL != result.get_physical_plan())) {
     if (need_execute_async && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
       ctx_.is_execute_async_ = true;
-      WITH_CONTEXT(&query_ctx.get_mem_context())
+      WITH_CONTEXT(query_ctx.get_mem_context())
       {
         if (OB_FAIL(register_callback_with_async(query_ctx))) {
           LOG_WARN("response result with async failed", K(ret));

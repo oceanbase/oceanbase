@@ -49,7 +49,7 @@ OB_DEF_SERIALIZE(ObInfixExprItem)
 OB_DEF_DESERIALIZE(ObInfixExprItem)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObPostExprItem::deserialize(CURRENT_CONTEXT.get_arena_allocator(), buf, data_len, pos))) {
+  if (OB_FAIL(ObPostExprItem::deserialize(CURRENT_CONTEXT->get_arena_allocator(), buf, data_len, pos))) {
     LOG_WARN("expr item deserialize failed", K(ret));
   } else {
     bool param_lazy = false;
