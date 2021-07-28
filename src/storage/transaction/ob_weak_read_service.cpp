@@ -99,11 +99,11 @@ int ObWeakReadService::get_server_version(const uint64_t tenant_id, int64_t& ver
     LOG_WARN("change tenant context fail when get weak read service server version", KR(ret), K(tenant_id));
   }
 
-  if (OB_SUCC(ret) && version <= 0) {
+  if (OB_SUCC(ret) && ! is_valid_read_snapshot_version(version)) {
     int old_ret = ret;
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR(
-        "get server version succ, but version not bigger than zero", K(ret), K(old_ret), K(tenant_id), K(version));
+    LOG_ERROR("get server version succ, but version is not valid snapshot version", K(ret), K(old_ret),
+        K(tenant_id), K(version));
   }
   LOG_DEBUG("[WRS] get_server_version", K(ret), K(tenant_id), K(version));
 
@@ -131,11 +131,11 @@ int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, int64_t& ve
     LOG_WARN("change tenant context fail when get weak read service cluster version", KR(ret), K(tenant_id));
   }
 
-  if (OB_SUCC(ret) && version <= 0) {
+  if (OB_SUCC(ret) && ! is_valid_read_snapshot_version(version)) {
     int old_ret = ret;
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR(
-        "get cluster version succ, but version not bigger than zero", K(ret), K(old_ret), K(tenant_id), K(version));
+    LOG_ERROR("get cluster version succ, but version is not valid snapshot version", K(ret), K(old_ret),
+        K(tenant_id), K(version));
   }
   LOG_DEBUG("[WRS] get_cluster_version", K(ret), K(tenant_id), K(version));
 
@@ -328,15 +328,19 @@ int ObWeakReadService::handle_partition_(ObIPartitionGroup& part, bool& need_ski
   ObTenantWeakReadService* twrs = NULL;
   const ObPartitionKey& pkey = part.get_partition_key();
   uint64_t tenant_id = pkey.get_tenant_id();
-  ObPartitionService& ps = ObPartitionService::get_instance();
+  ObPartitionService &ps = ObPartitionService::get_instance();
 
   // tenant maybe not exist, pass second parameter to ignore WARN log
-  int64_t max_stale_time =
-      ObWeakReadUtil::max_stale_time_for_weak_consistency(tenant_id, ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN);
+  int64_t max_stale_time = ObWeakReadUtil::max_stale_time_for_weak_consistency(tenant_id,
+      ObWeakReadUtil::IGNORE_TENANT_EXIST_WARN);
   // generate partition level weak read snapshot version
-  if (OB_FAIL(
-          ps.generate_partition_weak_read_snapshot_version(part, need_skip, is_user_part, version, max_stale_time))) {
-    LOG_WARN("generate partition weak read snapshot version fail", K(ret), K(pkey));
+  if (OB_FAIL(ps.generate_partition_weak_read_snapshot_version(part, need_skip,
+          is_user_part, version, max_stale_time))) {
+    LOG_WARN("generate partition weak read snapshot version fail", KR(ret), K(pkey));
+  } else if (OB_UNLIKELY(!need_skip && ! is_valid_read_snapshot_version(version))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected generated partitoin weak read snapshot version",
+        KR(ret), "pkey", part.get_partition_key(), K(is_user_part), K(version));
   } else {
     // switch tenant, get tenant weak read service
     FETCH_ENTITY(TENANT_SPACE, tenant_id)
