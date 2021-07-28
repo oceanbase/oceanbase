@@ -608,14 +608,17 @@ struct GetTableKeyV2<ObIndexSchemaHashWrapper, ObSimpleTableSchemaV2*> {
       if (OB_UNLIKELY(OB_SUCCESS != index_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
         ObIndexSchemaHashWrapper null_wrap;
         return null_wrap;
-      } else if (is_oracle_mode && !index_schema->is_in_recyclebin()) {
-        // oracle mode and index is not in recyclebin
-        ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-            index_schema->get_tenant_id(), index_schema->get_database_id(), index_schema->get_origin_index_name_str());
+      } else if (index_schema->is_in_recyclebin()) {  // index is in recyclebin
+        ObIndexSchemaHashWrapper index_schema_hash_wrapper(index_schema->get_tenant_id(),
+            index_schema->get_database_id(),
+            common::OB_INVALID_ID,
+            index_schema->get_table_name_str());
         return index_schema_hash_wrapper;
-      } else {  // mysql mode or index is in recyclebin
-        ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-            index_schema->get_tenant_id(), index_schema->get_database_id(), index_schema->get_table_name_str());
+      } else {
+        ObIndexSchemaHashWrapper index_schema_hash_wrapper(index_schema->get_tenant_id(),
+            index_schema->get_database_id(),
+            is_oracle_mode ? common::OB_INVALID_ID : index_schema->get_data_table_id(),
+            index_schema->get_origin_index_name_str());
         return index_schema_hash_wrapper;
       }
     } else {
@@ -887,7 +890,7 @@ private:
   int rebuild_schema_meta_if_not_consistent();
   int rebuild_table_hashmap(uint64_t& fk_cnt, uint64_t& cst_cnt);
   int rebuild_db_hashmap();
-
+  uint64_t extract_data_table_id_from_index_name(const common::ObString& index_name) const;
   int get_table_schema(const uint64_t tenant_id, const uint64_t database_id, const uint64_t session_id,
       const common::ObString& table_name, const ObSimpleTableSchemaV2*& table_schema) const;
   int get_index_schema(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& table_name,
