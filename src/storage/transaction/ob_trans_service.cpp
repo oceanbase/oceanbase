@@ -3451,6 +3451,9 @@ int ObTransService::check_partition_status(const ObPartitionKey& partition)
     TRANS_LOG(WARN, "get participant status error", K(ret), K(partition));
   } else if (OB_SUCCESS != clog_status) {
     ret = clog_status;
+    if (REACH_TIME_INTERVAL(ObTransCtx::MAX_TRANS_2PC_TIMEOUT_US)) {
+      (void)refresh_location_cache(partition, false);
+    }
   } else {
     // do nothing
   }

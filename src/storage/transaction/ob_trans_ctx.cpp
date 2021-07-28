@@ -651,7 +651,8 @@ int ObDistTransCtx::init(const uint64_t tenant_id, const ObTransID& trans_id, co
     TRANS_LOG(WARN, "ObTransCtx inited error", KR(ret));
   } else {
     set_state_(Ob2PCState::INIT);
-    trans_2pc_timeout_ = ObServerConfig::get_instance().trx_2pc_retry_interval;
+    trans_2pc_timeout_ =
+        std::min((int64_t)ObServerConfig::get_instance().trx_2pc_retry_interval, (int64_t)MAX_TRANS_2PC_TIMEOUT_US);
   }
 
   return ret;

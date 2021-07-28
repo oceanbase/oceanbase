@@ -491,9 +491,8 @@ public:
   // then the total size of trans_ctx preallocated by resource pool is 200B * 100 * 1000 = 20MB.
   // Taking the concurrency num into consideration, obviously, it is appropriate.
   static const int64_t RP_TOTAL_NUM = 100 * 1000;
-
-protected:
   static const int64_t MAX_TRANS_2PC_TIMEOUT_US = 3 * 1000 * 1000;  // 3s
+protected:
   // if 600 seconds after trans timeout, warn is required
   static const int64_t OB_TRANS_WARN_USE_TIME = 600 * 1000 * 1000;
   // 0x0078746365657266 means freectx
