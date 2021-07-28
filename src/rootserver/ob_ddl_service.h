@@ -802,10 +802,8 @@ private:
       const int64_t non_paxos_replica_num, const int64_t partition_id, const ObReplicaAddr& replica_addr,
       const int64_t lease_start_ts, const bool is_bootstrap, const bool is_standby, const int64_t restore,
       const share::ObSimpleFrozenStatus& frozen_status, obrpc::ObCreatePartitionArg& arg);
-  int set_flag_role(const bool initial_leader, const bool is_standby, const int64_t restore, const uint64_t table_id,
-      common::ObRole& role);
   int fill_flag_replica(const uint64_t table_id, const int64_t partition_cnt, const int64_t partition_id,
-      const obrpc::ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr, const common::ObRole role,
+      const obrpc::ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr,
       share::ObPartitionReplica& flag_replica);
 
   int try_modify_tenant_primary_zone_entity_count(common::ObMySQLTransaction& trans,

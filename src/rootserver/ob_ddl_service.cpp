@@ -10834,7 +10834,6 @@ int ObDDLService::construct_create_partition_creator(const common::ObPartitionKe
           // there is no persistent member list, standby_restore will have problems
         } else {
           int64_t restore = REPLICA_NOT_RESTORE;
-          common::ObRole role = FOLLOWER;
           if (OB_CREATE_TABLE_MODE_RESTORE == create_mode &&
               ObReplicaTypeCheck::is_replica_with_ssstore(a->replica_type_)) {
             // logical restore
@@ -10849,20 +10848,18 @@ int ObDDLService::construct_create_partition_creator(const common::ObPartitionKe
           } else {
             restore = REPLICA_NOT_RESTORE;
           }
-          if (OB_FAIL(set_flag_role(a->initial_leader_, is_standby, restore, table_id, role))) {
-            LOG_WARN("fail to set flag role", KR(ret), K(is_standby), K(restore), K(table_id), K(role));
-          } else if (OB_FAIL(fill_create_partition_arg(table_id,
-                         partition_cnt,
-                         paxos_replica_num,
-                         non_paxos_replica_num,
-                         partition_id,
-                         *a,
-                         now,
-                         is_bootstrap,
-                         is_standby,
-                         restore,
-                         frozen_status,
-                         arg))) {
+          if (OB_FAIL(fill_create_partition_arg(table_id,
+                  partition_cnt,
+                  paxos_replica_num,
+                  non_paxos_replica_num,
+                  partition_id,
+                  *a,
+                  now,
+                  is_bootstrap,
+                  is_standby,
+                  restore,
+                  frozen_status,
+                  arg))) {
             LOG_WARN("fail to fill ObCreatePartitionArg",
                 K(ret),
                 K(table_id),
@@ -10874,7 +10871,7 @@ int ObDDLService::construct_create_partition_creator(const common::ObPartitionKe
                 *a,
                 "timestamp",
                 now);
-          } else if (OB_FAIL(fill_flag_replica(table_id, partition_cnt, partition_id, arg, *a, role, flag_replica))) {
+          } else if (OB_FAIL(fill_flag_replica(table_id, partition_cnt, partition_id, arg, *a, flag_replica))) {
             LOG_WARN("fail to fill flag replica",
                 K(ret),
                 K(table_id),
@@ -11030,27 +11027,8 @@ int ObDDLService::fill_create_partition_arg(const uint64_t table_id, const int64
   return ret;
 }
 
-int ObDDLService::set_flag_role(const bool initial_leader, const bool is_standby, const int64_t restore,
-    const uint64_t table_id, common::ObRole& role)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("variable is not init", KR(ret));
-  } else {
-    if (initial_leader && !is_standby && REPLICA_NOT_RESTORE == restore && !is_sys_table(table_id)) {
-      // When setting the flag role, only the non-restore leader of the primary cluster is considered,
-      // and the rest are reported normally
-      role = LEADER;
-    } else {
-      role = FOLLOWER;
-    }
-  }
-  return ret;
-}
-
 int ObDDLService::fill_flag_replica(const uint64_t table_id, const int64_t partition_cnt, const int64_t partition_id,
-    const ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr, const common::ObRole role,
-    share::ObPartitionReplica& flag_replica)
+    const ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr, share::ObPartitionReplica& flag_replica)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -11088,7 +11066,6 @@ int ObDDLService::fill_flag_replica(const uint64_t table_id, const int64_t parti
           replica_addr.replica_type_);
     } else {
       flag_replica.is_restore_ = arg.restore_;
-      flag_replica.role_ = role;
       if (arg.ignore_member_list_) {
         // not fill member list
       } else if (REPLICA_RESTORE_DATA == flag_replica.is_restore_ ||
@@ -15121,7 +15098,6 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
   int64_t non_paxos_replica_num = OB_INVALID_COUNT;
   const uint64_t tenant_id = tablegroup_schema.get_tenant_id();
   const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
-  bool is_standby = false;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || !frozen_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(frozen_status));
@@ -15139,8 +15115,6 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN(
         "array count unexpected", K(ret), "tg_addr_count", tablegroup_addr.count(), "part_ids_count", part_ids.count());
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("fail to get cluster", KR(ret), K(is_standby), K(tablegroup_schema));
   } else {
     obrpc::ObCreatePartitionArg arg;
     share::ObSplitPartition split_info;
@@ -15165,7 +15139,6 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
         FOREACH_CNT_X(a, part_addr, OB_SUCC(ret))
         {
           ObPartitionReplica flag_replica;
-          common::ObRole role = FOLLOWER;
           if (OB_UNLIKELY(nullptr == a || nullptr == rpc_proxy_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("addr or rpc_proxy is null", K(ret));
@@ -15181,27 +15154,24 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
             } else {
               restore = REPLICA_NOT_RESTORE;
             }
-            if (OB_FAIL(set_flag_role(a->initial_leader_, is_standby, restore, tablegroup_id, role))) {
-              LOG_WARN("fail to set flag role", KR(ret));
-            } else if (OB_FAIL(fill_create_partition_arg(tablegroup_id,
-                           tablegroup_schema.get_partition_cnt(),
-                           paxos_replica_num,
-                           non_paxos_replica_num,
-                           partition_id,
-                           *a,
-                           now,
-                           false /*is_bootstrap*/,
-                           false /*is_standby*/,
-                           restore,
-                           frozen_status,
-                           arg))) {
+            if (OB_FAIL(fill_create_partition_arg(tablegroup_id,
+                    tablegroup_schema.get_partition_cnt(),
+                    paxos_replica_num,
+                    non_paxos_replica_num,
+                    partition_id,
+                    *a,
+                    now,
+                    false /*is_bootstrap*/,
+                    false /*is_standby*/,
+                    restore,
+                    frozen_status,
+                    arg))) {
               LOG_WARN("fail to fill ObCreatePartitionArg", K(ret), K(tablegroup_id));
             } else if (OB_FAIL(fill_flag_replica(tablegroup_id,
                            tablegroup_schema.get_partition_cnt(),
                            partition_id,
                            arg,
                            *a,
-                           role,
                            flag_replica))) {
               LOG_WARN("fail to fill flag replica", K(ret), K(tablegroup_id));
             } else if (OB_FAIL(creator.add_flag_replica(flag_replica))) {
@@ -15266,7 +15236,6 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
   int ret = OB_SUCCESS;
   const uint64_t schema_id = restore_arg.schema_id_;
   const ObCreateTableMode create_mode = ObCreateTableMode::OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
-  bool is_standby = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (!restore_arg.is_valid() || addrs.count() <= 0 || last_schema_version <= OB_CORE_SCHEMA_VERSION) {
@@ -15275,8 +15244,6 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
   } else if (!partition_schema.has_self_partition()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("table/tablegroup should has self partition", K(ret), K(schema_id));
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("fail to get standby cluster", KR(ret), K(partition_schema));
   } else {
     ObPartIdsGenerator gen(partition_schema);
     ObArray<int64_t> part_ids;
@@ -15328,12 +15295,9 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
           FOREACH_CNT_X(a, part_addr, OB_SUCC(ret))
           {
             ObPartitionReplica flag_replica;
-            common::ObRole role = FOLLOWER;
             if (OB_UNLIKELY(nullptr == a || nullptr == rpc_proxy_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("addr or rpc_proxy is null", K(ret));
-            } else if (OB_FAIL(set_flag_role(a->initial_leader_, is_standby, restore, partition_id, role))) {
-              LOG_WARN("fail to set flag role", KR(ret));
             } else if (OB_FAIL(fill_create_partition_arg(schema_id,
                            partition_schema.get_partition_cnt(),
                            paxos_replica_num,
@@ -15347,13 +15311,8 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
                            frozen_status,
                            arg))) {
               LOG_WARN("fail to fill ObCreatePartitionArg", K(ret), K(schema_id));
-            } else if (OB_FAIL(fill_flag_replica(schema_id,
-                           partition_schema.get_partition_cnt(),
-                           partition_id,
-                           arg,
-                           *a,
-                           role,
-                           flag_replica))) {
+            } else if (OB_FAIL(fill_flag_replica(
+                           schema_id, partition_schema.get_partition_cnt(), partition_id, arg, *a, flag_replica))) {
               LOG_WARN("fail to fill flag replica", K(ret), K(schema_id));
             } else if (OB_FAIL(creator.add_flag_replica(flag_replica))) {
               LOG_WARN("fail to add flag replica to partition creator", K(ret), K(flag_replica));
