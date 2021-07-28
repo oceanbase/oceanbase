@@ -240,7 +240,7 @@ int ObBatchSubmitCtx::flush_cb(const ObLogCursor& base_log_cursor)
     CLOG_LOG(ERROR, "ObBatchSubmitCtx is not inited", K(ret), K(trans_id_));
   } else if (!base_log_cursor.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "invalid argumets", K(ret), K(trans_id_), K(base_log_cursor));
+    CLOG_LOG(ERROR, "invalid arguments", K(ret), K(trans_id_), K(base_log_cursor));
   } else {
     ObMutexGuard guard(lock_);
 

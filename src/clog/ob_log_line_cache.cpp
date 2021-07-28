@@ -167,7 +167,7 @@ int ObLogLineCache::handle_when_block_conflict_(
         LOG_WARN("do_wash_block_ fail", K(ret), K(block_id), K(expire_time), K(cur_tstamp));
       } else {
         if (wash_succeed) {
-          // eliminated uccessfully
+          // eliminated successfully
           done = true;
         } else {
           // eliminated failed, wait
@@ -308,7 +308,7 @@ int ObLogLineCache::get_line(
             // timeout
             reason = GetLineTimeoutReason::BLOCK_NOT_HIT_TIMEOUT;
           } else if (OB_ITEM_NOT_MATCH == ret) {
-            // block conflct, retry directly
+            // block conflict, retry directly
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("handle_when_block_not_hit_ fail", K(ret), K(block_index), K(file_id), K(end_tstamp), K(block));

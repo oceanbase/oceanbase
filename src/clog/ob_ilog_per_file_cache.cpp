@@ -89,7 +89,7 @@ int ObIlogPerFileCache::query_cursor(const ObPartitionKey& pkey, const uint64_t 
       OB_UNLIKELY(!result.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CSR_LOG(ERROR,
-        "invald argument",
+        "invalid argument",
         K(ret),
         K(pkey),
         K(query_log_id),

@@ -298,7 +298,7 @@ int ObRemoteLogQueryEngine::get_addr_array_(
       CLOG_LOG(WARN, "execute sql failed", K(sql), K(ret));
     } else if (NULL == (result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "fail to get reuslt", K(ret));
+      CLOG_LOG(WARN, "fail to get result", K(ret));
     } else {
       while (OB_SUCC(ret) && OB_SUCC(result->next())) {
         int64_t tmp_real_str_len = 0;

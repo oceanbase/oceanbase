@@ -76,7 +76,7 @@ public:
     } else if (NULL == (val = new (std::nothrow) T())) {
       CLOG_LOG(WARN, "alloc value error", KP(val));
     } else if (0 != (err = pthread_setspecific(key_, val))) {
-      CLOG_LOG(WARN, "pthead set specific error", K(err), K(key_));
+      CLOG_LOG(WARN, "pthread set specific error", K(err), K(key_));
     }
     if (0 != err) {
       release(val);

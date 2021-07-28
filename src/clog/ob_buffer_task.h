@@ -49,7 +49,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(MyFixedBufferAlloc);
 };
 
-// DiskLogBuffer and NetLogBuffer serilize different content to BatchBuffer by using respective BufferTask.
+// DiskLogBuffer and NetLogBuffer serialize different content to BatchBuffer by using respective BufferTask.
 class ObIBufferTask {
 public:
   ObIBufferTask() : next_(NULL), need_callback_(false)

@@ -87,7 +87,7 @@ int ObLogRestoreMgr::leader_takeover_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (RESTORE_LEADER == role_) {
-    CLOG_LOG(WARN, "self is already resore leader", K(ret), K_(partition_key), K_(role));
+    CLOG_LOG(WARN, "self is already restore leader", K(ret), K_(partition_key), K_(role));
   } else {
     role_ = RESTORE_LEADER;
     restore_leader_ = self_;
