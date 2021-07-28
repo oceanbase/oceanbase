@@ -274,7 +274,7 @@ int ObExtLogFetcher::wash()
   return ret;
 }
 
-// log_id wantted does not exist on this server, feed this information back to liboblog,
+// log_id wanted does not exist on this server, feed this information back to liboblog,
 // liboblog needs to change search server.
 int ObExtLogFetcher::handle_log_not_exist(
     const ObPartitionKey& pkey, const uint64_t next_log_id, ObLogStreamFetchLogResp& resp)

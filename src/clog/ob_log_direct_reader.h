@@ -80,7 +80,7 @@ public:
 
 public:
   // Interface of read
-  // Read data from disk directlly
+  // Read data from disk directly
   //
   // Feature:
   // 1. rbuf is aligned by CLOG_DIO_ALIGN_SIZE

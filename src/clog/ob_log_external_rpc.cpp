@@ -678,7 +678,7 @@ int ObLogExternalFetchLogResponse::append_offline_partition(const ObPartitionKey
   OfflinePartition offline;
   if (!pkey.is_valid() || sync_ts <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    EXTLOG_LOG(WARN, "append offline parittion error", K(ret), K(pkey), K(sync_ts));
+    EXTLOG_LOG(WARN, "append offline partition error", K(ret), K(pkey), K(sync_ts));
   } else {
     offline.pkey_ = pkey;
     offline.sync_ts_ = sync_ts;
