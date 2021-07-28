@@ -1240,13 +1240,18 @@ int ObScheTransCtx::wait_end_stmt(const int64_t expired_time)
     stmt_rollback_req_timeout_ = GCONF._ob_trans_rpc_timeout / 3;
     bool need_retry_rpc = true;
     int64_t retry_count = 0;
+    int64_t waittime = 0;
     while (OB_SUCC(ret) && need_retry_rpc) {
-      // 1s->2s->3s->3s...
-      stmt_rollback_req_timeout_ = (1 + retry_count) * stmt_rollback_req_timeout_;
       const int64_t trans_rpc_timeout = GCONF._ob_trans_rpc_timeout;
-      const int64_t rpc_timeout_us = std::min(trans_rpc_timeout, stmt_rollback_req_timeout_) + 200 * 1000;
+      // 1s->2s->3s->3s...
+      stmt_rollback_req_timeout_ = std::min(trans_rpc_timeout, (1 + retry_count) * stmt_rollback_req_timeout_);
       int64_t max_left_waittime = expired_time - ObTimeUtility::current_time();
-      int64_t waittime = ((max_left_waittime > rpc_timeout_us) ? rpc_timeout_us : max_left_waittime);
+      if (max_left_waittime > stmt_rollback_req_timeout_ + 200 * 1000) {
+        waittime = stmt_rollback_req_timeout_ + 200 * 1000;
+      } else {
+        waittime = max_left_waittime;
+        stmt_rollback_req_timeout_ = waittime;
+      }
       if (waittime <= 0) {
         // generate request id, so rolback stmt will not retry
         CtxLockGuard guard(lock_);
