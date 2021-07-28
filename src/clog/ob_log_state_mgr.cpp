@@ -509,7 +509,7 @@ bool ObLogStateMgr::can_receive_log(const common::ObProposalID& proposal_id_in_r
       // non-private replica cannot receive log from a different cluster.
       if (REACH_TIME_INTERVAL(100 * 1000)) {
         CLOG_LOG(INFO,
-            "cannot receive_log from diff clulster in disabled state",
+            "cannot receive_log from diff cluster in disabled state",
             K(partition_key_),
             K(cluster_id),
             "self_cluster_id",
@@ -820,7 +820,7 @@ int ObLogStateMgr::switch_state(bool& need_retry)
           need_next_loop = true;  // 1) reconfirm or 2) fetch log from leader
         }
       } else {
-        // skip check leader during phsyical restore
+        // skip check leader during physical restore
         need_next_loop = false;
       }
     } else if (is_leader_reconfirm_() || is_standby_leader_reconfirm_()) {
@@ -835,7 +835,7 @@ int ObLogStateMgr::switch_state(bool& need_retry)
       } else if (is_reconfirm_not_eagain_(ret)) {
         if (OB_SUCC(ret)) {
           ret = reconfirm_to_taking_over_();
-          need_next_loop = true;  // next loop whill check whether taking_over is done
+          need_next_loop = true;  // next loop will check whether taking_over is done
         } else {
           ret = reconfirm_to_follower_active_();
         }
@@ -1112,9 +1112,9 @@ int ObLogStateMgr::handle_prepare_rqst(
         is_leader_changed = true;
       }
       if (!ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) && GCTX.is_standby_cluster()) {
-        // standby replcia need maintain prepared_primary_leader_, because when primary cluster is doing reconfirm,
+        // standby replica need maintain prepared_primary_leader_, because when primary cluster is doing reconfirm,
         // standby_leader may still does't know current primary_leader, so it cannot reply standby_ack to primary.
-        // Then priamry leader's reconfirm maybe slowed down, but standby_leader can send ack to
+        // Then primary leader's reconfirm maybe slowed down, but standby_leader can send ack to
         // prepared_primary_leader_ to avoid this bad case.
         ObCascadMember new_leader_member(new_leader, cluster_id);
         prepared_primary_leader_ = new_leader_member;
@@ -1735,7 +1735,7 @@ int ObLogStateMgr::leader_active_to_revoking_()
       CLOG_LOG(ERROR, "clean sliding window failed", K_(partition_key), K(ret));
     } else {
       reset_status_();
-      CLOG_LOG(INFO, "standby_leader swtich to REVOKING state", K_(partition_key));
+      CLOG_LOG(INFO, "standby_leader switch to REVOKING state", K_(partition_key));
     }
   } else if (LEADER == role_) {
     if (OB_FAIL(sw_->leader_revoke())) {
@@ -2154,7 +2154,7 @@ bool ObLogStateMgr::leader_active_need_switch_(bool& is_error)
       is_error = true;
     } else {
       // state_changed is false, check cluster type and status
-      // if primary cluster switches to standby，clog need do role chagne: leader->follower->standby_leader
+      // if primary cluster switches to standby，clog need do role change: leader->follower->standby_leader
       if (!ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) &&
           GCTX.is_in_standby_active_state()) {
         state_changed = true;
@@ -2230,7 +2230,7 @@ void ObLogStateMgr::primary_leader_check_start_log_state_(
 
       if (!GCTX.need_sync_to_standby() && GCTX.is_in_max_availability_mode() && log_task->is_local_majority_flushed()) {
         // primary leader in max_availability mode, already degraded to max_perf level
-        // start log reach majority, need swtich leader to self
+        // start log reach majority, need switch leader to self
         need_switch_leader_to_self = true;
         CLOG_LOG(INFO,
             "start log_task reach majority, primary leader need swtich to self",
@@ -3381,7 +3381,7 @@ int ObLogStateMgr::standby_leader_check_protection_level_()
       } else if (max_confirmed_log_id >= standby_sync_start_id_) {
         standby_protection_level_ = MAXIMUM_PROTECTION_LEVEL;
         CLOG_LOG(INFO,
-            "swith protection_level to max_protection",
+            "switch protection_level to max_protection",
             K_(partition_key),
             K_(standby_protection_level),
             K_(standby_sync_start_id),

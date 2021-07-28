@@ -1585,7 +1585,7 @@ int ObLogEngine::prepare_response(const common::ObAddr& server, const int64_t ds
         K(self_cluster_id));
   } else {
     CLOG_LOG(INFO,
-        "-->prepare_respone",
+        "-->prepare_response",
         K(partition_key),
         K(proposal_id),
         K(max_log_id),

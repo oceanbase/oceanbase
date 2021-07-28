@@ -221,7 +221,7 @@ public:
   //
   // ret code:
   // OB_NOT_INIT/OB_INVALID_ARGUMENT for normal case.
-  // OB_SUCCESS, all Partititions execute success.
+  // OB_SUCCESS, all partitions execute success.
   // OB_PARTIAL_FAILED, some Partition execution fails, the caller needs to check ret_array to determine the execution
   // state of each Partition.
   virtual int batch_add_member(const common::ObPartitionArray& partition_array,
@@ -232,7 +232,7 @@ public:
   virtual int batch_remove_member(const common::ObPartitionArray& partition_array,
       const common::ObMemberArray& member_array, const common::ObQuorumArray& quorum_array,
       common::ObReturnArray& ret_array, ObMCLogInfoArray& log_info_array) = 0;
-  // Function: Check whether the operation of adding/deleting members of a group of Parttiions is performed
+  // Function: Check whether the operation of adding/deleting members of a group of Partitions is performed
   // successfully.
   //
   // Arguments:
@@ -250,7 +250,7 @@ public:
   // state of each Partition.
   virtual int batch_is_member_change_done(const common::ObPartitionArray& partition_array,
       const ObMCLogInfoArray& log_info_array, common::ObReturnArray& ret_array) = 0;
-  //===================== batch chdange member end ================
+  //===================== batch change member end ================
 
   // Function:
   // Single-machine distributed transaction batch commits log, performing one phase optimization.
@@ -384,7 +384,7 @@ public:
   // Query the accumulative checksum and submit_timestamp values corresponding to this log_id based on log_id.
   // use case:
   //     When minor freeze need obtain base_storage_info, only the log_id corresponding to the snapshot point is saved
-  //     in the transaction context At this time, the accumulative checksum and submit_timetamp corresponding to this
+  //     in the transaction context At this time, the accumulative checksum and submit_timestamp corresponding to this
   //     log_id need to be returned and saved in base_storage_info
   //
   //     accum_checksum and submit_timestamp are saved in ilog entry, so just need query ilog_storage.
@@ -527,7 +527,7 @@ private:
 private:
   int create_partition_(const common::ObPartitionKey& partition_key, const int64_t replica_num,
       const common::ObMemberList& member_list, const common::ObVersion& freeze_version,
-      const common::ObReplicaType replica_type, const common::ObReplicaProperty replia_property,
+      const common::ObReplicaType replica_type, const common::ObReplicaProperty replica_property,
       const int64_t last_submit_timestamp, const uint64_t last_replay_log_id, const int16_t archive_restore_state,
       const bool need_skip_mlist_check, ObIPartitionLogService* pls);
   int query_max_ilog_id_(const common::ObPartitionKey& pkey, uint64_t& ret_max_file_id);

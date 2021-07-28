@@ -160,7 +160,7 @@ private:
   file_id_t file_id_;
   offset_t offset_;
   int32_t size_;
-  // To facilitate compatibility processing, use the highest bit of submit_timestmap_ to indicate whether
+  // To facilitate compatibility processing, use the highest bit of submit_timestamp_ to indicate whether
   // batch_committed The remaining 63 bits are still used to represent timestamp information
   int64_t submit_timestamp_;
   int64_t accum_checksum_;

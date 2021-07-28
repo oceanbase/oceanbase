@@ -89,7 +89,7 @@ inline int parse_log_item_type(const char* buf, const int64_t len, ObCLogItemTyp
 // 3. Only read one file(any file), read from offset equal zero, file trailer is valid;
 // 4. Only read one file(last file), read from any offset, file trailer is valid;
 //
-// Regardless of Whethter the offset is zero, the implementation can ensure that the offset must correspond
+// Regardless of Whether the offset is zero, the implementation can ensure that the offset must correspond
 // to a valid block header.
 //
 // When tailer is valid, we can confirm that the end of the file is read by direct_reader returning
@@ -143,7 +143,7 @@ private:
   // When timestamp in block header is less than last_block_ts and exceeds CHECK_LAST_BLOCK_TS_INTERVAL,
   // considered ITER_END.
   // This is mainly to prevent clock rollback. The 1.4x version used ObTimeUtility::current_time to get
-  // the timestamp for block header, if clock jumps, may cause iterate file failuer.
+  // the timestamp for block header, if clock jumps, may cause iterate file failure.
   //
   // We used ObClockGenerator::getClock to ensure that the monotonic increase of the clock.
   //
@@ -348,7 +348,7 @@ int ObRawEntryIterator<Type, Interface>::handle_block_(const ObLogBlockMetaV2& m
   // and the block header1 will write into next file. so, the timestamp between two consecutive files
   // is out of ordered.
   //
-  // Fixed the problem by ingored InfoBlock header when need record last_block_ts
+  // Fixed the problem by ignored InfoBlock header when need record last_block_ts
   if (OB_INFO_BLOCK != type) {
     last_block_ts_ = meta.get_timestamp();
   }

@@ -146,10 +146,10 @@ private:
       NeedFreezePartitionArray& partition_array, const common::ObPartitionKey& partition_key, const uint64_t log_id);
 
 private:
-  // adapt hashmap forech, used to traverse infoblock.
+  // adapt hashmap foreach, used to traverse infoblock.
   // 1. during the restart phase, log_scan_runnable will compare max_log_id which
   // is record in infoblock with last_replay_log_id which is record in base_storage_info,
-  // if last_replay_log_id is greator than max_log_id, means that the file needn't
+  // if last_replay_log_id is greater than max_log_id, means that the file needn't
   // to read.
   class CheckFileCanBeSkippedFunctor {
   public:
@@ -322,7 +322,7 @@ private:
     TstampArray& max_log_tstamp_array_;
   };
 
-  // InfoEntry loader, inclued:
+  // InfoEntry loader, included:
   // 1. min_log_id
   // 2. min_log_timestamp
   // 3. max_log_timestamp

@@ -226,7 +226,7 @@ public:
       storage::ObPartitionService* partition_service, ObILogCallbackEngine* cb_engine,
       common::ObILogAllocator* alloc_mgr, ObLogEventScheduler* event_scheduler, const common::ObAddr& self,
       const common::ObVersion& data_version, const common::ObPartitionKey& parition_key,
-      const common::ObReplicaType replica_type, const common::ObReplicaProperty replia_property,
+      const common::ObReplicaType replica_type, const common::ObReplicaProperty replica_property,
       const common::ObBaseStorageInfo& base_storage_info, const int16_t archive_restore_state,
       const bool need_skip_mlist_check, ObRemoteLogQueryEngine* remote_log_query_engine,
       archive::ObArchiveMgr* archive_mgr, archive::ObArchiveRestoreEngine* archive_restore_engine,
@@ -470,7 +470,7 @@ public:
   virtual int check_if_start_log_task_empty(bool& is_empty) = 0;
   virtual bool has_valid_member_list() const = 0;
   virtual int get_last_archived_log_id(
-      const int64_t incarnartion, const int64_t archive_round, uint64_t& last_archived_log_id) = 0;
+      const int64_t incarnation, const int64_t archive_round, uint64_t& last_archived_log_id) = 0;
   virtual int process_check_rebuild_req(
       const common::ObAddr& server, const uint64_t start_log_id, const int64_t cluster_id) = 0;
   virtual void get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const = 0;
@@ -731,7 +731,7 @@ public:
   virtual int set_member_list(const ObMemberList& member_list, const int64_t replica_num,
       const common::ObAddr& assigned_leader, const int64_t lease_start) override;
   int get_last_archived_log_id(
-      const int64_t incarnartion, const int64_t archive_round, uint64_t& last_archived_log_id) override;
+      const int64_t incarnation, const int64_t archive_round, uint64_t& last_archived_log_id) override;
   virtual int try_freeze_aggre_buffer() override;
   int set_archive_restore_state(const int16_t archive_restore_state) override;
   /*return values:

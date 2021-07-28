@@ -126,7 +126,7 @@ int ObIlogMemstore::check_need_freeze(
   }
 
   if (OB_SUCCESS != ret) {
-    CSR_LOG(ERROR, "check_need_freeze return value upexpected", K(ret), K(partition_key), K(log_id));
+    CSR_LOG(ERROR, "check_need_freeze return value unexpected", K(ret), K(partition_key), K(log_id));
   }
   CSR_LOG(TRACE, "check_need_freeze", K(ret), K(partition_key), K(log_id), K(trigger_type));
   return ret;

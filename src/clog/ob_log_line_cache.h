@@ -452,7 +452,7 @@ private:
   // FIXME: ObCond can only wake up one waiter, cond which can be broadcast should be used here
   common::ObCond block_wash_cond_;
 
-  // cached Line combing
+  // cached Line combine
   int64_t cached_line_count_ CACHE_ALIGNED;
 
   // Statistics

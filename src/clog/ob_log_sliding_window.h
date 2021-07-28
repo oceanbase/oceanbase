@@ -671,7 +671,7 @@ private:
   mutable int64_t fetch_log_warn_time_;
   mutable int64_t update_log_task_log_time_;
   mutable int64_t sync_replica_reset_fetch_state_time_;
-  // When calculating start_service_time during restart, it is necessary to filter out the partitons that have not
+  // When calculating start_service_time during restart, it is necessary to filter out the partitions that have not
   // updated next_replay_log_id_info in a period of time Such partition may have been deleted, or it may take a long
   // time to execute rebuild, which will affect the recovery time of the system;
   int64_t last_update_next_replay_log_id_info_ts_;
