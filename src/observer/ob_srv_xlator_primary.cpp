@@ -53,6 +53,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator* xlator)
 {
   RPC_PROCESSOR(ObRpcGetRoleP, gctx_);
   RPC_PROCESSOR(ObRpcBatchGetRoleP, gctx_);
+  RPC_PROCESSOR(ObRpcBroadcastLocationsP, gctx_);
   RPC_PROCESSOR(ObRpcGetMasterRSP, gctx_);
   RPC_PROCESSOR(ObRpcSetConfigP, gctx_);
   RPC_PROCESSOR(ObRpcGetConfigP, gctx_);

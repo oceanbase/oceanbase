@@ -4530,5 +4530,35 @@ OB_SERIALIZE_MEMBER(ObDropRestorePointArg, tenant_id_, name_);
 
 OB_SERIALIZE_MEMBER(ObCheckBuildIndexTaskExistArg, tenant_id_, task_id_, scheduler_id_);
 
+OB_SERIALIZE_MEMBER(ObPartitionBroadcastArg, keys_);
+bool ObPartitionBroadcastArg::is_valid() const
+{
+  return keys_.count() > 0;
+}
+int ObPartitionBroadcastArg::assign(const ObPartitionBroadcastArg& other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(keys_.assign(other.keys_))) {
+    LOG_WARN("fail to assign keys", KR(ret), K(other));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObPartitionBroadcastResult, ret_);
+bool ObPartitionBroadcastResult::is_valid() const
+{
+  return true;
+}
+int ObPartitionBroadcastResult::assign(const ObPartitionBroadcastResult& other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
 }  // end namespace obrpc
 }  // namespace oceanbase

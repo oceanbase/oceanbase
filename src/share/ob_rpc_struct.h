@@ -47,7 +47,8 @@
 #include "share/restore/ob_restore_args.h"  // ObRestoreArgs
 #include "rootserver/ob_rs_job_table_operator.h"
 #include "sql/executor/ob_task_id.h"
-#include "sql/parser/ob_item_type.h"  // ObCacheType
+#include "sql/parser/ob_item_type.h"                           // ObCacheType
+#include "share/partition_table/ob_partition_location_task.h"  // ObPartitionBroadcastTask
 
 namespace oceanbase {
 namespace rootserver {
@@ -8042,6 +8043,44 @@ public:
   uint64_t scheduler_id_;
 
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(scheduler_id));
+};
+
+struct ObPartitionBroadcastArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObPartitionBroadcastArg() : keys_()
+  {}
+  ~ObPartitionBroadcastArg()
+  {}
+  bool is_valid() const;
+  int assign(const ObPartitionBroadcastArg& other);
+  TO_STRING_KV(K_(keys));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPartitionBroadcastArg);
+
+public:
+  common::ObSEArray<share::ObPartitionBroadcastTask, common::UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM> keys_;
+};
+
+struct ObPartitionBroadcastResult {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObPartitionBroadcastResult() : ret_(common::OB_SUCCESS)
+  {}
+  ~ObPartitionBroadcastResult()
+  {}
+  bool is_valid() const;
+  int assign(const ObPartitionBroadcastResult& other);
+  TO_STRING_KV(K_(ret));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPartitionBroadcastResult);
+
+public:
+  int ret_;
 };
 
 }  // end namespace obrpc
