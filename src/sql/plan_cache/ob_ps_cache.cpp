@@ -46,19 +46,10 @@ ObPsCache::ObPsCache()
 ObPsCache::~ObPsCache()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObPsStmtId, 512> all_stmt_id;
-  ObGetAllStmtIdOp op(&all_stmt_id);
-  if (OB_FAIL(stmt_info_map_.foreach_refactored(op))) {
-    LOG_WARN("traverse stmt_info_map_ failed", K(ret));
-  } else if (OB_FAIL(op.get_callback_ret())) {
-    LOG_WARN("traverse stmt_info_map_ failed", K(ret));
-  } else {
-    for (int64_t i = 0; i < all_stmt_id.count(); ++i) {  // ignore ret
-      if (OB_FAIL(deref_ps_stmt(all_stmt_id.at(i), true /*erase_info*/))) {
-        LOG_WARN("deref_ps_stmt faield when destroy ObPsCache", K(ret), K(all_stmt_id.at(i)), K(all_stmt_id.count()));
-      }
-    }
-  }
+  // ps_stmt_id和ps_stmt_info创建时，会给其增加引用计数
+  // 现在PsCache要析构了，对所有内部对象减去1,如果引用计数到0，会显式free内存
+  cache_evict_all_ps();
+
   if (NULL != mem_context_) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;

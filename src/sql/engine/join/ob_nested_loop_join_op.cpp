@@ -73,12 +73,25 @@ int ObNestedLoopJoinOp::switch_iterator()
   return ret;
 }
 
-int ObNestedLoopJoinOp::rescan()
-{
+int ObNestedLoopJoinOp::set_param_null() {
+  int ret = OB_SUCCESS;
+  ObDatum null_datum;
+  null_datum.set_null();
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.rescan_params_.count(); ++i) {
+    OZ(MY_SPEC.rescan_params_.at(i).update_dynamic_param(eval_ctx_,
+                                                         null_datum));
+    LOG_DEBUG("prepare_rescan_params", K(ret), K(i));
+  }
+  return ret;
+}
+
+int ObNestedLoopJoinOp::rescan() {
   int ret = OB_SUCCESS;
   reset_buf_state();
-  ObPhysicalPlanCtx* plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-  if (OB_FAIL(ObBasicNestedLoopJoinOp::rescan())) {
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  if (OB_FAIL(set_param_null())) {
+    LOG_WARN("failed to set param null", K(ret));
+  } else if (OB_FAIL(ObBasicNestedLoopJoinOp::rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   }
 
@@ -116,6 +129,13 @@ int ObNestedLoopJoinOp::inner_get_next_row()
         }
       }
     }  // while end
+  }
+  if (OB_ITER_END == ret) {
+    if (OB_FAIL(set_param_null())) {
+      LOG_WARN("failed to set param null", K(ret));
+    } else {
+      ret = OB_ITER_END;
+    }
   }
 
   return ret;

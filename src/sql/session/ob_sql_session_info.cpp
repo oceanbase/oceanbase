@@ -803,7 +803,9 @@ int ObSQLSessionInfo::get_ps_session_info(const ObPsStmtId stmt_id, ObPsSessionI
 int ObSQLSessionInfo::remove_ps_session_info(const ObPsStmtId stmt_id)
 {
   int ret = OB_SUCCESS;
-  ObPsSessionInfo* session_info = NULL;
+  ObPsSessionInfo *session_info = NULL;
+  LOG_TRACE("remove ps session info", K(ret), K(stmt_id), K(get_sessid()),
+            K(lbt()));
   if (OB_FAIL(ps_session_info_map_.erase_refactored(stmt_id, &session_info))) {
     LOG_WARN("ps session info not exist", K(stmt_id));
   } else if (OB_ISNULL(session_info)) {

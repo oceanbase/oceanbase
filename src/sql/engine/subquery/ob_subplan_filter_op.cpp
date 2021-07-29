@@ -325,6 +325,13 @@ int ObSubPlanFilterOp::inner_get_next_row()
       OZ(handle_update_set());
     }
   }
+  if (OB_ITER_END == ret) {
+    if (OB_FAIL(set_param_null())) {
+      LOG_WARN("failed to set param null", K(ret));
+    } else {
+      ret = OB_ITER_END;
+    }
+  }
   return ret;
 }
 

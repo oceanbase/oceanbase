@@ -93,6 +93,7 @@ private:
   bool is_full() const;
   // used for rescan and switch iter
   virtual void reset_buf_state();
+  int set_param_null();
 
 public:
   ObJoinState state_;

@@ -124,7 +124,9 @@ private:
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];
   // nested loop join with index seek, batch
-  int batch_index_join_get_next(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
+  int batch_index_join_get_next(ObExecContext &exec_ctx,
+                                const common::ObNewRow *&row) const;
+  int reset_rescan_params(ObExecContext &ctx) const;
 
 private:
   int bij_fill_left_rows(ObExecContext& exec_ctx) const;

@@ -43,8 +43,14 @@ public:
       id_time.first = entry.first;
       id_time.second = entry.second->get_last_closed_timestamp();
       if (entry.second->is_expired()) {
-        if (OB_SUCCESS != (callback_ret_ = expired_ps_->push_back(id_time))) {
-          SQL_PC_LOG(WARN, "fail to push back key", K_(callback_ret));
+        // for expired ps info, only evicted once;
+        // use cas, because auto cache evict and flush ps cache may concurrent
+        // processing
+        if (ATOMIC_BCAS(entry.second->get_is_expired_evicted_ptr(), false,
+                        true)) {
+          if (OB_SUCCESS != (callback_ret_ = expired_ps_->push_back(id_time))) {
+            SQL_PC_LOG(WARN, "fail to push back key", K_(callback_ret));
+          }
         }
       } else {
         if (OB_SUCCESS != (callback_ret_ = closed_ps_->push_back(id_time))) {

@@ -1989,6 +1989,7 @@ public:
         is_lob_column_(false),
         is_unpivot_mocked_column_(false),
         is_hidden_(false),
+        from_alias_table_(false),
         real_expr_(nullptr)
   {
     set_expr_class(ObExpr::EXPR_COLUMN_REF);
@@ -2010,6 +2011,7 @@ public:
         is_lob_column_(false),
         is_unpivot_mocked_column_(false),
         is_hidden_(false),
+        from_alias_table_(false),
         real_expr_(nullptr)
   {
     set_expr_class(ObExpr::EXPR_COLUMN_REF);
@@ -2031,6 +2033,7 @@ public:
         is_lob_column_(false),
         is_unpivot_mocked_column_(false),
         is_hidden_(false),
+        from_alias_table_(false),
         real_expr_(nullptr)
   {
     set_expr_class(ObExpr::EXPR_COLUMN_REF);
@@ -2119,6 +2122,9 @@ public:
   virtual int do_visit(ObRawExprVisitor& visitor) override;
 
   virtual uint64_t hash_internal(uint64_t seed) const;
+
+  bool is_from_alias_table() const { return from_alias_table_; }
+  void set_from_alias_table(bool value) { from_alias_table_ = value; }
   inline bool is_generated_column() const
   {
     return share::schema::ObSchemaUtils::is_generated_column(column_flags_);
@@ -2226,6 +2232,7 @@ private:
   bool is_lob_column_;             // TODO add lob column
   bool is_unpivot_mocked_column_;  // used for unpivot
   bool is_hidden_;                 // used for print hidden column
+  bool from_alias_table_;
   ObRawExpr* real_expr_;           // for oracle virtual table that is mapping a real table
 };
 

@@ -280,6 +280,9 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr* expr)
           is_oracle_mode ? "\"%.*s\".\"%.*s\"" : "`%.*s`.`%.*s`", LEN_AND_PTR(table_name), LEN_AND_PTR(col_name));
     } else if (OB_UNLIKELY(only_column_namespace_)) {
       DATA_PRINTF(is_oracle_mode ? "\"%.*s\"" : "`%.*s`", LEN_AND_PTR(col_name));
+    } else if (expr->is_from_alias_table()) {
+      DATA_PRINTF(is_oracle_mode ? "\"%.*s\".\"%.*s\"" : "`%.*s`.`%.*s`",
+                  LEN_AND_PTR(expr->get_table_name()), LEN_AND_PTR(col_name));
     } else {
       if (!expr->get_synonym_name().empty() && !expr->get_synonym_db_name().empty()) {
         ObString synonyn_db_name = expr->get_synonym_db_name();

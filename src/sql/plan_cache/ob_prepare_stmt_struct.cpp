@@ -264,6 +264,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator* inner_allocator)
       dep_objs_(NULL),
       dep_objs_cnt_(0),
       ps_item_(NULL),
+      is_expired_evicted_(false), 
       allocator_(inner_allocator),
       external_allocator_(NULL)
 
@@ -286,6 +287,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator* inner_allocator, ObIAllocator* external
       ps_item_(NULL),
       tenant_version_(OB_INVALID_VERSION),
       is_expired_(false),
+      is_expired_evicted_(false), 
       allocator_(inner_allocator),
       external_allocator_(external_allocator)
 {}
@@ -312,6 +314,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo& other)
     ps_item_ = other.ps_item_;
     tenant_version_ = other.tenant_version_;
     is_expired_ = other.is_expired_;
+    is_expired_evicted_ = other.is_expired_evicted_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion*>(

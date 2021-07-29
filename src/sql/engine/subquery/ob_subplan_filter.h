@@ -104,6 +104,7 @@ private:
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   int handle_update_set(ObSubPlanFilterCtx* subplan_ctx, const common::ObNewRow*& row) const;
   int construct_array_params(ObExecContext& ctx) const;
+  int reset_rescan_params(ObExecContext &ctx) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSubPlanFilter);

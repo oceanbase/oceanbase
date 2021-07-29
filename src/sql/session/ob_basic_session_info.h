@@ -1259,48 +1259,31 @@ public:
   int get_max_allowed_packet(int64_t& max_allowed_pkt) const;
   int get_net_buffer_length(int64_t& net_buffer_len) const;
   /// @}
-  int64_t get_session_info_mem_size() const
+  int64_t get_session_info_mem_size() const { return block_allocator_.get_total_mem_size(); }
+  int64_t get_sys_var_mem_size() const { return base_sys_var_alloc_.total(); }
+  ObPartitionHitInfo &partition_hit() { return partition_hit_; } // 和上面的set_partition_hit没有任何关系
+  bool get_err_final_partition_hit(int err_ret)
   {
-    return block_allocator_.get_total_mem_size();
+    bool is_partition_hit = partition_hit().get_bool();
+    if (is_proxy_refresh_location_ret(err_ret)) {
+      is_partition_hit = false;
+    } else if (get_is_in_retry()
+               && is_proxy_refresh_location_ret(retry_info_.get_last_query_retry_err())) {
+      is_partition_hit = false;
+    }
+    return is_partition_hit;
+  };
+  bool is_proxy_refresh_location_ret(int err_ret) {
+    return common::OB_NOT_MASTER == err_ret;
   }
-  int64_t get_sys_var_mem_size() const
-  {
-    return base_sys_var_alloc_.total();
-  }
-  // for improving cache miss of proxy, nothing to do with the set_partition_hit() above.
-  ObPartitionHitInfo& partition_hit()
-  {
-    return partition_hit_;
-  }
-  void set_shadow(bool is_shadow)
-  {
-    ATOMIC_STORE(&thread_data_.is_shadow_, is_shadow);
-  }
-  bool is_shadow()
-  {
-    return ATOMIC_LOAD(&thread_data_.is_shadow_);
-  }
-  uint32_t get_version() const
-  {
-    return version_;
-  }
-  uint32_t get_magic_num()
-  {
-    return magic_num_;
-  }
-  int64_t get_current_execution_id() const
-  {
-    return current_execution_id_;
-  }
-  const common::ObCurTraceId::TraceId& get_last_trace_id() const
-  {
-    return last_trace_id_;
-  }
-  void set_current_execution_id(int64_t execution_id)
-  {
-    current_execution_id_ = execution_id;
-  }
-  void set_last_trace_id(common::ObCurTraceId::TraceId* trace_id)
+  void set_shadow(bool is_shadow) { ATOMIC_STORE(&thread_data_.is_shadow_, is_shadow); }
+  bool is_shadow() { return ATOMIC_LOAD(&thread_data_.is_shadow_);  }
+  uint32_t get_version() const {return version_;}
+  uint32_t get_magic_num() {return magic_num_;}
+  int64_t get_current_execution_id() const { return current_execution_id_; }
+  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
+  void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
+  void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
     if (OB_ISNULL(trace_id)) {
     } else {

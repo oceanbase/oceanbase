@@ -321,14 +321,9 @@ public:
   {
     tenant_version_ = tenant_version;
   }
-  void set_is_expired()
-  {
-    ATOMIC_STORE(&is_expired_, true);
-  }
-  int64_t is_expired()
-  {
-    return ATOMIC_LOAD(&is_expired_);
-  }
+  void set_is_expired() { ATOMIC_STORE(&is_expired_, true); }
+  bool is_expired() { return ATOMIC_LOAD(&is_expired_); }
+  bool *get_is_expired_evicted_ptr() { return &is_expired_evicted_; }
 
   DECLARE_VIRTUAL_TO_STRING;
 
@@ -351,6 +346,8 @@ private:
   ObPsStmtItem* ps_item_;
   int64_t tenant_version_;
   bool is_expired_;
+  // check whether has dec ref count for ps info expired
+  bool is_expired_evicted_;
 
   // ObDataBuffer is used to use the internal memory of ObPsStmtItem,
   // The memory essentially comes from inner_allocator_ in ObPsPlancache

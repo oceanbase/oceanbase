@@ -470,7 +470,7 @@ struct ObPlanCacheCtx {
         must_be_positive_index_(),
         multi_stmt_fp_results_(allocator),
         handle_id_(MAX_HANDLE),
-      is_remote_executor_(false)
+        is_remote_executor_(false)
   {
     bl_key_.tenant_id_ = tenant_id;
     fp_result_.pc_key_.is_ps_mode_ = is_ps_mode_;
