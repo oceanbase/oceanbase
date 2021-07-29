@@ -52,17 +52,11 @@ int ObExprLastTraceId::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
       const int64_t buf_len = 128;
       char* buf = static_cast<char*>(expr_ctx.calc_buf_->alloc(buf_len));
       int64_t pos = 0;
-      ObAddr server;
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_ENG_LOG(ERROR, "fail to alloc memory", K(ret), K(buf));
-      } else if (OB_FAIL(trace_id.get_server_addr(server))) {
-        SQL_ENG_LOG(WARN, "fail to get server addr", K(ret));
-      } else if (OB_FAIL(server.ip_port_to_string(buf, buf_len))) {
-        SQL_ENG_LOG(WARN, "fail to print server ip", K(ret));
       } else {
-        pos += strlen(buf);
-        BUF_PRINTF(", TraceId: " TRACE_ID_FORMAT, trace_id.get()[0], trace_id.get()[1]);
+        BUF_PRINTF("%s", to_cstring(trace_id));
         result.set_varchar(ObString(strlen(buf), buf));
         result.set_collation(result_type_);
       }
@@ -91,19 +85,10 @@ int ObExprLastTraceId::eval_last_trace_id(const ObExpr& expr, ObEvalCtx& ctx, Ob
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "buff is null", K(ret));
       } else {
-        ObAddr server;
-        if (OB_FAIL(trace_id.get_server_addr(server))) {
-          SQL_ENG_LOG(WARN, "fail to get server addr", K(ret));
-        } else if (OB_FAIL(server.ip_port_to_string(buf, MAX_BUF_LEN))) {
-          SQL_ENG_LOG(WARN, "fail to print server ip", K(ret));
+        if (OB_FAIL(databuff_printf(buf, MAX_BUF_LEN, pos, "%s", to_cstring(trace_id)))) {
+          SQL_ENG_LOG(WARN, "fail to databuff_printf", K(ret));
         } else {
-          pos += strlen(buf);
-          if (OB_FAIL(databuff_printf(
-                  buf, MAX_BUF_LEN, pos, ", TraceId: " TRACE_ID_FORMAT, trace_id.get()[0], trace_id.get()[1]))) {
-            SQL_ENG_LOG(WARN, "fail to databuff_printf", K(ret));
-          } else {
-            expr_datum.set_string(buf, pos);
-          }
+          expr_datum.set_string(buf, pos);
         }
       }
     }

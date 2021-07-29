@@ -132,21 +132,8 @@ int ObPxMultiPartUpdate::inner_open(ObExecContext& ctx) const
     LOG_WARN("table or row desc is invalid", K(ret), K_(table_desc), K_(row_desc));
   } else if (OB_FAIL(op_ctx->data_driver_.init(ctx.get_allocator(), table_desc_, this, this))) {
     LOG_WARN("fail init data driver", K(ret));
-  } else if (FALSE_IT(op_ctx->row_iter_wrapper_.set_old_projector(old_projector_, old_projector_size_))) {
-    LOG_WARN("fail set old projector for row_iter", K(ret));
-  } else if (FALSE_IT(op_ctx->row_iter_wrapper_.set_updated_projector(updated_projector_, updated_projector_size_))) {
-    LOG_WARN("fail set projector for row_iter", K(ret));
-  } else if (FALSE_IT(op_ctx->row_iter_wrapper_.set_dml_row_checker(*this))) {
-    // nop
   }
   LOG_TRACE("multi-part update open", K_(index_tid));
-  return ret;
-}
-
-int ObPxMultiPartUpdate::on_process_new_row(ObExecContext& ctx, const common::ObNewRow& new_row) const
-{
-  int ret = OB_SUCCESS;
-  OZ(check_row_null(ctx, new_row, column_infos_), new_row);
   return ret;
 }
 
@@ -198,6 +185,9 @@ int ObPxMultiPartUpdate::init_op_ctx(ObExecContext& ctx) const
   OZ(CREATE_PHY_OPERATOR_CTX(ObPxMultiPartUpdateCtx, ctx, get_id(), get_type(), op_ctx), get_type());
   CK(OB_NOT_NULL(op_ctx));
   OZ(init_cur_row(*op_ctx, true));
+  OZ(op_ctx->alloc_row_cells(old_projector_size_, op_ctx->old_row_));
+  OZ(op_ctx->alloc_row_cells(updated_projector_size_, op_ctx->new_row_));
+
   return ret;
 }
 
@@ -242,50 +232,62 @@ int ObPxMultiPartUpdate::read_row(ObExecContext& ctx, const ObNewRow*& row, int6
   return ret;
 }
 
-int ObPxMultiPartUpdate::ObPDMLRowIteratorWrapper::init(ObPDMLRowIterator& iter)
-{
-  int ret = OB_SUCCESS;
-  iter_ = &iter;
-  if (OB_FAIL(op_ctx_.alloc_row_cells(old_projector_size_, old_row_))) {
-    LOG_WARN("fail to create old project row", K(ret), K(old_projector_size_));
-  } else if (OB_FAIL(op_ctx_.alloc_row_cells(updated_projector_size_, new_row_))) {
-    LOG_WARN("fail to create new project row", K(ret), K(updated_projector_size_));
-  }
-  return ret;
-}
-
 int ObPxMultiPartUpdate::ObPDMLRowIteratorWrapper::get_next_row(common::ObNewRow*& row)
 {
   int ret = OB_SUCCESS;
   if (has_got_old_row_) {
-    LOG_DEBUG("get new row", K_(new_row));
-    row = &new_row_;
+    row = &op_ctx_.new_row_;
     has_got_old_row_ = false;
-    OB_ASSERT(row_checker_);
-    if (OB_FAIL(row_checker_->on_process_new_row(op_ctx_.exec_ctx_, new_row_))) {
-      LOG_WARN("fail process new row", K(ret));
-    }
   } else {
     ObNewRow* full_row = nullptr;
-    if (OB_ISNULL(iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(iter_->get_next_row(full_row))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("fail get next row from child", K(ret));
+    bool is_updated = false;
+    do {
+      if (OB_FAIL(iter_.get_next_row(full_row))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail get next row from child", K(ret));
+        }
+      } else if (OB_FAIL(op_.on_process_row(op_ctx_.exec_ctx_,
+                     op_ctx_,
+                     pkey_,
+                     dml_param_,
+                     *full_row,
+                     op_ctx_.old_row_,
+                     op_ctx_.new_row_,
+                     is_updated))) {
+        LOG_WARN("fail check updated value", K(ret), K_(op_ctx_.old_row), K_(op_ctx_.new_row));
+      } else if (is_updated) {
+        row = &op_ctx_.old_row_;
+        has_got_old_row_ = true;
+        LOG_DEBUG("read update row", K(*full_row), K_(op_ctx_.old_row), K_(op_ctx_.new_row));
       }
-    } else if (OB_FAIL(project_old_and_new_row(*full_row, old_row_, new_row_))) {
-      LOG_WARN("fail project new old row", K(*full_row), K(ret));
-    } else {
-      row = &old_row_;
-      has_got_old_row_ = true;
-      LOG_TRACE("read update row", K(*full_row), K_(old_row), K_(new_row));
-    }
+    } while (!is_updated && OB_SUCC(ret));
   }
   return ret;
 }
 
-int ObPxMultiPartUpdate::ObPDMLRowIteratorWrapper::project_old_and_new_row(
-    const ObNewRow& full_row, ObNewRow& old_row, ObNewRow& new_row) const
+int ObPxMultiPartUpdate::on_process_row(ObExecContext& ctx, ObPxMultiPartUpdateCtx& op_ctx, ObPartitionKey& pkey,
+    storage::ObDMLBaseParam& dml_param, const common::ObNewRow& full_row, common::ObNewRow& old_row,
+    common::ObNewRow& new_row, bool& is_updated) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(project_old_and_new_row(full_row, old_row, new_row))) {
+    LOG_WARN("fail project new old row", K(full_row), K(ret));
+  } else if (OB_FAIL(check_updated_value(op_ctx, *this, old_row, new_row, is_updated))) {
+    LOG_WARN("fail check updated value", K(ret));
+  } else if (!is_updated) {
+    // should lock the unchanged row to match the trans model
+    if (OB_FAIL(lock_row(ctx, old_row, dml_param, pkey))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("fail lock row", K(old_row), K(pkey), K(ret));
+      }
+    }
+  } else {
+    OZ(check_row_null(ctx, new_row, column_infos_), new_row);
+  }
+  return ret;
+}
+
+int ObPxMultiPartUpdate::project_old_and_new_row(const ObNewRow& full_row, ObNewRow& old_row, ObNewRow& new_row) const
 {
   int ret = OB_SUCCESS;
   if (new_row.count_ != updated_projector_size_ || old_row.count_ != old_projector_size_) {
@@ -306,6 +308,7 @@ int ObPxMultiPartUpdate::ObPDMLRowIteratorWrapper::project_old_and_new_row(
   }
   return ret;
 }
+
 int ObPxMultiPartUpdate::write_rows(ObExecContext& ctx, ObPartitionKey& pkey, ObPDMLRowIterator& dml_row_iter) const
 {
   int ret = OB_SUCCESS;
@@ -333,16 +336,16 @@ int ObPxMultiPartUpdate::write_rows(ObExecContext& ctx, ObPartitionKey& pkey, Ob
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(fill_dml_base_param(index_tid_, *my_session, *my_phy_plan_, *plan_ctx, dml_param))) {
     LOG_WARN("fail fill dml base param", K(ret));
-  } else if (OB_FAIL(op_ctx->row_iter_wrapper_.init(dml_row_iter))) {
-    LOG_WARN("fail init row iter wrapper", K(ret));
   } else {
+    // dml_iter_wrapper can split one full row into old_row & new_row
+    ObPDMLRowIteratorWrapper row_iter_wrapper(*this, *op_ctx, pkey, dml_param, dml_row_iter);
     int64_t affected_rows = 0;
     if (OB_FAIL(ps->update_rows(my_session->get_trans_desc(),
             dml_param,
             pkey,
             column_ids_,
             updated_column_ids_,
-            &op_ctx->row_iter_wrapper_,
+            &row_iter_wrapper,
             affected_rows))) {
       LOG_WARN("fail write rows to storage layer", K(ret));
     } else {
@@ -415,4 +418,17 @@ void ObPxMultiPartUpdate::set_old_projector(int32_t* projector, int64_t projecto
 {
   old_projector_ = projector;
   old_projector_size_ = projector_size;
+}
+
+bool ObPxMultiPartUpdate::check_row_whether_changed(const ObNewRow& new_row) const
+{
+  bool bret = false;
+  if (updated_column_infos_.count() > 0 && new_row.is_valid()) {
+    int64_t projector_index = updated_column_infos_.at(0).projector_index_;
+    if (projector_index >= 0 && projector_index < new_row.get_count()) {
+      const ObObj& updated_value = new_row.get_cell(projector_index);
+      bret = !(updated_value.is_ext() && ObActionFlag::OP_LOCK_ROW == updated_value.get_ext());
+    }
+  }
+  return bret;
 }

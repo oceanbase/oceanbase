@@ -978,7 +978,7 @@ int ObParallelDfoScheduler::dispatch_sqc(
         LOG_WARN("fail to deal with init sqc error", K(exec_ctx), K(sqc), K(temp_ret));
       }
     } else {
-      LOG_WARN("fail to wait all async init sqc", K(ret), K(exec_ctx));
+      LOG_WARN("fail to wait all async init sqc", K(ret), K(dfo), K(exec_ctx));
     }
   } else {
     const ObArray<ObSqcAsyncCB*>& callbacks = proxy.get_callbacks();
@@ -1143,7 +1143,7 @@ int ObParallelDfoScheduler::try_schedule_next_dfo(ObExecContext& ctx) const
       ObDfo& parent = *dfos.at(1);
       LOG_TRACE("to schedule", K(parent), K(child));
       if (OB_FAIL(schedule_pair(ctx, child, parent))) {
-        LOG_WARN("fail schedule parent and child", K(ret));
+        LOG_WARN("fail schedule parent and child", K(ret), K(child), K(parent));
       }
     }
   }

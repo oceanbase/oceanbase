@@ -38,10 +38,7 @@ public:
   }
 };
 
-class ObPxMultiPartUpdate : public ObDMLDataReader,
-                            public ObDMLDataWriter,
-                            public ObTableModify,
-                            public ObDMLRowChecker {
+class ObPxMultiPartUpdate : public ObDMLDataReader, public ObDMLDataWriter, public ObTableModify {
   OB_UNIS_VERSION(1);
 
 public:
@@ -49,71 +46,71 @@ private:
   class ObPxMultiPartUpdateCtx;
   class ObPDMLRowIteratorWrapper : public common::ObNewRowIterator {
   public:
-    ObPDMLRowIteratorWrapper(ObPxMultiPartUpdateCtx& op_ctx)
-        : op_ctx_(op_ctx),
-          iter_(nullptr),
-          old_projector_(nullptr),
-          old_projector_size_(0),
-          updated_projector_(nullptr),
-          updated_projector_size_(0),
-          has_got_old_row_(false),
-          old_row_(),
-          new_row_()
+    ObPDMLRowIteratorWrapper(const ObPxMultiPartUpdate& op, ObPxMultiPartUpdateCtx& op_ctx,
+        common::ObPartitionKey& pkey, storage::ObDMLBaseParam& dml_param, ObPDMLRowIterator& iter)
+        : op_(op), op_ctx_(op_ctx), pkey_(pkey), dml_param_(dml_param), iter_(iter), has_got_old_row_(false)
     {}
     virtual ~ObPDMLRowIteratorWrapper() = default;
-
-    void set_updated_projector(int32_t* projector, int64_t projector_size)
-    {
-      updated_projector_ = projector;
-      updated_projector_size_ = projector_size;
-    }
-    void set_old_projector(int32_t* projector, int64_t projector_size)
-    {
-      old_projector_ = projector;
-      old_projector_size_ = projector_size;
-    }
-    void set_dml_row_checker(const ObDMLRowChecker& checker)
-    {
-      row_checker_ = &checker;
-    }
-    int init(ObPDMLRowIterator& iter);
     int get_next_row(common::ObNewRow*& row) override;
     void reset() override
     {}
 
   private:
-    int project_old_and_new_row(const ObNewRow& full_row, ObNewRow& old_row, ObNewRow& new_row) const;
-
   private:
+    const ObPxMultiPartUpdate& op_;
     ObPxMultiPartUpdateCtx& op_ctx_;
-    ObPDMLRowIterator* iter_;
-    int32_t* old_projector_;
-    int64_t old_projector_size_;
-    int32_t* updated_projector_;
-    int64_t updated_projector_size_;
-
+    common::ObPartitionKey& pkey_;
+    storage::ObDMLBaseParam& dml_param_;
+    ObPDMLRowIterator& iter_;
     // Update spit out the old line first, and then the new line.
     // Generate old rows and new rows at one time during implementation, and then
     // Cache the information of the new line and return to the next iteration
     bool has_got_old_row_;
-    common::ObNewRow old_row_;
-    common::ObNewRow new_row_;
-    const ObDMLRowChecker* row_checker_;
   };
 
   class ObPxMultiPartUpdateCtx : public ObTableModifyCtx {
   public:
     ObPxMultiPartUpdateCtx(ObExecContext& ctx)
-        : ObTableModifyCtx(ctx), data_driver_(op_monitor_info_), row_iter_wrapper_(*this)
+        : ObTableModifyCtx(ctx), found_rows_(0), changed_rows_(0), affected_rows_(0), data_driver_(op_monitor_info_)
     {}
     ~ObPxMultiPartUpdateCtx() = default;
     virtual void destroy()
     {
       ObTableModifyCtx::destroy();
     }
-    // ObBatchRowCache cache_;
+    void inc_affected_rows()
+    {
+      affected_rows_++;
+    }
+    void inc_found_rows()
+    {
+      found_rows_++;
+    }
+    void inc_changed_rows()
+    {
+      changed_rows_++;
+    }
+    int64_t get_affected_rows()
+    {
+      return affected_rows_;
+    }
+    int64_t get_found_rows()
+    {
+      return found_rows_;
+    }
+    int64_t get_changed_rows()
+    {
+      return changed_rows_;
+    }
+
+  public:
+    int64_t found_rows_;
+    int64_t changed_rows_;
+    int64_t affected_rows_;
+    storage::ObDMLBaseParam dml_param_;
     ObPDMLDataDriver data_driver_;
-    ObPDMLRowIteratorWrapper row_iter_wrapper_;
+    common::ObNewRow old_row_;
+    common::ObNewRow new_row_;
   };
 
 public:
@@ -157,11 +154,20 @@ public:
   {
     return table_desc_;
   }
+  const common::ObIArrayWrap<ColumnContent>& get_assign_columns() const
+  {
+    return updated_column_infos_;
+  }
+  bool check_row_whether_changed(const ObNewRow& new_row) const;
 
 private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
-  int on_process_new_row(ObExecContext& ctx, const common::ObNewRow& new_row) const;
+  int project_old_and_new_row(
+      const common::ObNewRow& full_row, common::ObNewRow& old_row, common::ObNewRow& new_row) const;
+  int on_process_row(ObExecContext& ctx, ObPxMultiPartUpdateCtx& op_ctx, common::ObPartitionKey& pkey,
+      storage::ObDMLBaseParam& dml_param, const common::ObNewRow& full_row, common::ObNewRow& old_row,
+      common::ObNewRow& new_row, bool& need_update) const;
 
 private:
   /* functions */

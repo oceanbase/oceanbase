@@ -894,6 +894,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCharset);
   REG_OP_ORCL(ObExprCollation);
   REG_OP_ORCL(ObExprCoercibility);
+  REG_OP_ORCL(ObExprLastTraceId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

@@ -56,6 +56,7 @@ int IndexDMLInfo::deep_copy(ObRawExprFactory& expr_factory, const IndexDMLInfo& 
   rowkey_cnt_ = other.rowkey_cnt_;
   need_filter_null_ = other.need_filter_null_;
   distinct_algo_ = other.distinct_algo_;
+  index_type_ = other.index_type_;
   assignments_.reset();
   if (OB_FAIL(column_exprs_.assign(other.column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));

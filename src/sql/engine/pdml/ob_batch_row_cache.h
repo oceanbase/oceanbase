@@ -96,12 +96,6 @@ public:
   virtual int write_rows(ObExecContext& ctx, common::ObPartitionKey& pkey, ObPDMLRowIterator& iterator) const = 0;
 };
 
-class ObDMLRowChecker {
-public:
-  // check new row, do null check and constaint check
-  virtual int on_process_new_row(ObExecContext& ctx, const common::ObNewRow& new_row) const = 0;
-};
-
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* __OB_SQL_PDML_BATCH_ROW_CACHE_H__ */

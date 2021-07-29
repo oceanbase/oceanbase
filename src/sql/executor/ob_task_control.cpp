@@ -259,7 +259,7 @@ int ObTaskControl::update_task_state(ObExecContext& ctx, ObTaskEvent& evt)
           task_info->set_state(OB_TASK_STATE_FAILED);
           ret = err_code;
           LOG_WARN("task is not successfully executed", K(ret), K(evt));
-          if (is_data_not_readable_err(err_code)) {
+          if (is_data_not_readable_err(err_code) || OB_RPC_CONNECT_ERROR == ret) {
             int add_ret = OB_SUCCESS;
             if (OB_UNLIKELY(
                     OB_SUCCESS != (add_ret = ctx.get_scheduler_thread_ctx()

@@ -170,7 +170,7 @@ protected:
       ObPhyOperator*& subplan_root, ObTableDMLInfo& table_dml_info);
   int convert_delete(ObLogDelete& op, const PhyOpsDesc& child_ops, PhyOpsDesc& out_ops);
   int handle_pdml_shadow_pk(const common::ObIArray<ObColumnRefRawExpr*>& index_dml_column_exprs, RowDesc* out_row_desc,
-      ObPhyOperator* phy_op);
+      RowDesc* extra_row_desc, ObPhyOperator* phy_op);
   int convert_pdml_delete(ObLogDelete& op, const PhyOpsDesc& child_ops, PhyOpsDesc& out_ops);
   int get_pdml_partition_id_column_idx(const RowDesc& row_desc, int64_t& idx);
   int convert_update(ObLogUpdate& op, const PhyOpsDesc& child_ops, PhyOpsDesc& out_ops);

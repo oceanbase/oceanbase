@@ -1568,6 +1568,7 @@ int ObPartitionStorage::check_other_columns_in_column_ids(const ObRelativeTables
       STORAGE_LOG(WARN,
           "invalid column_ids",
           K(ret),
+          K(relative_tables.data_table_),
           "column_ids",
           column_ids,
           "column_ids length",

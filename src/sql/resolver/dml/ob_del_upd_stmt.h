@@ -29,7 +29,8 @@ public:
         part_cnt_(common::OB_INVALID_ID),
         all_part_num_(0),
         need_filter_null_(false),
-        distinct_algo_(T_DISTINCT_NONE)
+        distinct_algo_(T_DISTINCT_NONE),
+        index_type_(share::schema::INDEX_TYPE_IS_NOT)
   {}
   inline void reset()
   {
@@ -47,6 +48,7 @@ public:
     assignments_.reset();
     need_filter_null_ = false;
     distinct_algo_ = T_DISTINCT_NONE;
+    index_type_ = share::schema::INDEX_TYPE_IS_NOT;
     calc_part_id_exprs_.reset();
   }
   int64_t to_explain_string(char* buf, int64_t buf_len, ExplainType type) const;
@@ -79,6 +81,7 @@ public:
     }
     seed = do_hash(need_filter_null_, seed);
     seed = do_hash(distinct_algo_, seed);
+    seed = do_hash(index_type_, seed);
     for (int64_t i = 0; i < primary_key_ids_.count(); ++i) {
       seed = do_hash(primary_key_ids_.at(i), seed);
     }
@@ -120,6 +123,7 @@ public:
   ObAssignments assignments_;
   bool need_filter_null_;
   DistinctType distinct_algo_;
+  share::schema::ObIndexType index_type_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> calc_part_id_exprs_;
 
   common::ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> primary_key_ids_;

@@ -3836,8 +3836,8 @@ int ObCodeGeneratorImpl::convert_subplan_filter(
   return ret;
 }
 
-int ObCodeGeneratorImpl::handle_pdml_shadow_pk(
-    const common::ObIArray<ObColumnRefRawExpr*>& index_dml_column_exprs, RowDesc* out_row_desc, ObPhyOperator* phy_op)
+int ObCodeGeneratorImpl::handle_pdml_shadow_pk(const common::ObIArray<ObColumnRefRawExpr*>& index_dml_column_exprs,
+    RowDesc* out_row_desc, RowDesc* extra_row_desc, ObPhyOperator* phy_op)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> calc_exprs;
@@ -3852,8 +3852,8 @@ int ObCodeGeneratorImpl::handle_pdml_shadow_pk(
     }
   }
   if (OB_SUCC(ret) && calc_exprs.count() > 0) {
-    if (OB_FAIL(add_compute(calc_exprs, *out_row_desc, out_row_desc, *phy_op))) {
-      LOG_WARN("failed ato add compute for calc exprs", K(ret));
+    if (OB_FAIL(add_compute(calc_exprs, *out_row_desc, extra_row_desc, *phy_op))) {
+      LOG_WARN("failed to add compute for calc exprs", K(ret), K(calc_exprs));
     } else {
       LOG_DEBUG("add inner compute success", K(calc_exprs));
     }
@@ -4104,7 +4104,7 @@ int ObCodeGeneratorImpl::convert_pdml_delete(ObLogDelete& op, const PhyOpsDesc& 
         pdml_delete->get_dml_row_desc().set_part_id_index(partition_expr_idx);
       }
       if (OB_SUCC(ret) && op.is_index_maintenance()) {
-        if (OB_FAIL(handle_pdml_shadow_pk(index_dml_info.column_exprs_, out_row_desc, pdml_delete))) {
+        if (OB_FAIL(handle_pdml_shadow_pk(index_dml_info.column_exprs_, out_row_desc, out_row_desc, pdml_delete))) {
           LOG_WARN("failed to handle pdml shadow pk", K(ret), K(index_dml_info.column_exprs_));
         }
       }
@@ -4449,7 +4449,7 @@ int ObCodeGeneratorImpl::convert_pdml_update(ObLogUpdate& op, const PhyOpsDesc& 
       LOG_WARN("fail to add column id to table update operator", K(ret));
     }
     if (OB_SUCC(ret) && op.is_index_maintenance()) {
-      if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, phy_op))) {
+      if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, out_row_desc, phy_op))) {
         LOG_WARN("failed to handle pdml shadow pk", K(ret), K(dml_index_info.column_exprs_));
       }
     }
@@ -5857,7 +5857,14 @@ int ObCodeGeneratorImpl::convert_pdml_insert(ObLogInsert& op, const PhyOpsDesc& 
     }
 
     if (OB_SUCC(ret) && op.is_index_maintenance()) {
-      if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, phy_op))) {
+      RowDesc extra_row_desc;
+      if (OB_FAIL(extra_row_desc.init())) {
+        LOG_WARN("failed to init extra row desc", K(ret));
+      } else if (OB_FAIL(generate_insert_new_row_desc(&dml_index_info.column_exprs_,
+                     dml_index_info.column_convert_exprs_,
+                     *out_row_desc,
+                     extra_row_desc))) {
+      } else if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, &extra_row_desc, phy_op))) {
         LOG_WARN("failed to handle pdml shadow pk", K(ret), K(dml_index_info.column_exprs_));
       }
     }

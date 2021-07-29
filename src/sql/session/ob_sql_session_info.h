@@ -475,6 +475,12 @@ public:
   {
     return session_type_;
   }
+  // sql from obclient, proxy, PL are all marked as user_session
+  // NOTE: for sql from PL, is_inner() = true, is_user_session() = true
+  inline bool is_user_session() const
+  {
+    return USER_SESSION == session_type_;
+  }
   void set_early_lock_release(bool enable);
   bool get_early_lock_release() const
   {

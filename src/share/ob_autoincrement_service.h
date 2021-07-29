@@ -96,7 +96,12 @@ struct CacheHandle {
 };
 
 struct TableNode : public common::LinkHashValue<AutoincKey> {
-  TableNode() : table_id_(0), next_value_(0), local_sync_(0), last_refresh_ts_(0), prefetching_(false)
+  TableNode()
+      : table_id_(0),
+        next_value_(0),
+        local_sync_(0),
+        last_refresh_ts_(common::ObTimeUtility::current_time()),
+        curr_node_state_is_pending_(false)
   {}
   virtual ~TableNode()
   {
@@ -104,8 +109,7 @@ struct TableNode : public common::LinkHashValue<AutoincKey> {
   }
   int init(int64_t autoinc_table_part_num);
 
-  TO_STRING_KV(KT_(table_id), K_(next_value), K_(local_sync), K_(last_refresh_ts), K_(curr_node), K_(prefetch_node),
-      K_(prefetching));
+  TO_STRING_KV(KT_(table_id), K_(next_value), K_(local_sync), K_(last_refresh_ts), K_(curr_node), K_(prefetch_node));
 
   int alloc_handle(common::ObSmallAllocator& allocator, const uint64_t offset, const uint64_t increment,
       const uint64_t desired_count, const uint64_t max_value, CacheHandle*& handle);
@@ -126,14 +130,19 @@ struct TableNode : public common::LinkHashValue<AutoincKey> {
   }
   lib::ObMutex sync_mutex_;
   lib::ObMutex alloc_mutex_;
+  lib::ObMutex rpc_mutex_;
   uint64_t table_id_;
   uint64_t next_value_;
   uint64_t local_sync_;
   int64_t last_refresh_ts_;
   CacheNode curr_node_;
   CacheNode prefetch_node_;
-  bool prefetching_;
   common::hash::ObHashMap<int64_t, int64_t> partition_leader_epoch_map_;
+  // we are not sure if curr_node is avaliable.
+  // it will become avaliable again after fetch a new node
+  // and combine them together.
+  // ref: https://yuque.antfin-inc.com/xiaochu.yh/doc/eqnlv0
+  bool curr_node_state_is_pending_;
 };
 
 // atomic update if greater than origin value
@@ -169,7 +178,6 @@ public:
   int get_handle(AutoincParam& param, CacheHandle*& handle);
   void release_handle(CacheHandle*& handle);
 
-  int sync_insert_value(AutoincParam& param, CacheHandle*& cache_handle, const uint64_t value_to_sync);
   int sync_insert_value_global(AutoincParam& param);
 
   int sync_insert_value_local(AutoincParam& param);
@@ -203,6 +211,7 @@ private:
       const bool sync_presync = false, const uint64_t* sync_value = NULL);
   int get_server_set(
       const uint64_t table_id, common::hash::ObHashSet<common::ObAddr>& server_set, const bool get_follower = false);
+  int sync_insert_value(AutoincParam& param, CacheHandle*& cache_handle, const uint64_t value_to_sync);
   // for prefetch or presync
   int set_pre_op_timeout(common::ObTimeoutCtx& ctx);
   template <typename SchemaType>

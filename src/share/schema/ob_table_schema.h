@@ -613,6 +613,7 @@ public:
   inline bool is_global_local_index_table() const;
   inline bool is_global_normal_index_table() const;
   inline bool is_global_unique_index_table() const;
+  inline static bool is_global_unique_index_table(const ObIndexType index_type);
   inline bool is_local_unique_index_table() const;
   inline bool is_domain_index() const;
   inline static bool is_domain_index(ObIndexType index_type);
@@ -1744,6 +1745,11 @@ inline bool ObSimpleTableSchemaV2::is_global_normal_index_table() const
 inline bool ObSimpleTableSchemaV2::is_global_unique_index_table() const
 {
   return INDEX_TYPE_UNIQUE_GLOBAL == index_type_;
+}
+
+inline bool ObSimpleTableSchemaV2::is_global_unique_index_table(const ObIndexType index_type)
+{
+  return INDEX_TYPE_UNIQUE_GLOBAL == index_type;
 }
 
 inline bool ObSimpleTableSchemaV2::is_local_unique_index_table() const

@@ -229,6 +229,10 @@ int ObRepartSliceIdxCalc::get_previous_row_partition_id(ObObj& partition_id)
 int ObSlaveMapRepartIdxCalcBase::init()
 {
   int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObRepartSliceIdxCalc::init())) {
+    LOG_WARN("fail init base", K(ret));
+  }
   // In the case of pkey random, a partition can be processed by all workers on the SQC where it is located,
   // So one partition_id may correspond to multiple task idx,
   // Form the mapping relationship between partition_id -> task_idx_list
@@ -239,8 +243,10 @@ int ObSlaveMapRepartIdxCalcBase::init()
   // p1 : [task1,task2,task3]
   // p2 : [task4,task5]
   const ObPxPartChMapArray& part_ch_array = part_ch_info_.part_ch_array_;
-  if (OB_FAIL(part_to_task_array_map_.create(max(1, part_ch_array.count()), ObModIds::OB_SQL_PX))) {
-    LOG_WARN("fail create part to task array map", "count", part_ch_array.count(), K(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(part_to_task_array_map_.create(max(1, part_ch_array.count()), ObModIds::OB_SQL_PX))) {
+      LOG_WARN("fail create part to task array map", "count", part_ch_array.count(), K(ret));
+    }
   }
 
   ARRAY_FOREACH_X(part_ch_array, idx, cnt, OB_SUCC(ret))
@@ -440,18 +446,26 @@ int ObRepartSliceIdxCalc::build_repart_ch_map(ObPxPartChMap& affinity_map)
     LOG_WARN("fail create hashmap", "count", part_ch_array.count(), K(ret));
   }
 
+
+  int64_t partition_id = common::OB_INVALID_INDEX_INT64;
   ARRAY_FOREACH_X(part_ch_array, idx, cnt, OB_SUCC(ret))
   {
     LOG_DEBUG("map build", K(idx), K(cnt), "key", part_ch_array.at(idx).first_, "val", part_ch_array.at(idx).second_);
-    if (OB_FAIL(affinity_map.set_refactored(part_ch_array.at(idx).first_, part_ch_array.at(idx).second_))) {
-      LOG_WARN("fail add item to hash map",
-          K(idx),
-          K(cnt),
-          "key",
-          part_ch_array.at(idx).first_,
-          "val",
-          part_ch_array.at(idx).second_,
-          K(ret));
+    if (partition_id != part_ch_array.at(idx).first_) {
+      partition_id = part_ch_array.at(idx).first_;
+      if (OB_FAIL(affinity_map.set_refactored(part_ch_array.at(idx).first_, part_ch_array.at(idx).second_))) {
+        LOG_WARN("fail add item to hash map",
+            K(idx),
+            K(cnt),
+            "key",
+            part_ch_array.at(idx).first_,
+            "val",
+            part_ch_array.at(idx).second_,
+            K(ret));
+      }
+    } else {
+      // skip, same partition id may take more than one entry in part_ch_array.
+      // (e.g slave mapping pkey hash)
     }
   }
   return ret;
@@ -809,7 +823,7 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_idx(const common::ObNewRow& row, int64_
     LOG_WARN("the size of slave map part task channel map is zero", K(ret));
   } else if (OB_FAIL(get_multi_hash_value(row, hash_val))) {
     LOG_WARN("failed to get hash values", K(ret));
-  } else if (OB_FAIL(get_partition_id(row, partition_id))) {
+  } else if (OB_FAIL(ObRepartSliceIdxCalc::get_partition_id(row, partition_id))) {
     LOG_WARN("failed to get_partition_id", K(ret));
   } else if (OB_INVALID_INDEX == partition_id) {
     slice_idx = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
@@ -817,7 +831,12 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_idx(const common::ObNewRow& row, int64_
     ObPxPartChMapItem item;
     const ObPxPartChMapArray& part_ch_array = part_ch_info_.part_ch_array_;
     if (OB_FAIL(affi_hash_map_.get_refactored(partition_id, item))) {
-      LOG_WARN("failed to get item", K(ret));
+      if (OB_HASH_NOT_EXIST == ret) {
+        LOG_WARN("can't get the right partition", K(ret), K(partition_id), K(slice_idx));
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      } else {
+        LOG_WARN("failed to get item", K(ret));
+      }
     } else {
       int64_t offset = hash_val % (item.second_ - item.first_);
       slice_idx = part_ch_array.at(item.first_ + offset).second_;

@@ -7057,7 +7057,7 @@ int ObLogPlan::calc_plan_resource()
     if (OB_FAIL(analyzer.analyze(*plan_root, max_parallel_thread_group_count))) {
       LOG_WARN("fail analyze px stmt thread group reservation count", K(ret));
     } else {
-      LOG_INFO("max parallel thread group count", K(max_parallel_thread_group_count));
+      LOG_TRACE("max parallel thread group count", K(max_parallel_thread_group_count));
       set_expected_worker_count(max_parallel_thread_group_count);
     }
   }

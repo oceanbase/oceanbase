@@ -140,6 +140,7 @@ int ObTableAssignment::deep_copy(ObRawExprFactory& expr_factory, const ObTableAs
   int ret = OB_SUCCESS;
   table_id_ = other.table_id_;
   is_update_part_key_ = other.is_update_part_key_;
+  is_update_unique_key_ = other.is_update_unique_key_;
   if (OB_FAIL(assignments_.prepare_allocate(other.assignments_.count()))) {
     LOG_WARN("failed to prepare allocate array", K(ret));
   }
@@ -159,6 +160,7 @@ int ObTableAssignment::assign(const ObTableAssignment& other)
   } else {
     table_id_ = other.table_id_;
     is_update_part_key_ = other.is_update_part_key_;
+    is_update_unique_key_ = other.is_update_unique_key_;
   }
   return ret;
 }

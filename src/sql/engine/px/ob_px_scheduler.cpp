@@ -232,7 +232,6 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext& ctx, const ObPxFinishSqcResult
   ObDfo* edge = NULL;
   ObPxSqcMeta* sqc = NULL;
   ObSQLSessionInfo* session = NULL;
-
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr session", K(ret));
@@ -468,8 +467,26 @@ int ObPxTerminateMsgProc::on_sqc_finish_msg(ObExecContext& ctx, const ObPxFinish
   LOG_TRACE("terminate msg : proc on sqc finish msg", K(pkt.rc_));
   ObDfo* edge = NULL;
   ObPxSqcMeta* sqc = NULL;
-  UNUSED(ctx);
-  if (OB_FAIL(coord_info_.dfo_mgr_.find_dfo_edge(pkt.dfo_id_, edge))) {
+  ObSQLSessionInfo* session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL ptr session", K(ret));
+  } else if (OB_FAIL(session->get_trans_result().merge_result(pkt.get_trans_result()))) {
+    LOG_WARN("fail merge result",
+        K(ret),
+        "session_trans_result",
+        session->get_trans_result(),
+        "packet_trans_result",
+        pkt.get_trans_result());
+  } else {
+    LOG_DEBUG("on_sqc_finish_msg trans_result",
+        "session_trans_result",
+        session->get_trans_result(),
+        "packet_trans_result",
+        pkt.get_trans_result());
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(coord_info_.dfo_mgr_.find_dfo_edge(pkt.dfo_id_, edge))) {
     LOG_WARN("fail find dfo", K(pkt), K(ret));
   } else if (OB_FAIL(edge->get_sqc(pkt.sqc_id_, sqc))) {
     LOG_WARN("fail find sqc", K(pkt), K(ret));
