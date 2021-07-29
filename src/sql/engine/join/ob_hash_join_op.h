@@ -307,13 +307,11 @@ private:
 
     void set_part_count(int64_t part_shift, int64_t level1_part_count, int64_t level2_part_count)
     {
-      OB_ASSERT(0 != level1_part_count);
-      OB_ASSERT(0 != level2_part_count);
       part_shift_ = part_shift;
       level_one_part_count_ = level1_part_count;
       level_two_part_count_ = level2_part_count;
-      level1_bit_ = __builtin_ctz(level1_part_count);
-      level2_bit_ = __builtin_ctz(level2_part_count);
+      level1_bit_ = (0 == level1_part_count) ? 0 : __builtin_ctz(level1_part_count);
+      level2_bit_ = (0 == level2_part_count) ? 0 : __builtin_ctz(level2_part_count);
     }
     bool is_valid()
     {

@@ -120,7 +120,13 @@ public:
   template <typename T = ObChunkDatumStore::StoredRow>
   class LastStoredRow {
   public:
-    LastStoredRow(ObIAllocator& alloc) : store_row_(nullptr), alloc_(alloc), max_size_(0), reuse_(false)
+    LastStoredRow(ObIAllocator& alloc)
+        : store_row_(nullptr),
+          alloc_(alloc),
+          max_size_(0),
+          reuse_(false),
+          pre_alloc_row1_(nullptr),
+          pre_alloc_row2_(nullptr)
     {}
     ~LastStoredRow()
     {}
@@ -141,17 +147,31 @@ public:
         int64_t head_size = sizeof(T);
         reuse = OB_ISNULL(store_row_) ? false : reuse && (max_size_ >= row_size + head_size + extra_size);
         if (reuse && OB_NOT_NULL(store_row_)) {
+          // switch buffer for write
+          store_row_ = (store_row_ == pre_alloc_row1_ ? pre_alloc_row2_ : pre_alloc_row1_);
           buf = reinterpret_cast<char*>(store_row_);
           new_row = store_row_;
           buffer_len = max_size_;
         } else {
+          // alloc 2 buffer with same length
           buffer_len = (!reuse_ ? row_size : row_size * 2) + head_size + extra_size;
-          if (OB_ISNULL(buf = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
+          char* buf1 = nullptr;
+          char* buf2 = nullptr;
+          if (OB_ISNULL(buf1 = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
-          } else if (OB_ISNULL(new_row = new (buf) T())) {
+          } else if (OB_ISNULL(buf2 = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
+          } else if (OB_ISNULL(pre_alloc_row1_ = new (buf1) T())) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
+          } else if (OB_ISNULL(pre_alloc_row2_ = new (buf2) T())) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
+          } else {
+            buf = buf1;
+            new_row = pre_alloc_row1_;
           }
         }
         if (OB_SUCC(ret)) {
@@ -221,6 +241,11 @@ public:
     ObIAllocator& alloc_;
     int64_t max_size_;
     bool reuse_;
+
+  private:
+    // To avoid writing memory overwrite, alloc 2 row for alternate writing
+    T* pre_alloc_row1_;
+    T* pre_alloc_row2_;
   };
 
   template <typename T = ObChunkDatumStore::StoredRow>
