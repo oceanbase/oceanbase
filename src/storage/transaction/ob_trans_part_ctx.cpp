@@ -2861,12 +2861,14 @@ int ObPartTransCtx::check_schema_version_elapsed(const int64_t schema_version, c
     } else if (OB_UNLIKELY(schema_version <= 0) || OB_UNLIKELY(refreshed_schema_ts < 0)) {
       TRANS_LOG(WARN, "invalid argument", K(schema_version), "context", *this);
       ret = OB_INVALID_ARGUMENT;
+    } else if (is_exiting_) {
+      // do nothing
     } else if (for_replay_) {
       ret = OB_NOT_MASTER;
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         TRANS_LOG(WARN, "current participant not master, need retry", K(ret), K(*this));
       }
-    } else if (is_exiting_ || is_readonly_) {
+    } else if (is_readonly_) {
       // do nothing
     } else if (ctx_create_time_ <= refreshed_schema_ts) {
       ret = OB_EAGAIN;

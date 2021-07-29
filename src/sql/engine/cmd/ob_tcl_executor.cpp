@@ -41,14 +41,15 @@ int ObEndTransExecutor::end_trans(ObExecContext& ctx, ObEndTransStmt& stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session ptr is null", K(ret));
   } else if (my_session->is_in_transaction() && my_session->get_trans_desc().is_xa_local_trans()) {
-    transaction::ObXATransID xid = my_session->get_trans_desc().get_xid();
+    const transaction::ObTransDesc& trans_desc = my_session->get_trans_desc();
+    transaction::ObXATransID xid = trans_desc.get_xid();
     if (stmt.get_is_rollback()) {
       // Rollback can be executed in the xa transaction,
       // the role is to roll back all modifications, but does not end the xa transaction
     } else {
       // commit is prohibited in xa transaction
       ret = OB_TRANS_XA_ERR_COMMIT;
-      LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid));
+      LOG_WARN("COMMIT is not allowed in a xa trans", K(ret), K(xid), K(trans_desc));
     }
     ctx.set_need_disconnect(false);
   } else if (OB_FAIL(ObSqlTransControl::explicit_end_trans(ctx, stmt.get_is_rollback()))) {

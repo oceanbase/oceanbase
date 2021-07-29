@@ -562,7 +562,9 @@ int ObPartitionLoopWorker::set_replay_checkpoint(const int64_t checkpoint)
     const int64_t last_checkpoint = ATOMIC_LOAD(&last_checkpoint_);
     const int64_t NOTICE_THRESHOLD = 3 * 1000 * 1000;
     if (last_checkpoint > 0 && checkpoint - last_checkpoint > NOTICE_THRESHOLD) {
-      STORAGE_LOG(INFO, "replay checkpoint updated", K_(pkey), K(checkpoint), K(*this));
+      if (EXECUTE_COUNT_PER_SEC(10)) {
+        STORAGE_LOG(INFO, "replay checkpoint updated", K_(pkey), K(checkpoint), K(*this));
+      }
     }
     inc_update(&last_checkpoint_, checkpoint);
   } else {

@@ -239,7 +239,7 @@ int ObXAEndTransP::process()
             break;
           }
         }
-        if (is_rollback) {
+        if (is_rollback && is_terminated) {
           // one phase rollback or terminate
           if (OB_FAIL(sche_ctx->xa_rollback_session_terminate())) {
             TRANS_LOG(WARN, "rollback xa trans failed", K(ret), K(xid), K(trans_id), K(is_rollback));

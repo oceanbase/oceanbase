@@ -2139,6 +2139,7 @@ int ObPartitionGroup::prepare_splitting(
 int ObPartitionGroup::check_cur_partition_split(bool& is_split_partition)
 {
   int ret = OB_SUCCESS;
+  const bool split_kill_trans = true;
   //  SpinWLockGuard guard(split_lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2149,7 +2150,7 @@ int ObPartitionGroup::check_cur_partition_split(bool& is_split_partition)
   } else {
     is_split_partition = false;
   }
-  if (!(GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_3100)) {
+  if (split_kill_trans || !(GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_3100)) {
     is_split_partition = false;
   }
 

@@ -186,7 +186,7 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(trans_id), "ctx", OB_P(ctx_base));
       tmp_ret = common::OB_INVALID_ARGUMENT;
     } else {
-      if (OB_FAIL(ctx_base->kill(arg_, cb_array_))) {
+      if (OB_SUCC(ctx_base->kill(arg_, cb_array_))) {
         TRANS_LOG(INFO, "kill transaction success", K(trans_id), K_(arg));
       } else if (common::OB_TRANS_CANNOT_BE_KILLED == ret) {
         TRANS_LOG(INFO, "transaction can not be killed", K(trans_id), "context", *ctx_base);
@@ -199,7 +199,7 @@ public:
         if (OB_SUCCESS != (tmp_ret = ctx_base->reset_trans_audit_record())) {
           TRANS_LOG(WARN, "reset trans audot record failed", KR(tmp_ret));
         }
-        ctx_base->get_record_mgr_guard().destroy();
+        // ctx_base->get_record_mgr_guard().destroy();
       }
     }
 
