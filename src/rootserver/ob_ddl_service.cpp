@@ -3985,7 +3985,9 @@ int ObDDLService::update_global_index(ObAlterTableArg& arg, const uint64_t tenan
     } else if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get_index_tid_array failed", K(ret));
     } else {
+      int64_t delay_deleted_global_index_count = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+        bool is_delay_delete = false;
         const ObTableSchema* index_table_schema = NULL;
         if (OB_FAIL(schema_guard.get_table_schema(simple_index_infos.at(i).table_id_, index_table_schema))) {
           LOG_WARN("get_table_schema failed", "table id", simple_index_infos.at(i).table_id_, K(ret));
@@ -4015,8 +4017,13 @@ int ObDDLService::update_global_index(ObAlterTableArg& arg, const uint64_t tenan
             ObTableSchema new_table_schema;
             if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
               LOG_WARN("fail to assign schema", K(ret));
-            } else if (OB_FAIL(rebuild_index_in_trans(
-                           schema_guard, new_table_schema, frozen_version, NULL, arg.create_mode_, &trans))) {
+            } else if (OB_FAIL(rebuild_index_in_trans(schema_guard,
+                           new_table_schema,
+                           frozen_version,
+                           NULL,
+                           arg.create_mode_,
+                           &trans,
+                           &is_delay_delete))) {
               LOG_WARN("ddl_service_ rebuild_index failed", KR(ret));
             } else {
               ObSArray<obrpc::ObIndexArg*>& index_arg_list = arg.index_arg_list_;
@@ -4033,11 +4040,22 @@ int ObDDLService::update_global_index(ObAlterTableArg& arg, const uint64_t tenan
                   LOG_WARN("fail to assign index schema", KR(ret), K(new_table_schema));
                 } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
                   LOG_WARN("push back to index_arg_list failed", KR(ret), K(create_index_arg));
+                } else if (is_delay_delete) {
+                  delay_deleted_global_index_count++;
                 }
               }
             }
           }
         }
+      }
+      // In the case of delayed deletion, it is necessary to determine
+      // whether the sum of rebuilt indexex exceeds the maximum index of the data table.
+      if (OB_SUCC(ret) && 0 < delay_deleted_global_index_count &&
+          orig_table_schema.get_index_tid_count() + delay_deleted_global_index_count > OB_MAX_INDEX_PER_TABLE) {
+        ret = OB_ERR_TOO_MANY_KEYS;
+        LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
+        int64_t index_count = orig_table_schema.get_index_tid_count();
+        LOG_WARN("too many index for table", K(OB_MAX_INDEX_PER_TABLE), K(index_count), K(ret));
       }
     }
   }
@@ -8401,7 +8419,7 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg& arg, const int64
 // If sql_trans is NULL, you need to create a transaction inside the function
 int ObDDLService::drop_table_in_trans(ObSchemaGetterGuard& schema_guard, const ObTableSchema& table_schema,
     const bool is_rebuild_index, const bool is_index, const bool to_recyclebin, const ObString* ddl_stmt_str,
-    ObMySQLTransaction* sql_trans, DropTableIdHashSet* drop_table_set)
+    ObMySQLTransaction* sql_trans, DropTableIdHashSet* drop_table_set, bool* is_delay_delete /*NULL*/)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_index);
@@ -8446,8 +8464,13 @@ int ObDDLService::drop_table_in_trans(ObSchemaGetterGuard& schema_guard, const O
             LOG_WARN("fail to try modify tenant primary zone entity count", KR(ret));
           }
         }
-        if (OB_SUCC(ret) && OB_FAIL(ddl_operator.drop_table(
-                                table_schema, trans, ddl_stmt_str, false /*is_truncate_table*/, drop_table_set))) {
+        if (OB_SUCC(ret) && OB_FAIL(ddl_operator.drop_table(table_schema,
+                                trans,
+                                ddl_stmt_str,
+                                false /*is_truncate_table*/,
+                                drop_table_set,
+                                false,
+                                is_delay_delete))) {
           LOG_WARN("ddl_operator drop_table failed", K(table_schema), KR(ret));
         }
       }
@@ -10166,7 +10189,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg& arg, const int64_t froz
 // If sql_trans is NULL, you need to create a transaction inside the function
 int ObDDLService::rebuild_index_in_trans(ObSchemaGetterGuard& schema_guard, ObTableSchema& index_schema,
     const int64_t frozen_version, const ObString* ddl_stmt_str, const obrpc::ObCreateTableMode create_mode,
-    ObMySQLTransaction* sql_trans)
+    ObMySQLTransaction* sql_trans, bool* is_delay_delete /*NULL*/)
 {
   int ret = OB_SUCCESS;
   uint64_t new_table_id = index_schema.get_table_id();
@@ -10178,7 +10201,8 @@ int ObDDLService::rebuild_index_in_trans(ObSchemaGetterGuard& schema_guard, ObTa
     LOG_WARN("schema_service must not null", KR(ret));
   } else if (OB_ISNULL(sql_trans) && OB_FAIL(trans.start(sql_proxy_))) {
     LOG_WARN("start transaction failed", KR(ret));
-  } else if (OB_FAIL(drop_table_in_trans(schema_guard, index_schema, true, true, false, ddl_stmt_str, &trans, NULL))) {
+  } else if (OB_FAIL(drop_table_in_trans(
+                 schema_guard, index_schema, true, true, false, ddl_stmt_str, &trans, NULL, is_delay_delete))) {
     LOG_WARN("drop_table failed", K(index_schema), KR(ret));
   } else if (FALSE_IT(new_table_id = OB_INVALID_ID)) {
   } else if (OB_FAIL(schema_service->fetch_new_table_id(index_schema.get_tenant_id(), new_table_id))) {

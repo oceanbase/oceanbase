@@ -5426,17 +5426,19 @@ int ObDDLOperator::drop_obj_privs(
 
 int ObDDLOperator::drop_table(const ObTableSchema& table_schema, ObMySQLTransaction& trans,
     const ObString* ddl_stmt_str /*=NULL*/, const bool is_truncate_table /*false*/,
-    DropTableIdHashSet* drop_table_set /*=NULL*/, const bool is_drop_db /*false*/)
+    DropTableIdHashSet* drop_table_set /*=NULL*/, const bool is_drop_db /*false*/, bool* is_delay_delete /*NULL*/)
 {
   int ret = OB_SUCCESS;
-  bool is_delay_delete = false;
-  if (OB_FAIL(check_is_delay_delete(table_schema.get_tenant_id(), is_delay_delete))) {
+  bool tmp = false;
+  is_delay_delete = (NULL == is_delay_delete) ? &tmp : is_delay_delete;
+  if (OB_FAIL(check_is_delay_delete(table_schema.get_tenant_id(), *is_delay_delete))) {
     LOG_WARN("check is delay delete failed", K(ret), K(table_schema.get_tenant_id()));
-  } else if (is_delay_delete) {
+  } else if (*is_delay_delete) {
     // do nothing
   } else if (table_schema.is_dropped_schema() && OB_FAIL(drop_table_for_inspection(table_schema, trans))) {
     LOG_WARN("drop table for dropped shema failed", K(ret));
   }
+
   if (OB_FAIL(ret)) {
   } else if (!table_schema.is_dropped_schema() &&
              OB_FAIL(drop_table_for_not_dropped_schema(
