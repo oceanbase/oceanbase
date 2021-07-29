@@ -32,9 +32,9 @@ int ObSortOpImpl::Compare::init(
   if (nullptr == sort_collations || nullptr == sort_cmp_funs) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(sort_collations), KP(sort_cmp_funs));
-  } else if (sort_cmp_funs->count() != sort_cmp_funs->count()) {
+  } else if (sort_collations->count() != sort_cmp_funs->count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("column count miss match", K(ret), K(sort_cmp_funs->count()), K(sort_cmp_funs->count()));
+    LOG_WARN("column count miss match", K(ret), K(sort_collations->count()), K(sort_cmp_funs->count()));
   } else {
     sort_collations_ = sort_collations;
     sort_cmp_funs_ = sort_cmp_funs;
