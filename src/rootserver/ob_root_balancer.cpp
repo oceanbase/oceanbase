@@ -774,6 +774,7 @@ int ObRootBalancer::non_emergency_balance(int64_t& total_task_cnt)
     DEBUG_SYNC(UNIT_BALANCE_BEFORE_PARTITION_BALANCE);
     FOREACH_X(t, all_tenant, OB_SUCCESS == ret)
     {
+      update_last_run_timestamp();
       const uint64_t tenant_id = *t;
       // if have enough task in task queue, idle
       if (task_mgr_->is_busy()) {
