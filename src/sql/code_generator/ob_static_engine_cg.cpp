@@ -1451,9 +1451,9 @@ int ObStaticEngineCG::convert_global_index_merge_info(ObLogMerge& op, const Tabl
     delete_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
     update_insert_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
     insert_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
-    OZ(OB_FAIL(delete_subplan.access_exprs_.init(access_cnt)));
-    OZ(OB_FAIL(update_insert_subplan.access_exprs_.init(access_cnt)));
-    OZ(OB_FAIL(insert_subplan.access_exprs_.init(access_cnt)));
+    OZ(delete_subplan.access_exprs_.init(access_cnt));
+    OZ(update_insert_subplan.access_exprs_.init(access_cnt));
+    OZ(insert_subplan.access_exprs_.init(access_cnt));
     OZ(generate_merge_subplan_access_exprs(merge_stmt->has_update_clause(),
         index_dml_info.assignments_,
         index_dml_info.column_exprs_,
