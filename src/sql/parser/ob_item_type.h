@@ -578,7 +578,7 @@ typedef enum ObItemType {
   T_FUN_SYS_UTC_DATE = 1594,
   T_FUN_SYS_TIME_FORMAT = 1595,
   ///< @note add new oracle only function type before this line
-
+  T_FUN_SYS_CONVERT_TZ = 1580,
   T_FUN_SYS_END = 2000,
 
   T_MAX_OP = 3000,

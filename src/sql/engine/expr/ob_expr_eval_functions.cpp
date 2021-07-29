@@ -180,6 +180,7 @@
 #include "ob_expr_bit_length.h"
 #include "ob_expr_to_single_byte.h"
 #include "ob_expr_to_multi_byte.h"
+#include "ob_expr_convert_tz.h"
 
 namespace oceanbase {
 using namespace common;
@@ -663,6 +664,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprTimeFormat::calc_time_format,               /* 407 */
     ObExprMakedate::calc_makedate,                    /* 408 */
     ObExprPeriodAdd::calc_periodadd,                  /* 409 */
+    ObExprConvertTZ::eval_convert_tz                  /* 410 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));
