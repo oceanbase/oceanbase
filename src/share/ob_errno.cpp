@@ -4334,6 +4334,22 @@ static struct ObStrErrorInit {
     ORACLE_STR_USER_ERROR[-OB_TENANT_RESOURCE_UNIT_EXIST] =
         "ORA-00600: internal error code, arguments: -4712, tenant already has resource unit configured, tenant_id: "
         "%ld, observer: \'%s\'";
+    ERROR_NAME[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX";
+    MYSQL_ERRNO[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = -1;
+    SQLSTATE[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "HY000";
+    STR_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "rebuild global index failed when drop/truncate partitions";
+    STR_USER_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "rebuild global index:'%.*s' failed when drop/truncate partitions";
+    ORACLE_ERRNO[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = 600;
+    ORACLE_STR_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "ORA-00600: internal error code, arguments: -4713, rebuild global index failed when drop/truncate partitions";
+    ORACLE_STR_USER_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "ORA-00600: internal error code, arguments: -4713, rebuild global index:'%.*s' failed when drop/truncate partitions";
+    ERROR_NAME[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "OB_ERR_ATLER_TABLE_ILLEGAL_FK";
+    MYSQL_ERRNO[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = -1;
+    SQLSTATE[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "HY000";
+    STR_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "unique/primary keys in table referenced by enabled foreign keys";
+    STR_USER_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "unique/primary keys in table referenced by enabled foreign keys";
+    ORACLE_ERRNO[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = 02266;
+    ORACLE_STR_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "ORA-02266: unique/primary keys in table referenced by enabled foreign keys";
+    ORACLE_STR_USER_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "ORA-02266: unique/primary keys in table referenced by enabled foreign keys";
     ERROR_NAME[-OB_ERR_PARSER_INIT] = "OB_ERR_PARSER_INIT";
     MYSQL_ERRNO[-OB_ERR_PARSER_INIT] = ER_PARSE_ERROR;
     SQLSTATE[-OB_ERR_PARSER_INIT] = "0B000";
@@ -13266,29 +13282,6 @@ static struct ObStrErrorInit {
         "ORA-00600: internal error code, arguments: -9054, backup clean info not exists";
     ORACLE_STR_USER_ERROR[-OB_BACKUP_CLEAN_INFO_NOT_EXIST] =
         "ORA-00600: internal error code, arguments: -9054, backup clean info not exists";
-    ERROR_NAME[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX";
-    MYSQL_ERRNO[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = -1;
-    SQLSTATE[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = "HY000";
-    STR_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] =
-        "rebuild global index failed when drop/truncate partitions";
-    STR_USER_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] =
-        "rebuild global index:'%.*s' failed when drop/truncate partitions";
-    ORACLE_ERRNO[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] = 600;
-    ORACLE_STR_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] =
-        "ORA-00600: internal error code, arguments: -9055, rebuild global index failed when drop/truncate partitions";
-    ORACLE_STR_USER_ERROR[-OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX] =
-        "ORA-00600: internal error code, arguments: -9055, rebuild global index:'%.*s' failed when drop/truncate "
-        "partitions";
-    ERROR_NAME[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "OB_ERR_ATLER_TABLE_ILLEGAL_FK";
-    MYSQL_ERRNO[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = -1;
-    SQLSTATE[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "HY000";
-    STR_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "unique/primary keys in table referenced by enabled foreign keys";
-    STR_USER_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = "unique/primary keys in table referenced by enabled foreign keys";
-    ORACLE_ERRNO[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] = 02266;
-    ORACLE_STR_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] =
-        "ORA-02266: unique/primary keys in table referenced by enabled foreign keys";
-    ORACLE_STR_USER_ERROR[-OB_ERR_ATLER_TABLE_ILLEGAL_FK] =
-        "ORA-02266: unique/primary keys in table referenced by enabled foreign keys";
     ERROR_NAME[-OB_IO_LIMIT] = "OB_IO_LIMIT";
     MYSQL_ERRNO[-OB_IO_LIMIT] = -1;
     SQLSTATE[-OB_IO_LIMIT] = "HY000";
