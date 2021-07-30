@@ -1,0 +1,10 @@
+mkdocs==1.1.2
+mkdocs-material
+mkdocs-macros-plugin
+mike
+mdx_truly_sane_lists
+mkdocs_latest_release_plugin
+mkdocs-git-revision-date-localized-plugin
+weasyprint
+mkdocs-with-pdf
+qrcode
