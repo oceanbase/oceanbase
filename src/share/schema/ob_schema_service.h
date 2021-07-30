@@ -849,6 +849,9 @@ public:
   virtual int fetch_recycle_object(const uint64_t tenant_id, const common::ObString& object_name,
       const ObRecycleObject::RecycleObjType recycle_obj_type, common::ObISQLClient& sql_client,
       common::ObIArray<ObRecycleObject>& recycle_objs) = 0;
+  virtual int fetch_recycle_object_by_original_name(const uint64_t tenant_id, const common::ObString& original_name,
+      const ObRecycleObject::RecycleObjType recycle_obj_type, common::ObISQLClient& sql_client,
+      const bool desc, common::ObIArray<ObRecycleObject>& recycle_objs) = 0;
   virtual int delete_recycle_object(
       const uint64_t tenant_id, const ObRecycleObject& recycle_object, common::ObISQLClient& sql_client) = 0;
   virtual int fetch_expire_recycle_objects(const uint64_t tenant_id, const int64_t expire_time,

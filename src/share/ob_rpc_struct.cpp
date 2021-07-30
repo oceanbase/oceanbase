@@ -1944,7 +1944,7 @@ bool ObPurgeTableArg::is_valid() const
   return OB_INVALID_ID != tenant_id_ && !table_name_.empty();
 }
 
-OB_SERIALIZE_MEMBER((ObPurgeTableArg, ObDDLArg), tenant_id_, table_name_);
+OB_SERIALIZE_MEMBER((ObPurgeTableArg, ObDDLArg), tenant_id_, table_name_, is_object_name_);
 
 bool ObPurgeDatabaseArg::is_valid() const
 {

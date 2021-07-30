@@ -42,6 +42,7 @@ public:
   }
   void set_table_name(const common::ObString& table_name);
   void set_db_name(const common::ObString& db_name);
+  void set_is_object_name(const bool is_object_name);
   virtual obrpc::ObDDLArg& get_ddl_arg()
   {
     return purge_table_arg_;
@@ -62,7 +63,10 @@ inline void ObPurgeTableStmt::set_table_name(const common::ObString& table_name)
 {
   purge_table_arg_.table_name_ = table_name;
 }
-
+inline void ObPurgeTableStmt::set_is_object_name(const bool is_object_name)
+{
+  purge_table_arg_.is_object_name_ = is_object_name;
+}
 /**
  * Purge index
  */

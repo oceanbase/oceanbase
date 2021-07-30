@@ -76,6 +76,14 @@
   "SELECT * FROM %s "            \
   "WHERE tenant_id = %lu and object_name = '%.*s' and type = %d "
 
+#define FETCH_ALL_RECYCLEBIN_BY_ORIGINAL_DESC_SQL \
+  "SELECT * FROM %s "            \
+  "WHERE tenant_id = %lu and original_name = '%.*s' and type = %d order by gmt_create desc limit 1"
+
+#define FETCH_ALL_RECYCLEBIN_BY_ORIGINAL_ASC_SQL \
+  "SELECT * FROM %s "            \
+  "WHERE tenant_id = %lu and original_name = '%.*s' and type = %d order by gmt_create asc limit 1"
+
 #define FETCH_SYS_ALL_RECYCLEBIN_SQL \
   "SELECT * FROM %s "                \
   "WHERE (tenant_id = %lu and object_name = '%.*s' and type = %d) or (object_name = '%.*s' and type = 7) "
@@ -4769,6 +4777,56 @@ int ObSchemaServiceSQLImpl::fetch_recycle_object(const uint64_t tenant_id, const
                 object_name.length(),
                 object_name.ptr()))) {
           LOG_WARN("append sql failed", K(ret), K(object_name), K(recycle_obj_type));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        DEFINE_SQL_CLIENT_RETRY_WEAK(sql_client);
+        if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+          LOG_WARN("execute sql failed", K(sql), K(ret));
+        } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get result. ", K(ret));
+        } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_recycle_object(exec_tenant_id, *result, recycle_objs))) {
+          LOG_WARN("failed to retrieve recycle_object", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_recycle_object_by_original_name(const uint64_t tenant_id, const common::ObString& original_name,
+    const ObRecycleObject::RecycleObjType recycle_obj_type, common::ObISQLClient& sql_client,
+    const bool desc, common::ObIArray<ObRecycleObject>& recycle_objs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == tenant_id || ObRecycleObject::INVALID == recycle_obj_type || original_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(recycle_obj_type), K(original_name));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      ObMySQLResult* result = NULL;
+      ObSqlString sql;
+      recycle_objs.reset();
+      const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+      if (desc) {
+        if (OB_FAIL(sql.append_fmt(FETCH_ALL_RECYCLEBIN_BY_ORIGINAL_DESC_SQL,
+                OB_ALL_RECYCLEBIN_TNAME,
+                ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                original_name.length(),
+                original_name.ptr(),
+                recycle_obj_type))) {
+          LOG_WARN("append sql failed", K(ret), K(original_name), K(recycle_obj_type), K(tenant_id));
+        }
+      } else {
+        if (OB_FAIL(sql.append_fmt(FETCH_ALL_RECYCLEBIN_BY_ORIGINAL_ASC_SQL,
+                OB_ALL_RECYCLEBIN_TNAME,
+                ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                original_name.length(),
+                original_name.ptr(),
+                recycle_obj_type))) {
+          LOG_WARN("append sql failed", K(ret), K(original_name), K(recycle_obj_type), K(tenant_id));
         }
       }
       if (OB_SUCC(ret)) {

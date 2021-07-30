@@ -9005,22 +9005,40 @@ int ObDDLService::purge_table(const ObPurgeTableArg& arg, int64_t& pz_count, ObM
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                 combine_id(tenant_id, OB_RECYCLEBIN_SCHEMA_ID),
-                 arg.table_name_,
-                 false, /*is_index*/
-                 table_schema))) {
-    LOG_WARN("get_table_schema failed", K(ret));
-  } else if (NULL == table_schema) {
-    ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
-    LOG_WARN("table is not in recyclebin", K(arg), K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    ObString obj_name;
+    // trx begin
     if (OB_ISNULL(pr_trans) && OB_FAIL(trans.start(sql_proxy_))) {
       LOG_WARN("start transaction failed", K(ret));
+    } else {
+      // fetch obj name
+      if (arg.is_object_name_) {
+        obj_name = arg.table_name_;
+      } else {
+        if (OB_FAIL(ddl_operator.get_object_name_by_original_name(
+            tenant_id, arg.table_name_, ObRecycleObject::TABLE, false,
+            OB_ISNULL(pr_trans) ? trans : *pr_trans, obj_name))) {
+          LOG_WARN("get object name failed", K(ret));  
+        }        
+      }
+      // fetch schema
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                 combine_id(tenant_id, OB_RECYCLEBIN_SCHEMA_ID),
+                 obj_name,
+                 false, /*is_index*/
+                 table_schema))) {
+          LOG_WARN("get_table_schema failed", K(ret));
+        } else if (NULL == table_schema) {
+          ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+          LOG_WARN("table is not in recyclebin", K(ret), K(arg));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_FAIL(ddl_operator.purge_table_with_aux_table(
                    *table_schema, schema_guard, OB_ISNULL(pr_trans) ? trans : *pr_trans, &arg.ddl_stmt_str_))) {
       LOG_WARN("purge table with aux table failed", K(ret));
@@ -9280,6 +9298,7 @@ int ObDDLService::purge_recyclebin_except_tenant(
             purge_table_arg.tenant_id_ = arg.tenant_id_;
             purge_table_arg.table_name_ = recycle_obj.get_object_name();
             purge_table_arg.ddl_stmt_str_ = ddl_stmt.string();
+            purge_table_arg.is_object_name_ = true;
             if (OB_FAIL(purge_table(purge_table_arg, this_pz_count, &trans))) {
               if (OB_ERR_OBJECT_NOT_IN_RECYCLEBIN == ret) {
                 LOG_WARN("recycle object maybe purge by database", K(ret), K(recycle_obj));

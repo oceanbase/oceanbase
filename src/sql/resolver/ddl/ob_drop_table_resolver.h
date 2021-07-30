@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace sql {
 class ObDropTableResolver : public ObDDLResolver {
 public:
-  enum node_type { MATERIALIZED_NODE = 0, IF_EXIST_NODE, TABLE_LIST_NODE, MAX_NODE };
+  enum node_type { MATERIALIZED_NODE = 0, IF_EXIST_NODE, TABLE_LIST_NODE, DROP_PURGE_NODE, MAX_NODE };
 
 public:
   explicit ObDropTableResolver(ObResolverParams& params);
