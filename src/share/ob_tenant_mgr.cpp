@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <cstdio>
 #include "lib/utility/ob_print_utils.h"
 #include "lib/alloc/malloc_hook.h"
 #include "share/ob_tenant_mgr.h"
@@ -26,20 +27,13 @@
 int64_t get_virtual_memory_used()
 {
   constexpr int BUFFER_SIZE = 128;
-  char buf[BUFFER_SIZE];
-  snprintf(buf, BUFFER_SIZE, "/proc/%d/status", getpid());
-  std::ifstream status(buf);
-  int64_t used = 0;
-  while (status && 0 == used) {
-    status >> buf;
-    if (strncmp(buf, "VmSize:", BUFFER_SIZE) == 0) {
-      status >> buf;
-      used = std::stoi(buf);
-    } else {
-      status.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    }
-  }
-  return used * 1024;
+  char filename[BUFFER_SIZE];
+  int64_t page_cnt = 0;
+  snprintf(filename, BUFFER_SIZE, "/proc/%d/statm", getpid());
+  FILE* statm = fopen(filename, "r");
+  fscanf(statm, "%ld", &page_cnt);
+  fclose(statm);
+  return page_cnt * sysconf(_SC_PAGESIZE);
 }
 
 namespace oceanbase {

@@ -461,7 +461,7 @@ int main(int argc, char* argv[])
     if (0 == memory_used) {
       _LOG_INFO("Get virtual memory info failed");
     } else {
-      _LOG_INFO("Virtual memory : %ld byte", memory_used);
+      _LOG_INFO("Virtual memory : %'15ld byte", memory_used);
     }
     // print in log file.
     print_args(argc, argv);
