@@ -41,7 +41,11 @@ public:
     return purge_table_arg_.tenant_id_;
   }
   void set_table_name(const common::ObString& table_name);
-  void set_db_name(const common::ObString& db_name);
+  void set_database_name(const common::ObString& database_name);
+  void set_is_object_name(const bool is_object_name);
+  inline const common::ObString& get_database_name() const;
+  inline const common::ObString& get_table_name() const;
+  inline bool get_is_object_name() const;
   virtual obrpc::ObDDLArg& get_ddl_arg()
   {
     return purge_table_arg_;
@@ -62,7 +66,26 @@ inline void ObPurgeTableStmt::set_table_name(const common::ObString& table_name)
 {
   purge_table_arg_.table_name_ = table_name;
 }
-
+inline void ObPurgeTableStmt::set_database_name(const common::ObString& database_name)
+{
+  purge_table_arg_.database_name_ = database_name;
+}
+inline void ObPurgeTableStmt::set_is_object_name(const bool is_object_name)
+{
+  purge_table_arg_.is_object_name_ = is_object_name;
+}
+inline const common::ObString& ObPurgeTableStmt::get_database_name() const
+{
+  return purge_table_arg_.database_name_;
+}
+inline const common::ObString& ObPurgeTableStmt::get_table_name() const
+{
+  return purge_table_arg_.table_name_;
+}
+inline bool ObPurgeTableStmt::get_is_object_name() const
+{
+  return purge_table_arg_.is_object_name_;
+}
 /**
  * Purge index
  */
@@ -84,13 +107,12 @@ public:
   {
     return purge_index_arg_.tenant_id_;
   }
-  inline void set_table_id(const uint64_t table_id);
-  uint64_t get_table_id() const
-  {
-    return purge_index_arg_.table_id_;
-  }
   void set_table_name(const common::ObString& table_name);
-  void set_db_name(const common::ObString& db_name);
+  void set_database_name(const common::ObString& database_name);
+  void set_is_object_name(const bool is_object_name);
+  const common::ObString& get_table_name() const;
+  const common::ObString& get_database_name() const;
+  bool get_is_object_name() const;
   virtual obrpc::ObDDLArg& get_ddl_arg()
   {
     return purge_index_arg_;
@@ -107,18 +129,38 @@ inline void ObPurgeIndexStmt::set_tenant_id(const uint64_t tenant_id)
   purge_index_arg_.tenant_id_ = tenant_id;
 }
 
-inline void ObPurgeIndexStmt::set_table_id(const uint64_t table_id)
-{
-  purge_index_arg_.table_id_ = table_id;
-}
-
 inline void ObPurgeIndexStmt::set_table_name(const common::ObString& table_name)
 {
   purge_index_arg_.table_name_ = table_name;
 }
 
+inline const common::ObString& ObPurgeIndexStmt::get_table_name() const
+{
+  return purge_index_arg_.table_name_;
+}
+
+inline void ObPurgeIndexStmt::set_database_name(const common::ObString& database_name)
+{
+  purge_index_arg_.database_name_ = database_name;
+}
+
+inline const common::ObString& ObPurgeIndexStmt::get_database_name() const
+{
+  return purge_index_arg_.database_name_;
+}
+
+inline void ObPurgeIndexStmt::set_is_object_name(const bool is_object_name)
+{
+  purge_index_arg_.is_object_name_ = is_object_name;
+}
+
+inline bool ObPurgeIndexStmt::get_is_object_name() const
+{
+  return purge_index_arg_.is_object_name_;
+}
+
 /**
- * flaskback database
+ * purge database
  */
 
 class ObPurgeDatabaseStmt : public ObDDLStmt {
@@ -139,6 +181,7 @@ public:
     return purge_db_arg_.tenant_id_;
   }
   void set_db_name(const common::ObString& db_name);
+  void set_is_object_name(const bool is_object_name);
   virtual obrpc::ObDDLArg& get_ddl_arg()
   {
     return purge_db_arg_;
@@ -160,6 +203,10 @@ inline void ObPurgeDatabaseStmt::set_db_name(const common::ObString& db_name)
   purge_db_arg_.db_name_ = db_name;
 }
 
+inline void ObPurgeDatabaseStmt::set_is_object_name(const bool is_object_name)
+{
+  purge_db_arg_.is_object_name_ = is_object_name;
+}
 /**
  * purge tenant
  */

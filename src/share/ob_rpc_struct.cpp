@@ -1923,7 +1923,7 @@ bool ObPurgeIndexArg::is_valid() const
   return OB_INVALID_ID != tenant_id_ && !table_name_.empty();
 }
 
-OB_SERIALIZE_MEMBER((ObPurgeIndexArg, ObDDLArg), tenant_id_, table_name_);
+OB_SERIALIZE_MEMBER((ObPurgeIndexArg, ObDDLArg), tenant_id_, table_name_, database_name_, is_object_name_);
 
 bool ObFlashBackDatabaseArg::is_valid() const
 {
@@ -1944,14 +1944,14 @@ bool ObPurgeTableArg::is_valid() const
   return OB_INVALID_ID != tenant_id_ && !table_name_.empty();
 }
 
-OB_SERIALIZE_MEMBER((ObPurgeTableArg, ObDDLArg), tenant_id_, table_name_);
+OB_SERIALIZE_MEMBER((ObPurgeTableArg, ObDDLArg), tenant_id_, table_name_, database_name_, is_object_name_);
 
 bool ObPurgeDatabaseArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && !db_name_.empty();
 }
 
-OB_SERIALIZE_MEMBER((ObPurgeDatabaseArg, ObDDLArg), tenant_id_, db_name_);
+OB_SERIALIZE_MEMBER((ObPurgeDatabaseArg, ObDDLArg), tenant_id_, db_name_, is_object_name_);
 
 bool ObPurgeTenantArg::is_valid() const
 {

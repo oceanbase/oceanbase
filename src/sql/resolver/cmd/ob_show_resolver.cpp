@@ -1088,17 +1088,44 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
         } else {
+          uint64_t show_db_id = OB_INVALID_ID;
           show_resv_ctx.stmt_type_ = stmt::T_SHOW_RECYCLEBIN;
-          if (real_tenant_id == OB_SYS_TENANT_ID) {
-            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SYS_RECYCLEBIN);
-            GEN_SQL_STEP_2(
-                ObShowSqlSet::SHOW_SYS_RECYCLEBIN, OB_SYS_DATABASE_NAME, OB_ALL_RECYCLEBIN_TNAME, OB_SYS_TENANT_ID);
+          if (OB_FAIL(get_database_info(
+                  NULL, database_name, real_tenant_id, show_resv_ctx, show_db_id))) {
+            LOG_WARN("fail to get database info", K(ret));
+          } else if (OB_UNLIKELY(OB_INVALID_ID == show_db_id)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("database id is invalid", K(ret), K(show_db_id));
           } else {
-            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_RECYCLEBIN);
-            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_RECYCLEBIN,
-                REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
-                REAL_NAME(OB_ALL_RECYCLEBIN_TNAME, OB_ALL_VIRTUAL_RECYCLEBIN_AGENT_TNAME),
-                is_oracle_mode ? real_tenant_id : sql_tenant_id);
+            if (database_name == OB_RECYCLEBIN_SCHEMA_NAME) {
+              if (real_tenant_id == OB_SYS_TENANT_ID) {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_SYS_RECYCLEBIN);
+                GEN_SQL_STEP_2(
+                  ObShowSqlSet::SHOW_SYS_RECYCLEBIN, OB_SYS_DATABASE_NAME, OB_ALL_RECYCLEBIN_TNAME, OB_SYS_TENANT_ID);
+              } else {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_RECYCLEBIN);
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_RECYCLEBIN,
+                  REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                  REAL_NAME(OB_ALL_RECYCLEBIN_TNAME, OB_ALL_VIRTUAL_RECYCLEBIN_AGENT_TNAME),
+                  is_oracle_mode ? real_tenant_id : sql_tenant_id);
+              }
+            } else {
+              const char * db_name;
+              const char * table_name;
+              uint64_t tenant_id;
+              if (real_tenant_id == OB_SYS_TENANT_ID) {
+                db_name = OB_SYS_DATABASE_NAME;
+                table_name = OB_ALL_RECYCLEBIN_TNAME;
+                tenant_id = OB_SYS_TENANT_ID;
+              } else {
+                db_name = REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME);
+                table_name = REAL_NAME(OB_ALL_RECYCLEBIN_TNAME, OB_ALL_VIRTUAL_RECYCLEBIN_AGENT_TNAME);
+                tenant_id = is_oracle_mode ? real_tenant_id : sql_tenant_id;
+              }
+              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_RECYCLEBIN_FROM_DATABASE);
+              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_RECYCLEBIN_FROM_DATABASE, db_name, table_name,
+                tenant_id, ObSchemaUtils::get_extract_schema_id(real_tenant_id, show_db_id));
+            }
           }
         }
         break;
@@ -2166,6 +2193,12 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_RECYCLEBIN, "SELECT OBJECT_NAME, ORIGINAL_NAME, TYPE
     "then 'DATABASE' when 5 then 'AUX_VP' when 6 then 'TRIGGER' when 7 then 'TENANT' else 'INVALID' end as TYPE, "
     "gmt_create as CREATETIME FROM %s.%s WHERE tenant_id = %lu AND TYPE != 7",
     R"(SELECT "OBJECT_NAME", "ORIGINAL_NAME", CASE "TYPE" WHEN 1 THEN 'TABLE' WHEN 2 THEN 'INDEX' WHEN 3 THEN 'VIEW' WHEN 4 THEN 'DATABASE' when 5 then 'AUX_VP' when 6 then 'TRIGGER' WHEN 7 THEN 'TENANT' ELSE 'INVALID' END AS "TYPE", "GMT_CREATE" AS "CREATETIME" FROM %s.%s WHERE TENANT_ID = %lu AND TYPE != 7)",
+    NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_RECYCLEBIN_FROM_DATABASE, "SELECT OBJECT_NAME, ORIGINAL_NAME, TYPE, CREATETIME",
+    "SELECT OBJECT_NAME, ORIGINAL_NAME, case TYPE when 1 then 'TABLE' when 2 then 'INDEX' when 3 then 'VIEW' when 4 "
+    "then 'DATABASE' when 5 then 'AUX_VP' when 6 then 'TRIGGER' when 7 then 'TENANT' else 'INVALID' end as TYPE, "
+    "gmt_create as CREATETIME FROM %s.%s WHERE tenant_id = %lu AND database_id = %lu",
+    R"(SELECT "OBJECT_NAME", "ORIGINAL_NAME", CASE "TYPE" WHEN 1 THEN 'TABLE' WHEN 2 THEN 'INDEX' WHEN 3 THEN 'VIEW' WHEN 4 THEN 'DATABASE' when 5 then 'AUX_VP' when 6 then 'TRIGGER' WHEN 7 THEN 'TENANT' ELSE 'INVALID' END AS "TYPE", "GMT_CREATE" AS "CREATETIME" FROM %s.%s WHERE TENANT_ID = %lu AND TYPE != 7 AND database_id = %lu)",
     NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_SYS_RECYCLEBIN, "SELECT OBJECT_NAME, ORIGINAL_NAME, TYPE, CREATETIME",
     "SELECT OBJECT_NAME, ORIGINAL_NAME, case TYPE when 1 then 'TABLE' when 2 then 'INDEX' when 3 then 'VIEW' when 4 "

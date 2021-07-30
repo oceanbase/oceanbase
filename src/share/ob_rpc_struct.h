@@ -2062,7 +2062,8 @@ struct ObPurgeTableArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObPurgeTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), table_name_()
+  ObPurgeTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), 
+    table_name_(), database_name_(), is_object_name_(false)
   {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const
@@ -2071,14 +2072,17 @@ public:
   }
   uint64_t tenant_id_;
   common::ObString table_name_;
-  TO_STRING_KV(K_(tenant_id), K_(table_name));
+  common::ObString database_name_;
+  bool is_object_name_;
+  TO_STRING_KV(K_(tenant_id), K_(table_name), K_(database_name), K_(is_object_name));
 };
 
 struct ObPurgeIndexArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObPurgeIndexArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), table_name_(), table_id_(common::OB_INVALID_ID)
+  ObPurgeIndexArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), table_name_(),
+  database_name_(), is_object_name_(false)
   {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const
@@ -2087,16 +2091,17 @@ public:
   }
   uint64_t tenant_id_;
   common::ObString table_name_;
-  uint64_t table_id_;  // only used in work thread, no need add to SERIALIZE now
-
-  TO_STRING_KV(K_(tenant_id), K_(table_name), K_(table_id));
+  common::ObString database_name_;
+  bool is_object_name_;
+  TO_STRING_KV(K_(tenant_id), K_(table_name), K_(database_name), K_(is_object_name));
 };
 
 struct ObPurgeDatabaseArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObPurgeDatabaseArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_()
+  ObPurgeDatabaseArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), 
+  is_object_name_(false)
   {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const
@@ -2105,7 +2110,8 @@ public:
   }
   uint64_t tenant_id_;
   common::ObString db_name_;
-  TO_STRING_KV(K_(tenant_id), K_(db_name));
+  bool is_object_name_;
+  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(is_object_name));
 };
 
 struct ObPurgeTenantArg : public ObDDLArg {

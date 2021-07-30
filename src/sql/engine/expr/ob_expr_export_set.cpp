@@ -13,15 +13,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "sql/engine/expr/ob_expr_export_set.h"
-
-#include <limits.h>
-#include <string.h>
-
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
-using namespace oceanbase::sql;
 namespace oceanbase {
 namespace sql {
 
@@ -47,10 +42,12 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
         KP(type_ctx.get_session()));
   } else {
     // deduce length
+    // Maximum occurrences of on and of in result
     const uint64_t MAX_BIT_NUM = 64;
+    // Maximum occurrences of sep in result
     const uint64_t MAX_SEP_NUM = 63;
-    int64_t on_len = types_array[1].get_length();
-    int64_t off_len = types_array[2].get_length();
+    const int64_t on_len = types_array[1].get_length();
+    const int64_t off_len = types_array[2].get_length();
     int64_t sep_len = 1;
     int64_t str_num = 2;
     const uint64_t max_len = std::max(on_len, off_len);
@@ -70,7 +67,6 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
         MAX_SEP_NUM * sep_len);
     type.set_length(len);
     type.set_varchar();
-    type.set_length_semantics(LS_CHAR);
     // set collation_type for string type
     OZ(ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
         type, &types_array[1], str_num, type_ctx.get_coll_type()));
@@ -92,19 +88,26 @@ int ObExprExportSet::calc_resultN(ObObj& result, const ObObj* objs_array, int64_
     ObObj tmp_n_bits;
     ObObj tmp_sep;
     tmp_n_bits.set_int(64);
-    tmp_sep.set_varchar(","); 
-    tmp_sep.set_collation_type(result.get_collation_type()); 
-    ret = calc_export_set(result, objs_array[0], objs_array[1], objs_array[2], 
-        tmp_sep, tmp_n_bits, expr_ctx);
+    tmp_sep.set_string(common::ObVarcharType, ObCharsetUtils::get_const_str(
+        objs_array[1].get_collation_type(), ','));
+    if (OB_FAIL(calc_export_set(result, objs_array[0], objs_array[1], objs_array[2], 
+        tmp_sep, tmp_n_bits, expr_ctx))) {
+      LOG_WARN("calc_export_set failed", K(ret));
+    }
   } else if (4 == param_num) {
     ObObj tmp_n_bits;
-    tmp_n_bits.set_int(64); 
-    ret = calc_export_set(result, objs_array[0], objs_array[1], objs_array[2],
-        objs_array[3], tmp_n_bits, expr_ctx);
+    tmp_n_bits.set_int(64);
+    if (OB_FAIL(calc_export_set(result, objs_array[0], objs_array[1], objs_array[2],
+        objs_array[3], tmp_n_bits, expr_ctx))) {
+      LOG_WARN("calc_export_set failed", K(ret));
+    }
   } else if (5 == param_num) {
-    ret = calc_export_set(result, objs_array[0], objs_array[1], objs_array[2],
-        objs_array[3], objs_array[4], expr_ctx);
+    if (OB_FAIL(calc_export_set(result, objs_array[0], objs_array[1], objs_array[2],
+        objs_array[3], objs_array[4], expr_ctx))) {
+      LOG_WARN("calc_export_set failed", K(ret));
+    }
   }
+
   return ret;
 }
 
@@ -156,15 +159,15 @@ int ObExprExportSet::calc_export_set_inner(ObString& ret_str, const uint64_t bit
     const uint64_t MAX_BIT_NUM = 64UL;
     uint64_t local_n_bits = static_cast<uint64_t>(n_bits);
     local_n_bits = std::min(MAX_BIT_NUM, local_n_bits);
-    int64_t length_on = on.length();
-    int64_t length_off = off.length();
-    int64_t length_sep = sep.length();
+    const int64_t length_on = on.length();
+    const int64_t length_off = off.length();
+    const int64_t length_sep = sep.length();
     int64_t tot_length = 0;  // total length for the result.
     uint64_t i;
-    uint64_t mask;
+    const uint64_t mask = 1;
     //compute tot_length and save ans
     tot_length += (local_n_bits - 1) * length_sep;
-    for (i = 0, mask = 1; i < local_n_bits; ++i) {
+    for (i = 0; i < local_n_bits; ++i) {
       if (bits & (mask << i)){
         tot_length += length_on;
       } else {
@@ -229,26 +232,23 @@ int ObExprExportSet::eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
   int64_t max_size = 0;
   if (OB_FAIL(expr.eval_param_value(ctx, bits, on, off, sep, n_bits))) {
     LOG_WARN("evaluate parameters failed", K(ret));
+  } else if (OB_ISNULL(bits) || OB_ISNULL(on) || OB_ISNULL(off)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bits, on or off is null ptr", K(ret), K(bits), K(on), K(off));
   } else if (bits->is_null() || on->is_null() || off->is_null()) {
     expr_datum.set_null();
   } else if (OB_NOT_NULL(sep) && sep->is_null()) {
     expr_datum.set_null();
   } else if (OB_NOT_NULL(n_bits) && n_bits->is_null()) {
     expr_datum.set_null();
-  } else if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error. session null", K(ret), KP(ctx.exec_ctx_.get_my_session()));
-  } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
-    LOG_WARN("get max length failed", K(ret));
   } else {
     ObExprStrResAlloc expr_res_alloc(expr, ctx);
     ObString output;
     //default parm
     ObString sep_parm;
     int64_t n_bits_parm;
-    char default_sep[1] = {','};
     if (OB_ISNULL(sep)) {
-      sep_parm.assign(default_sep, 1);
+      sep_parm = ObCharsetUtils::get_const_str(expr.datum_meta_.cs_type_, ',');
     } else {
       sep_parm = sep->get_string();
     }

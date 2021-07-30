@@ -117,7 +117,10 @@ int ObDropDatabaseResolver::resolve(const ParseNode& parse_tree)
     }
     if (OB_SUCC(ret)) {
       ObObj is_recyclebin_open;
-      if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_RECYCLEBIN, is_recyclebin_open))) {
+      bool drop_purge = (NULL != parse_tree.children_[DROP_PURGE_NODE]) ? true : false;
+      if (drop_purge) {
+        drop_database_stmt->set_to_recyclebin(false);
+      } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_RECYCLEBIN, is_recyclebin_open))) {
         LOG_WARN("get sys variable failed", K(ret));
       } else {
         drop_database_stmt->set_to_recyclebin(is_recyclebin_open.get_bool());

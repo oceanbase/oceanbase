@@ -1,0 +1,46 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+# show recyclebin的测试
+
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+set recyclebin=on;
+
+create database recyclebin_t1;
+use recyclebin_t1;
+create table t1(c1 int);
+drop table t1;
+let $a1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $a2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo $a1;
+echo $a2;
+
+create database recyclebin_t2;
+use recyclebin_t2;
+create table t1(c1 int,c2 int);
+drop table t1;
+let $b1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $b2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo $b1;
+echo $b2;
+
+create database recyclebin_t3;
+use recyclebin_t3;
+create table t1(c1 int,c2 int);
+drop table t1;
+let $c1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $c2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo $c1;
+echo $c2;
+
+#清理
+use test;
+drop database recyclebin_t1;
+drop database recyclebin_t2;
+drop database recyclebin_t3;
+select count(*) from oceanbase.__all_recyclebin;
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+

@@ -22,6 +22,7 @@ namespace sql {
 
 class ObPurgeTableResolver : public ObDDLResolver {
   static const int TABLE_NODE = 0;
+  static const int OBJECT_NAME_NODE = 1;
 
 public:
   explicit ObPurgeTableResolver(ObResolverParams& params) : ObDDLResolver(params)
@@ -38,7 +39,7 @@ private:
 
 class ObPurgeIndexResolver : public ObDDLResolver {
   static const int TABLE_NODE = 0;
-
+  static const int OBJECT_NAME_NODE = 1;
 public:
   explicit ObPurgeIndexResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}
@@ -54,7 +55,7 @@ private:
 
 class ObPurgeDatabaseResolver : public ObDDLResolver {
   static const int DATABASE_NODE = 0;
-
+  static const int OBJECT_NAME_NODE = 1;
 public:
   explicit ObPurgeDatabaseResolver(ObResolverParams& params) : ObDDLResolver(params)
   {}

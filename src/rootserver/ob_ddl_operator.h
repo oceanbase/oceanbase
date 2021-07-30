@@ -361,6 +361,12 @@ public:
   virtual int flashback_table_from_recyclebin(const share::schema::ObTableSchema& table_schema,
       common::ObMySQLTransaction& trans, const uint64_t new_db_id, const common::ObString& new_table_name,
       const common::ObString* ddl_stmt_str, share::schema::ObSchemaGetterGuard& guard);
+  virtual int check_object_name_in_db(const uint64_t tenant_id, const common::ObString object_name, 
+      const uint64_t database_id, share::schema::ObRecycleObject::RecycleObjType recycle_type,
+      common::ObMySQLTransaction& trans);
+  virtual int get_object_name_by_original_name(const uint64_t tenant_id, const common::ObString original_name, 
+      const uint64_t database_id, share::schema::ObRecycleObject::RecycleObjType recycle_type, bool const desc,
+      common::ObMySQLTransaction& trans, common::ObString& object_name);
   virtual int purge_table_in_recyclebin(const share::schema::ObTableSchema& table_schema,
       common::ObMySQLTransaction& trans, const common::ObString* ddl_stmt_str /*=NULL*/);
   // create_table_in_recylebin only applies to truncate table.

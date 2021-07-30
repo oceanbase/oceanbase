@@ -1,0 +1,32 @@
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys;
+set recyclebin=on;
+create database recyclebin_t1;
+use recyclebin_t1;
+create table t1(c1 int);
+drop table t1;
+t1
+No such row
+create database recyclebin_t2;
+use recyclebin_t2;
+create table t1(c1 int,c2 int);
+drop table t1;
+t1
+No such row
+create database recyclebin_t3;
+use recyclebin_t3;
+create table t1(c1 int,c2 int);
+drop table t1;
+t1
+No such row
+use test;
+drop database recyclebin_t1;
+drop database recyclebin_t2;
+drop database recyclebin_t3;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+6
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0

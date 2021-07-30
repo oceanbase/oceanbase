@@ -1,0 +1,422 @@
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys;
+set recyclebin=off;
+drop database if exists test;
+create database test;
+use test;
+drop tenant if exists recyclebin_tenant force;
+drop resource pool if exists recyclebin_pool;
+drop resource unit if exists recyclebin_unit;
+set recyclebin=on;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+purge table recyclebin_test_t1;
+succeed
+succeed
+purge table recyclebin_test_t1;
+succeed
+purge table recyclebin_test_t1;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+create table recyclebin_test_t2(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t2;
+create table recyclebin_test_t3(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t3;
+purge table recyclebin_test_t1;
+purge table recyclebin_test_t2;
+purge table recyclebin_test_t3;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+create database recyclebin_database1;
+drop database recyclebin_database1;
+purge database recyclebin_database1;
+create database recyclebin_database1;
+use recyclebin_database1;
+create table t1(c1 int);
+create index index_t1 on t1(c1);
+drop table t1;
+create table t2(c1 int);
+create index index_t2 on t2(c1);
+drop table t2;
+use test;
+drop database recyclebin_database1;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+5
+purge recyclebin;
+use __recyclebin;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+use test;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create database recyclebin_database1;
+use recyclebin_database1;
+purge table recyclebin_t1;
+ERROR HY000: object not in RECYCLE BIN
+drop database recyclebin_database1;
+use __recyclebin;
+purge table recyclebin_t1;
+purge recyclebin;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+use test;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+create database recyclebin_database_t1;
+create database recyclebin_database_t2;
+create database recyclebin_database_t3;
+drop database recyclebin_database_t1 purge;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+drop database recyclebin_database_t2 purge;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+drop database recyclebin_database_t3 purge;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+recyclebin_test_t1
+drop table recyclebin_test_t2;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+recyclebin_test_t1
+recyclebin_test_t2
+drop table recyclebin_test_t3;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+recyclebin_test_t1
+recyclebin_test_t2
+recyclebin_test_t3
+purge recyclebin;
+CREATE USER 'weihan'@'%' IDENTIFIED BY 'weihan';
+grant all on test.* to weihan@'%'  identified by "weihan";
+disconnect obsys;
+connect  obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys_weihan;
+use test;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+purge table recyclebin_test_t1;
+succeed
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+purge table recyclebin_test_t1;
+succeed
+purge table recyclebin_test_t1;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+disconnect obsys_weihan;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys;
+create database recyclebin_database1;
+use recyclebin_database1;
+create table t1(c1 int);
+drop table t1;
+create table t2(c1 int);
+drop table t2;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+t1
+t2
+grant select on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect obsys;
+connect  obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys_weihan;
+use recyclebin_database1;
+purge table t1;
+ERROR 42000: Access denied for user 'weihan'@'%' to database 'recyclebin_database1'
+purge table t2;
+ERROR 42000: Access denied for user 'weihan'@'%' to database 'recyclebin_database1'
+disconnect obsys_weihan;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys;
+use __recyclebin;
+drop database recyclebin_database1;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+3
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+disconnect obsys;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys;
+create database recyclebin_database1;
+grant all on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect obsys;
+connect  obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys_weihan;
+use test;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+use recyclebin_database1;
+purge table recyclebin_t1;
+ERROR HY000: object not in RECYCLE BIN
+use test;
+purge table recyclebin_t1;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+disconnect obsys_weihan;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys;
+drop database recyclebin_database1 purge;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+disconnect obsys;
+connect  obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys_weihan;
+use test;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+disconnect obsys_weihan;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys;
+create resource unit if not exists recyclebin_unit max_cpu=1, min_memory='1G',max_memory='1G',max_disk_size='1G',max_iops=1000,max_session_num=1000;
+create resource pool if not exists recyclebin_pool unit='recyclebin_unit', unit_num=1;
+create tenant if not exists recyclebin_tenant RESOURCE_POOL_LIST=('recyclebin_pool') set ob_tcp_invited_nodes='%';
+disconnect obsys;
+connect  comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_root;
+set recyclebin=on;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+use __recyclebin;
+purge database recyclebin_database1;
+succeed
+succeed
+purge database recyclebin_database1;
+succeed
+purge database recyclebin_database1;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+use test;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+purge database recyclebin_database1;
+create database recyclebin_database1;
+use recyclebin_database1;
+create table t1(c1 int);
+create index index_t1 on t1(c1);
+drop table t1;
+create table t2(c1 int);
+create index index_t2 on t2(c1);
+drop table t2;
+use test;
+drop database recyclebin_database1;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+5
+purge recyclebin;
+use __recyclebin;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+use test;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create database recyclebin_database1;
+use recyclebin_database1;
+purge table recyclebin_t1;
+ERROR HY000: object not in RECYCLE BIN
+drop database recyclebin_database1;
+use __recyclebin;
+purge table recyclebin_t1;
+purge recyclebin;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+use test;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+create database recyclebin_database_t1;
+create database recyclebin_database_t2;
+create database recyclebin_database_t3;
+drop database recyclebin_database_t1 purge;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+drop database recyclebin_database_t2 purge;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+drop database recyclebin_database_t3 purge;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+recyclebin_test_t1
+drop table recyclebin_test_t2;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+recyclebin_test_t1
+recyclebin_test_t2
+drop table recyclebin_test_t3;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+recyclebin_test_t1
+recyclebin_test_t2
+recyclebin_test_t3
+purge recyclebin;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+CREATE USER 'weihan'@'%' IDENTIFIED BY 'weihan';
+grant all on test.* to weihan@'%'  identified by "weihan";
+disconnect comm_root;
+connect  comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_weihan;
+set recyclebin=on;
+use test;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+purge table recyclebin_test_t1;
+succeed
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+purge table recyclebin_test_t1;
+succeed
+purge table recyclebin_test_t1;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+disconnect comm_weihan;
+connect  comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_root;
+create database recyclebin_database1;
+use recyclebin_database1;
+set recyclebin=on;
+create table t1(c1 int);
+drop table t1;
+create table t2(c1 int);
+drop table t2;
+select original_name from oceanbase.__all_recyclebin;
+original_name
+t1
+t2
+grant update on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect comm_root;
+connect  comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_weihan;
+use recyclebin_database1;
+purge table t1;
+ERROR 42000: Access denied for user 'weihan'@'%' to database 'recyclebin_database1'
+purge table t2;
+ERROR 42000: Access denied for user 'weihan'@'%' to database 'recyclebin_database1'
+disconnect comm_weihan;
+connect  comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_root;
+use __recyclebin;
+set recyclebin=on;
+drop database recyclebin_database1;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+3
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+disconnect comm_root;
+connect  comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_root;
+create database recyclebin_database1;
+grant all on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect comm_root;
+connect  comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_weihan;
+use test;
+create table recyclebin_t1(c1 int);
+set recyclebin=on;
+drop table recyclebin_t1;
+use recyclebin_database1;
+purge table recyclebin_t1;
+ERROR HY000: object not in RECYCLE BIN
+use test;
+purge table recyclebin_t1;
+disconnect comm_weihan;
+connect  comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_root;
+set recyclebin=on;
+drop database recyclebin_database1 purge;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+disconnect comm_root;
+connect  comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_weihan;
+use test;
+set recyclebin=on;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+OBJECT_NAME	ORIGINAL_NAME	TYPE	CREATETIME
+set recyclebin=off;
+disconnect comm_weihan;
+connect  comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_root;
+drop user weihan;
+set recyclebin=off;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys;
+drop tenant recyclebin_tenant force;
+drop resource pool recyclebin_pool;
+drop resource unit recyclebin_unit;
+drop user weihan;
+set recyclebin=off;

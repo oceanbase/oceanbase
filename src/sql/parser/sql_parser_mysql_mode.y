@@ -326,7 +326,7 @@ END_P SET_VAR DELIMITER
 %type <node> update_asgn_list update_asgn_factor
 %type <node> table_element_list table_element column_definition column_definition_ref column_definition_list column_name_list aux_column_list vertical_column_name
 %type <node> opt_generated_keyname opt_generated_column_attribute_list generated_column_attribute opt_storage_type
-%type <node> data_type temporary_option opt_if_not_exists opt_if_exists opt_charset collation opt_collation cast_data_type
+%type <node> data_type temporary_option opt_if_not_exists opt_if_exists opt_drop_purge opt_charset collation opt_collation cast_data_type
 %type <node> replace_with_opt_hint insert_with_opt_hint column_list opt_on_duplicate_key_clause opt_into  opt_replace opt_materialized opt_materialized_or_temporary
 %type <node> insert_vals_list insert_vals value_or_values
 %type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set select_clause_set_left select_clause_set_right  select_clause_set_with_order_and_limit
@@ -3356,10 +3356,10 @@ READ WRITE { malloc_terminal_node($$, result->malloc_pool_, T_OFF); }
  *
  *****************************************************************************/
 drop_database_stmt:
-DROP database_key opt_if_exists database_factor
+DROP database_key opt_if_exists database_factor opt_drop_purge
 {
   (void)($2);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DATABASE, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DATABASE, 3, $3, $4, $5);
 }
 ;
 
@@ -6276,12 +6276,12 @@ MATERIALIZED
  *****************************************************************************/
 
 drop_table_stmt:
-DROP opt_materialized_or_temporary table_or_tables opt_if_exists table_list opt_drop_behavior
+DROP opt_materialized_or_temporary table_or_tables opt_if_exists table_list opt_drop_purge opt_drop_behavior
 {
   (void)($3);
   ParseNode *tables = NULL;
   merge_nodes(tables, result, T_TABLE_LIST, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_TABLE, 3, $2, $4, tables);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_TABLE, 4, $2, $4, tables, $6);
 }
 ;
 
@@ -6310,6 +6310,13 @@ opt_if_exists:
 { $$ = NULL; }
 | IF EXISTS
 { malloc_terminal_node($$, result->malloc_pool_, T_IF_EXISTS); }
+;
+
+opt_drop_purge:
+/* EMPTY */
+{ $$ = NULL; }
+| PURGE
+{ malloc_terminal_node($$, result->malloc_pool_, T_DROP_PURGE); }
 ;
 
 table_list:
@@ -10664,20 +10671,42 @@ SET DEFAULT signed_literal
  *****************************************************************************/
 
 purge_stmt:
-PURGE TABLE relation_factor
+PURGE TABLE STRING_VALUE
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_TABLE, 1, $3);
+  ParseNode *obj_name_node = NULL;
+  malloc_terminal_node(obj_name_node, result->malloc_pool_, T_OBJ_NAME);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_TABLE, 2, $3, obj_name_node);
 }
 |
-PURGE INDEX relation_factor
+PURGE TABLE relation_name
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_INDEX, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_TABLE, 2, $3, NULL);
+}
+|
+PURGE INDEX STRING_VALUE
+{
+  ParseNode *obj_name_node = NULL;
+  malloc_terminal_node(obj_name_node, result->malloc_pool_, T_OBJ_NAME);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_INDEX, 2, $3, obj_name_node);
+}
+|
+PURGE INDEX relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_INDEX, 2, $3, NULL);
+}
+|
+PURGE database_key STRING_VALUE
+{
+  (void)($2);
+  ParseNode *obj_name_node = NULL;
+  malloc_terminal_node(obj_name_node, result->malloc_pool_, T_OBJ_NAME);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_DATABASE, 2, $3, obj_name_node);
 }
 |
 PURGE database_key database_factor
 {
   (void)($2);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_DATABASE, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PURGE_DATABASE, 2, $3, NULL);
 }
 |
 PURGE TENANT relation_name
