@@ -411,7 +411,7 @@ int64_t ObLogDirectReader::calc_read_size(const int64_t rbuf_len, const offset_t
   const int64_t size_limitted_by_file_size = limit_by_file_size(line_key_offset + try_read_size) - line_key_offset;
   // read size cannot exceed the length of the buff
   const int64_t unaligned_read_size = std::min(rbuf_len, size_limitted_by_file_size);
-  // avoid incomplate data in line cache
+  // avoid incompleted data in line cache
   const int64_t read_size = do_align_offset((offset_t)unaligned_read_size, CLOG_CACHE_SIZE);
   return read_size;
 }
@@ -476,7 +476,7 @@ int ObLogDirectReader::put_into_kvcache(const common::ObAddr& addr, const int64_
   return ret;
 }
 
-// The buffser used to read is thread local, line_buf points to this buffer.
+// The buffer used to read is thread local, line_buf points to this buffer.
 int ObLogDirectReader::read_disk_and_update_kvcache(const common::ObAddr& addr, const int64_t seq,
     const file_id_t want_file_id, const offset_t line_key_offset, ObReadBuf& read_buf, const char*& line_buf,
     ObReadCost& cost)
@@ -906,7 +906,7 @@ int ObLogDirectReader::get_log_file_type(ObLogWritePoolType& file_type) const
   return ret;
 }
 
-// read data from disk directlly
+// read data from disk directly
 int ObLogDirectReader::read_data_direct_impl(
     const ObReadParam& param, ObReadBuf& rbuf, ObReadRes& res, ObReadCost& cost)
 {
@@ -916,7 +916,7 @@ int ObLogDirectReader::read_data_direct_impl(
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "direct read not init", K(ret), K(param));
   } else if (OB_FAIL(is_valid_read_param(param, is_valid_param))) {
-    CLOG_LOG(WARN, "is_valid_read_param falied", K(ret), K(param), K(is_valid_param));
+    CLOG_LOG(WARN, "is_valid_read_param failed", K(ret), K(param), K(is_valid_param));
   } else if (OB_UNLIKELY(!is_valid_param) || OB_UNLIKELY(!rbuf.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid read argument", K(ret), K(param), K(rbuf));

@@ -1279,7 +1279,7 @@ int ObCLogMgr::pre_batch_change_member_(const common::ObPartitionArray& partitio
     } else if (OB_FAIL(member_list_array.push_back(member_list))) {
       CLOG_LOG(WARN, "member_list_array push_back failed", K(ret), K(partition_key), K(member_list));
     } else if (OB_FAIL(proposal_id_array.push_back(proposal_id))) {
-      CLOG_LOG(WARN, "proposal_id_array push_back faield", K(ret), K(partition_key), K(proposal_id_array));
+      CLOG_LOG(WARN, "proposal_id_array push_back failed", K(ret), K(partition_key), K(proposal_id_array));
     } else if (OB_FAIL(ret_map.insert(partition_key, ret))) {
       CLOG_LOG(WARN, "ret_map insert failed", K(ret), K(ret), K(partition_key));
     } else {
@@ -2925,7 +2925,7 @@ int ObCLogMgr::leader_construct_log_info_(const common::ObPartitionArray& partit
                 unused_freeze_version,
                 is_trans_log))) {
           CLOG_LOG(WARN,
-              "log_header genearte_header failed",
+              "log_header generate_header failed",
               K(ret),
               K(log_type),
               K(partition_key),

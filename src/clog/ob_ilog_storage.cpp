@@ -688,7 +688,7 @@ void ObIlogStorage::ObIlogStorageTimerTask::purge_stale_file_()
   } else if (OB_FAIL(ilog_storage_->purge_stale_file())) {
     CSR_LOG(WARN, "ilog_storage_timer purge_stale_file failed", K(ret));
   } else {
-    CSR_LOG(TRACE, "ilog_storage_timer pruge_stale_file success");
+    CSR_LOG(TRACE, "ilog_storage_timer purge_stale_file success");
   }
 }
 
@@ -843,7 +843,7 @@ int ObIlogStorage::get_cursor_batch(
     if (OB_FAIL(get_cursor_from_file_(partition_key, query_log_id, result))) {
       // subsequent code will judge the error number, determines if need tot return error.
       CSR_LOG(TRACE, "get_cursor_from_file_ failed", K(ret), K(partition_key), K(query_log_id));
-      // handle logs betweent ilog_store and memstore.
+      // handle logs between ilog_store and memstore.
       if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {
         if (OB_SUCCESS == tmp_ret && query_log_id < min_log_id) {
           CSR_LOG(INFO,

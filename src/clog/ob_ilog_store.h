@@ -115,7 +115,7 @@ private:
   const static int64_t DEFAULT_MEMSTORE_COUNT = 16;
   const static int64_t TIMER_TASK_INTERVAL = 1000;
   // PINNED_MEMORY_SIZE should set as ObIlogMemstore::CURSOR_SIZE_TRIGGER(32MB)
-  // however, in concurrent secenarios, it will causes that the size of
+  // however, in concurrent scenarios, it will causes that the size of
   // ObIlogMemstore will exceed than ObIlogMemstore::CURSOR_SIZE_TRIGGER.
   // therefore, set PINNED_MEMORY_SIZE as double ObIlogMemstore::CURSOR_SIZE_TRIGGER
   const static int64_t PINNED_MEMORY_SIZE = 2 * ObIlogMemstore::CURSOR_SIZE_TRIGGER;
@@ -150,7 +150,7 @@ private:
 
   // merge all ObIlogMemstore in [0, end_idx] to merge_after_memstore
   // end_idx is the last index of frozen_memstore_array_
-  // memstore_after_merge is the container to merge forzen_memstore_array_
+  // memstore_after_merge is the container to merge frozen_memstore_array_
   int merge_frozen_memstore_(int64_t& end_idx, FrozenMemstore& memstore_after_merge);
   int build_and_write_file_(ObIlogFileBuilder& builder);
   int check_need_dump_(bool& need_dump, int64_t curr_memstore_seq);
@@ -161,10 +161,10 @@ private:
   // free_memstore_array_ records the memstore need to release memory
   // builder is used to write memstore_after_merge into file
   // 1) if trigger_type is OB_TIMER_TRIGGER_TYPE or OB_CLOG_SIZE_TRIGGER_TYPE,
-  //    don't need apeend info_block into file_id_cache, free_memstore_array records the
+  //    don't need append info_block into file_id_cache, free_memstore_array records the
   //    memstore located in [0, end_idx).
   // 2) if trigger_type is OB_ILOG_NOT_CONTINOUS_TYPE or OB_MERGE_NEED_SWITCH_FILE_TRIGGER_TYPE,
-  //    need append info_block into file_id_cache and swith ilog file, free_memstore_array
+  //    need append info_block into file_id_cache and switch ilog file, free_memstore_array
   //    records the memstore located in [0, end_idx]
   int handle_different_trigger_type_(const FrozenMemstore& memstore_after_merge, const int64_t& end_idx,
       IlogMemstoreArray& free_memstore_array, ObIlogFileBuilder& builder);

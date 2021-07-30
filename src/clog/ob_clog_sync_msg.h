@@ -137,7 +137,7 @@ private:
   uint64_t max_confirmed_log_id_;
   // following conditions will lead to false:
   // 1. out of memory
-  // 2. disk space not enougn
+  // 2. disk space not enough
   bool is_normal_partition_;
 
 private:

@@ -199,7 +199,7 @@ private:
 private:
   bool is_inited_;
   bool is_running_;
-  // Query __all_clog_hisotry_info
+  // Query __all_clog_history_info
   common::ObMySQLProxy* sql_proxy_;
   // Provide reading remote log
   ObILogEngine* log_engine_;

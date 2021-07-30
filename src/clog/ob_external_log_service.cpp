@@ -95,7 +95,7 @@ int ObExtLogService::req_start_log_id_by_ts_with_breakpoint(
   } else if (OB_UNLIKELY(!clog_mgr_->is_scan_finished())) {
     resp.set_err(OB_SERVER_IS_INIT);
     EXTLOG_LOG(WARN,
-        "all clog and ilog file are not scan-finised, can not serve "
+        "all clog and ilog file are not scan-finished, can not serve "
         "req_start_log_id_by_ts_with_breakpoint RPC",
         K(req_msg),
         K(resp));
@@ -137,7 +137,7 @@ int ObExtLogService::fetch_log(
   } else if (OB_UNLIKELY(!clog_mgr_->is_scan_finished())) {
     resp.set_err(OB_SERVER_IS_INIT);
     EXTLOG_LOG(WARN,
-        "all clog and ilog file are not scan-finised, can not serve fetch_log RPC",
+        "all clog and ilog file are not scan-finished, can not serve fetch_log RPC",
         K(req),
         K(resp),
         K(send_ts),
@@ -175,7 +175,7 @@ int ObExtLogService::archive_fetch_log(const ObPGKey& pg_key, const ObReadParam&
   } else if (OB_UNLIKELY(!clog_mgr_->is_scan_finished())) {
     ret = OB_EAGAIN;
     EXTLOG_LOG(
-        WARN, "all clog and ilog file are not scan-finised, can not serve fetch_log", K(pg_key), K(param), KR(ret));
+        WARN, "all clog and ilog file are not scan-finished, can not serve fetch_log", K(pg_key), K(param), KR(ret));
   } else {
     const int64_t start_ts = ObTimeUtility::current_time();
     if (OB_FAIL(archive_log_fetcher_.fetch_log(pg_key, param, rbuf, res))) {

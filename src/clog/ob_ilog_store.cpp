@@ -271,7 +271,7 @@ private:
       }
     } else if (entry_has_merged.max_log_id_ != entry_to_merge.min_log_id_ - 1) {
       // during merge, log in different memstore may be not continous,
-      // because of partition migrattion
+      // because of partition migration
       ret = OB_EAGAIN;
       CLOG_LOG(
           WARN, "insert_into_block failed because of not continous", K(ret), K(entry_to_merge), K(entry_has_merged));
@@ -968,7 +968,7 @@ void ObIlogStore::runTimerTask()
         // whatever the trigger_type is, need to dump memstore to disk
       } else if (OB_FAIL(build_and_write_file_(builder))) {
         CLOG_LOG(ERROR, "build_and_write_file_ failed", K(ret));
-        // whatever the trigger_type is, need to update flused_ilog_id
+        // whatever the trigger_type is, need to update fused_ilog_id
       } else if (OB_FAIL(update_max_flushed_ilog_id_(builder.get_index_info_block_map()))) {
         CSR_LOG(ERROR, "update_max_flushed_ilog_id_ failed", K(ret));
       } else if (OB_FAIL(handle_different_trigger_type_(memstore_after_merge, end_idx, free_memstore_array, builder))) {
@@ -1199,9 +1199,9 @@ int ObIlogStore::get_merge_range_(int64_t& end_idx, bool& need_switch_file)
         need_switch_file = true;
       } else if (OB_UNLIKELY(NULL == memstore)) {
         ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, "unexpect error becauese memstore is nullptr", K(ret));
+        CLOG_LOG(ERROR, "unexpect error because memstore is nullptr", K(ret));
       } else if (OB_FAIL(memstore->get_cursor_size(tmp_cursor_size))) {
-        CLOG_LOG(ERROR, "get_cusrsor_size failed", K(ret));
+        CLOG_LOG(ERROR, "get_cursor_size failed", K(ret));
       } else if (OB_FAIL(memstore->get_clog_size(tmp_clog_size))) {
         CLOG_LOG(ERROR, "get_clog_size failed", K(ret));
         // Try to ensure the total size of each file does not exceed 32MB,
@@ -1306,7 +1306,7 @@ int ObIlogStore::check_need_dump_(bool& need_dump, int64_t curr_memstore_seq)
   return ret;
 }
 
-// 1. if reanme failed, it will kill observer
+// 1. if rename failed, it will kill observer
 // 2. if push item to free_memstore_array failed, it will do same thing above
 // 3. if remove item from free_memstore_array failed, it will do same thing above
 int ObIlogStore::handle_different_trigger_type_(const FrozenMemstore& memstore_after_merge, const int64_t& end_idx,
@@ -1320,7 +1320,7 @@ int ObIlogStore::handle_different_trigger_type_(const FrozenMemstore& memstore_a
     CLOG_LOG(ERROR, "ilog store not inited", K(ret));
   } else if (!memstore_after_merge.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "invalid arguent", K(ret), K(memstore_after_merge));
+    CLOG_LOG(ERROR, "invalid argument", K(ret), K(memstore_after_merge));
   } else if (!need_merge_frozen_memstore_array_by_trigger_type_(trigger_type) &&
              OB_FAIL(file_id_cache_->append(next_ilog_file_id_, builder.get_index_info_block_map()))) {
     CSR_LOG(ERROR, "file_id_cache_ append failed", K(ret), K(next_ilog_file_id_));

@@ -29,7 +29,7 @@ class ObIlogAccessor;
 // The InfoBlock of the ilog file records each partition_key and its min_log_id, max_log_id,
 // min_submit_timestamp, max_submit_timestamp in this ilog file,
 //
-// For version after 2.1(include 2.1), it's only recore the start_offset of the first ilog of
+// For version after 2.1(include 2.1), it's only record the start_offset of the first ilog of
 // this partition in the ilog file.
 //
 // For version before 2.1, the start_offset corresponds to the start_offset_index of the first

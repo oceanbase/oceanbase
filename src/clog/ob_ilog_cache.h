@@ -28,7 +28,7 @@ namespace clog {
  * essentially, it's an in-memory cache.
  *
  * The main data struct of ObIlogCache is a map, which the key
- * is file_id_t(fild_id_t is a discriptor of one ilog file),
+ * is file_id_t(fild_id_t is a descriptor of one ilog file),
  * and the value is ObIlogPerFileCacheNode.
  *
  * Concurrency control:
@@ -43,10 +43,10 @@ namespace clog {
  *    it's need to backfill the status of ObIlogPerFileCacheNode into ready,
  *    the node may be not exist, in this case, we destroy the object which has
  *    been loaded.
- * 2. Same as above, wash thread delete the placeholder node, there is may be a new placehodler node,
+ * 2. Same as above, wash thread delete the placeholder node, there is may be a new placeholder node,
  *    at this time, the above loading has finished. To identify two different nodes, a monotonically
  *    increasing sequence number is used to mark them
- * 3. To prevent the node which being accessed to be destoryed, we use reference count to protect
+ * 3. To prevent the node which being accessed to be destroyed, we use reference count to protect
  *    node, the initial reference count of each node which has inserted into hash_map is 1.
  */
 
@@ -75,7 +75,7 @@ struct ObIlogPerFileCacheWrapper {
     page_arena_.set_tenant_id(tenant_id);
   }
 
-  // Preloaded files, should give this file more time, avoid ealry wash
+  // Preloaded files, should give this file more time, avoid early wash
   void be_kind_to_preload()
   {
     const int64_t PRELOAD_KIND_INTERVAL = 90 * 1000 * 1000;  // 90 second
