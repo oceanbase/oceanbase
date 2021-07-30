@@ -8981,31 +8981,55 @@ int ObDDLService::purge_index(const obrpc::ObPurgeIndexArg& arg)
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema* table_schema = NULL;
   const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t database_id = common::OB_INVALID_ID;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                 combine_id(tenant_id, OB_RECYCLEBIN_SCHEMA_ID),
-                 arg.table_name_,
-                 true, /*is_index*/
-                 table_schema))) {
-    LOG_WARN("get_table_schema failed", K(ret));
-  } else if (NULL == table_schema) {
-    ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
-    LOG_WARN("table is not in recyclebin", K(arg), K(ret));
-  } else if (!table_schema->is_index_table()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("purge index failed, the table is not index", K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else if (OB_FAIL(schema_guard.get_database_id(tenant_id, arg.database_name_, database_id))) {
+    LOG_WARN("fail to get database_id ", K(ret), K(database_id));
+  } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    ObString obj_name;
+    // trx begin
     if (OB_FAIL(trans.start(sql_proxy_))) {
       LOG_WARN("start transaction failed", K(ret));
-    } else if (OB_FAIL(ddl_operator.purge_table_in_recyclebin(*table_schema, trans, &arg.ddl_stmt_str_))) {
-      LOG_WARN("purge index failed", K(ret));
+    } else {
+      bool is_in = false;
+      if (OB_FAIL(ddl_operator.check_object_name_in_db(
+          tenant_id, arg.table_name_, database_id, ObRecycleObject::INDEX,
+          trans, is_in))) {
+        LOG_WARN("check obj failed", K(ret), K(database_id));
+      } else if (is_in) {
+        obj_name = arg.table_name_;
+      } else if (OB_FAIL(ddl_operator.get_object_name_by_original_name(
+           tenant_id, arg.table_name_, database_id, ObRecycleObject::INDEX, false,
+           trans, obj_name))) {
+        LOG_WARN("get object name failed", K(ret));  
+      } else if (obj_name.empty()) {
+        ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+        LOG_WARN("table is not in recyclebin", K(ret), K(arg));
+      }
+      // fetch schema
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                 combine_id(tenant_id, OB_RECYCLEBIN_SCHEMA_ID),
+                 obj_name,
+                 true, /*is_index*/
+                 table_schema))) {
+          LOG_WARN("get_table_schema failed", K(ret));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+          LOG_WARN("table is not in recyclebin", K(ret), K(arg));
+        } else if (!table_schema->is_index_table()) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("purge index failed, the table is not index", K(ret));
+        } else if (OB_FAIL(ddl_operator.purge_table_in_recyclebin(
+                   *table_schema, trans, &arg.ddl_stmt_str_))) {
+          LOG_WARN("purge table with aux table failed", K(ret));
+        }
+      }
     }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
@@ -9029,37 +9053,60 @@ int ObDDLService::purge_table(const ObPurgeTableArg& arg, int64_t& pz_count, ObM
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema* table_schema = NULL;
   const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t database_id = common::OB_INVALID_ID;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
-                 combine_id(tenant_id, OB_RECYCLEBIN_SCHEMA_ID),
-                 arg.table_name_,
-                 false, /*is_index*/
-                 table_schema))) {
-    LOG_WARN("get_table_schema failed", K(ret));
-  } else if (NULL == table_schema) {
-    ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
-    LOG_WARN("table is not in recyclebin", K(arg), K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else if (OB_FAIL(schema_guard.get_database_id(tenant_id, arg.database_name_, database_id))) {
+    LOG_WARN("fail to get database_id ", K(ret), K(database_id));
+  } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    ObString obj_name;
+    // trx begin
     if (OB_ISNULL(pr_trans) && OB_FAIL(trans.start(sql_proxy_))) {
       LOG_WARN("start transaction failed", K(ret));
-    } else if (OB_FAIL(ddl_operator.purge_table_with_aux_table(
-                   *table_schema, schema_guard, OB_ISNULL(pr_trans) ? trans : *pr_trans, &arg.ddl_stmt_str_))) {
-      LOG_WARN("purge table with aux table failed", K(ret));
-    } else if (table_schema->get_primary_zone().empty()) {
-      // derive from upper level
-    } else if (nullptr != pr_trans) {
-      pz_count = 1;
     } else {
-      if (OB_FAIL(try_modify_tenant_primary_zone_entity_count(
+      bool is_in = false;
+      if (OB_FAIL(ddl_operator.check_object_name_in_db(
+          tenant_id, arg.table_name_, database_id, ObRecycleObject::TABLE,
+          OB_ISNULL(pr_trans) ? trans : *pr_trans, is_in))) {
+        LOG_WARN("check obj failed", K(ret), K(database_id));
+      } else if (is_in) {
+        obj_name = arg.table_name_;
+      } else if (OB_FAIL(ddl_operator.get_object_name_by_original_name(
+          tenant_id, arg.table_name_, database_id, ObRecycleObject::TABLE, false,
+          OB_ISNULL(pr_trans) ? trans : *pr_trans, obj_name))) {
+        LOG_WARN("get object name failed", K(ret));
+      } else if (obj_name.empty()) {
+        ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+        LOG_WARN("table is not in recyclebin", K(ret), K(arg));
+      }
+      // fetch schema
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                 combine_id(tenant_id, OB_RECYCLEBIN_SCHEMA_ID),
+                 obj_name,
+                 false, /*is_index*/
+                 table_schema))) {
+          LOG_WARN("get_table_schema failed", K(ret));
+        } else if (NULL == table_schema) {
+          ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+          LOG_WARN("table is not in recyclebin", K(ret), K(arg));
+        } else if (OB_FAIL(ddl_operator.purge_table_with_aux_table(
+                   *table_schema, schema_guard, OB_ISNULL(pr_trans) ? trans : *pr_trans, &arg.ddl_stmt_str_))) {
+          LOG_WARN("purge table with aux table failed", K(ret));
+        } else if (table_schema->get_primary_zone().empty()) {
+          // derive from upper level
+        } else if (nullptr != pr_trans) {
+          pz_count = 1;
+        } else {
+          if (OB_FAIL(try_modify_tenant_primary_zone_entity_count(
               trans, schema_guard, false /*sub*/, 1, table_schema->get_tenant_id()))) {
-        LOG_WARN("fail to try modify primary zone entity count", K(ret));
+            LOG_WARN("fail to try modify primary zone entity count", K(ret));
+          }
+        }
       }
     }
     if (trans.is_started()) {
@@ -9163,46 +9210,65 @@ int ObDDLService::purge_database(const ObPurgeDatabaseArg& arg, int64_t& pz_coun
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, arg.db_name_, database_schema))) {
-    LOG_WARN("get_database_schema failed", K(ret));
-  } else if (OB_ISNULL(database_schema)) {
-    ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
-    LOG_WARN("database not in recyclebin, can not be purge", K(arg), K(ret));
-  } else if (!database_schema->is_in_recyclebin()) {
-    ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
-    LOG_WARN("database not in recyclebin, can not be purge", K(arg), K(*database_schema), K(ret));
-  } else if (OB_FAIL(
-                 schema_guard.get_table_ids_in_database(tenant_id, database_schema->get_database_id(), table_ids))) {
-    LOG_WARN("fail to get table ids in database", K(ret), K(arg));
-  } else { /*do nothing*/
   }
-
-  if (OB_SUCC(ret)) {
-    pz_count = 0;
-    if (database_schema->get_primary_zone().empty()) {
-      // derive from upper level
-    } else {
-      ++pz_count;
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
-      const ObSimpleTableSchemaV2* schema = nullptr;
-      if (OB_FAIL(schema_guard.get_table_schema(table_ids.at(i), schema))) {
-        LOG_WARN("fail to get table schema", K(ret), "table_id", table_ids.at(i));
-      } else if (nullptr == schema) {
-        // bypass
-      } else if (schema->get_primary_zone().empty()) {
-        // bypass
-      } else {
-        ++pz_count;
-      }
-    }
-  }
-
   if (OB_SUCC(ret)) {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObDDLSQLTransaction trans(schema_service_);
+    bool is_in = false;
+    ObString obj_name;
     if (OB_ISNULL(pr_trans) && OB_FAIL(trans.start(sql_proxy_))) {
       LOG_WARN("start transaction failed", K(ret));
+    } else if (OB_FAIL(ddl_operator.check_object_name_in_db(
+        tenant_id, arg.db_name_, OB_RECYCLEBIN_SCHEMA_ID, ObRecycleObject::DATABASE,
+        OB_ISNULL(pr_trans) ? trans : *pr_trans, is_in))) {
+      LOG_WARN("check obj failed", K(ret));
+    } else if (is_in) {
+      obj_name = arg.db_name_;
+    } else if (OB_FAIL(ddl_operator.get_object_name_by_original_name(
+        tenant_id, arg.db_name_, OB_RECYCLEBIN_SCHEMA_ID, ObRecycleObject::DATABASE, false,
+        OB_ISNULL(pr_trans) ? trans : *pr_trans, obj_name))) {
+      LOG_WARN("get object name failed", K(ret));
+    } else if (obj_name.empty()) {
+      ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+      LOG_WARN("table is not in recyclebin", K(ret), K(arg));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(schema_guard.get_database_schema(tenant_id, obj_name, database_schema))) {
+        LOG_WARN("get_database_schema failed", K(ret));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+        LOG_WARN("database not in recyclebin, can not be purge", K(arg), K(ret));
+      } else if (!database_schema->is_in_recyclebin()) {
+        ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+        LOG_WARN("database not in recyclebin, can not be purge", K(arg), K(*database_schema), K(ret));
+      } else if (OB_FAIL(
+          schema_guard.get_table_ids_in_database(tenant_id, database_schema->get_database_id(), table_ids))) {
+        LOG_WARN("fail to get table ids in database", K(ret), K(arg));
+      } else { /*do nothing*/
+      }
+    }
+    if (OB_SUCC(ret)) {
+      pz_count = 0;
+      if (database_schema->get_primary_zone().empty()) {
+        // derive from upper level
+      } else {
+        ++pz_count;
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+        const ObSimpleTableSchemaV2* schema = nullptr;
+        if (OB_FAIL(schema_guard.get_table_schema(table_ids.at(i), schema))) {
+          LOG_WARN("fail to get table schema", K(ret), "table_id", table_ids.at(i));
+        } else if (nullptr == schema) {
+          // bypass
+        } else if (schema->get_primary_zone().empty()) {
+          // bypass
+        } else {
+          ++pz_count;
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
     } else if (OB_FAIL(ddl_operator.purge_database_in_recyclebin(
                    *database_schema, OB_ISNULL(pr_trans) ? trans : *pr_trans, schema_guard, &arg.ddl_stmt_str_))) {
       LOG_WARN("purge database failed", K(ret));
@@ -9245,13 +9311,19 @@ int ObDDLService::purge_database(const ObPurgeDatabaseArg& arg, int64_t& pz_coun
 */
 int ObDDLService::purge_tenant_expire_recycle_objects(const ObPurgeRecycleBinArg& arg, int64_t& purged_objects)
 {
+  uint64_t database_id = common::OB_INVALID_ID;
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(arg.tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_database_id(arg.tenant_id_, arg.database_name_, database_id))) {
+    LOG_WARN("fail to get database_id ", K(ret), K(database_id));
   } else {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObArray<ObRecycleObject> recycle_objs;
-    if (OB_FAIL(ddl_operator.fetch_expire_recycle_objects(arg.tenant_id_, arg.expire_time_, recycle_objs))) {
+    if (OB_FAIL(ddl_operator.fetch_expire_recycle_objects(arg.tenant_id_, database_id, arg.expire_time_, recycle_objs))) {
       LOG_WARN("fetch expire recycle objects failed", K(ret), K(arg));
     } else {
       LOG_INFO("purge expire recycle object of tenant start", K(arg), K(recycle_objs.size()), K(ret));
@@ -9308,6 +9380,7 @@ int ObDDLService::purge_recyclebin_except_tenant(
             purge_table_arg.tenant_id_ = arg.tenant_id_;
             purge_table_arg.table_name_ = recycle_obj.get_object_name();
             purge_table_arg.ddl_stmt_str_ = ddl_stmt.string();
+            purge_table_arg.database_name_ = OB_RECYCLEBIN_SCHEMA_NAME;
             if (OB_FAIL(purge_table(purge_table_arg, this_pz_count, &trans))) {
               if (OB_ERR_OBJECT_NOT_IN_RECYCLEBIN == ret) {
                 LOG_WARN("recycle object maybe purge by database", K(ret), K(recycle_obj));

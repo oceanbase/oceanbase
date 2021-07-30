@@ -47,8 +47,6 @@ int ObDropTableResolver::resolve(const ParseNode& parse_tree)
     if (OB_ISNULL(parse_tree.children_[TABLE_LIST_NODE]) || parse_tree.children_[TABLE_LIST_NODE]->num_child_ <= 0) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
-    } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_RECYCLEBIN, is_recyclebin_open))) {
-      SQL_RESV_LOG(WARN, "get sys variable failed", K(ret));
     } else {
       if (share::is_oracle_mode()) {
         drop_table_arg.if_exist_ = false;
@@ -56,7 +54,13 @@ int ObDropTableResolver::resolve(const ParseNode& parse_tree)
         drop_table_arg.if_exist_ = (NULL != parse_tree.children_[IF_EXIST_NODE]) ? true : false;
       }
       drop_table_arg.tenant_id_ = session_info_->get_effective_tenant_id();
-      drop_table_arg.to_recyclebin_ = is_recyclebin_open.get_bool();
+      if (NULL != parse_tree.children_[DROP_PURGE_NODE]) {
+        drop_table_arg.to_recyclebin_ = false;
+      } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_RECYCLEBIN, is_recyclebin_open))) {
+        SQL_RESV_LOG(WARN, "get sys variable failed", K(ret));
+      } else {
+        drop_table_arg.to_recyclebin_ = is_recyclebin_open.get_bool();
+      }
     }
 
     if (OB_FAIL(ret)) {

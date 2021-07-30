@@ -351,10 +351,22 @@ public:
       const ObRecycleObject::RecycleObjType recycle_obj_type, common::ObISQLClient& sql_client,
       common::ObIArray<ObRecycleObject>& recycle_objs) override;
 
+  virtual int fetch_recycle_object_by_original_name_from_all(const uint64_t tenant_id, 
+      const common::ObString& original_name, const ObRecycleObject::RecycleObjType recycle_obj_type,
+      common::ObISQLClient& sql_client, const bool desc, common::ObIArray<ObRecycleObject>& recycle_objs) override;
+      
+  virtual int fetch_recycle_object_by_object_name_from_db(const uint64_t tenant_id, const uint64_t database_id, 
+      const common::ObString& object_name, const ObRecycleObject::RecycleObjType recycle_obj_type,
+      common::ObISQLClient& sql_client, uint64_t& recycle_obj_cnt) override;
+
+  virtual int fetch_recycle_object_by_original_name_from_db(const uint64_t tenant_id, const uint64_t database_id, 
+      const common::ObString& original_name, const ObRecycleObject::RecycleObjType recycle_obj_type,
+      common::ObISQLClient& sql_client, const bool desc, common::ObIArray<ObRecycleObject>& recycle_objs) override;
+
   virtual int delete_recycle_object(
       const uint64_t tenant_id, const ObRecycleObject& recycle_object, common::ObISQLClient& sql_client) override;
 
-  virtual int fetch_expire_recycle_objects(const uint64_t tenant_id, const int64_t expire_time,
+  virtual int fetch_expire_recycle_objects(const uint64_t tenant_id, const uint64_t database_id, const int64_t expire_time,
       common::ObISQLClient& sql_client, common::ObIArray<ObRecycleObject>& recycle_objs) override;
 
   virtual int fetch_recycle_objects_of_db(const uint64_t tenant_id, const uint64_t database_id,

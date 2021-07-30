@@ -1,0 +1,929 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+echo --------------------------------------------------------------------------;
+echo 一，系统租户下的root用户的purge测试;
+echo --------------------------------------------------------------------------;
+echo ;
+echo --------------------------------------------------------------------------;
+echo 1.0 连接;
+echo --------------------------------------------------------------------------;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+
+--disable_warnings
+set recyclebin=off;
+drop database if exists test;
+create database test;
+use test;
+drop tenant if exists recyclebin_tenant force;
+drop resource pool if exists recyclebin_pool;
+drop resource unit if exists recyclebin_unit;
+--enable_warnings
+
+set recyclebin=on;
+echo ;
+echo --------------------------------------------------------------------------;
+echo 1.1 用原始名进行purge;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 同名情况下，先purge先进回收站的对象;
+echo 依次将表放入回收站中，检查purge的顺序是否一致，如果一致会输出三个succeed;
+echo 回收站中有三个对象，第一个对象obj1最早进入回收站，第二个obj2次之，第三个obj3最后进入回收站;
+echo purge一个原始名recyclebin_test_t1的表，现在只有两个对象;
+echo 第一个对象为obj2输出succeed，第二个对象为obj3输出succeed;
+echo 继续purge，剩下的一个为obj3，输出succeed;
+echo --------------------------------------------------------------------------;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+purge table recyclebin_test_t1;
+let $tmp1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $tmp2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+if($tmp1 == $obj_name2)
+{
+    --echo succeed
+}
+if($tmp2 == $obj_name3)
+{
+    --echo succeed
+}
+purge table recyclebin_test_t1;
+let $tmp1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+if($tmp1 == $obj_name3)
+{
+    --echo succeed
+}
+purge table recyclebin_test_t1;
+show recyclebin;
+echo --------------------------------------------------------------------------;
+echo 用object name进行purge操作,然后比对回收站数量是否对上;
+echo --------------------------------------------------------------------------;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+--disable_query_log
+--echo purge table obj_name1
+eval purge table $obj_name1;
+--echo purge table obj_name2
+eval purge table $obj_name2;
+--echo purge table obj_name3
+eval purge table $obj_name3;
+--enable_query_log
+show recyclebin;
+
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 1.2 purge权限测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo root用户拥有super权限，可以执行所有purge操作;
+echo 所有执行将会成功;
+echo --------------------------------------------------------------------------;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+purge database recyclebin_database1;
+create database recyclebin_database1;
+use recyclebin_database1;
+create table t1(c1 int);
+create index index_t1 on t1(c1);
+drop table t1;
+create table t2(c1 int);
+create index index_t2 on t2(c1);
+drop table t2;
+use test;
+drop database recyclebin_database1;
+echo 回收站里面有5个对象，其中1个数据库类型，2个表类型，2个索引类型;
+select count(*) from oceanbase.__all_recyclebin;
+use __recyclebin;
+purge recyclebin;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo purge index的测试;
+echo --------------------------------------------------------------------------;
+use test;
+create table t(c1 int);
+create index index_t on t(c1);
+drop table t;
+create table t(c1 int);
+create index index_t on t(c1);
+drop table t;
+let $index_obj1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $index_org1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $index_obj2= query_get_value(show recyclebin, OBJECT_NAME, 3);
+let $index_org2= query_get_value(show recyclebin, ORIGINAL_NAME, 3);
+--disable_query_log
+echo purge index index_obj1;
+eval purge index $index_obj1;
+echo purge index index_org2;
+eval purge index $index_org2;
+--enable_query_log
+echo 回收站里面还有两个类型为表的对象;
+select count(*) from oceanbase.__all_recyclebin;
+purge table t;
+purge table t;
+echo 回收站里面没有对象;
+select count(*) from oceanbase.__all_recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 1.3 purge默认只能purge当前库回收站对象的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 直接用表名的时候，purge的回收站对象不属于当前库的时候，就会报错;
+echo 加上其它的库名的时候，如果有权限的话，可以purge属于其它库的回收站对象;
+echo 首先，在一个数据库里创建三个表，然后放入回收站里面，然后在另一个里面进行purge操作;
+echo 如果直接使用object name和original name进行purge的时候，会失败;
+echo 加上库的名字后，就会成功;
+echo --------------------------------------------------------------------------;
+use test;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t2(c1 int);
+drop table recyclebin_t2;
+create table recyclebin_t3(c1 int);
+drop table recyclebin_t3;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+create database recyclebin_database1;
+use recyclebin_database1;
+--error 5270
+purge table recyclebin_t1;
+--error 5270
+purge table recyclebin_t2;
+--error 5270
+purge table recyclebin_t3;
+--disable_query_log
+--echo purge table obj_name1
+--error 5270
+eval purge table $obj_name1;
+--echo purge table obj_name2
+--error 5270
+eval purge table $obj_name2;
+--echo purge table obj_name3
+--error 5270
+eval purge table $obj_name3;
+--echo purge table test.obj_name1
+eval purge table test.$obj_name1;
+--echo purge table test.obj_name2
+eval purge table test.$obj_name2;
+--echo purge table test.recyclebin_t3
+eval purge table test.recyclebin_t3;
+--enable_query_log
+use __recyclebin;
+drop database recyclebin_database1;
+echo 回收站只有一个类型为数据库的对象;
+select count(*) from oceanbase.__all_recyclebin;
+purge recyclebin;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 1.4 直接drop表的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 当回收站功能开启的时候，如果加上purge可选项，可以直接删除，不进入回收站;
+echo 开启purge选项后，可以直接进行删除操作，查看回收站，发现并没有进入回收站;
+echo 包含表，库，索引不能单独进入回收站中;
+echo --------------------------------------------------------------------------;
+use test;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+
+
+create database recyclebin_database_t1;
+create database recyclebin_database_t2;
+create database recyclebin_database_t3;
+drop database recyclebin_database_t1 purge;
+select original_name from oceanbase.__all_recyclebin;
+drop database recyclebin_database_t2 purge;
+select original_name from oceanbase.__all_recyclebin;
+drop database recyclebin_database_t3 purge;
+select original_name from oceanbase.__all_recyclebin;
+
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1;
+select original_name from oceanbase.__all_recyclebin;
+drop table recyclebin_test_t2;
+select original_name from oceanbase.__all_recyclebin;
+drop table recyclebin_test_t3;
+select original_name from oceanbase.__all_recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 1.5 清理;
+echo --------------------------------------------------------------------------;
+purge recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 二，系统租户下的普通用户的purge测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 2.0 连接;
+echo --------------------------------------------------------------------------;
+CREATE USER 'weihan'@'%' IDENTIFIED BY 'weihan';
+grant all on test.* to weihan@'%'  identified by "weihan";
+disconnect obsys;
+connect (obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys_weihan;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 2.1 用原始名进行purge;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 同名情况下，先purge先进回收站的对象;
+echo 依次将表放入回收站中，检查purge的顺序是否一致，如果一致会输出两个succeed;
+echo 首先创建两个回收站对象，原始名字相同，依次在回收站当中，obj1和obj2，obj1先进入回收站;
+echo 用原始名字purge，回收站只剩下一个对象，那就是obj2，返回succeed;
+echo 再创建一个同名表，进入回收站，记做obj3;
+echo 用原始名字purge，回收站只剩下一个对象，那就是obj3，返回succeed;
+echo --------------------------------------------------------------------------;
+use test;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+purge table recyclebin_test_t1;
+let $obj_tmp= query_get_value(show recyclebin, OBJECT_NAME, 1);
+if($obj_tmp == $obj_name2)
+{
+    --echo succeed
+}
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 2);
+purge table recyclebin_test_t1;
+let $obj_tmp= query_get_value(show recyclebin, OBJECT_NAME, 1);
+if($obj_tmp == $obj_name3)
+{
+    --echo succeed
+}
+purge table recyclebin_test_t1;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 2.2 purge权限测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 在没有权限的库中做purge操作，会报错;
+echo 在sys租户中，weihan没有recyclebin_database1库的drop权限，执行会失败;
+echo 首先，创建数据库recyclebin_database1，在里面创建一些表，然后放到回收站里面;
+echo 然后对用户赋予select权限，登陆用户;
+echo 切换到test库中，对属于recyclebin_database1库的回收站对象进行purge，失败，没有权限;
+echo 切换到recyclebin_database1库，进行purge，失败，权限不够;
+echo --------------------------------------------------------------------------;
+disconnect obsys_weihan;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+create database recyclebin_database1;
+use recyclebin_database1;
+create table t1(c1 int);
+drop table t1;
+create table t2(c1 int);
+drop table t2;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+select original_name from oceanbase.__all_recyclebin;
+# 只赋予select权限
+grant select on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect obsys;
+connect (obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys_weihan;
+use test;
+--error 1044
+purge table recyclebin_database1.t1;
+--error 1044
+purge table recyclebin_database1.t2;
+--disable_query_log
+--echo purge table recyclebin_database1.obj_name1
+--error 1044
+eval purge table recyclebin_database1.$obj_name1;
+--echo purge table recyclebin_database1.obj_name2
+--error 1044
+eval purge table recyclebin_database1.$obj_name2;
+--enable_query_log
+use recyclebin_database1;
+--error 1044
+purge table t1;
+--error 1044
+purge table t2;
+--disable_query_log
+--echo purge table obj_name1
+--error 1044
+eval purge table $obj_name1;
+--echo purge table obj_name2
+--error 1044
+eval purge table $obj_name2;
+--enable_query_log
+disconnect obsys_weihan;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+use __recyclebin;
+drop database recyclebin_database1;
+echo 回收站里面有三个对象，其中1个类型为数据库，两个类型为表;
+select count(*) from oceanbase.__all_recyclebin;
+purge recyclebin;
+echo 回收站里面没有对象，全被purge了;
+select count(*) from oceanbase.__all_recyclebin;
+disconnect obsys;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 2.3 purge默认只能purge当前库的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 直接用表名的时候，purge的回收站对象不属于当前库的时候，就会报错;
+echo 加上其它的库名的时候，如果有权限的话，可以purge属于其它库的回收站对象;
+echo 首先，在一个数据库里创建三个表，然后放入回收站里面，然后在另一个里面进行purge操作;
+echo 如果直接使用object name和original name进行purge的时候，会失败;
+echo 加上库的名字后，就会成功;
+echo --------------------------------------------------------------------------;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+create database recyclebin_database1;
+grant all on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect obsys;
+connect (obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys_weihan;
+use test;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+let $obj_name4= query_get_value(show recyclebin, OBJECT_NAME, 4);
+let $obj_name5= query_get_value(show recyclebin, OBJECT_NAME, 5);
+let $obj_name6= query_get_value(show recyclebin, OBJECT_NAME, 6);
+use recyclebin_database1;
+--error 5270
+purge table recyclebin_t1;
+--disable_query_log
+--echo purge table obj_name1
+--error 5270
+eval purge table $obj_name1;
+--echo purge table obj_name2
+--error 5270
+eval purge table $obj_name2;
+--echo purge table obj_name3
+--error 5270
+eval purge table $obj_name3;
+--echo purge table test.recyclebin_t1
+purge table test.recyclebin_t1;
+--echo purge table test.obj_name2
+eval purge table test.$obj_name2;
+--echo purge table test.obj_name3
+eval purge table test.$obj_name3;
+--enable_query_log
+use test;
+purge table recyclebin_t1;
+--disable_query_log
+--echo purge table obj_name5
+eval purge table $obj_name5;
+--echo purge table obj_name6
+eval purge table $obj_name6;
+--enable_query_log
+show recyclebin;
+disconnect obsys_weihan;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+drop database recyclebin_database1 purge;
+echo 回收站里面没有对象;
+select count(*) from oceanbase.__all_recyclebin;
+disconnect obsys;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 2.4 直接drop表的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 当回收站功能开启的时候，如果加上purge可选项，可以直接删除，不进入回收站;
+echo --------------------------------------------------------------------------;
+connect (obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys_weihan;
+use test;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+disconnect obsys_weihan;
+
+echo ;
+echo 2.5 清理;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 三，普通租户下的root用户的purge测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 3.0 连接;
+echo --------------------------------------------------------------------------;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+create resource unit if not exists recyclebin_unit max_cpu=1, min_memory='1G',max_memory='1G',max_disk_size='1G',max_iops=1000,max_session_num=1000;
+create resource pool if not exists recyclebin_pool unit='recyclebin_unit', unit_num=1;
+create tenant if not exists recyclebin_tenant RESOURCE_POOL_LIST=('recyclebin_pool') set ob_tcp_invited_nodes='%';
+disconnect obsys;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+set recyclebin=on;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 3.1 用原始名进行purge;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 同名情况下，先purge先进回收站的对象;
+echo 依次将数据库放入回收站中，检查purge的顺序是否一致，如果一致会输出三个succeed;
+echo 回收站中有三个对象，第一个对象obj1最早进入回收站，第二个obj2次之，第三个obj3最后进入回收站;
+echo purge一个原始名recyclebin_database1的库，现在只有两个对象;
+echo 第一个对象为obj2输出succeed，第二个对象为obj3输出succeed;
+echo 继续purge，剩下的一个为obj3，输出succeed;
+echo --------------------------------------------------------------------------;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+use __recyclebin;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+purge database recyclebin_database1;
+let $tmp_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $tmp_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+if($tmp_name1 == $obj_name2)
+{
+    --echo succeed
+}
+if($tmp_name2 == $obj_name3)
+{
+    --echo succeed
+}
+purge database recyclebin_database1;
+let $tmp_= query_get_value(show recyclebin, OBJECT_NAME, 1);
+if($tmp_ == $obj_name3)
+{
+    --echo succeed
+}
+purge database recyclebin_database1;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 3.2 purge权限测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo root用户拥有super权限，可以执行所有purge操作;
+echo root拥有所有权限，执行会成功;
+echo --------------------------------------------------------------------------;
+use test;
+create database recyclebin_database1;
+drop database recyclebin_database1;
+purge database recyclebin_database1;
+create database recyclebin_database1;
+use recyclebin_database1;
+create table t1(c1 int);
+create index index_t1 on t1(c1);
+drop table t1;
+create table t2(c1 int);
+create index index_t2 on t2(c1);
+drop table t2;
+use test;
+drop database recyclebin_database1;
+echo 回收站里面有5个对象，其中1个数据库类型，2个表类型，2个索引类型;
+select count(*) from oceanbase.__all_recyclebin;
+use __recyclebin;
+purge recyclebin;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo purge index的测试;
+echo --------------------------------------------------------------------------;
+use test;
+create table t(c1 int);
+create index index_t on t(c1);
+drop table t;
+create table t(c1 int);
+create index index_t on t(c1);
+drop table t;
+let $index_obj1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $index_org1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $index_obj2= query_get_value(show recyclebin, OBJECT_NAME, 3);
+let $index_org2= query_get_value(show recyclebin, ORIGINAL_NAME, 3);
+--disable_query_log
+echo purge index index_obj1;
+eval purge index $index_obj1;
+echo purge index index_org2;
+eval purge index $index_org2;
+--enable_query_log
+echo 回收站里面还有两个类型为表的对象;
+select count(*) from oceanbase.__all_recyclebin;
+purge table t;
+purge table t;
+echo 回收站里面没有对象;
+select count(*) from oceanbase.__all_recyclebin;
+
+
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 3.3 purge默认只能purge当前库回收站对象的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 直接用表名的时候，purge的回收站对象不属于当前库的时候，就会报错;
+echo 加上其它的库名的时候，如果有权限的话，可以purge属于其它库的回收站对象;
+echo 首先，在一个数据库里创建三个表，然后放入回收站里面，然后在另一个里面进行purge操作;
+echo 如果直接使用object name和original name进行purge的时候，会失败;
+echo 加上库的名字后，就会成功;
+echo --------------------------------------------------------------------------;
+use test;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+let $obj_name4= query_get_value(show recyclebin, OBJECT_NAME, 4);
+let $obj_name5= query_get_value(show recyclebin, OBJECT_NAME, 5);
+let $obj_name6= query_get_value(show recyclebin, OBJECT_NAME, 6);
+create database recyclebin_database1;
+use recyclebin_database1;
+--error 5270
+purge table recyclebin_t1;
+--disable_query_log
+--echo purge table obj_name1
+--error 5270
+eval purge table $obj_name1;
+--echo purge table obj_name2
+--error 5270
+eval purge table $obj_name2;
+--echo purge table obj_name3
+--error 5270
+eval purge table $obj_name3;
+--echo purge table obj_name1
+eval purge table test.$obj_name1;
+--echo purge table obj_name2
+eval purge table test.$obj_name2;
+--enable_query_log
+purge table test.recyclebin_t1;
+drop database recyclebin_database1;
+use __recyclebin;
+purge table recyclebin_t1;
+--disable_query_log
+--echo purge table obj_name5
+eval purge table $obj_name5;
+--echo purge table obj_name6
+eval purge table $obj_name6;
+--enable_query_log
+echo 回收站里面有一个对象，类型为数据库;
+select count(*) from oceanbase.__all_recyclebin;
+purge recyclebin;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 3.4 直接drop表的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 当回收站功能开启的时候，如果加上purge可选项，可以直接删除，不进入回收站;
+echo --------------------------------------------------------------------------;
+use test;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+
+create database recyclebin_database_t1;
+create database recyclebin_database_t2;
+create database recyclebin_database_t3;
+drop database recyclebin_database_t1 purge;
+select original_name from oceanbase.__all_recyclebin;
+drop database recyclebin_database_t2 purge;
+select original_name from oceanbase.__all_recyclebin;
+drop database recyclebin_database_t3 purge;
+select original_name from oceanbase.__all_recyclebin;
+
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1;
+select original_name from oceanbase.__all_recyclebin;
+drop table recyclebin_test_t2;
+select original_name from oceanbase.__all_recyclebin;
+drop table recyclebin_test_t3;
+select original_name from oceanbase.__all_recyclebin;
+
+echo ;
+echo 3.5 清理;
+purge recyclebin;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 四，普通租户下的普通用户的purge测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 4.0 连接;
+echo --------------------------------------------------------------------------;
+CREATE USER 'weihan'@'%' IDENTIFIED BY 'weihan';
+grant all on test.* to weihan@'%'  identified by "weihan";
+disconnect comm_root;
+connect (comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_weihan;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 4.1 用原始名进行purge;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 同名情况下，先purge先进回收站的对象;
+echo 依次将表放入回收站中，检查purge的顺序是否一致，如果一致会输出两个succeed;
+echo 首先创建两个回收站对象，原始名字相同，依次在回收站当中，obj1和obj2，obj1先进入回收站;
+echo 用原始名字purge，回收站只剩下一个对象，那就是obj2，返回succeed;
+echo 再创建一个同名表，进入回收站，记做obj3;
+echo 用原始名字purge，回收站只剩下一个对象，那就是obj3，返回succeed;
+echo --------------------------------------------------------------------------;
+set recyclebin=on;
+use test;
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+purge table recyclebin_test_t1;
+let $tmp_obj= query_get_value(show recyclebin, OBJECT_NAME, 1);
+if($tmp_obj == $obj_name2)
+{
+    --echo succeed
+}
+create table recyclebin_test_t1(c1 int,c2 int,c3 char(50));
+drop table recyclebin_test_t1;
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 2);
+purge table recyclebin_test_t1;
+let $tmp_objj= query_get_value(show recyclebin, OBJECT_NAME, 1);
+if($tmp_objj == $obj_name3)
+{
+    --echo succeed
+}
+purge table recyclebin_test_t1;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 4.2 purge权限测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 在没有权限的库中做purge操作，会报错;
+echo 在普通租户中，weihan没有recyclebin_database1库的drop权限，执行会失败;
+echo 首先，创建数据库recyclebin_database1，在里面创建一些表，然后放到回收站里面;
+echo 然后对用户赋予update权限，登陆用户;
+echo 切换到test库中，对属于recyclebin_database1库的回收站对象进行purge，失败，没有权限;
+echo 切换到recyclebin_database1库，进行purge，失败，权限不够;
+echo --------------------------------------------------------------------------;
+disconnect comm_weihan;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+create database recyclebin_database1;
+use recyclebin_database1;
+set recyclebin=on;
+create table t1(c1 int);
+drop table t1;
+create table t2(c1 int);
+drop table t2;
+create table t3(c1 int);
+drop table t3;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+select original_name from oceanbase.__all_recyclebin;
+# 只赋予update权限
+grant update on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect comm_root;
+connect (comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_weihan;
+use recyclebin_database1;
+--error 1044
+purge table t1;
+--error 1044
+purge table t2;
+--error 1044
+purge table t3;
+--disable_query_log
+--echo purge table obj_name1
+--error 1044
+eval purge table $obj_name1;
+--echo purge table obj_name2
+--error 1044
+eval purge table $obj_name2;
+--echo purge table obj_name3
+--error 1044
+eval purge table $obj_name3;
+--enable_query_log
+use test;
+--error 1044
+purge table recyclebin_database1.t1;
+--error 1044
+purge table recyclebin_database1.t2;
+--error 1044
+purge table recyclebin_database1.t3;
+--disable_query_log
+--echo purge table recyclebin_database1.obj_name1
+--error 1044
+eval purge table recyclebin_database1.$obj_name1;
+--echo purge table recyclebin_database1.obj_name2
+--error 1044
+eval purge table recyclebin_database1.$obj_name2;
+--echo purge table recyclebin_database1.obj_name3
+--error 1044
+eval purge table recyclebin_database1.$obj_name3;
+--enable_query_log
+disconnect comm_weihan;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+use __recyclebin;
+set recyclebin=on;
+drop database recyclebin_database1;
+echo 回收站里面有四个对象，其中1个类型为数据库，三个类型为表;
+select count(*) from oceanbase.__all_recyclebin;
+purge recyclebin;
+echo 回收站里面没有对象;
+select count(*) from oceanbase.__all_recyclebin;
+disconnect comm_root;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 4.3 purge默认只能purge当前库的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 直接用表名的时候，purge的回收站对象不属于当前库的时候，就会报错;
+echo 加上其它的库名的时候，如果有权限的话，可以purge属于其它库的回收站对象;
+echo 首先，在一个数据库里创建三个表，然后放入回收站里面，然后在另一个里面进行purge操作;
+echo 如果直接使用object name和original name进行purge的时候，会失败;
+echo 加上库的名字后，就会成功;
+echo --------------------------------------------------------------------------;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+create database recyclebin_database1;
+grant all on recyclebin_database1.* to weihan@'%'  identified by "weihan";
+disconnect comm_root;
+connect (comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_weihan;
+use test;
+set recyclebin=on;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+create table recyclebin_t1(c1 int);
+drop table recyclebin_t1;
+let $obj_name1= query_get_value(show recyclebin, OBJECT_NAME, 1);
+let $obj_name2= query_get_value(show recyclebin, OBJECT_NAME, 2);
+let $obj_name3= query_get_value(show recyclebin, OBJECT_NAME, 3);
+let $obj_name4= query_get_value(show recyclebin, OBJECT_NAME, 4);
+let $obj_name5= query_get_value(show recyclebin, OBJECT_NAME, 5);
+let $obj_name6= query_get_value(show recyclebin, OBJECT_NAME, 6);
+use recyclebin_database1;
+--error 5270
+purge table recyclebin_t1;
+--disable_query_log
+--echo purge table obj_name1
+--error 5270
+eval purge table $obj_name1;
+--echo purge table obj_name2
+--error 5270
+eval purge table $obj_name2;
+--echo purge table obj_name3
+--error 5270
+eval purge table $obj_name3;
+--enable_query_log
+purge table test.recyclebin_t1;
+--disable_query_log
+--echo purge table test.obj_name2
+eval purge table test.$obj_name2;
+--echo purge table test.obj_name3
+eval purge table test.$obj_name3;
+--enable_query_log
+use test;
+purge table recyclebin_t1;
+--disable_query_log
+--echo purge table obj_name5
+eval purge table $obj_name5;
+--echo purge table obj_name6
+eval purge table $obj_name6;
+--enable_query_log
+show recyclebin;
+disconnect comm_weihan;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+set recyclebin=on;
+drop database recyclebin_database1 purge;
+echo 回收站里面没有对象;
+select count(*) from oceanbase.__all_recyclebin;
+disconnect comm_root;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 4.4 直接drop表的测试;
+echo --------------------------------------------------------------------------;
+echo --------------------------------------------------------------------------;
+echo 当回收站功能开启的时候，如果加上purge可选项，可以直接删除，不进入回收站;
+echo --------------------------------------------------------------------------;
+connect (comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_weihan;
+use test;
+set recyclebin=on;
+create table recyclebin_test_t1(c1 int);
+create table recyclebin_test_t2(c1 int);
+create table recyclebin_test_t3(c1 int);
+drop table recyclebin_test_t1 purge;
+show recyclebin;
+drop table recyclebin_test_t2 purge;
+show recyclebin;
+drop table recyclebin_test_t3 purge;
+show recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------------;
+echo 4.5 清理;
+echo --------------------------------------------------------------------------;
+set recyclebin=off;
+disconnect comm_weihan;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+drop user weihan;
+set recyclebin=off;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+drop tenant recyclebin_tenant force;
+drop resource pool recyclebin_pool;
+drop resource unit recyclebin_unit;
+drop user weihan;
+set recyclebin=off;

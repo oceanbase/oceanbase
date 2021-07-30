@@ -1,0 +1,226 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+
+echo show recyclebin的测试;
+echo show recyclebin只能看到当前库下面的回收站对象;
+echo ;
+
+echo --------------------------------------------------------------------;
+echo 一，sys租户 root用户;
+echo 创建三个库，每个库中创建一个表，然后放入回收站当中，在每个库中使用show recyclebin;
+echo 发现只有一个对象，看不到其它库的回收站对象;
+echo --------------------------------------------------------------------;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+set recyclebin=on;
+
+create database recyclebin_db1;
+use recyclebin_db1;
+create table t1(c1 int);
+drop table t1;
+echo 获取show recyclebin结果的第一行的ORIGINAL_NAME列数据;
+let $a1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+echo 获取show recyclebin结果的第二行的ORIGINAL_NAME列数据;
+let $a2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $a1;
+echo 第二行没有数据，因为show recyclebin只有一行数据;
+echo row2 ORIGINAL_NAME: $a2;
+
+echo ;
+create database recyclebin_db2;
+use recyclebin_db2;
+create table t1(c1 int,c2 int);
+drop table t1;
+let $b1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $b2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $b1;
+echo 第二行没有数据，因为show recyclebin显示的只有一行数据，只能看到当前数据库的recyclebin对象;
+echo row2 ORIGINAL_NAME: $b2;
+
+echo ;
+create database recyclebin_db3;
+use recyclebin_db3;
+create table t1(c1 int,c2 int);
+drop table t1;
+let $c1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $c2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $c1;
+echo 第二行没有数据，因为show recyclebin显示的只有一行数据，只能看到当前数据库的recyclebin对象;
+echo row2 ORIGINAL_NAME: $c2;
+
+echo ;
+echo --------------------------------------------------------------------;
+echo 二，sys租户 普通用户;
+echo 一共有三个库，属于每个库的回收站对象只有一个，在每个库中使用show recyclebin;
+echo 发现只有一个对象，看不到其它库的回收站对象;
+echo --------------------------------------------------------------------;
+CREATE USER 'weihan'@'%' IDENTIFIED BY 'weihan';
+grant all on recyclebin_db1.* to weihan@'%'  identified by "weihan";
+grant all on recyclebin_db2.* to weihan@'%'  identified by "weihan";
+grant all on recyclebin_db3.* to weihan@'%'  identified by "weihan";
+disconnect obsys;
+connect (obsys_weihan,$OBMYSQL_MS0,weihan@sys,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys_weihan;
+
+echo;
+use recyclebin_db1;
+let $a1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $a2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $a1;
+echo 只能看到一行数据;
+echo row2 ORIGINAL_NAME: $a2;
+
+echo ;
+use recyclebin_db1;
+let $b1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $b2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $b1;
+echo 只能看到一行数据;
+echo row2 ORIGINAL_NAME: $b2;
+
+echo;
+use recyclebin_db1;
+let $c1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $c2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $c1;
+echo 只能看到一行数据;
+echo row2 ORIGINAL_NAME: $c2;
+
+
+echo ;
+echo --------------------------------------------------------------------;
+echo 清理;
+echo --------------------------------------------------------------------;
+disconnect obsys_weihan;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT);
+connection obsys;
+use test;
+drop database recyclebin_db1;
+drop database recyclebin_db2;
+drop database recyclebin_db3;
+echo 有6条记录，其中三个表对象，三个数据库对象;
+select count(*) from oceanbase.__all_recyclebin;
+use __recyclebin;
+purge recyclebin;
+
+echo ;
+echo --------------------------------------------------------------------;
+echo 三，普通租户 root用户;
+echo 创建三个库，每个库中创建一个表，然后放入回收站当中，在每个库中使用show recyclebin;
+echo 发现只有一个对象，看不到其它库的回收站对象;
+echo --------------------------------------------------------------------;
+create resource unit if not exists recyclebin_unit max_cpu=1, min_memory='1G',max_memory='1G',max_disk_size='1G',max_iops=1000,max_session_num=1000;
+create resource pool if not exists recyclebin_pool unit='recyclebin_unit', unit_num=1;
+create tenant if not exists recyclebin_tenant RESOURCE_POOL_LIST=('recyclebin_pool') set ob_tcp_invited_nodes='%';
+disconnect obsys;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+set recyclebin=on;
+
+
+echo ;
+create database recyclebin_db1;
+use recyclebin_db1;
+create table t1(c1 int);
+drop table t1;
+echo 获取show recyclebin结果的第一行的ORIGINAL_NAME列数据;
+let $a1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+echo 获取show recyclebin结果的第二行的ORIGINAL_NAME列数据;
+let $a2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $a1;
+echo 第二行没有数据，因为show recyclebin只有一行数据;
+echo row2 ORIGINAL_NAME: $a2;
+
+echo ;
+create database recyclebin_db2;
+use recyclebin_db2;
+create table t1(c1 int,c2 int);
+drop table t1;
+let $b1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $b2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $b1;
+echo 第二行没有数据，因为show recyclebin显示的只有一行数据，只能看到当前数据库的recyclebin对象;
+echo row2 ORIGINAL_NAME: $b2;
+
+echo ;
+create database recyclebin_db3;
+use recyclebin_db3;
+create table t1(c1 int,c2 int);
+drop table t1;
+let $c1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $c2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $c1;
+echo 第二行没有数据，因为show recyclebin显示的只有一行数据，只能看到当前数据库的recyclebin对象;
+echo row2 ORIGINAL_NAME: $c2;
+
+echo ;
+echo --------------------------------------------------------------------;
+echo 四，普通租户 普通用户;
+echo 一共有三个库，属于每个库的回收站对象只有一个，在每个库中使用show recyclebin;
+echo 发现只有一个对象，看不到其它库的回收站对象;
+echo --------------------------------------------------------------------;
+CREATE USER 'weihan'@'%' IDENTIFIED BY 'weihan';
+grant all on recyclebin_db1.* to weihan@'%'  identified by "weihan";
+grant all on recyclebin_db2.* to weihan@'%'  identified by "weihan";
+grant all on recyclebin_db3.* to weihan@'%'  identified by "weihan";
+disconnect comm_root;
+connect (comm_weihan,$OBMYSQL_MS0,weihan@recyclebin_tenant,weihan,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_weihan;
+
+echo ;
+use recyclebin_db1;
+let $a1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $a2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $a1;
+echo row2 ORIGINAL_NAME: $a2;
+
+echo ;
+use recyclebin_db1;
+let $b1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $b2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $b1;
+echo row2 ORIGINAL_NAME: $b2;
+
+echo ;
+use recyclebin_db1;
+let $c1= query_get_value(show recyclebin, ORIGINAL_NAME, 1);
+let $c2= query_get_value(show recyclebin, ORIGINAL_NAME, 2);
+echo row1 ORIGINAL_NAME: $c1;
+echo row2 ORIGINAL_NAME: $c2;
+
+
+echo ;
+echo --------------------------------------------------------------------;
+echo 清理;
+echo --------------------------------------------------------------------;
+disconnect comm_weihan;
+connect (comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT);
+connection comm_root;
+set recyclebin = on;
+use test;
+drop database recyclebin_db1;
+drop database recyclebin_db2;
+drop database recyclebin_db3;
+echo 有6条记录，其中三个表对象，三个数据库对象;
+select count(*) from oceanbase.__all_recyclebin;
+use __recyclebin;
+purge recyclebin;
+set recyclebin=off;
+
+
+
+echo ;
+echo --------------------------------------------------------------------;
+echo 清理;
+echo --------------------------------------------------------------------;
+drop user weihan;
+set recyclebin=off;
+disconnect comm_root;
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+drop tenant recyclebin_tenant force;
+drop resource pool recyclebin_pool;
+drop resource unit recyclebin_unit;
+drop user weihan;
+set recyclebin=off;

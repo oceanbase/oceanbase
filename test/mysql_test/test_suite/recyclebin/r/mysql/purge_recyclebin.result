@@ -1,0 +1,189 @@
+purge recyclebin的测试
+purge recyclebin只能purge当前库下面的回收站对象
+
+--------------------------------------------------------------------
+一，sys租户 root用户
+1.1,先在三个库里面分别创建一个表，放入回收站当中，然后依次在每个库里面执行purge操作，
+判断个数是否对的上
+--------------------------------------------------------------------
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,*NO-ONE*,$OBMYSQL_PORT;
+connection obsys;
+set recyclebin=on;
+create database recyclebin_db1;
+use recyclebin_db1;
+create table recyclebin_tb1(c1 int unique);
+drop table recyclebin_tb1;
+create database recyclebin_db2;
+use recyclebin_db2;
+create table recyclebin_tb2(c1 int unique);
+drop table recyclebin_tb2;
+create database recyclebin_db3;
+use recyclebin_db3;
+create table recyclebin_tb3(c1 int unique);
+drop table recyclebin_tb3;
+use recyclebin_db1;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+6
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+4
+use recyclebin_db2;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+4
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+2
+use recyclebin_db3;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+2
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+use test;
+drop database recyclebin_db1;
+drop database recyclebin_db2;
+drop database recyclebin_db3;
+use __recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+3
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+
+--------------------------------------------------------------------
+1.2,先在三个库里面分别创建一个表，放入回收站当中，
+在__recyclebin库里面执行purge操作，判断个数是否对的上
+--------------------------------------------------------------------
+create database recyclebin_db1;
+use recyclebin_db1;
+create table recyclebin_tb1(c1 int unique);
+drop table recyclebin_tb1;
+create database recyclebin_db2;
+use recyclebin_db2;
+create table recyclebin_tb2(c1 int unique);
+drop table recyclebin_tb2;
+create database recyclebin_db3;
+use recyclebin_db3;
+create table recyclebin_tb3(c1 int unique);
+drop table recyclebin_tb3;
+use __recyclebin;
+drop database recyclebin_db1;
+drop database recyclebin_db2;
+drop database recyclebin_db3;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+9
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+
+--------------------------------------------------------------------
+二，普通租户 root用户
+2.1,先在三个库里面分别创建一个表，放入回收站当中，然后依次在每个库里面执行purge操作，
+判断个数是否对的上
+--------------------------------------------------------------------
+create resource unit if not exists recyclebin_unit max_cpu=1, min_memory='1G',max_memory='1G',max_disk_size='1G',max_iops=1000,max_session_num=1000;
+create resource pool if not exists recyclebin_pool unit='recyclebin_unit', unit_num=1;
+create tenant if not exists recyclebin_tenant RESOURCE_POOL_LIST=('recyclebin_pool') set ob_tcp_invited_nodes='%';
+disconnect obsys;
+connect  comm_root,$OBMYSQL_MS0,root@recyclebin_tenant,,*NO-ONE*,$OBMYSQL_PORT;
+connection comm_root;
+set recyclebin=on;
+create database recyclebin_db1;
+use recyclebin_db1;
+create table recyclebin_tb1(c1 int unique);
+drop table recyclebin_tb1;
+create database recyclebin_db2;
+use recyclebin_db2;
+create table recyclebin_tb2(c1 int unique);
+drop table recyclebin_tb2;
+create database recyclebin_db3;
+use recyclebin_db3;
+create table recyclebin_tb3(c1 int unique);
+drop table recyclebin_tb3;
+use recyclebin_db1;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+6
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+4
+use recyclebin_db2;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+4
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+2
+use recyclebin_db3;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+2
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+use test;
+drop database recyclebin_db1;
+drop database recyclebin_db2;
+drop database recyclebin_db3;
+use __recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+3
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+
+--------------------------------------------------------------------
+2.2,先在三个库里面分别创建一个表，放入回收站当中，
+在__recyclebin库里面执行purge操作，判断个数是否对的上
+--------------------------------------------------------------------
+create database recyclebin_db1;
+use recyclebin_db1;
+create table recyclebin_tb1(c1 int unique);
+drop table recyclebin_tb1;
+create database recyclebin_db2;
+use recyclebin_db2;
+create table recyclebin_tb2(c1 int unique);
+drop table recyclebin_tb2;
+create database recyclebin_db3;
+use recyclebin_db3;
+create table recyclebin_tb3(c1 int unique);
+drop table recyclebin_tb3;
+use __recyclebin;
+drop database recyclebin_db1;
+drop database recyclebin_db2;
+drop database recyclebin_db3;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+9
+purge recyclebin;
+select count(*) from oceanbase.__all_recyclebin;
+count(*)
+0
+
+--------------------------------------------------------------------
+清理
+--------------------------------------------------------------------
+set recyclebin=off;
+disconnect comm_root;
+connect  obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT;
+connection obsys;
+set recyclebin=on;
+drop tenant recyclebin_tenant force;
+drop resource pool recyclebin_pool;
+drop resource unit recyclebin_unit;
+set recyclebin=off;

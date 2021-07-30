@@ -19,7 +19,8 @@ class ObDropDatabaseResolver : public ObDDLResolver {
 public:
   const static int64_t IF_EXIST = 0;
   const static int64_t DBNAME = 1;
-  const static int64_t DB_NODE_COUNT = 2;
+  const static int64_t DROP_PURGE_NODE = 2;
+  const static int64_t DB_NODE_COUNT = 3;
 
   explicit ObDropDatabaseResolver(ObResolverParams& params);
   virtual ~ObDropDatabaseResolver();

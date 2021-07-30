@@ -42,29 +42,19 @@ int ObPurgeTableResolver::resolve(const ParseNode& parser_tree)
     purge_table_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
     // Purge table
     ParseNode* table_node = parser_tree.children_[TABLE_NODE];
-    ObString table_name;
+    ObString tb_name;
     ObString db_name;
     if (OB_ISNULL(table_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_node should not be null", K(ret));
-    } else if (resolve_table_relation_node(table_node, table_name, db_name, true /*get origin db_name*/)) {
+    } else if (resolve_table_relation_node(table_node, tb_name, db_name, false /*get origin db_name*/)) {
       LOG_WARN("failed to resolve_table_relation_node", K(ret));
-    } else if (!db_name.empty() && ObString(OB_RECYCLEBIN_SCHEMA_NAME) != db_name) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(table_name), to_cstring(db_name));
-      LOG_WARN("purge table db.xx should not specified with db name", K(ret));
-    } else if (table_name.empty()) {
+    } else if (tb_name.empty() || db_name.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("table name should not be empty", K(ret));
     } else {
-      purge_table_stmt->set_table_name(table_name);
-      if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-        OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-            session_info_->get_priv_user_id(),
-            db_name,
-            stmt::T_PURGE_TABLE,
-            session_info_->get_enable_role_array()));
-      }
+      purge_table_stmt->set_database_name(db_name);
+      purge_table_stmt->set_table_name(tb_name);
     }
   }
   return ret;
@@ -77,18 +67,16 @@ int ObPurgeIndexResolver::resolve(const ParseNode& parser_tree)
 {
   int ret = OB_SUCCESS;
   ObPurgeIndexStmt* purge_index_stmt = NULL;
-  if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
+  ObString db_name;
+  if (OB_ISNULL(session_info_) || T_PURGE_INDEX != parser_tree.type_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session_info or schema_checker is null", K(ret), K(schema_checker_), K(session_info_));
-  } else if (T_PURGE_INDEX != parser_tree.type_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid parse tree", K(parser_tree.type_));
+    LOG_WARN("session_info is null", K(ret));
   }
-  // create Purge table stmt
+  // create Purge index stmt
   if (OB_SUCC(ret)) {
     if (NULL == (purge_index_stmt = create_stmt<ObPurgeIndexStmt>())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to create purege table stmt", K(ret));
+      LOG_ERROR("failed to create purege index stmt", K(ret));
     } else {
       stmt_ = purge_index_stmt;
     }
@@ -97,37 +85,19 @@ int ObPurgeIndexResolver::resolve(const ParseNode& parser_tree)
     purge_index_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
     // Purge table
     ParseNode* table_node = parser_tree.children_[TABLE_NODE];
-    ObString table_name;
+    ObString tb_name;
     ObString db_name;
-    const share::schema::ObTableSchema* table_schema = NULL;
     if (OB_ISNULL(table_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_node should not be null", K(ret));
-    } else if (resolve_table_relation_node(table_node, table_name, db_name, true /*get origin db_name*/)) {
+    } else if (resolve_table_relation_node(table_node, tb_name, db_name, false /*get origin db_name*/)) {
       LOG_WARN("failed to resolve_table_relation_node", K(ret));
-    } else if (!db_name.empty() && ObString(OB_RECYCLEBIN_SCHEMA_NAME) != db_name) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(table_name), to_cstring(db_name));
-      LOG_WARN("purge table db.xx should not specified with db name", K(ret));
-    } else if (table_name.empty()) {
+    } else if (tb_name.empty() || db_name.empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("table name should not be empty", K(ret));
     } else {
-      UNUSED(schema_checker_->get_table_schema(purge_index_stmt->get_tenant_id(),
-          combine_id(purge_index_stmt->get_tenant_id(), OB_RECYCLEBIN_SCHEMA_ID),
-          table_name,
-          true,  /*is_index*/
-          false, /*cte_table_fisrt*/
-          table_schema));
-      purge_index_stmt->set_table_name(table_name);
-      purge_index_stmt->set_table_id(OB_NOT_NULL(table_schema) ? table_schema->get_table_id() : OB_INVALID_ID);
-      if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-        OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-            session_info_->get_priv_user_id(),
-            db_name,
-            stmt::T_PURGE_INDEX,
-            session_info_->get_enable_role_array()));
-      }
+      purge_index_stmt->set_database_name(db_name);
+      purge_index_stmt->set_table_name(tb_name);
     }
   }
   return ret;
@@ -225,6 +195,7 @@ int ObPurgeTenantResolver::resolve(const ParseNode& parser_tree)
 int ObPurgeRecycleBinResolver::resolve(const ParseNode& parser_tree)
 {
   int ret = OB_SUCCESS;
+  ObString db_name;
   ObPurgeRecycleBinStmt* purge_recyclebin_stmt = NULL;
   if (OB_ISNULL(session_info_) || T_PURGE_RECYCLEBIN != parser_tree.type_) {
     ret = OB_ERR_UNEXPECTED;
@@ -241,6 +212,12 @@ int ObPurgeRecycleBinResolver::resolve(const ParseNode& parser_tree)
   }
   if (OB_SUCC(ret)) {
     int64_t current_time = ObTimeUtility::current_time();
+    db_name.assign_ptr(session_info_->get_database_name().ptr(), session_info_->get_database_name().length());
+    if (db_name.empty()) {
+      ret = OB_ERR_NO_DB_SELECTED;
+      LOG_WARN("no database selected");
+    }
+    purge_recyclebin_stmt->set_database_name(db_name);
     purge_recyclebin_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
     purge_recyclebin_stmt->set_expire_time(current_time);
     purge_recyclebin_stmt->set_purge_num(obrpc::ObPurgeRecycleBinArg::DEFAULT_PURGE_EACH_TIME);

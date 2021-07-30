@@ -232,6 +232,9 @@ int ObExprExportSet::eval_export_set(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
   int64_t max_size = 0;
   if (OB_FAIL(expr.eval_param_value(ctx, bits, on, off, sep, n_bits))) {
     LOG_WARN("evaluate parameters failed", K(ret));
+  } else if (OB_ISNULL(bits) || OB_ISNULL(on) || OB_ISNULL(off)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("bits, on or off is null ptr", K(ret), K(bits), K(on), K(off));
   } else if (bits->is_null() || on->is_null() || off->is_null()) {
     expr_datum.set_null();
   } else if (OB_NOT_NULL(sep) && sep->is_null()) {

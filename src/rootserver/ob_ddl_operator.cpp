@@ -5845,6 +5845,75 @@ int ObDDLOperator::purge_aux_table(const ObTableSchema& table_schema, ObSchemaGe
   return ret;
 }
 
+int ObDDLOperator::check_object_name_in_db(const uint64_t tenant_id, const common::ObString object_name, 
+    const uint64_t database_id, share::schema::ObRecycleObject::RecycleObjType recycle_type,
+    common::ObMySQLTransaction& trans, bool& is_in)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService* schema_service = schema_service_.get_schema_service();
+  uint64_t recycle_obj_cnt = 0;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service should not be null", K(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id is invalid", K(ret));
+  } else if (OB_FAIL(schema_service->fetch_recycle_object_by_object_name_from_db(tenant_id, database_id,
+    object_name, recycle_type, trans, recycle_obj_cnt))) {
+    LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
+  } else if (0 == recycle_obj_cnt) {
+    is_in = false;
+  } else if (1 == recycle_obj_cnt) {
+    is_in = true;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected recycle object num", K(ret), K(recycle_obj_cnt));    
+  }
+  return ret;
+}
+
+int ObDDLOperator::get_object_name_by_original_name(const uint64_t tenant_id, const common::ObString original_name,
+    const uint64_t database_id, ObRecycleObject::RecycleObjType recycle_type, const bool desc,
+    common::ObMySQLTransaction& trans, common::ObString& object_name)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService* schema_service = schema_service_.get_schema_service();
+  ObArray<ObRecycleObject> recycle_objs;
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service should not be null", K(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id is invalid", K(ret));
+  } else {
+    const uint64_t db_id = extract_pure_id(database_id);
+    //from all
+    if (OB_RECYCLEBIN_SCHEMA_ID == db_id) {
+      if (OB_FAIL(schema_service->fetch_recycle_object_by_original_name_from_all(tenant_id, original_name,
+        recycle_type, trans, desc, recycle_objs))) {
+        LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
+      }
+    } else {
+      if (OB_FAIL(schema_service->fetch_recycle_object_by_original_name_from_db(tenant_id, database_id,
+        original_name, recycle_type, trans, desc, recycle_objs))) {
+        LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (0 == recycle_objs.size()) {
+        ret = OB_ERR_OBJECT_NOT_IN_RECYCLEBIN;
+        LOG_WARN("not found in recyclebin", K(ret), K(recycle_objs.size()));
+      } else if (1 != recycle_objs.size()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
+      } else {
+        object_name = recycle_objs.at(0).get_object_name();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLOperator::purge_table_in_recyclebin(
     const ObTableSchema& table_schema, ObMySQLTransaction& trans, const ObString* ddl_stmt_str /*=NULL*/)
 {
@@ -5862,7 +5931,7 @@ int ObDDLOperator::purge_table_in_recyclebin(
   } else if (OB_FAIL(schema_service->fetch_recycle_object(
                  table_schema.get_tenant_id(), table_schema.get_table_name_str(), recycle_type, trans, recycle_objs))) {
     LOG_WARN("get_recycle_object failed", K(recycle_type), K(ret));
-  } else if (recycle_objs.size() != 1) {
+  } else if (1 != recycle_objs.size()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
   } else if (OB_FAIL(schema_service->delete_recycle_object(table_schema.get_tenant_id(), recycle_objs.at(0), trans))) {
@@ -5878,7 +5947,7 @@ int ObDDLOperator::create_index_in_recyclebin(ObTableSchema& table_schema, ObSch
 {
   int ret = OB_SUCCESS;
 
-  if (table_schema.get_table_type() != USER_INDEX) {
+  if (USER_INDEX != table_schema.get_table_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema type is not index", K(ret));
   } else {
@@ -6164,14 +6233,14 @@ int ObDDLOperator::purge_database_in_recyclebin(const ObDatabaseSchema& database
 }
 
 int ObDDLOperator::fetch_expire_recycle_objects(
-    const uint64_t tenant_id, const int64_t expire_time, ObIArray<ObRecycleObject>& recycle_objs)
+    const uint64_t tenant_id, const uint64_t database_id, const int64_t expire_time, ObIArray<ObRecycleObject>& recycle_objs)
 {
   int ret = OB_SUCCESS;
   ObSchemaService* schema_service = schema_service_.get_schema_service();
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service should not be null", K(ret));
-  } else if (OB_FAIL(schema_service->fetch_expire_recycle_objects(tenant_id, expire_time, sql_proxy_, recycle_objs))) {
+  } else if (OB_FAIL(schema_service->fetch_expire_recycle_objects(tenant_id, database_id, expire_time, sql_proxy_, recycle_objs))) {
     LOG_WARN("fetch expire recycle objects failed", K(ret), K(expire_time), K(tenant_id));
   }
   return ret;
