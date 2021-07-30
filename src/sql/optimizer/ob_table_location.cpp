@@ -2991,6 +2991,7 @@ int ObTableLocation::record_insert_partition_info(
     ObDMLStmt& stmt, const share::schema::ObTableSchema* table_schema, ObSQLSessionInfo* session_info)
 {
   int ret = OB_SUCCESS;
+  bool has_auto_inc_part_key = false;
   bool partkey_has_subquery = false;
   ObInsertStmt& insert_stmt = static_cast<ObInsertStmt&>(stmt);
   ObSEArray<ColumnItem, 4> partition_columns;
@@ -2998,7 +2999,9 @@ int ObTableLocation::record_insert_partition_info(
   const ObRawExpr* partition_raw_expr = NULL;
   if (OB_FAIL(insert_stmt.part_key_has_subquery(partkey_has_subquery))) {
     LOG_WARN("failed to check whether insert stmt has part key", K(ret));
-  } else if ((insert_stmt.has_part_key_sequence() || partkey_has_subquery) &&
+  } else if (OB_FAIL(insert_stmt.part_key_has_auto_inc(has_auto_inc_part_key))) {
+    LOG_WARN("check to check whether part key containts auto inc column", K(ret));
+  } else if ((insert_stmt.has_part_key_sequence() || partkey_has_subquery || has_auto_inc_part_key) &&
              PARTITION_LEVEL_ZERO != table_schema->get_part_level()) {
     part_get_all_ = true;
   } else if (OB_FAIL(get_partition_column_info(stmt,
@@ -4621,7 +4624,7 @@ int ObTableLocation::record_insert_part_info(ObInsertStmt& insert_stmt, ObSQLSes
         if (OB_ISNULL(value_desc->at(value_idx))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("value desc expr is null");
-        } else if (!value_desc->at(value_idx)->is_auto_increment()) {
+        } else {
           if (OB_FAIL(value_need_idx.push_back(value_idx))) {
             LOG_WARN("Failed to add value idx", K(ret));
           }

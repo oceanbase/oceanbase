@@ -2964,11 +2964,6 @@ int ObResolverUtils::resolve_columns_for_partition_expr(ObRawExpr*& expr, ObIArr
               q_name.col_name_.ptr(),
               scope_name.length(),
               scope_name.ptr());
-        } else if (col_schema->is_autoincrement()) {
-          ret = OB_ERR_AUTO_PARTITION_KEY;
-          LOG_USER_ERROR(OB_ERR_AUTO_PARTITION_KEY,
-              col_schema->get_column_name_str().length(),
-              col_schema->get_column_name_str().ptr());
         } else if (OB_FAIL(partition_keys.push_back(q_name.col_name_))) {
           LOG_WARN("add column name failed", K(ret), K_(q_name.col_name));
         } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *col_expr))) {

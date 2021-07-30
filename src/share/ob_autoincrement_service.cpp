@@ -623,7 +623,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
 
   const int64_t partition_id = param.pkey_.is_valid() ? param.pkey_.get_partition_id() : -1;
   int64_t leader_epoch = 0;
-  if (OB_FAIL(get_leader_epoch_id(param.pkey_, leader_epoch))) {
+  if (param.with_order() && OB_FAIL(get_leader_epoch_id(param.pkey_, leader_epoch))) {
     LOG_WARN("get leader epoch id failed", K(ret), K(param));
   } else if (OB_FAIL(node_map_.get(key, table_node))) {
     if (ret != OB_ENTRY_NOT_EXIST) {
@@ -683,7 +683,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("succ to get table node", K(param), K(*table_node), K(ret));
+    LOG_DEBUG("succ to get table node", K(param), KPC(table_node), K(ret));
   } else {
     LOG_WARN("failed to get table node", K(param), K(ret));
   }

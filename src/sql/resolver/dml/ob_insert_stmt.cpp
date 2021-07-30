@@ -619,6 +619,32 @@ int ObInsertStmt::part_key_has_rand_value(bool& has)
   return ret;
 }
 
+int ObInsertStmt::part_key_has_auto_inc(bool& has)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObColumnRefRawExpr*>* table_columns = get_table_columns();
+  if (OB_ISNULL(table_columns)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    has = false;
+    for (int64_t i = 0; OB_SUCCESS == ret && i < table_columns->count(); ++i) {
+      ObColumnRefRawExpr* col_expr = table_columns->at(i);
+      if (IS_SHADOW_COLUMN(col_expr->get_column_id())) {
+        // do nothing
+      } else if (OB_FAIL(ObTransformUtils::get_base_column(this, col_expr))) {
+        LOG_WARN("failed to get base column", K(ret));
+      } else if (OB_ISNULL(col_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (col_expr->is_table_part_key_column() && col_expr->is_auto_increment()) {
+        has = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObInsertStmt::part_key_has_subquery(bool& has)
 {
   int ret = OB_SUCCESS;

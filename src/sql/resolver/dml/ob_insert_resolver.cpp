@@ -1875,6 +1875,10 @@ int ObInsertResolver::save_autoinc_params(uint64_t table_offset /*default 0*/)
           if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
             param.autoinc_increment_ = 1;
             param.autoinc_offset_ = 1;
+            param.part_value_no_order_ = true;
+          } else if (column_schema->is_tbl_part_key_column()) {
+            // don't keep intra-partition value asc order when partkey column is auto inc
+            param.part_value_no_order_ = true;
           }
           uint64_t tid = insert_stmt->get_insert_table_id(table_offset);
           const ObIArray<ObColumnRefRawExpr*>* table_columns = NULL;

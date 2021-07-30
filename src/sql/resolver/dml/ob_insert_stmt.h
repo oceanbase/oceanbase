@@ -209,6 +209,7 @@ public:
       const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs) override;
   int part_key_has_rand_value(bool& has);
   int part_key_has_subquery(bool& has);
+  int part_key_has_auto_inc(bool& has);
   int get_value_exprs(ObIArray<ObRawExpr*>& value_exprs);
 
   // if generated col is partition key in heap table, we need to store all dep cols,
