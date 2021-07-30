@@ -35,7 +35,7 @@ public:
       share::schema::ObSchemaGetterGuard* guard_schema);
   bool is_inited() const;
 
-  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const
+  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const override
   {
     return ObIPartitionLocationCache::PART_LOC_CACHE_TYPE_SQL;
   }
@@ -80,7 +80,7 @@ public:
       const common::ObPartitionKey& partition, const int64_t expire_renew_time, bool& is_limited) override;
 
   // link table.
-  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location);
+  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location) override;
 
   ObSqlPartitionLocationCache::LocationDistributedMode get_location_distributed_mode(const uint64_t table_id) const;
 

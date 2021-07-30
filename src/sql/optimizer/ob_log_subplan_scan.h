@@ -27,13 +27,13 @@ public:
   virtual int est_cost() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
 
-  virtual int copy_without_child(ObLogicalOperator*& out);
-  int allocate_expr_post(ObAllocExprContext& ctx);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
+  int allocate_expr_post(ObAllocExprContext& ctx) override;
   int allocate_exchange_post(AllocExchContext* ctx) override;
   int update_weak_part_exprs(AllocExchContext* ctx);
   int gen_filters();
   int gen_output_columns();
-  int set_properties();
+  int set_properties() override;
   void set_subquery_id(uint64_t subquery_id)
   {
     subquery_id_ = subquery_id;
@@ -54,16 +54,16 @@ public:
   {
     return access_exprs_;
   }
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
-  virtual int transmit_op_ordering();
-  virtual int transmit_local_ordering();
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+  virtual int transmit_op_ordering() override;
+  virtual int transmit_local_ordering() override;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
 
 private:
-  virtual int print_operator_for_outline(planText& plan_text);
-  virtual int is_used_join_type_hint(JoinAlgo join_algo, bool& is_used);
-  virtual int is_used_in_leading_hint(bool& is_used);
+  virtual int print_operator_for_outline(planText& plan_text) override;
+  virtual int is_used_join_type_hint(JoinAlgo join_algo, bool& is_used) override;
+  virtual int is_used_in_leading_hint(bool& is_used) override;
 
 private:
   uint64_t subquery_id_;

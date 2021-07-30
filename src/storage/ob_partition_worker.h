@@ -32,9 +32,9 @@ public:
   }
   int init(storage::ObPartitionService* ps);
   void destroy();
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
 
 public:
   virtual void run1() override;

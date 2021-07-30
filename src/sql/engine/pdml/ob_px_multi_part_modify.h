@@ -79,7 +79,7 @@ public:
   virtual void reset() override
   { /*@TODO fix reset member*/
   }
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
   virtual void set_task_id(int64_t task_id)
   {
     task_id_ = task_id;

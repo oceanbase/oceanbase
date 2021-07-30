@@ -439,7 +439,7 @@ public:
   {}
 
   int init(const common::ObPartitionKey pkey, ObTransService* trans_service);
-  void reset();
+  void reset() override;
 
 public:
   virtual void runTimerTask() override;

@@ -278,22 +278,22 @@ public:
       ObDailyMergeScheduler& daily_merge_scheduler);
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
 
   void wakeup();
-  void stop();
+  void stop() override;
 
   // this interface is provided to daily merge, no one else shall invoke it anywhere
   virtual int check_daily_merge_switch_leader(
-      const common::ObIArray<common::ObZone>& zone_list, common::ObIArray<bool>& results);
-  virtual int coordinate();
+      const common::ObIArray<common::ObZone>& zone_list, common::ObIArray<bool>& results) override;
+  virtual int coordinate() override;
   virtual int coordinate_tenants(const common::ObArray<common::ObZone>& excluded_zones,
       const common::ObIArray<common::ObAddr>& excluded_servers, const common::ObIArray<uint64_t>& tenant_ids,
       const bool force = false);
-  void set_merge_status(bool is_in_merging)
+  void set_merge_status(bool is_in_merging) override
   {
     is_in_merging_ = is_in_merging;
   }
@@ -302,28 +302,28 @@ public:
   virtual int coordinate_partition_group(const uint64_t table_id, const int64_t partition_id,
       const common::ObIArray<common::ObAddr>& excluded_servers, const common::ObArray<common::ObZone>& excluded_zones);
 
-  virtual int start_smooth_coordinate();
-  virtual int is_doing_smooth_coordinate(bool& is_doing);
-  virtual int is_last_switch_turn_succ(bool& is_succ);
+  virtual int start_smooth_coordinate() override;
+  virtual int is_doing_smooth_coordinate(bool& is_doing) override;
+  virtual int is_last_switch_turn_succ(bool& is_succ) override;
 
-  virtual void signal()
+  virtual void signal() override
   {
     wakeup();
   }
-  virtual int get_leader_stat(ServerLeaderStat& leader_stat);
+  virtual int get_leader_stat(ServerLeaderStat& leader_stat) override;
 
   // for mock test
   virtual int get_tenant_ids(common::ObArray<uint64_t>& tenant_ids);
 
-  virtual common::ObLatch& get_lock()
+  virtual common::ObLatch& get_lock() override
   {
     return lock_;
   }
-  virtual common::ObLatch& get_switch_leader_lock()
+  virtual common::ObLatch& get_switch_leader_lock() override
   {
     return switch_leader_lock_;
   }
-  virtual obrpc::ObSrvRpcProxy& get_rpc_proxy()
+  virtual obrpc::ObSrvRpcProxy& get_rpc_proxy() override
   {
     return *srv_rpc_proxy_;
   }
@@ -334,7 +334,7 @@ public:
   }
   static int get_same_tablegroup_partition_entity_ids(share::schema::ObSchemaGetterGuard& schema_guard,
       const uint64_t partition_entity_id, common::ObIArray<uint64_t>& partition_entity_ids);
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
   int get_excluded_zone_array(common::ObIArray<common::ObZone>& excluded_zone_array) const;
   int build_zone_region_score_array(const ObZone& primary_zone,
       common::ObIArray<share::ObRawPrimaryZoneUtil::ZoneScore>& zone_score_array,

@@ -90,15 +90,15 @@ public:
   virtual int est_cost() override;
   virtual int allocate_granule_pre(AllocGIContext &ctx);
   virtual int allocate_granule_post(AllocGIContext &ctx);
-  virtual int allocate_exchange_post(AllocExchContext* ctx);
+  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   virtual int transmit_op_ordering() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
 
-  virtual uint64_t hash(uint64_t seed) const;
-  virtual int copy_without_child(ObLogicalOperator*& out);
-  int check_output_dep_specific(ObRawExprCheckDep& checker);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual uint64_t hash(uint64_t seed) const override;
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
+  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   void set_fetch_with_ties(bool is_fetch_with_ties)
   {
     is_fetch_with_ties_ = is_fetch_with_ties;

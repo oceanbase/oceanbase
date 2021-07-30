@@ -109,7 +109,7 @@ public:
       sql::ObSQLSessionInfo* extern_session = NULL, ObISQLClient* client_addr = NULL,
       ObRestoreSQLModifier* sql_modifer = NULL);
   int destroy(void);
-  inline void reset()
+  inline void reset() override
   {
     destroy();
   }

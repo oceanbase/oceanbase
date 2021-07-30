@@ -72,7 +72,7 @@ public:
   virtual ~ObEmptyServerChecker();
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
@@ -81,7 +81,7 @@ public:
       share::schema::ObMultiVersionSchemaService& schema_service);
 
   virtual void wakeup();
-  virtual void stop();
+  virtual void stop() override;
   virtual int notify_check();
   virtual int pt_sync_finish(const common::ObAddr& server, const int64_t version);
 

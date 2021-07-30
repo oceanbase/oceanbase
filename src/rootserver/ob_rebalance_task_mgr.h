@@ -181,11 +181,11 @@ public:
   int init(common::ObServerConfig& config, ObRebalanceTaskExecutor& executor);
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
 
   // add_task() will never block. Task with no source_ field will be executed immediately.
   //
@@ -255,7 +255,7 @@ public:
   int check_dest_server_has_too_many_partitions(const ObRebalanceTask& task, bool& is_available);
   int get_schedule_task(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, common::ObIAllocator& allocator,
       ObRebalanceTask*& task);
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
 
 private:
   common::ObThreadCond& get_cond()

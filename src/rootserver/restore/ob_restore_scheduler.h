@@ -61,8 +61,8 @@ public:
       const common::ObAddr& self_addr);
   virtual void run3() override;
   void wakeup();
-  void stop();
-  virtual int blocking_run()
+  void stop() override;
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
@@ -73,7 +73,7 @@ public:
 
 private:
   int idle();
-  int check_stop() const;
+  int check_stop() const override;
 
   int process_restore_job(const share::ObPhysicalRestoreJob& job);
   int try_recycle_job(const share::ObPhysicalRestoreJob& job);

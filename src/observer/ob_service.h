@@ -94,7 +94,7 @@ public:
   virtual int fill_partition_replica(const common::ObPGKey& pg_key, share::ObPartitionReplica& replica) override;
   virtual int fill_partition_replica(storage::ObIPartitionGroup* part, share::ObPartitionReplica& replica);
   int get_pg_key(const common::ObPartitionKey& pkey, common::ObPGKey& pg_key) const;
-  virtual const common::ObAddr& get_self_addr();
+  virtual const common::ObAddr& get_self_addr() override;
   virtual int fill_checksum(const common::ObPartitionKey& pkey, const uint64_t sstable_id, const int sstable_type,
       const ObSSTableChecksumUpdateType update_type,
       common::ObIArray<share::ObSSTableDataChecksumItem>& data_checksum_items,

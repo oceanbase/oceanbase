@@ -108,7 +108,7 @@ public:
   {
     return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet();
   }
-  virtual int flush_buffer(const bool is_last);
+  virtual int flush_buffer(const bool is_last) override;
   int init(rpc::ObRequest* req, sql::ObSQLSessionInfo* sess_info, uint8_t packet_seq, bool conn_status,
       bool req_has_wokenup, int64_t query_receive_ts, bool io_thread_mark);
 

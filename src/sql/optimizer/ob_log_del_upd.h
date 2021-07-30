@@ -82,14 +82,14 @@ public:
   {
     check_constraint_exprs_ = check_constraint_exprs;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   virtual uint64_t get_hash(uint64_t seed) const
   {
     return seed;
   }
-  virtual uint64_t hash(uint64_t seed) const;
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
+  virtual uint64_t hash(uint64_t seed) const override;
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   virtual int reordering_project_columns() override;
   void set_ignore(bool is_ignore)
   {
@@ -195,7 +195,7 @@ public:
   {
     table_columns_ = table_columns;
   }
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
   ObTablePartitionInfo& get_table_partition_info()
   {
@@ -261,7 +261,7 @@ private:
   int do_reordering_project_columns(ObLogicalOperator& child);
 
 protected:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   virtual int add_exprs_to_ctx_for_pdml(
       ObAllocExprContext& ctx, const ObIArray<ObRawExpr*>& input_exprs, uint64_t producer_id);
 

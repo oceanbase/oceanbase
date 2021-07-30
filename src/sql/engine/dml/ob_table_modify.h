@@ -354,7 +354,7 @@ public:
     is_single_part_ = false;
     part_infos_.reset();
   }
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
   inline int64_t get_location_idx() const
   {
     return location_idx_;
@@ -363,7 +363,7 @@ public:
   {
     location_idx_ = location_idx;
   }
-  virtual bool need_serialized() const
+  virtual bool need_serialized() const override
   {
     return !is_single_part_;
   }
@@ -371,7 +371,7 @@ public:
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator)
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override
   {
     part_infos_.set_allocator(allocator);
   }
@@ -533,8 +533,8 @@ public:
   explicit ObTableModify(common::ObIAllocator& alloc);
   ~ObTableModify();
 
-  void reset();
-  void reuse();
+  void reset() override;
+  void reuse() override;
   /**
    * @brief the table id specify which table will be modified data
    */
@@ -549,7 +549,7 @@ public:
   //  void set_child_table_id(uint64_t table_id) { child_table_id_ = table_id; }
   //  void set_parent_table_id(uint64_t table_id) { parent_table_id_ = table_id; }
   int add_column_info(const ColumnContent& column);
-  virtual int create_operator_input(ObExecContext& ctx) const;
+  virtual int create_operator_input(ObExecContext& ctx) const override;
   /**
    * @brief table_modify must tell storage every cell's column id in the row
    * @param column_id[in], the order of column_id must correspond with the index of column in the row
@@ -630,11 +630,11 @@ public:
   {
     return index_tid_;
   }
-  virtual bool is_dml_operator() const
+  virtual bool is_dml_operator() const override
   {
     return true;
   }
-  virtual bool is_dml_without_output() const
+  virtual bool is_dml_without_output() const override
   {
     return !is_returning();
   }
@@ -648,7 +648,7 @@ public:
   {
     return from_multi_table_dml_;
   }
-  virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const;
+  virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const override;
   static common::ObString get_duplicated_rowkey_buffer(const common::ObIArray<uint64_t>& rowkey_ids,
       const common::ObNewRow& row, const common::ObTimeZoneInfo* tz_info = NULL);
   static int init_dml_param(ObExecContext& ctx, const uint64_t table_id, const ObPhyOperator& phy_op,
@@ -743,12 +743,12 @@ protected:
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
   /**
    * @brief close operator, not including children operators.
    * Every op should implement this method.
    */
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_close(ObExecContext& ctx) const override;
 
   int calculate_virtual_column(common::ObExprCtx& expr_ctx, common::ObNewRow& calc_row, int64_t row_num) const;
   int calc_returning_row(ObExprCtx& expr_ctx, const ObNewRow& cur_row, ObNewRow& return_row) const;

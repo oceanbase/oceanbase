@@ -25,9 +25,9 @@ public:
   {}
   virtual ~ObLogSequence()
   {}
-  virtual uint64_t hash(uint64_t seed) const;
-  virtual int copy_without_child(ObLogicalOperator*& out);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual uint64_t hash(uint64_t seed) const override;
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   int allocate_exchange_post(AllocExchContext* ctx) override;
   const common::ObIArray<uint64_t>& get_sequence_ids() const
   {

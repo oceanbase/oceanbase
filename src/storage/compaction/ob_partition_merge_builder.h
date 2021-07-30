@@ -75,16 +75,16 @@ public:
       const ObIArray<share::schema::ObColDesc>& column_ids,
       const ObIArray<blocksstable::ObMacroBlockInfoPair>* lob_blocks = NULL) override;
   virtual int init_bloomfilter_if_need(storage::ObSSTableMergeCtx& ctx);
-  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx);
-  virtual int process(const blocksstable::ObMicroBlock& micro_block);
-  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type);
-  virtual int close();
-  virtual void reset();
-  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const
+  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx) override;
+  virtual int process(const blocksstable::ObMicroBlock& micro_block) override;
+  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type) override;
+  virtual int close() override;
+  virtual void reset() override;
+  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const override
   {
     return &desc_;
   }
-  virtual void set_purged_count(const int64_t count);
+  virtual void set_purged_count(const int64_t count) override;
   TO_STRING_KV(K_(desc), K_(sstable_merge_info), K_(writer));
 
 protected:
@@ -125,20 +125,20 @@ public:
   virtual int open(storage::ObSSTableMergeCtx& ctx, const int64_t idx, const bool iter_complement,
       const ObIArray<share::schema::ObColDesc>& column_ids,
       const ObIArray<blocksstable::ObMacroBlockInfoPair>* lob_blocks = NULL) override;
-  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx);
-  virtual int process(const blocksstable::ObMicroBlock& micro_block);
-  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type);
-  virtual int close();
-  virtual void reset();
+  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx) override;
+  virtual int process(const blocksstable::ObMicroBlock& micro_block) override;
+  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type) override;
+  virtual int close() override;
+  virtual void reset() override;
   OB_INLINE void set_component(ObIStoreRowProcessor* component)
   {
     component_ = component;
   }
-  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const
+  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const override
   {
     return is_opened_ ? component_->get_data_store_desc() : NULL;
   }
-  virtual void set_purged_count(const int64_t count);
+  virtual void set_purged_count(const int64_t count) override;
   TO_STRING_KV(KP(component_));
 
 private:

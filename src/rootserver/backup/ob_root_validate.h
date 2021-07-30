@@ -58,12 +58,12 @@ public:
   int init(common::ObServerConfig& config, common::ObMySQLProxy& sql_proxy, ObRootBalancer& root_balancer,
       ObServerManager& server_manager, ObRebalanceTaskMgr& rebalance_mgr, obrpc::ObSrvRpcProxy& rpc_proxy,
       share::ObIBackupLeaseService& backup_lease_service);
-  int start();
+  int start() override;
   int idle();
   void wakeup();
-  void stop();
+  void stop() override;
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }

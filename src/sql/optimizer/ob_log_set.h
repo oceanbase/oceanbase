@@ -44,7 +44,7 @@ public:
   ObSelectLogPlan* get_right_plan() const;
   ObSelectStmt* get_left_stmt() const;
   ObSelectStmt* get_right_stmt() const;
-  const char* get_name() const;
+  const char* get_name() const override;
   inline void assign_set_distinct(const bool is_distinct)
   {
     is_distinct_ = is_distinct;
@@ -69,7 +69,7 @@ public:
   {
     return is_distinct_;
   }
-  virtual bool is_consume_child_1by1() const
+  virtual bool is_consume_child_1by1() const override
   {
     return ObSelectStmt::UNION == set_op_ && (HASH_SET == set_algo_ || !is_distinct_);
   }
@@ -81,10 +81,10 @@ public:
   {
     return set_op_;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   int calculate_sharding_info(
       ObIArray<ObRawExpr*>& left_keys, ObIArray<ObRawExpr*>& right_keys, ObShardingInfo& output_sharding);
-  virtual int allocate_exchange_post(AllocExchContext* ctx);
+  virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   int get_set_child_exprs(common::ObIArray<ObRawExpr*>& left_keys, common::ObIArray<ObRawExpr*>& right_keys);
   int get_calc_types(common::ObIArray<ObExprCalcType>& calc_types);
   const common::ObIArray<ObOrderDirection>& get_set_directions() const
@@ -112,7 +112,7 @@ public:
   virtual int est_cost() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
   int get_children_cost_info(ObIArray<ObBasicCostInfo>& children_cost_info);
-  virtual int transmit_op_ordering();
+  virtual int transmit_op_ordering() override;
   int set_left_expected_ordering(const common::ObIArray<OrderItem>& left_expected_ordering);
 
   int set_right_expected_ordering(const common::ObIArray<OrderItem>& right_expected_ordering);
@@ -128,7 +128,7 @@ public:
 
   int set_search_ordering(const common::ObIArray<OrderItem>& search_ordering);
   int set_cycle_items(const common::ObIArray<ColumnItem>& cycle_items);
-  uint64_t hash(uint64_t seed) const;
+  uint64_t hash(uint64_t seed) const override;
   const common::ObIArray<OrderItem>& get_search_ordering()
   {
     return search_ordering_;

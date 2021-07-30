@@ -131,8 +131,9 @@ public:
     destroy();
   }
 
-  virtual int init(const char* log_dir, const uint32_t align_size, const common::ObILogFileStore* file_store) override;
-  virtual void destroy();
+virtual int init(const char *log_dir,
+  const uint32_t align_size, const common::ObILogFileStore *file_store) override;
+  virtual void destroy() override;
 
   virtual int load_file(uint32_t& file_id, uint32_t& offset, bool enable_pre_creation = false) override;
   // Local disk format:

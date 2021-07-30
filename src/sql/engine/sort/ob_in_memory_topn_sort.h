@@ -29,15 +29,15 @@ class ObInMemoryTopnSort : public ObBaseSort {
 public:
   ObInMemoryTopnSort();
   virtual ~ObInMemoryTopnSort();
-  virtual void reset();
-  virtual void reuse();
-  virtual int add_row(const common::ObNewRow& row, bool& need_sort);
-  virtual int sort_rows();
-  virtual int get_next_row(common::ObNewRow& row);
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual int add_row(const common::ObNewRow& row, bool& need_sort) override;
+  virtual int sort_rows() override;
+  virtual int get_next_row(common::ObNewRow& row) override;
   virtual int64_t get_row_count() const override;
   virtual int64_t get_used_mem_size() const override;
-  virtual int get_next_compact_row(common::ObString& compact_row);
-  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t preifx_pos);
+  virtual int get_next_compact_row(common::ObString& compact_row) override;
+  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t preifx_pos) override;
   inline void set_fetch_with_ties(bool is_fetch_with_ties)
   {
     is_fetch_with_ties_ = is_fetch_with_ties;

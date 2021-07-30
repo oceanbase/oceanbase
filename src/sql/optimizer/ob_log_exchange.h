@@ -38,7 +38,7 @@ public:
   virtual ~ObLogExchange()
   {}
   virtual int est_cost() override;
-  virtual const char* get_name() const;
+  virtual const char* get_name() const override;
   int set_sort_keys(const common::ObIArray<OrderItem>& order_keys);
   const common::ObIArray<OrderItem>& get_sort_keys() const
   {
@@ -132,18 +132,18 @@ public:
   {
     return is_merge_sort_;
   }
-  inline bool is_block_op() const
+  inline bool is_block_op() const override
   {
     return is_local_order_;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int32_t get_explain_name_length() const;
-  virtual int get_explain_name_internal(char* buf, const int64_t buf_len, int64_t& pos);
+  virtual int32_t get_explain_name_length() const override;
+  virtual int get_explain_name_internal(char* buf, const int64_t buf_len, int64_t& pos) override;
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  int check_output_dep_specific(ObRawExprCheckDep& checker);
+  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   virtual int set_exchange_info(ObExchangeInfo& exch_info);
-  virtual int transmit_op_ordering();
+  virtual int transmit_op_ordering() override;
   const common::ObIArray<ObRawExpr*>& get_repart_keys() const
   {
     return exch_info_.repartition_keys_;
@@ -212,7 +212,7 @@ public:
   virtual int px_pipe_blocking_post(ObPxPipeBlockingCtx& ctx) override;
   virtual int allocate_granule_post(AllocGIContext& ctx) override;
   virtual int allocate_granule_pre(AllocGIContext& ctx) override;
-  uint64_t hash(uint64_t seed) const;
+  uint64_t hash(uint64_t seed) const override;
   bool is_local_order() const
   {
     return is_local_order_;
@@ -222,7 +222,7 @@ public:
     is_local_order_ = local_order;
   }
   virtual int compute_op_ordering() override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   SlaveMappingType get_slave_mapping_type()
   {
     return exch_info_.get_slave_mapping_type();
@@ -234,7 +234,7 @@ public:
   int update_sharding_conds(AllocExchContext& ctx);
 
 private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   virtual int print_plan_head_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
   virtual int inner_replace_generated_agg_expr(

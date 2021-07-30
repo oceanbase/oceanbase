@@ -423,7 +423,7 @@ public:
   int init(common::ObMySQLProxy* sql_proxy);
   virtual void run3() override;
   void wakeup();
-  void stop();
+  void stop() override;
   virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();

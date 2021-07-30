@@ -72,11 +72,11 @@ public:
     {}
     virtual ~ObRefreshStatTask()
     {}
-    virtual int64_t hash() const
+    virtual int64_t hash() const override
     {
       return 0;
     }
-    virtual bool operator==(const common::IObDedupTask& other) const
+    virtual bool operator==(const common::IObDedupTask& other) const override
     {
       UNUSED(other);
       return false;
@@ -85,12 +85,12 @@ public:
     {
       return sizeof(*this);
     }
-    virtual common::IObDedupTask* deep_copy(char* buffer, const int64_t buf_size) const;
-    virtual int64_t get_abs_expired_time() const
+    virtual common::IObDedupTask* deep_copy(char* buffer, const int64_t buf_size) const override;
+    virtual int64_t get_abs_expired_time() const override
     {
       return 0;
     }
-    virtual int process();
+    virtual int process() override;
     int init(const obrpc::ObUpdateStatCacheArg& analyze_arg)
     {
       return analyze_arg_.assign(analyze_arg);

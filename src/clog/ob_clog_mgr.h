@@ -310,75 +310,75 @@ public:
 public:
   virtual int init(storage::ObPartitionService* partition_service, ObLogReplayEngineWrapper* replay_engine,
       election::ObIElectionMgr* election_mgr, const common::ObAddr& self_addr, obrpc::ObBatchRpc* batch_rpc,
-      obrpc::ObLogRpcProxy* rpc, common::ObMySQLProxy* sql_proxy, const CLogMgrConfig& config);
-  void destroy();
+      obrpc::ObLogRpcProxy* rpc, common::ObMySQLProxy* sql_proxy, const CLogMgrConfig& config) override;
+  void destroy() override;
   virtual int create_partition(const common::ObPartitionKey& partition_key, const int64_t replica_num,
       const common::ObMemberList& member_list, const common::ObAddr& leader, const int64_t lease_start,
       const common::ObVersion& freeze_version, const common::ObReplicaType replica_type,
       const common::ObReplicaProperty replica_property, const int64_t last_submit_timestamp,
       const uint64_t last_replay_log_id, const int16_t archive_restore_state, const bool need_skip_mlist_check,
-      ObIPartitionLogService* pls);
+      ObIPartitionLogService* pls) override;
   virtual int assign_partition(const common::ObPartitionKey& partition_key, const ObReplicaType replica_type,
       const common::ObReplicaProperty replica_property, const common::ObBaseStorageInfo& info,
-      const common::ObVersion& freeze_version, const int16_t archive_restore_state, ObIPartitionLogService* pls);
+      const common::ObVersion& freeze_version, const int16_t archive_restore_state, ObIPartitionLogService* pls) override;
   virtual int add_partition(const common::ObPartitionKey& partition_key, const ObReplicaType replica_type,
       const common::ObReplicaProperty replica_property, const common::ObBaseStorageInfo& info,
       const common::ObVersion& freeze_version, const ObAddr& src_server, const int16_t archive_restore_state,
-      ObIPartitionLogService* pls);
-  virtual int handle_packet(int pcode, const char* data, int64_t len);
-  virtual int run_check_log_file_collect_task();
+      ObIPartitionLogService* pls) override;
+  virtual int handle_packet(int pcode, const char* data, int64_t len) override;
+  virtual int run_check_log_file_collect_task() override;
   virtual int req_start_log_id_by_ts(
-      const obrpc::ObLogReqStartLogIdByTsRequest& req_msg, obrpc::ObLogReqStartLogIdByTsResponse& result);
+      const obrpc::ObLogReqStartLogIdByTsRequest& req_msg, obrpc::ObLogReqStartLogIdByTsResponse& result) override;
   virtual int req_start_pos_by_log_id(
-      const obrpc::ObLogReqStartPosByLogIdRequest& req_msg, obrpc::ObLogReqStartPosByLogIdResponse& result);
+      const obrpc::ObLogReqStartPosByLogIdRequest& req_msg, obrpc::ObLogReqStartPosByLogIdResponse& result) override;
   virtual int fetch_log(
-      const obrpc::ObLogExternalFetchLogRequest& req_msg, obrpc::ObLogExternalFetchLogResponse& result);
+      const obrpc::ObLogExternalFetchLogRequest& req_msg, obrpc::ObLogExternalFetchLogResponse& result) override;
   virtual int req_heartbeat_info(
-      const obrpc::ObLogReqHeartbeatInfoRequest& req_msg, obrpc::ObLogReqHeartbeatInfoResponse& result);
+      const obrpc::ObLogReqHeartbeatInfoRequest& req_msg, obrpc::ObLogReqHeartbeatInfoResponse& result) override;
   virtual int req_start_log_id_by_ts_with_breakpoint(const obrpc::ObLogReqStartLogIdByTsRequestWithBreakpoint& req_msg,
-      obrpc::ObLogReqStartLogIdByTsResponseWithBreakpoint& result);
+      obrpc::ObLogReqStartLogIdByTsResponseWithBreakpoint& result) override;
   virtual int req_start_pos_by_log_id_with_breakpoint(
       const obrpc::ObLogReqStartPosByLogIdRequestWithBreakpoint& req_msg,
-      obrpc::ObLogReqStartPosByLogIdResponseWithBreakpoint& result);
+      obrpc::ObLogReqStartPosByLogIdResponseWithBreakpoint& result) override;
   virtual int handle_get_mc_ts_request(
-      const obrpc::ObLogGetMCTsRequest& request_msg, obrpc::ObLogGetMCTsResponse& result);
+      const obrpc::ObLogGetMCTsRequest& request_msg, obrpc::ObLogGetMCTsResponse& result) override;
   virtual int handle_get_mc_ctx_array_request(
-      const obrpc::ObLogGetMcCtxArrayRequest& request_msg, obrpc::ObLogGetMcCtxArrayResponse& result);
+      const obrpc::ObLogGetMcCtxArrayRequest& request_msg, obrpc::ObLogGetMcCtxArrayResponse& result) override;
   virtual int handle_get_priority_array_request(
-      const obrpc::ObLogGetPriorityArrayRequest& request_msg, obrpc::ObLogGetPriorityArrayResponse& result);
+      const obrpc::ObLogGetPriorityArrayRequest& request_msg, obrpc::ObLogGetPriorityArrayResponse& result) override;
   ObLogExecutor& get_log_executor()
   {
     return log_executor_;
   }
-  virtual logservice::ObExtLogService* get_external_log_service()
+  virtual logservice::ObExtLogService* get_external_log_service() override
   {
     return &external_log_service_;
   }
-  int start();
-  void stop();
-  void wait();
-  bool is_scan_finished() const;
+  int start() override;
+  void stop() override;
+  void wait() override;
+  bool is_scan_finished() const override;
   // for test
   int get_last_slide_log_id(const common::ObPartitionKey& partition_key, uint64_t& log_id);
-  ObILogEngine* get_log_engine()
+  ObILogEngine* get_log_engine() override
   {
     return &log_engine_;
   }
-  virtual int get_need_freeze_partition_array(NeedFreezePartitionArray& partition_array) const;
-  virtual uint32_t get_clog_min_using_file_id() const;
+  virtual int get_need_freeze_partition_array(NeedFreezePartitionArray& partition_array) const override;
+  virtual uint32_t get_clog_min_using_file_id() const override;
   virtual int get_clog_using_disk_space(int64_t& using_space) const override;
   virtual int get_ilog_using_disk_space(int64_t& using_space) const override;
 
   //===================== transaction one phase commit begin ================
 public:
   virtual int batch_submit_log(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
-      const ObLogInfoArray& log_info_array, const ObISubmitLogCbArray& cb_array);
-  virtual int check_can_batch_submit(const common::ObPartitionArray& partition_array, bool& can_batch);
-  virtual int batch_flush_cb(const transaction::ObTransID& trans_id, const ObLogCursor& base_log_cursor);
+      const ObLogInfoArray& log_info_array, const ObISubmitLogCbArray& cb_array) override;
+  virtual int check_can_batch_submit(const common::ObPartitionArray& partition_array, bool& can_batch) override;
+  virtual int batch_flush_cb(const transaction::ObTransID& trans_id, const ObLogCursor& base_log_cursor) override;
   virtual int batch_receive_log(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
-      const ObLogInfoArray& log_info_array, const common::ObAddr& leader, const int64_t cluster_id);
+      const ObLogInfoArray& log_info_array, const common::ObAddr& leader, const int64_t cluster_id) override;
   virtual int batch_ack_log(
-      const transaction::ObTransID& trans_id, const common::ObAddr& server, const ObBatchAckArray& batch_ack_array);
+      const transaction::ObTransID& trans_id, const common::ObAddr& server, const ObBatchAckArray& batch_ack_array) override;
   //===================== transaction one phase commit end ================
 
   // Query the accumulative checksum and submit_timestamp values corresponding to this log_id based on log_id.
@@ -400,45 +400,45 @@ public:
   // OB_NOT_INIT
   // OB_INVALID_ARGUMENT
   virtual int query_log_info_with_log_id(const common::ObPartitionKey& partition_key, const uint64_t log_id,
-      int64_t& accum_checksum, int64_t& submit_timestamp, int64_t& epoch_id);
+      int64_t& accum_checksum, int64_t& submit_timestamp, int64_t& epoch_id) override;
   virtual int query_log_info_with_log_id(const common::ObPartitionKey& partition_key, const uint64_t log_id,
-      ObLogEntry& log_entry, int64_t& accum_checksum, bool& is_batch_committed);
+      ObLogEntry& log_entry, int64_t& accum_checksum, bool& is_batch_committed) override;
   // **********************************************************
   // batch get valid_candidates
   virtual int get_candidates_array(const common::ObPartitionIArray& pkey_array,
       const common::ObAddrIArray& dst_server_list, common::ObSArray<common::ObAddrSArray>& candidate_mlist_array,
-      common::ObSArray<obrpc::CandidateStatusList>& status_array) const;
+      common::ObSArray<obrpc::CandidateStatusList>& status_array) const override;
   //===================== batch change member begin ================
 public:
-  virtual int batch_add_member(const obrpc::ObChangeMemberArgs& ctx_array, obrpc::ObChangeMemberCtxs& return_ctx_array);
+  virtual int batch_add_member(const obrpc::ObChangeMemberArgs& ctx_array, obrpc::ObChangeMemberCtxs& return_ctx_array) override;
   virtual int batch_remove_member(
-      const obrpc::ObChangeMemberArgs& ctx_array, obrpc::ObChangeMemberCtxs& return_ctx_array);
-  virtual int batch_is_member_change_done(obrpc::ObChangeMemberCtxs& return_ctx_array);
+      const obrpc::ObChangeMemberArgs& ctx_array, obrpc::ObChangeMemberCtxs& return_ctx_array) override;
+  virtual int batch_is_member_change_done(obrpc::ObChangeMemberCtxs& return_ctx_array) override;
   virtual int batch_add_member(const common::ObPartitionArray& partition_array,
       const common::ObMemberArray& member_array, const common::ObQuorumArray& quorum_array,
-      common::ObReturnArray& ret_array, ObMCLogInfoArray& log_info_array);
+      common::ObReturnArray& ret_array, ObMCLogInfoArray& log_info_array) override;
   virtual int batch_remove_member(const common::ObPartitionArray& partition_array,
       const common::ObMemberArray& member_array, const common::ObQuorumArray& quorum_array,
-      common::ObReturnArray& ret_array, ObMCLogInfoArray& log_info_array);
+      common::ObReturnArray& ret_array, ObMCLogInfoArray& log_info_array) override;
   virtual int batch_is_member_change_done(const common::ObPartitionArray& partition_array,
-      const ObMCLogInfoArray& log_info_array, common::ObReturnArray& ret_array);
-  virtual int get_election_group_priority(const uint64_t tenant_id, election::ObElectionGroupPriority& priority) const;
+      const ObMCLogInfoArray& log_info_array, common::ObReturnArray& ret_array) override;
+  virtual int get_election_group_priority(const uint64_t tenant_id, election::ObElectionGroupPriority& priority) const override;
   virtual int handle_get_remote_log_request(
-      const obrpc::ObLogGetRemoteLogRequest& request_msg, obrpc::ObLogGetRemoteLogResponse& result);
-  virtual ObLogCallbackEngine& get_cb_engine()
+      const obrpc::ObLogGetRemoteLogRequest& request_msg, obrpc::ObLogGetRemoteLogResponse& result) override;
+  virtual ObLogCallbackEngine& get_cb_engine() override
   {
     return cb_engine_;
   }
   // ==================== physical flashback =====================
-  int delete_all_log_files();
+  int delete_all_log_files() override;
   // ==================== log archive =====================
-  int add_pg_archive_task(storage::ObIPartitionGroup* partition);
-  int try_advance_restoring_clog();
-  int delete_pg_archive_task(storage::ObIPartitionGroup* partition);
+  int add_pg_archive_task(storage::ObIPartitionGroup* partition) override;
+  int try_advance_restoring_clog() override;
+  int delete_pg_archive_task(storage::ObIPartitionGroup* partition) override;
   int mark_log_archive_encount_fatal_err(
-      const common::ObPartitionKey& pkey, const int64_t incarnation, const int64_t archive_round);
-  int get_archive_pg_map(archive::PGArchiveMap*& map);
-  bool is_server_archive_stop(const int64_t incarnation, const int64_t archive_round);
+      const common::ObPartitionKey& pkey, const int64_t incarnation, const int64_t archive_round) override;
+  int get_archive_pg_map(archive::PGArchiveMap*& map) override;
+  bool is_server_archive_stop(const int64_t incarnation, const int64_t archive_round) override;
 
 public:
   // clog callback thread num

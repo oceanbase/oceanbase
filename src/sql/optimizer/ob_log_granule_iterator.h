@@ -33,7 +33,7 @@ public:
   virtual ~ObLogGranuleIterator()
   {}
 
-  const char* get_name() const;
+  const char* get_name() const override;
 
   virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;

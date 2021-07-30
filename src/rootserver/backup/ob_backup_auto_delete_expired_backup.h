@@ -55,18 +55,18 @@ public:
       share::schema::ObMultiVersionSchemaService& schema_service, ObBackupDataClean& backup_data_clean,
       share::ObIBackupLeaseService& backup_lease_service);
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
   void wakeup();
   int idle() const;
-  virtual bool is_working() const
+  virtual bool is_working() const override
   {
     return is_working_;
   }
-  int start();
+  int start() override;
   ;
 
 private:

@@ -53,7 +53,7 @@ public:
 
   virtual int prefetch(const uint64_t tenant_id, const uint64_t start_table_id, const int64_t set_partition_id,
       common::ObIArray<ObPartitionInfo>& partition_infos, bool ignore_row_checksum,
-      const bool need_fetch_faillist = false);
+      const bool need_fetch_faillist = false) override;
 
   virtual int prefetch(const uint64_t pt_table_id, const int64_t pt_partition_id, const uint64_t start_table_id,
       const int64_t start_partition_id, common::ObIArray<ObPartitionInfo>& partition_infos,

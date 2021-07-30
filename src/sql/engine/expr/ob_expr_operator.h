@@ -1153,7 +1153,7 @@ public:
   virtual ~ObSubQueryRelationalExpr()
   {}
 
-  virtual int assign(const ObExprOperator& other);
+  virtual int assign(const ObExprOperator& other) override;
 
   void set_subquery_key(ObSubQueryKey key)
   {

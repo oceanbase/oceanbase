@@ -43,16 +43,16 @@ public:
   ObPxNewRowIterator();
   virtual ~ObPxNewRowIterator();
 
-  int get_next_row(common::ObNewRow& row);
-  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx)
+  int get_next_row(common::ObNewRow& row) override;
+  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx) override
   {
     UNUSED(exprs);
     UNUSED(eval_ctx);
     return common::OB_ERR_UNEXPECTED;
   }
-  void reset();
+  void reset() override;
 
-  bool is_inited()
+  bool is_inited() override
   {
     return is_inited_;
   }
@@ -60,7 +60,7 @@ public:
   {
     is_inited_ = true;
   }
-  bool has_next()
+  bool has_next() override
   {
     return rows_ > 0 && row_store_it_.has_next();
   }
@@ -69,7 +69,7 @@ public:
     return is_eof_;
   }
 
-  bool is_iter_end()
+  bool is_iter_end() override
   {
     return is_iter_end_;
   }
@@ -79,8 +79,8 @@ public:
     return row_store_.get_row_cnt();
   }
 
-  void set_iterator_end();
-  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer);
+  void set_iterator_end() override;
+  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer) override;
   void set_rows(int64_t rows)
   {
     rows_ = rows;
@@ -105,15 +105,15 @@ public:
   ObPxDatumRowIterator();
   virtual ~ObPxDatumRowIterator();
 
-  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx);
-  int get_next_row(common::ObNewRow& row)
+  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx) override;
+  int get_next_row(common::ObNewRow& row) override
   {
     UNUSED(row);
     return common::OB_ERR_UNEXPECTED;
   }
-  void reset();
+  void reset() override;
 
-  bool is_inited()
+  bool is_inited() override
   {
     return is_inited_;
   }
@@ -121,7 +121,7 @@ public:
   {
     is_inited_ = true;
   }
-  bool has_next()
+  bool has_next() override
   {
     return rows_ > 0 && datum_store_it_.has_next();
   }
@@ -130,7 +130,7 @@ public:
     return is_eof_;
   }
 
-  bool is_iter_end()
+  bool is_iter_end() override
   {
     return is_iter_end_;
   }
@@ -140,8 +140,8 @@ public:
     return datum_store_.get_row_cnt();
   }
 
-  void set_iterator_end();
-  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer);
+  void set_iterator_end() override;
+  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer) override;
   void set_rows(int64_t rows)
   {
     rows_ = rows;

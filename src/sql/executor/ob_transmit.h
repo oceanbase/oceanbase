@@ -84,8 +84,8 @@ public:
   explicit ObTransmit(common::ObIAllocator& alloc);
   virtual ~ObTransmit();
   // virtual int close(ObExecContext &ctx) const;
-  void reset();
-  void reuse();
+  void reset() override;
+  void reuse() override;
   inline void set_interm_result_manager(ObIntermResultManager* result_mgr);
   inline void set_split_task_count(int64_t count);
   inline int64_t get_split_task_count() const;
@@ -106,7 +106,7 @@ public:
   {
     return job_conf_;
   }
-  int add_compute(ObColumnExpression* expr);
+  int add_compute(ObColumnExpression* expr) override;
   int add_filter(ObSqlExpression* expr);
 
   int init_repart_columns(int64_t repart_count, int64_t repart_sub_count);
@@ -208,8 +208,8 @@ public:
   }
 
 protected:
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
-  virtual int inner_open(ObExecContext& ctx) const;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
+  virtual int inner_open(ObExecContext& ctx) const override;
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const override;
 
 protected:

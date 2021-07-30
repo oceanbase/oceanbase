@@ -24,13 +24,13 @@ public:
   virtual ~ObLogDistinct()
   {}
 
-  const char* get_name() const;
+  const char* get_name() const override;
 
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   int push_down_distinct(
       AllocExchContext* ctx, common::ObIArray<OrderItem>& sort_keys, ObLogicalOperator*& exchange_point);
-  int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   // this interface can be used for adding distinct expr
   inline ObIArray<ObRawExpr*>& get_distinct_exprs()
   {
@@ -49,8 +49,8 @@ public:
     return append(distinct_exprs_, exprs);
   }
   virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs);
-  uint64_t hash(uint64_t seed) const;
+      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs) override;
+  uint64_t hash(uint64_t seed) const override;
 
   inline void set_hash_type()
   {
@@ -78,7 +78,7 @@ public:
   }
   virtual int est_cost() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual int transmit_op_ordering();
+  virtual int transmit_op_ordering() override;
   virtual bool is_block_op() const override
   {
     return false;

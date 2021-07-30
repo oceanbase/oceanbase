@@ -174,7 +174,7 @@ public:
   {
     return get_child(second_child);
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   int gen_filters();
   int gen_output_columns();
   /**
@@ -184,7 +184,7 @@ public:
 
   int update_weak_part_exprs(AllocExchContext* ctx);
 
-  virtual int allocate_expr_post(ObAllocExprContext& ctx);
+  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
   //@brief Set all the join predicates
   int set_join_conditions(const common::ObIArray<ObRawExpr*>& conditions)
   {
@@ -225,7 +225,7 @@ public:
     return right_expected_ordering_;
   }
   virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs);
+      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs) override;
   const common::ObIArray<ObOrderDirection>& get_merge_directions() const
   {
     return merge_directions_;
@@ -238,15 +238,15 @@ public:
   /**
    *  Get the operator's hash value
    */
-  virtual uint64_t hash(uint64_t seed) const;
+  virtual uint64_t hash(uint64_t seed) const override;
 
   // const char* get_name() const;
-  virtual int32_t get_explain_name_length() const;
-  virtual int get_explain_name_internal(char* buf, const int64_t buf_len, int64_t& pos);
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
+  virtual int32_t get_explain_name_length() const override;
+  virtual int get_explain_name_internal(char* buf, const int64_t buf_len, int64_t& pos) override;
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual int re_calc_cost();
-  virtual int transmit_op_ordering();
+  virtual int re_calc_cost() override;
+  virtual int transmit_op_ordering() override;
   /*
    * IN         right_child_sharding_info   the join's right child sharding info
    * IN         right_keys                  the right join equal condition
@@ -255,7 +255,7 @@ public:
   int bloom_filter_partition_type(
       const ObShardingInfo& right_child_sharding_info, ObIArray<ObRawExpr*>& right_keys, PartitionFilterType& type);
   virtual bool is_block_input(const int64_t child_idx) const override;
-  virtual bool is_consume_child_1by1() const
+  virtual bool is_consume_child_1by1() const override
   {
     return HASH_JOIN == join_algo_;
   }
@@ -271,7 +271,7 @@ public:
     return (NESTED_LOOP_JOIN == join_algo_) && nl_params_.empty();
   }
 
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
   virtual int compute_table_set() override;
   bool is_enable_gi_partition_pruning() const
@@ -305,8 +305,8 @@ private:
       ObIArray<ObExprCalcType>& calc_types);
   int make_sort_keys(common::ObIArray<ObRawExpr*>& sort_expr, common::ObIArray<OrderItem>& directions);
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
-  virtual int print_outline(planText& plan);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+  virtual int print_outline(planText& plan) override;
   int print_material_nl(planText& plan_text, JoinTreeType join_tree_type, bool is_need_print);
   int print_use_join(planText& plan_text, JoinTreeType join_tree_type, bool is_need_print);
   int print_pq_distribute(planText& plan_text, JoinTreeType join_tree_type, bool is_need_print);

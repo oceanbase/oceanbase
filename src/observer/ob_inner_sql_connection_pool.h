@@ -59,13 +59,13 @@ public:
   virtual int wait();
 
   // sql string escape
-  virtual int escape(const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size);
+  virtual int escape(const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size) override;
 
   // acquired connection must be released
   virtual int acquire(common::sqlclient::ObISQLConnection*& conn, ObISQLClient* client_addr) override;
   virtual int acquire(
       common::sqlclient::ObISQLConnection*& conn, const int64_t cluster_id, ObISQLClient* client_addr) override;
-  virtual int release(common::sqlclient::ObISQLConnection* conn, const bool success);
+  virtual int release(common::sqlclient::ObISQLConnection* conn, const bool success) override;
   int acquire_spi_conn(sql::ObSQLSessionInfo* session_info, observer::ObInnerSQLConnection*& conn);
   int acquire(sql::ObSQLSessionInfo* session_info, common::sqlclient::ObISQLConnection*& conn);
 

@@ -143,7 +143,7 @@ public:
     return is_empty_();
   }
 
-  virtual int search_boundary(const T& item, T& prev_item, T& next_item)
+  virtual int search_boundary(const T& item, T& prev_item, T& next_item) override
   {
     int ret = OB_SUCCESS;
     if (IS_NOT_INIT) {

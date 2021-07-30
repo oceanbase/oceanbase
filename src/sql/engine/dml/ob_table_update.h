@@ -113,10 +113,10 @@ public:
   explicit ObTableUpdate(common::ObIAllocator& alloc);
   virtual ~ObTableUpdate();
 
-  void reset();
-  void reuse();
+  void reset() override;
+  void reuse() override;
   virtual int rescan(ObExecContext& ctx) const override;
-  int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
+  int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   virtual int switch_iterator(ObExecContext& ctx) const override;
   int init_updated_column_count(common::ObIAllocator& allocator, int64_t count)
   {
@@ -161,25 +161,25 @@ protected:
    * @param ctx[in], execute context
    * @param row[out], ObSqlRow an obj array and row_size
    */
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
   /**
    * @brief close operator, not including children operators.
    * Every op should implement this method.
    */
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_close(ObExecContext& ctx) const override;
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  int init_op_ctx(ObExecContext& ctx) const;
-  virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
+  int init_op_ctx(ObExecContext& ctx) const override;
+  virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const override;
   inline int update_rows(ObExecContext& ctx, int64_t& affected_rows) const;
   int build_lock_row(ObTableUpdateCtx& update_ctx, const common::ObNewRow& old_row) const;
   int do_table_update(ObExecContext& ctx) const;

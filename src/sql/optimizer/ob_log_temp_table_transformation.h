@@ -30,7 +30,7 @@ public:
   virtual int allocate_exchange(AllocExchContext* ctx, ObExchangeInfo& exch_info) override;
   virtual int compute_op_ordering() override;
   virtual int transmit_local_ordering() override;
-  virtual bool is_consume_child_1by1() const
+  virtual bool is_consume_child_1by1() const override
   {
     return true;
   }

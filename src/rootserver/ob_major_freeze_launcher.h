@@ -35,11 +35,11 @@ public:
   int init(ObRootService& root_service, obrpc::ObCommonRpcProxy& rpc_proxy, common::ObServerConfig& config,
       const common::ObAddr& self_addr, ObFreezeInfoManager& freeze_info_manager);
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
 
 private:
   static const int64_t TRY_LAUNCH_MAJOR_FREEZE_INTERVAL_US = 1000 * 1000;  // 1s

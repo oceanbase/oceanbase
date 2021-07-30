@@ -38,8 +38,8 @@ public:
     force_save_interm_result_ = false;
     slice_events_ = NULL;
   }
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
-  inline virtual ObPhyOperatorType get_phy_op_type() const
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
+  inline virtual ObPhyOperatorType get_phy_op_type() const override
   {
     return PHY_DISTRIBUTED_TRANSMIT;
   }

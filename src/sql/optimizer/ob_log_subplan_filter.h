@@ -30,7 +30,7 @@ public:
   {}
   ~ObLogSubPlanFilter()
   {}
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   int allocate_exchange_post(AllocExchContext* ctx) override;
   int check_if_match_partition_wise(const AllocExchContext& ctx, bool& is_partition_wise);
   int has_serial_child(bool& has_serial_child);
@@ -47,8 +47,8 @@ public:
   int gen_output_columns();
   virtual int est_cost() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual int transmit_op_ordering();
-  virtual int transmit_local_ordering();
+  virtual int transmit_op_ordering() override;
+  virtual int transmit_local_ordering() override;
 
   /**
    *  Get the exec params
@@ -109,12 +109,12 @@ public:
 
   int get_subquery_exprs(ObIArray<ObRawExpr*>& subquery_exprs);
 
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
 
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
-  virtual int re_calc_cost();
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+  virtual int re_calc_cost() override;
   int get_children_cost_info(common::ObIArray<ObBasicCostInfo>& children_cost_info);
-  uint64_t hash(uint64_t seed) const;
+  uint64_t hash(uint64_t seed) const override;
   void set_update_set(bool update_set)
   {
     update_set_ = update_set;
@@ -123,8 +123,8 @@ public:
   {
     return update_set_;
   }
-  int allocate_granule_pre(AllocGIContext& ctx);
-  int allocate_granule_post(AllocGIContext& ctx);
+  int allocate_granule_pre(AllocGIContext& ctx) override;
+  int allocate_granule_post(AllocGIContext& ctx) override;
   virtual int compute_one_row_info() override;
 
 protected:
