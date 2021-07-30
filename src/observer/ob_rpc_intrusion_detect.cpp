@@ -47,7 +47,7 @@ static int on_connect(easy_connection_t* c)
     LOG_WARN("check server legitimate fail", K(ret), K(local_addr));
   } else if (!is_valid) {
     LOG_WARN("RPC INTRUSION DETECT: receive TCP connection out of this cluster,"
-             "may be a new server just add to this cluster or an 'ob_admin' operation happening",
+             "maybe a new server is just added to this cluster or an 'ob_admin' operation is running",
         K(local_addr));
   }
   return OB_SUCC(ret) ? EASY_OK : EASY_ERROR;
