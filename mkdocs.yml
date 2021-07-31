@@ -2,8 +2,7 @@ site_name: OceanBase 手册
 repo_url: 'https://github.com/oceanbase/oceanbase'
 repo_name: 'OceanBase'
 edit_uri: 'edit/master/docs/'
-docs_dir: './'
-site_dir: '../site'
+
 theme:
   name: 'material'
 nav:
