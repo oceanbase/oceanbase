@@ -8,7 +8,7 @@ Before installing dependencies, please make sure you have installed a recent ver
 
 Then you can run the following command from the command line:
 
-    $ pip install -r requirements.txt
+    $ pip install -r docs/requirements.txt
 
 ## Build the documentation
 
@@ -30,11 +30,11 @@ Open up http://127.0.0.1:8000/ in your browser, and you'll see the default home 
 
 ### Edit a page
 
-If you want to modify the content of a page, you can modify the markdown file in `docs/` directory directly.
+If you want to modify the content of a page, you can edit the markdown file in `docs/` directory directly.
 
 ### Modify the layout of pages
 
-To modify the layout of pages, you need to modify `mkdocs.yml`.
+To modify the layout of pages, you need to edit `mkdocs.yml`.
 
 For configuration details, see [MkDocs User Guide](https://www.mkdocs.org/user-guide/configuration/).
 
