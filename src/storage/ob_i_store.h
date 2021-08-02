@@ -658,7 +658,6 @@ public:
   uint16_t* column_ids_;
   common::ObNewRow row_val_;
   int64_t snapshot_version_;
-  ObFastQueryContext fq_ctx_;
   int64_t range_array_idx_;
   transaction::ObTransID* trans_id_ptr_;
   bool fast_filter_skipped_;
@@ -1393,7 +1392,6 @@ public:
   common::ObVersionRange trans_version_range_;
   const ObIStoreRowFilter* row_filter_;
   bool use_fuse_row_cache_;  // temporary code
-  const ObFastQueryContext* fq_ctx_;
   bool need_scn_;
   int16_t fuse_row_cache_hit_rate_;
   int16_t block_cache_hit_rate_;

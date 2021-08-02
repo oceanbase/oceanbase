@@ -101,8 +101,7 @@ int ObFuseRowCacheFetcher::put_fuse_row_cache(
                                access_param_->iter_param_.schema_version_,
                                read_snapshot_version,
                                access_ctx_->pkey_.get_partition_id(),
-                               sstable_end_log_ts,
-                               row.fq_ctx_))) {
+                               sstable_end_log_ts))) {
           STORAGE_LOG(WARN, "fail to init row cache value", K(tmp_ret));
         } else if (OB_SUCCESS != (tmp_ret = ObStorageCacheSuite::get_instance().get_fuse_row_cache().put_row(
                                       cache_key, row_cache_value))) {

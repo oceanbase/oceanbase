@@ -228,7 +228,6 @@ int ObMultipleGetMerge::construct_iters_without_fuse_row_cache()
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObITable*>& tables = tables_handle_.get_tables();
-  access_ctx_->fq_ctx_ = nullptr;
 
   if (iters_.count() > 0 && iters_.count() != tables.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -325,7 +324,6 @@ int ObMultipleGetMerge::try_get_fuse_row_cache(int64_t& end_table_idx)
               // do not use fuse row cache
               handle.reset();
             } else {
-              access_ctx_->fq_ctx_ = handle.value_->get_fq_ctx();
               end_table_idx = i;
               rows_[handle_idx].state_ = ObMultiGetRowState::IN_FUSE_ROW_CACHE;
               rows_[handle_idx].sstable_end_log_ts_ = sstable_end_log_ts;
@@ -485,17 +483,13 @@ int ObMultipleGetMerge::get_table_row(const int64_t table_idx, const int64_t row
       if (table->is_multi_version_minor_sstable() && row_info.sstable_end_log_ts_ < table->get_end_log_ts()) {
         row_info.sstable_end_log_ts_ = table->get_end_log_ts();
       }
-    } else if (!prow->fq_ctx_.is_valid() && table->is_memtable()) {
-      stop_reading = true;
     }
-    row_info.row_.fq_ctx_ = prow->fq_ctx_.is_valid() ? prow->fq_ctx_ : row_info.row_.fq_ctx_;
     STORAGE_LOG(DEBUG,
         "process row fuse",
         KP(this),
         "row",
         prow->flag_ == ObActionFlag::OP_ROW_DOES_NOT_EXIST ? "not exist" : to_cstring(*prow),
         K(row_info.row_),
-        K(row_info.row_.fq_ctx_),
         K(access_ctx_->store_ctx_->mem_ctx_->get_read_snapshot()),
         K(stop_reading));
   }
@@ -552,7 +546,6 @@ int ObMultipleGetMerge::prefetch()
         }
       } else {
         // try get from latest memtable
-        access_ctx_->fq_ctx_ = nullptr;
         for (int64_t i = table_cnt - 1; OB_SUCC(ret) && i >= end_memtable_idx_; --i) {
           if (OB_FAIL(get_table_row(i, prefetch_range_idx_, stop_reading))) {
             STORAGE_LOG(WARN, "fail to get table row", K(ret));

@@ -44,7 +44,7 @@ public:
   ObFuseRowCacheValue();
   virtual ~ObFuseRowCacheValue() = default;
   int init(const storage::ObStoreRow& row, const int64_t schema_version, const int64_t snapshot_version,
-      const int64_t partition_id, const int64_t sstable_end_log_ts, const storage::ObFastQueryContext& fq_ctx);
+      const int64_t partition_id, const int64_t sstable_end_log_ts);
   virtual int64_t size() const override;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& value) const override;
   bool is_valid() const
@@ -80,12 +80,8 @@ public:
   {
     return sstable_end_log_ts_;
   }
-  const storage::ObFastQueryContext* get_fq_ctx() const
-  {
-    return &fq_ctx_;
-  }
   TO_STRING_KV(KP_(obj_array), K_(size), K_(column_cnt), K_(schema_version), K_(flag), K_(snapshot_version),
-      K_(partition_id), K_(sstable_end_log_ts), K(fq_ctx_));
+      K_(partition_id), K_(sstable_end_log_ts));
 
 private:
   common::ObObj* obj_array_;
@@ -96,7 +92,6 @@ private:
   int64_t snapshot_version_;
   int64_t partition_id_;
   int64_t sstable_end_log_ts_;
-  storage::ObFastQueryContext fq_ctx_;
 };
 
 struct ObFuseRowValueHandle {

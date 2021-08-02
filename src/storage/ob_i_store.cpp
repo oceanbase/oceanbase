@@ -901,7 +901,6 @@ ObTableAccessContext::ObTableAccessContext()
       trans_version_range_(),
       row_filter_(NULL),
       use_fuse_row_cache_(false),
-      fq_ctx_(nullptr),
       need_scn_(false),
       fuse_row_cache_hit_rate_(0),
       block_cache_hit_rate_(0),
@@ -1103,7 +1102,6 @@ void ObTableAccessContext::reset()
   trans_version_range_.reset();
   row_filter_ = NULL;
   use_fuse_row_cache_ = false;
-  fq_ctx_ = nullptr;
   fuse_row_cache_hit_rate_ = 0;
   block_cache_hit_rate_ = 0;
   is_array_binding_ = false;
@@ -1142,7 +1140,6 @@ void ObTableAccessContext::reuse()
   trans_version_range_.reset();
   row_filter_ = NULL;
   use_fuse_row_cache_ = false;
-  fq_ctx_ = nullptr;
   fuse_row_cache_hit_rate_ = 0;
   block_cache_hit_rate_ = 0;
   is_array_binding_ = false;
