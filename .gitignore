@@ -86,6 +86,9 @@ test/tmp
 test/var
 *.ccls-cache/
 
+###### Docs website files
+site
+
 ###### Intellij files
 .idea
 cmake-build-debug
