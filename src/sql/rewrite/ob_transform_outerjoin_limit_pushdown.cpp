@@ -302,7 +302,6 @@ int ObTransformOuterJoinLimitPushDown::collect_orderby_table_ids(
     ObSelectStmt* select_stmt, ObSqlBitSet<>& table_ids, bool& is_valid_orderby)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> order_exprs;
   table_ids.reset();
   is_valid_orderby = true;
   if (OB_ISNULL(select_stmt)) {
@@ -519,6 +518,8 @@ int ObTransformOuterJoinLimitPushDown::add_condition_expr_for_viewtable(
     ObSEArray<ObRawExpr*, 16> old_column_exprs;
     ObSEArray<ObRawExpr*, 16> new_column_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < extracted_conditions.count(); ++i) {
+      old_column_exprs.reuse();
+      new_column_exprs.reuse();
       ObRawExpr* expr = extracted_conditions.at(i);
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -552,9 +553,11 @@ int ObTransformOuterJoinLimitPushDown::add_orderby_for_viewtable(
   } else if (need_rename) {
     // order by column needs to be renamed before moving
     // from upper_stmt to inner generated_view.
+    ObSEArray<ObRawExpr*, 16> old_order_exprs;
+    ObSEArray<ObRawExpr*, 16> new_order_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < saved_order_items.count(); i++) {
-      ObSEArray<ObRawExpr*, 16> old_order_exprs;
-      ObSEArray<ObRawExpr*, 16> new_order_exprs;
+      old_order_exprs.reuse();
+      new_order_exprs.reuse();
       if (OB_ISNULL(saved_order_items.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid expr", K(ret));
