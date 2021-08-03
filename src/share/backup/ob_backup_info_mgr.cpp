@@ -366,6 +366,7 @@ int ObBackupInfoMgr::get_restore_status_from_cache(const uint64_t tenant_id, Phy
         ObPhysicalRestoreJob& cur_job = cur_restore_job_->at(i);
         if (cur_job.tenant_id_ == tenant_id) {
           status = cur_job.status_;
+          ret = OB_SUCCESS;
           break;
         }
       }
