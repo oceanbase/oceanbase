@@ -3858,11 +3858,25 @@ int ObTableStore::get_multi_version_start(int64_t& multi_version_start)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_ERROR("not inited", K(ret), K(PRETTY_TS(*this)));
+  } else if (table_count_ <= 0) {
+    // empty table store, do nothing
+  } else if (inc_pos_ == table_count_) {  // no minor sstable
+    multi_version_start = tables_[inc_pos_ - 1]->get_snapshot_version();
+  } else if (inc_pos_ > table_count_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inc_pos is invlaid", K(ret), K(inc_pos_), K(table_count_));
   } else {
-    for (int64_t i = table_count_ - 1; i >= 0; --i) {
+    int64_t idx = inc_pos_;
+    for (int64_t i = table_count_ - 1; i >= inc_pos_; --i) {
       if (tables_[i]->get_multi_version_start() != tables_[i]->get_base_version()) {
-        multi_version_start = tables_[i]->get_multi_version_start();
+        idx = i;
         break;
+      }
+    }
+    multi_version_start = tables_[idx]->get_multi_version_start();
+    for (int64_t i = start_pos_; i < inc_pos_ - 1; ++i) {
+      if (tables_[i]->get_snapshot_version() >= tables_[idx]->get_base_version()) {
+        multi_version_start = MAX(multi_version_start, tables_[i]->get_snapshot_version());
       }
     }
   }
