@@ -3033,9 +3033,10 @@ int ObSSTable::check_row_locked(const ObStoreCtx& ctx, const common::ObStoreRowk
         STORAGE_LOG(WARN, "failed to open getter, ", K(ret), K(iter_param), K(access_context), K(ext_rowkey));
       } else if (OB_SUCC(row_iterator->get_next_row(store_row))) {
         lock_state.trans_version_ = store_row->snapshot_version_;
-        lock_state.is_locked_ = ((ObSSTableRowLockChecker*)row_iterator)->is_curr_row_locked();
-        lock_state.lock_trans_id_ = ((ObSSTableRowLockChecker*)row_iterator)->get_lock_trans_id();
       }
+
+      lock_state.is_locked_ = ((ObSSTableRowLockChecker*)row_iterator)->is_curr_row_locked();
+      lock_state.lock_trans_id_ = ((ObSSTableRowLockChecker*)row_iterator)->get_lock_trans_id();
     }
     row_iterator->~ObISSTableRowIterator();
   }
