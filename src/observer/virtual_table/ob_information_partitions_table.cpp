@@ -367,32 +367,38 @@ int ObInfoSchemaPartitionsTable::add_partitions(
         }
         case TABLE_ROWS: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case AVG_ROW_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case DATA_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case MAX_DATA_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case INDEX_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case DATA_FREE: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case CREATE_TIME: {

@@ -13451,18 +13451,18 @@ int ObInnerTableSchema::all_virtual_processlist_ora_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("TRACE_ID",     // column_name
-        ++column_id,                  // column_id
-        0,                            // rowkey_id
-        0,                            // index_id
-        0,                            // part_key_pos
-        ObVarcharType,                // column_type
-        CS_TYPE_UTF8MB4_BIN,          // column_collation_type
-        OB_MAX_TRACE_ID_BUFFER_SIZE,  // column_length
-        2,                            // column_precision
-        -1,                           // column_scale
-        true,                         // is_nullable
-        false);                       // is_autoincrement
+    ADD_COLUMN_SCHEMA("TRACE_ID", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_UTF8MB4_BIN, //column_collation_type
+      OB_MAX_TRACE_ID_BUFFER_SIZE, //column_length
+      2, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
   }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_func_type(PARTITION_FUNC_TYPE_HASH);

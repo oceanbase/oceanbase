@@ -1912,15 +1912,18 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "stores in context is null", K(ret));
   } else {
+    bool locked_by_self = false;
     int64_t max_trans_version = 0;
     const ObIArray<ObITable*>* stores = ctx.tables_;
+    ObStoreRowLockState lock_state;
 
     // ignore active memtable
     for (int64_t i = stores->count() - 2; OB_SUCC(ret) && i >= 0; i--) {
       int64_t current_version = 0;
       bool is_locked = false;
       uint32_t lock_descriptor = 0;
-      ObStoreRowLockState lock_state;
+
+      lock_state.reset();
 
       if (NULL == stores->at(i)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1929,7 +1932,13 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
         ObMemtable* memtable = static_cast<ObMemtable*>(stores->at(i));
         if (OB_FAIL(memtable->get_mvcc_engine().check_row_locked(
                 *ctx.mem_ctx_, key, is_locked, lock_descriptor, current_version))) {
-          TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(is_locked), K(lock_descriptor));
+          TRANS_LOG(WARN,
+              "mvcc engine check row lock fail, may be locked by other",
+              K(ret),
+              K(is_locked),
+              K(lock_descriptor));
+        } else {
+          locked_by_self |= is_locked && lock_descriptor == ctx.mem_ctx_->get_ctx_descriptor();
         }
       } else if (stores->at(i)->is_sstable()) {
         ObSSTable* sstable = static_cast<ObSSTable*>(stores->at(i));
@@ -1937,6 +1946,7 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
           TRANS_LOG(WARN, "failed to check row lock by other", K(ret), K(*key), K(lock_state));
         } else {
           current_version = lock_state.trans_version_;
+          locked_by_self |= lock_state.is_locked_ && ctx.trans_id_ == lock_state.lock_trans_id_;
         }
         TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(*key), K(*sstable), K(current_version));
       } else {
@@ -1945,16 +1955,27 @@ int ObMemtable::lock_row_on_frozen_stores(const ObStoreCtx& ctx, const ObMemtabl
       }
 
       max_trans_version = max(max_trans_version, current_version);
-      TRANS_LOG(DEBUG, "check_row_locked", K(i), K(stores->count()), K(stores->at(i)));
+      TRANS_LOG(DEBUG,
+          "check_row_locked",
+          K(i),
+          K(stores->count()),
+          K(stores->at(i)),
+          K(locked_by_self),
+          K(current_version),
+          K(max_trans_version));
     }
 
     if (OB_SUCC(ret)) {
       value->update_max_trans_version(max_trans_version);
-      value->set_lower_lock_scaned();
+      if (!locked_by_self) {
+        // there is no locks on frozen stores
+        if (max_trans_version > ctx.mem_ctx_->get_read_snapshot()) {
+          ret = OB_TRANSACTION_SET_VIOLATION;
+          TRANS_LOG(WARN, "TRANS_SET_VIOLATION", K(ret), K(max_trans_version), "ctx", ctx.mem_ctx_);
+        }
 
-      if (max_trans_version > ctx.mem_ctx_->get_read_snapshot()) {
-        ret = OB_TRANSACTION_SET_VIOLATION;
-        TRANS_LOG(WARN, "TRANS_SET_VIOLATION", K(ret), K(max_trans_version), "ctx", ctx.mem_ctx_);
+        value->set_lower_lock_scaned();
+        TRANS_LOG(DEBUG, "lower lock check finish", K(*value), K(*stores));
       }
     }
   }

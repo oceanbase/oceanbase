@@ -1130,7 +1130,6 @@ int ObMvccRow::check_row_locked(
   }
   // locked by other
   if (is_locked && lock_descriptor != ctx.get_ctx_descriptor()) {
-    lock_descriptor = row_lock_.get_exclusive_uid();
     int64_t lock_wait_start_ts =
         ctx.get_lock_wait_start_ts() > 0 ? ctx.get_lock_wait_start_ts() : common::ObClockGenerator::getClock();
     int64_t query_abs_lock_wait_timeout = ctx.get_query_abs_lock_wait_timeout(lock_wait_start_ts);
