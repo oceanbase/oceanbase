@@ -611,7 +611,7 @@ void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo& s
 ObPlanCache* ObSQLSessionInfo::get_plan_cache()
 {
   if (OB_LIKELY(NULL != plan_cache_manager_)) {
-    if (OB_NOT_NULL(plan_cache_) && plan_cache_->is_valid()) {
+    if (OB_NOT_NULL(plan_cache_)) {
       // do nothing
     } else {
       // release old plancache and get new
@@ -803,7 +803,9 @@ int ObSQLSessionInfo::get_ps_session_info(const ObPsStmtId stmt_id, ObPsSessionI
 int ObSQLSessionInfo::remove_ps_session_info(const ObPsStmtId stmt_id)
 {
   int ret = OB_SUCCESS;
-  ObPsSessionInfo* session_info = NULL;
+  ObPsSessionInfo *session_info = NULL;
+  LOG_TRACE("remove ps session info", K(ret), K(stmt_id), K(get_sessid()),
+            K(lbt()));
   if (OB_FAIL(ps_session_info_map_.erase_refactored(stmt_id, &session_info))) {
     LOG_WARN("ps session info not exist", K(stmt_id));
   } else if (OB_ISNULL(session_info)) {
@@ -1227,7 +1229,7 @@ void ObSQLSessionInfo::refresh_tenant_config()
   const bool change_tenant = (saved_tenant_info_ != effective_tenant_id);
   if (change_tenant || cur_ts - last_check_ec_ts_ > 5000000) {
     if (change_tenant) {
-      LOG_INFO("refresh tenant config where tenant changed", K_(saved_tenant_info), K(effective_tenant_id));
+      LOG_DEBUG("refresh tenant config where tenant changed", K_(saved_tenant_info), K(effective_tenant_id));
       ATOMIC_STORE(&saved_tenant_info_, effective_tenant_id);
     }
     is_external_consistent_ = transaction::ObTsMgr::get_instance().is_external_consistent(effective_tenant_id);

@@ -75,6 +75,15 @@ public:
   {
     return add_timestamp_;
   }
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObSSTableChecksumUpdateTask& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
   TO_STRING_KV(K_(pkey), K_(sstable_id), K_(sstable_type), K_(is_remove));
 
 private:

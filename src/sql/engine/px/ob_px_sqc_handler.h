@@ -185,7 +185,7 @@ private:
   };
 
 private:
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   uint64_t tenant_id_;
   int64_t reserved_px_thread_count_;
   uint64_t process_flags_;

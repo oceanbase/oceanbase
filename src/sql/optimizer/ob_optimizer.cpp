@@ -193,7 +193,7 @@ int ObOptimizer::get_session_parallel_info(
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));
-  } else if (!session_info->is_inner()) {
+  } else if (session_info->is_user_session()) {
     if (!stmt.is_px_dml_supported_stmt()) {
       if (OB_FAIL(session_info->get_enable_parallel_query(session_enable_parallel))) {
         LOG_WARN("failed to get sys variable for enable parallel query", K(ret));
@@ -235,7 +235,7 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt& stmt, const ObSQLSessionInf
   is_use_pdml = false;
   const ObStmtHint& hint = stmt.get_stmt_hint();
   // case 1
-  if (!session.use_static_typing_engine() || !stmt.is_pdml_supported_stmt()) {
+  if (!stmt.is_pdml_supported_stmt()) {
     is_use_pdml = false;
   } else if (stmt::T_INSERT == stmt.get_stmt_type() && !static_cast<const ObInsertStmt&>(stmt).value_from_select()) {
     is_use_pdml = false;
@@ -293,6 +293,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt& stmt, const ObSQL
     LOG_WARN("the schema guard is null", K(ret));
   } else if (enable_all_pdml_feature) {
     is_use_pdml = true;
+    LOG_INFO("event: force enable pdml. may leads error", K(ret));
   } else if (pdml_stmt.get_all_table_columns().count() != 1) {
     is_use_pdml = false;
   } else if (stmt::T_INSERT == stmt.get_stmt_type() && static_cast<const ObInsertStmt&>(stmt).get_insert_up()) {
@@ -303,23 +304,32 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt& stmt, const ObSQL
   } else if (table_schema->get_foreign_key_infos().count() > 0) {
     LOG_TRACE("dml has foreign key, disable pdml", K(ret));
     is_use_pdml = false;
+  } else if (stmt::T_DELETE == stmt.get_stmt_type()) {
+    // https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/5345309
+    // if no trigger, no foreign key, delete can do pdml, even if with local unique index
+    is_use_pdml = true;
   } else if (!session.use_static_typing_engine() && stmt.get_check_constraint_exprs_size() > 0) {
     LOG_TRACE("dml has constraint, old engine, disable pdml", K(ret));
     is_use_pdml = false;
   } else {
-    // check global unique index, update(row movement)
-    int global_index_cnt = pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.count();
-    for (int idx = 0; idx < global_index_cnt && OB_SUCC(ret) && is_use_pdml; idx++) {
-      const ObIArray<ObColumnRefRawExpr*>& column_exprs =
-          pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.at(idx).column_exprs_;
-      bool has_unique_index = false;
-      LOG_TRACE("check pdml unique index", K(column_exprs));
-      if (OB_FAIL(check_unique_index(column_exprs, has_unique_index))) {
-        LOG_WARN("failed to check has unique index", K(ret));
-      } else if (has_unique_index) {
-        LOG_TRACE("dml has unique index, disable pdml", K(ret));
+    if (OB_SUCC(ret) && is_use_pdml) {
+      // check enabling parallel with local unique index
+      //  1. disable parallel insert. because parallel unique check not supported
+      //     (storage does not support parallel unique check in one update/insert statement.)
+      //  2. disable parallel update. only if the unqiue column is updated.
+      //     [FIXME] for now, we blindly disable PDML if table has unique local index
+      //
+      // future work:
+      // data is reshuffled by partition key, so that same unique value may be reshuffled
+      // to different thread. To make same unique value reshuffled to same thread, we can
+      // do a hybrid reshuffle: map partition key to server, map unique key to thread.
+      // However, if there are more than one unique local index, this method will still fail.
+      uint64_t main_table_tid = pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.at(0).index_tid_;
+      bool with_unique_local_idx = false;
+      if (OB_FAIL(schema_guard->check_has_local_unique_index(main_table_tid, with_unique_local_idx))) {
+        LOG_WARN("fail check if table with local unqiue index", K(main_table_tid), K(ret));
+      } else if (with_unique_local_idx) {
         is_use_pdml = false;
-        break;
       }
     }
   }

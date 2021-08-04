@@ -128,7 +128,7 @@ public:
       : common::ObVTableScanParam(),
         trans_desc_(NULL),
         table_param_(NULL),
-        allocator_(&CURRENT_CONTEXT.get_arena_allocator()),
+        allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         part_filter_(NULL),
         part_mgr_(NULL),
         column_orders_(nullptr),
@@ -143,7 +143,7 @@ public:
       : common::ObVTableScanParam(),
         trans_desc_(&trans_desc),
         table_param_(NULL),
-        allocator_(&CURRENT_CONTEXT.get_arena_allocator()),
+        allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         part_filter_(NULL),
         part_mgr_(NULL),
         column_orders_(nullptr),
@@ -170,7 +170,7 @@ public:
   int16_t block_cache_hit_rate_;
   uint64_t ref_table_id_;  // main table id
   ObIPartitionGroupGuard* partition_guard_;
-  lib::MemoryContext* iterator_mementity_;
+  lib::MemoryContext iterator_mementity_;
   OB_INLINE virtual bool is_valid() const
   {
     return (NULL != trans_desc_ && trans_desc_->is_valid_or_standalone_stmt() && ObVTableScanParam::is_valid());

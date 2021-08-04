@@ -94,7 +94,7 @@ int ObParser::split_multiple_stmt(
     int tmp_ret = OB_SUCCESS;
     bool need_continue = true;
     while (remain > 0 && OB_SUCC(ret) && !parse_stat.parse_fail_ && need_continue) {
-      ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+      ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
       allocator.set_label("SplitMultiStmt");
       ObIAllocator* bak_allocator = allocator_;
       allocator_ = &allocator;

@@ -231,8 +231,8 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
   }
 
   if (OB_SUCC(ret)) {
-    // Distribute the centralized assignment information to each index, and do assignment updates for each index
-    if (OB_FAIL(update_stmt->refill_index_assignment_info())) {
+    if (OB_FAIL(update_stmt->refill_global_index_dml_info(
+            *params_.expr_factory_, session_info_->use_static_typing_engine()))) {
       LOG_WARN("init index assignment info failed", K(ret));
     }
   }
@@ -601,6 +601,7 @@ int ObUpdateResolver::resolve_multi_table_dml_info(const ObTableAssignment& ta, 
         index_dml_info.part_cnt_ = index_schema->get_partition_cnt();
         index_dml_info.all_part_num_ = index_schema->get_all_part_num();
         index_dml_info.rowkey_cnt_ = index_schema->get_rowkey_column_num();
+        index_dml_info.index_type_ = index_schema->get_index_type();
         if (OB_FAIL(index_schema->get_index_name(index_dml_info.index_name_))) {
           LOG_WARN("get index name from index schema failed", K(ret));
         } else if (OB_FAIL(update_stmt->add_multi_table_dml_info(index_dml_info))) {

@@ -636,7 +636,7 @@ int ObLogExternalExecutorWithBreakpoint::ts_handle_cold_pkeys_by_last_info(
   int64_t info_min_ts = OB_INVALID_TIMESTAMP;
   if (OB_ISNULL(log_engine_) || OB_ISNULL(search_status)) {
     ret = OB_ERR_UNEXPECTED;
-    EXTLOG_LOG(ERROR, "log_engine_ or search_satus is null", K(ret), KP(log_engine_), KP(search_status));
+    EXTLOG_LOG(ERROR, "log_engine_ or search_status is null", K(ret), KP(log_engine_), KP(search_status));
   } else {
     if (OB_FAIL(log_engine_->get_ilog_memstore_min_log_id_and_ts(pkey, info_min_log_id, info_min_ts))) {
       if (OB_PARTITION_NOT_EXIST == ret) {
@@ -685,7 +685,7 @@ int ObLogExternalExecutorWithBreakpoint::id_handle_cold_pkeys_by_last_info(
   int64_t info_min_ts = OB_INVALID_TIMESTAMP;
   if (OB_ISNULL(log_engine_) || OB_ISNULL(search_status)) {
     ret = OB_ERR_UNEXPECTED;
-    EXTLOG_LOG(ERROR, "log_engine_ or search_satus is null", K(ret), KP(log_engine_), KP(search_status));
+    EXTLOG_LOG(ERROR, "log_engine_ or search_status is null", K(ret), KP(log_engine_), KP(search_status));
   } else {
     if (OB_FAIL(log_engine_->get_ilog_memstore_min_log_id_and_ts(pkey, info_min_log_id, info_min_ts))) {
       if (OB_PARTITION_NOT_EXIST == ret) {
@@ -703,7 +703,7 @@ int ObLogExternalExecutorWithBreakpoint::id_handle_cold_pkeys_by_last_info(
       EXTLOG_LOG(TRACE, "get info entry success", K(pkey), K(info_min_log_id), K(info_min_ts));
       if (start_log_id >= info_min_log_id) {
         search_status->search_by_id_.err_ = OB_SUCCESS;
-        // If log file is swithed, the return progress.max_file_id_ may be too small, which is safe
+        // If log file is switched, the return progress.max_file_id_ may be too small, which is safe
         search_status->search_by_id_.res_file_id_ = progress.max_file_id_;
         search_status->set_finished();
         progress.finish_one();

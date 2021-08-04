@@ -64,8 +64,8 @@ public:
       share::schema::ObMultiVersionSchemaService* schema_service, ObRootService* root_service);
   virtual void run3() override;
   void wakeup();
-  void stop();
-  virtual int blocking_run()
+  void stop() override;
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }

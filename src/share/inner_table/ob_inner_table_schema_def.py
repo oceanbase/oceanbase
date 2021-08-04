@@ -4680,6 +4680,7 @@ def_table_schema(
   ('trans_id', 'uint'),
   ('thread_id', 'uint'),
   ('ssl_cipher', 'varchar:OB_MAX_COMMAND_LENGTH', 'true'),
+  ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', ''),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )

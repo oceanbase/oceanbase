@@ -32,16 +32,14 @@ public:
    */
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
 
-  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
+  virtual int est_cost() override;
 
-  virtual int est_cost();
-
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     out = NULL;
     return common::OB_SUCCESS;
   }
-  virtual const char* get_name() const;
+  virtual const char* get_name() const override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDelete);

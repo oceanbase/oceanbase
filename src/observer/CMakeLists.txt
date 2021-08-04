@@ -37,6 +37,7 @@ ob_set_subtarget(ob_server common
   ob_lease_state_mgr.cpp
   ob_partition_table_checker.cpp
   ob_partition_table_updater.cpp
+  ob_partition_location_updater.cpp
   ob_rebuild_flag_reporter.cpp
   ob_root_service_monitor.cpp
   ob_rpc_extra_payload.cpp

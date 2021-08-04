@@ -93,7 +93,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet& result)
 
   if (!OB_SUCC(ret) && !async_resp_used && !retry_ctrl_.need_retry()) {
     int sret = OB_SUCCESS;
-    bool is_partition_hit = session_.partition_hit().get_bool();
+    bool is_partition_hit = session_.get_err_final_partition_hit(ret);
     if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
       LOG_WARN("send error packet fail", K(sret), K(ret));
     }

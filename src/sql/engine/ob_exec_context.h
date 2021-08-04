@@ -387,6 +387,8 @@ public:
   ObRawExprFactory* get_expr_factory();
 
   int check_status();
+  int fast_check_status(const int64_t n = 0xFF);
+
   void set_outline_params_wrapper(const share::schema::ObOutlineParamsWrapper* params)
   {
     outline_params_wrapper_ = params;
@@ -602,11 +604,11 @@ public:
   {
     return eval_ctx_;
   }
-  lib::MemoryContext* get_eval_res_mem()
+  lib::MemoryContext get_eval_res_mem()
   {
     return eval_res_mem_;
   }
-  lib::MemoryContext* get_eval_tmp_mem()
+  lib::MemoryContext get_eval_tmp_mem()
   {
     return eval_tmp_mem_;
   }
@@ -786,8 +788,8 @@ protected:
   ObOpKitStore op_kit_store_;
 
   // expression evaluating memory and context.
-  lib::MemoryContext* eval_res_mem_;
-  lib::MemoryContext* eval_tmp_mem_;
+  lib::MemoryContext eval_res_mem_;
+  lib::MemoryContext eval_tmp_mem_;
   ObEvalCtx* eval_ctx_;
   ObQueryExecCtx* query_exec_ctx_;
   ObSEArray<ObSqlTempTableCtx, 1> temp_ctx_;
@@ -796,7 +798,7 @@ protected:
   ObGIPruningInfo gi_pruning_info_;
 
   ObSchedInfo sched_info_;
-  lib::MemoryContext* lob_fake_allocator_;
+  lib::MemoryContext lob_fake_allocator_;
 
   // serialize operator inputs of %root_op_ subplan if root_op_ is not NULL
   const ObPhyOperator* root_op_;
@@ -807,8 +809,8 @@ protected:
   int64_t fixed_id_;  // fixed part id or fixed subpart ids
   // for expr values op use
   int64_t expr_partition_id_;
-
   ObSEArray<common::ObNewRowIterator*, 1, common::ObIAllocator&> iters_;
+  int64_t check_status_times_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

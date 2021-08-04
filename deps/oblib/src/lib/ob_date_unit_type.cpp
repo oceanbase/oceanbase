@@ -111,3 +111,17 @@ const char* ob_date_unit_type_num_str(enum ObDateUnitType type)
   static_assert(DATE_UNIT_MAX + 1 == ARRAYSIZEOF(date_unit_type_num), "size of array not match enum size");
   return date_unit_type_num[type];
 }
+
+const char *ob_get_format_unit_type_str(enum ObGetFormatUnitType type)
+{
+  static const char *get_format_unit_type_name[GET_FORMAT_MAX + 1] =
+  {
+    "date",
+    "time",
+    "datetime",
+    "unknown",
+  };
+  static_assert(GET_FORMAT_MAX + 1 == ARRAYSIZEOF(get_format_unit_type_name),
+              "size of array not match enum size");
+  return get_format_unit_type_name[type];
+}

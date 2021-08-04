@@ -235,6 +235,8 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
     LOG_ERROR("init interrupt fail", K(ret));
   } else if (OB_FAIL(rs_mgr_.init(&rs_rpc_proxy_, &config_, &sql_proxy_))) {
     LOG_ERROR("init rs_mgr_ failed", K(ret));
+  } else if (OB_FAIL(server_tracer_.init(rs_rpc_proxy_, sql_proxy_))) {
+    LOG_WARN("init server tracer failed", K(ret));
   } else if (OB_FAIL(init_ob_service())) {
     LOG_ERROR("init ob service fail", K(ret));
   } else if (OB_FAIL(init_root_service())) {
@@ -262,8 +264,6 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
                  ObPartitionService::get_instance().get_locality_manager(),
                  config_.cluster_id))) {
     LOG_WARN("location fetcher init failed", K(ret));
-  } else if (OB_FAIL(server_tracer_.init(rs_rpc_proxy_, sql_proxy_))) {
-    LOG_WARN("init server tracer failed", K(ret));
   } else if (OB_FAIL(location_cache_.init(schema_service_,
                  config_,
                  server_tracer_,
@@ -1310,7 +1310,7 @@ int ObServer::init_global_kvcache()
 int ObServer::init_ob_service()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ob_service_.init(sql_proxy_))) {
+  if (OB_FAIL(ob_service_.init(sql_proxy_, server_tracer_))) {
     LOG_ERROR("oceanbase service init failed", K(ret));
   }
   return ret;
@@ -1679,7 +1679,7 @@ int ObServer::init_gc_partition_adapter()
   return ret;
 }
 
-int ObServer::get_network_speed_from_sysfs(int64_t &network_speed)
+int ObServer::get_network_speed_from_sysfs(int64_t& network_speed)
 {
   int ret = OB_SUCCESS;
   // sys_bkgd_net_percentage_ = config_.sys_bkgd_net_percentage;
@@ -1715,9 +1715,9 @@ char* strtrim(char* str)
   return str;
 }
 
-static int64_t nic_rate_parse(const char *str, bool &valid)
+static int64_t nic_rate_parse(const char* str, bool& valid)
 {
-  char *p_unit = nullptr;
+  char* p_unit = nullptr;
   int64_t value = 0;
 
   if (OB_ISNULL(str) || '\0' == str[0]) {
@@ -1731,22 +1731,15 @@ static int64_t nic_rate_parse(const char *str, bool &valid)
       valid = false;
     } else if (value <= 0) {
       valid = false;
-    } else if (0 == STRCASECMP("bit", p_unit)
-               || 0 == STRCASECMP("b", p_unit)) {
+    } else if (0 == STRCASECMP("bit", p_unit) || 0 == STRCASECMP("b", p_unit)) {
       // do nothing
-    } else if (0 == STRCASECMP("kbit", p_unit)
-               || 0 == STRCASECMP("kb", p_unit)
-               || 0 == STRCASECMP("k", p_unit)) {
+    } else if (0 == STRCASECMP("kbit", p_unit) || 0 == STRCASECMP("kb", p_unit) || 0 == STRCASECMP("k", p_unit)) {
       value <<= 10;
-    } else if ('\0' == *p_unit
-               || 0 == STRCASECMP("mbit", p_unit)
-               || 0 == STRCASECMP("mb", p_unit)
-               || 0 == STRCASECMP("m", p_unit)) {
+    } else if ('\0' == *p_unit || 0 == STRCASECMP("mbit", p_unit) || 0 == STRCASECMP("mb", p_unit) ||
+               0 == STRCASECMP("m", p_unit)) {
       // default is meta bit
       value <<= 20;
-    } else if (0 == STRCASECMP("gbit", p_unit)
-               || 0 == STRCASECMP("gb", p_unit)
-               || 0 == STRCASECMP("g", p_unit)) {
+    } else if (0 == STRCASECMP("gbit", p_unit) || 0 == STRCASECMP("gb", p_unit) || 0 == STRCASECMP("g", p_unit)) {
       value <<= 30;
     } else {
       valid = false;
@@ -1756,17 +1749,16 @@ static int64_t nic_rate_parse(const char *str, bool &valid)
   return value;
 }
 
-int ObServer::get_network_speed_from_config_file(int64_t &network_speed)
+int ObServer::get_network_speed_from_config_file(int64_t& network_speed)
 {
   int ret = OB_SUCCESS;
-  const char *nic_rate_path = "etc/nic.rate.config";
-  const int64_t MAX_NIC_CONFIG_FILE_SIZE = 1 << 10; // 1KB
-  FILE *fp = nullptr;
-  char *buf = nullptr;
+  const char* nic_rate_path = "etc/nic.rate.config";
+  const int64_t MAX_NIC_CONFIG_FILE_SIZE = 1 << 10;  // 1KB
+  FILE* fp = nullptr;
+  char* buf = nullptr;
   static int nic_rate_file_exist = 1;
 
-  if (OB_ISNULL(buf = static_cast<char *>(ob_malloc(MAX_NIC_CONFIG_FILE_SIZE + 1,
-                                                           ObModIds::OB_BUFFER)))) {
+  if (OB_ISNULL(buf = static_cast<char*>(ob_malloc(MAX_NIC_CONFIG_FILE_SIZE + 1, ObModIds::OB_BUFFER)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc buffer failed", LITERAL_K(MAX_NIC_CONFIG_FILE_SIZE), K(ret));
   } else if (OB_ISNULL(fp = fopen(nic_rate_path, "r"))) {
@@ -1791,7 +1783,7 @@ int ObServer::get_network_speed_from_config_file(int64_t &network_speed)
     }
     memset(buf, 0, MAX_NIC_CONFIG_FILE_SIZE + 1);
     fread(buf, 1, MAX_NIC_CONFIG_FILE_SIZE, fp);
-    char *prate = nullptr;
+    char* prate = nullptr;
 
     if (OB_UNLIKELY(0 != ferror(fp))) {
       ret = OB_IO_ERROR;
@@ -1815,13 +1807,13 @@ int ObServer::get_network_speed_from_config_file(int64_t &network_speed)
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid NIC Config file", K(ret));
       }
-    } // else
+    }  // else
 
     if (OB_UNLIKELY(0 != fclose(fp))) {
       ret = OB_IO_ERROR;
       LOG_ERROR("Close NIC Config file failed", K(ret));
     }
-  } // else
+  }  // else
   if (OB_LIKELY(nullptr != buf)) {
     ob_free(buf);
     buf = nullptr;
@@ -1849,10 +1841,7 @@ int ObServer::init_bandwidth_throttle()
     if (OB_FAIL(bandwidth_throttle_.init(rate))) {
       LOG_WARN("failed to init bandwidth throttle", K(ret), K(rate), K(network_speed));
     } else {
-      LOG_INFO("succeed to init_bandwidth_throttle",
-          K(sys_bkgd_net_percentage_),
-          K(network_speed),
-          K(rate));
+      LOG_INFO("succeed to init_bandwidth_throttle", K(sys_bkgd_net_percentage_), K(network_speed), K(rate));
       ethernet_speed_ = network_speed;
     }
   }
@@ -1886,8 +1875,10 @@ int ObServer::reload_bandwidth_throttle_limit(int64_t network_speed)
       LOG_WARN("failed to reset bandwidth throttle", K(ret), K(rate), K(ethernet_speed_));
     } else {
       LOG_INFO("succeed to reload_bandwidth_throttle_limit",
-          "old_percentage", sys_bkgd_net_percentage_,
-          "new_percentage", sys_bkgd_net_percentage,
+          "old_percentage",
+          sys_bkgd_net_percentage_,
+          "new_percentage",
+          sys_bkgd_net_percentage,
           K(network_speed),
           K(rate));
       sys_bkgd_net_percentage_ = sys_bkgd_net_percentage;
@@ -2134,11 +2125,10 @@ int ObServer::refresh_temp_table_sess_active_time()
   return ret;
 }
 
-ObServer::ObRefreshNetworkSpeedTask::ObRefreshNetworkSpeedTask()
-: obs_(nullptr), is_inited_(false)
+ObServer::ObRefreshNetworkSpeedTask::ObRefreshNetworkSpeedTask() : obs_(nullptr), is_inited_(false)
 {}
 
-int ObServer::ObRefreshNetworkSpeedTask::init(ObServer *obs, int tg_id)
+int ObServer::ObRefreshNetworkSpeedTask::init(ObServer* obs, int tg_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -2221,11 +2211,11 @@ int ObServer::init_ctas_clean_up_task()
 
 int ObServer::init_refresh_network_speed_task()
 {
-   int ret = OB_SUCCESS;
-   if (OB_FAIL(refresh_network_speed_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
-     LOG_WARN("fail to init refresh network speed task", K(ret));
-   }
-   return ret;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(refresh_network_speed_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
+    LOG_WARN("fail to init refresh network speed task", K(ret));
+  }
+  return ret;
 }
 
 // @@Query cleanup rules for built tables and temporary tables:

@@ -30,7 +30,7 @@ namespace logservice {
  * case request from leader,   return <OB_SUCCESS,    next_served_log_id/ts>
  * case request from follower, return <OB_NOT_MASTER, next_served_log_id/ts>
  *
- * note: leader will process dounle check
+ * note: leader will process double check
  */
 
 class ObExtLeaderHeartbeatHandler {

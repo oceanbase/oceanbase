@@ -1,4 +1,4 @@
-/**
+ /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -2389,7 +2389,7 @@ int ObSql::transform_stmt_with_outline(
       // So we use a memory context to do that
       CREATE_WITH_TEMP_CONTEXT(param)
       {
-        ObIAllocator& tmp_allocator = CURRENT_CONTEXT.get_arena_allocator();
+        ObIAllocator& tmp_allocator = CURRENT_CONTEXT->get_arena_allocator();
         ObMaxConcurrentParam::FixParamStore fix_param_store(
             OB_MALLOC_NORMAL_BLOCK_SIZE, ObWrapperAllocator(&tmp_allocator));
         if (OB_FAIL(ObSQLUtils::get_outline_key(
@@ -2462,7 +2462,7 @@ int ObSql::get_outline_info(
     int64_t sql_buf_size = pc_ctx.raw_sql_.get_serialize_size();
     int64_t sql_pos = 0;
     char* sql_buf = NULL;
-    ObIAllocator& allocator = CURRENT_CONTEXT.get_arena_allocator();
+    ObIAllocator& allocator = CURRENT_CONTEXT->get_arena_allocator();
     if (OB_ISNULL(sql_buf = (char*)allocator.alloc(sql_buf_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));

@@ -139,6 +139,8 @@ public:
   RPC_AP(PR3 batch_get_member_list_and_leader, OB_BATCH_GET_MEMBER_LIST_AND_LEADER, (obrpc::ObLocationRpcRenewArg),
       obrpc::ObLocationRpcRenewResult);
   RPC_AP(PR3 batch_get_role, OB_BATCH_GET_ROLE, (obrpc::ObBatchGetRoleArg), obrpc::ObBatchGetRoleResult);
+  RPC_AP(PR5 broadcast_locations, OB_BROADCAST_LOCATIONS, (obrpc::ObPartitionBroadcastArg),
+      obrpc::ObPartitionBroadcastResult);
   RPC_AP(PR5 check_has_need_offline_replica, OB_CHECK_NEED_OFFLINE_REPLICA, (obrpc::ObTenantSchemaVersions),
       obrpc::ObGetPartitionCountResult);
   RPC_AP(PR5 check_flashback_info_dump, OB_CHECK_FLASHBACK_INFO_DUMP, (obrpc::ObCheckFlashbackInfoArg),

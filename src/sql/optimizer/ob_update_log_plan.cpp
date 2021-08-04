@@ -414,7 +414,7 @@ int ObUpdateLogPlan::allocate_pdml_update_as_top(ObLogicalOperator*& top)
     } else {
       const ObTableAssignment& assign = one_table_assignment->at(0);
       const IndexDMLInfo& dml_info = update_stmt->get_all_table_columns().at(0).index_dml_infos_.at(idx);
-      if (assign.is_update_part_key_) {
+      if (assign.is_update_part_key_ || assign.is_update_unique_key_) {
 
         LOG_TRACE("partition key updated, gen delete-insert as raw plan", K(assign));
         int64_t binlog_row_image = share::ObBinlogRowImage::FULL;

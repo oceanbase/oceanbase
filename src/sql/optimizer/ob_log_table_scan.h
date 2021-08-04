@@ -80,7 +80,7 @@ public:
   virtual ~ObLogTableScan()
   {}
 
-  const char* get_name() const;
+  const char* get_name() const override;
 
   // not used at the moment
   TO_STRING_KV(K_(table_id), K_(index_table_id), K_(is_fake_cte_table), K_(table_name), K_(index_name));
@@ -330,7 +330,7 @@ public:
   /**
    *  Copy operator and it's properties without copying its child operators
    */
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
 
   /**
    * Generate the filtering expressions
@@ -351,7 +351,7 @@ public:
    * */
   virtual int allocate_granule_post(AllocGIContext& ctx) override;
 
-  virtual int compute_property(Path* path);
+  virtual int compute_property(Path* path) override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
 
   int get_index_cost(int64_t column_count, bool index_back, double& cost);
@@ -360,12 +360,12 @@ public:
   /**
    * This function add all output columns from column items.
    */
-  virtual int allocate_expr_post(ObAllocExprContext& ctx);
+  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
 
   /**
    *  Generate hash value for the operator using given seed
    */
-  virtual uint64_t hash(uint64_t seed) const;
+  virtual uint64_t hash(uint64_t seed) const override;
 
   /**
    *  Get table name
@@ -494,7 +494,7 @@ public:
     return exist_hint_;
   }
   virtual int inner_replace_generated_agg_expr(
-      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs);
+      const common::ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs) override;
   inline common::ObIArray<bool>& get_filter_before_index_flags()
   {
     return filter_before_index_back_;
@@ -667,8 +667,8 @@ public:
     return session_id_;
   }
 
-  virtual int transmit_op_ordering();
-  virtual int transmit_local_ordering();
+  virtual int transmit_op_ordering() override;
+  virtual int transmit_local_ordering() override;
   bool is_need_feedback() const;
   int set_filters(const common::ObIArray<ObRawExpr*>& filters);
   int refine_query_range();
@@ -698,24 +698,24 @@ private:  // member functions
   int pick_out_startup_filters();
   int filter_before_index_back_set();
   bool is_covered(ObRelIds& rel_ids);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   //  virtual int print_outline(char *buf, int64_t &buf_len, int64_t &pos, bool is_oneline);
-  virtual int print_outline(planText& plan_text);
+  virtual int print_outline(planText& plan_text) override;
   int print_outline_data(planText& plan_text);
   int print_all_no_index(const ObIndexHint& index_hint, planText& plan_text);
   int print_single_no_index(const ObString& index_name, planText& plan_text);
   int get_index_hint(bool& is_used_hint, const ObIndexHint*& index_hint);
   int print_used_index(planText& plan_text);
-  virtual int print_operator_for_outline(planText& plan_text);
-  virtual int is_used_join_type_hint(JoinAlgo join_algo, bool& is_used);
-  virtual int is_used_in_leading_hint(bool& is_used);
+  virtual int print_operator_for_outline(planText& plan_text) override;
+  virtual int is_used_join_type_hint(JoinAlgo join_algo, bool& is_used) override;
+  virtual int is_used_in_leading_hint(bool& is_used) override;
   int print_no_use_late_materialization(planText& plan_text);
   int print_range_annotation(char* buf, int64_t buf_len, int64_t& pos, ExplainType type);
   int print_filter_before_indexback_annotation(char* buf, int64_t buf_len, int64_t& pos);
   int print_limit_offset_annotation(char* buf, int64_t buf_len, int64_t& pos, ExplainType type);
   int print_ranges(char* buf, int64_t buf_len, int64_t& pos, const ObIArray<ObNewRange>& ranges);
   int print_split_range_annotation(char* buf, int64_t buf_len, int64_t& pos, ExplainType type);
-  virtual int explain_index_selection_info(char* buf, int64_t& buf_len, int64_t& pos);
+  virtual int explain_index_selection_info(char* buf, int64_t& buf_len, int64_t& pos) override;
   int generate_part_filter(ObRawExpr*& part_filter_expr);
   int fill_link_stmt(
       const common::ObIArray<ObRawExpr*>& select_strs, const TableItem& table_item, ObLinkStmt& link_stmt);

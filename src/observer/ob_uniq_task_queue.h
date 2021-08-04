@@ -243,8 +243,17 @@ int ObUniqTaskQueue<Task, Process>::add(const Task& task)
       const Task* stored_task = NULL;
       if (OB_FAIL(task_map_.set_refactored(task, task))) {
         if (common::OB_HASH_EXIST == ret) {
-          ret = common::OB_EAGAIN;
-          SERVER_LOG(TRACE, "same task exist", K(task));
+          if (task.need_assign_when_equal()) {
+            if (NULL == (stored_task = task_map_.get(task))) {
+              ret = common::OB_ERR_SYS;
+              SERVER_LOG(WARN, "get inserted task failed", K(ret), K(task));
+            } else if (OB_FAIL(const_cast<Task*>(stored_task)->assign_when_equal(task))) {
+              SERVER_LOG(WARN, "assign task failed", K(ret), K(task));
+            }
+          } else {
+            ret = common::OB_EAGAIN;
+            SERVER_LOG(TRACE, "same task exist", K(task));
+          }
         } else {
           SERVER_LOG(WARN, "insert into hash failed", K(ret), K(task));
         }

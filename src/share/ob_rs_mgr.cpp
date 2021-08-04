@@ -364,10 +364,15 @@ int ObRsMgr::do_detect_master_rs_v2(common::ObIArray<common::ObAddr>& rs_list)
     ObGetRootserverRoleResult result;
     const int64_t cluster_id = GCONF.cluster_id;
     bool has_rs = false;
+    int64_t timeout = 0;
+    if (ObTimeoutCtx::get_ctx().is_timeout_set() && !ObTimeoutCtx::get_ctx().is_timeouted()) {
+      timeout = ObTimeoutCtx::get_ctx().get_timeout();
+    }
+
     FOREACH_CNT(server, rs_list)
     {
       result.reset();
-      if (OB_FAIL(do_detect_master_rs_v3(*server, cluster_id, result))) {
+      if (OB_FAIL(do_detect_master_rs_v3(*server, cluster_id, timeout, result))) {
         // LOG_WARN("detect master rootservice failed", K(ret), "server", *server);
       } else {
         has_rs = true;
@@ -438,14 +443,14 @@ int ObRsMgr::do_detect_master_rs_v3(const ObIArray<ObAddr>& server_list, ObParti
     bool has_rs = false;
     int tmp_ret = OB_SUCCESS;
     ObGetRootserverRoleResult result;
+    int64_t timeout = 0;
+    if (ObTimeoutCtx::get_ctx().is_timeout_set() && !ObTimeoutCtx::get_ctx().is_timeouted()) {
+      timeout = ObTimeoutCtx::get_ctx().get_timeout();
+    }
     FOREACH_CNT(server, server_list)
     {
       result.reset();
-      if (ObTimeoutCtx::get_ctx().is_timeout_set() && ObTimeoutCtx::get_ctx().is_timeouted()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("detect master rs timeout", KR(ret));
-        break;
-      } else if (OB_FAIL(do_detect_master_rs_v3(*server, cluster_id, result))) {
+      if (OB_FAIL(do_detect_master_rs_v3(*server, cluster_id, timeout, result))) {
         // LOG_WARN("detect master rootservice failed", K(ret), "server", *server);
       } else {
         // if RS exists, return the memroy data of RS directly.
@@ -468,17 +473,14 @@ int ObRsMgr::do_detect_master_rs_v3(const ObIArray<ObAddr>& server_list, ObParti
 }
 
 int ObRsMgr::do_detect_master_rs_v3(
-    const ObAddr& dst_server, const int64_t cluster_id, ObGetRootserverRoleResult& result)
+    const ObAddr& dst_server, const int64_t cluster_id, const int64_t rpc_timeout, ObGetRootserverRoleResult& result)
 {
   int ret = OB_SUCCESS;
   result.reset();
   result.role_ = ObRoleMgr::OB_SLAVE;
   result.zone_.reset();
   ObCurTraceId::Guard guard(GCTX.self_addr_);
-  int64_t timeout = DETECT_MASTER_TIMEOUT;
-  if (ObTimeoutCtx::get_ctx().is_timeout_set()) {
-    timeout = ObTimeoutCtx::get_ctx().get_timeout();
-  }
+  int64_t timeout = max(DETECT_MASTER_TIMEOUT, rpc_timeout);
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -489,14 +491,14 @@ int ObRsMgr::do_detect_master_rs_v3(
     ObCurTraceId::Guard guard(GCTX.self_addr_);
     if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2220) {
       if (OB_FAIL(rpc_proxy_->to_addr(dst_server).timeout(timeout).get_root_server_status(result))) {
-        LOG_WARN("failed to get rootserver role", KR(ret), K(dst_server));
+        LOG_WARN("failed to get rootserver role", K(ret), K(dst_server), K(timeout));
       }
     } else {
       if (OB_FAIL(rpc_proxy_->to_addr(dst_server)
                       .timeout(timeout)
                       .dst_cluster_id(cluster_id)
                       .get_master_root_server(result))) {
-        LOG_WARN("fail to get rootserver role", KR(ret), K(dst_server), K(cluster_id));
+        LOG_WARN("fail to get rootserver role", K(ret), K(dst_server), K(cluster_id), K(timeout));
       }
     }
   }
@@ -544,6 +546,11 @@ int ObRsMgr::get_remote_cluster_master_rs(const int64_t cluster_id, common::ObAd
   } else {
     bool found = false;
     ObGetRootserverRoleResult result;
+    int64_t timeout = 0;
+    if (ObTimeoutCtx::get_ctx().is_timeout_set() && !ObTimeoutCtx::get_ctx().is_timeouted()) {
+      timeout = ObTimeoutCtx::get_ctx().get_timeout();
+    }
+
     for (int64_t i = 0; i < addr_agent_.get_agent_num(); ++i) {
       if (OB_FAIL(addr_agent_.fetch_rslist_by_agent_idx(i, cluster_id, new_list, new_readonly_list, cluster_type))) {
         LOG_WARN("fetch rs list failed", K(ret), K(cluster_id), K(i));
@@ -552,7 +559,7 @@ int ObRsMgr::get_remote_cluster_master_rs(const int64_t cluster_id, common::ObAd
         for (int64_t i = 0; i < new_list.count(); ++i) {
           const ObAddr& dst_server = new_list.at(i).server_;
           result.reset();
-          if (OB_FAIL(do_detect_master_rs_v3(dst_server, cluster_id, result))) {
+          if (OB_FAIL(do_detect_master_rs_v3(dst_server, cluster_id, timeout, result))) {
           } else {
             addr = result.replica_.server_;
             LOG_INFO("new master rootserver found", "rootservice", addr, K(cluster_id));

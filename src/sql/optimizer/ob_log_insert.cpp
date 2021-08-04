@@ -291,13 +291,6 @@ int ObLogInsert::allocate_expr_post(ObAllocExprContext& ctx)
     }
   }
 
-  if (OB_SUCC(ret) && is_pdml() && is_index_maintenance()) {
-    // handle shadow pk column
-    if (OB_FAIL(alloc_shadow_pk_column_for_pdml(ctx))) {
-      LOG_WARN("failed alloc generated column for pdml index maintain", K(ret));
-    }
-  }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObLogDelUpd::allocate_expr_post(ctx))) {
       LOG_WARN("failed to allocate expr post", K(ret));
@@ -693,6 +686,7 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   ObSEArray<ObShardingInfo*, 2> input_sharding;
   ObShardingInfo output_sharding;
   ObLogicalOperator* child = NULL;
+  bool has_auto_inc_part_key = false;
   bool has_rand_part_key = false;
   bool has_subquery_part_key = false;
   bool trigger_exist = false;
@@ -708,7 +702,12 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   } else if (OB_ISNULL(tbl_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(insert_stmt));
+  } else if (modify_multi_tables()) {
+    is_needed = true;
+  } else if (is_table_update_part_key() && tbl_schema->get_all_part_num() > 1) {
+    is_needed = true;
   }
+
   if (OB_SUCC(ret) && OB_FAIL(generate_sharding_info(target_sharding_info))) {
     if (ret == OB_NO_PARTITION_FOR_GIVEN_VALUE && trigger_exist) {
       ret = OB_SUCCESS;
@@ -716,18 +715,18 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
       LOG_WARN("failed to generate sharding info", K(ret));
     }
   }
+
   if (OB_FAIL(ret) || is_needed) {
-  } else if (modify_multi_tables()) {
-    is_needed = true;
-  } else if (is_table_update_part_key() && tbl_schema->get_all_part_num() > 1) {
-    is_needed = true;
+    // nop
   } else if (is_table_insert_sequence_part_key()) {
     is_needed = true;
+  } else if (OB_FAIL(insert_stmt->part_key_has_auto_inc(has_auto_inc_part_key))) {
+    LOG_WARN("check to check whether part key containts auto inc column", K(ret));
   } else if (OB_FAIL(insert_stmt->part_key_has_rand_value(has_rand_part_key))) {
     LOG_WARN("failed to check whether part key containts random value", K(ret));
   } else if (OB_FAIL(insert_stmt->part_key_has_subquery(has_subquery_part_key))) {
     LOG_WARN("check to check whether part key containts subquery", K(ret));
-  } else if (has_rand_part_key || has_subquery_part_key) {
+  } else if (has_auto_inc_part_key || has_rand_part_key || has_subquery_part_key) {
     is_needed = true;
   } else if (get_part_hint() != NULL && insert_stmt->value_from_select()) {
     is_needed = true;
@@ -741,11 +740,6 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
     LOG_WARN("failed to compute basic sharding info", K(ret));
   } else if (is_basic) {
     is_needed = false;
-    sharding_info.copy_with_part_keys(target_sharding_info);
-  } else if (target_sharding_info.is_distributed() && child->get_sharding_info().is_match_all() &&
-             insert_stmt->with_explicit_autoinc_column() && !is_insert_select()) {
-    is_needed = false;
-    ctx.plan_type_ = AllocExchContext::DistrStat::DISTRIBUTED;
     sharding_info.copy_with_part_keys(target_sharding_info);
   } else if (OB_FAIL(check_if_match_partition_wise_insert(
                  ctx, target_sharding_info, child->get_sharding_info(), is_match))) {

@@ -1190,12 +1190,13 @@ void ObTableLocation::reset()
 }
 
 int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_t table_id, uint64_t ref_table_id,
-    ObDMLStmt& stmt, RowDesc& row_desc, const bool is_dml_table, /*whether the ref_table is modified*/
+    ObDMLStmt& stmt, const RowDesc& row_desc, const bool is_dml_table, /*whether the ref_table is modified*/
     const ObOrderDirection& direction)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema* table_schema = NULL;
   const ObRawExpr* part_raw_expr = NULL;
+  RowDesc loc_row_desc;
 
   table_id_ = table_id;
   ref_table_id_ = ref_table_id;
@@ -1239,6 +1240,10 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
   } else if (0 >= (part_num_ = table_schema->get_part_option().get_part_num())) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("partitioned virtual table's part num should > 0", K(ret), K(part_num_));
+  } else if (OB_FAIL(loc_row_desc.init())) {
+    LOG_WARN("init loc row desc failed", K(ret));
+  } else if (OB_FAIL(loc_row_desc.assign(row_desc))) {
+    LOG_WARN("assign location row desc failed", K(ret));
   } else {
     if (OB_ISNULL(part_raw_expr = get_related_part_expr(stmt, PARTITION_LEVEL_ONE, table_id, ref_table_id_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1249,10 +1254,10 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
     } else if (FALSE_IT(is_col_part_expr_ = part_raw_expr->is_column_ref_expr())) {
       // never reach
     } else if (OB_FAIL(ObExprGeneratorImpl::gen_expression_with_row_desc(
-                   sql_expression_factory_, expr_op_factory_, row_desc, part_raw_expr, part_expr_))) {
+                   sql_expression_factory_, expr_op_factory_, loc_row_desc, part_raw_expr, part_expr_))) {
       LOG_WARN("gen expression with row desc failed", K(ret));
     } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type_ || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type_) {
-      if (OB_FAIL(part_projector_.init_part_projector(part_raw_expr, row_desc))) {
+      if (OB_FAIL(part_projector_.init_part_projector(part_raw_expr, loc_row_desc))) {
         LOG_WARN("init part projector failed", K(ret));
       }
     } else {
@@ -1278,17 +1283,17 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
                    can_get_part_by_range_for_range_columns(subpart_raw_expr, is_valid_range_columns_subpart_range_))) {
       LOG_WARN("failed to check can get part by range for range columns", K(ret));
     } else if (OB_FAIL(ObExprGeneratorImpl::gen_expression_with_row_desc(
-                   sql_expression_factory_, expr_op_factory_, row_desc, subpart_raw_expr, subpart_expr_))) {
+                   sql_expression_factory_, expr_op_factory_, loc_row_desc, subpart_raw_expr, subpart_expr_))) {
       LOG_WARN("gen expression with row desc failed", K(ret));
     } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == subpart_type_ ||
                PARTITION_FUNC_TYPE_LIST_COLUMNS == subpart_type_) {
-      if (OB_FAIL(part_projector_.init_subpart_projector(subpart_raw_expr, row_desc))) {
+      if (OB_FAIL(part_projector_.init_subpart_projector(subpart_raw_expr, loc_row_desc))) {
         LOG_WARN("init subpart projector failed", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    part_projector_.set_column_cnt(row_desc.get_column_num());
+    part_projector_.set_column_cnt(loc_row_desc.get_column_num());
     bool check_dropped_schema = false;
     ObTablePartitionKeyIter iter(*table_schema, check_dropped_schema);
     int64_t partition_id = -1;
@@ -1693,7 +1698,7 @@ int ObTableLocation::calculate_partition_ids_fast_for_non_insert(
             K(query_range.get_table_grapth().key_part_head_->pos_.column_type_.get_collation_type()));
       } else {
         if (type1 != type2 && ob_is_string_tc(type1) == ob_is_string_tc(type2)) {
-          ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+          ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
           allocator.set_label("CalcNoInsert");
           ObExprCtx expr_ctx;
           const ObObj* cast_result = NULL;
@@ -1785,7 +1790,7 @@ int ObTableLocation::calculate_partition_ids_fast_for_insert(
               K(key_cvt_item.get_expr_operator()->get_result_type().get_collation_type()));
         } else {
           if (type1 != type2 && ob_is_string_tc(type1) == ob_is_string_tc(type2)) {
-            ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+            ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
             allocator.set_label("CalcInsert");
             ObExprCtx expr_ctx;
             const ObObj* cast_result = NULL;
@@ -2178,7 +2183,7 @@ int ObTableLocation::calc_partition_ids_by_in_expr(ObExecContext& exec_ctx, comm
       LOG_WARN("Failed to push back partition id", K(ret));
     }
   } else {
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("CalcByInExpr");
     ObExprCtx expr_ctx;
     ObNewRow part_row;
@@ -2986,6 +2991,7 @@ int ObTableLocation::record_insert_partition_info(
     ObDMLStmt& stmt, const share::schema::ObTableSchema* table_schema, ObSQLSessionInfo* session_info)
 {
   int ret = OB_SUCCESS;
+  bool has_auto_inc_part_key = false;
   bool partkey_has_subquery = false;
   ObInsertStmt& insert_stmt = static_cast<ObInsertStmt&>(stmt);
   ObSEArray<ColumnItem, 4> partition_columns;
@@ -2993,7 +2999,9 @@ int ObTableLocation::record_insert_partition_info(
   const ObRawExpr* partition_raw_expr = NULL;
   if (OB_FAIL(insert_stmt.part_key_has_subquery(partkey_has_subquery))) {
     LOG_WARN("failed to check whether insert stmt has part key", K(ret));
-  } else if ((insert_stmt.has_part_key_sequence() || partkey_has_subquery) &&
+  } else if (OB_FAIL(insert_stmt.part_key_has_auto_inc(has_auto_inc_part_key))) {
+    LOG_WARN("check to check whether part key containts auto inc column", K(ret));
+  } else if ((insert_stmt.has_part_key_sequence() || partkey_has_subquery || has_auto_inc_part_key) &&
              PARTITION_LEVEL_ZERO != table_schema->get_part_level()) {
     part_get_all_ = true;
   } else if (OB_FAIL(get_partition_column_info(stmt,
@@ -3561,7 +3569,7 @@ int ObTableLocation::calc_query_range_partition_ids(ObExecContext& exec_ctx, com
   } else {
     all_part = false;
     ObQueryRangeArray query_ranges;
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("CalcQRPartIds");
     bool is_all_single_value_ranges = true;
     if (OB_FAIL(calc_node->pre_query_range_.get_tablet_ranges(
@@ -3635,7 +3643,7 @@ int ObTableLocation::calc_func_value_partition_ids(ObExecContext& exec_ctx, comm
       }
       if (OB_SUCC(ret)) {
         ObObj tmp;
-        ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+        ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
         allocator.set_label("CalcFVPartIds");
         ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, calc_node->res_type_.get_collation_type());
         ObExprCtx expr_ctx;
@@ -3692,7 +3700,7 @@ int ObTableLocation::calc_column_value_partition_ids(ObExecContext& exec_ctx, co
     if (OB_SUCC(ret)) {
       ObObj tmp;
       ObExprCtx expr_ctx;
-      ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+      ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
       allocator.set_label("CalcCVPartIds");
       ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, calc_node->res_type_.get_collation_type());
       bool is_strict = false;
@@ -3746,7 +3754,7 @@ int ObTableLocation::calc_partition_ids_by_stored_expr(ObExecContext& exec_ctx, 
         K_(part_level),
         K(subkey_conv_exprs_.count()));
   } else {
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("CalcStoredExpr");
     ObExprCtx expr_ctx;
     ObNewRow part_row;
@@ -3919,7 +3927,7 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext& exec_ctx, commo
         LOG_WARN("Failed to get part ids by ranges", K(ret));
       }
     } else {
-      ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+      ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
       allocator.set_label("CalcByRanges");
       ObExprCtx expr_ctx;
       if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type_, exec_ctx, allocator, expr_ctx))) {
@@ -4284,7 +4292,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
   int ret = OB_SUCCESS;
   ObObj func_result;
   ObTaskExecutorCtx* tctx = NULL;
-  ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+  ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
   allocator.set_label("CalcByRow");
   ObExprCtx expr_ctx;
   if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type_, exec_ctx, allocator, expr_ctx))) {
@@ -4616,7 +4624,7 @@ int ObTableLocation::record_insert_part_info(ObInsertStmt& insert_stmt, ObSQLSes
         if (OB_ISNULL(value_desc->at(value_idx))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("value desc expr is null");
-        } else if (!value_desc->at(value_idx)->is_auto_increment()) {
+        } else {
           if (OB_FAIL(value_need_idx.push_back(value_idx))) {
             LOG_WARN("Failed to add value idx", K(ret));
           }
@@ -4911,7 +4919,7 @@ int ObTableLocation::calc_up_key_exprs_partition_id(ObExecContext& exec_ctx, ObP
   int ret = OB_SUCCESS;
   const int64_t key_count = key_exprs.count();
   cross_part = false;
-  ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+  ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
   allocator.set_label("CalcUpKey");
   ObNewRow part_row;
   ObExprCtx expr_ctx;

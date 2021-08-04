@@ -23,8 +23,8 @@ public:
   virtual ~ObLogWindowFunction()
   {}
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int copy_without_child(ObLogicalOperator*& out);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
   inline int add_window_expr(ObWinFunRawExpr* win_expr)
   {
@@ -36,12 +36,12 @@ public:
   }
   virtual int est_cost() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual int transmit_op_ordering();
+  virtual int transmit_op_ordering() override;
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
   virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   int is_my_window_expr(const ObRawExpr* expr, bool& is_mine);
   virtual bool is_block_op() const override;
-  virtual uint64_t hash(uint64_t seed) const;
+  virtual uint64_t hash(uint64_t seed) const override;
   virtual int allocate_granule_post(AllocGIContext& ctx) override;
   virtual int allocate_granule_pre(AllocGIContext& ctx) override;
   int get_win_partition_intersect_exprs(ObIArray<ObWinFunRawExpr*>& win_exprs, ObIArray<ObRawExpr*>& win_part_exprs);

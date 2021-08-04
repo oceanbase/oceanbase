@@ -307,13 +307,11 @@ private:
 
     void set_part_count(int64_t part_shift, int64_t level1_part_count, int64_t level2_part_count)
     {
-      OB_ASSERT(0 != level1_part_count);
-      OB_ASSERT(0 != level2_part_count);
       part_shift_ = part_shift;
       level_one_part_count_ = level1_part_count;
       level_two_part_count_ = level2_part_count;
-      level1_bit_ = __builtin_ctz(level1_part_count);
-      level2_bit_ = __builtin_ctz(level2_part_count);
+      level1_bit_ = (0 == level1_part_count) ? 0 : __builtin_ctz(level1_part_count);
+      level2_bit_ = (0 == level2_part_count) ? 0 : __builtin_ctz(level2_part_count);
     }
     bool is_valid()
     {
@@ -669,7 +667,7 @@ private:
   PartHashJoinTable hash_table_;
   HashTableCell* cur_tuple_;       // null or last matched tuple
   common::ObNewRow cur_left_row_;  // like cur_row_ in operator, get row from rowstore
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   common::ObIAllocator* alloc_;  // for buckets
   ModulePageAllocator* bloom_filter_alloc_;
   ObGbyBloomFilter* bloom_filter_;
@@ -726,7 +724,7 @@ inline int ObHashJoinOp::init_mem_context(uint64_t tenant_id)
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_mem_attr(tenant_id, common::ObModIds::OB_ARENA_HASH_JOIN, common::ObCtxIds::WORK_AREA);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));

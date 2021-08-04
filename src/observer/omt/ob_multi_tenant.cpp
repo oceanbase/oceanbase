@@ -415,6 +415,9 @@ int ObMultiTenant::add_tenant(const uint64_t tenant_id, const double min_cpu, co
                OB_FAIL(OTC_MGR.got_version(tenant_id, common::ObSystemConfig::INIT_VERSION))) {
       LOG_ERROR("failed to got version", K(tenant_id), K(ret));
 #endif
+    } else if (OB_FAIL(GCTX.sql_engine_->get_plan_cache_manager()->validate_plan_cache(tenant_id))) {
+      // do nothing
+      LOG_WARN("failed to active plan cache", K(ret), K(tenant_id));
     } else {
       LOG_INFO("activate tenant done", K(tenant_id), K(ret));
     }

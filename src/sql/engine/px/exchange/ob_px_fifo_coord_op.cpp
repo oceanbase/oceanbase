@@ -106,7 +106,7 @@ int ObPxFifoCoordOp::inner_get_next_row()
     int64_t timeout_us = 0;
     clear_evaluated_flag();
     if (FALSE_IT(timeout_us = phy_plan_ctx->get_timeout_timestamp() - get_timestamp())) {
-    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    } else if (OB_FAIL(ctx_.fast_check_status())) {
       LOG_WARN("fail check status, maybe px query timeout", K(ret));
       // TODO: cleanup
     } else if (OB_FAIL(msg_loop_.process_one(timeout_us))) {

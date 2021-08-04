@@ -1561,15 +1561,13 @@ void ObHashJoinOp::calc_cache_aware_partition_count()
   int64_t tmp_partition_cnt_per_level = max_partition_count_per_level_;
   if (total_partition_cnt > tmp_partition_cnt_per_level) {
     level1_part_count_ = part_count_;
-    OB_ASSERT(0 != level1_part_count_);
-    level1_bit_ = __builtin_ctz(level1_part_count_);
+    level1_bit_ = (0 == level1_part_count_) ? 0 : __builtin_ctz(level1_part_count_);
     level2_part_count_ = total_partition_cnt / level1_part_count_;
     level2_part_count_ =
         level2_part_count_ > tmp_partition_cnt_per_level ? tmp_partition_cnt_per_level : level2_part_count_;
   } else {
     level1_part_count_ = total_partition_cnt > part_count_ ? total_partition_cnt : part_count_;
-    OB_ASSERT(0 != level1_part_count_);
-    level1_bit_ = __builtin_ctz(level1_part_count_);
+    level1_bit_ = (0 == level1_part_count_) ? 0 : __builtin_ctz(level1_part_count_);
   }
   LOG_TRACE("partition count",
       K(total_partition_cnt),
@@ -2758,7 +2756,11 @@ int ObHashJoinOp::get_next_probe_partition()
         } else {
           // two level
           OB_ASSERT(0 != level2_part_count_);
-          int64_t level1_part_idx = (cur_full_right_partition_ >> (__builtin_ctz(level2_part_count_)));
+          int64_t leading_zero = 0;
+          if (0 != level2_part_count_) {
+            leading_zero = __builtin_ctz(level2_part_count_);
+          }
+          int64_t level1_part_idx = (cur_full_right_partition_ >> (leading_zero));
           if (level1_part_idx < dump_part_count) {
             cur_left_hist_ = &part_histograms_[cur_full_right_partition_];
             break;

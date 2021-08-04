@@ -78,7 +78,7 @@ public:
   {
     return schema_param_;
   }
-  TO_STRING_KV("index_id", NULL == schema_ ? 0 : schema_->get_table_id(), KP(schema_), K_(allow_not_ready),
+  TO_STRING_KV("index_id", NULL == schema_ ? 0 : schema_->get_table_id(), KPC(schema_), K_(allow_not_ready),
       K_(use_schema_param), KPC(schema_param_));
 
 private:

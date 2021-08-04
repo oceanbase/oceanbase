@@ -901,7 +901,6 @@ ObTableAccessContext::ObTableAccessContext()
       trans_version_range_(),
       row_filter_(NULL),
       use_fuse_row_cache_(false),
-      fq_ctx_(nullptr),
       need_scn_(false),
       fuse_row_cache_hit_rate_(0),
       block_cache_hit_rate_(0),
@@ -963,8 +962,8 @@ int ObTableAccessContext::init(ObTableScanParam& scan_param, const ObStoreCtx& c
 {
   int ret = OB_SUCCESS;
 
-  lib::MemoryContext& current_mem =
-      (NULL == scan_param.iterator_mementity_) ? CURRENT_CONTEXT : *scan_param.iterator_mementity_;
+  lib::MemoryContext current_mem =
+      (NULL == scan_param.iterator_mementity_) ? CURRENT_CONTEXT : scan_param.iterator_mementity_;
   lib::ContextParam param;
   param
       .set_mem_attr(
@@ -979,11 +978,11 @@ int ObTableAccessContext::init(ObTableScanParam& scan_param, const ObStoreCtx& c
     LOG_WARN("invalid argument", K(ret), "pkey", scan_param.pkey_);
   } else if (NULL != scan_mem_) {
     // reused, do nothing.
-  } else if (OB_FAIL(current_mem.CREATE_CONTEXT(scan_mem_, param))) {
+  } else if (OB_FAIL(current_mem->CREATE_CONTEXT(scan_mem_, param))) {
     LOG_WARN("fail to create entity", K(ret));
   }
   if (OB_SUCC(ret)) {
-    stmt_mem_ = &current_mem;
+    stmt_mem_ = current_mem;
     stmt_allocator_ = &stmt_mem_->get_arena_allocator();
     allocator_ = &scan_mem_->get_arena_allocator();
     pkey_ = scan_param.pkey_;
@@ -1103,7 +1102,6 @@ void ObTableAccessContext::reset()
   trans_version_range_.reset();
   row_filter_ = NULL;
   use_fuse_row_cache_ = false;
-  fq_ctx_ = nullptr;
   fuse_row_cache_hit_rate_ = 0;
   block_cache_hit_rate_ = 0;
   is_array_binding_ = false;
@@ -1142,7 +1140,6 @@ void ObTableAccessContext::reuse()
   trans_version_range_.reset();
   row_filter_ = NULL;
   use_fuse_row_cache_ = false;
-  fq_ctx_ = nullptr;
   fuse_row_cache_hit_rate_ = 0;
   block_cache_hit_rate_ = 0;
   is_array_binding_ = false;
@@ -1489,7 +1486,7 @@ int ObRowsInfo::init(
     const ObRelativeTable& table, const ObStoreCtx& store_ctx, const ObIArray<share::schema::ObColDesc>& col_descs)
 {
   int ret = OB_SUCCESS;
-  lib::MemoryContext& current_mem = CURRENT_CONTEXT;
+  lib::MemoryContext current_mem = CURRENT_CONTEXT;
 
   lib::ContextParam param;
   param
@@ -1499,7 +1496,7 @@ int ObRowsInfo::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObRowsinfo init twice", K(ret));
-  } else if (OB_FAIL(current_mem.CREATE_CONTEXT(scan_mem_, param))) {
+  } else if (OB_FAIL(current_mem->CREATE_CONTEXT(scan_mem_, param))) {
     LOG_WARN("fail to create entity", K(ret));
   } else if (OB_ISNULL(scan_mem_)) {
     ret = OB_ERR_UNEXPECTED;

@@ -538,12 +538,12 @@ int MockCacheObjectFactory::alloc(ObCacheObject*& cache_obj, ObCacheObjType co_t
     mem_attr.label_ = ObNewModIds::OB_SQL_PHY_PLAN;
   }
   mem_attr.ctx_id_ = ObCtxIds::PLAN_CACHE_CTX_ID;
-  MemoryContext* entity = NULL;
+  lib::MemoryContext entity = NULL;
 
   if (OB_UNLIKELY(co_type < T_CO_SQL_CRSR) || OB_UNLIKELY(co_type >= T_CO_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("co_type is invalid", K(co_type));
-  } else if (OB_FAIL(ROOT_CONTEXT.CREATE_CONTEXT(entity, lib::ContextParam().set_mem_attr(mem_attr)))) {
+  } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(entity, lib::ContextParam().set_mem_attr(mem_attr)))) {
     LOG_WARN("create entity failed", K(ret), K(mem_attr));
   } else if (NULL == entity) {
     ret = OB_ERR_UNEXPECTED;
@@ -556,7 +556,7 @@ int MockCacheObjectFactory::alloc(ObCacheObject*& cache_obj, ObCacheObjType co_t
       switch (co_type) {
         case T_CO_SQL_CRSR:
           if (NULL != (buf = entity->get_arena_allocator().alloc(sizeof(ObPhysicalPlan)))) {
-            cache_obj = new (buf) ObPhysicalPlan(*entity);
+            cache_obj = new (buf) ObPhysicalPlan(entity);
           }
           break;
         case T_CO_ANON:
@@ -593,7 +593,7 @@ void MockCacheObjectFactory::free(ObCacheObject* cache_obj)
   if (OB_ISNULL(cache_obj)) {
     // nothing to do
   } else {
-    MemoryContext& entity = cache_obj->get_mem_context();
+    lib::MemoryContext entity = cache_obj->get_mem_context();
     int64_t ref_count = cache_obj->dec_ref_count(PLAN_GEN_HANDLE);
     if (ref_count > 0) {
       // nothing todo
@@ -610,13 +610,13 @@ void MockCacheObjectFactory::inner_free(ObCacheObject* cache_obj)
 {
   int ret = OB_SUCCESS;
 
-  MemoryContext& entity = cache_obj->get_mem_context();
-  WITH_CONTEXT(&entity)
+  lib::MemoryContext entity = cache_obj->get_mem_context();
+  WITH_CONTEXT(entity)
   {
     cache_obj->~ObCacheObject();
   }
   cache_obj = NULL;
-  DESTROY_CONTEXT(&entity);
+  DESTROY_CONTEXT(entity);
 }
 
 }  // end of namespace test

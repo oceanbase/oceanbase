@@ -108,7 +108,7 @@ struct ObCreateIndexKey : public ObILongOpsKey {
   virtual ~ObCreateIndexKey()
   {}
   virtual int to_key_string() override;
-  bool is_valid() const
+  bool is_valid() const override
   {
     return common::OB_INVALID_ID != index_table_id_ && common::OB_INVALID_ID != partition_id_;
   }

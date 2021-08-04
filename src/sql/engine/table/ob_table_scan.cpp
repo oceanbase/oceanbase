@@ -265,8 +265,8 @@ int ObTableScan::ObTableScanCtx::init_table_allocator(ObExecContext& ctx)
     lib::ContextParam param;
     param.set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    MemoryContext* mem_context = nullptr;
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    lib::MemoryContext mem_context = nullptr;
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("fail to create entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;
@@ -276,12 +276,12 @@ int ObTableScan::ObTableScanCtx::init_table_allocator(ObExecContext& ctx)
     }
   }
   if (OB_SUCC(ret)) {
-    MemoryContext* mem_context = nullptr;
+    lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     param.set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_TABLE_SCAN_ITER, ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("fail to create entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;

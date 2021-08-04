@@ -2846,12 +2846,12 @@ int ObTransformUtils::check_exprs_unique_on_table_items(ObDMLStmt* stmt, ObSQLSe
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    MemoryContext* mem_entity = NULL;
+    lib::MemoryContext mem_entity = NULL;
     lib::ContextParam param;
     param.set_mem_attr(ObMemAttr(session_info->get_effective_tenant_id(), "CheckUnique"));
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL);
     param.set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_entity, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_entity, param))) {
       LOG_WARN("failed to create memory entity", K(ret));
     } else if (OB_ISNULL(mem_entity)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2953,12 +2953,12 @@ int ObTransformUtils::check_stmt_unique(ObSelectStmt* stmt, ObSQLSessionInfo* se
   if (OB_FAIL(ret) || is_unique || !need_check) {
     /*do nothing*/
   } else {
-    MemoryContext* mem_entity = NULL;
+    lib::MemoryContext mem_entity = NULL;
     lib::ContextParam param;
     param.set_mem_attr(ObMemAttr(session_info->get_effective_tenant_id(), "CheckUnique"));
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL);
     param.set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_entity, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_entity, param))) {
       LOG_WARN("failed to create memory entity", K(ret));
     } else if (OB_ISNULL(mem_entity)) {
       ret = OB_ERR_UNEXPECTED;

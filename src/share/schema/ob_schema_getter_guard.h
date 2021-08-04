@@ -185,6 +185,7 @@ public:
    */
   int get_can_read_index_array(uint64_t table_id, uint64_t* index_tid_array, int64_t& size, bool with_mv,
       bool with_global_index = true, bool with_domain_index = true);
+  int check_has_local_unique_index(uint64_t table_id, bool& has_local_unique_index);
 
   bool is_tenant_schema_valid(const int64_t tenant_id) const;
   /*

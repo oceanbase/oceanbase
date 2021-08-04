@@ -250,6 +250,37 @@ int ObSchemaGetterGuard::get_can_read_index_array(uint64_t table_id, uint64_t* i
   return ret;
 }
 
+int ObSchemaGetterGuard::check_has_local_unique_index(uint64_t table_id, bool& has_local_unique_index)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema* table_schema = NULL;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const ObSimpleTableSchemaV2* index_schema = NULL;
+  has_local_unique_index = false;
+  if (OB_FAIL(get_table_schema(table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot get table schema for table ", K(table_id));
+  } else if (OB_FAIL(table_schema->get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos without delay_deleted_tid failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (OB_FAIL(get_table_schema(simple_index_infos.at(i).table_id_, index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(simple_index_infos.at(i).table_id_));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
+    } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
+      // invalid index status, need ingore
+    } else if (index_schema->is_local_unique_index_table()) {
+      has_local_unique_index = true;
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObSchemaGetterGuard::get_tenant_id(const ObString& tenant_name, uint64_t& tenant_id)
 {
   int ret = OB_SUCCESS;

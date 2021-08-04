@@ -156,7 +156,7 @@ public:
   int alloc_partitions_for_split(const SCHEMA& table, const SCHEMA& new_schema, ObITablePartitionAddr& addr);
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
@@ -170,7 +170,7 @@ public:
   // balance partition's in %tenant_id
   virtual int tenant_balance(const uint64_t tenant_id, int64_t& task_cnt);
   int check_locality(int64_t& task_cnt);
-  void stop();
+  void stop() override;
   void wakeup();
 
   bool is_inited() const
@@ -183,7 +183,7 @@ public:
   }
   void set_active();
   // return OB_CANCELED if stop, else return OB_SUCCESS
-  int check_stop() const;
+  int check_stop() const override;
   int idle() const;
   int check_tenant_group_config_legality(
       common::ObIArray<ObTenantGroupParser::TenantNameGroup>& tenant_groups, bool& legal);
@@ -195,7 +195,7 @@ public:
   {
     return task_mgr_;
   }
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
   int refresh_unit_replica_counter(const uint64_t tenant_id);
   int create_unit_replica_counter(const uint64_t tenant_id);
   int destory_tenant_unit_array();

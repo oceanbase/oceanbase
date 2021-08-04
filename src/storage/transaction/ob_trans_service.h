@@ -153,9 +153,9 @@ public:
   int init(const ObAddr& self, ObITransRpc* rpc, ObILocationAdapter* location_adapter, ObIClogAdapter* clog_adapter,
       storage::ObPartitionService* partition_service, share::schema::ObMultiVersionSchemaService* schema_service,
       ObITsMgr* ts_mgr);
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
   void destroy();
   int push(void* task);
   virtual void handle(void* task) override;

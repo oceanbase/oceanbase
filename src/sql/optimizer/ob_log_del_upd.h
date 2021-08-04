@@ -82,14 +82,14 @@ public:
   {
     check_constraint_exprs_ = check_constraint_exprs;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   virtual uint64_t get_hash(uint64_t seed) const
   {
     return seed;
   }
-  virtual uint64_t hash(uint64_t seed) const;
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
+  virtual uint64_t hash(uint64_t seed) const override;
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   virtual int reordering_project_columns() override;
   void set_ignore(bool is_ignore)
   {
@@ -195,7 +195,7 @@ public:
   {
     table_columns_ = table_columns;
   }
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
   ObTablePartitionInfo& get_table_partition_info()
   {
@@ -246,7 +246,8 @@ protected:
   int calculate_table_location(uint64_t loc_table_id, uint64_t ref_table_id, const ObPartHint* part_hint,
       ObTablePartitionInfo& table_partition_info);
   int alloc_partition_id_expr(ObAllocExprContext& ctx);
-  int alloc_shadow_pk_column_for_pdml(ObAllocExprContext& ctx);
+  virtual int allocate_expr_post(ObAllocExprContext &ctx);
+  int alloc_shadow_pk_column_for_gui(ObAllocExprContext& ctx);
   virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed);
   int check_multi_table_dml_for_px(AllocExchContext& ctx, ObShardingInfo* source_sharding,
       ObShardingInfo& sharding_info, const ObPhyTableLocationInfo* phy_table_locaion_info, bool& is_needed);
@@ -260,7 +261,7 @@ private:
   int do_reordering_project_columns(ObLogicalOperator& child);
 
 protected:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   virtual int add_exprs_to_ctx_for_pdml(
       ObAllocExprContext& ctx, const ObIArray<ObRawExpr*>& input_exprs, uint64_t producer_id);
 

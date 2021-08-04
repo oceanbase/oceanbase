@@ -69,7 +69,8 @@ DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "65536", "[1024,]",
     "the size of the task queue for each tenant. Range: [1024,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0", common::ObConfigMemoryLimitChecker, "0, [8G,)",
-    "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. Range: 0, [8G,)",
+    "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. "
+    "Range: 0, [8G,)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(rootservice_memory_limit, OB_CLUSTER_PARAMETER, "2G", "[2G,)",
     "max memory size which can be used by rs tenant The default value is 2G. Range: [2G,)",
@@ -754,12 +755,11 @@ DEF_INT(clog_max_unconfirmed_log_count, OB_TENANT_PARAMETER, "1500", "[100, 5000
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_ob_clog_timeout_to_force_switch_leader, OB_CLUSTER_PARAMETER, "10s", "[0s, 60m]",
-         "When log sync is blocking, leader need wait this interval before revoke."
-         "The default value is 0s, use 0s to close this function. Range: [0s, 60m]",
-         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_ob_clog_disk_buffer_cnt, OB_CLUSTER_PARAMETER, "64", "[1, 2000]",
-        "clog disk buffer cnt. Range: [1, 2000]",
-        ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+    "When log sync is blocking, leader need wait this interval before revoke."
+    "The default value is 0s, use 0s to close this function. Range: [0s, 60m]",
+    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ob_clog_disk_buffer_cnt, OB_CLUSTER_PARAMETER, "64", "[1, 2000]", "clog disk buffer cnt. Range: [1, 2000]",
+    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
     "transaction rpc timeout(s). Range: [0s, 3600s]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -824,6 +824,14 @@ DEF_TIME(location_cache_refresh_sql_timeout, OB_CLUSTER_PARAMETER, "1s", "[1ms,)
     "The timeout used for refreshing location cache by SQL. Range: [1ms, +∞)",
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(all_server_list, OB_CLUSTER_PARAMETER, "", "all server addr in cluster",
+    ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_auto_refresh_location_cache, OB_CLUSTER_PARAMETER, "False", "enable auto refresh location",
+    ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(auto_refresh_location_cache_rate_limit, OB_CLUSTER_PARAMETER, "1000", "[1, 100000]",
+    "Maximum number of partitions to refresh location automatically per second",
+    ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(auto_broadcast_location_cache_rate_limit, OB_CLUSTER_PARAMETER, "1000", "[1, 100000]",
+    "Maximum number of partitions to broadcast location per second",
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// cache config
@@ -1321,7 +1329,7 @@ DEF_TIME(_backup_idle_time, OB_CLUSTER_PARAMETER, "5m", "[10s,]",
     "the time interval between the schedules of physical backup task. "
     "Range: [10s, +∞)",
     ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_ob_enable_prepared_statement, OB_CLUSTER_PARAMETER, "True", "control if enable prepared statement",
+DEF_BOOL(_ob_enable_prepared_statement, OB_CLUSTER_PARAMETER, "False", "control if enable prepared statement",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(_upgrade_stage, OB_CLUSTER_PARAMETER, "NONE", common::ObConfigUpgradeStageChecker,
     "specifies the upgrade stage. "
@@ -1454,6 +1462,6 @@ DEF_BOOL(_enable_block_file_punch_hole, OB_CLUSTER_PARAMETER, "False",
     "specifies whether to punch whole when free blocks in block_file",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_enable_px_for_inner_sql, OB_CLUSTER_PARAMETER, "true",
-         "specifies whether inner sql uses px. "
-         "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+    "specifies whether inner sql uses px. "
+    "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

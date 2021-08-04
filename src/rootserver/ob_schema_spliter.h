@@ -288,7 +288,7 @@ public:
 private:
   virtual int quick_check(const uint64_t tenant_id, bool& passed) override;
   virtual int construct_sql(const uint64_t tenant_id, ObSqlString& sql) override;
-  virtual int process();
+  virtual int process() override;
 };
 
 class ObAllTableV2SchemaSpliter : public ObTableSchemaSpliter {

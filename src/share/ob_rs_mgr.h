@@ -100,8 +100,8 @@ private:
   int renew_master_rootserver_v2();
   int do_detect_master_rs_v2(common::ObIArray<common::ObAddr>& rs_list);
   int renew_master_rootserver_v3();
-  int do_detect_master_rs_v3(
-      const common::ObAddr& dst_server, const int64_t cluster_id, obrpc::ObGetRootserverRoleResult& result);
+  int do_detect_master_rs_v3(const common::ObAddr& dst_server, const int64_t cluster_id, const int64_t rpc_timeout,
+      obrpc::ObGetRootserverRoleResult& result);
 
 private:
   static const int64_t DETECT_MASTER_TIMEOUT = 1 * 1000 * 1000;  // 1s

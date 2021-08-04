@@ -18,7 +18,7 @@ namespace share {
 OB_SERIALIZE_MEMBER(AutoincParam, tenant_id_, autoinc_table_id_, autoinc_table_part_num_, autoinc_col_id_,
     autoinc_col_index_, autoinc_update_col_index_, autoinc_col_type_, total_value_count_, autoinc_desired_count_,
     autoinc_old_value_index_, autoinc_increment_, autoinc_offset_, autoinc_first_part_num_, part_level_, pkey_,
-    auto_increment_cache_size_);
+    auto_increment_cache_size_, part_value_no_order_);
 
 }  // end namespace share
 }  // end namespace oceanbase

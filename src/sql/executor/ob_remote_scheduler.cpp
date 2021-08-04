@@ -247,7 +247,7 @@ int ObRemoteScheduler::execute_with_sql(ObExecContext& ctx, ObPhysicalPlan* phy_
       bool skip_failed_tasks = false;
       int check_ret = OB_SUCCESS;
       int add_ret = OB_SUCCESS;
-      if (is_data_not_readable_err(ret)) {
+      if (is_data_not_readable_err(ret) || OB_RPC_CONNECT_ERROR == ret) {
         if (OB_UNLIKELY(
                 OB_SUCCESS != (add_ret = retry_info->add_invalid_server_distinctly(task.get_runner_svr(), true)))) {
           LOG_WARN(

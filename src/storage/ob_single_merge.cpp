@@ -78,7 +78,7 @@ int ObSingleMerge::is_range_valid() const
 }
 
 int ObSingleMerge::get_table_row(const int64_t table_idx, const ObIArray<ObITable*>& tables, const ObStoreRow*& prow,
-    ObStoreRow& fuse_row, bool& final_result, int64_t& sstable_end_log_ts, bool& stop_reading)
+    ObStoreRow& fuse_row, bool& final_result, int64_t& sstable_end_log_ts)
 {
   int ret = OB_SUCCESS;
   ObStoreRowIterator* iter = NULL;
@@ -124,17 +124,9 @@ int ObSingleMerge::get_table_row(const int64_t table_idx, const ObIArray<ObITabl
         if (table->is_minor_sstable() && sstable_end_log_ts < table->get_end_log_ts()) {
           sstable_end_log_ts = table->get_end_log_ts();
         }
-      } else if (!prow->fq_ctx_.is_valid() && table->is_memtable()) {
-        // use fast query but no data is changed
-        stop_reading = true;
       }
-      fuse_row.fq_ctx_ = prow->fq_ctx_.is_valid() ? prow->fq_ctx_ : fuse_row.fq_ctx_;
-      STORAGE_LOG(DEBUG,
-          "process row fuse",
-          K(*prow),
-          K(fuse_row),
-          K(fuse_row.fq_ctx_),
-          K(access_ctx_->store_ctx_->mem_ctx_->get_read_snapshot()));
+      STORAGE_LOG(
+          DEBUG, "process row fuse", K(*prow), K(fuse_row), K(access_ctx_->store_ctx_->mem_ctx_->get_read_snapshot()));
     }
   }
   return ret;
@@ -159,7 +151,6 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
     bool final_result = false;
     bool is_fuse_row_empty = false;
     int64_t sstable_end_log_ts = 0;
-    bool stop_reading = false;
     ObStoreRow& fuse_row = full_row_;
     nop_pos_.reset();
     fuse_row.row_val_.count_ = 0;
@@ -173,8 +164,6 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
         K(*rowkey_),
         K(access_ctx_->use_fuse_row_cache_),
         K(access_param_->iter_param_.enable_fuse_row_cache()));
-
-    access_ctx_->fq_ctx_ = nullptr;
 
     // firstly, try get from fuse row cache if memtable row is not final result
     if (OB_SUCC(ret) && enable_fuse_row_cache && !has_frozen_memtable) {
@@ -203,7 +192,6 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
                 handle_.reset();
               } else {
                 found_row_cache = true;
-                access_ctx_->fq_ctx_ = handle_.value_->get_fq_ctx();
                 end_table_idx = i;
                 STORAGE_LOG(DEBUG, "fuse row cache info", K(*(handle_.value_)), K(sstable_end_log_ts), K(*table));
               }
@@ -215,8 +203,8 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
     }
 
     // secondly, try to get from other delta table
-    for (int64_t i = table_cnt - 1; OB_SUCC(ret) && !stop_reading && !final_result && i >= end_table_idx; --i) {
-      if (OB_FAIL(get_table_row(i, tables, prow, fuse_row, final_result, sstable_end_log_ts, stop_reading))) {
+    for (int64_t i = table_cnt - 1; OB_SUCC(ret) && !final_result && i >= end_table_idx; --i) {
+      if (OB_FAIL(get_table_row(i, tables, prow, fuse_row, final_result, sstable_end_log_ts))) {
         STORAGE_LOG(WARN, "fail to get table row", K(ret));
       }
     }

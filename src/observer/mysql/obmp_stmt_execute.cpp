@@ -276,7 +276,7 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
   exception.pos_ = pos;
   exception.error_code_ = static_cast<uint16_t>(ob_errpkt_errno(error_code, lib::is_oracle_mode()));
 
-  ObIAllocator& alloc = CURRENT_CONTEXT.get_arena_allocator();
+  ObIAllocator& alloc = CURRENT_CONTEXT->get_arena_allocator();
 
   const ObWarningBuffer* wb = common::ob_get_tsi_warning_buffer();
   if (OB_LIKELY(NULL != wb) && wb->get_err_code() == error_code) {
@@ -341,7 +341,7 @@ int ObMPStmtExecute::before_process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid request", K(ret), K_(*req));
   } else {
-    ObIAllocator& alloc = CURRENT_CONTEXT.get_arena_allocator();
+    ObIAllocator& alloc = CURRENT_CONTEXT->get_arena_allocator();
     if (OB_ISNULL(params_ = static_cast<ParamStore*>(alloc.alloc(sizeof(ParamStore))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));
@@ -716,9 +716,13 @@ int ObMPStmtExecute::do_process(
             && !THIS_WORKER.need_retry()
             && !retry_ctrl_.need_retry()) {
           LOG_WARN("query failed", K(ret), K(retry_ctrl_.need_retry()), K_(stmt_id));
-          bool is_partition_hit = session.partition_hit().get_bool();
-          int err = send_error_packet(ret, NULL, is_partition_hit, (void*)(&ctx_.reroute_info_));
-          if (OB_SUCCESS != err) {
+          // 当need_retry=false时，可能给客户端回过包了，可能还没有回过任何包。
+          // 不过，可以确定：这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
+          // 则需要在下面回复一个error_packet作为收尾。否则后面没人帮忙发错误包给客户端了，
+          // 可能会导致客户端挂起等回包。
+          bool is_partition_hit = session.get_err_final_partition_hit(ret);
+          int err = send_error_packet(ret, NULL, is_partition_hit, (void *)(&ctx_.reroute_info_));
+          if (OB_SUCCESS != err) {  // 发送error包
             LOG_WARN("send error packet failed", K(ret), K(err));
           }
         }

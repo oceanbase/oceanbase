@@ -38,7 +38,7 @@ protected:
 
 private:
   virtual int get_table_row(const int64_t table_idx, const ObIArray<ObITable*>& tables, const ObStoreRow*& prow,
-      ObStoreRow& fuse_row, bool& final_result, int64_t& sstable_end_log_ts, bool& stop_reading);
+      ObStoreRow& fuse_row, bool& final_result, int64_t& sstable_end_log_ts);
 
 private:
   const common::ObExtStoreRowkey* rowkey_;

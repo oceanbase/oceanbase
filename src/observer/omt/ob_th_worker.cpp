@@ -403,7 +403,7 @@ void ObThWorker::worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t
             public:
               AllocatorGuard(ObIAllocator** allocator) : allocator_(allocator)
               {
-                *allocator_ = &CURRENT_CONTEXT.get_arena_allocator();
+                *allocator_ = &CURRENT_CONTEXT->get_arena_allocator();
               }
               ~AllocatorGuard()
               {

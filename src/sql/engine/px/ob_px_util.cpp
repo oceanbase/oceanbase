@@ -939,14 +939,17 @@ int ObPxTreeSerializer::deserialize_tree(const char* buf, int64_t data_len, int6
 
   // Terminate serialization when meet ObReceive, as this op indicates
   if (OB_SUCC(ret)) {
-    bool serialize_child = is_fulltree || (!IS_RECEIVE(op->get_type()));
+    bool is_receive = IS_RECEIVE(op->get_type());
+    bool serialize_child = is_fulltree || !is_receive;
     if (serialize_child) {
       if (OB_FAIL(op->create_child_array(op->get_child_num()))) {
         LOG_WARN("create child array failed", K(ret), K(op->get_child_num()));
       }
       for (int32_t i = 0; OB_SUCC(ret) && i < op->get_child_num(); i++) {
         ObPhyOperator* child = NULL;
-        if (OB_FAIL(deserialize_tree(buf, data_len, pos, phy_plan, child, is_fulltree, tsc_ops))) {
+        ObSEArray<const ObTableScan*, 4> dummy_ops;  // don't collect child-dfo scan ops
+        if (OB_FAIL(
+                deserialize_tree(buf, data_len, pos, phy_plan, child, is_fulltree, is_receive ? dummy_ops : tsc_ops))) {
           LOG_WARN("fail to deserialize tree", K(ret));
         } else if (OB_FAIL(op->set_child(i, *child))) {
           LOG_WARN("fail to set child", K(ret));

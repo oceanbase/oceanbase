@@ -776,6 +776,7 @@ int ObServerManager::receive_hb(
     const ObLeaseRequest& lease_request, uint64_t& server_id, bool& to_alive, bool& update_delay_time_flag)
 {
   int ret = OB_SUCCESS;
+  bool zone_exist = true;
   to_alive = false;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -783,6 +784,15 @@ int ObServerManager::receive_hb(
   } else if (!lease_request.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid lease_request", K(lease_request), K(ret));
+  } else if (OB_UNLIKELY(nullptr == GCTX.root_service_ || nullptr == zone_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice ptr is null", KR(ret));
+  } else if (GCTX.root_service_->is_full_service()
+      && OB_FAIL(zone_mgr_->check_zone_exist(lease_request.zone_, zone_exist))) {
+    LOG_WARN("fail to check zone exist", KR(ret));
+  } else if (!zone_exist) {
+    ret = OB_ZONE_INFO_NOT_EXIST;
+    LOG_WARN("zone info not exist", KR(ret), K(lease_request));
   } else {
     SpinWLockGuard guard(server_status_rwlock_);
     const bool with_rootserver = rs_addr_ == lease_request.server_;
@@ -1024,8 +1034,13 @@ int ObServerManager::set_server_status(const ObLeaseRequest& lease_request, cons
   } else if (!lease_request.is_valid() || hb_timestamp <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid lease_request or invalid hb_timestamp", K(lease_request), K(hb_timestamp), K(ret));
+  } else if (OB_UNLIKELY(nullptr == GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice ptr is null", KR(ret));
   } else {
-    server_status.zone_ = lease_request.zone_;
+    if (GCTX.root_service_->is_full_service()) {
+      server_status.zone_ = lease_request.zone_;
+    }
     MEMCPY(server_status.build_version_, lease_request.build_version_, OB_SERVER_VERSION_LENGTH);
     server_status.server_ = lease_request.server_;
     server_status.sql_port_ = lease_request.inner_port_;

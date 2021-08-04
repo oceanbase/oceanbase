@@ -5364,7 +5364,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp& operation, void* ctx)
   } else {
     NumberingCtx numbering_ctx;                   // operator numbering context
     NumberingExchangeCtx numbering_exchange_ctx;  // operator numbering context
-    ObArenaAllocator allocator(CURRENT_CONTEXT.get_malloc_allocator());
+    ObArenaAllocator allocator(CURRENT_CONTEXT->get_malloc_allocator());
     allocator.set_label("PlanTreeTraver");
     ObAllocExprContext alloc_expr_ctx(allocator);  // expr allocation context
     AllocExchContext alloc_exch_ctx(parallel);     // exchange allocation context
@@ -7057,7 +7057,7 @@ int ObLogPlan::calc_plan_resource()
     if (OB_FAIL(analyzer.analyze(*plan_root, max_parallel_thread_group_count))) {
       LOG_WARN("fail analyze px stmt thread group reservation count", K(ret));
     } else {
-      LOG_INFO("max parallel thread group count", K(max_parallel_thread_group_count));
+      LOG_TRACE("max parallel thread group count", K(max_parallel_thread_group_count));
       set_expected_worker_count(max_parallel_thread_group_count);
     }
   }

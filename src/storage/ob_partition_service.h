@@ -320,7 +320,7 @@ public:
   VIRTUAL_FOR_UNITTEST int start();
   VIRTUAL_FOR_UNITTEST int stop();
   VIRTUAL_FOR_UNITTEST int wait();
-  VIRTUAL_FOR_UNITTEST int destroy();
+  VIRTUAL_FOR_UNITTEST int destroy() override;
 
   VIRTUAL_FOR_UNITTEST int wait_start_finish();
 
@@ -691,10 +691,10 @@ public:
       common::ObIArray<int64_t>* split_index) override;
 
   virtual int get_multi_ranges_cost(
-      const common::ObPartitionKey& pkey, const common::ObIArray<common::ObStoreRange>& ranges, int64_t& total_size);
+      const common::ObPartitionKey& pkey, const common::ObIArray<common::ObStoreRange>& ranges, int64_t& total_size) override;
   virtual int split_multi_ranges(const common::ObPartitionKey& pkey,
       const common::ObIArray<common::ObStoreRange>& ranges, const int64_t expected_task_count,
-      common::ObIAllocator& allocator, common::ObArrayArray<common::ObStoreRange>& multi_range_split_array);
+      common::ObIAllocator& allocator, common::ObArrayArray<common::ObStoreRange>& multi_range_split_array) override;
   VIRTUAL_FOR_UNITTEST int is_log_sync(
       const common::ObPartitionKey& key, bool& is_sync, uint64_t& max_confirmed_log_id);
   VIRTUAL_FOR_UNITTEST int set_region(const ObPartitionKey& key, clog::ObIPartitionLogService* pls);
@@ -796,8 +796,8 @@ public:
   int check_physical_flashback_succ(
       const obrpc::ObCheckPhysicalFlashbackArg& arg, obrpc::ObPhysicalFlashbackResultArg& result);
   int nonblock_renew_loc_cache(const common::ObPartitionKey& pkey);
-  int submit_pt_update_task(const ObPartitionKey& pkey);
-  int submit_pt_update_role_task(const ObPartitionKey& pkey);
+  int submit_pt_update_task(const ObPartitionKey& pkey) override;
+  int submit_pt_update_role_task(const ObPartitionKey& pkey) override;
   int start_physical_flashback();
   int check_can_physical_flashback();
   int try_freeze_aggre_buffer(const common::ObPartitionKey& pkey);

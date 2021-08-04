@@ -122,23 +122,35 @@ int ObNestedLoopJoin::switch_iterator(ObExecContext& ctx) const
   return ret;
 }
 
-int ObNestedLoopJoin::rescan(ObExecContext& exec_ctx) const
-{
+int ObNestedLoopJoin::reset_rescan_params(ObExecContext &ctx) const {
   int ret = OB_SUCCESS;
-  ObNestedLoopJoinCtx* join_ctx = GET_PHY_OPERATOR_CTX(ObNestedLoopJoinCtx, exec_ctx, get_id());
-  ObPhysicalPlanCtx* plan_ctx = exec_ctx.get_physical_plan_ctx();
-  if (OB_ISNULL(join_ctx) || OB_ISNULL(plan_ctx)) {
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan context is null", K(ret));
+  } else {
+    for (int64_t i = 0; i < rescan_params_.count(); ++i) {
+      int64_t idx = rescan_params_.at(i).param_idx_;
+      plan_ctx->get_param_store_for_update().at(idx).set_null();
+      LOG_TRACE("prepare_rescan_params", K(ret), K(i), K(idx));
+    }
+  }
+
+  return ret;
+}
+
+int ObNestedLoopJoin::rescan(ObExecContext &exec_ctx) const {
+  int ret = OB_SUCCESS;
+  ObNestedLoopJoinCtx *join_ctx =
+      GET_PHY_OPERATOR_CTX(ObNestedLoopJoinCtx, exec_ctx, get_id());
+  if (OB_ISNULL(join_ctx)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("join ctx is null", K(ret));
   } else {
     join_ctx->reset();
-    int64_t param_cnt = rescan_params_.count();
-    for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
-      int64_t idx = rescan_params_.at(i).param_idx_;
-      plan_ctx->get_param_store_for_update().at(idx).set_null();
-      LOG_DEBUG("prepare_rescan_params", K(ret), K(i), K(idx));
-    }
-    if (OB_FAIL(ObBasicNestedLoopJoin::rescan(exec_ctx))) {
+    if (OB_FAIL(reset_rescan_params(exec_ctx))) {
+      LOG_WARN("fail to reset rescan params", K(ret));
+    } else if (OB_FAIL(ObBasicNestedLoopJoin::rescan(exec_ctx))) {
       LOG_WARN("failed to rescan", K(ret));
     }
   }
@@ -204,9 +216,16 @@ int ObNestedLoopJoin::inner_get_next_row(ObExecContext& exec_ctx, const ObNewRow
       LOG_WARN("copy current row failed", K(ret));
     }
   }
+  if (OB_ITER_END == ret) {
+    if (OB_FAIL(reset_rescan_params(exec_ctx))) {
+      LOG_WARN("fail to reset rescan params", K(ret));
+    } else {
+      ret = OB_ITER_END;
+    }
+  }
 
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("get next row from nested loop join", K(*row));
+    LOG_TRACE("get next row from nested loop join", K(*row));
   }
   return ret;
 }

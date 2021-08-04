@@ -142,6 +142,7 @@ ob_set_subtarget(ob_share partition_table
   partition_table/ob_united_pt_operator.cpp
   partition_table/ob_inmemory_partition_table.cpp
   partition_table/ob_location_update_task.cpp
+  partition_table/ob_partition_location_task.cpp
   partition_table/ob_partition_info.cpp
   partition_table/ob_partition_location.cpp
   partition_table/ob_partition_location_cache.cpp

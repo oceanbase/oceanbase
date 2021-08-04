@@ -1536,6 +1536,24 @@ int ObRawExprUtils::extract_column_exprs(const ObIArray<ObRawExpr*>& exprs, ObIA
   return ret;
 }
 
+int ObRawExprUtils::mark_column_explicited_reference(ObRawExpr& expr)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 2> column_exprs;
+  if (OB_FAIL(extract_column_exprs(&expr, column_exprs))) {
+    LOG_WARN("extract column exprs failed", K(ret), K(expr));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+    if (!column_exprs.at(i)->is_column_ref_expr()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column expr is unexpected", K(ret));
+    } else {
+      static_cast<ObColumnRefRawExpr*>(column_exprs.at(i))->set_explicited_reference();
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_column_ids(const ObIArray<ObRawExpr*>& exprs, common::ObIArray<uint64_t>& column_ids)
 {
   int ret = OB_SUCCESS;

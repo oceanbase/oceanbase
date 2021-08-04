@@ -275,5 +275,47 @@ int ObExprToTimestampTZ::set_my_result_from_ob_time(ObExprCtx& expr_ctx, ObTime&
   return ret;
 }
 
+
+ObExprTimestamp::ObExprTimestamp(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIMESTAMP, N_TIMESTAMP, 1, NOT_ROW_DIMENSION)
+{
+}
+
+ObExprTimestamp::~ObExprTimestamp()
+{
+}
+
+int ObExprTimestamp::calc_result_type1(ObExprResType &type,
+                                  ObExprResType &type1,
+                                  ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  //param will be casted to ObDatetimeType before calculation
+  type1.set_calc_type(ObDateTimeType);
+  type.set_type(ObDateTimeType);
+  //deduce scale now.
+  int16_t scale1 = MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL);
+  int16_t scale = (SCALE_UNKNOWN_YET == scale1) ? MAX_SCALE_FOR_TEMPORAL : scale1;
+  type.set_scale(scale);
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
+  return ret;
+}
+
+int ObExprTimestamp::calc_result1(ObObj &result,
+                             const ObObj &obj,
+                             ObExprCtx &expr_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(obj.is_null())) {
+    result.set_null();
+  } else {
+    TYPE_CHECK(obj, ObDateTimeType);
+    result = obj;
+  }
+  UNUSED(expr_ctx);
+  return ret;
+}
+
+
 }  // namespace sql
 }  // namespace oceanbase

@@ -205,16 +205,16 @@ void* Thread::__th_start(void* arg)
           !lib::is_mini_mode() ? ObPageManager::DEFAULT_CHUNK_CACHE_CNT : ObPageManager::MINI_MODE_CHUNK_CACHE_CNT;
       pm.set_max_chunk_cache_cnt(cache_cnt);
       ObPageManager::set_thread_local_instance(pm);
-      MemoryContext** mem_context = GET_TSI0(MemoryContext*);
+      MemoryContext* mem_context = GET_TSI0(MemoryContext);
       if (OB_ISNULL(mem_context)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("alloc mem_context failed", K(ret));
       } else {
-        ret = ROOT_CONTEXT.CREATE_CONTEXT(
+        ret = ROOT_CONTEXT->CREATE_CONTEXT(
             *mem_context, ContextParam().set_properties(RETURN_MALLOC_DEFAULT).set_label("ThreadRoot"));
         if (OB_FAIL(ret)) {
           LOG_ERROR("create memory context failed", K(ret));
-        } else if (OB_ISNULL(*mem_context)) {
+        } else if (OB_ISNULL(mem_context)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("null ptr", K(ret));
         } else {

@@ -486,7 +486,7 @@ int ObLogMembershipTaskMgr::submit_renew_ms_log_(const ObRenewMembershipLog& ren
     } else {
       if (OB_FAIL(submit_slog_flush_task_(header.get_log_type(), log_id, renew_ms_log, server, cluster_id))) {
         // If the submission fails, set_log will not be executed.
-        // standby_leadera will retry,
+        // standby_leaders will retry,
         // follower will receive log again later.
         CLOG_LOG(WARN, "submit_slog_flush_task_ failed", K(ret), K_(partition_key), K(header));
       } else if (OB_FAIL(log_task->set_log(header, buff, need_copy))) {

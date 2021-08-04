@@ -95,7 +95,9 @@ int TableNode::alloc_handle(ObSmallAllocator& allocator, const uint64_t offset, 
   }
   uint64_t new_next_value = 0;
   uint64_t needed_interval = 0;
-  if (min_value >= max_value) {
+  if (curr_node_state_is_pending_) {
+    ret = OB_SIZE_OVERFLOW;
+  } else if (min_value >= max_value) {
     new_next_value = max_value;
     needed_interval = max_value;
   } else if (min_value > node.cache_end_) {
@@ -376,52 +378,89 @@ int ObAutoincrementService::get_handle(AutoincParam& param, CacheHandle*& handle
       }
     }
     // alloc handle
-    bool need_prefetch = false;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(table_node->alloc_mutex_.lock())) {
         LOG_WARN("failed to get alloc lock", K(param), K(*table_node), K(ret));
-      } else {
-        if (OB_SIZE_OVERFLOW ==
-            (ret = table_node->alloc_handle(handle_allocator_, offset, increment, desired_count, max_value, handle))) {
-          if (OB_FAIL(fetch_table_node(param, table_node))) {
-            LOG_WARN("failed to fetch table node", K(param), K(ret));
-          } else if (OB_FAIL(table_node->alloc_handle(
-                         handle_allocator_, offset, increment, desired_count, max_value, handle))) {
-            LOG_WARN("failed to alloc cache handle", K(param), K(ret));
+      } else if (OB_SUCC(table_node->alloc_handle(
+                     handle_allocator_, offset, increment, desired_count, max_value, handle))) {
+        if (!table_node->prefetch_condition()) {
+          table_node->alloc_mutex_.unlock();
+        } else {
+          if (OB_FAIL(table_node->rpc_mutex_.trylock())) {
+            if (OB_EAGAIN == ret) {
+              // 已经有人在做预取，当前线程放弃预取
+              ret = OB_SUCCESS;
+            } else {
+              LOG_ERROR("rpc mutext try lock failed", K(ret));
+            }
+            table_node->alloc_mutex_.unlock();
           } else {
-            LOG_INFO("succ to get cache handle", K(param), K(*handle), K(ret));
+            LOG_INFO("begin to prefetch table node", K(param), K(ret));
+            // ensure single thread to prefetch
+            TableNode mock_node;
+            table_node->alloc_mutex_.unlock();
+            if (OB_FAIL(fetch_table_node(param, &mock_node, true))) {
+              LOG_WARN("failed to fetch table node", K(param), K(ret));
+            } else {
+              LOG_INFO("fetch table node success", K(param), K(mock_node), K(*table_node));
+              table_node->alloc_mutex_.lock();
+              if (table_node->prefetch_node_.cache_start_ != 0 ||
+                  mock_node.prefetch_node_.cache_start_ <= table_node->curr_node_.cache_end_) {
+                LOG_INFO("new table_node has been fetched by other, ignore");
+              } else {
+                atomic_update(table_node->local_sync_, mock_node.local_sync_);
+                atomic_update(table_node->last_refresh_ts_, mock_node.last_refresh_ts_);
+                table_node->prefetch_node_.cache_start_ = mock_node.prefetch_node_.cache_start_;
+                table_node->prefetch_node_.cache_end_ = mock_node.prefetch_node_.cache_end_;
+              }
+              table_node->alloc_mutex_.unlock();
+            }
+            table_node->rpc_mutex_.unlock();
           }
         }
-        if (OB_SUCC(ret) && table_node->prefetch_condition() && !table_node->prefetching_) {
-          // ensure single thread to prefetch
-          need_prefetch = true;
-          table_node->prefetching_ = true;
-        }
-        table_node->alloc_mutex_.unlock();
-      }
-    }
-    // prefetch cache node
-    if (OB_SUCC(ret) && need_prefetch) {
-      LOG_INFO("begin to prefetch table node", K(param), K(ret));
-      TableNode mock_node;
-      if (OB_FAIL(fetch_table_node(param, &mock_node, true))) {
-        LOG_WARN("failed to fetch table node", K(param), K(ret));
-      } else if (OB_FAIL(table_node->alloc_mutex_.lock())) {
-        LOG_WARN("failed to get alloc lock", K(param), K(*table_node), K(ret));
-      } else {
-        LOG_INFO("dump node", K(mock_node), K(*table_node));
-        if (table_node->prefetch_node_.cache_start_ != 0 ||
-            mock_node.prefetch_node_.cache_start_ <= table_node->curr_node_.cache_end_) {
-          LOG_INFO("new table_node has been fetched by other, ignore");
+      } else if (OB_SIZE_OVERFLOW == ret) {
+        if (OB_FAIL(table_node->rpc_mutex_.trylock())) {
+          if (OB_EAGAIN == ret) {
+            // rewrite ret
+            ret = OB_AUTOINC_SERVICE_BUSY;
+          } else {
+            LOG_ERROR("rpc mutext try lock failed", K(ret));
+          }
+          table_node->alloc_mutex_.unlock();
         } else {
-          atomic_update(table_node->local_sync_, mock_node.local_sync_);
-          atomic_update(table_node->last_refresh_ts_, mock_node.last_refresh_ts_);
-          table_node->prefetch_node_.cache_start_ = mock_node.prefetch_node_.cache_start_;
-          table_node->prefetch_node_.cache_end_ = mock_node.prefetch_node_.cache_end_;
+          TableNode mock_node;
+          table_node->alloc_mutex_.unlock();
+          if (OB_FAIL(fetch_table_node(param, &mock_node))) {
+            LOG_WARN("failed to fetch table node", K(param), K(ret));
+          } else {
+            LOG_INFO("fetch table node success", K(param), K(mock_node), K(*table_node));
+            table_node->alloc_mutex_.lock();
+            atomic_update(table_node->local_sync_, mock_node.local_sync_);
+            atomic_update(table_node->last_refresh_ts_, mock_node.last_refresh_ts_);
+            table_node->prefetch_node_.reset();
+            if (mock_node.curr_node_.cache_start_ == table_node->curr_node_.cache_end_ + 1) {
+              // when the above condition is true, it means that no other thread has consume
+              // any cache. intra-partition ascending property can be kept
+              table_node->curr_node_.cache_end_ = mock_node.curr_node_.cache_end_;
+            } else {
+              table_node->curr_node_.cache_start_ = mock_node.curr_node_.cache_start_;
+              table_node->curr_node_.cache_end_ = mock_node.curr_node_.cache_end_;
+            }
+            table_node->curr_node_state_is_pending_ = false;
+            if (OB_FAIL(
+                    table_node->alloc_handle(handle_allocator_, offset, increment, desired_count, max_value, handle))) {
+              LOG_WARN("failed to alloc cache handle", K(param), K(ret));
+            } else {
+              LOG_INFO("succ to get cache handle", K(param), K(*handle), K(ret));
+            }
+            table_node->alloc_mutex_.unlock();
+          }
+          table_node->rpc_mutex_.unlock();
         }
+      } else {
+        LOG_WARN("alloc handle failed", K(ret));
         table_node->alloc_mutex_.unlock();
       }
-      table_node->prefetching_ = false;
     }
   }
   // table node must be reverted after get to decrement reference count
@@ -468,7 +507,7 @@ int ObAutoincrementService::clear_autoinc_cache_all(
       const int64_t sync_timeout = GCONF.autoinc_cache_refresh_interval + TIME_SKEW;
       ObHashSet<ObAddr>::iterator iter;
       for (iter = server_set.begin(); OB_SUCC(ret) && iter != server_set.end(); ++iter) {
-        LOG_INFO("send rpc call to other observers", "server", iter->first);
+        LOG_INFO("send rpc call to other observers", "server", iter->first, K(tenant_id), K(table_id));
         if (OB_FAIL(srv_proxy_->to(iter->first).timeout(sync_timeout).clear_autoinc_cache(arg))) {
           if (is_timeout_err(ret) || is_server_down_error(ret)) {
             // ignore time out, go on
@@ -584,7 +623,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
 
   const int64_t partition_id = param.pkey_.is_valid() ? param.pkey_.get_partition_id() : -1;
   int64_t leader_epoch = 0;
-  if (OB_FAIL(get_leader_epoch_id(param.pkey_, leader_epoch))) {
+  if (param.with_order() && OB_FAIL(get_leader_epoch_id(param.pkey_, leader_epoch))) {
     LOG_WARN("get leader epoch id failed", K(ret), K(param));
   } else if (OB_FAIL(node_map_.get(key, table_node))) {
     if (ret != OB_ENTRY_NOT_EXIST) {
@@ -604,13 +643,9 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
           LOG_ERROR("failed to set", K(param), K(ret));
         } else {
           table_node->prefetch_node_.reset();
-          if (OB_FAIL(fetch_table_node(param, table_node))) {
-            LOG_WARN("failed to fetch table node", K(param), K(ret));
-          } else {
-            lib::ObMutexGuard guard(map_mutex_);
-            if (OB_FAIL(node_map_.insert_and_get(key, table_node))) {
-              LOG_WARN("failed to create table node", K(param), K(ret));
-            }
+          lib::ObMutexGuard guard(map_mutex_);
+          if (OB_FAIL(node_map_.insert_and_get(key, table_node))) {
+            LOG_WARN("failed to create table node", K(param), K(ret));
           }
         }
         if (OB_FAIL(ret) && table_node != nullptr) {
@@ -631,14 +666,24 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
         LOG_ERROR("failed to set", K(param), K(ret));
       } else {
         table_node->prefetch_node_.reset();
-        if (OB_FAIL(fetch_table_node(param, table_node))) {
-          LOG_WARN("failed to fetch table node", K(param), K(ret));
-        }
+        // 注意场景：如果主切到其它节点后没有被访问过，又切回来，
+        // reset 掉 curr_node 不是最优的选择
+        // table_node->curr_node_.reset();
+        //
+        // UPDATE: 3.1, 2021-06-24:
+        // 给客户解释这个跳变还是很困难，尝试修复问题，不跳
+        // 理论上，这种场景下 curr_node 还可以继续使用。
+        // curr_node_state_is_pending_ 通过这个变量尝试继续使用curr_node
+        // https://yuque.antfin-inc.com/xiaochu.yh/doc/eqnlv0#floor-3
+        // 有了这个修复后，下面两种情况都不会跳变：
+        //  - 一个分区来回切主，只要本地 cache 是系统中值最大的 cach，则不会跳变
+        //  - 新分区到来，只要本地 cache 是系统中值最大的 cache，则不会跳变
+        table_node->curr_node_state_is_pending_ = true;
       }
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("succ to get table node", K(param), K(*table_node), K(ret));
+    LOG_DEBUG("succ to get table node", K(param), KPC(table_node), K(ret));
   } else {
     LOG_WARN("failed to get table node", K(param), K(ret));
   }
@@ -859,43 +904,43 @@ int ObAutoincrementService::fetch_table_node(
               }
             }
           }
+        }
 
-          // commit transaction or rollback
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(trans.end(true))) {
-              LOG_WARN("fail to commit transaction.", K(ret));
-            }
+        // commit transaction or rollback
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(trans.end(true))) {
+            LOG_WARN("fail to commit transaction.", K(ret));
+          }
+        } else {
+          int err = OB_SUCCESS;
+          if (OB_SUCCESS != (err = trans.end(false))) {
+            LOG_WARN("fail to rollback transaction. ", K(err));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          table_node->table_id_ = table_id;
+          atomic_update(table_node->local_sync_, sync_value);
+          atomic_update(table_node->last_refresh_ts_, ObTimeUtility::current_time());
+          if (fetch_prefetch) {
+            table_node->prefetch_node_.cache_start_ = curr_new_value;
+            table_node->prefetch_node_.cache_end_ = next_value;
           } else {
-            int err = OB_SUCCESS;
-            if (OB_SUCCESS != (err = trans.end(false))) {
-              LOG_WARN("fail to rollback transaction. ", K(err));
+            // there is no prefetch_node here
+            // because we must have tried to allocate cache handle from curr_node and prefetch_node
+            // before allocate new cache node
+            // if we allocate new cache node, curr_node and prefetch_node should have been combined;
+            // and prefetch_node should have been reset
+            CacheNode new_node;
+            new_node.cache_start_ = curr_new_value;
+            new_node.cache_end_ = next_value;
+            if (OB_FAIL(table_node->curr_node_.combine_cache_node(new_node))) {
+              LOG_WARN("failed to combine cache node", K(*table_node), K(new_node), K(ret));
+            } else if (0 == table_node->next_value_) {
+              table_node->next_value_ = curr_new_value;
             }
           }
-
-          if (OB_SUCC(ret)) {
-            table_node->table_id_ = table_id;
-            atomic_update(table_node->local_sync_, sync_value);
-            atomic_update(table_node->last_refresh_ts_, ObTimeUtility::current_time());
-            if (fetch_prefetch) {
-              table_node->prefetch_node_.cache_start_ = curr_new_value;
-              table_node->prefetch_node_.cache_end_ = next_value;
-            } else {
-              // there is no prefetch_node here
-              // because we must have tried to allocate cache handle from curr_node and prefetch_node
-              // before allocate new cache node
-              // if we allocate new cache node, curr_node and prefetch_node should have been combined;
-              // and prefetch_node should have been reset
-              CacheNode new_node;
-              new_node.cache_start_ = curr_new_value;
-              new_node.cache_end_ = next_value;
-              if (OB_FAIL(table_node->curr_node_.combine_cache_node(new_node))) {
-                LOG_WARN("failed to combine cache node", K(*table_node), K(new_node), K(ret));
-              } else if (0 == table_node->next_value_) {
-                table_node->next_value_ = curr_new_value;
-              }
-            }
-            LOG_INFO("succ to allocate new table node", K(*table_node), K(ret));
-          }
+          LOG_INFO("succ to allocate new table node", K(*table_node), K(ret));
         }
       }
     }
@@ -991,6 +1036,12 @@ int ObAutoincrementService::get_server_set(
   return ret;
 }
 
+/* 本函数核心做几件事：
+ * 1. 将 value_to_sync 写入内部表
+ *   - value_to_sync 比当前 table node 里记录的 sync 值大，才会执行写入
+ * 2. 通知 table 所在的所有 server 有更新
+ * 3. 本地处理更新 table node
+ */
 int ObAutoincrementService::sync_insert_value(
     AutoincParam& param, CacheHandle*& cache_handle, const uint64_t value_to_sync)
 {
@@ -1070,7 +1121,7 @@ int ObAutoincrementService::sync_insert_value(
           }
         }
         if (OB_SUCC(ret)) {
-          LOG_INFO("get global sync", K(sync_value), K(insert_value), K(ret));
+          LOG_INFO("get global sync", K(sync_value), K(insert_value), K(*table_node));
           // if insert_value <= global_sync
           if (insert_value <= sync_value) {
             // do not need to sync other servers, update local sync
@@ -1079,6 +1130,8 @@ int ObAutoincrementService::sync_insert_value(
           } else {
             // if insert_value > global_sync
             // 1. mock a insert value large enough
+            // (因为本地已经消耗了这个cache里的部分值，其余server
+            // 肯定不需要关心本地已经cache过的这段值，所以插入到内部表之前做了一个推高)
             // 2. update __all_sequence(may get global_sync)
             // 3. sync to other server
             // 4. adjust cache_handle(prefetch) and table node
@@ -1118,6 +1171,8 @@ int ObAutoincrementService::sync_insert_value(
             } else if (!is_single_row(affected_rows)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected error", K(affected_rows), K(ret));
+            } else {
+              LOG_INFO("sync insert value", K(param), K(insert_value), K(*table_node));
             }
 
             // commit transaction or rollback
@@ -1255,16 +1310,37 @@ int ObAutoincrementService::sync_insert_value(
           }
         }
         if (OB_SUCC(ret)) {
-          // re-alloc table node
-          lib::ObMutexGuard guard(table_node->alloc_mutex_);
-          if (insert_value >= table_node->curr_node_.cache_end_ &&
-              insert_value >= table_node->prefetch_node_.cache_end_) {
-            table_node->curr_node_.reset();
-            table_node->prefetch_node_.reset();
-            if (OB_FAIL(fetch_table_node(param, table_node))) {
-              LOG_WARN("failed to alloc table node", K(param), K(ret));
+
+          // 决策要点：当 insert_value 比当前 cache 的值大，则一定需要取新缓存
+          // 此时面临一个问题：如果其他线程正在取缓存，我们这边还要不要取？
+          //  - 如果不取，万一存在另一方取了一个很小的 table node 呢？
+          // 最终决策，这边一定要取 table node。
+          // 决策原因：sync insert value 的场景并不多，效率可接受
+          if (OB_FAIL(table_node->rpc_mutex_.lock())) {
+            LOG_WARN("fail get rpc mutex lock", K(*table_node), K(ret));
+          } else {
+            table_node->alloc_mutex_.lock();
+            if (insert_value >= table_node->curr_node_.cache_end_ &&
+                insert_value >= table_node->prefetch_node_.cache_end_) {
+              table_node->alloc_mutex_.unlock();
+              TableNode mock_node;
+              if (OB_FAIL(fetch_table_node(param, &mock_node))) {
+                LOG_WARN("failed to alloc table node", K(param), K(ret));
+              } else {
+                table_node->alloc_mutex_.lock();
+                table_node->prefetch_node_.reset();
+                if (mock_node.curr_node_.cache_end_ > table_node->curr_node_.cache_end_) {
+                  table_node->curr_node_.cache_start_ = mock_node.curr_node_.cache_start_;
+                  table_node->curr_node_.cache_end_ = mock_node.curr_node_.cache_end_;
+                }
+                table_node->alloc_mutex_.unlock();
+                LOG_INFO("fetch table node success", K(param), K(*table_node));
+              }
+            } else {
+              table_node->alloc_mutex_.unlock();
             }
           }
+          table_node->rpc_mutex_.unlock();
         }
       }
     }
@@ -1545,9 +1621,8 @@ int ObAutoincrementService::get_sequence_value(
       sql_len = snprintf(sql,
           OB_MAX_SQL_LENGTH,
           " SELECT sequence_value, sync_value FROM %s"
-          " WHERE tenant_id = %lu AND sequence_key = %lu AND column_id = %lu",
+          " WHERE sequence_key = %lu AND column_id = %lu",
           OB_ALL_SEQUENCE_V2_TNAME,
-          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
           column_id);
       ObISQLClient* sql_client = mysql_proxy_;
@@ -1562,9 +1637,17 @@ int ObAutoincrementService::get_sequence_value(
         LOG_WARN("failed to get result", K(ret));
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(result->next())) {
-        LOG_INFO("there is no sequence record", K(ret));
-        seq_value = 0;
-        ret = OB_SUCCESS;
+        if (OB_ITER_END == ret) {
+          LOG_INFO("there is no autoinc column record, return 0 as seq_value by default",
+              K(tenant_id),
+              K(table_id),
+              K(column_id),
+              K(ret));
+          seq_value = 0;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail get next value", K(tenant_id), K(table_id), K(column_id), K(ret));
+        }
       } else if (OB_FAIL(result->get_uint(0l, seq_value))) {
         LOG_WARN("fail to get int_value.", K(ret));
       } else {

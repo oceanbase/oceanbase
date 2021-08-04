@@ -882,16 +882,16 @@ int ObPxRpcInitTaskArgs::init_deserialize_param(lib::MemoryContext& mem_context,
   int ret = OB_SUCCESS;
   void* plan_buf = NULL;
   void* ctx_buf = NULL;
-  if (OB_ISNULL(plan_buf = mem_context.get_arena_allocator().alloc(sizeof(ObPhysicalPlan)))) {
+  if (OB_ISNULL(plan_buf = mem_context->get_arena_allocator().alloc(sizeof(ObPhysicalPlan)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_ISNULL(ctx_buf = mem_context.get_arena_allocator().alloc(sizeof(ObDesExecContext)))) {
+  } else if (OB_ISNULL(ctx_buf = mem_context->get_arena_allocator().alloc(sizeof(ObDesExecContext)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
     des_phy_plan_ = new (plan_buf) ObPhysicalPlan(mem_context);
     exec_ctx_ = new (ctx_buf) ObDesExecContext(gctx.session_mgr_);
-    des_allocator_ = &mem_context.get_arena_allocator();
+    des_allocator_ = &mem_context->get_arena_allocator();
   }
   return ret;
 }

@@ -1059,6 +1059,9 @@ int ObTransService::end_trans(
     if (is_rollback && OB_TRANS_TIMEOUT == ret) {
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = end_trans_callback_(cb, OB_SUCCESS, tenant_id)))) {
         ret = tmp_ret;
+      } else {
+        // overwrite retcode when rollback timeout
+        ret = OB_SUCCESS;
       }
     } else {
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = end_trans_callback_(cb, ret, tenant_id)))) {
@@ -2421,8 +2424,10 @@ int ObTransService::end_stmt(bool is_rollback, bool is_incomplete, const ObParti
     // or which no need for creating context (has_epoch)
     if (!is_rollback) {
       for (int64_t i = 0; OB_SUCC(ret) && i < cur_stmt_all_participants.count(); i++) {
+        // if participant is pg, merge commit list immediately
         if (is_contain(epoch_participants, cur_stmt_all_participants.at(i)) &&
-            !is_contain(discard_participants, cur_stmt_all_participants.at(i))) {
+            (cur_stmt_all_participants.at(i).is_pg() ||
+                !is_contain(discard_participants, cur_stmt_all_participants.at(i)))) {
           if (OB_FAIL(real_stmt_participants.push_back(cur_stmt_all_participants.at(i)))) {
             TRANS_LOG(WARN, "push back error", KR(ret), K(cur_stmt_all_participants), K(trans_desc));
           }
@@ -3446,6 +3451,9 @@ int ObTransService::check_partition_status(const ObPartitionKey& partition)
     TRANS_LOG(WARN, "get participant status error", K(ret), K(partition));
   } else if (OB_SUCCESS != clog_status) {
     ret = clog_status;
+    if (REACH_TIME_INTERVAL(ObTransCtx::MAX_TRANS_2PC_TIMEOUT_US)) {
+      (void)refresh_location_cache(partition, false);
+    }
   } else {
     // do nothing
   }

@@ -34,8 +34,8 @@ public:
   ObMaterialInput() : bypass_(false)
   {}
   virtual ~ObMaterialInput() = default;
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
-  virtual ObPhyOperatorType get_phy_op_type() const;
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
+  virtual ObPhyOperatorType get_phy_op_type() const override;
   virtual void reset() override
   {
     bypass_ = false;
@@ -104,7 +104,7 @@ private:
     }
 
   private:
-    lib::MemoryContext* mem_context_;
+    lib::MemoryContext mem_context_;
     ObChunkRowStore row_store_;
     ObChunkRowStore::Iterator row_store_it_;
     int64_t row_id_;

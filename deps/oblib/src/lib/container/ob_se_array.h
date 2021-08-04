@@ -55,11 +55,11 @@ public:
 template <typename BlockAllocatorT>
 static inline void init_block_allocator(lib::MemoryContext& mem_entity, BlockAllocatorT& block_allocator)
 {
-  block_allocator = BlockAllocatorT(mem_entity.get_allocator());
+  block_allocator = BlockAllocatorT(mem_entity->get_allocator());
 }
 static inline void init_block_allocator(lib::MemoryContext& mem_entity, ModulePageAllocator& block_allocator)
 {
-  block_allocator = ModulePageAllocator(mem_entity.get_allocator(), block_allocator.get_label());
+  block_allocator = ModulePageAllocator(mem_entity->get_allocator(), block_allocator.get_label());
 }
 
 // ObSEArrayImpl is a high performant array for OceanBase developers,
@@ -310,8 +310,8 @@ private:
   {
     if (OB_UNLIKELY(!has_alloc_)) {
       if (auto_free) {
-        mem_context_ = &CURRENT_CONTEXT;
-        init_block_allocator(*mem_context_, block_allocator_);
+        mem_context_ = CURRENT_CONTEXT;
+        init_block_allocator(mem_context_, block_allocator_);
       }
       has_alloc_ = true;
     } else {
@@ -342,7 +342,7 @@ private:
   int error_;
   BlockAllocatorT block_allocator_;
   bool has_alloc_;
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
 };
 
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT, bool auto_free>

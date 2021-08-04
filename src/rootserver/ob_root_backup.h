@@ -114,22 +114,22 @@ public:
       obrpc::ObSrvRpcProxy& rpc_proxy, share::ObIBackupLeaseService& backup_lease_service,
       ObRestorePointService& restore_point_service);
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
   void wakeup();
   int idle() const;
   int get_lease_time(const uint64_t tenant_id, int64_t& lease_time);
   int update_lease_time(const uint64_t tenant_id);
   void update_prepare_flag(const bool is_prepare_flag);
   bool get_prepare_flag() const;
-  virtual bool is_working() const
+  virtual bool is_working() const override
   {
     return is_working_;
   }
-  int start();
+  int start() override;
   int update_tenant_backup_meta_info(
       const common::ObPartitionKey& pkey, const int64_t pg_count, const int64_t partition_count);
   int get_tenant_backup_meta_info(ObTenantBackupMetaInfo& meta_info);

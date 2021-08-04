@@ -1311,6 +1311,7 @@ DEFINE_ERROR_EXT(OB_ERR_WINDOW_NAME_IS_NOT_DEFINE, -5929, -1, "HY000", "Window n
 DEFINE_ORACLE_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, -5930, -1, "HY000", "maximum open cursors exceeded", 1000, "maximum open cursors exceeded");
 DEFINE_ORACLE_ERROR(OB_ERR_ARG_INVALID, -5931, -1, "HY000", "argument is null, invalid, or out of range", 21560, "argument %.*s is null, invalid, or out of range");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_NAME_STRING, -5932, -1, "HY000", "unexpected name string", 21560, "unexpected name string '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION, -5936, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect value for function", "Incorrect %.*s value: '%.*s' for function %.*s");
 
 ////////////////////////////////////////////////////////////////
 //error code for transaction, mvcc and commitlog -6001 ---- -7000

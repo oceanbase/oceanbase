@@ -620,10 +620,12 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
   ObIPxCoordEventListener* listener = NULL;
   int64_t timeout_us = 0;
   int64_t nth_channel = OB_INVALID_INDEX_INT64;
+  bool collect_trans_result_ok = false;
   if (OB_FAIL(coord_info_.dfo_mgr_.get_running_dfos(active_dfos))) {
     LOG_WARN("fail find dfo", K(ret));
   } else if (OB_UNLIKELY(!first_row_fetched_)) {
     // no dfo sent, do nothing.
+    collect_trans_result_ok = true;
     ret = OB_ITER_END;
   }
 
@@ -663,8 +665,9 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
         LOG_WARN("fail to check sqc");
       } else if (all_dfo_terminate) {
         wait_msg = false;
+        collect_trans_result_ok = true;
         LOG_TRACE("all dfo has been terminate", K(ret));
-      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+      } else if (OB_FAIL(ctx_.fast_check_status())) {
         LOG_WARN("fail check status, maybe px query timeout", K(ret));
       } else if (OB_FAIL(loop.process_one_if(&control_channels, timeout_us, nth_channel))) {
         if (OB_EAGAIN == ret) {
@@ -699,6 +702,16 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
   if (OB_GOT_SIGNAL_ABORTING != coord_info_.first_error_code_ &&
       OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER != coord_info_.first_error_code_) {
     ret = coord_info_.first_error_code_;
+  }
+  if (!collect_trans_result_ok) {
+    ObSQLSessionInfo* session = ctx_.get_my_session();
+    session->get_trans_result().set_incomplete();
+    LOG_WARN("collect trans_result fail",
+        K(ret),
+        "session_id",
+        session->get_sessid(),
+        "trans_result",
+        session->get_trans_result());
   }
   return ret;
 }

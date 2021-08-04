@@ -673,6 +673,7 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
   int64_t timeout_us = 0;
   const ObNewRow* row = NULL;
   int64_t nth_channel = OB_INVALID_INDEX_INT64;
+  bool collect_trans_result_ok = false;
 
   if (OB_ISNULL(px_ctx_ptr = GET_PHY_OPERATOR_CTX(ObPxCoordCtx, ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -684,6 +685,7 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
     LOG_WARN("phy plan ctx NULL", K(ret));
   } else if (OB_UNLIKELY(!px_ctx_ptr->first_row_fetched_)) {
     // no dfo sent, do nothing.
+    collect_trans_result_ok = true;
     ret = OB_ITER_END;
   }
 
@@ -724,8 +726,9 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
         LOG_WARN("fail to check sqc");
       } else if (all_dfo_terminate) {
         wait_msg = false;
+        collect_trans_result_ok = true;
         LOG_TRACE("all dfo has been terminate", K(ret));
-      } else if (OB_FAIL(THIS_WORKER.check_status())) {
+      } else if (OB_FAIL(ctx.fast_check_status())) {
         LOG_WARN("fail check status, maybe px query timeout", K(ret));
       } else if (OB_FAIL(loop.process_one_if(&control_channels, timeout_us, nth_channel))) {
         if (OB_EAGAIN == ret) {
@@ -760,6 +763,22 @@ int ObPxCoord::wait_all_running_dfos_exit(ObExecContext& ctx) const
   if (OB_NOT_NULL(px_ctx_ptr) && OB_GOT_SIGNAL_ABORTING != px_ctx_ptr->coord_info_.first_error_code_ &&
       OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER != px_ctx_ptr->coord_info_.first_error_code_) {
     ret = px_ctx_ptr->coord_info_.first_error_code_;
+  }
+
+  if (!collect_trans_result_ok) {
+    ObSQLSessionInfo* session = ctx.get_my_session();
+    if (OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null or px_ctx is null", K(ret));
+    } else {
+      session->get_trans_result().set_incomplete();
+      LOG_WARN("collect trans_result fail",
+          K(ret),
+          "session_id",
+          session->get_sessid(),
+          "trans_result",
+          session->get_trans_result());
+    }
   }
   return ret;
 }

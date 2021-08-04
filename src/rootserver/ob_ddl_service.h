@@ -153,7 +153,8 @@ public:
 
   int rebuild_index_in_trans(share::schema::ObSchemaGetterGuard& schema_guard,
       share::schema::ObTableSchema& table_schema, const int64_t frozen_version, const ObString* ddl_stmt_str,
-      const obrpc::ObCreateTableMode create_mode, ObMySQLTransaction* sql_trans);
+      const obrpc::ObCreateTableMode create_mode, ObMySQLTransaction* sql_trans,
+      bool* is_delay_delete = NULL /* Bring out the delayed delete behavior */);
 
   int create_inner_expr_index(const share::schema::ObTableSchema& orig_table_schema,
       share::schema::ObTableSchema& new_table_schema, common::ObIArray<share::schema::ObColumnSchemaV2*>& new_columns,
@@ -802,10 +803,8 @@ private:
       const int64_t non_paxos_replica_num, const int64_t partition_id, const ObReplicaAddr& replica_addr,
       const int64_t lease_start_ts, const bool is_bootstrap, const bool is_standby, const int64_t restore,
       const share::ObSimpleFrozenStatus& frozen_status, obrpc::ObCreatePartitionArg& arg);
-  int set_flag_role(const bool initial_leader, const bool is_standby, const int64_t restore, const uint64_t table_id,
-      common::ObRole& role);
   int fill_flag_replica(const uint64_t table_id, const int64_t partition_cnt, const int64_t partition_id,
-      const obrpc::ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr, const common::ObRole role,
+      const obrpc::ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr,
       share::ObPartitionReplica& flag_replica);
 
   int try_modify_tenant_primary_zone_entity_count(common::ObMySQLTransaction& trans,
@@ -952,7 +951,8 @@ private:
   int drop_table_in_trans(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTableSchema& table_schema, const bool is_rebuild_index, const bool is_index,
       const bool to_recyclebin, const common::ObString* ddl_stmt_str, ObMySQLTransaction* sql_trans,
-      share::schema::DropTableIdHashSet* drop_table_set = NULL);
+      share::schema::DropTableIdHashSet* drop_table_set = NULL,
+      bool* is_delay_delete = NULL /* Bring out the delayed delete behavior */);
   int drop_aux_table_in_drop_table(common::ObMySQLTransaction& trans, ObDDLOperator& ddl_operator,
       share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObTableSchema& table_schema,
       const share::schema::ObTableType table_type, const bool to_recyclebin);

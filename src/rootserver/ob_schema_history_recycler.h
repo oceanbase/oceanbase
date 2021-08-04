@@ -187,8 +187,8 @@ public:
       ObZoneManager& zone_manager, common::ObMySQLProxy& sql_proxy, ObServerManager& server_mgr);
   virtual void run3() override;
   void wakeup();
-  void stop();
-  virtual int blocking_run()
+  void stop() override;
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }

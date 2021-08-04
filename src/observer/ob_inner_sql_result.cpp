@@ -67,7 +67,7 @@ int ObInnerSQLResult::init()
       .set_properties(lib::USE_TL_PAGE_OPTIONAL)
       .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
       .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-  if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+  if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
     LOG_WARN("create memory entity failed", K(ret));
   } else {
     result_set_ = new (buf_) ObResultSet(session_, mem_context_->get_arena_allocator());

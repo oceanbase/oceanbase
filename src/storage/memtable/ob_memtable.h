@@ -362,7 +362,7 @@ public:
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp), K_(active_trx_count), K_(state),
       K_(max_schema_version), K_(write_ref_cnt), K_(local_allocator), K_(with_accurate_log_ts_range), K_(frozen),
       K_(frozen_log_applied), K_(mark_finish), K_(pending_cb_cnt), K_(pending_lob_cnt), K_(pending_batch_commit_cnt),
-      K_(pending_elr_cnt));
+      K_(pending_elr_cnt), K_(contain_hotspot_row));
 
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20;  // 10MB

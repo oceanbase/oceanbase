@@ -355,8 +355,8 @@ public:
 
   virtual int lock(const ObStoreCtx& ctx) override;
 
-  virtual void set_merge_status(bool merge_success);
-  virtual bool can_schedule_merge();
+  virtual void set_merge_status(bool merge_success) override;
+  virtual bool can_schedule_merge() override;
 
   // write ssstore objects @version tree to data file, used by write_check_point
   virtual int serialize(ObArenaAllocator& allocator, char*& new_buf, int64_t& serialize_size);
@@ -364,27 +364,27 @@ public:
   virtual int deserialize(const ObReplicaType replica_type, const char* buf, const int64_t buf_len,
       ObIPartitionGroup* pg, int64_t& pos, bool& is_old_meta, ObPartitionStoreMeta& old_meta);
 
-  virtual bool has_memstore();
+  virtual bool has_memstore() override;
 
   // freeze actions
-  virtual int get_replayed_table_version(int64_t& table_version);
-  virtual int get_partition_ss_store_info(common::ObArray<PartitionSSStoreInfo>& partition_ss_store_info_list);
-  virtual int get_all_tables(ObTablesHandle& tables_handle);
-  virtual int retire_warmup_store(const bool is_disk_full);
-  virtual int halt_prewarm();
+  virtual int get_replayed_table_version(int64_t& table_version) override;
+  virtual int get_partition_ss_store_info(common::ObArray<PartitionSSStoreInfo>& partition_ss_store_info_list) override;
+  virtual int get_all_tables(ObTablesHandle& tables_handle) override;
+  virtual int retire_warmup_store(const bool is_disk_full) override;
+  virtual int halt_prewarm() override;
 
-  virtual common::ObReplicaType get_replica_type()
+  virtual common::ObReplicaType get_replica_type() override
   {
     return store_.get_replica_type();
   }
   virtual int query_range_to_macros(common::ObIAllocator& allocator,
       const common::ObIArray<common::ObStoreRange>& ranges, const int64_t type, uint64_t* macros_count,
       const int64_t* total_task_count, common::ObIArray<common::ObStoreRange>* splitted_ranges,
-      common::ObIArray<int64_t>* split_index);
-  virtual int get_multi_ranges_cost(const common::ObIArray<common::ObStoreRange>& ranges, int64_t& total_size);
+      common::ObIArray<int64_t>* split_index) override;
+  virtual int get_multi_ranges_cost(const common::ObIArray<common::ObStoreRange>& ranges, int64_t& total_size) override;
   virtual int split_multi_ranges(const common::ObIArray<common::ObStoreRange>& ranges,
       const int64_t expected_task_count, common::ObIAllocator& allocator,
-      common::ObArrayArray<common::ObStoreRange>& multi_range_split_array);
+      common::ObArrayArray<common::ObStoreRange>& multi_range_split_array) override;
   virtual int append_local_sort_data(const share::ObBuildIndexAppendLocalDataParam& param,
       const common::ObPGKey& pg_key, const blocksstable::ObStorageFileHandle& file_handle,
       common::ObNewRowIterator& iter) override;
@@ -418,12 +418,12 @@ public:
   {
     return store_;
   }
-  int do_warm_up_request(const ObIWarmUpRequest* request);
-  int check_index_need_build(const share::schema::ObTableSchema& index_schema, bool& need_build);
-  int get_build_index_context(const compaction::ObBuildIndexParam& param, compaction::ObBuildIndexContext& context);
+  int do_warm_up_request(const ObIWarmUpRequest* request) override;
+  int check_index_need_build(const share::schema::ObTableSchema& index_schema, bool& need_build) override;
+  int get_build_index_context(const compaction::ObBuildIndexParam& param, compaction::ObBuildIndexContext& context) override;
 
   int local_sort_index_by_range(
-      const int64_t idx, const compaction::ObBuildIndexParam& param, const compaction::ObBuildIndexContext& context);
+      const int64_t idx, const compaction::ObBuildIndexParam& param, const compaction::ObBuildIndexContext& context) override;
 
   int get_build_index_param(const uint64_t index_id, const int64_t schema_version, ObIPartitionReport* report,
       compaction::ObBuildIndexParam& param) override;

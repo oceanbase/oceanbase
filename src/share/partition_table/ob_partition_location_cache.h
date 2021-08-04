@@ -272,6 +272,15 @@ public:
     return type_;
   }
   bool need_discard() const;
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObLocationAsyncUpdateTask& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
   TO_STRING_KV(KT_(table_id), K_(partition_id), K_(add_timestamp), K_(cluster_id), K_(type));
 
 private:

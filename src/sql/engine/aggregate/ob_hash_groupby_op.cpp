@@ -138,7 +138,7 @@ int ObHashGroupByOp::init_mem_context()
     lib::ContextParam param;
     param.set_mem_attr(
         ctx_.get_my_session()->get_effective_tenant_id(), ObModIds::OB_HASH_NODE_GROUP_ROWS, ObCtxIds::WORK_AREA);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       LOG_WARN("memory entity create failed", K(ret));
     }
   }
@@ -519,7 +519,6 @@ int64_t ObHashGroupByOp::detect_part_cnt(const int64_t rows) const
       K(get_aggr_hold_size()),
       K(get_dump_part_hold_size()),
       K(rows),
-      K(mem_context_),
       K(availble_mem_size),
       K(est_dump_size));
   return part_cnt;

@@ -92,9 +92,9 @@ public:
   int on_submit_log_success(
       const bool with_need_update_version, const uint64_t cur_log_id, const int64_t cur_log_timestamp);
   int on_submit_log_fail(const int retcode);
-  bool is_callbacking() const
+  bool is_commit_log_callbacking() const
   {
-    return is_callbacking_;
+    return is_commit_log_callbacking_;
   }
 
 private:
@@ -115,7 +115,7 @@ private:
   int64_t submit_timestamp_;
   ObTransCtx* ctx_;
   bool have_prev_trans_;
-  bool is_callbacking_;
+  bool is_commit_log_callbacking_;
 };
 
 }  // namespace transaction

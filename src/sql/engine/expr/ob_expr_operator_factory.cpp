@@ -122,6 +122,7 @@
 #include "sql/engine/expr/ob_expr_period_diff.h"
 #include "sql/engine/expr/ob_expr_unix_timestamp.h"
 #include "sql/engine/expr/ob_expr_maketime.h"
+#include "sql/engine/expr/ob_expr_makedate.h"
 #include "sql/engine/expr/ob_expr_extract.h"
 #include "sql/engine/expr/ob_expr_to_days.h"
 #include "sql/engine/expr/ob_expr_day_of_func.h"
@@ -206,6 +207,7 @@
 #include "sql/engine/expr/ob_expr_sys_connect_by_path.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 #include "sql/engine/expr/ob_expr_shadow_uk_project.h"
+#include "sql/engine/expr/ob_expr_time_format.h"
 #include "sql/engine/expr/ob_expr_interval.h"
 #include "sql/engine/expr/ob_expr_week_of_func.h"
 #include "sql/engine/expr/ob_expr_userenv.h"
@@ -506,19 +508,24 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTimeStampDiff);
   REG_OP(ObExprTimeDiff);
   REG_OP(ObExprPeriodDiff);
+  REG_OP(ObExprPeriodAdd);
   REG_OP(ObExprUnixTimestamp);
   REG_OP(ObExprMakeTime);
+  REG_OP(ObExprMakedate);
   REG_OP(ObExprExtract);
   REG_OP(ObExprToDays);
   REG_OP(ObExprPosition);
   REG_OP(ObExprFromDays);
   REG_OP(ObExprDateFormat);
+  REG_OP(ObExprGetFormat);
   REG_OP(ObExprStrToDate);
   REG_OP(ObExprCurDate);
   REG_OP(ObExprCurTime);
   REG_OP(ObExprSysdate);
   REG_OP(ObExprCurTimestamp);
   REG_OP(ObExprUtcTimestamp);
+  REG_OP(ObExprUtcTime);
+  REG_OP(ObExprUtcDate);
   REG_OP(ObExprTimeToUsec);
   REG_OP(ObExprUsecToTime);
   REG_OP(ObExprMergingFrozenTime);
@@ -653,6 +660,9 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprFormat);
   REG_OP(ObExprLog);
   REG_OP(ObExprPi);
+  REG_OP(ObExprLastDay);
+  REG_OP(ObExprTimeFormat);
+  REG_OP(ObExprTimestamp);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);
@@ -884,6 +894,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCharset);
   REG_OP_ORCL(ObExprCollation);
   REG_OP_ORCL(ObExprCoercibility);
+  REG_OP_ORCL(ObExprLastTraceId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

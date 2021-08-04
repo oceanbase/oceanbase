@@ -111,7 +111,7 @@ int ObPlXaStartExecutor::execute(ObExecContext& ctx, ObXaStartStmt& stmt)
     LOG_WARN("set xid error", K(ret), K(stmt));
   } else if (my_session->get_in_transaction()) {
     ret = OB_TRANS_XA_OUTSIDE;
-    LOG_WARN("already start trans", K(ret), K(stmt.get_xa_string()));
+    LOG_WARN("already start trans", K(ret), K(stmt.get_xa_string()), K(trans_desc));
   } else {
     transaction::ObStartTransParam& start_trans_param = plan_ctx->get_start_trans_param();
     init_start_trans_param(my_session, task_exec_ctx, start_trans_param);

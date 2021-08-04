@@ -827,7 +827,7 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(int64_t& max_wa_memory_size
         // TODO: kvcache大概可以淘汰多少内存，目前没有数据，后续寒晖他们会提供接口
         // bug34818894 https://work.aone.alibaba-inc.com/issue/34818894
         // 这里暂时写一个默认比例
-        max_tenant_memory_size += resource_handle.get_memory_mgr()->get_cache_hold() * 0.05;
+        max_tenant_memory_size += resource_handle.get_memory_mgr()->get_cache_hold() * pctg;
       }
     }
     int64_t remain_memory_size =
@@ -868,7 +868,8 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(int64_t& max_wa_memory_size
           K(remain_memory_size),
           K(ratio),
           K(alloc_ratio),
-          K(hold_ratio));
+          K(hold_ratio),
+          K(tenant_memory_hold));
     }
   }
   return ret;

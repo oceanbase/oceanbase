@@ -204,25 +204,34 @@ void ObSubPlanFilter::reuse()
   ObMultiChildrenPhyOperator::reuse();
 }
 
-int ObSubPlanFilter::rescan(ObExecContext& ctx) const
-{
+int ObSubPlanFilter::reset_rescan_params(ObExecContext &ctx) const {
   int ret = OB_SUCCESS;
-  ObPhyOperator* child_op = NULL;
-  ObSubPlanFilterCtx* subplan_ctx = NULL;
-  ObPhysicalPlanCtx* plan_ctx = NULL;
-  if (OB_ISNULL(subplan_ctx = GET_PHY_OPERATOR_CTX(ObSubPlanFilterCtx, ctx, get_id())) ||
-      OB_ISNULL(plan_ctx = ctx.get_physical_plan_ctx())) {
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan context is null", K(ret));
+  } else {
+    for (int64_t i = 0; i < rescan_params_.count(); ++i) {
+      int64_t idx = rescan_params_.at(i).second;
+      plan_ctx->get_param_store_for_update().at(idx).set_null();
+      LOG_TRACE("prepare_rescan_params", K(ret), K(i), K(idx));
+    }
+  }
+
+  return ret;
+}
+
+int ObSubPlanFilter::rescan(ObExecContext &ctx) const {
+  int ret = OB_SUCCESS;
+  ObPhyOperator *child_op = NULL;
+  ObSubPlanFilterCtx *subplan_ctx = NULL;
+  if (OB_ISNULL(subplan_ctx =
+                    GET_PHY_OPERATOR_CTX(ObSubPlanFilterCtx, ctx, get_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get physical operator context failed", K(ret));
-  } else { /*do nothing*/
+  } else if (OB_FAIL(reset_rescan_params(ctx))) {
+    LOG_WARN("fail to reset rescan params", K(ret));
   }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < rescan_params_.count(); ++i) {
-    int64_t idx = rescan_params_.at(i).second;
-    plan_ctx->get_param_store_for_update().at(idx).set_null();
-    LOG_DEBUG("prepare_rescan_params", K(ret), K(i), K(idx));
-  }
-
   for (int32_t i = 1; OB_SUCC(ret) && i < get_child_num(); ++i) {
     if (OB_ISNULL(child_op = get_child(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -618,6 +627,13 @@ int ObSubPlanFilter::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row
       OZ(handle_update_set(subplan_ctx, row));
     } else {
       OZ(copy_cur_row(*subplan_ctx, row));
+    }
+  }
+  if (OB_ITER_END == ret) {
+    if (OB_FAIL(reset_rescan_params(ctx))) {
+      LOG_WARN("fail to reset rescan params", K(ret));
+    } else {
+      ret = OB_ITER_END;
     }
   }
 

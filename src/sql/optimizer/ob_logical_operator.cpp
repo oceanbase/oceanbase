@@ -1507,7 +1507,7 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp& op, void* ctx
             //   select /*+NO_REWRITE*/ count(*) from t1 group by 1 + (select 1 > all (select 0));
             //
             if ((*e)->has_const_or_const_expr_flag() && !(*e)->has_flag(CNT_VOLATILE_CONST) &&
-                !(*e)->has_flag(IS_EXEC_PARAM)) {
+                !(*e)->has_flag(CNT_EXEC_PARAM)) {
               ObRawExpr* remove_const_expr = NULL;
               OZ(ObRawExprUtils::build_remove_const_expr(
                   get_plan()->get_optimizer_context().get_expr_factory(), *session, *e, remove_const_expr));

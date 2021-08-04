@@ -386,6 +386,9 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_tanh.cpp
   engine/expr/ob_expr_time.cpp
   engine/expr/ob_expr_time_diff.cpp
+  engine/expr/ob_expr_time_diff.h
+  engine/expr/ob_expr_time_format.cpp
+  engine/expr/ob_expr_time_format.h
   engine/expr/ob_expr_time_to_usec.cpp
   engine/expr/ob_expr_timestamp.cpp
   engine/expr/ob_expr_timestamp_add.cpp
@@ -439,6 +442,9 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_bool.cpp
   engine/expr/ob_expr_eval_functions.cpp
   engine/expr/ob_expr_maketime.cpp
+  engine/expr/ob_expr_makedate.h
+  engine/expr/ob_expr_makedate.cpp
+  engine/join/ob_join_op.h
   engine/join/ob_join_op.cpp
   engine/join/ob_basic_nested_loop_join_op.cpp
   engine/join/ob_nested_loop_join_op.cpp

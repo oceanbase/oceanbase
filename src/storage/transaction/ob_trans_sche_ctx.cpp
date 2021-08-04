@@ -1240,13 +1240,18 @@ int ObScheTransCtx::wait_end_stmt(const int64_t expired_time)
     stmt_rollback_req_timeout_ = GCONF._ob_trans_rpc_timeout / 3;
     bool need_retry_rpc = true;
     int64_t retry_count = 0;
+    int64_t waittime = 0;
     while (OB_SUCC(ret) && need_retry_rpc) {
-      // 1s->2s->3s->3s...
-      stmt_rollback_req_timeout_ = (1 + retry_count) * stmt_rollback_req_timeout_;
       const int64_t trans_rpc_timeout = GCONF._ob_trans_rpc_timeout;
-      const int64_t rpc_timeout_us = std::min(trans_rpc_timeout, stmt_rollback_req_timeout_) + 200 * 1000;
+      // 1s->2s->3s->3s...
+      stmt_rollback_req_timeout_ = std::min(trans_rpc_timeout, (1 + retry_count) * stmt_rollback_req_timeout_);
       int64_t max_left_waittime = expired_time - ObTimeUtility::current_time();
-      int64_t waittime = ((max_left_waittime > rpc_timeout_us) ? rpc_timeout_us : max_left_waittime);
+      if (max_left_waittime > stmt_rollback_req_timeout_ + 200 * 1000) {
+        waittime = stmt_rollback_req_timeout_ + 200 * 1000;
+      } else {
+        waittime = max_left_waittime;
+        stmt_rollback_req_timeout_ = waittime;
+      }
       if (waittime <= 0) {
         // generate request id, so rolback stmt will not retry
         CtxLockGuard guard(lock_);
@@ -3070,12 +3075,27 @@ int ObScheTransCtx::xa_rollback_session_terminate()
     TRANS_LOG(WARN, "ObScheTransCtx not inited", K(ret));
   } else if (is_terminated_) {
     TRANS_LOG(INFO, "transaction is terminating", K(ret), "context", *this);
-  } else if (ObXATransState::ACTIVE != xa_trans_state_) {
+  }
+  /*
+  else if (ObXATransState::ACTIVE != xa_trans_state_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected state", K(ret), K(xa_trans_state_), K(*this));
-  } else if (has_decided_()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpected, xa trans already decided", K(ret), K(*this));
+  }
+  */
+  else if (has_decided_()) {
+    if (!is_xa_one_phase_) {
+      // 已进入两阶段提交阶段的xa事务不再允许执行一阶段提交
+      ret = OB_TRANS_XA_PROTO;
+      TRANS_LOG(WARN, "xa trans has entered into two phase", "context", *this);
+    } else if (!is_rollback_) {
+      ret = OB_TRANS_XA_PROTO;
+      TRANS_LOG(WARN, "invalid xa trans one phase request", "context", *this);
+    } else {
+      // 断连接转发超时，不需要重试
+      ret = OB_SUCCESS;
+    }
+    // ret = OB_ERR_UNEXPECTED;
+    // TRANS_LOG(WARN, "unexpected, xa trans already decided", K(ret), K(*this));
   } else if (OB_FAIL(xa_rollback_session_terminate_())) {
     TRANS_LOG(WARN, "terminate xa trans failed", K(ret), K(*this));
   }
@@ -3113,7 +3133,11 @@ int ObScheTransCtx::xa_one_phase_end_trans(const bool is_rollback)
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(is_exiting_)) {
     TRANS_LOG(WARN, "transaction is exiting", "context", *this);
-    ret = OB_TRANS_IS_EXITING;
+    if (is_rollback) {
+      ret = OB_SUCCESS;
+    } else {
+      ret = OB_TRANS_IS_EXITING;
+    }
   } else if (is_tightly_coupled_ && !is_rollback && 1 < get_unprepared_branch_count_()) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(
@@ -3129,10 +3153,13 @@ int ObScheTransCtx::xa_one_phase_end_trans(const bool is_rollback)
     } else {
       // one-phase proxy end_trans request timeout
       // if scheduler in end_trans phase, need to retry and wait ctx released
-      ret = OB_TRANS_XA_RETRY;
+      if (is_rollback) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_TRANS_XA_RETRY;
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     if (OB_FAIL(xa_one_phase_end_trans_(is_rollback))) {
       TRANS_LOG(WARN, "xa one phase end trans failed", K(ret), K(is_rollback), K(*this));
     }

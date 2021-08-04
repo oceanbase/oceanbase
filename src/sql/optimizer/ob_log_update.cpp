@@ -119,22 +119,6 @@ int ObLogUpdate::allocate_expr_pre(ObAllocExprContext& ctx)
   return ret;
 }
 
-int ObLogUpdate::allocate_expr_post(ObAllocExprContext& ctx)
-{
-  int ret = OB_SUCCESS;
-  if (is_pdml() && is_index_maintenance()) {
-    if (OB_FAIL(alloc_shadow_pk_column_for_pdml(ctx))) {
-      LOG_WARN("failed alloc generated column for pdml index maintain", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
-      LOG_WARN("failed to allocate expr post for delete", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObLogUpdate::check_output_dep_specific(ObRawExprCheckDep& checker)
 {
   int ret = OB_SUCCESS;
@@ -194,6 +178,9 @@ int ObLogUpdate::allocate_exchange_post(AllocExchContext* ctx)
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
         ObRawExpr* expr = NULL;
         OZ(gen_calc_part_id_expr(index_infos.at(i).loc_table_id_, index_infos.at(i).index_tid_, expr));
+        // calc part id expr's column reference expr need to be marked with explicit reference
+        // let TSC to produce its column expr
+        OZ(ObRawExprUtils::mark_column_explicited_reference(*expr));
         OZ(index_infos.at(i).calc_part_id_exprs_.push_back(expr));
         CK(OB_NOT_NULL(get_plan()));
         CK(OB_NOT_NULL(get_plan()->get_optimizer_context().get_session_info()));

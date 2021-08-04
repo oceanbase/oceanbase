@@ -73,7 +73,7 @@ public:
   {}
 
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "tenant_checker";
   };
@@ -94,7 +94,7 @@ public:
   virtual ~ObTableGroupChecker();
   int init();
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "tablegroup_checker";
   };
@@ -131,7 +131,7 @@ public:
   virtual ~ObDropTenantChecker()
   {}
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "drop_tenant_checker";
   }
@@ -173,7 +173,7 @@ public:
   virtual ~ObForceDropSchemaChecker()
   {}
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "drop_schema_checker";
   }
@@ -281,7 +281,7 @@ public:
   virtual ~ObRootInspection();
 
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "sys_schema_checker";
   };
@@ -420,7 +420,7 @@ public:
   {}
 
   virtual int inspect(bool& passed, const char*& warning_info) override;
-  virtual const char* get_task_name() const
+  virtual const char* get_task_name() const override
   {
     return "primary_checker";
   };

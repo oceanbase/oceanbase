@@ -1204,8 +1204,10 @@ int ObPartitionScheduler::schedule_pg(
             if (OB_ENTRY_NOT_EXIST != tmp_ret) {
               LOG_WARN("Failed to check need fast freeze for hotspot table", K(tmp_ret), K(pg_key));
             }
-          } else if (!need_fast_freeze) {
-
+          }
+          // ignore tmp_ret
+          if (!need_fast_freeze) {
+            // do nothing
           } else if (OB_SUCCESS != (tmp_ret = partition_service_->minor_freeze(pg_key))) {
             LOG_WARN("Failed to schedule fast freeze", K(tmp_ret), K(pg_key));
           } else {
@@ -2510,8 +2512,7 @@ ObFastFreezeChecker::ObFastFreezeChecker(const int64_t tenant_id)
   reset();
   if (OB_UNLIKELY(tenant_id == OB_INVALID_TENANT_ID)) {
     LOG_WARN("Invalid tenant id to init fast freeze checker", K(tenant_id));
-  } else if (OB_SYS_TENANT_ID != tenant_id) {
-    // fast freeze only trigger for user tenant
+  } else {
     tenant_id_ = tenant_id;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     if (tenant_config.is_valid()) {

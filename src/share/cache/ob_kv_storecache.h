@@ -88,11 +88,11 @@ public:
   int init(const uint64_t tenant_id, ObKVCache<Key, Value>& cache);
   void reset();
   void destroy();
-  virtual int put(const Key& key, const Value& value, bool overwrite = true);
+  virtual int put(const Key& key, const Value& value, bool overwrite = true) override;
   virtual int put_and_fetch(
-      const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle, bool overwrite = true);
-  virtual int get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle);
-  virtual int erase(const Key& key);
+      const Key& key, const Value& value, const Value*& pvalue, ObKVCacheHandle& handle, bool overwrite = true) override;
+  virtual int get(const Key& key, const Value*& pvalue, ObKVCacheHandle& handle) override;
+  virtual int erase(const Key& key) override;
 
   int64_t get_used() const
   {

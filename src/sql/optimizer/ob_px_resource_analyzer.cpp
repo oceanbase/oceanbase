@@ -162,7 +162,7 @@ int DfoInfo::get_child(int64_t idx, DfoInfo*& child)
 // ===================================================================================
 // ===================================================================================
 
-ObPxResourceAnalyzer::ObPxResourceAnalyzer() : dfo_allocator_(CURRENT_CONTEXT.get_malloc_allocator())
+ObPxResourceAnalyzer::ObPxResourceAnalyzer() : dfo_allocator_(CURRENT_CONTEXT->get_malloc_allocator())
 {
   dfo_allocator_.set_label("PxResourceAnaly");
 }

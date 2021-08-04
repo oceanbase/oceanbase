@@ -564,7 +564,8 @@ struct ObMaterializedViewContext {
 typedef common::ObSEArray<ObAssignment, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> ObAssignments;
 /// all assignments of one table
 struct ObTableAssignment {
-  ObTableAssignment() : table_id_(OB_INVALID_ID), assignments_(), is_update_part_key_(false)
+  ObTableAssignment()
+      : table_id_(OB_INVALID_ID), assignments_(), is_update_part_key_(false), is_update_unique_key_(false)
   {}
 
   int deep_copy(ObRawExprFactory& expr_factory, const ObTableAssignment& other);
@@ -579,14 +580,15 @@ struct ObTableAssignment {
       seed = do_hash(assignments_.at(j), seed);
     }
     seed = do_hash(is_update_part_key_, seed);
-
+    seed = do_hash(is_update_unique_key_, seed);
     return seed;
   }
 
   uint64_t table_id_;
   ObAssignments assignments_;
   bool is_update_part_key_;
-  TO_STRING_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key));
+  bool is_update_unique_key_;
+  TO_STRING_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key), K_(is_update_unique_key));
 };
 /// multi-table assignments
 typedef common::ObSEArray<ObTableAssignment, 3, common::ModulePageAllocator, true> ObTablesAssignments;

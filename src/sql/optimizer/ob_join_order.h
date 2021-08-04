@@ -396,7 +396,7 @@ public:
     return est_cost_info_;
   }
   const ObShardingInfo* get_sharding_info() const;
-  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const
+  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const override
   {
     BUF_PRINTF("@");
     BUF_PRINTF("%lu", table_id_);
@@ -483,7 +483,7 @@ public:
   int cost_nest_loop_join(double& op_cost, double& cost);
   int cost_merge_join(double& op_cost, double& cost);
   int cost_hash_join(double& op_cost, double& cost);
-  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const
+  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const override
   {
     BUF_PRINTF("<");
     if (NULL != left_path_) {
@@ -542,7 +542,7 @@ public:
   virtual ~SubQueryPath()
   {}
   virtual int estimate_cost() override;
-  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const
+  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const override
   {
     BUF_PRINTF("@sub_");
     BUF_PRINTF("%lu", subquery_id_);

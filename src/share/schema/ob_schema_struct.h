@@ -206,8 +206,15 @@ enum ObIndexType {
   INDEX_TYPE_UNIQUE_GLOBAL = 4,
   INDEX_TYPE_PRIMARY = 5,
   INDEX_TYPE_DOMAIN_CTXCAT = 6,
+  /* create table t1(c1 int primary key, c2 int);
+   * create index i1 on t1(c2)
+   * i1 is a global index.
+   * But we regard i1 as a local index for better access performance.
+   * Since it is non-partitioned, it's safe to do so.
+   */
   INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE = 7,
   INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE = 8,
+
   INDEX_TYPE_MAX = 9,
 };
 
@@ -3700,10 +3707,12 @@ inline uint64_t ObColumnSchemaHashWrapper::hash() const
 }
 class ObIndexSchemaHashWrapper {
 public:
-  ObIndexSchemaHashWrapper() : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID)
+  ObIndexSchemaHashWrapper()
+      : tenant_id_(common::OB_INVALID_ID), database_id_(common::OB_INVALID_ID), data_table_id_(common::OB_INVALID_ID)
   {}
-  ObIndexSchemaHashWrapper(uint64_t tenant_id, const uint64_t database_id, const common::ObString& index_name)
-      : tenant_id_(tenant_id), database_id_(database_id), index_name_(index_name)
+  ObIndexSchemaHashWrapper(
+      uint64_t tenant_id, const uint64_t database_id, const uint64_t data_table_id, const common::ObString& index_name)
+      : tenant_id_(tenant_id), database_id_(database_id), data_table_id_(data_table_id), index_name_(index_name)
   {}
   ~ObIndexSchemaHashWrapper()
   {}
@@ -3718,6 +3727,10 @@ public:
   {
     return database_id_;
   }
+  inline uint64_t get_data_table_id() const
+  {
+    return data_table_id_;
+  }
   inline const common::ObString& get_index_name() const
   {
     return index_name_;
@@ -3726,6 +3739,7 @@ public:
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
+  uint64_t data_table_id_;  // only for mysql mode
   common::ObString index_name_;
 };
 
@@ -3734,6 +3748,7 @@ inline uint64_t ObIndexSchemaHashWrapper::hash() const
   uint64_t hash_ret = 0;
   hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
   hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
+  hash_ret = common::murmurhash(&data_table_id_, sizeof(uint64_t), hash_ret);
   // case insensitive
   hash_ret = common::ObCharset::hash(common::CS_TYPE_UTF8MB4_GENERAL_CI, index_name_, hash_ret);
   return hash_ret;
@@ -3744,7 +3759,7 @@ inline bool ObIndexSchemaHashWrapper::operator==(const ObIndexSchemaHashWrapper&
   // mysql case insensitive
   // oracle case sensitive
   ObCompareNameWithTenantID name_cmp(tenant_id_);
-  return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) &&
+  return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_) && (data_table_id_ == rv.data_table_id_) &&
          (0 == name_cmp.compare(index_name_, rv.index_name_));
 }
 

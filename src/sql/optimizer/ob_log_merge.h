@@ -81,16 +81,16 @@ public:
   }
   int add_delete_exprs_to_ctx(ObAllocExprContext& ctx);
   int add_all_table_assignments_to_ctx(ObAllocExprContext& ctx);
-  virtual uint64_t hash(uint64_t seed) const;
-  const char* get_name() const;
+  virtual uint64_t hash(uint64_t seed) const override;
+  const char* get_name() const override;
 
-  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   int add_merge_exprs_to_ctx(ObAllocExprContext& ctx, const ObIArray<ObRawExpr*>& exprs);
   int classify_merge_subquery_expr(const ObIArray<ObRawExpr*>& exprs, ObIArray<ObRawExpr*>& subquery_exprs,
       ObIArray<ObRawExpr*>& non_subquery_exprs);
 
 private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
   int add_all_source_table_columns_to_ctx(ObAllocExprContext& ctx);
   DISALLOW_COPY_AND_ASSIGN(ObLogMerge);

@@ -59,11 +59,11 @@ public:
   int init(share::schema::ObMultiVersionSchemaService& schema_service, ObMySQLProxy& sql_proxy,
       share::ObIBackupLeaseService& backup_lease_service);
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
   void wakeup();
   int idle() const;
   void update_prepare_flag(const bool is_prepare_flag);
@@ -73,7 +73,7 @@ public:
   {
     return is_working_;
   }
-  int start();
+  int start() override;
   share::ObIBackupLeaseService* get_backup_lease_service()
   {
     return backup_lease_service_;

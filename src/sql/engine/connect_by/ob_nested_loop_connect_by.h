@@ -161,7 +161,7 @@ public:
 
   private:
     ObConnectByPump connect_by_pump_;
-    lib::MemoryContext* mem_context_;
+    lib::MemoryContext mem_context_;
     ObSqlWorkAreaProfile profile_;
     ObSqlMemMgrProcessor sql_mem_processor_;
   };

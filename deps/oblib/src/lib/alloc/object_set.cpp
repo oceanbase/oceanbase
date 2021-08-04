@@ -33,7 +33,7 @@ void __attribute__((weak)) has_unfree_callback(char* info)
   _OB_LOG(ERROR, "HAS UNFREE PTR!!! %s", info);
 }
 
-ObjectSet::ObjectSet(MemoryContext* mem_context, const uint32_t ablock_size)
+ObjectSet::ObjectSet(__MemoryContext__* mem_context, const uint32_t ablock_size)
     : mem_context_(mem_context),
       locker_(nullptr),
       mod_set_(nullptr),

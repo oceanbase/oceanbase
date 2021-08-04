@@ -21,7 +21,7 @@ public:
   ObLogExprValues(ObLogPlan& plan) : ObLogicalOperator(plan), need_columnlized_(false)
   {}
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     return clone(out);
   }
@@ -56,13 +56,13 @@ public:
   virtual int compute_table_set() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_one_row_info() override;
-  virtual int allocate_dummy_output();
-  uint64_t hash(uint64_t seed) const;
+  virtual int allocate_dummy_output() override;
+  uint64_t hash(uint64_t seed) const override;
   virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
 private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
 private:
   bool need_columnlized_;

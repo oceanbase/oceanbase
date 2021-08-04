@@ -4023,26 +4023,21 @@ int ObDDLOperator::drop_table_for_inspection(const ObTableSchema& orig_table_sch
   } else if (OB_RECYCLEBIN_SCHEMA_ID == extract_pure_id(orig_table_schema.get_database_id())) {
     // FIXME: remove [!is_dropped_schema()] from ObSimpleTableSchemaV2::is_in_recyclebin()
     ObRecycleObject::RecycleObjType recycle_type = ObRecycleObject::get_type_by_table_schema(orig_table_schema);
-    const ObRecycleObject* recycle_obj = NULL;
     ObArray<ObRecycleObject> recycle_objs;
-    if (NULL == recycle_obj) {
-      if (OB_FAIL(schema_service->fetch_recycle_object(orig_table_schema.get_tenant_id(),
-              orig_table_schema.get_table_name_str(),
-              recycle_type,
-              trans,
-              recycle_objs))) {
-        LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
-      } else if (recycle_objs.size() != 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
-      } else {
-        recycle_obj = &recycle_objs.at(0);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(schema_service->delete_recycle_object(orig_table_schema.get_tenant_id(), *recycle_obj, trans))) {
-        LOG_WARN("delete_recycle_object failed", K(ret), K(*recycle_obj));
-      }
+    if (OB_FAIL(schema_service->fetch_recycle_object(orig_table_schema.get_tenant_id(),
+            orig_table_schema.get_table_name_str(),
+            recycle_type,
+            trans,
+            recycle_objs))) {
+      LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
+    } else if (0 == recycle_objs.size()) {
+      // bugfix: https://work.aone.alibaba-inc.com/issue/35723010
+    } else if (recycle_objs.size() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
+    } else if (OB_FAIL(schema_service->delete_recycle_object(
+                   orig_table_schema.get_tenant_id(), recycle_objs.at(0), trans))) {
+      LOG_WARN("delete_recycle_object failed", K(ret), K(recycle_objs.at(0)));
     }
   }
   if (OB_FAIL(ret)) {
@@ -5431,17 +5426,19 @@ int ObDDLOperator::drop_obj_privs(
 
 int ObDDLOperator::drop_table(const ObTableSchema& table_schema, ObMySQLTransaction& trans,
     const ObString* ddl_stmt_str /*=NULL*/, const bool is_truncate_table /*false*/,
-    DropTableIdHashSet* drop_table_set /*=NULL*/, const bool is_drop_db /*false*/)
+    DropTableIdHashSet* drop_table_set /*=NULL*/, const bool is_drop_db /*false*/, bool* is_delay_delete /*NULL*/)
 {
   int ret = OB_SUCCESS;
-  bool is_delay_delete = false;
-  if (OB_FAIL(check_is_delay_delete(table_schema.get_tenant_id(), is_delay_delete))) {
+  bool tmp = false;
+  is_delay_delete = (NULL == is_delay_delete) ? &tmp : is_delay_delete;
+  if (OB_FAIL(check_is_delay_delete(table_schema.get_tenant_id(), *is_delay_delete))) {
     LOG_WARN("check is delay delete failed", K(ret), K(table_schema.get_tenant_id()));
-  } else if (is_delay_delete) {
+  } else if (*is_delay_delete) {
     // do nothing
   } else if (table_schema.is_dropped_schema() && OB_FAIL(drop_table_for_inspection(table_schema, trans))) {
     LOG_WARN("drop table for dropped shema failed", K(ret));
   }
+
   if (OB_FAIL(ret)) {
   } else if (!table_schema.is_dropped_schema() &&
              OB_FAIL(drop_table_for_not_dropped_schema(

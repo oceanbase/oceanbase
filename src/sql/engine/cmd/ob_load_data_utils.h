@@ -147,6 +147,15 @@ public:
     return ret_bool;
   }
 
+  static inline bool is_zero_field(const common::ObString& field_str)
+  {
+    int ret_bool = false;
+    if (field_str.length() == 2 && field_str.ptr()[0] == '\xff' && field_str.ptr()[1] == '\xff') {
+      ret_bool = true;
+    }
+    return ret_bool;
+  }
+
   static common::ObString escape_quotation(const common::ObString& value, common::ObDataBuffer& data_buf);
   static int init_empty_string_array(common::ObIArray<common::ObString>& new_array, int64_t array_size);
 

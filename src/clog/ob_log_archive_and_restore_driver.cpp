@@ -82,7 +82,7 @@ void ObLogArchiveAndRestoreDriver::run1()
   lib::set_thread_name("LogArchiveDri");
   ObCurTraceId::init(GCONF.self_addr_);
   state_driver_loop();
-  CLOG_LOG(INFO, "ob_log_archvie_and_restore_driver will stop");
+  CLOG_LOG(INFO, "ob_log_archive_and_restore_driver will stop");
 }
 
 void ObLogArchiveAndRestoreDriver::state_driver_loop()

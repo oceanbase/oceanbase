@@ -29,8 +29,8 @@ public:
   {}
   virtual ~MockObIPartitionReport()
   {}
-  MOCK_METHOD3(submit_pt_update_task,
-      int(const common::ObPartitionKey& part_key, const bool need_report_checksum, const bool with_role));
+  MOCK_METHOD2(submit_pt_update_task,
+      int(const common::ObPartitionKey& part_key, const bool need_report_checksum));
   MOCK_METHOD1(submit_pt_update_role_task, int(const common::ObPartitionKey& part_key));
   MOCK_METHOD1(submit_pg_pt_update_task, void(const common::ObPartitionArray& pg_partitions));
   MOCK_METHOD1(pt_sync_update, int(const common::ObPartitionKey& part_key));

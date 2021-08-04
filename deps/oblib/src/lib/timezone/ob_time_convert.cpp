@@ -1941,7 +1941,7 @@ int ObTimeConverter::str_to_ob_time_with_date(const ObString& str, ObTime& ob_ti
       LOG_WARN("failed to get digits", K(ret), K(str));
     } else if (OB_FAIL(validate_datetime(ob_time, is_dayofmonth))) {
       // OK, it seems like a valid format, now we need check its value.
-      LOG_WARN("datetime is invalid or out of range", K(ret), K(str), K(ob_time));
+      LOG_WARN("datetime is invalid or out of range", K(ret), K(str), K(ob_time), K(lbt()));
     } else {
       ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
     }
@@ -2106,6 +2106,17 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString& str, ObTime& ob
   return ret;
 }
 
+#define GET_YEAR_WEEK_WDAY(len, var, set_state, elem, max, min) \
+  if (OB_SUCC(get_datetime_digits(str_pos, str_end, len, digits))) {  \
+    if (digits.value_ < min || digits.value_ > max) { \
+      ret = OB_INVALID_DATE_VALUE;  \
+    } else {  \
+      var.elem##_set_state_ = ObYearWeekWdayElems::ElemSetState::set_state; \
+      var.elem##_value_ = digits.value_;     \
+    }     \
+  }
+
+
 int ObTimeConverter::str_to_ob_time_format(const ObString& str, const ObString& fmt, ObTime& ob_time, int16_t* scale)
 {
   int ret = OB_SUCCESS;
@@ -2129,6 +2140,8 @@ int ObTimeConverter::str_to_ob_time_format(const ObString& str, const ObString& 
     ObString name;
     ObTimeDigits digits;
     ObTimeDelims delims;
+    // https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_date-format
+    ObYearWeekWdayElems week_day_elements;
     if (NULL != scale) {
       *scale = 0;
     }
@@ -2152,6 +2165,8 @@ int ObTimeConverter::str_to_ob_time_format(const ObString& str, const ObString& 
             name.assign_ptr(const_cast<char*>(str_pos), static_cast<int32_t>(str_end - str_pos));
             if (OB_SUCC(get_str_array_idx(name, WDAY_ABBR_NAMES, DAYS_PER_WEEK, ob_time.parts_[DT_WDAY]))) {
               str_pos += WDAY_ABBR_NAMES[ob_time.parts_[DT_WDAY]].len_;
+              week_day_elements.weekday_set_ = true;
+              week_day_elements.weekday_value_ = ob_time.parts_[DT_WDAY] % DAYS_PER_WEEK;
             }
             break;
           }
@@ -2270,19 +2285,62 @@ int ObTimeConverter::str_to_ob_time_format(const ObString& str, const ObString& 
             }
             break;
           }
-          case 'U':
-          case 'u':
-          case 'V':
-          case 'v':
-          case 'W':
-          case 'w':
-          case 'X':
+          case 'U': {
+            GET_YEAR_WEEK_WDAY(2, week_day_elements, UPPER_SET, week, 53, 0);
+            week_day_elements.week_u_set_ = true;
+            break;
+          }
+          case 'u': {
+            GET_YEAR_WEEK_WDAY(2, week_day_elements, LOWER_SET, week, 53, 0);
+            week_day_elements.week_u_set_ = true;
+            break;
+          }
+          case 'V': {
+            GET_YEAR_WEEK_WDAY(2, week_day_elements, UPPER_SET, week, 53, 1);
+            week_day_elements.week_u_set_ = false;
+            break;
+          }
+          case 'v': {
+            GET_YEAR_WEEK_WDAY(2, week_day_elements, LOWER_SET, week, 53, 1);
+            week_day_elements.week_u_set_ = false;
+            break;
+          }
+          case 'W': {
+            name.assign_ptr(const_cast<char *>(str_pos), static_cast<int32_t>(str_end - str_pos));
+            if (OB_SUCC(get_str_array_idx(name, WDAY_NAMES, static_cast<int32_t>(DAYS_PER_WEEK),
+                        ob_time.parts_[DT_WDAY]))) {
+              str_pos += WDAY_NAMES[ob_time.parts_[DT_WDAY]].len_;
+              week_day_elements.weekday_set_ = true;
+              week_day_elements.weekday_value_ = ob_time.parts_[DT_WDAY] % DAYS_PER_WEEK;
+            }
+            break;
+          }
+          case 'w': {
+            if (OB_SUCC(get_datetime_digits(str_pos, str_end, 1, digits))) {
+              if (digits.value_ < 0 || digits.value_ > 6) {
+                ret = OB_INVALID_DATE_VALUE;
+              } else {
+                week_day_elements.weekday_set_ = true;
+                week_day_elements.weekday_value_ = digits.value_;
+                ob_time.parts_[DT_WDAY] = 0 == digits.value_ ? DAYS_PER_WEEK : digits.value_;
+              }
+            }
+            break;
+          }
+          case 'X': {
+            GET_YEAR_WEEK_WDAY(4, week_day_elements, UPPER_SET, year, 9999, 0);
+            break;
+          }
           case 'x': {
-            ret = OB_NOT_SUPPORTED;  // not use in str_to_date()
+            GET_YEAR_WEEK_WDAY(4, week_day_elements, LOWER_SET, year, 9999, 0);
             break;
           }
           case 'Y': {
+            const char *ori_pos = str_pos;
             if (OB_SUCC(get_datetime_digits(str_pos, str_end, 4, digits))) {
+              if (str_pos - ori_pos <= 2) {
+                apply_date_year2_rule(digits);
+              }
               ob_time.parts_[DT_YEAR] = digits.value_;
             }
             break;
@@ -2317,7 +2375,10 @@ int ObTimeConverter::str_to_ob_time_format(const ObString& str, const ObString& 
       } else if (HOUR_PM == hour_flag && ob_time.parts_[DT_HOUR] > 0 && ob_time.parts_[DT_HOUR] < 12) {
         ob_time.parts_[DT_HOUR] += 12;
       }
-      if (0 == ob_time.parts_[DT_MON] && 0 == ob_time.parts_[DT_MDAY] && 0 == ob_time.parts_[DT_YEAR]) {
+      if (OB_FAIL(handle_year_week_wday(week_day_elements, ob_time))) {
+        LOG_WARN("handle %u %x %v and %w value failed", K(ret));
+      } else if (0 == ob_time.parts_[DT_MON] && 0 == ob_time.parts_[DT_MDAY]
+                 && 0 == ob_time.parts_[DT_YEAR]) {
         if (OB_FAIL(validate_time(ob_time))) {
           LOG_WARN("time value is invalid or out of range", K(ret), K(str));
         }
@@ -2327,6 +2388,69 @@ int ObTimeConverter::str_to_ob_time_format(const ObString& str, const ObString& 
         } else if (ZERO_DATE != ob_time.parts_[DT_DATE]) {
           ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTimeConverter::calc_date_with_year_week_wday(const ObYearWeekWdayElems &elements, ObTime &ot)
+{
+  int ret = OB_SUCCESS;
+  ObTime tmp_ot;
+  tmp_ot.parts_[DT_YEAR] = elements.is_year_set() ? elements.year_value_ : ot.parts_[DT_YEAR];
+  tmp_ot.parts_[DT_MON] = 1;
+  tmp_ot.parts_[DT_MDAY] = 1;
+  tmp_ot.parts_[DT_DATE] = ob_time_to_date(tmp_ot);
+  // now we get weekday of %X-01-01: tmp_ot.parts_[DT_WDAY]
+  const bool is_sunday_start = elements.is_upper_week_set();
+  int32_t week = elements.week_value_;
+  int32_t weekday = is_sunday_start ? elements.weekday_value_
+                    : ((elements.weekday_value_ + DAYS_PER_WEEK - 1) % DAYS_PER_WEEK) + 1;
+  // %X%V means week start with sunday and the first week in the year must contain sunday.
+  const int32_t first_week_monday_offset_upper[DAYS_PER_WEEK] = {1, 7, 6, 5, 4, 3, 2};
+  // %X%V means week start with monday and the first week in the year must contain at least 4 days.
+  const int32_t first_week_monday_offset_lower[DAYS_PER_WEEK] = {1, 0, -1, -2, -3, 3, 2};
+  int32_t offset = (elements.is_upper_week_set() ?
+                      first_week_monday_offset_upper[tmp_ot.parts_[DT_WDAY] % DAYS_PER_WEEK] :
+                      first_week_monday_offset_lower[tmp_ot.parts_[DT_WDAY] % DAYS_PER_WEEK])
+                    + (week - 1) * DAYS_PER_WEEK + (weekday - 1);
+  int32_t date_value = tmp_ot.parts_[DT_DATE] + offset;
+  if (OB_FAIL(date_to_ob_time(date_value, ot))) {
+    LOG_WARN("date to ob time failed", K(ret));
+  }
+  LOG_DEBUG("%x %v", K(ret), K(elements), K(tmp_ot), K(offset), K(date_value), K(ot));
+  return ret;
+}
+
+int ObTimeConverter::handle_year_week_wday(const ObYearWeekWdayElems &elements, ObTime &ot)
+{
+  int ret = OB_SUCCESS;
+  //%X/%x must be used together with %V/%v
+  if ((elements.is_year_set() || elements.is_week_v_set())
+      && !(elements.year_set_state_ == elements.week_set_state_ && elements.is_week_v_set())) {
+    ret = OB_INVALID_DATE_VALUE;
+    MEMSET(ot.parts_, 0, sizeof(*ot.parts_) * TOTAL_PART_CNT);
+    ot.parts_[DT_DATE] = ZERO_DATE;
+    LOG_WARN("%x and %v must be used together", K(ret), K(elements));
+  } else if (elements.is_year_set()) {
+    if (elements.year_value_ <= 0) {
+      MEMSET(ot.parts_, 0, sizeof(*ot.parts_) * TOTAL_PART_CNT);
+      ot.parts_[DT_DATE] = ZERO_DATE;
+    } else if (elements.is_weekday_set()) {
+      // calc date with elements %x, %v and %w/a
+      if (OB_FAIL(calc_date_with_year_week_wday(elements, ot))) {
+        LOG_WARN("calc date with year week and wday failed", K(ret));
+      }
+    }
+  } else if (elements.is_week_u_set() && elements.is_weekday_set()) {
+    if (0 == ot.parts_[DT_YEAR]) {
+      MEMSET(ot.parts_, 0, sizeof(*ot.parts_) * TOTAL_PART_CNT);
+      ot.parts_[DT_DATE] = ZERO_DATE;
+    } else {
+      // calc date with elements %y %u and %w/a
+      if (OB_FAIL(calc_date_with_year_week_wday(elements, ot))) {
+        LOG_WARN("calc date with year week and wday failed", K(ret));
       }
     }
   }
@@ -2884,12 +3008,12 @@ int ObTimeConverter::data_fmt_nd(char* buffer, int64_t buf_len, int64_t& pos, co
 int ObTimeConverter::data_fmt_d(char* buffer, int64_t buf_len, int64_t& pos, int64_t target)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(target < 0 || target >= 100)) {
+  if (OB_UNLIKELY(target < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LIB_TIME_LOG(ERROR, "invalid argument", K(ret), K(target));
   } else {
-    // buffer_size_need will be 1 or 2
-    int64_t buffer_size_need = 1 + (target >= 10);
+    //buffer_size_need will be 1 or 2 or 3
+    int64_t buffer_size_need = 1 + (target >= 10) + (target >= 100);
     if (OB_UNLIKELY(buffer_size_need > buf_len - pos)) {
       ret = OB_SIZE_OVERFLOW;
       LIB_TIME_LOG(WARN, "no enough space for buffer", K(ret), K(buffer_size_need), K(buf_len), K(pos));
@@ -4676,7 +4800,11 @@ int ObTimeConverter::ob_time_to_str_format(
             break;
           }
           default: {
-            ret = OB_NOT_SUPPORTED;
+            if (pos >= buf_len) {
+              ret = OB_SIZE_OVERFLOW;
+              break;
+            }
+            buf[pos++] = *format_ptr;
             break;
           }
         }
@@ -5679,7 +5807,7 @@ int ObTimeConverter::otimestamp_add_nsecond(const ObOTimestampData ori_value, co
   return ret;
 }
 
-int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_date_value, int64_t& result_date_value)
+int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_date_value, int64_t& result_date_value, const ObObjType dest_type)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATETIME);
@@ -5698,9 +5826,17 @@ int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_date_value, i
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ob_time_to_datetime(ob_time, cvrt_ctx, result_date_value))) {
-        LOG_WARN("failed to calc result", K(ret));
+      if (ObDateTimeType == dest_type) {
+        if (OB_FAIL(ob_time_to_datetime(ob_time, cvrt_ctx, result_date_value))) {
+          LOG_WARN("failed to calc result", K(ret));
+        }
+      } else if (ObDateType == dest_type) {
+        result_date_value = static_cast<int64_t>(ob_time_to_date(ob_time));
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("unexpected dest type", K(ret), K(dest_type));
       }
+
     }
   }
   LOG_DEBUG("debug calc_last_mday", K(ob_time), K(ori_date_value), K(result_date_value));

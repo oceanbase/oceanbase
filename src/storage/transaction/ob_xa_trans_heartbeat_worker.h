@@ -29,9 +29,9 @@ public:
     destroy();
   }
   int init(ObTransService* trans_service);
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
   void destroy();
 
 public:

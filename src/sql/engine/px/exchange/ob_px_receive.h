@@ -120,8 +120,8 @@ public:
     {
       if (0 == ts_cnt_ % 1000) {
         ts_ = common::ObTimeUtility::current_time();
-        ++ts_cnt_;
       }
+      ++ts_cnt_;
       return ts_;
     }
     ObPxTaskChSet& get_ch_set()

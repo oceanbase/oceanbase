@@ -185,7 +185,22 @@ void ObTransCtx::destroy()
 int ObTransCtx::reset_trans_audit_record()
 {
   int ret = OB_SUCCESS;
+  CtxLockGuard guard(lock_);
   if (OB_NOT_NULL(trans_audit_record_)) {
+    (void)trans_audit_record_->set_trans_audit_data(tenant_id_,
+        addr_,
+        trans_id_,
+        self_,
+        session_id_,
+        proxy_session_id_,
+        trans_type_,
+        get_uref(),
+        ctx_create_time_,
+        trans_expired_time_,
+        trans_param_,
+        get_type(),
+        get_status_(),
+        is_for_replay());
     ObTransAuditRecordMgr* record_mgr = NULL;
     if (OB_ISNULL(record_mgr = record_mgr_guard_.get_trans_audit_record_mgr())) {
       ret = OB_ERR_UNEXPECTED;
@@ -196,6 +211,7 @@ int ObTransCtx::reset_trans_audit_record()
     trans_audit_record_ = NULL;
     tlog_ = NULL;
   }
+  record_mgr_guard_.destroy();
   return ret;
 }
 
@@ -651,7 +667,8 @@ int ObDistTransCtx::init(const uint64_t tenant_id, const ObTransID& trans_id, co
     TRANS_LOG(WARN, "ObTransCtx inited error", KR(ret));
   } else {
     set_state_(Ob2PCState::INIT);
-    trans_2pc_timeout_ = ObServerConfig::get_instance().trx_2pc_retry_interval;
+    trans_2pc_timeout_ =
+        std::min((int64_t)ObServerConfig::get_instance().trx_2pc_retry_interval, (int64_t)MAX_TRANS_2PC_TIMEOUT_US);
   }
 
   return ret;

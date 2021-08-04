@@ -897,7 +897,6 @@ int ObMemtable::get(const storage::ObTableIterParam& param, storage::ObTableAcce
   ObMemtableKey returned_mtk;
   ObMvccValueIterator value_iter;
   const common::ObIArray<share::schema::ObColDesc>* out_cols = nullptr;
-  bool need_query_memtable = false;
   ObTransSnapInfo snapshot_info;
   const bool skip_compact = false;
   if (IS_NOT_INIT) {
@@ -915,64 +914,14 @@ int ObMemtable::get(const storage::ObTableIterParam& param, storage::ObTableAcce
     TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
   } else if (OB_FAIL(context.store_ctx_->get_snapshot_info(snapshot_info))) {
     TRANS_LOG(WARN, "get snapshot info failed", K(ret));
-  } else {
-    bool fast_query = false;
-    const ObFastQueryContext* fq_ctx = nullptr;
-    if (nullptr != context.fq_ctx_) {
-      fq_ctx = context.fq_ctx_;
-      fast_query =
-          timestamp_ == fq_ctx->get_timestamp() && this == fq_ctx->get_memtable() && nullptr != fq_ctx->get_mvcc_row();
-    }
-    if (fast_query && !context.store_ctx_->mem_ctx_->is_can_elr()) {
-      int64_t trans_version = 0L;
-      if (OB_FAIL(mvcc_engine_.get_trans_version(*context.store_ctx_->mem_ctx_,
-              snapshot_info,
-              context.query_flag_,
-              &parameter_mtk,
-              reinterpret_cast<ObMvccRow*>(fq_ctx->get_mvcc_row()),
-              trans_version))) {
-        TRANS_LOG(WARN, "fail to do mvcc engine fast get", K(ret));
-      } else {
-        if (trans_version == fq_ctx->get_row_version()) {
-          // just read from row cache
-          // do not set memtable row
-          row.flag_ = common::ObActionFlag::OP_ROW_DOES_NOT_EXIST;
-          row.fq_ctx_.set_timestamp(-1L);
-          row.fq_ctx_.set_memtable(nullptr);
-          row.fq_ctx_.set_mvcc_row(nullptr);
-          row.fq_ctx_.set_row_version(0L);
-          row.snapshot_version_ = trans_version;
-          TRANS_LOG(DEBUG, "do fast get successfully", K(rowkey), K(trans_version), K(*fq_ctx));
-        } else {
-          if (OB_FAIL(mvcc_engine_.get(*context.store_ctx_->mem_ctx_,
-                  snapshot_info,
-                  context.query_flag_,
-                  skip_compact,
-                  &parameter_mtk,
-                  &returned_mtk,
-                  value_iter))) {
-            TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
-          } else {
-            need_query_memtable = true;
-          }
-        }
-      }
-    } else {
-      if (OB_FAIL(mvcc_engine_.get(*context.store_ctx_->mem_ctx_,
-              snapshot_info,
-              context.query_flag_,
-              skip_compact,
-              &parameter_mtk,
-              &returned_mtk,
-              value_iter))) {
-        TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
-      } else {
-        need_query_memtable = true;
-      }
-    }
-  }
-
-  if (OB_FAIL(ret) || !need_query_memtable) {
+  } else if (OB_FAIL(mvcc_engine_.get(*context.store_ctx_->mem_ctx_,
+                 snapshot_info,
+                 context.query_flag_,
+                 skip_compact,
+                 &parameter_mtk,
+                 &returned_mtk,
+                 value_iter))) {
+    TRANS_LOG(WARN, "fail to do mvcc engine get", K(ret));
   } else {
     ColumnMap* local_map = NULL;
     const ColumnMap* param_column_map = nullptr;
@@ -1037,10 +986,6 @@ int ObMemtable::get(const storage::ObTableIterParam& param, storage::ObTableAcce
             }
           }
         }
-        row.fq_ctx_.set_timestamp(timestamp_);
-        row.fq_ctx_.set_memtable(this);
-        row.fq_ctx_.set_mvcc_row(const_cast<ObMvccRow*>(value_iter.get_mvcc_row()));
-        row.fq_ctx_.set_row_version(row.snapshot_version_);
       }
     }
   }

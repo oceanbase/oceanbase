@@ -56,6 +56,7 @@ int IndexDMLInfo::deep_copy(ObRawExprFactory& expr_factory, const IndexDMLInfo& 
   rowkey_cnt_ = other.rowkey_cnt_;
   need_filter_null_ = other.need_filter_null_;
   distinct_algo_ = other.distinct_algo_;
+  index_type_ = other.index_type_;
   assignments_.reset();
   if (OB_FAIL(column_exprs_.assign(other.column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -575,7 +576,8 @@ int64_t IndexDMLInfo::to_explain_string(char* buf, int64_t buf_len, ExplainType 
   return pos;
 }
 
-int IndexDMLInfo::init_assignment_info(const ObAssignments& assignments)
+int IndexDMLInfo::init_assignment_info(
+    const ObAssignments& assignments, ObRawExprFactory& expr_factory, bool use_static_typing_engine)
 {
   int ret = OB_SUCCESS;
   assignments_.reset();
@@ -584,6 +586,11 @@ int IndexDMLInfo::init_assignment_info(const ObAssignments& assignments)
       if (OB_FAIL(assignments_.push_back(assignments.at(i)))) {
         LOG_WARN("add assignment index to assign info failed", K(ret));
       }
+    }
+  }
+  if (OB_SUCC(ret) && use_static_typing_engine) {
+    if (OB_FAIL(add_spk_assignment_info(expr_factory))) {
+      LOG_WARN("fail to add spk assignment info", K(ret));
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(init_column_convert_expr(assignments_))) {

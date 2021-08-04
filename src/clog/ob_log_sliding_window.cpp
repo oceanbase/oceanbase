@@ -630,7 +630,7 @@ int ObLogSlidingWindow::alloc_log_id_ts_(const int64_t base_timestamp, uint64_t&
     if (OB_SUCCESS == ret && NULL != aggre_buffer_ && state_mgr_->is_leader_active()) {
       if (log_id < aggre_buffer_start_id_) {
         ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, "alloc invalue log_id", K(log_id), K(aggre_buffer_start_id_));
+        CLOG_LOG(ERROR, "alloc invalid log_id", K(log_id), K(aggre_buffer_start_id_));
       } else {
         if (AGGRE_BUFFER_FLAG != tmp_offset) {
           ret = fill_aggre_buffer_(log_id - 1, tmp_offset, NULL, 0, 0, NULL);
@@ -1384,7 +1384,7 @@ int ObLogSlidingWindow::submit_to_sliding_window_(const ObLogEntryHeader& header
         // Rely on this forwarding to trigger re-collection of ack
         standby_need_send_follower = true;
       }
-      // standby leadre replies ack to primary leader
+      // standby leader replies ack to primary leader
       if (log_task->is_majority_finished()) {
         if (OB_FAIL(send_standby_log_ack_(server, cluster_id, log_id, proposal_id))) {
           CLOG_LOG(WARN,
@@ -1689,7 +1689,7 @@ int ObLogSlidingWindow::submit_confirmed_info_(
   }
   // confirmed log may be slide out during reconfirm
   if (is_leader && OB_ERROR_OUT_OF_RANGE == ret) {
-    CLOG_LOG(INFO, "log task slide out while submnit confirm info", K(ret), K_(partition_key), K(log_id));
+    CLOG_LOG(INFO, "log task slide out while submit confirm info", K(ret), K_(partition_key), K(log_id));
     ret = OB_SUCCESS;
   }
   return ret;
@@ -2217,6 +2217,10 @@ void ObLogSlidingWindow::try_update_next_replay_log_info(
     LOAD128(last, &next_replay_log_id_info_);
     if (next.hi <= last.hi && next.lo <= last.lo) {
       break;
+    } else if (is_nop_or_truncate_log && next.hi > last.hi && next.lo < last.lo) {
+      // last.lo has been pulled up with keepalive message; need to update log_id
+      next.hi = log_id;
+      next.lo = last.lo;
     } else if (next.hi < last.hi || next.lo < last.lo) {
       if (!is_nop_or_truncate_log) {
         CLOG_LOG(ERROR,
@@ -2228,7 +2232,12 @@ void ObLogSlidingWindow::try_update_next_replay_log_info(
             K(next.lo));
       }
       break;
-    } else if (CAS128(&next_replay_log_id_info_, last, next)) {
+    } else {
+      //(next.hi >= last.hi && next.lo > last.lo) || (next.hi > last.hi && next.lo >= last.lo)
+      // need update
+    }
+    // need update
+    if (CAS128(&next_replay_log_id_info_, last, next)) {
       break;
     } else {
       PAUSE();
@@ -3112,7 +3121,7 @@ bool ObLogSlidingWindow::is_freeze_log_(const char* log_buf, const int64_t log_b
     CLOG_LOG(WARN, "deserialize failed", K(ret), K_(partition_key));
   } else {
     bool_ret = storage::ObStorageLogTypeChecker::is_freeze_log(log_type);
-    CLOG_LOG(DEBUG, "is freee log", K(ret), K_(partition_key), K(log_type));
+    CLOG_LOG(DEBUG, "is free log", K(ret), K_(partition_key), K(log_type));
   }
   return bool_ret;
 }
@@ -3294,7 +3303,7 @@ int ObLogSlidingWindow::try_submit_replay_task_(const uint64_t log_id, const ObL
         log_buf_len = log_task.get_log_buf_len();
       } else {
         ObLogEntry tmp_entry;
-        // here we use alloc_buf instead of ObReadBufGuard because allcating may not be need where
+        // here we use alloc_buf instead of ObReadBufGuard because allocating may not be need where
         // submit_log_body exists
         if (OB_FAIL(ObILogDirectReader::alloc_buf(ObModIds::OB_LOG_DIRECT_READER_CACHE_ID, rbuf))) {
           CLOG_LOG(WARN, "failed to alloc read_buf", K_(partition_key), K(log_id), K(log_task), K(ret));
@@ -3320,7 +3329,7 @@ int ObLogSlidingWindow::try_submit_replay_task_(const uint64_t log_id, const ObL
         } else if (OB_LOG_START_MEMBERSHIP == header_log_type) {
           need_replay = true;
           CLOG_LOG(TRACE, "submit replay success", K(ret), K_(partition_key), K(log_id));
-          // new primary cluster leader rely on start_woring callback to flush member_list to pg_meta
+          // new primary cluster leader rely on start_wrong callback to flush member_list to pg_meta
           if (!ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) &&
               OB_SUCCESS != (tmp_ret = try_submit_mc_success_cb_(
                                  header_log_type, log_id, log_buf, log_buf_len, log_task.get_proposal_id()))) {
@@ -3477,7 +3486,7 @@ bool ObLogSlidingWindow::is_standby_leader_need_fetch_log_(const uint64_t start_
   } else if (OB_INVALID_ID == start_log_id) {
     CLOG_LOG(WARN, "invalid argument", K_(partition_key), K(start_log_id));
   } else if (STANDBY_LEADER != state_mgr_->get_role()) {
-    // not stadnby_leader, skip
+    // not standby_leader, skip
   } else {
     ObLogTask* log_task = NULL;
     const int64_t* ref = NULL;
@@ -3585,7 +3594,7 @@ int ObLogSlidingWindow::follower_check_need_rebuild_(const uint64_t start_log_id
     int64_t dst_cluster_id = OB_INVALID_CLUSTER_ID;
 
     if (restore_mgr_->is_archive_restoring_log()) {
-      // folloer fetch log from restore_leader during physical restoring
+      // follower fetch log from restore_leader during physical restoring
       dst_server = restore_mgr_->get_restore_leader();
       dst_cluster_id = state_mgr_->get_self_cluster_id();
     } else {
@@ -4638,7 +4647,7 @@ int ObLogSlidingWindow::resubmit_log(const ObLogInfo& log_info, ObISubmitLogCb* 
     CLOG_LOG(WARN, "ObLogSlidingWindow is not inited", K(ret), K(partition_key_));
   } else if (!log_info.is_valid() || OB_ISNULL(cb)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argumetns", K(ret), K(partition_key_), K(log_info), KP(cb));
+    CLOG_LOG(WARN, "invalid arguments", K(ret), K(partition_key_), K(log_info), KP(cb));
   } else if (OB_FAIL(resubmit_log_(log_info, cb))) {
     CLOG_LOG(WARN, "resubmit_log_ failed", K(ret), K(partition_key_), K(log_info));
   }

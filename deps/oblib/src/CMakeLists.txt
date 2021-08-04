@@ -18,7 +18,8 @@ if (OB_USE_CLANG)
     -Wall -Wextra -Wformat -Wno-deprecated
     -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
     -Wno-address-of-packed-member -Wno-sign-compare -Werror 
-    -Wno-inconsistent-missing-override -fno-delete-null-pointer-checks
+    -Wno-inconsistent-missing-override 
+    -fno-delete-null-pointer-checks
     -Wno-delete-non-virtual-dtor -Wno-dynamic-class-memaccess
     -Wno-format-security -Wno-reserved-user-defined-literal -Wno-sometimes-uninitialized
     -Wno-unused-value -Wno-self-assign -Wno-overloaded-virtual

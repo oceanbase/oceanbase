@@ -445,7 +445,7 @@ int ObPxFifoReceive::inner_get_next_row(ObExecContext& ctx, const common::ObNewR
           LOG_WARN("get row from channel timeout", K(ret));
         } else {
           usleep(1 * 1000);
-          int tmp_ret = THIS_WORKER.check_status();
+          int tmp_ret = ctx.fast_check_status();
           if (OB_SUCCESS != tmp_ret) {
             LOG_WARN("wait to receive row interrupted", K(tmp_ret), K(ret));
             ret = tmp_ret;

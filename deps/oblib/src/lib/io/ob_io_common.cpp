@@ -95,22 +95,22 @@ int ob_io_getevents(io_context_t ctx_id, long min_nr, long nr, struct io_event* 
 #ifdef ERRSIM
   ret = E(EventTable::EN_IO_GETEVENTS) OB_SUCCESS;
   if (OB_SUCC(ret)) {
-    ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+    ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
   } else {
     if (OB_IO_ERROR == ret) {
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       for (int64_t i = 0; i < ret; ++i) {
         events[i].res = 1;
       }
     } else if (OB_TIMEOUT == ret) {
       sleep(1);
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
     } else if (OB_AIO_TIMEOUT == ret) {
       // ignore real return
-      io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       ret = 0;
     } else if (OB_EAGAIN == ret) {
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       if (ret >= 1) {
         // random make 1 event fail
         int64_t idx = common::ObRandom::rand(1, ret) - 1;
@@ -118,17 +118,24 @@ int ob_io_getevents(io_context_t ctx_id, long min_nr, long nr, struct io_event* 
       }
     } else if (OB_RESOURCE_OUT == ret) {
       // OB_CS_OUTOF_DISK_SPACE is not defined in lib/ob_errno.h, use OB_RESOURCE_OUT to represent
-      ret = io_getevents(ctx_id, min_nr, nr, events, timeout);
+      ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
       for (int64_t i = 0; i < ret; ++i) {
         events[i].res2 = -ENOSPC;
       }
     }
   }
 #else
-  // ignore EINTR and retry
-  while ((ret = io_getevents(ctx_id, min_nr, nr, events, timeout)) < 0 && -EINTR == ret)
-    ;
+  ret = io_getevents_with_retry(ctx_id, min_nr, nr, events, timeout);
 #endif
+  return ret;
+}
+
+int io_getevents_with_retry(
+    io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout)
+{
+  int ret = 0;
+  // ignore EINTR and retry
+  while ((ret = io_getevents(ctx_id, min_nr, nr, events, timeout)) < 0 && -EINTR == ret) {}
   return ret;
 }
 

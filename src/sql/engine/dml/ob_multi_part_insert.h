@@ -28,7 +28,7 @@ public:
   explicit ObMultiPartInsert(common::ObIAllocator& alloc);
   virtual ~ObMultiPartInsert();
 
-  virtual int create_operator_input(ObExecContext& ctx) const
+  virtual int create_operator_input(ObExecContext& ctx) const override
   {
     UNUSED(ctx);
     return common::OB_SUCCESS;
@@ -37,10 +37,10 @@ public:
   {
     return subplan_has_foreign_key();
   }
-  void reset();
-  void reuse();
+  void reset() override;
+  void reuse() override;
   int set_insert_row_exprs();
-  virtual bool is_multi_dml() const
+  virtual bool is_multi_dml() const override
   {
     return true;
   }
@@ -51,15 +51,15 @@ protected:
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
-  virtual int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const;
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
+  virtual int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
+  virtual int inner_close(ObExecContext& ctx) const override;
   int shuffle_insert_row(ObExecContext& ctx, bool& got_row) const;
 
 protected:

@@ -295,7 +295,7 @@ inline int create_entity(T_Entity*& entity, Args&&... args)
 
   lib::ObMemAttr attr;
   attr.label_ = "CreateEntity";
-  void* ptr = ROOT_CONTEXT.allocf(sizeof(T_Entity), attr);
+  void* ptr = ROOT_CONTEXT->allocf(sizeof(T_Entity), attr);
   if (OB_ISNULL(ptr)) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -331,7 +331,7 @@ inline void destroy_entity(T_Entity* entity)
     entity->deinit();
     entity->~T_Entity();
     if (need_free) {
-      ROOT_CONTEXT.free(entity);
+      ROOT_CONTEXT->free(entity);
     }
   }
 }

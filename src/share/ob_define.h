@@ -193,6 +193,12 @@ OB_INLINE bool is_valid_membership_version(const int64_t membership_version)
   return membership_version >= 0;
 }
 
+OB_INLINE bool is_valid_read_snapshot_version(const int64_t read_snapshot_version)
+{
+  // read snapshot version should be greater than 0 and should not be INT64_MAX
+  return read_snapshot_version > 0 && INT64_MAX != read_snapshot_version;
+}
+
 inline bool is_schema_error(int err)
 {
   bool ret = false;

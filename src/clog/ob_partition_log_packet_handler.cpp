@@ -82,7 +82,7 @@ int ObPartitionLogPacketHandler::handle_single_request(ObLogReqContext& ctx)
         ObILogEngine* log_engine = NULL;
         if (OB_ISNULL(clog_mgr_) || (OB_ISNULL(log_engine = clog_mgr_->get_log_engine()))) {
           ret = OB_INVALID_ARGUMENT;
-          CLOG_LOG(WARN, "invalid arugment", KR(ret), KP(clog_mgr_), KP(log_engine), K(ctx));
+          CLOG_LOG(WARN, "invalid argument", KR(ret), KP(clog_mgr_), KP(log_engine), K(ctx));
         } else {
           ret = receive_log(log_service, log_engine, ctx, type);
         }

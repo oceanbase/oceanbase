@@ -32,9 +32,9 @@ int ObSortOpImpl::Compare::init(
   if (nullptr == sort_collations || nullptr == sort_cmp_funs) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(sort_collations), KP(sort_cmp_funs));
-  } else if (sort_cmp_funs->count() != sort_cmp_funs->count()) {
+  } else if (sort_collations->count() != sort_cmp_funs->count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("column count miss match", K(ret), K(sort_cmp_funs->count()), K(sort_cmp_funs->count()));
+    LOG_WARN("column count miss match", K(ret), K(sort_collations->count()), K(sort_cmp_funs->count()));
   } else {
     sort_collations_ = sort_collations;
     sort_cmp_funs_ = sort_cmp_funs;
@@ -197,7 +197,7 @@ int ObSortOpImpl::init(const uint64_t tenant_id, const ObIArray<ObSortFieldColla
     lib::ContextParam param;
     param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (NULL == mem_context_ && OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (NULL == mem_context_ && OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       LOG_WARN("create entity failed", K(ret));
     } else if (NULL == mem_context_) {
       ret = OB_ERR_UNEXPECTED;

@@ -126,7 +126,7 @@ public:
       const storage::ObSSTable* sstable) override;
   virtual int open(const MacroBlockId& macro_id, const ObFullMacroBlockMeta& macro_meta,
       const ObMicroBlockData& block_data, const bool is_left_border, const bool is_right_border) override;
-  void reset();
+  void reset() override;
 
 protected:
   virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
@@ -195,7 +195,7 @@ public:
       const storage::ObSSTable* sstable) override;
   virtual int open(const MacroBlockId& macro_id, const ObFullMacroBlockMeta& macro_meta,
       const ObMicroBlockData& block_data, const bool is_left_border, const bool is_right_border) override;
-  void reset();
+  void reset() override;
   void rescan() override;
 
 protected:
@@ -248,7 +248,7 @@ public:
       const storage::ObSSTable* sstable) override;
   virtual int open(const MacroBlockId& macro_id, const ObFullMacroBlockMeta& macro_meta,
       const ObMicroBlockData& block_data, const bool is_left_border, const bool is_right_border) override;
-  void reset();
+  void reset() override;
   void rescan() override
   {
     reset();

@@ -808,6 +808,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_date(time_val);
           val.set_scale(0);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
         }
         break;
       }
@@ -821,6 +822,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_time(time_val);
           val.set_scale(scale);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(MYSQL_LITERAL_PREFIX_TIME);
         }
         break;
       }
@@ -833,8 +835,8 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
         } else {
           val.set_datetime(time_val);
           val.set_scale(OB_MAX_DATE_PRECISION);
-          literal_prefix = ObString::make_string(ORALCE_LITERAL_PREFIX_DATE);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
         }
         break;
       }
@@ -849,6 +851,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_datetime(time_val);
           val.set_scale(scale);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_TIMESTAMP);
         }
         break;
       }
@@ -864,7 +867,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           /* use max scale bug:#18093350 */
           val.set_otimestamp_value(value_type, tz_value);
           val.set_scale(OB_MAX_TIMESTAMP_TZ_PRECISION);
-          literal_prefix = ObString::make_string(ORALCE_LITERAL_PREFIX_TIMESTAMP);
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_TIMESTAMP);
           val.set_param_meta(val.get_meta());
         }
         break;
@@ -2961,11 +2964,6 @@ int ObResolverUtils::resolve_columns_for_partition_expr(ObRawExpr*& expr, ObIArr
               q_name.col_name_.ptr(),
               scope_name.length(),
               scope_name.ptr());
-        } else if (col_schema->is_autoincrement()) {
-          ret = OB_ERR_AUTO_PARTITION_KEY;
-          LOG_USER_ERROR(OB_ERR_AUTO_PARTITION_KEY,
-              col_schema->get_column_name_str().length(),
-              col_schema->get_column_name_str().ptr());
         } else if (OB_FAIL(partition_keys.push_back(q_name.col_name_))) {
           LOG_WARN("add column name failed", K(ret), K_(q_name.col_name));
         } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *col_expr))) {

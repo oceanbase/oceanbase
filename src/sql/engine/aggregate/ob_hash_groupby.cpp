@@ -76,7 +76,7 @@ public:
       param.set_mem_attr(exec_ctx_.get_my_session()->get_effective_tenant_id(),
           ObModIds::OB_HASH_NODE_GROUP_ROWS,
           ObCtxIds::WORK_AREA);
-      if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
         LOG_WARN("memory entity create failed", K(ret));
       }
     }
@@ -147,7 +147,7 @@ private:
   int64_t group_idx_;
 
   // memory allocator for group by partitions
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
 
   ObDList<ObGbyPartition> all_parts_;
 
@@ -566,7 +566,6 @@ int64_t ObHashGroupBy::detect_part_cnt(const int64_t rows, ObHashGroupByCtx& gby
       K(gby_ctx.get_data_hold_size()),
       K(gby_ctx.get_part_hold_size()),
       K(rows),
-      K(gby_ctx.mem_context_),
       K(availble_mem_size),
       K(est_dump_size));
   return part_cnt;

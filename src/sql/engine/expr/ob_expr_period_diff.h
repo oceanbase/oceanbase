@@ -31,7 +31,6 @@ public:
   static int calc_perioddiff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
 private:
-  static int get_year_month(const uint64_t value, uint64_t& year, uint64_t& month);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprPeriodDiff);
 };
@@ -39,16 +38,41 @@ private:
 inline int ObExprPeriodDiff::calc_result_type2(
     ObExprResType& type, ObExprResType& left, ObExprResType& right, common::ObExprTypeCtx& type_ctx) const
 {
-  UNUSED(type_ctx);
-  UNUSED(left);
-  UNUSED(right);
   type.set_int();
   type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
   type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   left.set_calc_type(common::ObUInt64Type);
   right.set_calc_type(common::ObUInt64Type);
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   return common::OB_SUCCESS;
 }
+
+class ObExprPeriodAdd : public ObFuncExprOperator
+{
+public:
+  explicit  ObExprPeriodAdd(common::ObIAllocator &alloc);
+  virtual ~ObExprPeriodAdd();
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &left,
+                                ObExprResType &right,
+                                common::ObExprTypeCtx &type_ctx) const;
+  template <typename T>
+  static int calc(T &result, const T &left, const T &right);
+  virtual int calc_result2(common::ObObj &result,
+                           const common::ObObj &left,
+                           const common::ObObj &right,
+                           common::ObExprCtx &expr_ctx) const;
+  virtual common::ObCastMode get_cast_mode() const { return CM_STRING_INTEGER_TRUNC;}
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int calc_periodadd(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprPeriodAdd);
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif  //_OCEANBASE_SQL_OB_EXPR_PERIOD_DIFF_H_

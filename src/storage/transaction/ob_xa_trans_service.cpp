@@ -1741,6 +1741,7 @@ int ObTransService::handle_terminate_for_xa_branch_(ObTransDesc& trans_desc)
         ObTransCond cond;
         // rely on timeout of cb, therefore timeout of cond is set to max
         const int64_t wait_time = (INT64_MAX - now) / 2;
+        req.set_terminated();
         if (OB_FAIL(cb.init(&cond))) {
           TRANS_LOG(WARN, "ObXARPCCB init failed", KR(ret));
         } else if (OB_FAIL(req.init(trans_id, xid, is_rollback /*true*/, is_terminated /*true*/))) {

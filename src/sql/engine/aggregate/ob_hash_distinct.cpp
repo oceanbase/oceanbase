@@ -934,7 +934,7 @@ int ObHashDistinct::ObHashDistinctCtx::assign_sub_ctx(
           ObModIds::OB_SQL_HASH_DIST,
           ObCtxIds::WORK_AREA)
       .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-  if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+  if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
     LOG_WARN("fail to create entity", K(ret));
   } else if (OB_ISNULL(mem_context_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1022,11 +1022,11 @@ int ObHashDistinct::init_op_ctx(ObExecContext& ctx) const
   } else if (OB_FAIL(init_cur_row(*op_ctx, need_copy_row_for_compute()))) {
     LOG_WARN("init current row failed", K(ret));
   } else {
-    lib::MemoryContext* mem_context = nullptr;
+    lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(), ObModIds::OB_SQL_HASH_DIST, ObCtxIds::WORK_AREA)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("fail to create entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;

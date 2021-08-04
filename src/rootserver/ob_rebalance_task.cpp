@@ -6255,6 +6255,11 @@ int ObRemoveMemberTask::add_remove_member_task_info(const ObRemoveMemberTaskInfo
   return ret;
 }
 
+void ObRemoveMemberTask::clear_task_info()
+{
+  task_infos_.reset();
+}
+
 // the code try to invoke this func has the responsbility to guarantee
 // there is only one task info for each partition
 int ObModifyQuorumTask::add_modify_quorum_task_info(const ObModifyQuorumTaskInfo& task_info)

@@ -189,9 +189,9 @@ int ObRawExprPrinter::print(ObConstRawExpr* expr)
     } else if (OB_FAIL(expr->get_value().print_sql_literal(buf_, buf_len_, *pos_, print_params_))) {
       LOG_WARN("fail to print sql literal", K(ret));
     }
-  } else if (expr->get_literal_prefix() == ORALCE_LITERAL_PREFIX_DATE) {
+  } else if (expr->get_literal_prefix() == LITERAL_PREFIX_DATE && expr->get_value().is_datetime()) {
     int32_t tmp_date = 0;
-    if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "%s '", ORALCE_LITERAL_PREFIX_DATE))) {
+    if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "%s '", LITERAL_PREFIX_DATE))) {
       LOG_WARN("fail to print literal prefix", K(ret));
     } else if (OB_FAIL(ObTimeConverter::datetime_to_date(expr->get_value().get_datetime(), NULL, tmp_date))) {
       LOG_WARN("fail to datetime_to_date", "datetime", expr->get_value().get_datetime(), K(ret));
@@ -280,6 +280,9 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr* expr)
           is_oracle_mode ? "\"%.*s\".\"%.*s\"" : "`%.*s`.`%.*s`", LEN_AND_PTR(table_name), LEN_AND_PTR(col_name));
     } else if (OB_UNLIKELY(only_column_namespace_)) {
       DATA_PRINTF(is_oracle_mode ? "\"%.*s\"" : "`%.*s`", LEN_AND_PTR(col_name));
+    } else if (expr->is_from_alias_table()) {
+      DATA_PRINTF(is_oracle_mode ? "\"%.*s\".\"%.*s\"" : "`%.*s`.`%.*s`",
+                  LEN_AND_PTR(expr->get_table_name()), LEN_AND_PTR(col_name));
     } else {
       if (!expr->get_synonym_name().empty() && !expr->get_synonym_db_name().empty()) {
         ObString synonyn_db_name = expr->get_synonym_db_name();
@@ -931,7 +934,8 @@ int ObRawExprPrinter::print(ObSysFunRawExpr* expr)
   } else {
     ObString func_name = expr->get_func_name();
     switch (expr->get_expr_type()) {
-      case T_FUN_SYS_UTC_TIMESTAMP: {
+      case T_FUN_SYS_UTC_TIMESTAMP:
+      case T_FUN_SYS_UTC_TIME: {
         const int16_t scale = static_cast<int16_t>(expr->get_result_type().get_scale());
         if (scale > 0) {
           DATA_PRINTF("%.*s(%d)", LEN_AND_PTR(func_name), scale);
@@ -1324,6 +1328,24 @@ int ObRawExprPrinter::print(ObSysFunRawExpr* expr)
               DATA_PRINTF(")");
             }
           }
+        }
+        break;
+      }
+      case T_FUN_SYS_GET_FORMAT: {
+        if (2 != expr->get_param_count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param count should be equal 2", K(ret), K(expr->get_param_count()));
+        } else {
+          DATA_PRINTF("get_format(");
+          // temporal_unit
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(print_get_format_unit(expr->get_param_expr(0)))) {
+              LOG_WARN("fail to print date unit", K(ret));
+            }
+          }
+          DATA_PRINTF(", ");
+          PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(")");
         }
         break;
       }
@@ -2072,6 +2094,33 @@ int ObRawExprPrinter::print_date_unit(ObRawExpr* expr)
       } else {
         con_expr->get_value().get_int(date_unit_type);
         DATA_PRINTF(ob_date_unit_type_str(static_cast<ObDateUnitType>(date_unit_type)));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRawExprPrinter::print_get_format_unit(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
+  } else {
+    if (ObRawExpr::EXPR_CONST != expr->get_expr_class()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr class should be EXPR_CONST", K(ret), K(expr->get_expr_class()));
+    } else {
+      int64_t get_format_type = GET_FORMAT_MAX;
+      ObConstRawExpr *con_expr = static_cast<ObConstRawExpr*>(expr);
+      if (OB_ISNULL(con_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("con_expr should not be NULL", K(ret));
+      } else {
+        con_expr->get_value().get_int(get_format_type);
+        DATA_PRINTF("%s", ob_get_format_unit_type_str(static_cast<ObGetFormatUnitType>(get_format_type)));
       }
     }
   }

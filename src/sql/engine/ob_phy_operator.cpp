@@ -228,7 +228,7 @@ int ObPhyOperator::close(ObExecContext& ctx) const
   if (GCONF.enable_sql_audit) {
     // Record current operator statistics to sql_plan_monitor, inner_sql will not be counted
     ObPlanMonitorNodeList* list = MTL_GET(ObPlanMonitorNodeList*);
-    if (op_ctx && list && my_phy_plan_ && !ctx.get_my_session()->is_inner() &&
+    if (op_ctx && list && my_phy_plan_ && ctx.get_my_session()->is_user_session() &&
         OB_PHY_PLAN_LOCAL != my_phy_plan_->get_plan_type() && OB_PHY_PLAN_REMOTE != my_phy_plan_->get_plan_type()) {
       op_ctx->op_monitor_info_.set_plan_depth(plan_depth_);
       IGNORE_RETURN list->submit_node(op_ctx->op_monitor_info_);
@@ -456,11 +456,11 @@ int ObPhyOperator::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
     op_ctx->expr_ctx_.row_ctx_.reset();
     if (OB_FAIL(inner_get_next_row(ctx, input_row))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("get next row failed", K(ret), K_(type), "op", ob_phy_operator_type_str(get_type()));
+        LOG_WARN("get next row failed", K(ret), K_(type), K_(id), "op", ob_phy_operator_type_str(get_type()));
       }
     } else {
       if (need_filter_row() && OB_FAIL(filter_row(op_ctx->expr_ctx_, *input_row, is_filtered))) {  // filter the row
-        LOG_WARN("call filter_row failed", K(ret), K_(type), "op", ob_phy_operator_type_str(get_type()));
+        LOG_WARN("call filter_row failed", K(ret), K_(type), K_(id), "op", ob_phy_operator_type_str(get_type()));
       } else if (!is_filtered) {
         // not be filtered, break
         break;

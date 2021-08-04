@@ -75,7 +75,7 @@ public:
   virtual int has_special_expr(const ObExprInfoFlag, bool& has) const override;
   virtual int replace_inner_stmt_expr(
       const common::ObIArray<ObRawExpr*>& other_exprs, const common::ObIArray<ObRawExpr*>& new_exprs) override;
-  int refill_index_assignment_info();
+  int refill_global_index_dml_info(ObRawExprFactory& expr_factory, bool use_static_typing_engine);
   const ObTablesAssignments* get_slice_from_all_table_assignments(
       common::ObIAllocator& allocator, int64_t table_idx, int64_t index_idx) const;
 
@@ -102,6 +102,7 @@ private:
    */
   bool low_priority_;
   bool update_set_;
+  bool use_static_typing_engine_;
 };
 }  // namespace sql
 }  // namespace oceanbase

@@ -51,33 +51,41 @@ int ObBasicNestedLoopJoin::prepare_rescan_params(ObBasicNestedLoopJoinCtx& join_
 {
   int ret = OB_SUCCESS;
   ObObjParam res_obj;
-  ObPhysicalPlanCtx* plan_ctx = join_ctx.exec_ctx_.get_physical_plan_ctx();
-  if (OB_ISNULL(plan_ctx) || OB_ISNULL(join_ctx.left_row_)) {
+  ObPhysicalPlanCtx *plan_ctx = join_ctx.exec_ctx_.get_physical_plan_ctx();
+  ObPhyOperator *left_child = get_child(FIRST_CHILD);
+  ObPhyOperatorCtx *left_child_ctx = NULL;
+  if (OB_ISNULL(plan_ctx) || OB_ISNULL(join_ctx.left_row_) ||
+      OB_ISNULL(left_child)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("plan ctx or left row is null", K(ret));
+  } else if (NULL ==
+             (left_child_ctx = static_cast<ObPhyOperatorCtx *>(
+                  join_ctx.exec_ctx_.get_phy_op_ctx(left_child->get_id())))) {
+    LOG_WARN("fail to get phy operator ctx", K(ret));
   } else {
     int64_t param_cnt = rescan_params_.count();
-    const ObSqlExpression* expr = NULL;
+    const ObSqlExpression *expr = NULL;
+    // rescan param need deep copy, because memory of expr result from calc_buf
+    // in ObPhyOperator, when get next row next time, will free memory in
+    // calc_buf; here we use left child calc_buf, because when left child need
+    // get next row, rescan param will not used;
     for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
+      int64_t idx = rescan_params_.at(i).param_idx_;
       if (OB_ISNULL(expr = rescan_params_.at(i).expr_)) {
         ret = OB_BAD_NULL_ERROR;
         LOG_WARN("rescan param expr is null", K(ret), K(i));
       } else if (OB_FAIL(expr->calc(join_ctx.expr_ctx_, *join_ctx.left_row_, res_obj))) {
         LOG_WARN("failed to calc expr for rescan param", K(ret), K(i));
       } else {
-        int64_t idx = rescan_params_.at(i).param_idx_;
         res_obj.set_param_meta();
-        plan_ctx->get_param_store_for_update().at(idx) = res_obj;
-        LOG_DEBUG("prepare_rescan_params",
-            K(ret),
-            K(i),
-            K(res_obj),
-            K(idx),
-            K(expr),
-            K(plan_ctx),
-            K(*join_ctx.left_row_),
-            K(*expr),
-            K(join_ctx.expr_ctx_.phy_plan_ctx_));
+        if (OB_FAIL(deep_copy_obj(
+                left_child_ctx->get_calc_buf(), res_obj,
+                plan_ctx->get_param_store_for_update().at(idx)))) {
+          LOG_WARN("fail to deep copy ", K(ret));
+        }
+        LOG_DEBUG("prepare_rescan_params", K(ret), K(i), K(res_obj), K(idx),
+                  K(expr), K(plan_ctx), K(*join_ctx.left_row_), K(*expr),
+                  K(join_ctx.expr_ctx_.phy_plan_ctx_));
       }
     }
   }

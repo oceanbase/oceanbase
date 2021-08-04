@@ -50,6 +50,9 @@ extern int ob_io_cancel(io_context_t ctx, struct iocb* iocb, struct io_event* ev
 extern int ob_io_getevents(
     io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout);
 
+int io_getevents_with_retry(
+    io_context_t ctx_id, long min_nr, long nr, struct io_event* events, struct timespec* timeout);
+
 void align_offset_size(const int64_t offset, const int64_t size, int64_t& align_offset, int64_t& align_size);
 
 enum ObIOMode {

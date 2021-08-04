@@ -325,6 +325,13 @@ int ObSubPlanFilterOp::inner_get_next_row()
       OZ(handle_update_set());
     }
   }
+  if (OB_ITER_END == ret) {
+    if (OB_FAIL(set_param_null())) {
+      LOG_WARN("failed to set param null", K(ret));
+    } else {
+      ret = OB_ITER_END;
+    }
+  }
   return ret;
 }
 
@@ -451,7 +458,7 @@ int ObSubPlanFilterOp::handle_update_set()
     lib::ContextParam param;
     param.set_mem_attr(ctx_.get_my_session()->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::WORK_AREA)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(update_set_mem_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(update_set_mem_, param))) {
       LOG_WARN("create memory entity failed", K(ret));
     }
   } else {

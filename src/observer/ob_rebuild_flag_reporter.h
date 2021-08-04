@@ -59,6 +59,15 @@ public:
   {
     return false;
   }
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObRebuildFlagReporter& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
 
   TO_STRING_KV(K_(part_key), K_(server), K_(rebuild_flag));
 

@@ -110,7 +110,7 @@ public:
   virtual int open(const ObCreateSSTableParam& param);
   virtual int open(const blocksstable::ObSSTableBaseMeta& meta);
   virtual int close();
-  virtual void destroy();
+  virtual void destroy() override;
 
   // if set success, src ObMacroBlocksWriteCtx will be clear
   // if set failed, dest sstable macro blocks will be clear
@@ -264,9 +264,9 @@ public:
       const int64_t type, uint64_t* macros_count, const int64_t* total_task_count,
       common::ObIArray<common::ObStoreRange>* splitted_ranges, common::ObIArray<int64_t>* split_index);
   int exist(const ObStoreCtx& ctx, const uint64_t table_id, const common::ObStoreRowkey& rowkey,
-      const common::ObIArray<share::schema::ObColDesc>& column_ids, bool& is_exist, bool& has_found);
-  virtual int prefix_exist(storage::ObRowsInfo& rows_info, bool& may_exist);
-  int exist(ObRowsInfo& rows_info, bool& is_exist, bool& all_rows_found);
+      const common::ObIArray<share::schema::ObColDesc>& column_ids, bool& is_exist, bool& has_found) override;
+  virtual int prefix_exist(storage::ObRowsInfo& rows_info, bool& may_exist) override;
+  int exist(ObRowsInfo& rows_info, bool& is_exist, bool& all_rows_found) override;
   int64_t get_occupy_size() const
   {
     return meta_.occupy_size_;

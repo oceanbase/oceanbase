@@ -52,8 +52,8 @@ int ObSQLSessionMgr::SessionPool::pop_session(uint64_t tenant_id, ObSQLSessionIn
           "failed to pop session", K(ret), K(tenant_id), K(session_pool_.get_total()), K(session_pool_.get_free()));
     } else {
       ret = OB_SUCCESS;
-      LOG_INFO(
-          "session pool is empty", K(tenant_id), K(session_pool_.get_total()), K(session_pool_.get_free()), K(lbt()));
+      LOG_DEBUG("session pool is empty",
+               K(tenant_id), K(session_pool_.get_total()), K(session_pool_.get_free()), K(lbt()));
     }
   }
   return ret;

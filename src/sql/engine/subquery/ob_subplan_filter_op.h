@@ -126,7 +126,7 @@ private:
 
 private:
   common::ObSEArray<Iterator*, 16> subplan_iters_;
-  lib::MemoryContext* update_set_mem_;
+  lib::MemoryContext update_set_mem_;
 };
 
 }  // end namespace sql

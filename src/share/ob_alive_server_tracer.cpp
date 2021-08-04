@@ -189,6 +189,25 @@ int ObAliveServerMap::refresh_server_list(
   return ret;
 }
 
+int ObAliveServerMap::get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    addrs.reset();
+    ObLatchRGuard guard(lock_, ObLatchIds::ALIVE_SERVER_TRACER_LOCK);
+    common::hash::ObHashSet<common::ObAddr, common::hash::NoPthreadDefendMode>::const_iterator iter;
+    for (iter = active_servers_.begin(); OB_SUCC(ret) && iter != active_servers_.end(); ++iter) {
+      if (OB_FAIL(addrs.push_back(iter->first))) {
+        LOG_WARN("fail to push back addr", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 ObAliveServerRefreshTask::ObAliveServerRefreshTask(ObAliveServerTracer& tracer) : tracer_(tracer), is_inited_(false)
 {}
 
@@ -370,6 +389,23 @@ int ObAliveServerTracer::get_primary_cluster_id(int64_t& cluster_id) const
 {
   UNUSED(cluster_id);
   return OB_NOT_SUPPORTED;
+}
+int ObAliveServerTracer::get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    const ObAliveServerMap* volatile map = cur_map_;
+    if (OB_ISNULL(map)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null pointer", KR(ret));
+    } else if (OB_FAIL(map->get_active_server_list(addrs))) {
+      LOG_WARN("check server alive failed", KR(ret), K(addrs));
+    }
+  }
+  return ret;
 }
 }  // end namespace share
 }  // end namespace oceanbase

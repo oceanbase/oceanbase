@@ -30,12 +30,12 @@ public:
   {}
   virtual ~ObLogValues()
   {}
-  virtual int allocate_exchange_post(AllocExchContext* ctx)
+  virtual int allocate_exchange_post(AllocExchContext* ctx) override
   {
     UNUSED(ctx);
     return common::OB_SUCCESS;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     out = NULL;
     return common::OB_SUCCESS;
@@ -64,7 +64,7 @@ public:
   {
     return row_store_;
   }
-  uint64_t hash(uint64_t seed) const
+  uint64_t hash(uint64_t seed) const override
   {
     if (NULL != explain_plan_) {
       seed = do_hash(*explain_plan_, seed);

@@ -356,18 +356,20 @@ int ObTransformSimplify::push_down_on_condition(ObDMLStmt *stmt,
     LOG_WARN("failed to update column item rel id", K(ret));
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(child_stmt->adjust_subquery_stmt_parent(stmt, child_stmt))) {
-    LOG_WARN("failed to adjust subquery stmt parent", K(ret));
-  } else if (OB_FAIL(stmt->get_column_exprs(join_table->right_table_->table_id_, old_column_exprs))) {
-    LOG_WARN("failed to get column exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
-                 old_column_exprs, *child_stmt, new_column_exprs))) {
-    LOG_WARN("failed to conver column exprs", K(ret));
-  } else if (OB_FAIL(child_stmt->replace_inner_stmt_expr(old_column_exprs, new_column_exprs))) {
-    LOG_WARN("failed to replace stmt exprs", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize stmt", K(ret));
+  if (OB_SUCC(ret)) {
+    child_stmt->set_parent_namespace_stmt(stmt->get_parent_namespace_stmt());
+    if (OB_FAIL(child_stmt->adjust_subquery_stmt_parent(stmt, child_stmt))) {
+      LOG_WARN("failed to adjust subquery stmt parent", K(ret));
+    } else if (OB_FAIL(stmt->get_column_exprs(join_table->right_table_->table_id_, old_column_exprs))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
+                  old_column_exprs, *child_stmt, new_column_exprs))) {
+      LOG_WARN("failed to conver column exprs", K(ret));
+    } else if (OB_FAIL(child_stmt->replace_inner_stmt_expr(old_column_exprs, new_column_exprs))) {
+      LOG_WARN("failed to replace stmt exprs", K(ret));
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    }
   }
   return ret;
 }

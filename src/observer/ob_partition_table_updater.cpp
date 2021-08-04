@@ -475,6 +475,11 @@ int ObPartitionTableUpdater::do_batch_execute(const int64_t start_time,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(GCTX.pt_operator_->batch_report_partition_role(replicas, new_role))) {
         LOG_WARN("fail to batch report partition role", KR(ret), K(replicas));
+      } else if (is_strong_leader(new_role)) {
+        int tmp_ret = submit_broadcast_tasks(replicas);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("submit broadcast_tasks failed", KR(ret), K(replicas));
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -634,7 +639,11 @@ int ObPartitionTableUpdater::batch_process_tasks(const ObIArray<ObPTUpdateTask>&
   bool skip_to_reput_tasks = false;
   const int64_t start_time = ObTimeUtility::current_time();
   ObCurTraceId::init(GCONF.self_addr_);
-  if (OB_ISNULL(GCTX.pt_operator_) || OB_ISNULL(GCTX.ob_service_)) {
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_PREVENT_ASYNC_REPORT) OB_SUCCESS;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(GCTX.pt_operator_) || OB_ISNULL(GCTX.ob_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(GCTX.pt_operator_));
   } else if (OB_UNLIKELY(batch_tasks.count() <= 0)) {
@@ -825,6 +834,12 @@ int ObPartitionTableUpdater::do_batch_execute(const int64_t start_time, const Ob
               "do partition table update failed", K(ret), "escape time", ObTimeUtility::current_time() - start_time);
         } else {
           success_idx++;
+          if (is_strong_leader(replicas.at(i).role_)) {
+            int tmp_ret = submit_broadcast_tasks(tmp_replicas);
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("submit broadcast_tasks failed", KR(ret), K(tmp_replicas));
+            }
+          }
         }
       }
     } else if (replicas.at(0).need_force_full_report() || with_role) {
@@ -838,6 +853,12 @@ int ObPartitionTableUpdater::do_batch_execute(const int64_t start_time, const Ob
             ObTimeUtility::current_time() - start_time);
       } else {
         success_idx = replicas.count() - 1;
+        if (is_strong_leader(replicas.at(0).role_)) {
+          int tmp_ret = submit_broadcast_tasks(replicas);
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN("submit broadcast_tasks failed", KR(ret), K(replicas));
+          }
+        }
       }
     } else {
       if (OB_FAIL(GCTX.pt_operator_->batch_report_with_optimization(replicas, false /*without role*/))) {
@@ -1125,6 +1146,34 @@ int ObPartitionTableUpdater::do_sync_pt_finish(const int64_t version)
     if (OB_FAIL(GCTX.rs_rpc_proxy_->to_addr(rs_addr).timeout(GCONF.rpc_timeout).sync_pt_finish(arg))) {
       LOG_WARN("call sync partition table finish rpc failed", K(ret), K(arg));
     }
+  }
+  return ret;
+}
+
+int ObPartitionTableUpdater::submit_broadcast_tasks(const common::ObIArray<ObPartitionReplica>& replicas)
+{
+  int ret = OB_SUCCESS;
+  if (replicas.count() <= 0 || !GCONF.enable_auto_refresh_location_cache) {
+    // skip
+  } else if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("observer is null", KR(ret));
+  } else {
+    const int64_t timestamp = ObTimeUtility::current_time();
+    ObPartitionBroadcastTask task;
+    for (int64_t i = 0; OB_SUCC(ret) && i < replicas.count(); i++) {
+      task.reset();
+      const ObPartitionReplica& replica = replicas.at(i);
+      if (OB_FAIL(task.init(replica.table_id_, replica.partition_id_, replica.partition_cnt_, timestamp))) {
+        LOG_WARN("fail to init task", KR(ret), K(replica));
+      } else if (OB_FAIL(GCTX.ob_service_->submit_broadcast_task(task))) {
+        LOG_WARN("fail to submit broadcast task", KR(ret), K(task));
+      }
+    }
+    LOG_DEBUG("submit broadcast task", KR(ret), K(replicas));
   }
   return ret;
 }

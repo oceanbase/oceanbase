@@ -1153,7 +1153,7 @@ public:
   virtual ~ObSubQueryRelationalExpr()
   {}
 
-  virtual int assign(const ObExprOperator& other);
+  virtual int assign(const ObExprOperator& other) override;
 
   void set_subquery_key(ObSubQueryKey key)
   {
@@ -1458,7 +1458,7 @@ public:
   {}
   static int convert_result_collation(
       const ObExprResType& result_type, common::ObObj& result, common::ObIAllocator* allocator);
-
+  void calc_temporal_format_result_length(ObExprResType& type, const ObExprResType& format) const;
 protected:
   common::ObObjType get_result_type_mysql(int64_t char_length) const;
   static const int64_t MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT = 512;

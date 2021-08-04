@@ -373,7 +373,7 @@ public:
 
   protected:
     ObExecContext& exec_ctx_;
-    lib::MemoryContext* calc_mem_;
+    lib::MemoryContext calc_mem_;
     common::ObArenaAllocator* calc_buf_;
     common::ObNewRow cur_row_;
     common::ObNewRow* cur_rows_;
@@ -899,7 +899,7 @@ inline int ObPhyOperator::ObPhyOperatorCtx::init_base(uint64_t tenant_id)
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_mem_attr(tenant_id, common::ObModIds::OB_SQL_EXPR_CALC, common::ObCtxIds::DEFAULT_CTX_ID);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(calc_mem_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(calc_mem_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else {
       calc_buf_ = &calc_mem_->get_arena_allocator();
