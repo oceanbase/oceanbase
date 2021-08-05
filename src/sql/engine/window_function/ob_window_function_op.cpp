@@ -27,6 +27,7 @@
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
+#include "lib/allocator/ob_malloc.h"
 namespace oceanbase {
 using namespace common;
 namespace sql {
@@ -34,7 +35,7 @@ namespace sql {
 OB_SERIALIZE_MEMBER(
     WinFuncInfo::ExtBound, is_preceding_, is_unbounded_, is_nmb_literal_, between_value_expr_, range_bound_expr_);
 
-OB_SERIALIZE_MEMBER(WinFuncInfo, win_type_, func_type_, is_ignore_null_, is_from_first_, expr_, aggr_info_, upper_,
+OB_SERIALIZE_MEMBER(WinFuncInfo, win_type_, func_type_, is_ignore_null_, is_from_first_, is_support_aggr_, expr_, aggr_info_, upper_,
     lower_, param_exprs_, partition_exprs_, sort_exprs_, sort_collations_, sort_cmp_funcs_);
 
 OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec), wf_infos_, all_expr_, is_parallel_);
@@ -81,6 +82,70 @@ int ObWindowFunctionOp::AggrCell::trans_self(const ObRADatumStore::StoredRow& ro
   }
   return ret;
 }
+//overload trans_self for max, min.
+int ObWindowFunctionOp::AggrCell::trans_self(const ObRADatumStore::StoredRow& row, MaxMinInfo& max_min_info)
+{
+  int ret = OB_SUCCESS;
+  ObAggregateProcessor::GroupRow* group_row = NULL;
+  if (!finish_prepared_ && OB_FAIL(aggr_processor_.init_one_group())) {
+    LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+  } else if (OB_FAIL(aggr_processor_.get_group_row(0, group_row))) {
+    LOG_WARN("failed to get_group_row", K(ret));
+  } else if (OB_ISNULL(group_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("group_row is null", K(ret));
+  } else if (!finish_prepared_) {
+    if ((OB_FAIL(aggr_processor_.prepare(*group_row)))) {
+      LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+    } else {
+      finish_prepared_ = true;
+    }
+  } else {
+    if (OB_FAIL(aggr_processor_.process(*group_row, max_min_info))) {
+      LOG_WARN("fail to process the aggr func", K(ret), K(row));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // uppon invoke inv_trans(), forbiden it to reuse the last_result
+    got_result_ = false;
+  }
+  return ret;
+}
+// removable for aggr_fun.
+int ObWindowFunctionOp::AggrCell::inv_trans_self(const ObRADatumStore::StoredRow& row, int64_t is_support_aggr)
+{
+  int ret = OB_SUCCESS;
+  //is_support_aggr = 1 means supporting sum, count and derive functions in removal method.
+  if (is_support_aggr == 1) {
+    ObAggregateProcessor::GroupRow* group_row = NULL;
+    if (!pre_finish_prepared_ && OB_FAIL(pre_aggr_processor_.init_one_group())) {
+      LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+    } else if (OB_FAIL(pre_aggr_processor_.get_group_row(0, group_row))) {
+      LOG_WARN("failed to get_group_row", K(ret));
+    } else if (OB_ISNULL(group_row)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("group_row is null", K(ret));
+    } else if (!pre_finish_prepared_) {
+      if ((OB_FAIL(pre_aggr_processor_.prepare(*group_row)))) {
+        LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+      } else {
+        pre_finish_prepared_ = true;
+      }
+    } else {
+      if (OB_FAIL(pre_aggr_processor_.process(*group_row))) {
+        LOG_WARN("fail to process the aggr func", K(ret), K(row));
+      }
+    
+    }
+
+    if (OB_SUCC(ret)) {
+      // uppon invoke trans(), forbiden it to reuse the last_result
+      pre_got_result_ = false;
+    }
+  }
+  return ret;
+}
 
 int ObWindowFunctionOp::AggrCell::final(ObDatum& val)
 {
@@ -99,6 +164,27 @@ int ObWindowFunctionOp::AggrCell::final(ObDatum& val)
   } else {
     val = static_cast<ObDatum>(result_);
   }
+  return ret;
+}
+//removable for sum, avg, count, variance, stddev, var_*, stddev_*.
+int ObWindowFunctionOp::AggrCell::pre_final(ObDatum& pre_val)
+{
+  int ret = OB_SUCCESS;
+  if (!pre_got_result_) {
+    if (OB_FAIL(pre_aggr_processor_.collect(0))) {
+      LOG_WARN("fail to collect", K(ret));
+    } else {
+      pre_val = wf_info_.aggr_info_.expr_->locate_expr_datum(op_.eval_ctx_);
+      if (OB_FAIL(pre_aggr_processor_.clone_cell(pre_result_, pre_val, wf_info_.aggr_info_.expr_->obj_meta_.is_number()))) {
+        LOG_WARN("fail to clone_cell", K(ret));
+      } else {
+        pre_got_result_ = true;
+      }
+    }
+  } else {
+    pre_val = static_cast<ObDatum>(pre_result_);
+  }
+
   return ret;
 }
 
@@ -628,7 +714,7 @@ int ObWindowFunctionOp::check_same_partition(WinFuncCell& cell, bool& same)
 
 // todo: concern boundary
 bool ObWindowFunctionOp::Frame::need_restart_aggr(
-    const bool can_inv, const Frame& last_valid_frame, const Frame& new_frame)
+    const bool can_inv, const Frame& last_valid_frame, const Frame& new_frame, MaxMinInfo& max_min_info, int64_t is_support_aggr)
 {
   bool need = false;
   if (-1 == last_valid_frame.head_ || -1 == last_valid_frame.tail_) {
@@ -637,12 +723,29 @@ bool ObWindowFunctionOp::Frame::need_restart_aggr(
     const int64_t inc_cost =
         std::abs(last_valid_frame.head_ - new_frame.head_) + std::abs(last_valid_frame.tail_ - new_frame.tail_);
     const int64_t restart_cost = new_frame.tail_ - new_frame.head_;
+    //removable: can_inv = true;
     if (inc_cost > restart_cost) {
       need = true;
     } else if (!can_inv) {
       // has sliding-out row
       if (new_frame.head_ > last_valid_frame.head_ || new_frame.tail_ < last_valid_frame.tail_) {
         need = true;
+      }
+    }
+    // judge support removal aggr_fun.
+    if (new_frame.head_ > last_valid_frame.head_ || new_frame.tail_ < last_valid_frame.tail_) {
+      // is_support_aggr = -1 means type is not support now.
+      if (is_support_aggr == -1){
+        need = true;
+      }
+    }
+    
+    // judge max_min_index_ in [new_frame.head, new_frame.tail]
+    // is_support_aggr = 2 means supporting max,min in removal method.
+    if (is_support_aggr == 2) {
+      if (max_min_info.max_min_index_ < new_frame.head_ || max_min_info.max_min_index_ > new_frame.tail_) {
+        // The maximum value cannot be used, and the assignment needs to be traversed again.
+        need = true;      
       }
     }
   }
@@ -718,19 +821,19 @@ int ObWindowFunctionOp::init()
           case T_FUN_MEDIAN:
           case T_FUN_GROUP_PERCENTILE_CONT:
           case T_FUN_GROUP_PERCENTILE_DISC:
-          case T_FUN_STDDEV:
-          case T_FUN_STDDEV_SAMP:
-          case T_FUN_VARIANCE:
-          case T_FUN_STDDEV_POP:
+          case T_FUN_STDDEV: 
+          case T_FUN_STDDEV_SAMP: 
+          case T_FUN_VARIANCE: 
+          case T_FUN_STDDEV_POP: 
           case T_FUN_APPROX_COUNT_DISTINCT:
-          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
-          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
+          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS: 
+          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: 
           case T_FUN_GROUP_CONCAT:
           case T_FUN_CORR:
           case T_FUN_COVAR_POP:
           case T_FUN_COVAR_SAMP:
-          case T_FUN_VAR_POP:
-          case T_FUN_VAR_SAMP:
+          case T_FUN_VAR_POP: 
+          case T_FUN_VAR_SAMP: 
           case T_FUN_REGR_SLOPE:
           case T_FUN_REGR_INTERCEPT:
           case T_FUN_REGR_COUNT:
@@ -758,7 +861,8 @@ int ObWindowFunctionOp::init()
             } else {
               AggrCell* aggr_func = new (tmp_ptr) AggrCell(wf_info, *this, *aggr_infos);
               aggr_func->aggr_processor_.set_in_window_func();
-              if (OB_FAIL(aggr_func->aggr_processor_.init())) {
+              aggr_func->pre_aggr_processor_.set_in_window_func();
+              if (OB_FAIL(aggr_func->aggr_processor_.init())&&OB_FAIL(aggr_func->pre_aggr_processor_.init())) {
                 LOG_WARN("failed to initialize init_group_rows", K(ret));
               } else {
                 wf_cell = aggr_func;
@@ -952,11 +1056,10 @@ int ObWindowFunctionOp::reset_for_part_scan(const int64_t tenant_id)
   return ret;
 }
 
-int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, ObDatum& val)
+int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, ObDatum& val, MaxMinInfo& max_min_info, bool& use_removal)
 {
   int ret = OB_SUCCESS;
   const ObRADatumStore::StoredRow* row = NULL;
-
   Frame new_frame;
   bool upper_has_null = false;
   bool lower_has_null = false;
@@ -987,9 +1090,17 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
       if (wf_cell.is_aggr()) {
         AggrCell* aggr_func = static_cast<AggrCell*>(&wf_cell);
         const ObRADatumStore::StoredRow* cur_row = NULL;
+        // obtain aggr_fun & tmp_column_tc for removable.
+        const ObItemType aggr_fun = wf_cell.wf_info_.aggr_info_.get_expr_type(); 
+        int64_t is_support_aggr = wf_cell.wf_info_.is_support_aggr_;
+        const ObObjTypeClass tmp_column_tc = ob_obj_type_class(wf_cell.wf_info_.aggr_info_.get_first_child_type());
         if (!Frame::same_frame(last_valid_frame, new_frame)) {
-          if (!Frame::need_restart_aggr(aggr_func->can_inv(), last_valid_frame, new_frame)) {
+          if (!Frame::need_restart_aggr(aggr_func->can_inv(), last_valid_frame, new_frame, max_min_info, is_support_aggr)) {
             bool use_trans = new_frame.head_ < last_valid_frame.head_;
+            //judge use removal.
+            if((last_valid_frame.head_!=-1)&&(new_frame.head_ > last_valid_frame.head_)){
+              use_removal = true;
+            }
             int64_t b = min(new_frame.head_, last_valid_frame.head_);
             int64_t e = max(new_frame.head_, last_valid_frame.head_);
             for (int64_t i = b; OB_SUCC(ret) && i < e; ++i) {
@@ -998,11 +1109,20 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
               } else if (FALSE_IT(clear_evaluated_flag())) {
               } else if (OB_FAIL(cur_row->to_expr(get_all_expr(), eval_ctx_))) {
                 LOG_WARN("Failed to to_expr", K(ret));
-              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row))) {
+              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row, max_min_info, is_support_aggr))) {
                 LOG_WARN("invoke failed", K(use_trans), K(ret));
+              }
+              //judge index change and record index.
+              if (max_min_info.is_change_index_) {
+                max_min_info.max_min_index_ = i;
+                max_min_info.is_change_index_ = false;
               }
             }
             use_trans = new_frame.tail_ > last_valid_frame.tail_;
+            //judge use removal.
+            if((last_valid_frame.head_!=-1)&&(new_frame.tail_ < last_valid_frame.tail_)){
+              use_removal = true;
+            }
             b = min(new_frame.tail_, last_valid_frame.tail_);
             e = max(new_frame.tail_, last_valid_frame.tail_);
             for (int64_t i = b + 1; OB_SUCC(ret) && i <= e; ++i) {
@@ -1011,12 +1131,18 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
               } else if (FALSE_IT(clear_evaluated_flag())) {
               } else if (OB_FAIL(cur_row->to_expr(get_all_expr(), eval_ctx_))) {
                 LOG_WARN("Failed to to_expr", K(ret));
-              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row))) {
+              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row, max_min_info, is_support_aggr))) {
                 LOG_WARN("invoke failed", K(use_trans), K(ret));
+              }
+              //judge index change and record index.
+              if (max_min_info.is_change_index_) {
+                max_min_info.max_min_index_ = i;
+                max_min_info.is_change_index_ = false;
               }
             }
           } else {
             aggr_func->reset_for_restart();
+            use_removal = false;
             LOG_DEBUG("restart agg", K(last_valid_frame), K(new_frame), KPC(aggr_func));
             for (int64_t i = new_frame.head_; OB_SUCC(ret) && i <= new_frame.tail_; ++i) {
               if (OB_FAIL(rows_store_.get_row(i, cur_row))) {
@@ -1024,19 +1150,125 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
               } else if (FALSE_IT(clear_evaluated_flag())) {
               } else if (OB_FAIL(cur_row->to_expr(get_all_expr(), eval_ctx_))) {
                 LOG_WARN("Failed to to_expr", K(ret));
-              } else if (OB_FAIL(aggr_func->trans(*cur_row))) {
+              } else if (OB_FAIL(aggr_func->trans(*cur_row, max_min_info, is_support_aggr))) {
                 LOG_WARN("trans failed", K(ret));
+              }
+              //judge index change and record index.
+              if (max_min_info.is_change_index_) {
+                max_min_info.max_min_index_ = i;
+                max_min_info.is_change_index_ = false;
               }
             }
           }
         } else {
-          LOG_DEBUG("use last value");
+          LOG_DEBUG("use last value");      
           // reuse last result, invoke final directly...
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(aggr_func->final(val))) {
             LOG_WARN("final failed", K(ret));
           } else {
+            // removable for sum, avg, count, variance, stddev, var_*, stddev_* start.
+            // is_support_aggr != -1 means supporting type in removal method.
+            if (is_support_aggr != -1) {
+              if ((last_valid_frame.head_!=-1)&&(new_frame.head_ <= last_valid_frame.head_)&&(new_frame.tail_ >= last_valid_frame.tail_)) {
+                aggr_func->pre_got_result_ = false;
+              }
+              switch(aggr_fun) {
+                case T_FUN_COUNT: {
+                  // count type is int.
+                  if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                    int64_t val_count = val.get_int();
+                    if (OB_FAIL(aggr_func->pre_final(val))) {
+                      LOG_WARN("pre_final failed", K(ret));
+                    }
+                    int64_t pre_val_count = val.get_int();
+                    int64_t tmp_val_count = val_count - pre_val_count;
+                    val.set_int(tmp_val_count);                   
+                    LOG_DEBUG("finish use removal count", K(row_idx), K(val));
+                  }
+                  break;
+                }
+                case T_FUN_SUM:
+                case T_FUN_VARIANCE:
+                case T_FUN_VAR_POP:
+                case T_FUN_VAR_SAMP:
+                case T_FUN_STDDEV:
+                case T_FUN_STDDEV_SAMP:
+                case T_FUN_STDDEV_POP:
+                case T_FUN_AVG: {
+                  //sum, count and derive functions' type: int&uint&number -> number.
+                  switch(tmp_column_tc) {
+                    case ObNumberTC:
+                    case ObIntTC: 
+                    case ObUIntTC: {
+                      if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                        number::ObNumber val_num(val.get_number());
+                        char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+                        ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+                        number::ObNumber tmp_val_num;
+                        tmp_val_num.deep_copy_v3(val_num,tmp_allocator_val);
+                        if (OB_FAIL(aggr_func->pre_final(val))) {
+                          LOG_WARN("pre final failed", K(ret));
+                        }
+                        number::ObNumber pre_val_num(val.get_number());
+                        char buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+                        ObDataBuffer allocator_val(buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+                        tmp_val_num.sub(pre_val_num,tmp_val_num,allocator_val);
+                        
+                        val.set_number(tmp_val_num);
+                      }
+                      break;
+                    }
+                    case ObDoubleTC: {
+                      if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                        double val_double = val.get_double();
+                        if (OB_FAIL(aggr_func->pre_final(val))) {
+                          LOG_WARN("pre final failed", K(ret));
+                        }
+                        double pre_val_double = val.get_double();
+                        double tmp_val_double = val_double - pre_val_double;
+                        
+                        val.set_double(tmp_val_double);
+                      }
+                      break;
+                    }
+                    case ObFloatTC: {
+                      if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                        float val_float = val.get_float();
+                        if (OB_FAIL(aggr_func->pre_final(val))) {
+                          LOG_WARN("final failed", K(ret));
+                        }
+                        float pre_val_float = val.get_float();
+                        float tmp_val_float = val_float - pre_val_float;
+                        
+                        val.set_float(tmp_val_float);
+                      }
+                      break;
+                    }
+                    default: {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("not support now", K(tmp_column_tc));
+                      break;
+                    }
+                  }
+                  LOG_DEBUG("finish use removal sum or avg", K(row_idx), K(val));
+                  break;
+                }
+                case T_FUN_MAX:
+                case T_FUN_MIN: {
+                  //do nothing.
+                  break;
+                }
+                default: {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("not support now", K(aggr_fun));
+                  break;
+                }
+              }
+            }           
+            // removable for sum, avg, count, variance, stddev, var_*, stddev_* end.
+            
             last_valid_frame = new_frame;
             LOG_DEBUG("finish compute", K(row_idx), K(last_valid_frame), K(val));
           }
@@ -1158,6 +1390,11 @@ int ObWindowFunctionOp::inner_get_next_row()
           wf->reset_for_restart();
           ObDatum result_datum;
           RowsReader row_reader(rows_store_);
+          // removable:
+          // removable for sum, avg, count, flag for judging current frame use removal method or not.
+          bool use_removal = false;     
+          // removable for max, min. defined in ob_aggregate_processor.h  
+          MaxMinInfo max_min_info;
           for (int64_t i = wf->part_first_row_idx_; i < rows_store_.count() && OB_SUCC(ret); ++i) {
             // we should check status interval since this loop will occupy cpu!
             if (0 == ++check_times % CHECK_STATUS_INTERVAL) {
@@ -1165,13 +1402,12 @@ int ObWindowFunctionOp::inner_get_next_row()
                 break;
               }
             }
-            if (OB_FAIL(compute(row_reader, *wf, i, result_datum))) {
+            if (OB_FAIL(compute(row_reader, *wf, i, result_datum, max_min_info, use_removal))) {
               LOG_WARN("compute failed", K(ret));
             } else if (OB_FAIL(collect_result(i, result_datum, *wf))) {
               LOG_WARN("collect_result failed", K(ret));
             }
           }
-          // free prev
           if (OB_SUCC(ret) && first != wf) {
             wf->get_prev()->part_rows_store_.reset_buf(tenant_id);
           }
@@ -1214,6 +1450,7 @@ int ObWindowFunctionOp::inner_get_next_row()
     iter_end_ = true;
     reset_for_scan(ctx_.get_my_session()->get_effective_tenant_id());
   }
+  
   LOG_DEBUG("after inner_get_next_row",
       "total_size",
       this->local_allocator_.get_arena().total(),

@@ -6194,6 +6194,36 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr*>& all_expr, ObWinFunRawExpr&
         wf_info.lower_.between_value_expr_ = expr;
       }
     }
+    
+    // judge support aggr func of removal method.
+    // for extension, is_support_aggr_ is int.
+    // in removal method, sum,count and derive functions belong to one type, max,min belong to another type. we set is_support_aggr_ = 1 and 2. 
+    // use removal method, it's devided 2 type, because it use 2 different implements in details.
+    switch (wf_info.func_type_) {
+      case T_FUN_SUM:
+      case T_FUN_COUNT:
+      case T_FUN_VARIANCE:
+      case T_FUN_VAR_POP:
+      case T_FUN_VAR_SAMP:
+      case T_FUN_STDDEV:
+      case T_FUN_STDDEV_SAMP:
+      case T_FUN_STDDEV_POP:
+      case T_FUN_AVG: {
+        wf_info.is_support_aggr_ = 1;
+        break;
+      }
+      case T_FUN_MAX:
+      case T_FUN_MIN: {
+        wf_info.is_support_aggr_ = 2;
+        break;
+      }
+      default: {
+        wf_info.is_support_aggr_ = -1;
+        break;
+      }
+    }
+    
+    
 
     if (WINDOW_ROWS == wf_info.win_type_) {
       // do nothing
