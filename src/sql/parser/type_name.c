@@ -320,7 +320,6 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_TIME_TO_SEC : return "T_FUN_SYS_TIME_TO_SEC";
 	case T_FUN_SYS_SEC_TO_TIME : return "T_FUN_SYS_SEC_TO_TIME";
 	case T_FUN_SYS_INTERVAL : return "T_FUN_SYS_INTERVAL";
-	case T_FUN_SYS_CONVERT_TZ : return "T_FUN_SYS_CONVERT_TZ";
 	case T_FUN_UDF : return "T_FUN_UDF";
 	case T_FUN_SYS_SUBTIME : return "T_FUN_SYS_SUBTIME";
 	case T_FUN_SYS_SQRT : return "T_FUN_SYS_SQRT";
@@ -519,6 +518,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_UTC_TIME : return "T_FUN_SYS_UTC_TIME";
 	case T_FUN_SYS_UTC_DATE : return "T_FUN_SYS_UTC_DATE";
 	case T_FUN_SYS_TIME_FORMAT : return "T_FUN_SYS_TIME_FORMAT";
+	case T_FUN_SYS_CONVERT_TZ : return "T_FUN_SYS_CONVERT_TZ";
 	case T_FUN_SYS_END : return "T_FUN_SYS_END";
 	case T_MAX_OP : return "T_MAX_OP";
 	case T_FUN_MATCH_AGAINST : return "T_FUN_MATCH_AGAINST";
