@@ -6174,6 +6174,10 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr*>& all_expr, ObWinFunRawExpr&
         LOG_WARN("expr is null ", K(ret), K(expr));
       } else {
         wf_info.upper_.between_value_expr_ = expr;
+        // judge interval is const, if not, use segment_tree method.
+        if (!raw_expr->is_const_expr()){
+          wf_info.is_interval_param_ = true;
+        }
       }
     }
 
@@ -6189,8 +6193,54 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr*>& all_expr, ObWinFunRawExpr&
         LOG_WARN("expr is null ", K(ret), K(expr));
       } else {
         wf_info.lower_.between_value_expr_ = expr;
+        // judge interval is const, if not, use segment_tree method.
+        if (!raw_expr->is_const_expr()){
+          wf_info.is_interval_param_ = true;
+        }
       }
     }
+
+    // judge support aggr func of removal or segment tree method.
+    // for extension, is_support_aggr_ is int.
+    // in segment tree method, sum,avg,count,max,min belong to one type. we set is_support_aggr_ = 0;
+    // in removal method, sum,avg,count belong to one type, max,min belong to another type. we set is_support_aggr_ = 1 and 2.
+    if (wf_info.is_interval_param_) {
+      // use segment tree method.
+      switch (wf_info.func_type_) {
+        case T_FUN_SUM:
+        case T_FUN_COUNT:
+        case T_FUN_AVG:
+        case T_FUN_MAX:
+        case T_FUN_MIN: {
+          wf_info.is_support_aggr_ = 0;
+          break;
+        }
+        default: {
+          wf_info.is_support_aggr_ = -1;
+          break;
+        }
+      }
+    } else {
+      // use removal method, it's devided 2 type, because it use 2 different implements in details.
+      switch (wf_info.func_type_) {
+        case T_FUN_SUM:
+        case T_FUN_COUNT:
+        case T_FUN_AVG: {
+          wf_info.is_support_aggr_ = 1;
+          break;
+        }
+        case T_FUN_MAX:
+        case T_FUN_MIN: {
+          wf_info.is_support_aggr_ = 2;
+          break;
+        }
+        default: {
+          wf_info.is_support_aggr_ = -1;
+          break;
+        }
+    }
+    }
+    
 
     if (WINDOW_ROWS == wf_info.win_type_) {
       // do nothing

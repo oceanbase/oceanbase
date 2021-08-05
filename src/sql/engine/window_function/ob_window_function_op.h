@@ -27,6 +27,20 @@
 
 namespace oceanbase {
 namespace sql {
+// struct SegmentTreeNode for segment_tree method.
+struct SegmentTreeNode{
+public:
+  SegmentTreeNode (int64_t frame_left = -1,int64_t frame_right = -1) : frame_left_(frame_left),frame_right_(frame_right)
+    {}
+  // record current node's frame.
+  int64_t frame_left_,frame_right_;
+  // record value.
+  ObDatum value_;
+};
+
+#define FLOAT_MAX 3.40e+38
+#define DOUBLE_MAX 1.79e+308
+
 struct WinFuncInfo {
   OB_UNIS_VERSION_V(1);
 
@@ -54,7 +68,7 @@ public:
   };
 
 public:
-  WinFuncInfo() : win_type_(WINDOW_MAX), func_type_(T_MAX), is_ignore_null_(false), is_from_first_(false), expr_(NULL)
+  WinFuncInfo() : win_type_(WINDOW_MAX), func_type_(T_MAX), is_ignore_null_(false), is_from_first_(false), is_support_aggr_(-1), is_interval_param_(false), expr_(NULL)
   {}
 
   virtual ~WinFuncInfo()
@@ -86,12 +100,19 @@ public:
     return ret;
   }
 
-  TO_STRING_KV(K_(win_type), K_(func_type), K_(is_ignore_null), K_(is_from_first), KPC_(expr), K_(aggr_info), K_(upper),
+  TO_STRING_KV(K_(win_type), K_(func_type), K_(is_ignore_null), K_(is_from_first), K_(is_support_aggr), K_(is_interval_param), KPC_(expr), K_(aggr_info), K_(upper),
       K_(lower), K_(param_exprs), K_(partition_exprs), K_(sort_exprs), K_(sort_collations), K_(sort_cmp_funcs));
   WindowType win_type_;
   ObItemType func_type_;
   bool is_ignore_null_;
   bool is_from_first_;
+  // add is_support_aggr_ for judging support type of removal and segment tree now.
+  // for extension, is_support_aggr_ is int.
+  // in segment tree method, sum,avg,count,max,min belong to one type. we set is_support_aggr_ = 0;
+  // in removal method, sum,avg,count belong to one type, max,min belong to another type. we set is_support_aggr_ = 1 and 2.
+  int64_t is_support_aggr_;
+  // add is_interval_param_ for judging interval is param in segment tree method.
+  bool is_interval_param_;
 
   ObExpr* expr_;  // same as aggr_info_.expr_
   ObAggrInfo aggr_info_;
@@ -137,7 +158,8 @@ public:
     static bool valid_frame(const Frame& part_frame, const Frame& frame);
     static bool same_frame(const Frame& left, const Frame& right);
     static void prune_frame(const Frame& part_frame, Frame& frame);
-    static bool need_restart_aggr(const bool can_inv, const Frame& last_valid_frame, const Frame& new_frame);
+    // add two parameter: 1. max_min_info 2. is_support_aggr
+    static bool need_restart_aggr(const bool can_inv, const Frame& last_valid_frame, const Frame& new_frame, MaxMinInfo& max_min_info, int64_t is_support_aggr);
     TO_STRING_KV(K(head_), K(tail_));
 
     int64_t head_;
@@ -283,38 +305,64 @@ public:
     AggrCell(WinFuncInfo& wf_info, ObWindowFunctionOp& op, ObIArray<ObAggrInfo>& aggr_infos)
         : WinFuncCell(wf_info, op),
           finish_prepared_(false),
+          pre_finish_prepared_(false),
           aggr_processor_(op_.eval_ctx_, aggr_infos),
+          pre_aggr_processor_(op_.eval_ctx_, aggr_infos),
           result_(),
-          got_result_(false)
+          pre_result_(),
+          got_result_(false),
+          pre_got_result_(false)
     {}
     virtual ~AggrCell()
     {
       aggr_processor_.destroy();
+      pre_aggr_processor_.destroy();
     }
     int trans(const ObRADatumStore::StoredRow& row)
     {
       return trans_self(row);
     }
+    // overload trans for max/min.
+    int trans(const ObRADatumStore::StoredRow& row, MaxMinInfo& max_min_info, int64_t is_support_aggr)
+    {
+      int ret = common::OB_SUCCESS;
+      // is_support_aggr = 2 means supporting max, min type in removal method.
+      if (is_support_aggr == 2) {
+        // overload trans_self for max/min.
+        if (OB_FAIL(trans_self(row, max_min_info))) {
+          LOG_WARN("fail to trans self", K(ret));
+        }
+      } else {
+        if (OB_FAIL(trans_self(row))) {
+          LOG_WARN("fail to trans self", K(ret));
+        }
+      }
+      return ret;
+    }
     virtual bool can_inv() const
     {
-      return false;
+      // removable switch.
+      return true;
     }
-    int inv_trans(const ObRADatumStore::StoredRow& row)
+    int inv_trans(const ObRADatumStore::StoredRow& row, int64_t is_support_aggr)
     {
       int ret = common::OB_SUCCESS;
       if (!can_inv()) {
         ret = common::OB_NOT_SUPPORTED;
       } else {
-        ret = inv_trans_self(row);
+        // removable.
+        ret = inv_trans_self(row, is_support_aggr);
       }
       return ret;
     };
-    int invoke_aggr(const bool use_trans, const ObRADatumStore::StoredRow& row)
+    int invoke_aggr(const bool use_trans, const ObRADatumStore::StoredRow& row,  MaxMinInfo& max_min_info, int64_t is_support_aggr)
     {
-      return use_trans ? trans(row) : inv_trans(row);
+      return use_trans ? trans(row, max_min_info, is_support_aggr) : inv_trans(row, is_support_aggr);
     }
 
     virtual int final(common::ObDatum& val);
+    //removable for sum, avg, count.
+    virtual int pre_final(common::ObDatum& pre_val);
     virtual bool is_aggr() const
     {
       return true;
@@ -323,26 +371,32 @@ public:
 
   protected:
     virtual int trans_self(const ObRADatumStore::StoredRow& row);
-    virtual int inv_trans_self(const ObRADatumStore::StoredRow& row)
-    {
-      UNUSED(row);
-      int ret = common::OB_SUCCESS;
-      ret = common::OB_NOT_SUPPORTED;
-      return ret;
-    }
+    //overload trans_self for max(), min().
+    virtual int trans_self(const ObRADatumStore::StoredRow& row, MaxMinInfo& max_min_info);
+    // removable for aggr_fun.
+    virtual int inv_trans_self(const ObRADatumStore::StoredRow& row, int64_t is_support_aggr);
     virtual void reset_for_restart_self() override
     {
       finish_prepared_ = false;
+      pre_finish_prepared_= false;
       aggr_processor_.reuse();
+      pre_aggr_processor_.reuse();
       result_.reset();
+      pre_result_.reset();
       got_result_ = false;
+      pre_got_result_ = false;
     }
 
   public:
+    //add pre_* for removable in sum(), avg(), count().
     bool finish_prepared_;
+    bool pre_finish_prepared_;
     ObAggregateProcessor aggr_processor_;
+    ObAggregateProcessor pre_aggr_processor_;
     ObDatum result_;
+    ObDatum pre_result_;
     bool got_result_;
+    bool pre_got_result_;
   };
 
   class NonAggrCell : public WinFuncCell {
@@ -425,6 +479,7 @@ public:
   ObWindowFunctionOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input),
         local_allocator_(),
+        st_local_allocator_(),
         rows_store_(),
         wf_list_(),
         next_row_(),
@@ -465,7 +520,21 @@ protected:
   }
   int fetch_child_row();
   int input_one_row(WinFuncCell& func_ctx, bool& part_end);
-  int compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, common::ObDatum& val);
+  // add two parameter: 1. max_min_info 2. use_removal
+  int compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, common::ObDatum& val, MaxMinInfo& max_min_info, bool& use_removal);
+  // segment_tree func add.
+  // sgement_tree build.
+  int sgement_tree_build(RowsReader& row_reader,WinFuncCell& wf_cell, ObDatum& val, int64_t left, int64_t right, int64_t k, SegmentTreeNode *stn_array, int64_t& index);
+  // sgement_tree compute.
+  int segment_tree_compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, ObDatum& val, SegmentTreeNode *stn_array);
+  // sgement_tree compute sum or avg.
+  int segment_tree_sum_avg(int64_t k, SegmentTreeNode *stn_array, int64_t head, int64_t tail, ObDatum& val, const ObObjTypeClass tmp_column_tc);
+  // sgement_tree compute count.
+  int segment_tree_count(int64_t k, SegmentTreeNode *stn_array, int64_t head, int64_t tail, ObDatum& val, const ObObjTypeClass tmp_column_tc);
+  // sgement_tree compute max.
+  int segment_tree_max(int64_t k, SegmentTreeNode *stn_array, int64_t head, int64_t tail,  ObDatum& val, const ObObjTypeClass tmp_column_tc);
+  // sgement_tree compute min.
+  int segment_tree_min(int64_t k, SegmentTreeNode *stn_array, int64_t head, int64_t tail,  ObDatum& val, const ObObjTypeClass tmp_column_tc);
   int check_same_partition(
       const ExprFixedArray& other_exprs, bool& is_same_part, const ExprFixedArray* curr_exprs = NULL);
   int check_same_partition(WinFuncCell& cell, bool& same);
@@ -490,7 +559,8 @@ private:
 
 private:
   common::ObArenaAllocator local_allocator_;
-
+  // add st_local_allocator_ for segment_tree build.
+  common::ObArenaAllocator st_local_allocator_;
   RowsStore rows_store_;
   WinFuncCellList wf_list_;
   // shadow copy the next and restore it before get next row from child.

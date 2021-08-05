@@ -27,7 +27,14 @@
 
 namespace oceanbase {
 namespace sql {
-
+// define MaxMinInfo for ob_window_function_op in removable. 
+struct  MaxMinInfo{
+public:
+  MaxMinInfo (int64_t max_min_index = -1, bool is_change_index = false) : max_min_index_(max_min_index), is_change_index_(is_change_index)
+    {}
+  int64_t max_min_index_; //index for current frame in max/min.
+  bool is_change_index_; //judge index change.
+};
 struct ObAggrInfo {
 public:
   OB_UNIS_VERSION_V(1);
@@ -383,6 +390,8 @@ public:
 
   int prepare(GroupRow& group_row);
   int process(GroupRow& group_row);
+  //overload process for window_function's removable in min() or max().
+  int process(GroupRow& group_row,  MaxMinInfo& max_min_info);
   int collect(const int64_t group_id = 0, const ObExpr* diff_expr = NULL);
 
   // used by ScalarAggregate operator when there's no input rows
@@ -437,13 +446,20 @@ private:
       AggrCell& aggr_cell, const ObAggrInfo& aggr_info);
   int process_aggr_result(const ObChunkDatumStore::StoredRow& stored_row, const ObIArray<ObExpr*>* param_exprs,
       AggrCell& aggr_cell, const ObAggrInfo& aggr_info);
+  //overload process_aggr_result for window_function's removable in min() or max().
+  int process_aggr_result(const ObChunkDatumStore::StoredRow& stored_row, const ObIArray<ObExpr*>* param_exprs,
+      AggrCell& aggr_cell, const ObAggrInfo& aggr_info, MaxMinInfo& max_min_info);
   int collect_aggr_result(AggrCell& aggr_cell, const ObExpr* diff_expr, const ObAggrInfo& aggr_info);
   int process_aggr_result_from_distinct(AggrCell& aggr_cell, const ObAggrInfo& aggr_info);
 
   int clone_number_cell(const number::ObNumber& src_cell, ObDatum& target_cell);
 
   int max_calc(ObDatum& base, const ObDatum& other, common::ObDatumCmpFuncType cmp_func, const bool is_number);
+  //overload max_calc for window_function's removable in max().
+  int max_calc(ObDatum& base, const ObDatum& other, common::ObDatumCmpFuncType cmp_func, const bool is_number, MaxMinInfo& max_min_info);
   int min_calc(ObDatum& base, const ObDatum& other, common::ObDatumCmpFuncType cmp_func, const bool is_number);
+  //overload min_calc for window_function's removable in min().
+  int min_calc(ObDatum& base, const ObDatum& other, common::ObDatumCmpFuncType cmp_func, const bool is_number, MaxMinInfo& max_min_info);
   int prepare_add_calc(const ObDatum& iter_value, AggrCell& aggr_cell, const ObAggrInfo& aggr_info);
   int add_calc(const ObDatum& iter_value, AggrCell& aggr_cell, const ObAggrInfo& aggr_info);
   int rollup_add_calc(AggrCell& aggr_cell, AggrCell& rollup_cell, const ObAggrInfo& aggr_info);

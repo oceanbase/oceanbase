@@ -1,0 +1,188 @@
+#description:
+--echo # Test of SQL window functions for removable.
+--echo # ----------------------------------------------------------------------
+--disable_warnings
+drop database if exists removal;
+create database removal;
+use removal;
+--disable_warnings
+
+
+#
+# ========================begin: scheme && data=========================
+#
+create table test_window
+(
+c1             integer              ,
+c2             integer              ,
+c3             integer              ,
+c4             integer              ,
+c5             double               ,
+c6             float                ,
+c7             integer unsigned     ,
+c8             integer              ,
+c9             integer
+ );
+insert into test_window values(1, 1, 1, 4305, 1.1, 1.2, 1, 3, 4);
+insert into test_window values(1, 1, 2, 2823, 2.1, 2.2, 2, 1, 1);
+insert into test_window values(1, 1, 3, 9148, 3.1, 3.2, 3, 4, 3);
+insert into test_window values(1, 1, 4, 5573, 4.1, 4.2, 4, 2, 3);
+insert into test_window values(1, 1, 5, 698, 5.1, 5.2, 5, 2, 5);
+insert into test_window values(1, 1, 6, 1783, 6.1, 6.2, 6, 5, 8);
+insert into test_window values(1, 1, 7, 2628, 7.1, 7.2, 7, 5, 2);
+insert into test_window values(1, 1, 8, 2819, 8.1, 8.2, 8, 6, 1);
+insert into test_window values(1, 1, 9, 545, 9.1, 9.2, 9, 8, 6);
+insert into test_window values(1, 1, 10, 1790, 10.1, 10.2, 10, 6, 8);
+insert into test_window values(1, 2, 11, 3494, 11.1, 11.2, 11, 1, 1);
+insert into test_window values(1, 2, 12, 4419, 12.1, 12.2, 12, 4, 3);
+insert into test_window values(1, 2, 13, 7885, 13.1, 13.2, 13, 1, 2);
+insert into test_window values(1, 2, 14, 9860, 14.1, 14.2, 14, 1, 4);
+insert into test_window values(1, 2, 15, 979, 15.1, 15.2, 15, 1, 5);
+insert into test_window values(1, 2, 16, 8563, 16.1, 16.2, 16, 4, 8);
+insert into test_window values(1, 2, 17, 3914, 17.1, 17.2, 17, 4, 2);
+insert into test_window values(1, 2, 18, 3736, 18.1, 18.2, 18, 5, 1);
+insert into test_window values(1, 2, 19, 1964, 19.1, 19.2, 19, 5, 6);
+insert into test_window values(1, 2, 20, 2848, 20.1, 20.2, 20, 8, 3);
+insert into test_window values(1, 3, 21, 335, 21.1, 21.2, 21, 3, 2);
+insert into test_window values(1, 3, 22, 2210, 22.1, 22.2, 22, 2, 5);
+insert into test_window values(1, 3, 23, 3416, 23.1, 23.2, 23, 5, 0);
+insert into test_window values(1, 3, 24, 2001, 24.1, 24.2, 24, 7, 1);
+insert into test_window values(1, 3, 25, 1621, 25.1, 25.2, 25, 1, 0);
+insert into test_window values(1, 3, 26, 2027, 26.1, 26.2, 26, 2, 5);
+insert into test_window values(1, 3, 27, 1771, 27.1, 27.2, 27, 4, 2);
+insert into test_window values(1, 3, 28, 6742, 28.1, 28.2, 28, 5, 1);
+insert into test_window values(1, 3, 29, 956, 29.1, 29.2, 29, 1, 1);
+insert into test_window values(1, 3, 30, 1877, 30.1, 30.2, 30, 3, 3);
+insert into test_window values(1, 4, 31, 9193, 31.1, 31.2, 31, 2, 5);
+insert into test_window values(1, 4, 32, 3085, 32.1, 32.2, 32, 7, 1);
+insert into test_window values(1, 4, 33, 2293, 33.1, 33.2, 33, 1, 8);
+insert into test_window values(1, 4, 34, 154, 34.1, 34.2, 34, 4, 2);
+insert into test_window values(1, 4, 35, 2731, 35.1, 35.2, 35, 4, 2);
+insert into test_window values(1, 4, 36, 2399, 36.1, 36.2, 36, 2, 1);
+insert into test_window values(1, 4, 37, 1770, 37.1, 37.2, 37, 6, 2);
+insert into test_window values(1, 4, 38, 3047, 38.1, 38.2, 38, 3, 4);
+insert into test_window values(1, 4, 39, 7746, 39.1, 39.2, 39, 8, 5);
+insert into test_window values(1, 4, 40, 154, 40.1, 40.2, 40, 2, 1);
+insert into test_window values(2, 1, 1, 4305, 1.1, 1.2, 1, 3, 4);
+insert into test_window values(2, 1, 2, 2823, 2.1, 2.2, 2, 1, 1);
+insert into test_window values(2, 1, 3, 9148, 3.1, 3.2, 3, 4, 3);
+insert into test_window values(2, 1, 4, 5573, 4.1, 4.2, 4, 2, 3);
+insert into test_window values(2, 1, 5, 698, 5.1, 5.2, 5, 2, 5);
+insert into test_window values(2, 1, 6, 1783, 6.1, 6.2, 6, 5, 8);
+insert into test_window values(2, 1, 7, 2628, 7.1, 7.2, 7, 5, 2);
+insert into test_window values(2, 1, 8, 2819, 8.1, 8.2, 8, 6, 1);
+insert into test_window values(2, 1, 9, 545, 9.1, 9.2, 9, 8, 6);
+insert into test_window values(2, 1, 10, 1790, 10.1, 10.2, 10, 6, 8);
+insert into test_window values(2, 2, 11, 3494, 11.1, 11.2, 11, 1, 1);
+insert into test_window values(2, 2, 12, 4419, 12.1, 12.2, 12, 4, 3);
+insert into test_window values(2, 2, 13, 7885, 13.1, 13.2, 13, 1, 2);
+insert into test_window values(2, 2, 14, 9860, 14.1, 14.2, 14, 1, 4);
+insert into test_window values(2, 2, 15, 979, 15.1, 15.2, 15, 1, 5);
+insert into test_window values(2, 2, 16, 8563, 16.1, 16.2, 16, 4, 8);
+insert into test_window values(2, 2, 17, 3914, 17.1, 17.2, 17, 4, 2);
+insert into test_window values(2, 2, 18, 3736, 18.1, 18.2, 18, 5, 1);
+insert into test_window values(2, 2, 19, 1964, 19.1, 19.2, 19, 5, 6);
+insert into test_window values(2, 2, 20, 2848, 20.1, 20.2, 20, 8, 3);
+insert into test_window values(2, 3, 21, 335, 21.1, 21.2, 21, 3, 2);
+insert into test_window values(2, 3, 22, 2210, 22.1, 22.2, 22, 2, 5);
+insert into test_window values(2, 3, 23, 3416, 23.1, 23.2, 23, 5, 0);
+insert into test_window values(2, 3, 24, 2001, 24.1, 24.2, 24, 7, 1);
+insert into test_window values(2, 3, 25, 1621, 25.1, 25.2, 25, 1, 0);
+insert into test_window values(2, 3, 26, 2027, 26.1, 26.2, 26, 2, 5);
+insert into test_window values(2, 3, 27, 1771, 27.1, 27.2, 27, 4, 2);
+insert into test_window values(2, 3, 28, 6742, 28.1, 28.2, 28, 5, 1);
+insert into test_window values(2, 3, 29, 956, 29.1, 29.2, 29, 1, 1);
+insert into test_window values(2, 3, 30, 1877, 30.1, 30.2, 30, 3, 3);
+insert into test_window values(2, 4, 31, 9193, 31.1, 31.2, 31, 2, 5);
+insert into test_window values(2, 4, 32, 3085, 32.1, 32.2, 32, 7, 1);
+insert into test_window values(2, 4, 33, 2293, 33.1, 33.2, 33, 1, 8);
+insert into test_window values(2, 4, 34, 154, 34.1, 34.2, 34, 4, 2);
+insert into test_window values(2, 4, 35, 2731, 35.1, 35.2, 35, 4, 2);
+insert into test_window values(2, 4, 36, 2399, 36.1, 36.2, 36, 2, 1);
+insert into test_window values(2, 4, 37, 1770, 37.1, 37.2, 37, 6, 2);
+insert into test_window values(2, 4, 38, 3047, 38.1, 38.2, 38, 3, 4);
+insert into test_window values(2, 4, 39, 7746, 39.1, 39.2, 39, 8, 5);
+insert into test_window values(2, 4, 40, 154, 40.1, 40.2, 40, 2, 1);
+#
+# ========================end: scheme && data=========================
+#
+--echo # test rows for removable.
+--echo # test sum(), int for removable.
+select sum(c1) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test max(), int for removable. max() only records max value index, not concern data type. 
+select max(c4) over (partition by c1 order by c3 rows between 5 preceding and 5 following) from test_window;
+
+--echo # test min(), int for removable. min() only records min value index, not concern data type. 
+select min(c4) over (partition by c1 order by c3 rows between 5 preceding and 5 following) from test_window;
+
+--echo # test count(), int for removable.
+select count(c1) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test avg(), int for removable.
+select avg(c4) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test sum(), double for removable.
+#select sum(c5) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test sum(), float for removable.
+select sum(c6) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test sum(), int unsigned for removable.
+select sum(c7) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test count(), double for removable. count() only records count, not concern data type. 
+select count(c5) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test avg(), double for removable.
+#select avg(c5) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test sum(), mul_window in different partition for removable.
+select sum(c1) over (partition by c3 order by c3 rows between 1 preceding and 1 following) , sum(c1) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test sum(), max(), mul_window in different partition for removable.
+select max(c4) over (partition by c3 order by c3 rows between 5 preceding and 5 following) , sum(c1) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--echo # test max(), min(), mul_window in different partition with common subset "c1" for removable.
+select max(c4) over (partition by c1 order by c3 rows between 5 preceding and 5 following) , min(c4) over (partition by c1,c2 order by c3 rows between 5 preceding and 5 following) from test_window;
+
+--echo # test avg(), sum(), mul_window in different partition with common subset "c1" for removable.
+select avg(c4) over (partition by c1 order by c3 rows between 5 preceding and 5 following) , sum(c4) over (partition by c1,c2 order by c3 rows between 5 preceding and 5 following) from test_window;
+
+--echo # test range for removable.
+--echo # test max(), int for removable. max() only records max value index, not concern data type. 
+select max(c4) over (partition by c1 order by c2 range between 1 preceding and 1 following) from test_window;
+
+--echo # test min(), int for removable. min() only records min value index, not concern data type. 
+select min(c4) over (partition by c1 order by c2 range between 1 preceding and 1 following) from test_window;
+
+--echo # test count(), int for removable. count() only records count, not concern data type. 
+select count(c4) over (partition by c1 order by c2 range between 1 preceding and 1 following) from test_window;
+
+--echo # test sum(), int for removable.
+select sum(c1) over (partition by c1 order by c2 range between 1 preceding and 1 following) from test_window;
+
+--echo # test avg(), int for removable.
+select avg(c4) over (partition by c1 order by c2 range between 1 preceding and 1 following) from test_window;
+
+--echo # test avg(), count(), mul_window in different partition with common subset "c1" for removable.
+select avg(c4) over (partition by c1 order by c2 range between 1 preceding and 1 following), count(c4) over (partition by c1,c2 order by c2 range between 1 preceding and 1 following) from test_window;
+
+--echo # test max(), min(), mul_window in different partition with common subset "c1" for removable.
+select max(c4) over (partition by c1 order by c2 range between 1 preceding and 1 following), min(c4) over (partition by c1,c2 order by c2 range between 1 preceding and 1 following) from test_window;
+
+--echo # test max(), min(), mul_window in different partition with common subset "c1" for segment_tree, use variable intreval.
+select max(c4) over (partition by c1 order by c2 range between 1 preceding and 1 following), min(c4) over (partition by c1,c2 order by c2 range between c8 preceding and c9 following) from test_window;
+
+--echo # test sum(), avg(), mul_window in different partition with common subset "c1" for segment_tree, use variable intreval.
+select sum(c4) over (partition by c1 order by c2 range between c8 preceding and 1 following), avg(c4) over (partition by c1,c2 order by c2 range between 1 preceding and c9 following) from test_window;
+
+--echo # test sum(), max(), mul_window in same partition with "c1" for segment_tree, use variable intreval.
+select sum(c1) over (partition by c1 order by c3 rows between c8 preceding and c9 following) , max(c4) over (partition by c1 order by c3 rows between c8 preceding and 1 following) from test_window;
+--echo # test parallel's correctness
+select /*+parallel(2)*/ sum(c1) over (partition by c1 order by c3 rows between c8 preceding and c9 following) , sum(c1) over (partition by c1 order by c3 rows between c8 preceding and c9 following), max(c4) over (partition by c1 order by c3 rows between 1 preceding and 1 following) from test_window;
+
+--disable_warnings
+drop database if exists removal;
+--disable_warnings
+
