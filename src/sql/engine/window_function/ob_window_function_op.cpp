@@ -27,6 +27,7 @@
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 
+#include "lib/allocator/ob_malloc.h"
 namespace oceanbase {
 using namespace common;
 namespace sql {
@@ -34,7 +35,7 @@ namespace sql {
 OB_SERIALIZE_MEMBER(
     WinFuncInfo::ExtBound, is_preceding_, is_unbounded_, is_nmb_literal_, between_value_expr_, range_bound_expr_);
 
-OB_SERIALIZE_MEMBER(WinFuncInfo, win_type_, func_type_, is_ignore_null_, is_from_first_, expr_, aggr_info_, upper_,
+OB_SERIALIZE_MEMBER(WinFuncInfo, win_type_, func_type_, is_ignore_null_, is_from_first_, is_support_aggr_, is_interval_param_, expr_, aggr_info_, upper_,
     lower_, param_exprs_, partition_exprs_, sort_exprs_, sort_collations_, sort_cmp_funcs_);
 
 OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec), wf_infos_, all_expr_, is_parallel_);
@@ -81,6 +82,70 @@ int ObWindowFunctionOp::AggrCell::trans_self(const ObRADatumStore::StoredRow& ro
   }
   return ret;
 }
+//overload trans_self for max, min.
+int ObWindowFunctionOp::AggrCell::trans_self(const ObRADatumStore::StoredRow& row, MaxMinInfo& max_min_info)
+{
+  int ret = OB_SUCCESS;
+  ObAggregateProcessor::GroupRow* group_row = NULL;
+  if (!finish_prepared_ && OB_FAIL(aggr_processor_.init_one_group())) {
+    LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+  } else if (OB_FAIL(aggr_processor_.get_group_row(0, group_row))) {
+    LOG_WARN("failed to get_group_row", K(ret));
+  } else if (OB_ISNULL(group_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("group_row is null", K(ret));
+  } else if (!finish_prepared_) {
+    if ((OB_FAIL(aggr_processor_.prepare(*group_row)))) {
+      LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+    } else {
+      finish_prepared_ = true;
+    }
+  } else {
+    if (OB_FAIL(aggr_processor_.process(*group_row, max_min_info))) {
+      LOG_WARN("fail to process the aggr func", K(ret), K(row));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // uppon invoke inv_trans(), forbiden it to reuse the last_result
+    got_result_ = false;
+  }
+  return ret;
+}
+// removable for aggr_fun.
+int ObWindowFunctionOp::AggrCell::inv_trans_self(const ObRADatumStore::StoredRow& row, int64_t is_support_aggr)
+{
+  int ret = OB_SUCCESS;
+  //is_support_aggr = 1 means supporting sum, count and derive functions in removal method.
+  if (is_support_aggr == 1) {
+    ObAggregateProcessor::GroupRow* group_row = NULL;
+    if (!pre_finish_prepared_ && OB_FAIL(pre_aggr_processor_.init_one_group())) {
+      LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+    } else if (OB_FAIL(pre_aggr_processor_.get_group_row(0, group_row))) {
+      LOG_WARN("failed to get_group_row", K(ret));
+    } else if (OB_ISNULL(group_row)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("group_row is null", K(ret));
+    } else if (!pre_finish_prepared_) {
+      if ((OB_FAIL(pre_aggr_processor_.prepare(*group_row)))) {
+        LOG_WARN("fail to prepare the aggr func", K(ret), K(row));
+      } else {
+        pre_finish_prepared_ = true;
+      }
+    } else {
+      if (OB_FAIL(pre_aggr_processor_.process(*group_row))) {
+        LOG_WARN("fail to process the aggr func", K(ret), K(row));
+      }
+    
+    }
+
+    if (OB_SUCC(ret)) {
+      // uppon invoke trans(), forbiden it to reuse the last_result
+      pre_got_result_ = false;
+    }
+  }
+  return ret;
+}
 
 int ObWindowFunctionOp::AggrCell::final(ObDatum& val)
 {
@@ -99,6 +164,27 @@ int ObWindowFunctionOp::AggrCell::final(ObDatum& val)
   } else {
     val = static_cast<ObDatum>(result_);
   }
+  return ret;
+}
+//removable for sum, avg, count, variance, stddev, var_*, stddev_*.
+int ObWindowFunctionOp::AggrCell::pre_final(ObDatum& pre_val)
+{
+  int ret = OB_SUCCESS;
+  if (!pre_got_result_) {
+    if (OB_FAIL(pre_aggr_processor_.collect(0))) {
+      LOG_WARN("fail to collect", K(ret));
+    } else {
+      pre_val = wf_info_.aggr_info_.expr_->locate_expr_datum(op_.eval_ctx_);
+      if (OB_FAIL(pre_aggr_processor_.clone_cell(pre_result_, pre_val, wf_info_.aggr_info_.expr_->obj_meta_.is_number()))) {
+        LOG_WARN("fail to clone_cell", K(ret));
+      } else {
+        pre_got_result_ = true;
+      }
+    }
+  } else {
+    pre_val = static_cast<ObDatum>(pre_result_);
+  }
+
   return ret;
 }
 
@@ -628,7 +714,7 @@ int ObWindowFunctionOp::check_same_partition(WinFuncCell& cell, bool& same)
 
 // todo: concern boundary
 bool ObWindowFunctionOp::Frame::need_restart_aggr(
-    const bool can_inv, const Frame& last_valid_frame, const Frame& new_frame)
+    const bool can_inv, const Frame& last_valid_frame, const Frame& new_frame, MaxMinInfo& max_min_info, int64_t is_support_aggr)
 {
   bool need = false;
   if (-1 == last_valid_frame.head_ || -1 == last_valid_frame.tail_) {
@@ -637,12 +723,29 @@ bool ObWindowFunctionOp::Frame::need_restart_aggr(
     const int64_t inc_cost =
         std::abs(last_valid_frame.head_ - new_frame.head_) + std::abs(last_valid_frame.tail_ - new_frame.tail_);
     const int64_t restart_cost = new_frame.tail_ - new_frame.head_;
+    //removable: can_inv = true;
     if (inc_cost > restart_cost) {
       need = true;
     } else if (!can_inv) {
       // has sliding-out row
       if (new_frame.head_ > last_valid_frame.head_ || new_frame.tail_ < last_valid_frame.tail_) {
         need = true;
+      }
+    }
+    // judge support removal aggr_fun.
+    if (new_frame.head_ > last_valid_frame.head_ || new_frame.tail_ < last_valid_frame.tail_) {
+      // is_support_aggr = -1 means type is not support now.
+      if (is_support_aggr == -1){
+        need = true;
+      }
+    }
+    
+    // judge max_min_index_ in [new_frame.head, new_frame.tail]
+    // is_support_aggr = 2 means supporting max,min in removal method.
+    if (is_support_aggr == 2) {
+      if (max_min_info.max_min_index_ < new_frame.head_ || max_min_info.max_min_index_ > new_frame.tail_) {
+        // The maximum value cannot be used, and the assignment needs to be traversed again.
+        need = true;      
       }
     }
   }
@@ -699,6 +802,10 @@ int ObWindowFunctionOp::init()
     local_allocator_.set_tenant_id(tenant_id);
     local_allocator_.set_label(ObModIds::OB_SQL_WINDOW_LOCAL);
     local_allocator_.set_ctx_id(ObCtxIds::WORK_AREA);
+    // segment tree use local allocator.
+    st_local_allocator_.set_tenant_id(tenant_id);
+    st_local_allocator_.set_label(ObModIds::OB_SQL_WINDOW_LOCAL);
+    st_local_allocator_.set_ctx_id(ObCtxIds::WORK_AREA);
     FuncAllocer func_alloc;
     func_alloc.local_allocator_ = &local_allocator_;
 
@@ -718,19 +825,19 @@ int ObWindowFunctionOp::init()
           case T_FUN_MEDIAN:
           case T_FUN_GROUP_PERCENTILE_CONT:
           case T_FUN_GROUP_PERCENTILE_DISC:
-          case T_FUN_STDDEV:
-          case T_FUN_STDDEV_SAMP:
-          case T_FUN_VARIANCE:
-          case T_FUN_STDDEV_POP:
+          case T_FUN_STDDEV: 
+          case T_FUN_STDDEV_SAMP: 
+          case T_FUN_VARIANCE: 
+          case T_FUN_STDDEV_POP: 
           case T_FUN_APPROX_COUNT_DISTINCT:
-          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
-          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
+          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS: 
+          case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: 
           case T_FUN_GROUP_CONCAT:
           case T_FUN_CORR:
           case T_FUN_COVAR_POP:
           case T_FUN_COVAR_SAMP:
-          case T_FUN_VAR_POP:
-          case T_FUN_VAR_SAMP:
+          case T_FUN_VAR_POP: 
+          case T_FUN_VAR_SAMP: 
           case T_FUN_REGR_SLOPE:
           case T_FUN_REGR_INTERCEPT:
           case T_FUN_REGR_COUNT:
@@ -758,7 +865,8 @@ int ObWindowFunctionOp::init()
             } else {
               AggrCell* aggr_func = new (tmp_ptr) AggrCell(wf_info, *this, *aggr_infos);
               aggr_func->aggr_processor_.set_in_window_func();
-              if (OB_FAIL(aggr_func->aggr_processor_.init())) {
+              aggr_func->pre_aggr_processor_.set_in_window_func();
+              if (OB_FAIL(aggr_func->aggr_processor_.init())&&OB_FAIL(aggr_func->pre_aggr_processor_.init())) {
                 LOG_WARN("failed to initialize init_group_rows", K(ret));
               } else {
                 wf_cell = aggr_func;
@@ -884,6 +992,7 @@ int ObWindowFunctionOp::inner_close()
   }
   wf_list_.reset();
   local_allocator_.reset();
+  st_local_allocator_.reset();
   return ObOperator::inner_close();
 }
 
@@ -892,6 +1001,7 @@ void ObWindowFunctionOp::destroy()
   rows_store_.~RowsStore();
   wf_list_.~WinFuncCellList();
   local_allocator_.~ObArenaAllocator();
+  st_local_allocator_.~ObArenaAllocator();
   ObOperator::destroy();
 }
 
@@ -951,12 +1061,230 @@ int ObWindowFunctionOp::reset_for_part_scan(const int64_t tenant_id)
   LOG_DEBUG("finish reset_for_part_scan", K(rows_store_), K(ret));
   return ret;
 }
+// sgement_tree build.
+int ObWindowFunctionOp::sgement_tree_build(RowsReader& row_reader, WinFuncCell& wf_cell, ObDatum& val, int64_t left, int64_t right, int64_t k, SegmentTreeNode *stn_array, int64_t& index){
+  int ret = OB_SUCCESS;
+  AggrCell* aggr_func = static_cast<AggrCell*>(&wf_cell);
+  const ObItemType aggr_fun = wf_cell.wf_info_.aggr_info_.get_expr_type(); 
+  const ObObjTypeClass tmp_column_tc = ob_obj_type_class(wf_cell.wf_info_.aggr_info_.get_first_child_type());
+  
+  stn_array[k].frame_left_ = left;
+  stn_array[k].frame_right_ = right;
+  if(left == right) {
+    const ObRADatumStore::StoredRow* cur_row = NULL;
+    aggr_func->reset_for_restart();
+    if (OB_FAIL(rows_store_.get_row(index, cur_row))) {
+      LOG_WARN("get cur row failed", K(ret), K(index));
+    } else if (FALSE_IT(clear_evaluated_flag())) {
+    } else if (OB_FAIL(cur_row->to_expr(get_all_expr(), eval_ctx_))) {
+      LOG_WARN("Failed to to_expr", K(ret));
+    }
+    
+    aggr_func->trans(*cur_row);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(aggr_func->final(val))) {
+        LOG_WARN("final failed", K(ret));
+      } else {
+        LOG_DEBUG("finish build", K(val));
+      }
+    }
+    
+    stn_array[k].value_.deep_copy(val, st_local_allocator_);
+    index++;
+  } else {
+    stn_array[k].value_.deep_copy(val, st_local_allocator_);
+    int64_t mid = left + (right - left)/2;
+    sgement_tree_build(row_reader, wf_cell, val, left, mid, k*2, stn_array, index);
+    sgement_tree_build(row_reader, wf_cell, val, mid+1, right, k*2+1, stn_array, index);
+    switch (aggr_fun) {
+      case T_FUN_COUNT: {
+        stn_array[k].value_.set_int((stn_array[2*k].value_.get_int()+stn_array[2*k+1].value_.get_int()));
+        
+        break;
+      }
+      case T_FUN_SUM:
+      case T_FUN_VARIANCE:
+      case T_FUN_VAR_POP:
+      case T_FUN_VAR_SAMP:
+      case T_FUN_STDDEV:
+      case T_FUN_STDDEV_SAMP:
+      case T_FUN_STDDEV_POP:
+      case T_FUN_AVG: {
+        switch (tmp_column_tc) {
+          case ObIntTC:
+          case ObUIntTC:
+          case ObNumberTC: {
+            number::ObNumber value_num_left(stn_array[2*k].value_.get_number());
+            number::ObNumber value_num_right(stn_array[2*k+1].value_.get_number());
+            char buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+            ObDataBuffer allocator_val(buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+            number::ObNumber value_num;
+            char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+            ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+            value_num.deep_copy_v3(value_num_left,tmp_allocator_val);
+            value_num.add(value_num_right, value_num,allocator_val);
+            stn_array[k].value_.set_number(value_num);
 
-int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, ObDatum& val)
+            break;
+          }
+          case ObDoubleTC: {
+            double value_double_left = stn_array[2*k].value_.get_double();
+            double value_double_right = stn_array[2*k+1].value_.get_double();
+            if (OB_UNLIKELY(ObArithExprOperator::is_double_out_of_range(value_double_left + value_double_right))) {
+              ret = OB_OPERATE_OVERFLOW;
+              char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
+              int64_t pos = 0;
+              databuff_printf(expr_str, OB_MAX_TWO_OPERATOR_EXPR_LENGTH, pos, "'(%le + %le)'", value_double_left, value_double_right);
+              LOG_USER_ERROR(OB_OPERATE_OVERFLOW, lib::is_oracle_mode() ? "BINARY_DOUBLE" : "DOUBLE", expr_str);
+              LOG_WARN("double out of range", K(value_double_left), K(value_double_right), K(ret));
+            } else {
+              stn_array[k].value_.set_double((value_double_left + value_double_right));
+            }
+            
+            break;
+          }
+          case ObFloatTC: {
+            float value_float_left = stn_array[2*k].value_.get_float();
+            float value_float_right = stn_array[2*k+1].value_.get_float();
+            if (OB_UNLIKELY(ObArithExprOperator::is_float_out_of_range(value_float_left + value_float_right))) {
+              ret = OB_OPERATE_OVERFLOW;
+              char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
+              int64_t pos = 0;
+              databuff_printf(expr_str, OB_MAX_TWO_OPERATOR_EXPR_LENGTH, pos, "'(%e + %e)'", value_float_left, value_float_right);
+              LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "BINARY_FLOAT", expr_str);
+              LOG_WARN("float out of range", K(value_float_left), K(value_float_right));
+            } else {
+              stn_array[k].value_.set_double((value_float_left + value_float_right));
+            }
+
+            break;
+          }
+          default: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support now", K(tmp_column_tc));
+
+            break;
+          }
+        }
+
+        break;
+      }
+      case T_FUN_MAX: {
+        switch (tmp_column_tc) {
+          case ObIntTC: {
+            stn_array[k].value_.set_int(max(stn_array[2*k].value_.get_int(), stn_array[2*k+1].value_.get_int()));
+            
+            break;
+          }
+          case ObUIntTC: {
+            stn_array[k].value_.set_uint(max(stn_array[2*k].value_.get_uint(), stn_array[2*k+1].value_.get_uint()));
+            
+            break;
+          }
+          case ObDoubleTC: {
+            double value_double_left = stn_array[2*k].value_.get_double();
+            double value_double_right = stn_array[2*k+1].value_.get_double();
+            double value_double = MAX(value_double_left,value_double_right);
+            stn_array[k].value_.set_double(value_double);
+
+            break;
+          }
+          case ObFloatTC: {
+            float value_float_left = stn_array[2*k].value_.get_float();
+            float value_float_right = stn_array[2*k+1].value_.get_float();
+            float value_float = MAX(value_float_left,value_float_right);
+            stn_array[k].value_.set_float(value_float);
+
+            break;
+          }
+          case ObNumberTC: {
+            number::ObNumber value_num_left(stn_array[2*k].value_.get_number());
+            number::ObNumber value_num_right(stn_array[2*k+1].value_.get_number());
+            char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+            ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+            number::ObNumber value_num;
+            value_num.deep_copy_v3((value_num_left > value_num_right) ? value_num_left : value_num_right, tmp_allocator_val);
+            stn_array[k].value_.set_number(value_num);
+            
+            break; 
+          }
+          default: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support now", K(tmp_column_tc));
+            
+            break;
+          }
+        }
+        
+        break;
+      }
+
+      case T_FUN_MIN: {
+        switch (tmp_column_tc) {
+          case ObIntTC: {
+            stn_array[k].value_.set_int(min(stn_array[2*k].value_.get_int(), stn_array[2*k+1].value_.get_int()));
+            
+            break;
+          }
+          case ObUIntTC: {
+            stn_array[k].value_.set_uint(min(stn_array[2*k].value_.get_uint(), stn_array[2*k+1].value_.get_uint()));
+            
+            break;
+          }
+          case ObDoubleTC: {
+            double value_double_left = stn_array[2*k].value_.get_double();
+            double value_double_right = stn_array[2*k+1].value_.get_double();
+            double value_double = MIN(value_double_left,value_double_right);
+            stn_array[k].value_.set_double(value_double);
+            
+            break;
+          }
+          case ObFloatTC: {
+            float value_float_left = stn_array[2*k].value_.get_float();
+            float value_float_right = stn_array[2*k+1].value_.get_float();
+            float value_float = MIN(value_float_left,value_float_right);
+            stn_array[k].value_.set_float(value_float);
+
+            break;
+          }
+          case ObNumberTC: {
+            number::ObNumber value_num_left(stn_array[2*k].value_.get_number());
+            number::ObNumber value_num_right(stn_array[2*k+1].value_.get_number());
+            char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+            ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+            number::ObNumber value_num;
+            value_num.deep_copy_v3((value_num_left < value_num_right) ? value_num_left : value_num_right, tmp_allocator_val);
+            stn_array[k].value_.set_number(value_num);
+            
+            break; 
+          }
+          default: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support now", K(tmp_column_tc));
+            
+            break;
+          }
+        }
+        
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support now", K(aggr_fun));
+        
+        break;
+      }
+    }
+
+  }
+
+  return ret;
+}
+// sgement_tree compute.
+int ObWindowFunctionOp::segment_tree_compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, ObDatum& val, SegmentTreeNode *stn_array)
 {
   int ret = OB_SUCCESS;
   const ObRADatumStore::StoredRow* row = NULL;
-
   Frame new_frame;
   bool upper_has_null = false;
   bool lower_has_null = false;
@@ -987,9 +1315,507 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
       if (wf_cell.is_aggr()) {
         AggrCell* aggr_func = static_cast<AggrCell*>(&wf_cell);
         const ObRADatumStore::StoredRow* cur_row = NULL;
+        // obtain aggr_fun & tmp_column_tc for segment_tree.
+        const ObItemType aggr_fun = wf_cell.wf_info_.aggr_info_.get_expr_type(); 
+        const ObObjTypeClass tmp_column_tc = ob_obj_type_class(wf_cell.wf_info_.aggr_info_.get_first_child_type());
         if (!Frame::same_frame(last_valid_frame, new_frame)) {
-          if (!Frame::need_restart_aggr(aggr_func->can_inv(), last_valid_frame, new_frame)) {
+          switch (aggr_fun) {
+            case T_FUN_SUM:
+            case T_FUN_VARIANCE:
+            case T_FUN_VAR_POP:
+            case T_FUN_VAR_SAMP:
+            case T_FUN_STDDEV:
+            case T_FUN_STDDEV_SAMP:
+            case T_FUN_STDDEV_POP:
+            case T_FUN_AVG: {
+              // init value for sum, count and derive functions.
+              switch (tmp_column_tc) {
+                case ObIntTC:
+                case ObUIntTC:
+                case ObNumberTC: {
+                  number::ObNumber t_num;
+                  val.set_number(t_num);
+                  break;
+                }
+                case ObDoubleTC: {
+                  double tmp_double = 0;
+                  val.set_double(tmp_double);
+                  break;
+                }
+                case ObFloatTC: {
+                  float tmp_float = 0;
+                  val.set_float(tmp_float);
+                  break;
+                }
+                default: {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("not support now", K(tmp_column_tc));
+                  break;
+                }
+              }
+              segment_tree_sum(1, stn_array, new_frame.head_, new_frame.tail_, val, tmp_column_tc);
+              LOG_DEBUG("finish use segment_tree for sum or avg",K(val));
+
+              break;
+            }
+            case T_FUN_MAX: {
+              segment_tree_max(1,stn_array,new_frame.head_,new_frame.tail_, val, tmp_column_tc);
+              LOG_DEBUG("finish use segment_tree for max",K(val));
+
+              break;
+            }
+            case T_FUN_MIN: {
+              segment_tree_min(1,stn_array,new_frame.head_,new_frame.tail_, val, tmp_column_tc);
+              LOG_DEBUG("finish use segment_tree for min",K(val));
+
+              break;
+            }
+            case T_FUN_COUNT: {
+              int64_t tmp_int = 0;
+              val.set_int(tmp_int);
+              segment_tree_count(1, stn_array, new_frame.head_, new_frame.tail_, val, tmp_column_tc);
+              LOG_DEBUG("finish use segment_tree for count",K(val));
+
+              break;
+            }
+            default: {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not support now", K(aggr_fun));
+
+              break;
+            }
+          }
+           
+        } else {
+          LOG_DEBUG("use last value");      
+          // reuse last result directly...
+        }
+        if (OB_SUCC(ret)) {
+            last_valid_frame = new_frame;
+            LOG_DEBUG("finish compute", K(row_idx), K(last_valid_frame), K(val));
+        }
+      } 
+    } else {
+      // special case
+      if (T_FUN_COUNT == wf_cell.wf_info_.func_type_) {
+        ObDatum& expr_datum = wf_cell.wf_info_.aggr_info_.expr_->locate_datum_for_write(eval_ctx_);
+        expr_datum.set_int(0);
+        wf_cell.wf_info_.aggr_info_.expr_->get_eval_info(eval_ctx_).evaluated_ = true;
+        val = static_cast<ObDatum&>(expr_datum);
+      } else {
+        // set null for invalid frame
+        val.set_null();
+      }
+    }
+  }
+  return ret;
+}
+
+// sgement_tree compute sum.
+int ObWindowFunctionOp::segment_tree_sum(int64_t k, SegmentTreeNode *stn_array, int64_t head, int64_t tail, ObDatum& val, const ObObjTypeClass tmp_column_tc)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("segment_tree sum start",K(k),K(stn_array[k].frame_left_),K(stn_array[k].frame_right_));
+  if(stn_array[k].frame_left_ >= head && stn_array[k].frame_right_ <= tail) 
+  {
+      if (ObIntTC == tmp_column_tc || ObUIntTC == tmp_column_tc || ObNumberTC == tmp_column_tc) {
+        char buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+        ObDataBuffer tmp_allocator_val(buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+        number::ObNumber tmp_num(val.get_number());
+        tmp_num.add(stn_array[k].value_.get_number(), tmp_num ,tmp_allocator_val);
+
+        val.set_number(tmp_num);
+      } else if (ObDoubleTC == tmp_column_tc) {
+        if (OB_UNLIKELY(ObArithExprOperator::is_double_out_of_range(stn_array[k].value_.get_double() + val.get_double()))) {
+          ret = OB_OPERATE_OVERFLOW;
+            char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
+            int64_t pos = 0;
+            databuff_printf(expr_str, OB_MAX_TWO_OPERATOR_EXPR_LENGTH, pos, "'(%le + %le)'", stn_array[k].value_.get_double(), val.get_double());
+            LOG_USER_ERROR(OB_OPERATE_OVERFLOW, lib::is_oracle_mode() ? "BINARY_DOUBLE" : "DOUBLE", expr_str);
+            LOG_WARN("double out of range", K(stn_array[k].value_.get_double()), K(val.get_double()), K(ret));
+        } else {
+          val.set_double((stn_array[k].value_.get_double() + val.get_double()));
+        }
+        
+      } else if (ObFloatTC == tmp_column_tc) {
+        if (OB_UNLIKELY(ObArithExprOperator::is_float_out_of_range(stn_array[k].value_.get_float() + val.get_float()))) {
+          ret = OB_OPERATE_OVERFLOW;
+          char expr_str[OB_MAX_TWO_OPERATOR_EXPR_LENGTH];
+          int64_t pos = 0;
+          databuff_printf(expr_str, OB_MAX_TWO_OPERATOR_EXPR_LENGTH, pos, "'(%e + %e)'", stn_array[k].value_.get_float(), val.get_float());
+          LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "BINARY_FLOAT", expr_str);
+          LOG_WARN("float out of range", K(stn_array[k].value_.get_float()), K(val.get_float()));
+        } else {
+          val.set_float((stn_array[k].value_.get_float() + val.get_float()));
+        }
+        
+      }
+  } else {
+    int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+    if(head <= mid) segment_tree_sum(k*2, stn_array, head, tail, val, tmp_column_tc);
+    if(tail > mid) segment_tree_sum(k*2+1, stn_array, head, tail, val, tmp_column_tc);
+  }
+  return ret;
+}
+
+// sgement_tree compute count.
+int ObWindowFunctionOp::segment_tree_count(int64_t k, SegmentTreeNode *stn_array, int64_t head, int64_t tail, ObDatum& val, const ObObjTypeClass tmp_column_tc)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("segment_tree count start",K(k),K(stn_array[k].frame_left_),K(stn_array[k].frame_right_));
+  if(stn_array[k].frame_left_ >= head && stn_array[k].frame_right_ <= tail) 
+  {   
+    val.set_int((stn_array[k].value_.get_int() + val.get_int()));
+  } else {
+    int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+    if(head <= mid) segment_tree_count(k*2, stn_array, head, tail, val, tmp_column_tc);
+    if(tail > mid) segment_tree_count(k*2+1, stn_array, head, tail, val, tmp_column_tc);
+  }
+  return ret;
+}
+
+// sgement_tree compute max.
+int ObWindowFunctionOp::segment_tree_max(int64_t k, SegmentTreeNode *stn_array, int64_t x, int64_t y,  ObDatum& val, const ObObjTypeClass tmp_column_tc)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("segment_tree max start",K(k),K(stn_array[k].frame_left_),K(stn_array[k].frame_right_));
+  switch (tmp_column_tc) {
+    case ObIntTC: {
+      int64_t max_value_int = INT64_MIN;
+      bool flag = true;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_int(stn_array[k].value_.get_int());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        
+        if(x <= mid) {
+          segment_tree_max(k*2, stn_array, x, y, val, tmp_column_tc);
+          max_value_int = max(max_value_int, val.get_int());
+        }
+        
+        if(y > mid) {
+          segment_tree_max(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          max_value_int = max(max_value_int, val.get_int());
+        } 
+        val.set_int(max_value_int);
+      }
+
+      break;
+    }
+    case ObUIntTC: {
+      int64_t max_value_uint = 0;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_uint(stn_array[k].value_.get_uint());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_max(k*2, stn_array, x, y, val, tmp_column_tc);
+          max_value_uint = max(max_value_uint, val.get_uint());
+        }
+        
+        if(y > mid) {
+          segment_tree_max(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          max_value_uint = max(max_value_uint, val.get_uint());
+        }
+        val.set_uint(max_value_uint);
+      }
+
+      break;
+    }
+    case ObDoubleTC: {
+      double max_value_double = -DOUBLE_MAX;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_double(stn_array[k].value_.get_double());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_max(k*2, stn_array, x, y, val, tmp_column_tc);
+          max_value_double = MAX(max_value_double, val.get_double());
+        }
+        
+        if(y > mid) {
+          segment_tree_max(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          max_value_double = MAX(max_value_double, val.get_double());
+        }
+        val.set_double(max_value_double);
+      }
+
+      break;
+    }
+    case ObFloatTC: {
+      float max_value_float = -FLOAT_MAX;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_float(stn_array[k].value_.get_float());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_max(k*2, stn_array, x, y, val, tmp_column_tc);
+          max_value_float = MAX(max_value_float, val.get_float());
+        }
+        
+        if(y > mid) {
+          segment_tree_max(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          max_value_float = MAX(max_value_float, val.get_float());
+        }
+        val.set_float(max_value_float);
+      }
+
+      break;
+    }
+    case ObNumberTC: {
+      number::ObNumber max_value_num;
+      bool flag = true;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        number::ObNumber value_num_tmp(stn_array[k].value_.get_number());
+        char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+        ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+        number::ObNumber value_num;
+        value_num.deep_copy_v3(value_num_tmp,tmp_allocator_val);
+        stn_array[k].value_.set_number(value_num);
+        val.set_number(value_num);
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_max(k*2, stn_array, x, y, val, tmp_column_tc);
+          char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+          if (flag) {
+            max_value_num.deep_copy_v3(val.get_number(), tmp_allocator_val);
+            flag = false;
+          } else {
+            max_value_num.deep_copy_v3((max_value_num > val.get_number()) ? max_value_num : val.get_number(), tmp_allocator_val);
+          }
+        }
+        
+        if(y > mid) {
+          segment_tree_max(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+          if (flag) {
+            max_value_num.deep_copy_v3(val.get_number(), tmp_allocator_val);
+            flag = false;
+          } else {
+            max_value_num.deep_copy_v3((max_value_num > val.get_number()) ? max_value_num : val.get_number(), tmp_allocator_val);
+          }
+        } 
+        val.set_number(max_value_num);
+      }
+
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support now", K(tmp_column_tc));
+      break;
+    }
+  }
+  return ret;
+}
+
+// sgement_tree compute min.
+int ObWindowFunctionOp::segment_tree_min(int64_t k, SegmentTreeNode *stn_array, int64_t x, int64_t y,  ObDatum& val, const ObObjTypeClass tmp_column_tc)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("segment_tree min start",K(k),K(stn_array[k].frame_left_),K(stn_array[k].frame_right_));
+  switch (tmp_column_tc) {
+    case ObIntTC: {
+      int64_t min_value_int = INT64_MAX;
+      bool flag = true;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_int(stn_array[k].value_.get_int());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        
+        if(x <= mid) {
+          segment_tree_min(k*2, stn_array, x, y, val, tmp_column_tc);
+          min_value_int = min(min_value_int, val.get_int());
+        }
+        
+        if(y > mid) {
+          segment_tree_min(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          min_value_int = min(min_value_int, val.get_int());
+        } 
+        val.set_int(min_value_int);
+      }
+
+      break;
+    }
+    case ObUIntTC: {
+      int64_t min_value_uint = UINT_MAX;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_uint(stn_array[k].value_.get_uint());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_min(k*2, stn_array, x, y, val, tmp_column_tc);
+          min_value_uint = min(min_value_uint, val.get_uint());
+        }
+        
+        if(y > mid) {
+          segment_tree_min(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          min_value_uint = min(min_value_uint, val.get_uint());
+        }
+        val.set_uint(min_value_uint);
+      }
+
+      break;
+    }
+    case ObDoubleTC: {
+      double min_value_double = DOUBLE_MAX;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_double(stn_array[k].value_.get_double());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_min(k*2, stn_array, x, y, val, tmp_column_tc);
+          min_value_double = MIN(min_value_double, val.get_double());
+        }
+        
+        if(y > mid) {
+          segment_tree_min(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          min_value_double = MIN(min_value_double, val.get_double());
+        }
+        val.set_double(min_value_double);
+      }
+
+      break;
+    }
+    case ObFloatTC: {
+      float min_value_float = FLOAT_MAX;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        val.set_float(stn_array[k].value_.get_float());
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_min(k*2, stn_array, x, y, val, tmp_column_tc);
+          min_value_float = MIN(min_value_float, val.get_float());
+        }
+        
+        if(y > mid) {
+          segment_tree_min(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          min_value_float = MIN(min_value_float, val.get_float());
+        }
+        val.set_float(min_value_float);
+      }
+
+      break;
+    }
+    case ObNumberTC: {
+      number::ObNumber min_value_num;
+      bool flag = true;
+      if(stn_array[k].frame_left_ >= x && stn_array[k].frame_right_ <= y) 
+      {
+        number::ObNumber value_num_tmp(stn_array[k].value_.get_number());
+        char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+        ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+        number::ObNumber value_num;
+        value_num.deep_copy_v3(value_num_tmp,tmp_allocator_val);
+        stn_array[k].value_.set_number(value_num);
+        val.set_number(value_num);
+      }
+      else {
+        int64_t mid = stn_array[k].frame_left_ + (stn_array[k].frame_right_ - stn_array[k].frame_left_) / 2; 
+        if(x <= mid) {
+          segment_tree_min(k*2, stn_array, x, y, val, tmp_column_tc);
+          char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+          if (flag) {
+            min_value_num.deep_copy_v3(val.get_number(), tmp_allocator_val);
+            flag = false;
+          } else {
+            min_value_num.deep_copy_v3((min_value_num < val.get_number()) ? min_value_num : val.get_number(), tmp_allocator_val);
+          }
+        }
+        
+        if(y > mid) {
+          segment_tree_min(k*2+1, stn_array, x, y, val, tmp_column_tc);
+          char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+          ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+          if (flag) {
+            min_value_num.deep_copy_v3(val.get_number(), tmp_allocator_val);
+            flag = false;
+          } else {
+            min_value_num.deep_copy_v3((min_value_num < val.get_number()) ? min_value_num : val.get_number(), tmp_allocator_val);
+          }
+        } 
+        val.set_number(min_value_num);
+      }
+
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support now", K(tmp_column_tc));
+
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, const int64_t row_idx, ObDatum& val, MaxMinInfo& max_min_info, bool& use_removal)
+{
+  int ret = OB_SUCCESS;
+  const ObRADatumStore::StoredRow* row = NULL;
+  Frame new_frame;
+  bool upper_has_null = false;
+  bool lower_has_null = false;
+  if (OB_FAIL(rows_store_.get_row(row_idx, row))) {
+    LOG_WARN("failed to get row", K(ret), K(row_idx));
+  } else if (FALSE_IT(clear_evaluated_flag())) {
+  } else if (OB_FAIL(row->to_expr(get_all_expr(), eval_ctx_))) {
+    LOG_WARN("Failed to to_expr", K(ret));
+  } else if (OB_FAIL(get_pos(row_reader, wf_cell, row_idx, *row, true, new_frame.head_, upper_has_null))) {
+    LOG_WARN("get pos failed", K(ret));
+  } else if (OB_FAIL(get_pos(row_reader, wf_cell, row_idx, *row, false, new_frame.tail_, lower_has_null))) {
+    LOG_WARN("get pos failed", K(ret));
+  } else {
+    Frame& last_valid_frame = wf_cell.last_valid_frame_;
+    Frame part_frame(wf_cell.part_first_row_idx_, get_part_end_idx());
+
+    LOG_DEBUG("dump frame",
+        K(part_frame),
+        K(last_valid_frame),
+        K(new_frame),
+        K(rows_store_.count()),
+        K(row_idx),
+        K(upper_has_null),
+        K(lower_has_null),
+        K(wf_cell));
+    if (!upper_has_null && !lower_has_null && Frame::valid_frame(part_frame, new_frame)) {
+      Frame::prune_frame(part_frame, new_frame);
+      if (wf_cell.is_aggr()) {
+        AggrCell* aggr_func = static_cast<AggrCell*>(&wf_cell);
+        const ObRADatumStore::StoredRow* cur_row = NULL;
+        // obtain aggr_fun & tmp_column_tc for removable.
+        const ObItemType aggr_fun = wf_cell.wf_info_.aggr_info_.get_expr_type(); 
+        int64_t is_support_aggr = wf_cell.wf_info_.is_support_aggr_;
+        const ObObjTypeClass tmp_column_tc = ob_obj_type_class(wf_cell.wf_info_.aggr_info_.get_first_child_type());
+        if (!Frame::same_frame(last_valid_frame, new_frame)) {
+          if (!Frame::need_restart_aggr(aggr_func->can_inv(), last_valid_frame, new_frame, max_min_info, is_support_aggr)) {
             bool use_trans = new_frame.head_ < last_valid_frame.head_;
+            //judge use removal.
+            if((last_valid_frame.head_!=-1)&&(new_frame.head_ > last_valid_frame.head_)){
+              use_removal = true;
+            }
             int64_t b = min(new_frame.head_, last_valid_frame.head_);
             int64_t e = max(new_frame.head_, last_valid_frame.head_);
             for (int64_t i = b; OB_SUCC(ret) && i < e; ++i) {
@@ -998,11 +1824,20 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
               } else if (FALSE_IT(clear_evaluated_flag())) {
               } else if (OB_FAIL(cur_row->to_expr(get_all_expr(), eval_ctx_))) {
                 LOG_WARN("Failed to to_expr", K(ret));
-              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row))) {
+              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row, max_min_info, is_support_aggr))) {
                 LOG_WARN("invoke failed", K(use_trans), K(ret));
+              }
+              //judge index change and record index.
+              if (max_min_info.is_change_index_) {
+                max_min_info.max_min_index_ = i;
+                max_min_info.is_change_index_ = false;
               }
             }
             use_trans = new_frame.tail_ > last_valid_frame.tail_;
+            //judge use removal.
+            if((last_valid_frame.head_!=-1)&&(new_frame.tail_ < last_valid_frame.tail_)){
+              use_removal = true;
+            }
             b = min(new_frame.tail_, last_valid_frame.tail_);
             e = max(new_frame.tail_, last_valid_frame.tail_);
             for (int64_t i = b + 1; OB_SUCC(ret) && i <= e; ++i) {
@@ -1011,12 +1846,18 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
               } else if (FALSE_IT(clear_evaluated_flag())) {
               } else if (OB_FAIL(cur_row->to_expr(get_all_expr(), eval_ctx_))) {
                 LOG_WARN("Failed to to_expr", K(ret));
-              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row))) {
+              } else if (OB_FAIL(aggr_func->invoke_aggr(use_trans, *cur_row, max_min_info, is_support_aggr))) {
                 LOG_WARN("invoke failed", K(use_trans), K(ret));
+              }
+              //judge index change and record index.
+              if (max_min_info.is_change_index_) {
+                max_min_info.max_min_index_ = i;
+                max_min_info.is_change_index_ = false;
               }
             }
           } else {
             aggr_func->reset_for_restart();
+            use_removal = false;
             LOG_DEBUG("restart agg", K(last_valid_frame), K(new_frame), KPC(aggr_func));
             for (int64_t i = new_frame.head_; OB_SUCC(ret) && i <= new_frame.tail_; ++i) {
               if (OB_FAIL(rows_store_.get_row(i, cur_row))) {
@@ -1024,19 +1865,125 @@ int ObWindowFunctionOp::compute(RowsReader& row_reader, WinFuncCell& wf_cell, co
               } else if (FALSE_IT(clear_evaluated_flag())) {
               } else if (OB_FAIL(cur_row->to_expr(get_all_expr(), eval_ctx_))) {
                 LOG_WARN("Failed to to_expr", K(ret));
-              } else if (OB_FAIL(aggr_func->trans(*cur_row))) {
+              } else if (OB_FAIL(aggr_func->trans(*cur_row, max_min_info, is_support_aggr))) {
                 LOG_WARN("trans failed", K(ret));
+              }
+              //judge index change and record index.
+              if (max_min_info.is_change_index_) {
+                max_min_info.max_min_index_ = i;
+                max_min_info.is_change_index_ = false;
               }
             }
           }
         } else {
-          LOG_DEBUG("use last value");
+          LOG_DEBUG("use last value");      
           // reuse last result, invoke final directly...
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(aggr_func->final(val))) {
             LOG_WARN("final failed", K(ret));
           } else {
+            // removable for sum, avg, count, variance, stddev, var_*, stddev_* start.
+            // is_support_aggr != -1 means supporting type in removal method.
+            if (is_support_aggr != -1) {
+              if ((last_valid_frame.head_!=-1)&&(new_frame.head_ <= last_valid_frame.head_)&&(new_frame.tail_ >= last_valid_frame.tail_)) {
+                aggr_func->pre_got_result_ = false;
+              }
+              switch(aggr_fun) {
+                case T_FUN_COUNT: {
+                  // count type is int.
+                  if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                    int64_t val_count = val.get_int();
+                    if (OB_FAIL(aggr_func->pre_final(val))) {
+                      LOG_WARN("pre_final failed", K(ret));
+                    }
+                    int64_t pre_val_count = val.get_int();
+                    int64_t tmp_val_count = val_count - pre_val_count;
+                    val.set_int(tmp_val_count);                   
+                    LOG_DEBUG("finish use removal count", K(row_idx), K(val));
+                  }
+                  break;
+                }
+                case T_FUN_SUM:
+                case T_FUN_VARIANCE:
+                case T_FUN_VAR_POP:
+                case T_FUN_VAR_SAMP:
+                case T_FUN_STDDEV:
+                case T_FUN_STDDEV_SAMP:
+                case T_FUN_STDDEV_POP:
+                case T_FUN_AVG: {
+                  //sum, count and derive functions' type: int&uint&number -> number.
+                  switch(tmp_column_tc) {
+                    case ObNumberTC:
+                    case ObIntTC: 
+                    case ObUIntTC: {
+                      if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                        number::ObNumber val_num(val.get_number());
+                        char tmp_buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+                        ObDataBuffer tmp_allocator_val(tmp_buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+                        number::ObNumber tmp_val_num;
+                        tmp_val_num.deep_copy_v3(val_num,tmp_allocator_val);
+                        if (OB_FAIL(aggr_func->pre_final(val))) {
+                          LOG_WARN("pre final failed", K(ret));
+                        }
+                        number::ObNumber pre_val_num(val.get_number());
+                        char buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN];
+                        ObDataBuffer allocator_val(buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
+                        tmp_val_num.sub(pre_val_num,tmp_val_num,allocator_val);
+                        
+                        val.set_number(tmp_val_num);
+                      }
+                      break;
+                    }
+                    case ObDoubleTC: {
+                      if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                        double val_double = val.get_double();
+                        if (OB_FAIL(aggr_func->pre_final(val))) {
+                          LOG_WARN("pre final failed", K(ret));
+                        }
+                        double pre_val_double = val.get_double();
+                        double tmp_val_double = val_double - pre_val_double;
+                        
+                        val.set_double(tmp_val_double);
+                      }
+                      break;
+                    }
+                    case ObFloatTC: {
+                      if ((last_valid_frame.head_!=-1)&&(use_removal)){
+                        float val_float = val.get_float();
+                        if (OB_FAIL(aggr_func->pre_final(val))) {
+                          LOG_WARN("final failed", K(ret));
+                        }
+                        float pre_val_float = val.get_float();
+                        float tmp_val_float = val_float - pre_val_float;
+                        
+                        val.set_float(tmp_val_float);
+                      }
+                      break;
+                    }
+                    default: {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("not support now", K(tmp_column_tc));
+                      break;
+                    }
+                  }
+                  LOG_DEBUG("finish use removal sum or avg", K(row_idx), K(val));
+                  break;
+                }
+                case T_FUN_MAX:
+                case T_FUN_MIN: {
+                  //do nothing.
+                  break;
+                }
+                default: {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("not support now", K(aggr_fun));
+                  break;
+                }
+              }
+            }           
+            // removable for sum, avg, count, variance, stddev, var_*, stddev_* end.
+            
             last_valid_frame = new_frame;
             LOG_DEBUG("finish compute", K(row_idx), K(last_valid_frame), K(val));
           }
@@ -1158,6 +2105,31 @@ int ObWindowFunctionOp::inner_get_next_row()
           wf->reset_for_restart();
           ObDatum result_datum;
           RowsReader row_reader(rows_store_);
+          // removable:
+          // removable for sum, avg, count, flag for judging current frame use removal method or not.
+          bool use_removal = false;     
+          // removable for max, min. defined in ob_aggregate_processor.h  
+          MaxMinInfo max_min_info;
+          LOG_DEBUG("before st_inner_get_next_row",
+          "total_size",
+          this->st_local_allocator_.get_arena().total(),
+          "used_size",
+          this->st_local_allocator_.get_arena().used());
+          // segment_tree:
+          // segment tree alloc memory.
+          SegmentTreeNode *stn_array = NULL;
+          // defense mechanism, when the number of rows in the partition <=10000000, we can use segment_tree method.
+          if (wf->wf_info_.is_interval_param_ && (wf->wf_info_.is_support_aggr_ != -1) && (rows_store_.count() <= 10000000)) {
+            int64_t tree_len = 4 * rows_store_.count() + 1;
+            void* ptr = NULL;
+            ptr = st_local_allocator_.alloc(sizeof(SegmentTreeNode) * tree_len);
+            stn_array = new (ptr) SegmentTreeNode();
+            int64_t index = wf->part_first_row_idx_;
+            // segment tree build.
+            if (OB_FAIL(sgement_tree_build(row_reader, *wf, result_datum, 0, rows_store_.count()-1, 1, stn_array, index))) {
+              LOG_WARN("segment tree build failed", K(ret));
+            } 
+          }
           for (int64_t i = wf->part_first_row_idx_; i < rows_store_.count() && OB_SUCC(ret); ++i) {
             // we should check status interval since this loop will occupy cpu!
             if (0 == ++check_times % CHECK_STATUS_INTERVAL) {
@@ -1165,13 +2137,32 @@ int ObWindowFunctionOp::inner_get_next_row()
                 break;
               }
             }
-            if (OB_FAIL(compute(row_reader, *wf, i, result_datum))) {
-              LOG_WARN("compute failed", K(ret));
-            } else if (OB_FAIL(collect_result(i, result_datum, *wf))) {
-              LOG_WARN("collect_result failed", K(ret));
-            }
+            
+            // segment tree compute.   
+            LOG_DEBUG("is interval param", K(wf->wf_info_.is_interval_param_));
+            // interval conclude variables & is support type, use segment tree method.
+            if (wf->wf_info_.is_interval_param_ && (wf->wf_info_.is_support_aggr_ != -1) && (rows_store_.count() <= 10000000)) {
+              if (OB_FAIL(segment_tree_compute(row_reader, *wf, i, result_datum, stn_array))) {
+                LOG_WARN("compute failed", K(ret));
+              } else if (OB_FAIL(collect_result(i, result_datum, *wf))) {
+                LOG_WARN("collect_result failed", K(ret));
+              }
+            } else {
+              // orginal compute.
+              if (OB_FAIL(compute(row_reader, *wf, i, result_datum, max_min_info, use_removal))) {
+                LOG_WARN("compute failed", K(ret));
+              } else if (OB_FAIL(collect_result(i, result_datum, *wf))) {
+                LOG_WARN("collect_result failed", K(ret));
+              }
+            } 
           }
-          // free prev
+          LOG_DEBUG("after st_inner_get_next_row",
+          "total_size",
+          this->st_local_allocator_.get_arena().total(),
+          "used_size",
+          this->st_local_allocator_.get_arena().used());
+          // reset segment_tree.
+          st_local_allocator_.reset();
           if (OB_SUCC(ret) && first != wf) {
             wf->get_prev()->part_rows_store_.reset_buf(tenant_id);
           }
@@ -1214,6 +2205,7 @@ int ObWindowFunctionOp::inner_get_next_row()
     iter_end_ = true;
     reset_for_scan(ctx_.get_my_session()->get_effective_tenant_id());
   }
+  
   LOG_DEBUG("after inner_get_next_row",
       "total_size",
       this->local_allocator_.get_arena().total(),

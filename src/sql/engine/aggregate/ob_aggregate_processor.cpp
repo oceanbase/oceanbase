@@ -691,6 +691,44 @@ int ObAggregateProcessor::process(GroupRow& group_row)
   return ret;
 }
 
+// overload process for window_function's removable in min() or max().
+int ObAggregateProcessor::process(GroupRow& group_row, MaxMinInfo& max_min_info)
+{
+  int ret = OB_SUCCESS;
+  // process aggregate columns
+  for (int64_t i = 0; OB_SUCC(ret) && i < group_row.n_cells_; ++i) {
+    const ObAggrInfo& aggr_info = aggr_infos_.at(i);
+    AggrCell& aggr_cell = group_row.aggr_cells_[i];
+    ObDatum* result = NULL;
+    if (aggr_info.is_implicit_first_aggr()) {
+      // do nothing
+      break;  // no need process the follower column
+    } else {
+      if (OB_FAIL(aggr_info.eval_aggr(aggr_cell.curr_row_results_, eval_ctx_))) {
+        LOG_WARN("fail to eval", K(ret));
+      } else {
+        if (aggr_info.has_distinct_) {
+          ExtraResult* ad_result = static_cast<ExtraResult*>(aggr_cell.get_extra());
+          if (OB_FAIL(ad_result->unique_sort_op_->add_row(aggr_info.param_exprs_))) {
+            LOG_WARN("add row to distinct set failed", K(ret));
+          }
+        } else {
+          // not distinct aggr column
+          
+          // removable for max/min, overload process_aggr_result.
+          if (OB_FAIL(process_aggr_result(
+                  *aggr_cell.curr_row_results_.get_store_row(), &(aggr_info.param_exprs_), aggr_cell, aggr_info, max_min_info))) {
+            LOG_WARN("failed to calculate aggr cell", K(ret));
+          }
+        }
+      }
+    }
+    OX(LOG_DEBUG("finish process", K(aggr_cell), K(aggr_cell.curr_row_results_)));
+  }  // end for
+  return ret;
+}
+
+
 int ObAggregateProcessor::collect(const int64_t group_id /*= 0*/, const ObExpr* diff_expr /*= NULL*/)
 {
   int ret = OB_SUCCESS;
@@ -1506,6 +1544,51 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         //      }
         //      break;
         //    }
+      default:
+        LOG_WARN("unknown aggr function type", K(aggr_fun), K(ret));
+        break;
+    }
+  }
+  return ret;
+}
+
+// overload process_aggr_result for window_function's removable in min() or max().
+int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow& stored_row,
+    const ObIArray<ObExpr*>* param_exprs, AggrCell& aggr_cell, const ObAggrInfo& aggr_info, MaxMinInfo& max_min_info)
+{
+  int ret = OB_SUCCESS;
+  const ObItemType aggr_fun = aggr_info.get_expr_type();
+  if (NULL != param_exprs && param_exprs->empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("datum is null", K(aggr_fun), K(ret));
+  } else {
+    switch (aggr_fun) {
+      case T_FUN_MAX: {
+        if (OB_UNLIKELY(stored_row.cnt_ != 1)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("curr_row_results count is not 1", K(stored_row));
+        } else if (!stored_row.cells()[0].is_null()) {
+          // removable for max
+          ret = max_calc(aggr_cell.get_iter_result(),
+              stored_row.cells()[0],
+              aggr_info.expr_->basic_funcs_->null_first_cmp_,
+              aggr_info.is_number(), max_min_info);
+        }
+        break;
+      }
+      case T_FUN_MIN: {
+        if (OB_UNLIKELY(stored_row.cnt_ != 1)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("curr_row_results count is not 1", K(stored_row));
+        } else if (!stored_row.cells()[0].is_null()) {
+          // removable for min
+          ret = min_calc(aggr_cell.get_iter_result(),
+              stored_row.cells()[0],
+              aggr_info.expr_->basic_funcs_->null_first_cmp_,
+              aggr_info.is_number(), max_min_info);
+        }
+        break;
+      }
       default:
         LOG_WARN("unknown aggr function type", K(aggr_fun), K(ret));
         break;
@@ -2400,6 +2483,34 @@ int ObAggregateProcessor::max_calc(
   return ret;
 }
 
+// overload max_calc for window_function's removable in max().
+int ObAggregateProcessor::max_calc(
+    ObDatum& base, const ObDatum& other, ObDatumCmpFuncType cmp_func, const bool is_number, MaxMinInfo& max_min_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cmp_func)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cmp_func is NULL", K(ret));
+  } else if (!base.is_null() && !other.is_null()) {
+    if (cmp_func(base, other) < 0) {
+      ret = clone_cell(base, other, is_number);
+      // change current frame's max value index.
+      max_min_info.is_change_index_ = true;
+      LOG_DEBUG("max_index_is_change", K(max_min_info.is_change_index_));
+    }
+  } else if (/*base.is_null() &&*/ !other.is_null()) {
+    // base must be null!
+    // if base is not null, the first 'if' will be match, not this 'else if'.
+    ret = clone_cell(base, other, is_number);
+    // change current frame's max value index.
+    max_min_info.is_change_index_ = true;
+    LOG_DEBUG("max_index_is_change", K(max_min_info.is_change_index_));
+  } else {
+    // nothing.
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::min_calc(
     ObDatum& base, const ObDatum& other, ObDatumCmpFuncType cmp_func, const bool is_number)
 {
@@ -2420,6 +2531,35 @@ int ObAggregateProcessor::min_calc(
   }
   return ret;
 }
+
+// overload min_calc for window_function's removable in min().
+int ObAggregateProcessor::min_calc(
+    ObDatum& base, const ObDatum& other, ObDatumCmpFuncType cmp_func, const bool is_number, MaxMinInfo& max_min_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cmp_func)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cmp_func is NULL", K(ret));
+  } else if (!base.is_null() && !other.is_null()) {
+    if (cmp_func(base, other) > 0) {
+      ret = clone_cell(base, other, is_number);
+      // change current frame's min value index.
+      max_min_info.is_change_index_ = true;
+      LOG_DEBUG("min_index_is_change", K(max_min_info.is_change_index_));
+    }
+  } else if (/*base.is_null() &&*/ !other.is_null()) {
+    // base must be null!
+    // if base is not null, the first 'if' will be match, not this 'else if'.
+    ret = clone_cell(base, other, is_number);
+    // change current frame's min value index.
+    max_min_info.is_change_index_ = true;
+    LOG_DEBUG("min_index_is_change", K(max_min_info.is_change_index_));
+  } else {
+    // nothing.
+  }
+  return ret;
+}
+
 
 int ObAggregateProcessor::prepare_add_calc(const ObDatum& first_value, AggrCell& aggr_cell, const ObAggrInfo& aggr_info)
 {
