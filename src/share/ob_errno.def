@@ -20,6 +20,8 @@
 //
 //C0: int OB_MAX_ERROR_CODE                           -----> ob errno
 //C1: char *ERROR_NAME[OB_MAX_ERROR_CODE];            -----> store ob errno name
+//C2: char *ERROR_CAUSE[OB_MAX_ERROR_CODE];           -----> store ob errno cause
+//C3: char *ERROR_SOLUTION[OB_MAX_ERROR_CODE];        -----> store ob errno solution
 //M1: int MYSQL_ERRNO[OB_MAX_ERROR_CODE];             -----> store mysql errno
 //M2: char *SQLSTATE[OB_MAX_ERROR_CODE];              -----> store mysql errstate
 //M3: char *STR_ERROR[OB_MAX_ERROR_CODE];             -----> store mysql errmsg without parameter
@@ -35,6 +37,13 @@
 //DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4) <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, ORA, R3, R4)
 //DEFINE_PLS_ERROR(C1, C0, M1, M2, M3, R1, R3)                <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, PLS, R3, R3)
 //DEFINE_PLS_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4)    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, PLS, R3, R4)
+//
+//DEFINE_ERROR(C1, C0, M1, M2, M3, C2, C3)                            <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, -600, M2, M3, M3, C2, C3)
+//DEFINE_ERROR_EXT(C1, C0, M1, M2, M3, M4, C2, C3)                    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, -600, M2, M3, M4, C2, C3)
+//DEFINE_ORACLE_ERROR(C1, C0, M1, M2, M3, R1, R3, C2, C3)             <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, ORA, R3, R3, C2, C3)
+//DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4, C2, C3) <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, ORA, R3, R4, C2, C3)
+//DEFINE_PLS_ERROR(C1, C0, M1, M2, M3, R1, R3, C2, C3)                <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, PLS, R3, R3, C2, C3)
+//DEFINE_PLS_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4, C2, C3)    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, PLS, R3, R4, C2, C3)
 //
 //DEFINE_ERROR(C1, C0, M1, M2, M3)
 //   M1 = (M1 == -1 ? C0 : M1)
@@ -824,7 +833,7 @@ DEFINE_ORACLE_ERROR(OB_EER_NULL_IN_VALUES_LESS_THAN, -5285, ER_NULL_IN_VALUES_LE
 DEFINE_ERROR(OB_ERR_PARTITION_CONST_DOMAIN_ERROR, -5286, ER_PARTITION_CONST_DOMAIN_ERROR, "HY000", "Partition constant is out of partition function domain");
 DEFINE_ERROR(OB_ERR_TOO_MANY_PARTITION_FUNC_FIELDS, -5287, ER_TOO_MANY_PARTITION_FUNC_FIELDS_ERROR, "HY000", "Too many fields in \'list of partition fields\'");
 DEFINE_ERROR_EXT(OB_ERR_BAD_FT_COLUMN, -5288, ER_BAD_FT_COLUMN, "HY000", "Column cannot be part of FULLTEXT index", "Column '%.*s' cannot be part of FULLTEXT index");
-DEFINE_ERROR_EXT(OB_ERR_KEY_DOES_NOT_EXISTS, -5289, ER_KEY_DOES_NOT_EXITS, "42000", "key does not exist in table", "Key '%.*s' doesn't exist in table '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_KEY_DOES_NOT_EXISTS, -5289, ER_KEY_DOES_NOT_EXISTS, "42000", "key does not exist in table", "Key '%.*s' doesn't exist in table '%.*s'");
 DEFINE_ERROR_EXT(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, -5290, ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, "HY000", "non-default value for generated column is not allowed", "The value specified for generated column '%.*s' in table '%.*s' is not allowed");
 DEFINE_ERROR(OB_ERR_BAD_CTXCAT_COLUMN, -5291, -1, "HY000", "The CTXCAT column must be contiguous in the index column list");
 DEFINE_ERROR_EXT(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, -5292, ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "HY000", "not supported for generated columns", "'%s' is not supported for generated columns.");
@@ -1199,7 +1208,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_EPAREN, -5813, -1, "HY000", "unmatched parenth
 DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ESUBREG, -5814, -1, "HY000", "invalid back reference in regular expression", 12727, "invalid back reference in regular expression");
 DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ERANGE, -5815, -1, "HY000", "invalid range in regular expression", 12728, "invalid range in regular expression");
 DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ECTYPE, -5816, -1, "HY000", "invalid character class in regular expression", 12729, "invalid character class in regular expression");
-DEFINE_ERROR(OB_ERR_REGEXP_ECOLLATE, -5817, -1, "HY000", "invalid collation class in regular expression", 12731, "invalid collation class in regular expression");
+DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ECOLLATE, -5817, -1, "HY000", "invalid collation class in regular expression", 12731, "invalid collation class in regular expression");
 DEFINE_ERROR(OB_ERR_REGEXP_EBRACE, -5818, -1, "HY000", "braces {} not balanced in in regular expression");
 DEFINE_ERROR(OB_ERR_REGEXP_BADBR, -5819, -1, "HY000", "invalid repetition count(s) in regular expression");
 DEFINE_ERROR(OB_ERR_REGEXP_BADRPT, -5820, -1, "HY000", "The regular expression was too complex and current library can't be parsed");
