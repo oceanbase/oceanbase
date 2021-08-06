@@ -136,6 +136,7 @@ ob_set_subtarget(oblib_lib common
   oblog/ob_log_module.ipp
   oblog/ob_trace_log.cpp
   oblog/ob_warning_buffer.cpp
+  oblog/ob_log_compressor.cpp
   ob_name_id_def.cpp
   ob_replica_define.cpp
   profile/ob_atomic_event.cpp
@@ -234,6 +235,7 @@ ob_lib_add_pchs(lib
   oblog/ob_log.h
   oblog/ob_base_log_writer.h
   oblog/ob_async_log_struct.h
+  oblog/ob_log_compressor.h
   hash/fnv_hash.h
   coro/co_var.h
   time/Time.h

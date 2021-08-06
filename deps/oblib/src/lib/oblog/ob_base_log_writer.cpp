@@ -63,10 +63,13 @@ int ObBaseLogWriter::init(const ObBaseLogWriterCfg& log_cfg)
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
   } else if (0 != pthread_mutex_init(&log_mutex_, NULL)) {
     ret = OB_ERR_SYS;
+    LOG_STDERR("Failed to pthread_mutex_init.\n");
   } else if (0 != pthread_cond_init(&log_write_cond_, NULL)) {
     ret = OB_ERR_SYS;
+    LOG_STDERR("Failed to pthread_cond_init.\n");
   } else if (0 != pthread_cond_init(&log_flush_cond_, NULL)) {
     ret = OB_ERR_SYS;
+    LOG_STDERR("Failed to pthread_cond_init.\n");
   } else {
     flush_tid_ = 0;
     log_item_push_idx_ = 0;
