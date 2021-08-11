@@ -405,8 +405,13 @@ int ObTransformOuterJoinLimitPushDown::check_validity_for_target_table(OjLimitPu
     } else if (has_rownum) {
       is_valid = false;
     } else {
-      // no need to create new view
-      helper.need_create_view_ = false;
+      if (ref_query->is_set_stmt()) {
+        helper.need_create_view_ = true;
+      } else {
+        // no need to create new view
+        helper.need_create_view_ = false;
+      }
+      helper.need_rename_ = true;
       helper.view_table_ = helper.target_table_;
     }
   } else {
