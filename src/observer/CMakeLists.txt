@@ -240,6 +240,16 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_all_virtual_backupset_history_mgr.cpp
 )
 
+ob_set_subtarget(ob_server table
+  table/ob_table_batch_execute_processor.cpp		
+  table/ob_table_end_trans_cb.cpp		
+  table/ob_table_execute_processor.cpp		
+  table/ob_table_query_processor.cpp		
+  table/ob_table_rpc_processor.cpp		
+  table/ob_table_service.cpp		
+  table/ob_table_api_row_iterator.cpp
+)
+
 ob_server_add_pchs(observer
   ob_server_struct.h
   ob_uniq_task_queue.h

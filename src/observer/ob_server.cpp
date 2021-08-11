@@ -45,6 +45,7 @@
 #include "sql/ob_sql_init.h"
 #include "sql/ob_sql_task.h"
 #include "observer/ob_server.h"
+#include "observer/table/ob_table_rpc_processor.h"
 #include "sql/ob_sql_init.h"
 #include "sql/dtl/ob_dtl.h"
 #include "sql/ob_sql_init.h"
@@ -129,6 +130,7 @@ ObServer::ObServer()
       vt_data_service_(root_service_, self_addr_, &config_),
       cache_size_calculator_(),
       weak_read_service_(),
+      table_service_(),
       cgroup_ctrl_(),
       start_time_(ObTimeUtility::current_time()),
       zone_merged_version_(OB_MERGED_VERSION_INIT),
@@ -198,8 +200,10 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(init_loaddata_global_stat())) {
-        LOG_WARN("fail to init global load data stat map", K(ret));
+      if (OB_FAIL(ObTableApiProcessorBase::init_session())) {
+        LOG_WARN("failed to init static session", K(ret));
+      } else if (OB_FAIL(init_loaddata_global_stat())) {
+         LOG_WARN("fail to init global load data stat map", K(ret));
       }
     }
   }
@@ -326,6 +330,8 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
     LOG_WARN("fail to init long ops monitor instance", K(ret));
   } else if (OB_FAIL(ObCompatModeGetter::instance().init(&sql_proxy_))) {
     LOG_WARN("fail to init get compat mode server");
+  } else if (OB_FAIL(table_service_.init(gctx_))) {
+    LOG_WARN("failed to init table service", K(ret));
   } else if (OB_FAIL(ObTimerMonitor::get_instance().init())) {
     LOG_WARN("failed to init timer monitor", K(ret));
   } else if (OB_FAIL(ObBGThreadMonitor::get_instance().init())) {
@@ -1468,6 +1474,7 @@ int ObServer::init_global_context()
   (void)gctx_.set_split_schema_version(OB_INVALID_VERSION);
   (void)gctx_.set_split_schema_version_v2(OB_INVALID_VERSION);
   gctx_.weak_read_service_ = &weak_read_service_;
+  gctx_.table_service_ = &table_service_;
   gctx_.cgroup_ctrl_ = &cgroup_ctrl_;
   gctx_.schema_status_proxy_ = &schema_status_proxy_;
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
