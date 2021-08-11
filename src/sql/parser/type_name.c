@@ -1552,6 +1552,7 @@ const char* get_type_name(int type)
 	case T_HASH_PARTITION_LIST : return "T_HASH_PARTITION_LIST";
 	case T_RANGE_PARTITION_LIST : return "T_RANGE_PARTITION_LIST";
 	case T_LIST_PARTITION_LIST : return "T_LIST_PARTITION_LIST";
+	case T_FUN_SYS_EXPORT_SET : return "T_FUN_SYS_EXPORT_SET";
 	default:return "Unknown";
 	}
 }

@@ -69,6 +69,7 @@
 #include "ob_expr_regexp_replace.h"
 #include "ob_expr_regexp_substr.h"
 #include "ob_expr_repeat.h"
+#include "ob_expr_export_set.h"
 #include "ob_expr_replace.h"
 #include "ob_expr_func_dump.h"
 #include "ob_expr_func_part_hash.h"
@@ -663,6 +664,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprTimeFormat::calc_time_format,               /* 407 */
     ObExprMakedate::calc_makedate,                    /* 408 */
     ObExprPeriodAdd::calc_periodadd,                  /* 409 */
+    ObExprExportSet::eval_export_set,                 /* 401 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

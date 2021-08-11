@@ -376,7 +376,7 @@ int ObExprRegexContext::like(const ObString& text, int64_t occurrence, bool& sub
   } else if (text.length() < 0 || (text.length() > 0 && OB_ISNULL(text.ptr()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid param, source text is null", K(ret), K(text));
-  } else if (reg_.re_nsub >= 0) {
+  } else {
     size_t nsub = reg_.re_nsub;
     ob_regmatch_t pmatch[nsub + 1];
     int error = 0;

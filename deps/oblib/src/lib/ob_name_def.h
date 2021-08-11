@@ -434,6 +434,7 @@
 #define N_REPLACE "replace"
 #define N_TRANSLATE "translate"
 #define N_CONCAT "concat"
+#define N_EXPORT_SET "export_set"
 #define N_CONCAT_WS "concat_ws"
 #define N_TO_OUTFILE_ROW "to_outfile_row"
 #define N_INSTR "instr"

@@ -426,6 +426,8 @@ typedef enum ObItemType {
   T_FUN_SYS_QUARTER = 711,
   T_FUN_SYS_BIT_LENGTH = 712,
   T_FUN_SYS_PI = 713,
+  T_FUN_SYS_EXPORT_SET = 714,
+  
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
