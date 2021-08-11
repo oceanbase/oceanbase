@@ -2765,26 +2765,37 @@ int ObRestoreScheduler::drop_tenant_force_if_necessary(const ObPhysicalRestoreJo
   const bool need_force_drop = GCONF._auto_drop_tenant_if_restore_failed;
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
+    LOG_WARN("not inited", KR(ret));
   } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("restore scheduler stopped", K(ret));
+    LOG_WARN("restore scheduler stopped", KR(ret));
   } else if (need_force_drop) {
-    obrpc::ObDropTenantArg arg;
-    arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
-    arg.tenant_name_ = job_info.tenant_name_;
-    arg.if_exist_ = true;
-    arg.delay_to_drop_ = false;
-    ObSqlString sql;
-    const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
-    const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
-    int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
-    if (OB_FAIL(sql.append_fmt("DROP TENANT IF EXISTS %s FORCE", arg.tenant_name_.ptr()))) {
-      LOG_WARN("fail to generate sql", K(ret), K(arg));
-    } else if (FALSE_IT(arg.ddl_stmt_str_ = sql.string())) {
-    } else if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).drop_tenant(arg))) {
-      LOG_WARN("fail to drop tenant", K(ret), K(arg));
+    ObSchemaGetterGuard schema_guard;
+    ObString tenant_name(job_info.tenant_name_);
+    const ObTenantSchema* tenant_schema = NULL;
+    if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", KR(ret));
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_name, tenant_schema))) {
+      LOG_WARN("fail to get tenant schema", KR(ret), K(tenant_name));
+    } else if (OB_ISNULL(tenant_schema) || !tenant_schema->is_restore()) {
+      LOG_INFO("tenant not exist or tenant is not in physical restore status, just skip", K(tenant_name));
     } else {
-      LOG_INFO("drop_tenant_force after restore fail", K(job_info));
+      obrpc::ObDropTenantArg arg;
+      arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+      arg.tenant_name_ = tenant_name;
+      arg.if_exist_ = true;
+      arg.delay_to_drop_ = false;
+      ObSqlString sql;
+      const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // default 2s
+      const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
+      int64_t rpc_timeout = max(TIMEOUT_PER_RPC, DEFAULT_TIMEOUT);
+      if (OB_FAIL(sql.append_fmt("DROP TENANT IF EXISTS %s FORCE", arg.tenant_name_.ptr()))) {
+        LOG_WARN("fail to generate sql", KR(ret), K(arg));
+      } else if (FALSE_IT(arg.ddl_stmt_str_ = sql.string())) {
+      } else if (OB_FAIL(rpc_proxy_->timeout(rpc_timeout).drop_tenant(arg))) {
+        LOG_WARN("fail to drop tenant", KR(ret), K(arg));
+      } else {
+        LOG_INFO("drop_tenant_force after restore fail", K(job_info));
+      }
     }
   } else {
     LOG_INFO("no need to drop tenant after restore fail", K(job_info));

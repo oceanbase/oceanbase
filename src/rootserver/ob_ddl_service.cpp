@@ -13070,7 +13070,12 @@ int ObDDLService::modify_tenant(const ObModifyTenantArg& arg)
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObDDLSQLTransaction trans(schema_service_);
     trans.set_end_tenant_id(OB_SYS_TENANT_ID);
-    if (orig_tenant_schema->get_tenant_id() <= OB_MAX_RESERVED_TENANT_ID) {
+    if (orig_tenant_schema->is_restore()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN(
+          "rename tenant while tenant is in physical restore status is not allowed", KR(ret), KPC(orig_tenant_schema));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "rename tenant while tenant is in physical restore status is");
+    } else if (orig_tenant_schema->get_tenant_id() <= OB_MAX_RESERVED_TENANT_ID) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("rename special tenant not supported", K(ret), K(orig_tenant_schema->get_tenant_id()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename special tenant");
