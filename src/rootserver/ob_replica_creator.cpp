@@ -1271,7 +1271,9 @@ int ObReplicaCreator::get_pg_partitions(const ObTableSchema& table, ObITablePart
       {
         partition.reuse();
         // table schema pointer validity checked in previous iteration, not need check again.
-        if (*id >= (*table_schema)->get_all_part_num()) {
+        if (!(*table_schema)->has_self_partition()) {
+          continue;
+        } else if (*id >= (*table_schema)->get_all_part_num()) {
           continue;
         } else if (OB_FAIL(pt_operator_->get((*table_schema)->get_table_id(), *id, partition))) {
           LOG_WARN("pt_operator get failed", "table_id", (*table_schema)->get_table_id(), "partition_id", *id, K(ret));
