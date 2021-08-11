@@ -29,6 +29,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(deps/easy)
 add_subdirectory(deps/oblib)
 add_subdirectory(src)
+add_subdirectory(tools)
 
 include(CMakeDependentOption)
 # OB_BUILD_RPM => include tools and build them.
