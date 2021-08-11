@@ -122,7 +122,7 @@
         devname: bond0
     ```
 
-## 步骤 4：连接 OceanBase 数据库
+## 步骤 4：启动 OceanBase 数据库
 
 按照以下步骤部署并启动 OceanBase 数据库实例：
 
