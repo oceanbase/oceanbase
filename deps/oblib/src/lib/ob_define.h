@@ -1527,6 +1527,7 @@ const int64_t MAX_SSTABLE_CNT_IN_STORAGE = 64;
 const int64_t RESERVED_STORE_CNT_IN_STORAGE =
     8;  // Avoid mistakenly triggering minor or major freeze to cause the problem of unsuccessful merge.
 const int64_t MAX_FROZEN_MEMSTORE_CNT_IN_STORAGE = 7;
+const int64_t MAX_MEMSTORE_CNT = 16;
 // some frozen memstores and one active memstore
 // Only limited to minor freeze, major freeze is not subject to this restriction
 const int64_t MAX_MEMSTORE_CNT_IN_STORAGE = MAX_FROZEN_MEMSTORE_CNT_IN_STORAGE + 1;

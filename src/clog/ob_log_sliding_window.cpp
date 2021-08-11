@@ -211,21 +211,6 @@ void ObLogSlidingWindow::destroy_aggre_buffer()
   }
 }
 
-int ObLogSlidingWindow::leader_takeover()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(ERROR, "ObPartitionLogService is not inited", K(ret), K(partition_key_));
-  } else {
-    uint64_t max_log_id = OB_INVALID_ID;
-    int64_t max_log_ts = OB_INVALID_TIMESTAMP;
-    get_max_log_id_info(max_log_id, max_log_ts);
-    try_update_max_majority_log(max_log_id, max_log_ts);
-  }
-  return ret;
-}
-
 int ObLogSlidingWindow::leader_active()
 {
   int ret = OB_SUCCESS;

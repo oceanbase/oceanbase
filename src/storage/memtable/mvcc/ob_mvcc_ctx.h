@@ -408,6 +408,9 @@ public:
   ObMvccTransNode* alloc_trans_node();
   int append_callback(ObITransCallback* cb);
 
+private:
+  void check_row_callback_registration_between_stmt_();
+
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObIMvccCtx);
   int alloc_type_;

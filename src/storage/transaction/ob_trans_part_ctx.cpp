@@ -1097,6 +1097,8 @@ int ObPartTransCtx::end_stmt_(
       need_response = false;
       ret = OB_NOT_MASTER;
       TRANS_LOG(WARN, "transaction is preparing changing leader", KR(ret), "context", *this);
+    } else if (OB_FAIL(get_status_())) {
+      TRANS_LOG(WARN, "transaction is not healthy when end_stmt_", KR(ret), "context", *this);
     } else if (!can_rollback_stmt_) {
       need_response = true;
       if (Ob2PCState::INIT == get_state_()) {
@@ -1530,6 +1532,9 @@ int ObPartTransCtx::kill(const KillTransArg& arg, ObEndTransCallbackArray& cb_ar
     }
     if (OB_SUCC(ret)) {
       trans_kill_();
+      // Force kill cannot guarantee the consistency, so we just set end_log_ts
+      // to zero
+      end_log_ts_ = 0;
       (void)trans_clear_();
       if (OB_FAIL(unregister_timeout_task_())) {
         TRANS_LOG(WARN, "unregister timer task error", KR(ret), "context", *this);
@@ -1774,6 +1779,10 @@ int ObPartTransCtx::on_sync_log_success(
       has_write_or_replay_mutator_redo_log_ = true;
       if (0 == redo_log_no_++) {
         TRANS_LOG(DEBUG, "participant enter into 2pc", "context", *this, K(log_type), K(timestamp));
+      }
+      if (redo_log_no_ == 1) {
+        // The log is completed, we need verify the txn checksum
+        need_checksum_ = true;
       }
       // need submit redo_prepare log when log_type equal OB_LOG_TRANS_REDO
       if (OB_LOG_TRANS_REDO == log_type) {
@@ -2528,6 +2537,7 @@ int ObPartTransCtx::leader_active(const LeaderActiveArg& arg)
       is_trans_state_sync_finished_ = false;
       is_changing_leader_ = false;
       prepare_changing_leader_state_ = CHANGING_LEADER_STATE::NO_CHANGING_LEADER;
+      update_max_submitted_log_timestamp_(max_durable_log_ts_);
       if (need_register_timer_task) {
         // The request_id_ should be initialized to prevent the 2pc cannot be
         // driven if all participants transferring the leader
@@ -3065,6 +3075,8 @@ int ObPartTransCtx::leader_revoke(const bool first_check, bool& need_release, Ob
     (void)unregister_timeout_task_();
     if (!has_logged_() && !is_in_2pc_() && 0 == submit_log_count_) {
       trans_kill_();
+      // Because of  no logs, we can free the dirty trans instantly
+      end_log_ts_ = 0;
       (void)trans_clear_();
       set_exiting_();
       if (!is_logging_()) {
@@ -3084,6 +3096,12 @@ int ObPartTransCtx::leader_revoke(const bool first_check, bool& need_release, Ob
       if (!is_trans_state_sync_finished_) {
         TRANS_LOG(INFO, "transaction is killed", "context", *this);
       }
+    } else if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && 0 == submit_log_count_) {
+      // - When leader is revoking  and some non-2pc logs of txn has already been
+      //   submitted to sliding window:
+      //   - If no on-the-fly log and state log is not synced successfully, remove all
+      //     marked_log_cnts
+      (void)mt_ctx_.clean_dirty_callbacks();
     } else if (OB_FAIL(mt_ctx_.commit_to_replay())) {
       TRANS_LOG(WARN, "commit to replay error", KR(ret), "context", *this);
     } else {
@@ -3899,7 +3917,10 @@ int ObPartTransCtx::replay_prepare_log(const ObTransPrepareLog& log, const int64
     } else {
       batch_commit_trans_ = false;
     }
-    if (log.get_redo_log_ids().count() == 0) {
+    if (0 == log.get_redo_log_ids().count() && 0 == redo_log_no_) {
+      // We only enable the checksum check if prev_redo_log_ids' count is zero
+      // and redo_log_no is zero. The later check is used to filter the txn
+      // REDO_WITH_PREPARE log which donot include itself inth prev_redo_log_id.
       need_checksum_ = true;
     }
     /*
@@ -4409,7 +4430,6 @@ int ObPartTransCtx::replay_trans_state_log(const ObTransStateLog& log, const int
       TRANS_LOG(WARN, "different can elr state", K(log), K(*this));
     }
     can_elr_ = log.is_can_elr();
-    update_durable_log_id_ts_(OB_LOG_TRANS_STATE, log_id, timestamp);
     log_type_ = log.get_log_type();
     scheduler_ = log.get_scheduler();
     is_readonly_ = log.is_readonly();
@@ -4438,9 +4458,12 @@ int ObPartTransCtx::replay_trans_state_log(const ObTransStateLog& log, const int
     has_trans_state_log_ = true;
     TRANS_LOG(INFO, "replay trans state log success", "context", *this, K(log), K(log_id));
   }
-  if (OB_FAIL(ret)) {
+  if (OB_SUCC(ret)) {
+    update_durable_log_id_ts_(OB_LOG_TRANS_STATE, log_id, timestamp);
+  } else {
     TRANS_LOG(WARN, "replay trans state log error", KR(ret), "context", *this, K(log), K(log_id));
   }
+
   REC_TRANS_TRACE_EXT(tlog_,
       replay_trans_state,
       Y(ret),
@@ -4668,11 +4691,11 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
 
   CtxTransTableLockGuard guard(lock_, trans_table_seqlock_);
 
-  if (submit_log_count_ <= 0) {
-    // do nothing
-  } else if (IS_NOT_INIT) {
+  if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
+  } else if (is_exiting_) {
+    // do nothing
   } else if (OB_UNLIKELY(!for_replay_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
@@ -4681,6 +4704,16 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log), K(timestamp));
     ret = OB_TRANS_INVALID_STATE;
     need_print_trace_log_ = true;
+  } else if (0 == submit_log_count_) {
+    if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && is_changing_leader_) {
+      // - When replaying start working:
+      //   - Case 3.2: If txn has no on-the-fly log and no trans state is synced by the leader
+      //     transfer(txn may need abort, while we donot have the information whether the
+      //     original leader successfully synced the log), and we also remove all marked trans node.
+      (void)mt_ctx_.clean_dirty_callbacks();
+
+      TRANS_LOG(INFO, "clean dirty callbacks when replay start working", K(*this));
+    }
   } else {
     need_print_trace_log_ = true;
     if (!has_logged_() && !is_in_2pc_() && !is_hazardous_ctx_) {
@@ -4695,11 +4728,17 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
       // majority(TODO: need provement)
       is_dirty_ = false;
       set_exiting_();
-    } else {
-      // because current log is not majoritied, and some logs have been
+    } else if (has_logged_() && !is_in_2pc_() && submit_log_count_ > 0) {
+      // - When replaying start working:
+      //   - Case 3.1: If txn has a on-the-fly log, it means some logs are not paxos-choosen
+      //     successfully(txn need abort), so we remove all marked trans node
+      (void)mt_ctx_.clean_dirty_callbacks();
+
+      // Because current log is not majoritied, and some logs have been
       // majoritied, we need wait for abort log by new leader
       TRANS_LOG(INFO, "no need to kill trans when replay start working log", K(*this));
     }
+
     submit_log_count_ = 0;
     TRANS_STAT_ABORT_TRANS_INC(tenant_id_);
   }
@@ -11911,6 +11950,7 @@ int ObPartTransCtx::fake_kill_(const int64_t terminate_log_ts)
     // fake kill interface
     end_log_ts_ = terminate_log_ts;
     // TODO(): the interface is currently not necessary, remove it
+    set_state_(Ob2PCState::CLEAR);
     (void)trans_clear_();
     set_exiting_();
   }
@@ -11931,6 +11971,7 @@ int ObPartTransCtx::kill_v2_(const int64_t terminate_log_ts)
   } else {
     end_log_ts_ = terminate_log_ts;
     // TODO(): the interface is currently not necessary, remove it
+    set_state_(Ob2PCState::CLEAR);
     (void)trans_clear_();
     set_exiting_();
   }

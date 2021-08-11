@@ -14,6 +14,7 @@
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/memtable/ob_memtable_data.h"
 #include "storage/memtable/ob_memtable.h"
+#include "storage/transaction/ob_trans_part_ctx.h"
 
 namespace oceanbase {
 using namespace common;
@@ -83,7 +84,8 @@ int ObIMvccCtx::register_row_commit_cb(const ObMemtableKey* key, ObMvccRow* valu
     TRANS_LOG(WARN, "alloc row callback failed", K(ret));
   } else {
     tg.click();
-    // count up memory size of current transaction node
+    (void)check_row_callback_registration_between_stmt_();
+    tg.click();
     add_trans_mem_total_size(data_size);
     node->set_mvcc_row_cb(cb);
     cb->set(key, node, data_size, old_row, is_replay, need_fill_redo, sql_no);
@@ -372,6 +374,15 @@ int64_t ObIMvccCtx::get_query_abs_lock_wait_timeout(const int64_t lock_wait_star
   }
 
   return abs_timeout;
+}
+
+void ObIMvccCtx::check_row_callback_registration_between_stmt_()
+{
+  ObIMemtableCtx* i_mem_ctx = (ObIMemtableCtx*)(this);
+  transaction::ObPartTransCtx* trans_ctx = (transaction::ObPartTransCtx*)(i_mem_ctx->get_trans_ctx());
+  if (NULL != trans_ctx && trans_ctx->is_task_match()) {
+    TRANS_LOG(ERROR, "register commit not match expection", K(*trans_ctx));
+  }
 }
 
 }  // namespace memtable

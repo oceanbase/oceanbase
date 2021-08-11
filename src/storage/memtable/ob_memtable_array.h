@@ -40,8 +40,8 @@ public:
   };
   bool is_reach_max_memtable_cnt()
   {
-    return get_count_() >= 16;
-  };
+    return get_count_() >= common::MAX_MEMSTORE_CNT;
+  }
   bool is_contain_this_memtable(ObMemtable* memtable);
   int check_memtable_count(int64_t& count);
 

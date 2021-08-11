@@ -3409,7 +3409,8 @@ int ObPartitionGroup::get_freeze_cut_(ObMemtable& frozen_memtable, const bool is
             K(*this));
       }
     } else {
-      // 2. The freeze_id of follower is the right boundary of replay queue.
+      // 2. The freeze_id of follower is the the maximum log id of the right
+      // boundary of replay queue and the max majoritied log id
       // The follower will block the replay, wait it to be empty and then get the freeze_id.
       if (OB_FAIL(wait_follower_no_pending_task_())) {
         STORAGE_LOG(WARN, "wait follower no pending task failed", K(is_leader), K(freeze_id), K(*this));
@@ -3421,6 +3422,53 @@ int ObPartitionGroup::get_freeze_cut_(ObMemtable& frozen_memtable, const bool is
             K(freeze_id),
             K(freeze_ts),
             K(*this));
+      } else {
+        // The logic below is sophistic:
+        //
+        // If you remember the semantic of end_log_ts and max_log_ts belong to
+        // the memstore, you will know that all data belong to the log before
+        // end_log_ts is within the memstore, and the data may or maynot exist
+        // in the memstore if the log creates the data is between end_log_ts and
+        // max_log_ts
+        //
+        // In terms of the minor freeze, follower needs to wait until replaying
+        // to a continuous log point and fetch the freeze point. While follower
+        // cannot use the min replayed log ts both as the end_log_ts and
+        // max_log_ts.
+        //
+        // To see why the more sophistic max_log_ts calculation is required,
+        // consider the following example:
+        // 1. Leader submits the log 5,6,7 and only log 7 is in quorum using
+        //    paxos and its data is already filled in the memstore
+        // 2. Leader switches to the follower and the min replayed log ts is
+        //    smaller than the log 5's log_ts
+        // 3. If we just use the min replayed log ts as both the end_log_ts and
+        //    max_log_ts the semantic specified above is broken
+        //
+        // So we need maintain the max_log_ts using the log 7's timestamp, in
+        // terms of the implementation, we use the max_majority_log_ts which is
+        // updated after each log's synchronization of leader.
+        //
+        // What's more, we need mark all data whose log is between end_log_ts to
+        // max_log_ts as overflow(the requirement from the storage layer). while
+        // the data may already synced and we have no chance to mark the data
+        // except traversing all data in the memtable. So we choose to mark the
+        // end_log_ts as the max_majority_log_ts as well. The detailed issue can
+        // be found in https://work.aone.alibaba-inc.com/issue/33865988
+        //
+        // NB: we never maintain the max_mjority_log_ts for follower, so we just
+        // use the variable for the corner case of leader transfer.
+        uint64_t max_majority_log_id = OB_INVALID_ID;
+        int64_t max_majority_log_ts = OB_INVALID_TIMESTAMP;
+        (void)pls_->get_max_majority_log(max_majority_log_id, max_majority_log_ts);
+        if (max_majority_log_ts > freeze_ts) {
+          TRANS_LOG(WARN,
+              "max majority log ts is larger than freeze timestamp",
+              K(max_majority_log_ts),
+              K(freeze_ts),
+              K(*this));
+          ret = OB_EAGAIN;
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -3616,7 +3664,7 @@ int ObPartitionGroup::wait_follower_no_pending_task_()
   int64_t cnt = 0;
   int64_t task_cnt = replay_status_->get_pending_task_count();
 
-  while (replay_status_->has_pending_task(pkey_) && OB_SUCC(ret)) {
+  while (replay_status_->has_pending_task(pkey_) && !replay_status_->has_encount_fatal_error() && OB_SUCC(ret)) {
     usleep(FREEZE_WAIT_RETRY_SLEEP_TS);
     cnt++;
 
@@ -3631,6 +3679,11 @@ int ObPartitionGroup::wait_follower_no_pending_task_()
 
       cnt = 0;
     }
+  }
+
+  if (replay_status_->has_encount_fatal_error()) {
+    TRANS_LOG(ERROR, "encounter fatal error", K(*replay_status_), K(ret), K(pkey_));
+    ret = OB_ERR_UNEXPECTED;
   }
 
   return ret;
@@ -3661,7 +3714,6 @@ int ObPartitionGroup::check_range_changed_(ObTableHandle& handle, const bool is_
     base_version = mt->get_base_version();
 
     if (tmp_freeze_ts < start_log_ts || tmp_snapshot_version < base_version) {
-      ret = OB_EAGAIN;
       STORAGE_LOG(INFO,
           "skip freeze, maybe in the process of restarting",
           K(ret),
@@ -3818,7 +3870,7 @@ int ObPartitionGroup::freeze_log_and_data_v2_(const bool emergency, const bool f
     if (OB_STATE_NOT_MATCH == ret) {
       STORAGE_LOG(INFO, "skip freeze due to clog state", K(ret), K(pkey_));
       ret = OB_SUCCESS;
-    } else if (OB_EAGAIN != ret) {
+    } else {
       STORAGE_LOG(WARN, "failed to check log_id or version range changed", K(ret), K(old_handle));
     }
   } else if (!changed) {
@@ -3835,6 +3887,10 @@ int ObPartitionGroup::freeze_log_and_data_v2_(const bool emergency, const bool f
     } else {
       STORAGE_LOG(INFO, "submit_new_active_memtable success", K(ret), K(pkey_));
     }
+  }
+
+  if (OB_FAIL(ret) || !effected) {
+    freeze_record_.clear();
   }
 
   return ret;
