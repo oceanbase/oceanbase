@@ -577,6 +577,10 @@ int ObTransformQueryPushDown::push_down_stmt_exprs(ObSelectStmt* select_stmt, Ob
       LOG_WARN("view stmt append subquery failed", K(ret));
     } else if (OB_FAIL(adjust_stmt_hints(select_stmt, view_stmt))) {
       LOG_WARN("failed to adjust hints", K(ret));
+    } else if (OB_FAIL(view_stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(view_stmt->adjust_subquery_stmt_parent(select_stmt, view_stmt))) {
+      LOG_WARN("failed to adjust subquery stmt parent", K(ret));
     } else {
       view_stmt->set_current_level(select_stmt->get_current_level());
       view_stmt->set_parent_namespace_stmt(select_stmt->get_parent_namespace_stmt());
