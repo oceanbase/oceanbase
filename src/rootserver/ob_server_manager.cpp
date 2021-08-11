@@ -14,6 +14,7 @@
 
 #include "ob_server_manager.h"
 
+#include "observer/ob_server.h"
 #include "share/ob_define.h"
 #include "lib/container/ob_array_iterator.h"
 #include "share/ob_debug_sync.h"
