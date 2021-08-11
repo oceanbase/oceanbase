@@ -9001,10 +9001,13 @@ int ObDDLService::purge_table(const ObPurgeTableArg& arg, int64_t& pz_count, ObM
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema* table_schema = NULL;
   const uint64_t tenant_id = arg.tenant_id_;
+  uint64_t database_id;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_database_id(tenant_id, arg.database_name_, database_id))) {
+    LOG_WARN("fail to get database_id ", K(ret), K(database_id));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
@@ -9013,15 +9016,23 @@ int ObDDLService::purge_table(const ObPurgeTableArg& arg, int64_t& pz_count, ObM
     if (OB_ISNULL(pr_trans) && OB_FAIL(trans.start(sql_proxy_))) {
       LOG_WARN("start transaction failed", K(ret));
     } else {
-      // fetch obj name
-      if (arg.is_object_name_) {
-        obj_name = arg.table_name_;
-      } else {
+      // original name
+      if (arg.object_name_.empty()) {
         if (OB_FAIL(ddl_operator.get_object_name_by_original_name(
-            tenant_id, arg.table_name_, ObRecycleObject::TABLE, false,
+            tenant_id, arg.table_name_, database_id, ObRecycleObject::TABLE, false,
             OB_ISNULL(pr_trans) ? trans : *pr_trans, obj_name))) {
           LOG_WARN("get object name failed", K(ret));  
-        }        
+        }
+      } else {
+        // fetch obj name
+        // check object in db
+        obj_name = arg.object_name_;
+        if (extract_pure_id(database_id) != OB_RECYCLEBIN_SCHEMA_ID && 
+            OB_FAIL(ddl_operator.check_object_name_in_db(
+            tenant_id, obj_name, database_id, ObRecycleObject::TABLE, 
+            OB_ISNULL(pr_trans) ? trans : *pr_trans))) {
+          LOG_WARN("check obj failed", K(ret), K(database_id));
+        }
       }
       // fetch schema
       if (OB_SUCC(ret)) {
@@ -9296,9 +9307,10 @@ int ObDDLService::purge_recyclebin_except_tenant(
           } else {
             ObPurgeTableArg purge_table_arg;
             purge_table_arg.tenant_id_ = arg.tenant_id_;
-            purge_table_arg.table_name_ = recycle_obj.get_object_name();
+            purge_table_arg.table_name_ = recycle_obj.get_original_name();
             purge_table_arg.ddl_stmt_str_ = ddl_stmt.string();
-            purge_table_arg.is_object_name_ = true;
+            purge_table_arg.object_name_ = recycle_obj.get_object_name();
+            purge_table_arg.database_name_ = OB_RECYCLEBIN_SCHEMA_NAME;
             if (OB_FAIL(purge_table(purge_table_arg, this_pz_count, &trans))) {
               if (OB_ERR_OBJECT_NOT_IN_RECYCLEBIN == ret) {
                 LOG_WARN("recycle object maybe purge by database", K(ret), K(recycle_obj));

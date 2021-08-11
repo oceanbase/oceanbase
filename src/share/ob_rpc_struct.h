@@ -2063,7 +2063,7 @@ struct ObPurgeTableArg : public ObDDLArg {
 
 public:
   ObPurgeTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), 
-    table_name_(), is_object_name_(false)
+    table_name_(), database_name_(), object_name_()
   {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const
@@ -2072,8 +2072,9 @@ public:
   }
   uint64_t tenant_id_;
   common::ObString table_name_;
-  bool is_object_name_;
-  TO_STRING_KV(K_(tenant_id), K_(table_name));
+  common::ObString database_name_;
+  common::ObString object_name_;
+  TO_STRING_KV(K_(tenant_id), K_(table_name), K_(database_name), K_(object_name));
 };
 
 struct ObPurgeIndexArg : public ObDDLArg {

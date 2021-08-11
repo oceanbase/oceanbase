@@ -1612,9 +1612,23 @@ int get_purge_table_stmt_need_privs(
     LOG_WARN("Stmt type should be T_PURGE_TABLE", K(ret), "stmt type", stmt->get_stmt_type());
   } else {
     ObNeedPriv need_priv;
-    need_priv.priv_set_ = OB_PRIV_SUPER;
-    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
-    ADD_NEED_PRIV(need_priv);
+    const ObPurgeTableStmt* purge_stmt = static_cast<const ObPurgeTableStmt*>(stmt);
+    if (purge_stmt->get_database_name() == OB_RECYCLEBIN_SCHEMA_NAME) {
+      need_priv.priv_set_ = OB_PRIV_SUPER;
+      need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+      ADD_NEED_PRIV(need_priv);
+    } else {
+      if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, purge_stmt->get_database_name()))) {
+        LOG_WARN("Can not purge table in information_schema database", K(session_priv), K(ret));
+      } else {
+        need_priv.db_ = purge_stmt->get_database_name();
+        need_priv.table_ = purge_stmt->get_table_name();
+        need_priv.priv_set_ = OB_PRIV_DROP;
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+      }      
+    }
+
   }
   return ret;
 }

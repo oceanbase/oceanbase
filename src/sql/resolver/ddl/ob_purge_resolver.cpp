@@ -25,6 +25,7 @@ int ObPurgeTableResolver::resolve(const ParseNode& parser_tree)
 {
   int ret = OB_SUCCESS;
   ObPurgeTableStmt* purge_table_stmt = NULL;
+  ObString db_name;
   if (OB_ISNULL(session_info_) || T_PURGE_TABLE != parser_tree.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session_info is null", K(ret));
@@ -43,7 +44,8 @@ int ObPurgeTableResolver::resolve(const ParseNode& parser_tree)
     // Purge table
     ParseNode* tbname_node = parser_tree.children_[TABLE_NODE];
     ObString tb_name;
-
+    ObString obj_name;
+    ObString tmp_name;
     const int64_t max_user_table_name_length =
       share::is_oracle_mode() ? OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE : OB_MAX_USER_TABLE_NAME_LENGTH_MYSQL;
     if (OB_ISNULL(tbname_node) || OB_UNLIKELY(T_IDENT != tbname_node->type_ && T_VARCHAR != tbname_node->type_)) {
@@ -53,23 +55,35 @@ int ObPurgeTableResolver::resolve(const ParseNode& parser_tree)
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, (int)tbname_node->str_len_, tbname_node->str_value_);
     } else {
-      tb_name.assign_ptr(tbname_node->str_value_, static_cast<int32_t>(tbname_node->str_len_));
-      if (tb_name.empty()) {
+      tmp_name.assign_ptr(tbname_node->str_value_, static_cast<int32_t>(tbname_node->str_len_));
+      db_name.assign_ptr(session_info_->get_database_name().ptr(), session_info_->get_database_name().length());
+      if (db_name.empty()) {
+        ret = OB_ERR_NO_DB_SELECTED;
+        LOG_WARN("no database selected");
+      } else if (tmp_name.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("table_name is empty()", K(ret));
       } else {
+        purge_table_stmt->set_database_name(db_name);
+        // table name
+        if (OB_ISNULL(parser_tree.children_[OBJECT_NAME_NODE])) {
+          ObString null_str;
+          tb_name = tmp_name;
+          purge_table_stmt->set_object_name(null_str);
+        } else {
+          purge_table_stmt->set_object_name(tmp_name);
+        }
         purge_table_stmt->set_table_name(tb_name);
-        purge_table_stmt->set_is_object_name(NULL != parser_tree.children_[OBJECT_NAME_NODE]);
       }
     }
   }
-  /*if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
     OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
         session_info_->get_priv_user_id(),
         db_name,
         stmt::T_PURGE_TABLE,
         session_info_->get_enable_role_array()));
-  }*/
+  }
   return ret;
 }
 
