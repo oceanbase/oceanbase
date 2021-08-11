@@ -4387,12 +4387,21 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 | blob_type_i opt_string_length_i_v2
 {
   malloc_terminal_node($$, result->malloc_pool_, $1[0]);
+  if (0 == $2[1]) {
+    $2[0] = 0; /* change default string len from -1 to 0 for compat mysql */
+  } 
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 1; /* is binary */
 }
 | text_type_i opt_string_length_i_v2 opt_binary opt_charset opt_collation
 {
   malloc_non_terminal_node($$, result->malloc_pool_, $1[0], 3, $4, $5, $3);
+  if ($1[0] != T_TEXT && $2[0] != -1) {
+    yyerror(&@2, result, "not support to specify the length in parentheses\n");
+    YYERROR;
+  } else if (0 == $2[1]) {
+    $2[0] = 0; /* change default string len from -1 to 0 for compat mysql */
+  }
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is text */
 }
