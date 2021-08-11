@@ -291,6 +291,7 @@ private:
   int aio_pread_without_lock(const ObTmpFileIOInfo& io_info, int64_t& offset, ObTmpFileIOHandle& handle);
   int64_t small_file_prealloc_size();
   int64_t big_file_prealloc_size();
+  int64_t find_first_extent(const int64_t offset);
 
 private:
   // NOTE:
@@ -303,7 +304,10 @@ private:
   bool is_big_;
   uint64_t tenant_id_;
   int64_t offset_;  // read offset
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
+  int64_t last_extent_id_;
+  int64_t last_extent_min_offset_;
+  int64_t last_extent_max_offset_;
   common::SpinRWLock lock_;
   bool is_inited_;
 

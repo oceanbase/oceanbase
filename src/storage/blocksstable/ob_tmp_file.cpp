@@ -471,8 +471,18 @@ int ObTmpFileMeta::clear()
   return ret;
 }
 
-ObTmpFile::ObTmpFile() : file_meta_(), is_big_(false), tenant_id_(-1), offset_(0), allocator_(NULL), is_inited_(false)
-{}
+ObTmpFile::ObTmpFile()
+  : file_meta_(),
+    is_big_(false),
+    tenant_id_(-1),
+    offset_(0),
+    allocator_(NULL),
+    last_extent_id_(0),
+    last_extent_min_offset_(0),
+    last_extent_max_offset_(INT64_MAX),
+    is_inited_(false)
+{
+}
 
 ObTmpFile::~ObTmpFile()
 {
@@ -489,6 +499,9 @@ int ObTmpFile::clear()
       is_big_ = false;
       tenant_id_ = -1;
       offset_ = 0;
+      last_extent_id_ = 0;
+      last_extent_min_offset_ = 0;
+      last_extent_max_offset_ = INT64_MAX;
       allocator_ = NULL;
       is_inited_ = false;
     }
@@ -518,7 +531,30 @@ int ObTmpFile::init(const int64_t fd, const int64_t dir_id, common::ObIAllocator
   return ret;
 }
 
-int ObTmpFile::aio_pread_without_lock(const ObTmpFileIOInfo& io_info, int64_t& offset, ObTmpFileIOHandle& handle)
+int64_t ObTmpFile::find_first_extent(const int64_t offset)
+{
+  common::ObIArray<ObTmpFileExtent *> &extents = file_meta_.get_extents();
+  int64_t first_extent = 0;
+  int64_t left = 0;
+  int64_t right = extents.count() - 1;
+  ObTmpFileExtent *tmp = nullptr;
+  while(left < right) {
+    int64_t mid = (left + right) / 2;
+    tmp = extents.at(mid);
+    if (tmp->get_global_start() <= offset && offset < tmp->get_global_end()) {
+      first_extent = mid;
+      break;
+    } else if(tmp->get_global_start() > offset) {
+      right = mid - 1;
+    } else if(tmp->get_global_end() <= offset) {
+      left = mid + 1;
+    }
+  }
+  return first_extent;
+}
+
+int ObTmpFile::aio_pread_without_lock(const ObTmpFileIOInfo &io_info,
+    int64_t &offset, ObTmpFileIOHandle &handle)
 {
   int ret = OB_SUCCESS;
   char* buf = io_info.buf_;
@@ -533,9 +569,15 @@ int ObTmpFile::aio_pread_without_lock(const ObTmpFileIOInfo& io_info, int64_t& o
   } else if (OB_FAIL(handle.prepare_read(io_info.buf_, this))) {
     STORAGE_LOG(WARN, "fail to prepare read io handle", K(ret));
   } else {
-    common::ObIArray<ObTmpFileExtent*>& extents = file_meta_.get_extents();
-    for (int64_t i = 0; OB_SUCC(ret) && i < extents.count() && size > 0; ++i) {
-      tmp = extents.at(i);
+    int64_t ith_extent = 0;
+    common::ObIArray<ObTmpFileExtent *> &extents = file_meta_.get_extents();
+    if (offset >= last_extent_min_offset_ && offset_ <= last_extent_max_offset_) {
+      ith_extent = last_extent_id_;
+    } else {
+      ith_extent = find_first_extent(offset);
+    }
+    for (; OB_SUCC(ret) && ith_extent < extents.count() && size > 0; ++ith_extent) {
+      tmp = extents.at(ith_extent);
       if (tmp->get_global_start() <= offset && offset < tmp->get_global_end()) {
         if (offset + size > tmp->get_global_end()) {
           read_size = tmp->get_global_end() - offset;
@@ -550,6 +592,9 @@ int ObTmpFile::aio_pread_without_lock(const ObTmpFileIOInfo& io_info, int64_t& o
           size -= read_size;
           buf += read_size;
           handle.add_data_size(read_size);
+          last_extent_id_ = ith_extent;
+          last_extent_min_offset_ = tmp->get_global_start();
+          last_extent_max_offset_ = tmp->get_global_end();
         }
       }
     }

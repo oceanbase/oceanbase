@@ -1476,6 +1476,104 @@ TEST_F(TestTmpFile, test_handle_double_wait)
   ObTmpFileManager::get_instance().remove(fd);
 }
 
+TEST_F(TestTmpFile, test_sql_workload)
+{
+  int ret = OB_SUCCESS;
+  int64_t dir = -1;
+  int64_t fd = -1;
+  const int64_t macro_block_size = OB_FILE_SYSTEM.get_macro_block_size();
+  ObTmpFileIOInfo io_info;
+  ObTmpFileIOHandle handle;
+  ret = ObTmpFileManager::get_instance().alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ObTmpFileManager::get_instance().open(fd, dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  const int64_t blk_cnt = 16;
+  int64_t write_size = macro_block_size * blk_cnt;
+  char *write_buf = (char *)malloc(write_size);
+  for (int64_t i = 0; i < write_size; ++i) {
+    write_buf[i] = static_cast<char>(i % 256);
+  }
+  char *read_buf = (char *)malloc(write_size);
+
+
+  io_info.fd_ = fd;
+  io_info.tenant_id_ = 1;
+  io_info.io_desc_.category_ = USER_IO;
+  io_info.io_desc_.wait_event_no_ = 2;
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+  const int64_t timeout_ms = 5000;
+  int64_t write_time = ObTimeUtility::current_time();
+
+  const int cnt = 1;
+  const int64_t sql_read_size = 64 * 1024;
+  const int64_t sql_cnt = write_size / sql_read_size;
+
+  for (int i = 0; i < cnt; i++) {
+    for (int64_t j = 0; j < sql_cnt; j++) {
+      io_info.size_ = sql_read_size;
+      io_info.buf_ = write_buf + j * sql_read_size;
+      ret = ObTmpFileManager::get_instance().write(io_info, timeout_ms);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+  }
+  write_time = ObTimeUtility::current_time() - write_time;
+
+
+  io_info.buf_ = read_buf;
+
+  io_info.size_ = macro_block_size;
+  ret = ObTmpFileManager::get_instance().pread(io_info, 100, timeout_ms, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(macro_block_size, handle.get_data_size());
+  int cmp = memcmp(handle.get_buffer(), write_buf + 100, handle.get_data_size());
+  ASSERT_EQ(0, cmp);
+
+
+  io_info.size_ = write_size;
+  int64_t read_time = ObTimeUtility::current_time();
+
+  ret = ObTmpFileManager::get_instance().seek(fd, 0, ObTmpFile::SET_SEEK);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  for (int i = 0; i < cnt; i++) {
+    for (int64_t j = 0; j < sql_cnt; j++) {
+      io_info.size_ = sql_read_size;
+      io_info.buf_ = read_buf + j * sql_read_size;
+      ret = ObTmpFileManager::get_instance().read(io_info, timeout_ms, handle);
+      ASSERT_EQ(OB_SUCCESS, ret);
+      ASSERT_EQ(sql_read_size, handle.get_data_size());
+      cmp = memcmp(handle.get_buffer(), write_buf + j * sql_read_size, sql_read_size);
+      ASSERT_EQ(0, cmp);
+    }
+  }
+  read_time = ObTimeUtility::current_time() - read_time;
+
+  io_info.size_ = 200;
+  ret = ObTmpFileManager::get_instance().pread(io_info, 200, timeout_ms, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(200, handle.get_data_size());
+  cmp = memcmp(handle.get_buffer(), write_buf + 200, 200);
+  ASSERT_EQ(0, cmp);
+
+  free(write_buf);
+  free(read_buf);
+
+
+  STORAGE_LOG(INFO, "test_sql_workload");
+  STORAGE_LOG(INFO, "io time", K((write_size * cnt) / (1024*1024*1024)), K(write_time), K(read_time));
+  ObTmpTenantFileStore *store = NULL;
+  OB_TMP_FILE_STORE.get_store(1, store);
+  store->print_block_usage();
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(1);
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(500);
+  ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
+
+  ObTmpFileManager::get_instance().remove(fd);
+}
+
 }  // end namespace unittest
 }  // end namespace oceanbase
 
