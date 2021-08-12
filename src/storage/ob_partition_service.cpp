@@ -4477,6 +4477,7 @@ int ObPartitionService::replay_redo_log(const common::ObPartitionKey& pkey, cons
   } else {
     // used to order trans nodes that have not determined the commit version during replay
     ctx.mem_ctx_->set_redo_log_timestamp(log_timestamp);
+    ctx.mem_ctx_->set_redo_log_id(log_id);
     if (OB_FAIL(get_partition(pkey, guard))) {
       STORAGE_LOG(WARN, "get partition failed", K(pkey), K(ret));
     } else if (OB_ISNULL(guard.get_partition_group())) {

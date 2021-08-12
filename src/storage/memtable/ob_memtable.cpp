@@ -1323,7 +1323,9 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
     const int64_t log_timestamp = mt_ctx->get_redo_log_timestamp();
     // In principle, failure is not allowed here, but from implementation aspect,
     // the logic inside needs to deal with failures due to lack of memory
-    if (OB_UNLIKELY(0 >= log_timestamp) || OB_UNLIKELY(INT64_MAX == log_timestamp)) {
+    const int64_t log_id = mt_ctx->get_redo_log_id();
+    if (OB_UNLIKELY(0 >= log_timestamp) || OB_UNLIKELY(INT64_MAX == log_timestamp) || OB_UNLIKELY(0 >= log_id) ||
+        OB_UNLIKELY(INT64_MAX == log_id)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected log timestamp", K(ret), K(*mt_ctx));
     } else if (OB_FAIL(mt_ctx->set_replay_host(this, for_replay))) {
@@ -1380,9 +1382,8 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
             TRANS_LOG(WARN, "failed to check standby_cluster_schema_condition", K(ret), K(table_id), K(table_version));
           } else {
             // FIXME.
+            transaction::ObPartTransCtx* part_ctx = static_cast<transaction::ObPartTransCtx*>(mt_ctx->get_trans_ctx());
             if (0 != flag) {
-              transaction::ObPartTransCtx* part_ctx =
-                  static_cast<transaction::ObPartTransCtx*>(mt_ctx->get_trans_ctx());
               if (OB_FAIL(part_ctx->replay_rollback_to(sql_no, ctx.log_ts_))) {
                 TRANS_LOG(WARN, "replay rollback savepoint failed", K(ret), K(*mt_ctx), K(sql_no));
               } else {
@@ -1414,8 +1415,10 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
                       K(acc_checksum));
                 }
               } else {
-                ctx.mem_ctx_->set_table_version(table_version);
-                set_max_schema_version(table_version);
+                if (part_ctx->need_update_schema_version(log_id, log_timestamp)) {
+                  ctx.mem_ctx_->set_table_version(table_version);
+                  set_max_schema_version(table_version);
+                }
               }
             }
           }

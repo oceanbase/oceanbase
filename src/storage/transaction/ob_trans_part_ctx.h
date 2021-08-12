@@ -389,6 +389,7 @@ public:
   bool is_in_trans_table_state();
   virtual int64_t get_part_trans_action() const override;
   int rollback_stmt(const int64_t from_sql_no, const int64_t to_sql_no);
+  bool need_update_schema_version(const int64_t log_id, const int64_t log_ts);
 
 public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(snapshot_version), K_(local_trans_version),
