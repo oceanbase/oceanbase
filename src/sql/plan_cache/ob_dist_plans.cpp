@@ -486,8 +486,8 @@ int ObDistPlans::calc_table_locations(const ObIArray<LocationConstraint>& loc_co
       } else if (OB_ISNULL(tmp_tbl_loc_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("got an unexpected null tbl_loc_ptr", K(ret), K(tmp_tbl_loc_ptr));
-      } else {
-        out_tbl_locations.push_back(*tmp_tbl_loc_ptr);
+      } else if (OB_FAIL(out_tbl_locations.push_back(*tmp_tbl_loc_ptr))) {
+        LOG_WARN("failed to add table location", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
