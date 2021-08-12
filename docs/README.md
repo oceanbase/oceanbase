@@ -6,9 +6,9 @@ OceanBase documentation is built with [MkDocs](https://www.mkdocs.org/). You can
 
 Before installing dependencies, please make sure you have installed a recent version of Python 3 and pip.
 
-Then you can run the following command in your terminal:
+Then you can run the following command in your terminal at current directory:
 
-    $ pip install -r docs/requirements.txt
+    $ pip install -r requirements.txt
 
 ## Build the documentation
 
@@ -42,4 +42,4 @@ For configuration details, see [MkDocs User Guide](https://www.mkdocs.org/user-g
 
 ## Contribute
 
-See [How to contribute](CONTRIBUTING.md).
+See [How to contribute](../CONTRIBUTING.md).
