@@ -1412,8 +1412,9 @@ int ObRawExprUtils::replace_all_ref_column(
 }
 
 // if %expr_factory is not NULL, will deep copy %to expr. default behavior is shallow copy
-int ObRawExprUtils::replace_ref_column(
-    ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to, ObRawExprFactory* expr_factory)
+// if except_exprs is not NULL, will skip the expr in except_exprs
+int ObRawExprUtils::replace_ref_column(ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to,
+    ObRawExprFactory* expr_factory, const ObIArray<ObRawExpr*>* except_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(raw_expr) || OB_ISNULL(from) || OB_ISNULL(to)) {
@@ -1423,6 +1424,8 @@ int ObRawExprUtils::replace_ref_column(
     // do nothing
     // in case:    parent(child) = to (from)
     // replace as: parenet(child) = to (to)
+  } else if (NULL != except_exprs && is_contain(*except_exprs, raw_expr)) {
+    // do nothing
   } else if (raw_expr == from) {
     if (NULL != expr_factory) {
       ObRawExpr* new_to = NULL;
@@ -1446,14 +1449,14 @@ int ObRawExprUtils::replace_ref_column(
       LOG_WARN("get unexpected null", K(ret), K(ref_stmt));
     } else if (OB_FAIL(ref_stmt->get_relation_exprs(relation_exprs))) {
       LOG_WARN("failed to get relation exprs", K(ret));
-    } else if (OB_FAIL(SMART_CALL(replace_ref_column(relation_exprs, from, to)))) {
+    } else if (OB_FAIL(SMART_CALL(replace_ref_column(relation_exprs, from, to, except_exprs)))) {
       LOG_WARN("replace reference column failed", K(ret));
     }
   } else {
     int64_t N = raw_expr->get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       ObRawExpr*& child_expr = raw_expr->get_param_expr(i);
-      if (OB_FAIL(SMART_CALL(replace_ref_column(child_expr, from, to, expr_factory)))) {
+      if (OB_FAIL(SMART_CALL(replace_ref_column(child_expr, from, to, expr_factory, except_exprs)))) {
         LOG_WARN("replace reference column failed", K(ret));
       }
     }  // end for
@@ -1461,7 +1464,8 @@ int ObRawExprUtils::replace_ref_column(
   return ret;
 }
 
-int ObRawExprUtils::replace_ref_column(ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to)
+int ObRawExprUtils::replace_ref_column(
+    ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to, const ObIArray<ObRawExpr*>* except_exprs)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -1479,7 +1483,7 @@ int ObRawExprUtils::replace_ref_column(ObIArray<ObRawExpr*>& exprs, ObRawExpr* f
       ObRawExpr*& raw_expr = tmp_raw_expr;
       if (OB_FAIL(exprs.at(i, raw_expr))) {
         LOG_WARN("failed to get raw expr", K(i), K(ret));
-      } else if (OB_FAIL(SMART_CALL(replace_ref_column(raw_expr, from, to)))) {
+      } else if (OB_FAIL(SMART_CALL(replace_ref_column(raw_expr, from, to, NULL, except_exprs)))) {
         LOG_WARN("failed to replace_ref_column", K(from), K(to), K(ret));
       } else { /*do nothing*/
       }
