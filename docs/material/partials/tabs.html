@@ -1,0 +1,50 @@
+{#-
+  This file was automatically generated - do not edit
+-#}
+{% set class = "" %}
+<!--nav class="md-tabs" aria-label="{{ lang.t('tabs.title') }}" data-md-component="tabs">
+  <div class="md-tabs__inner md-grid">
+    <ul class="md-tabs__list">
+      {% for nav_item in nav %}
+        {% include "partials/tabs-item.html" %}
+      {% endfor %}
+    </ul>
+  </div>
+</nav-->
+
+
+<!-- nav -->
+    <div id="ob_nav">
+        <div id="ob_nav_left">
+            <div id="ob_nav_icon">
+                <img src="{{ 'img/oceanbase1.svg' | url }}" alt="" width="165px" height="17px">
+            </div>
+            <div id="ob_nav_sub">
+
+
+
+				<ul>
+          {% for nav_item in nav %}
+            {% include "partials/tabs-item.html" %}
+          {% endfor %}
+
+				  </ul>
+	    </div>
+          {% if "search" in config["plugins"] %}
+          {% include "partials/search.html" %}
+          {% endif %}
+        </div>
+        <div id="ob_nav_right">
+
+            <div class="ob_nav_search">
+                <div><input class="ob_nav_input" type="text" placeholder="请输入关键词"></div>
+                <div class="search icon"></div>
+            </div>
+            <div>
+                <a href="javascript:;" class="ob_nav_login">登录</a>
+            </div>
+            <div>
+                <a href="javascript:;" class="ob_nav_register">立即注册</a>
+            </div>
+        </div>
+    </div>

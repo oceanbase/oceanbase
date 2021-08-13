@@ -1,0 +1,16 @@
+ {% if not nav_item.children %}
+  <li>
+    <a class="ob_fl_title" href="{{ nav_item.url|url }}">{{ nav_item.title }}</a>
+  </li>
+  {% else %}
+  <li class="ob_nav_subList">
+    <a href="javascript:;">
+      {{ nav_item.title }}
+    </a>
+    <ul>
+        {% for nav_item in nav_item.children %}
+        {% include "partials/newtoc.html" %}
+        {% endfor %}
+    </ul>
+  </li>
+  {% endif %}

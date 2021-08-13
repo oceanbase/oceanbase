@@ -1,0 +1,15 @@
+{#-
+  This file was automatically generated - do not edit
+-#}
+{% set class = "md-nav md-nav--primary" %}
+{% if "navigation.tabs" in features %}
+  {% set class = class ~ " md-nav--lifted" %}
+{% endif %}
+{% if "toc.integrate" in features %}
+  {% set class = class ~ " md-nav--integrated" %}
+{% endif %}
+<ul>
+  {% for nav_item in nav %}
+    {% include "partials/newtoc.html" %}
+  {% endfor %}
+</ul>
