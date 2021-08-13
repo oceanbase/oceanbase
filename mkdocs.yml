@@ -1,9 +1,0 @@
-site_name: OceanBase 手册
-repo_url: 'https://github.com/oceanbase/oceanbase'
-repo_name: 'OceanBase'
-edit_uri: 'edit/master/docs/'
-
-theme:
-  name: 'material'
-nav:
-  - Home: 'index.md'

@@ -87,7 +87,7 @@ test/var
 *.ccls-cache/
 
 ###### Docs website files
-site
+docs/site
 
 ###### Intellij files
 .idea
