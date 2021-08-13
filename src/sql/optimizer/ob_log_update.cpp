@@ -204,20 +204,22 @@ int ObLogUpdate::allocate_exchange_post(AllocExchContext* ctx)
             LOG_WARN("fail to copy subpart expr", K(ret));
           } else {
             CK(PARTITION_LEVEL_MAX != part_level);
+            ObArray<ObRawExpr*> value_exprs;
             for (int64_t assign_idx = 0; OB_SUCC(ret) && assign_idx < index_infos.at(i).assignments_.count();
                  assign_idx++) {
               ObColumnRefRawExpr* col = index_infos.at(i).assignments_.at(assign_idx).column_expr_;
               ObRawExpr* value = index_infos.at(i).assignments_.at(assign_idx).expr_;
               if (PARTITION_LEVEL_ZERO != part_level) {
-                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_part_expr, col, value))) {
+                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_part_expr, col, value, NULL, &value_exprs))) {
                   LOG_WARN("fail to replace ref column", K(ret));
                 }
               }
               if (PARTITION_LEVEL_TWO == part_level) {
-                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_subpart_expr, col, value))) {
+                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_subpart_expr, col, value, NULL, &value_exprs))) {
                   LOG_WARN("fail to replace ref column", K(ret));
                 }
               }
+              OZ(value_exprs.push_back(index_infos.at(i).assignments_.at(assign_idx).expr_));
             }  // for assignments end
           }
           if (OB_SUCC(ret)) {

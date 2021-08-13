@@ -211,10 +211,12 @@ public:
   /// replace all `from' to `to' in the raw_expr
   static int replace_all_ref_column(ObRawExpr*& raw_expr, const common::ObIArray<ObRawExpr*>& exprs, int64_t& offset);
   // if %expr_factory is not NULL, will deep copy %to expr. default behavior is shallow copy
-  static int replace_ref_column(
-      ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to, ObRawExprFactory* expr_factory = NULL);
+  // if except_exprs is not NULL, will skip the expr in except_exprs
+  static int replace_ref_column(ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to,
+      ObRawExprFactory* expr_factory = NULL, const ObIArray<ObRawExpr*>* except_exprs = NULL);
   static int replace_level_column(ObRawExpr*& raw_expr, ObRawExpr* to, bool& replaced);
-  static int replace_ref_column(common::ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to);
+  static int replace_ref_column(common::ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to,
+      const ObIArray<ObRawExpr*>* except_exprs = NULL);
   static bool all_column_exprs(const common::ObIArray<ObRawExpr*>& exprs);
   /// extract column exprs from the raw expr
   static int extract_column_exprs(const ObRawExpr* raw_expr, common::ObIArray<ObRawExpr*>& column_exprs);

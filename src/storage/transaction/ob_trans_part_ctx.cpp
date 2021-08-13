@@ -4132,6 +4132,18 @@ bool ObPartTransCtx::need_rollback_when_restore_(const int64_t commit_version)
          commit_version > restore_snapshot_version;
 }
 
+bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int64_t log_ts)
+{
+  const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
+  const int64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
+  bool need_update = true;
+  if (restore_snapshot_version > 0 && (last_restore_log_id == OB_INVALID_ID || log_id <= last_restore_log_id) &&
+      (log_ts > restore_snapshot_version)) {
+    need_update = false;
+  }
+  return need_update;
+}
+
 int ObPartTransCtx::trans_replay_commit_(const int64_t commit_version, const int64_t checksum)
 {
   ObTimeGuard tg("trans_replay_commit", 50 * 1000);

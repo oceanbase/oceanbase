@@ -340,8 +340,8 @@ public:
   static const int64_t CANNOT_COMPARE_BOTH_ARE_RANGE = 3;
 
 protected:
-  int64_t compare(const common::ObStoreRowkey& rowkey, const common::ObStoreRange& range);
-  void get_border_key(const common::ObStoreRowkey& border_key, const bool is_start_key, common::ObStoreRowkey& rowkey);
+  int compare(const common::ObStoreRowkey& rowkey, const common::ObStoreRange& range, int64_t& cmp_ret);
+  int get_border_key(const common::ObStoreRowkey& border_key, const bool is_start_key, common::ObStoreRowkey& rowkey);
 
 protected:
   int next_range();
