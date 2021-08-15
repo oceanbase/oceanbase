@@ -10,6 +10,7 @@ a{
 }
 /* 导航部分 */
 #ob_nav{
+  font-weight: 500;
   width: 100%;
   height: 56px;
   background-color: #212529;
@@ -29,8 +30,6 @@ a{
 
 #ob_nav_sub{
     height: 100%;
-    line-height: 56px;
-    
 }
 #ob_nav_sub>ul{
     display: flex;
@@ -53,7 +52,7 @@ a{
 }
 #ob_nav_sub>ul>li:hover>a::after{
     position: absolute;
-    bottom: 0;
+    bottom: 6px;
     left: 0;
     display: block;
     width: 100%;
@@ -89,24 +88,23 @@ a{
 .ob_nav_subListShow{
     position: absolute;
     top: 49px;
-    left: -20%;
+    left: -10%;
     display: none;
     padding-top: 10px;
-    z-index: 9999;
+    z-index: 9999999;
     transition: all 3s;
-    
-
 }
 .ob_nav_subList:hover .ob_nav_subListShow{
     display: block;
+    z-index: 9999;
     /* transition-duration:.3s; */
     /* margin: 10px auto 0; */
 }
 .ob_nav_subUl{
-    padding: 10px;
+    padding: 0 10px 10px 10px;
     overflow: hidden;
     text-align: center;
-    width: 90px;
+    width: 5.625rem;
     color: #fff;
     background-color: #343a40;
     

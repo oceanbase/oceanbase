@@ -3,13 +3,106 @@ repo_url: 'https://github.com/oceanbase/oceanbase'
 repo_name: 'OceanBase'
 edit_uri: 'edit/master/docs/'
 
+copyright: 'Copyright &copy; ICP备案: 京ICP备20024574号-1</a>'
+
 theme:
-  name: 'material'
+  name: null
+  custom_dir: 'themes/material'
   features:
     - navigation.tabs
     - navigation.top
+
+  # Static files
+  static_templates:
+    - 404.html
+
+  # Don't include MkDocs' JavaScript
+  include_search_page: false
+  search_index_only: true
+
+  # Default values, taken from mkdocs_theme.yml
+  language: en
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+    - scheme: slate
+      primary: red
+      accent: red
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  favicon: assets/favicon.png
+  icon:
+    logo: logo
+
+# Plugins
+
+# Customization
+extra:
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/squidfunk
+    - icon: fontawesome/brands/gitter
+      link: https://gitter.im/squidfunk/mkdocs-material
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/r/squidfunk/mkdocs-material/
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/squidfunk
+    - icon: fontawesome/brands/linkedin
+      link: https://linkedin.com/in/squidfunk/
+    - icon: fontawesome/brands/instagram
+      link: https://instagram.com/squidfunk
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - abbr
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: squidfunk
+      repo: mkdocs-material
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid-experimental
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
 nav:
-  - Home: index.md
 
   - 文档:
     - 了解 OceanBase 数据库:
@@ -92,7 +185,7 @@ nav:
       - SQL引擎:
         - SQL 请求执行流程: docs-cn/5.overview/7.sql-engine-1/1.sql-request-execution-process-1.md
         - 查询改写:
-          - 概述: docs-cn/5.overview/7.sql-engine-1/1.overview-9.md
+          - 概述: docs-cn/5.overview/7.sql-engine-1/2.query-rewrite-1/1.overview-9.md
           - 基于规则的查询改写: docs-cn/5.overview/7.sql-engine-1/2.query-rewrite-1/2.rule-based-query-rewriting-1.md
           - 基于代价的查询改写: docs-cn/5.overview/7.sql-engine-1/2.query-rewrite-1/3.cost-based-query-rewriting-1.md
         - 查询优化:
@@ -1115,7 +1208,7 @@ nav:
         - 概述 : docs-cn/13.reference-guide/1.system-view/1.overview-4.md
         - 字典视图 :
           - mysql.help_topic : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/1.mysql-help_topic.md
-          - information_schema.COLLATIONS : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/
+          - mysql-help_category : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/2.mysql-help_category.md
           - mysql.help_keyword : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/3.mysql-help_keyword.md
           - mysql.help_relation : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/4.mysql-help_relation.md
           - mysql.db : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/5.mysql-db.md
@@ -2230,3 +2323,4 @@ nav:
     - 第6章 事务处理: lectures/lecture-6.md
     - 参考资料: lectures/references.md
     - 版权声明: lectures/copyright.md
+

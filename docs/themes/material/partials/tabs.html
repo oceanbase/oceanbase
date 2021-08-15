@@ -1,50 +1,48 @@
 {#-
-  This file was automatically generated - do not edit
+This file was automatically generated - do not edit
 -#}
 {% set class = "" %}
 <!--nav class="md-tabs" aria-label="{{ lang.t('tabs.title') }}" data-md-component="tabs">
   <div class="md-tabs__inner md-grid">
     <ul class="md-tabs__list">
       {% for nav_item in nav %}
-        {% include "partials/tabs-item.html" %}
+      {% include "partials/tabs-item.html" %}
       {% endfor %}
     </ul>
   </div>
 </nav-->
 
-
-<!-- nav -->
-    <div id="ob_nav">
-        <div id="ob_nav_left">
-            <div id="ob_nav_icon">
-                <img src="{{ 'img/oceanbase1.svg' | url }}" alt="" width="165px" height="17px">
-            </div>
-            <div id="ob_nav_sub">
-
-
-
-				<ul>
+<nav id="ob_nav">
+    <div id="ob_nav_sub" class="md-tabs md-tabs__inner md-grid">
+      <ul>
+          <li><a href="https://open.oceanbase.com/quickStart" class="md-tabs__link">快速上手</a></li>
           {% for nav_item in nav %}
-            {% include "partials/tabs-item.html" %}
+          {% include "partials/tabs-item.html" %}
           {% endfor %}
-
-				  </ul>
-	    </div>
-          {% if "search" in config["plugins"] %}
-          {% include "partials/search.html" %}
-          {% endif %}
-        </div>
-        <div id="ob_nav_right">
-
-            <div class="ob_nav_search">
-                <div><input class="ob_nav_input" type="text" placeholder="请输入关键词"></div>
-                <div class="search icon"></div>
-            </div>
-            <div>
-                <a href="javascript:;" class="ob_nav_login">登录</a>
-            </div>
-            <div>
-                <a href="javascript:;" class="ob_nav_register">立即注册</a>
-            </div>
-        </div>
+          <li class="ob_nav_subList">
+              <a href="https://open.oceanbase.com/community/contribution" class="md-tabs__link">社区</a>
+              <div class="ob_nav_subListShow">
+                  <ul class="ob_nav_subUl">
+                      <li><a href="https://open.oceanbase.com/community/contribution" class="md-tabs__link">社区贡献</a></li>
+                      <li><a href="https://open.oceanbase.com/community/organization" class="md-tabs__link">社区组织</a></li>
+                      <li><a href="https://open.oceanbase.com/community/activities" class="md-tabs__link">社区活动</a></li>
+                      <li><a href="https://open.oceanbase.com/community/exchange" class="md-tabs__link">社区交流</a></li>
+                  </ul>
+              </div>
+          </li>
+          <li class="ob_nav_subList">
+              <a href="https://open.oceanbase.com/security/leak" class="md-tabs__link">安全</a>
+              <div class="ob_nav_subListShow">
+                  <ul class="ob_nav_subUl">
+                      <li><a href="https://open.oceanbase.com/security/leak" class="md-tabs__link">悬赏计划</a></li>
+                      <li><a href="https://open.oceanbase.com/security/notice" class="md-tabs__link">安全公告</a></li>
+                  </ul>
+              </div>
+          </li>
+          <li><a href="https://open.oceanbase.com/articles" class="md-tabs__link">博客</a></li>
+          <li><a href="https://open.oceanbase.com/softwareCenter/community" class="md-tabs__link">下载</a></li>
+          <li><a href="https://open.oceanbase.com/answer" class="md-tabs__link">问答</a></li>
+      </ul>
     </div>
+</nav>
+
