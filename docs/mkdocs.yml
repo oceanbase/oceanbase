@@ -41,6 +41,10 @@ theme:
     logo: logo
 
 # Plugins
+plugins:
+  - search:
+      # use Japanese to support Chinese, see https://www.mkdocs.org/user-guide/configuration/#lang
+      lang: ja
 
 # Customization
 extra:
