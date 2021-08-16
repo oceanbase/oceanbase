@@ -2321,7 +2321,7 @@ nav:
       - Pull Request 与 Commit 信息规范 : docs-cn/15.community-contribution/3.pull-request-and-commit-specifications.md
     - OceanBase Roadmap : docs-cn/16.oceanbase-roadmap.md
 
-  - 讲义:
+  - 数据库教程:
     - 数据库管理系统实现基础讲义: lectures/index.md
     - 第1章 数据库管理系统概述: lectures/lecture-1.md
     - 第2章 数据库的存储结构: lectures/lecture-2.md
