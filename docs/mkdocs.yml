@@ -1,9 +1,7 @@
 site_name: OceanBase
 repo_url: 'https://github.com/oceanbase/oceanbase'
 repo_name: 'OceanBase'
-edit_uri: 'edit/master/docs/'
-
-copyright: 'Copyright &copy; ICP备案: 京ICP备20024574号-1</a>'
+edit_uri: 'edit/master/docs/docs/'
 
 theme:
   name: null
@@ -51,17 +49,15 @@ extra:
     property: !ENV GOOGLE_ANALYTICS_KEY
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/squidfunk
-    - icon: fontawesome/brands/gitter
-      link: https://gitter.im/squidfunk/mkdocs-material
-    - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/squidfunk/mkdocs-material/
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/squidfunk
-    - icon: fontawesome/brands/linkedin
-      link: https://linkedin.com/in/squidfunk/
-    - icon: fontawesome/brands/instagram
-      link: https://instagram.com/squidfunk
+      link: https://github.com/oceanbase/oceanbase
+    - icon: fontawesome/brands/gitee2
+      link: https://gitee.com/oceanbase
+    - icon: fontawesome/brands/微博
+      link: https://weibo.com/6281091917/profile?topnav=1&wvr=6&is_all=1
+    - icon: fontawesome/brands/知乎
+      link: https://www.zhihu.com/people/pi-pi-xia-45-56/
+    - icon: fontawesome/brands/博客
+      link: https://open.oceanbase.com/articles
 
 # Extensions
 markdown_extensions:

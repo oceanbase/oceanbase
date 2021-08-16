@@ -42,11 +42,22 @@
   <div class="md-footer-meta md-typeset">
     <div class="md-footer-meta__inner md-grid">
       <div class="md-footer-copyright">
-        {% if config.copyright %}
-          <div class="md-footer-copyright__highlight">
-            {{ config.copyright }}
+        <div class="md-footer-copyright__highlight">
+          <div class="ob_footer_bottomHalf">
+            <span>ICP备案: 京ICP备20024574号-1</span>
+            <div class="diver"></div>
+            <span>
+                    <a href="https://www.oceanbase.com/protocols/ob_trial">OceanBase 软件许可协议</a>
+                </span>
+            <div class="diver"></div>
+            <span>
+                    <a href="https://open.oceanbase.com/protocols/ob_law">法律声明</a>
+                </span>
+            <span>
+                    OceanBase 版权所有 © 2021 基础资源和备案服务由阿里云提供
+                </span>
           </div>
-        {% endif %}
+        </div>
       </div>
       {% include "partials/social.html" %}
     </div>
