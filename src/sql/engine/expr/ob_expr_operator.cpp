@@ -3096,6 +3096,12 @@ void ObStringExprOperator::calc_temporal_format_result_length(
     type.set_varchar();
     type.set_length(MAX_VARCHAR_BUFFER_SIZE);
   }
+  if (is_mysql_mode() && ob_is_text_tc(type.get_type())) {
+    const int32_t mbmaxlen = 4;
+    const int32_t default_text_length = ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()].get_length() / mbmaxlen;
+    // need to set a correct length for text tc in mysql mode
+    type.set_length(default_text_length);
+  }
 }
 
 ObObjType ObStringExprOperator::get_result_type_mysql(int64_t char_length) const

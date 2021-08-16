@@ -2960,7 +2960,7 @@ int ObDDLResolver::check_text_length(ObCharsetType cs_type, ObCollationType co_t
   } else if (0 == mbmaxlen) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(ERROR, "mbmaxlen can not be 0", K(ret), K(co_type), K(mbmaxlen));
-  } else if (0 == length) {
+  } else if (share::is_oracle_mode() || 0 == length) {
     length = default_length;
   } else if (0 > length) {
     ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
