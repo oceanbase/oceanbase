@@ -3189,16 +3189,20 @@ int ObPartitionStore::get_kept_multi_version_start(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (OB_FAIL(get_last_major_sstable(pkey_.get_table_id(), handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get last major sstable", K(ret), K_(pkey));
-    } else {
-      ret = OB_SUCCESS;
+  } else if (pkey_.is_trans_table()) {
+    // trans table no need deal with multi version start or
+    // backup snapshot version
+    multi_version_start = 1;
+  } else {
+    if (OB_FAIL(get_last_major_sstable(pkey_.get_table_id(), handle))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_WARN("failed to get last major sstable", K(ret), K_(pkey));
+      } else {
+        ret = OB_SUCCESS;
+      }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    {
+    if (OB_SUCC(ret)) {
       TCRLockGuard lock_guard(lock_);
       if (OB_FAIL(get_min_merged_version_(min_merged_version))) {
         LOG_WARN("failed to get_min_merged_version_", K(ret));
@@ -3213,17 +3217,16 @@ int ObPartitionStore::get_kept_multi_version_start(
         LOG_WARN("failed to get_kept_multi_version_start", K(ret), K(pkey_));
       }
     }
-  }
 
-  multi_version_start = min_reserved_snapshot;
+    multi_version_start = min_reserved_snapshot;
 
-  if (OB_SUCC(ret) && is_in_dest_split) {
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      LOG_INFO("partition in logical splitting cannot keep multi version start", K_(pkey));
+    if (OB_SUCC(ret) && is_in_dest_split) {
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+        LOG_INFO("partition in logical splitting cannot keep multi version start", K_(pkey));
+      }
+      multi_version_start = std::max(ObTimeUtility::current_time(), multi_version_start);
     }
-    multi_version_start = std::max(ObTimeUtility::current_time(), multi_version_start);
   }
-
   multi_version_start = std::max(multi_version_start, meta_->multi_version_start_);
   return ret;
 }

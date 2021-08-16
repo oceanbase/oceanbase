@@ -199,11 +199,8 @@ struct ObCurTraceId {
 
   inline static TraceId* get_trace_id()
   {
-    static RLOCAL(TraceId*, TRACE_ID);
-    if (OB_UNLIKELY(TRACE_ID == nullptr)) {
-      TRACE_ID = new (std::nothrow) TraceId();
-    }
-    return TRACE_ID;
+    static thread_local TraceId TRACE_ID;
+    return &TRACE_ID;
   }
 
   inline static void mark_user_request()

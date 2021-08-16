@@ -88,6 +88,7 @@ void ObDtlRpcChannel::SendBCMsgCB::on_invalid()
       LOG_WARN("set finish failed", K(ret), K(resps.count()), K(responses_.count()), K(trace_id_));
     }
   }
+  resps.reset();
 }
 
 void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
@@ -102,6 +103,7 @@ void ObDtlRpcChannel::SendBCMsgCB::on_timeout()
       LOG_WARN("set finish failed", K(ret), K(resps.count()), K(responses_.count()), K(trace_id_));
     }
   }
+  resps.reset();
 }
 
 int ObDtlRpcChannel::SendBCMsgCB::process()
@@ -125,6 +127,7 @@ int ObDtlRpcChannel::SendBCMsgCB::process()
     }
     LOG_TRACE("rpc clone sendbcmsg cb", K(responses_.at(i)), K(trace_id_));
   }
+  resps.reset();
   return ret;
 }
 
