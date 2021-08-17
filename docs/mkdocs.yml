@@ -61,13 +61,6 @@ extra:
     - icon: fontawesome/brands/博客
       link: https://open.oceanbase.com/articles
 
-# Plugins
-plugins:
-  - search:
-      # use Japanese to support Chinese, see https://www.mkdocs.org/user-guide/configuration/#lang
-      lang: ja
-
-
 # Extensions
 markdown_extensions:
   - admonition
