@@ -38,7 +38,9 @@ To modify the layout of pages, you need to edit `mkdocs.yml`.
 
 For configuration details, see [MkDocs User Guide](https://www.mkdocs.org/user-guide/configuration/).
 
-**Note:** `docs/` is the default value of `docs_dir`, which means `docs/` is equivalent to `./` in `mkdocs.yml`.
+Note the following rules when editing documents:
+- All paths in `nav` must be relative to the `docs_dir`, which is `docs` by default. So here `./` is equivalent to [docs](docs).
+- All internal links must be relative paths, as MkDocs only supports regular Markdown linking syntax.
 
 ## Contribute
 

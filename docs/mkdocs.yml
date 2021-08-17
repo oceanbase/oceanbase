@@ -1,13 +1,20 @@
 site_name: OceanBase
 repo_url: 'https://github.com/oceanbase/oceanbase'
 repo_name: 'OceanBase'
-edit_uri: 'edit/master/docs/'
+edit_uri: 'edit/master/docs/docs'
 
 theme:
   name: 'material'
   features:
     - navigation.tabs
     - navigation.top
+
+# Plugins
+plugins:
+  - search:
+      # use Japanese to support Chinese, see https://www.mkdocs.org/user-guide/configuration/#lang
+      lang: ja
+
 nav:
   - Home: index.md
 
@@ -92,7 +99,7 @@ nav:
       - SQL引擎:
         - SQL 请求执行流程: docs-cn/5.overview/7.sql-engine-1/1.sql-request-execution-process-1.md
         - 查询改写:
-          - 概述: docs-cn/5.overview/7.sql-engine-1/1.overview-9.md
+          - 概述: docs-cn/5.overview/7.sql-engine-1/2.query-rewrite-1/1.overview-9.md
           - 基于规则的查询改写: docs-cn/5.overview/7.sql-engine-1/2.query-rewrite-1/2.rule-based-query-rewriting-1.md
           - 基于代价的查询改写: docs-cn/5.overview/7.sql-engine-1/2.query-rewrite-1/3.cost-based-query-rewriting-1.md
         - 查询优化:
@@ -123,16 +130,16 @@ nav:
             - SELECT INTO: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/14.select-into.md
             - SUBPLAN SCAN: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/15.subplan-scan.md
             - UNION: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/16.UNION.md
-            - INTERSECT: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/16.UNION.md
+            - INTERSECT: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/17.INTERSECT.md
             - EXCEPT/MINUS: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/18.except-minus.md
             - INSERT: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/19.INSERT-1-2.md
-            - DELETE: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/19.INSERT-1-2.md
-            - UPDATE: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/19.INSERT-1-2.md
+            - DELETE: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/20.DELETE-1-2.md
+            - UPDATE: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/21.UPDATE-1-2.md
             - MERGE: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/22.MERGE-1.md
-            - EXCHANGE: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/22.MERGE-1.md
+            - EXCHANGE: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/23.EXCHANGE.md
             - GI: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/2.execution-plan-operator/24.GI.md
           - 执行计划缓存: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/3.execution-plan-cache-2.md
-          - 快速参数化: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/3.execution-plan-cache-2.md
+          - 快速参数化: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/4.fast-parameterization-1.md
           - 实时执行计划展示: docs-cn/5.overview/7.sql-engine-1/4.sql-execution-plan-1/5.real-time-execution-plan-display-1.md
         - 分布式执行计划:
           - 分布式执行和并行查询: docs-cn/5.overview/7.sql-engine-1/5.distributed-execution-plan-1/1.distributed-execution-and-parallel-query-2.md
@@ -427,8 +434,9 @@ nav:
         - 事务保存点 : docs-cn/7.developer-guide-1/3.about-dml-statements-and-transactions/5.transaction-savepoints.md
         - 关于事务超时 : docs-cn/7.developer-guide-1/3.about-dml-statements-and-transactions/6.about-transaction-timeout.md
       - 创建和管理数据库对象:
-        - 关于 DDL 语句 : docs-cn/8.developer-guide-oracle-mode/4.create-and-manage-database-objects-1/1.about-ddl-statements-1.md
+        - 关于 DDL 语句 : docs-cn/7.developer-guide-1/4.create-and-manage-database-objects/1.about-ddl-statements.md
         - 创建和管理表:
+          - 关于 SQL 数据类型: docs-cn/7.developer-guide-1/4.create-and-manage-database-objects/2.create-and-manage-tables/1.about-sql-data-types.md
           - 创建表 : docs-cn/7.developer-guide-1/4.create-and-manage-database-objects/2.create-and-manage-tables/2.create-a-table-1.md
           - 关于自增列 : docs-cn/7.developer-guide-1/4.create-and-manage-database-objects/2.create-and-manage-tables/3.about-auto-increment-columns.md
           - 关于列的约束类型 : docs-cn/7.developer-guide-1/4.create-and-manage-database-objects/2.create-and-manage-tables/4.about-column-constraint-types.md
@@ -795,6 +803,8 @@ nav:
                 - 与联接操作相关的 Hint : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/6.annotation-1/4.Hint/2.hint-list/3.hints-related-to-join-operations.md
                 - 与并行执行相关的 Hint : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/6.annotation-1/4.Hint/2.hint-list/4.hints-related-to-parallel-execution.md
                 - 与查询策略相关的 Hint : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/6.annotation-1/4.Hint/2.hint-list/5.hints-related-to-the-query-policy.md
+                - 与查询转换相关的 Hint : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/6.annotation-1/4.Hint/2.hint-list/6.hints-related-to-query-transformation.md
+                - 其他Hint : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/6.annotation-1/4.Hint/2.hint-list/7.other-hints.md
               - 数据库对象:
                 - Schema 对象: docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/7.database-objects/1.schema-object.md
               - 数据库对象命名规范:
@@ -802,7 +812,6 @@ nav:
                 - 数据库对象命名规则 : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/8.database-naming-convention/2.database-object-naming-rules.md
                 - Schema 对象命名示例 : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/8.database-naming-convention/3.schema-object-naming-example.md
                 - Schema 对象命名准则 : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/8.database-naming-convention/4.schema-object-naming-guidelines.md
-                - 与查询转换相关的 Hint : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/6.annotation-1/4.Hint/2.hint-list/6.hints-related-to-query-transformation.md
               - 数据库对象引用:
                 - 数据库对象引用概述 : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/9.database-object-reference-method/1.overview-of-database-object-references.md
                 - 引用 Schema 对象 : docs-cn/11.sql-reference-oracle-mode/3.basic-elements-1/9.database-object-reference-method/2.reference-a-schema-object.md
@@ -1115,7 +1124,7 @@ nav:
         - 概述 : docs-cn/13.reference-guide/1.system-view/1.overview-4.md
         - 字典视图 :
           - mysql.help_topic : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/1.mysql-help_topic.md
-          - information_schema.COLLATIONS : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/
+          - mysql-help_category : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/2.mysql-help_category.md
           - mysql.help_keyword : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/3.mysql-help_keyword.md
           - mysql.help_relation : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/4.mysql-help_relation.md
           - mysql.db : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/5.mysql-db.md
@@ -2220,7 +2229,7 @@ nav:
       - Pull Request 与 Commit 信息规范 : docs-cn/15.community-contribution/3.pull-request-and-commit-specifications.md
     - OceanBase Roadmap : docs-cn/16.oceanbase-roadmap.md
 
-  - 讲义:
+  - 数据库教程:
     - 数据库管理系统实现基础讲义: lectures/index.md
     - 第1章 数据库管理系统概述: lectures/lecture-1.md
     - 第2章 数据库的存储结构: lectures/lecture-2.md
@@ -2230,3 +2239,4 @@ nav:
     - 第6章 事务处理: lectures/lecture-6.md
     - 参考资料: lectures/references.md
     - 版权声明: lectures/copyright.md
+
