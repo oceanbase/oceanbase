@@ -70,6 +70,12 @@ int ObExprRepeat::calc_result_type2(
        * length to be  OB_MAX_VARCHAR_LENGTH here.
        */
       type.set_length(MAX_CHAR_LENGTH_FOR_VARCAHR_RESULT);
+    } else if (ob_is_text_tc(type.get_type())) {
+      const int32_t mbmaxlen = 4;
+      const int32_t default_text_length =
+        ObAccuracy::DDL_DEFAULT_ACCURACY[type.get_type()].get_length() / mbmaxlen;
+      // need to set a correct length for text tc in mysql mode
+      type.set_length(default_text_length);
     }
   }
   if (OB_SUCC(ret)) {
