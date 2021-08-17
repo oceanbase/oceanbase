@@ -84,6 +84,7 @@ class ObCgroupCtrl;
 namespace observer {
 class ObService;
 class ObVTIterCreator;
+class ObTableService;
 
 class ObServerOptions {
 public:
@@ -197,6 +198,7 @@ struct ObGlobalContext {
   common::ObString* sort_dir_;
   obmysql::ObDiag* diag_;
   common::ObMysqlRandom* scramble_rand_;
+  ObTableService* table_service_;
   omt::ObCgroupCtrl* cgroup_ctrl_;
   bool inited_;
   int64_t split_schema_version_;

@@ -311,6 +311,10 @@ public:
   {
     return is_dirty_;
   }
+  bool has_synced_log() const
+  {
+    return 0 != max_durable_log_ts_;
+  }
   int64_t get_forbidden_sql_no() const
   {
     return ATOMIC_LOAD(&forbidden_sql_no_);
@@ -375,12 +379,17 @@ public:
   {
     return enable_new_1pc_;
   }
+  bool is_task_match()
+  {
+    return stmt_info_.is_task_match();
+  }
   void remove_trans_table();
   int clear_trans_after_restore(
       const int64_t restore_version, const uint64_t last_restore_log_id, const int64_t fake_terminate_log_ts);
   bool is_in_trans_table_state();
   virtual int64_t get_part_trans_action() const override;
   int rollback_stmt(const int64_t from_sql_no, const int64_t to_sql_no);
+  bool need_update_schema_version(const int64_t log_id, const int64_t log_ts);
 
 public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(snapshot_version), K_(local_trans_version),
@@ -391,8 +400,8 @@ public:
       K_(is_dup_table_prepare), K_(dup_table_syncing_log_id), K_(is_prepare_leader_revoke), K_(is_local_trans),
       K_(forbidden_sql_no), K(is_dirty_), K_(undo_status), K_(max_durable_sql_no), K_(max_durable_log_ts),
       K(mt_ctx_.get_checksum_log_ts()), K_(is_changing_leader), K_(has_trans_state_log),
-      K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx), K(mt_ctx_.get_callback_count()),
-      K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
+      K_(is_trans_state_sync_finished), K_(status), K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx),
+      K(mt_ctx_.get_callback_count()), K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
       K_(is_xa_trans_prepared));
 
 public:
@@ -687,6 +696,18 @@ private:
   bool is_prepared_;
   bool is_gts_waiting_;
   bool batch_commit_trans_;
+  // Whether there exists a trans state log for the current leader transfer
+  //
+  // It is implemented as follow:
+  // - For the New Leader:
+  //   - we set the value to true when we replay the trans state log
+  //     if the new leader is me
+  //   - we reset the value when leader is active
+  // - For the original Leader:
+  //   - we reset the value before each leader transfer
+  //   - we set the value to true when we synced the trans state log
+  //   - we reset the value when leader is revoked if no on-the-fly log
+  //     exist
   bool is_trans_state_sync_finished_;
   bool is_changing_leader_;
   bool can_rollback_stmt_;

@@ -1491,7 +1491,30 @@ int ObPartitionLogService::receive_log(const ObLogEntry& log_entry, const ObAddr
 
   if (OB_SUCC(ret)) {
     RLockGuard guard(lock_);
-    if (cluster_id != state_mgr_.get_self_cluster_id() && STANDBY_LEADER != state_mgr_.get_role()) {
+    // check src server
+    const common::ObAddr parent = cascading_mgr_.get_parent_addr();
+    bool is_valid_src = false;
+    if (!parent.is_valid() || server == parent || cascading_mgr_.is_in_reregister_period()) {
+      // When my parent is invalid(may be migrating dest) or src is my parent or
+      // I'm in reregister period, I can receive log.
+      is_valid_src = true;
+    }
+
+    if (!is_valid_src) {
+      // sender is not valid src, cannot receive log
+      ret = OB_STATE_NOT_MATCH;
+      CLOG_LOG(WARN,
+          "sender is an unexpected src, cannot receive log",
+          K_(partition_key),
+          K(ret),
+          K(server),
+          K(proposal_id),
+          K(cluster_id),
+          K(type),
+          K(parent),
+          "self_cluster_id",
+          state_mgr_.get_self_cluster_id());
+    } else if (cluster_id != state_mgr_.get_self_cluster_id() && STANDBY_LEADER != state_mgr_.get_role()) {
       // only STANDBY_LEADER can receive logs from different cluster
       ret = OB_STATE_NOT_MATCH;
       CLOG_LOG(WARN,

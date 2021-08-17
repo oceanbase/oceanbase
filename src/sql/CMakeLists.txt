@@ -307,6 +307,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_neg.cpp
   engine/expr/ob_expr_autoinc_nextval.cpp
   engine/expr/ob_expr_not.cpp
+  engine/expr/ob_expr_convert_tz.cpp
   engine/expr/ob_expr_not_between.cpp
   engine/expr/ob_expr_not_equal.cpp
   engine/expr/ob_expr_not_exists.cpp
@@ -346,6 +347,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_regexp_like.cpp
   engine/expr/ob_expr_repeat.cpp
   engine/expr/ob_expr_replace.cpp
+  engine/expr/ob_expr_export_set.cpp
   engine/expr/ob_expr_translate.cpp
   engine/expr/ob_expr_pi.cpp
   engine/expr/ob_expr_pi.h

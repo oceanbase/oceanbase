@@ -669,7 +669,7 @@ DEF_INT(zone_merge_concurrency, OB_CLUSTER_PARAMETER, "0", "[0,]",
     ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(zone_merge_order, OB_CLUSTER_PARAMETER, "", "the order of zone start merge in daily merge",
     ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_merge_by_turn, OB_CLUSTER_PARAMETER, "True",
+DEF_BOOL(enable_merge_by_turn, OB_CLUSTER_PARAMETER, "False",
     "specifies whether merge tasks can be performed on different zones "
     "in an alternating fashion. Value: True:turned on; False: turned off",
     ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

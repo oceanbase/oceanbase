@@ -517,7 +517,6 @@ int ObHexUtils::unhex(const ObString& text, ObCastCtx& cast_ctx, ObObj& result)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed", K(alloc_length), K(ret));
   } else {
-    bool all_valid_char = true;
     int32_t i = 0;
     char c1 = 0;
     char c2 = 0;
@@ -532,21 +531,18 @@ int ObHexUtils::unhex(const ObString& text, ObCastCtx& cast_ctx, ObObj& result)
         i = 1;
       }
     }
-    while (OB_SUCC(ret) && all_valid_char && i < text.length()) {
+    while (OB_SUCC(ret) && i < text.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
         c1 = text[++i];
         c2 = text[++i];
-      } else if (lib::is_oracle_mode()) {
+      } else {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(text));
-      } else {
-        all_valid_char = false;
-        result.set_null();
       }
     }
 
-    if (OB_SUCC(ret) && all_valid_char) {
+    if (OB_SUCC(ret)) {
       str_result.assign_ptr(buf, tmp_length);
       result.set_varchar(str_result);
     }

@@ -266,6 +266,7 @@ ObGlobalContext& ObGlobalContext::operator=(const ObGlobalContext& other)
     sort_dir_ = other.sort_dir_;
     diag_ = other.diag_;
     scramble_rand_ = other.scramble_rand_;
+    table_service_ = other.table_service_;
     cgroup_ctrl_ = other.cgroup_ctrl_;
     inited_ = other.inited_;
     split_schema_version_ = other.split_schema_version_;

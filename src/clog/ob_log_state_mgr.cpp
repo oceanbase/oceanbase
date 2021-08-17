@@ -1678,8 +1678,6 @@ int ObLogStateMgr::reconfirm_to_taking_over_()
     revoke_leader_(revoke_type);
   } else if (OB_FAIL(on_leader_takeover_())) {
     CLOG_LOG(WARN, "on_leader_takeover_ failed, try again", K_(partition_key), K(ret));
-  } else if (OB_FAIL(sw_->leader_takeover())) {
-    CLOG_LOG(ERROR, "sw leader_active failed", K(ret), K(partition_key_));
   } else {
     reconfirm_->reset();
     // role_ = LEADER;

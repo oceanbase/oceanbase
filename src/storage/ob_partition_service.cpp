@@ -4477,6 +4477,7 @@ int ObPartitionService::replay_redo_log(const common::ObPartitionKey& pkey, cons
   } else {
     // used to order trans nodes that have not determined the commit version during replay
     ctx.mem_ctx_->set_redo_log_timestamp(log_timestamp);
+    ctx.mem_ctx_->set_redo_log_id(log_id);
     if (OB_FAIL(get_partition(pkey, guard))) {
       STORAGE_LOG(WARN, "get partition failed", K(pkey), K(ret));
     } else if (OB_ISNULL(guard.get_partition_group())) {
@@ -8142,15 +8143,17 @@ int ObPartitionService::nonblock_get_strong_leader_from_loc_cache(
       int tmp_ret = OB_SUCCESS;
       const int64_t expire_renew_time = 0;
       if (OB_SUCCESS != (tmp_ret = location_cache_->nonblock_renew(pkey, expire_renew_time, cluster_id))) {
-        STORAGE_LOG(WARN, "nonblock_renew failed", K(pkey), K(tmp_ret));
+        STORAGE_LOG(WARN, "nonblock_renew failed", K(pkey), K(tmp_ret), K(cluster_id));
       } else {
-        STORAGE_LOG(DEBUG, "nonblock_renew success", K(pkey));
+        if (REACH_TIME_INTERVAL(1000 * 1000)) {
+          STORAGE_LOG(INFO, "nonblock_renew success", K(pkey), K(cluster_id));
+        }
       }
     }
     if (OB_FAIL(location_cache_->nonblock_get_strong_leader_without_renew(pkey, leader, cluster_id))) {
-      STORAGE_LOG(DEBUG, "nonblock_get_strong_leader_without_renew failed", K(pkey), K(ret));
+      STORAGE_LOG(DEBUG, "nonblock_get_strong_leader_without_renew failed", K(pkey), K(cluster_id), K(ret));
     } else {
-      STORAGE_LOG(DEBUG, "nonblock_get_leader_without_renew success", K(pkey), K(ret));
+      STORAGE_LOG(DEBUG, "nonblock_get_strong_leader_without_renew success", K(pkey), K(cluster_id), K(ret));
     }
   }
   return ret;

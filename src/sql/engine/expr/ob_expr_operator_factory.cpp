@@ -143,6 +143,7 @@
 #include "sql/engine/expr/ob_expr_merging_frozen_time.h"
 #include "sql/engine/expr/ob_expr_remainder.h"
 #include "sql/engine/expr/ob_expr_repeat.h"
+#include "sql/engine/expr/ob_expr_export_set.h"
 #include "sql/engine/expr/ob_expr_replace.h"
 #include "sql/engine/expr/ob_expr_translate.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
@@ -264,6 +265,7 @@
 #include "sql/engine/expr/ob_expr_format.h"
 #include "sql/engine/expr/ob_expr_quarter.h"
 #include "sql/engine/expr/ob_expr_bit_length.h"
+#include "sql/engine/expr/ob_expr_convert_tz.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -535,6 +537,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprFuncCeiling);
   REG_OP(ObExprFuncDump);
   REG_OP(ObExprRepeat);
+  REG_OP(ObExprExportSet);
   REG_OP(ObExprReplace);
   REG_OP(ObExprFuncPartOldHash);
   REG_OP(ObExprFuncPartHash);
@@ -554,6 +557,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprCharset);
   REG_OP(ObExprCollation);
   REG_OP(ObExprCoercibility);
+  REG_OP(ObExprConvertTZ);
   REG_OP(ObExprSetCollation);
   REG_OP(ObExprReverse);
   REG_OP(ObExprRight);

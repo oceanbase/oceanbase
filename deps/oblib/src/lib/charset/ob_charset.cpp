@@ -2250,43 +2250,42 @@ int ObCharset::charset_convert(ObIAllocator& alloc, const ObString& in, const Ob
       if (OB_ISNULL(res_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
-      } else if (OB_FAIL(
-                     charset_convert(src_cs_type, in.ptr(), in.length(), dst_cs_type, res_buf, res_buf_len, res_len))) {
       } else {
-        out.assign_ptr(res_buf, res_len);
-      }
-
-      // handle replace unknown character
-      if (OB_FAIL(ret)) {
-        LOG_WARN("convert charset failed", K(ret), K(in), K(src_cs_type), K(dst_cs_type), KPHEX(in.ptr(), in.length()));
-        if (!!(convert_flag & REPLACE_UNKNOWN_CHARACTER)) {
-          int32_t in_offset = 0;
-          int64_t res_buf_offset = 0;
-          ObString question_mark = ObCharsetUtils::get_const_str(dst_cs_type, '?');
-          while (in_offset < in.length() && res_buf_offset + question_mark.length() <= res_buf_len) {
-            int64_t offset = ObCharset::charpos(src_cs_type, in.ptr() + in_offset, in.length() - in_offset, 1);
-            ret = ObCharset::charset_convert(src_cs_type,
-                in.ptr() + in_offset,
-                offset,
-                dst_cs_type,
-                res_buf + res_buf_offset,
-                res_buf_len - res_buf_offset,
-                res_len);
-            in_offset += offset;
-            if (OB_SUCCESS == ret) {
-              res_buf_offset += res_len;
-            } else {
-              MEMCPY(res_buf + res_buf_offset, question_mark.ptr(), question_mark.length());
-              res_buf_offset += question_mark.length();
+        if (OB_SUCC(charset_convert(src_cs_type, in.ptr(), in.length(), dst_cs_type, res_buf, res_buf_len, res_len))) {
+          out.assign_ptr(res_buf, res_len);
+        } else {
+          // handle replace unknown character
+          LOG_WARN(
+              "convert charset failed", K(ret), K(in), K(src_cs_type), K(dst_cs_type), KPHEX(in.ptr(), in.length()));
+          if (!!(convert_flag & REPLACE_UNKNOWN_CHARACTER)) {
+            int32_t in_offset = 0;
+            int64_t res_buf_offset = 0;
+            ObString question_mark = ObCharsetUtils::get_const_str(dst_cs_type, '?');
+            while (in_offset < in.length() && res_buf_offset + question_mark.length() <= res_buf_len) {
+              int64_t offset = ObCharset::charpos(src_cs_type, in.ptr() + in_offset, in.length() - in_offset, 1);
+              ret = ObCharset::charset_convert(src_cs_type,
+                  in.ptr() + in_offset,
+                  offset,
+                  dst_cs_type,
+                  res_buf + res_buf_offset,
+                  res_buf_len - res_buf_offset,
+                  res_len);
+              in_offset += offset;
+              if (OB_SUCCESS == ret) {
+                res_buf_offset += res_len;
+              } else {
+                MEMCPY(res_buf + res_buf_offset, question_mark.ptr(), question_mark.length());
+                res_buf_offset += question_mark.length();
+              }
             }
-          }
-          if (in_offset < in.length()) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("buf size over flow", K(ret), K(in), KPHEX(in.ptr(), in.length()));
-          } else {
-            res_len = res_buf_offset;
-            out.assign_ptr(res_buf, res_len);
-            ret = OB_SUCCESS;
+            if (in_offset < in.length()) {
+              ret = OB_SIZE_OVERFLOW;
+              LOG_WARN("buf size over flow", K(ret), K(in), KPHEX(in.ptr(), in.length()));
+            } else {
+              res_len = res_buf_offset;
+              out.assign_ptr(res_buf, res_len);
+              ret = OB_SUCCESS;
+            }
           }
         }
       }

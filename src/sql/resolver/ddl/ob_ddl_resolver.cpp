@@ -2960,8 +2960,14 @@ int ObDDLResolver::check_text_length(ObCharsetType cs_type, ObCollationType co_t
   } else if (0 == mbmaxlen) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(ERROR, "mbmaxlen can not be 0", K(ret), K(co_type), K(mbmaxlen));
-  } else if (length < 0) {
+  } else if (share::is_oracle_mode() || 0 == length) {
     length = default_length;
+  } else if (0 > length) {
+    ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+    LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, name,
+                   static_cast<int>(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType].get_length() / mbmaxlen));
+    SQL_RESV_LOG(WARN, "fail to check column data length",
+                 K(ret), K(length), K(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType].get_length()), K(mbmaxlen));
   } else {
     // eg. text(128) will be tinytext in mysql, and text(65537) will be mediumtext
     if (ObTextType == type) {

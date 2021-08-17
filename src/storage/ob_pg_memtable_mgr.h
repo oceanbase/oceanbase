@@ -111,8 +111,6 @@ private:
 
 private:
   static const int64_t PRINT_READABLE_INFO_DURATION_US = 1000 * 1000 * 60 * 10L;  // 10min
-  static const int64_t MAX_MEMSTORE_CNT = 16;
-
 private:
   int64_t memtable_head_;
   int64_t memtable_tail_;

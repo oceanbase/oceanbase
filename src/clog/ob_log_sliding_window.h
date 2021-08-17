@@ -100,7 +100,6 @@ public:
   virtual int get_next_replay_log_timestamp(int64_t& next_replay_log_timestamp) const = 0;
   virtual uint64_t get_next_index_log_id() const = 0;
   virtual int leader_active() = 0;
-  virtual int leader_takeover() = 0;
   virtual int leader_revoke() = 0;
   virtual void get_next_replay_log_id_info(uint64_t& next_log_id, int64_t& next_log_ts) const = 0;
   virtual bool is_fake_info_need_revoke(const uint64_t log_id, const int64_t current_time) = 0;
@@ -490,7 +489,6 @@ public:
     return common::OB_SUCCESS;
   }
   int leader_active() override;
-  int leader_takeover() override;
   int leader_revoke() override;
   int get_replica_replay_type(ObReplicaReplayType& replay_type) const;
   // is_meta_log: log type that need been replayed by D replica and log replica

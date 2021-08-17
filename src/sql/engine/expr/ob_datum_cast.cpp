@@ -477,7 +477,6 @@ int ObDatumHexUtils::unhex(const ObExpr& expr, const ObString& in_str, ObEvalCtx
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(alloc_length), K(ret));
   } else {
-    bool all_valid_char = true;
     int32_t i = 0;
     char c1 = 0;
     char c2 = 0;
@@ -492,27 +491,23 @@ int ObDatumHexUtils::unhex(const ObExpr& expr, const ObString& in_str, ObEvalCtx
         i = 1;
       }
     }
-    while (OB_SUCC(ret) && all_valid_char && i < in_str.length()) {
+    while (OB_SUCC(ret) && i < in_str.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
         c1 = in_str[++i];
         c2 = in_str[++i];
-      } else if (lib::is_oracle_mode()) {
+      } else {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(in_str));
-      } else {
-        all_valid_char = false;
-        res_datum.set_null();
       }
     }
-    if (OB_SUCC(ret) && all_valid_char) {
+    if (OB_SUCC(ret)) {
       ObString str_res(tmp_length, buf);
       // There will be no zero fill in the unhex() function, so it is directly assigned here
       res_datum.pack_ = tmp_length;
       res_datum.ptr_ = buf;
     }
   }
-
   return ret;
 }
 

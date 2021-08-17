@@ -234,9 +234,12 @@ int ObStaticEngineCG::postorder_generate_op(
   }
   if (is_subplan) {
     cur_op_exprs_.reset();
-    cur_op_exprs_.assign(tmp_cur_op_exprs);
     cur_op_self_produced_exprs_.reset();
-    cur_op_self_produced_exprs_.assign(tmp_cur_op_self_produced_exprs);
+    if (OB_FAIL(cur_op_exprs_.assign(tmp_cur_op_exprs))) {
+      LOG_WARN("assign exprs failed", K(ret)); 
+    } else if (OB_FAIL(cur_op_self_produced_exprs_.assign(tmp_cur_op_self_produced_exprs))) {
+      LOG_WARN("assign exprs failed", K(ret));
+    }
   }
 
   return ret;

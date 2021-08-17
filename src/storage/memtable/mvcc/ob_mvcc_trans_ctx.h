@@ -46,6 +46,7 @@ enum TransCallbackType {
   TCB_REMOVE_CALLBACK = 17,
   TCB_SUB_STMT_ABORT = 18,
   TCB_CRC4 = 19,
+  TCB_CLEAN_DIRTY_CB = 20,
 
   // TEST_ONLY, used for print callback
   TCB_PRINT_CALLBACK = 100
@@ -322,6 +323,7 @@ public:
   int mark_frozen_data(
       const ObMemtable* const frozen_memtable, const ObMemtable* const active_memtable, bool& marked, int64_t& cb_cnt);
   int calc_checksum_before_log_ts(const ObITransCallback* start, const ObITransCallback* end, const int64_t log_ts);
+  int clean_dirty_callbacks();
   int fetch_rollback_data_size(const ObITransCallback* start, const ObITransCallback* end, int64_t& rollback_size);
 
 private:
@@ -507,6 +509,7 @@ private:
 public:
   bool is_rowlocks_released() const;
   int calc_checksum_before_log_ts(const int64_t log_ts);
+  int clean_dirty_callbacks();
   int fetch_rollback_data_size(const ObITransCallback* point, int64_t& rollback_size);
   void inc_pending_log_size(const int64_t size);
   void inc_flushed_log_size(const int64_t size)
@@ -767,6 +770,7 @@ private:
   }
   int dec_pending_cb_count();
   void mark_tnode_overflow(const int64_t log_ts);
+  int clean_dirty_cb();
 
 private:
   ObIMvccCtx& ctx_;

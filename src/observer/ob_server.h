@@ -19,6 +19,7 @@
 #include "share/stat/ob_user_tab_col_statistics.h"
 #include "share/stat/ob_opt_stat_service.h"
 
+#include "observer/table/ob_table_service.h"
 #include "sql/ob_sql.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/ob_query_exec_ctx_mgr.h"
@@ -387,6 +388,9 @@ private:
 
   // Weakly Consistent Read Service
   transaction::ObWeakReadService weak_read_service_;
+
+  // table service             
+  ObTableService table_service_;
 
   // Tenant isolation resource management
   omt::ObCgroupCtrl cgroup_ctrl_;

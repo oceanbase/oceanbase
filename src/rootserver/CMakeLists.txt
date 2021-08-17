@@ -59,38 +59,6 @@ ob_set_subtarget(ob_rootserver common
   ob_rs_job_table_operator.cpp
   ob_rs_reentrant_thread.cpp
   ob_schema2ddl_sql.cpp
-  ob_server_balance_plan.cpp
-  ob_server_balancer.cpp
-  ob_server_checker.cpp
-  ob_server_manager.cpp
-  ob_server_table_operator.cpp
-  ob_shrink_resource_pool_checker.cpp
-  ob_single_partition_balance.cpp
-  ob_single_zone_mode_migrate_replica.cpp
-  ob_snapshot_info_manager.cpp
-  ob_system_admin_util.cpp
-  ob_thread_idling.cpp
-  ob_unit_balancer.cpp
-  ob_unit_manager.cpp
-  ob_unit_placement_strategy.cpp
-  ob_unit_stat_manager.cpp
-  ob_update_rs_list_task.cpp
-  ob_schema_spliter.cpp
-  ob_schema_split_executor.cpp
-  ob_upgrade_executor.cpp
-  ob_upgrade_storage_format_version_executor.cpp
-  ob_create_inner_schema_executor.cpp
-  ob_schema_revise_executor.cpp
-  ob_vtable_location_getter.cpp
-  ob_zone_manager.cpp
-  ob_zone_unit_provider.cpp
-  ob_partition_backup.cpp
-  ob_backup_cancel_scheduler.cpp
-  ob_restore_point_service.cpp
-  ob_log_archive_scheduler.cpp
-  ob_backup_data_clean_scheduler.cpp
-  ob_backup_data_clean.cpp
-  ob_schema_history_recycler.cpp
 )
 
 ob_set_subtarget(ob_rootserver vt
@@ -133,6 +101,42 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_cancel_validate_scheduler.cpp
   backup/ob_backup_lease_service.cpp
   backup/ob_cancel_delete_backup_scheduler.cpp
+)
+
+ob_set_subtarget(ob_rootserver task
+  ob_update_rs_list_task.cpp
+  ob_server_balance_plan.cpp
+  ob_server_balancer.cpp
+  ob_server_checker.cpp
+  ob_server_manager.cpp
+  ob_server_table_operator.cpp
+  ob_shrink_resource_pool_checker.cpp
+  ob_single_partition_balance.cpp
+  ob_single_zone_mode_migrate_replica.cpp
+  ob_snapshot_info_manager.cpp
+  ob_system_admin_util.cpp
+  ob_thread_idling.cpp
+  ob_unit_balancer.cpp
+  ob_unit_manager.cpp
+  ob_unit_placement_strategy.cpp
+  ob_unit_stat_manager.cpp
+  ob_backup_cancel_scheduler.cpp
+  ob_schema_spliter.cpp
+  ob_schema_split_executor.cpp
+  ob_upgrade_executor.cpp
+  ob_upgrade_storage_format_version_executor.cpp
+  ob_create_inner_schema_executor.cpp
+  ob_schema_revise_executor.cpp
+  ob_vtable_location_getter.cpp
+  ob_zone_manager.cpp
+  ob_zone_unit_provider.cpp
+  ob_partition_backup.cpp
+  ob_backup_cancel_scheduler.cpp
+  ob_restore_point_service.cpp
+  ob_log_archive_scheduler.cpp
+  ob_backup_data_clean_scheduler.cpp
+  ob_backup_data_clean.cpp
+  ob_schema_history_recycler.cpp
 )
 
 ob_server_add_pchs(rootserver

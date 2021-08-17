@@ -1,0 +1,221 @@
+$ob_error 1
+
+Oracle:
+	Oracle Error Code: ORA-00001
+	Message: unique constraint violated
+	Related OceanBase Error Code:
+		OB_ERR_PRIMARY_KEY_DUPLICATE(-5024)
+		OB_ER_DUPLICATED_VALUE_IN_TYPE(-5334)
+		OB_ERR_CONSTRAINT_DUPLICATE(-5562)
+		OB_ERR_DUP_KEY(-5595)
+$ob_error 13
+
+Operating System:
+	Linux Error Code: EACCES(13)
+	Message: Permission denied
+$ob_error 200
+
+OceanBase:
+	Error Code 200 not found.
+$ob_error 600
+
+Oracle:
+	Oracle Error Code: ORA-00600
+	Message: auto increment service busy
+	Message: rowid type mismatch
+	Related OceanBase Error Code:
+		OB_AUTOINC_SERVICE_BUSY(-5794)
+		OB_ROWID_TYPE_MISMATCH(-5870)
+		OB_ROWID_NUM_MISMATCH(-5871)
+$ob_error 1017
+
+MySQL:
+	MySQL Error Code: 1017 (HY000)
+	Message: File not exist
+	Related OceanBase Error Code:
+		OB_FILE_NOT_EXIST(-4027)
+
+Oracle:
+	Oracle Error Code: ORA-01017
+	Message: invalid username/password; logon deniedd
+	Related OceanBase Error Code:
+		OB_ERR_LOGIN_DENIED(-5845)
+$ob_error 5858
+
+OceanBase:
+	OceanBase Error Code: OB_ERR_CONFLICTING_DECLARATIONS(-5858)
+	Message: Conflicting declarations
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+$ob_error 4001
+
+OceanBase:
+	OceanBase Error Code: OB_OBJ_TYPE_ERROR(-4001)
+	Message: Object type error
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+
+Oracle:
+	Oracle Error Code: ORA-04001
+	Message: sequence parameter must be an integer
+	Related OceanBase Error Code:
+		OB_ERR_SEQ_OPTION_MUST_BE_INTEGER(-4317)
+$ob_error 20000
+
+OceanBase:
+	OceanBase Error Code: OB_SP_RAISE_APPLICATION_ERROR(-20000)
+	Message: The stored procedure 'raise_application_error' was called which causes this error to be generated
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+
+Oracle:
+	Oracle Error Code: ORA-20000
+	Message: The stored procedure 'raise_application_error' was called which causes this error to be generated
+	Related OceanBase Error Code:
+		OB_SP_RAISE_APPLICATION_ERROR(-20000)
+$ob_error 24761
+
+Oracle:
+	Oracle Error Code: ORA-24761
+	Message: transaction rolled back
+	Message: transaction rolled back: transaction is killed
+	Message: transaction rolled back: transaction context does not exist
+	Message: transaction rolled back: partition is frozen
+	Message: transaction rolled back: Transaction exiting
+	Message: transaction rolled back: transaction needs rollback
+	Message: transaction rolled back: transaction context count reach limit
+	Related OceanBase Error Code:
+		OB_TRANS_ROLLBACKED(-6002)
+		OB_TRANS_KILLED(-6211)
+		OB_TRANS_CTX_NOT_EXIST(-6213)
+		OB_PARTITION_IS_FROZEN(-6214)
+		OB_TRANS_IS_EXITING(-6223)
+		OB_TRANS_NEED_ROLLBACK(-6224)
+		OB_TRANS_CTX_COUNT_REACH_LIMIT(-6234)
+$ob_error 5727
+
+OceanBase:
+	OceanBase Error Code: OB_ERR_PROXY_REROUTE(-5727)
+	Message: SQL request should be rerouted
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+$ob_error 5133
+
+MySQL:
+	MySQL Error Code: 5133 (42000)
+	Message: No such grant defined
+	Related OceanBase Error Code:
+		OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT(-5362)
+$ob_error 1210
+
+MySQL:
+	MySQL Error Code: 1210 (HY000)
+	Message: Invalid argument
+	Message: Miss argument
+	Message: Incorrect arguments to ESCAPE
+	Related OceanBase Error Code:
+		OB_INVALID_ARGUMENT(-4002)
+		OB_MISS_ARGUMENT(-4277)
+		INCORRECT_ARGUMENTS_TO_ESCAPE(-5832)
+$ob_error 700 -a 1000
+error: '-a ARG' is unsupport in this scene
+Use 'ob_error ora 600 -a ARG'.
+Use 'ob_error --help' for help.
+$ob_error my 6000
+
+MySQL:
+	Error Code 6000 not found.
+$ob_error my 4000
+
+OceanBase:
+	OceanBase Error Code: OB_ERROR(-4000)
+	Message: Common error
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+$ob_error my 5133
+
+MySQL:
+	MySQL Error Code: 5133 (42000)
+	Message: No such grant defined
+	Related OceanBase Error Code:
+		OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT(-5362)
+$ob_error my 1210
+
+MySQL:
+	MySQL Error Code: 1210 (HY000)
+	Message: Invalid argument
+	Message: Miss argument
+	Message: Incorrect arguments to ESCAPE
+	Related OceanBase Error Code:
+		OB_INVALID_ARGUMENT(-4002)
+		OB_MISS_ARGUMENT(-4277)
+		INCORRECT_ARGUMENTS_TO_ESCAPE(-5832)
+$ob_error ora 00051
+
+Oracle:
+	Oracle Error Code: ORA-00051
+	Message: timeout occurred while waiting for a resource
+	Related OceanBase Error Code:
+		OB_ERR_TIMEOUT_ON_RESOURCE(-5848)
+$ob_error ora 900
+
+Oracle:
+	Oracle Error Code: ORA-00900
+	Message: invalid SQL statement
+	Message: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use
+	Related OceanBase Error Code:
+		OB_ERR_PARSE_SQL(-5001)
+		OB_ERR_PARSER_SYNTAX(-5006)
+$ob_error ora 600 -a 5858
+
+OceanBase:
+	OceanBase Error Code: OB_ERR_CONFLICTING_DECLARATIONS(-5858)
+	Message: Conflicting declarations
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+
+Oracle:
+	Oracle Error Code: ORA-00600
+	Message: internal error code, arguments: -5858, Conflicting declarations
+	Related OceanBase Error Code:
+		OB_ERR_CONFLICTING_DECLARATIONS(-5858)
+$ob_error ora 600 -a 5727
+
+OceanBase:
+	OceanBase Error Code: OB_ERR_PROXY_REROUTE(-5727)
+	Message: SQL request should be rerouted
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+
+Oracle:
+	Oracle Error Code: ORA-00600
+	Message: internal error code, arguments: -5727, SQL request should be rerouted
+	Related OceanBase Error Code:
+		OB_ERR_PROXY_REROUTE(-5727)
+$ob_error -a 100 ora 600
+error: '-a ARG' is unsupport in this scene
+Use 'ob_error ora 600 -a ARG'.
+Use 'ob_error --help' for help.
+$ob_error ora -a 100 600
+error: '-a ARG' is unsupport in this scene
+Use 'ob_error ora 600 -a ARG'.
+Use 'ob_error --help' for help.
+$ob_error ora 600 -a 100
+
+OceanBase:
+	Error Code 100 not found.
+
+Oracle:
+	Error Code ORA-00600 arguments: -100 not found.
+$ob_error pls 100
+
+Oracle:
+	Error Code PLS-00100 not found.
+$ob_error pls 201
+
+Oracle:
+	Oracle Error Code: PLS-00201
+	Message: identifier must be declared
+	Related OceanBase Error Code:
+		OB_ERR_SP_UNDECLARED_VAR(-5543)
+		OB_ERR_SP_LILABEL_MISMATCH(-5546)

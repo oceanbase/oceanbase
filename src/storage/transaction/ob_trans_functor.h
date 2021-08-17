@@ -885,8 +885,10 @@ public:
 
         if (OB_ISNULL(part_ctx = dynamic_cast<ObPartTransCtx*>(ctx_base))) {
           ret = OB_ERR_UNEXPECTED;
-        } else if (!part_ctx->is_dirty_trans()) {
-          // do nothing
+        } else if (!part_ctx->is_dirty_trans() || !part_ctx->has_synced_log()) {
+          if (part_ctx->is_dirty_trans() && !part_ctx->has_synced_log()) {
+            TRANS_LOG(INFO, "We donot dump the dirty trans with no synced log", K(*part_ctx));
+          }
           clean_trx_cnt_++;
         } else if (OB_FAIL(part_ctx->get_trans_sstable_durable_ctx_info(end_log_ts_, ctx_info))) {
           TRANS_LOG(WARN, "failed to get trans table status info", K(ret));
@@ -897,7 +899,7 @@ public:
             allocator_.reuse();
             if (OB_ISNULL(tmp_buf_ = static_cast<char*>(allocator_.alloc(serialize_size)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
-              STORAGE_LOG(WARN, "failed to allocate memory", K(serialize_size));
+              TRANS_LOG(WARN, "failed to allocate memory", K(serialize_size));
             }
           } else {
             tmp_buf_ = buf_;

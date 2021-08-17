@@ -320,6 +320,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_TIME_TO_SEC : return "T_FUN_SYS_TIME_TO_SEC";
 	case T_FUN_SYS_SEC_TO_TIME : return "T_FUN_SYS_SEC_TO_TIME";
 	case T_FUN_SYS_INTERVAL : return "T_FUN_SYS_INTERVAL";
+	case T_FUN_SYS_CONVERT_TZ : return "T_FUN_SYS_CONVERT_TZ";
 	case T_FUN_UDF : return "T_FUN_UDF";
 	case T_FUN_SYS_SUBTIME : return "T_FUN_SYS_SUBTIME";
 	case T_FUN_SYS_SQRT : return "T_FUN_SYS_SQRT";
@@ -1552,6 +1553,7 @@ const char* get_type_name(int type)
 	case T_HASH_PARTITION_LIST : return "T_HASH_PARTITION_LIST";
 	case T_RANGE_PARTITION_LIST : return "T_RANGE_PARTITION_LIST";
 	case T_LIST_PARTITION_LIST : return "T_LIST_PARTITION_LIST";
+	case T_FUN_SYS_EXPORT_SET : return "T_FUN_SYS_EXPORT_SET";
 	default:return "Unknown";
 	}
 }

@@ -8350,6 +8350,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   int64_t current_timestamp = ObTimeUtility::current_time();
   const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L;  // prevent to recovery to a certain time in the future
   int64_t job_id = OB_INVALID_ID;
+  ObSchemaGetterGuard schema_guard;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -8374,6 +8375,9 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   } else if (arg.restore_timestamp_ + RESTORE_TIMESTAMP_DETA >= current_timestamp) {
     ret = OB_EAGAIN;
     LOG_WARN("restore_timestamp is too new", K(ret), K(current_timestamp), K(arg));
+  } else if (OB_FAIL(
+                 ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get sys tenant's schema guard", KR(ret));
   } else {
     ObMySQLTransaction trans;
     ObPhysicalRestoreJob job_info;
@@ -8387,8 +8391,20 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
       LOG_WARN("invalid job_id", K(ret), K(job_id));
     } else if (OB_FAIL(ObRestoreUtil::fill_physical_restore_job(job_id, arg, job_info))) {
       LOG_WARN("fail to fill physical restore job", K(ret), K(job_id), K(arg));
-    } else if (FALSE_IT(job_info.restore_start_ts_ = current_timestamp)) {
-    } else if (OB_FAIL(ObRestoreUtil::record_physical_restore_job(trans, job_info))) {
+    } else {
+      job_info.restore_start_ts_ = current_timestamp;
+      // check if tenant exists
+      const ObTenantSchema* tenant_schema = NULL;
+      ObString tenant_name(job_info.tenant_name_);
+      if (OB_FAIL(schema_guard.get_tenant_info(tenant_name, tenant_schema))) {
+        LOG_WARN("fail to get tenant schema", KR(ret), K(job_info));
+      } else if (OB_NOT_NULL(tenant_schema)) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("restore tenant with existed tenant name is not allowed", KR(ret), K(tenant_name));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant with existed tenant name is");
+      }
+    }
+    if (FAILEDx(ObRestoreUtil::record_physical_restore_job(trans, job_info))) {
       LOG_WARN("fail to record physical restore job", K(ret), K(job_id), K(arg));
     } else {
       restore_scheduler_.wakeup();

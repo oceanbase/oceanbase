@@ -16,6 +16,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "observer/ob_uniq_task_queue.h"
 #include "share/partition_table/ob_partition_location_task.h"
+#include "share/ob_alive_server_tracer.h"
 namespace oceanbase {
 namespace storage {
 class ObIAliveServerTracer;

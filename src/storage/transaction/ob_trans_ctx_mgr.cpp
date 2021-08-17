@@ -3750,7 +3750,7 @@ int ObPartTransCtxMgr::remove_partition(const ObPartitionKey& partition, const b
                   if (0 == ctx_mgr->get_active_read_write_count() && 0 == ctx_mgr->get_read_only_count()) {
                     if (0 != ctx_mgr->get_ctx_count()) {
                       TRANS_LOG(
-                          ERROR, "maybe some context memory not free, please attention", K(partition), K(*ctx_mgr));
+                          WARN, "maybe some context memory not free, please attention", K(partition), K(*ctx_mgr));
                     }
                     need_retry = false;
                     // OB_SUCCESS is not returned here.
