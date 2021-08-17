@@ -3875,22 +3875,25 @@ int ObPartitionGroup::freeze_log_and_data_v2_(const bool emergency, const bool f
     }
   } else if (!changed) {
     // skip
-  } else if (OB_FAIL(submit_freeze_and_effect_memstore_(
-                 is_leader, emergency, *frozen_memtable, effected, snapshot_version))) {
-    STORAGE_LOG(WARN, "submit freeze and prepare memstore", K(ret), K(pkey_), K(*frozen_memtable));
-  } else if (effected) {
-    if (OB_FAIL(pg_storage_.get_active_memtable(new_handle))) {
-      STORAGE_LOG(WARN, "fail to get new active memtable", K(ret), K(pkey_));
-    } else if (OB_FAIL(freeze_record_.submit_new_active_memtable(new_handle))) {
-      // Submit a new memtable. Allow async_freeze threads to scan and synchronize log.
-      STORAGE_LOG(ERROR, "fail to submit freeze record", K(ret), K(pkey_));
-    } else {
-      STORAGE_LOG(INFO, "submit_new_active_memtable success", K(ret), K(pkey_));
+  } else {
+    if (OB_FAIL(
+            submit_freeze_and_effect_memstore_(is_leader, emergency, *frozen_memtable, effected, snapshot_version))) {
+      STORAGE_LOG(WARN, "submit freeze and prepare memstore", K(ret), K(pkey_), K(*frozen_memtable));
+    } else if (effected) {
+      if (OB_FAIL(pg_storage_.get_active_memtable(new_handle))) {
+        STORAGE_LOG(WARN, "fail to get new active memtable", K(ret), K(pkey_));
+      } else if (OB_FAIL(freeze_record_.submit_new_active_memtable(new_handle))) {
+        // Submit a new memtable. Allow async_freeze threads to scan and synchronize log.
+        STORAGE_LOG(ERROR, "fail to submit freeze record", K(ret), K(pkey_));
+      } else {
+        STORAGE_LOG(INFO, "submit_new_active_memtable success", K(ret), K(pkey_));
+      }
     }
-  }
 
-  if (OB_FAIL(ret) || !effected) {
-    freeze_record_.clear();
+    if (OB_FAIL(ret) || !effected) {
+      TRANS_LOG(INFO, "clear the record when failed", K(*this));
+      freeze_record_.clear();
+    }
   }
 
   return ret;
