@@ -1724,6 +1724,10 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                 if (OB_FAIL(check_enable_log_archive(item.value_.str()))) {
                   LOG_WARN("cannot set enable log archive true", K(ret));
                 }
+              } else if (0 == STRCMP(item.name_.ptr(), CLUSTER_ID)) {
+                ret = OB_OP_NOT_ALLOW;
+                LOG_WARN("cluster_id is not allowed to modify");
+                LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter cluster_id");
               }
             }
           }

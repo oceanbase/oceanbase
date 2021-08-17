@@ -1400,8 +1400,15 @@ void ObDailyMergeScheduler::check_merge_timeout()
       }                                                                // end FOREACH(zone, zones)
       const int64_t MAX_NO_MERGE_INTERVAL = 36 * 3600 * 1000 * 1000L;  // 36 hours
       if (now - max_last_merge_merged_time > MAX_NO_MERGE_INTERVAL &&
-          now - max_start_merge_time > MAX_NO_MERGE_INTERVAL) {
-        LOG_ERROR("long time no daily merge, please check it", K(ret));
+          now - max_start_merge_time > MAX_NO_MERGE_INTERVAL && !config_->major_freeze_duty_time.disable()) {
+        // if cluster can not daily merge, no need
+        if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000)) {
+          LOG_ERROR("long time no daily merge, please check it",
+              KR(ret),
+              K(max_last_merge_merged_time),
+              K(max_start_merge_time),
+              K(zones));
+        }
       }
     }
   }
