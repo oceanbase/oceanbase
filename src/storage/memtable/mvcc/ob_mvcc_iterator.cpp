@@ -306,7 +306,8 @@ bool ObMvccValueIterator::read_by_sql_no(
     } else {
       can_read_by_sql_no = true;
     }
-  } else if (ctx.is_for_replay() && !iter->is_committed() && iter->get_ctx_descriptor() == ctx.get_ctx_descriptor()) {
+  } else if (ctx.is_for_replay() && OB_NOT_NULL(iter) &&  // row may not modified
+             !iter->is_committed() && iter->get_ctx_descriptor() == ctx.get_ctx_descriptor()) {
     can_read_by_sql_no = true;
   }
   if (can_read_by_sql_no) {
