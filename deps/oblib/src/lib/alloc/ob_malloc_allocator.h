@@ -66,7 +66,7 @@ public:
   int set_tenant_ctx_idle(
       const uint64_t tenant_id, const uint64_t ctx_id, const int64_t size, const bool reserve = false);
   int get_chunks(AChunk** chunks, int cap, int& cnt);
-
+  static uint64_t get_max_used_tenant_id() { return max_used_tenant_id_; }
 private:
   using InvokeFunc = std::function<int(ObTenantMemoryMgr*)>;
   static int with_resource_handle_invoke(uint64_t tenant_id, InvokeFunc func);
@@ -79,6 +79,7 @@ private:
   ObTenantCtxAllocator* allocators_[PRESERVED_TENANT_COUNT][common::ObCtxIds::MAX_CTX_ID];
   int64_t reserved_;
   int64_t urgent_;
+  static uint64_t max_used_tenant_id_;
 
   static ObMallocAllocator* instance_;
 };  // end of class ObMallocAllocator
