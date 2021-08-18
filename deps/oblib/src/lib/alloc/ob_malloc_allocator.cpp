@@ -25,6 +25,7 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 ObMallocAllocator* ObMallocAllocator::instance_ = NULL;
+uint64_t ObMallocAllocator::max_used_tenant_id_ = 0;
 
 ObMallocAllocator::ObMallocAllocator() : locks_(), allocators_(), reserved_(0), urgent_(0)
 {}
@@ -206,6 +207,9 @@ ObTenantCtxAllocator* ObMallocAllocator::get_tenant_ctx_allocator(uint64_t tenan
 int ObMallocAllocator::create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id)
 {
   int ret = OB_SUCCESS;
+  if (tenant_id > max_used_tenant_id_) {
+    UNUSED(ATOMIC_BCAS(&max_used_tenant_id_, max_used_tenant_id_, tenant_id));
+  }
   if (INT64_MAX == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(lbt()), K(tenant_id), K(ret));

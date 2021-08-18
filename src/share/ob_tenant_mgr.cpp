@@ -194,31 +194,11 @@ using namespace oceanbase::storage;
 void get_tenant_ids(uint64_t* ids, int cap, int& cnt)
 {
   int ret = OB_SUCCESS;
+  auto *instance = ObMallocAllocator::get_instance();
   cnt = 0;
-  omt::ObMultiTenant* omt = GCTX.omt_;
-  if (OB_ISNULL(omt)) {
-    if (ObTenantManager::get_instance().is_inited()) {
-      common::ObArray<uint64_t> tmp_ids;
-      if (OB_FAIL(ObTenantManager::get_instance().get_all_tenant_id(tmp_ids))) {
-        SERVER_LOG(WARN, "get tenant id error", K(ret));
-      } else {
-        for (auto it = tmp_ids.begin(); OB_SUCC(ret) && it != tmp_ids.end() && cnt < cap; it++) {
-          ids[cnt++] = *it;
-        }
-      }
-    } else {
-      if (cnt < cap) {
-        ids[cnt++] = OB_SYS_TENANT_ID;
-      }
-      if (cnt < cap) {
-        ids[cnt++] = OB_SERVER_TENANT_ID;
-      }
-    }
-  } else {
-    omt::TenantIdList tmp_ids(nullptr, ObModIds::OMT);
-    omt->get_tenant_ids(tmp_ids);
-    for (auto it = tmp_ids.begin(); OB_SUCC(ret) && it != tmp_ids.end() && cnt < cap; it++) {
-      ids[cnt++] = *it;
+  for (uint64_t tenant_id = 1; tenant_id <= ObMallocAllocator::get_max_used_tenant_id() && cnt < cap; ++tenant_id) {
+    if (nullptr != instance->get_tenant_ctx_allocator(tenant_id, 0)) {
+      ids[cnt++] = tenant_id;
     }
   }
 }
