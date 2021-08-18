@@ -1387,50 +1387,52 @@ int ObNumber::width_bucket(
   ObDataBuffer allocator2(buf_alloc2, ObNumber::MAX_BYTE_LEN);
   ObDataBuffer allocator3(buf_alloc3, ObNumber::MAX_BYTE_LEN);
   if (OB_FAIL(bucket_num.from(bucket, allocator_bucket))) {
-    LOG_WARN("copy bucket number failed", K(*this), K(bucket_num), K(ret));
+    LOG_WARN("copy bucket number failed", K(bucket_num), K(ret));
   } else if (OB_FAIL(bucket_num.floor(0))) {
-    LOG_WARN("bucket floor failed", K(*this), K(bucket_num), K(ret));
+    LOG_WARN("bucket floor failed", K(bucket_num), K(ret));
   } else if (OB_UNLIKELY(bucket_num.is_zero() || bucket_num.is_negative())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("bucket < 1", K(*this), K(bucket_num), K(ret));
+    LOG_WARN("bucket < 1", K(bucket_num), K(ret));
   } else {
     ObNumber range, offset;
     if (start == end) {
       if (*this < start) {
-        res.from(static_cast<int64_t>(0), allocator_res);
+        if (OB_FAIL(res.from(static_cast<int64_t>(0), allocator_res))) {
+          LOG_WARN("create number 0 failed", K(res), K(ret));
+        }
       } else {
         ObNumber temp;
         if (OB_FAIL(temp.from(static_cast<int64_t>(1), allocator1))) {
-          LOG_WARN("create number 1 failed", K(*this), K(bucket_num), K(res), K(temp), K(ret));
+          LOG_WARN("create number 1 failed", K(res), K(temp), K(ret));
         } else if (OB_FAIL(bucket_num.add(temp, res, allocator_res))) {
-          LOG_WARN("bucket add 1 failed", K(*this), K(bucket_num), K(res), K(ret));
+          LOG_WARN("bucket add 1 failed", K(bucket_num), K(res), K(ret));
         }
       }
     } else {
       if (start > end) {
         if (OB_FAIL(start.sub(end, range, allocator1))) {
-          LOG_WARN("start sub end failed", K(*this), K(start), K(end), K(range), K(ret));
+          LOG_WARN("start sub end failed", K(start), K(end), K(range), K(ret));
         } else if (OB_FAIL(start.sub(*this, offset, allocator2))) {
-          LOG_WARN("start sub target failed", K(*this), K(start), K(offset), K(ret));
+          LOG_WARN("start sub target failed", K(start), K(offset), K(ret));
         }
       } else {
         if (OB_FAIL(end.sub(start, range, allocator1))) {
-          LOG_WARN("end sub start failed", K(*this), K(start), K(end), K(range), K(ret));
+          LOG_WARN("end sub start failed", K(start), K(end), K(range), K(ret));
         } else if (OB_FAIL(sub(start, offset, allocator2))) {
-          LOG_WARN("end sub target failed", K(*this), K(start), K(offset), K(ret));
+          LOG_WARN("end sub target failed", K(start), K(offset), K(ret));
         }
       }
       if (OB_SUCC(ret)) {
         if (offset.is_negative()) {
           if (OB_FAIL(res.from(static_cast<int64_t>(0), allocator_res))) {
-            LOG_WARN("assign 0 to res failed", K(*this), K(res), K(ret));
+            LOG_WARN("assign 0 to res failed", K(res), K(ret));
           }
         } else if (offset >= range) {
           ObNumber temp;
           if (OB_FAIL(temp.from(static_cast<int64_t>(1), allocator3))) {
-            LOG_WARN("create number 1 failed", K(*this), K(temp), K(ret));
+            LOG_WARN("create number 1 failed", K(temp), K(ret));
           } else if (OB_FAIL(bucket_num.add(temp, res, allocator_res))) {
-            LOG_WARN("bucket add 1 failed", K(*this), K(bucket_num), K(temp), K(res), K(ret));
+            LOG_WARN("bucket add 1 failed", K(bucket_num), K(temp), K(res), K(ret));
           }
         } else {
           ObNumber q;
@@ -1446,16 +1448,18 @@ int ObNumber::width_bucket(
             allocator2.free();
             std::swap(allocator2, allocator_res);
             if (OB_FAIL(temp.from(static_cast<int64_t>(1), allocator1))) {
-              LOG_WARN("create number 1 failed", K(*this), K(temp), K(ret));
+              LOG_WARN("create number 1 failed", K(temp), K(ret));
             } else if (OB_FAIL(res.add(temp, res, allocator_res))) {
-              LOG_WARN("value add 1 failed", K(*this), K(res), K(temp), K(ret));
+              LOG_WARN("value add 1 failed", K(res), K(temp), K(ret));
             }
           }
         }
       }
     }
     if (OB_SUCC(ret)) {
-      value.from(res, allocator);
+      if (OB_FAIL(value.from(res, allocator))) {
+        LOG_WARN("copy res failed", K(value), K(res), K(ret));
+      }
     }
   }
   return ret;
