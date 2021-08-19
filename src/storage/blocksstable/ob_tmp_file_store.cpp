@@ -1059,7 +1059,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock* block, ObTmpBlockIOInfo& io
       info.offset_ = common::lower_align(io_info.offset_, ObTmpMacroBlock::get_default_page_size());
       info.size_ = page_nums * ObTmpMacroBlock::get_default_page_size();
       info.macro_block_id_ = block->get_macro_block_id();
-      if (OB_FAIL(page_cache_->prefetch(info, page_io_infos, handle, mb_handle))) {
+      if (OB_FAIL(page_cache_->prefetch(info, page_io_infos, mb_handle))) {
         STORAGE_LOG(WARN, "fail to prefetch multi tmp page", K(ret));
       } else {
         ObTmpFileIOHandle::ObIOReadHandle read_handle(
@@ -1076,7 +1076,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock* block, ObTmpBlockIOInfo& io
         info.offset_ = page_io_infos.at(i).key_.get_page_id() * ObTmpMacroBlock::get_default_page_size();
         info.size_ = ObTmpMacroBlock::get_default_page_size();
         info.macro_block_id_ = block->get_macro_block_id();
-        if (OB_FAIL(page_cache_->prefetch(page_io_infos.at(i).key_, info, handle, mb_handle))) {
+        if (OB_FAIL(page_cache_->prefetch(page_io_infos.at(i).key_, info, mb_handle))) {
           STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
         } else {
           char* buf =
