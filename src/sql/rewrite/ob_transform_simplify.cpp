@@ -722,7 +722,8 @@ int ObTransformSimplify::replace_is_null_condition(ObDMLStmt* stmt, bool& trans_
       if (OB_ISNULL(cond = stmt->get_condition_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("condition expr is null", K(ret));
-      } else if (OB_FAIL(inner_replace_is_null_condition(stmt, stmt->get_condition_exprs().at(i), is_happened))) {
+      } else if (OB_FAIL(inner_replace_is_null_condition(stmt, stmt->get_condition_exprs().at(i),
+                    ObTransformUtils::NULLABLE_SCOPE::NS_WHERE, is_happened))) {
         LOG_WARN("failed to replace is null expr", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -731,7 +732,8 @@ int ObTransformSimplify::replace_is_null_condition(ObDMLStmt* stmt, bool& trans_
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
       ObSelectStmt* sel_stmt = static_cast<ObSelectStmt*>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
-        if (OB_FAIL(inner_replace_is_null_condition(sel_stmt, sel_stmt->get_having_exprs().at(i), is_happened))) {
+        if (OB_FAIL(inner_replace_is_null_condition(sel_stmt, sel_stmt->get_having_exprs().at(i),
+                ObTransformUtils::NULLABLE_SCOPE::NS_TOP, is_happened))) {
           LOG_WARN("failed to replace is null expr", K(ret));
         } else {
           trans_happened |= is_happened;
@@ -742,7 +744,7 @@ int ObTransformSimplify::replace_is_null_condition(ObDMLStmt* stmt, bool& trans_
   return ret;
 }
 
-int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, bool& trans_happened)
+int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, int nullable_scope, bool& trans_happened)
 {
   int ret = OB_SUCCESS;
   bool is_happened = false;
@@ -764,7 +766,7 @@ int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawE
       if (OB_ISNULL(temp = op_expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(SMART_CALL(inner_replace_is_null_condition(stmt, temp, is_happened)))) {
+      } else if (OB_FAIL(SMART_CALL(inner_replace_is_null_condition(stmt, temp, nullable_scope, is_happened)))) {
         LOG_WARN("failed to replace is null expr", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -775,7 +777,7 @@ int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawE
 
   if (OB_SUCC(ret) && (T_OP_IS == expr->get_expr_type() || T_OP_IS_NOT == expr->get_expr_type())) {
     // do transforamtion for its own exprs
-    if (OB_FAIL(do_replace_is_null_condition(stmt, expr, is_happened))) {
+    if (OB_FAIL(do_replace_is_null_condition(stmt, expr, nullable_scope, is_happened))) {
       LOG_WARN("failed to replace is null condition", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -794,7 +796,7 @@ int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawE
   return ret;
 }
 
-int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, bool& trans_happened)
+int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, int nullable_scope, bool& trans_happened)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -820,6 +822,7 @@ int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr
           is_expected = true;
         } else if (child_0->is_column_ref_expr()) {
           bool sql_auto_is_null = false;
+          bool found = false;
           const ObColumnRefRawExpr* col_expr = static_cast<const ObColumnRefRawExpr*>(child_0);
           uint64_t table_id = col_expr->get_table_id();
           if (OB_FAIL(ctx_->session_info_->get_sql_auto_is_null(sql_auto_is_null))) {
@@ -830,6 +833,11 @@ int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr
                     !col_expr->get_result_type().is_date() && !(sql_auto_is_null && col_expr->is_auto_increment()))) {
               if (OB_FAIL(is_expected_table_for_replace(stmt, table_id, is_expected))) {
                 LOG_WARN("fail to judge expected table", K(ret), K(table_id), K(is_expected));
+              } else if (is_expected && OB_FAIL(ObTransformUtils::check_nullable_exprs_in_groupby(stmt,
+                                                const_cast<ObColumnRefRawExpr*>(col_expr), nullable_scope, found))) {
+                LOG_WARN("fail to checkin nullable in groupby", K(ret), K(table_id), K(is_expected));
+              } else if (found) {
+                is_expected = false;
               }
             }
           }
@@ -1008,19 +1016,18 @@ int ObTransformSimplify::is_expected_table_for_replace(ObDMLStmt* stmt, uint64_t
       LOG_WARN("fail to judge expected table", K(ret));
     } else { /*do nothing*/
     }
-  } else {
-    // table from current stmt
-    if (table_item->is_basic_table() || table_item->is_generated_table()) {
-      bool is_on_null_side = false;
-      if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table_item->table_id_, is_on_null_side))) {
-        LOG_WARN("check is table on null side failed", K(ret), K(*table_item));
-      } else {
-        is_expected = !is_on_null_side;
-      }
+  } else if (table_item->is_basic_table()) {
+    bool is_on_null_side = false;
+    if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table_item->table_id_, is_on_null_side))) {
+      LOG_WARN("check is table on null side failed", K(ret), K(*table_item));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table item type", K_(table_item->type));
+      is_expected = !is_on_null_side;
     }
+  } else if (table_item->is_generated_table()) {
+    is_expected = false;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table item type", K_(table_item->type));
   }
   return ret;
 }

@@ -2091,6 +2091,63 @@ int ObTransformUtils::find_expr(const ObIArray<const ObRawExpr*>& source, const 
   return ret;
 }
 
+int ObTransformUtils::check_nullable_exprs_in_groupby(ObDMLStmt *stmt, ObRawExpr *expr, int nullable_scope, bool &found)
+{
+  int ret = OB_SUCCESS;
+  found = false;
+  ObSelectStmt *select_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid input", K(stmt), K(expr));
+  } else if (!stmt->is_select_stmt()) {
+    // do nothing 
+  } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt*>(stmt))) {
+    // do nothing
+  } else if (NULLABLE_SCOPE::NS_TOP == nullable_scope &&
+             OB_FAIL(find_expr_in_groupby_clause(select_stmt, expr, found))) {
+    LOG_WARN("failed to find expr in group by clause", K(ret));
+  } else if (!found && NULLABLE_SCOPE::NS_TOP == nullable_scope &&
+             OB_FAIL(find_expr_in_scala_groupby(select_stmt, expr, found))) {
+    LOG_WARN("failed to find expr in scala group by", K(ret));
+  } else {
+    // todo: other nullable scenarios
+  }
+  return ret;
+}
+
+int ObTransformUtils::find_expr_in_groupby_clause(ObSelectStmt *select_stmt, ObRawExpr *column_expr, bool &found)
+{
+  int ret = OB_SUCCESS;
+  found = false;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid input", K(select_stmt), K(column_expr));
+    // case: select c1 + c2 from t group by rollup (c1+c2);
+    // can't deduce c1 + c2 as not null even if c1 and c2 are not null
+    //const ObIArray<ObRawExpr*> &rollup_exprs = select_stmt->get_rollup_exprs();
+  } else if (ObOptimizerUtil::find_item(select_stmt->get_rollup_exprs(), column_expr)) {
+    found = true;
+  }
+  return ret;
+}
+
+int ObTransformUtils::find_expr_in_scala_groupby(ObSelectStmt *select_stmt, ObRawExpr *expr, bool &found)
+{
+  int ret = OB_SUCCESS;
+  found = false;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid input", K(select_stmt), K(expr));
+  } else if (select_stmt->is_scala_group_by() &&
+             (expr->is_column_ref_expr() ||
+              (expr->is_aggr_expr() && T_FUN_COUNT != expr->get_expr_type()))) {
+    // case: select * from t1 where (c1, c2) not in (select pk, max(pk) from t2);
+    // can't deduce pk and max(pk) as not null when t2 is empty 
+    found = true;
+  }
+  return ret;
+}
+
 /**
  * column <=> ? or ? <=> column
  * column is ? or column != ?
@@ -7045,29 +7102,28 @@ int ObTransformUtils::extract_column_contained_expr(
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret));
-  } else if (!expr->get_expr_levels().has_member(stmt_level)) {
+  } else if (!(expr->get_expr_levels().has_member(stmt_level) || expr->has_flag(CNT_SUB_QUERY))) {
     /*do nothing */
-  } else if (!expr->is_query_ref_expr() && !expr->get_relation_ids().is_empty()) {
-    if (!expr->is_column_ref_expr() && !expr->is_aggr_expr() && !expr->is_win_func_expr() &&
-        expr->get_expr_levels().num_members() == 1 && !ObRawExprUtils::find_expr(contain_column_exprs, expr) &&
-        OB_FAIL(contain_column_exprs.push_back(expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-        if (OB_FAIL(
-                SMART_CALL(extract_column_contained_expr(expr->get_param_expr(i), stmt_level, contain_column_exprs)))) {
-          LOG_WARN("failed to extract column contained expr", K(ret));
-        } else { /*do nothing*/
-        }
-      }
-    }
-  } else if (expr->is_query_ref_expr()) {
-    if (OB_FAIL(extract_stmt_column_contained_expr(
+  } else if (expr->is_query_ref_expr() && expr->get_expr_level() == stmt_level) {
+    if (OB_FAIL(contain_column_exprs.push_back(expr))) {
+      LOG_WARN("failed to push back expr into column array", K(ret));
+    } else if (OB_FAIL(extract_stmt_column_contained_expr(
             static_cast<ObQueryRefRawExpr*>(expr)->get_ref_stmt(), stmt_level, contain_column_exprs))) {
       LOG_WARN("failed to extract stmt column contained expr", K(ret));
     } else { /*do nothing*/
     }
-  } else { /*do nothing*/
+  } else if (!expr->get_relation_ids().is_empty() && !expr->is_column_ref_expr() && !expr->is_aggr_expr() && !expr->is_win_func_expr() &&
+        expr->get_expr_levels().num_members() == 1 && !ObRawExprUtils::find_expr(contain_column_exprs, expr) &&
+        OB_FAIL(contain_column_exprs.push_back(expr))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(
+              SMART_CALL(extract_column_contained_expr(expr->get_param_expr(i), stmt_level, contain_column_exprs)))) {
+        LOG_WARN("failed to extract column contained expr", K(ret));
+      } else { /*do nothing*/
+      }
+    }
   }
   return ret;
 }

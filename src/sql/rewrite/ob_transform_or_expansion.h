@@ -70,9 +70,9 @@ private:
   int adjust_or_expansion_stmt(const int64_t transformed_expr_pos, const int64_t param_pos, bool can_union_distinct,
       ObSelectStmt*& or_expansion_stmt);
   int create_expr_for_in_expr(const ObRawExpr& transformed_expr, const int64_t param_pos, bool can_union_distinct,
-      common::ObIArray<ObRawExpr*>& generated_exprs, common::ObIArray<ObQueryRefRawExpr*>& subqueries);
+      common::ObIArray<ObRawExpr*>& generated_exprs);
   int create_expr_for_or_expr(ObRawExpr& transformed_expr, const int64_t param_pos, bool can_union_distinct,
-      common::ObIArray<ObRawExpr*>& generated_exprs, common::ObIArray<ObQueryRefRawExpr*>& subqueries);
+      common::ObIArray<ObRawExpr*>& generated_exprs);
   int preprocess_or_condition(ObSelectStmt* select_stmt, ObRawExpr* expr, bool& can_union_distinct, bool& spj_is_unique,
       bool& skip_this_cond, const bool is_topk);
 
