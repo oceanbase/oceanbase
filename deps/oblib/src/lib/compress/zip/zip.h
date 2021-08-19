@@ -1,13 +1,30 @@
 /*
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
+  This is free and unencumbered software released into the public domain.
 
+  Anyone is free to copy, modify, publish, use, compile, sell, or
+  distribute this software, either in source code form or as a compiled
+  binary, for any purpose, commercial or non-commercial, and by any
+  means.
+
+  In jurisdictions that recognize copyright laws, the author or authors
+  of this software dedicate any and all copyright interest in the
+  software to the public domain. We make this dedication for the benefit
+  of the public at large and to the detriment of our heirs and
+  successors. We intend this dedication to be an overt act of
+  relinquishment in perpetuity of all present and future rights to this
+  software under copyright law.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+  OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+  ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+  OTHER DEALINGS IN THE SOFTWARE.
+
+  For more information, please refer to <http://unlicense.org/>
+*/
+/* https://github.com/kuba--/zip */
 #pragma once
 #ifndef ZIP_H
 #define ZIP_H
@@ -134,7 +151,6 @@ extern ZIP_EXPORT struct zip_t *zip_open(const char *zipname, int level,
  * @param zip zip archive handler.
  */
 extern ZIP_EXPORT void zip_close(struct zip_t *zip);
-
 /**
  * Determines if the archive has a zip64 end of central directory headers.
  *
@@ -157,8 +173,7 @@ extern ZIP_EXPORT int zip_is64(struct zip_t *zip);
  *
  * @return the return code - 0 on success, negative number (< 0) on error.
  */
-extern ZIP_EXPORT int zip_entry_open(struct zip_t *zip, const char *entryname);
-
+extern ZIP_EXPORT int zip_entry_open(struct zip_t *zip, const char *entryname, void *outBuf, size_t *outSize);
 /**
  * Opens a new entry by index in the zip archive.
  *
@@ -178,8 +193,8 @@ extern ZIP_EXPORT int zip_entry_openbyindex(struct zip_t *zip, int index);
  *
  * @return the return code - 0 on success, negative number (< 0) on error.
  */
-extern ZIP_EXPORT int zip_entry_close(struct zip_t *zip);
-
+extern ZIP_EXPORT int zip_entry_extra_write(struct zip_t *zip, void *outBuf, size_t *outSize);
+extern ZIP_EXPORT int zip_entry_close(struct zip_t *zip, void *outBuf, size_t *outSize);
 /**
  * Returns a local name of the current zip entry.
  *
@@ -242,9 +257,8 @@ extern ZIP_EXPORT unsigned int zip_entry_crc32(struct zip_t *zip);
  *
  * @return the return code - 0 on success, negative number (< 0) on error.
  */
-extern ZIP_EXPORT int zip_entry_write(struct zip_t *zip, const void *buf,
-                                      size_t bufsize);
-
+extern ZIP_EXPORT int zip_entry_write(struct zip_t *zip, const void *inBuf, size_t inSize, 
+                                      void *outBuf, size_t *outSize);
 /**
  * Compresses a file for the current zip entry.
  *
@@ -392,8 +406,7 @@ extern ZIP_EXPORT ssize_t zip_stream_copy(struct zip_t *zip, void **buf,
  *
  * @return
  */
-extern ZIP_EXPORT void zip_stream_close(struct zip_t *zip);
-
+extern ZIP_EXPORT int zip_stream_close(struct zip_t *zip, void *outBuf, size_t *outSize);
 /**
  * Creates a new archive and puts files into a single zip archive.
  *

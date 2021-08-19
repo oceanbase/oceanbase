@@ -1,3 +1,30 @@
+/*
+  This is free and unencumbered software released into the public domain.
+
+  Anyone is free to copy, modify, publish, use, compile, sell, or
+  distribute this software, either in source code form or as a compiled
+  binary, for any purpose, commercial or non-commercial, and by any
+  means.
+
+  In jurisdictions that recognize copyright laws, the author or authors
+  of this software dedicate any and all copyright interest in the
+  software to the public domain. We make this dedication for the benefit
+  of the public at large and to the detriment of our heirs and
+  successors. We intend this dedication to be an overt act of
+  relinquishment in perpetuity of all present and future rights to this
+  software under copyright law.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+  OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+  ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+  OTHER DEALINGS IN THE SOFTWARE.
+
+  For more information, please refer to <http://unlicense.org/>
+*/
+/* https://github.com/kuba--/zip */
 #define MINIZ_EXPORT
 /* miniz.c 2.2.0 - public domain deflate/inflate, zlib-subset, ZIP
    reading/writing/appending, PNG writing See "unlicense" statement at the end
@@ -1307,6 +1334,9 @@ typedef struct {
   mz_file_needs_keepalive m_pNeeds_keepalive;
   void *m_pIO_opaque;
 
+  void *m_outBuf;
+  size_t m_outSize;
+  
   mz_zip_internal_state *m_pState;
 
 } mz_zip_archive;
@@ -7629,17 +7659,15 @@ static size_t mz_zip_heap_write_func(void *pOpaque, mz_uint64 file_ofs,
 
     while (new_capacity < new_size)
       new_capacity *= 2;
-
-    if (NULL == (pNew_block = pZip->m_pRealloc(
-                     pZip->m_pAlloc_opaque, pState->m_pMem, 1, new_capacity))) {
-      mz_zip_set_error(pZip, MZ_ZIP_ALLOC_FAILED);
-      return 0;
-    }
-
-    pState->m_pMem = pNew_block;
+    
     pState->m_mem_capacity = new_capacity;
   }
-  memcpy((mz_uint8 *)pState->m_pMem + file_ofs, pBuf, n);
+
+  if (pZip->m_outBuf) {
+    memcpy((char*)(pZip->m_outBuf)+pZip->m_outSize, pBuf, n);
+    pZip->m_outSize += n;
+  }
+  
   pState->m_mem_size = (size_t)new_size;
   return n;
 }
@@ -7762,11 +7790,6 @@ mz_bool mz_zip_writer_init_heap_v2(mz_zip_archive *pZip,
 
   if (0 != (initial_allocation_size = MZ_MAX(initial_allocation_size,
                                              size_to_reserve_at_beginning))) {
-    if (NULL == (pZip->m_pState->m_pMem = pZip->m_pAlloc(
-                     pZip->m_pAlloc_opaque, 1, initial_allocation_size))) {
-      mz_zip_writer_end_internal(pZip, MZ_FALSE);
-      return mz_zip_set_error(pZip, MZ_ZIP_ALLOC_FAILED);
-    }
     pZip->m_pState->m_mem_capacity = initial_allocation_size;
   }
 

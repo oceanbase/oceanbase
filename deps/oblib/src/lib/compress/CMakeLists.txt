@@ -3,6 +3,7 @@ add_subdirectory(zstd_1_3_8)
 add_subdirectory(lz4)
 add_subdirectory(snappy)
 add_subdirectory(zlib)
+add_subdirectory(zip)
 
 ob_lib_add_target(oblib_compress
   ob_compressor.cpp
@@ -15,4 +16,5 @@ ob_lib_add_target(oblib_compress
   zstd/ob_zstd_stream_compressor.cpp
   zstd_1_3_8/ob_zstd_compressor_1_3_8.cpp
   zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.cpp
+  zip/ob_zip_compressor.cpp
 )

@@ -1,12 +1,30 @@
 /*
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
- * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
+  This is free and unencumbered software released into the public domain.
+
+  Anyone is free to copy, modify, publish, use, compile, sell, or
+  distribute this software, either in source code form or as a compiled
+  binary, for any purpose, commercial or non-commercial, and by any
+  means.
+
+  In jurisdictions that recognize copyright laws, the author or authors
+  of this software dedicate any and all copyright interest in the
+  software to the public domain. We make this dedication for the benefit
+  of the public at large and to the detriment of our heirs and
+  successors. We intend this dedication to be an overt act of
+  relinquishment in perpetuity of all present and future rights to this
+  software under copyright law.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+  OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+  ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+  OTHER DEALINGS IN THE SOFTWARE.
+
+  For more information, please refer to <http://unlicense.org/>
+*/
+/* https://github.com/kuba--/zip */
 #define __STDC_WANT_LIB_EXT1__ 1
 
 #include <errno.h>
@@ -438,7 +456,8 @@ static ssize_t zip_entry_mark(struct zip_t *zip,
       return ZIP_ENOENT;
     }
 
-    zip_entry_close(zip);
+    zip_entry_extra_write(zip, NULL, NULL);
+    zip_entry_close(zip, NULL, NULL);
 
     entry_mark[i].m_local_header_ofs = file_stat.m_local_header_ofs;
     entry_mark[i].file_index = -1;
@@ -857,7 +876,7 @@ int zip_is64(struct zip_t *zip) {
   return (int)zip->archive.m_pState->m_zip64;
 }
 
-int zip_entry_open(struct zip_t *zip, const char *entryname) {
+int zip_entry_open(struct zip_t *zip, const char *entryname, void *outBuf, size_t *outSize) {
   size_t entrylen = 0;
   mz_zip_archive *pzip = NULL;
   mz_uint num_alignment_padding_bytes, level;
@@ -898,6 +917,10 @@ int zip_entry_open(struct zip_t *zip, const char *entryname) {
   }
 
   pzip = &(zip->archive);
+  // start
+  pzip->m_outBuf = outBuf;
+  pzip->m_outSize = 0;
+
   if (pzip->m_zip_mode == MZ_ZIP_MODE_READING) {
     zip->entry.index =
         mz_zip_reader_locate_file(pzip, zip->entry.name, NULL, 0);
@@ -985,6 +1008,11 @@ int zip_entry_open(struct zip_t *zip, const char *entryname) {
     err = ZIP_EWRTENT;
     goto cleanup;
   }
+  // end
+  if (outSize) {
+    *outSize = pzip->m_outSize;
+  }
+  pzip->m_outBuf = NULL;
 
   zip->entry.offset += entrylen;
   level = zip->level & 0xF;
@@ -1086,10 +1114,53 @@ int zip_entry_openbyindex(struct zip_t *zip, int index) {
   return 0;
 }
 
-int zip_entry_close(struct zip_t *zip) {
+int zip_entry_extra_write(struct zip_t *zip, void *outBuf, size_t *outSize) {
   mz_zip_archive *pzip = NULL;
   mz_uint level;
   tdefl_status done;
+  int err = 0;
+
+  if (!zip) {
+    // zip_t handler is not initialized
+    err = ZIP_ENOINIT;
+    goto cleanup;
+  }
+
+  pzip = &(zip->archive);
+
+  if (pzip->m_zip_mode == MZ_ZIP_MODE_READING) {
+    goto cleanup;
+  }
+  
+  level = zip->level & 0xF;
+  if (level) {
+    //start
+    pzip->m_outBuf = outBuf;
+    pzip->m_outSize = 0;
+
+    done = tdefl_compress_buffer(&(zip->entry.comp), "", 0, TDEFL_FINISH);
+    if (done != TDEFL_STATUS_DONE && done != TDEFL_STATUS_OKAY) {
+      // Cannot flush compressed buffer
+      err = ZIP_ETDEFLBUF;
+      goto cleanup;
+    }
+    // end
+    if (outSize) {
+      *outSize = pzip->m_outSize;
+    }
+    pzip->m_outBuf = NULL;
+
+    zip->entry.comp_size = zip->entry.state.m_comp_size;
+    zip->entry.offset = zip->entry.state.m_cur_archive_file_ofs;
+    zip->entry.method = MZ_DEFLATED;
+  }
+
+cleanup:
+  return err;
+}
+
+int zip_entry_close(struct zip_t *zip, void *outBuf, size_t *outSize) {
+  mz_zip_archive *pzip = NULL;
   mz_uint16 entrylen;
   mz_uint16 dos_time = 0, dos_date = 0;
   int err = 0;
@@ -1101,22 +1172,14 @@ int zip_entry_close(struct zip_t *zip) {
   }
 
   pzip = &(zip->archive);
+
   if (pzip->m_zip_mode == MZ_ZIP_MODE_READING) {
     goto cleanup;
   }
 
-  level = zip->level & 0xF;
-  if (level) {
-    done = tdefl_compress_buffer(&(zip->entry.comp), "", 0, TDEFL_FINISH);
-    if (done != TDEFL_STATUS_DONE && done != TDEFL_STATUS_OKAY) {
-      // Cannot flush compressed buffer
-      err = ZIP_ETDEFLBUF;
-      goto cleanup;
-    }
-    zip->entry.comp_size = zip->entry.state.m_comp_size;
-    zip->entry.offset = zip->entry.state.m_cur_archive_file_ofs;
-    zip->entry.method = MZ_DEFLATED;
-  }
+  //start
+  pzip->m_outBuf = outBuf;
+  pzip->m_outSize = 0;
 
   entrylen = (mz_uint16)strlen(zip->entry.name);
   if ((zip->entry.comp_size > 0xFFFFFFFF) || (zip->entry.offset > 0xFFFFFFFF)) {
@@ -1137,7 +1200,7 @@ int zip_entry_close(struct zip_t *zip) {
     err = ZIP_ECRTHDR;
     goto cleanup;
   }
-
+  
   if (pzip->m_pWrite(pzip->m_pIO_opaque, zip->entry.header_offset,
                      zip->entry.header,
                      sizeof(zip->entry.header)) != sizeof(zip->entry.header)) {
@@ -1156,6 +1219,11 @@ int zip_entry_close(struct zip_t *zip) {
     goto cleanup;
   }
 
+  // end
+  if (outSize) {
+    *outSize = pzip->m_outSize;
+  }
+  pzip->m_outBuf = NULL;
   pzip->m_total_files++;
   pzip->m_archive_size = zip->entry.offset;
 
@@ -1208,7 +1276,8 @@ unsigned int zip_entry_crc32(struct zip_t *zip) {
   return zip ? zip->entry.uncomp_crc32 : 0;
 }
 
-int zip_entry_write(struct zip_t *zip, const void *buf, size_t bufsize) {
+int zip_entry_write(struct zip_t *zip, const void *inBuf, size_t inSize, 
+    void *outBuf, size_t *outSize) {
   mz_uint level;
   mz_zip_archive *pzip = NULL;
   tdefl_status status;
@@ -1219,23 +1288,33 @@ int zip_entry_write(struct zip_t *zip, const void *buf, size_t bufsize) {
   }
 
   pzip = &(zip->archive);
-  if (buf && bufsize > 0) {
-    zip->entry.uncomp_size += bufsize;
+  // start 
+  pzip->m_outBuf = outBuf;
+  pzip->m_outSize = 0;
+
+  if (inBuf && inSize > 0) {
+    zip->entry.uncomp_size += inSize;
     zip->entry.uncomp_crc32 = (mz_uint32)mz_crc32(
-        zip->entry.uncomp_crc32, (const mz_uint8 *)buf, bufsize);
+        zip->entry.uncomp_crc32, (const mz_uint8 *)inBuf, inSize);
 
     level = zip->level & 0xF;
     if (!level) {
-      if ((pzip->m_pWrite(pzip->m_pIO_opaque, zip->entry.offset, buf,
-                          bufsize) != bufsize)) {
+      if ((pzip->m_pWrite(pzip->m_pIO_opaque, zip->entry.offset, inBuf,
+                          inSize) != inSize)) {
         // Cannot write buffer
         return ZIP_EWRTENT;
       }
-      zip->entry.offset += bufsize;
-      zip->entry.comp_size += bufsize;
+      zip->entry.offset += inSize;
+      zip->entry.comp_size += inSize;
     } else {
-      status = tdefl_compress_buffer(&(zip->entry.comp), buf, bufsize,
-                                     TDEFL_NO_FLUSH);
+      status = tdefl_compress_buffer(&(zip->entry.comp), inBuf, inSize, TDEFL_SYNC_FLUSH);
+
+      // end
+      if (outSize) {
+        *outSize = pzip->m_outSize;
+      }
+      pzip->m_outBuf = NULL;
+
       if (status != TDEFL_STATUS_DONE && status != TDEFL_STATUS_OKAY) {
         // Cannot compress buffer
         return ZIP_ETDEFLBUF;
@@ -1279,7 +1358,7 @@ int zip_entry_fwrite(struct zip_t *zip, const char *filename) {
 
   while ((n = fread(buf, sizeof(mz_uint8), MZ_ZIP_MAX_IO_BUF_SIZE, stream)) >
          0) {
-    if (zip_entry_write(zip, buf, n) < 0) {
+    if (zip_entry_write(zip, buf, n, NULL, NULL) < 0) {
       err = ZIP_EWRTENT;
       break;
     }
@@ -1530,12 +1609,34 @@ ssize_t zip_stream_copy(struct zip_t *zip, void **buf, size_t *bufsize) {
   return (ssize_t)n;
 }
 
-void zip_stream_close(struct zip_t *zip) {
+int zip_stream_close(struct zip_t *zip, void *outBuf, size_t *outSize) {
+  int err = 0;
+
   if (zip) {
-    mz_zip_writer_end(&(zip->archive));
-    mz_zip_reader_end(&(zip->archive));
-    CLEANUP(zip);
+    mz_zip_archive *pZip = &(zip->archive);
+    if (pZip) {
+      pZip->m_outBuf = outBuf;
+      pZip->m_outSize = 0;
+      // get the central directory file header and the end of central directory record
+      if (!mz_zip_writer_finalize_archive(&(zip->archive))) {
+        // err code maybe not this one
+        err = ZIP_ENOINIT;
+      } else {
+        if (outSize) {
+          *outSize = pZip->m_outSize;
+        }
+        pZip->m_outBuf = NULL;
+        zip_archive_truncate(&(zip->archive));
+        mz_zip_writer_end(&(zip->archive));
+        mz_zip_reader_end(&(zip->archive));
+        CLEANUP(zip);
+      }
+    } else {
+      err = ZIP_ENOINIT;
+    }
   }
+
+  return err;
 }
 
 int zip_create(const char *zipname, const char *filenames[], size_t len) {
