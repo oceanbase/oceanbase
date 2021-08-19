@@ -2606,7 +2606,7 @@ int ObDDLResolver::cast_default_value(ObObj& default_value, const ObTimeZoneInfo
     ObCastCtx cast_ctx(&allocator,
         &dtc_params,
         CUR_TIME,
-        share::is_oracle_mode() ? CM_ORACLE_MODE : CM_NONE,
+        share::is_oracle_mode() ? CM_ORACLE_MODE : CM_COLUMN_CONVERT,
         column_schema.get_collation_type(),
         NULL,
         &res_accuracy);
