@@ -487,7 +487,8 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo& session)
         login_info.passwd_ = hsr_.get_auth_response();
 
         SSL* ssl_st = req_->get_ssl_st();
-        if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st))) {
+        const ObUserInfo* user_info = NULL;
+        if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
 
           int inner_ret = OB_SUCCESS;
           bool is_unlocked = false;
@@ -517,7 +518,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo& session)
                        (tmp_ret = gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
               LOG_WARN("get schema guard failed", K(ret), K(tmp_ret), K(tenant_id));
             } else if (OB_SUCCESS == inner_ret) {
-              if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st))) {
+              if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
                 LOG_WARN("User access denied", K(login_info), K(ret));
               }
             }
@@ -527,12 +528,17 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo& session)
             if (OB_PASSWORD_WRONG == ret && is_inner_proxyro_user(*conn, user_name_)) {
               reset_inner_proxyro_scramble(*conn, login_info);
               int pre_ret = ret;
-              if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st))) {
+              if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
                 LOG_WARN("User access denied", K(login_info), K(pre_ret), K(ret));
               }
             } else {
               LOG_WARN("User access denied", K(login_info), K(ret));
             }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(session.on_user_connect(session_priv, user_info))) {
+            LOG_WARN("session on user connect failed", K(ret));
           }
         }
       }

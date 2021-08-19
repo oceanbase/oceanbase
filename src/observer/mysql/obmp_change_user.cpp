@@ -23,6 +23,7 @@
 #include "sql/ob_end_trans_callback.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/session/ob_user_resource_mgr.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/parser/ob_parser_utils.h"
 #include "observer/mysql/obsm_struct.h"
@@ -294,8 +295,18 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo* session)
     SSL* ssl_st = req_->get_ssl_st();
 
     share::schema::ObSessionPrivInfo session_priv;
-    if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st))) {
+    if (session->has_got_conn_res()) {
+      // disconnect previous user connection first.
+      if (OB_FAIL(session->on_user_disconnect())) {
+        LOG_WARN("user disconnect failed", K(ret));
+      }
+    }
+    const ObUserInfo* user_info = NULL;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
       OB_LOG(WARN, "User access denied", K(login_info), K(ret));
+    } else if (OB_FAIL(session->on_user_connect(session_priv, user_info))) {
+      OB_LOG(WARN, "user connect failed", K(ret), K(session_priv));
     } else {
       uint64_t db_id = OB_INVALID_ID;
       session->set_user(session_priv.user_name_, session_priv.host_name_, session_priv.user_id_);

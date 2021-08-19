@@ -157,11 +157,12 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
     login_info.passwd_ = pass_secret;
     SSL *ssl_st = NULL;//TODO::@yanhua not support ssl now for table-api
     schema::ObSessionPrivInfo session_priv;
-    const schema::ObUserInfo *user_info = nullptr;
-    if (OB_FAIL(guard.check_user_access(login_info, session_priv, ssl_st))) {
+    const schema::ObUserInfo* user_info = nullptr;
+    if (OB_FAIL(guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
       LOG_WARN("User access denied", K(login_info), K(ret));
-    } else if (OB_FAIL(guard.get_user_info(session_priv.tenant_id_, session_priv.user_id_, user_info))) {
-      LOG_WARN("get user info failed", K(ret), K(session_priv));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user info is null", K(ret));
     } else {
       user_token = user_info->get_passwd_str().hash();
     }

@@ -857,6 +857,8 @@ private:
   int replay_alter_user(const share::schema::ObUserInfo& user_info);
   int set_passwd_in_trans(const uint64_t tenant_id, const uint64_t user_id, const common::ObString& new_passwd,
       const common::ObString* ddl_stmt_str);
+  int set_max_connection_in_trans(const uint64_t tenant_id, const uint64_t user_id, const uint64_t max_connections_per_hour,
+      const uint64_t max_user_connections, const ObString *ddl_stmt_str);
   int alter_user_require_in_trans(const uint64_t tenant_id, const uint64_t user_id, const obrpc::ObSetPasswdArg& arg,
       const common::ObString* ddl_stmt_str);
   int rename_user_in_trans(const uint64_t tenant_id, const uint64_t user_id, const obrpc::ObAccountArg& new_account,

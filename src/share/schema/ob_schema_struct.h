@@ -4445,7 +4445,9 @@ public:
         role_id_array_(),
         profile_id_(common::OB_INVALID_ID),
         password_last_changed_timestamp_(common::OB_INVALID_TIMESTAMP),
-        role_id_option_array_()
+        role_id_option_array_(),
+        max_connections_(0),
+        max_user_connections_(0)
   {}
   explicit ObUserInfo(common::ObIAllocator* allocator);
   virtual ~ObUserInfo();
@@ -4537,6 +4539,14 @@ public:
   {
     password_last_changed_timestamp_ = ts;
   }
+  inline void set_max_connections(uint64_t max_connections)
+  {
+    max_connections_ = max_connections;
+  }
+  inline void set_max_user_connections(uint64_t max_user_connections)
+  {
+    max_user_connections_ = max_user_connections;
+  }
   // get methods
   inline const char* get_user_name() const
   {
@@ -4614,6 +4624,14 @@ public:
   {
     return password_last_changed_timestamp_;
   }
+  inline uint64_t get_max_connections() const
+  {
+    return max_connections_;
+  }
+  inline uint64_t get_max_user_connections() const
+  {
+    return max_user_connections_;
+  }
   // role
   inline bool is_role() const
   {
@@ -4689,6 +4707,8 @@ private:
   uint64_t profile_id_;
   int64_t password_last_changed_timestamp_;
   common::ObSEArray<uint64_t, 8> role_id_option_array_;  // Record which roles the user/role has
+  uint64_t max_connections_;
+  uint64_t max_user_connections_;
 };
 
 struct ObDBPrivSortKey {

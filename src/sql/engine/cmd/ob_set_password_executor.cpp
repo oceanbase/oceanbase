@@ -101,6 +101,9 @@ int ObSetPasswordExecutor::execute(ObExecContext& ctx, ObSetPasswordStmt& stmt)
       arg.x509_issuer_ = x509_issuer;
       arg.x509_subject_ = x509_subject;
       arg.exec_tenant_id_ = tenant_id;
+      arg.max_connections_per_hour_ = stmt.get_max_connections_per_hour();
+      arg.max_user_connections_= stmt.get_max_user_connections();
+      arg.modify_max_connections_ = stmt.get_modify_max_connections();
       if (stmt.get_need_enc()) {
         if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd, arg.passwd_, enc_buf, ENC_BUF_LEN))) {
           LOG_WARN("Encrypt passwd failed", K(ret));

@@ -1718,6 +1718,10 @@ int ObSchemaRetrieveUtils::fill_user_schema(
         SQL_LOG(WARN, "fail to retrieve priv_create_synonym", K(ret));
       }
     }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, max_connections, user_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, max_user_connections, user_info, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
   }
   return ret;
 }
