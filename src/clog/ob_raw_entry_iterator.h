@@ -485,9 +485,14 @@ int ObRawEntryIterator<Type, Interface>::get_next_entry_(
         int64_t uncompress_len = 0;
         if (OB_FAIL(
                 uncompress(buf_cur_, buf_size, compress_rbuf_.buf_, compress_rbuf_.buf_len_, uncompress_len, pos))) {
-          CLOG_LOG(
-              WARN, "failed to uncompress, ret will be overwrite with OB_INVALID_DATA", K(ret), K(param), K(buf_size));
-          ret = OB_INVALID_DATA;
+          CLOG_LOG(WARN,
+              "failed to uncompress, ret will be overwrite with OB_INVALID_DATA if not OB_DESERIALIZE_ERROR",
+              K(ret),
+              K(param),
+              K(buf_size));
+          if (common::OB_DESERIALIZE_ERROR != ret) {
+            ret = OB_INVALID_DATA;
+          }
         } else if (OB_FAIL(entry.deserialize(compress_rbuf_.buf_, uncompress_len, local_pos))) {
           if (common::OB_DESERIALIZE_ERROR == ret) {
             ret = common::OB_INVALID_DATA;
@@ -714,9 +719,6 @@ bool ObRawEntryIterator<Type, Interface>::check_last_block_(
 
   ObReadParam param;
   ObReadRes res;
-  int16_t magic = 0;
-  int64_t m_pos = 0;
-  int64_t pos = 0;
 
   ObReadBufGuard guard(common::ObModIds::OB_LOG_DIRECT_READER_ITER_ID);
   ObReadBuf& rbuf = guard.get_read_buf();
@@ -737,22 +739,33 @@ bool ObRawEntryIterator<Type, Interface>::check_last_block_(
       } else {
         for (int64_t index = 0; OB_SUCC(ret) && index < res.data_len_ - CLOG_DIO_ALIGN_SIZE; index++) {
           meta.reset();
-          pos = 0;
-          magic = 0;
-          m_pos = 0;
-          if (OB_FAIL(common::serialization::decode_i16(res.buf_, sizeof(int16_t), m_pos, &magic))) {
-            CLOG_LOG(ERROR, "decode magic failed", K(ret), K(res), K(m_pos), K(magic));
-          } else if (!ObLogBlockMetaV2::check_magic_number(magic)) {
+          int64_t magic_pos = 0;
+          int16_t magic_value = 0;
+          int64_t pos = 0;
+          const int64_t data_len = res.data_len_ - index;
+          const char *buf = res.buf_ + index;
+          if (OB_FAIL(common::serialization::decode_i16(buf, data_len, magic_pos, &magic_value))) {
+            CLOG_LOG(ERROR, "decode magic failed", K(ret), K(res), K(magic_pos), K(magic_value));
+          } else if (!ObLogBlockMetaV2::check_magic_number(magic_value)) {
             // otherwise skip
             continue;
-          } else if (OB_FAIL(meta.deserialize(res.buf_, res.data_len_, pos))) {
-            CLOG_LOG(ERROR, "meta deserialize failed", K(param), K(ret));
+          } else if (OB_FAIL(meta.deserialize(buf, data_len, pos))) {
+            CLOG_LOG(ERROR, "meta deserialize failed", K(param), K(file_id), K(start_offset), K(last_block_ts), K(ret));
           } else if (!meta.check_meta_checksum()) {
             continue;
           } else if (meta.get_timestamp() > last_block_ts) {
             ret = common::OB_ERR_UNEXPECTED;
-            CLOG_LOG(
-                ERROR, "check last block failed", K(ret), K(last_block_ts), "meta timestamp", meta.get_timestamp());
+            CLOG_LOG(ERROR,
+                "check last block failed",
+                K(ret),
+                K(file_id),
+                K(start_offset),
+                K(last_block_ts),
+                "meta timestamp",
+                meta.get_timestamp(),
+                K(param),
+                K(index),
+                K(res));
           } else {
             // do nothing
           }
