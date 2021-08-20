@@ -68,7 +68,7 @@ public:
   void stat();
 
 public:
-  // These interface are one one mapping whit MySQL request type currently
+  // These interface are one one mapping with MySQL request type currently
 
   // Interface of SQL Engine for OB_MYSQL_COM_QUERY request
   //
