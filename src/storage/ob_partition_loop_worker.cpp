@@ -137,7 +137,15 @@ int ObPartitionLoopWorker::gen_readable_info_with_memtable_(ObPartitionReadableI
       STORAGE_LOG(WARN, "get_next_replay_log_info error", K(ret), K_(pkey));
     }
   } else {
-    readable_info.min_replay_engine_ts_ = replay_status_->get_min_unreplay_log_timestamp();
+    uint64_t min_unreplay_log_id = OB_INVALID_ID;
+    int64_t min_unreplay_log_ts = OB_INVALID_TIMESTAMP;
+    replay_status_->get_min_unreplay_log(min_unreplay_log_id, min_unreplay_log_ts);
+    if (min_unreplay_log_id == next_replay_log_id) {
+      // cold partition, min_unreplay_log_ts returned by replay engine may be too small
+      readable_info.min_replay_engine_ts_ = readable_info.min_log_service_ts_;
+    } else {
+      readable_info.min_replay_engine_ts_ = min_unreplay_log_ts;
+    }
     if (OB_FAIL(txs_->get_min_uncommit_prepare_version(pkey_, readable_info.min_trans_service_ts_))) {
       if (OB_PARTITION_NOT_EXIST == ret) {
         if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {

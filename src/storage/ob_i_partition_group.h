@@ -467,7 +467,6 @@ public:
   virtual int retire_warmup_store(const bool is_disk_full) = 0;
   virtual int enable_write_log(const bool is_replay_old) = 0;
   virtual uint64_t get_min_replayed_log_id() = 0;  // Get the minimum log id that has been replayed continuously.
-  virtual void get_min_replayed_log(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) = 0;
   virtual int get_min_replayed_log_with_keepalive(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) = 0;
   virtual int create_partition_group(const ObCreatePGParam& param) = 0;
   virtual int create_pg_partition(const common::ObPartitionKey& pkey, const int64_t multi_version_start,
