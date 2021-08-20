@@ -8236,7 +8236,15 @@ int ObUnitManager::try_migrate_unit(const uint64_t unit_id, const ObUnitStat& un
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(migrate_unit(unit_id, dst, is_manual))) {
+      bool can_migrate = false;
+      share::ObUnitInfo unit_info;
+      if (OB_FAIL(get_unit_info_by_id(unit_id, unit_info))) {
+        LOG_WARN("fail to get unit info by id", KR(ret), K(unit_id));
+      } else if (OB_FAIL(check_unit_can_migrate(unit_info.pool_.tenant_id_, can_migrate))) {
+        LOG_WARN("fail to check unit can migrate", KR(ret), K(unit_info), K(can_migrate));
+      } else if (!can_migrate) {
+        LOG_INFO("can't migrate unit, don't need auto migrate unit", K(unit_info));
+      } else if (OB_FAIL(migrate_unit(unit_id, dst, is_manual))) {
         LOG_WARN("fail migrate unit", K(unit_id), K(dst), K(ret));
       }
     }
