@@ -1821,23 +1821,24 @@ int ObLogReplayEngine::fetch_and_submit_single_log_(const ObPartitionKey& pkey, 
         CLOG_LOG(WARN, "log_engine get_cursor failed", K(ret), K(pkey), K(log_id));
       }
     } else {
-      uint32_t clog_min_using_file_id = log_engine->get_clog_min_using_file_id();
-      if (log_cursor_ext.get_file_id() <= clog_min_using_file_id) {
-        bool need_block_receive_log = false;
-        if (OB_FAIL(log_engine->check_need_block_log(need_block_receive_log))) {
-          REPLAY_LOG(WARN, "failed to check_need_block_log ", K(ret), K(pkey), K(log_id));
-        } else if (need_block_receive_log) {
+      bool need_block_receive_log = false;
+      if (OB_FAIL(log_engine->check_need_block_log(log_cursor_ext.get_file_id(), need_block_receive_log))) {
+        REPLAY_LOG(WARN, "failed to check_need_block_log", K(ret), K(pkey), K(log_id), K(log_cursor_ext));
+      } else if (need_block_receive_log) {
+        if (replay_status.can_receive_log()) {
           // mark replay status
           replay_status.set_can_receive_log(false);
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            REPLAY_LOG(
-                WARN, "can not receive log now", K(log_cursor_ext), K(pkey), K(clog_min_using_file_id), K(log_id));
-          }
+          REPLAY_LOG(ERROR, "can not receive log now", K(pkey), K(log_cursor_ext), K(log_id));
         } else {
-          replay_status.set_can_receive_log(true);
+          if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+            REPLAY_LOG(WARN, "receiving log has been blocked", K(pkey), K(log_cursor_ext), K(log_id));
+          }
         }
       } else {
-        replay_status.set_can_receive_log(true);
+        if (!replay_status.can_receive_log()) {
+          replay_status.set_can_receive_log(true);
+          REPLAY_LOG(INFO, "can receive log now", K(pkey), K(log_cursor_ext), K(log_id));
+        }
       }
 
       if (OB_SUCC(ret)) {

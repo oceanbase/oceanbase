@@ -766,10 +766,11 @@ DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
 DEF_BOOL(enable_early_lock_release, OB_TENANT_PARAMETER, "False", "enable early lock release",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(__enable_block_receiving_clog, OB_CLUSTER_PARAMETER, "True",
-    "If this option is set to true, block receiving clog for slave replicas when too much clog is waiting for beening "
-    "submited to replaying. The default is true",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+//__enable_block_receiving_clog is obsolete
+// DEF_BOOL(__enable_block_receiving_clog, OB_CLUSTER_PARAMETER, "True",
+//         "If this option is set to true, block receiving clog for slave replicas when too much clog is waiting for
+//         beening submited to replaying. The default is true", ObParameterAttr(Section::TRANS, Source::DEFAULT,
+//         EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_trx_commit_retry_interval, OB_CLUSTER_PARAMETER, "200ms", "[100ms,)",
     "transaction commit retry interval. Range: [100ms,)",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -4384,7 +4384,7 @@ bool ObLogSlidingWindow::check_can_receive_larger_log(const uint64_t log_id)
         const uint64_t start_log_id = sw_.get_start_id();
         state_mgr_->report_start_id_trace(start_log_id);
         CLOG_LOG(WARN,
-            "check_can_receive_log, now can not recieve larger log",
+            "check_can_receive_log, now can not receive larger log because of sliding window is full",
             K_(partition_key),
             K(log_id),
             "next_index_log_id",
@@ -4392,26 +4392,6 @@ bool ObLogSlidingWindow::check_can_receive_larger_log(const uint64_t log_id)
             "max_log_id",
             get_max_log_id(),
             K(start_log_id));
-      }
-    }
-  }
-
-  if (bool_ret && GCONF.__enable_block_receiving_clog) {
-    int64_t pending_submit_task_count = INT64_MAX;
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(replay_engine_->get_pending_submit_task_count(partition_key_, pending_submit_task_count))) {
-      bool_ret = false;
-      CLOG_LOG(WARN, "failed to get_pending_submit_task_count", KR(ret), K_(partition_key));
-    } else {
-      bool_ret = pending_submit_task_count < follower_max_unconfirmed_threshold;
-      if (!bool_ret) {
-        if (partition_reach_time_interval(5 * 60 * 1000 * 1000, check_can_receive_larger_log_warn_time_)) {
-          CLOG_LOG(WARN,
-              "check_can_receive_log, now can not recieve larger log because of pending too many task to submit",
-              K_(partition_key),
-              K(log_id),
-              K(pending_submit_task_count));
-        }
       }
     }
   }
