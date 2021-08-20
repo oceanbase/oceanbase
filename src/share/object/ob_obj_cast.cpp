@@ -3681,7 +3681,7 @@ static int string_number(
       ret = value.from_sci_opt(str.ptr(), str.length(), params, &res_precision, &res_scale);
       // select cast('1e500' as decimal);  -> max_val
       // select cast('-1e500' as decimal); -> min_val
-      if (CM_IS_SET_MIN_IF_OVERFLOW(cast_mode) && ret == OB_NUMERIC_OVERFLOW) {
+      if (ret == OB_NUMERIC_OVERFLOW) {
         int64_t i = 0;
         while (i < str.length() && isspace(str[i])) {
           ++i;
