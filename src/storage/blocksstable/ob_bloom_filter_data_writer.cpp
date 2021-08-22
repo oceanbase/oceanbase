@@ -88,7 +88,7 @@ int ObBloomFilterMicroBlockWriter::build_micro_block_header(const int64_t rowkey
 }
 
 int ObBloomFilterMicroBlockWriter::write(
-    const ObBloomFilterCacheValue& bf_cache_value, const char*& block_buf, int64_t& block_size)
+    const ObFilterCacheValue& bf_cache_value, const char*& block_buf, int64_t& block_size)
 {
   int ret = OB_SUCCESS;
 
@@ -185,7 +185,7 @@ int ObBloomFilterMacroBlockWriter::init(const ObDataStoreDesc& desc)
   return ret;
 }
 
-int ObBloomFilterMacroBlockWriter::write(const ObBloomFilterCacheValue& bf_cache_value)
+int ObBloomFilterMacroBlockWriter::write(const ObFilterCacheValue& bf_cache_value)
 {
   int ret = OB_SUCCESS;
 
@@ -474,7 +474,7 @@ int ObBloomFilterDataWriter::init(const ObDataStoreDesc& desc)
   } else if (OB_UNLIKELY(!desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init ObBloomFilterDataWriter", K(desc), K(ret));
-  } else if (OB_FAIL(bf_cache_value_.init(desc.schema_rowkey_col_cnt_, BLOOM_FILTER_MAX_ROW_COUNT))) {
+  } else if (OB_FAIL(bf_cache_value_.init(desc.schema_rowkey_col_cnt_, BLOOM_FILTER_MAX_ROW_COUNT, GCONF.is_xor))) {
     STORAGE_LOG(WARN, "Failed to init bloomfilter cache value", K(desc), K(ret));
   } else if (bf_cache_value_.get_serialize_size() > desc.macro_block_size_) {
     ret = OB_ERR_UNEXPECTED;
@@ -535,7 +535,7 @@ int ObBloomFilterDataWriter::append(const ObStoreRowkey& rowkey)
   return ret;
 }
 
-int ObBloomFilterDataWriter::append(const ObBloomFilterCacheValue& bf_cache_value)
+int ObBloomFilterDataWriter::append(const ObFilterCacheValue& bf_cache_value)
 {
   int ret = OB_SUCCESS;
 

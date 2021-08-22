@@ -29,7 +29,7 @@ public:
   void reset();
   void reuse();
   int init(const int64_t micro_block_size);
-  int write(const ObBloomFilterCacheValue& bf_cache_value, const char*& block_buf, int64_t& block_size);
+  int write(const ObFilterCacheValue& bf_cache_value, const char*& block_buf, int64_t& block_size);
 
 private:
   int build_micro_block_header(const int64_t rowkey_column_count, const int64_t row_count);
@@ -47,7 +47,7 @@ public:
   void reset();
   void reuse();
   int init(const ObDataStoreDesc& desc);
-  int write(const ObBloomFilterCacheValue& bf_cache_value);
+  int write(const ObFilterCacheValue& bf_cache_value);
   OB_INLINE ObMacroBlocksWriteCtx& get_block_write_ctx()
   {
     return block_write_ctx_;
@@ -80,7 +80,7 @@ public:
   void reuse();
   int append(const storage::ObStoreRow& row);
   int append(const common::ObStoreRowkey& rowkey);
-  int append(const ObBloomFilterCacheValue& bf_cache_value);
+  int append(const ObFilterCacheValue& bf_cache_value);
   int flush_bloom_filter();
   OB_INLINE int32_t get_row_count() const
   {
@@ -90,14 +90,14 @@ public:
   {
     return bf_macro_writer_.get_block_write_ctx();
   }
-  OB_INLINE const ObBloomFilterCacheValue& get_bloomfilter_cache_value() const
+  OB_INLINE const ObFilterCacheValue& get_bloomfilter_cache_value() const
   {
     return bf_cache_value_;
   }
 
 private:
   static const int64_t BLOOM_FILTER_MAX_ROW_COUNT = 1500000L;
-  ObBloomFilterCacheValue bf_cache_value_;
+  ObFilterCacheValue bf_cache_value_;
   ObBloomFilterMacroBlockWriter bf_macro_writer_;
   int64_t rowkey_column_count_;
   bool is_inited_;

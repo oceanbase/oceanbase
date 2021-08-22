@@ -47,9 +47,9 @@ using namespace share;
 using namespace memtable;
 static const int64_t TENANT_BUCKET_NUM = 128;
 /*
- * -----------------------------------------------ObBloomfilterBuildTask---------------------------------------------------
+ * -----------------------------------------------ObFilterBuildTask---------------------------------------------------
  */
-ObBloomFilterBuildTask::ObBloomFilterBuildTask(const uint64_t table_id, const blocksstable::MacroBlockId& macro_id,
+ObFilterBuildTask::ObFilterBuildTask(const uint64_t table_id, const blocksstable::MacroBlockId& macro_id,
     const int64_t prefix_len, const ObITable::TableKey& table_key)
     : IObDedupTask(T_BLOOMFILTER),
       table_id_(table_id),
@@ -61,17 +61,17 @@ ObBloomFilterBuildTask::ObBloomFilterBuildTask(const uint64_t table_id, const bl
       allocator_(ObModIds::OB_BLOOM_FILTER)
 {}
 
-ObBloomFilterBuildTask::~ObBloomFilterBuildTask()
+ObFilterBuildTask::~ObFilterBuildTask()
 {}
 
-int64_t ObBloomFilterBuildTask::hash() const
+int64_t ObFilterBuildTask::hash() const
 {
   uint64_t hash_val = macro_id_.hash();
   hash_val = murmurhash(&table_id_, sizeof(uint64_t), hash_val);
   return hash_val;
 }
 
-bool ObBloomFilterBuildTask::operator==(const IObDedupTask& other) const
+bool ObFilterBuildTask::operator==(const IObDedupTask& other) const
 {
   bool is_equal = false;
   if (this == &other) {
@@ -79,46 +79,46 @@ bool ObBloomFilterBuildTask::operator==(const IObDedupTask& other) const
   } else {
     if (get_type() == other.get_type()) {
       // it's safe to do this transformation, we have checked the task's type
-      const ObBloomFilterBuildTask& o = static_cast<const ObBloomFilterBuildTask&>(other);
+      const ObFilterBuildTask& o = static_cast<const ObFilterBuildTask&>(other);
       is_equal = (o.table_id_ == table_id_) && (o.macro_id_ == macro_id_);
     }
   }
   return is_equal;
 }
 
-int64_t ObBloomFilterBuildTask::get_deep_copy_size() const
+int64_t ObFilterBuildTask::get_deep_copy_size() const
 {
   return sizeof(*this);
 }
 
-IObDedupTask* ObBloomFilterBuildTask::deep_copy(char* buffer, const int64_t buf_size) const
+IObDedupTask* ObFilterBuildTask::deep_copy(char* buffer, const int64_t buf_size) const
 {
-  ObBloomFilterBuildTask* task = NULL;
+  ObFilterBuildTask* task = NULL;
   if (NULL != buffer && buf_size >= get_deep_copy_size()) {
-    task = new (buffer) ObBloomFilterBuildTask(table_id_, macro_id_, prefix_len_, table_key_);
+    task = new (buffer) ObFilterBuildTask(table_id_, macro_id_, prefix_len_, table_key_);
   }
   return task;
 }
 
-int ObBloomFilterBuildTask::process()
+int ObFilterBuildTask::process()
 {
   int ret = OB_SUCCESS;
-  ObBloomFilterCacheValue bfcache_value;
+  ObFilterCacheValue filter_cache_value;
 
   ObTenantStatEstGuard stat_est_guard(OB_SYS_TENANT_ID);
   if (OB_UNLIKELY(OB_INVALID_ID == table_id_) || OB_UNLIKELY(!macro_id_.is_valid()) || OB_UNLIKELY(prefix_len_ <= 0)) {
     ret = OB_INVALID_DATA;
-    LOG_WARN("The bloom filter build task is not valid, ", K_(table_id), K_(macro_id), K_(prefix_len), K(ret));
-  } else if (OB_FAIL(build_bloom_filter())) {
-    LOG_WARN("Fail to build bloom filter, ", K(ret));
+    LOG_WARN("The filter build task is not valid, ", K_(table_id), K_(macro_id), K_(prefix_len), K(ret));
+  } else if (OB_FAIL(build_filter())) {
+    LOG_WARN("Fail to build filter, ", K(ret));
   } else {
-    LOG_INFO("Success to build bloom filter, ", K_(table_id), K_(macro_id));
+    LOG_INFO("Success to build filter, ", K_(table_id), K_(macro_id));
   }
 
   return ret;
 }
 
-int ObBloomFilterBuildTask::build_bloom_filter()
+int ObFilterBuildTask::build_filter()
 {
   int ret = OB_SUCCESS;
   void* buf = NULL;
@@ -142,7 +142,7 @@ int ObBloomFilterBuildTask::build_bloom_filter()
     if (OB_FAIL(ObFileSystemUtil::get_pg_file_with_guard(table_key_.get_partition_key(), pg_guard, pg_file))) {
       LOG_WARN("fail to get pg_file", K(ret), K(table_key_));
     } else if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().check_need_build(
-                   ObBloomFilterCacheKey(table_id_, macro_id_, pg_file->get_file_id(), prefix_len_), need_build))) {
+                   ObFilterCacheKey(table_id_, macro_id_, pg_file->get_file_id(), prefix_len_), need_build))) {
       STORAGE_LOG(WARN, "Fail to check need build, ", K(ret));
     } else if (!need_build) {
       // already in cache,do nothing
@@ -240,12 +240,14 @@ int ObBloomFilterBuildTask::build_bloom_filter()
       // scan and build
       if (OB_SUCC(ret)) {
         ObIPartitionGroupGuard guard;
-        ObBloomFilterCacheValue bfcache_value;
+        ObFilterCacheValue filter_cache_value;
         blocksstable::ObMacroBlockCtx macro_block_ctx;
+        ObFilterBuilder filter_builder;
+        bool is_xor = GCONF.is_xor;
 
-        if (OB_FAIL(bfcache_value.init(prefix_len_, meta.meta_->row_count_))) {
-          LOG_WARN("Fail to init bloom filter, ", K(ret));
-        } else if (OB_FAIL(sstable->get_macro_block_ctx(macro_id_, macro_block_ctx))) {
+        if (OB_FAIL(filter_builder.init(prefix_len_, meta.meta_->row_count_, is_xor, &filter_cache_value))) {
+          LOG_WARN("fail to init filter builder, ", K(ret));
+        }else if (OB_FAIL(sstable->get_macro_block_ctx(macro_id_, macro_block_ctx))) {
           LOG_WARN("fail to get macro block ctx", K(ret));
         } else if (OB_FAIL(
                        scanner->open(access_param_.iter_param_, access_context_, &range, macro_block_ctx, sstable))) {
@@ -253,22 +255,24 @@ int ObBloomFilterBuildTask::build_bloom_filter()
         } else {
           while (OB_SUCC(scanner->get_next_row(row))) {
             rowkey.assign(row->row_val_.cells_, row->row_val_.count_);
-            if (OB_FAIL(bfcache_value.insert(rowkey))) {
-              LOG_WARN("Fail to insert rowkey to bfcache, ", K(ret));
+            if (OB_FAIL(filter_builder.insert(rowkey))) {
+              LOG_WARN("fail to insert rowkey to filter builder, ", K(ret));
               break;
             }
           }
 
-          if (OB_ITER_END == ret) {
+          if (OB_FAIL(filter_builder.build())) {
+            LOG_WARN("Fail to build filter, ", K(ret));
+          } else if (OB_SUCC(ret)) {
             ObStorageCacheContext context;
             context.set(block_cache_ws);
             if (OB_FAIL(context.bf_cache_->put_bloom_filter(
-                    table_id_, macro_id_, pg_file->get_file_id(), bfcache_value, true))) {
+                    table_id_, macro_id_, pg_file->get_file_id(), filter_cache_value, true))) {
               LOG_WARN("Fail to put value to bloom_filter_cache, ", K(ret));
             } else {
-              FLOG_INFO("Succ to put a new bloomfilter", K(macro_id_), K_(table_id), K(bfcache_value));
+              FLOG_INFO("Succ to put a new bloomfilter", K(macro_id_), K_(table_id), K(filter_cache_value));
             }
-          }
+          } 
         }
       }
       if (NULL != scanner) {
@@ -341,7 +345,7 @@ int ObBloomFilterLoadTask::process()
     ret = OB_INVALID_DATA;
     LOG_WARN("The bloom filter build task is not valid, ", K_(table_id), K_(macro_id), K(ret));
   } else {
-    ObBloomFilterCacheValue bf_cache_value;
+    ObFilterCacheValue bf_cache_value;
     ObBloomFilterDataReader bf_macro_reader;
     blocksstable::ObMacroBlockCtx macro_block_ctx;  // TODO(): fix build bloom filter later
     ObTableHandle table_handle;
@@ -992,7 +996,7 @@ int ObPartitionScheduler::schedule_build_bloomfilter(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument, ", K(table_id), K(macro_id), K(prefix_len), K(ret));
   } else {
-    ObBloomFilterBuildTask task(table_id, macro_id, prefix_len, table_key);
+    ObFilterBuildTask task(table_id, macro_id, prefix_len, table_key);
     if (OB_FAIL(bf_queue_.add_task(task))) {
       if (OB_EAGAIN == ret) {
         ret = OB_SUCCESS;

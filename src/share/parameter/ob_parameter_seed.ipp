@@ -20,6 +20,9 @@
 #define OB_TENANT_PARAMETER(args...)
 #endif
 
+DEF_BOOL(is_xor, OB_CLUSTER_PARAMETER, "True", "use xor filter",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 //// sstable config
 // "/ob/storage/path/dir" means use local dir
 // "ofs://0.0.0.0,1.1.1.1,2.2.2.2/dir" means use ofs dir

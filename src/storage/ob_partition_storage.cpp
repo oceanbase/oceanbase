@@ -20,7 +20,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/word_segment/ob_word_segment.h"
-#include "lib/bloom_filter/ob_bloomfilter.h"
+#include "lib/filter/ob_bloomfilter.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/objectpool/ob_resource_pool.h"
 #include "common/rowkey/ob_rowkey.h"

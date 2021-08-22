@@ -19,7 +19,7 @@
 #include "ob_block_cache_working_set.h"
 #include "ob_row_cache.h"
 #include "ob_fuse_row_cache.h"
-#include "ob_bloom_filter_cache.h"
+#include "ob_filter_cache.h"
 
 #define OB_STORE_CACHE oceanbase::blocksstable::ObStorageCacheSuite::get_instance()
 

@@ -54,11 +54,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBloomFilterLoadTask);
 };
 
-class ObBloomFilterBuildTask : public common::IObDedupTask {
+class ObFilterBuildTask : public common::IObDedupTask {
 public:
-  ObBloomFilterBuildTask(const uint64_t table_id, const blocksstable::MacroBlockId& macro_id, const int64_t prefix_len,
+  ObFilterBuildTask(const uint64_t table_id, const blocksstable::MacroBlockId& macro_id, const int64_t prefix_len,
       const ObITable::TableKey& table_key);
-  virtual ~ObBloomFilterBuildTask();
+  virtual ~ObFilterBuildTask();
   virtual int64_t hash() const;
   virtual bool operator==(const IObDedupTask& other) const;
   virtual int64_t get_deep_copy_size() const;
@@ -70,7 +70,7 @@ public:
   virtual int process();
 
 private:
-  int build_bloom_filter();
+  int build_filter();
   uint64_t table_id_;
   blocksstable::MacroBlockId macro_id_;
   int64_t prefix_len_;
@@ -80,7 +80,7 @@ private:
   common::ObArenaAllocator allocator_;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObBloomFilterBuildTask);
+  DISALLOW_COPY_AND_ASSIGN(ObFilterBuildTask);
 };
 
 struct ObMergeStatEntry {

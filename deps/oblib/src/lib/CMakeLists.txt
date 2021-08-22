@@ -464,7 +464,8 @@ ob_lib_add_pchs(lib
   atomic/atomic128.h
   profile/ob_active_resource_list.h
   list/dlink.h
-  bloom_filter/ob_bloomfilter.h
+  filter/ob_bloomfilter.h
+  filter/ob_xorfilter.h
   container/ob_fast_array.h
   list/ob_obj_store.h
   time/ob_cur_time.h

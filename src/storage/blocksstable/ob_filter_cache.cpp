@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "ob_bloom_filter_cache.h"
+#include "ob_filter_cache.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "storage/ob_partition_scheduler.h"
 
@@ -18,17 +18,17 @@ namespace oceanbase {
 using namespace common;
 namespace blocksstable {
 /**
- * ----------------------------------------------------ObBloomFilterCacheKey--------------------------------------------------
+ * ----------------------------------------------------ObFilterCacheKey--------------------------------------------------
  */
-ObBloomFilterCacheKey::ObBloomFilterCacheKey(
+ObFilterCacheKey::ObFilterCacheKey(
     const uint64_t table_id, const MacroBlockId& block_id, const int64_t file_id, const int8_t prefix_rowkey_len)
     : table_id_(table_id), macro_block_id_(block_id), file_id_(file_id), prefix_rowkey_len_(prefix_rowkey_len)
 {}
 
-ObBloomFilterCacheKey::~ObBloomFilterCacheKey()
+ObFilterCacheKey::~ObFilterCacheKey()
 {}
 
-uint64_t ObBloomFilterCacheKey::hash() const
+uint64_t ObFilterCacheKey::hash() const
 {
   uint64_t hash_val = macro_block_id_.hash();
   const uint64_t sum = table_id_ + file_id_ + prefix_rowkey_len_;
@@ -36,24 +36,24 @@ uint64_t ObBloomFilterCacheKey::hash() const
   return hash_val;
 }
 
-bool ObBloomFilterCacheKey::operator==(const common::ObIKVCacheKey& other) const
+bool ObFilterCacheKey::operator==(const common::ObIKVCacheKey& other) const
 {
-  const ObBloomFilterCacheKey& other_bfkey = reinterpret_cast<const ObBloomFilterCacheKey&>(other);
+  const ObFilterCacheKey& other_bfkey = reinterpret_cast<const ObFilterCacheKey&>(other);
   return table_id_ == other_bfkey.table_id_ && macro_block_id_ == other_bfkey.macro_block_id_ &&
          file_id_ == other_bfkey.file_id_ && prefix_rowkey_len_ == other_bfkey.prefix_rowkey_len_;
 }
 
-uint64_t ObBloomFilterCacheKey::get_tenant_id() const
+uint64_t ObFilterCacheKey::get_tenant_id() const
 {
   return common::extract_tenant_id(table_id_);
 }
 
-int64_t ObBloomFilterCacheKey::size() const
+int64_t ObFilterCacheKey::size() const
 {
   return static_cast<int64_t>(sizeof(*this));
 }
 
-int ObBloomFilterCacheKey::deep_copy(char* buf, const int64_t buf_len, common::ObIKVCacheKey*& key) const
+int ObFilterCacheKey::deep_copy(char* buf, const int64_t buf_len, common::ObIKVCacheKey*& key) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == buf || buf_len < size())) {
@@ -61,75 +61,98 @@ int ObBloomFilterCacheKey::deep_copy(char* buf, const int64_t buf_len, common::O
     STORAGE_LOG(WARN, "Invalid argument, ", KP(buf), K(buf_len), K(ret));
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_DATA;
-    STORAGE_LOG(WARN, "The bloom filter cache key is invalid, ", K(*this), K(ret));
+    STORAGE_LOG(WARN, "The filter cache key is invalid, ", K(*this), K(ret));
   } else {
-    key = new (buf) ObBloomFilterCacheKey(table_id_, macro_block_id_, file_id_, prefix_rowkey_len_);
+    key = new (buf) ObFilterCacheKey(table_id_, macro_block_id_, file_id_, prefix_rowkey_len_);
   }
   return ret;
 }
 
-bool ObBloomFilterCacheKey::is_valid() const
+bool ObFilterCacheKey::is_valid() const
 {
   return OB_INVALID_ID != table_id_ && macro_block_id_.is_valid() && OB_INVALID_DATA_FILE_ID != file_id_ &&
          0 < prefix_rowkey_len_;
 }
 
 /**
- * --------------------------------------------------ObBloomFilterCacheValue--------------------------------------------------
+ * --------------------------------------------------ObFilterCacheValue--------------------------------------------------
  */
-ObBloomFilterCacheValue::ObBloomFilterCacheValue()
-    : version_(BLOOM_FILTER_CACHE_VALUE_VERSION),
+ObFilterCacheValue::ObFilterCacheValue()
+    : allocator_(),
+      version_(BLOOM_FILTER_CACHE_VALUE_VERSION),
       rowkey_column_cnt_(0),
       row_count_(0),
-      bloom_filter_(),
-      is_inited_(false)
+      filter_(NULL),
+      is_inited_(false),
+      is_xor_(false)
 {}
 
-ObBloomFilterCacheValue::~ObBloomFilterCacheValue()
-{}
+ObFilterCacheValue::~ObFilterCacheValue()
+{
+  if (filter_ != NULL) {
+    filter_->~ObFilter();
+    filter_ = NULL;
+    allocator_.reset();
+  }
+}
 
-void ObBloomFilterCacheValue::reset()
+void ObFilterCacheValue::reset()
 {
   rowkey_column_cnt_ = 0;
-  bloom_filter_.destroy();
+  if (OB_ISNULL(filter_)) {
+    STORAGE_LOG(WARN, "The filter_ is not inited", KP(filter_));
+  } else {
+    filter_->destroy();
+  }
   row_count_ = 0;
   is_inited_ = false;
 }
 
-void ObBloomFilterCacheValue::reuse()
+void ObFilterCacheValue::reuse()
 {
   row_count_ = 0;
-  bloom_filter_.clear();
+  filter_->clear();
 }
 
-int64_t ObBloomFilterCacheValue::size() const
+int64_t ObFilterCacheValue::size() const
 {
-  return static_cast<int64_t>(sizeof(*this) + bloom_filter_.get_deep_copy_size());
+  int64_t size = static_cast<int64_t>(sizeof(*this) + filter_->get_deep_copy_size());
+  size += is_xor_ ? sizeof(XorFilter) : sizeof(BloomFilter);
+  return size;
 }
 
-int ObBloomFilterCacheValue::deep_copy(ObBloomFilterCacheValue& bf_cache_value) const
+int ObFilterCacheValue::deep_copy(ObFilterCacheValue& bf_cache_value) const
 {
   int ret = common::OB_SUCCESS;
 
+  char* buf = NULL;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "The bloom filter cache value is not valid", K(*this), K(ret));
+  } else if (!is_xor_ && NULL == (buf = reinterpret_cast<char*>(bf_cache_value.allocator_.alloc(sizeof(BloomFilter))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(ERROR, "Fail to allocate  memory", K(ret));
+  } else if (is_xor_ && NULL == (buf = reinterpret_cast<char*>(bf_cache_value.allocator_.alloc(sizeof(XorFilter))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(ERROR, "Fail to allocate  memory", K(ret));
   } else {
     bf_cache_value.reset();
-    if (OB_FAIL(bf_cache_value.bloom_filter_.deep_copy(bloom_filter_))) {
-      STORAGE_LOG(WARN, "Fail to deep copy bloom filter cache value", K(ret));
-    } else {
-      bf_cache_value.version_ = version_;
-      bf_cache_value.rowkey_column_cnt_ = rowkey_column_cnt_;
-      bf_cache_value.row_count_ = row_count_;
-      bf_cache_value.is_inited_ = true;
-    }
+    bf_cache_value.version_ = version_;
+    bf_cache_value.rowkey_column_cnt_ = rowkey_column_cnt_;
+    bf_cache_value.row_count_ = row_count_;
+    bf_cache_value.is_inited_ = true;
+    bf_cache_value.is_xor_ = is_xor_;
+    if (is_xor_)
+      bf_cache_value.filter_ = new (buf) XorFilter();
+    else
+      bf_cache_value.filter_ = new (buf) BloomFilter();
+    if (OB_FAIL(bf_cache_value.filter_->deep_copy(*filter_)))
+      STORAGE_LOG(WARN, "Fail to deep copy filter cache value, ", K(ret));
   }
-
   return ret;
 }
 
-int ObBloomFilterCacheValue::deep_copy(char* buf, const int64_t buf_len, common::ObIKVCacheValue*& value) const
+int ObFilterCacheValue::deep_copy(char* buf, const int64_t buf_len, common::ObIKVCacheValue*& value) const
 {
   int ret = common::OB_SUCCESS;
 
@@ -140,22 +163,29 @@ int ObBloomFilterCacheValue::deep_copy(char* buf, const int64_t buf_len, common:
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "The bloom filter cache value is not valid, ", K(*this), K(ret));
   } else {
-    ObBloomFilterCacheValue* bfcache_value = new (buf) ObBloomFilterCacheValue();
-    if (OB_FAIL(bfcache_value->bloom_filter_.deep_copy(bloom_filter_, buf + sizeof(*bfcache_value)))) {
-      STORAGE_LOG(WARN, "Fail to deep copy bloom filter cache value, ", K(ret));
+    int offset;
+    ObFilterCacheValue* filter_cache_value = new (buf) ObFilterCacheValue();
+    if (is_xor_) {
+      filter_cache_value->filter_ = new (buf + sizeof(*filter_cache_value)) XorFilter();
+      offset = sizeof(*filter_cache_value) + sizeof(XorFilter);
     } else {
-      bfcache_value->version_ = version_;
-      bfcache_value->rowkey_column_cnt_ = rowkey_column_cnt_;
-      bfcache_value->row_count_ = row_count_;
-      bfcache_value->is_inited_ = true;
-      value = bfcache_value;
+      filter_cache_value->filter_ = new (buf + sizeof(*filter_cache_value)) BloomFilter();
+      offset = sizeof(*filter_cache_value) + sizeof(BloomFilter);
     }
+    if (OB_FAIL(filter_cache_value->filter_->deep_copy(*filter_, buf + offset)))
+      STORAGE_LOG(WARN, "Fail to deep copy filter cache value, ", K(ret));
+    filter_cache_value->version_ = version_;
+    filter_cache_value->rowkey_column_cnt_ = rowkey_column_cnt_;
+    filter_cache_value->row_count_ = row_count_;
+    filter_cache_value->is_inited_ = true;
+    filter_cache_value->is_xor_ = is_xor_;
+    value = filter_cache_value;
   }
 
   return ret;
 }
 
-int ObBloomFilterCacheValue::init(const int64_t rowkey_column_cnt, const int64_t row_cnt)
+int ObFilterCacheValue::init(const int64_t rowkey_column_cnt, const int64_t row_cnt, const bool is_xor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(rowkey_column_cnt <= 0 || row_cnt <= 0)) {
@@ -163,18 +193,33 @@ int ObBloomFilterCacheValue::init(const int64_t rowkey_column_cnt, const int64_t
     STORAGE_LOG(WARN, "Invalid argument, ", K(rowkey_column_cnt), K(row_cnt), K(ret));
   } else if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "The bloom filter cache value has been inited, ", K(ret));
-  } else if (OB_FAIL(bloom_filter_.init(row_cnt))) {
-    STORAGE_LOG(WARN, "Fail to init bloom filter, ", K(ret));
+    STORAGE_LOG(WARN, "The filter cache value has been inited, ", K(ret));
   } else {
-    rowkey_column_cnt_ = static_cast<int16_t>(rowkey_column_cnt);
-    row_count_ = 0;
-    is_inited_ = true;
+    char* buf = NULL;
+    bool isXor = false;
+    if (is_xor && OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(sizeof(XorFilter))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
+    } else if (!is_xor && OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(sizeof(BloomFilter))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
+    } else {
+      is_xor_ = is_xor;
+      if (is_xor) {
+        filter_ = new (buf) XorFilter();
+      } else {
+        filter_ = new (buf) BloomFilter();
+      }
+      filter_->init(row_cnt);
+      rowkey_column_cnt_ = static_cast<int16_t>(rowkey_column_cnt);
+      row_count_ = 0;
+      is_inited_ = true;
+    }
   }
   return ret;
 }
 
-int ObBloomFilterCacheValue::insert(const ObStoreRowkey& rowkey)
+int ObFilterCacheValue::insert(const ObStoreRowkey& rowkey)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -183,21 +228,21 @@ int ObBloomFilterCacheValue::insert(const ObStoreRowkey& rowkey)
   } else if (OB_UNLIKELY(!rowkey.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ", K(rowkey), K(ret));
-  } else if (OB_FAIL(bloom_filter_.insert(rowkey))) {
-    STORAGE_LOG(WARN, "Fail to insert rowkey to bloom filter, ", K(rowkey), K(ret));
+  } else if (OB_FAIL(filter_->insert(rowkey))) {
+    STORAGE_LOG(WARN, "Fail to insert rowkey to filter, ", K(rowkey), K(ret));
   } else {
     row_count_++;
   }
   return ret;
 }
 
-int ObBloomFilterCacheValue::insert_hash(const uint32_t hash)
+int ObFilterCacheValue::insert_hash(const uint32_t hash)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The bloom filter cache value has not been inited, ", K(ret));
-  } else if (OB_FAIL(bloom_filter_.insert_hash(hash))) {
+  } else if (OB_FAIL(filter_->insert_hash(hash))) {
     STORAGE_LOG(WARN, "Fail to insert rowkey to bloom filter, ", K(hash), K(ret));
   } else {
     row_count_++;
@@ -205,7 +250,21 @@ int ObBloomFilterCacheValue::insert_hash(const uint32_t hash)
   return ret;
 }
 
-int ObBloomFilterCacheValue::may_contain(const ObStoreRowkey& rowkey, bool& is_contain) const
+int ObFilterCacheValue::insert_all(const ObStoreRowkey* elements, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "The filter cache value has not been inited, ", K(ret));
+  } else if (OB_FAIL(filter_->insert_all(elements, size))) {
+    STORAGE_LOG(WARN, "Fail to insert all elements to filter, ", K(elements), K(ret));
+  } else {
+    row_count_ += size;
+  }
+  return ret;
+}
+
+int ObFilterCacheValue::may_contain(const ObStoreRowkey& rowkey, bool& is_contain) const
 {
   int ret = OB_SUCCESS;
   is_contain = true;
@@ -214,29 +273,32 @@ int ObBloomFilterCacheValue::may_contain(const ObStoreRowkey& rowkey, bool& is_c
     STORAGE_LOG(WARN, "Invalid argument, ", K(rowkey), K(ret));
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "The bloom filter cache value has not been inited, ", K(ret));
+    STORAGE_LOG(WARN, "The filter cache value has not been inited, ", K(ret));
   } else if (OB_UNLIKELY(rowkey_column_cnt_ != rowkey.get_obj_cnt())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected ObBloomFilterCacheValue.rowkey_column_cnt not match rowkey.get_obj_cnt", K(ret));
-  } else if (OB_FAIL(bloom_filter_.may_contain(rowkey, is_contain))) {
-    STORAGE_LOG(WARN, "The bloom filter judge failed, ", K(ret));
+    STORAGE_LOG(WARN, "unexpected ObFilterCacheValue.rowkey_column_cnt not match rowkey.get_obj_cnt", K(ret));
+  } else if (OB_ISNULL(filter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected error, the filter_ is NULL, ", K(ret));
+  } else if (OB_FAIL(filter_->may_contain(rowkey, is_contain))) {
+    STORAGE_LOG(WARN, "The filter judge failed, ", K(ret));
   }
+
   return ret;
 }
 
-bool ObBloomFilterCacheValue::is_valid() const
+bool ObFilterCacheValue::is_valid() const
 {
   return is_inited_ && rowkey_column_cnt_ > 0;
 }
 
-bool ObBloomFilterCacheValue::could_merge_bloom_filter(const ObBloomFilterCacheValue& bf_cache_value) const
+bool ObFilterCacheValue::could_merge_bloom_filter(const ObFilterCacheValue& bf_cache_value) const
 {
   bool bret = false;
 
   if (OB_UNLIKELY(!is_valid() || !bf_cache_value.is_valid())) {
   } else if (bf_cache_value.version_ != version_ || bf_cache_value.rowkey_column_cnt_ != rowkey_column_cnt_) {
-  } else if (bf_cache_value.bloom_filter_.get_nhash() != bloom_filter_.get_nhash() ||
-             bf_cache_value.bloom_filter_.get_nbit() != bloom_filter_.get_nbit()) {
+  } else if (!filter_->could_merge(*bf_cache_value.filter_)) {
   } else {
     bret = true;
   }
@@ -244,7 +306,7 @@ bool ObBloomFilterCacheValue::could_merge_bloom_filter(const ObBloomFilterCacheV
   return bret;
 }
 
-int ObBloomFilterCacheValue::merge_bloom_filter(const ObBloomFilterCacheValue& bf_cache_value)
+int ObFilterCacheValue::merge_bloom_filter(const ObFilterCacheValue& bf_cache_value)
 {
   int ret = OB_SUCCESS;
 
@@ -256,26 +318,18 @@ int ObBloomFilterCacheValue::merge_bloom_filter(const ObBloomFilterCacheValue& b
     STORAGE_LOG(WARN, "Invalid bloomfilter cache to merge", K(ret));
   } else if (OB_UNLIKELY(!could_merge_bloom_filter(bf_cache_value))) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN,
-        "Unexpected bloomfilter cache to merge",
-        K(bf_cache_value),
-        K_(rowkey_column_cnt),
-        K_(bloom_filter),
-        K(ret));
+    STORAGE_LOG(
+        WARN, "Unexpected bloomfilter cache to merge", K(bf_cache_value), K_(rowkey_column_cnt), K_(filter), K(ret));
+  } else if (OB_FAIL(filter_->merge(*bf_cache_value.filter_))) {
+    STORAGE_LOG(WARN, "filter cache merge fail", K(ret));
   } else {
-    int64_t num_bytes = bloom_filter_.get_nbytes();
-    const uint8_t* merge_bits = bf_cache_value.get_bloom_filter_bits();
-    uint8_t* dest_bits = bloom_filter_.get_bits();
-    for (int64_t i = 0; i < num_bytes; i++) {
-      dest_bits[i] |= merge_bits[i];
-    }
     row_count_ += bf_cache_value.get_row_count();
   }
 
   return ret;
 }
 
-DEFINE_SERIALIZE(ObBloomFilterCacheValue)
+DEFINE_SERIALIZE(ObFilterCacheValue)
 {
   int ret = OB_SUCCESS;
   const int64_t serialize_size = get_serialize_size();
@@ -293,14 +347,14 @@ DEFINE_SERIALIZE(ObBloomFilterCacheValue)
     STORAGE_LOG(WARN, "Failed to encode rowkey column cnt", K(buf_len), K(pos), K_(rowkey_column_cnt), K(ret));
   } else if (OB_FAIL(serialization::encode_vi32(buf, buf_len, pos, row_count_))) {
     STORAGE_LOG(WARN, "Failed to encode row cnt", K(buf_len), K(pos), K_(row_count), K(ret));
-  } else if (OB_FAIL(bloom_filter_.serialize(buf, buf_len, pos))) {
+  } else if (OB_FAIL(filter_->serialize(buf, buf_len, pos))) {
     STORAGE_LOG(WARN, "Failed to serialize bloom_filter", K(buf_len), K(pos), K(ret));
   }
 
   return ret;
 }
 
-DEFINE_DESERIALIZE(ObBloomFilterCacheValue)
+DEFINE_DESERIALIZE(ObFilterCacheValue)
 {
   int ret = OB_SUCCESS;
   const int64_t min_bf_size = 4;
@@ -319,7 +373,7 @@ DEFINE_DESERIALIZE(ObBloomFilterCacheValue)
       STORAGE_LOG(WARN, "Unexpected deserialize rowkey column cnt", K_(rowkey_column_cnt), K(ret));
     } else if (OB_FAIL(serialization::decode_vi32(buf, data_len, pos, &row_count_))) {
       STORAGE_LOG(WARN, "Failed to decode row cnt", K(data_len), K(pos), K(ret));
-    } else if (OB_FAIL(bloom_filter_.deserialize(buf, data_len, pos))) {
+    } else if (OB_FAIL(filter_->deserialize(buf, data_len, pos))) {
       STORAGE_LOG(WARN, "Failed to deserialize bloom_filter", K(data_len), K(pos), K(ret));
     } else {
       is_inited_ = true;
@@ -329,10 +383,83 @@ DEFINE_DESERIALIZE(ObBloomFilterCacheValue)
   return ret;
 }
 
-DEFINE_GET_SERIALIZE_SIZE(ObBloomFilterCacheValue)
+DEFINE_GET_SERIALIZE_SIZE(ObFilterCacheValue)
 {
-  return bloom_filter_.get_serialize_size() + serialization::encoded_length_i16(version_) +
+  return filter_->get_serialize_size() + serialization::encoded_length_i16(version_) +
          serialization::encoded_length_i16(rowkey_column_cnt_) + serialization::encoded_length_vi32(row_count_);
+}
+
+/**
+ * ----------------------------------------------------ObFilterBuilder----------------------------------------------------
+ */
+
+ObFilterBuilder::ObFilterBuilder()
+    : allocator_(), size_(0), is_xor_(false), inited_(false), rowkeys_(NULL), filter_value_(NULL)
+{}
+
+ObFilterBuilder::~ObFilterBuilder()
+{
+  allocator_.reset();
+  rowkeys_ = NULL;
+  filter_value_ = NULL;
+}
+
+int ObFilterBuilder::init(const int64_t rowkey_column_cnt, const int64_t size, const bool is_xor, ObFilterCacheValue* filter_value)
+{
+  int ret = OB_SUCCESS;
+
+  size_ = size;
+  is_xor_ = is_xor;
+  filter_value_ = filter_value;
+  key_pos_ = 0;
+  char* buf;
+
+  if (OB_FAIL(filter_value_->init(rowkey_column_cnt, size, is_xor))) {
+    STORAGE_LOG(WARN, "fail to init filter cache value", K(ret), KP(filter_value_));
+  } else if (NULL == (buf = (char*)allocator_.alloc(sizeof(ObStoreRowkey) * size))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(ERROR, "fail to allocate memory, ", K(ret));
+  } else {
+    rowkeys_ = new (buf) ObStoreRowkey[size_];
+    inited_ = true;
+  }
+  return ret;
+}
+
+int ObFilterBuilder::insert(ObStoreRowkey& rowkey)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_xor_) {
+    ObIAllocator* allocator = &allocator_;
+    if (key_pos_ >= size_) {
+      ret = OB_SIZE_OVERFLOW;
+      STORAGE_LOG(WARN, "rowkeys is already full", K(ret));
+    } else if (OB_FAIL(rowkey.deep_copy(rowkeys_[key_pos_], *allocator))) {
+      STORAGE_LOG(WARN, "fail to insert rowkey", K(ret));
+    } else {
+      key_pos_++;
+    }
+  } else if (OB_FAIL(filter_value_->insert(rowkey))) {
+    STORAGE_LOG(WARN, "fail to insert rowkey", K(ret));
+  }
+
+  return ret;
+}
+
+int ObFilterBuilder::build()
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_xor_) {
+  } else if (size_ != key_pos_) {
+    ret = OB_CONFLICT_VALUE;
+    STORAGE_LOG(WARN, "inconsistent number of keys", K(ret), K_(size), K_(key_pos));
+  } else if (OB_FAIL(filter_value_->insert_all(rowkeys_, size_))) {
+    STORAGE_LOG(WARN, "fail to build filter", K(ret), K_(size), K_(key_pos));
+  }
+
+  return ret;
 }
 
 /**
@@ -350,15 +477,15 @@ ObBloomFilterCache::~ObBloomFilterCache()
 {}
 
 int ObBloomFilterCache::put_bloom_filter(const uint64_t table_id, const MacroBlockId macro_block_id,
-    const int64_t file_id, const ObBloomFilterCacheValue& bf_value, const bool adaptive)
+    const int64_t file_id, const ObFilterCacheValue& filter_value, const bool adaptive)
 {
   int ret = OB_SUCCESS;
-  ObBloomFilterCacheKey bf_key(table_id, macro_block_id, file_id, static_cast<int8_t>(bf_value.get_prefix_len()));
+  ObFilterCacheKey bf_key(table_id, macro_block_id, file_id, static_cast<int8_t>(filter_value.get_prefix_len()));
   bool overwrite = true;
-  if (OB_UNLIKELY(!bf_key.is_valid() || !bf_value.is_valid())) {
+  if (OB_UNLIKELY(!bf_key.is_valid() || !filter_value.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument, ", K(bf_key), K(bf_value), K(ret));
-  } else if (OB_FAIL(put(bf_key, bf_value, overwrite))) {
+    STORAGE_LOG(WARN, "Invalid argument, ", K(bf_key), K(filter_value), K(ret));
+  } else if (OB_FAIL(put(bf_key, filter_value, overwrite))) {
     STORAGE_LOG(WARN, "Fail to put bloomfilter to cache, ", K(ret));
   }
 
@@ -382,8 +509,8 @@ int ObBloomFilterCache::may_contain(const uint64_t table_id, const MacroBlockId 
 {
   int ret = OB_SUCCESS;
   is_contain = true;
-  ObBloomFilterCacheKey bf_key(table_id, macro_block_id, file_id, static_cast<int8_t>(rowkey.get_obj_cnt()));
-  const ObBloomFilterCacheValue* bf_value = NULL;
+  ObFilterCacheKey bf_key(table_id, macro_block_id, file_id, static_cast<int8_t>(rowkey.get_obj_cnt()));
+  const ObFilterCacheValue* filter_value = NULL;
   ObKVCacheHandle handle;
 
   if (OB_UNLIKELY(!bf_key.is_valid() || !rowkey.is_valid())) {
@@ -391,17 +518,17 @@ int ObBloomFilterCache::may_contain(const uint64_t table_id, const MacroBlockId 
     STORAGE_LOG(WARN, "Invalid argument, ", K(bf_key), K(rowkey), K(ret));
   } else if (0 == bf_cache_miss_count_threshold_) {
     // disable bf cache
-  } else if (OB_FAIL(get(bf_key, bf_value, handle))) {
+  } else if (OB_FAIL(get(bf_key, filter_value, handle))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "Fail to get bloom filter cache, ", K(ret));
     }
     EVENT_INC(ObStatEventIds::BLOOM_FILTER_CACHE_MISS);
   } else {
     EVENT_INC(ObStatEventIds::BLOOM_FILTER_CACHE_HIT);
-    if (OB_ISNULL(bf_value)) {
+    if (OB_ISNULL(filter_value)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected error, the bf_value is NULL, ", K(ret));
-    } else if (OB_FAIL(bf_value->may_contain(rowkey, is_contain))) {
+      STORAGE_LOG(WARN, "Unexpected error, the filter_value is NULL, ", K(ret));
+    } else if (OB_FAIL(filter_value->may_contain(rowkey, is_contain))) {
       STORAGE_LOG(WARN, "Fail to check rowkey exist from bloom filter, ", K(ret));
     } else {
       if (is_contain) {
@@ -415,11 +542,11 @@ int ObBloomFilterCache::may_contain(const uint64_t table_id, const MacroBlockId 
 }
 
 int ObBloomFilterCache::get_sstable_bloom_filter(const uint64_t table_id, const MacroBlockId macro_block_id,
-    const int64_t file_id, const uint64_t rowkey_column_number, const ObBloomFilterCacheValue* bloom_filter,
+    const int64_t file_id, const uint64_t rowkey_column_number, const ObFilterCacheValue* bloom_filter,
     ObKVCacheHandle& cache_handle)
 {
   int ret = OB_SUCCESS;
-  ObBloomFilterCacheKey bf_key(table_id, macro_block_id, file_id, static_cast<int8_t>(rowkey_column_number));
+  ObFilterCacheKey bf_key(table_id, macro_block_id, file_id, static_cast<int8_t>(rowkey_column_number));
   bloom_filter = NULL;
   cache_handle.reset();
 
@@ -433,7 +560,7 @@ int ObBloomFilterCache::get_sstable_bloom_filter(const uint64_t table_id, const 
     EVENT_INC(ObStatEventIds::BLOOM_FILTER_CACHE_MISS);
   } else if (OB_ISNULL(bloom_filter)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected error, the bf_value is NULL, ", K(ret));
+    STORAGE_LOG(WARN, "Unexpected error, the filter_value is NULL, ", K(ret));
   } else {
     EVENT_INC(ObStatEventIds::BLOOM_FILTER_CACHE_HIT);
   }
@@ -462,7 +589,7 @@ int ObBloomFilterCache::inc_empty_read(const uint64_t table_id, const MacroBlock
   } else if (0 == bf_cache_miss_count_threshold_) {
     // bf cache is disabled, do nothing
   } else {
-    const ObBloomFilterCacheKey bfc_key(table_id, macro_block_id, file_id, empty_read_prefix);
+    const ObFilterCacheKey bfc_key(table_id, macro_block_id, file_id, empty_read_prefix);
     uint64_t key_hash = bfc_key.hash();
     uint64_t cur_cnt = 1;
     ObEmptyReadCell* cell = NULL;
@@ -502,22 +629,22 @@ int ObBloomFilterCache::inc_empty_read(const uint64_t table_id, const MacroBlock
   return ret;
 }
 
-int ObBloomFilterCache::check_need_build(const ObBloomFilterCacheKey& bf_key, bool& need_build)
+int ObBloomFilterCache::check_need_build(const ObFilterCacheKey& bf_key, bool& need_build)
 {
   int ret = OB_SUCCESS;
-  const ObBloomFilterCacheValue* bf_value = NULL;
+  const ObFilterCacheValue* filter_value = NULL;
   ObKVCacheHandle handle;
   need_build = false;
   if (!bf_key.is_valid()) {
     // do nothing;
-  } else if (OB_FAIL(get(bf_key, bf_value, handle))) {
+  } else if (OB_FAIL(get(bf_key, filter_value, handle))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "Fail to get bloom filter cache, ", K(ret));
     } else {
       need_build = true;
       ret = OB_SUCCESS;
     }
-  } else if (bf_value->get_prefix_len() != bf_key.get_prefix_rowkey_len()) {
+  } else if (filter_value->get_prefix_len() != bf_key.get_prefix_rowkey_len()) {
     need_build = true;
   }
   return ret;
@@ -528,7 +655,7 @@ int ObBloomFilterCache::init(const char* cache_name, const int64_t priority, con
   int ret = OB_SUCCESS;
   char* buf = NULL;
   // size must be 2^n, for fast mod
-  if (OB_FAIL((common::ObKVCache<ObBloomFilterCacheKey, ObBloomFilterCacheValue>::init(cache_name, priority)))) {
+  if (OB_FAIL((common::ObKVCache<ObFilterCacheKey, ObFilterCacheValue>::init(cache_name, priority)))) {
     STORAGE_LOG(WARN, "Fail to init kv cache, ", K(ret));
   } else if (OB_UNLIKELY(size <= 0 || (size & (size - 1)))) {
     ret = OB_INVALID_ARGUMENT;
@@ -546,7 +673,7 @@ int ObBloomFilterCache::init(const char* cache_name, const int64_t priority, con
 
 void ObBloomFilterCache::destroy()
 {
-  common::ObKVCache<ObBloomFilterCacheKey, ObBloomFilterCacheValue>::destroy();
+  common::ObKVCache<ObFilterCacheKey, ObFilterCacheValue>::destroy();
   if (NULL != buckets_) {
     for (int64_t i = 0; i < bucket_size_; ++i) {
       buckets_[i].~ObEmptyReadCell();
@@ -590,7 +717,7 @@ int ObMacroBloomFilterCacheWriter::init(const int64_t rowkey_column_count, const
 {
   int ret = OB_SUCCESS;
   max_row_count_ = row_count + row_count / 16;
-  if (OB_FAIL(bf_cache_value_.init(rowkey_column_count, max_row_count_))) {
+  if (OB_FAIL(bf_cache_value_.init(rowkey_column_count, max_row_count_, GCONF.is_xor))) {
     STORAGE_LOG(WARN, "blolomfilter cache value init failed, ", K(ret));
   } else {
     need_build_ = true;

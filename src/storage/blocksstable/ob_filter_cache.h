@@ -13,7 +13,8 @@
 #ifndef OB_BLOOM_FILTER_CACHE_H_
 #define OB_BLOOM_FILTER_CACHE_H_
 
-#include "lib/bloom_filter/ob_bloomfilter.h"
+#include "lib/filter/ob_bloomfilter.h"
+#include "lib/filter/ob_xorfilter.h"
 #include "share/config/ob_server_config.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ob_i_table.h"
@@ -29,11 +30,11 @@ public:
   }
 };
 
-class ObBloomFilterCacheKey : public common::ObIKVCacheKey {
+class ObFilterCacheKey : public common::ObIKVCacheKey {
 public:
-  ObBloomFilterCacheKey(
+  ObFilterCacheKey(
       const uint64_t table_id, const MacroBlockId& block_id, const int64_t file_id, const int8_t prefix_rowkey_len);
-  virtual ~ObBloomFilterCacheKey();
+  virtual ~ObFilterCacheKey();
   virtual bool operator==(const common::ObIKVCacheKey& other) const;
   virtual uint64_t get_tenant_id() const;
   virtual uint64_t hash() const;
@@ -53,22 +54,23 @@ private:
   int8_t prefix_rowkey_len_;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObBloomFilterCacheKey);
+  DISALLOW_COPY_AND_ASSIGN(ObFilterCacheKey);
 };
 
-class ObBloomFilterCacheValue : public common::ObIKVCacheValue {
+class ObFilterCacheValue : public common::ObIKVCacheValue {
 public:
   static const int64_t BLOOM_FILTER_CACHE_VALUE_VERSION = 1;
-  ObBloomFilterCacheValue();
-  virtual ~ObBloomFilterCacheValue();
+  ObFilterCacheValue();
+  virtual ~ObFilterCacheValue();
   void reset();
   void reuse();
   virtual int64_t size() const;
   virtual int deep_copy(char* buf, const int64_t buf_len, common::ObIKVCacheValue*& value) const;
-  virtual int deep_copy(ObBloomFilterCacheValue& bf_cache_value) const;
-  int init(const int64_t rowkey_column_cnt, const int64_t row_cnt);
+  virtual int deep_copy(ObFilterCacheValue& bf_cache_value) const;
+  int init(const int64_t rowkey_column_cnt, const int64_t row_cnt, const bool is_xor);
   int insert(const common::ObStoreRowkey& rowkey);
   int insert_hash(const uint32_t hash);
+  int insert_all(const ObStoreRowkey* elements, const int64_t size);
   int may_contain(const common::ObStoreRowkey& rowkey, bool& is_contain) const;
   bool is_valid() const;
   inline bool is_empty() const
@@ -79,11 +81,11 @@ public:
   {
     return rowkey_column_cnt_;
   }
-  bool could_merge_bloom_filter(const ObBloomFilterCacheValue& bf_cache_value) const;
-  int merge_bloom_filter(const ObBloomFilterCacheValue& bf_cache_value);
+  bool could_merge_bloom_filter(const ObFilterCacheValue& bf_cache_value) const;
+  int merge_bloom_filter(const ObFilterCacheValue& bf_cache_value);
   OB_INLINE const uint8_t* get_bloom_filter_bits() const
   {
-    return bloom_filter_.get_bits();
+    return filter_->get_bits();
   }
   OB_INLINE int32_t get_row_count() const
   {
@@ -91,30 +93,56 @@ public:
   }
   OB_INLINE int64_t get_nhash() const
   {
-    return bloom_filter_.get_nhash();
+    return filter_->get_nhash();
   }
   OB_INLINE int64_t get_nbit() const
   {
-    return bloom_filter_.get_nbit();
+    return filter_->get_nbit();
   }
   OB_INLINE int64_t get_nbytes() const
   {
-    return bloom_filter_.get_nbytes();
+    return filter_->get_nbytes();
   }
-  TO_STRING_KV(K_(version), K_(rowkey_column_cnt), K_(row_count), K_(bloom_filter), K_(is_inited));
+  TO_STRING_KV(K_(version), K_(rowkey_column_cnt), K_(row_count), KP(filter_), K_(is_inited));
   OB_UNIS_VERSION(BLOOM_FILTER_CACHE_VALUE_VERSION);
 
 private:
   typedef common::ObBloomFilter<common::ObStoreRowkey, ObStoreRowkeyHashFunc> BloomFilter;
+  typedef common::ObXorFilter<common::ObStoreRowkey, ObStoreRowkeyHashFunc> XorFilter;
+  typedef common::ObFilter<common::ObStoreRowkey, ObStoreRowkeyHashFunc> Filter;
+  common::ObArenaAllocator allocator_;
   int16_t version_;
   int16_t rowkey_column_cnt_;
   int32_t row_count_;
-  BloomFilter bloom_filter_;
+  Filter *filter_;
   bool is_inited_;
+  bool is_xor_;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObBloomFilterCacheValue);
+  DISALLOW_COPY_AND_ASSIGN(ObFilterCacheValue);
 };
+
+
+class ObFilterBuilder {
+  public:
+    ObFilterBuilder();
+    ~ObFilterBuilder();
+    int init(const int64_t rowkey_column_cnt, const int64_t size, const bool is_xor, ObFilterCacheValue* filter_value);
+    int insert(ObStoreRowkey& rowkey);
+    int build();
+
+  private:
+    ObArenaAllocator allocator_;
+    int64_t size_;
+    bool is_xor_;
+    int64_t key_pos_;
+    bool inited_;
+    ObStoreRowkey* rowkeys_;
+    ObFilterCacheValue* filter_value_;
+
+};
+
+
 
 struct ObEmptyReadCell {
   enum CellState { IDLE = 0, BUILDING = 1 };
@@ -187,14 +215,14 @@ private:
 
 class ObBFCacheKeyHashFunc {
 public:
-  uint64_t operator()(const ObBloomFilterCacheKey& cacheKey, const uint64_t hash)
+  uint64_t operator()(const ObFilterCacheKey& cacheKey, const uint64_t hash)
   {
     UNUSED(hash);
     return cacheKey.hash();
   }
 };
 
-class ObBloomFilterCache : public common::ObKVCache<ObBloomFilterCacheKey, ObBloomFilterCacheValue> {
+class ObBloomFilterCache : public common::ObKVCache<ObFilterCacheKey, ObFilterCacheValue> {
 public:
   ObBloomFilterCache();
   virtual ~ObBloomFilterCache();
@@ -207,7 +235,7 @@ public:
    * @param [in] bloom_filter
    */
   int put_bloom_filter(const uint64_t table_id, const MacroBlockId macro_block_id, const int64_t file_id,
-      const ObBloomFilterCacheValue& bloom_filter, const bool adaptive = false);
+      const ObFilterCacheValue& bloom_filter, const bool adaptive = false);
   /**
    * check if the macro block contains the rowkey
    * @param [in] table_id
@@ -231,7 +259,7 @@ public:
       const ObMacroBlockMetaV2& macro_meta, const int64_t empty_read_prefix,
       const storage::ObITable::TableKey& table_key);
   int get_sstable_bloom_filter(const uint64_t table_id, const MacroBlockId macro_block_id, const int64_t file_id,
-      const uint64_t rowkey_column_number, const ObBloomFilterCacheValue* bloom_filter, ObKVCacheHandle& cache_handle);
+      const uint64_t rowkey_column_number, const ObFilterCacheValue* bloom_filter, ObKVCacheHandle& cache_handle);
   inline int set_bf_cache_miss_count_threshold(const int64_t threshold);
   inline void auto_bf_cache_miss_count_threshold(const int64_t qsize)
   {
@@ -250,7 +278,7 @@ public:
       STORAGE_LOG(INFO, "current bloomfilter task queue size,", K(qsize), K_(bf_cache_miss_count_threshold));
     }
   }
-  int check_need_build(const ObBloomFilterCacheKey& bf_key, bool& need_build);
+  int check_need_build(const ObFilterCacheKey& bf_key, bool& need_build);
   OB_INLINE bool is_valid() const
   {
     return NULL != buckets_;
@@ -327,7 +355,7 @@ public:
   TO_STRING_KV(K_(is_inited), K_(need_build), K_(max_row_count), K_(bf_cache_value));
 
 private:
-  ObBloomFilterCacheValue bf_cache_value_;
+  ObFilterCacheValue bf_cache_value_;
   int64_t max_row_count_;
   bool need_build_;
   bool is_inited_;

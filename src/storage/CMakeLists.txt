@@ -3,7 +3,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_block_index_intermediate.cpp
   blocksstable/ob_block_mark_deletion_maker.cpp
   blocksstable/ob_block_sstable_struct.cpp
-  blocksstable/ob_bloom_filter_cache.cpp
+  blocksstable/ob_filter_cache.cpp
   blocksstable/ob_bloom_filter_data_reader.cpp
   blocksstable/ob_bloom_filter_data_writer.cpp
   blocksstable/ob_column_map.cpp
@@ -400,7 +400,7 @@ ob_server_add_pchs(storage
   blocksstable/ob_storage_cache_suite.h
   blocksstable/ob_micro_block_index_cache.h
   blocksstable/ob_micro_block_cache.h
-  blocksstable/ob_bloom_filter_cache.h
+  blocksstable/ob_filter_cache.h
   blocksstable/ob_block_cache_working_set.h
   ob_storage_struct.h
   ob_partition_split.h

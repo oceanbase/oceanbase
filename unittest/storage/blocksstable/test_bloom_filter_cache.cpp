@@ -13,20 +13,20 @@
 #include <gtest/gtest.h>
 #include <storage/ob_i_table.h>
 #define private public
-#include "storage/blocksstable/ob_bloom_filter_cache.h"
+#include "storage/blocksstable/ob_filter_cache.h"
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 
 namespace oceanbase {
 using namespace common;
 namespace blocksstable {
 
-TEST(ObBloomFilterCache, test_invalid)
+TEST(ObFilterCache, test_invalid)
 {
   int ret = OB_SUCCESS;
-  ObBloomFilterCache bf_cache;
+  ObFilterCache bf_cache;
   ObStoreRowkey rowkey;
   bool may_contain = false;
-  ObBloomFilterCacheValue bf_value;
+  ObFilterCacheValue bf_value;
   uint64_t table_id = combine_id(1, 3001);
   MacroBlockId block_id(3);
   int64_t file_id = 100;
@@ -47,13 +47,13 @@ TEST(ObBloomFilterCache, test_invalid)
   bf_cache.destroy();
 }
 
-TEST(ObBloomFilterCache, test_normal)
+TEST(ObFilterCache, test_normal)
 {
   int ret = OB_SUCCESS;
-  ObBloomFilterCache bf_cache;
+  ObFilterCache bf_cache;
   ObStoreRowkey rowkey;
   bool may_contain = false;
-  ObBloomFilterCacheValue bf_value;
+  ObFilterCacheValue bf_value;
   uint64_t table_id = combine_id(1, 3001);
   MacroBlockId block_id(3);
   int64_t file_id = 100;
@@ -67,11 +67,11 @@ TEST(ObBloomFilterCache, test_normal)
   // test ObMacroBlockMeta bf_flag_
   macro_meta.bf_flag_ = 0;
 
-  // test ObBloomFilterCache may_contain()
+  // test ObFilterCache may_contain()
   ret = bf_cache.init("bf_cache", 1);
   EXPECT_EQ(OB_SUCCESS, ret);
 
-  ret = bf_value.init(2, 1);
+  ret = bf_value.init(2, 1, false);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   ObObj obj[2];
@@ -102,7 +102,7 @@ TEST(ObBloomFilterCache, test_normal)
   EXPECT_EQ(OB_SUCCESS, ret);
 
   ObEmptyReadCell* cell;
-  ObBloomFilterCacheKey bf_key(table_id, block_id, file_id, rowkey.get_obj_cnt());
+  ObFilterCacheKey bf_key(table_id, block_id, file_id, rowkey.get_obj_cnt());
   storage::ObITable::TableKey table_key;
   ret = bf_cache.inc_empty_read(table_id, block_id, file_id, macro_meta, rowkey.get_obj_cnt(), table_key);
   EXPECT_EQ(OB_SUCCESS, ret);
@@ -124,7 +124,7 @@ TEST(ObBloomFilterCache, test_normal)
 TEST(ObEmptyReadCell, test_invalid)
 {
   int ret = OB_SUCCESS;
-  ObBloomFilterCache bf_cache;
+  ObFilterCache bf_cache;
   uint64_t table_id = combine_id(1, 3001);
   MacroBlockId block_id(3);
   int64_t file_id = 100;
@@ -134,7 +134,7 @@ TEST(ObEmptyReadCell, test_invalid)
   ret = bf_cache.init("bf_cache", 1, 7);
   EXPECT_NE(OB_SUCCESS, ret);
 
-  ObBloomFilterCacheKey bf_key(table_id, block_id, file_id, empty_read_prefix);
+  ObFilterCacheKey bf_key(table_id, block_id, file_id, empty_read_prefix);
   ret = bf_cache.get_cell(bf_key.hash(), cell);
   EXPECT_NE(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL == cell);
@@ -149,7 +149,7 @@ TEST(ObEmptyReadCell, test_normal)
   const int64_t max_cache_size = 1024 * 1024 * 512;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   ObKVGlobalCache::get_instance().init(bucket_num, max_cache_size, block_size);
-  ObBloomFilterCache bf_cache;
+  ObFilterCache bf_cache;
   ret = bf_cache.init("bf_cache", 1);
   EXPECT_EQ(OB_SUCCESS, ret);
 
@@ -162,7 +162,7 @@ TEST(ObEmptyReadCell, test_normal)
   uint64_t table_id = combine_id(1, 3001);
   MacroBlockId block_id(3);
   int64_t file_id = 100;
-  ObBloomFilterCacheKey bf_key(table_id, block_id, file_id, rowkey.get_obj_cnt());
+  ObFilterCacheKey bf_key(table_id, block_id, file_id, rowkey.get_obj_cnt());
   ObEmptyReadCell* cell;
 
   bf_cache.get_cell(bf_key.hash(), cell);

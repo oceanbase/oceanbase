@@ -38,14 +38,14 @@ protected:
   int prepare_rowkey(ObStoreRowkey& rowkey, const int64_t rowkey_column_cnt = TEST_ROWKEY_COLUMN_CNT);
   void prepare_schema();
   int prepare_block_ctx(const MacroBlockId& block_id, ObMacroBlockCtx& bf_block_ctx);
-  int prepare_bloom_filter_cache(ObBloomFilterCacheValue& bf_cache_value,
+  int prepare_bloom_filter_cache(ObFilterCacheValue& bf_cache_value,
       const int64_t rowkey_column_cnt = TEST_ROWKEY_COLUMN_CNT, const int64_t row_count = TEST_ROW_COUNT,
       const int64_t max_row_count = TEST_ROW_COUNT * 10);
   int prepare_bloom_filter_cache(ObBloomFilterDataWriter& bf_writer, const int64_t row_count = TEST_ROW_COUNT);
   int check_bloom_filter_cache(
-      const ObBloomFilterCacheValue& bf_cache_value, const ObBloomFilterCacheValue& bf_cache_value2);
-  int check_bloom_filter_cache(const ObBloomFilterCacheValue& new_bf_cache_value,
-      const ObBloomFilterCacheValue& bf_cache_value, const ObBloomFilterCacheValue& bf_cache_value2);
+      const ObFilterCacheValue& bf_cache_value, const ObFilterCacheValue& bf_cache_value2);
+  int check_bloom_filter_cache(const ObFilterCacheValue& new_bf_cache_value,
+      const ObFilterCacheValue& bf_cache_value, const ObFilterCacheValue& bf_cache_value2);
 
 protected:
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
@@ -147,13 +147,13 @@ int TestBloomFilterDataReaderWriter::prepare_rowkey(ObStoreRowkey& rowkey, const
   return ret;
 }
 
-int TestBloomFilterDataReaderWriter::prepare_bloom_filter_cache(ObBloomFilterCacheValue& bf_cache_value,
+int TestBloomFilterDataReaderWriter::prepare_bloom_filter_cache(ObFilterCacheValue& bf_cache_value,
     const int64_t rowkey_column_cnt, const int64_t row_count, const int64_t max_row_count)
 {
   int ret = OB_SUCCESS;
 
   bf_cache_value.reset();
-  if (OB_FAIL(bf_cache_value.init(rowkey_column_cnt, max_row_count))) {
+  if (OB_FAIL(bf_cache_value.init(rowkey_column_cnt, max_row_count, false))) {
     STORAGE_LOG(WARN, "Failed to init bloomfilter cache value", K(ret));
   } else {
     ObStoreRowkey rowkey;
@@ -204,7 +204,7 @@ int TestBloomFilterDataReaderWriter::prepare_block_ctx(const MacroBlockId& block
 }
 
 int TestBloomFilterDataReaderWriter::check_bloom_filter_cache(
-    const ObBloomFilterCacheValue& bf_cache_value, const ObBloomFilterCacheValue& bf_cache_value2)
+    const ObFilterCacheValue& bf_cache_value, const ObFilterCacheValue& bf_cache_value2)
 {
   int ret = OB_SUCCESS;
 
@@ -233,8 +233,8 @@ int TestBloomFilterDataReaderWriter::check_bloom_filter_cache(
   return ret;
 }
 
-int TestBloomFilterDataReaderWriter::check_bloom_filter_cache(const ObBloomFilterCacheValue& new_bf_cache_value,
-    const ObBloomFilterCacheValue& bf_cache_value, const ObBloomFilterCacheValue& bf_cache_value2)
+int TestBloomFilterDataReaderWriter::check_bloom_filter_cache(const ObFilterCacheValue& new_bf_cache_value,
+    const ObFilterCacheValue& bf_cache_value, const ObFilterCacheValue& bf_cache_value2)
 {
   int ret = OB_SUCCESS;
 
@@ -293,8 +293,8 @@ TEST_F(TestBloomFilterDataReaderWriter, test_cache_value_serial)
   int64_t macro_block_size = get_file_system().get_macro_block_size();
   int64_t pos = 0;
 
-  ObBloomFilterCacheValue bf_cache_value;
-  ObBloomFilterCacheValue bf_cache_value2;
+  ObFilterCacheValue bf_cache_value;
+  ObFilterCacheValue bf_cache_value2;
 
   ret = prepare_bloom_filter_cache(bf_cache_value);
   EXPECT_EQ(OB_SUCCESS, ret);
@@ -317,9 +317,9 @@ TEST_F(TestBloomFilterDataReaderWriter, test_cache_value_merge)
 {
   int ret = OB_SUCCESS;
 
-  ObBloomFilterCacheValue bf_cache_value;
-  ObBloomFilterCacheValue bf_cache_value2;
-  ObBloomFilterCacheValue tmp_bf_cache_value;
+  ObFilterCacheValue bf_cache_value;
+  ObFilterCacheValue bf_cache_value2;
+  ObFilterCacheValue tmp_bf_cache_value;
 
   ret = prepare_bloom_filter_cache(bf_cache_value);
   EXPECT_EQ(OB_SUCCESS, ret);
@@ -347,7 +347,7 @@ TEST_F(TestBloomFilterDataReaderWriter, test_writer)
   int64_t data_version = 1;
   ObStoreRowkey rowkey;
   ObArray<MacroBlockId> macro_blocks;
-  ObBloomFilterCacheValue bf_cache_value;
+  ObFilterCacheValue bf_cache_value;
 
   ObPGKey pg_key(combine_id(1, table_schema_.get_tablegroup_id()), 1, table_schema_.get_partition_cnt());
   ObIPartitionGroupGuard pg_guard;
@@ -418,7 +418,7 @@ TEST_F(TestBloomFilterDataReaderWriter, test_writer)
   ObDataStoreDesc desc;
   int64_t data_version = 1;
   ObStoreRowkey rowkey;
-  ObBloomFilterCacheValue bf_cache_value;
+  ObFilterCacheValue bf_cache_value;
 
   ret = desc.init(table_schema_, data_version, NULL, 1,
       MINOR_MERGE, false, false);

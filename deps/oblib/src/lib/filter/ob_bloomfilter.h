@@ -21,22 +21,29 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/utility/serialization.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/filter/ob_filter.h"
 
 namespace oceanbase {
 namespace common {
 template <class T, class HashFunc>
-class ObBloomFilter {
+class ObBloomFilter : public ObFilter<T, HashFunc>{
 public:
   ObBloomFilter();
   ~ObBloomFilter();
+  int init(int64_t element_count);
   int init(int64_t element_count, double false_positive_prob = BLOOM_FILTER_FALSE_POSITIVE_PROB);
   void destroy();
   void clear();
+  int deep_copy(const ObFilter<T, HashFunc>& other);
+  int deep_copy(const ObFilter<T, HashFunc>& other, char* buffer);
   int deep_copy(const ObBloomFilter<T, HashFunc>& other);
   int deep_copy(const ObBloomFilter<T, HashFunc>& other, char* buf);
   int64_t get_deep_copy_size() const;
   int insert(const T& element);
   int insert_hash(const uint32_t key_hash);
+  int insert_all(const T* keys, const int64_t size);
+  bool could_merge(const ObFilter<T, HashFunc>& other);
+  int merge(const ObFilter<T, HashFunc>& other);
   int may_contain(const T& element, bool& is_contain) const;
   int64_t calc_nbyte(const int64_t nbit) const;
   bool is_valid() const
@@ -88,6 +95,19 @@ ObBloomFilter<T, HashFunc>::~ObBloomFilter()
   destroy();
 }
 
+
+template <class T, class HashFunc>
+int ObBloomFilter<T, HashFunc>::deep_copy(const ObFilter<T, HashFunc>& other) {
+  const ObBloomFilter<T, HashFunc>& filter = static_cast<const ObBloomFilter<T, HashFunc>&>(other);
+  return deep_copy(filter);
+}
+
+template <class T, class HashFunc>
+int ObBloomFilter<T, HashFunc>::deep_copy(const ObFilter<T, HashFunc>& other, char* buffer){
+  const ObBloomFilter<T, HashFunc>& filter = static_cast<const ObBloomFilter<T, HashFunc>&>(other);
+  return deep_copy(filter, buffer);
+}
+
 template <class T, class HashFunc>
 int ObBloomFilter<T, HashFunc>::deep_copy(const ObBloomFilter<T, HashFunc>& other)
 {
@@ -136,6 +156,11 @@ template <class T, class HashFunc>
 int64_t ObBloomFilter<T, HashFunc>::calc_nbyte(const int64_t nbit) const
 {
   return (nbit / CHAR_BIT + (nbit % CHAR_BIT ? 1 : 0));
+}
+
+template <class T, class HashFunc>
+int ObBloomFilter<T, HashFunc>::init(const int64_t element_count) {
+  return init(element_count, BLOOM_FILTER_FALSE_POSITIVE_PROB);
 }
 
 template <class T, class HashFunc>
@@ -226,6 +251,18 @@ int ObBloomFilter<T, HashFunc>::insert_hash(const uint32_t key_hash)
 }
 
 template <class T, class HashFunc>
+int ObBloomFilter<T, HashFunc>::insert_all(const T* keys, const int64_t size) {
+  int ret = OB_SUCCESS;
+  for (size_t i = 0; i < size; i++) {
+    if (OB_FAIL(insert(keys[i]))){
+      LIB_LOG(WARN, "Failed to insert all elements to bloom filter", K(ret));
+      break;
+    }
+  }
+  return ret;
+}
+
+template <class T, class HashFunc>
 int ObBloomFilter<T, HashFunc>::may_contain(const T& element, bool& is_contain) const
 {
   int ret = OB_SUCCESS;
@@ -243,6 +280,40 @@ int ObBloomFilter<T, HashFunc>::may_contain(const T& element, bool& is_contain) 
         break;
       }
       bit_pos = (bit_pos + delta) < nbit_ ? bit_pos + delta : bit_pos + delta - nbit_;
+    }
+  }
+  return ret;
+}
+
+template <class T, class HashFunc>
+bool ObBloomFilter<T, HashFunc>::could_merge(const ObFilter<T, HashFunc>& other)
+{
+  const ObBloomFilter<T, HashFunc>& filter = static_cast<const ObBloomFilter<T, HashFunc>&>(other);
+  int bret = false;
+  if(filter.get_nhash() != get_nhash() || filter.get_nbit() != get_nbit()) {
+  } else {
+    bret = true;
+  }
+  return bret;
+}
+
+template <class T, class HashFunc>
+int ObBloomFilter<T, HashFunc>::merge(const ObFilter<T, HashFunc>& other)
+{
+  int ret = OB_SUCCESS;
+  
+  if (OB_UNLIKELY(!could_merge(other))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN,
+        "Unexpected bloomfilter to merge",
+        K(ret));
+  } else {
+    const ObBloomFilter<T, HashFunc>& filter = static_cast<const ObBloomFilter<T, HashFunc>&>(other);
+    int64_t num_bytes = get_nbytes();
+    const uint8_t* merge_bits = filter.get_bits();
+    uint8_t* dest_bits = get_bits();
+    for (int64_t i = 0; i < num_bytes; i++) {
+      dest_bits[i] |= merge_bits[i];
     }
   }
   return ret;

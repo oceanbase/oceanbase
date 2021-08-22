@@ -161,7 +161,7 @@ ObBloomFilterDataReader::~ObBloomFilterDataReader()
 {}
 
 int ObBloomFilterDataReader::read_bloom_filter(
-    const ObMacroBlockCtx& macro_block_ctx, ObStorageFile* pg_file, ObBloomFilterCacheValue& bf_cache_value)
+    const ObMacroBlockCtx& macro_block_ctx, ObStorageFile* pg_file, ObFilterCacheValue& bf_cache_value)
 {
   int ret = OB_SUCCESS;
   const char* bf_buf = NULL;

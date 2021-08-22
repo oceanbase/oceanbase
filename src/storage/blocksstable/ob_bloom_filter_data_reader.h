@@ -49,7 +49,7 @@ public:
   void reset();
   void reuse();
   int read_bloom_filter(
-      const ObMacroBlockCtx& macro_block_ctx, ObStorageFile* pg_file, ObBloomFilterCacheValue& bf_cache_value);
+      const ObMacroBlockCtx& macro_block_ctx, ObStorageFile* pg_file, ObFilterCacheValue& bf_cache_value);
 
 private:
   ObBloomFilterMacroBlockReader bf_macro_reader_;
