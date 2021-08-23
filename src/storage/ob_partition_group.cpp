@@ -4229,8 +4229,10 @@ int ObPartitionGroup::check_is_from_restore(bool& is_from_restore) const
   int ret = OB_SUCCESS;
 
   uint64_t last_restore_log_id = OB_INVALID_ID;
+  int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
   int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
-  if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id, restore_snapshot_version))) {
+  if (OB_FAIL(
+          pg_storage_.get_restore_replay_info(last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
     STORAGE_LOG(WARN, "fail to get_restore_replay_info", K(ret), K(pkey_));
   } else {
     is_from_restore = (OB_INVALID_ID != last_restore_log_id);
@@ -5990,24 +5992,29 @@ int ObPartitionGroup::check_can_physical_flashback(const int64_t flashback_scn)
   return ret;
 }
 
-int ObPartitionGroup::clear_trans_after_restore_log(const uint64_t last_restore_log_id)
+int ObPartitionGroup::clear_trans_after_restore_log(
+    const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
 
   ObPartitionGroupLockGuard guard(lock_, PGLOCKTRANS | PGLOCKSTORAGE, 0);
   if (OB_SYS_TENANT_ID == pkey_.get_tenant_id()) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "sys partitions do not do physical restore", K(ret), K(pkey_));
+    STORAGE_LOG(ERROR, "sys partitions do not do physical restore", K(ret), K(pkey_));
   } else if (OB_ISNULL(txs_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "txs_ is NULL", KR(ret), K_(pkey));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id) ||
+             OB_UNLIKELY(OB_INVALID_TIMESTAMP == last_restore_log_ts)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid last_restore_log_id", KR(ret), K_(pkey), K(last_restore_log_id));
-  } else if (OB_FAIL(pg_storage_.set_last_restore_log_id(last_restore_log_id))) {
-    CLOG_LOG(WARN, "failed to set_last_restore_log_id", K(ret), K_(pkey), K(last_restore_log_id));
-  } else if (OB_FAIL(txs_->set_last_restore_log_id(pkey_, last_restore_log_id))) {
-    STORAGE_LOG(WARN, "failed to set_last_restore_log_id", KR(ret), K_(pkey), K(last_restore_log_id));
+    STORAGE_LOG(
+        WARN, "invalid last_restore_log_info", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
+  } else if (OB_FAIL(pg_storage_.set_last_restore_log_info(last_restore_log_id, last_restore_log_ts))) {
+    STORAGE_LOG(
+        WARN, "failed to set_last_restore_log_info", K(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
+  } else if (OB_FAIL(txs_->set_last_restore_log_ts(pkey_, last_restore_log_ts))) {
+    STORAGE_LOG(
+        WARN, "failed to set_last_restore_log_ts", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else {
     ATOMIC_SET(&has_clear_trans_after_restore_, true);
   }
@@ -6023,7 +6030,9 @@ int ObPartitionGroup::get_base_storage_info_(common::ObBaseStorageInfo& info)
   } else {
     int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
     uint64_t last_restore_log_id = OB_INVALID_ID;
-    if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id, restore_snapshot_version))) {
+    int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
+    if (OB_FAIL(
+            pg_storage_.get_restore_replay_info(last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
       STORAGE_LOG(WARN, "failed to get_restore_replay_info", KR(ret), K(pkey_));
     } else if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
       // The last_replay_log_id of recovered partition needs to be adjusted.

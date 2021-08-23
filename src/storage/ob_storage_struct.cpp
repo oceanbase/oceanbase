@@ -178,7 +178,7 @@ OB_SERIALIZE_MEMBER(ObPGPartitionStoreMeta, pkey_, report_status_, multi_version
 OB_SERIALIZE_MEMBER(ObPartitionGroupMeta, pg_key_, is_restore_, replica_type_, replica_property_, saved_split_state_,
     migrate_status_, migrate_timestamp_, storage_info_, split_info_, partitions_, report_status_,
     create_schema_version_, ddl_seq_num_, create_timestamp_, create_frozen_version_, last_restore_log_id_,
-    restore_snapshot_version_);
+    restore_snapshot_version_, last_restore_log_ts_);
 
 ObPartitionGroupMeta::ObPartitionGroupMeta()
 {
@@ -216,6 +216,7 @@ void ObPartitionGroupMeta::reset()
   create_frozen_version_ = 0;
   last_restore_log_id_ = OB_INVALID_ID;
   restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
+  last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObPartitionGroupMeta::deep_copy(const ObPartitionGroupMeta& meta)
@@ -248,6 +249,7 @@ int ObPartitionGroupMeta::deep_copy(const ObPartitionGroupMeta& meta)
     create_frozen_version_ = meta.create_frozen_version_;
     last_restore_log_id_ = meta.last_restore_log_id_;
     restore_snapshot_version_ = meta.restore_snapshot_version_;
+    last_restore_log_ts_ = meta.last_restore_log_ts_;
   }
 
   return ret;
@@ -642,6 +644,7 @@ ObCreatePGParam::ObCreatePGParam()
       file_mgr_(nullptr),
       create_frozen_version_(0),
       last_restore_log_id_(OB_INVALID_ID),
+      last_restore_log_ts_(OB_INVALID_TIMESTAMP),
       restore_snapshot_version_(OB_INVALID_TIMESTAMP),
       migrate_status_(ObMigrateStatus::OB_MIGRATE_STATUS_NONE)
 {}
@@ -661,6 +664,7 @@ void ObCreatePGParam::reset()
   file_mgr_ = nullptr;
   create_frozen_version_ = 0;
   last_restore_log_id_ = OB_INVALID_ID;
+  last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
   restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
   migrate_status_ = ObMigrateStatus::OB_MIGRATE_STATUS_NONE;
 }
@@ -695,6 +699,7 @@ int ObCreatePGParam::assign(const ObCreatePGParam& param)
     file_mgr_ = param.file_mgr_;
     create_frozen_version_ = param.create_frozen_version_;
     last_restore_log_id_ = param.last_restore_log_id_;
+    last_restore_log_ts_ = param.last_restore_log_ts_;
     restore_snapshot_version_ = param.restore_snapshot_version_;
     migrate_status_ = param.migrate_status_;
   }

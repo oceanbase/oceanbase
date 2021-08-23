@@ -920,6 +920,7 @@ int ObMigratePrepareTask::create_new_partition(const ObAddr& src_server, ObRepli
 
     param.create_frozen_version_ = ctx_->pg_meta_.create_frozen_version_;
     param.last_restore_log_id_ = ctx_->pg_meta_.last_restore_log_id_;
+    param.last_restore_log_ts_ = ctx_->pg_meta_.last_restore_log_ts_;
     param.restore_snapshot_version_ = ctx_->pg_meta_.restore_snapshot_version_;
     if (NULL == (pls = partition->get_log_service())) {
       ret = OB_ERR_UNEXPECTED;
@@ -5135,6 +5136,7 @@ int ObMigrateDag::online_for_rebuild()
     ObIPartitionGroup* partition = ctx_->get_partition();
     int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
     uint64_t last_restore_log_id = OB_INVALID_ID;
+    int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
     if (NULL == partition) {
       ret = OB_ERR_SYS;
       LOG_ERROR("partition must not null", K(ret), K(*ctx_));
@@ -5147,18 +5149,19 @@ int ObMigrateDag::online_for_rebuild()
     } else if (OB_FAIL(partition->get_log_service()->migrate_set_base_storage_info(clog_info))) {
       STORAGE_LOG(WARN, "reset clog start point fail", K(ret), K(info));
     } else if (OB_FAIL(partition->get_pg_storage().get_restore_replay_info(
-                   last_restore_log_id, restore_snapshot_version))) {
+                   last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
       LOG_WARN("failed to get_restore_replay_info", KR(ret), "pkey", partition->get_partition_key());
     } else if (OB_FAIL(MIGRATOR.get_partition_service()->online_partition(ctx_->replica_op_arg_.key_,
                    data_info.get_publish_version(),
                    restore_snapshot_version,
-                   last_restore_log_id))) {
+                   last_restore_log_ts))) {
       STORAGE_LOG(WARN,
           "online partition failed",
           K(ret),
           K(info),
           K(restore_snapshot_version),
           K(last_restore_log_id),
+          K(last_restore_log_ts),
           K(*ctx_));
     } else if (OB_FAIL(ctx_->get_partition()->get_log_service()->restore_replayed_log(clog_info))) {
       STORAGE_LOG(WARN, "restore and replay log failed.", K(ret), K_(ctx_->replica_op_arg_.key), K(info));
@@ -7859,7 +7862,7 @@ int ObMigrateUtil::enable_replay_with_old_partition(ObMigrateCtx& ctx)
     ObBaseStorageInfo& clog_info = meta.storage_info_.get_clog_info();
     ObDataStorageInfo& data_info = meta.storage_info_.get_data_info();
     int64_t restore_snapshot_version = meta.restore_snapshot_version_;
-    uint64_t last_restore_log_id = meta.last_restore_log_id_;
+    int64_t last_restore_log_ts = meta.last_restore_log_ts_;
 
     const int64_t local_last_replay_log_id = partition->get_log_service()->get_next_index_log_id() - 1;
     const int64_t src_last_replay_log_id =
@@ -7885,7 +7888,7 @@ int ObMigrateUtil::enable_replay_with_old_partition(ObMigrateCtx& ctx)
         } else if (OB_FAIL(MIGRATOR.get_partition_service()->online_partition(ctx.replica_op_arg_.key_,
                        data_info.get_publish_version(),
                        restore_snapshot_version,
-                       last_restore_log_id))) {
+                       last_restore_log_ts))) {
           STORAGE_LOG(WARN, "online partition failed", K(ctx.replica_op_arg_), K(meta), K(ret));
         } else if (OB_PERMANENT_OFFLINE_REPLICA == ctx.replica_state_ &&
                    F_WORKING != ctx.get_partition()->get_partition_state() &&

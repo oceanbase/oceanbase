@@ -421,7 +421,7 @@ public:
 
   int check_can_physical_flashback(const int64_t flashback_scn);
 
-  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id);
+  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   virtual int reset_for_replay();
 
   virtual int inc_pending_batch_commit_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts);

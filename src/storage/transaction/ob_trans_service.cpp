@@ -9410,7 +9410,7 @@ int ObTransService::set_restore_snapshot_version(const ObPartitionKey& pkey, con
   return ret;
 }
 
-int ObTransService::set_last_restore_log_id(const ObPartitionKey& pkey, const uint64_t last_restore_log_id)
+int ObTransService::set_last_restore_log_ts(const ObPartitionKey &pkey, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -9420,8 +9420,8 @@ int ObTransService::set_last_restore_log_id(const ObPartitionKey& pkey, const ui
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(part_trans_ctx_mgr_.set_last_restore_log_id(pkey, last_restore_log_id))) {
-    TRANS_LOG(WARN, "set last restore log id error", K(ret), K(pkey), K(last_restore_log_id));
+  } else if (OB_FAIL(part_trans_ctx_mgr_.set_last_restore_log_ts(pkey, last_restore_log_ts))) {
+    TRANS_LOG(WARN, "set last restore log ts error", K(ret), K(pkey), K(last_restore_log_ts));
   } else {
     // do nothing
   }
@@ -9430,7 +9430,7 @@ int ObTransService::set_last_restore_log_id(const ObPartitionKey& pkey, const ui
 }
 
 int ObTransService::update_restore_replay_info(
-    const ObPartitionKey& pkey, const int64_t restore_snapshot_version, const uint64_t last_restore_log_id)
+    const ObPartitionKey &pkey, const int64_t restore_snapshot_version, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -9441,13 +9441,13 @@ int ObTransService::update_restore_replay_info(
     TRANS_LOG(WARN, "ObTransService is not running");
     ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(
-                 part_trans_ctx_mgr_.update_restore_replay_info(pkey, restore_snapshot_version, last_restore_log_id))) {
+                 part_trans_ctx_mgr_.update_restore_replay_info(pkey, restore_snapshot_version, last_restore_log_ts))) {
     TRANS_LOG(WARN,
         "failed to update_restore_replay_info",
         K(ret),
         K(pkey),
         K(restore_snapshot_version),
-        K(last_restore_log_id));
+        K(last_restore_log_ts));
   } else {
     // do nothing
   }

@@ -2389,11 +2389,12 @@ int ObLogSlidingWindow::restore_leader_try_confirm_log()
 {
   int ret = OB_SUCCESS;
   uint64_t last_restore_log_id = OB_INVALID_ID;
+  int64_t unused_log_ts = OB_INVALID_TIMESTAMP;
   int64_t unused_version = OB_INVALID_TIMESTAMP;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(
-                 partition_service_->get_restore_replay_info(partition_key_, last_restore_log_id, unused_version))) {
+  } else if (OB_FAIL(partition_service_->get_restore_replay_info(
+                 partition_key_, last_restore_log_id, unused_log_ts, unused_version))) {
     CLOG_LOG(WARN, "get_restore_replay_info failed", K_(partition_key), K(ret));
   } else if (OB_INVALID_ID == last_restore_log_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -2793,6 +2794,11 @@ int ObLogSlidingWindow::get_next_replay_log_timestamp(int64_t& next_replay_log_t
   }
 
   return ret;
+}
+
+void ObLogSlidingWindow::get_last_replay_log_id_and_ts(uint64_t &last_replay_log_id, int64_t &last_replay_log_ts)
+{
+  last_replay_log_.get(last_replay_log_id, last_replay_log_ts);
 }
 
 int ObLogSlidingWindow::set_log_flushed_succ(const uint64_t log_id, const ObProposalID proposal_id,

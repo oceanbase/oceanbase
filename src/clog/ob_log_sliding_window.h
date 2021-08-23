@@ -458,6 +458,7 @@ public:
   {
     return last_replay_log_.get_log_id();
   }
+  void get_last_replay_log_id_and_ts(uint64_t &last_replay_log_id, int64_t &last_replay_log_ts);
   void set_saved_accum_checksum(const int64_t accum_checksum)
   {
     saved_accum_checksum_ = accum_checksum;

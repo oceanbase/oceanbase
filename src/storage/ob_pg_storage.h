@@ -279,8 +279,8 @@ public:
   int add_sstable_for_merge(const ObPartitionKey& pkey, storage::ObSSTable* table,
       const int64_t max_kept_major_version_number, ObSSTable* complement_minor_sstable = nullptr);
   int set_restore_flag(const int16_t restore_flag, const int64_t restore_snapshot_version);
-  int set_last_restore_log_id(const int64_t last_restore_log_id);
-  int get_restore_replay_info(uint64_t& last_restore_log_id, int64_t& restore_snapshot_version);
+  int set_last_restore_log_info(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
+  int get_restore_replay_info(uint64_t& last_restore_log_id, int64_t& last_restore_log_ts, int64_t& restore_snapshot_version);
   int set_partition_removed(const ObPartitionKey& pkey);
   int get_all_pg_partition_keys_with_lock(common::ObPartitionArray& pkeys, const bool include_trans_table = false);
   int clear_all_memtables();

@@ -519,7 +519,7 @@ public:
   virtual int check_can_physical_flashback(const int64_t flashback_scn) = 0;
   virtual int register_txs_change_leader(const common::ObAddr& server, ObTsWindows& changing_leader_windows) = 0;
   virtual int check_physical_split(bool& finished) = 0;
-  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id) = 0;
+  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts) = 0;
   virtual int reset_for_replay() = 0;
   virtual int inc_pending_batch_commit_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) = 0;
   virtual int inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) = 0;

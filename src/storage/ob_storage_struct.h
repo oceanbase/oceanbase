@@ -256,6 +256,7 @@ struct ObPartitionGroupMeta {
   int64_t create_frozen_version_;
   uint64_t last_restore_log_id_;
   int64_t restore_snapshot_version_;
+  int64_t last_restore_log_ts_;
 
   ObPartitionGroupMeta();
   virtual ~ObPartitionGroupMeta();
@@ -276,7 +277,7 @@ struct ObPartitionGroupMeta {
   TO_STRING_KV(K_(pg_key), K_(is_restore), K_(replica_type), K_(replica_property), K_(saved_split_state),
       K_(migrate_status), K_(migrate_timestamp), K_(storage_info), K_(report_status), K_(create_schema_version),
       K_(split_info), K_(partitions), K_(ddl_seq_num), K_(create_timestamp), K_(create_frozen_version),
-      K_(last_restore_log_id), K_(restore_snapshot_version));
+      K_(last_restore_log_id), K_(last_restore_log_ts), K_(restore_snapshot_version));
 
   OB_UNIS_VERSION_V(PARTITION_GROUP_META_VERSION);
 
@@ -381,8 +382,8 @@ public:
   int set_storage_info(const ObSavedStorageInfoV2& info);
   int set_split_info(const ObPartitionSplitInfo& split_info);
   TO_STRING_KV(K_(info), K_(is_restore), K_(replica_type), K_(replica_property), K_(data_version), K_(write_slog),
-      K_(split_info), K_(split_state), K_(create_frozen_version), K_(last_restore_log_id), K_(restore_snapshot_version),
-      K_(migrate_status));
+      K_(split_info), K_(split_state), K_(create_frozen_version), K_(last_restore_log_id), K_(last_restore_log_ts),
+      K_(restore_snapshot_version), K_(migrate_status));
 
   ObSavedStorageInfoV2 info_;
   int64_t is_restore_;  // ObReplicaRestoreStatus
@@ -397,6 +398,7 @@ public:
   ObBaseFileMgr* file_mgr_;
   int64_t create_frozen_version_;
   uint64_t last_restore_log_id_;
+  int64_t last_restore_log_ts_;
   int64_t restore_snapshot_version_;
   ObMigrateStatus migrate_status_;
   DISALLOW_COPY_AND_ASSIGN(ObCreatePGParam);
