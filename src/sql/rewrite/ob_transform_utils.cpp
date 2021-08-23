@@ -7292,6 +7292,11 @@ int ObTransformUtils::create_view_with_from_items(ObDMLStmt* stmt, ObTransformer
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(add_new_table_item(ctx, stmt, view, view_table))) {
     LOG_WARN("failed to add table items", K(ret));
+  } else if (OB_ISNULL(view_table->ref_query_)) {
+    LOG_WARN("get unexpected ref query", K(ret));
+  } else if (select_exprs.empty() &&
+             OB_FAIL(ObTransformUtils::create_dummy_select_item(*view_table->ref_query_, ctx))) {
+    LOG_WARN("failed to create dummy select item", K(ret));           
   } else if (OB_FAIL(create_columns_for_view(ctx, *view_table, stmt, select_exprs, column_exprs))) {
     LOG_WARN("failed to create column items", K(ret));
   } else if (OB_FAIL(view->adjust_subquery_list())) {
