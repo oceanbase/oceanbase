@@ -82,6 +82,7 @@ public:
   {
     return bits_;
   }
+  TO_STRING_KV(K_(nbit), KP_(bits));
   INLINE_NEED_SERIALIZE_AND_DESERIALIZE;
 
 private:
@@ -371,7 +372,8 @@ template <class T, class HashFunc>
 bool ObXorFilter<T, HashFunc>::could_merge(const ObFilter<T, HashFunc>& other)
 {
   // xor filter doesn't support merge
-  LIB_LOG(WARN, "xor filter does not support merge", K(other));
+  (void)other;
+  LIB_LOG(WARN, "xor filter does not support merge");
   return false;
 }
 
@@ -381,7 +383,8 @@ int ObXorFilter<T, HashFunc>::merge(const ObFilter<T, HashFunc>& other)
   // xor filter doesn't support merge
   int ret = OB_NOT_SUPPORTED;
 
-  LIB_LOG(WARN, "xor filter does not support merge, ", K(ret), K(other));
+  (void)other;
+  LIB_LOG(WARN, "xor filter does not support merge, ", K(ret));
   return ret;
 }
 
