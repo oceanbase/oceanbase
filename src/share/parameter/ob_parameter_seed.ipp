@@ -103,11 +103,11 @@ DEF_TIME(trace_log_sampling_interval, OB_CLUSTER_PARAMETER, "10ms", "[0ms,]",
     "logging info regarding 'slow query' and 'white list' will be printed out. "
     "Range: [0ms,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "100ms", "[1ms,]",
+DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
     "the threshold of execution time (in milliseconds) of a query beyond "
     "which it is considered to be a \\'slow query\\'. Range: [1ms,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "True", "enable one phase commit optimization",
+DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "False", "enable one phase commit optimization",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_pg, OB_CLUSTER_PARAMETER, "False", "open partition group",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -697,7 +697,7 @@ DEF_TIME(trx_2pc_retry_interval, OB_CLUSTER_PARAMETER, "100ms", "[1ms, 5000ms]",
     "the time interval between the retries in case of failure "
     "during a transaction\\'s two-phase commit phase. Range: [1ms,5000ms]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(clog_sync_time_warn_threshold, OB_CLUSTER_PARAMETER, "100ms", "[1ms, 10000ms]",
+DEF_TIME(clog_sync_time_warn_threshold, OB_CLUSTER_PARAMETER, "1s", "[1ms, 10000ms]",
     "the time given to the commit log synchronization between a leader and its followers "
     "before a \\'warning\\' message is printed in the log file.  Range: [1ms,1000ms]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -933,7 +933,7 @@ DEF_INT(restore_concurrency, OB_CLUSTER_PARAMETER, "0", "[0,512]",
 DEF_INT(merge_stat_sampling_ratio, OB_CLUSTER_PARAMETER, "100", "[0,100]",
     "column stats sampling ratio daily merge. Range: [0,100] in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "5", "[0, 65535]",
+DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "100", "[0, 65535]",
     "specifies how many minor freezes should be triggered between two major freezes. Range: [0, 65535]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_CLUSTER_PARAMETER, "2", "[0,16]", "minor_compact_trigger, Range: [0,16] in integer",
