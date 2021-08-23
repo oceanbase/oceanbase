@@ -2146,18 +2146,13 @@ int ObLogEngine::check_need_freeze_based_on_used_space_(bool& is_need) const
   return ret;
 }
 
-int ObLogEngine::check_need_block_log(bool& is_need) const
+int ObLogEngine::check_need_block_log(const file_id_t cur_file_id, bool &is_need) const
 {
   int ret = OB_SUCCESS;
   is_need = false;
-  const uint32_t clog_max_file_id = clog_env_.get_max_file_id();
-  const uint32_t clog_min_file_id = clog_env_.get_min_file_id();
-  const uint32_t clog_min_using_file_id = clog_env_.get_min_using_file_id();
-
-  // clog disk has been used
-  if (clog_min_file_id > 1) {
-    is_need = (clog_max_file_id - clog_min_using_file_id) * 100LL >
-              (clog_max_file_id - clog_min_file_id) * RESERVED_DISK_USAGE_PERFERT;
+  uint32_t clog_min_using_file_id = get_clog_min_using_file_id();
+  if (cur_file_id == clog_min_using_file_id) {
+    ret = check_need_freeze_based_on_used_space_(is_need);
   }
   return ret;
 }

@@ -256,6 +256,11 @@ int ObPartitionLogService::init(ObILogEngine* log_engine, ObLogReplayEngineWrapp
     archive_mgr_ = archive_mgr;
     max_flushed_ilog_id_ = 0;
     scan_confirmed_log_cnt_ = 0;
+
+    // priority of log replica include encrypted log replica should be initialize with UINT64_MAX,
+    // while other replica types with 0.
+    const uint64_t zone_priority = ObReplicaTypeCheck::is_log_replica(replica_type) ? UINT64_MAX : 0;
+    ATOMIC_STORE(&zone_priority_, zone_priority);
     is_inited_ = true;
     election_has_removed_ = false;
   }
@@ -4144,7 +4149,7 @@ void ObPartitionLogService::destroy()
     self_.reset();
     // checksum_.destroy()
     saved_base_storage_info_.reset();
-    zone_priority_ = UINT64_MAX;
+    zone_priority_ = 0;
     is_candidate_ = false;
     free_cursor_array_cache_();
     free_broadcast_info_mgr_();
@@ -6386,7 +6391,9 @@ int64_t ObPartitionLogService::get_zone_priority() const
 
 void ObPartitionLogService::set_zone_priority(const uint64_t zone_priority)
 {
-  ATOMIC_STORE(&zone_priority_, zone_priority);
+  const uint64_t final_zone_priority =
+      ObReplicaTypeCheck::is_log_replica(mm_.get_replica_type()) ? UINT64_MAX : zone_priority;
+  ATOMIC_STORE(&zone_priority_, final_zone_priority);
 }
 
 int ObPartitionLogService::set_region(const common::ObRegion& region)
@@ -6672,6 +6679,9 @@ int ObPartitionLogService::set_replica_type(const enum ObReplicaType replica_typ
       free_broadcast_info_mgr_();
     }
   } else {
+    if (ObReplicaTypeCheck::is_log_replica(replica_type)) {
+      ATOMIC_STORE(&zone_priority_, UINT64_MAX);
+    }
     // change success
     if (REPLICA_TYPE_LOGONLY == mm_.get_replica_type()) {
       sw_.destroy_aggre_buffer();

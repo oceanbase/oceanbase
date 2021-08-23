@@ -1717,7 +1717,8 @@ int ObLogStateMgr::taking_over_to_leader_active_()
       K(ret),
       K_(partition_key),
       K(reconfirm_to_active_cost),
-      K(last_leader_active_time_));
+      K(last_leader_active_time_),
+      K_(role));
   return ret;
 }
 

@@ -41,7 +41,8 @@ public:
       const common::ObString& x509_issuer, const common::ObString& x509_subject, common::ObSqlString& sql_string);
   static int gen_set_passwd_sql(
       const obrpc::ObAccountArg& account, const common::ObString& passwd, common::ObSqlString& sql_string);
-
+  static int gen_set_max_connections_sql(const obrpc::ObAccountArg &account, const uint64_t max_connections_per_hour,
+      const uint64_t max_user_connections, common::ObSqlString &sql_string);
   static int gen_alter_user_require_sql(
       const obrpc::ObAccountArg& account, const obrpc::ObSetPasswdArg& arg, common::ObSqlString& sql_string);
   static int gen_rename_user_sql(

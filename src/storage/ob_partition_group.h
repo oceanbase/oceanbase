@@ -343,7 +343,6 @@ public:
   int has_active_memtable(bool& found);
   virtual int enable_write_log(const bool is_replay_old) override;
   virtual uint64_t get_min_replayed_log_id() override;
-  virtual void get_min_replayed_log(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) override;
   virtual int get_min_replayed_log_with_keepalive(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) override;
   virtual int check_dirty_txn(
       const int64_t min_log_ts, const int64_t max_log_ts, int64_t& freeze_ts, bool& is_dirty) override;

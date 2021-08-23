@@ -5364,35 +5364,12 @@ uint64_t ObPartitionGroup::get_min_replayed_log_id()
   uint64_t min_replay_log_id = UINT64_MAX;
   int64_t unused = 0;
 
-  get_min_replayed_log(min_replay_log_id, unused);
+  get_min_replayed_log_with_keepalive(min_replay_log_id, unused);
 
   return min_replay_log_id;
 }
 
-void ObPartitionGroup::get_min_replayed_log(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts)
-{
-  uint64_t unreplay_log_id = UINT64_MAX;
-  int64_t unreplay_log_ts = 0;
-  uint64_t last_replay_log_id = UINT64_MAX;
-  int64_t last_replay_log_ts = 0;
-
-  // 1. The left boundary of sliding window.
-  pls_->get_last_replay_log(last_replay_log_id, last_replay_log_ts);
-
-  // 2. The minimum continuously replayed log of replay engine.
-  replay_status_->get_min_unreplay_log(unreplay_log_id, unreplay_log_ts);
-  if (unreplay_log_id <= last_replay_log_id) {
-    min_replay_log_id = unreplay_log_id - 1;
-    min_replay_log_ts = unreplay_log_ts - 1;
-  } else {
-    min_replay_log_id = last_replay_log_id;
-    min_replay_log_ts = last_replay_log_ts;
-  }
-
-  STORAGE_LOG(INFO, "min replayed log", K(pkey_), K(min_replay_log_ts), K(unreplay_log_ts), K(last_replay_log_ts));
-}
-
-int ObPartitionGroup::get_min_replayed_log_with_keepalive(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts)
+int ObPartitionGroup::get_min_replayed_log_with_keepalive(uint64_t &min_replay_log_id, int64_t &min_replay_log_ts)
 {
   int ret = OB_SUCCESS;
   uint64_t unreplay_log_id = UINT64_MAX;
@@ -5406,12 +5383,13 @@ int ObPartitionGroup::get_min_replayed_log_with_keepalive(uint64_t& min_replay_l
   } else {
     // 2. The minimum continuously replayed log of replay engine.
     replay_status_->get_min_unreplay_log(unreplay_log_id, unreplay_log_ts);
-    if (unreplay_log_id <= next_replay_log_id - 1) {
-      min_replay_log_id = unreplay_log_id - 1;
-      min_replay_log_ts = unreplay_log_ts - 1;
-    } else {
+    if (unreplay_log_id == next_replay_log_id) {
+      // cold partition, return next_replay_log_ts instead of unreplay_log_ts,  unreplay_log_ts may be too small.
       min_replay_log_id = next_replay_log_id - 1;
       min_replay_log_ts = next_replay_log_ts - 1;
+    } else {
+      min_replay_log_id = unreplay_log_id - 1;
+      min_replay_log_ts = unreplay_log_ts - 1;
     }
 
     STORAGE_LOG(INFO,
@@ -5856,7 +5834,7 @@ int ObPartitionGroup::get_merge_log_ts(int64_t& merge_ts)
 
   ObPartitionGroupLockGuard guard(lock_, PGLOCKTRANS | PGLOCKREPLAY | PGLOCKCLOG, 0);
   uint64_t unused = 0;
-  get_min_replayed_log(unused, merge_ts);
+  get_min_replayed_log_with_keepalive(unused, merge_ts);
 
   if (OB_ISNULL(txs_)) {
     ret = OB_ERR_UNEXPECTED;

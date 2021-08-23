@@ -165,9 +165,9 @@ SQL: select * from t2 left join (select * from t1) as v  on t2.c1 = v.c2 where (
 =========================================
 |ID|OPERATOR        |NAME|EST. ROWS|COST|
 -----------------------------------------
-|0 |NESTED-LOOP JOIN|    |0        |121 |
-|1 | SUBPLAN SCAN   |v   |0        |121 |
-|2 |  TABLE SCAN    |t1  |100      |90  |
+|0 |NESTED-LOOP JOIN|    |0        |140 |
+|1 | SUBPLAN SCAN   |v   |0        |140 |
+|2 |  TABLE SCAN    |t1  |0        |140 |
 |3 | TABLE GET      |t2  |1        |36  |
 =========================================
 
@@ -175,9 +175,9 @@ Outputs & filters:
 -------------------------------------
   0 - output([t2.c1], [t2.c2], [t2.c3], [v.c1], [v.c2]), filter(nil), 
       conds(nil), nl_params_([v.c2])
-  1 - output([v.c2], [v.c1]), filter([(T_OP_IS, v.c2, NULL, 0)], [? > (T_OP_IS_NOT, v.c2, NULL, 0)]), 
+  1 - output([v.c2], [v.c1]), filter(nil), 
       access([v.c2], [v.c1])
-  2 - output([t1.c1], [t1.c2]), filter(nil), 
+  2 - output([t1.c1], [t1.c2]), filter([(T_OP_IS, t1.c2, NULL, 0)], [? > (T_OP_IS_NOT, t1.c2, NULL, 0)], [(T_OP_IS_NOT, t1.c1, NULL, 0)]), 
       access([t1.c1], [t1.c2]), partitions(p0)
   3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)

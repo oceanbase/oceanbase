@@ -17202,6 +17202,9 @@ int ObDDLService::set_passwd(const ObSetPasswdArg& arg)
   const ObString& user_name = arg.user_;
   const ObString& host_name = arg.host_;
   const ObString& passwd = arg.passwd_;
+  const bool modify_max_connections = arg.modify_max_connections_;
+  const uint64_t max_connections_per_hour = arg.max_connections_per_hour_;
+  const uint64_t max_user_connections = arg.max_user_connections_;
   const share::schema::ObSSLType ssl_type = arg.ssl_type_;
 
   ObSchemaGetterGuard schema_guard;
@@ -17218,11 +17221,23 @@ int ObDDLService::set_passwd(const ObSetPasswdArg& arg)
       ret = OB_USER_NOT_EXIST;  // no such user
       LOG_WARN("Try to set password for non-exist user", K(tenant_id), K(user_name), K(host_name), K(ret));
     } else if (share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED == ssl_type) {
-      if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), passwd, ddl_stmt_str))) {
-        LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
-      } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-      } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd, &ddl_sql))) {
-        LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
+      if (modify_max_connections) {
+        if (OB_FAIL(ObDDLSqlGenerator::gen_set_max_connections_sql(
+              ObAccountArg(user_name, host_name), max_connections_per_hour, max_user_connections,
+              ddl_stmt_str))) {
+          LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
+        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+        } else if (OB_FAIL(set_max_connection_in_trans(tenant_id, user_id,
+                max_connections_per_hour, max_user_connections, &ddl_sql))) {
+          LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
+        }
+      } else {
+        if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), passwd, ddl_stmt_str))) {
+          LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
+        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+        } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd, &ddl_sql))) {
+          LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
+        }
       }
     } else {
       if (OB_FAIL(
@@ -17254,6 +17269,49 @@ int ObDDLService::set_passwd_in_trans(
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       if (OB_FAIL(ddl_operator.set_passwd(tenant_id, user_id, new_passwd, ddl_stmt_str, trans))) {
         LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id), K(new_passwd));
+      }
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        }
+      }
+    }
+  }
+
+  // publish schema
+  if (OB_SUCC(ret)) {
+    ret = publish_schema(tenant_id);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("pubish schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::set_max_connection_in_trans(
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const uint64_t max_connections_per_hour,
+    const uint64_t max_user_connections,
+    const ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  ObDDLSQLTransaction trans(schema_service_);
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init");
+  } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Tenant_id or user_id is invalid", K(tenant_id), K(user_id), K(ret));
+  } else {
+    if (OB_FAIL(trans.start(sql_proxy_))) {
+      LOG_WARN("Start transaction failed", K(ret));
+    } else {
+      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+      if (OB_FAIL(ddl_operator.set_max_connections(tenant_id, user_id, max_connections_per_hour,
+          max_user_connections, ddl_stmt_str, trans))) {
+        LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id));
       }
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;

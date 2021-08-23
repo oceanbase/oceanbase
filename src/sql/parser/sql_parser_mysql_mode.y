@@ -417,6 +417,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_match_option
 %type <ival> match_action
 %type <node> opt_reference_option_list reference_option require_specification tls_option_list tls_option
+%type <node> opt_resource_option resource_option_list resource_option
 %type <ival> reference_action
 %type <node> alter_foreign_key_action
 %type <node> optimize_stmt
@@ -9371,19 +9372,23 @@ opt_desc_column_option:
  *
  *****************************************************************************/
 create_user_stmt:
-CREATE USER opt_if_not_exists user_specification_list
+CREATE USER opt_if_not_exists user_specification_list opt_resource_option
 {
   ParseNode *users_node = NULL;
   merge_nodes(users_node, result, T_USERS, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 3, $3, users_node, NULL);
+  ParseNode *res_opt_node = NULL;
+  merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 4, $3, users_node, NULL, res_opt_node);
 }
-| CREATE USER opt_if_not_exists user_specification_list require_specification
+| CREATE USER opt_if_not_exists user_specification_list require_specification opt_resource_option
 {
   ParseNode *users_node = NULL;
   merge_nodes(users_node, result, T_USERS, $4);
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 3, $3, users_node, require_node);
+  ParseNode *res_opt_node = NULL;
+  merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 4, $3, users_node, require_node, res_opt_node);
 }
 ;
 
@@ -9441,6 +9446,52 @@ REQUIRE NONE
   merge_nodes(specified_node, result, T_TLS_SPECIFIED, $2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_TLS_SPECIFIED, 1, specified_node);
 }
+;
+
+opt_resource_option:
+WITH resource_option_list
+{
+  $$ = $2;
+}
+|
+{
+  $$ = NULL;
+}
+;
+
+resource_option_list:
+resource_option_list resource_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+| resource_option
+{
+  $$ = $1;
+}
+
+resource_option:
+MAX_CONNECTIONS_PER_HOUR INTNUM
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_MAX_CONNECTIONS_PER_HOUR);
+  $$->value_ = $2->value_;
+}
+| MAX_USER_CONNECTIONS INTNUM
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_MAX_USER_CONNECTIONS);
+  $$->value_ = $2->value_;
+}
+/*
+| MAX_QUERIES_PER_HOUR INTNUM
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_MAX_QUERIES_PER_HOUR);
+  $$->value_ = $2->value_;
+}
+| MAX_UPDATES_PER_HOUR INTNUM
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_MAX_UPDATES_PER_HOUR);
+  $$->value_ = $2->value_;
+}
+*/
 ;
 
 tls_option_list:
@@ -9571,6 +9622,12 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, NULL, NULL, require_node);
+}
+| ALTER USER user_with_host_name WITH resource_option_list
+{
+  ParseNode *res_opt_node = NULL;
+  merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 4, $3, NULL, NULL, res_opt_node);
 }
 ;
 

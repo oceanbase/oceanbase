@@ -193,7 +193,6 @@ using namespace oceanbase::storage;
 
 void get_tenant_ids(uint64_t* ids, int cap, int& cnt)
 {
-  int ret = OB_SUCCESS;
   auto *instance = ObMallocAllocator::get_instance();
   cnt = 0;
   for (uint64_t tenant_id = 1; tenant_id <= ObMallocAllocator::get_max_used_tenant_id() && cnt < cap; ++tenant_id) {

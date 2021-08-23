@@ -146,7 +146,8 @@ ObServer::ObServer()
       refresh_active_time_task_(),
       refresh_network_speed_task_(),
       schema_status_proxy_(sql_proxy_),
-      is_log_dir_empty_(false)
+      is_log_dir_empty_(false),
+      conn_res_mgr_()
 {
   memset(&gctx_, 0, sizeof(gctx_));
   lib::g_mem_cutter = &observer::g_server_mem_cutter;
@@ -1354,6 +1355,8 @@ int ObServer::init_sql()
     LOG_WARN("init sql session mgr fail");
   } else if (OB_FAIL(query_ctx_mgr_.init())) {
     LOG_WARN("init query ctx mgr failed", K(ret));
+  } else if (OB_FAIL(conn_res_mgr_.init(schema_service_))) {
+    LOG_WARN("init user resource mgr failed", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, session_mgr_, ObSQLSessionMgr::SCHEDULE_PERIOD, true))) {
     LOG_WARN("tier schedule fail");
   } else {
@@ -1456,6 +1459,7 @@ int ObServer::init_global_context()
   gctx_.session_mgr_ = &session_mgr_;
   gctx_.query_ctx_mgr_ = &query_ctx_mgr_;
   gctx_.sql_engine_ = &sql_engine_;
+  gctx_.conn_res_mgr_ = &conn_res_mgr_;
   gctx_.omt_ = &multi_tenant_;
   gctx_.vt_iter_creator_ = &vt_data_service_.get_vt_iter_factory().get_vt_iter_creator();
   gctx_.location_cache_ = &location_cache_;

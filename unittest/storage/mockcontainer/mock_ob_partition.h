@@ -302,7 +302,6 @@ public:
     return common::OB_SUCCESS;
   }
   MOCK_METHOD0(get_min_replayed_log_id, uint64_t());
-  MOCK_METHOD2(get_min_replayed_log, void(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts));
   MOCK_METHOD2(get_min_replayed_log_with_keepalive, int(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts));
   MOCK_CONST_METHOD1(get_table_store_cnt, int(int64_t& table_cnt));
   MOCK_METHOD4(

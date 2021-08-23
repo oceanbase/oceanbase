@@ -645,6 +645,17 @@ public:
     return is_ignore_stmt_;
   }
 
+  void set_got_conn_res(bool v)
+  {
+    got_conn_res_ = v;
+  }
+  bool has_got_conn_res() const
+  {
+    return got_conn_res_;
+  }
+  int on_user_connect(share::schema::ObSessionPrivInfo& priv_info, const share::schema::ObUserInfo* user_info);
+  int on_user_disconnect();
+
 private:
   int close_all_ps_stmt();
 
@@ -724,6 +735,11 @@ private:
   // return different stmt id for same sql if proxy version is higher than min_proxy_version_ps_.
   uint64_t min_proxy_version_ps_;
   bool is_ignore_stmt_;  // for static engine.
+  // Record whether this session has got connection resource, which means it increased connections count.
+  // It's used for on_user_disconnect.
+  // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.
+  // While only session got connection resource can release connection resource and decrease connections count.
+  bool got_conn_res_;
 };
 
 inline ObIExtraStatusCheck::Guard::Guard(ObSQLSessionInfo& session, ObIExtraStatusCheck& checker)

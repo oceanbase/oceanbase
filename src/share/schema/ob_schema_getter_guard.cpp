@@ -35,6 +35,7 @@
 #include "share/schema/ob_synonym_mgr.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/ob_sql_mock_schema_utils.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/ob_schema_checker.h"
@@ -1915,9 +1916,11 @@ int ObSchemaGetterGuard::add_role_id_recursively(uint64_t role_id, ObSessionPriv
 }
 
 // for privilege
-int ObSchemaGetterGuard::check_user_access(const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st)
+int ObSchemaGetterGuard::check_user_access(
+    const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st, const ObUserInfo*& sel_user_info)
 {
   int ret = OB_SUCCESS;
+  sel_user_info = NULL;
   if (OB_FAIL(get_tenant_id(login_info.tenant_name_, s_priv.tenant_id_))) {
     LOG_WARN("Invalid tenant", "tenant_name", login_info.tenant_name_, K(ret));
   } else if (OB_FAIL(check_tenant_schema_guard(s_priv.tenant_id_))) {
@@ -1998,7 +2001,6 @@ int ObSchemaGetterGuard::check_user_access(const ObUserLoginInfo& login_info, Ob
           }
         }
       }
-
       if (OB_SUCC(ret)) {
         if (matched_user_info != NULL && matched_user_info->get_is_locked()) {
           ret = OB_ERR_USER_IS_LOCKED;
@@ -2042,7 +2044,7 @@ int ObSchemaGetterGuard::check_user_access(const ObUserLoginInfo& login_info, Ob
         s_priv.host_name_ = user_info->get_host_name_str();
         s_priv.user_priv_set_ = user_info->get_priv_set();
         s_priv.db_ = login_info.db_;
-
+        sel_user_info = user_info;
         // load role priv
         if (OB_SUCC(ret)) {
           const ObSEArray<uint64_t, 8>& role_id_array = user_info->get_role_id_array();

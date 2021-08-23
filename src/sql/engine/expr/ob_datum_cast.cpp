@@ -844,7 +844,7 @@ static OB_INLINE int common_string_number(
     ret = nmb.from_sci_opt(in_str.ptr(), in_str.length(), alloc, &res_precision, &res_scale);
     // select cast('1e500' as decimal);  -> max_val
     // select cast('-1e500' as decimal); -> min_val
-    if (OB_NUMERIC_OVERFLOW == ret && CM_IS_SET_MIN_IF_OVERFLOW(expr.extra_)) {
+    if (OB_NUMERIC_OVERFLOW == ret) {
       int64_t i = 0;
       while (i < in_str.length() && isspace(in_str[i])) {
         ++i;

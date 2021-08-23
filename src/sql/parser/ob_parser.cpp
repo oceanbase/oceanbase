@@ -107,7 +107,7 @@ int ObParser::split_multiple_stmt(
       ObString part(str_len, stmt.ptr() + offset);
       ObString remain_part(remain, stmt.ptr() + offset);
       //first try parse part str, because it's have less length and need less memory
-      if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode))) {
+      if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, true))) {
         //if parser part str failed, then try parse all remain part, avoid parse many times:
         //bug: https://work.aone.alibaba-inc.com/issue/34642901
         tmp_ret = OB_SUCCESS;
@@ -146,12 +146,14 @@ int ObParser::split_multiple_stmt(
   return ret;
 }
 
-int ObParser::parse_sql(const ObString& stmt, ParseResult& parse_result)
+int ObParser::parse_sql(const ObString& stmt, ParseResult& parse_result, const bool no_throw_parser_error)
 {
   int ret = OB_SUCCESS;
   ObSQLParser sql_parser(*(ObIAllocator*)(parse_result.malloc_pool_), sql_mode_);
   if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {
-    LOG_INFO("failed to parse stmt as sql", K(stmt), K(ret));
+    if (!no_throw_parser_error) {
+      LOG_INFO("failed to parse stmt as sql", K(stmt), K(ret));
+    }
   } else if (parse_result.is_dynamic_sql_) {
     memmove(parse_result.no_param_sql_ + parse_result.no_param_sql_len_,
         parse_result.input_sql_ + parse_result.pl_parse_info_.last_pl_symbol_pos_,
@@ -160,11 +162,11 @@ int ObParser::parse_sql(const ObString& stmt, ParseResult& parse_result)
   } else { /*do nothing*/
   }
   if (parse_result.is_fp_ || parse_result.is_multi_query_) {
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) && !no_throw_parser_error) {
       LOG_WARN("failed to fast parameterize", K(stmt), K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && !no_throw_parser_error) {
     auto err_charge_sql_mode = lib::is_oracle_mode();
     LOG_WARN("failed to parse the statement",
         K(stmt),
@@ -206,7 +208,8 @@ int ObParser::parse_sql(const ObString& stmt, ParseResult& parse_result)
 }
 
 int ObParser::parse(
-    const ObString& query, ParseResult& parse_result, ParseMode parse_mode, const bool is_batched_multi_stmt_split_on)
+    const ObString& query, ParseResult& parse_result, ParseMode parse_mode, const bool is_batched_multi_stmt_split_on,
+    const bool no_throw_parser_error)
 {
   int ret = OB_SUCCESS;
 
@@ -268,8 +271,10 @@ int ObParser::parse(
     LOG_DEBUG("check parse_result param", "connection charset", ObCharset::charset_name(connection_collation_));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(parse_sql(stmt, parse_result))) {
-      LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+    if (OB_FAIL(parse_sql(stmt, parse_result, no_throw_parser_error))) {
+      if (!no_throw_parser_error) {
+        LOG_WARN("failed to parse stmt as sql", K(stmt), K(parse_mode), K(ret));
+      }
     }
   }
   return ret;
