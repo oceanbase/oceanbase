@@ -7829,13 +7829,19 @@ int get_bit_len(const ObString& str, int32_t& bit_len)
   } else {
     const char* ptr = str.ptr();
     uint32_t uneven_value = reinterpret_cast<const unsigned char&>(ptr[0]);
+    int32_t len = str.length();
     if (0 == uneven_value) {
-      bit_len = 1;
+      if (len > 8) {
+        // Compatible with MySQL, if the length of bit string greater than 8 Bytes,
+        // it would be considered too long. We set bit_len to OB_MAX_BIT_LENGTH + 1.
+        bit_len = OB_MAX_BIT_LENGTH + 1;
+      } else {
+        bit_len = 1;
+      }
     } else {
       // Built-in Function: int __builtin_clz (unsigned int x).
       // Returns the number of leading 0-bits in x, starting at the most significant bit position.
       // If x is 0, the result is undefined.
-      int32_t len = str.length();
       int32_t uneven_len = static_cast<int32_t>(sizeof(unsigned int) * 8 - __builtin_clz(uneven_value));
       bit_len = uneven_len + 8 * (len - 1);
     }
