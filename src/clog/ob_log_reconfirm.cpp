@@ -832,6 +832,10 @@ int ObLogReconfirm::confirm_log_()
       const uint64_t new_start_id = sw_->get_start_id();
       if (new_start_id > next_id_) {
         next_id_ = new_start_id;
+        // When next_id_ is inceased, last_ts_ also need update
+        // Or later NOP log's submit_timestamp may fallback
+        const int64_t last_submit_ts = sw_->get_last_submit_timestamp();
+        (void)try_update_last_ts_(last_submit_ts);
         CLOG_LOG(INFO,
             "there may execute a rebuild operation in\
             leader reconfirm",

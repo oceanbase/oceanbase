@@ -6821,10 +6821,6 @@ int ObRootService::stop_server(const obrpc::ObAdminServerArg& arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (!config_->enable_auto_leader_switch) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("cannot stop server when auto leader switchover disabled", K(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Stop server when auto leader switchover is disabled");
   } else if (OB_FAIL(get_readwrite_servers(arg.servers_, readwrite_servers))) {
     LOG_WARN("fail to get readwrite servers", K(ret));
   } else if (readwrite_servers.count() <= 0) {
@@ -7103,10 +7099,6 @@ int ObRootService::stop_zone(const obrpc::ObAdminZoneArg& arg)
     } else if (!arg.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arg", K(arg), K(ret));
-    } else if (!config_->enable_auto_leader_switch) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("cannot stop zone when auto leader switchover is disabled", K(ret));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Stop zone when auto leader switchover is disabled");
     } else if (OB_FAIL(zone_manager_.check_zone_exist(arg.zone_, zone_exist))) {
       LOG_WARN("fail to check zone exist", K(ret));
     } else if (!zone_exist) {

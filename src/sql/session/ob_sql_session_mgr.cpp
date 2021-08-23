@@ -23,6 +23,7 @@
 #include "observer/mysql/obsm_handler.h"
 #include "observer/mysql/obsm_struct.h"
 #include "observer/ob_server_struct.h"
+#include "sql/session/ob_user_resource_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -421,6 +422,10 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx& ctx)
   ObSQLSessionInfo* sess_info = NULL;
   sessinfo_map_.get(Key(version, sessid), sess_info);
   if (NULL != sess_info) {
+    if (sess_info->has_got_conn_res()
+        && OB_UNLIKELY(OB_SUCCESS != sess_info->on_user_disconnect())) {
+      LOG_ERROR("user disconnect failed", K(ret), K(sess_info->get_user_id()));
+    }
     sessinfo_map_.revert(sess_info);
   }
   if (OB_FAIL(sessinfo_map_.del(Key(version, sessid)))) {

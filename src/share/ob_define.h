@@ -453,7 +453,7 @@ const int64_t OB_STATUS_LENGTH = 64;
 
 ///////////////////////////
 //// used for replay
-const int64_t REPLAY_TASK_QUEUE_SIZE = 4;
+const int64_t REPLAY_TASK_QUEUE_SIZE = 64;
 inline int64_t& get_replay_queue_index()
 {
   static __thread int64_t replay_queue_index = -1;

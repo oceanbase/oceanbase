@@ -103,13 +103,12 @@ int ObTmpPageCacheValue::deep_copy(char* buf, const int64_t buf_len, ObIKVCacheV
   return ret;
 }
 
-int ObTmpPageCache::prefetch(const ObTmpPageCacheKey& key, const ObTmpBlockIOInfo& info, ObTmpFileIOHandle& handle,
-    ObMacroBlockHandle& mb_handle)
+int ObTmpPageCache::prefetch(const ObTmpPageCacheKey &key, const ObTmpBlockIOInfo &info, ObMacroBlockHandle &mb_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!key.is_valid() || !handle.is_valid())) {
+  if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(key), K(handle));
+    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(key));
   } else {
     // fill the callback
     ObTmpPageIOCallback callback;
@@ -122,7 +121,7 @@ int ObTmpPageCache::prefetch(const ObTmpPageCacheKey& key, const ObTmpBlockIOInf
       if (mb_handle.get_io_handle().is_empty()) {
         // TODO: After the continuous IO has been optimized, this should
         // not happen.
-        if (OB_FAIL(handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
+        if (OB_FAIL(mb_handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
           STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
         } else if (OB_FAIL(read_io(info, callback, mb_handle))) {
           STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
@@ -135,13 +134,13 @@ int ObTmpPageCache::prefetch(const ObTmpPageCacheKey& key, const ObTmpBlockIOInf
   return ret;
 }
 
-int ObTmpPageCache::prefetch(const ObTmpBlockIOInfo& info, const common::ObIArray<ObTmpPageIOInfo>& page_io_infos,
-    ObTmpFileIOHandle& handle, ObMacroBlockHandle& mb_handle)
+int ObTmpPageCache::prefetch(
+    const ObTmpBlockIOInfo &info, const common::ObIArray<ObTmpPageIOInfo> &page_io_infos, ObMacroBlockHandle &mb_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(page_io_infos.count() <= 0 || !handle.is_valid())) {
+  if (OB_UNLIKELY(page_io_infos.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(page_io_infos.count()), K(info), K(handle));
+    STORAGE_LOG(WARN, "Invalid arguments", K(ret), K(page_io_infos.count()), K(info));
   } else {
     ObTmpMultiPageIOCallback callback;
     callback.cache_ = this;
@@ -159,7 +158,7 @@ int ObTmpPageCache::prefetch(const ObTmpBlockIOInfo& info, const common::ObIArra
         if (mb_handle.get_io_handle().is_empty()) {
           // TODO: After the continuous IO has been optimized, this should
           // not happen.
-          if (OB_FAIL(handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
+          if (OB_FAIL(mb_handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
             STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
           } else if (OB_FAIL(read_io(info, callback, mb_handle))) {
             STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));

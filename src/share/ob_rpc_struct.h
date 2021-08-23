@@ -3832,13 +3832,15 @@ struct ObSetPasswdArg : public ObDDLArg {
 
 public:
   ObSetPasswdArg()
-      : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), ssl_type_(share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED)
+      : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), ssl_type_(share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED),
+        modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID), max_user_connections_(OB_INVALID_ID)
   {}
   virtual ~ObSetPasswdArg()
   {}
   bool is_valid() const;
   TO_STRING_KV(
-      K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject));
+      K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type), K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
+      K_(modify_max_connections), K_(max_connections_per_hour), K_(max_user_connections));
 
   uint64_t tenant_id_;
   common::ObString user_;
@@ -3848,6 +3850,9 @@ public:
   common::ObString ssl_cipher_;
   common::ObString x509_issuer_;
   common::ObString x509_subject_;
+  bool modify_max_connections_;
+  uint64_t max_connections_per_hour_;
+  uint64_t max_user_connections_;
 };
 
 struct ObLockUserArg : public ObDDLArg {

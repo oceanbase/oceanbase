@@ -372,6 +372,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_QUARTER : return "T_FUN_SYS_QUARTER";
 	case T_FUN_SYS_BIT_LENGTH : return "T_FUN_SYS_BIT_LENGTH";
 	case T_FUN_SYS_PI : return "T_FUN_SYS_PI";
+	case T_FUN_SYS_EXPORT_SET : return "T_FUN_SYS_EXPORT_SET";
 	case T_MYSQL_ONLY_SYS_MAX_OP : return "T_MYSQL_ONLY_SYS_MAX_OP";
 	case T_FUN_SYS_CONNECT_BY_PATH : return "T_FUN_SYS_CONNECT_BY_PATH";
 	case T_FUN_SYS_SYSTIMESTAMP : return "T_FUN_SYS_SYSTIMESTAMP";
@@ -1553,7 +1554,11 @@ const char* get_type_name(int type)
 	case T_HASH_PARTITION_LIST : return "T_HASH_PARTITION_LIST";
 	case T_RANGE_PARTITION_LIST : return "T_RANGE_PARTITION_LIST";
 	case T_LIST_PARTITION_LIST : return "T_LIST_PARTITION_LIST";
-	case T_FUN_SYS_EXPORT_SET : return "T_FUN_SYS_EXPORT_SET";
+	case T_USER_RESOURCE_OPTIONS : return "T_USER_RESOURCE_OPTIONS";
+	case T_MAX_CONNECTIONS_PER_HOUR : return "T_MAX_CONNECTIONS_PER_HOUR";
+	case T_MAX_USER_CONNECTIONS : return "T_MAX_USER_CONNECTIONS";
+	case T_MAX_QUERIES_PER_HOUR : return "T_MAX_QUERIES_PER_HOUR";
+	case T_MAX_UPDATES_PER_HOUR : return "T_MAX_UPDATES_PER_HOUR";
 	default:return "Unknown";
 	}
 }

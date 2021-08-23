@@ -19,15 +19,15 @@ oceanbase-ce:
     schema_history_expire_time: 1d
     net_thread_count: 4
     sys_bkgd_migration_retry_num: 3
-    minor_freeze_times: 10
+    minor_freeze_times: 100
     enable_separate_sys_clog: 0
     enable_merge_by_turn: FALSE
     enable_auto_leader_switch: FALSE
     enable_one_phase_commit: FALSE
     weak_read_version_refresh_interval: 5s
-    trace_log_slow_query_watermark: 10s
+    trace_log_slow_query_watermark: 1s
     large_query_threshold: 1s
-    clog_sync_time_warn_threshold: 2000ms
+    clog_sync_time_warn_threshold: 1s
     syslog_io_bandwidth_limit: 10M
     enable_sql_audit: FALSE
     enable_perf_event: FALSE

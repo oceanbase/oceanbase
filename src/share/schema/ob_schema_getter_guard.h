@@ -28,6 +28,9 @@ class ObKVCacheHandle;
 template <class T>
 class ObIArray;
 }  // namespace common
+namespace sql {
+class ObSQLSessionInfo;
+}
 namespace share {
 class ObWorker;
 namespace schema {
@@ -327,7 +330,8 @@ public:
   int verify_table_read_only(const uint64_t tenant_id, const ObNeedPriv& need_priv);
   // for privilege
   int add_role_id_recursively(uint64_t role_id, ObSessionPrivInfo& s_priv);
-  int check_user_access(const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st);
+  int check_user_access(
+      const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st, const ObUserInfo*& sel_user_info);
   int check_ssl_access(const ObUserInfo& user_info, SSL* ssl_st);
   int check_ssl_invited_cn(const uint64_t tenant_id, SSL* ssl_st);
   int check_db_access(ObSessionPrivInfo& s_priv, const common::ObString& database_name);

@@ -789,11 +789,11 @@ static struct VarsInit {
 
     ObSysVars[62].info_ = "";
     ObSysVars[62].name_ = "max_connections";
-    ObSysVars[62].data_type_ = ObIntType;
-    ObSysVars[62].value_ = "151";
+    ObSysVars[62].data_type_ = ObUInt64Type;
+    ObSysVars[62].value_ = "4294967295";
     ObSysVars[62].min_val_ = "1";
-    ObSysVars[62].max_val_ = "100000";
-    ObSysVars[62].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY;
+    ObSysVars[62].max_val_ = "4294967295";
+    ObSysVars[62].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY;
     ObSysVars[62].id_ = SYS_VAR_MAX_CONNECTIONS;
     cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_CONNECTIONS));
     ObSysVarsIdToArrayIdx[SYS_VAR_MAX_CONNECTIONS] = 62;

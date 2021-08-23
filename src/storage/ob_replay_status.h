@@ -759,7 +759,7 @@ private:
   bool is_pending_;
   // whether replay trans log or not: Log replica only needs replaying add_partition_to_pg and remove_partition_to_pg
   bool need_filter_trans_log_;
-  bool can_receive_log_;
+  bool can_receive_log_;  // mainly consider whether clog disk space is enough
   int64_t tenant_id_;
   uint64_t offline_partition_log_id_;
   bool offline_partition_task_submitted_;

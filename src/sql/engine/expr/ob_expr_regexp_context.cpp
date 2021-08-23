@@ -689,11 +689,16 @@ int ObExprRegexContext::replace(const ObString& text, const ObString& to, ObSEAr
         if (OB_UNLIKELY(real_tot_length > tot_length)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get invalid argument", K(real_tot_length), K(tot_length), K(ret));
-        } else {
-          char* real_buf = static_cast<char*>(string_buf.alloc(real_tot_length));
-          MEMSET(real_buf, 0, real_tot_length);
-          MEMCPY(real_buf, buf, real_tot_length);
-          sub.assign_ptr(real_buf, static_cast<int64_t>(real_tot_length));
+        } else if (real_tot_length > 0) {
+          char *real_buf = static_cast<char *>(string_buf.alloc(real_tot_length));
+          if (OB_ISNULL(real_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed.", K(real_buf), K(ret));
+          } else {
+            MEMSET(real_buf, 0, real_tot_length);
+            MEMCPY(real_buf, buf, real_tot_length);
+            sub.assign_ptr(real_buf, static_cast<int64_t>(real_tot_length));
+          }
         }
       }
     }
@@ -760,27 +765,32 @@ int ObExprRegexContext::w2c(
   if (length < 0 || (length > 0 && OB_ISNULL(wc))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("source text is null or length is vaild", K(ret), K(wc), K(length));
-  } else {
+  } else if (length > 0) {
     int32_t buff_len = sizeof(wchar_t);
-    char* buff = static_cast<char*>(string_buf.alloc(buff_len));
     int64_t chr_len = (length + 1) * buff_len;
-    chr = static_cast<char*>(string_buf.alloc(chr_len));
-    char* tmp_chr = chr;
-    MEMSET(chr, 0, chr_len);
-    MEMSET(buff, 0, buff_len);
-    for (int64_t i = 0; OB_SUCC(ret) && i < length; ++i) {
-      int32_t wc_int = static_cast<int32_t>(wc[i]);
-      int32_t real_length = 0;
-      if (OB_FAIL(ObCharset::wc_mb(
-              ObCharset::get_default_collation_oracle(CHARSET_UTF8MB4), wc_int, buff, buff_len, real_length))) {
-        LOG_WARN("failed to multi byte to wide char", K(ret));
-      } else if (OB_UNLIKELY(chr_length + real_length > chr_len)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(chr_length), K(real_length), K(chr_len), K(ret));
-      } else {
-        MEMCPY(tmp_chr, buff, real_length);
-        chr_length += real_length;
-        tmp_chr = tmp_chr + real_length;
+    char *buff = NULL;
+    if (OB_ISNULL(buff = static_cast<char *>(string_buf.alloc(buff_len))) ||
+        OB_ISNULL(chr = static_cast<char *>(string_buf.alloc(chr_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed.", K(buff), K(chr), K(ret));
+    } else {
+      char *tmp_chr = chr;
+      MEMSET(chr, 0, chr_len);
+      MEMSET(buff, 0, buff_len);
+      for (int64_t i = 0; OB_SUCC(ret) && i < length; ++i) {
+        int32_t wc_int = static_cast<int32_t>(wc[i]);
+        int32_t real_length = 0;
+        if (OB_FAIL(ObCharset::wc_mb(
+                ObCharset::get_default_collation_oracle(CHARSET_UTF8MB4), wc_int, buff, buff_len, real_length))) {
+          LOG_WARN("failed to multi byte to wide char", K(ret));
+        } else if (OB_UNLIKELY(chr_length + real_length > chr_len)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(chr_length), K(real_length), K(chr_len), K(ret));
+        } else {
+          MEMCPY(tmp_chr, buff, real_length);
+          chr_length += real_length;
+          tmp_chr = tmp_chr + real_length;
+        }
       }
     }
   }
@@ -926,10 +936,15 @@ int ObExprRegexContext::pre_process_replace_str(const ObString& text, const ObSt
             MEMCPY(tmp_buf, to_ptr + length_to - 1, 1);
             ++real_tot_length;
           }
-          char* real_buf = static_cast<char*>(string_buf.alloc(real_tot_length));
-          MEMSET(real_buf, 0, real_tot_length);
-          MEMCPY(real_buf, buf, real_tot_length);
-          tmp_string.assign_ptr(real_buf, static_cast<int64_t>(real_tot_length));
+          char *real_buf = static_cast<char *>(string_buf.alloc(real_tot_length));
+          if (OB_ISNULL(real_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("alloc memory failed.", K(real_buf), K(ret));
+          } else {
+            MEMSET(real_buf, 0, real_tot_length);
+            MEMCPY(real_buf, buf, real_tot_length);
+            tmp_string.assign_ptr(real_buf, static_cast<int64_t>(real_tot_length));
+          }
         }
         if (OB_SUCC(ret) && OB_FAIL(to_strings.push_back(tmp_string))) {
           LOG_WARN("failed to push back string", K(ret));

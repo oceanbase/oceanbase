@@ -102,84 +102,35 @@ int ObSetPasswordResolver::resolve(const ParseNode& parse_tree)
         ObSSLType ssl_type = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
         ObString infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
         if ((NULL == node->children_[1]) && (NULL == node->children_[2])) {
-          // alter user require ssl_info
-          ParseNode* require_info = const_cast<ParseNode*>(node->children_[3]);
-          ParseNode* ssl_infos = NULL;
-          if (OB_ISNULL(require_info) || OB_UNLIKELY(T_TLS_OPTIONS != require_info->type_) ||
-              OB_UNLIKELY(require_info->num_child_ != 1) || OB_ISNULL(ssl_infos = require_info->children_[0])) {
+          const ParseNode *child_node = node->children_[3];
+          if (OB_ISNULL(child_node)) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("Create user ParseNode error", K(ret), K(ssl_infos->type_));
+            LOG_WARN("alter user ParseNode error", K(ret));
+          } else if (T_TLS_OPTIONS == child_node->type_) {
+            if (OB_FAIL(resolve_require_node(*child_node, user_name, host_name, ssl_type, infos))) {
+              LOG_WARN("resolve require node failed", K(ret));
+            }
+          } else if (T_USER_RESOURCE_OPTIONS == child_node->type_) {
+            if (OB_FAIL(resolve_resource_option_node(*child_node, user_name, host_name, ssl_type, infos))) {
+              LOG_WARN("resolve resource option node failed", K(ret));
+            }
           } else {
-            ssl_type = static_cast<ObSSLType>(
-                static_cast<int32_t>(ObSSLType::SSL_TYPE_NONE) + (ssl_infos->type_ - T_TLS_NONE));
-
-            if (ObSSLType::SSL_TYPE_SPECIFIED == ssl_type) {
-              ParseNode* specified_ssl_infos = NULL;
-
-              if (OB_UNLIKELY(ssl_infos->num_child_ <= 0) || OB_ISNULL(specified_ssl_infos = ssl_infos->children_[0])) {
-                ret = OB_INVALID_ARGUMENT;
-                LOG_WARN("Create user ParseNode error", K(ret), K(ssl_infos->num_child_), KP(specified_ssl_infos));
-              } else {
-                bool check_repeat[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
-                for (int i = 0; i < specified_ssl_infos->num_child_ && OB_SUCC(ret); ++i) {
-                  ParseNode* ssl_info = specified_ssl_infos->children_[i];
-                  if (OB_ISNULL(ssl_info)) {
-                    ret = OB_ERR_PARSE_SQL;
-                    LOG_WARN("The child of parseNode should not be NULL", K(ret), K(i));
-                  } else if (OB_UNLIKELY(ssl_info->num_child_ != 1)) {
-                    ret = OB_ERR_PARSE_SQL;
-                    LOG_WARN("The num_child_is error", K(ret), K(i), K(ssl_info->num_child_));
-                  } else if (OB_UNLIKELY(check_repeat[ssl_info->type_ - T_TLS_CIPHER])) {
-                    ret = OB_ERR_DUP_ARGUMENT;
-                    LOG_WARN("Option used twice in statement", K(ret), K(ssl_info->type_));
-                    LOG_USER_ERROR(OB_ERR_DUP_ARGUMENT,
-                        get_ssl_spec_type_str(static_cast<ObSSLSpecifiedType>(ssl_info->type_ - T_TLS_CIPHER)));
-                  } else {
-                    check_repeat[ssl_info->type_ - T_TLS_CIPHER] = true;
-                    infos[ssl_info->type_ - T_TLS_CIPHER].assign_ptr(
-                        ssl_info->children_[0]->str_value_, ssl_info->children_[0]->str_len_);
-                  }
-                }
-              }
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            ObString password;
-            set_pwd_stmt->set_need_enc(false);
-            if (OB_FAIL(set_pwd_stmt->set_user_password(user_name, host_name, password))) {
-              LOG_WARN("Failed to set UserPasswordStmt");
-            } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
-                           infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                           infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                           infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
-              LOG_WARN("Failed to add_ssl_info",
-                  K(ssl_type),
-                  "CIPHER",
-                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                  "ISSUER",
-                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                  "SUBJECT",
-                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)],
-                  K(ret));
-            }
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("alter user ParseNode error", K(ret), K(child_node->type_));
           }
         } else if (OB_ISNULL(node->children_[1]) || OB_ISNULL(node->children_[2])) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("The child 1 or child 2 should not be NULL",
-              K(ret),
-              "child 1",
-              node->children_[1],
-              "child 2",
-              node->children_[2]);
+              K(ret), "child 1", node->children_[1], "child 2", node->children_[2]);
         } else {
-          ObString password(static_cast<int32_t>(node->children_[1]->str_len_), node->children_[1]->str_value_);
+          ObString password(static_cast<int32_t>(node->children_[1]->str_len_),
+                            node->children_[1]->str_value_);
           if (!share::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
             LOG_WARN("fail to check password strength", K(ret));
-          } else if (share::is_oracle_mode() &&
-                     OB_FAIL(resolve_oracle_password_strength(user_name, host_name, password))) {
+          } else if (share::is_oracle_mode() && OB_FAIL(
+                     resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
-          } else if (0 != password.length()) {  // set password
+          } else if (0 != password.length()) {//set password
             bool need_enc = (1 == node->children_[2]->value_) ? true : false;
             if (!need_enc && (!is_valid_mysql41_passwd(password))) {
               ret = OB_ERR_PASSWORD_FORMAT;
@@ -188,37 +139,145 @@ int ObSetPasswordResolver::resolve(const ParseNode& parse_tree)
               set_pwd_stmt->set_need_enc(need_enc);
             }
           } else {
-            set_pwd_stmt->set_need_enc(false);  // clear password
+            set_pwd_stmt->set_need_enc(false); //clear password
           }
           if (OB_SUCC(ret)) {
             if (OB_FAIL(set_pwd_stmt->set_user_password(user_name, host_name, password))) {
               LOG_WARN("Failed to set UserPasswordStmt");
             } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
-                           infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                           infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                           infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
-              LOG_WARN("Failed to add_ssl_info",
-                  K(ssl_type),
-                  "ISSUER",
-                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-                  "CIPHER",
-                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-                  "SUBJECT",
-                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)],
-                  K(ret));
+                                                          infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                                                          infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                                                          infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
+              LOG_WARN("Failed to add_ssl_info", K(ssl_type),
+                       "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                       "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                       "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
             }
           }
         }
       }
     }
-    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check() && set_pwd_stmt->get_for_current_user() == false) {
-      OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-             session_info_->get_priv_user_id(),
-             ObString(""),
-             stmt::T_SET_PASSWORD,
-             session_info_->get_enable_role_array()),
-          session_info_->get_effective_tenant_id(),
-          session_info_->get_user_id());
+    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check() 
+        && set_pwd_stmt->get_for_current_user() == false) {
+      OZ (schema_checker_->check_ora_ddl_priv(
+            session_info_->get_effective_tenant_id(),
+            session_info_->get_priv_user_id(),
+            ObString(""),
+            stmt::T_SET_PASSWORD,
+            session_info_->get_enable_role_array()),
+            session_info_->get_effective_tenant_id(), session_info_->get_user_id());
+    }
+  }
+  return ret;
+}
+
+int ObSetPasswordResolver::resolve_require_node(const ParseNode &require_info,
+    const ObString &user_name, const ObString &host_name, ObSSLType &ssl_type, ObString *infos)
+{
+  int ret = OB_SUCCESS;
+  //alter user require ssl_info
+  ParseNode *ssl_infos = NULL;
+  ObSetPasswordStmt *set_pwd_stmt = static_cast<ObSetPasswordStmt *>(stmt_);
+  if (OB_UNLIKELY(T_TLS_OPTIONS != require_info.type_)
+      || OB_UNLIKELY(require_info.num_child_ != 1)
+      || OB_ISNULL(ssl_infos = require_info.children_[0])
+      || OB_ISNULL(set_pwd_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Create user ParseNode error", K(ret), K(ssl_infos), K(set_pwd_stmt));
+  } else {
+    ssl_type = static_cast<ObSSLType>(static_cast<int32_t>(ObSSLType::SSL_TYPE_NONE) + (ssl_infos->type_ - T_TLS_NONE));
+
+    if (ObSSLType::SSL_TYPE_SPECIFIED == ssl_type) {
+      ParseNode *specified_ssl_infos = NULL;
+
+      if (OB_UNLIKELY(ssl_infos->num_child_ <= 0)
+          || OB_ISNULL(specified_ssl_infos = ssl_infos->children_[0])) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Create user ParseNode error", K(ret), K(ssl_infos->num_child_), KP(specified_ssl_infos));
+      } else {
+        bool check_repeat[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
+        for (int i = 0; i < specified_ssl_infos->num_child_ && OB_SUCC(ret); ++i) {
+          ParseNode *ssl_info = specified_ssl_infos->children_[i];
+          if (OB_ISNULL(ssl_info)) {
+            ret = OB_ERR_PARSE_SQL;
+            LOG_WARN("The child of parseNode should not be NULL", K(ret), K(i));
+          } else if (OB_UNLIKELY(ssl_info->num_child_ != 1)) {
+            ret = OB_ERR_PARSE_SQL;
+            LOG_WARN("The num_child_is error", K(ret), K(i), K(ssl_info->num_child_));
+          } else if (OB_UNLIKELY(check_repeat[ssl_info->type_ - T_TLS_CIPHER])) {
+            ret = OB_ERR_DUP_ARGUMENT;
+            LOG_WARN("Option used twice in statement", K(ret), K(ssl_info->type_));
+            LOG_USER_ERROR(OB_ERR_DUP_ARGUMENT, get_ssl_spec_type_str(static_cast<ObSSLSpecifiedType>(ssl_info->type_ - T_TLS_CIPHER)));
+          } else {
+            check_repeat[ssl_info->type_ - T_TLS_CIPHER] = true;
+            infos[ssl_info->type_ - T_TLS_CIPHER].assign_ptr(ssl_info->children_[0]->str_value_, ssl_info->children_[0]->str_len_);
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObString password;
+    set_pwd_stmt->set_need_enc(false);
+    if (OB_FAIL(set_pwd_stmt->set_user_password(user_name, host_name, password))) {
+      LOG_WARN("Failed to set UserPasswordStmt");
+    } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
+                                                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                                                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                                                  infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
+      LOG_WARN("Failed to add_ssl_info", K(ssl_type),
+                "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSetPasswordResolver::resolve_resource_option_node(const ParseNode &resource_options,
+  const ObString &user_name, const ObString &host_name, ObSSLType &ssl_type, ObString *infos)
+{
+  int ret = OB_SUCCESS;
+  ObSetPasswordStmt *set_pwd_stmt = static_cast<ObSetPasswordStmt *>(stmt_);
+  if (OB_ISNULL(set_pwd_stmt) || T_USER_RESOURCE_OPTIONS != resource_options.type_
+      || OB_ISNULL(resource_options.children_)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid resource options argument", K(ret), K(set_pwd_stmt),
+              K(resource_options.type_), K(resource_options.children_));
+  } else {
+    for (int64_t i = 0; i < resource_options.num_child_; i++) {
+      ParseNode *res_option = resource_options.children_[i];
+      if (OB_ISNULL(res_option)) {
+        ret = common::OB_INVALID_ARGUMENT;
+        LOG_WARN("null res option", K(ret), K(i));
+      } else if (T_MAX_CONNECTIONS_PER_HOUR == res_option->type_) {
+        uint64_t max_connections_per_hour = static_cast<uint64_t>(res_option->value_);
+        max_connections_per_hour = max_connections_per_hour > MAX_CONNECTIONS ? MAX_CONNECTIONS
+                                    : max_connections_per_hour;
+        set_pwd_stmt->set_max_connections_per_hour(max_connections_per_hour);
+      } else if (T_MAX_USER_CONNECTIONS == res_option->type_) {
+        uint64_t max_user_connections = static_cast<uint64_t>(res_option->value_);
+        max_user_connections = max_user_connections > MAX_CONNECTIONS ? MAX_CONNECTIONS
+                                : max_user_connections;
+        set_pwd_stmt->set_max_user_connections(max_user_connections);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    set_pwd_stmt->set_modify_max_connections(true);
+    ObString password;
+    set_pwd_stmt->set_need_enc(false);
+    if (OB_FAIL(set_pwd_stmt->set_user_password(user_name, host_name, password))) {
+      LOG_WARN("Failed to set UserPasswordStmt");
+    } else if (OB_FAIL(set_pwd_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
+                        infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                        infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                        infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
+      LOG_WARN("Failed to add_ssl_info", K(ssl_type),
+                "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
     }
   }
   return ret;

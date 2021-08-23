@@ -666,6 +666,8 @@ int ObOptimizerUtil::compute_const_exprs(
               LOG_WARN("failed to push back expr", K(ret));
             } else { /*do nothing*/
             }
+          } else if (T_BOOL == const_expr->get_expr_type()) {
+            // is true/false will not be regarded as const
           } else if (OB_FAIL(add_var_to_array_no_dup(const_exprs, common_expr))) {
             LOG_WARN("failed to push back expr", K(ret));
           } else { /*do nothing*/

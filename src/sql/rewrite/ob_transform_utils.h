@@ -81,6 +81,14 @@ private:
   };
 
 public:
+  enum NULLABLE_SCOPE {
+    NS_FROM     = 1 << 0,
+    NS_WHERE    = 1 << 1,
+    NS_GROUPBY  = 1 << 2,
+    NS_HAVING   = 1 << 3,
+    NS_TOP      = 1 << 4
+  };
+
   static int is_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_correlated);
 
   static int is_correlated_subquery(ObSelectStmt* subquery,
@@ -267,6 +275,12 @@ public:
   static int find_expr(const ObIArray<const ObRawExpr*>& source, const ObRawExpr* target, bool& bret);
 
   static int find_expr(const ObIArray<OrderItem>& source, const ObRawExpr* target, bool& bret);
+
+  static int check_nullable_exprs_in_groupby(ObDMLStmt *stmt, ObRawExpr *expr, int nullable_scope, bool &found);
+
+  static int find_expr_in_groupby_clause(ObSelectStmt *select_stmt, ObRawExpr *column_expr, bool &found);
+  
+  static int find_expr_in_scala_groupby(ObSelectStmt *select_stmt, ObRawExpr *expr, bool &found);
 
   /**
    * @brief is_null_propagate_type

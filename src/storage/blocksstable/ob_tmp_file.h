@@ -374,7 +374,7 @@ private:
         : tenant_id_(tenant_id), fd_list_(fd_list)
     {}
     ~RmTenantTmpFileOp() = default;
-    bool operator()(common::hash::HashMapPair<int64_t, ObTmpFile*>& entry)
+    int operator()(common::hash::HashMapPair<int64_t, ObTmpFile *> &entry)
     {
       int ret = OB_SUCCESS;
       ObTmpFile* tmp_file = entry.second;
@@ -386,7 +386,7 @@ private:
           STORAGE_LOG(WARN, "fd_list_ push back failed", K(ret));
         }
       }
-      return OB_SUCCESS == ret;
+      return ret;
     }
 
   private:

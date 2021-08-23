@@ -87,6 +87,14 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow*& row)
                         ObCharset::get_default_collation(ObCharset::get_default_charset()));
                     break;
                   }
+                  case (MAX_CONNECTIONS): {
+                    cells[col_idx].set_int(static_cast<int64_t>(user_info->get_max_connections()));
+                    break;
+                  }
+                  case (MAX_USER_CONNECTIONS): {
+                    cells[col_idx].set_int(static_cast<int64_t>(user_info->get_max_user_connections()));
+                    break;
+                  }
 #define EXIST_PRIV_CASE(PRIV_NAME)                                                                         \
   case (PRIV_NAME##_PRIV): {                                                                               \
     cells[col_idx].set_varchar((user_info->get_priv_set() & OB_PRIV_##PRIV_NAME) ? "Y" : "N");             \
@@ -141,8 +149,6 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow*& row)
                     COLUMN_SET_WITH_TYPE(X509_SUBJECT, varchar, user_info->get_x509_subject());
                     COLUMN_SET_WITH_TYPE(MAX_QUESTIONS, int, 0);
                     COLUMN_SET_WITH_TYPE(MAX_UPDATES, int, 0);
-                    COLUMN_SET_WITH_TYPE(MAX_CONNECTIONS, int, 0);
-                    COLUMN_SET_WITH_TYPE(MAX_USER_CONNECTIONS, int, 0);
                     COLUMN_SET_WITH_TYPE(PLUGIN, varchar, "ob_native_password");
                     COLUMN_SET_WITH_TYPE(AUTHENTICATION_STRING, varchar, "");
                     COLUMN_SET_WITH_TYPE(PASSWORD_EXPIRED, varchar, "");

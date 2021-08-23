@@ -43,6 +43,8 @@ public:
       const common::ObString* ddl_stmt_str, common::ObISQLClient& sql_client);
   virtual int set_passwd(const ObUserInfo& user_info, const int64_t new_schema_version,
       const common::ObString* ddl_stmt_str, common::ObISQLClient& sql_client);
+  virtual int set_max_connections(const ObUserInfo &user_info, const int64_t new_schema_version,
+      const ObString *ddl_stmt_str, ObISQLClient &sql_client);
   virtual int alter_user_require(const ObUserInfo& user_info, const int64_t new_schema_version,
       const common::ObString* ddl_stmt_str, common::ObISQLClient& sql_client);
   virtual int grant_revoke_user(const ObUserInfo& user_info, const int64_t new_schema_version,
