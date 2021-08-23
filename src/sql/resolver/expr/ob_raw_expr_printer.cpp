@@ -157,6 +157,10 @@ int ObRawExprPrinter::print(ObRawExpr* expr)
         PRINT_EXPR(set_op_expr);
         break;
       }
+      case ObRawExpr::EXPR_VAR: {
+        /* skip */
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown expr class", K(ret), K(expr->get_expr_class()));
@@ -427,8 +431,13 @@ int ObRawExprPrinter::print(ObOpRawExpr* expr)
         SET_SYMBOL_IF_EMPTY("not in");  // not in sub-query wille be rewrited as expr != all(sub-query)
       case T_OP_BIT_OR:
         SET_SYMBOL_IF_EMPTY("|");
-      case T_OP_BIT_XOR:
       case T_OP_XOR:
+        if (lib::is_mysql_mode()) {
+          SET_SYMBOL_IF_EMPTY("xor");
+        } else {
+          SET_SYMBOL_IF_EMPTY("^");
+        }
+      case T_OP_BIT_XOR:
         SET_SYMBOL_IF_EMPTY("^");
       case T_OP_BIT_AND:
         SET_SYMBOL_IF_EMPTY("&");

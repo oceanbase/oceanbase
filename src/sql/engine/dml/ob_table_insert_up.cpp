@@ -322,6 +322,7 @@ int ObTableInsertUp::get_next_row(ObExecContext& ctx, const ObNewRow*& row) cons
   } else if (update_ctx->cur_gi_task_iter_end_) {
     ret = OB_ITER_END;
   } else {
+    bool is_filtered = false;
     if (update_ctx->get_count_ == 0) {
       update_ctx->get_update_row().projector_ = old_projector_;
       update_ctx->get_update_row().projector_size_ = old_projector_size_;
@@ -341,6 +342,16 @@ int ObTableInsertUp::get_next_row(ObExecContext& ctx, const ObNewRow*& row) cons
         LOG_WARN("failed to check row null", K(ret), K(*row));
       } else if (OB_FAIL(ForeignKeyHandle::do_handle(*update_ctx, fk_args_, old_row, *row))) {
         LOG_WARN("failed to handle foreign key", K(ret), K(old_row), K(*row));
+      } else if (OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
+        update_ctx->expr_ctx_, *row, check_constraint_exprs_, is_filtered))) {
+        LOG_WARN("failed to handle check constraint", K(ret), K(old_row), K(*row));
+      } else if (is_filtered) {
+        if (share::is_mysql_mode() && update_ctx->dml_param_.is_ignore_) {
+          ret = OB_ITER_END; //ignore flag ,skip this row
+        } else {
+          ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+          LOG_WARN("row is filtered by check filters, running is stopped");
+        }
       }
     } else {
       ret = OB_ITER_END;
@@ -443,8 +454,10 @@ int ObTableInsertUp::do_table_insert_up(ObExecContext& ctx) const
     LOG_WARN("wrap expression context failed", K(ret));
   } else {
     NG_TRACE(insertup_start_do);
+    bool is_filtered = false;
     while (OB_SUCC(ret) && OB_SUCCESS == (ret = child_op_->get_next_row(ctx, insert_row))) {
       NG_TRACE_TIMES(2, insertup_start_calc_insert_row);
+      is_filtered = false;
       if (OB_FAIL(calc_insert_row(ctx, expr_ctx, insert_row))) {
         LOG_WARN("fail to calc insert row", K(ret));
       } else if (OB_ISNULL(insert_row)) {
@@ -454,6 +467,16 @@ int ObTableInsertUp::do_table_insert_up(ObExecContext& ctx) const
         LOG_WARN("fail to check_row_null", K(ret), K(*insert_row));
       } else if (OB_FAIL(ForeignKeyHandle::do_handle_new_row(*insert_update_ctx, fk_args_, *insert_row))) {
         LOG_WARN("fail to handle foreign key", K(ret), K(*insert_row));
+      } else if (OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
+        insert_update_ctx->expr_ctx_, *insert_row, check_constraint_exprs_, is_filtered))) {
+        LOG_WARN("fail to handle check constraint", K(ret), K(*insert_row));
+      } else if (is_filtered) {
+        if (share::is_mysql_mode() && insert_update_ctx->dml_param_.is_ignore_) {
+          //ignore flag ,skip this row
+        } else {
+          ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+          LOG_WARN("row is filtered by check filters, running is stopped");
+        }
       } else {
         insert_update_ctx->found_rows_++;
         // 1. Try to insert and require the storage layer to return the first row that encounters conflicts

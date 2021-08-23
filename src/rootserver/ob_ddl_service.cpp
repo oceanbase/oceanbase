@@ -902,6 +902,7 @@ int ObDDLService::generate_schema(const ObCreateTableArg& arg, ObTableSchema& sc
   ObSchemaService* schema_service = NULL;
   const ObDatabaseSchema* database_schema = NULL;
   const ObTenantSchema* tenant_schema = NULL;
+  bool is_oracle_mode = false;
   ObSchemaGetterGuard guard;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
@@ -976,6 +977,10 @@ int ObDDLService::generate_schema(const ObCreateTableArg& arg, ObTableSchema& sc
     }
   }
   // constraints
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+              schema.get_tenant_id(), is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < constraints.count(); ++i) {
     ObConstraint& cst = const_cast<ObConstraint&>(constraints.at(i));
     cst.set_tenant_id(tenant_id);
@@ -986,10 +991,13 @@ int ObDDLService::generate_schema(const ObCreateTableArg& arg, ObTableSchema& sc
     if (!cst.get_constraint_name_str().empty()) {
       bool is_constraint_name_exist = true;
       if (OB_FAIL(
-              check_constraint_name_is_exist(guard, schema, cst.get_constraint_name_str(), is_constraint_name_exist))) {
+              check_constraint_name_is_exist(guard, schema, cst.get_constraint_name_str(), true, is_oracle_mode, is_constraint_name_exist))) {
         LOG_WARN("fail to check constraint name is exist or not", K(ret), K(cst.get_constraint_name_str()));
       } else if (is_constraint_name_exist) {
         ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+        if (!is_oracle_mode) {
+          LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, cst.get_constraint_name_str().length(), cst.get_constraint_name_str().ptr());
+        }
         LOG_WARN("cst name is duplicate", K(ret), K(cst.get_constraint_name_str()));
       }
     }
@@ -1048,13 +1056,20 @@ int ObDDLService::get_uk_cst_id_for_self_ref(const ObIArray<ObTableSchema>& tabl
 
 int ObDDLService::check_constraint_name_is_exist(share::schema::ObSchemaGetterGuard& schema_guard,
     const share::schema::ObTableSchema& table_schema, const common::ObString& constraint_name,
-    bool& is_constraint_name_exist)
+    bool check_constraint, bool check_foreign_key, bool& is_constraint_name_exist)
 {
   int ret = OB_SUCCESS;
   uint64_t constraint_id = OB_INVALID_ID;
-  is_constraint_name_exist = true;
-
-  if (OB_FAIL(schema_guard.get_constraint_id(
+  is_constraint_name_exist = false;
+  bool is_oracle_mode = false;
+  if (!check_constraint) {
+    // do nothing
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+              table_schema.get_tenant_id(), is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  } else if (!is_oracle_mode && table_schema.is_tmp_table()) {
+    // tmp table in mysql mode
+  } else if (OB_FAIL(schema_guard.get_constraint_id(
           table_schema.get_tenant_id(), table_schema.get_database_id(), constraint_name, constraint_id))) {
     LOG_WARN("get constraint id failed",
         K(ret),
@@ -1064,18 +1079,20 @@ int ObDDLService::check_constraint_name_is_exist(share::schema::ObSchemaGetterGu
   } else if (OB_INVALID_ID != constraint_id) {
     is_constraint_name_exist = true;
   } else {
-    if (OB_FAIL(schema_guard.get_foreign_key_id(
-            table_schema.get_tenant_id(), table_schema.get_database_id(), constraint_name, constraint_id))) {
-      LOG_WARN("get foreign key id failed",
-          K(ret),
-          K(table_schema.get_tenant_id()),
-          K(table_schema.get_database_id()),
-          K(constraint_name));
-    } else if (OB_INVALID_ID != constraint_id) {
-      is_constraint_name_exist = true;
-    } else {
-      is_constraint_name_exist = false;
-    }
+    //do nothing
+  }
+  if (OB_FAIL(ret) || !check_foreign_key || is_constraint_name_exist) { // do nothing
+  } else if (OB_FAIL(schema_guard.get_foreign_key_id(
+          table_schema.get_tenant_id(), table_schema.get_database_id(), constraint_name, constraint_id))) {
+    LOG_WARN("get foreign key id failed",
+        K(ret),
+        K(table_schema.get_tenant_id()),
+        K(table_schema.get_database_id()),
+        K(constraint_name));
+  } else if (OB_INVALID_ID != constraint_id) {
+    is_constraint_name_exist = true;
+  } else {
+    //do nothing
   }
 
   return ret;
@@ -2885,6 +2902,40 @@ int ObDDLService::set_raw_table_options(const AlterTableSchema& alter_table_sche
                 new_table_schema.set_database_id(database_id);
               }
             }
+
+            if (OB_SUCC(ret) && !is_oracle_mode &&
+                orig_table_schema->get_database_id() != new_table_schema.get_database_id()) {
+              //check if constraint/foreign key name is exist when raname table (mysql mode)
+              new_table_schema.set_table_type(orig_table_schema->get_table_type());
+              bool is_constraint_name_exist = true;
+              ObTableSchema::const_constraint_iterator iter = orig_table_schema->constraint_begin();
+              for (; OB_SUCC(ret) && iter != orig_table_schema->constraint_end(); ++iter) {
+                if (OB_FAIL(check_constraint_name_is_exist(
+                      schema_guard, new_table_schema, (*iter)->get_constraint_name_str(), true, is_oracle_mode, is_constraint_name_exist))) {
+                  LOG_WARN(
+                      "fail to check check constraint name is exist or not", K(ret), K((*iter)->get_constraint_name_str()));
+                } else if (is_constraint_name_exist) {
+                  ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+                  if (!is_oracle_mode) {
+                    LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, (*iter)->get_constraint_name_str().length(), (*iter)->get_constraint_name_str().ptr());
+                  }
+                  LOG_WARN("check constraint name is duplicate", K(ret), K((*iter)->get_constraint_name_str()));
+                }
+              }
+              const common::ObIArray<ObForeignKeyInfo>& foreign_keys = orig_table_schema->get_foreign_key_infos();
+              for (int i = 0;OB_SUCC(ret) && i < foreign_keys.count(); ++i) {
+                if (OB_FAIL(check_constraint_name_is_exist(
+                            schema_guard, new_table_schema, foreign_keys.at(i).foreign_key_name_, is_oracle_mode, true, is_constraint_name_exist))) {
+                  LOG_WARN("fail to check foreign key name is exist or not", K(ret), K(foreign_keys.at(i).foreign_key_name_));
+                } else if (is_constraint_name_exist) {
+                  ret = OB_ERR_DUP_KEY;
+                  LOG_USER_ERROR(OB_ERR_DUP_KEY,
+                      table_name.length(),
+                      table_name.ptr());
+                  LOG_WARN("foreign key name is duplicate", K(ret), K(foreign_keys.at(i).foreign_key_name_));
+                }
+              }
+            }
           }
           break;
         }
@@ -3668,19 +3719,26 @@ int ObDDLService::alter_table_constraints(const ObAlterTableArg::AlterConstraint
       for (ObTableSchema::const_constraint_iterator iter_r = iter + 1;
            OB_SUCC(ret) && iter_r != inc_table_schema.constraint_end();
            iter_r++) {
-        if ((*iter_r)->get_constraint_name_str() == cst_name) {
-          if (is_oracle_mode) {
-            ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
-          } else {
-            ret = OB_ERR_CONSTRAINT_DUPLICATE;
-          }
+        if (is_oracle_mode && (*iter_r)->get_constraint_name_str() == cst_name) {
+          ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+          LOG_WARN("duplicate constraint name", K(ret), K(cst_name));
+        } else if (!is_oracle_mode && 0 == cst_name.case_compare((*iter_r)->get_constraint_name_str())) {
+          ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+          LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, cst_name.length(), cst_name.ptr());
           LOG_WARN("duplicate constraint name", K(ret), K(cst_name));
         }
       }
       if (OB_SUCC(ret)) {
-        ObConstraint* const* res = std::find_if(orig_table_schema.constraint_begin(),
+        ObConstraint* const* res = nullptr;
+        if (is_oracle_mode) {
+          res = std::find_if(orig_table_schema.constraint_begin(),
             orig_table_schema.constraint_end(),
             [&cst_name](const ObConstraint* cst) { return cst_name == cst->get_constraint_name_str(); });
+        } else {
+          res = std::find_if(orig_table_schema.constraint_begin(),
+            orig_table_schema.constraint_end(),
+            [&cst_name](const ObConstraint* cst) { return 0 == cst_name.case_compare(cst->get_constraint_name_str()); });
+        }
         if (orig_table_schema.constraint_end() == res) {
           if (obrpc::ObAlterTableArg::DROP_CONSTRAINT == op_type ||
               obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == op_type) {
@@ -3689,10 +3747,9 @@ int ObDDLService::alter_table_constraints(const ObAlterTableArg::AlterConstraint
           }
         } else {
           if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == op_type) {
-            if (is_oracle_mode) {
-              ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
-            } else {
-              ret = OB_ERR_CONSTRAINT_DUPLICATE;
+            ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+            if (!is_oracle_mode) {
+              LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, cst_name.length(), cst_name.ptr());
             }
             LOG_WARN("constraint duplicate", K(ret), K(cst_name));
           } else if (obrpc::ObAlterTableArg::DROP_CONSTRAINT == op_type ||
@@ -6079,7 +6136,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int
       }
       // check check constraint info
       if (OB_FAIL(ret)) {
-      } else if (is_oracle_mode && alter_table_arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ADD_CONSTRAINT) {
+      } else if (alter_table_arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ADD_CONSTRAINT) {
         ObTableSchema::const_constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin();
         if (iter + 1 != alter_table_arg.alter_table_schema_.constraint_end()) {
           ret = OB_ERR_UNEXPECTED;
@@ -6090,11 +6147,14 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int
         } else {
           bool is_check_constraint_name_exist = true;
           if (OB_FAIL(check_constraint_name_is_exist(
-                  schema_guard, *table_schema, (*iter)->get_constraint_name_str(), is_check_constraint_name_exist))) {
+                  schema_guard, *table_schema, (*iter)->get_constraint_name_str(), true, is_oracle_mode, is_check_constraint_name_exist))) {
             LOG_WARN(
                 "fail to check check constraint name is exist or not", K(ret), K((*iter)->get_constraint_name_str()));
           } else if (is_check_constraint_name_exist) {
             ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+            if (!is_oracle_mode) {
+              LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, (*iter)->get_constraint_name_str().length(), (*iter)->get_constraint_name_str().ptr());
+            }
             LOG_WARN("check constraint name is duplicate", K(ret), K((*iter)->get_constraint_name_str()));
           }
         }
@@ -6107,7 +6167,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int
         if (!foreign_key_arg.foreign_key_name_.empty()) {
           bool is_foreign_key_name_exist = true;
           if (OB_FAIL(check_constraint_name_is_exist(
-                  schema_guard, *table_schema, foreign_key_arg.foreign_key_name_, is_foreign_key_name_exist))) {
+                schema_guard, *table_schema, foreign_key_arg.foreign_key_name_, is_oracle_mode, true, is_foreign_key_name_exist))) {
             LOG_WARN("fail to check foreign key name is exist or not", K(ret), K(foreign_key_arg.foreign_key_name_));
           } else if (is_foreign_key_name_exist) {
             if (foreign_key_arg.is_modify_fk_state_) {
@@ -7255,6 +7315,40 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg& rename_table_arg)
               }
             }
 
+            if (OB_SUCC(ret) && !is_oracle_mode &&
+              from_table_schema->get_database_id() != database_schema->get_database_id()) {
+              //check if constraint/foreign key name is exist when rename table (mysql mode)
+              ObTableSchema tmp_schema;
+              tmp_schema.set_tenant_id(tenant_id);
+              tmp_schema.set_table_type(from_table_schema->get_table_type());
+              tmp_schema.set_database_id(database_schema->get_database_id());
+              bool is_constraint_name_exist = true;
+              ObTableSchema::const_constraint_iterator iter = from_table_schema->constraint_begin();
+              for (;OB_SUCC(ret) && iter != from_table_schema->constraint_end(); ++iter) {
+                if (OB_FAIL(check_constraint_name_is_exist(
+                      schema_guard, tmp_schema, (*iter)->get_constraint_name_str(), true, is_oracle_mode, is_constraint_name_exist))) {
+                  LOG_WARN(
+                      "fail to check check constraint name is exist or not", K(ret), K((*iter)->get_constraint_name_str()));
+                } else if (is_constraint_name_exist) {
+                  ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+                  LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, (*iter)->get_constraint_name_str().length(), (*iter)->get_constraint_name_str().ptr());
+                  LOG_WARN("check constraint name is duplicate", K(ret), K((*iter)->get_constraint_name_str()));
+                }
+              }
+              const common::ObIArray<ObForeignKeyInfo>& foreign_keys = from_table_schema->get_foreign_key_infos();
+              for (int i = 0; OB_SUCC(ret) && i < foreign_keys.count(); ++i) {
+                if (OB_FAIL(check_constraint_name_is_exist(
+                            schema_guard, tmp_schema, foreign_keys.at(i).foreign_key_name_, is_oracle_mode, true, is_constraint_name_exist))) {
+                  LOG_WARN("fail to check foreign key name is exist or not", K(ret), K(foreign_keys.at(i).foreign_key_name_));
+                } else if (is_constraint_name_exist) {
+                  ret = OB_ERR_DUP_KEY;
+                  LOG_USER_ERROR(OB_ERR_DUP_KEY,
+                      rename_item.new_table_name_.length(),
+                      rename_item.new_table_name_.ptr());
+                  LOG_WARN("foreign key name is duplicate", K(ret), K(foreign_keys.at(i).foreign_key_name_));
+                }
+              }
+            }
             if (OB_SUCC(ret)) {
               ObSqlString sql;
               if (!is_oracle_mode) {
@@ -8232,6 +8326,7 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema& orig_tab
   ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   ObTableSchema new_table_schema;
+  bool is_oracle_mode = false;
   if (OB_FAIL(new_table_schema.assign(orig_table_schema))) {
     LOG_WARN("fail to assign schema", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
@@ -8246,6 +8341,28 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema& orig_tab
     new_table_schema.set_database_id(new_database_schema.get_database_id());
     new_table_schema.set_create_mem_version(frozen_version);
     new_table_schema.reset_foreign_key_infos();
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                new_table_schema.get_tenant_id(), is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (!is_oracle_mode && new_table_schema.has_constraint()) { //reset check constraint name in mysql mode
+      ObTableSchema::const_constraint_iterator iter = new_table_schema.constraint_begin();
+      ObTableSchema::const_constraint_iterator iter_last = iter;
+      ObString new_constraint_name;
+      for (;OB_SUCC(ret) && iter != new_table_schema.constraint_end();++iter) {
+        (*iter)->set_table_id(new_table_id);
+        (*iter)->set_tenant_id(tenant_id);
+        do {
+          if (OB_FAIL(ObTableSchema::create_cons_name_automatically(
+                new_constraint_name, new_table_name, allocator, (*iter)->get_constraint_type()))) {
+            SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+          }
+        } while (OB_SUCC(ret) && (*iter_last)->get_constraint_name_str() == new_constraint_name);
+        if (OB_SUCC(ret)) {
+          (*iter)->set_constraint_name(new_constraint_name);
+        }
+        iter_last = iter;
+      }
+    }
     if (orig_table_schema.is_sys_table() || orig_table_schema.is_vir_table()) {
       new_table_schema.set_table_type(USER_TABLE);
     } else if (orig_table_schema.is_sys_view()) {

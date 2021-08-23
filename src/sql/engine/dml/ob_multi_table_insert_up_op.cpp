@@ -204,6 +204,10 @@ int ObMultiTableInsertUpOp::shuffle_final_insert_row(ObExecContext& ctx, const O
       MY_SPEC.table_dml_infos_.at(0).index_infos_.at(0).se_subplans_.at(INSERT_OP).subplan_root_;
   CK(OB_NOT_NULL(insert_spec));
   OZ(ForeignKeyHandle::do_handle_new_row(*this, insert_spec->fk_args_, insert_row));
+  bool is_filtered = false;
+  int end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
+  OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, end_idx));
+  OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
   OZ(MY_SPEC.shuffle_dml_row(ctx, *this, insert_row, INSERT_OP));
   return ret;
 }
@@ -225,6 +229,10 @@ int ObMultiTableInsertUpOp::shuffle_insert_row(
   CK(OB_NOT_NULL(insert_spec));
   OZ(ForeignKeyHandle::do_handle_new_row(*this, insert_spec->fk_args_, MY_SPEC.insert_row_));
 
+  bool is_filtered = false;
+  int end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
+  OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, end_idx));
+  OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
   OZ(MY_SPEC.duplicate_key_checker_.insert_new_row(dupkey_checker_ctx_, insert_exprs, insert_row), insert_row);
   OZ(MY_SPEC.shuffle_dml_row(ctx_, *this, insert_exprs, INSERT_OP), insert_row);
   return ret;
@@ -279,6 +287,11 @@ int ObMultiTableInsertUpOp::shuffle_update_row(const ObChunkDatumStore::StoredRo
     OZ(check_row_null(MY_SPEC.new_row_, MY_SPEC.column_infos_));
     CK(OB_NOT_NULL(sub_update));
     OZ(ForeignKeyHandle::do_handle(*this, sub_update->fk_args_, sub_update->old_row_, sub_update->new_row_));
+    bool is_filtered = false;
+    int beg_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
+    int end_idx = MY_SPEC.check_constraint_exprs_.count();
+    OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, beg_idx, end_idx));
+    OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < global_index_infos->count(); ++i) {
     ObExpr* old_calc_part_id_expr = global_index_infos->at(i).calc_part_id_exprs_.at(0);

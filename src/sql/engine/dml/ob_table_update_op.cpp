@@ -247,13 +247,20 @@ int ObTableUpdateOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
                 MY_SPEC.new_row_);
             OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
             if (OB_SUCC(ret) && is_filtered) {
-              ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-              LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
+              if (share::is_mysql_mode() && dml_param_.is_ignore_) {
+                changed_rows_ --;
+                affected_rows_ --;
+                need_update_ = false;
+              } else {
+                ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+                LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
+              }
             }
           }
-        } else {
+        }
+        if (!need_update_) {
           if (OB_FAIL(lock_row(MY_SPEC.old_row_, dml_param_, part_key_))) {
-            // lock row if no changes
+            // lock row if no changes or ignored
             if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
               LOG_WARN("fail to lock row", K(ret), K(lock_row_), K(part_key_));
             }

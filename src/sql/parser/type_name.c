@@ -320,7 +320,6 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_TIME_TO_SEC : return "T_FUN_SYS_TIME_TO_SEC";
 	case T_FUN_SYS_SEC_TO_TIME : return "T_FUN_SYS_SEC_TO_TIME";
 	case T_FUN_SYS_INTERVAL : return "T_FUN_SYS_INTERVAL";
-	case T_FUN_SYS_CONVERT_TZ : return "T_FUN_SYS_CONVERT_TZ";
 	case T_FUN_UDF : return "T_FUN_UDF";
 	case T_FUN_SYS_SUBTIME : return "T_FUN_SYS_SUBTIME";
 	case T_FUN_SYS_SQRT : return "T_FUN_SYS_SQRT";
@@ -372,6 +371,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_QUARTER : return "T_FUN_SYS_QUARTER";
 	case T_FUN_SYS_BIT_LENGTH : return "T_FUN_SYS_BIT_LENGTH";
 	case T_FUN_SYS_PI : return "T_FUN_SYS_PI";
+	case T_FUN_SYS_EXPORT_SET : return "T_FUN_SYS_EXPORT_SET";
 	case T_MYSQL_ONLY_SYS_MAX_OP : return "T_MYSQL_ONLY_SYS_MAX_OP";
 	case T_FUN_SYS_CONNECT_BY_PATH : return "T_FUN_SYS_CONNECT_BY_PATH";
 	case T_FUN_SYS_SYSTIMESTAMP : return "T_FUN_SYS_SYSTIMESTAMP";
@@ -519,6 +519,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_UTC_TIME : return "T_FUN_SYS_UTC_TIME";
 	case T_FUN_SYS_UTC_DATE : return "T_FUN_SYS_UTC_DATE";
 	case T_FUN_SYS_TIME_FORMAT : return "T_FUN_SYS_TIME_FORMAT";
+	case T_FUN_SYS_CONVERT_TZ : return "T_FUN_SYS_CONVERT_TZ";
 	case T_FUN_SYS_END : return "T_FUN_SYS_END";
 	case T_MAX_OP : return "T_MAX_OP";
 	case T_FUN_MATCH_AGAINST : return "T_FUN_MATCH_AGAINST";
@@ -1360,6 +1361,8 @@ const char* get_type_name(int type)
 	case T_NORELY_CONSTRAINT : return "T_NORELY_CONSTRAINT";
 	case T_ENABLE_CONSTRAINT : return "T_ENABLE_CONSTRAINT";
 	case T_DISABLE_CONSTRAINT : return "T_DISABLE_CONSTRAINT";
+	case T_ENFORCED_CONSTRAINT : return "T_ENFORCED_CONSTRAINT";
+	case T_NOENFORCED_CONSTRAINT : return "T_NOENFORCED_CONSTRAINT";
 	case T_VALIDATE_CONSTRAINT : return "T_VALIDATE_CONSTRAINT";
 	case T_NOVALIDATE_CONSTRAINT : return "T_NOVALIDATE_CONSTRAINT";
 	case T_RELATION_FACTOR_IN_USE_JOIN_HINT_LIST : return "T_RELATION_FACTOR_IN_USE_JOIN_HINT_LIST";
@@ -1553,7 +1556,6 @@ const char* get_type_name(int type)
 	case T_HASH_PARTITION_LIST : return "T_HASH_PARTITION_LIST";
 	case T_RANGE_PARTITION_LIST : return "T_RANGE_PARTITION_LIST";
 	case T_LIST_PARTITION_LIST : return "T_LIST_PARTITION_LIST";
-	case T_FUN_SYS_EXPORT_SET : return "T_FUN_SYS_EXPORT_SET";
 	default:return "Unknown";
 	}
 }

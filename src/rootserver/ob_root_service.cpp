@@ -4309,7 +4309,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
           if (!foreign_key_arg.foreign_key_name_.empty()) {
             bool is_foreign_key_name_exist = true;
             if (OB_FAIL(ddl_service_.check_constraint_name_is_exist(
-                    schema_guard, table_schema, foreign_key_arg.foreign_key_name_, is_foreign_key_name_exist))) {
+                  schema_guard, table_schema, foreign_key_arg.foreign_key_name_, is_oracle_mode, true, is_foreign_key_name_exist))) {
               LOG_WARN("fail to check foreign key name is exist or not", K(ret), K(foreign_key_arg.foreign_key_name_));
             } else if (is_foreign_key_name_exist) {
               if (is_oracle_mode) {
@@ -4619,8 +4619,7 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg& arg, obrpc::ObAlter
         } else if (OB_ISNULL(simple_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("simple_table_schema is NULL ptr", K(ret), K(simple_table_schema), K(ret));
-        } else if (is_oracle_mode &&
-                   (arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ADD_CONSTRAINT ||
+        } else if ((arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ADD_CONSTRAINT ||
                        arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE)) {
           ObTableSchema::const_constraint_iterator iter = arg.alter_table_schema_.constraint_begin();
           if (iter + 1 != arg.alter_table_schema_.constraint_end()) {

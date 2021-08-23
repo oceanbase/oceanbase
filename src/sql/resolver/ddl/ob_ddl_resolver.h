@@ -224,7 +224,7 @@ public:
   int check_column_in_foreign_key_for_oracle(const share::schema::ObTableSchema& table_schema,
       const ObString& column_name, ObAlterTableStmt* alter_table_stmt);
 
-  int check_column_in_check_constraint_for_oracle(const share::schema::ObTableSchema& table_schema,
+  int check_column_in_check_constraint(const share::schema::ObTableSchema& table_schema,
       const ObString& column_name, ObAlterTableStmt* alter_table_stmt);
 
   int check_index_columns_equal_foreign_key(
@@ -333,6 +333,7 @@ protected:
   int resolve_check_constraint_node(const ParseNode& cst_node, common::ObSEArray<share::schema::ObConstraint, 4>& csts,
       const share::schema::ObColumnSchemaV2* column_schema = NULL);
   int resolve_check_cst_state_node(const ParseNode* cst_check_state_node, share::schema::ObConstraint& cst);
+  int resolve_check_mysql_cst_state_node(const ParseNode* cst_check_state_node, share::schema::ObConstraint& cst);
   int resolve_pk_constraint_node(
       const ParseNode& cst_node, common::ObString pk_name, common::ObSEArray<share::schema::ObConstraint, 4>& csts);
   int check_partid_valid(const ObDDLStmt* stmt, const int64_t part_id, const int64_t max_used_part_id, bool& valid);

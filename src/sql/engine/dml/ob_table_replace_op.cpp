@@ -232,6 +232,9 @@ int ObTableReplaceOp::try_insert(ObSQLSessionInfo& my_session, const ObPartition
 
   OZ(check_row_null(MY_SPEC.output_, MY_SPEC.column_infos_));
   OZ(ForeignKeyHandle::do_handle_new_row(*this, MY_SPEC.get_fk_args(), MY_SPEC.output_));
+  bool is_filtered = false;
+  OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
+  OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
   OZ(project_row(MY_SPEC.output_.get_data(), MY_SPEC.get_output_count(), new_row));
   if (OB_SUCC(ret)) {
     record_++;

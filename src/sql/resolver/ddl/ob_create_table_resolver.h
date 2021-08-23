@@ -62,7 +62,7 @@ private:
   int check_column_name_duplicate(const ParseNode* node);
   int resolve_primary_key_node(const ParseNode& pk_node, common::ObArray<ObColumnResolveStat>& stats);
   int resolve_table_elements(const ParseNode* node, common::ObArray<int>& idx_index_node,
-      common::ObArray<int>& foreign_key_node_position_list, const int resolve_rule);
+      common::ObArray<int>& foreign_key_node_position_list, ObArray<int>& table_level_constraint_list, const int resolve_rule);
   int resolve_table_elements_from_select(const ParseNode& parse_tree);
   int set_nullable_for_cta_column(
       ObSelectStmt* select_stmt, share::schema::ObColumnSchemaV2& column, const ObRawExpr* expr);
@@ -81,6 +81,7 @@ private:
   int resolve_index_node(const ParseNode* node);
   int resolve_index_name(
       const ParseNode* node, const common::ObString& first_column_name, bool is_unique, ObString& uk_name);
+  int resolve_table_level_constraint(const ParseNode* node, ObArray<int>& constraint_position_list);
   int build_partition_key_info(share::schema::ObTableSchema& table_schema, const bool is_subpart);
   // resolve partitoin option only used in ObCreateTableResolver now.
   int resolve_partition_option(ParseNode* node, share::schema::ObTableSchema& table_schema);

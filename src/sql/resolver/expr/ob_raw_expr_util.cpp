@@ -1156,7 +1156,7 @@ int ObRawExprUtils::build_check_constraint_expr(ObRawExprFactory& expr_factory, 
           op_exprs))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (OB_UNLIKELY(expr->has_flag(CNT_SUB_QUERY))) {
-    ret = OB_ERR_INVALID_SUBQUERY_USE;
+    ret = lib::is_mysql_mode() ? OB_ERR_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED:OB_ERR_INVALID_SUBQUERY_USE;
     LOG_WARN("subquery not allowed here", K(ret));
   } else if (OB_UNLIKELY(expr->has_flag(CNT_AGG))) {
     ret = OB_ERR_GROUP_FUNC_NOT_ALLOWED;
@@ -1169,13 +1169,31 @@ int ObRawExprUtils::build_check_constraint_expr(ObRawExprFactory& expr_factory, 
         K(expr->has_flag(CNT_PSEUDO_COLUMN)));
   } else if (OB_UNLIKELY(expr->has_flag(CNT_WINDOW_FUNC))) {
     ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
-  } else if (OB_UNLIKELY(sys_vars.count() > 0 || expr->has_flag(CNT_CUR_TIME) || expr->has_flag(CNT_STATE_FUNC))) {
-    ret = OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST;
-    LOG_WARN("date or system variable wrongly specified in CHECK constraint",
-        K(ret),
-        K(expr->has_flag(CNT_CUR_TIME)),
-        K(expr->has_flag(CNT_STATE_FUNC)));
-  } else { /*do nothing*/
+  } else if (lib::is_oracle_mode()) {
+    if (OB_UNLIKELY(sys_vars.count() > 0 || expr->has_flag(CNT_CUR_TIME) || expr->has_flag(CNT_STATE_FUNC))) {
+      ret = OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST;
+      LOG_WARN("date or system variable wrongly specified in CHECK constraint",
+          K(ret),
+          K(expr->has_flag(CNT_CUR_TIME)),
+          K(expr->has_flag(CNT_STATE_FUNC)));
+    } else {/*do nothing*/
+    }
+  } else { //mysql mode
+    LOG_INFO("sysfunc:",K(get_type_name(expr->get_expr_type())),K(expr->get_expr_type()));
+    if (OB_UNLIKELY(sys_vars.count() > 0)) {
+      ret = OB_ERR_CHECK_CONSTRAINT_VARIABLES;
+      LOG_WARN("system variable wrongly specified in CHECK constraint", K(ret),K(sys_vars.count()), K(expr->has_flag(IS_USER_VARIABLE)));
+    } else if (OB_UNLIKELY(expr->has_flag(CNT_CUR_TIME) || expr->has_flag(CNT_STATE_FUNC) ||
+              expr->has_flag(CNT_RAND_FUNC) || expr->has_flag(CNT_MYSQL_STATE))) {
+      ret = OB_ERR_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED;
+      LOG_WARN("system variable wrongly specified in CHECK constraint",
+          K(ret), K(expr->has_flag(CNT_CUR_TIME)),
+          K(expr->has_flag(CNT_RAND_FUNC)),
+          K(expr->has_flag(CNT_STATE_FUNC)),
+          K(expr->has_flag(CNT_MYSQL_STATE))
+          );
+    } else {/*do nothing*/
+    }
   }
   return ret;
 }

@@ -222,9 +222,10 @@ int ObTableInsertOp::inner_get_next_row()
   return ret;
 }
 
-OB_INLINE int ObTableInsertOp::process_row()
+OB_INLINE int ObTableInsertOp::process_row(bool &is_ignored)
 {
   int ret = OB_SUCCESS;
+  is_ignored = false;
   // check insert value
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.storage_row_output_.count(); i++) {
     ObExpr* expr = MY_SPEC.storage_row_output_.at(i);
@@ -245,7 +246,11 @@ OB_INLINE int ObTableInsertOp::process_row()
     OZ(ForeignKeyHandle::do_handle_new_row(*this, MY_SPEC.fk_args_, MY_SPEC.storage_row_output_));
     bool is_filtered = false;
     OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
-    OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+    if (MY_SPEC.is_ignore_ && is_filtered && share::is_mysql_mode()) {
+      is_ignored = true;
+    } else {
+      OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+    }
   }
   return ret;
 }
@@ -253,26 +258,31 @@ OB_INLINE int ObTableInsertOp::process_row()
 int ObTableInsertOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
 {
   int ret = OB_SUCCESS;
-  output = &MY_SPEC.storage_row_output_;
-  if (OB_FAIL(try_check_status())) {
-    LOG_WARN("check status failed", K(ret));
-  } else if (OB_FAIL(inner_get_next_row())) {
-    if (OB_ITER_END == ret) {
-      NG_TRACE(insert_iter_end);
+  bool is_ignored = true;
+  output = nullptr;
+  while (OB_SUCC(ret) && is_ignored) {
+    if (OB_FAIL(try_check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else if (OB_FAIL(inner_get_next_row())) {
+      if (OB_ITER_END == ret) {
+        NG_TRACE(insert_iter_end);
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    } else if (OB_FAIL(process_row(is_ignored))) {
+      LOG_WARN("fail to process row", K(ret));
+    } else if (is_ignored) {
+       /*skip row*/
     } else {
-      LOG_WARN("fail to get next row", K(ret));
+      output = &MY_SPEC.storage_row_output_;
+      LOG_DEBUG("insert output row",
+          "output row",
+          ROWEXPR2STR(eval_ctx_, MY_SPEC.storage_row_output_),
+          "storage row output",
+          ROWEXPR2STR(eval_ctx_, MY_SPEC.storage_row_output_));
     }
-  } else if (OB_FAIL(process_row())) {
-    LOG_WARN("fail to process row", K(ret));
-  } else {
     curr_row_num_++;
-    LOG_DEBUG("insert output row",
-        "output row",
-        ROWEXPR2STR(eval_ctx_, MY_SPEC.storage_row_output_),
-        "storage row output",
-        ROWEXPR2STR(eval_ctx_, MY_SPEC.storage_row_output_));
   }
-
   return ret;
 }
 

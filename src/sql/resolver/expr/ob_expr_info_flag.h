@@ -55,6 +55,7 @@ enum ObExprInfoFlag {
   IS_ENUM_OR_SET,
   IS_VOLATILE_CONST,  // the const expr may be altered by overwrite, non-const in execution.
   IS_ORA_ROWSCN_EXPR,
+  IS_MYSQL_STATE,     // connection_id() current_user() version() found_rows() row_count() only used in mysql mode
   IS_VAR_EXPR,
   IS_CONST_EXPR,   // expression contains calculable expression
   CNT_CONST_EXPR,  // IS_CONST_EXPR and CNT_CONST_EXPR at most one is true
@@ -97,6 +98,7 @@ enum ObExprInfoFlag {
   CNT_ENUM_OR_SET,
   CNT_VOLATILE_CONST,
   CNT_ORA_ROWSCN_EXPR,
+  CNT_MYSQL_STATE,     // connection_id() current_user() version() found_rows() row_count() only used in mysql mode
   CNT_VAR_EXPR,
 
   BE_USED,         // expression has been applied
@@ -261,6 +263,10 @@ inline const char* get_expr_info_flag_str(const ObExprInfoFlag flag)
     }
     case IS_ENUM_OR_SET: {
       ret = "IS_ENUM_OR_SET";
+      break;
+    }
+    case IS_MYSQL_STATE: {
+      ret = "IS_MYSQL_STATE";
       break;
     }
     case IS_CONST_EXPR: {

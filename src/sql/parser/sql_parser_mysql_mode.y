@@ -298,6 +298,8 @@ END_P SET_VAR DELIMITER
 
         ZONE ZONE_LIST ZONE_TYPE
 
+        ENFORCED
+
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
@@ -377,7 +379,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_comment opt_as
 %type <node> column_name relation_name function_name column_label var_name relation_name_or_string row_format_option
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end
-%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint opt_constraint_name constraint_name
+%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint opt_constraint_name constraint_name  check_state constraint_definition 
 %type <node> opt_when
 %type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra
 %type <reserved_keyword> mysql_reserved_keyword
@@ -3952,6 +3954,10 @@ column_definition
 {
   $$ = $1;
 }
+| constraint_definition
+{
+  $$ = $1;
+}
 | opt_constraint PRIMARY KEY opt_index_using_algorithm '(' column_name_list ')' opt_index_using_algorithm opt_comment
 {
   (void)($1);
@@ -3987,12 +3993,6 @@ column_definition
   merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $8);
   merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $10);
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 4, $5 ? $5 : $2, col_list, index_option, $6);
-  $$->value_ = 1;
-}
-| CONSTRAINT constraint_name CHECK '(' expr ')'
-{
-  dup_expr_string($5, result, @5.first_column, @5.last_column);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 2, $2, $5);
   $$->value_ = 1;
 }
 | opt_constraint FOREIGN KEY opt_index_name '(' column_name_list ')' REFERENCES relation_factor '(' column_name_list ')' opt_match_option opt_reference_option_list
@@ -4102,6 +4102,22 @@ column_definition_ref data_type opt_column_attribute_list opt_position_column
 }
 ;
 
+constraint_definition:
+opt_constraint CHECK '(' expr ')' check_state
+{
+  dup_expr_string($4, result, @4.first_column, @4.last_column);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 3, $1, $4, $6);
+  $$->value_ = 1;
+}
+| opt_constraint CHECK '(' expr ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ENFORCED_CONSTRAINT);
+  dup_expr_string($4, result, @4.first_column, @4.last_column);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 3, $1, $4, $$);
+  $$->value_ = 1;
+}
+;
+
 opt_generated_keyname:
 GENERATED ALWAYS
 {
@@ -4154,6 +4170,10 @@ NOT NULLX
 | ID INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_ID, 1, $2);
+}
+| constraint_definition
+{
+  $$ = $1;
 }
 ;
 
@@ -4816,6 +4836,10 @@ not NULLX
 | ID INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_ID, 1, $2);
+}
+| constraint_definition
+{
+  $$ = $1;
 }
 ;
 
@@ -6146,6 +6170,17 @@ CONSTRAINT opt_constraint_name
 |
 {
   $$ = NULL;
+}
+;
+
+check_state:
+NOT ENFORCED
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOENFORCED_CONSTRAINT);
+}
+| ENFORCED
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ENFORCED_CONSTRAINT);
 }
 ;
 
@@ -10468,6 +10503,11 @@ opt_set table_option_list_space_seperated
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_FOREIGN_KEY_OPTION, 1, $1);
 }
+| DROP CONSTRAINT NAME_OB
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_CONSTRAINT, 1, $3);
+  $$->value_ = 3;
+}
 /*  | ORDER BY column_list
 //    {
 //      ParseNode *col_list = NULL;
@@ -10477,17 +10517,22 @@ opt_set table_option_list_space_seperated
 ;
 
 alter_constraint_option:
-DROP CONSTRAINT '(' name_list ')'
+DROP CHECK '(' name_list ')'
 {
   merge_nodes($$, result, T_NAME_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 1, $$);
   $$->value_ = 0;
 }
 |
-ADD CONSTRAINT constraint_name CHECK '(' expr ')'
+DROP CHECK NAME_OB
 {
-  dup_expr_string($6, result, @6.first_column, @6.last_column);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 2, $3, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 1, $3);
+  $$->value_ = 0;
+}
+|
+ADD constraint_definition
+{
+  $$ = $2;
   $$->value_ = 1;
 }
 ;
@@ -10686,6 +10731,16 @@ ADD key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list '
 | ALTER INDEX index_name parallel_option
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ALTER_PARALLEL, 2, $3, $4);
+}
+| ALTER CHECK NAME_OB check_state
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 2, $3, $4);
+  $$->value_ = 2;
+}
+| ALTER CONSTRAINT NAME_OB check_state
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_CONSTRAINT_OPTION, 2, $3, $4);
+  $$->value_ = 2;
 }
 ;
 

@@ -251,14 +251,32 @@ int ObInsertResolver::resolve_single_table_insert(const ParseNode& node)
     }
   }
 
-  if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+  if (OB_SUCC(ret)) {
     if (0 == insert_stmt->get_table_items().count() || OB_ISNULL(insert_stmt->get_table_item(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table items count is zero in insert stmt", K(ret));
     } else if (OB_FAIL(resolve_check_constraints(insert_stmt->get_table_item(0)))) {
       LOG_WARN("resolve check constraint failed", K(ret));
     } else if (session_info_->use_static_typing_engine()) {
-      for (uint64_t i = 0; OB_SUCC(ret) && i < insert_stmt->get_check_constraint_exprs_size(); ++i) {
+      int cnt = insert_stmt->get_check_constraint_exprs_size(); 
+      if (insert_stmt->get_insert_up() && share::is_mysql_mode()) {
+        // on duplicate key
+        if (OB_FAIL(resolve_check_constraints(insert_stmt->get_table_item(0)))) {
+          LOG_WARN("resolve check constraint failed for update", K(ret));
+        }
+        ObTablesAssignments& tas = insert_stmt->get_table_assignments();
+        if (OB_UNLIKELY(tas.at(0).assignments_.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("stmt does not have column assign", K(ret));
+        }
+        for (uint64_t i = cnt; OB_SUCC(ret) && i < insert_stmt->get_check_constraint_exprs_size(); ++i) {
+          if (OB_FAIL(ObTableAssignment::expand_expr(
+                  tas.at(0).assignments_, insert_stmt->get_check_constraint_exprs().at(i)))) {
+            LOG_WARN("expand generated column expr failed", K(ret));
+          }
+        }
+      }
+      for (uint64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
         if (OB_FAIL(replace_column_ref_for_check_constraint(insert_stmt->get_check_constraint_exprs().at(i)))) {
           LOG_WARN("fail to replace column ref for check constraint", K(ret));
         }

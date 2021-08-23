@@ -388,6 +388,7 @@ int ObTableReplace::try_insert(ObExecContext& ctx, ObExprCtx& expr_ctx, const Ob
   ObPartitionService* partition_service = NULL;
   ObSQLSessionInfo* my_session = NULL;
   int64_t cur_affected = 0;
+  bool is_filtered = false;
   if (OB_ISNULL(insert_row) || OB_ISNULL(expr_ctx.calc_buf_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(insert_row), K(expr_ctx.calc_buf_));
@@ -407,6 +408,12 @@ int ObTableReplace::try_insert(ObExecContext& ctx, ObExprCtx& expr_ctx, const Ob
     LOG_WARN("fail to check_row_null", K(ret), K(*insert_row));
   } else if (OB_FAIL(ForeignKeyHandle::do_handle_new_row(*replace_ctx, fk_args_, *insert_row))) {
     LOG_WARN("fail to handle foreign key", K(ret), K(*insert_row));
+  } else if (OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
+      replace_ctx->expr_ctx_, *insert_row, check_constraint_exprs_, is_filtered))) {
+    LOG_WARN("fail to handle check constraint", K(ret), K(*insert_row));
+  } else if (is_filtered) {
+    ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+    LOG_WARN("check constraint violated", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < column_ids_.count(); i++) {
       replace_ctx->insert_row_.cells_[i] = insert_row->get_cell(i);

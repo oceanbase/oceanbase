@@ -289,11 +289,19 @@ int ObTableUpdate::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
             OZ(ObPhyOperator::filter_row_for_check_cst(
                 update_ctx->expr_ctx_, new_row, check_constraint_exprs_, is_filtered));
             if (is_filtered && OB_SUCC(ret)) {
-              ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-              LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
+              if (share::is_mysql_mode() && update_ctx->dml_param_.is_ignore_) {
+                is_updated = false; //ignore this row
+                update_ctx->changed_rows_ --;
+                update_ctx->affected_rows_ --;
+              } else {
+                ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+                LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
+              }
             }
           }
         } else {
+        }
+        if (!is_updated) {
           if (OB_FAIL(build_lock_row(*update_ctx, update_ctx->old_row_))) {
             LOG_WARN("build lock row failed", K(ret), K(update_ctx->old_row_));
           } else if (OB_FAIL(lock_row(ctx, update_ctx->lock_row_, update_ctx->dml_param_, update_ctx->part_key_))) {
@@ -512,7 +520,9 @@ inline int ObTableUpdate::update_rows(ObExecContext& ctx, int64_t& affected_rows
       LOG_WARN("create current rows failed", K(ret), K_(projector_size));
     }
     while (OB_SUCC(ret) && OB_SUCC(get_next_row(ctx, old_row)) && OB_SUCC(get_next_row(ctx, new_row))) {
-      if (OB_FAIL(copy_cur_row_by_projector(update_ctx->cur_rows_[0], old_row))) {
+      if (share::is_mysql_mode() && OB_ISNULL(old_row)) {
+        /* ignored, do nothing */
+      } else if (OB_FAIL(copy_cur_row_by_projector(update_ctx->cur_rows_[0], old_row))) {
         LOG_WARN("copy old row failed", K(ret));
       } else if (OB_FAIL(copy_cur_row_by_projector(update_ctx->cur_rows_[1], new_row))) {
         LOG_WARN("copy new row failed", K(ret));

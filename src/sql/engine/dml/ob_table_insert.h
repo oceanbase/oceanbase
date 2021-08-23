@@ -120,7 +120,7 @@ protected:
   virtual int init_op_ctx(ObExecContext& ctx) const;
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   int do_column_convert(ObExprCtx& expr_ctx, const ObDList<ObSqlExpression>& new_row_exprs, ObNewRow& insert_row) const;
-  int process_row(ObExecContext& ctx, ObTableInsertCtx* insert_ctx, const common::ObNewRow*& insert_row) const;
+  int process_row(ObExecContext& ctx, ObTableInsertCtx* insert_ctx, const common::ObNewRow*& insert_row, bool& is_ignored) const;
   int deep_copy_row(ObTableInsertCtx* insert_ctx, const common::ObNewRow*& insert_row) const;
   int is_valid(ObTableInsertCtx*& insert_ctx, ObExecContext& ctx) const;
   int insert_rows(ObExecContext& ctx, int64_t& affected_rows) const;

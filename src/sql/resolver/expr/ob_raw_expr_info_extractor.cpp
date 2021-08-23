@@ -528,6 +528,12 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
       }
     } else if (T_FUN_SYS_REMOVE_CONST == expr.get_expr_type()) {
       OZ(expr.add_flag(CNT_VOLATILE_CONST));
+    } else if (lib::is_mysql_mode() && (T_FUN_SYS_ROW_COUNT == expr.get_expr_type() ||
+              T_FUN_SYS_FOUND_ROWS == expr.get_expr_type() || T_FUN_SYS_CONNECTION_ID == expr.get_expr_type() ||
+              T_FUN_SYS_CURRENT_USER == expr.get_expr_type() || T_FUN_SYS_VERSION == expr.get_expr_type())) {
+      if (OB_FAIL(expr.add_flag(IS_MYSQL_STATE))) {
+        LOG_WARN("failed to add flag IS_MYSQL_STATE", K(ret));
+      }
     }
 
     if (OB_SUCC(ret) && T_OP_GET_USER_VAR == expr.get_expr_type()) {

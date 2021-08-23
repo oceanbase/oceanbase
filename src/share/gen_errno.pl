@@ -209,8 +209,11 @@ print $fh_header '/**
 #include "share/mysql_errno.h"
 #include "lib/ob_errno.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
+using namespace ::oblib;
 ';
   print $fh_header "
 constexpr int OB_LAST_ERROR_CODE = $last_errno;

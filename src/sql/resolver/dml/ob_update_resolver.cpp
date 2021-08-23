@@ -114,36 +114,34 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
 
   // 3. resolve other clauses
   if (OB_SUCC(ret)) {
-    if (share::is_oracle_mode()) {
-      ObTablesAssignments& tas = update_stmt->get_tables_assignments();
-      if (1 != tas.count()) {
+    ObTablesAssignments& tas = update_stmt->get_tables_assignments();
+    if (1 != tas.count() && share::is_oracle_mode()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("oracle mode don't support multi table update grammar", K(ret));
+    } else {
+      ObTableAssignment& ta = tas.at(0);
+      if (OB_INVALID_ID == ta.table_id_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("oracle mode don't support multi table update grammar", K(ret));
-      } else {
-        ObTableAssignment& ta = tas.at(0);
-        if (OB_INVALID_ID == ta.table_id_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("invalid table assignment", K(ta.table_id_));
-        } else if (OB_FAIL(resolve_check_constraints(update_stmt->get_table_item(0)))) {
-          LOG_WARN("resolve check constraint failed", K(ret));
-        } else if (session_info_->use_static_typing_engine()) {
-          //
-          // TODO : support trigger in new engine.
-          // Replace constraint with assigned values is removed in 1d840f573269 commit to
-          // support trigger. Because the trigger may alter the assigned value, constraint
-          // check must base on the altered values. A magic hack is done in code generator
-          // to make the constraint find the new values.
-          //
-          // We can not do this magic in new engine because we can not evaluate expression
-          // with different input rows. We must make sure the constraint base on the assigned
-          // values here. Trigger is not supported in new engine right now, because PL is not
-          // supported. We believe we can add a trigger generated expr here and make
-          // constraint base on that expressions to solve the problem in future.
-          for (uint64_t i = 0; OB_SUCC(ret) && i < update_stmt->get_check_constraint_exprs_size(); ++i) {
-            if (OB_FAIL(ObTableAssignment::expand_expr(
-                    tas.at(0).assignments_, update_stmt->get_check_constraint_exprs().at(i)))) {
-              LOG_WARN("expand generated column expr failed", K(ret));
-            }
+        LOG_ERROR("invalid table assignment", K(ta.table_id_));
+      } else if (OB_FAIL(resolve_check_constraints(update_stmt->get_table_item(0)))) {
+        LOG_WARN("resolve check constraint failed", K(ret));
+      } else if (session_info_->use_static_typing_engine()) {
+        //
+        // TODO : support trigger in new engine.
+        // Replace constraint with assigned values is removed in 1d840f573269 commit to
+        // support trigger. Because the trigger may alter the assigned value, constraint
+        // check must base on the altered values. A magic hack is done in code generator
+        // to make the constraint find the new values.
+        //
+        // We can not do this magic in new engine because we can not evaluate expression
+        // with different input rows. We must make sure the constraint base on the assigned
+        // values here. Trigger is not supported in new engine right now, because PL is not
+        // supported. We believe we can add a trigger generated expr here and make
+        // constraint base on that expressions to solve the problem in future.
+        for (uint64_t i = 0; OB_SUCC(ret) && i < update_stmt->get_check_constraint_exprs_size(); ++i) {
+          if (OB_FAIL(ObTableAssignment::expand_expr(
+                  tas.at(0).assignments_, update_stmt->get_check_constraint_exprs().at(i)))) {
+            LOG_WARN("expand generated column expr failed", K(ret));
           }
         }
       }

@@ -3427,10 +3427,19 @@ int ObResolverUtils::resolve_check_constraint_expr(ObResolverParams& params, con
     if (q_name.is_sys_func()) {
       ObRawExpr* sys_func = q_name.access_idents_.at(0).sys_func_expr_;
       CK(OB_NOT_NULL(sys_func));
-      if (OB_SUCC(ret) &&
+      if (OB_FAIL(ret)) {
+      } else if (share::is_oracle_mode() &&
           (T_FUN_SYS_SYS_CONTEXT == sys_func->get_expr_type() || T_FUN_SYS_USERENV == sys_func->get_expr_type())) {
         ret = OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST;
         LOG_WARN("date or system variable wrongly specified in CHECK constraint", K(ret));
+      } else if (share::is_mysql_mode() && (T_FUN_SYS_SYS_CONTEXT == sys_func->get_expr_type() || T_FUN_SYS_USERENV == sys_func->get_expr_type() || 
+              sys_func->is_non_pure_sys_func_expr() || T_FUN_SYS_UID == sys_func->get_expr_type())) {
+        if (T_FUN_SYS_USERENV == sys_func->get_expr_type()) {
+          ret = OB_ERR_CHECK_CONSTRAINT_VARIABLES;
+        } else {
+          ret = OB_ERR_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED;
+        }
+        LOG_WARN("date or system variable wrongly specified in CHECK constraint", K(ret),K(sys_func->get_expr_type()));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < ref_sys_exprs.count(); ++i) {
         OZ(ObRawExprUtils::replace_ref_column(sys_func, ref_sys_exprs.at(i).first, ref_sys_exprs.at(i).second));
@@ -3446,22 +3455,40 @@ int ObResolverUtils::resolve_check_constraint_expr(ObResolverParams& params, con
     } else {
       if (!is_col_level_cst) {
         if (OB_ISNULL(column_schema = tbl_schema.get_column_schema(q_name.col_name_)) || column_schema->is_hidden()) {
-          ret = OB_ERR_BAD_FIELD_ERROR;
-          ObString scope_name = "constraint column function";
-          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR,
-              q_name.col_name_.length(),
-              q_name.col_name_.ptr(),
-              scope_name.length(),
-              scope_name.ptr());
+          if (share::is_oracle_mode()) {
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            ObString scope_name = "constraint column function";
+            LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR,
+                q_name.col_name_.length(),
+                q_name.col_name_.ptr(),
+                scope_name.length(),
+                scope_name.ptr());
+          } else {
+            ret = OB_ERR_CHECK_CONSTRAINT_REFERS_UNKNOWN_COLUMN;
+            LOG_USER_ERROR(OB_ERR_CHECK_CONSTRAINT_REFERS_UNKNOWN_COLUMN,
+                constraint.get_constraint_name_str().length(),
+                constraint.get_constraint_name_str().ptr(),
+                q_name.col_name_.length(),
+                q_name.col_name_.ptr());
+          }
         }
       } else {  // is_col_level_cst
         if (0 != columns.at(i).col_name_.compare(column_schema->get_column_name_str())) {
           ret = OB_ERR_COL_CHECK_CST_REFER_ANOTHER_COL;
+          if (share::is_mysql_mode()) {
+            LOG_USER_ERROR(OB_ERR_COL_CHECK_CST_REFER_ANOTHER_COL,
+                constraint.get_constraint_name_str().length(),
+                constraint.get_constraint_name_str().ptr());
+          }
           LOG_WARN("column check constraint cannot reference other columns",
               K(ret),
               K(columns.at(i).col_name_),
               K(column_schema->get_column_name_str()));
         }
+      }
+      if (OB_SUCC(ret) && share::is_mysql_mode() && column_schema->is_autoincrement()) {
+        ret = OB_ERR_CHECK_CONSTRAINT_REFERS_AUTO_INCREMENT_COLUMN;
+        LOG_WARN("Check constraint cannot refer to an auto-increment column", K(ret), K(column_schema->get_column_id()));
       }
       if (OB_SUCC(ret)) {
         if (column_ids.end() == std::find(column_ids.begin(), column_ids.end(), column_schema->get_column_id())) {
@@ -3486,38 +3513,14 @@ int ObResolverUtils::resolve_check_constraint_expr(ObResolverParams& params, con
     LOG_WARN("formalize expr failed", K(ret));
   }
   if (OB_SUCC(ret) && share::is_mysql_mode()) {
-    if (T_OP_EQ != expr->get_expr_type()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("constraint expr type should be T_OP_EQ", K(expr->get_expr_type()), K(ret));
+    if (T_INT == expr->get_expr_type() || T_TINYINT == expr->get_expr_type() || IS_BOOL_OP(expr->get_expr_type())) {
+      // 1,0,true,false,<=>
+    } else if (expr->is_sys_func_expr() && ObTinyIntType == expr->get_result_type().get_type()) {
+      //sys func returns bool
     } else {
-      ObOpRawExpr* eq_expr = static_cast<ObOpRawExpr*>(expr);
-      ObRawExpr* exprs[2] = {eq_expr->get_param_expr(0), eq_expr->get_param_expr(1)};
-      for (int i = 0; OB_SUCC(ret) && i < 2; i++) {
-        if (OB_ISNULL(exprs[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL ptr", K(ret), K(exprs[i]));
-        } else if (T_FUN_SYS_SUBSTR == exprs[i]->get_expr_type()) {
-          ObSysFunRawExpr* sys_expr = static_cast<ObSysFunRawExpr*>(exprs[i]);
-          for (int64_t j = 0; OB_SUCC(ret) && j < sys_expr->get_param_count(); j++) {
-            ObRawExpr* param_expr = sys_expr->get_param_expr(j);
-            if (OB_ISNULL(param_expr)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("NULL ptr", K(ret), K(param_expr));
-            } else if (0 == j && !param_expr->is_column_ref_expr()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("column ref expr expected", K(ret), K(param_expr->get_expr_type()));
-            } else if (0 != j && !param_expr->is_const_expr()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("const expr expected", K(ret), K(param_expr->get_expr_type()));
-            }
-          }
-        } else if (exprs[i]->is_column_ref_expr()) {
-          // do-nothing
-        } else {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("substring or column ref expr expected", K(ret), K(exprs[i]->get_expr_type()));
-        }
-      }
+      ret = OB_ERR_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT;
+      LOG_USER_ERROR(OB_ERR_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT, constraint.get_constraint_name_str().length(), constraint.get_constraint_name_str().ptr());
+      LOG_WARN("expr result type is not boolean", K(ret), K(expr->get_result_type().get_type()));
     }
   }
   if (OB_SUCC(ret)) {

@@ -141,7 +141,9 @@ int ObInfoSchemaTableConstraintsTable::add_table_constraints(
   if (OB_SUCCESS == ret && OB_FAIL(add_index_constraints(table_schema, database_name, cells, col_count))) {
     SERVER_LOG(WARN, "fail to add normal indexes", K(ret));
   }
-  if (OB_SUCCESS == ret && OB_FAIL(add_check_constraints(table_schema, database_name, cells, col_count))) {
+  if (lib::is_mysql_mode() && table_schema.is_tmp_table()) {
+    // do nothing
+  } else if (OB_SUCCESS == ret && OB_FAIL(add_check_constraints(table_schema, database_name, cells, col_count))) {
     SERVER_LOG(WARN, "fail to add check constraintes", K(ret));
   }
   if (OB_SUCCESS == ret && OB_FAIL(add_foreign_key_constraints(table_schema, database_name, cells, col_count))) {

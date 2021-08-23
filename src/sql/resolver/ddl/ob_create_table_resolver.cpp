@@ -565,16 +565,18 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
         ParseNode* table_element_list_node = create_table_node->children_[3];
         ObArray<int> index_node_position_list;
         ObArray<int> foreign_key_node_position_list;
+        ObArray<int> table_level_constraint_list;
         if (OB_SUCC(ret)) {
           if (false == is_create_as_sel) {
             if (OB_FAIL(resolve_table_elements(
-                    table_element_list_node, index_node_position_list, foreign_key_node_position_list, RESOLVE_ALL))) {
+                    table_element_list_node, index_node_position_list, foreign_key_node_position_list, table_level_constraint_list, RESOLVE_ALL))) {
               SQL_RESV_LOG(WARN, "resolve table elements failed", K(ret));
             }
           } else {
             if (OB_FAIL(resolve_table_elements(table_element_list_node,
                     index_node_position_list,
                     foreign_key_node_position_list,
+                    table_level_constraint_list,
                     RESOLVE_COL_ONLY))) {
               SQL_RESV_LOG(WARN, "resolve table elements col failed", K(ret));
             } else if (OB_FAIL(resolve_table_elements_from_select(parse_tree))) {
@@ -582,6 +584,7 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
             } else if (OB_FAIL(resolve_table_elements(table_element_list_node,
                            index_node_position_list,
                            foreign_key_node_position_list,
+                           table_level_constraint_list,
                            RESOLVE_NON_COL))) {
               SQL_RESV_LOG(WARN, "resolve table elements non-col failed", K(ret));
             }
@@ -685,6 +688,8 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
             SQL_RESV_LOG(WARN, "resolve index failed", K(ret));
           } else if (OB_FAIL(resolve_foreign_key(table_element_list_node, foreign_key_node_position_list))) {
             SQL_RESV_LOG(WARN, "resolve foreign key failed", K(ret));
+          } else if (OB_FAIL(resolve_table_level_constraint(table_element_list_node, table_level_constraint_list))) {
+            SQL_RESV_LOG(WARN, "resolve check constraint failed", K(ret));
           } else {
           }  // do nothing
         }
@@ -1069,7 +1074,7 @@ int ObCreateTableResolver::get_resolve_stats_from_table_schema(
 // 1st time: resolve columns only,
 // 2nd time: resolve other infomation.
 int ObCreateTableResolver::resolve_table_elements(const ParseNode* node, ObArray<int>& index_node_position_list,
-    ObArray<int>& foreign_key_node_position_list, const int resolve_rule)
+    ObArray<int>& foreign_key_node_position_list, ObArray<int>& table_level_constraint_list, const int resolve_rule)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {
@@ -1315,10 +1320,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode* node, ObArray
         } else { /*do nothing*/
         }
       } else if (T_CHECK_CONSTRAINT == element->type_) {
-        ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-        ObSEArray<ObConstraint, 4>& csts = create_table_stmt->get_create_table_arg().constraint_list_;
-        if (OB_FAIL(resolve_check_constraint_node(*element, csts))) {
-          SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
+        if (OB_FAIL(table_level_constraint_list.push_back(i))) {
+          SQL_RESV_LOG(WARN, "add check constraint node failed", K(ret));
+        } else { /*do nothing*/
         }
       } else {
         // won't be here
@@ -2040,6 +2044,36 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema& table_schem
           OB_FAIL(table_schema.set_comment(comment_)) || OB_FAIL(table_schema.set_tablegroup_name(tablegroup_name_)) ||
           OB_FAIL(table_schema.set_primary_zone(primary_zone_)) || OB_FAIL(table_schema.set_locality(locality_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::resolve_table_level_constraint(const ParseNode* node, ObArray<int>& constraint_position_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    // do nothing, create table t as select ... will come here
+  } else if (T_TABLE_ELEMENT_LIST != node->type_) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "invalid argument.", K(ret), K(node->type_));
+  } else if (OB_ISNULL(stmt_)) {
+    ret = OB_NOT_INIT;
+    SQL_RESV_LOG(WARN, "stmt_ is null.", K(ret));
+  } else if (OB_ISNULL(node->children_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "invalid argument.", K(ret), K(node->children_));
+  } else {
+    ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+    ObSEArray<ObConstraint, 4>& csts = create_table_stmt->get_create_table_arg().constraint_list_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < constraint_position_list.size(); ++i) {
+      if (OB_UNLIKELY(constraint_position_list.at(i) >= node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid argument.", K(ret), K(constraint_position_list.at(i)));
+      } else if (OB_FAIL(resolve_check_constraint_node(*node->children_[constraint_position_list.at(i)], csts))) {
+        SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
+      } else { /*do nothing*/
       }
     }
   }

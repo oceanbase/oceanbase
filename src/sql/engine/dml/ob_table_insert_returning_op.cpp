@@ -45,12 +45,12 @@ int ObTableInsertReturningOp::get_next_row()
   } else if (OB_FAIL(prepare_next_storage_row(output))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row failed", K(ret));
-    }
-  } else if (NULL == output) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL output returned", K(ret));
-  } else if (OB_FAIL(ObTableModifyOp::project_row(output->get_data(), output->count(), new_row_))) {
-    LOG_WARN("project row failed", K(ret));
+   } else if (NULL == output) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL output returned", K(ret));
+   } else if (OB_FAIL(ObTableModifyOp::project_row(output->get_data(), output->count(), new_row_))) {
+      LOG_WARN("project row failed", K(ret));
+   }
   } else if (OB_FAIL(partition_service->insert_row(my_session->get_trans_desc(),
                  dml_param_,
                  part_infos_.at(0).partition_key_,

@@ -1065,7 +1065,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_ARGUMENT_OUT_OF_RANGE, -5674, -1, "HY000", "argum
 DEFINE_ORACLE_ERROR(OB_ERR_ORDER_BY_ITEM_NOT_IN_SELECT_LIST, -5675, -1, "HY000", "ORDER BY item must be the number of a SELECT-list expression", 1785, "ORDER BY item must be the number of a SELECT-list expression");
 DEFINE_ORACLE_ERROR(OB_ERR_INTERVAL_INVALID, -5676, -1, "HY000", "the interval is invalid", 1867, "the interval is invalid");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_NUMERIC_OR_VALUE_ERROR, -5677, -1, "HY000", "PL/SQL: numeric or value error", "PL/SQL: numeric or value error: %.*s", 6502, "PL/SQL: numeric or value error", "PL/SQL: numeric or value error: %.*s");
-DEFINE_ORACLE_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, -5678, -1, "HY000", "name already used by an existing constraint", 2264, "name already used by an existing constraint");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_CONSTRAINT_NAME_DUPLICATE, -5678, ER_CHECK_CONSTRAINT_DUP_NAME, "HY000", "Duplicate check constraint name","Duplicate check constraint name \'%.*s\'.", 2264, "name already used by an existing constraint", "name \'%.*s\' already used by an existing constraint");
 DEFINE_ORACLE_ERROR(OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE, -5679, -1, "HY000", "table must have at least one column that is not invisible", 54039, "table must have at least one column that is not invisible");
 DEFINE_ORACLE_ERROR(OB_ERR_INVISIBLE_COL_ON_UNSUPPORTED_TABLE_TYPE, -5680, -1, "HY000", "Invisible column is not supported on this type of table.", 54042, "Invisible column is not supported on this type of table.");
 DEFINE_ORACLE_ERROR(OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION, -5681, -1, "HY000", "Column visibility modifications cannot be combined with any other modified column DDL option.", 54046, "Column visibility modifications cannot be combined with any other modified column DDL option.");
@@ -1079,8 +1079,8 @@ DEFINE_ERROR(OB_ERR_SP_EMPTY_BLOCK, -5688, -1, "42000", "Empty block prohibited 
 DEFINE_ERROR(OB_ARRAY_BINDING_ROLLBACK, -5689, -1, "HY000", "array binding need rollback");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SUBQUERY_USE, -5690, -1, "HY000", "subquery not allowed here", 2251, "subquery not allowed here");
 DEFINE_ORACLE_ERROR(OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST, -5691, -1, "HY000", "date or system variable wrongly specified in CHECK constraint", 2436, "date or system variable wrongly specified in CHECK constraint");
-DEFINE_ORACLE_ERROR(OB_ERR_NONEXISTENT_CONSTRAINT, -5692, -1, "HY000", "Cannot drop constraint  - nonexistent constraint", 2443, "Cannot drop constraint  - nonexistent constraint");
-DEFINE_ORACLE_ERROR(OB_ERR_CHECK_CONSTRAINT_VIOLATED, -5693, -1, "HY000", "check constraint violated", 2290, "check constraint violated");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_NONEXISTENT_CONSTRAINT, -5692, ER_CONSTRAINT_NOT_FOUND, "HY000", "Constraint does not exist.", "Constraint \'%.*s\' does not exist.", 2443, "Cannot drop constraint  - nonexistent constraint", "Cannot drop constraint \'%.*s\' - nonexistent constraint");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_VIOLATED, -5693, ER_CHECK_CONSTRAINT_VIOLATED, "HY000", "check constraint violated", "check constraint \'%.*s\' is violated", 2290, "check constraint violated", "check constraint \'%.*s\' is violated");
 DEFINE_ORACLE_ERROR(OB_ERR_GROUP_FUNC_NOT_ALLOWED, -5694, -1, "HY000", "group function is not allowed here", 934, "group function is not allowed here");
 DEFINE_ORACLE_ERROR(OB_ERR_POLICY_STRING_NOT_FOUND, -5695, -1, "HY000", "policy string not found", 12416, "policy string not found");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_LABEL_STRING, -5696, -1, "HY000", "invalid label string", 12401, "invalid label string");
@@ -1177,7 +1177,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_DISABLE_NONEXISTENT_CONSTRAINT, -5779, -1, "HY000
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_DOWNGRADE_DOP, -5780, -1, "HY000", "PX DOP downgrade", "PX DOP downgrade from %ld to %ld", 0, "PX DOP downgrade", "PX DOP downgrade from %ld to %ld");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_DOWNGRADE_PARALLEL_MAX_SERVERS, -5781, -1, "HY000", "parallel_max_servers downgrade due to insufficent cpu resource", "parallel_max_servers downgrade due to insufficent cpu resource from %ld to %ld", 0, "parallel_max_servers downgrade due to insufficent cpu resource", "parallel_max_servers downgrade due to insufficent cpu resource from %ld to %ld");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_ORPHANED_CHILD_RECORD_EXISTS, -5785, -1, "HY000", "cannot validate - parent keys not found", "cannot validate (%.*s.%.*s) - parent keys not found", 2298, "cannot validate - parent keys not found", "cannot validate (%.*s.%.*s) - parent keys not found");
-DEFINE_ORACLE_ERROR(OB_ERR_COL_CHECK_CST_REFER_ANOTHER_COL, -5786, -1, "HY000", "Column check constraint cannot reference other columns", 2438, "Column check constraint cannot reference other columns");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_COL_CHECK_CST_REFER_ANOTHER_COL, -5786, ER_COLUMN_CHECK_CONSTRAINT_REFERENCES_OTHER_COLUMN, "HY000", "Column check constraint cannot reference other columns","Column check constraint \'%.*s\' references other column.", 2438, "Column check constraint cannot reference other columns","Column check constraint \'%.*s\' cannot reference other columns");
 DEFINE_ERROR(OB_BATCHED_MULTI_STMT_ROLLBACK, -5787, -1, "HY000", "batched multi statement execution needs rollback");
 DEFINE_ORACLE_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT, -5788, -1, "HY000", "cannot select FOR UPDATE from view with DISTINCT, GROUP BY, etc.", 2014, "cannot select FOR UPDATE from view with DISTINCT, GROUP BY, etc.");
 DEFINE_ORACLE_ERROR(OB_ERR_POLICY_WITH_CHECK_OPTION_VIOLATION, -5789, -1, "HY000", "policy with check option violation", 28115, "policy with check option violation");
@@ -1250,7 +1250,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_PARAM_VALUE_INVALID, -5855, -1, "HY000", "parameter c
 DEFINE_ORACLE_ERROR(OB_ERR_DBMS_SQL_CURSOR_NOT_EXIST, -5856, -1, "HY000", "DBMS_SQL access denied", 29471, "DBMS_SQL access denied");
 DEFINE_ORACLE_ERROR(OB_ERR_DBMS_SQL_NOT_ALL_VAR_BIND, -5857, -1, "HY000", "not all variables bound", 1008, "not all variables bound");
 DEFINE_ERROR_EXT(OB_ERR_CONFLICTING_DECLARATIONS, -5858, ER_CONFLICTING_DECLARATIONS, "42000", "Conflicting declarations", "Conflicting declarations: '%s' and '%s'");
-DEFINE_ORACLE_ERROR(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT, -5859, -1, "HY000", "column is referenced in a multi-column constraint", 12991, "column is referenced in a multi-column constraint");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT, -5859, ER_DEPENDENT_BY_CHECK_CONSTRAINT, "HY000", "column is referenced in a multi-column constraint", "Check constraint \'%.*s\' uses column \'%.*s\', hence column cannot be dropped or renamed.", 12991, "column is referenced in a multi-column constraint","column \'%.*s\' is referenced in a multi-column constraint \'%.*s\'");
 DEFINE_ORACLE_ERROR(OB_ERR_MODIFY_COL_DATATYEP_REFERENCED_CONSTRAINT, -5860, -1, "HY000", "cannot modify column datatype with current constraint(s)", 1463, "cannot modify column datatype with current constraint(s)");
 DEFINE_ORACLE_ERROR(OB_ERR_PERCENTILE_VALUE_INVALID, -5861, -1, "HY000", "The percentile value should be a number between 0 and 1.", 30493, "The percentile value should be a number between 0 and 1.");
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_NUMERIC_DATE_DATETIME_TYPE, -5862, -1, "HY000", "The argument should be of numeric or date/datetime type.", 30495, "The argument should be of numeric or date/datetime type.");
@@ -1322,6 +1322,19 @@ DEFINE_ORACLE_ERROR(OB_ERR_ARG_INVALID, -5931, -1, "HY000", "argument is null, i
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_NAME_STRING, -5932, -1, "HY000", "unexpected name string", 21560, "unexpected name string '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION, -5936, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect value for function", "Incorrect %.*s value: '%.*s' for function %.*s");
 
+////////////////////////////////////////////////////////////////
+//error code for constraint
+///////////////////////////////////////////////////////////////
+
+DEFINE_ERROR_EXT(OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME, -5937, ER_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME, "HY000", "Table has multiple constraints with the name.", "Table has multiple constraints with the name \'%.*s\'. Please use constraint specific \'%.*s\' clause.");
+DEFINE_ERROR_EXT(OB_ERR_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT, -5938, ER_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT, "HY000", "An expression of non-boolean type specified to a check constraint","An expression of non-boolean type specified to a check constraint \'%.*s\'");
+DEFINE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_NOT_FOUND, -5939, ER_CHECK_CONSTRAINT_NOT_FOUND, "HY000", "Check constraint is not found in the table.", "Check constraint \'%.*s\' is not found in the table.");
+DEFINE_ERROR_EXT(OB_ERR_ALTER_CONSTRAINT_ENFORCEMENT_NOT_SUPPORTED, -5940, ER_ALTER_CONSTRAINT_ENFORCEMENT_NOT_SUPPORTED, "HY000", "Altering constraint enforcement is not supported for the constraint.", "Altering constraint enforcement is not supported for the constraint \'%.*s\'. Enforcement state alter is not supported for the PRIMARY, UNIQUE and FOREIGN KEY type constraints.");
+DEFINE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_REFERS_AUTO_INCREMENT_COLUMN, -5941, ER_CHECK_CONSTRAINT_REFERS_AUTO_INCREMENT_COLUMN, "HY000", "Check constraint cannot refer to an auto-increment column.", "Check constraint \'%.*s\' cannot refer to an auto-increment column.");
+DEFINE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED, -5942, ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED, "HY000", "An expression of a check constraint contains disallowed function.", "An expression of a check constraint \'%.*s\' contains disallowed function: %.*s.");
+DEFINE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED, -5943, ER_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED, "HY000", "An expression of a check constraint contains disallowed function.", "An expression of a check constraint \'%.*s\' contains disallowed function");
+DEFINE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_VARIABLES, -5944, ER_CHECK_CONSTRAINT_VARIABLES, "HY000", "An expression of a check constraint cannot refer to a user or system variable.", "An expression of a check constraint \'%.*s\' cannot refer to a user or system variable.");
+DEFINE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_REFERS_UNKNOWN_COLUMN, -5945, ER_CHECK_CONSTRAINT_REFERS_UNKNOWN_COLUMN, "HY000", "Check constraint refers to non-existing column.","Check constraint \'%.*s\' refers to non-existing column \'%.*s\'.");
 ////////////////////////////////////////////////////////////////
 //error code for transaction, mvcc and commitlog -6001 ---- -7000
 ////////////////////////////////////////////////////////////////

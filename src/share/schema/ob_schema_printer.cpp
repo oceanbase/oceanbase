@@ -600,6 +600,11 @@ int ObSchemaPrinter::print_table_definition_constraints(
               cst->get_check_expr_str().ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print constraint", K(ret));
       }
+      if (OB_SUCC(ret) && !cst->get_enable_flag()) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " /*!80016 not enforced */"))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print constraint not enforced");
+        }
+      }
     } else if (share::is_oracle_mode() && CONSTRAINT_TYPE_CHECK == cst->get_constraint_type()) {
       if (OB_FAIL(databuff_printf(buf,
               buf_len,

@@ -1928,16 +1928,16 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2& table_schema)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("build table id hashmap failed", K(ret), K(hash_ret), "table_id", new_table_schema->get_table_id());
     } else {
-      if (new_table_schema->is_dropped_schema()) {
+      bool is_oracle_mode = false;
+      if (OB_FAIL(new_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+        LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
+      } else if (new_table_schema->is_dropped_schema()) {
         uint64_t table_id = new_table_schema->get_table_id();
         if (OB_FAIL(delay_deleted_table_map_.set_refactored(table_id, new_table_schema, 1 /*overwrite*/))) {
           LOG_WARN("fail to set delay_deleted_table_id", KR(ret), K(table_id));
         }
       } else if (new_table_schema->is_index_table()) {  // index is in recyclebin
-        bool is_oracle_mode = false;
-        if (OB_FAIL(new_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
-          LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
-        } else if (new_table_schema->is_in_recyclebin()) {
+          if (new_table_schema->is_in_recyclebin()) {
           ObIndexSchemaHashWrapper index_name_wrapper(new_table_schema->get_tenant_id(),
               new_table_schema->get_database_id(),
               common::OB_INVALID_ID,
@@ -2035,7 +2035,8 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2& table_schema)
             }
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(
+            if (!is_oracle_mode && new_table_schema->is_tmp_table()) { /* do nothing*/
+            } else if (OB_FAIL(
                     add_constraints_in_table(new_table_schema->get_simple_constraint_info_array(), 1 /*over_write*/))) {
               LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
             } else {
@@ -2593,7 +2594,10 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
       // and the solution is solved by rebuild logic
       ret = OB_HASH_NOT_EXIST != hash_ret ? hash_ret : ret;
     } else {
-      if (schema_to_del->is_dropped_schema()) {
+      bool is_oracle_mode = false;
+      if (OB_FAIL(schema_to_del->check_if_oracle_compat_mode(is_oracle_mode))) {
+        LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
+      } else if (schema_to_del->is_dropped_schema()) {
         const uint64_t table_id = schema_to_del->get_table_id();
         if (OB_FAIL(delay_deleted_table_map_.erase_refactored(table_id))) {
           LOG_WARN("fail to erase delay_deleted_table_id", KR(ret), K(table_id));
@@ -2602,10 +2606,7 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
           }
         }
       } else if (schema_to_del->is_index_table()) {
-        bool is_oracle_mode = false;
-        if (OB_FAIL(schema_to_del->check_if_oracle_compat_mode(is_oracle_mode))) {
-          LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
-        } else if (schema_to_del->is_in_recyclebin()) {  // index is in recyclebin
+          if (schema_to_del->is_in_recyclebin()) {  // index is in recyclebin
           ObIndexSchemaHashWrapper index_schema_wrapper(schema_to_del->get_tenant_id(),
               schema_to_del->get_database_id(),
               common::OB_INVALID_ID,
@@ -2683,6 +2684,7 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
         if (OB_SUCC(ret)) {
           if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
             // do-nothing for liboblog
+          } else if (!is_oracle_mode && schema_to_del->is_tmp_table()) {//do nothing
           } else if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
             LOG_WARN("delete constraint info from a hash map failed", K(ret), K(*schema_to_del));
           }
@@ -3761,7 +3763,10 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t& fk_cnt, uint64_t& cst_cnt)
             LOG_WARN("fail to set delay_deleted_table_id", KR(ret), K(table_id));
           }
         } else {
-          if (table_schema->is_index_table()) {
+          bool is_oracle_mode = false;
+          if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+            LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
+          } else if (table_schema->is_index_table()) {
             LOG_INFO("index is",
                 "table_id",
                 table_schema->get_table_id(),
@@ -3769,11 +3774,8 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t& fk_cnt, uint64_t& cst_cnt)
                 table_schema->get_database_id(),
                 "table_name",
                 table_schema->get_table_name_str());
-            bool is_oracle_mode = false;
             // oracle mode and index is not in recyclebin
-            if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
-              LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
-            } else if (table_schema->is_in_recyclebin()) {
+              if (table_schema->is_in_recyclebin()) {
               ObIndexSchemaHashWrapper index_name_wrapper(table_schema->get_tenant_id(),
                   table_schema->get_database_id(),
                   common::OB_INVALID_ID,
@@ -3864,6 +3866,7 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t& fk_cnt, uint64_t& cst_cnt)
             if (OB_SUCC(ret)) {
               if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
                 // do-nothing for liboblog
+              } else if (!is_oracle_mode && table_schema->is_tmp_table()) { /* do nothing*/
               } else if (OB_FAIL(
                              add_constraints_in_table(table_schema->get_simple_constraint_info_array(), over_write))) {
                 LOG_WARN("add constraint info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));

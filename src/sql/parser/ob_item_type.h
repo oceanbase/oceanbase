@@ -1474,6 +1474,8 @@ typedef enum ObItemType {
   T_NORELY_CONSTRAINT,
   T_ENABLE_CONSTRAINT,
   T_DISABLE_CONSTRAINT,
+  T_ENFORCED_CONSTRAINT,
+  T_NOENFORCED_CONSTRAINT,
   T_VALIDATE_CONSTRAINT,
   T_NOVALIDATE_CONSTRAINT,
   T_RELATION_FACTOR_IN_USE_JOIN_HINT_LIST,
@@ -1718,7 +1720,7 @@ typedef enum ObCacheType {
   CACHE_TYPE_MAX  // Attention: add a new type before CACHE_TYPE_MAX
 } ObCacheType;
 
-#define IS_BOOL_OP(op) (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN) || ((op) == T_OP_EXISTS) || ((op) == T_BOOL))
+#define IS_BOOL_OP(op) (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN) || ((op) == T_OP_EXISTS) || ((op) == T_BOOL) || ((op) == T_OP_XOR))
 
 #define IS_RANGE_CMP_OP(op) ((op) >= T_OP_LE && (op) <= T_OP_GT)
 // we will extract query range from following OP expressions

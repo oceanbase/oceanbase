@@ -162,6 +162,9 @@ int ObMultiTableReplaceOp::shuffle_replace_row(bool& got_row)
           MY_SPEC.table_dml_infos_.at(0).index_infos_.at(0).se_subplans_.at(INSERT_OP).subplan_root_;
       CK(OB_NOT_NULL(insert_spec));
       OZ(ForeignKeyHandle::do_handle_new_row(*this, insert_spec->fk_args_, MY_SPEC.table_column_exprs_));
+      bool is_filtered = false;
+      OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
+      OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
       // add new row to constraint info map
       OZ(MY_SPEC.shuffle_dml_row(ctx_, *this, MY_SPEC.table_column_exprs_, INSERT_OP), *replace_row);
       // OZ(replace_row->to_expr(MY_SPEC.table_column_exprs_, eval_ctx_));
@@ -235,6 +238,9 @@ int ObMultiTableReplaceOp::shuffle_final_insert_row(ObExecContext& ctx, const Ob
   OZ(ForeignKeyHandle::do_handle_new_row(*this, insert_spec->fk_args_, insert_row));
   // OZ(schema_service->get_tenant_schema_guard(
   //        ctx.get_my_session()->get_effective_tenant_id(), schema_guard));
+  bool is_filtered = false;
+  OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
+  OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
   OZ(MY_SPEC.shuffle_dml_row(ctx, *this, insert_row, INSERT_OP));
   return ret;
 }

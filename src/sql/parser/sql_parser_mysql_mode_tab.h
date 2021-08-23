@@ -1045,8 +1045,9 @@
      ZONE = 1261,
      ZONE_LIST = 1262,
      ZONE_TYPE = 1263,
-     COMP_NSEQ = 1264,
-     COMMA = 1265
+     ENFORCED = 1264,
+     COMP_NSEQ = 1265,
+     COMMA = 1266
    };
 #endif
 
@@ -1069,7 +1070,7 @@ typedef union YYSTYPE
 
 
 /* Line 1676 of yacc.c  */
-#line 1073 "../../../src/sql/parser/sql_parser_mysql_mode_tab.h"
+#line 1074 "../../../src/sql/parser/sql_parser_mysql_mode_tab.h"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

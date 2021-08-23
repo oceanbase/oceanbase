@@ -62,7 +62,21 @@ int ObTableInsertUpOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
       LOG_WARN("failed to check row null", K(ret));
     } else {
       OZ(ForeignKeyHandle::do_handle(*this, MY_SPEC.fk_args_, MY_SPEC.old_row_, MY_SPEC.new_row_));
-      output = &MY_SPEC.new_row_;
+      bool is_filtered = false;
+      int64_t cst_end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
+      OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, cst_end_idx));
+      if (OB_SUCC(ret)) {
+        if (is_filtered) {
+          if (share::is_mysql_mode() && dml_param_.is_ignore_) {
+            ret = OB_ITER_END; // skip this row
+          } else {
+            ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+            LOG_WARN("row is filtered by check filters, running is stopped");
+          }
+        } else {
+          output = &MY_SPEC.new_row_;
+        }
+      }
     }
   } else {
     ret = OB_ITER_END;
@@ -166,15 +180,26 @@ int ObTableInsertUpOp::do_table_insert_up()
     LOG_WARN("fail to get partition service", K(ret));
   } else {
     NG_TRACE(insertup_start_do);
+    int64_t cst_end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
     while (OB_SUCC(ret) && OB_SUCCESS == (ret = child_->get_next_row())) {
       NG_TRACE_TIMES(2, insertup_start_calc_insert_row);
       clear_evaluated_flag();
+      bool is_filtered = false;
       if (OB_FAIL(calc_insert_row())) {
         LOG_WARN("fail to calc insert row", K(ret));
       } else if (OB_FAIL(check_row_null(MY_SPEC.insert_row_, MY_SPEC.column_infos_))) {
         LOG_WARN("fail to check_row_null", K(ret));
       } else if (OB_FAIL(ForeignKeyHandle::do_handle_new_row(*this, MY_SPEC.fk_args_, MY_SPEC.insert_row_))) {
         LOG_WARN("do_handle_new_row failed", K(ret));
+      } else if (OB_FAIL(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, cst_end_idx))) {
+        LOG_WARN("filter row for check cst failed", K(ret));
+      } else if (is_filtered) {
+        if (share::is_mysql_mode() && dml_param_.is_ignore_) {
+          // skip this row
+        } else {
+          ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+          LOG_WARN("row is filtered by check filters, running is stopped");
+        }
       } else if (OB_FAIL(project_row(MY_SPEC.insert_row_, insert_row_))) {
         LOG_WARN("project to old style row failed", K(ret));
       } else {
@@ -305,6 +330,22 @@ int ObTableInsertUpOp::process_on_duplicate_update(ObNewRowIterator* duplicated_
     LOG_WARN("fail to calc rows for update", K(ret));
   }
   // update
+  if (OB_SUCC(ret) && is_row_changed) {//deal with check constraint
+    bool is_filtered = false;
+    clear_evaluated_flag();
+    int64_t cst_beg_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
+    int64_t cst_end_idx = MY_SPEC.check_constraint_exprs_.count();
+    if (OB_FAIL(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, cst_beg_idx, cst_end_idx))) {
+      LOG_WARN("filter row for check cst failed", K(ret));
+    } else if (is_filtered) {
+      if (share::is_mysql_mode() && dml_param_.is_ignore_) {
+        is_row_changed = false; // skip this row
+      } else {
+        ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+        LOG_WARN("row is filtered by check filters, running is stopped");
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     if (is_row_changed) {
       update_count++;

@@ -148,6 +148,7 @@ int ObMultiTableReplace::shuffle_replace_row(ObExecContext& ctx, bool& got_row) 
   if (OB_SUCC(ret)) {
     ObSEArray<ObConstraintValue, 2> constraint_values;
     ObRowStore::Iterator replace_row_iter = replace_ctx->replace_row_store_.begin();
+    bool is_filtered = false;
     while (OB_SUCC(ret) && OB_SUCC(replace_row_iter.get_next_row(replace_row, NULL))) {
       got_row = true;
       ++replace_ctx->affected_rows_;
@@ -177,6 +178,12 @@ int ObMultiTableReplace::shuffle_replace_row(ObExecContext& ctx, bool& got_row) 
           table_dml_infos_.at(0).index_infos_.at(0).dml_subplans_.at(INSERT_OP).subplan_root_,
           *replace_ctx,
           *replace_row));
+      OZ(ObPhyOperator::filter_row_for_check_cst(
+          replace_ctx->expr_ctx_, *replace_row, check_constraint_exprs_, is_filtered));
+      if (is_filtered) {
+        ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+        LOG_WARN("check constraint violated", K(ret));
+      }
       // add new row to constraint info map
       OZ(shuffle_dml_row(ctx, *sql_ctx->schema_guard_, *replace_ctx, *replace_row, INSERT_OP), *replace_row);
       OZ(duplicate_key_checker_.insert_new_row(replace_ctx->dupkey_checker_ctx_, *replace_row), *replace_row);
@@ -238,6 +245,13 @@ int ObMultiTableReplace::shuffle_final_insert_row(ObExecContext& ctx, const ObNe
   CK(OB_NOT_NULL(replace_ctx = GET_PHY_OPERATOR_CTX(ObMultiTableReplaceCtx, ctx, get_id())));
   OZ(ForeignKeyHandle::do_handle_new_row(
       table_dml_infos_.at(0).index_infos_.at(0).dml_subplans_.at(INSERT_OP).subplan_root_, *replace_ctx, insert_row));
+  bool is_filtered = false;
+  OZ(ObPhyOperator::filter_row_for_check_cst(
+      replace_ctx->expr_ctx_, insert_row, check_constraint_exprs_, is_filtered));
+  if (is_filtered) {
+    ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+    LOG_WARN("check constraint violated", K(ret));
+  }
   OZ(schema_service->get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), schema_guard));
   OZ(shuffle_dml_row(ctx, schema_guard, *replace_ctx, insert_row, INSERT_OP));
   return ret;

@@ -2086,8 +2086,14 @@ int ObDDLResolver::resolve_normal_column_attribute(
   default_value.set_null();
   bool is_set_cur_default = false;
   bool is_set_orig_default = false;
-  ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-
+  ObSEArray<ObConstraint, 4> alter_csts;
+  ObCreateTableStmt *create_table_stmt = nullptr;
+  ObAlterTableStmt *alter_table_stmt = nullptr;
+  if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+    alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_);
+  } else {
+    create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+  }
   if (OB_ISNULL(attrs_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("attrs_node is invalid");
@@ -2332,16 +2338,18 @@ int ObDDLResolver::resolve_normal_column_attribute(
         }
         break;
       case T_CHECK_CONSTRAINT: {
-        if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
-          ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(
-              WARN, "Adding column-level check cst while altering table not supported", K(ret), K(stmt_->stmt_type_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add column-level check cst while altering table");
-        } else {
+        if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+          if (OB_FAIL(resolve_check_constraint_node(*attr_node, alter_csts, &column))) {
+            SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
+          }
+        } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
           ObSEArray<ObConstraint, 4>& csts = create_table_stmt->get_create_table_arg().constraint_list_;
           if (OB_FAIL(resolve_check_constraint_node(*attr_node, csts, &column))) {
             SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
           }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Adding a column-level check constraint is not supported", K(ret),K(stmt_->get_stmt_type()));
         }
         break;
       }
@@ -2366,6 +2374,15 @@ int ObDDLResolver::resolve_normal_column_attribute(
         SQL_RESV_LOG(WARN, "Wrong column constraint", K(ret));
         break;
     }
+  }
+  if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type() && alter_csts.count() > 0) {
+    AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+    for (int i = 0;OB_SUCC(ret) && i < alter_csts.count(); ++i) {
+      if (OB_FAIL(alter_table_schema.add_constraint(alter_csts.at(i)))) {
+        SQL_RESV_LOG(WARN, "add constraint failed", K(ret));
+      }
+    }
+    alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::ADD_CONSTRAINT;
   }
   if (OB_SUCC(ret) && column.get_cur_default_value().is_null() && resolve_stat.is_set_default_value_ &&
       (!column.is_nullable() || resolve_stat.is_primary_key_)) {
@@ -4476,14 +4493,16 @@ int ObDDLResolver::check_column_in_foreign_key(const ObTableSchema& table_schema
   return ret;
 }
 
-int ObDDLResolver::check_column_in_check_constraint_for_oracle(
+int ObDDLResolver::check_column_in_check_constraint(
     const share::schema::ObTableSchema& table_schema, const ObString& column_name, ObAlterTableStmt* alter_table_stmt)
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2* alter_column = table_schema.get_column_schema(column_name);
+  int cst_cnt = table_schema.get_constraint_count();
   if (OB_ISNULL(alter_column)) {
     // do nothing
   } else {
+    AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
     for (ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
          OB_SUCC(ret) && (iter != table_schema.constraint_end());
          ++iter) {
@@ -4495,23 +4514,42 @@ int ObDDLResolver::check_column_in_check_constraint_for_oracle(
             if (0 == (*iter)->get_column_cnt()) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "check cst don't have column info", K(ret), K(**iter));
-            } else if (1 == (*iter)->get_column_cnt()) {
-              // drop check constraint cascaded
-              AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
-              if (OB_FAIL(alter_table_schema.add_constraint(**iter))) {
-                SQL_RESV_LOG(WARN, "add constraint failed!", K(ret), K(**iter));
-              } else {
-                alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
-              }
             } else {
-              // if check constraint includes more than one column, throw
-              ret = OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT;
-              SQL_RESV_LOG(WARN,
-                  "column is referenced in a multi-column constraint",
-                  K(ret),
-                  K(alter_column->get_column_name_str()),
-                  K((*iter)->get_constraint_name_str()),
-                  K((*iter)->get_check_expr_str()));
+              // drop check constraint cascaded
+              bool is_dropped = false;
+              if (share::is_mysql_mode()) {
+                //check if constraint has been droped
+                ObTableSchema::const_constraint_iterator iter_dropped = alter_table_schema.constraint_begin();
+                for(int i = 0; i < cst_cnt && (iter_dropped != alter_table_schema.constraint_end()); ++i) {
+                  if ((*iter)->get_constraint_id() == (*iter_dropped)->get_constraint_id()) {
+                    is_dropped = true;
+                    break;
+                  }
+                }
+              }
+              if (is_dropped) {
+                // skip this constraint
+              } else if (1 == (*iter)->get_column_cnt()) {
+                if (OB_FAIL(alter_table_schema.add_constraint(**iter))) {
+                  SQL_RESV_LOG(WARN, "add constraint failed!", K(ret), K(**iter));
+                } else {
+                  alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
+                }
+              } else {
+                // if check constraint includes more than one column, throw
+                ret = OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT;
+                if (share::is_mysql_mode()) {
+                  LOG_USER_ERROR(OB_ERR_DROP_COL_REFERENCED_MULTI_COLS_CONSTRAINT,
+                      (*iter)->get_constraint_name_str().length(), (*iter)->get_constraint_name_str().ptr(),
+                      alter_column->get_column_name_str().length(), alter_column->get_column_name_str().ptr());
+                }
+                SQL_RESV_LOG(WARN,
+                    "column is referenced in a multi-column constraint",
+                    K(ret),
+                    K(alter_column->get_column_name_str()),
+                    K((*iter)->get_constraint_name_str()),
+                    K((*iter)->get_check_expr_str()));
+              }
             }
           }
         }
@@ -4963,53 +5001,78 @@ int ObDDLResolver::resolve_check_constraint_node(
     const ParseNode& cst_node, ObSEArray<ObConstraint, 4>& csts, const share::schema::ObColumnSchemaV2* column_schema)
 {
   int ret = OB_SUCCESS;
-  if ((share::is_mysql_mode() && (cst_node.num_child_ != 2)) ||
-      (share::is_oracle_mode() && (cst_node.num_child_ != 3))) {
+  if (cst_node.num_child_ != 3) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "the num_child of constraint_node is wrong.", K(cst_node.num_child_), K(ret));
   } else {
     ObString cst_name;
     ParseNode* cst_name_node = cst_node.children_[0];
     ParseNode* cst_check_expr_node = cst_node.children_[1];
-    ParseNode* cst_check_state_node = NULL;
-    if (share::is_oracle_mode()) {
-      cst_check_state_node = cst_node.children_[2];
-    }
+    ParseNode* cst_check_state_node = cst_node.children_[2];
+    bool is_generate_name = false;
     if (OB_ISNULL(cst_check_expr_node)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "NULL ptr", K(ret), K(cst_check_expr_node));
     } else if (OB_ISNULL(cst_name_node)) {
+      is_generate_name = true;
+    } else if (cst_name_node->num_child_ != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "the num_child of constraint_name_node is wrong.", K(ret), K(cst_name_node->num_child_));
+    } else if (OB_ISNULL(cst_name_node->children_[0])) {
       if (share::is_mysql_mode()) {
+        is_generate_name = true;
+      } else {
         ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "NULL ptr", K(ret), K(cst_name_node));
-      } else if (share::is_oracle_mode()) {
-        if (OB_FAIL(ObTableSchema::create_cons_name_automatically(
-                cst_name, table_name_, *allocator_, CONSTRAINT_TYPE_CHECK))) {
-          SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
-        }
+        SQL_RESV_LOG(WARN, "NULL ptr", K(ret), K(cst_name_node->children_[0]));
       }
     } else {
-      cst_name.assign_ptr(cst_name_node->str_value_, static_cast<int32_t>(cst_name_node->str_len_));
+      cst_name.assign_ptr(cst_name_node->children_[0]->str_value_, static_cast<int32_t>(cst_name_node->children_[0]->str_len_));
     }
     if (OB_SUCC(ret)) {
-      ObConstraint cst;
-      if (cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH) {
-        ret = OB_ERR_TOO_LONG_IDENT;
-        LOG_WARN("constraint_name length overflow", K(ret), K(cst_name.length()));
-      } else {
+      bool reset_generate_name = is_generate_name;
+      do {
+        if (reset_generate_name) {//generate cst name automatically
+          if (OB_FAIL(ObTableSchema::create_cons_name_automatically( //not compatible with mysql, mysql cst name:<table_name>_chk_<1,2,3...>
+            cst_name, table_name_, *allocator_, CONSTRAINT_TYPE_CHECK))) {
+            SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+          }
+          reset_generate_name = false;
+        }
+        // check length of constraint name
+        if (share::is_oracle_mode() && cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH) {
+          ret = OB_ERR_TOO_LONG_IDENT;
+          LOG_WARN("constraint_name length overflow", K(ret), K(cst_name.length()));
+        } else if (share::is_mysql_mode() && cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH_MYSQL) {
+          ret = OB_ERR_TOO_LONG_IDENT;
+          LOG_WARN("constraint_name length overflow", K(ret), K(cst_name.length()));
+        }
+        //check if cst name is duplicate
+        for (uint64_t i = 0; OB_SUCC(ret) && i < csts.count() && !reset_generate_name; ++i) {
+          if (share::is_oracle_mode() && cst_name == csts.at(i).get_constraint_name_str()) {
+            if (is_generate_name) {
+              reset_generate_name = true; //generate name is duplicate
+            } else {
+              ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+              LOG_WARN("duplicate check constraint name", K(ret), K(cst_name));
+            }
+          } else if (!share::is_oracle_mode() && 0 == cst_name.case_compare(csts.at(i).get_constraint_name_str())) {
+            if (is_generate_name) {
+              reset_generate_name = true; //generate name is duplicate
+            } else {
+              ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+              LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, cst_name.length(), cst_name.ptr());
+              LOG_WARN("duplicate check constraint name", K(ret), K(cst_name));
+            }
+          }
+        }
+      } while (OB_SUCC(ret) && reset_generate_name);
+      if (OB_SUCC(ret)) {
+        ObConstraint cst;
         ObTableSchema tmp_table_schema;
         ObRawExpr* check_expr = NULL;
         if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
           LOG_WARN("get table schema failed", K(ret), K(cst_name));
         } else {
-          for (uint64_t i = 0; OB_SUCC(ret) && i < csts.count(); ++i) {
-            if (csts.at(i).get_constraint_name_str() == cst_name) {
-              ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
-              LOG_WARN("duplicate check constraint name", K(ret), K(cst_name));
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
           if (OB_FAIL(cst.set_constraint_name(cst_name))) {
             LOG_WARN("set constraint name failed", K(ret), K(cst_name));
           } else if (OB_FAIL(resolve_check_constraint_expr(
@@ -5021,6 +5084,10 @@ int ObDDLResolver::resolve_check_constraint_node(
               if (OB_FAIL(resolve_check_cst_state_node(cst_check_state_node, cst))) {
                 SQL_RESV_LOG(WARN, "fail to resolve check cst state node", K(ret));
               }
+            } else { //mysql mode
+              if (OB_FAIL(resolve_check_mysql_cst_state_node(cst_check_state_node, cst))) {
+                SQL_RESV_LOG(WARN, "fail to resolve check cst state node", K(ret));
+              }
             }
             if (OB_SUCC(ret)) {
               cst.set_constraint_type(CONSTRAINT_TYPE_CHECK);
@@ -5030,6 +5097,25 @@ int ObDDLResolver::resolve_check_constraint_node(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_check_mysql_cst_state_node(const ParseNode* cst_check_state_node, ObConstraint& cst)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cst_check_state_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "cst_check_state_node is null ptr", K(ret));
+  } else if (T_ENFORCED_CONSTRAINT == cst_check_state_node->type_) {
+    cst.set_enable_flag(true);
+    cst.set_validate_flag(true);
+  } else if (T_NOENFORCED_CONSTRAINT == cst_check_state_node->type_) {
+    cst.set_enable_flag(false);
+    cst.set_validate_flag(false);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "constraint type not support");
   }
   return ret;
 }

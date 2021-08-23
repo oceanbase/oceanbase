@@ -825,7 +825,7 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
       LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
     }
   }
-  if (OB_SUCC(ret) && is_oracle_mode && !is_sync_ddl_user &&
+  if (OB_SUCC(ret) && !is_sync_ddl_user &&
       (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_ ||
           (obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == alter_table_arg.alter_constraint_type_))) {
     common::ObCommonSqlProxy* user_sql_proxy;
@@ -849,7 +849,11 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
     } else if (OB_FAIL(refresh_schema_for_table(alter_table_arg.alter_table_schema_.get_tenant_id()))) {
       LOG_WARN("refresh_schema_for_table failed", K(ret));
     } else {
-      user_sql_proxy = &oracle_sql_proxy;
+      if (is_oracle_mode) {
+        user_sql_proxy = &oracle_sql_proxy;
+      } else {
+        user_sql_proxy = sql_proxy;  // mysql mode
+      }
       if (OB_FAIL(check_check_constraint_data_validity(ctx,
               alter_table_arg,
               user_sql_proxy,
@@ -865,11 +869,16 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
               K(ret),
               K(origin_database_name),
               K((*iter)->get_check_expr_str().empty()));
-        } else {
+        } else if (share::is_oracle_mode()) {
           ret = OB_ERR_ADD_CHECK_CONSTRAINT_VIOLATED;
           LOG_USER_ERROR(OB_ERR_ADD_CHECK_CONSTRAINT_VIOLATED,
               origin_database_name.length(),
               origin_database_name.ptr(),
+              (*iter)->get_constraint_name_str().length(),
+              (*iter)->get_constraint_name_str().ptr());
+        } else { //mysql mode
+          ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+          LOG_USER_ERROR(OB_ERR_CHECK_CONSTRAINT_VIOLATED,
               (*iter)->get_constraint_name_str().length(),
               (*iter)->get_constraint_name_str().ptr());
         }
@@ -1139,10 +1148,11 @@ int ObAlterTableExecutor::set_drop_constraint_ddl_stmt_str(
   char* buf = NULL;
   int64_t buf_len = OB_MAX_SQL_LENGTH;
   int64_t pos = 0;
-
+  bool is_check_cst = false;
   if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_) {
     ObTableSchema::const_constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin();
     cst_name = (*iter)->get_constraint_name_str();
+    is_check_cst = true;
   } else if (1 == alter_table_arg.foreign_key_arg_list_.count() &&
              !alter_table_arg.foreign_key_arg_list_.at(0).is_modify_enable_flag_) {
     obrpc::ObCreateForeignKeyArg fk_arg = alter_table_arg.foreign_key_arg_list_.at(0);
@@ -1159,7 +1169,8 @@ int ObAlterTableExecutor::set_drop_constraint_ddl_stmt_str(
                  buf_len,
                  pos,
                  share::is_oracle_mode() ? "ALTER TABLE \"%.*s\".\"%.*s\" DROP CONSTRAINT \"%.*s\""
-                                         : "ALTER TABLE `%.*s`.`%.*s` DROP FOREIGN KEY `%.*s`",
+                                         : (is_check_cst ? "ALTER TABLE `%.*s`.`%.*s` DROP CHECK `%.*s`"
+                                                        :"ALTER TABLE `%.*s`.`%.*s` DROP FOREIGN KEY `%.*s`"),
                  alter_table_schema.get_origin_database_name().length(),
                  alter_table_schema.get_origin_database_name().ptr(),
                  alter_table_schema.get_origin_table_name().length(),
@@ -1548,14 +1559,30 @@ int ObAlterTableExecutor::check_data_validity_for_check_by_inner_sql(
       if (check_expr_str.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("check_expr_str is empty", K(ret));
-      } else if (OB_FAIL(sql_string.assign_fmt("SELECT 1 FROM \"%.*s\".\"%.*s\" WHERE NOT (%.*s) AND ROWNUM = 1",
+      } else {
+        if (sql_proxy->is_oracle_mode()) { //oracle
+          if (OB_FAIL(sql_string.assign_fmt("SELECT 1 FROM \"%.*s\".\"%.*s\" WHERE NOT (%.*s) AND ROWNUM = 1",
                      static_cast<int>(alter_table_schema.get_origin_database_name().length()),
                      alter_table_schema.get_origin_database_name().ptr(),
                      static_cast<int>(alter_table_schema.get_origin_table_name().length()),
                      alter_table_schema.get_origin_table_name().ptr(),
                      static_cast<int>(check_expr_str.length()),
                      check_expr_str.ptr()))) {
-        LOG_WARN("fail to assign format", K(ret));
+            LOG_WARN("fail to assign format", K(ret));
+          }
+        } else {  //mysql_mode
+          if (OB_FAIL(sql_string.assign_fmt("SELECT 1 FROM `%.*s`.`%.*s` WHERE NOT (%.*s) LIMIT 1",
+                     static_cast<int>(alter_table_schema.get_origin_database_name().length()),
+                     alter_table_schema.get_origin_database_name().ptr(),
+                     static_cast<int>(alter_table_schema.get_origin_table_name().length()),
+                     alter_table_schema.get_origin_table_name().ptr(),
+                     static_cast<int>(check_expr_str.length()),
+                     check_expr_str.ptr()))) {
+            LOG_WARN("fail to assign format", K(ret));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(sql_proxy->read(res, alter_table_schema.get_tenant_id(), sql_string.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(sql_string.ptr()));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -1590,6 +1617,7 @@ int ObAlterTableExecutor::check_check_constraint_data_validity(ObExecContext& ct
   const ObString& origin_database_name = alter_table_schema.get_origin_database_name();
   const ObString& origin_table_name = alter_table_schema.get_origin_table_name();
   const ObTableSchema* orig_table_schema = NULL;
+  int session_id = schema_guard.get_session_id();
 
   if (OB_ISNULL(gctx.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1606,6 +1634,7 @@ int ObAlterTableExecutor::check_check_constraint_data_validity(ObExecContext& ct
           K(origin_database_name),
           K(origin_table_name));
     } else {
+      schema_guard.set_session_id(alter_table_arg.session_id_);
       if (OB_FAIL(schema_guard.get_table_schema(
               tenant_id, origin_database_name, origin_table_name, false, orig_table_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(origin_database_name), K(origin_table_name));
@@ -1626,6 +1655,7 @@ int ObAlterTableExecutor::check_check_constraint_data_validity(ObExecContext& ct
     }
   }
 
+  schema_guard.set_session_id(session_id);
   return ret;
 }
 

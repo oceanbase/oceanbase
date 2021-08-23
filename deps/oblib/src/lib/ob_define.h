@@ -209,6 +209,8 @@ const int64_t OB_MAX_ALIAS_NAME_LENGTH =
     255;  // Compatible with mysql, 255 visible characters. Plus 256 bytes at the end of 0
 const int64_t OB_MAX_CONSTRAINT_NAME_LENGTH =
     128;  // Compatible with Oracle, error is reported when the logic is greater than
+const int64_t OB_MAX_CONSTRAINT_NAME_LENGTH_MYSQL =
+    64;  // Compatible with mysql, error is reported when the logic is greater than
 const int64_t OB_MAX_CONSTRAINT_EXPR_LENGTH = 2048;
 const int64_t OB_MAX_TABLESPACE_NAME_LENGTH = 128;
 const int64_t OB_FIRST_PARTTITION_ID = 0;

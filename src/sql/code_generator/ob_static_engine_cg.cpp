@@ -1719,6 +1719,8 @@ int ObStaticEngineCG::convert_insert_subplan(
   if (OB_SUCC(ret) && log_op_def::LOG_INSERT == op.get_type()) {
     if (OB_FAIL(convert_foreign_keys(op, *dml_subplan.subplan_root_))) {
       LOG_WARN("failed to convert foreign keys", K(ret));
+    } else if (OB_FAIL(convert_check_constraint(op, *dml_subplan.subplan_root_))) {
+      LOG_WARN("failed to convert check constraint", K(ret));
     }
   }
   if (OB_SUCC(ret) && log_op_def::LOG_INSERT == op.get_type()) {
@@ -1972,6 +1974,8 @@ int ObStaticEngineCG::generate_spec(ObLogInsert& op, ObTableReplaceSpec& spec, c
   if (OB_SUCC(ret)) {
     if (OB_FAIL(convert_foreign_keys(op, spec))) {
       LOG_WARN("failed to convert foreign keys", K(ret));
+    } else if (OB_FAIL(convert_check_constraint(op, spec))) {
+      LOG_WARN("failed to convert check constraints", K(ret));
     }
   }
   // table columns exprs in dml need to set IS_COLUMNLIZED flag
@@ -2196,6 +2200,7 @@ int ObStaticEngineCG::convert_multi_table_replace_info(ObLogInsert& op, ObMultiT
     subplan_roots.at(i)->set_parent(append_op);
     OZ(append_op->set_child(static_cast<int32_t>(i), subplan_roots.at(i)));
   }
+  OZ(convert_check_constraint(op, phy_op));
   OZ(phy_op.add_table_dml_info(0, table_dml_info));
   return ret;
 }
@@ -2810,6 +2815,8 @@ int ObStaticEngineCG::generate_spec(ObLogInsert& op, ObTableInsertUpSpec& spec, 
   if (OB_SUCC(ret) && !op.is_multi_part_dml()) {
     if (OB_FAIL(convert_foreign_keys(op, spec))) {
       LOG_WARN("failed to convert foreign keys", K(ret));
+    } else if (OB_FAIL(convert_check_constraint(op, spec))) {
+      LOG_WARN("failed to convert check constraints", K(ret));
     }
   }
   // table columns exprs in dml need to set IS_COLUMNLIZED flag
@@ -2956,6 +2963,7 @@ int ObStaticEngineCG::convert_multi_table_insert_up_info(ObLogInsert& op, ObMult
   OZ(convert_update_assignments(table_columns->index_dml_infos_.at(0).column_exprs_,
       table_columns->index_dml_infos_.at(0).assignments_,
       table_dml_info.assign_columns_));
+  OZ(convert_check_constraint(op, phy_op));
   OZ(phy_op.add_table_dml_info(0, table_dml_info));
 
   return ret;

@@ -105,14 +105,19 @@ int ObMultiPartInsertOp::shuffle_insert_row(bool& got_row)
     const ObExprPtrIArray* output = NULL;
     while (OB_SUCC(ret) && OB_SUCC(prepare_next_storage_row(output))) {
       got_row = true;
-      ++affected_rows;
-      OZ(check_row_null(*output, sub_insert->column_infos_));
+      if (OB_ISNULL(output)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", K(ret));
+      } else {
+        ++affected_rows;
+        OZ(check_row_null(*output, sub_insert->column_infos_));
+        OZ(ForeignKeyHandle::do_handle_new_row(*this, sub_insert->fk_args_, *output));
+        OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
+        OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+      }
       if (MY_SPEC.is_returning_) {
         OZ(returning_datum_store_.add_row(MY_SPEC.output_, &eval_ctx_));
       }
-      OZ(ForeignKeyHandle::do_handle_new_row(*this, sub_insert->fk_args_, *output));
-      OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
-      OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
       for (int64_t i = 0; OB_SUCC(ret) && i < global_index_infos.count(); ++i) {
         ObDatum* partition_id_datum = NULL;
         const ObExpr* calc_part_id_expr = global_index_infos.at(i).calc_part_id_exprs_.at(0);
