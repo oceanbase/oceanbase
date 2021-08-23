@@ -173,6 +173,13 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_MD5 : return "T_FUN_SYS_MD5";
 	case T_FUN_SYS_IP2INT : return "T_FUN_SYS_IP2INT";
 	case T_FUN_SYS_INT2IP : return "T_FUN_SYS_INT2IP";
+	case T_FUN_SYS_INET6NTOA : return "T_FUN_SYS_INET6NTOA";
+	case T_FUN_SYS_INET6ATON : return "T_FUN_SYS_INET6ATON";
+	case T_FUN_SYS_INETATON : return "T_FUN_SYS_INETATON";
+	case T_FUN_SYS_IS_IPV4 : return "T_FUN_SYS_IS_IPV4";
+	case T_FUN_SYS_IS_IPV6 : return "T_FUN_SYS_IS_IPV6";
+	case T_FUN_SYS_IS_IPV4_MAPPED : return "T_FUN_SYS_IS_IPV4_MAPPED";
+	case T_FUN_SYS_IS_IPV4_COMPAT : return "T_FUN_SYS_IS_IPV4_COMPAT";
 	case T_FUN_SYS_INSERT : return "T_FUN_SYS_INSERT";
 	case T_FUN_SYS_LENGTH : return "T_FUN_SYS_LENGTH";
 	case T_FUN_SYS_HEX : return "T_FUN_SYS_HEX";

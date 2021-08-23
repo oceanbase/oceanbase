@@ -1002,7 +1002,7 @@ public:
   static int get_equal_meta(common::ObObjMeta& meta, const common::ObObjMeta& meta1, const common::ObObjMeta& meta2);
 
   OB_INLINE static bool can_cmp_without_cast(
-      ObExprResType type1, ObExprResType type2, common::ObCmpOp cmp_op, common::obj_cmp_func& cmp_func)
+      const ObExprResType& type1, const ObExprResType& type2, common::ObCmpOp cmp_op, common::obj_cmp_func& cmp_func)
   {
     bool need_no_cast = false;
     // Special processing shows that compare is called (for example: c1> c2),
@@ -1117,7 +1117,7 @@ protected:
   }
 
   static bool can_cmp_without_cast(
-      ObExprResType type1, ObExprResType type2, common::ObCmpOp cmp_op, const ObSQLSessionInfo& session);
+      const ObExprResType& type1, const ObExprResType& type2, common::ObCmpOp cmp_op, const ObSQLSessionInfo& session);
 
 protected:
   // only use for comparison with 2 operands(calc_result2)

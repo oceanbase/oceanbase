@@ -377,7 +377,7 @@ int ObExprMod::mod_float(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& datum)
   } else {
     const float left_f = left->get_float();
     const float right_f = right->get_float();
-    if (fabsf(right_f) == 0.0) {
+    if (fabsf(right_f) < share::ObUnitConfig::CPU_EPSILON) {
       datum.set_float(left_f);
     } else {
       datum.set_float(fmodf(left_f, right_f));

@@ -3245,6 +3245,8 @@ int ObResolverUtils::resolve_generated_column_info(
           type = ObExprOperatorFactory::get_type_by_name("pow");
         } else if (0 == func_name.case_compare("ws")) {
           type = ObExprOperatorFactory::get_type_by_name("word_segment");
+        } else if (0 == func_name.case_compare("inet_ntoa")) {
+          type = ObExprOperatorFactory::get_type_by_name("int2ip");
         } else {
           type = ObExprOperatorFactory::get_type_by_name(func_name);
         }

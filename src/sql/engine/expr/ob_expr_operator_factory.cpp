@@ -65,6 +65,7 @@
 #include "sql/engine/expr/ob_expr_not_in.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
 #include "sql/engine/expr/ob_expr_ip2int.h"
+#include "sql/engine/expr/ob_expr_inet.h"
 #include "sql/engine/expr/ob_expr_last_exec_id.h"
 #include "sql/engine/expr/ob_expr_last_trace_id.h"
 #include "sql/engine/expr/ob_expr_is.h"
@@ -446,6 +447,13 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprNotIn);
   REG_OP(ObExprInt2ip);
   REG_OP(ObExprIp2int);
+  REG_OP(ObExprInetAton);
+  REG_OP(ObExprInet6Ntoa);
+  REG_OP(ObExprInet6Aton);
+  REG_OP(ObExprIsIpv4);
+  REG_OP(ObExprIsIpv6);
+  REG_OP(ObExprIsIpv4Mapped);
+  REG_OP(ObExprIsIpv4Compat);
   REG_OP(ObExprInsert);
   REG_OP(ObExprIs);
   REG_OP(ObExprIsNot);

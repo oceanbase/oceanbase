@@ -376,7 +376,7 @@ struct ObExprOperatorFetcher : public ObSqlExpression {
 public:
   ObExprOperatorFetcher()
       //  the allocator is never used
-      : ObSqlExpression(*lib::ObMallocAllocator::get_instance(), 0)
+      : ObSqlExpression(*lib::ObMallocAllocator::get_instance(), 0), op_(NULL)
   {}
 
   virtual int add_expr_item(const ObPostExprItem& item) override
