@@ -2277,13 +2277,24 @@ static struct VarsInit {
     ObSysVarsIdToArrayIdx[SYS_VAR_NLS_DUAL_CURRENCY] = 193;
     ObSysVars[193].alias_ = "OB_SV_NLS_DUAL_CURRENCY";
 
+    ObSysVars[194].info_ = "this value is true if we have executed set transaction stmt, until a transaction "
+                           "commit(explicit or implicit) successfully";
+    ObSysVars[194].name_ = "_ob_proxy_session_temporary_table_used";
+    ObSysVars[194].data_type_ = ObIntType;
+    ObSysVars[194].value_ = "0";
+    ObSysVars[194].flags_ = ObSysVarFlag::READONLY | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE;
+    ObSysVars[194].id_ = SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED;
+    cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED));
+    ObSysVarsIdToArrayIdx[SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED] = 194;
+    ObSysVars[194].alias_ = "OB_SV__OB_PROXY_SESSION_TEMPORARY_TABLE_USED";
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) {
       HasInvalidSysVar = true;
     }
   }
 } vars_init;
 
-static int64_t var_amount = 194;
+static int64_t var_amount = 195;
 
 int64_t ObSysVariables::get_all_sys_var_count()
 {

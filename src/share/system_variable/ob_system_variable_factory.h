@@ -2634,6 +2634,19 @@ public:
     return ObSysVariables::get_default_value(193);
   }
 };
+class ObSysVarObProxySessionTemporaryTableUsed : public ObBoolSysVar {
+public:
+  ObSysVarObProxySessionTemporaryTableUsed() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL)
+  {}
+  inline virtual ObSysVarClassType get_type() const
+  {
+    return SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED;
+  }
+  inline virtual const common::ObObj& get_global_default_value() const
+  {
+    return ObSysVariables::get_default_value(194);
+  }
+};
 
 class ObSysVarFactory {
 public:
@@ -2651,7 +2664,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 81;
-  const static int64_t OB_SYS_VARS_COUNT = 113;
+  const static int64_t OB_SYS_VARS_COUNT = 114;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;

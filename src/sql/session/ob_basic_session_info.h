@@ -1534,6 +1534,9 @@ public:
   }
   int load_default_sys_variable(int64_t var_idx);
 
+  int set_session_temp_table_used(const bool is_used);
+  int get_session_temp_table_used(bool& is_used) const;
+
 protected:
   int process_session_variable(
       share::ObSysVarClassType var, const common::ObObj& value, bool is_inc, const bool check_timezone_valid = true);
