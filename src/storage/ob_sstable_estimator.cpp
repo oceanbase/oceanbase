@@ -589,9 +589,8 @@ int ObMultiVersionSingleScanEstimator::estimate_macro_row_count(const blocksstab
   } else {
     const int64_t delta = meta.meta_->row_count_delta_;
     // if delta < 0, it means this macro block really delete rows already exist in older table
-    // so we should minus gap_size * 2 from physical row count since rows from older table can
-    // be skipped
-    const int64_t gap_ratio = 1 + (delta < 0);
+    // so if this delta is believable, we should minus gap_size+delta from physical row count
+    // since rows from older table can be skipped
     int64_t macro_purged_row_count = 0;
     bool need_reset_gap = false;
     if (!(is_left_border || is_right_border)) {
@@ -599,7 +598,7 @@ int ObMultiVersionSingleScanEstimator::estimate_macro_row_count(const blocksstab
       part_est.physical_row_count_ += meta.meta_->row_count_;
       if (meta.meta_->macro_block_deletion_flag_) {
         gap_size += meta.meta_->row_count_;
-        purged_phy_row_count += meta.meta_->row_count_ * gap_ratio;
+        purged_phy_row_count += meta.meta_->row_count_ - (delta < 0 ? delta : 0);
       } else {
         need_reset_gap = true;
         if (delta <= 0) {
