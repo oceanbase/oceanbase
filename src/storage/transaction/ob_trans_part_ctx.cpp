@@ -10515,6 +10515,7 @@ int ObPartTransCtx::recover_from_trans_sstable_durable_ctx_info(ObTransSSTableDu
     mutator_log_no_ = ctx_info.mutator_log_no_;
     stmt_info_ = ctx_info.stmt_info_;
     min_log_ts_ = ctx_info.min_log_ts_;
+    min_log_id_ = ctx_info.min_log_id_;
     sp_user_request_ = ctx_info.sp_user_request_;
     need_checksum_ = ctx_info.need_checksum_;
     prepare_log_id_ = ctx_info.prepare_log_id_;
@@ -10595,6 +10596,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.mutator_log_no_ = mutator_log_no_;
     info.stmt_info_ = stmt_info_;
     info.min_log_ts_ = min_log_ts_;
+    info.min_log_id_ = min_log_id_;
     info.sp_user_request_ = sp_user_request_;
     info.need_checksum_ = need_checksum_;
     info.prepare_log_id_ = prepare_log_id_;
