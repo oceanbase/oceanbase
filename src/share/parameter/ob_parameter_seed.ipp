@@ -203,6 +203,15 @@ DEF_INT(cluster_id, OB_CLUSTER_PARAMETER, "0", "[1,4294901759]", "ID of the clus
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(obconfig_url, OB_CLUSTER_PARAMETER, "", "URL for OBConfig service",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_syslog_file_compress, OB_CLUSTER_PARAMETER, "False",
+    "specifies whether to compress archive log files"
+    "Value: True:turned on; False: turned off",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(max_syslog_file_time, OB_CLUSTER_PARAMETER, "0s", "[0s, 3650d]",
+    "specifies the maximum retention time of the log files. "
+    "When this value is set to 0s, no log file will be removed due to time. "
+    "with default 0s. Range: [0s, 3650d]",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_LOG_LEVEL(syslog_level, OB_CLUSTER_PARAMETER, "INFO",
     "specifies the current level of logging. There are DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR, six different log "
     "levels.",
@@ -214,7 +223,7 @@ DEF_INT(max_syslog_file_count, OB_CLUSTER_PARAMETER, "0", "[0,]",
     "specifies the maximum number of the log files "
     "that can co-exist before the log file recycling kicks in. "
     "Each log file can occupy at most 256MB disk space. "
-    "When this value is set to 0, no log file will be removed. Range: [0, +∞) in integer",
+    "When this value is set to 0, no log file will be removed due to the file count. Range: [0, +∞) in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_async_syslog, OB_CLUSTER_PARAMETER, "True",
     "specifies whether use async log for observer.log, elec.log and rs.log",

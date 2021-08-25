@@ -54,6 +54,8 @@ namespace oceanbase {
 namespace common {
 class ObFIFOAllocator;
 class ObPLogItem;
+class ObString;
+class ObLogCompressor;
 
 #define OB_LOGGER ::oceanbase::common::ObLogger::get_logger()
 #define OB_LOG_NEED_TO_PRINT(level) (OB_UNLIKELY(OB_LOGGER.need_to_print(OB_LOG_LEVEL_##level)))
@@ -866,9 +868,15 @@ public:
   void set_max_file_size(int64_t max_file_size);
   //@brief Set the max number of log-files. If max_file_index = 0, no limit.
   int set_max_file_index(int64_t max_file_index = 0x0F);
+  //@brief Set the max retention time of log-files. If max_file_time = 0, no limit.
+  int set_max_file_time(int64_t max_file_time);
+  //@brief Set whether compress log-files. If this flag set, will compress all log files.
+  int set_enable_file_compress(bool enable_file_compress);
   //@brief Set whether record old log file. If this flag and max_file_index set,
   // will record log files in the directory for log file
   int set_record_old_log_file(bool rec_old_file_flag = false);
+
+  int set_log_compressor(ObLogCompressor *log_compressor);
 
   //@brief Get current time.
   static struct timeval get_cur_tv();
@@ -1012,6 +1020,9 @@ private:
   int add_files_to_list(void* files /*ObIArray<FileName> * */, void* wf_files /*ObIArray<FileName> * */,
       std::deque<std::string>& file_list, std::deque<std::string>& wf_file_list);
 
+  void remove_outdated_file(std::deque<std::string> &file_list);
+  void update_compression_file(std::deque<std::string> &file_list);
+
   void rotate_log(
       const int64_t size, const bool redirect_flag, ObPLogFileStruct& log_struct, const ObPLogFDType fd_type);
   //@brief Rename the log to a filename with fmt. And open a new file with the old, then add old file to file_list.
@@ -1061,9 +1072,12 @@ private:
   static RLOCAL(bool, disable_logging_);
 
   ObPLogFileStruct log_file_[MAX_FD_FILE];
+  ObLogCompressor *log_compressor_;
 
   int64_t max_file_size_;
   int64_t max_file_index_;
+  int64_t max_file_time_;         // max retention time(second) of log-file
+  int32_t enable_file_compress_;  // percentage of log-file to compress
 
   pthread_mutex_t file_size_mutex_;
   pthread_mutex_t file_index_mutex_;

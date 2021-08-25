@@ -46,6 +46,7 @@
 #include "observer/ob_service.h"
 #include "observer/ob_server_reload_config.h"
 #include "observer/ob_root_service_monitor.h"
+#include "lib/oblog/ob_log_compressor.h"
 
 namespace oceanbase {
 namespace omt {
@@ -426,6 +427,7 @@ private:
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
   ObSignalWorker sig_worker_;
+  common::ObLogCompressor log_compressor_;
 
   bool is_log_dir_empty_;
   sql::ObConnectResourceMgr conn_res_mgr_;
