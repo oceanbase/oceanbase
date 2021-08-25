@@ -77,35 +77,18 @@ private:
   InfoMap map_;
 };
 
-enum ObDagStatus {
-  ODS_WARNING = 0,
-  ODS_RETRYED,
-  ODS_MAX,
-};
-
-static common::ObString ObDagStatusStr[ODS_MAX] = {"WARNING", "RETRYED"};
-
-static common::ObString ObDagModuleStr[share::ObIDag::DAG_TYPE_MAX] = {"EMPTY",
-    "COMPACTION",
-    "COMPACTION",
-    "INDEX",
-    "SPLIT",
-    "OTHER",
-    "MIGRATE",
-    "COMPACTION",
-    "MIGRATE",
-    "INDEX",
-    "COMPACTION",
-    "TRANS_TABLE_MERGE",
-    "FAST_RECOVERY",
-    "FAST_RECOVERY",
-    "BACKUP",
-    "OTHER",
-    "OTHER",
-    "OTHER"};
-
 struct ObDagWarningInfo {
 public:
+  enum ObDagStatus {
+    ODS_WARNING = 0,
+    ODS_RETRYED,
+    ODS_MAX,
+  };
+
+  static const char *ObDagStatusStr[ODS_MAX];
+
+  static const char *get_dag_status_str(enum ObDagStatus status);
+
   ObDagWarningInfo();
   ~ObDagWarningInfo();
   void reset();

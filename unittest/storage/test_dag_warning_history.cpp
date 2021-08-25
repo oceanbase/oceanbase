@@ -47,7 +47,7 @@ TEST_F(TestDagWarningHistory, simple_add)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   info->dag_ret_ = -4016;
-  info->dag_status_ = ODS_WARNING;
+  info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
   info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
   strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
@@ -76,7 +76,7 @@ TEST_F(TestDagWarningHistory, simple_del)
   const int64_t key = 8888;
   ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add(key, info));
   info->dag_ret_ = -4016;
-  info->dag_status_ = ODS_WARNING;
+  info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
   info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
   strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
@@ -97,7 +97,7 @@ TEST_F(TestDagWarningHistory, simple_loop_get)
 
   ObDagWarningInfo basic_info;
   basic_info.dag_ret_ = -4016;
-  basic_info.dag_status_ = ODS_WARNING;
+  basic_info.dag_status_ = ObDagWarningInfo::ODS_WARNING;
   basic_info.dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
   strcpy(basic_info.warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
@@ -108,7 +108,7 @@ TEST_F(TestDagWarningHistory, simple_loop_get)
     key = 8888 + i;
     ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add(key, info));
     info->dag_ret_ = -4016 + i;
-    info->dag_status_ = ODS_WARNING;
+    info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
     info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
     strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
   }
@@ -157,7 +157,7 @@ TEST_F(TestDagWarningHistory, test_rebuild)
   const int64_t max_cnt = 20;
   ObDagWarningInfo basic_info;
   basic_info.dag_ret_ = -4016;
-  basic_info.dag_status_ = ODS_WARNING;
+  basic_info.dag_status_ = ObDagWarningInfo::ODS_WARNING;
   basic_info.dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
   strcpy(basic_info.warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
 
@@ -167,7 +167,7 @@ TEST_F(TestDagWarningHistory, test_rebuild)
     key = 8888 + i;
     ASSERT_EQ(OB_SUCCESS, manager.alloc_and_add(key, info));
     info->dag_ret_ = -4016 + i;
-    info->dag_status_ = ODS_WARNING;
+    info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
     info->dag_type_ = share::ObIDag::DAG_TYPE_SSTABLE_MINOR_MERGE;
     strcpy(info->warning_info_, "table_id=1101710651081571, partition_id=66, mini merge error");
     STORAGE_LOG(DEBUG, "print info", K(ret), K(i), K(key), KPC(info));

@@ -22,6 +22,19 @@ namespace storage {
  * ObDagWarningInfo Func
  * */
 
+const char *ObDagWarningInfo::ObDagStatusStr[ODS_MAX] = {"WARNING", "RETRYED"};
+
+const char *ObDagWarningInfo::get_dag_status_str(enum ObDagStatus status)
+{
+  const char *str = "";
+  if (status >= ODS_MAX || status < ODS_WARNING) {
+    str = "invalid_type";
+  } else {
+    str = ObDagStatusStr[status];
+  }
+  return str;
+}
+
 ObDagWarningInfo::ObDagWarningInfo()
     : tenant_id_(0),
       task_id_(),
@@ -31,7 +44,9 @@ ObDagWarningInfo::ObDagWarningInfo()
       gmt_create_(0),
       gmt_modified_(0),
       warning_info_()
-{}
+{
+  MEMSET(warning_info_, '\0', common::OB_DAG_WARNING_INFO_LENGTH);
+}
 
 ObDagWarningInfo::~ObDagWarningInfo()
 {
@@ -86,14 +101,14 @@ int ObDagWarningHistoryManager::add_dag_warning_info(share::ObIDag* dag)
         } else {
           dag->gene_warning_info(*info);
           dag->gene_basic_warning_info(*info);  // only once
-          info->dag_status_ = ODS_WARNING;
+          info->dag_status_ = ObDagWarningInfo::ODS_WARNING;
         }
       } else {
         STORAGE_LOG(WARN, "failed to get dag warning info", K(ret), K(key), K(info));
       }
     } else {  // update
       dag->gene_warning_info(*info);
-      info->dag_status_ = ODS_RETRYED;
+      info->dag_status_ = ObDagWarningInfo::ODS_RETRYED;
     }
   }
   return ret;
