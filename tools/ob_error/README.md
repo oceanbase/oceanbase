@@ -156,7 +156,7 @@ If you want to add the cause and solution info, you can change the define as
 DEFINE_ERROR(OB_ERROR, -4000, -1, "HY000", "Common error", "CAUSE", "SOLUTION");
 ```
 
-And then regenerate the `src/lib/oberror_errno.h`、`src/oberror_errno.h` and `src/oberror_errno.cpp` by
+And then regenerate the `src/lib/ob_errno.h`、`src/share/ob_errno.h` and `src/share/ob_errno.cpp` by
 
 ```shell
 cd src/share

@@ -101,6 +101,12 @@ OceanBase:
 	Solution: Contact OceanBase Support
 $ob_error 5133
 
+OceanBase:
+	OceanBase Error Code: OB_ERR_NO_GRANT(-5133)
+	Message: No such grant defined
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+
 MySQL:
 	MySQL Error Code: 5133 (42000)
 	Message: No such grant defined
