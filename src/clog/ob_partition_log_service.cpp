@@ -4572,8 +4572,6 @@ int ObPartitionLogService::get_next_replay_log_info(uint64_t& next_replay_log_id
     RLockGuard guard(lock_);
     if (state_mgr_.is_offline()) {
       ret = OB_STATE_NOT_MATCH;
-    } else if (state_mgr_.is_need_rebuild()) {
-      ret = OB_STATE_NOT_MATCH;
     } else if (0 == mm_.get_replica_property().get_memstore_percent()) {
       // If it is a replica of D, when obtaining the standby machine-readable timestamp, the following situations need
       // to be distinguished: 1) In the non-<leader, active> and non-restore state, the time stamp read by the standby
