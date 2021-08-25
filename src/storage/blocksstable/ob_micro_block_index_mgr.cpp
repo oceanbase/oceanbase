@@ -334,7 +334,6 @@ int ObMicroBlockIndexMgr::cal_border_row_count(const ObStoreRange& range, const 
     logical_row_count += (row_count_delta_ * count) / micro_count_;
     physical_row_count += (row_count_ * count) / micro_count_;
     if (row_count_delta_ <= 0) {
-      const int64_t gap_ratio = 1 + (row_count_delta_ < 0);
       const int32_t avg_micro_row_count = row_count_ / micro_count_;
       int64_t index = start - index_array_;
       const int64_t end_index = end - index_array_;
@@ -344,14 +343,15 @@ int ObMicroBlockIndexMgr::cal_border_row_count(const ObStoreRange& range, const 
           gap_size += avg_micro_row_count;
         } else {
           if (gap_size >= common::OB_SKIP_RANGE_LIMIT) {
-            physical_row_count -= gap_size * gap_ratio;
+            physical_row_count -= gap_size;
           }
           gap_size = 0;
         }
       }
       if (gap_size >= common::OB_SKIP_RANGE_LIMIT) {
-        physical_row_count -= gap_size * gap_ratio;
+        physical_row_count -= gap_size;
       }
+      physical_row_count += row_count_delta_;
     }
   }
   return ret;
@@ -366,7 +366,6 @@ int ObMicroBlockIndexMgr::cal_macro_purged_row_count(int64_t& purged_row_count) 
   } else if (NULL == mark_deletion_array_) {
   } else {
     const int64_t avg_micro_row_count = row_count_ / micro_count_;
-    const int64_t gap_ratio = 1 + (row_count_delta_ < 0);
     int64_t gap_size = 0;
     purged_row_count = 0;
     for (int i = 0; OB_SUCC(ret) && i < micro_count_; ++i) {
@@ -374,14 +373,15 @@ int ObMicroBlockIndexMgr::cal_macro_purged_row_count(int64_t& purged_row_count) 
         gap_size += avg_micro_row_count;
       } else {
         if (gap_size >= common::OB_SKIP_RANGE_LIMIT) {
-          purged_row_count += gap_size * gap_ratio;
+          purged_row_count += gap_size;
         }
         gap_size = 0;
       }
     }
     if (gap_size >= common::OB_SKIP_RANGE_LIMIT) {
-      purged_row_count += gap_size * gap_ratio;
+      purged_row_count += gap_size;
     }
+    purged_row_count -= (row_count_delta_ < 0 ? row_count_delta_ : 0);
   }
   return ret;
 }

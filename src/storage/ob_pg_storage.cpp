@@ -4725,7 +4725,7 @@ int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t rest
   return ret;
 }
 
-int ObPGStorage::set_last_restore_log_id(const int64_t last_restore_log_id)
+int ObPGStorage::set_last_restore_log_info(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
   ObPartitionGroupMeta* next_meta_ptr = nullptr;
@@ -4737,19 +4737,21 @@ int ObPGStorage::set_last_restore_log_id(const int64_t last_restore_log_id)
   } else if (is_removed_) {
     ret = OB_PG_IS_REMOVED;
     LOG_WARN("pg is removed", K(ret), K(pkey_));
-  } else if (last_restore_log_id == OB_INVALID_ID) {
+  } else if (last_restore_log_id == OB_INVALID_ID || last_restore_log_ts == OB_INVALID_TIMESTAMP) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(last_restore_log_id));
-  } else if (meta_->last_restore_log_id_ != OB_INVALID_ID) {
-    if (last_restore_log_id != meta_->last_restore_log_id_) {
+    LOG_WARN("invalid args", K(ret), K(last_restore_log_id), K(last_restore_log_ts));
+  } else if (meta_->last_restore_log_id_ != OB_INVALID_ID || meta_->last_restore_log_ts_ != OB_INVALID_TIMESTAMP) {
+    if (last_restore_log_id != meta_->last_restore_log_id_ || last_restore_log_ts != meta_->last_restore_log_ts_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot set last_restore_log_id twice", K(ret), K(last_restore_log_id), K(*meta_));
+      LOG_WARN(
+          "cannot set last_restore_log_info twice", K(ret), K(last_restore_log_id), K(last_restore_log_ts), K(*meta_));
     } else {
-      FLOG_INFO("last_restore_log_id has already been assigned",
+      FLOG_INFO("last_restore_log_info has already been assigned",
           K_(pkey),
           "tenant_id",
           pkey_.get_tenant_id(),
-          K(last_restore_log_id));
+          K(last_restore_log_id),
+          K(last_restore_log_ts));
     }
   } else if (OB_FAIL(alloc_meta_(next_meta_ptr))) {
     LOG_WARN("failed to alloc meta", K(ret));
@@ -4760,11 +4762,17 @@ int ObPGStorage::set_last_restore_log_id(const int64_t last_restore_log_id)
       LOG_WARN("failed to get next meta", K(ret));
     } else {
       next_meta.last_restore_log_id_ = last_restore_log_id;
+      next_meta.last_restore_log_ts_ = last_restore_log_ts;
       if (OB_FAIL(write_update_pg_meta_trans(next_meta, OB_LOG_SET_PG_LAST_RESTORE_LOG_ID))) {
         LOG_WARN("failed to write_update_pg_meta_trans", K(ret), K(*meta_), K(next_meta));
       } else {
         switch_meta_(next_meta_ptr);
-        FLOG_INFO("last_restore_log_id", K_(pkey), "tenant_id", pkey_.get_tenant_id(), K(last_restore_log_id));
+        FLOG_INFO("last_restore_log_info",
+            K_(pkey),
+            "tenant_id",
+            pkey_.get_tenant_id(),
+            K(last_restore_log_id),
+            K(last_restore_log_ts));
       }
     }
   }
@@ -4772,11 +4780,13 @@ int ObPGStorage::set_last_restore_log_id(const int64_t last_restore_log_id)
   return ret;
 }
 
-int ObPGStorage::get_restore_replay_info(uint64_t& last_restore_log_id, int64_t& restore_snapshot_version)
+int ObPGStorage::get_restore_replay_info(
+    uint64_t &last_restore_log_id, int64_t &last_restore_log_ts, int64_t &restore_snapshot_version)
 {
   int ret = OB_SUCCESS;
 
   last_restore_log_id = OB_INVALID_ID;
+  last_restore_log_ts = OB_INVALID_TIMESTAMP;
   restore_snapshot_version = OB_INVALID_TIMESTAMP;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -4784,6 +4794,7 @@ int ObPGStorage::get_restore_replay_info(uint64_t& last_restore_log_id, int64_t&
   } else {
     TCRLockGuard guard(lock_);
     last_restore_log_id = meta_->last_restore_log_id_;
+    last_restore_log_ts = meta_->last_restore_log_ts_;
     restore_snapshot_version = meta_->restore_snapshot_version_;
   }
   return ret;

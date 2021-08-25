@@ -419,10 +419,10 @@ public:
   int xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStmtParam& stmt_param);
   // elr statistic
   int dump_elr_statistic();
-  int set_last_restore_log_id(const ObPartitionKey& pkey, const uint64_t last_restore_log_id);
+  int set_last_restore_log_ts(const ObPartitionKey &pkey, const int64_t last_restore_log_ts);
   int set_restore_snapshot_version(const ObPartitionKey& pkey, const int64_t restore_snapshot_version);
   int update_restore_replay_info(
-      const ObPartitionKey& partition, const int64_t restore_snapshot_version, const uint64_t last_restore_log_id);
+      const ObPartitionKey &partition, const int64_t restore_snapshot_version, const int64_t last_restore_log_ts);
   int xa_start_v2(
       const ObXATransID& xid, const int64_t flags, const int64_t xa_end_timeout_seconds, ObTransDesc& trans_desc);
   int xa_end_v2(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);

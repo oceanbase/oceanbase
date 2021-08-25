@@ -103,11 +103,11 @@ DEF_TIME(trace_log_sampling_interval, OB_CLUSTER_PARAMETER, "10ms", "[0ms,]",
     "logging info regarding 'slow query' and 'white list' will be printed out. "
     "Range: [0ms,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "100ms", "[1ms,]",
+DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
     "the threshold of execution time (in milliseconds) of a query beyond "
     "which it is considered to be a \\'slow query\\'. Range: [1ms,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "True", "enable one phase commit optimization",
+DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "False", "enable one phase commit optimization",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_pg, OB_CLUSTER_PARAMETER, "False", "open partition group",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -203,6 +203,15 @@ DEF_INT(cluster_id, OB_CLUSTER_PARAMETER, "0", "[1,4294901759]", "ID of the clus
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(obconfig_url, OB_CLUSTER_PARAMETER, "", "URL for OBConfig service",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_syslog_file_compress, OB_CLUSTER_PARAMETER, "False",
+    "specifies whether to compress archive log files"
+    "Value: True:turned on; False: turned off",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(max_syslog_file_time, OB_CLUSTER_PARAMETER, "0s", "[0s, 3650d]",
+    "specifies the maximum retention time of the log files. "
+    "When this value is set to 0s, no log file will be removed due to time. "
+    "with default 0s. Range: [0s, 3650d]",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_LOG_LEVEL(syslog_level, OB_CLUSTER_PARAMETER, "INFO",
     "specifies the current level of logging. There are DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR, six different log "
     "levels.",
@@ -214,7 +223,7 @@ DEF_INT(max_syslog_file_count, OB_CLUSTER_PARAMETER, "0", "[0,]",
     "specifies the maximum number of the log files "
     "that can co-exist before the log file recycling kicks in. "
     "Each log file can occupy at most 256MB disk space. "
-    "When this value is set to 0, no log file will be removed. Range: [0, +∞) in integer",
+    "When this value is set to 0, no log file will be removed due to the file count. Range: [0, +∞) in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_async_syslog, OB_CLUSTER_PARAMETER, "True",
     "specifies whether use async log for observer.log, elec.log and rs.log",
@@ -697,7 +706,7 @@ DEF_TIME(trx_2pc_retry_interval, OB_CLUSTER_PARAMETER, "100ms", "[1ms, 5000ms]",
     "the time interval between the retries in case of failure "
     "during a transaction\\'s two-phase commit phase. Range: [1ms,5000ms]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(clog_sync_time_warn_threshold, OB_CLUSTER_PARAMETER, "100ms", "[1ms, 10000ms]",
+DEF_TIME(clog_sync_time_warn_threshold, OB_CLUSTER_PARAMETER, "1s", "[1ms, 10000ms]",
     "the time given to the commit log synchronization between a leader and its followers "
     "before a \\'warning\\' message is printed in the log file.  Range: [1ms,1000ms]",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -766,10 +775,11 @@ DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
 DEF_BOOL(enable_early_lock_release, OB_TENANT_PARAMETER, "False", "enable early lock release",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(__enable_block_receiving_clog, OB_CLUSTER_PARAMETER, "True",
-    "If this option is set to true, block receiving clog for slave replicas when too much clog is waiting for beening "
-    "submited to replaying. The default is true",
-    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+//__enable_block_receiving_clog is obsolete
+// DEF_BOOL(__enable_block_receiving_clog, OB_CLUSTER_PARAMETER, "True",
+//         "If this option is set to true, block receiving clog for slave replicas when too much clog is waiting for
+//         beening submited to replaying. The default is true", ObParameterAttr(Section::TRANS, Source::DEFAULT,
+//         EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_trx_commit_retry_interval, OB_CLUSTER_PARAMETER, "200ms", "[100ms,)",
     "transaction commit retry interval. Range: [100ms,)",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -932,7 +942,7 @@ DEF_INT(restore_concurrency, OB_CLUSTER_PARAMETER, "0", "[0,512]",
 DEF_INT(merge_stat_sampling_ratio, OB_CLUSTER_PARAMETER, "100", "[0,100]",
     "column stats sampling ratio daily merge. Range: [0,100] in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "5", "[0, 65535]",
+DEF_INT(minor_freeze_times, OB_CLUSTER_PARAMETER, "100", "[0, 65535]",
     "specifies how many minor freezes should be triggered between two major freezes. Range: [0, 65535]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_CLUSTER_PARAMETER, "2", "[0,16]", "minor_compact_trigger, Range: [0,16] in integer",

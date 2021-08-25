@@ -4127,13 +4127,18 @@ int ObPartTransCtx::replay_commit_log(const ObTransCommitLog& log, const int64_t
 bool ObPartTransCtx::need_rollback_when_restore_(const int64_t commit_version)
 {
   const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
-  const uint64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
-  return restore_snapshot_version > 0 && (last_restore_log_id == OB_INVALID_ID || min_log_id_ <= last_restore_log_id) &&
+  const int64_t last_restore_log_ts = partition_mgr_->get_last_restore_log_ts();
+  return restore_snapshot_version > 0 &&
+         (last_restore_log_ts == OB_INVALID_TIMESTAMP || min_log_ts_ <= last_restore_log_ts) &&
          commit_version > restore_snapshot_version;
 }
 
+// TODO: duotian
 bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int64_t log_ts)
 {
+  UNUSED(log_id);
+  UNUSED(log_ts);
+  /*
   const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
   const int64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
   bool need_update = true;
@@ -4142,6 +4147,8 @@ bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int6
     need_update = false;
   }
   return need_update;
+  */
+  return true;
 }
 
 int ObPartTransCtx::trans_replay_commit_(const int64_t commit_version, const int64_t checksum)
@@ -10508,6 +10515,7 @@ int ObPartTransCtx::recover_from_trans_sstable_durable_ctx_info(ObTransSSTableDu
     mutator_log_no_ = ctx_info.mutator_log_no_;
     stmt_info_ = ctx_info.stmt_info_;
     min_log_ts_ = ctx_info.min_log_ts_;
+    min_log_id_ = ctx_info.min_log_id_;
     sp_user_request_ = ctx_info.sp_user_request_;
     need_checksum_ = ctx_info.need_checksum_;
     prepare_log_id_ = ctx_info.prepare_log_id_;
@@ -10588,6 +10596,7 @@ int ObPartTransCtx::get_trans_sstable_durable_ctx_info(const int64_t log_ts, ObT
     info.mutator_log_no_ = mutator_log_no_;
     info.stmt_info_ = stmt_info_;
     info.min_log_ts_ = min_log_ts_;
+    info.min_log_id_ = min_log_id_;
     info.sp_user_request_ = sp_user_request_;
     info.need_checksum_ = need_checksum_;
     info.prepare_log_id_ = prepare_log_id_;
@@ -11789,8 +11798,8 @@ void ObPartTransCtx::get_audit_info(int64_t& lock_for_read_elapse) const
 // It kills the uncommitted transactions and promotes the commit action for elr
 // and 1PC.
 
-// The restore_version and last_restore_log_id is respectively the version below
-// which transactions should be kept and the log id who is the last id during
+// The restore_version and last_restore_log_ts is respectively the version below
+// which transactions should be kept and the log ts who is the last log ts during
 // restore phase. fake_terminate_log_ts is mocked as terminate_log_ts of
 // aborted dirty transaction. (See details in ObPartTransCtx::fake_kill_).
 
@@ -11801,7 +11810,7 @@ void ObPartTransCtx::get_audit_info(int64_t& lock_for_read_elapse) const
 // dead even the transaction is committed in transaction table without commit
 // log to explicitly suicide. (See details in ObPartTransCtx::fake_kill_).
 int ObPartTransCtx::clear_trans_after_restore(
-    const int64_t restore_version, const uint64_t last_restore_log_id, const int64_t fake_terminate_log_ts)
+    const int64_t restore_version, const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
@@ -11814,16 +11823,16 @@ int ObPartTransCtx::clear_trans_after_restore(
         "transaction is not initted",
         K(*this),
         K(restore_version),
-        K(last_restore_log_id),
+        K(last_restore_log_ts),
         K(fake_terminate_log_ts));
-  } else if (min_log_id_ > last_restore_log_id) {
+  } else if (min_log_ts_ > last_restore_log_ts) {
     // skip new transactions after restore completes
     ret = OB_SUCCESS;
     TRANS_LOG(INFO,
         "new transactions after restore completes",
         K(*this),
         K(restore_version),
-        K(last_restore_log_id),
+        K(last_restore_log_ts),
         K(fake_terminate_log_ts));
   } else {
     ObTransTableStatusType status = mt_ctx_.get_trans_table_status();
@@ -11841,7 +11850,7 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case1.1",
             K(*this),
             K(restore_version),
-            K(last_restore_log_id),
+            K(last_restore_log_ts),
             K(fake_terminate_log_ts));
         ret = fake_kill_(fake_terminate_log_ts);
       } else {
@@ -11854,7 +11863,7 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case1.2",
             K(*this),
             K(restore_version),
-            K(last_restore_log_id),
+            K(last_restore_log_ts),
             K(fake_terminate_log_ts));
         (void)set_exiting_();
       }
@@ -11867,7 +11876,7 @@ int ObPartTransCtx::clear_trans_after_restore(
           "transaction in recover case2",
           K(*this),
           K(restore_version),
-          K(last_restore_log_id),
+          K(last_restore_log_ts),
           K(fake_terminate_log_ts));
       (void)set_exiting_();
     } else if (ObTransTableStatusType::RUNNING == status) {
@@ -11880,7 +11889,7 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case3.1",
             K(*this),
             K(restore_version),
-            K(last_restore_log_id),
+            K(last_restore_log_ts),
             K(fake_terminate_log_ts));
         ret = kill_v2_(fake_terminate_log_ts);
       } else {
@@ -11894,7 +11903,7 @@ int ObPartTransCtx::clear_trans_after_restore(
               "transaction in recover case3.2",
               K(*this),
               K(restore_version),
-              K(last_restore_log_id),
+              K(last_restore_log_ts),
               K(fake_terminate_log_ts));
 
           // must be elr or 1pc, if not, we should report the error
@@ -11903,7 +11912,7 @@ int ObPartTransCtx::clear_trans_after_restore(
                 "unexpected transaction status",
                 K(*this),
                 K(restore_version),
-                K(last_restore_log_id),
+                K(last_restore_log_ts),
                 K(fake_terminate_log_ts));
           }
 
@@ -11922,7 +11931,7 @@ int ObPartTransCtx::clear_trans_after_restore(
               "transaction in recover case3.3",
               K(*this),
               K(restore_version),
-              K(last_restore_log_id),
+              K(last_restore_log_ts),
               K(fake_terminate_log_ts));
           ret = kill_v2_(fake_terminate_log_ts);
         }
@@ -11933,7 +11942,7 @@ int ObPartTransCtx::clear_trans_after_restore(
           "unknown state",
           K(*this),
           K(restore_version),
-          K(last_restore_log_id),
+          K(last_restore_log_ts),
           K(fake_terminate_log_ts),
           K(status));
     }

@@ -268,6 +268,8 @@ class ObLeaderCoordinator : public ObILeaderCoordinator, public ObRsReentrantThr
 public:
   static const int64_t WAIT_SWITCH_LEADER_TIMEOUT = 16 * 1000 * 1000;  // 16s
   static const int64_t ALL_PARTITIONS = -1;
+  static const int64_t BUCKET_NUM = 1000;
+  typedef common::hash::ObHashSet<common::ObAddr> StopServerInfoSet;
 
   ObLeaderCoordinator();
   virtual ~ObLeaderCoordinator();
@@ -290,9 +292,9 @@ public:
   virtual int check_daily_merge_switch_leader(
       const common::ObIArray<common::ObZone>& zone_list, common::ObIArray<bool>& results) override;
   virtual int coordinate() override;
-  virtual int coordinate_tenants(const common::ObArray<common::ObZone>& excluded_zones,
-      const common::ObIArray<common::ObAddr>& excluded_servers, const common::ObIArray<uint64_t>& tenant_ids,
-      const bool force = false);
+  virtual int coordinate_tenants(const common::ObArray<common::ObZone> &excluded_zones,
+      const common::ObIArray<common::ObAddr> &excluded_servers, const common::ObIArray<uint64_t> &tenant_ids,
+      const StopServerInfoSet &stop_server_info_set, const bool force = false);
   void set_merge_status(bool is_in_merging) override
   {
     is_in_merging_ = is_in_merging;
@@ -1192,20 +1194,17 @@ private:
   };
 
   struct PartitionArrayCursor {
-    PartitionArrayCursor()
-        : part_idx_(0), part_cnt_(0), array_idx_(0), cur_leader_(), advised_leader_(), ignore_switch_percent_(false)
+    PartitionArrayCursor() : part_idx_(0), part_cnt_(0), array_idx_(0), cur_leader_(), advised_leader_()
     {}
-    PartitionArrayCursor(int64_t part_idx, int64_t part_cnt, int64_t array_idx, const common::ObAddr& cur_leader,
-        const common::ObAddr& advised_leader, bool ignore_switch_percent)
+    PartitionArrayCursor(int64_t part_idx, int64_t part_cnt, int64_t array_idx, const common::ObAddr &cur_leader,
+        const common::ObAddr &advised_leader)
         : part_idx_(part_idx),
           part_cnt_(part_cnt),
           array_idx_(array_idx),
           cur_leader_(cur_leader),
-          advised_leader_(advised_leader),
-          ignore_switch_percent_(ignore_switch_percent)
+          advised_leader_(advised_leader)
     {}
-    TO_STRING_KV(
-        K(part_idx_), K(part_cnt_), K(array_idx_), K(cur_leader_), K(advised_leader_), K(ignore_switch_percent_));
+    TO_STRING_KV(K(part_idx_), K(part_cnt_), K(array_idx_), K(cur_leader_), K(advised_leader_));
     bool switch_finish()
     {
       return part_idx_ >= part_cnt_;
@@ -1224,7 +1223,6 @@ private:
     int64_t array_idx_;
     common::ObAddr cur_leader_;
     common::ObAddr advised_leader_;
-    bool ignore_switch_percent_;
   };
   struct CursorContainer {
   public:
@@ -1324,17 +1322,17 @@ private:
     {}
 
   public:
-    virtual int execute(
-        TenantUnit& tenant_unit, ExpectedLeaderWaitOperator& leader_wait_operator, const bool force) = 0;
+    virtual int execute(TenantUnit &tenant_unit, ExpectedLeaderWaitOperator &leader_wait_operator, const bool force,
+        const bool has_stop_server) = 0;
 
   protected:
-    int coordinate_partitions_per_tg(TenantUnit& tenant_unit, PartitionArray& partition_array,
-        PartitionArrayCursor& cursor, const bool force, ExpectedLeaderWaitOperator& leader_wait_operator,
-        SwitchLeaderListAsyncOperator& async_rpc_operator, bool& do_switch_leader);
-    int check_before_coordinate_partition(const Partition& partition, const TenantUnit& tenant_unit, const bool force,
-        const common::ObPartitionKey& part_key, common::ObAddr& advised_leader, common::ObAddr& cur_leader,
-        bool& need_switch);
-    int check_tenant_on_server(const TenantUnit& tenant_unit, const common::ObAddr& server, bool& tenant_on_server);
+    int coordinate_partitions_per_tg(TenantUnit &tenant_unit, PartitionArray &partition_array,
+        PartitionArrayCursor &cursor, const bool force, ExpectedLeaderWaitOperator &leader_wait_operator,
+        SwitchLeaderListAsyncOperator &async_rpc_operator, bool &do_switch_leader, const bool has_stop_server);
+    int check_before_coordinate_partition(const Partition &partition, const TenantUnit &tenant_unit, const bool force,
+        const common::ObPartitionKey &part_key, common::ObAddr &advised_leader, common::ObAddr &cur_leader,
+        bool &need_switch, const bool has_stop_server);
+    int check_tenant_on_server(const TenantUnit &tenant_unit, const common::ObAddr &server, bool &tenant_on_server);
 
   protected:
     ObLeaderCoordinator& host_;
@@ -1382,7 +1380,8 @@ private:
     {}
 
   public:
-    virtual int execute(TenantUnit& tenant_unit, ExpectedLeaderWaitOperator& leader_wait_operator, const bool force);
+    virtual int execute(TenantUnit &tenant_unit, ExpectedLeaderWaitOperator &leader_wait_operator, const bool force,
+        const bool has_stop_server);
 
   private:
     int init_cursor_queue_map();
@@ -1400,10 +1399,11 @@ private:
   };
 
   int auto_coordinate();
-  int get_auto_leader_switch_idle_interval(int64_t& idle_interval_us) const;
-  int coordinate_helper(PartitionInfoContainer& partition_info_container,
-      const common::ObArray<common::ObZone>& excluded_zones, const common::ObIArray<common::ObAddr>& excluded_servers,
-      const common::ObIArray<uint64_t>& tenant_ids, const bool force = false);
+  int get_auto_leader_switch_idle_interval(int64_t &idle_interval_us) const;
+  int coordinate_helper(PartitionInfoContainer &partition_info_container,
+      const common::ObArray<common::ObZone> &excluded_zones, const common::ObIArray<common::ObAddr> &excluded_servers,
+      const common::ObIArray<uint64_t> &tenant_ids, const StopServerInfoSet &stop_server_info_set,
+      const bool force = false);
 
   int move_sys_tenant_to_last(const common::ObIArray<uint64_t>& tenant_ids, common::ObIArray<uint64_t>& new_tenant_ids);
 
@@ -1427,44 +1427,47 @@ private:
       PartitionInfoContainer& partition_info_container, const common::ObIArray<uint64_t>& table_ids,
       const bool small_tenant, common::ObIAllocator& partition_allocator, TablegroupPartition& tg_partition,
       const int64_t partition_idx);
-  int fill_partition_tg_id(share::schema::ObSchemaGetterGuard& schema_guard, const uint64_t table_id,
-      const bool small_tenant, Partition& partition);
-  int append_to_tg_partition(share::schema::ObSchemaGetterGuard& schema_guard, const bool is_single_partition_group,
-      const int64_t partition_idx, TablegroupPartition& tg_partition, const Partition& partition,
-      common::ObIAllocator& partition_allocator, const int64_t partition_array_capacity);
-  int move_all_core_last(TenantPartition& tenant_partition);
-  int get_tenant_unit(const uint64_t tenant_id, TenantUnit& tenant_unit);
-  int build_leader_balance_info(share::schema::ObSchemaGetterGuard& schema_guard, const uint64_t tenant_id,
-      LcBalanceGroupContainer& balance_group_container, TenantPartition& tenant_partition, TenantUnit& tenant_unit);
-  int coordinate_partition_arrays(ExpectedLeaderWaitOperator& leader_wait_operator,
-      common::ObArray<PartitionArray*>& partition_arrays, TenantUnit& tenant_unit, CursorContainer& cursor_container,
-      const bool force = false);
-  int build_single_pg_leader_candidates(GetLeaderCandidatesAsyncV2Operator& async_rpc_operator,
-      const int64_t in_array_index, PartitionArray& partitions, common::ObIArray<PartitionArray*>& partition_arrays);
-  int get_partition_prep_candidates(const common::ObAddr& leader,
-      const common::ObIArray<share::ObRawPrimaryZoneUtil::ZoneScore>& zone_score_array,
-      const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore>& region_score_array, Partition& partition,
-      ObIArray<common::ObAddr>& prep_partitions);
-  int get_high_score_regions(const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore>& region_score_array,
-      common::ObIArray<common::ObRegion>& high_score_regions);
+  int fill_partition_tg_id(share::schema::ObSchemaGetterGuard &schema_guard, const uint64_t table_id,
+      const bool small_tenant, Partition &partition);
+  int append_to_tg_partition(share::schema::ObSchemaGetterGuard &schema_guard, const bool is_single_partition_group,
+      const int64_t partition_idx, TablegroupPartition &tg_partition, const Partition &partition,
+      common::ObIAllocator &partition_allocator, const int64_t partition_array_capacity);
+  int move_all_core_last(TenantPartition &tenant_partition);
+  int get_tenant_unit(const uint64_t tenant_id, TenantUnit &tenant_unit);
+  int build_leader_balance_info(share::schema::ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id,
+      LcBalanceGroupContainer &balance_group_container, TenantPartition &tenant_partition, TenantUnit &tenant_unit);
+  int coordinate_partition_arrays(ExpectedLeaderWaitOperator &leader_wait_operator,
+      common::ObArray<PartitionArray *> &partition_arrays, TenantUnit &tenant_unit, CursorContainer &cursor_container,
+      const bool has_stop_server, const bool force = false);
+  int build_single_pg_leader_candidates(GetLeaderCandidatesAsyncV2Operator &async_rpc_operator,
+      const int64_t in_array_index, PartitionArray &partitions, common::ObIArray<PartitionArray *> &partition_arrays);
+  int get_partition_prep_candidates(const common::ObAddr &leader,
+      const common::ObIArray<share::ObRawPrimaryZoneUtil::ZoneScore> &zone_score_array,
+      const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore> &region_score_array, Partition &partition,
+      ObIArray<common::ObAddr> &prep_partitions);
+  int get_high_score_regions(const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore> &region_score_array,
+      common::ObIArray<common::ObRegion> &high_score_regions);
   static bool prep_candidates_match(
       ObArray<common::ObAddr>& prev_prep_candidates, ObSArray<common::ObAddr>& this_prep_candidates);
 
   int do_coordinate_partitions(const PartitionArray& partitions, const TenantUnit& tenant_unit,
       const common::ObAddr& advised_leader, const bool force, ExpectedLeaderWaitOperator& leader_wait_operator);
   // check advise leader can be switch, may update advise leader if needed.
-  int build_leader_switch_cursor_container(const uint64_t tenant_id, TenantUnit& tenant_unit,
-      common::ObArray<PartitionArray*>& partition_arrays, CursorContainer& cursor_array,
-      const ObZoneList& excluded_zones, const common::ObIArray<common::ObAddr>& excluded_servers, const bool force);
-  int build_pre_switch_pg_index_array(const uint64_t tenant_id, TenantUnit& tenant_unit,
-      common::ObArray<PartitionArray*>& partition_arrays, common::ObIArray<PreSwitchPgInfo>& pre_switch_index_array,
-      const ObZoneList& excluded_zones, const common::ObIArray<common::ObAddr>& excluded_servers);
-  int build_pg_array_leader_candidates(const common::ObIArray<PreSwitchPgInfo>& pre_switch_index_array,
-      common::ObArray<PartitionArray*>& partition_arrays);
-  int do_build_leader_switch_cursor_container(const uint64_t tenant_id, TenantUnit& tenant_unit,
-      const common::ObIArray<PreSwitchPgInfo>& pre_switch_index_array,
-      common::ObArray<PartitionArray*>& partition_arrays, const ObZoneList& excluded_zones,
-      const common::ObIArray<common::ObAddr>& excluded_servers, CursorContainer& cursor_container);
+  int build_leader_switch_cursor_container(const uint64_t tenant_id, TenantUnit &tenant_unit,
+      common::ObArray<PartitionArray *> &partition_arrays, CursorContainer &cursor_array,
+      const ObZoneList &excluded_zones, const common::ObIArray<common::ObAddr> &excluded_servers,
+      const StopServerInfoSet &stop_server_info_set, const bool force);
+  int build_pre_switch_pg_index_array(const uint64_t tenant_id, TenantUnit &tenant_unit,
+      common::ObArray<PartitionArray *> &partition_arrays, common::ObIArray<PreSwitchPgInfo> &pre_switch_index_array,
+      const ObZoneList &excluded_zones, const common::ObIArray<common::ObAddr> &excluded_servers,
+      const StopServerInfoSet &stop_server_info_set, const bool force);
+  int build_pg_array_leader_candidates(const common::ObIArray<PreSwitchPgInfo> &pre_switch_index_array,
+      common::ObArray<PartitionArray *> &partition_arrays);
+  int do_build_leader_switch_cursor_container(const uint64_t tenant_id, TenantUnit &tenant_unit,
+      const common::ObIArray<PreSwitchPgInfo> &pre_switch_index_array,
+      common::ObArray<PartitionArray *> &partition_arrays, const ObZoneList &excluded_zones,
+      const common::ObIArray<common::ObAddr> &excluded_servers, CursorContainer &cursor_container,
+      const StopServerInfoSet &stop_server_info_set, const bool force);
   // replica's server same with unit server and unit not migrating
   static int check_in_normal_unit(
       const share::ObPartitionReplica& replica, const TenantUnit& tenant_unit, bool& in_normal_unit);
@@ -1473,15 +1476,15 @@ private:
   // remove replicas not alive
   int remove_lost_replicas(share::ObPartitionInfo& partition_info);
   // compare by tuple (tablegroup_id, table_id)
-  static bool partition_entity_cmp(const IPartitionEntity* l, const IPartitionEntity* r);
-  int get_cur_partition_leader(
-      const common::ObIArray<Partition>& partitions, common::ObAddr& leader, bool& has_same_leader);
-  int build_partition_statistic(const PartitionArray& partitions, const TenantUnit& tenant_unit,
-      const ObZoneList& excluded_zones, const common::ObIArray<common::ObAddr>& excluded_servers,
-      CandidateLeaderInfoMap& leader_info_map, bool& is_ignore_switch_percent);
-  int update_candidate_leader_info(const Partition& partition, const share::ObPartitionReplica& replica,
-      const int64_t replica_index, const TenantUnit& tenant_unit, CandidateLeaderInfo& info,
-      int64_t& zone_migrate_out_or_transform_count, bool& is_ignore_switch_percent);
+  static bool partition_entity_cmp(const IPartitionEntity *l, const IPartitionEntity *r);
+  int get_cur_partition_leader(const common::ObIArray<Partition> &partitions, common::ObAddr &leader,
+      bool &has_same_leader, const StopServerInfoSet &stop_server_info_set, bool &has_leader_in_stop_server);
+  int build_partition_statistic(const PartitionArray &partitions, const TenantUnit &tenant_unit,
+      const ObZoneList &excluded_zones, const common::ObIArray<common::ObAddr> &excluded_servers,
+      CandidateLeaderInfoMap &leader_info_map);
+  int update_candidate_leader_info(const Partition &partition, const share::ObPartitionReplica &replica,
+      const int64_t replica_index, const TenantUnit &tenant_unit, CandidateLeaderInfo &info,
+      int64_t &zone_migrate_out_or_transform_count);
   int choose_leader(const uint64_t tenant_id, const uint64_t tablegroup_id,
       const CandidateLeaderInfoMap& leader_info_map, common::ObIArray<common::ObAddr>& candidate_leaders,
       const common::ObAddr& cur_leader);
@@ -1539,11 +1542,14 @@ private:
       const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore>& region_score_array,
       const PartitionArray& partition_array, CandidateZoneInfoMap& candidate_zone_map);
   int update_candidate_zone_info_map(
-      const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore>& region_score_array,
-      const common::ObAddr& candidate, CandidateZoneInfoMap& candidate_zone_map);
-  int do_check_daily_merge_switch_leader_by_pg(const PartitionArray& partition_array,
-      const CandidateZoneInfoMap& candidate_zone_map, const common::ObIArray<common::ObZone>& zone_list,
-      common::ObIArray<bool>& results);
+      const common::ObIArray<share::ObRawPrimaryZoneUtil::RegionScore> &region_score_array,
+      const common::ObAddr &candidate, CandidateZoneInfoMap &candidate_zone_map);
+  int do_check_daily_merge_switch_leader_by_pg(const PartitionArray &partition_array,
+      const CandidateZoneInfoMap &candidate_zone_map, const common::ObIArray<common::ObZone> &zone_list,
+      common::ObIArray<bool> &results);
+  int build_stop_server_info_set(StopServerInfoSet &stop_server_info_set, bool &skip_switch_leader);
+  int init_stop_server_info_set(StopServerInfoSet &stop_server_info_set);
+  int check_has_server_stopped(bool &has_stopped_server);
 
 private:
   bool inited_;

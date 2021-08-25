@@ -3584,7 +3584,8 @@ int ObBasicSessionInfo::is_sys_var_actully_changed(
       case SYS_VAR_OB_TRX_IDLE_TIMEOUT:
       case SYS_VAR_COLLATION_CONNECTION:
       case SYS_VAR_OB_PL_BLOCK_TIMEOUT:
-      case SYS_VAR_OB_COMPATIBILITY_MODE: {
+      case SYS_VAR_OB_COMPATIBILITY_MODE:
+      case SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED: {
         changed = old_val.get_meta() == new_val.get_meta() ? old_val != new_val : true;
       } break;
       default: {
@@ -3658,6 +3659,17 @@ int ObBasicSessionInfo::set_trans_specified(const bool is_spec)
   if (OB_FAIL(update_sys_variable(SYS_VAR_OB_PROXY_SET_TRX_EXECUTED, obj))) {
     LOG_WARN("fail to update_system_variable", K(ret));
   } else {
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::set_session_temp_table_used(const bool is_used)
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  obj.set_int(is_used);
+  if (OB_FAIL(update_sys_variable(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED, obj))) {
+    LOG_WARN("fail to update_system_variable", K(ret));
   }
   return ret;
 }
@@ -3836,6 +3848,10 @@ int ObBasicSessionInfo::get_sql_safe_updates(bool& v) const
   return get_bool_sys_var(SYS_VAR_SQL_SAFE_UPDATES, v);
 }
 
+int ObBasicSessionInfo::get_session_temp_table_used(bool& is_used) const
+{
+  return get_bool_sys_var(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED, is_used);
+}
 void ObBasicSessionInfo::reset_tx_variable()
 {
   // this function will be called in end_trans phase, and must be idempotent.

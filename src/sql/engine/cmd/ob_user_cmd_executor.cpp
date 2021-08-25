@@ -166,6 +166,8 @@ int ObCreateUserExecutor::execute(ObExecContext& ctx, ObCreateUserStmt& stmt)
               user_info.set_user_id(combine_id(tenant_id, OB_EMPTY_USER_ID));
             }
             user_info.set_profile_id(stmt.get_profile_id());
+            user_info.set_max_connections(stmt.get_max_connections_per_hour());
+            user_info.set_max_user_connections(stmt.get_max_user_connections());
             if (OB_FAIL(arg.user_infos_.push_back(user_info))) {
               LOG_WARN("Add user info to array error", K(ret));
             } else {

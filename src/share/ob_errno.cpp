@@ -12033,6 +12033,16 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = 600;
     ORACLE_STR_ERROR[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "ORA-00600: internal error code, arguments: -5936, Incorrect value for function";
     ORACLE_STR_USER_ERROR[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "ORA-00600: internal error code, arguments: -5936, Incorrect %.*s value: '%.*s' for function %.*s";
+    ERROR_NAME[-OB_ERR_USER_EXCEED_RESOURCE] = "OB_ERR_USER_EXCEED_RESOURCE";
+    ERROR_CAUSE[-OB_ERR_USER_EXCEED_RESOURCE] = "Internal Error";
+    ERROR_SOLUTION[-OB_ERR_USER_EXCEED_RESOURCE] = "Contact OceanBase Support";
+    MYSQL_ERRNO[-OB_ERR_USER_EXCEED_RESOURCE] = 1226;
+    SQLSTATE[-OB_ERR_USER_EXCEED_RESOURCE] = "42000";
+    STR_ERROR[-OB_ERR_USER_EXCEED_RESOURCE] = "User has exceeded the resource";
+    STR_USER_ERROR[-OB_ERR_USER_EXCEED_RESOURCE] = "User '%.*s' has exceeded the '%s' resource (current value: %lu)";
+    ORACLE_ERRNO[-OB_ERR_USER_EXCEED_RESOURCE] = 600;
+    ORACLE_STR_ERROR[-OB_ERR_USER_EXCEED_RESOURCE] = "ORA-00600: internal error code, arguments: -5967, User has exceeded the resource";
+    ORACLE_STR_USER_ERROR[-OB_ERR_USER_EXCEED_RESOURCE] = "ORA-00600: internal error code, arguments: -5967, User '%.*s' has exceeded the '%s' resource (current value: %lu)";
     ERROR_NAME[-OB_TRANSACTION_SET_VIOLATION] = "OB_TRANSACTION_SET_VIOLATION";
     ERROR_CAUSE[-OB_TRANSACTION_SET_VIOLATION] = "Internal Error";
     ERROR_SOLUTION[-OB_TRANSACTION_SET_VIOLATION] = "Contact OceanBase Support";

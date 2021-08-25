@@ -1228,6 +1228,38 @@ inline bool ob_is_unsigned_type(ObObjType type)
          ObUDoubleType == type || ObUNumberType == type;
 }
 
+inline void convert_unsigned_type_to_signed(ObObjType &type)
+{
+  switch (type) {
+    case (ObUTinyIntType):
+      type = ObTinyIntType;
+      break;
+    case (ObUSmallIntType):
+      type = ObSmallIntType;
+      break;
+    case (ObUMediumIntType):
+      type = ObMediumIntType;
+      break;
+    case (ObUInt32Type):
+      type = ObInt32Type;
+      break;
+    case (ObUInt64Type):
+      type = ObIntType;
+      break;
+    case (ObUFloatType):
+      type = ObFloatType;
+      break;
+    case (ObUDoubleType):
+      type = ObDoubleType;
+      break;
+    case (ObUNumberType):
+      type = ObNumberType;
+      break;
+    default:
+      break;
+  }
+}
+
 inline bool ob_is_oracle_numeric_type(ObObjType type)
 {
   return ObIntType == type || ob_is_number_tc(type) || ObFloatType == type || ObDoubleType == type;

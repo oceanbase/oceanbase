@@ -38,8 +38,8 @@ private:
   int having_filter_can_be_pushed_down(
       const ObRawExpr* having_filter, const ObSelectStmt& select_stmt, const bool has_rownum, bool& can_be);
   int replace_is_null_condition(ObDMLStmt* stmt, bool& trans_happened);
-  int inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, bool& trans_happened);
-  int do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, bool& trans_happened);
+  int inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, int nullalbe_scope, bool& trans_happened);
+  int do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, int nullalbe_scope, bool& trans_happened);
   int replace_op_null_condition(ObDMLStmt* stmt, bool& trans_happened);
   int replace_cmp_null_condition(
       ObRawExpr*& expr, const ObDMLStmt& stmt, const ParamStore& param_store, bool& trans_happened);

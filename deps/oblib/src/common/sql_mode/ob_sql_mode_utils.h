@@ -45,6 +45,12 @@ inline bool is_no_zero_date(ObSQLMode mode)
 {
   return (SMO_NO_ZERO_DATE & mode);
 }
+
+inline bool is_no_unsigned_subtraction(ObSQLMode mode)
+{
+  return (SMO_NO_UNSIGNED_SUBTRACTION & mode);
+}
+
 inline bool is_mysql_compatible(ObCompatibilityMode mode)
 {
   return OCEANBASE_MODE == mode || MYSQL_MODE == mode;

@@ -42,8 +42,12 @@ int ObExprMinus::calc_result_type2(
   static const int64_t CARRY_OFFSET = 1;
   ObScale scale = SCALE_UNKNOWN_YET;
   ObPrecision precision = PRECISION_UNKNOWN_YET;
+  const ObSQLSessionInfo *session = nullptr;
   bool is_oracle = share::is_oracle_mode();
-  if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
+  if (OB_ISNULL(session = type_ctx.get_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get mysession", K(ret));
+  } else if (OB_FAIL(ObArithExprOperator::calc_result_type2(type, type1, type2, type_ctx))) {
     LOG_WARN("fail to calc result type", K(ret), K(type), K(type1), K(type2));
   } else if (is_oracle && type.is_oracle_decimal()) {
     type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
@@ -77,6 +81,11 @@ int ObExprMinus::calc_result_type2(
       type.set_precision(PRECISION_UNKNOWN_YET);
     } else {
       type.set_precision(precision);
+    }
+    if (share::is_mysql_mode() && is_no_unsigned_subtraction(session->get_sql_mode())) {
+      ObObjType convert_type = type.get_type();
+      convert_unsigned_type_to_signed(convert_type);
+      type.set_type(convert_type);
     }
     LOG_DEBUG("calc_result_type2", K(scale), K(type1), K(type2), K(type), K(precision));
   }

@@ -343,7 +343,6 @@ public:
   int has_active_memtable(bool& found);
   virtual int enable_write_log(const bool is_replay_old) override;
   virtual uint64_t get_min_replayed_log_id() override;
-  virtual void get_min_replayed_log(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) override;
   virtual int get_min_replayed_log_with_keepalive(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) override;
   virtual int check_dirty_txn(
       const int64_t min_log_ts, const int64_t max_log_ts, int64_t& freeze_ts, bool& is_dirty) override;
@@ -422,7 +421,7 @@ public:
 
   int check_can_physical_flashback(const int64_t flashback_scn);
 
-  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id);
+  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   virtual int reset_for_replay();
 
   virtual int inc_pending_batch_commit_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts);

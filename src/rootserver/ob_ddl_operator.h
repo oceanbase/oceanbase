@@ -410,6 +410,8 @@ public:
       const common::ObString* ddl_stmt_str, common::ObMySQLTransaction& trans);
   virtual int set_passwd(const uint64_t tenant_id, const uint64_t user_id, const common::ObString& passwd,
       const common::ObString* ddl_stmt_str, common::ObMySQLTransaction& trans);
+  virtual int set_max_connections(const uint64_t tenant_id, const uint64_t user_id, const uint64_t max_connections_per_hour,
+      const uint64_t max_user_connections, const common::ObString *ddl_stmt_str, common::ObMySQLTransaction &trans);
   virtual int alter_user_require(const uint64_t tenant_id, const uint64_t user_id, const obrpc::ObSetPasswdArg& arg,
       const common::ObString* ddl_stmt_str, common::ObMySQLTransaction& trans);
   virtual int grant_revoke_user(const uint64_t tenant_id, const uint64_t user_id, const ObPrivSet priv_set,

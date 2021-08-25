@@ -1277,7 +1277,8 @@ int ObCSVParser::next_line(bool& yield_line)
       if (is_escaped_flag_) {
         escaped_res = escaped_char(*cur_pos_, &with_back_slash);
       }
-      if (cur_field_end_pos_ != cur_pos_ && !is_fast_parse_) {
+      bool has_escaped = cur_field_end_pos_ != cur_pos_;
+      if (has_escaped && !is_fast_parse_) {
         *cur_field_end_pos_ = escaped_res;
       }
 
@@ -1285,12 +1286,13 @@ int ObCSVParser::next_line(bool& yield_line)
 
       if (is_terminate_char(*cur_pos_, cur_field_end_pos_, line_term_matched)) {
         if (!line_term_matched || cur_field_begin_pos_ < cur_pos_) {
-          handle_one_field(cur_field_end_pos_);
+          handle_one_field(cur_field_end_pos_, has_escaped);
           field_id_++;
         }
         char* next_pos = cur_pos_ + 1;
         cur_field_begin_pos_ = next_pos;
         cur_field_end_pos_ = cur_pos_;
+        in_enclose_flag_ = false;
         if (line_term_matched && (!formats_.is_line_term_by_counting_field_ || field_id_ == total_field_nums_)) {
           if (OB_UNLIKELY(field_id_ != total_field_nums_)) {
             ret = deal_with_irregular_line();
@@ -1313,7 +1315,8 @@ int ObCSVParser::next_line(bool& yield_line)
   if (!yield && is_last_buf_ && cur_pos_ == buf_end_pos_) {
     if (cur_field_begin_pos_ < cur_pos_) {
       // new field, terminated with an eof
-      handle_one_field(cur_field_end_pos_);
+      bool has_escaped = cur_field_end_pos_ != cur_pos_;
+      handle_one_field(cur_field_end_pos_, has_escaped);
       field_id_++;
     }
     cur_field_begin_pos_ = cur_pos_;

@@ -400,6 +400,62 @@ int ObUserSqlService::set_passwd(const ObUserInfo& user_info, const int64_t new_
   return ret;
 }
 
+int ObUserSqlService::set_max_connections(
+    const ObUserInfo &user_info,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = user_info.get_tenant_id();
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  const uint64_t user_id = user_info.get_user_id();
+  ObSqlString sql_string;
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid id", K(tenant_id), K(user_id), K(ret));
+  } else {
+    int64_t affected_rows = 0;
+    ObDMLExecHelper exec(sql_client, exec_tenant_id);
+    ObDMLSqlSplicer dml;
+    if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, user_id)))
+        || OB_FAIL(dml.add_column("max_connections", user_info.get_max_connections()))
+        || OB_FAIL(dml.add_column("max_user_connections", user_info.get_max_user_connections()))
+        || OB_FAIL(dml.add_gmt_modified())) {
+      LOG_WARN("add column failed", K(ret));
+    }
+
+    // udpate __all_user table
+    if (FAILEDx(exec.exec_update(OB_ALL_USER_TNAME, dml, affected_rows))) {
+      LOG_WARN("execute update sql fail", K(ret));
+    } else if (!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update should affect only 1 row", K(affected_rows), K(ret));
+    }
+
+    // update __all_user history table
+    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client))) {
+      LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
+    }
+
+    // log operation
+    if (OB_SUCC(ret)) {
+      ObSchemaOperation priv_operation;
+      priv_operation.schema_version_ = new_schema_version;
+      priv_operation.tenant_id_ = tenant_id;
+      priv_operation.user_id_ = user_id;
+      priv_operation.op_type_ = OB_DDL_ALTER_USER;
+      priv_operation.ddl_stmt_str_ = ddl_stmt_str ? *ddl_stmt_str : ObString();
+      if (OB_FAIL(log_operation(priv_operation, sql_client))) {
+        LOG_WARN("Failed to log operation", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObUserSqlService::alter_user_require(const ObUserInfo& user_info, const int64_t new_schema_version,
     const ObString* ddl_stmt_str, ObISQLClient& sql_client)
 {
@@ -667,6 +723,8 @@ int ObUserSqlService::gen_user_dml(const uint64_t exec_tenant_id, const ObUserIn
       OB_FAIL(dml.add_column("PRIV_ALTER_SYSTEM", user.get_priv(OB_PRIV_ALTER_SYSTEM) ? 1 : 0)) ||
       OB_FAIL(dml.add_column("PRIV_CREATE_RESOURCE_POOL", user.get_priv(OB_PRIV_CREATE_RESOURCE_POOL) ? 1 : 0)) ||
       OB_FAIL(dml.add_column("PRIV_CREATE_RESOURCE_UNIT", user.get_priv(OB_PRIV_CREATE_RESOURCE_UNIT) ? 1 : 0)) ||
+      OB_FAIL(dml.add_column("max_connections", user.get_max_connections())) ||
+      OB_FAIL(dml.add_column("max_user_connections", user.get_max_user_connections())) ||
       (is_ssl_support && OB_FAIL(dml.add_column("SSL_TYPE", user.get_ssl_type()))) ||
       (is_ssl_support && OB_FAIL(dml.add_column("SSL_CIPHER", user.get_ssl_cipher()))) ||
       (is_ssl_support && OB_FAIL(dml.add_column("X509_ISSUER", user.get_x509_issuer()))) ||

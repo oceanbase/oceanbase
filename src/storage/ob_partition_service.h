@@ -341,9 +341,9 @@ public:
   VIRTUAL_FOR_UNITTEST int log_new_partition(ObIPartitionGroup* partition, const int64_t publish_version);
   VIRTUAL_FOR_UNITTEST int remove_partition(const common::ObPartitionKey& key, const bool write_slog = true);
   VIRTUAL_FOR_UNITTEST int remove_partition_from_pg(
-      const bool for_replay, const ObPartitionKey& pg_key, const ObPartitionKey& pkey, const uint64_t log_id);
-  VIRTUAL_FOR_UNITTEST int online_partition(const common::ObPartitionKey& pkey, const int64_t publish_version,
-      const int64_t restore_snapshot_version, const uint64_t last_restore_log_id);
+      const bool for_replay, const ObPartitionKey &pg_key, const ObPartitionKey &pkey, const uint64_t log_id);
+  VIRTUAL_FOR_UNITTEST int online_partition(const common::ObPartitionKey &pkey, const int64_t publish_version,
+      const int64_t restore_snapshot_version, const int64_t last_restore_log_ts);
   // before building the index, wait for all transactions with lower schema version to finish
   // max_commit_version is the max commit version of those transactions
   VIRTUAL_FOR_UNITTEST int check_schema_version_elapsed(const ObPartitionKey& partition, const int64_t schema_version,
@@ -781,8 +781,8 @@ public:
 
   int set_restore_flag(const ObPartitionKey& pkey, const int16_t flag);
   int set_restore_snapshot_version_for_trans(const ObPartitionKey& pkey, const int64_t restore_snapshot_version);
-  int get_restore_replay_info(
-      const ObPartitionKey& pkey, uint64_t& restore_last_replay_log_id, int64_t& restore_snapshot_version);
+  int get_restore_replay_info(const ObPartitionKey &pkey, uint64_t &restore_last_replay_log_id,
+      int64_t &restore_last_replay_log_ts, int64_t &restore_snapshot_version);
   int wait_all_trans_clear(const ObPartitionKey& pkey);
   int check_all_trans_in_trans_table_state(const ObPartitionKey& pkey);
 

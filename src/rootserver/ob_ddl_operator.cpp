@@ -7232,6 +7232,54 @@ int ObDDLOperator::set_passwd(const uint64_t tenant_id, const uint64_t user_id, 
   return ret;
 }
 
+int ObDDLOperator::set_max_connections(
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const uint64_t max_connections_per_hour,
+    const uint64_t max_user_connections,
+    const ObString *ddl_stmt_str,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id and user_id must not be null", K(tenant_id), K(user_id), K(ret));
+  } else if (OB_ISNULL(schema_sql_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schama service_impl and schema manage must not null",
+        "schema_service_impl", schema_sql_service, K(ret));
+  } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else {
+    const ObUserInfo *user_info = NULL;
+    if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+      LOG_WARN("failed to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_ERR_USER_NOT_EXIST;
+      LOG_WARN("User not exist", K(ret));
+    } else {
+      int64_t new_schema_version = OB_INVALID_VERSION;
+      ObUserInfo new_user_info = *user_info;
+      if (OB_INVALID_ID != max_connections_per_hour) {
+        new_user_info.set_max_connections(max_connections_per_hour);
+      }
+      if (OB_INVALID_ID != max_user_connections) {
+        new_user_info.set_max_user_connections(max_user_connections);
+      }
+      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_max_connections(
+                        new_user_info, new_schema_version, ddl_stmt_str, trans))) {
+        LOG_WARN("Failed to set passwd", K(tenant_id), K(user_id), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLOperator::alter_user_default_role(const ObString& ddl_str, const ObUserInfo& schema,
     ObIArray<uint64_t>& role_id_array, ObIArray<uint64_t>& disable_flag_array, ObMySQLTransaction& trans)
 {

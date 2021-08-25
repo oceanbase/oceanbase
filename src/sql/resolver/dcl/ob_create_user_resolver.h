@@ -24,6 +24,7 @@ public:
   virtual int resolve(const ParseNode& parse_tree);
 
 private:
+  const static uint64_t MAX_CONNECTIONS = 4294967295;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateUserResolver);
 };

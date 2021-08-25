@@ -235,7 +235,7 @@ private:
   ObIRowReader* row_reader_;
   ObFlatRowReader flat_row_reader_;
   ObSparseRowReader sparse_row_reader_;
-  ObSelfBufferWriter data_;  // micro header + data blocks;
+  ObSelfBufferWriter data_;  // macro header + data blocks;
   ObMicroBlockIndexWriter index_;
   ObSSTableMacroBlockHeader* header_;  // macro header store in head of data_;
   uint16_t* column_ids_;

@@ -74,6 +74,7 @@
 #include "observer/ob_server_memory_cutter.h"
 #include "share/ob_bg_thread_monitor.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "lib/oblog/ob_log_compressor.h"
 //#include "share/ob_ofs.h"
 
 using namespace oceanbase::lib;
@@ -146,7 +147,8 @@ ObServer::ObServer()
       refresh_active_time_task_(),
       refresh_network_speed_task_(),
       schema_status_proxy_(sql_proxy_),
-      is_log_dir_empty_(false)
+      is_log_dir_empty_(false),
+      conn_res_mgr_()
 {
   memset(&gctx_, 0, sizeof(gctx_));
   lib::g_mem_cutter = &observer::g_server_mem_cutter;
@@ -172,8 +174,17 @@ int ObServer::init(const ObServerOptions& opts, const ObPLogWriterCfg& log_cfg)
   ObLargePageHelper::set_param(config_.use_large_pages);
 
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(log_compressor_.init())) {
+      LOG_ERROR("log compressor init error.", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(OB_LOGGER.init(log_cfg))) {
       LOG_ERROR("async log init error.", K(ret));
+      ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
+    } else if (OB_FAIL(OB_LOGGER.set_log_compressor(&log_compressor_))) {
+      LOG_ERROR("set log compressor error.", K(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
     }
   }
@@ -419,6 +430,8 @@ void ObServer::destroy()
     LOG_WARN("memory dump destroyed");
     tenant_timezone_mgr_.destroy();
     LOG_WARN("tenant timezone manager destroyed");
+    log_compressor_.destroy();
+    LOG_WARN("log compressor destroyed");
     LOG_WARN("destroy observer end");
     has_destroy_ = true;
   }
@@ -950,10 +963,14 @@ int ObServer::init_pre_setting()
   // oblog configuration
   if (OB_SUCC(ret)) {
     const int max_log_cnt = static_cast<int32_t>(config_.max_syslog_file_count);
+    const int64_t max_log_time = config_.max_syslog_file_time;
+    const bool enable_log_compress = config_.enable_syslog_file_compress;
     const bool record_old_log_file = config_.enable_syslog_recycle;
     const bool log_warn = config_.enable_syslog_wf;
     const bool enable_async_syslog = config_.enable_async_syslog;
     OB_LOGGER.set_max_file_index(max_log_cnt);
+    OB_LOGGER.set_max_file_time(max_log_time);
+    OB_LOGGER.set_enable_file_compress(enable_log_compress);
     OB_LOGGER.set_record_old_log_file(record_old_log_file);
     LOG_INFO("Whether record old log file", K(record_old_log_file));
     OB_LOGGER.set_log_warn(log_warn);
@@ -1354,6 +1371,8 @@ int ObServer::init_sql()
     LOG_WARN("init sql session mgr fail");
   } else if (OB_FAIL(query_ctx_mgr_.init())) {
     LOG_WARN("init query ctx mgr failed", K(ret));
+  } else if (OB_FAIL(conn_res_mgr_.init(schema_service_))) {
+    LOG_WARN("init user resource mgr failed", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, session_mgr_, ObSQLSessionMgr::SCHEDULE_PERIOD, true))) {
     LOG_WARN("tier schedule fail");
   } else {
@@ -1456,6 +1475,7 @@ int ObServer::init_global_context()
   gctx_.session_mgr_ = &session_mgr_;
   gctx_.query_ctx_mgr_ = &query_ctx_mgr_;
   gctx_.sql_engine_ = &sql_engine_;
+  gctx_.conn_res_mgr_ = &conn_res_mgr_;
   gctx_.omt_ = &multi_tenant_;
   gctx_.vt_iter_creator_ = &vt_data_service_.get_vt_iter_factory().get_vt_iter_creator();
   gctx_.location_cache_ = &location_cache_;

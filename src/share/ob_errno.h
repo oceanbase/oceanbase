@@ -1028,6 +1028,7 @@ constexpr int OB_ERR_ARG_INVALID = -5931;
 constexpr int OB_ERR_ILL_NAME_STRING = -5932;
 constexpr int OB_ERR_CTE_NEED_QUERY_BLOCKS = -5933;
 constexpr int OB_ERR_INCORRECT_VALUE_FOR_FUNCTION = -5936;
+constexpr int OB_ERR_USER_EXCEED_RESOURCE = -5967;
 constexpr int OB_TRANSACTION_SET_VIOLATION = -6001;
 constexpr int OB_TRANS_ROLLBACKED = -6002;
 constexpr int OB_ERR_EXCLUSIVE_LOCK_CONFLICT = -6003;
@@ -2430,6 +2431,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILL_NAME_STRING__USER_ERROR_MSG "unexpected name string"
 #define OB_ERR_CTE_NEED_QUERY_BLOCKS__USER_ERROR_MSG "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s"
 #define OB_ERR_INCORRECT_VALUE_FOR_FUNCTION__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for function %.*s"
+#define OB_ERR_USER_EXCEED_RESOURCE__USER_ERROR_MSG "User '%.*s' has exceeded the '%s' resource (current value: %lu)"
 #define OB_TRANSACTION_SET_VIOLATION__USER_ERROR_MSG "Transaction set changed during the execution"
 #define OB_TRANS_ROLLBACKED__USER_ERROR_MSG "transaction is rolled back"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT__USER_ERROR_MSG "Lock wait timeout exceeded; try restarting transaction"
@@ -3850,6 +3852,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILL_NAME_STRING__ORA_USER_ERROR_MSG "ORA-21560: unexpected name string '%.*s'"
 #define OB_ERR_CTE_NEED_QUERY_BLOCKS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5933, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s"
 #define OB_ERR_INCORRECT_VALUE_FOR_FUNCTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5936, Incorrect %.*s value: '%.*s' for function %.*s"
+#define OB_ERR_USER_EXCEED_RESOURCE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5967, User '%.*s' has exceeded the '%s' resource (current value: %lu)"
 #define OB_TRANSACTION_SET_VIOLATION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6001, Transaction set changed during the execution"
 #define OB_TRANS_ROLLBACKED__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-30006: resource busy; acquire with WAIT timeout expired"

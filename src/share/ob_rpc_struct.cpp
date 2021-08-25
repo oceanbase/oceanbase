@@ -2971,7 +2971,8 @@ OB_DEF_SERIALIZE(ObSetPasswdArg)
 {
   int ret = OB_SUCCESS;
   BASE_SER((, ObDDLArg));
-  LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, user_, passwd_, host_, ssl_type_, ssl_cipher_, x509_issuer_, x509_subject_);
+  LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, user_, passwd_, host_, ssl_type_, ssl_cipher_, x509_issuer_, x509_subject_,
+    modify_max_connections_, max_connections_per_hour_, max_user_connections_);
   return ret;
 }
 
@@ -2985,14 +2986,16 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
   x509_subject_.reset();
 
   BASE_DESER((, ObDDLArg));
-  LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, user_, passwd_, host_, ssl_type_, ssl_cipher_, x509_issuer_, x509_subject_);
+  LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, user_, passwd_, host_, ssl_type_, ssl_cipher_, x509_issuer_, x509_subject_,
+    modify_max_connections_, max_connections_per_hour_, max_user_connections_);
   return ret;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObSetPasswdArg)
 {
   int64_t len = ObDDLArg::get_serialize_size();
-  LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, user_, passwd_, host_, ssl_type_, ssl_cipher_, x509_issuer_, x509_subject_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, user_, passwd_, host_, ssl_type_, ssl_cipher_, x509_issuer_, x509_subject_,
+    modify_max_connections_, max_connections_per_hour_, max_user_connections_);
   return len;
 }
 

@@ -98,6 +98,7 @@ enable_separate_sys_clog
 enable_smooth_leader_switch
 enable_sql_audit
 enable_sql_operator_dump
+enable_syslog_file_compress
 enable_syslog_recycle
 enable_syslog_wf
 enable_sys_table_ddl
@@ -145,6 +146,7 @@ max_px_worker_count
 max_stale_time_for_weak_consistency
 max_string_print_length
 max_syslog_file_count
+max_syslog_file_time
 memory_chunk_cache_size
 memory_limit
 memory_limit_percentage

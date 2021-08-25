@@ -575,6 +575,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       case T_SHOW_CREATE_TENANT:
       case T_SHOW_RECYCLEBIN:
       case T_SHOW_CREATE_TABLEGROUP:
+      case T_SHOW_TRIGGERS:
       case T_SHOW_STATUS: {
         REGISTER_STMT_RESOLVER(Show);
         break;

@@ -575,10 +575,10 @@ public:
   }
 
 private:
-  bool is_terminate_char(char cur_char, char*& cur_pos, bool& is_line_term);
-  bool is_enclosed_field_start(char* cur_pos, char& cur_char);
-  void handle_one_field(char* field_end_pos);
-  void deal_with_empty_field(ObString& field_str, int64_t index);
+  bool is_terminate_char(char cur_char, char *&cur_pos, bool &is_line_term);
+  bool is_enclosed_field_start(char *cur_pos, char &cur_char);
+  void handle_one_field(char *field_end_pos, bool has_escaped);
+  void deal_with_empty_field(ObString &field_str, int64_t index);
   // void deal_with_field_with_escaped_chars(ObString &field_str);
   int deal_with_irregular_line();
   void remove_enclosed_char(char*& cur_field_end_pos);
@@ -647,7 +647,6 @@ OB_INLINE bool ObCSVParser::is_terminate_char(char cur_char, char*& cur_pos, boo
       // with in_enclose_flag_ = true, a term char is valid only if an enclosed char before it
       if (static_cast<int64_t>(*pre_pos) == formats_.enclose_char_ &&
           cur_field_begin_pos_ != pre_pos) {  // 123---->'---->123
-        in_enclose_flag_ = false;
         remove_enclosed_char(cur_pos);
         ret_bool = true;  // return true
       } else {
@@ -670,14 +669,17 @@ OB_INLINE bool ObCSVParser::is_enclosed_field_start(char* cur_pos, char& cur_cha
          && cur_pos == cur_field_begin_pos_;
 }
 
-OB_INLINE void ObCSVParser::handle_one_field(char* field_end_pos)
+OB_INLINE void ObCSVParser::handle_one_field(char *field_end_pos, bool has_escaped)
 {
   if (OB_LIKELY(field_id_ < total_field_nums_)) {
     int32_t str_len = static_cast<int32_t>(field_end_pos - cur_field_begin_pos_);
     if (OB_UNLIKELY(str_len <= 0)) {
       deal_with_empty_field(values_in_line_.at(field_id_), field_id_);
     } else {
-      if (str_len == 1 && *cur_field_begin_pos_ == 'N' && cur_pos_ - cur_field_begin_pos_ == 2) {
+      if (!in_enclose_flag_ &&
+          ((str_len == 1 && *cur_field_begin_pos_ == 'N' && has_escaped && cur_pos_ - cur_field_begin_pos_ == 2) ||
+              (formats_.enclose_char_ != INT64_MAX && !has_escaped && str_len == 4 &&
+                  0 == MEMCMP(cur_field_begin_pos_, "NULL", 4)))) {
         values_in_line_.at(field_id_).assign_ptr(&ObLoadDataUtils::NULL_VALUE_FLAG, 1);
       } else {
         values_in_line_.at(field_id_).assign_ptr(cur_field_begin_pos_, str_len);

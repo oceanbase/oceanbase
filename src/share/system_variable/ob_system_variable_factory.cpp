@@ -59,6 +59,7 @@ const char* ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {"_enable_parallel
     "_force_parallel_query_dop",
     "_groupby_nopushdown_cut_ratio",
     "_nlj_batching_enabled",
+    "_ob_proxy_session_temporary_table_used",
     "_ob_px_bcast_optimization",
     "_ob_px_slave_mapping_threshold",
     "_ob_use_parallel_execution",
@@ -254,6 +255,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {SYS_VAR
     SYS_VAR__FORCE_PARALLEL_QUERY_DOP,
     SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO,
     SYS_VAR__NLJ_BATCHING_ENABLED,
+    SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED,
     SYS_VAR__OB_PX_BCAST_OPTIMIZATION,
     SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,
     SYS_VAR__OB_USE_PARALLEL_EXECUTION,
@@ -636,7 +638,8 @@ const char* ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {"auto_increment_inc
     "performance_schema",
     "nls_currency",
     "nls_iso_currency",
-    "nls_dual_currency"};
+    "nls_dual_currency",
+    "_ob_proxy_session_temporary_table_used"};
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char* name1, const ObString& name2)
 {
@@ -2955,6 +2958,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar*
         } else if (OB_ISNULL(sys_var_ptr = new (ptr) ObSysVarNlsDualCurrency())) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("fail to new ObSysVarNlsDualCurrency", K(ret));
+        }
+        break;
+      }
+      case SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED: {
+        void* ptr = NULL;
+        if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObProxySessionTemporaryTableUsed)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObProxySessionTemporaryTableUsed)));
+        } else if (OB_ISNULL(sys_var_ptr = new (ptr) ObSysVarObProxySessionTemporaryTableUsed())) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("fail to new ObSysVarObProxySessionTemporaryTableUsed", K(ret));
         }
         break;
       }

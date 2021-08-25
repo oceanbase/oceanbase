@@ -115,21 +115,19 @@ int ObAllVirtualLeaderStat::build_partition_group_candidate_leader_array()
         K(partition_group_idx_),
         "tenant partition group cnt",
         tenant_partition_.count());
+  } else if (OB_ISNULL(leader_coordinator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("leader_coordinator_ is null", KR(ret));
   } else {
     ObLeaderCoordinator::PartitionArray& partitions = *tenant_partition_.at(partition_group_idx_);
     ObLeaderCoordinator::CandidateLeaderInfoMap leader_info_map(*leader_coordinator_);
     const int64_t MAP_BUCKET_NUM = 64;
-    bool is_ignore_switch_percent = false;
     const common::ObArray<common::ObZone> exclude_zones;
     const common::ObArray<common::ObAddr> exclude_servers;
     if (OB_FAIL(leader_info_map.create(MAP_BUCKET_NUM, ObModIds::OB_RS_LEADER_COORDINATOR))) {
       LOG_WARN("fail to create leader info map", K(ret));
-    } else if (OB_FAIL(leader_coordinator_->build_partition_statistic(partitions,
-                   tenant_unit_,
-                   exclude_zones,
-                   exclude_servers,
-                   leader_info_map,
-                   is_ignore_switch_percent))) {
+    } else if (OB_FAIL(leader_coordinator_->build_partition_statistic(
+                   partitions, tenant_unit_, exclude_zones, exclude_servers, leader_info_map))) {
       LOG_WARN("fail to build partition statistic", K(ret));
     } else if (OB_FAIL(leader_coordinator_->update_leader_candidates(partitions, leader_info_map))) {
       LOG_WARN("fail to update leader candidates", K(ret));

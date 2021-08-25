@@ -3093,6 +3093,19 @@ int ObSql::after_get_plan(ObPlanCacheCtx& pc_ctx, ObSQLSessionInfo& session, ObP
         }
       }
     }
+    if (NULL != phy_plan && !session.get_is_deserialized()) {
+      if (phy_plan->is_contain_oracle_session_level_temporary_table()) {
+        bool is_already_set = false;
+        if (OB_FAIL(session.get_session_temp_table_used(is_already_set))) {
+          LOG_WARN("fail to get session temp table used", K(ret));
+        } else if (is_already_set) {
+          // do nothing
+        } else if (OB_FAIL(session.set_session_temp_table_used(true))) {
+          LOG_WARN("fail to set session temp table used", K(ret));
+        }
+        LOG_DEBUG("plan contain oracle session level temporary table detected", K(is_already_set));
+      }
+    }
   } else {
     // not phy_plan, ignore
   }

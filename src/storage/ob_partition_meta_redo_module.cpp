@@ -1599,6 +1599,7 @@ int ObPartitionMetaRedoModule::get_create_pg_param(const ObCreatePartitionGroupL
     param.file_mgr_ = file_mgr;
     param.create_frozen_version_ = log_entry.meta_.create_frozen_version_;
     param.last_restore_log_id_ = log_entry.meta_.last_restore_log_id_;
+    param.last_restore_log_ts_ = log_entry.meta_.last_restore_log_ts_;
     param.restore_snapshot_version_ = log_entry.meta_.restore_snapshot_version_;
   }
   return ret;

@@ -38,8 +38,8 @@ TG_DEF(PartSerSlogWr, PartSerSlogWr, "", TG_STATIC, QUEUE_THREAD,
 TG_DEF(LogScan, LogScan, "", TG_STATIC, TIMER_GROUP,
     ThreadCountPair(clog::ObLogScanRunnable::MAX_THREAD_CNT, clog::ObLogScanRunnable::MINI_MODE_THREAD_CNT))
 TG_DEF(ReplayEngine, ReplayEngine, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(sysconf(_SC_NPROCESSORS_ONLN), 2),
-    !lib::is_mini_mode() ? common::REPLAY_TASK_QUEUE_SIZE * OB_MAX_PARTITION_NUM_PER_SERVER
-                         : common::REPLAY_TASK_QUEUE_SIZE * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
+    !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_PARTITION_NUM_PER_SERVER
+                         : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
 TG_DEF(LogCb, LogCb, "", TG_STATIC, QUEUE_THREAD,
     ThreadCountPair(clog::ObCLogMgr::CLOG_CB_THREAD_COUNT, clog::ObCLogMgr::MINI_MODE_CLOG_CB_THREAD_COUNT),
     clog::CLOG_CB_TASK_QUEUE_SIZE)

@@ -569,6 +569,8 @@ all_user_def = dict(
       ('priv_alter_system', 'int', 'false', '0'),
       ('priv_create_resource_pool', 'int', 'false', '0'),
       ('priv_create_resource_unit', 'int', 'false', '0'),
+      ('max_connections', 'int', 'false', '0'),
+      ('max_user_connections', 'int', 'false', '0'),
     ],
 
     migrate_data_before_2200 = True,

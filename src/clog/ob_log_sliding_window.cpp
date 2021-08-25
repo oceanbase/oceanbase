@@ -2389,11 +2389,12 @@ int ObLogSlidingWindow::restore_leader_try_confirm_log()
 {
   int ret = OB_SUCCESS;
   uint64_t last_restore_log_id = OB_INVALID_ID;
+  int64_t unused_log_ts = OB_INVALID_TIMESTAMP;
   int64_t unused_version = OB_INVALID_TIMESTAMP;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(
-                 partition_service_->get_restore_replay_info(partition_key_, last_restore_log_id, unused_version))) {
+  } else if (OB_FAIL(partition_service_->get_restore_replay_info(
+                 partition_key_, last_restore_log_id, unused_log_ts, unused_version))) {
     CLOG_LOG(WARN, "get_restore_replay_info failed", K_(partition_key), K(ret));
   } else if (OB_INVALID_ID == last_restore_log_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -2793,6 +2794,11 @@ int ObLogSlidingWindow::get_next_replay_log_timestamp(int64_t& next_replay_log_t
   }
 
   return ret;
+}
+
+void ObLogSlidingWindow::get_last_replay_log_id_and_ts(uint64_t &last_replay_log_id, int64_t &last_replay_log_ts)
+{
+  last_replay_log_.get(last_replay_log_id, last_replay_log_ts);
 }
 
 int ObLogSlidingWindow::set_log_flushed_succ(const uint64_t log_id, const ObProposalID proposal_id,
@@ -4384,7 +4390,7 @@ bool ObLogSlidingWindow::check_can_receive_larger_log(const uint64_t log_id)
         const uint64_t start_log_id = sw_.get_start_id();
         state_mgr_->report_start_id_trace(start_log_id);
         CLOG_LOG(WARN,
-            "check_can_receive_log, now can not recieve larger log",
+            "check_can_receive_log, now can not receive larger log because of sliding window is full",
             K_(partition_key),
             K(log_id),
             "next_index_log_id",
@@ -4392,26 +4398,6 @@ bool ObLogSlidingWindow::check_can_receive_larger_log(const uint64_t log_id)
             "max_log_id",
             get_max_log_id(),
             K(start_log_id));
-      }
-    }
-  }
-
-  if (bool_ret && GCONF.__enable_block_receiving_clog) {
-    int64_t pending_submit_task_count = INT64_MAX;
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(replay_engine_->get_pending_submit_task_count(partition_key_, pending_submit_task_count))) {
-      bool_ret = false;
-      CLOG_LOG(WARN, "failed to get_pending_submit_task_count", KR(ret), K_(partition_key));
-    } else {
-      bool_ret = pending_submit_task_count < follower_max_unconfirmed_threshold;
-      if (!bool_ret) {
-        if (partition_reach_time_interval(5 * 60 * 1000 * 1000, check_can_receive_larger_log_warn_time_)) {
-          CLOG_LOG(WARN,
-              "check_can_receive_log, now can not recieve larger log because of pending too many task to submit",
-              K_(partition_key),
-              K(log_id),
-              K(pending_submit_task_count));
-        }
       }
     }
   }

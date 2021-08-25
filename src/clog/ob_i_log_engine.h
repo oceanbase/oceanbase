@@ -186,7 +186,7 @@ public:
   virtual int get_ilog_file_id_range(file_id_t& min_file_id, file_id_t& max_file_id) = 0;
   virtual int query_next_ilog_file_id(file_id_t& next_ilog_file_id) = 0;
   virtual int get_index_info_block_map(const file_id_t file_id, IndexInfoBlockMap& index_info_block_map) = 0;
-  virtual int check_need_block_log(bool& is_need) const = 0;
+  virtual int check_need_block_log(const file_id_t cur_file_id, bool &is_need) const = 0;
 
   // want_size refers to the length in clog, which may be the length after compression, and the returned data is after
   // decompression

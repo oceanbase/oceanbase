@@ -29,7 +29,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(deps/easy)
 add_subdirectory(deps/oblib)
 add_subdirectory(src)
-add_subdirectory(tools)
 
 include(CMakeDependentOption)
 # OB_BUILD_RPM => include tools and build them.
@@ -57,6 +56,12 @@ if (OB_BUILD_UNITTEST)
   add_subdirectory(unittest)
 elseif(OB_INCLUDE_UNITTEST)
   add_subdirectory(unittest EXCLUDE_FROM_ALL)
+endif()
+
+if (OB_BUILD_TOOLS)
+  add_subdirectory(tools)
+elseif (OB_INCLUDE_TOOLS)
+  add_subdirectory(tools EXCLUDE_FROM_ALL)
 endif()
 
 include(cmake/RPM.cmake)

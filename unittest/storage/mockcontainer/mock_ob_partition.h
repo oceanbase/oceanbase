@@ -302,7 +302,6 @@ public:
     return common::OB_SUCCESS;
   }
   MOCK_METHOD0(get_min_replayed_log_id, uint64_t());
-  MOCK_METHOD2(get_min_replayed_log, void(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts));
   MOCK_METHOD2(get_min_replayed_log_with_keepalive, int(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts));
   MOCK_CONST_METHOD1(get_table_store_cnt, int(int64_t& table_cnt));
   MOCK_METHOD4(
@@ -380,7 +379,8 @@ public:
   MOCK_METHOD0(clear, void());
   MOCK_METHOD1(get_merge_log_ts, int(int64_t& merge_log_ts));
   MOCK_METHOD2(check_ready_for_split, int(const ObPartitionArray& src_pkeys, bool& is_ready));
-  MOCK_METHOD1(clear_trans_after_restore_log, int(const uint64_t last_restore_log_id));
+  MOCK_METHOD2(
+      clear_trans_after_restore_log, int(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts));
   MOCK_METHOD0(reset_for_replay, int());
   MOCK_METHOD2(inc_pending_batch_commit_count, int(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts));
   MOCK_METHOD2(inc_pending_elr_count, int(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts));

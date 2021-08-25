@@ -23,6 +23,7 @@
 #include "sql/ob_sql.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/ob_query_exec_ctx_mgr.h"
+#include "sql/session/ob_user_resource_mgr.h"
 
 #include "storage/transaction/ob_weak_read_service.h"  // ObWeakReadService
 #include "storage/ob_long_ops_monitor.h"
@@ -45,6 +46,7 @@
 #include "observer/ob_service.h"
 #include "observer/ob_server_reload_config.h"
 #include "observer/ob_root_service_monitor.h"
+#include "lib/oblog/ob_log_compressor.h"
 
 namespace oceanbase {
 namespace omt {
@@ -236,6 +238,10 @@ class ObRefreshTime {
   {
     return sql_proxy_;
   }
+  sql::ObConnectResourceMgr& get_conn_res_mgr()
+  {
+    return conn_res_mgr_;
+  }
 
 private:
   int stop();
@@ -421,8 +427,10 @@ private:
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
   ObSignalWorker sig_worker_;
+  common::ObLogCompressor log_compressor_;
 
   bool is_log_dir_empty_;
+  sql::ObConnectResourceMgr conn_res_mgr_;
 };  // end of class ObServer
 
 inline ObServer& ObServer::get_instance()

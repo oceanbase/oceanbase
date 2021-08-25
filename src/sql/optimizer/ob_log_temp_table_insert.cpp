@@ -43,8 +43,10 @@ int ObLogTempTableInsert::allocate_exchange_post(AllocExchContext* ctx)
     LOG_WARN("get unexpected null", K(child), K(ret));
   } else if (child->get_sharding_info().is_distributed()) {
     sharding_info_.set_location_type(child->get_sharding_info().get_location_type());
-  } else {
-    ret = sharding_info_.copy_with_part_keys(child->get_sharding_info());
+  } else if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
+    LOG_WARN("failed to copy sharding info", K(ret));
+  } else if (sharding_info_.is_match_all()) {
+    sharding_info_.set_location_type(OB_TBL_LOCATION_LOCAL);
   }
   return ret;
 }

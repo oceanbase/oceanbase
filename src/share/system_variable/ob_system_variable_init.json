@@ -868,12 +868,12 @@
   "max_connections": {
     "id": 62,
     "name": "max_connections",
-    "value": "151",
-    "data_type": "int",
+    "value": "4294967295",
+    "data_type": "uint",
     "info": "",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1",
-    "max_val": "100000",
+    "max_val": "4294967295",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -2582,5 +2582,17 @@
     "info_cn": "U数字格式元素的双货币符号",
     "background_cn": "兼容 oracle number format model U 数字格式元素",
     "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/efqk1r"
+  },
+  "_ob_proxy_session_temporary_table_used": {
+    "id": 10116,
+    "name": "_ob_proxy_session_temporary_table_used",
+    "value": "0",
+    "data_type": "bool",
+    "info": "this value is true if we have executed set transaction stmt, until a transaction commit(explicit or implicit) successfully",
+    "flags": "READONLY | SESSION | INVISIBLE",
+    "publish_version": "310",
+    "info_cn": "标记当前Session是否使用过Session级别临时表，用于告知proxy并修改路由决策",
+    "background_cn": "为了解决Session临时表断链接时可能导致的问题，当Session临时表第一次使用后，后续请求Proxy只会路由到同一个Session",
+    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/hinq1e"
   }
 }

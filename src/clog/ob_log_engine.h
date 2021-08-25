@@ -522,7 +522,7 @@ public:
   int ensure_log_continuous_in_file_id_cache(
       const common::ObPartitionKey& partition_key, const uint64_t log_id) override;
   int get_index_info_block_map(const file_id_t file_id, IndexInfoBlockMap& index_info_block_map) override;
-  int check_need_block_log(bool& is_need) const override;
+  int check_need_block_log(const file_id_t cur_file_id, bool &is_need) const;
   int delete_all_ilog_files();
   ObLogCache* get_ilog_log_cache() override
   {

@@ -1217,16 +1217,18 @@ int ObPartitionService::prepare_all_partitions()
             txs_add_success = true;
             int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
             uint64_t last_restore_log_id = OB_INVALID_ID;
+            int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
             if (OB_FAIL(txs_->update_publish_version(pkey, data_info.get_publish_version(), true))) {
               STORAGE_LOG(WARN, "failed to set publish version", K(data_info), K(ret));
             } else if (OB_FAIL(partition->get_pg_storage().get_restore_replay_info(
-                           last_restore_log_id, restore_snapshot_version))) {
+                           last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
               STORAGE_LOG(WARN, "failed to get_restore_replay_info", K(pkey), K(ret));
-            } else if (OB_FAIL(txs_->update_restore_replay_info(pkey, restore_snapshot_version, last_restore_log_id))) {
+            } else if (OB_FAIL(txs_->update_restore_replay_info(pkey, restore_snapshot_version, last_restore_log_ts))) {
               STORAGE_LOG(WARN,
                   "failed to update_restore_replay_info",
                   K(restore_snapshot_version),
                   K(last_restore_log_id),
+                  K(last_restore_log_ts),
                   K(ret));
             } else { /*do nothing*/
             }
@@ -3342,8 +3344,8 @@ int ObPartitionService::remove_partition(const ObPartitionKey& pkey, const bool 
   return ret;
 }
 
-int ObPartitionService::online_partition(const ObPartitionKey& pkey, const int64_t publish_version,
-    const int64_t restore_snapshot_version, const uint64_t last_restore_log_id)
+int ObPartitionService::online_partition(const ObPartitionKey &pkey, const int64_t publish_version,
+    const int64_t restore_snapshot_version, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
   bool txs_add_success = false;
@@ -3367,9 +3369,9 @@ int ObPartitionService::online_partition(const ObPartitionKey& pkey, const int64
       txs_add_success = true;
       if (OB_FAIL(txs_->update_publish_version(pkey, publish_version, true))) {
         STORAGE_LOG(WARN, "update publish version failed", K(pkey), K(publish_version));
-      } else if (OB_FAIL(txs_->update_restore_replay_info(pkey, restore_snapshot_version, last_restore_log_id))) {
+      } else if (OB_FAIL(txs_->update_restore_replay_info(pkey, restore_snapshot_version, last_restore_log_ts))) {
         STORAGE_LOG(
-            WARN, "failed to update_restore_replay_info", K(restore_snapshot_version), K(last_restore_log_id), K(ret));
+            WARN, "failed to update_restore_replay_info", K(restore_snapshot_version), K(last_restore_log_ts), K(ret));
       } else { /*do nothing*/
       }
     }
@@ -12214,8 +12216,8 @@ int ObPartitionService::set_restore_flag(const ObPartitionKey& pkey, const int16
   return ret;
 }
 
-int ObPartitionService::get_restore_replay_info(
-    const ObPartitionKey& pkey, uint64_t& last_restore_log_id, int64_t& restore_snapshot_version)
+int ObPartitionService::get_restore_replay_info(const ObPartitionKey &pkey, uint64_t &last_restore_log_id,
+    int64_t &last_restore_log_ts, int64_t &restore_snapshot_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -12234,8 +12236,8 @@ int ObPartitionService::get_restore_replay_info(
   } else if (OB_ISNULL(partition = guard.get_partition_group()) || (!partition->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "partition is invalid", K(ret), K(pkey));
-  } else if (OB_FAIL(
-                 partition->get_pg_storage().get_restore_replay_info(last_restore_log_id, restore_snapshot_version))) {
+  } else if (OB_FAIL(partition->get_pg_storage().get_restore_replay_info(
+                 last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
     STORAGE_LOG(WARN, "failed to get_restore_replay_info", K(ret), K(pkey));
   } else { /*do nothing*/
   }
