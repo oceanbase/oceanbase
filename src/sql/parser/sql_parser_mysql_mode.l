@@ -10,6 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
+/* unput() change the yyin but it doesn't change ParserResult->input_sql_.
+// use unput() function may have unexpected result while copy string.
+*/
 %option noyywrap nounput noinput nodefault case-insensitive
 %option noyyalloc noyyrealloc noyyfree
 %option reentrant bison-bridge bison-locations
@@ -83,6 +86,10 @@ btbegin       {backtick}
 btend         {backtick}
 btdouble      {backtick}{backtick}
 btcontent     [^`]+
+
+mysql_compatible_comment_with_version \/\*\![0-9]{5}
+mysql_compatible_comment_without_version \/\*\!
+mysql_compatible_comment_end \*\/
 
 rowidPattern  (WITH{whitespace}ROWID)
 
@@ -1139,6 +1146,14 @@ Timestamp{whitespace}?\"[^\"]*\" {
   }
 }
 
+{mysql_compatible_comment_without_version} {
+  // if is a mysql comment without version. For example, /*!any sql str*/
+  // mysql_comment without version, processed as common sql str;
+  // place before `c_cmt_begin` to avoid (the '/*!') being hidden by '/*')
+  ParseResult *p = (ParseResult *)yyextra;
+  p->mysql_compatible_comment_ = true;
+}
+
 {c_cmt_begin} {
 BEGIN(in_c_comment);
 #ifdef SQL_PARSER_COMPILATION
@@ -1169,6 +1184,25 @@ BEGIN(in_c_comment);
     }
   }
 #endif
+}
+
+{mysql_compatible_comment_end} {
+  //for mysql compatible comment:
+  // only "*/" should be matched, duplicated '*' (e.g., "***/") will report a error.
+  ParseResult *p = (ParseResult *)yyextra;
+  if (p->mysql_compatible_comment_){
+    p->mysql_compatible_comment_ = false;
+    BEGIN(INITIAL);
+  } else {
+    // The sql could be "select */*!xxx*/ from t1;". We can't directly raise a syntax
+    // error here. We should treat the "*/" as '*' and '/' by return '*' and unput '/';
+
+    // yyless will change the yytext and yyleng.
+    char c_ret = yytext[0];
+    yyless(1);
+    p->yycolumn_ = p->yycolumn_ - 1;
+    return c_ret;
+  }
 }
 
 <in_c_comment><<EOF>>  {
@@ -1399,6 +1433,15 @@ BEGIN(in_c_comment);
     }
     return ret;
   }
+}
+
+{mysql_compatible_comment_with_version} {
+  // comment with version: /*!50600 any sql str*/
+  // comment without version: /*!any sql str*/
+  // we do not add a start_condition, since some sql string need to be processed in INITIAL state.
+  // instead of a new start_condition, we use a extra field (mysql_compatible_comment_) to mark the adaptive comment.
+  ParseResult *p = (ParseResult *)yyextra;
+  p->mysql_compatible_comment_ = true;
 }
 
 [\n] {
