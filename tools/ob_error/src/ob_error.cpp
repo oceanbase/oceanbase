@@ -351,7 +351,7 @@ bool add_ob_info(int error_code, ObErrorInfoMgr* mgr)
       if (mgr->insert_ob_error(error_name, error_msg, error_cause, error_solution, error_code)) {
         bret = true;
       }
-    } else if (-1 == g_mysql_error[error_code][0]) {
+    } else {
       const char* error_usr_msg = ob_errpkt_str_user_error(-error_code, false);
       if (nullptr != error_usr_msg) {
         const char* error_msg = ob_errpkt_strerror(-error_code, false);
