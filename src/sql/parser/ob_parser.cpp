@@ -250,6 +250,14 @@ int ObParser::parse(
       ObCharset::is_valid_collation(connection_collation_)
           ? (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4)
           : false;
+  parse_result.malloc_pool_ = allocator_;
+  parse_result.sql_mode_ = sql_mode_;
+  parse_result.need_parameterize_ = (FP_MODE == parse_mode || FP_PARAMERIZE_AND_FILTER_HINT_MODE == parse_mode);
+  parse_result.minus_ctx_.pos_ = -1;
+  parse_result.minus_ctx_.raw_sql_offset_ = -1;
+  parse_result.charset_info_ = ObCharset::get_charset(connection_collation_);
+  parse_result.connection_collation_ = connection_collation_;
+  parse_result.mysql_compatible_comment_ = false;
 
   if (parse_result.is_fp_ || parse_result.is_dynamic_sql_) {
     int64_t new_length = parse_result.is_fp_ ? stmt.length() + 1 : stmt.length() * 2;
