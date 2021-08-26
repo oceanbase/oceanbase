@@ -542,6 +542,7 @@ public:
     cur_line_begin_pos_ = NULL;
     buf_begin_pos_ = NULL;
     buf_end_pos_ = NULL;
+    last_end_enclosed_ = NULL;
     field_id_ = 0;
     in_enclose_flag_ = false;
     is_escaped_flag_ = false;
@@ -590,12 +591,13 @@ private:
   common::ObBitSet<> string_type_column_;
   // parsing state variables
   bool is_last_buf_;
-  char* cur_pos_;
-  char* cur_field_begin_pos_;
-  char* cur_field_end_pos_;
-  char* cur_line_begin_pos_;
-  char* buf_begin_pos_;
-  char* buf_end_pos_;
+  char *cur_pos_;
+  char *cur_field_begin_pos_;
+  char *cur_field_end_pos_;
+  char *cur_line_begin_pos_;
+  char *buf_begin_pos_;
+  char *buf_end_pos_;
+  char *last_end_enclosed_;
   int64_t field_id_;
   bool in_enclose_flag_;
   bool is_escaped_flag_;
@@ -643,10 +645,8 @@ OB_INLINE bool ObCSVParser::is_terminate_char(char cur_char, char*& cur_pos, boo
     if (!in_enclose_flag_) {
       ret_bool = true;  // return true
     } else {
-      char* pre_pos = cur_pos - 1;
       // with in_enclose_flag_ = true, a term char is valid only if an enclosed char before it
-      if (static_cast<int64_t>(*pre_pos) == formats_.enclose_char_ &&
-          cur_field_begin_pos_ != pre_pos) {  // 123---->'---->123
+      if (last_end_enclosed_ == cur_pos - 1) {
         remove_enclosed_char(cur_pos);
         ret_bool = true;  // return true
       } else {

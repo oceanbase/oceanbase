@@ -534,12 +534,14 @@ int ObLoadDataResolver::validate_stmt(ObLoadDataStmt* stmt)
       escape_char = (data_struct_in_file.field_escaped_str_.empty()
                          ? INT64_MAX
                          : static_cast<int64_t>(data_struct_in_file.field_escaped_str_[0]));
+      /*
       if (OB_SUCC(ret)) {
         if (escape_char != ObDataInFileStruct::DEFAULT_FIELD_ESCAPED_CHAR) {
           ret = OB_WRONG_FIELD_TERMINATORS;
           LOG_USER_ERROR(OB_WRONG_FIELD_TERMINATORS);
         }
       }
+      */
       if (OB_SUCC(ret)) {
         const char* is_ambiguous_field_sep = strchr("ntrb0ZN", static_cast<int>(field_sep_char));
         const char* is_unsafe_field_sep = strchr(".0123456789e+-", static_cast<int>(field_sep_char));
