@@ -120,7 +120,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
     LOG_WARN("failed to resolve with clause", K(ret));
   } else if (OB_FAIL(add_cte_table_to_children(left_resolver)) || OB_FAIL(add_cte_table_to_children(right_resolver))) {
     LOG_WARN("failed to add cte table to children", K(ret));
-  } else if (OB_FAIL(identify_anchor_member( // here first
+  } else if (OB_FAIL(identify_anchor_member(
                  identify_anchor_resolver, need_swap_child, *(parse_tree.children_[PARSE_SELECT_FORMER])))) {
     LOG_WARN("failed to identify anchor member", K(ret));
   } else if (!need_swap_child) {
@@ -138,26 +138,28 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
     }
   }
 
-  if (!params_.has_cte_param_list_ && right_resolver.saved_resolver != NULL &&
-      !right_resolver.saved_resolver->cte_ctx_.cte_col_names_.empty()) {
-    right_resolver.cte_ctx_.cte_col_names_.reset();
-    cte_ctx_.cte_col_names_.reset();
-    for (int64_t i = 0; OB_SUCC(ret) && i < right_resolver.saved_resolver->cte_ctx_.cte_col_names_.count(); ++i) {
-      if (OB_FAIL(right_resolver.cte_ctx_.cte_col_names_.push_back(
-              right_resolver.saved_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to right resolver
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pass cte column name to child resolver failed");
-      }
-      if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(
-              right_resolver.saved_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to parent resolver
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pass cte column name to child resolver failed");
+  if (OB_SUCC(ret)) {
+    if (!params_.has_cte_param_list_ && right_resolver.saved_left_resolver != NULL &&
+        !right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.empty()) {
+      right_resolver.cte_ctx_.cte_col_names_.reset();
+      cte_ctx_.cte_col_names_.reset();
+      for (int64_t i = 0; OB_SUCC(ret) && i < right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.count(); ++i) {
+        if (OB_FAIL(right_resolver.cte_ctx_.cte_col_names_.push_back(
+                right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to right resolver
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pass cte column name to child resolver failed");
+        }
+        if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(
+                right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to parent resolver
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pass cte column name to child resolver failed");
+        }
       }
     }
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FALSE_IT(right_resolver.cte_ctx_.set_recursive_right_branch(//here second
+  } else if (OB_FALSE_IT(right_resolver.cte_ctx_.set_recursive_right_branch(
                  left_select_stmt, parse_tree.children_[left_member], !select_stmt->is_set_distinct()))) {
   } else if (OB_FAIL(right_resolver.resolve_child_stmt(*parse_tree.children_[right_member]))) {
     LOG_WARN("failed to resolve child stmt", K(ret));
@@ -1539,7 +1541,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode& node)
     }
 
     // add for cte:
-    if (!params_.has_cte_param_list_) {
+    if (OB_SUCC(ret) && !params_.has_cte_param_list_) {
       if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(select_item.alias_name_))) {
         LOG_WARN("push back column alia name failed", K(ret));
       }
@@ -3013,7 +3015,7 @@ int ObSelectResolver::add_fake_schema(ObSelectStmt* left_stmt)
             ObColumnRefRawExpr* select_expr = static_cast<ObColumnRefRawExpr*>(expr);
             ObColumnSchemaV2* new_col = static_cast<ObColumnSchemaV2*>(allocator_->alloc(sizeof(ObColumnSchemaV2)));
             new_col = new (new_col) ObColumnSchemaV2(allocator_);
-            new_col->set_column_name(saved_resolver->cte_ctx_.cte_col_names_.at(i));
+            new_col->set_column_name(saved_left_resolver->cte_ctx_.cte_col_names_.at(i));
             new_col->set_tenant_id(tbl_schema->get_tenant_id());
             new_col->set_table_id(magic_table_id);
             new_col->set_column_id(magic_col_id + i);
@@ -5467,16 +5469,17 @@ int ObSelectResolver::identify_anchor_member(
 
   OC((add_cte_table_to_children)(identify_anchor_resolver));
 
-  identify_anchor_resolver.cte_ctx_.set_recursive_left_branch();  // here first
+  identify_anchor_resolver.cte_ctx_.set_recursive_left_branch();
 
   if (OB_FAIL(identify_anchor_resolver.resolve_child_stmt(parse_tree))) {
     if (OB_ERR_NEED_INIT_BRANCH_IN_RECURSIVE_CTE == ret) {
       need_swap_childa = true;
-      if (is_oracle_mode())
+      if (is_oracle_mode()){
         ret = OB_SUCCESS;
-      else if (params_.has_recursive_word)
+      } else if (params_.has_recursive_word) {
         ret = OB_ERR_CTE_NEED_QUERY_BLOCKS;  // mysql error: Recursive Common Table Expression 'cte' should have one or
                                              // more non-recursive query blocks followed by one or more recursive ones
+      }
     } else {
       LOG_WARN("Failed to find anchor member", K(ret));
     }
