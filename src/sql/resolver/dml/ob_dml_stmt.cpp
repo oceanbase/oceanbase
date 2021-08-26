@@ -3702,7 +3702,6 @@ int ObDMLStmt::copy_query_hint(ObDMLStmt* from, ObDMLStmt* to)
     LOG_WARN("get null stmt", K(ret), K(from), K(to));
   } else {
     to->get_stmt_hint().frozen_version_ = from->get_stmt_hint().frozen_version_;
-    to->get_stmt_hint().topk_precision_ = from->get_stmt_hint().topk_precision_;
     to->get_stmt_hint().use_jit_policy_ = from->get_stmt_hint().use_jit_policy_;
     to->get_stmt_hint().force_trace_log_ = from->get_stmt_hint().force_trace_log_;
     to->get_stmt_hint().read_consistency_ = from->get_stmt_hint().read_consistency_;

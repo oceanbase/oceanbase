@@ -2261,11 +2261,12 @@ int ObSelectLogPlan::candi_allocate_late_materialization()
   } else {
     bool use_late_mat = false;
     ObLogicalOperator* best_plan = NULL;
-    ObLogTableScan* index_scan = NULL;
+    ObLogTableScan* best_index_scan = NULL;
     TableItem* nl_table_item = NULL;
     ObLogTableScan* nl_table_get = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
       bool need = false;
+      ObLogTableScan* index_scan = NULL;
       CandidatePlan& plain_plan = candidates_.candidate_plans_.at(i);
       if (OB_FAIL(if_plan_need_late_materialization(plain_plan.plan_tree_, index_scan, need))) {
         LOG_WARN("failed to check if need late materialization", K(ret));
@@ -2288,6 +2289,7 @@ int ObSelectLogPlan::candi_allocate_late_materialization()
       } else if (NULL == best_plan || plain_plan.plan_tree_->get_cost() < best_plan->get_cost()) {
         best_plan = plain_plan.plan_tree_;
         use_late_mat = need;
+        best_index_scan = index_scan;
       } else { /*do nothing*/
       }
     }
@@ -2300,7 +2302,8 @@ int ObSelectLogPlan::candi_allocate_late_materialization()
         if (OB_FAIL(candidates_.candidate_plans_.push_back(CandidatePlan(best_plan)))) {
           LOG_WARN("failed to push back candidate plan", K(ret));
         } else if (use_late_mat && !get_optimizer_context().is_cost_evaluation() &&
-                   OB_FAIL(adjust_late_materialization_structure(best_plan, index_scan, nl_table_get, nl_table_item))) {
+                   OB_FAIL(adjust_late_materialization_structure(
+                       best_plan, best_index_scan, nl_table_get, nl_table_item))) {
           LOG_WARN("failed to adjust late materialization stmt", K(ret));
         } else {
           candidates_.plain_plan_.first = best_plan->get_cost();
