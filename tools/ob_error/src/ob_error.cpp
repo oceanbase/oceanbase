@@ -156,6 +156,12 @@ void ObErrorInfoMgr::print_oracle_error()
   }
 }
 
+static bool is_special_oracle_error_compatible(int ob_error_code) {
+  // These three errors have no argument in Oracle error msg
+  return OB_AUTOINC_SERVICE_BUSY == ob_error_code || OB_ROWID_TYPE_MISMATCH == ob_error_code ||
+            OB_ROWID_NUM_MISMATCH == ob_error_code;
+}
+
 bool ObErrorInfoMgr::insert_ob_error(
     const char* name, const char* msg, const char* cause, const char* solution, int error_code)
 {
@@ -190,6 +196,40 @@ void ObErrorInfoMgr::print_ob_error()
         ob_error_[i].error_msg_,
         ob_error_[i].cause_,
         ob_error_[i].solution_);
+    static const char* compatiable_header = "Compatible Error Code:";
+    bool is_compat_header_printed = false;
+    int ob_error_code = -ob_error_[i].error_code_;
+    int mysql_errno = ob_mysql_errno(ob_error_code);
+    if (-1 != mysql_errno) {
+      const char *sqlstate = ob_sqlstate(ob_error_code);
+      printf("\t%s\n", compatiable_header);
+      is_compat_header_printed = true;
+      printf("\t\tMySQL: %d(%s)\n", mysql_errno, sqlstate);
+    }
+    bool need_oracle_print = false;
+    int oracle_errno = ob_errpkt_errno(ob_error_code, true);
+    if (oracle_errno != -ob_error_code) {
+      if (ORACLE_SPECIAL_ERROR_CODE == oracle_errno) {
+        // Compatible error for ORA-00600
+        if (is_special_oracle_error_compatible(ob_error_code)) {
+          need_oracle_print = true;
+        }
+      } else {
+        need_oracle_print = true;
+      }
+      if (need_oracle_print) {
+        const char *oracle_err_msg = ob_errpkt_strerror(ob_error_code, true);
+        if (nullptr != oracle_err_msg) {
+          if (false == is_compat_header_printed) {
+            printf("\t%s\n", compatiable_header);
+            is_compat_header_printed = true;
+          }
+          char oracle_error_code[ORACLE_MSG_PREFIX] = {0};
+          strncpy(oracle_error_code, oracle_err_msg, ORACLE_MSG_PREFIX-2);
+          printf("\t\tOracle: %s\n", oracle_error_code);
+        }
+      }
+    }
   }
 }
 //////////////////////////////////////////////////////////////
@@ -630,8 +670,7 @@ static bool insert_oracle_error_slot_ora(int err_map[][OB_MAX_SAME_ERROR_COUNT],
       if (-1 == err_map[error_code][k]) {
         if (ORACLE_SPECIAL_ERROR_CODE == error_code) {
           // Compatible error for ORA-00600
-          if (OB_AUTOINC_SERVICE_BUSY == -ob_error || OB_ROWID_TYPE_MISMATCH == -ob_error ||
-              OB_ROWID_NUM_MISMATCH == -ob_error) {
+          if (is_special_oracle_error_compatible(-ob_error)) {
             err_map[error_code][k] = ob_error;
           }
         } else {

@@ -47,6 +47,8 @@ OceanBase:
 	Message: Conflicting declarations
 	Cause: Internal Error
 	Solution: Contact OceanBase Support
+	Compatible Error Code:
+		MySQL: 1302(42000)
 $ob_error 4001
 
 OceanBase:
@@ -123,6 +125,43 @@ MySQL:
 		OB_INVALID_ARGUMENT(-4002)
 		OB_MISS_ARGUMENT(-4277)
 		INCORRECT_ARGUMENTS_TO_ESCAPE(-5832)
+$ob_error 5794
+
+OceanBase:
+	OceanBase Error Code: OB_AUTOINC_SERVICE_BUSY(-5794)
+	Message: auto increment service busy
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+	Compatible Error Code:
+		Oracle: ORA-00600
+$ob_error 5870
+
+OceanBase:
+	OceanBase Error Code: OB_ROWID_TYPE_MISMATCH(-5870)
+	Message: rowid type mismatch
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+	Compatible Error Code:
+		Oracle: ORA-00600
+$ob_error 5871
+
+OceanBase:
+	OceanBase Error Code: OB_ROWID_NUM_MISMATCH(-5871)
+	Message: rowid num mismatch
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+	Compatible Error Code:
+		Oracle: ORA-00600
+$ob_error 4228
+
+OceanBase:
+	OceanBase Error Code: OB_ERR_FIELD_SPECIFIED_TWICE(-4228)
+	Message: Column specified twice
+	Cause: Internal Error
+	Solution: Contact OceanBase Support
+	Compatible Error Code:
+		MySQL: 1110(42000)
+		Oracle: ORA-00957
 $ob_error 700 -a 1000
 error: '-a ARG' is unsupport in this scene
 Use 'ob_error ora 600 -a ARG'.
@@ -179,6 +218,8 @@ OceanBase:
 	Message: Conflicting declarations
 	Cause: Internal Error
 	Solution: Contact OceanBase Support
+	Compatible Error Code:
+		MySQL: 1302(42000)
 
 Oracle:
 	Oracle Error Code: ORA-00600
