@@ -1264,19 +1264,18 @@ int ObCSVParser::next_line(bool& yield_line)
   bool yield = false;
   int with_back_slash = 0;
 
-  for (; !yield && cur_pos_ != buf_end_pos_; ++cur_pos_, ++cur_field_end_pos_) {
+  for (; !yield && cur_pos_ < buf_end_pos_; ++cur_pos_, ++cur_field_end_pos_) {
     bool line_term_matched = false;
     if (*cur_pos_ == formats_.enclose_char_ && !in_enclose_flag_ && cur_pos_ == cur_field_begin_pos_) {
       in_enclose_flag_ = true;
       last_end_enclosed_ = NULL;
-    } else if ((*cur_pos_ == formats_.escape_char_ && formats_.escape_char_ != formats_.enclose_char_) ||
-               (in_enclose_flag_ && formats_.enclose_char_ == *cur_pos_ && cur_pos_ < buf_end_pos_ &&
-                   formats_.enclose_char_ == *(cur_pos_ + 1))) {
-      if (cur_pos_ < buf_end_pos_) {
-        cur_pos_++;
-        if (!is_fast_parse_) {
-          *cur_field_end_pos_ = escaped_char(*cur_pos_, &with_back_slash);
-        }
+    } else if (cur_pos_ + 1 < buf_end_pos_ &&
+               ((*cur_pos_ == formats_.escape_char_ && formats_.escape_char_ != formats_.enclose_char_) ||
+                   (in_enclose_flag_ && formats_.enclose_char_ == *cur_pos_ &&
+                       formats_.enclose_char_ == *(cur_pos_ + 1)))) {
+      cur_pos_++;
+      if (!is_fast_parse_) {
+        *cur_field_end_pos_ = escaped_char(*cur_pos_, &with_back_slash);
       }
     } else {
       if (cur_field_end_pos_ != cur_pos_ && !is_fast_parse_) {
@@ -1369,19 +1368,16 @@ int ObCSVParser::fast_parse_lines(
   if (OB_UNLIKELY(!buffer.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
   } else if (formats.is_simple_format_) {
-    char* cur_pos = buffer.begin_ptr();
-    bool in_escaped = false;
-    for (char* p = buffer.begin_ptr(); p != buffer.current_ptr(); ++p) {
+    char *cur_pos = buffer.begin_ptr();
+    for (char *p = buffer.begin_ptr(); p < buffer.current_ptr(); ++p) {
       char cur_char = *p;
-      if (!in_escaped) {
-        if (formats.enclose_char_ == cur_char) {
-          in_escaped = true;
-        } else if (formats.line_term_char_ == cur_char) {
-          cur_lines++;
-          cur_pos = p + 1;
-          if (cur_lines >= line_count) {
-            break;
-          }
+      if (formats.escape_char_ == cur_char && p + 1 < buffer.current_ptr()) {
+        p++;
+      } else if (formats.line_term_char_ == cur_char) {
+        cur_lines++;
+        cur_pos = p + 1;
+        if (cur_lines >= line_count) {
+          break;
         }
       }
     }
