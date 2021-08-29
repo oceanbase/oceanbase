@@ -1203,17 +1203,7 @@ int ObLogSet::allocate_granule_post(AllocGIContext& ctx)
       LOG_WARN("set granule nodes affinity failed", K(ret));
     }
     LOG_TRACE("set right child gi to affinity");
-  } else if (DIST_PULL_TO_LOCAL == set_dist_algo_) {
-    ObLogicalOperator* op = NULL;
-    if (OB_FAIL(get_child(second_child)->find_first_recursive(LOG_GRANULE_ITERATOR, op))) {
-      LOG_WARN("find granule iterator in right failed", K(ret));
-    } else if (NULL == op) {
-      // granule iterator not found, do nothing
-    } else {
-      static_cast<ObLogGranuleIterator*>(op)->add_flag(GI_ACCESS_ALL);
-    }
-  } else { /*do nothing*/
-  }
+  } else { /*do nothing*/ }
 
   return ret;
 }

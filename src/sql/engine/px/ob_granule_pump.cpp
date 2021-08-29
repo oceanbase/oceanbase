@@ -261,7 +261,7 @@ int ObGranulePump::try_fetch_pwj_tasks(
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected type", K(ret));
+        LOG_WARN("unexpected type", K(ret), K(splitter_type_));
     }
   }
   return ret;
@@ -300,7 +300,7 @@ int ObGranulePump::fetch_granule_task(
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected type", K(ret));
+        LOG_WARN("unexpected type", K(ret), K(splitter_type_));
     }
   }
   return ret;
