@@ -2149,12 +2149,6 @@ void ObTransCtxMgrImpl::destroy()
 {
   int tmp_ret = OB_SUCCESS;
 
-  if (OB_SUCCESS != (tmp_ret = remove_all_partition())) {
-    TRANS_LOG(WARN, "remove all partition error", K(tmp_ret));
-  }
-  ctx_type_ = ObTransCtxType::UNKNOWN;
-  partition_ctx_map_.destroy();
-  mgr_cache_.destroy();
   if (OB_NOT_NULL(ctx_map_)) {
     for (int64_t i = 0; i < CONTEXT_MAP_COUNT; ++i) {
       ctx_map_[i].destroy();
@@ -2162,6 +2156,13 @@ void ObTransCtxMgrImpl::destroy()
     ob_free(ctx_map_);
     ctx_map_ = nullptr;
   }
+
+  if (OB_SUCCESS != (tmp_ret = remove_all_partition())) {
+    TRANS_LOG(WARN, "remove all partition error", K(tmp_ret));
+  }
+  ctx_type_ = ObTransCtxType::UNKNOWN;
+  partition_ctx_map_.destroy();
+  mgr_cache_.destroy();
 }
 
 int ObTransCtxMgrImpl::init(const int64_t ctx_type, ObITsMgr* ts_mgr, storage::ObPartitionService* partition_service)
