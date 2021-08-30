@@ -305,6 +305,7 @@ void ObTableLookupOp::reset()
 int ObTableLookupOp::get_store_next_row()
 {
   int ret = OB_SUCCESS;
+  clear_evaluated_flag();
   if (OB_FAIL(result_iter_.get_next_row_skip_const(eval_ctx_, MY_SPEC.remote_tsc_spec_->output_))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get next row", K(ret));
