@@ -28,7 +28,6 @@ class ObDatabaseSchema;
 }  // namespace share
 
 namespace observer {
-static const int32_t TABLE_CONSTRAINT_COLUMN_COUNT = 6;
 static const common::ObString PRIMARY_KEY_CONSTRAINT_TYPE = "PRIMARY KEY";
 static const common::ObString PRIMARY_KEY_CONSTRAINT_NAME = "PRIMARY";
 static const common::ObString UNIQUE_CONSTRAINT_TYPE = "UNIQUE";
@@ -71,9 +70,10 @@ private:
     TABLE_SCHEMA,
     TABLE_NAME,
     CONSTRAINT_TYPE,
+    ENFORCED,
     MAX_TABLE_CONSTRAINTS_COLUMN
   };
-  static const int64_t TABLE_CONSTRAINTS_COLUMN_COUNT = 6;
+  static const int64_t TABLE_CONSTRAINTS_COLUMN_COUNT = 7;
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaTableConstraintsTable);
 };
 

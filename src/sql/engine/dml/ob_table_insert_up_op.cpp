@@ -67,7 +67,7 @@ int ObTableInsertUpOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
       OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, cst_end_idx));
       if (OB_SUCC(ret)) {
         if (is_filtered) {
-          if (share::is_mysql_mode() && dml_param_.is_ignore_) {
+          if (dml_param_.is_ignore_) {
             ret = OB_ITER_END; // skip this row
           } else {
             ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
@@ -194,7 +194,7 @@ int ObTableInsertUpOp::do_table_insert_up()
       } else if (OB_FAIL(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, cst_end_idx))) {
         LOG_WARN("filter row for check cst failed", K(ret));
       } else if (is_filtered) {
-        if (share::is_mysql_mode() && dml_param_.is_ignore_) {
+        if (dml_param_.is_ignore_) {
           // skip this row
         } else {
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
@@ -330,20 +330,24 @@ int ObTableInsertUpOp::process_on_duplicate_update(ObNewRowIterator* duplicated_
     LOG_WARN("fail to calc rows for update", K(ret));
   }
   // update
+  bool is_filtered = false;
   if (OB_SUCC(ret) && is_row_changed) {//deal with check constraint
-    bool is_filtered = false;
     clear_evaluated_flag();
     int64_t cst_beg_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
     int64_t cst_end_idx = MY_SPEC.check_constraint_exprs_.count();
     if (OB_FAIL(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, cst_beg_idx, cst_end_idx))) {
       LOG_WARN("filter row for check cst failed", K(ret));
     } else if (is_filtered) {
-      if (share::is_mysql_mode() && dml_param_.is_ignore_) {
-        is_row_changed = false; // skip this row
+      if (dml_param_.is_ignore_) {
+        //skip row
+        is_row_changed = false;
+        update_count++;
       } else {
         ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
         LOG_WARN("row is filtered by check filters, running is stopped");
       }
+    } else {
+      //do nothing
     }
   }
   if (OB_SUCC(ret)) {
@@ -354,19 +358,20 @@ int ObTableInsertUpOp::process_on_duplicate_update(ObNewRowIterator* duplicated_
       if (OB_FAIL(dml_row_iter.init())) {
         LOG_WARN("init dml row iterator failed", K(ret));
       } else if (OB_FAIL(partition_service->update_rows(my_session->get_trans_desc(),
-                     dml_param,
-                     scan_param.pkey_,
-                     MY_SPEC.update_related_column_ids_,
-                     MY_SPEC.updated_column_ids_,
-                     &dml_row_iter,
-                     cur_affected))) {
+                    dml_param,
+                    scan_param.pkey_,
+                    MY_SPEC.update_related_column_ids_,
+                    MY_SPEC.updated_column_ids_,
+                    &dml_row_iter,
+                    cur_affected))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
           LOG_WARN("update rows to partition storage failed",
               K(ret),
               K(MY_SPEC.update_related_column_ids_),
               K(MY_SPEC.updated_column_ids_));
         }
-      } else {
+      }
+      if (OB_SUCC(ret)) {
         NG_TRACE_TIMES(2, insertup_end_update_row);
         // The affected-rows value per row is 1 if the row is inserted as a new row,
         // 2 if an existing row is updated, and 0 if an existing row is set to its current values

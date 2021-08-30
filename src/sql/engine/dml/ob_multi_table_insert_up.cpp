@@ -184,6 +184,7 @@ int ObMultiTableInsertUp::shuffle_insert_up_row(ObExecContext& ctx, bool& got_ro
     // insert into on duplicate key update only randomly updates one duplicated row at a time
     ObSEArray<ObConstraintValue, 1> constraint_values;
     ObRowStore::Iterator replace_row_iter = insert_up_ctx->replace_row_store_.begin();
+    bool is_filtered = false;
     while (OB_SUCC(ret) && OB_SUCC(replace_row_iter.get_next_row(insert_up_row, NULL))) {
       got_row = true;
       constraint_values.reuse();
@@ -195,6 +196,15 @@ int ObMultiTableInsertUp::shuffle_insert_up_row(ObExecContext& ctx, bool& got_ro
         OZ(ob_create_row(ctx.get_allocator(), column_ids_.count(), projected_row));
         OZ(ob_write_row_by_projector(ctx.get_allocator(), *cur_row, *projected_row));
       }
+      // check if constraint violate before insert
+      if (OB_SUCC(ret) && OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
+        insert_up_ctx->expr_ctx_, GET_VAL_BY_VERSION(*projected_row, *insert_up_row), check_constraint_exprs_, is_filtered, check_constraint_exprs_.get_size()/2, check_constraint_exprs_.get_size()))) {
+        LOG_WARN("fail to handle check constraint", K(ret));
+      } else if (is_filtered) {
+        ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+        LOG_WARN("row is filtered by check filters, running is stopped");
+      }
+      // check if duplicate
       OZ(duplicate_key_checker_.check_duplicate_rowkey(
           insert_up_ctx->dupkey_checker_ctx_, GET_VAL_BY_VERSION(*projected_row, *insert_up_row), constraint_values));
       if (OB_SUCC(ret)) {
@@ -257,16 +267,7 @@ int ObMultiTableInsertUp::shuffle_final_insert_row(ObExecContext& ctx, const ObN
   CK(OB_NOT_NULL(replace_ctx = GET_PHY_OPERATOR_CTX(ObMultiTableInsertUpCtx, ctx, get_id())));
   OZ(ForeignKeyHandle::do_handle_new_row(
       table_dml_infos_.at(0).index_infos_.at(0).dml_subplans_.at(INSERT_OP).subplan_root_, *replace_ctx, insert_row));
-  bool is_filtered = false;
-  if (OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
-    replace_ctx->expr_ctx_, insert_row, check_constraint_exprs_, is_filtered))) {
-    LOG_WARN("fail to handle check constraint", K(ret), K(insert_row));
-  } else if (is_filtered) {
-    ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-    LOG_WARN("row is filtered by check filters, running is stopped");
-  } else {
-    OZ(shuffle_dml_row(ctx, *schema_guard, *replace_ctx, insert_row, INSERT_OP));
-  }
+  OZ(shuffle_dml_row(ctx, *schema_guard, *replace_ctx, insert_row, INSERT_OP));
   return ret;
 }
 
@@ -279,13 +280,7 @@ int ObMultiTableInsertUp::shuffle_insert_row(
   OZ(ForeignKeyHandle::do_handle_new_row(
       table_dml_infos_.at(0).index_infos_.at(0).dml_subplans_.at(INSERT_OP).subplan_root_, insert_up_ctx, row));
   bool is_filtered = false;
-  if (OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
-    insert_up_ctx.expr_ctx_, row, check_constraint_exprs_, is_filtered))) {
-    LOG_WARN("fail to handle check constraint", K(ret), K(row));
-  } else if (is_filtered) {
-    ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-    LOG_WARN("row is filtered by check filters, running is stopped");
-  } else {
+  if (OB_SUCC(ret)) {
     ++insert_up_ctx.affected_rows_;
     OZ(duplicate_key_checker_.insert_new_row(insert_up_ctx.dupkey_checker_ctx_, row));
     OZ(shuffle_dml_row(ctx, part_mgr, insert_up_ctx, row, INSERT_OP));
@@ -325,7 +320,7 @@ int ObMultiTableInsertUp::shuffle_update_row(ObExecContext& ctx, ObPartMgr& part
   }
   bool is_filtered = false;
   if (is_row_changed && OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
-    insert_up_ctx.expr_ctx_, tmp_new_row, check_constraint_exprs_, is_filtered))) {
+    insert_up_ctx.expr_ctx_, tmp_new_row, check_constraint_exprs_, is_filtered, 0, check_constraint_exprs_.get_size()/2))) {
     LOG_WARN("fail to handle check constraint", K(ret), K(tmp_new_row));
   } else if (is_filtered) {
     ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;

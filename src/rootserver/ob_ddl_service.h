@@ -259,7 +259,13 @@ public:
       const obrpc::ObCreateForeignKeyArg& foreign_key_arg, share::schema::ObForeignKeyInfo& foreign_key_info);
   int check_constraint_name_is_exist(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTableSchema& table_schema, const common::ObString& constraint_name,
-      bool check_constraint, bool check_foreign_key, bool& is_constraint_name_exist);
+      bool& is_constraint_name_exist);
+  int check_ck_constraint_name_is_exist(share::schema::ObSchemaGetterGuard& schema_guard,
+      const share::schema::ObTableSchema& table_schema, const common::ObString& constraint_name,
+      bool& is_constraint_name_exist);
+  int check_fk_constraint_name_is_exist(share::schema::ObSchemaGetterGuard& schema_guard,
+      const share::schema::ObTableSchema& table_schema, const common::ObString& constraint_name,
+      bool& is_constraint_name_exist);
   virtual int rename_table(const obrpc::ObRenameTableArg& rename_table_arg);
   int collect_temporary_tables_in_session(const obrpc::ObDropTableArg& drop_table_arg);
   int need_collect_current_temp_table(share::schema::ObSchemaGetterGuard& schema_guard,

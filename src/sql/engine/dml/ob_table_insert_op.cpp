@@ -222,10 +222,10 @@ int ObTableInsertOp::inner_get_next_row()
   return ret;
 }
 
-OB_INLINE int ObTableInsertOp::process_row(bool &is_ignored)
+OB_INLINE int ObTableInsertOp::process_row(bool &is_filtered)
 {
   int ret = OB_SUCCESS;
-  is_ignored = false;
+  is_filtered = false;
   // check insert value
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.storage_row_output_.count(); i++) {
     ObExpr* expr = MY_SPEC.storage_row_output_.at(i);
@@ -244,13 +244,7 @@ OB_INLINE int ObTableInsertOp::process_row(bool &is_ignored)
       (PHY_INSERT == MY_SPEC.type_ || PHY_INSERT_RETURNING == MY_SPEC.type_)) {
     OZ(check_row_null(MY_SPEC.storage_row_output_, MY_SPEC.column_infos_));
     OZ(ForeignKeyHandle::do_handle_new_row(*this, MY_SPEC.fk_args_, MY_SPEC.storage_row_output_));
-    bool is_filtered = false;
     OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered));
-    if (MY_SPEC.is_ignore_ && is_filtered && share::is_mysql_mode()) {
-      is_ignored = true;
-    } else {
-      OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
-    }
   }
   return ret;
 }
@@ -258,9 +252,9 @@ OB_INLINE int ObTableInsertOp::process_row(bool &is_ignored)
 int ObTableInsertOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
 {
   int ret = OB_SUCCESS;
-  bool is_ignored = true;
+  bool is_filtered = true;
   output = nullptr;
-  while (OB_SUCC(ret) && is_ignored) {
+  while (OB_SUCC(ret) && is_filtered) {
     if (OB_FAIL(try_check_status())) {
       LOG_WARN("check status failed", K(ret));
     } else if (OB_FAIL(inner_get_next_row())) {
@@ -269,10 +263,15 @@ int ObTableInsertOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
       } else {
         LOG_WARN("fail to get next row", K(ret));
       }
-    } else if (OB_FAIL(process_row(is_ignored))) {
+    } else if (OB_FAIL(process_row(is_filtered))) {
       LOG_WARN("fail to process row", K(ret));
-    } else if (is_ignored) {
-       /*skip row*/
+    } else if (is_filtered) {
+      if (MY_SPEC.is_ignore_ && is_filtered && share::is_mysql_mode()) {
+        /*insert ignore, skip row*/
+      } else {
+        ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+        LOG_WARN("check constraint violated", K(ret));
+      }
     } else {
       output = &MY_SPEC.storage_row_output_;
       LOG_DEBUG("insert output row",

@@ -343,14 +343,14 @@ int ObTableInsertUp::get_next_row(ObExecContext& ctx, const ObNewRow*& row) cons
       } else if (OB_FAIL(ForeignKeyHandle::do_handle(*update_ctx, fk_args_, old_row, *row))) {
         LOG_WARN("failed to handle foreign key", K(ret), K(old_row), K(*row));
       } else if (OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
-        update_ctx->expr_ctx_, *row, check_constraint_exprs_, is_filtered))) {
+        update_ctx->expr_ctx_, *row, check_constraint_exprs_, is_filtered, 0, check_constraint_exprs_.get_size()/2))) {
         LOG_WARN("failed to handle check constraint", K(ret), K(old_row), K(*row));
       } else if (is_filtered) {
-        if (share::is_mysql_mode() && update_ctx->dml_param_.is_ignore_) {
+        if (update_ctx->dml_param_.is_ignore_) {
           ret = OB_ITER_END; //ignore flag ,skip this row
         } else {
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-          LOG_WARN("row is filtered by check filters, running is stopped");
+          LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
         }
       }
     } else {
@@ -468,14 +468,14 @@ int ObTableInsertUp::do_table_insert_up(ObExecContext& ctx) const
       } else if (OB_FAIL(ForeignKeyHandle::do_handle_new_row(*insert_update_ctx, fk_args_, *insert_row))) {
         LOG_WARN("fail to handle foreign key", K(ret), K(*insert_row));
       } else if (OB_FAIL(ObPhyOperator::filter_row_for_check_cst(
-        insert_update_ctx->expr_ctx_, *insert_row, check_constraint_exprs_, is_filtered))) {
+        insert_update_ctx->expr_ctx_, *insert_row, check_constraint_exprs_, is_filtered, check_constraint_exprs_.get_size()/2,  check_constraint_exprs_.get_size()))) {
         LOG_WARN("fail to handle check constraint", K(ret), K(*insert_row));
       } else if (is_filtered) {
-        if (share::is_mysql_mode() && insert_update_ctx->dml_param_.is_ignore_) {
+        if (insert_update_ctx->dml_param_.is_ignore_) {
           //ignore flag ,skip this row
         } else {
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-          LOG_WARN("row is filtered by check filters, running is stopped");
+          LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
         }
       } else {
         insert_update_ctx->found_rows_++;
@@ -713,7 +713,7 @@ int ObTableInsertUp::process_on_duplicate_update(ObExecContext& ctx, ObNewRowIte
           LOG_WARN(
               "update rows to partition storage failed", K(ret), K(update_related_column_ids_), K(updated_column_ids_));
         }
-      } else {
+      } else if (cur_affected == 1) {
         NG_TRACE_TIMES(2, insertup_end_update_row);
         // The affected-rows value per row is 1 if the row is inserted as a new row,
         // 2 if an existing row is updated, and 0 if an existing row is set to its current values

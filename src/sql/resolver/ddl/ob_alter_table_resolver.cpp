@@ -330,7 +330,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
             bool temp_is_modify_column_visibility = false;
             bool is_drop_column = false;
             if (OB_FAIL(
-                    resolve_column_options(*action_node, temp_is_modify_column_visibility, is_drop_column, reduced_visible_col_set))) {
+                    resolve_column_options(*action_node, temp_is_modify_column_visibility, reduced_visible_col_set, is_drop_column))) {
               SQL_RESV_LOG(WARN, "Resolve column option failed!", K(ret));
             } else {
               if (temp_is_modify_column_visibility) {
@@ -386,12 +386,12 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
             }
             break;
           }
-          case T_DROP_CONSTRAINT: {
+          case T_DROP_CONSTRAINT: { //drop check constraint/foreign key/index in oracle mode, drop check constraint/foreign key in mysql mode
             ObString constraint_name;
             uint64_t constraint_id = OB_INVALID_ID;
             bool is_constraint = false;
             bool is_foreign_key = false;
-            bool is_index = false;
+            bool is_unique_key = false;
             ObSchemaGetterGuard* schema_guard = schema_checker_->get_schema_guard();
 
             if (OB_ISNULL(action_node->children_[0])) {
@@ -475,7 +475,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
                       K(table_schema_->get_database_id()),
                       K(unique_index_name_with_prefix));
                 } else if (OB_NOT_NULL(simple_table_schema) && simple_table_schema->is_unique_index()) {
-                  is_index = true;
+                  is_unique_key = true;
                 }
               }
             }
@@ -489,7 +489,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
                 if (OB_FAIL(resolve_foreign_key_options(*action_node))) {
                   SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
                 }
-              } else if (is_index) {
+              } else if (is_unique_key) {
                 action_node->type_ = T_INDEX_DROP;
                 alter_table_stmt->set_alter_table_index();
                 if (OB_FAIL(resolve_drop_index(*action_node))) {
@@ -612,7 +612,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
 }
 
 int ObAlterTableResolver::resolve_column_options(
-    const ParseNode& node, bool& is_modify_column_visibility, bool& is_drop_column, ObReducedVisibleColSet& reduced_visible_col_set)
+    const ParseNode& node, bool& is_modify_column_visibility, ObReducedVisibleColSet& reduced_visible_col_set, bool& is_drop_column)
 {
   int ret = OB_SUCCESS;
 
@@ -2216,6 +2216,15 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode& node)
         }
         break;
       }
+      case T_CHECK_CONSTRAINT: {
+        if (share::is_oracle_mode()) {
+          const ParseNode* check_cst_node = node.children_[0];
+          if (OB_FAIL(resolve_constraint_options(*check_cst_node))) {
+            SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
+          }
+        }
+        break;
+      }
       case T_FOREIGN_KEY: {
         ObCreateForeignKeyArg foreign_key_arg;
         ParseNode* foreign_key_action_node = node.children_[0];
@@ -2230,16 +2239,7 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode& node)
         }
         break;
       }
-      case T_CHECK_CONSTRAINT:
       case T_MODIFY_CONSTRAINT_OPTION: {
-        if (share::is_oracle_mode() && T_CHECK_CONSTRAINT == node.children_[0]->type_) {
-          const ParseNode* check_cst_node = node.children_[0];
-          if (OB_FAIL(resolve_constraint_options(*check_cst_node))) {
-            SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
-          }
-          break;
-        } else { /*do nothing*/
-        }
         ObSchemaGetterGuard* schema_guard = schema_checker_->get_schema_guard();
         ParseNode* cons_state_node = node.children_[0];
         ParseNode* constraint_name_node = NULL;
@@ -2257,30 +2257,9 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode& node)
         }
         if (OB_FAIL(ret)) {
         } else if (share::is_mysql_mode()) {
-          bool is_constraint = false;
-          if (!table_schema_->is_tmp_table() && OB_FAIL(schema_guard->get_constraint_id(table_schema_->get_tenant_id(),
-                table_schema_->get_database_id(),
-                constraint_name,
-                constraint_id))) { //non-tmp_table
-            LOG_WARN("get constraint id failed",
-                K(ret),
-                K(table_schema_->get_tenant_id()),
-                K(table_schema_->get_database_id()),
-                K(constraint_name));
-          } else if (OB_INVALID_ID != constraint_id) {
-            is_constraint = true;
-          } else if (table_schema_->is_tmp_table()) { //tmp_table
-            ObTableSchema::const_constraint_iterator iter = table_schema_->constraint_begin();
-            for (; OB_SUCC(ret) && iter != table_schema_->constraint_end(); ++iter) {
-              if (0 == constraint_name.case_compare((*iter)->get_constraint_name_str())) {
-                is_constraint = true;
-                break;
-              }
-            }
-          }
-          //check foreign key with same name
-          if (T_CHECK_CONSTRAINT == node.children_[0]->type_) {
-          } else if (OB_FAIL(schema_guard->get_foreign_key_id(table_schema_->get_tenant_id(),
+          if (cons_state_node->value_ == 0) {
+            //alter constraint, check foreign key with same name
+            if (OB_FAIL(schema_guard->get_foreign_key_id(table_schema_->get_tenant_id(),
                     table_schema_->get_database_id(),
                     constraint_name,
                     constraint_id))) {
@@ -2289,39 +2268,49 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode& node)
                 K(table_schema_->get_tenant_id()),
                 K(table_schema_->get_database_id()),
                 K(constraint_name));
-          } else if (OB_INVALID_ID != constraint_id) {
-            if (is_constraint) {
-              ret = OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME;
-              ObString action("alter");
-              LOG_USER_ERROR(OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME,
-                            constraint_name.length(), constraint_name.ptr(),
-                            action.length(), action.ptr());
-            } else {
-              ret = OB_ERR_ALTER_CONSTRAINT_ENFORCEMENT_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_ERR_ALTER_CONSTRAINT_ENFORCEMENT_NOT_SUPPORTED, constraint_name.length(), constraint_name.ptr());
-              LOG_WARN("alter foreign key is not supported in mysql mode", K(ret), K(constraint_name));
-            }
-          }
-          // resolve check constraint
-          if (OB_SUCC(ret)){
-            if (is_constraint) {
-              if (OB_FAIL(resolve_modify_check_constraint_state_mysql(cons_state_node))) {
-                LOG_WARN("modify check constraint state failed", K(ret));
-              }
-            } else {
-              if (T_MODIFY_CONSTRAINT_OPTION == node.children_[0]->type_) {
-                ret = OB_ERR_NONEXISTENT_CONSTRAINT;
-                LOG_USER_ERROR(OB_ERR_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
+            } else if (OB_INVALID_ID != constraint_id) {
+              // check if check constraint exist
+              bool is_constraint = false;
+              if (!table_schema_->is_tmp_table() && OB_FAIL(schema_guard->get_constraint_id(table_schema_->get_tenant_id(),
+                    table_schema_->get_database_id(),
+                    constraint_name,
+                    constraint_id))) { //non-tmp_table
+                LOG_WARN("get constraint id failed",
+                    K(ret),
+                    K(table_schema_->get_tenant_id()),
+                    K(table_schema_->get_database_id()),
+                    K(constraint_name));
+              } else if (OB_INVALID_ID != constraint_id) {
+                is_constraint = true;
+              } else if (table_schema_->is_tmp_table()) {
+                ObTableSchema::const_constraint_iterator iter = table_schema_->constraint_begin();
+                for (; OB_SUCC(ret) && iter != table_schema_->constraint_end(); ++iter) {
+                  if (0 == constraint_name.case_compare((*iter)->get_constraint_name_str())) {
+                    is_constraint = true;
+                    break;
+                  }
+                }
               } else {
-                ret = OB_ERR_CHECK_CONSTRAINT_NOT_FOUND;
-                LOG_USER_ERROR(OB_ERR_CHECK_CONSTRAINT_NOT_FOUND, constraint_name.length(), constraint_name.ptr());
+                //check cst not exist
               }
-              
-              SQL_RESV_LOG(WARN,
-                  "Cannot modify constraint - nonexistent constraint",
-                  K(ret),
-                  K(constraint_name),
-                  K(table_schema_->get_table_name_str()));
+              if (is_constraint) {
+                ret = OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME;
+                ObString action("alter");
+                LOG_USER_ERROR(OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME,
+                              constraint_name.length(), constraint_name.ptr(),
+                              action.length(), action.ptr());
+              } else {
+                ret = OB_ERR_ALTER_CONSTRAINT_ENFORCEMENT_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_ERR_ALTER_CONSTRAINT_ENFORCEMENT_NOT_SUPPORTED, constraint_name.length(), constraint_name.ptr());
+                LOG_WARN("alter foreign key is not supported in mysql mode", K(ret), K(constraint_name));
+              }
+            }
+          } else {
+            //alter check, do nothing
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(resolve_modify_check_constraint_state_mysql(cons_state_node))) { // alter check constraint state
+              LOG_WARN("modify check constraint state failed", K(ret));
             }
           }
         } else { //oracle mode
@@ -2610,7 +2599,13 @@ int ObAlterTableResolver::resolve_modify_check_constraint_state_mysql(const Pars
     }
     if (OB_FAIL(ret)) {
     } else if (table_schema_->constraint_end() == iter) {
-      ret = OB_ERR_UNEXPECTED;
+      if (node->value_ == 0) {
+        ret = OB_ERR_NONEXISTENT_CONSTRAINT;
+        LOG_USER_ERROR(OB_ERR_NONEXISTENT_CONSTRAINT, cst_name.length(), cst_name.ptr());
+      } else {
+        ret = OB_ERR_CHECK_CONSTRAINT_NOT_FOUND;
+        LOG_USER_ERROR(OB_ERR_CHECK_CONSTRAINT_NOT_FOUND, cst_name.length(), cst_name.ptr());
+      }
       SQL_RESV_LOG(
           WARN, "can't find check constraint in table", K(ret), K(cst_name), K(table_schema_->get_table_name_str()));
     } else if (OB_UNLIKELY(OB_ISNULL(constraint_state))) {
@@ -2627,11 +2622,13 @@ int ObAlterTableResolver::resolve_modify_check_constraint_state_mysql(const Pars
       cst.set_is_modify_validate_flag(true);
       cst.set_validate_flag(false);
     }
-    if (OB_FAIL(alter_table_stmt->get_alter_table_arg().alter_table_schema_.add_constraint(cst))) {
-      SQL_RESV_LOG(WARN, "add constraint failed", K(ret));
-    } else {
-      alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::ALTER_CONSTRAINT_STATE;
-      ++add_or_modify_check_cst_times_;
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(alter_table_stmt->get_alter_table_arg().alter_table_schema_.add_constraint(cst))) {
+        SQL_RESV_LOG(WARN, "add constraint failed", K(ret));
+      } else {
+        alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::ALTER_CONSTRAINT_STATE;
+        ++add_or_modify_check_cst_times_;
+      }
     }
   }
 
@@ -3228,6 +3225,7 @@ int ObAlterTableResolver::resolve_tablegroup_options(const ParseNode& node)
 int ObAlterTableResolver::resolve_foreign_key_options(const ParseNode& node)
 {
   int ret = OB_SUCCESS;
+
   if (share::is_mysql_mode()) {
     ParseNode* foreign_key_action_node = NULL;
     if (T_DROP_CONSTRAINT == node.type_) {
@@ -3259,13 +3257,13 @@ int ObAlterTableResolver::resolve_foreign_key_options(const ParseNode& node)
       }
     }
   } else if (share::is_oracle_mode()) {
-    if (T_DROP_CONSTRAINT == node.type_) { //mysql/oracle mode
+    if (OB_UNLIKELY(T_DROP_CONSTRAINT != node.type_)) {
+       ret = OB_ERR_UNEXPECTED;
+       SQL_RESV_LOG(WARN, "invalid parse tree!", K(node.type_), K(ret));
+    } else {
       if (OB_FAIL(resolve_drop_foreign_key(node))) {
         SQL_RESV_LOG(WARN, "resolve drop foreign key failed", K(ret));
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "invalid parse tree!", K(node.type_), K(ret));
     }
   }
 

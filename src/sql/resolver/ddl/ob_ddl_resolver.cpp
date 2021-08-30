@@ -5039,7 +5039,7 @@ int ObDDLResolver::resolve_check_constraint_node(
           reset_generate_name = false;
         }
         // check length of constraint name
-        if (share::is_oracle_mode() && cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH) {
+        if (share::is_oracle_mode() && cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE) {
           ret = OB_ERR_TOO_LONG_IDENT;
           LOG_WARN("constraint_name length overflow", K(ret), K(cst_name.length()));
         } else if (share::is_mysql_mode() && cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH_MYSQL) {
@@ -5191,7 +5191,7 @@ int ObDDLResolver::resolve_pk_constraint_node(
   }
   if (OB_SUCC(ret)) {
     ObConstraint cst;
-    if (cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH) {
+    if (cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_WARN("constraint_name length overflow", K(ret), K(cst_name.length()));
     } else {

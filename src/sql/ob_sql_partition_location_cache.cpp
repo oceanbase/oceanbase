@@ -325,6 +325,7 @@ ObSqlPartitionLocationCache::LocationDistributedMode ObSqlPartitionLocationCache
     case OB_USER_PRIVILEGES_TID:
     case OB_SCHEMA_PRIVILEGES_TID:
     case OB_TABLE_CONSTRAINTS_TID:
+    case OB_CHECK_CONSTRAINTS_TID:
     case OB_REFERENTIAL_CONSTRAINTS_TID:
     case OB_GLOBAL_STATUS_TID:
     case OB_PARTITIONS_TID:

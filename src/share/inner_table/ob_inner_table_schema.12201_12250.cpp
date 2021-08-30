@@ -2305,6 +2305,128 @@ int ObInnerTableSchema::all_virtual_global_transaction_schema(ObTableSchema &tab
   return ret;
 }
 
+int ObInnerTableSchema::check_constraints_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_INFORMATION_SCHEMA_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CHECK_CONSTRAINTS_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(VIRTUAL_TABLE);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CHECK_CONSTRAINTS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    ObObj constraint_catalog_default;
+    constraint_catalog_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("CONSTRAINT_CATALOG", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      MAX_TABLE_CATALOG_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      constraint_catalog_default,
+      constraint_catalog_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj constraint_schema_default;
+    constraint_schema_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("CONSTRAINT_SCHEMA", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_DATABASE_NAME_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      constraint_schema_default,
+      constraint_schema_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj constraint_name_default;
+    constraint_name_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("CONSTRAINT_NAME", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_COLUMN_NAME_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      constraint_name_default,
+      constraint_name_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj check_clause_default;
+    check_clause_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("CHECK_CLAUSE", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_CONSTRAINT_EXPR_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      check_clause_default,
+      check_clause_default); //default_value
+  }
+  table_schema.set_index_using_type(USING_HASH);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

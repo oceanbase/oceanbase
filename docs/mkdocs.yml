@@ -1181,6 +1181,7 @@ nav:
           - oceanbase.CDB_OB_BACKUP_BACKUPSET_JOB_HISTORY : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/55.oceanbase-cdb_ob_backup_backupset_job_history.md
           - oceanbase.CDB_OB_BACKUP_BACKUPSET_JOB : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/56.oceanbase-cdb_ob_backup_backupset_job.md
           - oceanbase.CDB_OB_BACKUP_SET_OBSOLETE : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/57.oceanbase-cdb_ob_backup_set_obsolete.md
+          - information_schema.CHECK_CONSTRAINTS : docs-cn/13.reference-guide/1.system-view/2.dictionary-view/58.information_schema-check_constraints.md
         - 性能视图:
           - gv$plan_cache_stat : docs-cn/13.reference-guide/1.system-view/3.performance-view/1.gv-plan_cache_stat.md
           - gv$plan_cache_plan_stat : docs-cn/13.reference-guide/1.system-view/3.performance-view/2.gv-plan_cache_plan_stat.md

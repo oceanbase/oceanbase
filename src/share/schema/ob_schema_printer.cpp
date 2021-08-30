@@ -601,7 +601,7 @@ int ObSchemaPrinter::print_table_definition_constraints(
         SHARE_SCHEMA_LOG(WARN, "fail to print constraint", K(ret));
       }
       if (OB_SUCC(ret) && !cst->get_enable_flag()) {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " /*!80016 not enforced */"))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  NOT ENFORCED"))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print constraint not enforced");
         }
       }

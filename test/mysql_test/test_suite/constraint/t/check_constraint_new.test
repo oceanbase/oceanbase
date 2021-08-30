@@ -1,0 +1,1112 @@
+# WL929 - CHECK CONSTRAINTS.                                                   #
+#         Test file has cases to verify check constraint feature, common       #
+#         restrictions and mysql specific restriction on check constraints.    #
+# https://yuque.antfin.com/docs/share/c31d4eb7-6f31-46e8-83a3-0063bc4d71ac?# 《Mysql Check约束调研》
+# https://yuque.antfin.com/docs/share/bd68f0dd-be55-4fbc-bfee-d7f9097e1897?# 《mysql模式check约束兼容性说明》
+# https://yuque.antfin.com/docs/share/65ec900c-3e08-4838-a445-a875265a9c56?# 《mysql check约束测试》
+
+# set-up
+--disable_warnings
+drop table if exists t1,t2,tmp_t2,t3,parent,child,t;
+--enable_warnings
+--echo #------------------------------------------------------------------------
+--echo # Test cases to verify column check constraint syntax.
+--echo #------------------------------------------------------------------------
+--error 1064
+CREATE TABLE t1(f1 int CHECK);
+--error 1064
+CREATE TABLE t1(f1 int CHECK());
+--error 1064
+CREATE TABLE t1(f1 int CONSTRAINT CHECK());
+--error 1064
+CREATE TABLE t1(f1 int t1_ck CHECK());
+--error 1064
+CREATE TABLE t1(f1 int CONSTRAINT t1_ck CHECK());
+--error 1064
+CREATE TABLE t1(f1 int CONSTRAINT t1_ck CHECK( f1 < 10) NOT);
+--error 3812
+CREATE TABLE t1(f1 int CONSTRAINT t1_ck CHECK(f1));
+--error 3812
+CREATE TABLE t1(f1 int CONSTRAINT t1_ck CHECK(f1 + 10));
+--error 3813
+CREATE TABLE t1(f1 int CONSTRAINT t1_ck CHECK(f2 < 10));
+CREATE TABLE t1 (f1 int CONSTRAINT t1_f2_ck1 CHECK(f1 < 10),
+                 f2 int CONSTRAINT t1_f2_ck2 CHECK (f2 < 10));
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--error 1064
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CHECK);
+--error 1064
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CHECK());
+--error 1064
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CONSTRAINT CHECK());
+--error 1064
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int t1_f2_ck CHECK(f2 < 10));
+--error 1064
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CONSTRAINT t1_f2_ck CHECK(f2 < 10) NOT);
+--error 1064
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CHECK(f2 < 10) NOT);
+--error 3812
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CONSTRAINT t1_ck CHECK(f2));
+--error 3812
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CONSTRAINT t1_ck CHECK(f2 + 10));
+--error 3813
+CREATE TABLE t1(f1 int CHECK(f1 < 10), f2 int CONSTRAINT t1_ck CHECK(f3 < 10));
+CREATE TABLE t1 (f1 int CONSTRAINT t1_f1_ck1 CHECK(f1 < 10), f2 int CONSTRAINT t1_f2_ck2 CHECK(f2 < 10),
+                 f3 int CONSTRAINT t1_f3_ck CHECK (f3  < 10));
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+
+--echo #------------------------------------------------------------------------
+--echo # Test cases to verify table check constraint syntax.
+--echo #------------------------------------------------------------------------
+--error 1064
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK);
+--error 1064
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK();
+--error 1064
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK());
+--error 3812
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1));
+--error 3812
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1 + 10));
+--error 3820
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f2 < 10));
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1 < 10));
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+--error 1064
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1<10), CONSTRAINT t2_ck CHECK);
+--error 1064
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1<10), CONSTRAINT t2_ck CHECK();
+--error 1064
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1<10), CONSTRAINT t2_ck CHECK(f2 > 0) NOT);
+--error 3812
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1<10), CONSTRAINT t2_ck CHECK(f1));
+--error 3812
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1<10), CONSTRAINT t2_ck CHECK(f1 + 10));
+--error 3820
+CREATE TABLE t1(f1 int, CONSTRAINT t1_ck CHECK(f1<10), CONSTRAINT t2_ck CHECK(f2 > 1));
+CREATE TABLE t1(f1 int, CHECK(f1<10), CONSTRAINT t2_ck CHECK(f1 > 1));
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint name with special charecters.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT, c2 INT, CONSTRAINT `ck_1$` CHECK (c2 < 10));
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint name with white spaces.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT, c2 INT, CONSTRAINT ` ck_2$ ` CHECK (c2 < 10));
+#SHOW CREATE TABLE t1;
+--error 3821
+ALTER TABLE t1 DROP CHECK ck_2$;
+ALTER TABLE t1 DROP CHECK ` ck_2$ `;
+#SHOW CREATE TABLE t1;
+ALTER TABLE t1 ADD COLUMN c3 INTEGER;
+ALTER TABLE t1 ADD CONSTRAINT ` c 3 ` CHECK ( c3 > 10 );
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint name with reserved words.
+--echo #-----------------------------------------------------------------------
+--error 1064
+CREATE TABLE t1(c1 INT, c2 INT, CONSTRAINT FLOAT CHECK (c2 < 10));
+CREATE TABLE t1(c1 INT, c2 INT, CONSTRAINT `FLOAT` CHECK (c2 < 10));
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with long name.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT, c2 INT,
+                CONSTRAINT ckkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+                CHECK (c2 < 10));
+#SHOW CREATE TABLE t1;
+--error 1059
+CREATE TABLE t2(c1 INT, c2 INT,
+                CONSTRAINT ckkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk1
+                CHECK (c2 < 10));
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with too long generated name.
+--echo #-----------------------------------------------------------------------
+--error 1059
+CREATE TABLE t123456789012345678901234567890123456789(f1 INT CHECK(f1 < 10));
+CREATE TABLE t12345678901234567890123456789012345678(f1 INT CHECK(f1 < 10));
+--error 1059
+CREATE TABLE t1234567890123456789012345678901234567890123456789012345678901234(f1 INT);
+CREATE TABLE t123456789012345678901234567890123456789012345678901234567890123(f1 INT);
+--error 1059
+ALTER TABLE t123456789012345678901234567890123456789012345678901234567890123 ADD CONSTRAINT CHECK (f1 < 10);
+DROP TABLE t123456789012345678901234567890123456789012345678901234567890123;
+DROP TABLE t12345678901234567890123456789012345678;
+
+--echo #------------------------------------------------------------------------
+--echo # Test cases to verify forward reference of columns in the constraint.
+--echo #------------------------------------------------------------------------
+--error 3820
+CREATE TABLE t1(CONSTRAINT CK0 CHECK((f1 + f3) > 10), f1 int CONSTRAINT CK1 CHECK (f1 < 10), f2 int);
+CREATE TABLE t1(CONSTRAINT CK3 CHECK((f1 + f2) > 10), f1 int CONSTRAINT CK2 CHECK (f1 < 10), f2 int);
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraints with generated columns
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT,
+  c2 INT,
+  c3 INT GENERATED ALWAYS AS (c1 + c2),
+  CONSTRAINT ck CHECK (c3 > 10)
+);
+#SHOW CREATE TABLE t1;
+--error 3819
+INSERT INTO t1(c1,c2) VALUES(1,1);
+INSERT INTO t1(c1,c2) VALUES(10,10);
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with DEFAULT column value.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1(c1 INT DEFAULT 100 CHECK(c1 > 10));
+--error 3819
+INSERT INTO t1() VALUES(1);
+INSERT INTO t1() VALUES();
+DROP TABLE t1;
+CREATE TABLE t1(c1 int DEFAULT 1, CONSTRAINT CHECK(c1 IS NOT NULL));
+INSERT INTO t1() VALUES();
+--error 3819
+INSERT INTO t1() VALUES(NULL);
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint behaviour with ascii charset
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 VARCHAR(1) CHECK(c1 = 'a'));
+#SHOW CREATE TABLE t1;
+--error 3819
+INSERT INTO t1(c1) VALUES('b');
+INSERT INTO t1(c1) VALUES('a');
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with an expression evaluated to
+--echo # FALSE always.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1 (CHECK (1 < 1), f1 int);
+#SHOW CREATE TABLE t1;
+--error 3819
+INSERT INTO t1 VALUES(1);
+--error 3819
+INSERT INTO t1 VALUES(10);
+--error 3819
+INSERT INTO t1 VALUES();
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test cases to verify effect of check constraint in DML operations.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1(f1 INT PRIMARY KEY, f2 INT CHECK (f2 < 10));
+#SHOW CREATE TABLE t1;
+CREATE TABLE t2(f1 INT, f2 INT);
+INSERT INTO t2 VALUES(101, 1);
+INSERT INTO t2 VALUES(102, NULL);
+INSERT INTO t2 VALUES(103, 1000);
+INSERT INTO t2 VALUES(104, 1000);
+
+--echo # INSERT operations.
+INSERT INTO t1 VALUES(1, 1);
+INSERT INTO t1 VALUES(2, NULL);
+--error 3819
+INSERT INTO t1 VALUES(3, 1000);
+INSERT IGNORE INTO t1 VALUES (3, 1000);
+SELECT * FROM t1;
+--error 3819
+INSERT INTO t1 SELECT * FROM t2;
+SELECT * FROM t1;
+INSERT IGNORE INTO t1 SELECT * FROM t2;
+SELECT * FROM t1;
+
+--echo # REPLACE operations.
+REPLACE INTO t1 VALUES(4, 1);
+REPLACE INTO t1 VALUES(5, NULL);
+--error 3819
+REPLACE INTO t1 VALUES(6, 100);
+--error 3819
+REPLACE INTO t1 VALUES(2, 10);
+REPLACE INTO t1 VALUES(2, 2);
+SELECT * FROM t1;
+
+--echo # UPDATE operations.
+UPDATE t1 SET f2 = 2;
+SELECT * FROM t1;
+UPDATE t1 SET f2 = NULL;
+--error 3819
+UPDATE t1 SET f2 = 1000;
+UPDATE IGNORE t1 SET f2 = 1000;
+SELECT * FROM t1;
+DROP TABLE t1, t2;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraints with multi-table update.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(f1 INT, f2 INT CHECK(f2 < 20));
+INSERT INTO t1 VALUES (4, 4);
+CREATE TABLE t2(f1 INT, f2 INT);
+INSERT INTO t2 VALUES (4, 24);
+--error 3819
+UPDATE t1,t2  SET t1.f2 = t1.f2 + 20 WHERE t1.f1 = t2.f1;
+UPDATE IGNORE t1,t2  SET t1.f2 = t1.f2 + 20 WHERE t1.f1 = t2.f1;
+DROP TABLE t1, t2;
+
+CREATE TABLE t1 (
+   `f1` int(10) unsigned NOT NULL auto_increment,
+   `f2` int(11) NOT NULL default '0',
+   PRIMARY KEY  (`f1`)
+);
+INSERT INTO t1 VALUES (4433,5424);
+CREATE TABLE t2 (
+  `f3` int(10) unsigned NOT NULL default '0',
+  `f4` int(10) unsigned NOT NULL default '0' CHECK (f4 <= 500),
+  PRIMARY KEY  (`f3`,`f4`)
+);
+INSERT INTO t2 VALUES (495,500);
+INSERT INTO t2 VALUES (496,500);
+--error 3819
+UPDATE t2,t1 set t2.f4 = t2.f4 + 1;
+UPDATE IGNORE t2,t1 set t2.f4 = t2.f4 + 1;
+DROP TABLE t1, t2;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with INSERT ON DUPLICATE
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(f1 INT PRIMARY KEY, f2 INT CHECK (f2 < 10));
+--error 3819
+INSERT INTO t1 VALUES (2, 10) ON DUPLICATE KEY UPDATE f2 = 4;
+INSERT IGNORE INTO t1 VALUES (2, 10) ON DUPLICATE KEY UPDATE f2 = 4;
+INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 4;
+INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 4;
+--error 3819
+INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 10;
+INSERT IGNORE INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 10;
+--error 3819
+INSERT INTO t1 VALUES (1, 10) ON DUPLICATE KEY UPDATE f2 = 5;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints removal on DROP table operation.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1(f1 INT PRIMARY KEY, f2 INT CONSTRAINT ck CHECK (f2 < 10));
+#SHOW CREATE TABLE t1;
+SELECT * FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS;
+DROP TABLE t1;
+SELECT * FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints creation with ALTER TABLE DROP
+--echo # CONSTRAINT operation.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t2 (f1 INT PRIMARY KEY);
+CREATE TABLE t1 (f1 INT constraint ck1 CHECK (f1 < 10), constraint ck2 check(f1 < 20), constraint ck1 foreign key(f1) references t2(f1));
+#SHOW CREATE TABLE t1;
+ALTER TABLE t1 DROP CONSTRAINT ck2;
+--error 3939
+ALTER TABLE t1 DROP CONSTRAINT ck1;
+ALTER TABLE t1 DROP CHECK ck1;
+--error 3821
+ALTER TABLE t1 DROP CHECK ck1;
+#SHOW CREATE TABLE t1;
+DROP TABLE t1,t2;
+
+--echo #------------------------------------------------------------------------
+--echo # Test cases to verify check constraints with CREATE TABLE LIKE
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1(f1 INT CHECK (f1 < 10), f2 INT, CHECK (f2 < 10),
+                CONSTRAINT min CHECK (f1 + f2 > 10),
+                CONSTRAINT max CHECK (f1 + f2 < 929));
+#SHOW CREATE TABLE t1;
+CREATE TABLE t2 LIKE t1;
+#SHOW CREATE TABLE t2;
+CREATE TEMPORARY TABLE tmp_t2 LIKE t2;
+#SHOW CREATE TABLE tmp_t2;
+
+DROP TABLE tmp_t2,t1,t2;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to alter table to add/drop column with the check constraint.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1 (c1 INT, CONSTRAINT ck1 CHECK (c1 > 10));
+ALTER TABLE t1 ADD COLUMN c2 INT CONSTRAINT ck2 CHECK (c2 > 10);
+ALTER TABLE t1 ADD COLUMN c3 INT;
+ALTER TABLE t1 DROP CHECK ck2, DROP COLUMN c2;
+--error 3822
+ALTER TABLE t1 DROP CHECK ck1, DROP CHECK ck1;
+ALTER TABLE t1 ADD COLUMN c2 INT;
+ALTER TABLE t1 ADD CONSTRAINT ck3 CHECK (c2 + c1 < 10);
+--error 3959
+ALTER TABLE t1 DROP COLUMN c2;
+ALTER TABLE t1 DROP CHECK ck3, DROP COLUMN c2;
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify
+--echo #   - Creation of check constraint with NOT ENFORCED state.
+--echo #   - Listing state of the check constraints with SHOW and
+--echo #     INFORMATION_SCHEMA.CHECK_CONSTRAINTS table.
+--echo #   - State updates with ALTER TABLE statement to ALTER
+--echo #     check constraints.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(f1 INT,
+                f2 INT CONSTRAINT ck0 CHECK (f2 < 10),
+                f3 INT CONSTRAINT ck1 CHECK (f3 < 10) NOT ENFORCED,
+                CONSTRAINT ck2 CHECK (f1 > 10),
+                CONSTRAINT ck3 CHECK (f1 > 10) NOT ENFORCED);
+#SHOW CREATE TABLE t1;
+SELECT * FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS ORDER BY CONSTRAINT_NAME;
+SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = 't1' ORDER BY CONSTRAINT_NAME;
+
+--echo # REVOKE check constraint ck.
+ALTER TABLE t1 ALTER CHECK ck0 NOT ENFORCED;
+#SHOW CREATE TABLE t1;
+
+--echo # ENFORCE check constraint ck.
+ALTER TABLE t1 ALTER CHECK ck0 ENFORCED;
+#SHOW CREATE TABLE t1;
+
+--echo # Add new constraint in NOT ENFORCED state.
+INSERT INTO t1(f2) VALUES(1);
+INSERT INTO t1(f2) VALUES(2);
+--error 3819
+ALTER TABLE t1 ADD CONSTRAINT ck4 CHECK(f2>5) ENFORCED;
+DELETE FROM t1 WHERE f2 < 4;
+ALTER TABLE t1 ADD CONSTRAINT ck4 CHECK(f2>5) ENFORCED;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify auto-drop of check constraint on column drop.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1 (f1 INT check (f1 < 10), f2 INT);
+#SHOW CREATE TABLE t1;
+--echo # Drops check constraint t1_chk_1 too.
+ALTER TABLE t1 DROP COLUMN f1;
+
+ALTER TABLE t1 ADD COLUMN f1 INT check(f1 < 10);
+ALTER TABLE t1 ADD CONSTRAINT ck check(f1 + f2 < 10);
+ALTER TABLE t1 ADD CONSTRAINT check(f2 < 10);
+#SHOW CREATE TABLE t1;
+--error 3959
+ALTER TABLE t1 DROP COLUMN f1;
+ALTER TABLE t1 CHANGE f1 f3 INT;
+ALTER TABLE t1 DROP CHECK ck, DROP COLUMN f3;
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with IN operator.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1(f1 int CHECK (f1 IN (10, 20, 30)), f2 int, CHECK(f2 IN (100, 120, 450)));
+#SHOW CREATE TABLE t1;
+INSERT INTO t1 VALUES(10, 100);
+--error 3819
+INSERT INTO t1 VALUES(15, 100);
+--error 3819
+INSERT INTO t1 VALUES(10, 105);
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with BETWEEN operator.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1(f1 int CHECK(f1 BETWEEN 10 AND 30),
+                f2 int, CHECK(f2 BETWEEN 100 AND 450));
+INSERT INTO t1 VALUES(20, 200);
+--error 3819
+INSERT INTO t1 VALUES(2, 200);
+--error 3819
+INSERT INTO t1 VALUES(20, 2000);
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with IS NOT NULL.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1 (f1 int CHECK(f1 IS NOT NULL));
+INSERT INTO t1 VALUES(10);
+--error 3819
+INSERT INTO t1 VALUES(NULL);
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with IS NULL.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1 (f1 int CHECK(f1 IS NULL));
+INSERT INTO t1 VALUES(NULL);
+--error 3819
+INSERT INTO t1 VALUES(10);
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with CASE Statement
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT, c2 INT);
+ALTER TABLE t1 ADD CONSTRAINT CHECK( (CASE WHEN c1 > 10 THEN c2 = 20 END) = 1);
+INSERT INTO t1 VALUES(1,1);
+--error 3819
+INSERT INTO t1 VALUES(15,1);
+INSERT INTO t1 VALUES(15,20);
+SELECT * FROM t1;
+DROP TABLE t1;
+
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints restrictions.
+--echo #------------------------------------------------------------------------
+
+--echo # Check constraint using column with AUTO_INCREMENT attribute.
+--error 3818
+CREATE TABLE t1 (f1 int primary key auto_increment, f2 int, CHECK (f1 != f2));
+--error 3818
+CREATE TABLE t1 (f1 int primary key auto_increment CHECK (f1 < 10), f2 int);
+
+--echo # Check constraint using non-deterministic builtin functions.
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + NOW() > '2011-11-21'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + CURRENT_TIMESTAMP() > '2011-11-21 01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + CURRENT_TIMESTAMP > '2011-11-21 01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 DATETIME CHECK (f1 + CURDATE() > '2011-11-21'));
+--error 3814
+CREATE TABLE t1 (f1 DATETIME CHECK (f1 + CURTIME() > '23:11:21'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + CURRENT_TIME > '01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + CURRENT_DATE() > '2011-11-21'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + CURRENT_DATE > '2011-11-21'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + CURRENT_TIME() > '01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + CURRENT_TIME > '01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 DATETIME CHECK (f1 + LOCALTIME() > '23:11:21'));
+--error 3814
+CREATE TABLE t1 (f1 DATETIME CHECK (f1 + LOCALTIME > '23:11:21'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + LOCALTIMESTAMP() > '2011-11-21 01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + LOCALTIMESTAMP > '2011-11-21 01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + UNIX_TIMESTAMP() > '2011-11-21 01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 DATETIME CHECK (f1 + UTC_DATE() > '2011-11-21'));
+--error 3814
+CREATE TABLE t1 (f1 TIMESTAMP CHECK (f1 + UTC_TIMESTAMP() > '2011-11-21 01:02:03'));
+--error 3814
+CREATE TABLE t1 (f1 DATETIME CHECK (f1 + UTC_TIME() > '23:11:21'));
+--error 3814
+CREATE TABLE t1 (f1 INT CHECK (f1 + CONNECTION_ID() < 929));
+--error 3814
+CREATE TABLE t1 (a VARCHAR(32) CHECK (CURRENT_USER() != a));
+--error 3814
+CREATE TABLE t1 (a VARCHAR(32) CHECK (SESSION_USER() != a));
+--error 3814
+CREATE TABLE t1 (a VARCHAR(32) CHECK (VERSION() != a));
+--error 3814
+CREATE TABLE t1 (a VARCHAR(32) CHECK (SYSTEM_USER() != a));
+--error 3814
+CREATE TABLE t1 (a VARCHAR(32) CHECK (USER() != a));
+--echo # FOUND_ROWS
+--error 3814
+CREATE TABLE t1 (a VARCHAR(1024), b INT CHECK (b + FOUND_ROWS() > 2000));
+--error 3814
+CREATE TABLE t1 (a INT CHECK ((a + LAST_INSERT_ID()) < 929));
+--error 3814
+CREATE TABLE t1 (f1 FLOAT CHECK (f1 + RAND() < 929.929));
+--error 3814
+CREATE TABLE t1 (a INT CHECK (a + ROW_COUNT() > 1000));
+--error 3814
+CREATE TABLE t1 (id CHAR(40) CHECK(UUID() != id));
+--error 3814
+CREATE TABLE t1 (id INT CHECK(SLEEP(id) != 0));
+
+--echo # User variable
+SET @v = 10;
+--error 3816
+CREATE TABLE t1 (id INT CHECK (id != @v));
+--error 3816
+CREATE TABLE t1 (id INT CHECK (id != @@global.max_execution_time));
+--error 3816
+CREATE TABLE t1 (id INt CHECK (id != @@session.max_execution_time));
+
+--echo # Subquery
+--error 3815
+CREATE TABLE t1 (id INT CHECK (id != (SELECT 1)));
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with numeric data types.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1 (
+  c1 BIT(7) CHECK(c1 < B'1111100'),
+  c2 BOOLEAN CHECK(c2 > 0),
+  c3 TINYINT CHECK(c3 > 10),
+  c4 SMALLINT CHECK(c4 > 10),
+  c5 MEDIUMINT CHECK(c5 > 10),
+  c6 INT CHECK(c6 > 10),
+  c7 BIGINT CHECK(c7 > 10),
+  c8 DECIMAL(6,2) CHECK(c8 > 10.1),
+  c9 FLOAT(6,2) CHECK(c9 > 10.1),
+  c10 DOUBLE(6,2) CHECK(c10 > 10.1));
+--error 3819
+INSERT INTO t1(c1) VALUES(B'1111110');
+--error 3819
+INSERT INTO t1(c2) VALUES(0);
+--error 3819
+INSERT INTO t1(c3) VALUES(1);
+--error 3819
+INSERT INTO t1(c4) VALUES(1);
+--error 3819
+INSERT INTO t1(c5) VALUES(1);
+--error 3819
+INSERT INTO t1(c6) VALUES(1);
+--error 3819
+INSERT INTO t1(c7) VALUES(1);
+--error 3819
+INSERT INTO t1(c8) VALUES(10.0);
+--error 3819
+INSERT INTO t1(c9) VALUES(10.0);
+--error 3819
+INSERT INTO t1(c10) VALUES(10.0);
+INSERT INTO t1(c1,c2,c3,c4,c5,c6,c7,c8,c9,c10)
+  VALUES(B'1111000',1,11,11,11,11,11,10.2,10.2,10.2);
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with string data types.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1(c1 CHAR(1) CHECK(c1 > 'a'),
+  c2 VARCHAR(1) CHECK(c2 > 'a'),
+  c3 BINARY(1) CHECK(c3 > 'a'),
+  c4 VARBINARY(1) CHECK(c4 > 'a'),
+  c5 TINYBLOB CHECK(c5 > 'a'),
+  c6 TINYTEXT CHECK(c6 > 'a'),
+  c7 BLOB CHECK(c7 > 'a'),
+  c8 TEXT CHECK(c8 > 'a'),
+  c9 MEDIUMBLOB CHECK(c9 > 'a'),
+  c10 MEDIUMTEXT CHECK(c10 > 'a'),
+  c11 LONGBLOB CHECK(c11 > 'a'),
+  c12 LONGTEXT CHECK(c12 > 'a'));
+
+--error 3819
+INSERT INTO t1(c1) VALUES('a');
+--error 3819
+INSERT INTO t1(c2) VALUES('a');
+--error 3819
+INSERT INTO t1(c3) VALUES('a');
+--error 3819
+INSERT INTO t1(c4) VALUES('a');
+--error 3819
+INSERT INTO t1(c5) VALUES('a');
+--error 3819
+INSERT INTO t1(c6) VALUES('a');
+--error 3819
+INSERT INTO t1(c7) VALUES('a');
+--error 3819
+INSERT INTO t1(c8) VALUES('a');
+--error 3819
+INSERT INTO t1(c9) VALUES('a');
+--error 3819
+INSERT INTO t1(c10) VALUES('a');
+--error 3819
+INSERT INTO t1(c11) VALUES('a');
+--error 3819
+INSERT INTO t1(c12) VALUES('a');
+
+INSERT INTO t1(c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12)
+  VALUES('b',"b","b","b","b","b","b","b","b","b","b","b");
+
+DROP TABLE t1;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with date and time data types.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1 (c1 DATE CHECK(c1 > '2007-01-01'),
+  c2 DATETIME CHECK(c2 > '2007-01-01 12:00:01'),
+  c3 TIMESTAMP CHECK(c3 > '2007-01-01 00:00:01.000000'),
+  c4 TIME CHECK(c4 > '12:00:01.000000'),
+  c5 YEAR CHECK(c5 > '2007'));
+
+--error 3819
+INSERT INTO t1(c1) VALUES('2006-01-01');
+--error 3819
+INSERT INTO t1(c2) VALUES('2007-01-01 11:00:01');
+--error 3819
+INSERT INTO t1(c3) VALUES('2007-01-01 00:00:00.000000');
+--error 3819
+INSERT INTO t1(c4) VALUES('12:00:00.000000');
+--error 3819
+INSERT INTO t1(c5) VALUES('2006');
+
+INSERT INTO t1(c1,c2,c3,c4,c5)
+  VALUES('2008-01-01','2007-01-01 12:00:02','2007-01-01 00:00:02.000000',
+        '12:00:02.000000','2008');
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # check constraint with ENUM data type
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1 (c1 ENUM ('a','b'));
+INSERT INTO t1 VALUES('a'); 
+--error 3819
+alter table t1 add CONSTRAINT CK CHECK(c1 IN ('c','d'));
+--error 1265
+INSERT INTO t1 VALUES('c');
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # check constraint with SET data type
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1 (c1 SET ('a','b') CHECK (c1 IN ('c', 'd')) );
+--error 1265
+INSERT INTO t1 VALUES('d');
+--error 1265
+INSERT INTO t1 VALUES('c');
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with REGEX
+--echo #-----------------------------------------------------------------------
+CREATE TABLE student
+(
+   id      	INT,
+   stu_code 	VARCHAR(10),
+   name    	VARCHAR(14),
+   email   	VARCHAR(20),
+   scholarship 	INT,
+   country 	VARCHAR(20),
+   CONSTRAINT ck1 CHECK (id != 0),
+   CONSTRAINT ck2 CHECK (stu_code like 'j%'),
+   CONSTRAINT ck3 CHECK (lower(name) != "noname"),
+   CONSTRAINT ck4 CHECK (REGEXP_LIKE(email,'@')),
+   CONSTRAINT ck5 CHECK (scholarship BETWEEN 5000 AND 20000),
+   CONSTRAINT ck6 CHECK (country IN ('usa','uk'))
+);
+#SHOW CREATE TABLE student;
+
+--error 3819
+INSERT INTO student VALUES(0,"j001","name1","name1@oracle.com",6000,'usa');
+--error 3819
+INSERT INTO student VALUES(1,"s001","name1","name1@oracle.com",6000,'usa');
+--error 3819
+INSERT INTO student VALUES(1,"j001","NONAME","name1@oracle.com",6000,'usa');
+--error 3819
+INSERT INTO student VALUES(1,"j001","name1","name1oracle.com",6000,'usa');
+--error 3819
+INSERT INTO student VALUES(1,"j001","name1","name1@oracle.com",4000,'usa');
+--error 3819
+INSERT INTO student VALUES(1,"j001","name1","name1@oracle.com",6000,'nocountry');
+
+INSERT INTO student VALUES(1,"j001","name1","name1@oracle.com",6000,'usa');
+SELECT * FROM student;
+DROP TABLE student;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with numeric comparator
+--echo # operators with varchar columns.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT, c2 VARCHAR(20));
+ALTER TABLE t1 ADD CONSTRAINT ck1 CHECK ( c1 > c2 );
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with Comparison Functions
+--echo # and Operators
+--echo #-----------------------------------------------------------------------
+--error 3815
+CREATE TABLE t1(c1 INT, CHECK ( c1 IN ( SELECT COALESCE(NULL, 1, 1))));
+--error 3815
+CREATE TABLE t1(c1 INT, CHECK ( c1 < ( SELECT COALESCE(NULL, 1, 1))));
+CREATE TABLE t1(c1 INT , CHECK ( c1 <=> NULL ));
+--error 3819
+INSERT INTO t1 VALUES(1);
+INSERT INTO t1 VALUES(NULL);
+SELECT * FROM t1;
+
+ALTER TABLE t1 ADD COLUMN c2 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c2 > 10 );
+--error 3819
+INSERT INTO t1(c2) VALUES(10);
+INSERT INTO t1(c2) VALUES(11);
+
+ALTER TABLE t1 ADD COLUMN c3 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c3 >= 10 );
+--error 3819
+INSERT INTO t1(c3) VALUES(9);
+INSERT INTO t1(c3) VALUES(10);
+
+ALTER TABLE t1 ADD COLUMN c4 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c4 < 10 );
+--error 3819
+INSERT INTO t1(c4) VALUES(10);
+INSERT INTO t1(c4) VALUES(9);
+
+ALTER TABLE t1 ADD COLUMN c5 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c5 <= 10 );
+--error 3819
+INSERT INTO t1(c5) VALUES(11);
+INSERT INTO t1(c5) VALUES(10);
+
+ALTER TABLE t1 ADD COLUMN c6 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c6 != 10 );
+--error 3819
+INSERT INTO t1(c6) VALUES(10);
+INSERT INTO t1(c6) VALUES(20);
+
+ALTER TABLE t1 ADD COLUMN c7 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c7 <> 10 );
+--error 3819
+INSERT INTO t1(c7) VALUES(10);
+INSERT INTO t1(c7) VALUES(20);
+
+ALTER TABLE t1 ADD COLUMN c8 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c8 = GREATEST(1,2,3) );
+--error 3819
+INSERT INTO t1(c8) VALUES(1);
+INSERT INTO t1(c8) VALUES(3);
+
+ALTER TABLE t1 ADD COLUMN c9 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c9 = LEAST(1,2,3) );
+--error 3819
+INSERT INTO t1(c9) VALUES(3);
+INSERT INTO t1(c9) VALUES(1);
+
+ALTER TABLE t1 ADD COLUMN c10 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK( c10 NOT IN (1,2,3) );
+--error 3819
+INSERT INTO t1(c10) VALUES(1);
+--error 3819
+INSERT INTO t1(c10) VALUES(3);
+INSERT INTO t1(c10) VALUES(10);
+
+ALTER TABLE t1 ADD COLUMN c12 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK ( c12 NOT BETWEEN 10 AND 20);
+--error 3819
+INSERT INTO t1(c12) VALUES(15);
+INSERT INTO t1(c12) VALUES(25);
+
+ALTER TABLE t1 ADD COLUMN c13 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK ( c13 NOT IN (1, 2, 3));
+--error 3819
+INSERT INTO t1(c13) VALUES(1);
+INSERT INTO t1(c13) VALUES(15);
+
+ALTER TABLE t1 ADD COLUMN c14 CHAR(10);
+ALTER TABLE t1 ADD CONSTRAINT CHECK ( c14 LIKE 'A%');
+--error 3819
+INSERT INTO t1(c14) VALUES('Good');
+INSERT INTO t1(c14) VALUES('All');
+
+ALTER TABLE t1 ADD COLUMN c15 INT;
+ALTER TABLE t1 ADD CONSTRAINT CHECK ( c15 = STRCMP('A','A'));
+--error 3819
+INSERT INTO t1(c15) VALUES(1);
+INSERT INTO t1(c15) VALUES(0);
+
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with Logical Operators
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT, c2 INT);
+ALTER TABLE t1 ADD CONSTRAINT t1_chk_1 CHECK( (c1 > 10) AND (c2 < 20) );
+--error 3819
+INSERT INTO t1 VALUES(1,10);
+ALTER TABLE t1 ADD CONSTRAINT t1_chk_2 CHECK( (c1 > 10) && (c2 < 20) );
+--error 3819
+INSERT INTO t1 VALUES(15,25);
+ALTER TABLE t1 DROP CHECK `t1_chk_1`;
+ALTER TABLE t1 DROP CHECK `t1_chk_2`;
+
+ALTER TABLE t1 ADD CONSTRAINT t1_chk_1 CHECK( (c1 > 10) || (c2 < 20) );
+ALTER TABLE t1 ADD CONSTRAINT t1_chk_2 CHECK( (c1 > 10) OR (c2 < 20) );
+INSERT INTO t1 VALUES(15,25);
+INSERT INTO t1 VALUES(5,10);
+--error 3819
+INSERT INTO t1 VALUES(5,25);
+ALTER TABLE t1 DROP CHECK `t1_chk_1`;
+ALTER TABLE t1 DROP CHECK `t1_chk_2`;
+DELETE FROM t1;
+
+ALTER TABLE t1 ADD CONSTRAINT CHECK( (c1 > 10) XOR (c2 < 20) );
+--error 3819
+INSERT INTO t1 VALUES(15,10);
+
+#SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint behaviour with DEFAULT, NULL
+--echo # and with LOGICAL operators.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT DEFAULT 2 PRIMARY KEY CHECK(c1 > 1 OR c1 IS NOT NULL));
+#SHOW CREATE TABLE t1;
+--error ER_BAD_NULL_ERROR
+INSERT INTO t1 VALUES(NULL);
+INSERT INTO t1 VALUES(1);
+SELECT * FROM t1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 INT DEFAULT 2 PRIMARY KEY CHECK(c1 > 1 OR c1 > 2));
+--error 3819
+INSERT INTO t1 VALUES(1);
+INSERT INTO t1 VALUES(2);
+SELECT * FROM t1;
+DROP TABLE t1;
+CREATE TABLE t1(c1 INT DEFAULT 2 PRIMARY KEY CHECK(c1 > 1 AND c1 IS NOT NULL));
+--error 3819
+INSERT INTO t1 VALUES(1);
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraints with foreign key constraint
+--echo #-----------------------------------------------------------------------
+CREATE TABLE parent(pid INT NOT NULL PRIMARY KEY CHECK(pid > 0));
+CREATE TABLE child(cid INT CHECK(cid > 1),
+  CONSTRAINT fk FOREIGN KEY (cid) REFERENCES parent(pid));
+#SHOW CREATE TABLE parent;
+#SHOW CREATE TABLE child;
+INSERT INTO parent VALUES(2);
+INSERT INTO parent VALUES(1);
+--error 3819
+INSERT INTO child VALUES(1);
+--error 1452
+INSERT INTO child VALUES(3);
+INSERT INTO child VALUES(2);
+SELECT * FROM parent;
+SELECT * FROM child;
+DROP TABLE child;
+DROP TABLE parent;
+
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with PREPARE statement
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT CHECK(c1 > 10));
+PREPARE stmt1 FROM 'INSERT INTO t1 VALUES(1)';
+--error 3819
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+PREPARE stmt2 FROM 'INSERT INTO t1 VALUES(20)';
+EXECUTE stmt2;
+DEALLOCATE PREPARE stmt2;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint behaviour inside transaction
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT);
+CREATE TABLE t2(c1 INT CHECK(c1 > 10));
+SET AUTOCOMMIT = OFF;
+# Transaction 1
+START TRANSACTION;
+INSERT INTO t1 VALUES(1);
+--error 3819
+INSERT INTO t2 VALUES(1);
+ROLLBACK;
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+# Transaction 2
+START TRANSACTION;
+ALTER TABLE t1 ADD CONSTRAINT ck CHECK (C1 > 10);
+COMMIT;
+#SHOW CREATE TABLE t1;
+SET AUTOCOMMIT = ON;
+DROP TABLE t1,t2;
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints with Partition table.
+--echo #------------------------------------------------------------------------
+--echo # check constraint with range partition
+CREATE TABLE t1(
+  d DATE NOT NULL CONSTRAINT ck CHECK(YEAR(d) > '1950')
+)
+PARTITION BY RANGE( YEAR(d) ) (
+PARTITION p0 VALUES LESS THAN (1960),
+PARTITION p1 VALUES LESS THAN (1970),
+PARTITION p2 VALUES LESS THAN (1980),
+PARTITION p3 VALUES LESS THAN (1990)
+);
+#SHOW CREATE TABLE t1;
+--error 3819
+INSERT INTO t1 VALUES('1940-01-01');
+INSERT IGNORE INTO t1 VALUES('1940-01-01');
+
+INSERT INTO t1 VALUES('1960-01-01');
+SELECT * FROM t1;
+DROP TABLE t1;
+
+CREATE TABLE t1(
+  id INT NOT NULL CHECK(id BETWEEN 20 AND 40),
+  name VARCHAR(10)
+)
+PARTITION BY LIST(id) (
+PARTITION p0 VALUES IN (10,19),
+PARTITION p1 VALUES IN (20,29),
+PARTITION p2 VALUES IN (30,39),
+PARTITION p3 VALUES IN (40,49)
+);
+#SHOW CREATE TABLE t1;
+--error 1526
+INSERT INTO t1 VALUES(60,'aaa');
+--error 3819
+INSERT INTO t1 VALUES(49,'aaa');
+INSERT INTO t1 VALUES(30,'aaa');
+SELECT * FROM t1;
+DROP TABLE t1;
+
+CREATE TABLE t1(id INT NOT NULL CHECK(id > 10),
+                 name VARCHAR(40)
+)
+PARTITION BY HASH(id)
+PARTITIONS 4;
+#SHOW CREATE TABLE t1;
+--error 3819
+INSERT INTO t1 VALUES(1,'aaa');
+INSERT INTO t1 VALUES(60,'aaa');
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+CREATE TABLE t1(id INT PRIMARY KEY NOT NULL CHECK(id > 10),
+                 name VARCHAR(40)
+)
+PARTITION BY KEY()
+PARTITIONS 4;
+#SHOW CREATE TABLE t1;
+--error 3819
+INSERT INTO t1 VALUES(1,'aaa');
+INSERT INTO t1 VALUES(60,'aaa');
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint with Updatable view
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t1(c1 INT, c2 INT CHECK (c2 < 10));
+CREATE VIEW v1 AS SELECT * FROM t1;
+--error 3819
+INSERT INTO v1 VALUES(1,20);
+INSERT INTO v1 VALUES(1,5);
+SELECT * FROM t1;
+SELECT * FROM v1;
+DROP VIEW v1;
+DROP TABLE t1;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify duplicate check constraint name under same
+--echo # database. Check constraints with same name are not allowed under
+--echo # same database.
+--echo #-----------------------------------------------------------------------
+CREATE TABLE t(c1 INT, CONSTRAINT ck CHECK(c1 > 10));
+--error 3822
+ALTER TABLE t ADD CONSTRAINT ck CHECK(c1 > 10);
+--error 3822
+CREATE TABLE t1(c1 INT CONSTRAINT ck CHECK (c1 > 10));
+CREATE DATABASE IF NOT EXISTS db1;
+CREATE TABLE db1.t(c1 INT CONSTRAINT ck CHECK (c1 > 10));
+--error 3822
+ALTER TABLE t RENAME TO db1.t1;
+--error 3822
+RENAME TABLE t TO db1.t1;
+ALTER TABLE t RENAME TO t2;
+DROP TABLE t2;
+
+--echo rename table with foreign key
+create table parent(c1 int primary key);
+create table child1(c1 int, constraint fk foreign key(c1) references parent(c1));
+create table db1.child1(c1 int, constraint fk foreign key(c1) references parent(c1));
+--error 1022
+create table db1.child2(c1 int, constraint fk foreign key(c1) references parent(c1));
+--error 1022
+alter table child1 rename to db1.child2;
+DROP DATABASE db1;
+DROP TABLE child1;
+DROP TABLE parent;
+
+--echo #-----------------------------------------------------------------------
+--echo # Check constraint names are case insenitive and accent sensitive. Test
+--echo # case to verify the same.
+--echo #-----------------------------------------------------------------------
+--error 3822
+CREATE TABLE t1 (f1 INT, CONSTRAINT cafe CHECK (f1 < 10), CONSTRAINT CAFE CHECK (f1 < 10));
+
+--echo #------------------------------------------------------------------------
+--echo # Test case to verify check constraints creation with ALTER TABLE ADD
+--echo # CONSTRAINT operation.
+--echo #------------------------------------------------------------------------
+CREATE TABLE t1 (f1 INT CHECK (f1 < 10));
+CREATE TEMPORARY TABLE t3(f1 INT CHECK (f1 < 10));
+--error 1235
+ALTER TABLE t1 ADD CONSTRAINT CHECK (f1 > 1), ADD CONSTRAINT `t1_p_ck` CHECK (f1 > 1);
+ALTER TABLE t1 ADD CONSTRAINT `t1_p_ck` CHECK (f1 > 1);
+ALTER TABLE t3 ADD CONSTRAINT `t3_p_ck` CHECK (f1 > 1);
+#SHOW CREATE TABLE t1;
+#SHOW CREATE TABLE t3;
+DROP TABLE t1,t3;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify check constraint namespace in temporary table
+--echo #-----------------------------------------------------------------------
+create temporary table t1(f1 int constraint ck check(f1<10));
+create table t2(f1 int constraint ck check(f1<10));
+create temporary table t3(f1 int constraint ck check(f1<10));
+select * from information_schema.CHECK_CONSTRAINTS;
+drop table t2;
+drop temporary table t1,t3;
+
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify multi_table_update,multi_table_insert and muti_table_replace
+--echo #-----------------------------------------------------------------------
+create table t1(c1 int primary key, c2 int, constraint cst1 check(c1 >= c2)) partition by hash(c1) partitions 3;
+create index t1_c2 on t1(c2) global;
+insert into t1 values (1, 1);
+--error 3819
+insert into t1 values (1, 2);
+# muti table insert_update
+##update row
+insert into t1 values (1, 1) on duplicate key update c2 = -1;
+--error 3819
+insert into t1 values (1, 1) on duplicate key update c2 = 10;
+--error 3819
+insert into t1 values (1, 10) on duplicate key update c2 = 0;
+##insert row
+--error 3819 
+insert into t1 values (2, 3) on duplicate key update c2 = 1;
+insert into t1 values (2, 1) on duplicate key update c2 = 1;
+#muti table update
+update t1 set c2 = 0;
+--error 3819
+update t1 set c2 = 2;
+#muti table replace
+##insert row
+--error 3819
+replace into t1 values(3,10);
+replace into t1 values(3,1);
+##replace row 
+replace into t1 values(3,2);
+--error 3819
+replace into t1 values(3,4);
+select * from t1;
+drop table t1;

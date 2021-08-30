@@ -183,6 +183,7 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_information_session_variables_table.cpp
   virtual_table/ob_information_referential_constraints_table.cpp
   virtual_table/ob_information_table_constraints_table.cpp
+  virtual_table/ob_information_check_constraints_table.cpp
   virtual_table/ob_information_table_privileges_table.cpp
   virtual_table/ob_information_user_privileges_table.cpp
   virtual_table/ob_iterate_virtual_table.cpp

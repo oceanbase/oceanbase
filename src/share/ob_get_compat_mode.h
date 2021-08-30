@@ -27,6 +27,7 @@ public:
   // Provide global function interface
   static int get_tenant_mode(const uint64_t tenant_id, ObWorker::CompatMode& mode);
   static int check_is_oracle_mode_with_tenant_id(const uint64_t tenant_id, bool& is_oracle_mode);
+  static int check_is_mysql_mode_with_tenant_id(const uint64_t tenant_id, bool& is_mysql_mode);
   // init hash map
   int init(common::ObMySQLProxy* proxy);
   // free hash map

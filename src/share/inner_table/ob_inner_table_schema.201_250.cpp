@@ -1299,7 +1299,7 @@ int ObInnerTableSchema::all_constraint_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_CONSTRAINT_NAME_LENGTH, //column_length
+      OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -1591,7 +1591,7 @@ int ObInnerTableSchema::all_constraint_history_schema(ObTableSchema &table_schem
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_MAX_CONSTRAINT_NAME_LENGTH, //column_length
+      OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable

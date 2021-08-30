@@ -3751,8 +3751,7 @@ int ObSchemaServiceSQLImpl::fetch_tables(ObISQLClient& sql_client, const ObRefre
                   &table_ids.at(cnt * fetch_table_nums_per_time),
                   fetch_table_nums_per_time))) {
             LOG_WARN("Failed to fetch foreign key array info for simple table schemas", K(ret));
-          } else if ((ObWorker::CompatMode::INVALID != compat_mode) &&
-                     OB_FAIL(fetch_constraint_array_for_simple_table_schemas(schema_status,
+          } else if (OB_FAIL(fetch_constraint_array_for_simple_table_schemas(schema_status,
                          schema_version,
                          tenant_id,
                          sql_client,
@@ -3771,8 +3770,7 @@ int ObSchemaServiceSQLImpl::fetch_tables(ObISQLClient& sql_client, const ObRefre
                   &table_ids.at(table_ids.count() - last_fetch_num),
                   last_fetch_num))) {
             LOG_WARN("Failed to fetch foreign key array info for simple table schemas", K(ret));
-          } else if ((ObWorker::CompatMode::INVALID != compat_mode) &&
-                     OB_FAIL(fetch_constraint_array_for_simple_table_schemas(schema_status,
+          } else if (OB_FAIL(fetch_constraint_array_for_simple_table_schemas(schema_status,
                          schema_version,
                          tenant_id,
                          sql_client,

@@ -2,9 +2,13 @@
 #         Test file has cases to verify check constraint feature, common       #
 #         restrictions and mysql specific restriction on check constraints.    #
 
---disable_query_log
-set @@session.explicit_defaults_for_timestamp=off;
---enable_query_log
+connect (sys_jianhua, $OBMYSQL_MS0,root@sys,,oceanbase,$OBMYSQL_PORT);
+connection sys_jianhua;
+alter system set _enable_static_typing_engine = false;
+
+connect(mysql_jianhua, $OBMYSQL_MS0,root@mysql,'',test,$OBMYSQL_PORT);
+connection mysql_jianhua;
+
 # set-up
 --disable_warnings
 drop table if exists t1,t2,tmp_t2,t3,parent,child,t;
@@ -288,24 +292,27 @@ DROP TABLE t1, t2;
 --echo # Test case to verify check constraint with INSERT ON DUPLICATE
 --echo #-----------------------------------------------------------------------
 CREATE TABLE t1(f1 INT PRIMARY KEY, f2 INT CHECK (f2 < 10));
-INSERT INTO t1 VALUES (1, 1);
-INSERT INTO t1 VALUES (1, 2) ON DUPLICATE KEY UPDATE f2 = 4;
-SELECT * FROM t1;
-INSERT IGNORE INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 20;
 --error 3819
-INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 20;
+INSERT INTO t1 VALUES (2, 10) ON DUPLICATE KEY UPDATE f2 = 4;
+INSERT IGNORE INTO t1 VALUES (2, 10) ON DUPLICATE KEY UPDATE f2 = 4;
+INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 4;
+INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 4;
+--error 3819
+INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 10;
+INSERT IGNORE INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 10;
+--error 3819
+INSERT INTO t1 VALUES (1, 10) ON DUPLICATE KEY UPDATE f2 = 5;
 SELECT * FROM t1;
 DROP TABLE t1;
-
 
 --echo #------------------------------------------------------------------------
 --echo # Test case to verify check constraints removal on DROP table operation.
 --echo #------------------------------------------------------------------------
 CREATE TABLE t1(f1 INT PRIMARY KEY, f2 INT CONSTRAINT ck CHECK (f2 < 10));
 #SHOW CREATE TABLE t1;
-SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME='t1';
+SELECT * FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS;
 DROP TABLE t1;
-SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME='t1';
+SELECT * FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS;
 
 --echo #------------------------------------------------------------------------
 --echo # Test case to verify check constraints creation with ALTER TABLE DROP
@@ -368,6 +375,7 @@ CREATE TABLE t1(f1 INT,
                 CONSTRAINT ck2 CHECK (f1 > 10),
                 CONSTRAINT ck3 CHECK (f1 > 10) NOT ENFORCED);
 #SHOW CREATE TABLE t1;
+SELECT * FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS ORDER BY CONSTRAINT_NAME;
 SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = 't1' ORDER BY CONSTRAINT_NAME;
 
 --echo # REVOKE check constraint ck.
@@ -1067,13 +1075,13 @@ DROP TABLE t1,t3;
 create temporary table t1(f1 int constraint ck check(f1<10));
 create table t2(f1 int constraint ck check(f1<10));
 create temporary table t3(f1 int constraint ck check(f1<10));
-select * from information_schema.TABLE_CONSTRAINTS where table_name in ('t1', 't2', 't3');
+select * from information_schema.CHECK_CONSTRAINTS;
 drop table t2;
 drop temporary table t1,t3;
 
 
 --echo #-----------------------------------------------------------------------
---echo # Test case to verify multi_table_update and multi_table_insert
+--echo # Test case to verify multi_table_update,multi_table_insert and muti_table_replace
 --echo #-----------------------------------------------------------------------
 create table t1(c1 int primary key, c2 int, constraint cst1 check(c1 >= c2)) partition by hash(c1) partitions 3;
 create index t1_c2 on t1(c2) global;
@@ -1081,13 +1089,31 @@ insert into t1 values (1, 1);
 --error 3819
 insert into t1 values (1, 2);
 # muti table insert_update
-insert into t1 values (1, 3) on duplicate key update c2 = -1;
---error 3819
-insert into t1 values (2, 3) on duplicate key update c2 = 1;
+##update row
+insert into t1 values (1, 1) on duplicate key update c2 = -1;
 --error 3819
 insert into t1 values (1, 1) on duplicate key update c2 = 10;
+--error 3819
+insert into t1 values (1, 10) on duplicate key update c2 = 0;
+##insert row
+--error 3819 
+insert into t1 values (2, 3) on duplicate key update c2 = 1;
+insert into t1 values (2, 1) on duplicate key update c2 = 1;
+#muti table update
 update t1 set c2 = 0;
 --error 3819
 update t1 set c2 = 2;
+#muti table replace
+##insert row
+--error 3819
+replace into t1 values(3,10);
+replace into t1 values(3,1);
+##replace row 
+replace into t1 values(3,2);
+--error 3819
+replace into t1 values(3,4);
 select * from t1;
 drop table t1;
+
+connection sys_jianhua;
+alter system set _enable_static_typing_engine = true;

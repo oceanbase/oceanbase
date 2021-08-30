@@ -613,6 +613,46 @@ int ObPhyOperator::filter_row_for_check_cst(
   return ret;
 }
 
+int ObPhyOperator::filter_row_for_check_cst(
+    ObExprCtx& expr_ctx, const ObNewRow& row, const ObDList<ObSqlExpression>& filters, bool& is_filtered, int64_t beg_idx, int64_t end_idx) const
+{
+  int ret = OB_SUCCESS;
+  is_filtered = false;
+  if (beg_idx == OB_INVALID_ID && end_idx == OB_INVALID_ID) {
+    beg_idx = 0;
+    end_idx = filters.get_size();
+  } else if (OB_UNLIKELY(end_idx > filters.get_size())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("end_idx must be less equal than check_constraint_exprs.count()",
+        K(ret),
+        K(end_idx),
+        K(filters.get_size()));
+  }
+  if (OB_UNLIKELY(NULL == row.cells_ || row.count_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row is not init", K(ret));
+  } else if (!filters.is_empty()) {
+    if (OB_UNLIKELY(beg_idx < 0 || end_idx < beg_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected beg_idx or end_idx", K(ret), K(beg_idx), K(end_idx));
+    }
+    int p_idx = 0;
+    DLIST_FOREACH_X(p, filters, OB_SUCC(ret) && p_idx < end_idx)
+    {
+      if (p_idx < beg_idx) {
+        // skip
+      } else if (OB_FAIL(filter_row_inner_for_check_cst(expr_ctx, row, p, is_filtered))) {
+        LOG_WARN("fail to filter row", K(ret));
+      } else if (is_filtered) {
+        break;
+      }
+      p_idx ++;
+    }  // end for
+  }
+
+  return ret;
+}
+
 int ObPhyOperator::filter_row(
     ObExprCtx& expr_ctx, const ObNewRow& row, const ObIArray<ObISqlExpression*>& filters, bool& is_filtered)
 {

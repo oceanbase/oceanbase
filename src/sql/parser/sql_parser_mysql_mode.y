@@ -212,7 +212,7 @@ END_P SET_VAR DELIMITER
         DIRECTORY DISABLE DISCARD DISK DISKGROUP DO DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP
 
-        EFFECTIVE ENABLE ENCRYPTION END ENDS ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS
+        EFFECTIVE ENABLE ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED
 
@@ -298,8 +298,6 @@ END_P SET_VAR DELIMITER
 
         ZONE ZONE_LIST ZONE_TYPE
 
-        ENFORCED
-
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
@@ -379,7 +377,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_comment opt_as
 %type <node> column_name relation_name function_name column_label var_name relation_name_or_string row_format_option
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end
-%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint opt_constraint_name constraint_name  check_state constraint_definition 
+%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint opt_constraint_name constraint_name  check_state constraint_definition
 %type <node> opt_when
 %type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra
 %type <reserved_keyword> mysql_reserved_keyword
@@ -4109,10 +4107,10 @@ opt_constraint CHECK '(' expr ')' check_state
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 3, $1, $4, $6);
   $$->value_ = 1;
 }
-| opt_constraint CHECK '(' expr ')'
+| opt_constraint CHECK '(' expr ')' %prec LOWER_PARENS
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_ENFORCED_CONSTRAINT);
   dup_expr_string($4, result, @4.first_column, @4.last_column);
+  malloc_terminal_node($$, result->malloc_pool_, T_ENFORCED_CONSTRAINT);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 3, $1, $4, $$);
   $$->value_ = 1;
 }
@@ -6174,8 +6172,9 @@ CONSTRAINT opt_constraint_name
 ;
 
 check_state:
-NOT ENFORCED
+not ENFORCED
 {
+  (void)($1) ;
   malloc_terminal_node($$, result->malloc_pool_, T_NOENFORCED_CONSTRAINT);
 }
 | ENFORCED
@@ -10503,10 +10502,11 @@ opt_set table_option_list_space_seperated
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_FOREIGN_KEY_OPTION, 1, $1);
 }
-| DROP CONSTRAINT NAME_OB
+|
+DROP CONSTRAINT constraint_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_CONSTRAINT, 1, $3);
-  $$->value_ = 3;
+  $$->value_ = 3; // drop foreign key or check constraint, to be compatible with mysql
 }
 /*  | ORDER BY column_list
 //    {
@@ -10517,17 +10517,24 @@ opt_set table_option_list_space_seperated
 ;
 
 alter_constraint_option:
+DROP CONSTRAINT '(' name_list ')'
+{
+  merge_nodes($$, result, T_NAME_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 1, $$);
+  $$->value_ = 0; //only support drop check constraint
+}
+|
 DROP CHECK '(' name_list ')'
 {
   merge_nodes($$, result, T_NAME_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 1, $$);
-  $$->value_ = 0;
+  $$->value_ = 0; //drop check constraint
 }
 |
-DROP CHECK NAME_OB
+DROP CHECK constraint_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 1, $3);
-  $$->value_ = 0;
+  $$->value_ = 0; //drop check constraint
 }
 |
 ADD constraint_definition
@@ -10732,15 +10739,15 @@ ADD key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list '
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ALTER_PARALLEL, 2, $3, $4);
 }
-| ALTER CHECK NAME_OB check_state
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 2, $3, $4);
-  $$->value_ = 2;
-}
-| ALTER CONSTRAINT NAME_OB check_state
+| ALTER CONSTRAINT constraint_name check_state
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_CONSTRAINT_OPTION, 2, $3, $4);
-  $$->value_ = 2;
+  $$->value_ = 0; //修改check约束或外键约束状态
+}
+| ALTER CHECK constraint_name check_state
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_CONSTRAINT_OPTION, 2, $3, $4);
+  $$->value_ = 1; //修改check约束状态
 }
 ;
 

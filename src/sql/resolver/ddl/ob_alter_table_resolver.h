@@ -32,7 +32,7 @@ public:
   virtual int resolve(const ParseNode& parse_tree);
   int resolve_action_list(const ParseNode& node);
   int resolve_column_options(
-      const ParseNode& node, bool& is_modify_column_visibility, bool& is_drop_column, ObReducedVisibleColSet& reduced_visible_col_set);
+      const ParseNode& node, bool& is_modify_column_visibility, ObReducedVisibleColSet& reduced_visible_col_set, bool& is_drop_column);
   int resolve_index_options_oracle(const ParseNode& node);
   int resolve_index_options(const ParseNode& node);
   int resolve_partition_options(const ParseNode& node);

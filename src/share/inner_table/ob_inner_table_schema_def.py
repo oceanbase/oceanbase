@@ -1806,7 +1806,7 @@ all_foreign_key_def = dict(
   in_tenant_space = True,
 
   normal_columns = [
-    ('foreign_key_name', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH', 'false', ''),
+    ('foreign_key_name', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE', 'false', ''),
     ('child_table_id', 'int'),
     ('parent_table_id', 'int'),
     ('update_action', 'int'),
@@ -2410,7 +2410,7 @@ all_constraint_def = dict(
     in_tenant_space = True,
 
     normal_columns = [
-      ('constraint_name', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH', 'false'),
+      ('constraint_name', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE', 'false'),
       ('check_expr', 'varchar:OB_MAX_CONSTRAINT_EXPR_LENGTH', 'false'),
       ('schema_version', 'int'),
       ('constraint_type', 'int'),
@@ -7558,6 +7558,7 @@ def_table_schema(
   ('TABLE_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
   ('TABLE_NAME', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'false', ''),
   ('CONSTRAINT_TYPE', 'varchar:INDEX_NULL_LENGTH', 'false', ''),
+  ('ENFORCED', 'varchar:MAX_BOOL_STR_LENGTH', 'false', ''),
   ]
 )
 
@@ -9324,10 +9325,10 @@ def_table_schema(
   normal_columns = [
   ('CONSTRAINT_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
   ('CONSTRAINT_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-  ('CONSTRAINT_NAME', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH', 'false', ''),
+  ('CONSTRAINT_NAME', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE', 'false', ''),
   ('UNIQUE_CONSTRAINT_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
   ('UNIQUE_CONSTRAINT_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-  ('UNIQUE_CONSTRAINT_NAME', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH', 'true', 'NULL'),
+  ('UNIQUE_CONSTRAINT_NAME', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE', 'true', 'NULL'),
   ('MATCH_OPTION', 'varchar:64', 'false', ''),
   ('UPDATE_RULE', 'varchar:64', 'false', ''),
   ('DELETE_RULE', 'varchar:64', 'false', ''),
@@ -9774,6 +9775,23 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_global_transaction',
   keywords = all_def_keywords['__all_tenant_global_transaction']))
 
+def_table_schema(
+  tablegroup_id = 'OB_INVALID_ID',
+  database_id   = 'OB_INFORMATION_SCHEMA_ID',
+  table_name    = 'CHECK_CONSTRAINTS',
+  table_id      = '12207',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns    = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('CONSTRAINT_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
+  ('CONSTRAINT_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
+  ('CONSTRAINT_NAME', 'varchar:OB_MAX_COLUMN_NAME_LENGTH', 'false', ''),
+  ('CHECK_CLAUSE', 'varchar:OB_MAX_CONSTRAINT_EXPR_LENGTH', 'false', ''),
+  ]
+)
 
 ################################################################################
 # Oracle Virtual Table(15000,20000]

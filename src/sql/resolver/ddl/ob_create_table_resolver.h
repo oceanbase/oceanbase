@@ -81,7 +81,7 @@ private:
   int resolve_index_node(const ParseNode* node);
   int resolve_index_name(
       const ParseNode* node, const common::ObString& first_column_name, bool is_unique, ObString& uk_name);
-  int resolve_table_level_constraint(const ParseNode* node, ObArray<int>& constraint_position_list);
+  int resolve_table_level_constraint_for_mysql(const ParseNode* node, ObArray<int>& constraint_position_list);
   int build_partition_key_info(share::schema::ObTableSchema& table_schema, const bool is_subpart);
   // resolve partitoin option only used in ObCreateTableResolver now.
   int resolve_partition_option(ParseNode* node, share::schema::ObTableSchema& table_schema);

@@ -49,7 +49,7 @@ protected:
   virtual int rescan() override;
   virtual int inner_close() override;
   virtual int prepare_next_storage_row(const ObExprPtrIArray*& output) override;
-  int process_row(bool &is_ignored);
+  int process_row(bool & is_filtered);
   OB_INLINE int insert_rows(
       storage::ObDMLBaseParam& dml_param, const common::ObIArray<DMLPartInfo>& part_infos, int64_t& affected_rows);
   int do_table_insert();

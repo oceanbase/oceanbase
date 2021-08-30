@@ -688,7 +688,7 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
             SQL_RESV_LOG(WARN, "resolve index failed", K(ret));
           } else if (OB_FAIL(resolve_foreign_key(table_element_list_node, foreign_key_node_position_list))) {
             SQL_RESV_LOG(WARN, "resolve foreign key failed", K(ret));
-          } else if (OB_FAIL(resolve_table_level_constraint(table_element_list_node, table_level_constraint_list))) {
+          } else if (OB_FAIL(resolve_table_level_constraint_for_mysql(table_element_list_node, table_level_constraint_list))) {
             SQL_RESV_LOG(WARN, "resolve check constraint failed", K(ret));
           } else {
           }  // do nothing
@@ -1320,9 +1320,16 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode* node, ObArray
         } else { /*do nothing*/
         }
       } else if (T_CHECK_CONSTRAINT == element->type_) {
-        if (OB_FAIL(table_level_constraint_list.push_back(i))) {
-          SQL_RESV_LOG(WARN, "add check constraint node failed", K(ret));
-        } else { /*do nothing*/
+        if (share::is_mysql_mode()) {
+          if (OB_FAIL(table_level_constraint_list.push_back(i))) {
+            SQL_RESV_LOG(WARN, "add check constraint node failed", K(ret));
+          }
+        } else { //oracle mode
+          ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+          ObSEArray<ObConstraint, 4>& csts = create_table_stmt->get_create_table_arg().constraint_list_;
+          if (OB_FAIL(resolve_check_constraint_node(*element, csts))) {
+            SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
+          }
         }
       } else {
         // won't be here
@@ -2050,7 +2057,7 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema& table_schem
   return ret;
 }
 
-int ObCreateTableResolver::resolve_table_level_constraint(const ParseNode* node, ObArray<int>& constraint_position_list)
+int ObCreateTableResolver::resolve_table_level_constraint_for_mysql(const ParseNode* node, ObArray<int>& constraint_position_list)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {

@@ -42,6 +42,7 @@
 #include "observer/virtual_table/ob_mysql_db_table.h"
 #include "observer/virtual_table/ob_mysql_proc_table.h"
 #include "observer/virtual_table/ob_information_table_constraints_table.h"
+#include "observer/virtual_table/ob_information_check_constraints_table.h"
 #include "observer/virtual_table/ob_information_referential_constraints_table.h"
 #include "observer/virtual_table/ob_information_partitions_table.h"
 #include "observer/virtual_table/ob_all_virtual_session_event.h"
@@ -1341,6 +1342,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam& params, ObVirtualTableIte
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaTableConstraintsTable, table_constraint))) {
               table_constraint->set_tenant_id(real_tenant_id);
               vt_iter = static_cast<ObVirtualTableIterator*>(table_constraint);
+            }
+            break;
+          }
+          case OB_CHECK_CONSTRAINTS_TID: {
+            ObInfoSchemaCheckConstraintsTable* check_constraint = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaCheckConstraintsTable, check_constraint))) {
+              check_constraint->set_tenant_id(real_tenant_id);
+              vt_iter = static_cast<ObVirtualTableIterator*>(check_constraint);
             }
             break;
           }

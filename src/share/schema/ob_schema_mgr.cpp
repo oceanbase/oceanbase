@@ -2035,7 +2035,8 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2& table_schema)
             }
           }
           if (OB_SUCC(ret)) {
-            if (!is_oracle_mode && new_table_schema->is_tmp_table()) { /* do nothing*/
+            if (!is_oracle_mode && new_table_schema->is_tmp_table()) {
+              /* check constraints in non-temporary tables don't share namespace with constraints in temporary tables, do nothing*/
             } else if (OB_FAIL(
                     add_constraints_in_table(new_table_schema->get_simple_constraint_info_array(), 1 /*over_write*/))) {
               LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
@@ -2684,7 +2685,8 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
         if (OB_SUCC(ret)) {
           if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
             // do-nothing for liboblog
-          } else if (!is_oracle_mode && schema_to_del->is_tmp_table()) {//do nothing
+          } else if (!is_oracle_mode && schema_to_del->is_tmp_table()) {
+            /* check constraints in non-temporary tables don't share namespace with constraints in temporary tables, do nothing*/
           } else if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
             LOG_WARN("delete constraint info from a hash map failed", K(ret), K(*schema_to_del));
           }
@@ -3866,7 +3868,8 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t& fk_cnt, uint64_t& cst_cnt)
             if (OB_SUCC(ret)) {
               if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
                 // do-nothing for liboblog
-              } else if (!is_oracle_mode && table_schema->is_tmp_table()) { /* do nothing*/
+              } else if (!is_oracle_mode && table_schema->is_tmp_table()) {
+                /* check constraints in non-temporary tables don't share namespace with constraints in temporary tables, do nothing*/
               } else if (OB_FAIL(
                              add_constraints_in_table(table_schema->get_simple_constraint_info_array(), over_write))) {
                 LOG_WARN("add constraint info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));

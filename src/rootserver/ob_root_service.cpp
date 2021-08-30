@@ -4308,8 +4308,11 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
           // check for duplicate constraint names of foregin key
           if (!foreign_key_arg.foreign_key_name_.empty()) {
             bool is_foreign_key_name_exist = true;
-            if (OB_FAIL(ddl_service_.check_constraint_name_is_exist(
-                  schema_guard, table_schema, foreign_key_arg.foreign_key_name_, is_oracle_mode, true, is_foreign_key_name_exist))) {
+            if (is_oracle_mode && OB_FAIL(ddl_service_.check_constraint_name_is_exist(
+                  schema_guard, table_schema, foreign_key_arg.foreign_key_name_, is_foreign_key_name_exist))) {
+              LOG_WARN("fail to check foreign key name is exist or not", K(ret), K(foreign_key_arg.foreign_key_name_));
+            } else if (!is_oracle_mode && OB_FAIL(ddl_service_.check_fk_constraint_name_is_exist(
+                  schema_guard, table_schema, foreign_key_arg.foreign_key_name_, is_foreign_key_name_exist))) {
               LOG_WARN("fail to check foreign key name is exist or not", K(ret), K(foreign_key_arg.foreign_key_name_));
             } else if (is_foreign_key_name_exist) {
               if (is_oracle_mode) {

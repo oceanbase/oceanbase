@@ -136,10 +136,14 @@ int ObMultiTableInsertUpOp::shuffle_insert_up_row(bool& got_row)
     ObChunkDatumStore::Iterator insert_row_iter;
     OZ(replace_row_store_.begin(insert_row_iter));
     const ObChunkDatumStore::StoredRow* insert_row = NULL;
+    bool is_filtered = false;
     while (OB_SUCC(ret) && OB_SUCC(insert_row_iter.get_next_row(MY_SPEC.table_column_exprs_, eval_ctx_, &insert_row))) {
       got_row = true;
       constraint_values.reuse();
       LOG_DEBUG("insert iter next row", "row", ROWEXPR2STR(eval_ctx_, MY_SPEC.table_column_exprs_));
+      int end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
+      OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, end_idx));
+      OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
       OZ(MY_SPEC.duplicate_key_checker_.check_duplicate_rowkey(
           dupkey_checker_ctx_, MY_SPEC.table_column_exprs_, constraint_values));
       if (OB_SUCC(ret)) {
@@ -204,10 +208,6 @@ int ObMultiTableInsertUpOp::shuffle_final_insert_row(ObExecContext& ctx, const O
       MY_SPEC.table_dml_infos_.at(0).index_infos_.at(0).se_subplans_.at(INSERT_OP).subplan_root_;
   CK(OB_NOT_NULL(insert_spec));
   OZ(ForeignKeyHandle::do_handle_new_row(*this, insert_spec->fk_args_, insert_row));
-  bool is_filtered = false;
-  int end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
-  OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, end_idx));
-  OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
   OZ(MY_SPEC.shuffle_dml_row(ctx, *this, insert_row, INSERT_OP));
   return ret;
 }
@@ -230,9 +230,6 @@ int ObMultiTableInsertUpOp::shuffle_insert_row(
   OZ(ForeignKeyHandle::do_handle_new_row(*this, insert_spec->fk_args_, MY_SPEC.insert_row_));
 
   bool is_filtered = false;
-  int end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
-  OZ(filter_row_for_check_cst(MY_SPEC.check_constraint_exprs_, is_filtered, 0, end_idx));
-  OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
   OZ(MY_SPEC.duplicate_key_checker_.insert_new_row(dupkey_checker_ctx_, insert_exprs, insert_row), insert_row);
   OZ(MY_SPEC.shuffle_dml_row(ctx_, *this, insert_exprs, INSERT_OP), insert_row);
   return ret;

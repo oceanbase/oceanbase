@@ -65,6 +65,25 @@ int ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(const uint64_t tenan
   return ret;
 }
 
+int ObCompatModeGetter::check_is_mysql_mode_with_tenant_id(const uint64_t tenant_id, bool& is_mysql_mode)
+{
+  int ret = OB_SUCCESS;
+  ObWorker::CompatMode compat_mode = ObWorker::CompatMode::INVALID;
+
+  if (OB_FAIL(instance().get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("fail to get tenant mode", K(ret));
+  } else if (ObWorker::CompatMode::ORACLE == compat_mode) {
+    is_mysql_mode = false;
+  } else if (ObWorker::CompatMode::MYSQL == compat_mode) {
+    is_mysql_mode = true;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("compat_mode should not be INVALID.", K(ret));
+  }
+
+  return ret;
+}
+
 int ObCompatModeGetter::init(common::ObMySQLProxy* proxy)
 {
   int ret = OB_SUCCESS;

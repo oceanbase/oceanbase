@@ -721,7 +721,8 @@ protected:
 
   int filter_row_for_check_cst(common::ObExprCtx& expr_ctx, const common::ObNewRow& row,
       const common::ObDList<ObSqlExpression>& filters, bool& is_filtered) const;
-
+  int filter_row_for_check_cst(common::ObExprCtx& expr_ctx, const common::ObNewRow& row,
+      const common::ObDList<ObSqlExpression>& filters, bool& is_filtered, int64_t beg_idx, int64_t end_idx) const;
   int startup_filter(common::ObExprCtx& expr_ctx, bool& is_filtered) const;
   /**
    * @brief calculate the new row result

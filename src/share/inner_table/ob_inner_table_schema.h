@@ -756,6 +756,7 @@ public:
   static int all_virtual_pg_backup_backupset_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_backup_backup_log_archive_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_global_transaction_schema(share::schema::ObTableSchema &table_schema);
+  static int check_constraints_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_database_agent_schema(share::schema::ObTableSchema &table_schema);
@@ -1768,6 +1769,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_pg_backup_backupset_task_schema,
   ObInnerTableSchema::all_virtual_backup_backup_log_archive_status_schema,
   ObInnerTableSchema::all_virtual_global_transaction_schema,
+  ObInnerTableSchema::check_constraints_schema,
   ObInnerTableSchema::all_virtual_table_agent_schema,
   ObInnerTableSchema::all_virtual_column_agent_schema,
   ObInnerTableSchema::all_virtual_database_agent_schema,
@@ -2487,6 +2489,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_FILES_TID,
   OB_FILES_TID,
   OB_TENANT_VIRTUAL_OBJECT_DEFINITION_TID,
+  OB_CHECK_CONSTRAINTS_TID,
   OB_ALL_VIRTUAL_TABLE_AGENT_TID,
   OB_ALL_VIRTUAL_COLUMN_AGENT_TID,
   OB_ALL_VIRTUAL_DATABASE_AGENT_TID,
@@ -3353,6 +3356,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_FILES_TNAME,
   OB_FILES_TNAME,
   OB_TENANT_VIRTUAL_OBJECT_DEFINITION_TNAME,
+  OB_CHECK_CONSTRAINTS_TNAME,
   OB_ALL_VIRTUAL_TABLE_AGENT_TNAME,
   OB_ALL_VIRTUAL_COLUMN_AGENT_TNAME,
   OB_ALL_VIRTUAL_DATABASE_AGENT_TNAME,
@@ -4030,11 +4034,11 @@ static inline bool is_only_rs_virtual_table(const uint64_t tid)
 
 const int64_t OB_CORE_TABLE_COUNT = 5;
 const int64_t OB_SYS_TABLE_COUNT = 178;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 463;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 464;
 const int64_t OB_SYS_VIEW_COUNT = 350;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 997;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 998;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1000;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1001;
 
 } // end namespace share
 } // end namespace oceanbase

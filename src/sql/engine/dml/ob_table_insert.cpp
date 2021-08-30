@@ -311,27 +311,32 @@ int ObTableInsert::get_next_row(ObExecContext& ctx, const ObNewRow*& insert_row)
 {
   int ret = OB_SUCCESS;
   ObTableInsertCtx* insert_ctx = NULL;
-  bool is_ignored = false;
+  bool is_filtered = true;
+  
   if (OB_FAIL(is_valid(insert_ctx, ctx))) {
     LOG_WARN("the operator is not valid", K(ret));
-  } else if (OB_FAIL(inner_get_next_row(ctx, insert_row))) {
-    if (OB_ITER_END == ret) {
-      NG_TRACE(insert_iter_end);
+  }
+  while (OB_SUCC(ret) && is_filtered) {
+    if (OB_FAIL(inner_get_next_row(ctx, insert_row))) {
+      if (OB_ITER_END == ret) {
+        NG_TRACE(insert_iter_end);
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    } else if (OB_ISNULL(insert_row)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get invalid insert row", K(ret), K(insert_row), K(insert_ctx->expr_ctx_.calc_buf_));
+    } else if (OB_FAIL(copy_insert_row(
+                  *insert_ctx, insert_row, insert_ctx->get_cur_row(), need_copy_row_for_compute() || is_returning()))) {
+      LOG_WARN("fail to copy cur row failed", K(ret));
+    } else if (OB_FAIL(process_row(ctx, insert_ctx, insert_row, is_filtered))) {
+      LOG_WARN("fail to process the row", K(ret));
+    } else if (is_filtered && !(insert_ctx->dml_param_.is_ignore_ && share::is_mysql_mode())) { //in mysql mode, insert ignore operation skips violated rows
+      ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+      LOG_WARN("row is filtered by check filters, running is stopped");
     } else {
-      LOG_WARN("fail to get next row", K(ret));
+      insert_ctx->curr_row_num_++;
     }
-  } else if (OB_ISNULL(insert_row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("get invalid insert row", K(ret), K(insert_row), K(insert_ctx->expr_ctx_.calc_buf_));
-  } else if (OB_FAIL(copy_insert_row(
-                 *insert_ctx, insert_row, insert_ctx->get_cur_row(), need_copy_row_for_compute() || is_returning()))) {
-    LOG_WARN("fail to copy cur row failed", K(ret));
-  } else if (OB_FAIL(process_row(ctx, insert_ctx, insert_row, is_ignored))) {
-    LOG_WARN("fail to process the row", K(ret));
-  } else if (is_ignored) {
-    /*skip this row*/
-  } else {
-    insert_ctx->curr_row_num_++;
   }
   return ret;
 }
@@ -369,10 +374,10 @@ int ObTableInsert::get_next_rows(ObExecContext& ctx, const ObNewRow*& insert_row
       insert_ctx->rewind();
       static_cast<ObArenaAllocator*>(insert_ctx->expr_ctx_.calc_buf_)->reset_remain_one_page();
     }
-    bool is_ignored = false;
+
+    bool is_filtered = false;
     while (OB_SUCCESS == ret && row_count < insert_ctx->estimate_rows_ &&
            row_count < ObPhyOperator::ObPhyOperatorCtx::BULK_COUNT) {
-      is_ignored = false;
       if (OB_FAIL(child_op_->get_next_row(ctx, insert_row))) {
         if (OB_ITER_END == ret) {
           NG_TRACE(insert_iter_end);
@@ -388,10 +393,15 @@ int ObTableInsert::get_next_rows(ObExecContext& ctx, const ObNewRow*& insert_row
         }
       } else if (OB_FAIL(copy_insert_rows(*insert_ctx, insert_row))) {
         LOG_WARN("failed to copy insert rows", K(ret));
-      } else if (OB_FAIL(process_row(ctx, insert_ctx, insert_row, is_ignored))) {
+      } else if (OB_FAIL(process_row(ctx, insert_ctx, insert_row, is_filtered))) {
         LOG_WARN("fail to process the row", K(insert_row), K(ret));
-      } else if (is_ignored) {
-        /* skip this row*/
+      } else if (is_filtered) {
+        if (insert_ctx->dml_param_.is_ignore_ && share::is_mysql_mode()) {
+          //ignore flag ,skip this row
+        } else {
+          ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+          LOG_WARN("row is filtered by check filters, running is stopped");
+        }
       } else if (OB_FAIL(deep_copy_row(insert_ctx, insert_row))) {
         LOG_WARN("fail to deep copy the row", K(insert_row), K(ret));
       }
@@ -445,12 +455,11 @@ int ObTableInsert::do_column_convert(
 }
 
 OB_INLINE int ObTableInsert::process_row(
-    ObExecContext& ctx, ObTableInsertCtx* insert_ctx, const ObNewRow*& insert_row, bool& is_ignored) const
+    ObExecContext& ctx, ObTableInsertCtx* insert_ctx, const ObNewRow*& insert_row, bool& is_filtered) const
 {
   int ret = OB_SUCCESS;
   ObExprCtx& expr_ctx = insert_ctx->expr_ctx_;
-  bool is_filtered = false;
-  is_ignored = false;
+  is_filtered = false;
   if (OB_FAIL(do_column_convert(expr_ctx, *insert_ctx->new_row_exprs_, *const_cast<ObNewRow*>(insert_row)))) {
     int64_t err_col_idx = (expr_ctx.err_col_idx_) % column_ids_.count();
     log_user_error_inner(ret, err_col_idx, insert_ctx->curr_row_num_ + 1, ctx);
@@ -470,14 +479,6 @@ OB_INLINE int ObTableInsert::process_row(
     OZ(ForeignKeyHandle::do_handle_new_row(*insert_ctx, fk_args_, *insert_row));
     OZ(ObPhyOperator::filter_row_for_check_cst(
         insert_ctx->expr_ctx_, *insert_row, check_constraint_exprs_, is_filtered));
-    if (is_filtered) {
-      if (insert_ctx->dml_param_.is_ignore_ && share::is_mysql_mode()) {
-        is_ignored = true; //ignore flag ,skip this row
-      } else {
-        ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-        LOG_WARN("row is filtered by check filters, running is stopped");
-      }
-    }
   }
   return ret;
 }

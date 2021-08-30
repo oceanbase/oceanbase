@@ -4831,6 +4831,10 @@ int ObCodeGeneratorImpl::convert_replace(ObLogInsert& op, const PhyOpsDesc& chil
     } else {
       multi_table_replace->get_duplicate_key_checker().set_dml_flag(storage::INSERT_RETURN_ALL_DUP);
     }
+    //convert check constraint
+    if (OB_FAIL(convert_check_constraint(op, *phy_op, table_row_desc))) {
+      LOG_WARN("failed to convert check constraints", K(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -4847,6 +4851,9 @@ int ObCodeGeneratorImpl::convert_replace(ObLogInsert& op, const PhyOpsDesc& chil
     RowDesc extra_row_desc;
     OZ(extra_row_desc.init());
     OZ(generate_insert_new_row_desc(op.get_table_columns(), op.get_value_exprs(), *out_row_desc, extra_row_desc));
+    if (OB_SUCC(ret) && !op.is_multi_part_dml() &&OB_FAIL(convert_check_constraint(op, *phy_op, extra_row_desc))) {
+      LOG_WARN("failed to convert check constraints", K(ret));
+    }
     OZ(add_compute(op.get_output_exprs(), *out_row_desc, &extra_row_desc, *phy_op),
         op.get_name(),
         *out_row_desc,
@@ -5016,6 +5023,14 @@ int ObCodeGeneratorImpl::convert_insert_up(ObLogInsert& op, const PhyOpsDesc& ch
           phy_op->get_old_projector_size(),
           *phy_op));
     }
+    RowDesc extra_row_desc;
+    if (OB_FAIL(extra_row_desc.init())) {
+      LOG_WARN("failed to init new row desc", K(ret));
+    } else if (OB_FAIL(generate_update_new_row_desc(table_assigns.assignments_, update_row_desc, extra_row_desc))) {
+      LOG_WARN("failed to generate update new row desc", K(ret));
+    } else if (OB_FAIL(convert_check_constraint(op, *phy_op, extra_row_desc))) {
+      LOG_WARN("failed to convert check constraints", K(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -5048,6 +5063,8 @@ int ObCodeGeneratorImpl::convert_insert_up(ObLogInsert& op, const PhyOpsDesc& ch
     }
     if (OB_FAIL(convert_multi_table_insert_up_info(update_row_desc, op, *multi_table_insert_up))) {
       LOG_WARN("convert multi table insert update info failed", K(ret));
+    } else if (OB_FAIL(convert_check_constraint(op, *phy_op, update_row_desc))) {
+      LOG_WARN("failed to convert check constraints", K(ret));
     } else if (OB_FAIL(convert_duplicate_key_checker(*source_row_desc,
                    update_row_desc,
                    op.get_dupkey_checker(),
@@ -5058,10 +5075,18 @@ int ObCodeGeneratorImpl::convert_insert_up(ObLogInsert& op, const PhyOpsDesc& ch
     }
   }
   if (OB_SUCC(ret) && !op.is_multi_part_dml()) {
+    RowDesc extra_row_desc;
     if (OB_FAIL(convert_foreign_keys(op, *phy_op))) {
       LOG_WARN("failed to convert foreign keys", K(ret));
     } else if (OB_FAIL(convert_table_dml_param(op, *phy_op))) {
       LOG_ERROR("fail to convert table dml param", K(ret));
+    } else if (OB_FAIL(extra_row_desc.init())) {
+      LOG_WARN("failed to init extra row desc", K(ret));
+    } else if (OB_FAIL(generate_insert_new_row_desc(
+                   op.get_table_columns(), op.get_value_exprs(), *out_row_desc, extra_row_desc))) {
+      LOG_WARN("failed to generate insert new row desc", K(ret));
+    } else if (OB_FAIL(convert_check_constraint(op, *phy_op, extra_row_desc))) {
+      LOG_WARN("failed to convert check constraints", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

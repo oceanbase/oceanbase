@@ -792,7 +792,7 @@ int ObInnerTableSchema::all_virtual_constraint_agent_schema(ObTableSchema &table
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      OB_MAX_CONSTRAINT_NAME_LENGTH, //column_length
+      OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable

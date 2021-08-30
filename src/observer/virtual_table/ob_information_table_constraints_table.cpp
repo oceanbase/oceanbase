@@ -141,9 +141,7 @@ int ObInfoSchemaTableConstraintsTable::add_table_constraints(
   if (OB_SUCCESS == ret && OB_FAIL(add_index_constraints(table_schema, database_name, cells, col_count))) {
     SERVER_LOG(WARN, "fail to add normal indexes", K(ret));
   }
-  if (lib::is_mysql_mode() && table_schema.is_tmp_table()) {
-    // do nothing
-  } else if (OB_SUCCESS == ret && OB_FAIL(add_check_constraints(table_schema, database_name, cells, col_count))) {
+  if (!table_schema.is_tmp_table() && OB_SUCCESS == ret && OB_FAIL(add_check_constraints(table_schema, database_name, cells, col_count))) {
     SERVER_LOG(WARN, "fail to add check constraintes", K(ret));
   }
   if (OB_SUCCESS == ret && OB_FAIL(add_foreign_key_constraints(table_schema, database_name, cells, col_count))) {
@@ -191,6 +189,11 @@ int ObInfoSchemaTableConstraintsTable::add_rowkey_constraints(
       }
       case CONSTRAINT_TYPE: {
         cells[cell_idx].set_varchar(PRIMARY_KEY_CONSTRAINT_TYPE);
+        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
+      }
+      case ENFORCED: {
+        cells[cell_idx].set_varchar(ObString("YES"));
         cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
@@ -280,6 +283,11 @@ int ObInfoSchemaTableConstraintsTable::add_index_constraints(
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
+          case ENFORCED: {
+            cells[cell_idx].set_varchar(ObString("YES"));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(i), K(j), K(output_column_ids_), K(col_id));
@@ -343,6 +351,11 @@ int ObInfoSchemaTableConstraintsTable::add_foreign_key_constraints(const share::
           }
           case CONSTRAINT_TYPE: {
             cells[cell_idx].set_varchar(FOREIGN_KEY_CONSTRAINT_TYPE);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case ENFORCED: {
+            cells[cell_idx].set_varchar(ObString("YES"));
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
@@ -418,6 +431,11 @@ int ObInfoSchemaTableConstraintsTable::add_check_constraints(
           }
           case CONSTRAINT_TYPE: {
             cells[cell_idx].set_varchar(CHECK_CONSTRAINT_TYPE);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case ENFORCED: {
+            cells[cell_idx].set_varchar(constraint->get_enable_flag() ? ObString("YES"):ObString("NO"));
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
