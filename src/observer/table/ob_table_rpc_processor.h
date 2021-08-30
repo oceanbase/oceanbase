@@ -207,7 +207,7 @@ public:
 
 protected:
   virtual void set_req_has_wokenup() override;
-  int64_t get_timeout_ts() const;
+  virtual int64_t get_timeout_ts() const;
   virtual void save_request_string() override;
   virtual void generate_sql_id() override;
   virtual uint64_t get_request_checksum() = 0;

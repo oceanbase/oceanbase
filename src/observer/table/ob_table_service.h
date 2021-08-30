@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_res_type.h"
 #include "share/table/ob_table_rpc_struct.h"
 #include "storage/ob_dml_param.h"
+#include "share/schema/ob_table_param.h"
 namespace oceanbase
 {
 namespace storage
