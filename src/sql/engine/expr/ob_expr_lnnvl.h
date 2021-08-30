@@ -21,8 +21,8 @@ class ObExprFuncLnnvl : public ObFuncExprOperator {
 public:
   explicit ObExprFuncLnnvl(common::ObIAllocator& alloc);
   virtual ~ObExprFuncLnnvl();
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const;
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& input, common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
   static int eval_lnnvl(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);

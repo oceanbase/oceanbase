@@ -94,7 +94,7 @@ public:
   void set_rowkey(const common::ObExtStoreRowkey& rowkey);
   virtual int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context,
       storage::ObITable* table, const void* query_range) override;
-  virtual int inner_get_next_row(const storage::ObStoreRow*& row);
+  virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
   virtual void reset();
   virtual void reuse() override
   {
@@ -129,13 +129,13 @@ public:
       storage::ObITable* table, const void* query_range) override;
 
 public:
-  virtual int inner_get_next_row(const storage::ObStoreRow*& row);
+  virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
   virtual void reset();
   virtual void reuse() override
   {
     reset();
   }
-  virtual int get_gap_end(int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size)
+  virtual int get_gap_end(int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size) override
   {
     int ret = common::OB_SUCCESS;
     range_idx = 0;
@@ -145,7 +145,7 @@ public:
     }
     return ret;
   }
-  virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key);
+  virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key) override;
   ObIMemtable* get_memtable()
   {
     return memtable_;
@@ -160,7 +160,7 @@ public:
                ? 0
                : context_->store_ctx_->mem_ctx_->get_read_snapshot();
   }
-  uint8_t get_iter_flag()
+  uint8_t get_iter_flag() override
   {
     return iter_flag_;
   }
@@ -210,7 +210,7 @@ public:
       storage::ObITable* table, const void* query_range) override;
 
 public:
-  virtual int inner_get_next_row(const storage::ObStoreRow*& row);
+  virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
   virtual void reset();
   virtual void reuse() override
   {
@@ -248,14 +248,14 @@ public:
 public:
   int init(const storage::ObTableIterParam& param, storage::ObTableAccessContext& context, storage::ObITable* table,
       const void* query_range) override;
-  virtual int inner_get_next_row(const storage::ObStoreRow*& row);
-  virtual void reset();
+  virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
+  virtual void reset() override;
   virtual void reuse() override
   {
     reset();
   }
-  virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key);
-  virtual int get_gap_end(int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size)
+  virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key) override;
+  virtual int get_gap_end(int64_t& range_idx, const common::ObStoreRowkey*& gap_key, int64_t& gap_size) override
   {
     int ret = common::OB_SUCCESS;
     if (OB_FAIL(ObMemtableScanIterator::get_gap_end(range_idx, gap_key, gap_size))) {
@@ -293,7 +293,7 @@ public:
       storage::ObITable* table, const void* query_range) override;
 
 public:
-  virtual int inner_get_next_row(const storage::ObStoreRow*& row);
+  virtual int inner_get_next_row(const storage::ObStoreRow*& row) override;
   virtual void reset();
   virtual void reuse() override
   {

@@ -20,8 +20,10 @@ class ObExprUsecToTime : public ObFuncExprOperator {
 public:
   explicit ObExprUsecToTime(common::ObIAllocator& alloc);
   virtual ~ObExprUsecToTime();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& usec, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& usec, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type1(
+      ObExprResType& type, ObExprResType& usec, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result1(
+      common::ObObj& result, const common::ObObj& usec, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
 private:

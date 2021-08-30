@@ -22,14 +22,14 @@ class ObSSTableRowMultiGetter : public ObSSTableRowGetter {
 public:
   ObSSTableRowMultiGetter();
   virtual ~ObSSTableRowMultiGetter();
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
   virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key) override;
 
 protected:
-  virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt);
-  virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle);
-  virtual int get_range_count(const void* query_range, int64_t& range_count) const;
+  virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt) override;
+  virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle) override;
+  virtual int get_range_count(const void* query_range, int64_t& range_count) const override;
   virtual int get_skip_range_ctx(
       ObSSTableReadHandle& read_handle, const int64_t cur_micro_idx, ObSSTableSkipRangeCtx*& ctx) override;
 

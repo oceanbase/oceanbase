@@ -58,7 +58,7 @@ public:
   virtual ~ObSqlQueryExecutor()
   {}
 
-  virtual int execute(sql::ObSql& engine, sql::ObSqlCtx& ctx, sql::ObResultSet& res)
+  virtual int execute(sql::ObSql& engine, sql::ObSqlCtx& ctx, sql::ObResultSet& res) override
   {
     observer::ObReqTimeGuard req_timeinfo_guard;
     int ret = OB_SUCCESS;

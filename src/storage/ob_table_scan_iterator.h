@@ -98,9 +98,9 @@ public:
     common::ObNewRow* r = NULL;
     return get_next_row(r);
   }
-  virtual void reset();
+  virtual void reset() override;
   int set_range_array_idx(const int64_t range_array_idx);
-  virtual int release_table_ref();
+  virtual int release_table_ref() override;
 private:
   bool is_inited_;
   ObTableScanStoreRowIterator* row_iter_;
@@ -152,7 +152,7 @@ public:
       ObPartitionStore& partition_store);
   int rescan(ObTableScanParam& scan_param);
   virtual void reset() override;
-  virtual int release_table_ref();
+  virtual int release_table_ref() override;
 private:
   ObTableScanIterIterator iter_;
   ObNewRowIterator* row_iter_;

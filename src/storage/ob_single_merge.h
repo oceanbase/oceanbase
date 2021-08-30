@@ -24,7 +24,7 @@ public:
   ObSingleMerge();
   virtual ~ObSingleMerge();
   int open(const common::ObExtStoreRowkey& rowkey);
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
   static int estimate_row_count(const common::ObQueryFlag query_flag, const uint64_t table_id,
       const common::ObExtStoreRowkey& rowkey, const common::ObIArray<ObITable*>& stores, ObPartitionEst& part_estimate);
@@ -33,7 +33,7 @@ protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
   virtual int is_range_valid() const override;
-  virtual int inner_get_next_row(ObStoreRow& row);
+  virtual int inner_get_next_row(ObStoreRow& row) override;
   virtual void collect_merge_stat(ObTableStoreStat& stat) const override;
 
 private:

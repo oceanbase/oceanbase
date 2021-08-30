@@ -36,8 +36,8 @@ public:
   ObBuildIndexDag();
   virtual ~ObBuildIndexDag();
   int init(const ObPartitionKey& pkey, storage::ObPartitionService* partition_service);
-  virtual int64_t hash() const;
-  virtual bool operator==(const share::ObIDag& other) const;
+  virtual int64_t hash() const override;
+  virtual bool operator==(const share::ObIDag& other) const override;
   virtual int prepare();
   virtual int clean_up();
   int get_partition_storage(ObPartitionStorage*& storage);
@@ -67,7 +67,7 @@ public:
   {
     return pkey_.get_tenant_id();
   }
-  virtual int fill_comment(char* buf, const int64_t buf_len) const;
+  virtual int fill_comment(char* buf, const int64_t buf_len) const override;
   virtual int64_t get_compat_mode() const override
   {
     return static_cast<int64_t>(compat_mode_);
@@ -334,8 +334,8 @@ public:
   int alloc_local_index_task_callback(ObLocalUniqueIndexCallback*& callback);
   int alloc_global_index_task_callback(
       const ObPartitionKey& pkey, const uint64_t index_id, ObGlobalUniqueIndexCallback*& callback);
-  virtual int64_t hash() const;
-  virtual bool operator==(const share::ObIDag& other) const;
+  virtual int64_t hash() const override;
+  virtual bool operator==(const share::ObIDag& other) const override;
   virtual int64_t get_tenant_id() const override
   {
     return pkey_.get_tenant_id();

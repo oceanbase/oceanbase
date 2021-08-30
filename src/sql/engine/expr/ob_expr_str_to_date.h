@@ -23,9 +23,9 @@ public:
   explicit ObExprStrToDate(common::ObIAllocator& alloc);
   virtual ~ObExprStrToDate();
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& date, ObExprResType& format, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& date, const common::ObObj& format, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType& date, ObExprResType& format, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result2(common::ObObj& result, const common::ObObj& date, const common::ObObj& format,
+      common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
 private:

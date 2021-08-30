@@ -37,7 +37,7 @@ public:
   explicit ObDtlLocalChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr& peer);
   virtual ~ObDtlLocalChannel();
 
-  virtual DtlChannelType get_channel_type()
+  virtual DtlChannelType get_channel_type() override
   {
     return DtlChannelType::LOCAL_CHANNEL;
   }
@@ -46,7 +46,7 @@ public:
   virtual void destroy();
 
   virtual int feedup(ObDtlLinkedBuffer*& buffer) override;
-  virtual int send_message(ObDtlLinkedBuffer*& buf);
+  virtual int send_message(ObDtlLinkedBuffer*& buf) override;
 
 private:
   int send_shared_message(ObDtlLinkedBuffer*& buf);

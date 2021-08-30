@@ -41,7 +41,7 @@ public:
   explicit ObCreateTableResolver(ObResolverParams& params);
   virtual ~ObCreateTableResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
+  virtual int resolve(const ParseNode& parse_tree) override;
 
 private:
   enum ResolveRule { RESOLVE_ALL = 0, RESOLVE_COL_ONLY, RESOLVE_NON_COL };

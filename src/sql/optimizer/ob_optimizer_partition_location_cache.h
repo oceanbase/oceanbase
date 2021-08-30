@@ -23,7 +23,7 @@ public:
   ObOptimizerPartitionLocationCache(common::ObIAllocator& allocator, share::ObIPartitionLocationCache* location_cache);
   virtual ~ObOptimizerPartitionLocationCache();
 
-  virtual PartitionLocationCacheType get_type() const
+  virtual PartitionLocationCacheType get_type() const override
   {
     return ObOptimizerPartitionLocationCache::PART_LOC_CACHE_TYPE_OPTIMIZER;
   }
@@ -69,7 +69,7 @@ public:
   virtual int nonblock_renew_with_limiter(
       const common::ObPartitionKey& partition, const int64_t expire_renew_time, bool& is_limited) override;
   // link table.
-  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location);
+  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location) override;
   inline share::ObIPartitionLocationCache* get_location_cache()
   {
     return location_cache_;

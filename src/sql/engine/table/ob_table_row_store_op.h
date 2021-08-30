@@ -41,7 +41,7 @@ public:
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator);
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override;
 
 private:
   // One partition corresponds to one row store

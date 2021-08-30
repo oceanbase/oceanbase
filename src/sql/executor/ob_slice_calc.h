@@ -88,7 +88,7 @@ public:
   {}
   virtual ~ObAllToOneSliceIdxCalc() = default;
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx) override;
-  virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx);
+  virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx) override;
 
 protected:
 };
@@ -135,7 +135,8 @@ public:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> PartId2ArrayIdxMap;
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> SubPartId2ArrayIdxMap;
 
-  virtual ~ObRepartSliceIdxCalc() {}
+  virtual ~ObRepartSliceIdxCalc()
+  {}
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx) override;
 
   virtual int get_slice_idx(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, int64_t& slice_idx) override;
@@ -314,7 +315,8 @@ public:
   {}
 
   virtual int get_slice_indexes(const common::ObNewRow& row, SliceIdxArray& slice_idx_array) override;
-  virtual int get_slice_indexes(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, SliceIdxArray& slice_idx_array);
+  virtual int get_slice_indexes(
+      const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, SliceIdxArray& slice_idx_array) override;
 
 private:
   const ChannelIdxArray& channel_idx_;
@@ -342,7 +344,8 @@ public:
   {}
 
   virtual int get_slice_indexes(const common::ObNewRow& row, SliceIdxArray& slice_idx_array) override;
-  virtual int get_slice_indexes(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, SliceIdxArray& slice_idx_array);
+  virtual int get_slice_indexes(
+      const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx, SliceIdxArray& slice_idx_array) override;
 
 private:
   uint64_t slice_cnt_;
@@ -379,7 +382,7 @@ public:
   int calc_hash_value(const ObObj& obj, const ObObjType type, const ObCollationType cs_type, uint64_t& hash_val);
   int calc_hash_value(ObEvalCtx& eval_ctx, uint64_t& hash_val);
   int get_multi_hash_value(const ObNewRow& row, uint64_t& hash_val);
-  virtual int get_slice_idx(const ObNewRow& row, int64_t& slice_idx);
+  virtual int get_slice_idx(const ObNewRow& row, int64_t& slice_idx) override;
   int get_slice_idx(const ObIArray<ObExpr*>& row, ObEvalCtx& eval_ctx, int64_t& slice_idx) override;
 
   common::ObExprCtx* expr_ctx_;

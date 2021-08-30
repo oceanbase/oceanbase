@@ -28,7 +28,7 @@ public:
 
 private:
   virtual int compare_single_row(const common::ObNewRow& left_row, const common::ObNewRow& right_row,
-      common::ObExprCtx& expr_ctx, common::ObObj& result) const;
+      common::ObExprCtx& expr_ctx, common::ObObj& result) const override;
   DISALLOW_COPY_AND_ASSIGN(ObExprSubQueryNSEqual);
 };
 }  // namespace sql

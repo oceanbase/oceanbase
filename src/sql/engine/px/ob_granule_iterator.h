@@ -163,7 +163,7 @@ public:
   virtual int inner_close(ObExecContext& ctx) const override;
   virtual int inner_create_operator_ctx(ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx) const;
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const override;
-  virtual int create_operator_input(ObExecContext& ctx) const;
+  virtual int create_operator_input(ObExecContext& ctx) const override;
   virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const override
   {
     UNUSED(ctx);

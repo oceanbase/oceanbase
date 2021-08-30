@@ -246,7 +246,7 @@ protected:
   int calculate_table_location(uint64_t loc_table_id, uint64_t ref_table_id, const ObPartHint* part_hint,
       ObTablePartitionInfo& table_partition_info);
   int alloc_partition_id_expr(ObAllocExprContext& ctx);
-  virtual int allocate_expr_post(ObAllocExprContext &ctx);
+  virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
   int alloc_shadow_pk_column_for_gui(ObAllocExprContext& ctx);
   virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed);
   int check_multi_table_dml_for_px(AllocExchContext& ctx, ObShardingInfo* source_sharding,

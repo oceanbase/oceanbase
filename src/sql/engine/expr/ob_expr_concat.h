@@ -23,9 +23,9 @@ public:
   virtual ~ObExprConcat();
 
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   static int calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
       common::ObIAllocator* allocator, const common::ObObjType result_type, bool is_oracle_mode);
   // Check result length with %max_result_len (if %max_result_len greater than zero)

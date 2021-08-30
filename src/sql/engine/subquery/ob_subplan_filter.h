@@ -26,9 +26,9 @@ public:
   explicit ObSubPlanFilter(common::ObIAllocator& alloc);
   virtual ~ObSubPlanFilter();
 
-  void reset();
-  void reuse();
-  int rescan(ObExecContext& ctx) const;
+  void reset() override;
+  void reuse() override;
+  int rescan(ObExecContext& ctx) const override;
 
   /**
    * @brief add rescan param to subplan filter
@@ -65,7 +65,7 @@ public:
   {
     return update_set_;
   }
-  virtual int open(ObExecContext& ctx) const;
+  virtual int open(ObExecContext& ctx) const override;
   virtual int switch_iterator(ObExecContext& ctx) const override;
 
 private:
@@ -74,34 +74,34 @@ private:
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context
    * @param row[out], ObNewRow an obj array and row_size
    */
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
   /**
    * @brief close operator, not including children operators.
    * Every op should implement this method.
    */
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_close(ObExecContext& ctx) const override;
   /**
    * @brief wrap the object of ObExprCtx, and reset calc_buf
    * @param exec_ctx[in], execute context
    * @param expr_ctx[out], sql expression calculate buffer context
    * @return if success, return OB_SUCCESS
    */
-  virtual int wrap_expr_ctx(ObExecContext& exec_ctx, common::ObExprCtx& expr_ctx) const;
+  virtual int wrap_expr_ctx(ObExecContext& exec_ctx, common::ObExprCtx& expr_ctx) const override;
   int prepare_rescan_params(ObExecContext& ctx, const common::ObNewRow& row) const;
   int prepare_onetime_exprs(ObExecContext& ctx) const;
-  virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
+  virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const override;
   int handle_update_set(ObSubPlanFilterCtx* subplan_ctx, const common::ObNewRow*& row) const;
   int construct_array_params(ObExecContext& ctx) const;
   int reset_rescan_params(ObExecContext &ctx) const;

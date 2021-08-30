@@ -73,42 +73,42 @@ public:
   }
 
 protected:
-  virtual int deserialize()
+  virtual int deserialize() override
   {
     return common::OB_SUCCESS;
   }
-  virtual int process();
-  virtual void disconnect()
+  virtual int process() override;
+  virtual void disconnect() override
   {
     ObMPBase::disconnect();
   }
-  virtual void update_last_pkt_pos()
+  virtual void update_last_pkt_pos() override
   {
     if (NULL != ez_buf_) {
       comp_context_.update_last_pkt_pos(ez_buf_->last);
     }
   }
-  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL)
+  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL) override
   {
     return ObMPBase::send_error_packet(err, errmsg, is_partition_hit, extra_err_info);
   }
-  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param)
+  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param) override
   {
     return ObMPBase::send_ok_packet(session, ok_param);
   }
-  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result)
+  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result) override
   {
     return ObMPBase::send_eof_packet(session, result);
   }
-  virtual bool need_send_extra_ok_packet()
+  virtual bool need_send_extra_ok_packet() override
   {
     return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet();
   }
-  virtual int response_packet(obmysql::ObMySQLPacket& pkt)
+  virtual int response_packet(obmysql::ObMySQLPacket& pkt) override
   {
     return ObMPBase::response_packet(pkt);
   }
-  virtual int after_process()
+  virtual int after_process() override
   {
     return ObMPBase::after_process();
   }
@@ -153,11 +153,11 @@ private:
       const common::ObTimeZoneInfo* tz_info, sql::TypeInfo* type_info, sql::TypeInfo* dst_type_info, ObObjParam& param);
   int decode_type_info(const char*& buf, sql::TypeInfo& type_info);
 
-  virtual int before_response()
+  virtual int before_response() override
   {
     return OB_SUCCESS;
   }
-  virtual int before_process();
+  virtual int before_process() override;
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
 
   // copy or convert string, resove %extra_buf_len before result string.

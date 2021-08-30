@@ -132,10 +132,10 @@ protected:
     return partition_id_idx_;
   }
   virtual int do_transmit(ObExecContext& ctx) const = 0;
-  int inner_open(ObExecContext& exec_ctx) const;
-  int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
+  int inner_open(ObExecContext& exec_ctx) const override;
+  int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
-  int inner_close(ObExecContext& exec_ctx) const;
+  int inner_close(ObExecContext& exec_ctx) const override;
   static int link_ch_sets(
       ObPxTaskChSet& ch_set, common::ObIArray<dtl::ObDtlChannel*>& channels, dtl::ObDtlFlowControl* dfc = nullptr);
   int send_rows(ObExecContext& exec_ctx, ObPxTransmitCtx& transmit_ctx, ObSliceIdxCalc& slice_calc) const;

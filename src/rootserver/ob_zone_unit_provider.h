@@ -65,8 +65,8 @@ public:
   {
     zu_ = my_zu;
   }
-  virtual const share::ObUnitInfo* at(int64_t idx) const;
-  virtual int64_t count() const;
+  virtual const share::ObUnitInfo* at(int64_t idx) const override;
+  virtual int64_t count() const override;
   virtual int get_target_unit_idx(const int64_t unit_offset, common::hash::ObHashSet<int64_t>& unit_set,
       const bool is_primary_partition, int64_t& unit_idx) const override;
   virtual int update_tg_pg_count(const int64_t unit_idx, const bool is_primary_partition) override;
@@ -141,8 +141,8 @@ public:
   {
     all_unit_ = all_unit;
   }
-  virtual const share::ObUnitInfo* at(int64_t idx) const;
-  virtual int64_t count() const;
+  virtual const share::ObUnitInfo* at(int64_t idx) const override;
+  virtual int64_t count() const override;
   virtual int get_target_unit_idx(const int64_t unit_offset, common::hash::ObHashSet<int64_t>& unit_set,
       const bool is_primary_partition, int64_t& unit_idx) const override;
   virtual int update_tg_pg_count(const int64_t unit_idx, const bool is_primary_partition) override;
@@ -161,7 +161,7 @@ public:
   {}
   virtual ~ObZoneLogonlyUnitProvider()
   {}
-  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua);
+  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) override;
   virtual int get_all_zone_units(ZoneUnitArray& zone_unit) const override;
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const override;
   virtual bool exist(const ObZone& zone, const uint64_t unit_id) const override;
@@ -184,7 +184,7 @@ public:
   {}
   virtual int get_all_zone_units(ZoneUnitArray& zone_unit) const override;
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const override;
-  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua);
+  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) override;
 
 private:
   const ZoneUnitArray& all_zone_units_;
@@ -201,7 +201,7 @@ public:
   {}
   virtual ~ObAllZoneUnitsProvider()
   {}
-  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua);
+  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) override;
   virtual int get_all_zone_units(ZoneUnitArray& zone_unit) const override;
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const override;
 

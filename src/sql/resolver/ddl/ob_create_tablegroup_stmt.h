@@ -33,7 +33,7 @@ public:
   virtual int set_primary_zone(const common::ObString& zone) override;
   virtual int set_locality(const common::ObString& locality) override;
   obrpc::ObCreateTablegroupArg& get_create_tablegroup_arg();
-  virtual obrpc::ObDDLArg& get_ddl_arg()
+  virtual obrpc::ObDDLArg& get_ddl_arg() override
   {
     return create_tablegroup_arg_;
   }

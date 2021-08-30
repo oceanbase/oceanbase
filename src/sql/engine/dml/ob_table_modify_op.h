@@ -169,7 +169,7 @@ public:
   {}
   virtual ~ObTableModifyOpInput()
   {}
-  virtual void reset()
+  virtual void reset() override
   {
     location_idx_ = common::OB_INVALID_INDEX;
     part_infos_.reset();
@@ -187,7 +187,7 @@ public:
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator)
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override
   {
     part_infos_.set_allocator(allocator);
   }
@@ -351,9 +351,9 @@ public:
   }
 
 protected:
-  OperatorOpenOrder get_operator_open_order() const;
-  virtual int inner_open();
-  virtual int inner_close();
+  OperatorOpenOrder get_operator_open_order() const override;
+  virtual int inner_open() override;
+  virtual int inner_close() override;
 
   // project expressions to old style row, allocate cells from ctx_.get_allocator() if needed.
   int project_row(ObExpr* const* exprs, const int64_t cnt, common::ObNewRow& row) const;

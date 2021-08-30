@@ -37,7 +37,7 @@ public:
 private:
   virtual int init_non_exist_map_item(MapItem& item, const share::schema::ObColumnSchemaV2& col) override;
 
-  virtual int setup_inital_rowkey_condition(common::ObSqlString& cols, common::ObSqlString& vals);
+  virtual int setup_inital_rowkey_condition(common::ObSqlString& cols, common::ObSqlString& vals) override;
   virtual int add_extra_condition(common::ObSqlString& sql) override;
 
   bool check_tenant_in_range(const uint64_t tenant_id, const common::ObNewRange& range);

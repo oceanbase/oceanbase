@@ -62,7 +62,7 @@ public:
   }
   virtual int switch_iterator(const int64_t range_array_idx) override;
   int refresh_table_on_demand();
-  virtual int release_table_ref();
+  virtual int release_table_ref() override;
 
 protected:
   int open();

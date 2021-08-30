@@ -21,9 +21,9 @@ class ObExprInt2ip : public ObStringExprOperator {
 public:
   explicit ObExprInt2ip(common::ObIAllocator& alloc);
   virtual ~ObExprInt2ip();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
   static int calc(common::ObObj& result, const common::ObObj& text, common::ObExprStringBuf& string_buf);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int int2ip_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

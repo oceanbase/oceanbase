@@ -542,7 +542,7 @@ private:
   int try_freeze_aggre_buffer_(const uint64_t log_id);
   int submit_freeze_aggre_buffer_task_(const uint64_t log_id);
   int submit_aggre_log_(ObAggreBuffer* buffer, const uint64_t log_id, const int64_t submit_timestamp);
-  int try_update_submit_timestamp(const int64_t base_ts);
+  int try_update_submit_timestamp(const int64_t base_ts) override;
   bool is_confirm_match_(const uint64_t log_id, const int64_t log_data_checksum, const int64_t log_epoch_id,
       const int64_t log_submit_timestamp, const int64_t confirmed_info_data_checksum,
       const int64_t confirmed_info_epoch_id, const int64_t confirmed_info_submit_timestamp);

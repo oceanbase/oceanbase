@@ -43,7 +43,7 @@ public:
   virtual ~ObStoreRowFilter()
   {}
   int init(const sql::ObTableLocation* part_filter, sql::ObExecContext* exec_ctx, common::ObPartMgr* part_mgr,
-      const common::ObPartitionKey& pkey);
+      const common::ObPartitionKey& pkey) override;
   int check(const ObStoreRow& store_row, bool& is_filtered) const override;
   TO_STRING_KV(KP_(part_filter), KP_(exec_ctx), KP_(part_mgr), K_(pkey));
 

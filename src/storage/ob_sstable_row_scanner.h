@@ -22,7 +22,7 @@ class ObSSTableRowScanner : public ObSSTableRowIterator {
 public:
   ObSSTableRowScanner();
   virtual ~ObSSTableRowScanner();
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
   virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key) override;
   int skip_range_impl(const int64_t range_idx, const ObExtStoreRange& org_range, const ObExtStoreRange& new_range);
@@ -35,15 +35,15 @@ public:
   int get_row_iter_flag_impl(uint8_t& flag);
 
 protected:
-  virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt);
-  virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle);
-  virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row);
+  virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt) override;
+  virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle) override;
+  virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row) override;
   int prefetch_range(
       const int64_t range_idx, const common::ObExtStoreRange& ext_range, ObSSTableReadHandle& read_handle);
   int check_can_skip_range(const int64_t range_idx, const common::ObStoreRowkey& gap_key, bool& can_skip);
   int prefetch_block_index(const uint64_t table_id, const blocksstable::ObMacroBlockCtx& block_ctx,
       ObMicroBlockIndexHandle& block_index_handle);
-  virtual int get_range_count(const void* query_range, int64_t& range_count) const;
+  virtual int get_range_count(const void* query_range, int64_t& range_count) const override;
 
 private:
   int skip_batch_rows(

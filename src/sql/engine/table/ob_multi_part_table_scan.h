@@ -27,8 +27,8 @@ public:
   {}
   virtual ~ObMultiPartTableScanInput();
   virtual void reset() override;
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
-  virtual ObPhyOperatorType get_phy_op_type() const
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
+  virtual ObPhyOperatorType get_phy_op_type() const override
   {
     return PHY_MULTI_PART_TABLE_SCAN;
   };
@@ -68,15 +68,15 @@ private:
 public:
   explicit ObMultiPartTableScan(common::ObIAllocator& allocator);
   virtual ~ObMultiPartTableScan();
-  virtual int rescan(ObExecContext& ctx) const;
+  virtual int rescan(ObExecContext& ctx) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
-  virtual int inner_close(ObExecContext& ctx) const;
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
+  virtual int inner_close(ObExecContext& ctx) const override;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   virtual int create_operator_input(ObExecContext& ctx) const override final;
   virtual int init_op_ctx(ObExecContext& ctx) const override final;
   void get_used_range_count(ObExecContext& ctx, int64_t& range_count) const;

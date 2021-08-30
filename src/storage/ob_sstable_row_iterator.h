@@ -319,7 +319,7 @@ class ObSSTableRowIterator : public ObISSTableRowIterator {
 public:
   ObSSTableRowIterator();
   virtual ~ObSSTableRowIterator();
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
   virtual int get_skip_range_ctx(
       ObSSTableReadHandle& read_handle, const int64_t cur_micro_idx, ObSSTableSkipRangeCtx*& skip_ctx);
@@ -337,9 +337,9 @@ public:
   }
 
 protected:
-  virtual int inner_open(
-      const ObTableIterParam& access_param, ObTableAccessContext& access_ctx, ObITable* table, const void* query_range);
-  virtual int inner_get_next_row(const ObStoreRow*& store_row);
+  virtual int inner_open(const ObTableIterParam& access_param, ObTableAccessContext& access_ctx, ObITable* table,
+      const void* query_range) override;
+  virtual int inner_get_next_row(const ObStoreRow*& store_row) override;
   virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt) = 0;
   virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle) = 0;
   virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row) = 0;

@@ -53,7 +53,7 @@ public:
   }
 
   virtual int inner_open() override;
-  virtual int inner_get_next_row() = 0;
+  virtual int inner_get_next_row() override = 0;
   virtual int rescan() override;
   virtual int switch_iterator() override;
   virtual int inner_close() override;

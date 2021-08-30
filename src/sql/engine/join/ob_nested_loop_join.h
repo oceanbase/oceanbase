@@ -61,8 +61,8 @@ private:
 public:
   explicit ObNestedLoopJoin(common::ObIAllocator& alloc);
   virtual ~ObNestedLoopJoin();
-  virtual void reset();
-  virtual void reuse();
+  virtual void reset() override;
+  virtual void reuse() override;
   virtual int rescan(ObExecContext& exec_ctx) const;
   virtual int switch_iterator(ObExecContext& ctx) const override;
 
@@ -96,14 +96,14 @@ private:
   typedef int (ObNestedLoopJoin::*state_operation_func_type)(ObNestedLoopJoinCtx& join_ctx) const;
   typedef int (ObNestedLoopJoin::*state_function_func_type)(
       ObNestedLoopJoinCtx& join_ctx, const common::ObNewRow*& row) const;
-  virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
+  virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& exec_ctx) const;
-  virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const;
+  virtual int inner_open(ObExecContext& exec_ctx) const override;
+  virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const override;
   int prepare_rescan_params_for_group(ObNestedLoopJoinCtx& join_ctx) const;
   // JS_JOIN_END state operation and transfer functions.
   int join_end_operate(ObNestedLoopJoinCtx& join_ctx) const;
@@ -124,9 +124,8 @@ private:
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];
   // nested loop join with index seek, batch
-  int batch_index_join_get_next(ObExecContext &exec_ctx,
-                                const common::ObNewRow *&row) const;
-  int reset_rescan_params(ObExecContext &ctx) const;
+  int batch_index_join_get_next(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
+  int reset_rescan_params(ObExecContext& ctx) const;
 
 private:
   int bij_fill_left_rows(ObExecContext& exec_ctx) const;

@@ -100,9 +100,9 @@ private:
 public:
   explicit ObMergeJoin(common::ObIAllocator& alloc);
   virtual ~ObMergeJoin();
-  virtual void reset();
-  virtual void reuse();
-  virtual int rescan(ObExecContext& exec_ctx) const;
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual int rescan(ObExecContext& exec_ctx) const override;
   virtual int switch_iterator(ObExecContext& ctx) const override;
   inline void set_left_unique(const bool u)
   {
@@ -137,19 +137,19 @@ private:
   // state operation and transfer functions.
   typedef int (ObMergeJoin::*state_operation_func_type)(ObMergeJoinCtx& join_ctx) const;
   typedef int (ObMergeJoin::*state_function_func_type)(ObMergeJoinCtx& join_ctx, const common::ObNewRow*& row) const;
-  virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
+  virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& exec_ctx) const;
+  virtual int inner_open(ObExecContext& exec_ctx) const override;
   /**
    * @brief close operator, not including children operators.
    * Every op should implement this method.
    */
-  virtual int inner_close(ObExecContext& exec_ctx) const;
-  virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const;
+  virtual int inner_close(ObExecContext& exec_ctx) const override;
+  virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const override;
 
 private:
   // JS_JOIN_END state operation and transfer functions.

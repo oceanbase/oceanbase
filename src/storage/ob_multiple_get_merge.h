@@ -66,7 +66,7 @@ protected:
   virtual int prepare() override;
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
-  virtual int inner_get_next_row(ObStoreRow& row);
+  virtual int inner_get_next_row(ObStoreRow& row) override;
   virtual void collect_merge_stat(ObTableStoreStat& stat) const override;
   virtual int skip_to_range(const int64_t range_idx) override;
 

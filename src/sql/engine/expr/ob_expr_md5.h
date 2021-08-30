@@ -24,8 +24,8 @@ public:
   virtual ~ObExprMd5();
 
 public:
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& str, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& str_obj, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& str, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& str_obj, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_md5(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

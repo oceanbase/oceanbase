@@ -555,7 +555,7 @@ public:
       const ObProposalID& ms_proposal_id) override;
   virtual int fake_receive_log(const ObAddr& server, const uint64_t log_id, const ObProposalID& proposal_id) override;
   virtual int process_restore_check_req(
-      const common::ObAddr& server, const int64_t cluster_id, const ObRestoreCheckType restore_type);
+      const common::ObAddr& server, const int64_t cluster_id, const ObRestoreCheckType restore_type) override;
   virtual int get_log(const common::ObAddr& server, const uint64_t log_id, const int64_t log_num,
       const ObFetchLogType fetch_type, const common::ObProposalID& proposal_id, const int64_t cluster_id,
       const common::ObReplicaType replica_type, const int64_t network_limit,
@@ -790,7 +790,7 @@ private:
   int response_sliding_window_info_(const common::ObAddr& server, const bool is_leader);
   int process_replica_type_change_();
   int process_reject_msg(
-      const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type, const int64_t timestamp);
+      const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type, const int64_t timestamp) override;
   int process_reregister_msg(
       const common::ObAddr& src_server, const share::ObCascadMember& new_leader, const int64_t send_ts) override;
   int process_restore_alive_msg(const common::ObAddr& server, const uint64_t start_log_id) override;

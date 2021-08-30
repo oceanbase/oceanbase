@@ -335,28 +335,28 @@ public:
   ObRaidFileSystem();
   virtual ~ObRaidFileSystem();
 
-  virtual int init(const ObStorageEnv& storage_env, storage::ObPartitionService& partition_service);
-  virtual void destroy();
-  virtual int async_write(const ObStoreFileWriteInfo& write_info, common::ObIOHandle& io_handle);
-  virtual int async_read(const ObStoreFileReadInfo& read_info, common::ObIOHandle& io_handle);
+  virtual int init(const ObStorageEnv& storage_env, storage::ObPartitionService& partition_service) override;
+  virtual void destroy() override;
+  virtual int async_write(const ObStoreFileWriteInfo& write_info, common::ObIOHandle& io_handle) override;
+  virtual int async_read(const ObStoreFileReadInfo& read_info, common::ObIOHandle& io_handle) override;
   virtual int write_server_super_block(const ObServerSuperBlock& super_block) override;
   virtual int read_server_super_block(ObServerSuperBlock& super_block) override;
-  virtual int fsync();
-  virtual int64_t get_total_data_size() const;
-  virtual int init_file_ctx(const ObStoreFileType& file_type, blocksstable::ObStoreFileCtx& file_ctx) const;
+  virtual int fsync() override;
+  virtual int64_t get_total_data_size() const override;
+  virtual int init_file_ctx(const ObStoreFileType& file_type, blocksstable::ObStoreFileCtx& file_ctx) const override;
   virtual bool is_disk_full() const override;
   int init_recover_io_master(const ObMacroBlockCtx& macro_block_ctx, const int64_t aligned_offset,
       const int64_t out_io_buf_size, const ObIODesc& io_desc, const ObBitSet<OB_MAX_DISK_NUMBER>& recover_disk_idx_set,
       ObRaidRecoverIOCallback& callback, ObIOMaster* io_master);
-  virtual int add_disk(const ObString& diskgroup_name, const ObString& disk_path, const ObString& alias_name);
-  virtual int drop_disk(const ObString& diskgroup_name, const ObString& alias_name);
+  virtual int add_disk(const ObString& diskgroup_name, const ObString& disk_path, const ObString& alias_name) override;
+  virtual int drop_disk(const ObString& diskgroup_name, const ObString& alias_name) override;
   int do_rebuild_task();
   virtual int get_disk_status(ObDiskStats& disk_stats) override;
   int64_t get_raid_src_data_num() const;
 
-  virtual int start();
-  virtual void stop();
-  virtual void wait();
+  virtual int start() override;
+  virtual void stop() override;
+  virtual void wait() override;
 
   // used in report bad block.
   virtual int get_macro_block_info(const storage::ObTenantFileKey& file_key, const MacroBlockId& macro_block_id,

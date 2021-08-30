@@ -59,9 +59,9 @@ public:
   virtual ~ObExprIs(){};
 
   virtual int calc_with_null(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-      const common::ObObj& obj3, common::ObCastCtx& cast_ctx) const;
+      const common::ObObj& obj3, common::ObCastCtx& cast_ctx) const override;
   virtual int calc_with_int(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObCastCtx& cast_ctx) const;
+      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObCastCtx& cast_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_date_int_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int calc_is_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
@@ -89,9 +89,9 @@ public:
   virtual ~ObExprIsNot(){};
 
   virtual int calc_with_null(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-      const common::ObObj& obj3, common::ObCastCtx& cast_ctx) const;
+      const common::ObObj& obj3, common::ObCastCtx& cast_ctx) const override;
   virtual int calc_with_int(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObCastCtx& cast_ctx) const;
+      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObCastCtx& cast_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_not_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int int_is_not_true(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);

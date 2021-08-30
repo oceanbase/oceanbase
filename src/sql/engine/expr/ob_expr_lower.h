@@ -55,8 +55,8 @@ public:
   virtual ~ObExprLower()
   {}
   virtual int calc(const common::ObCollationType cs_type, char* src, int32_t src_len, char* dest, int32_t det_len,
-      int32_t& out_len) const;
-  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const;
+      int32_t& out_len) const override;
+  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_lower(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -70,8 +70,8 @@ public:
   virtual ~ObExprUpper()
   {}
   virtual int calc(const common::ObCollationType cs_type, char* src, int32_t src_len, char* dest, int32_t det_len,
-      int32_t& out_len) const;
-  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const;
+      int32_t& out_len) const override;
+  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_upper(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -85,8 +85,8 @@ public:
   virtual ~ObExprNlsLower()
   {}
   virtual int calc(const common::ObCollationType cs_type, char* src, int32_t src_len, char* dest, int32_t det_len,
-      int32_t& out_len) const;
-  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const;
+      int32_t& out_len) const override;
+  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_lower(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
@@ -100,8 +100,8 @@ public:
   virtual ~ObExprNlsUpper()
   {}
   virtual int calc(const common::ObCollationType cs_type, char* src, int32_t src_len, char* dest, int32_t det_len,
-      int32_t& out_len) const;
-  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const;
+      int32_t& out_len) const override;
+  virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_upper(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 

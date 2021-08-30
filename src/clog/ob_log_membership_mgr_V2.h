@@ -115,7 +115,7 @@ public:
       const int64_t new_quorum, obrpc::ObMCLogInfo& log_info) override;
   virtual int64_t get_replica_num() const override;
   virtual common::ObReplicaType get_replica_type() const override;
-  virtual bool is_single_member_mode() const
+  virtual bool is_single_member_mode() const override
   {
     return (1 == replica_num_);
   }

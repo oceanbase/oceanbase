@@ -134,7 +134,7 @@ public:
     virtual ~ObConnectByCtx()
     {}
     void reset();
-    virtual void destroy()
+    virtual void destroy() override
     {
       connect_by_pump_.~ObConnectByPump();  // must be call
       ObConnectByBaseCtx::destroy();

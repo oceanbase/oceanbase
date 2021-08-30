@@ -22,15 +22,15 @@ class ObSSTableRowMultiScanner : public ObSSTableRowScanner {
 public:
   ObSSTableRowMultiScanner();
   virtual ~ObSSTableRowMultiScanner();
-  virtual void reset();
-  virtual void reuse();
+  virtual void reset() override;
+  virtual void reuse() override;
   virtual int skip_range(int64_t range_idx, const common::ObStoreRowkey* gap_key, const bool include_gap_key) override;
 
 protected:
-  virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt);
-  virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle);
-  virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row);
-  virtual int get_range_count(const void* query_range, int64_t& range_count) const;
+  virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt) override;
+  virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle) override;
+  virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row) override;
+  virtual int get_range_count(const void* query_range, int64_t& range_count) const override;
 
 private:
   static const int64_t MULTISCAN_READ_HANDLE_CNT = 32;

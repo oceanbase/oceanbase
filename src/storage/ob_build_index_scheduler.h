@@ -63,10 +63,10 @@ public:
   ObTenantDDLCheckSchemaTask();
   virtual ~ObTenantDDLCheckSchemaTask();
   int init(const uint64_t tenant_id, const int64_t base_version, const int64_t refreshed_version);
-  virtual bool operator==(const ObIDDLTask& other) const;
-  virtual int64_t hash() const;
-  virtual int process();
-  virtual int64_t get_deep_copy_size() const
+  virtual bool operator==(const ObIDDLTask& other) const override;
+  virtual int64_t hash() const override;
+  virtual int process() override;
+  virtual int64_t get_deep_copy_size() const override
   {
     return sizeof(*this);
   }
@@ -107,10 +107,10 @@ public:
   virtual ~ObBuildIndexScheduleTask();
   int init(const common::ObPartitionKey& pkey, const uint64_t index_id, const int64_t schema_version,
       const bool is_unique_index);
-  virtual bool operator==(const ObIDDLTask& other) const;
-  virtual int64_t hash() const;
-  virtual int process();
-  virtual int64_t get_deep_copy_size() const
+  virtual bool operator==(const ObIDDLTask& other) const override;
+  virtual int64_t hash() const override;
+  virtual int process() override;
+  virtual int64_t get_deep_copy_size() const override
   {
     return sizeof(*this);
   }

@@ -421,7 +421,7 @@ private:
   int next();
   int join_end_operate();
   int join_end_func_end();
-  int get_next_left_row();
+  int get_next_left_row() override;
   int reuse_for_next_chunk();
   int load_next_chunk();
   int build_hash_table_for_nest_loop(int64_t& num_left_rows);
@@ -448,7 +448,7 @@ private:
   int split_partition_and_build_hash_table(int64_t& num_left_rows);
   int recursive_process(bool& need_not_read_right);
   int adaptive_process(bool& need_not_read_right);
-  int get_next_right_row();
+  int get_next_right_row() override;
   int read_right_operate();
   int calc_hash_value(const ObIArray<ObExpr*>& join_keys, const ObIArray<ObHashFunc>& hash_funcs, uint64_t& hash_value);
   int calc_right_hash_value();

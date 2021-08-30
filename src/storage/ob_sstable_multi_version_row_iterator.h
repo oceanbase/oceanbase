@@ -25,7 +25,7 @@ class ObSSTableMultiVersionRowIterator : public ObISSTableRowIterator {
 public:
   ObSSTableMultiVersionRowIterator();
   virtual ~ObSSTableMultiVersionRowIterator();
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
 
 protected:

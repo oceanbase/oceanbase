@@ -30,7 +30,7 @@ public:
   virtual ~ObExprInterval()
   {}
 
-  virtual int assign(const ObExprOperator& other);
+  virtual int assign(const ObExprOperator& other) override;
 
   OB_INLINE void set_use_binary_search(bool use_binary_search)
   {

@@ -1020,7 +1020,7 @@ class ObMigrateCopyPhysicalTask : public share::ObITask {
 public:
   ObMigrateCopyPhysicalTask();
   virtual ~ObMigrateCopyPhysicalTask();
-  int generate_next_task(ObITask*& next_task);
+  int generate_next_task(ObITask*& next_task) override;
   int init(const int64_t task_idx, ObMigratePhysicalSSTableCtx& sstable_ctx, ObMigrateCtx& ctx);
   virtual int process() override;
 

@@ -108,15 +108,15 @@ public:
   {}
   virtual ~ObRpcRemoteExecuteP()
   {}
-  virtual int init();
+  virtual int init() override;
 
 protected:
   virtual int send_result_to_controller(ObExecContext& exec_ctx, const ObPhysicalPlan& plan) override;
-  virtual int before_process();
-  virtual int process();
-  virtual int before_response();
-  virtual int after_process();
-  virtual void cleanup();
+  virtual int before_process() override;
+  virtual int process() override;
+  virtual int before_response() override;
+  virtual int after_process() override;
+  virtual void cleanup() override;
   virtual void clean_result_buffer() override;
 
 private:
@@ -133,15 +133,15 @@ public:
   {}
   virtual ~ObRpcRemoteSyncExecuteP()
   {}
-  virtual int init();
+  virtual int init() override;
 
 protected:
   virtual int send_result_to_controller(ObExecContext& exec_ctx, const ObPhysicalPlan& plan) override;
-  virtual int before_process();
-  virtual int process();
-  virtual int before_response();
-  virtual int after_process();
-  virtual void cleanup();
+  virtual int before_process() override;
+  virtual int process() override;
+  virtual int before_response() override;
+  virtual int after_process() override;
+  virtual void cleanup() override;
   virtual void clean_result_buffer() override;
 };
 
@@ -153,16 +153,16 @@ public:
   {}
   virtual ~ObRpcRemoteASyncExecuteP()
   {}
-  virtual int init();
+  virtual int init() override;
   ObRemoteTask& get_arg()
   {
     return arg_;
   }
-  virtual int before_process();
-  virtual int process();
-  virtual int before_response();
-  virtual int after_process();
-  virtual void cleanup();
+  virtual int before_process() override;
+  virtual int process() override;
+  virtual int before_response() override;
+  virtual int after_process() override;
+  virtual void cleanup() override;
   void set_from_batch()
   {
     is_from_batch_ = true;

@@ -22,7 +22,7 @@ public:
   explicit ObExprRepeat(common::ObIAllocator& alloc);
   virtual ~ObExprRepeat();
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& text, ObExprResType& count, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType& text, ObExprResType& count, common::ObExprTypeCtx& type_ctx) const override;
   ///@brief call function calc(), implementation of ObExprOperator::calc_result2()
   ///
   ///@param [out] result  result of RPEAT(str, count)
@@ -31,7 +31,7 @@ public:
   ///@param [in] allocator:ObExprStringBuf
   ///@return OB_SUCCESS success, others failure
   virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& text, const common::ObObj& count, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj& text, const common::ObObj& count, common::ObExprCtx& expr_ctx) const override;
   static int calc(common::ObObj& result, const common::ObObj& text, const common::ObObj& count,
       common::ObIAllocator* allocator, const common::ObObjType res_type, const int64_t max_result_size);
   static int calc(common::ObObj& result, const common::ObObjType type, const common::ObString& text,
