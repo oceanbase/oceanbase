@@ -310,8 +310,8 @@ public:
       ObTaskExecutorCtx& ctx, uint64_t table_location_key, uint64_t ref_table_id, ObPhyTableLocation*& table_location);
   static ObPhyTableLocation* get_phy_table_location_for_update(
       ObTaskExecutorCtx& ctx, uint64_t table_location_key, uint64_t ref_table_id);
-  static int get_full_table_phy_table_location(ObExecContext& ctx, uint64_t table_location_key, uint64_t ref_table_id,
-      bool is_weak, const ObPhyTableLocation*& table_location);
+  static int get_full_table_phy_table_location(ObExecContext &ctx, uint64_t table_location_key, uint64_t ref_table_id,
+      bool is_weak, ObPhyTableLocationGuard &table_location);
 
   static int extract_server_participants(
       ObExecContext& ctx, const common::ObAddr& svr, common::ObPartitionIArray& participants);

@@ -185,6 +185,41 @@ int ObPhyTableLocation::find_not_include_part_ids(const SrcArray& all_part_ids, 
   }
   return ret;
 }
+
+class ObPhyTableLocationGuard {
+public:
+  ObPhyTableLocationGuard() : loc_(nullptr){};
+  ~ObPhyTableLocationGuard()
+  {
+    if (loc_) {
+      loc_->~ObPhyTableLocation();
+      loc_ = nullptr;
+    }
+  }
+  int new_location(common::ObIAllocator &allocator)
+  {
+    int ret = common::OB_SUCCESS;
+    void *buf = nullptr;
+    if (OB_NOT_NULL(loc_)) {
+      // init twice
+      ret = common::OB_ERR_UNEXPECTED;
+    } else if (nullptr == (buf = allocator.alloc(sizeof(ObPhyTableLocation)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    } else if (NULL == (loc_ = new (buf) ObPhyTableLocation())) {
+      ret = common::OB_ERR_UNEXPECTED;
+    }
+    return ret;
+  }
+  // caller must ensure that the loc_ is not NULL before call get_loc()
+  ObPhyTableLocation *get_loc()
+  {
+    return loc_;
+  }
+
+private:
+  ObPhyTableLocation *loc_;
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OCEANBASE_SQL_OB_PHY_TABLE_LOCATION_ */

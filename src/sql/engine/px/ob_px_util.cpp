@@ -91,6 +91,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(ObExecContext& ctx, ObD
     }
   } else {
     const ObPhyTableLocation* table_loc = NULL;
+    ObPhyTableLocationGuard full_table_loc;
     uint64_t table_location_key = OB_INVALID_INDEX;
     uint64_t ref_table_id = OB_INVALID_ID;
     if (scan_ops.count() > 0) {
@@ -106,8 +107,10 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(ObExecContext& ctx, ObD
     if (dml_op && dml_op->is_table_location_uncertain()) {
       bool is_weak = false;
       if (OB_FAIL(ObTaskExecutorCtxUtil::get_full_table_phy_table_location(
-              ctx, table_location_key, ref_table_id, is_weak, table_loc))) {
+              ctx, table_location_key, ref_table_id, is_weak, full_table_loc))) {
         LOG_WARN("fail to get phy table location", K(ret));
+      } else {
+        table_loc = full_table_loc.get_loc();
       }
     } else {
       if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(ctx, table_location_key, ref_table_id, table_loc))) {
@@ -504,6 +507,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(
     // pass
   } else {
     const ObPhyTableLocation* table_loc = nullptr;
+    ObPhyTableLocationGuard full_table_loc;
     uint64_t table_location_key = common::OB_INVALID_ID;
     uint64_t ref_table_id = common::OB_INVALID_ID;
     if (FALSE_IT(table_location_key = dml_op->get_table_id())) {
@@ -512,8 +516,10 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(
       if (dml_op->is_table_location_uncertain()) {
         bool is_weak = false;
         if (OB_FAIL(ObTaskExecutorCtxUtil::get_full_table_phy_table_location(
-                ctx, table_location_key, ref_table_id, is_weak, table_loc))) {
+                ctx, table_location_key, ref_table_id, is_weak, full_table_loc))) {
           LOG_WARN("fail to get phy table location", K(ret));
+        } else {
+          table_loc = full_table_loc.get_loc();
         }
       } else {
         if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(ctx, table_location_key, ref_table_id, table_loc))) {
