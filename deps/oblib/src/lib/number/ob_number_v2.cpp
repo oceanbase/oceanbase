@@ -6309,8 +6309,9 @@ int ObNumber::power(
     int abs_exponent = std::abs(exponent);
 
     number::ObNumber base_product;
-    base_product.from(*this, one_time_allocator);
-    if ((abs_exponent & 1) != 0) {
+    if (OB_FAIL(base_product.from(*this, one_time_allocator))) {
+      LOG_WARN("failed: deep copy this to base_product", K(ret));
+    } else if ((abs_exponent & 1) != 0) {
       if (OB_FAIL(result.from(*this, one_time_allocator))) {
         LOG_WARN("failed: deep copy base to result", K(ret));
       }
