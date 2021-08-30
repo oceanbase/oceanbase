@@ -52,7 +52,9 @@ public:
   {}
   ~ObWinbufPieceMsg() = default;
   void reset()
-  {}
+  {
+    deseria_allocator_.reset();
+  }
   INHERIT_TO_STRING_KV("meta", ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_WINBUF_PIECE_MSG>, K_(op_id));
 
 public:
@@ -89,6 +91,7 @@ public:
     is_datum_ = false;
     row_store_.reset();
     datum_store_.reset();
+    assign_allocator_.reset();
   }
   VIRTUAL_TO_STRING_KV(K_(ready_state));
   int ready_state_;
