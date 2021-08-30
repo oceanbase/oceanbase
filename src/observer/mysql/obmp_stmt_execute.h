@@ -71,6 +71,43 @@ public:
   {
     return ObMPBase::flush_buffer(is_last);
   }
+  inline bool support_send_long_data(const uint32_t type)
+  {
+    bool is_support = false;
+    switch (type) {
+      case obmysql::MYSQL_TYPE_OB_NVARCHAR2:
+      case obmysql::MYSQL_TYPE_OB_NCHAR:
+      case obmysql::MYSQL_TYPE_OB_RAW:
+      case obmysql::MYSQL_TYPE_TINY_BLOB:
+      case obmysql::MYSQL_TYPE_MEDIUM_BLOB:
+      case obmysql::MYSQL_TYPE_LONG_BLOB:
+      case obmysql::MYSQL_TYPE_BLOB:
+      case obmysql::MYSQL_TYPE_STRING:
+      case obmysql::MYSQL_TYPE_VARCHAR:
+      case obmysql::MYSQL_TYPE_VAR_STRING:
+      case obmysql::MYSQL_TYPE_OB_NUMBER_FLOAT:
+      case obmysql::MYSQL_TYPE_NEWDECIMAL:
+      case obmysql::MYSQL_TYPE_OB_UROWID:
+      case obmysql::MYSQL_TYPE_ORA_BLOB:
+      case obmysql::MYSQL_TYPE_ORA_CLOB:
+        is_support = true;
+        break;
+      case obmysql::MYSQL_TYPE_COMPLEX:
+        is_support = share::is_oracle_mode() ? true : false;
+        break;
+      default:
+        is_support = false;
+    }
+    return is_support;
+  }
+  inline int32_t get_param_num()
+  {
+    return params_num_;
+  }
+  inline void set_param_num(int32_t num)
+  {
+    params_num_ = num;
+  }
 
 protected:
   virtual int deserialize() override
@@ -150,7 +187,8 @@ private:
   // in oracle: %cs_type is server collation whose charset may differ with %charset
   int parse_param_value(ObIAllocator& allocator, const uint32_t type, const ObCharsetType charset,
       const ObCollationType cs_type, const ObCollationType ncs_type, const char*& data,
-      const common::ObTimeZoneInfo* tz_info, sql::TypeInfo* type_info, sql::TypeInfo* dst_type_info, ObObjParam& param);
+      const common::ObTimeZoneInfo* tz_info, sql::TypeInfo* type_info, sql::TypeInfo* dst_type_info, 
+      ObObjParam& param, int16_t param_id);
   int decode_type_info(const char*& buf, sql::TypeInfo& type_info);
 
   virtual int before_response() override
@@ -186,6 +224,7 @@ private:
   int64_t single_process_timestamp_;
   int64_t exec_start_timestamp_;
   int64_t exec_end_timestamp_;
+  uint64_t params_num_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);

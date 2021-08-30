@@ -41,6 +41,7 @@
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/mysql/ob_async_plan_driver.h"
+#include "observer/mysql/obmp_stmt_send_long_data.h"
 #include "observer/ob_req_time_service.h"
 
 namespace oceanbase {
@@ -68,7 +69,8 @@ ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext& gctx)
       is_cursor_readonly_(false),
       single_process_timestamp_(0),
       exec_start_timestamp_(0),
-      exec_end_timestamp_(0)
+      exec_end_timestamp_(0),
+      params_num_(0)
 {
   ctx_.exec_type_ = MpQuery;
 }
@@ -416,12 +418,12 @@ int ObMPStmtExecute::before_process()
         ObSQLSessionInfo* old_sess_info = ctx_.session_info_;
         ctx_.schema_guard_ = &schema_guard;
         ctx_.session_info_ = session;
-        const int64_t num_of_params = ps_session_info->get_param_count();
+        const int64_t params_num_ = ps_session_info->get_param_count();
         stmt_type_ = ps_session_info->get_stmt_type();
         int8_t new_param_bound_flag = 0;
-        if (num_of_params > 0) {
+        if (params_num_ > 0) {
           // Step1: handle bitmap
-          int64_t bitmap_types = (num_of_params + 7) / 8;
+          int64_t bitmap_types = (params_num_ + 7) / 8;
           const char* bitmap = pos;
           pos += bitmap_types;
           // Step2: get new_param_bound_flag
@@ -434,18 +436,18 @@ int ObMPStmtExecute::before_process()
           }
           if (OB_FAIL(ret)) {
             // do nothing
-          } else if (OB_FAIL(param_type_infos.prepare_allocate(num_of_params))) {
+          } else if (OB_FAIL(param_type_infos.prepare_allocate(params_num_))) {
             LOG_WARN("array prepare allocate failed", K(ret));
-          } else if (OB_FAIL(params_->prepare_allocate(num_of_params))) {
+          } else if (OB_FAIL(params_->prepare_allocate(params_num_))) {
             LOG_WARN("array prepare allocate failed", K(ret));
-          } else if (OB_FAIL(param_cast_infos.prepare_allocate(num_of_params))) {
+          } else if (OB_FAIL(param_cast_infos.prepare_allocate(params_num_))) {
             LOG_WARN("array prepare allocate failed", K(ret));
           } else if (is_arraybinding_) {
             CK(OB_NOT_NULL(arraybinding_params_));
-            OZ(arraybinding_params_->prepare_allocate(num_of_params));
+            OZ(arraybinding_params_->prepare_allocate(params_num_));
           }
           // Step3: get type
-          for (int i = 0; OB_SUCC(ret) && i < num_of_params; ++i) {
+          for (int i = 0; OB_SUCC(ret) && i < params_num_; ++i) {
             uint8_t type = 0;
             int8_t flag = 0;
             if (1 == new_param_bound_flag) {
@@ -455,9 +457,9 @@ int ObMPStmtExecute::before_process()
                 LOG_WARN("push back field failed", K(ret));
               }
             } else {
-              if (num_of_params != param_types.count()) {
+              if (params_num_ != param_types.count()) {
                 ret = OB_ERR_WRONG_DYNAMIC_PARAM;
-                LOG_USER_ERROR(OB_ERR_WRONG_DYNAMIC_PARAM, param_types.count(), num_of_params);
+                LOG_USER_ERROR(OB_ERR_WRONG_DYNAMIC_PARAM, param_types.count(), params_num_);
               } else {
                 type = static_cast<uint8_t>(param_types.at(i));
               }
@@ -496,7 +498,7 @@ int ObMPStmtExecute::before_process()
           }
           // Step5: decode value
           const char* params = pos;
-          for (int64_t i = 0; OB_SUCC(ret) && i < num_of_params; ++i) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < params_num_; ++i) {
             ObObjParam& param = is_arraybinding_ ? arraybinding_params_->at(i) : params_->at(i);
             ObObjType ob_type;
             if (OB_FAIL(ObSMUtils::get_ob_type(ob_type, static_cast<EMySQLFieldType>(param_types.at(i))))) {
@@ -516,7 +518,8 @@ int ObMPStmtExecute::before_process()
                              session->get_timezone_info(),
                              &(param_type_infos.at(i)),
                              param_cast_infos.at(i) ? &(dst_type_infos.at(i)) : NULL,
-                             param))) {
+                             param,
+                             i))) {
                 LOG_WARN("get param value failed", K(param), K(i));
               } else {
                 LOG_TRACE("execute with param", K(param), K(i));
@@ -1065,6 +1068,24 @@ int ObMPStmtExecute::process()
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
   }
+  // whether the previous error was reported, a cleanup is to be done here
+  if (NULL != sess) {
+    ObPieceCache *piece_cache = static_cast<ObPieceCache *>(sess->get_piece_cache());
+    if (OB_ISNULL(piece_cache)) {
+      // do nothing
+      // piece_cache not be null in piece data protocol
+    } else {
+      for (uint64_t i = 0; OB_SUCC(ret) && i < params_num_; i++) {
+        if (OB_FAIL(piece_cache->remove_piece(piece_cache->get_piece_key(stmt_id_, i), *sess))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("remove piece fail", K(stmt_id_), K(i), K(ret));
+          }
+        }
+      }
+    }
+  }
 
   if (OB_FAIL(ret) && need_response_error && conn_valid_) {
     send_error_packet(ret, NULL);
@@ -1319,18 +1340,59 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator& allocator, const uint
 
 int ObMPStmtExecute::parse_param_value(ObIAllocator& allocator, const uint32_t type, const ObCharsetType charset,
     const ObCollationType cs_type, const ObCollationType ncs_type, const char*& data,
-    const common::ObTimeZoneInfo* tz_info, TypeInfo* type_info, TypeInfo* dst_type_info, ObObjParam& param)
+    const common::ObTimeZoneInfo* tz_info, TypeInfo* type_info, TypeInfo* dst_type_info, ObObjParam& param, int16_t param_id)
 {
   int ret = OB_SUCCESS;
+  uint64_t length = 0;
+  common::ObFixedArray<ObSqlString, ObIAllocator>
+                str_buf(THIS_WORKER.get_sql_arena_allocator());
+  ObPieceCache *piece_cache = NULL == ctx_.session_info_
+                                ? NULL
+                                : static_cast<ObPieceCache*>(ctx_.session_info_->get_piece_cache());
+  ObPiece *piece = NULL;
   if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
     ret = OB_NOT_SUPPORTED;
   } else if (OB_UNLIKELY(MYSQL_TYPE_CURSOR == type)) {
     ret = OB_NOT_SUPPORTED;
-  } else {
+  } else if (OB_NOT_NULL(piece_cache) && OB_FAIL(piece_cache->get_piece(stmt_id_, param_id, piece))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get piece fail.", K(ret));
+  } else if (OB_ISNULL(piece_cache) || OB_ISNULL(piece)) {
+    // not (send long data) column
     if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type, data, tz_info, param))) {
       LOG_WARN("failed to parse basic param value", K(ret), K(type_info), K(dst_type_info));
     } else {
       param.set_param_meta();
+    }
+  } else if (!support_send_long_data(type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("this type is not support send long data.", K(type), K(ret));
+  } else if (NULL == piece->get_allocator()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("piece allocator is null.", K(stmt_id_), K(param_id), K(ret));
+  } else {
+    ObSqlString str_buf;
+    if (OB_FAIL(piece_cache->get_buffer(stmt_id_,
+                                        param_id,
+                                        length,
+                                        str_buf))) {
+      LOG_WARN("piece get buffer fail.", K(ret), K(stmt_id_), K(param_id));
+    } else {
+      char *tmp = static_cast<char*>(piece->get_allocator()->alloc(length));
+      int64_t pos = 0;
+      MEMSET(tmp, 0, length);
+      if (OB_FAIL(ObMySQLUtil::store_obstr(tmp, length, str_buf.string(), pos))) {
+        LOG_WARN("store string fail.", K(ret), K(stmt_id_), K(param_id));
+      } else {
+        const char* src = tmp;
+        if (OB_FAIL(parse_basic_param_value(allocator, type, charset, cs_type, ncs_type,
+                                            src, tz_info, param))) {
+          LOG_WARN("failed to parse basic param value", K(ret));
+        } else {
+          param.set_param_meta();
+        }
+      }
+      piece->get_allocator()->free(tmp);
     }
   }
   return ret;

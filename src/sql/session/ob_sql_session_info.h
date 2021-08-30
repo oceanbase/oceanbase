@@ -656,6 +656,8 @@ public:
   int on_user_connect(share::schema::ObSessionPrivInfo& priv_info, const share::schema::ObUserInfo* user_info);
   int on_user_disconnect();
 
+  void *get_piece_cache(bool need_init = false);
+
 private:
   int close_all_ps_stmt();
 
@@ -740,6 +742,7 @@ private:
   // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.
   // While only session got connection resource can release connection resource and decrease connections count.
   bool got_conn_res_;
+  void *piece_cache_;
 };
 
 inline ObIExtraStatusCheck::Guard::Guard(ObSQLSessionInfo& session, ObIExtraStatusCheck& checker)

@@ -51,6 +51,7 @@
 #include "observer/mysql/obmp_stmt_prepare.h"
 #include "observer/mysql/obmp_stmt_execute.h"
 #include "observer/mysql/obmp_stmt_close.h"
+#include "observer/mysql/obmp_stmt_send_long_data.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::lib;
@@ -183,6 +184,7 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest& req, ObReqProcessor*& processor)
         MYSQL_PROCESSOR(ObMPStmtPrepare, gctx_);
         MYSQL_PROCESSOR(ObMPStmtExecute, gctx_);
         MYSQL_PROCESSOR(ObMPStmtClose, gctx_);
+        MYSQL_PROCESSOR(ObMPStmtSendLongData, gctx_);
         case obmysql::OB_MYSQL_COM_FIELD_LIST: {
           ObSMConnection* conn = reinterpret_cast<ObSMConnection*>(req.get_ez_req()->ms->c->user_data);
           if (OB_ISNULL(conn)) {

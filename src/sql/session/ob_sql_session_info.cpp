@@ -36,6 +36,7 @@
 #include "sql/resolver/ddl/ob_drop_synonym_stmt.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "lib/checksum/ob_crc64.h"
+#include "observer/mysql/obmp_stmt_send_long_data.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -144,7 +145,8 @@ ObSQLSessionInfo::ObSQLSessionInfo()
       proxy_version_(0),
       min_proxy_version_ps_(0),
       is_ignore_stmt_(false),
-      got_conn_res_(false)
+      got_conn_res_(false),
+      piece_cache_(NULL)
 {}
 
 ObSQLSessionInfo::~ObSQLSessionInfo()
@@ -331,6 +333,15 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
       if (OB_FAIL(close_all_ps_stmt())) {
         LOG_WARN("failed to close all stmt", K(ret));
       }
+    }
+
+    if (OB_SUCC(ret) && NULL != piece_cache_) {
+      if (OB_FAIL((static_cast<observer::ObPieceCache*>(piece_cache_))
+                      ->close_all(*this))) {
+        LOG_WARN("failed to close all piece", K(ret));
+      }
+      get_session_allocator().free(piece_cache_);
+      piece_cache_ = NULL;
     }
 
     reset(skip_sys_var);
@@ -1005,6 +1016,23 @@ int ObSQLSessionInfo::kill_query()
   LOG_INFO("kill query", K(get_sessid()), K(get_proxy_sessid()), K(get_current_query_string()));
   set_session_state(QUERY_KILLED);
   return OB_SUCCESS;
+}
+
+void* ObSQLSessionInfo::get_piece_cache(bool need_init) {
+  if (NULL == piece_cache_ && need_init) {
+    void *buf = get_session_allocator().alloc(sizeof(observer::ObPieceCache));
+    if (NULL != buf) {
+      MEMSET(buf, 0, sizeof(observer::ObPieceCache));
+      piece_cache_ = new (buf) observer::ObPieceCache();
+      if (OB_SUCCESS != (static_cast<observer::ObPieceCache*>(piece_cache_))->init(
+                            get_effective_tenant_id())) {
+        get_session_allocator().free(piece_cache_);
+        piece_cache_ = NULL;
+        LOG_WARN("init piece cache fail");
+      }
+    }
+  }
+  return piece_cache_;
 }
 
 ObAuditRecordData& ObSQLSessionInfo::get_audit_record()

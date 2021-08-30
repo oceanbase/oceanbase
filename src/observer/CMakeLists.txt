@@ -20,6 +20,8 @@ ob_set_subtarget(ob_server mysql
   mysql/obmp_stmt_close.cpp
   mysql/obmp_stmt_execute.cpp
   mysql/obmp_stmt_prepare.cpp
+  mysql/obmp_stmt_send_long_data.cpp
+  mysql/obmp_stmt_send_long_data.h
   mysql/obmp_utils.cpp
   mysql/obsm_handler.cpp
   mysql/obsm_row.cpp
