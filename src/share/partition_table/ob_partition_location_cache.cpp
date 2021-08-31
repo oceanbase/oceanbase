@@ -27,6 +27,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rs_mgr.h"
+#include "share/ob_share_util.h"
 #include "share/partition_table/ob_location_update_task.h"
 #include "share/partition_table/ob_partition_table_operator.h"
 #include "share/partition_table/ob_remote_partition_table_operator.h"
@@ -4134,28 +4135,11 @@ int ObPartitionLocationCache::add_update_task(const ObLocationAsyncUpdateTask& t
 int ObPartitionLocationCache::set_timeout_ctx(common::ObTimeoutCtx& ctx)
 {
   int ret = OB_SUCCESS;
-  int64_t abs_timeout_us = ctx.get_abs_timeout();
-
-  if (abs_timeout_us < 0) {
-    abs_timeout_us = ObTimeUtility::current_time() + GCONF.location_cache_refresh_rpc_timeout +
-                     GCONF.location_cache_refresh_sql_timeout;
+  int64_t default_timeout = GCONF.location_cache_refresh_rpc_timeout +
+                            GCONF.location_cache_refresh_sql_timeout;
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
+    LOG_WARN("fail to set default_timeout_ctx", KR(ret));
   }
-  if (THIS_WORKER.get_timeout_ts() > 0 && THIS_WORKER.get_timeout_ts() < abs_timeout_us) {
-    abs_timeout_us = THIS_WORKER.get_timeout_ts();
-  }
-
-  if (OB_FAIL(ctx.set_abs_timeout(abs_timeout_us))) {
-    LOG_WARN("set timeout failed", K(ret), K(abs_timeout_us));
-  } else if (ctx.is_timeouted()) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("is timeout",
-        K(ret),
-        "abs_timeout",
-        ctx.get_abs_timeout(),
-        "this worker timeout ts",
-        THIS_WORKER.get_timeout_ts());
-  }
-
   return ret;
 }
 
@@ -4658,7 +4642,6 @@ int ObPartitionLocationCache::set_batch_timeout_ctx(
         "this worker timeout ts",
         THIS_WORKER.get_timeout_ts());
   }
-
   return ret;
 }
 /*-----batch async renew location end -----*/

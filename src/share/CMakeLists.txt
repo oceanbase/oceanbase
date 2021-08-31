@@ -128,6 +128,7 @@ ob_set_subtarget(ob_share common
   ob_sstable_checksum_iterator.cpp
   ob_priv_common.cpp
   ob_bg_thread_monitor.cpp
+  ob_share_util.cpp
 )
 
 ob_set_subtarget(ob_share object
