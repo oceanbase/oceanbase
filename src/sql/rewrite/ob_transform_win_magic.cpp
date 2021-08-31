@@ -914,6 +914,8 @@ int ObTransformWinMagic::wrap_case_when_if_necessary(
         aggr_expr.clear_child();
         if (OB_FAIL(aggr_expr.add_real_param_expr(case_expr))) {
           LOG_WARN("failed to add real param expr", K(ret));
+        } else if (OB_FAIL(aggr_expr.formalize(ctx_->session_info_))) {
+          LOG_WARN("formalize failed", K(ret));
         }
       }
     }
