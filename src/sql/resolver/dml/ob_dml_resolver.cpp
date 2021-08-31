@@ -639,6 +639,7 @@ int ObDMLResolver::resolve_columns(ObRawExpr*& expr, ObArray<ObQualifiedName>& c
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     ObQualifiedName& q_name = columns.at(i);
     ObRawExpr* real_ref_expr = NULL;
+    params_.is_column_ref_ = expr->is_column_ref_expr();
     if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref expr failed", K(ret), K(q_name));
       report_user_error_msg(ret, expr, q_name);

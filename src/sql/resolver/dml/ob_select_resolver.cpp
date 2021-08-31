@@ -4266,9 +4266,23 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(const ObQualifiedName&
   int ret = OB_SUCCESS;
   // first, find column in current namespace
   if (OB_UNLIKELY(T_ORDER_SCOPE == current_scope_)) {
-    if (OB_FAIL(resolve_column_ref_alias_first(q_name, real_ref_expr))) {
-      LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref alias first failed", K(ret), K(q_name));
+    if (!params_.is_column_ref_) {
+      // if the item behind order by is an expr, then we should resolve column
+      // select id as data, data from test order by data + 1;
+      // select id as data, data from test order by sum(data);
+      // select id + 1 as data, data from test order by sum(data);
+      if (OB_FAIL(resolve_column_ref_table_first(q_name, real_ref_expr, false))) {
+        LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref table first failed", K(ret), K(q_name));
+      }
+    } else {
+      // should raise an error
+      // select id + 1 as data, data from test order by data
+      // select id as data, data from test order by data
+      if (OB_FAIL(resolve_column_ref_alias_first(q_name, real_ref_expr))) {
+        LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref alias first failed", K(ret), K(q_name));
+      }
     }
+    
   } else if (OB_UNLIKELY(T_HAVING_SCOPE == current_scope_)) {
     if (OB_FAIL(resolve_column_ref_for_having(q_name, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref for having failed", K(ret), K(q_name));
@@ -4279,7 +4293,7 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(const ObQualifiedName&
     }
   } else {
     // search column in table columns first
-    if (OB_FAIL(resolve_column_ref_table_first(q_name, real_ref_expr))) {
+    if (OB_FAIL(resolve_column_ref_table_first(q_name, real_ref_expr, true))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref table first failed", K(ret), K(q_name));
     }
   }
@@ -4595,32 +4609,36 @@ int ObSelectResolver::resolve_column_ref_for_having(const ObQualifiedName& q_nam
   return ret;
 }
 
-int ObSelectResolver::resolve_column_ref_table_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr)
+int ObSelectResolver::resolve_column_ref_table_first(
+  const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr,
+  bool need_further_match_alias /* = true */)
 {
   int ret = OB_SUCCESS;
   // search column ref in table columns first, follow by alias name
   // if table column exist, check column name whether exist in alias name list
   ObRawExpr* tmp_ref = NULL;
   if (OB_FAIL(resolve_table_column_ref(q_name, real_ref_expr))) {
-    if (OB_ERR_BAD_FIELD_ERROR == ret) {
+    if (OB_ERR_BAD_FIELD_ERROR == ret || OB_NON_UNIQ_ERROR == ret) {
       if (OB_FAIL(resolve_alias_column_ref(q_name, real_ref_expr))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve alias column ref failed", K(ret), K(q_name));
       }
     } else {
       LOG_WARN("resolve table column ref failed", K(ret));
     }
-  } else if (OB_FAIL(resolve_alias_column_ref(q_name, tmp_ref))) {
-    if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ILLEGAL_REFERENCE == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("try to hit column on target list failed", K(ret));
+  } else if (need_further_match_alias) {
+    if (OB_FAIL(resolve_alias_column_ref(q_name, tmp_ref))) {
+      if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ILLEGAL_REFERENCE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("try to hit column on target list failed", K(ret));
+      }
+    } else if (!ObRawExprUtils::is_same_column_ref(real_ref_expr, tmp_ref)) {
+      // if column name exist in both table columns and alias name list, use table column and produce warning msg
+      ObString col_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
+      ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+      LOG_USER_WARN(OB_NON_UNIQ_ERROR, col_name.length(), col_name.ptr(), scope_name.length(), scope_name.ptr());
     }
-  } else if (!ObRawExprUtils::is_same_column_ref(real_ref_expr, tmp_ref)) {
-    // if column name exist in both table columns and alias name list, use table column and produce warning msg
-    ObString col_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
-    ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-    LOG_USER_WARN(OB_NON_UNIQ_ERROR, col_name.length(), col_name.ptr(), scope_name.length(), scope_name.ptr());
-  }
+  } else { /* do nothing */}
   return ret;
 }
 

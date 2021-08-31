@@ -350,7 +350,7 @@ protected:
    * @param real_ref_expr, column real ref expr
    */
   int resolve_column_ref_alias_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
-  int resolve_column_ref_table_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
+  int resolve_column_ref_table_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr, bool need_further_match_alias = true);
   int resolve_column_ref_for_having(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
   int resolve_column_ref_for_search(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
   int resolve_table_column_ref(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr);
