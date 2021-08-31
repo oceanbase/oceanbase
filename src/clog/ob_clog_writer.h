@@ -65,9 +65,13 @@ public:
   virtual void destroy();
   int switch_file();
   file_id_t get_file_id() const;
-  bool is_disk_error() const;
-  int set_is_disk_error();
-  int reset_is_disk_error();
+  bool is_disk_hang() const;
+  inline bool is_disk_error() const
+  {
+    return true == is_disk_error_;
+  }
+  int set_is_disk_hang();
+  int reset_is_disk_hang();
 
 protected:
   virtual void process_log_items(common::ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt);
@@ -99,6 +103,7 @@ private:
   int inner_switch_file();
   bool is_started_;
   bool is_disk_error_;
+  bool is_disk_hang_;
   lib::ObMutex file_mutex_;
   ObCLogBaseFileWriter* file_writer_;
   ObLogWritePoolType type_;

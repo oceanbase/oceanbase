@@ -37,6 +37,7 @@ namespace clog {
 ObCLogWriter::ObCLogWriter()
     : is_started_(false),
       is_disk_error_(false),
+      is_disk_hang_(false),
       file_mutex_(),
       file_writer_(NULL),
       type_(INVALID_WRITE_POOL),
@@ -111,6 +112,7 @@ void ObCLogWriter::destroy()
   info_getter_ = NULL;
   tail_ = NULL;
   is_disk_error_ = false;
+  is_disk_hang_ = false;
   is_started_ = false;
 }
 
@@ -134,34 +136,31 @@ file_id_t ObCLogWriter::get_file_id() const
   return (NULL == file_writer_) ? 0 : file_writer_->get_cur_file_id();
 }
 
-bool ObCLogWriter::is_disk_error() const
+bool ObCLogWriter::is_disk_hang() const
 {
-  bool b_ret = ATOMIC_LOAD(&is_disk_error_);
-  if (!b_ret && nullptr != file_writer_) {
-    b_ret = file_writer_->is_write_hang();
-  }
-  return b_ret;
+  bool is_disk_hang = ATOMIC_LOAD(&is_disk_hang_);
+  return is_disk_hang;
 }
 
-int ObCLogWriter::set_is_disk_error()
+int ObCLogWriter::set_is_disk_hang()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
   } else {
-    ATOMIC_STORE(&is_disk_error_, true);
+    ATOMIC_STORE(&is_disk_hang_, true);
     CLOG_LOG(WARN, "clog disk may be hang or something error has happen!");
   }
   return ret;
 }
 
-int ObCLogWriter::reset_is_disk_error()
+int ObCLogWriter::reset_is_disk_hang()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
   } else {
-    ATOMIC_STORE(&is_disk_error_, false);
+    ATOMIC_STORE(&is_disk_hang_, false);
     CLOG_LOG(TRACE, "reset clog disk status to normal");
   }
   return ret;
@@ -241,7 +240,7 @@ void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64
       do {
         // TODO: flush log will not return OB_TIMEOUT, other IO error will be treated as bug
         if (OB_FAIL(file_writer_->flush(info_getter_, log_cache_, tail_, flush_start_offset))) {
-          set_is_disk_error();
+          is_disk_error_ = true;
           // flush log to disk until die when IO hang, other IO error will be treated as bug
           if (OB_TIMEOUT == ret && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
             ret = OB_IO_ERROR;
@@ -250,7 +249,7 @@ void ObCLogWriter::process_log_items(common::ObIBaseLogItem** items, const int64
             CLOG_LOG(ERROR, "Fail to flush clog to disk, ", K(ret));
           }
         } else {
-          reset_is_disk_error();
+          is_disk_error_ = false;
         }
       } while (!has_stoped() && OB_TIMEOUT == ret);
     }
@@ -386,8 +385,8 @@ int ObCLogDiskErrorCB::callback()
   storage::ObPartitionService& partition_service = storage::ObPartitionService::get_instance();
   if (OB_ISNULL(host_)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(host_->set_is_disk_error())) {
-    CLOG_LOG(ERROR, "ObCLogDiskErrorCB set_is_disk_error failed", K(ret));
+  } else if (OB_FAIL(host_->set_is_disk_hang())) {
+    CLOG_LOG(ERROR, "ObCLogDiskErrorCB set_is_disk_hang failed", K(ret));
   } else if (OB_FAIL(partition_service.try_revoke_all_leader(ObElection::RevokeType::CLOG_DISK_HANG))) {
     CLOG_LOG(ERROR, "ObCLogDiskErrorCB try_revoke_all_leader failed", K(ret));
   }
@@ -400,7 +399,7 @@ void ObCLogDiskErrorCB::destroy()
   // If disk has real error, may cause is_disk_error be false,
   // however, observer will be killed.
   if (OB_NOT_NULL(host_)) {
-    (void)host_->reset_is_disk_error();
+    (void)host_->reset_is_disk_hang();
   }
 }
 

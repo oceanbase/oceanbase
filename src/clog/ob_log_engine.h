@@ -531,10 +531,9 @@ public:
 
   int check_is_clog_obsoleted(const common::ObPartitionKey& partition_key, const file_id_t file_id,
       const offset_t offset, bool& is_obsoleted) const override;
-  // ================== interface for ObIlogStorage end  ====================
-  int get_clog_using_disk_space(int64_t& space) const;
-  int get_ilog_using_disk_space(int64_t& space) const;
-  bool is_clog_disk_error() const override;
+  int get_clog_using_disk_space(int64_t &space) const;
+  int get_ilog_using_disk_space(int64_t &space) const;
+  bool is_clog_disk_hang() const;
 
 private:
   int fetch_log_from_server(

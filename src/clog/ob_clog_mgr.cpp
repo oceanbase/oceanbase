@@ -3170,12 +3170,12 @@ int ObCLogMgr::get_election_group_priority(const uint64_t tenant_id, election::O
                               OBSERVER.get_gctx().rs_server_status_ == share::RSS_IS_WORKING;
     int tmp_ret = OB_SUCCESS;
     bool is_data_disk_error = false;
-    bool is_clog_disk_error = log_engine_.is_clog_disk_error();
+    bool is_clog_disk_hang = log_engine_.is_clog_disk_hang();
     if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error(is_data_disk_error))) {
       CLOG_LOG(WARN, "is_data_disk_error failed", K(tmp_ret));
     }
-    if (is_clog_disk_error) {
-      priority.set_system_clog_disk_error();
+    if (is_clog_disk_hang) {
+      priority.set_system_clog_disk_hang();
     }
     if (is_data_disk_error) {
       priority.set_system_data_disk_error();

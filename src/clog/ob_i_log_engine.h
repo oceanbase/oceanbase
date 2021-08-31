@@ -198,7 +198,7 @@ public:
   virtual int check_is_clog_obsoleted(const common::ObPartitionKey& partition_key, const file_id_t file_id,
       const offset_t offset, bool& is_obsoleted) const = 0;
 
-  virtual bool is_clog_disk_error() const = 0;
+  virtual bool is_clog_disk_hang() const = 0;
   // ================== interface for ObIlogStorage end  ====================
 };
 

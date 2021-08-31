@@ -3908,7 +3908,8 @@ int ObPartitionLogService::on_get_election_priority(election::ObElectionPriority
 #endif
     bool is_tenant_out_of_mem = is_tenant_out_of_memory_();
     bool is_data_disk_error = false;
-    bool is_clog_disk_error = log_engine_->is_clog_disk_error();
+    bool is_disk_space_enough = log_engine_->is_disk_space_enough();
+    bool is_clog_disk_hang = log_engine_->is_clog_disk_hang();
     const ObReplicaProperty replica_property = mm_.get_replica_property();
     const uint64_t log_id = sw_.get_max_confirmed_log_id();
     if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error(is_data_disk_error))) {
@@ -3933,8 +3934,11 @@ int ObPartitionLogService::on_get_election_priority(election::ObElectionPriority
     if (OB_SUCCESS != (ret = priority.init(is_candidate, mm_.get_timestamp(), log_id, zone_priority))) {
       CLOG_LOG(WARN, "priority init error", K_(partition_key), K(ret));
     } else {
-      if (is_clog_disk_error) {
-        priority.set_system_clog_disk_error();
+      if (!is_disk_space_enough) {
+        priority.set_system_disk_full();
+      }
+      if (is_clog_disk_hang) {
+        priority.set_system_clog_disk_hang();
       }
       if (is_data_disk_error) {
         priority.set_system_data_disk_error();
@@ -6702,7 +6706,7 @@ int ObPartitionLogService::check_is_normal_partition(bool& is_normal_partition) 
   bool is_out_of_memory = false;
   bool is_disk_not_enough = false;
   bool is_disk_error = false;
-  bool is_clog_disk_error = false;
+  bool is_clog_disk_hang = false;
   bool is_archive_restoring = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -6712,13 +6716,13 @@ int ObPartitionLogService::check_is_normal_partition(bool& is_normal_partition) 
   } else if (OB_FAIL(ObIOManager::get_instance().is_disk_error(is_disk_error))) {
     CLOG_LOG(ERROR, "is_disk_error failed", K(ret), K(partition_key_));
   } else {
-    is_clog_disk_error = log_engine_->is_clog_disk_error();
+    is_clog_disk_hang = log_engine_->is_clog_disk_hang();
     is_disk_not_enough = !log_engine_->is_disk_space_enough();
     // physical restoring replica cannot participate in member change.
     // because its election module has not been started, it cannot vote.
     is_archive_restoring = restore_mgr_.is_archive_restoring();
     is_normal_partition =
-        !(is_disk_not_enough || is_out_of_memory || is_disk_error || is_clog_disk_error || is_archive_restoring);
+        !(is_disk_not_enough || is_out_of_memory || is_disk_error || is_clog_disk_hang || is_archive_restoring);
   }
   return ret;
 }

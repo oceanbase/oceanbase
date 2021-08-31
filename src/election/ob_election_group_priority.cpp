@@ -64,9 +64,9 @@ int ObElectionGroupPriority::compare(const ObElectionGroupPriority& priority) co
   return ret;
 }
 
-void ObElectionGroupPriority::set_system_clog_disk_error()
+void ObElectionGroupPriority::set_system_clog_disk_hang()
 {
-  system_score_ += SYSTEM_SCORE_CLOG_DISK_ERROR * 100;
+  system_score_ += SYSTEM_SCORE_CLOG_DISK_HANG * 100;
 }
 
 void ObElectionGroupPriority::set_system_data_disk_error()
