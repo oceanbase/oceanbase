@@ -14,6 +14,7 @@
 #define _OBMP_DEFAULT_H
 
 #include "observer/mysql/obmp_base.h"
+
 namespace oceanbase {
 namespace observer {
 // this processor always returns NOT_SUPPORTED error to client
@@ -37,7 +38,9 @@ public:
       } else {
         SERVER_LOG(WARN, "MySQL command not supported", "cmd", pkt.get_cmd());
       }
-      disconnect();
+      if (obmysql::OB_MYSQL_COM_STMT_SEND_LONG_DATA == pkt.get_cmd()) {
+        disconnect();
+      }
     }
     return ret;
   }
