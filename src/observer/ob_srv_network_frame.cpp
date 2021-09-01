@@ -56,7 +56,11 @@ int ObSrvNetworkFrame::init()
   const char* mysql_unix_path = "unix:run/mysql.sock";
   const uint32_t rpc_port = static_cast<uint32_t>(GCONF.rpc_port);
   ObNetOptions opts;
-  const int io_cnt = static_cast<int>(GCONF.net_thread_count);
+  int io_cnt = static_cast<int>(GCONF.net_thread_count);
+  // make net thread count adaptive
+  if (0 == io_cnt) {
+    io_cnt = max(6, get_cpu_num() / 8);
+  }
   const int hp_io_cnt = static_cast<int>(GCONF.high_priority_net_thread_count);
   const bool use_easy_ma = hp_io_cnt > 0;
   opts.rpc_io_cnt_ = io_cnt;
