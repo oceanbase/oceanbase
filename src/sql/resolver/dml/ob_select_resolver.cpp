@@ -4618,7 +4618,7 @@ int ObSelectResolver::resolve_column_ref_table_first(
   // if table column exist, check column name whether exist in alias name list
   ObRawExpr* tmp_ref = NULL;
   if (OB_FAIL(resolve_table_column_ref(q_name, real_ref_expr))) {
-    if (OB_ERR_BAD_FIELD_ERROR == ret || OB_NON_UNIQ_ERROR == ret) {
+    if (OB_ERR_BAD_FIELD_ERROR == ret) {
       if (OB_FAIL(resolve_alias_column_ref(q_name, real_ref_expr))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve alias column ref failed", K(ret), K(q_name));
       }
