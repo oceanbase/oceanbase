@@ -68,10 +68,12 @@ int ObTableInsertUpOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
       if (OB_SUCC(ret)) {
         if (is_filtered) {
           if (dml_param_.is_ignore_) {
+            LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+            LOG_WARN("check constraint violated, skip row", K(ret));
             ret = OB_ITER_END; // skip this row
           } else {
             ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-            LOG_WARN("row is filtered by check filters, running is stopped");
+            LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
           }
         } else {
           output = &MY_SPEC.new_row_;
@@ -181,7 +183,7 @@ int ObTableInsertUpOp::do_table_insert_up()
   } else {
     NG_TRACE(insertup_start_do);
     int64_t cst_end_idx = MY_SPEC.check_constraint_exprs_.count() / 2;
-    while (OB_SUCC(ret) && OB_SUCCESS == (ret = child_->get_next_row())) {
+    while (OB_SUCC(ret) && OB_SUCC(child_->get_next_row())) {
       NG_TRACE_TIMES(2, insertup_start_calc_insert_row);
       clear_evaluated_flag();
       bool is_filtered = false;
@@ -196,9 +198,11 @@ int ObTableInsertUpOp::do_table_insert_up()
       } else if (is_filtered) {
         if (dml_param_.is_ignore_) {
           // skip this row
+          LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+          LOG_WARN("check constraint violated, skip row", K(ret));
         } else {
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-          LOG_WARN("row is filtered by check filters, running is stopped");
+          LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
         }
       } else if (OB_FAIL(project_row(MY_SPEC.insert_row_, insert_row_))) {
         LOG_WARN("project to old style row failed", K(ret));
@@ -340,11 +344,13 @@ int ObTableInsertUpOp::process_on_duplicate_update(ObNewRowIterator* duplicated_
     } else if (is_filtered) {
       if (dml_param_.is_ignore_) {
         //skip row
+        LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+        LOG_WARN("check constraint violated, skip row", K(ret));
         is_row_changed = false;
         update_count++;
       } else {
         ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-        LOG_WARN("row is filtered by check filters, running is stopped");
+        LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
       }
     } else {
       //do nothing

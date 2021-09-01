@@ -154,6 +154,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"encryption", ENCRYPTION},
     {"end", END},
     {"ends", ENDS},
+    {"enforced", ENFORCED},
     {"engine", ENGINE_},
     {"engines", ENGINES},
     {"enum", ENUM},

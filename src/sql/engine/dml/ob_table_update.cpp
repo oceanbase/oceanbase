@@ -293,6 +293,8 @@ int ObTableUpdate::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
                 is_updated = false; //ignore this row
                 update_ctx->changed_rows_ --;
                 update_ctx->affected_rows_ --;
+                LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+                LOG_WARN("check constraint violated, skip row", K(ret));
               } else {
                 ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
                 LOG_WARN("row is filtered by check filters, running is stopped", K(ret));

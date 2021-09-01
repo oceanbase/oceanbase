@@ -4622,8 +4622,8 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg& arg, obrpc::ObAlter
         } else if (OB_ISNULL(simple_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("simple_table_schema is NULL ptr", K(ret), K(simple_table_schema), K(ret));
-        } else if ((arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ADD_CONSTRAINT ||
-                       arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE)) {
+        } else if ((obrpc::ObAlterTableArg::ADD_CONSTRAINT == arg.alter_constraint_type_ ||
+                      obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == arg.alter_constraint_type_)) {
           ObTableSchema::const_constraint_iterator iter = arg.alter_table_schema_.constraint_begin();
           if (iter + 1 != arg.alter_table_schema_.constraint_end()) {
             ret = OB_ERR_UNEXPECTED;

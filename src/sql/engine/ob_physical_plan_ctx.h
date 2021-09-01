@@ -216,6 +216,18 @@ public:
   {
     snprintf(message_, common::MSG_SIZE, "%s", message);
   }
+  int64_t get_warning_count() const
+  {
+    return warning_count_;
+  }
+  void set_warning_count(int64_t warning_count)
+  {
+    warning_count_ = warning_count;
+  }
+  inline void add_warning_count(int64_t warning_count)
+  {
+    warning_count_ += warning_count;
+  }
   int64_t get_affected_rows() const
   {
     return affected_rows_;
@@ -359,6 +371,7 @@ public:
     row_matched_count_ = 0;
     row_duplicated_count_ = 0;
     row_deleted_count_ = 0;
+    warning_count_ = 0;
   }
   inline void set_bind_array_count(int64_t bind_array_count)
   {
@@ -620,6 +633,7 @@ private:
   // duplicated or changed
   int64_t row_duplicated_count_;
   int64_t row_deleted_count_;
+  int64_t warning_count_;
   bool is_error_ignored_;
   bool is_select_into_;
   bool is_result_accurate_;

@@ -391,7 +391,7 @@ int ObTableReplace::try_insert(ObExecContext& ctx, ObExprCtx& expr_ctx, const Ob
   bool is_filtered = false;
   if (OB_ISNULL(insert_row) || OB_ISNULL(expr_ctx.calc_buf_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(insert_row), K(expr_ctx.calc_buf_));
+    LOG_WARN("invalid argument", K(ret), K(insert_row), K(expr_ctx.calc_buf_));
   } else if (OB_ISNULL(replace_ctx = GET_PHY_OPERATOR_CTX(ObTableReplaceCtx, ctx, id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get physical operator context failed", K(ret), K_(id));

@@ -85,22 +85,8 @@ int ObMultiTableInsertResolver::resolve(const ParseNode& parse_tree)
       } else if (OB_FAIL(resolve_check_constraints(insert_stmt->get_table_item(i)))) {
         LOG_WARN("resolve check constraint failed", K(ret));
       } else {
-        int cnt = insert_stmt->get_check_constraint_exprs_size();
-        if (cnt > 0 && share::is_mysql_mode() && insert_stmt->get_insert_up()) {
-          // on duplicate key
-          if (OB_FAIL(resolve_check_constraints(insert_stmt->get_table_item(i)))) {
-            LOG_WARN("resolve check constraint failed", K(ret));
-          } else {
-            for (uint64_t j = cnt; OB_SUCC(ret) && j < insert_stmt->get_check_constraint_exprs_size(); ++j) {
-              if (OB_FAIL(ObTableAssignment::expand_expr(
-                      tas.at(0).assignments_, insert_stmt->get_check_constraint_exprs().at(j)))) {
-                LOG_WARN("expand generated column expr failed", K(ret));
-              }
-            }
-          }
-        }
         RawExprArray temp_check_cst_exprs;
-        for (int64_t j = 0; OB_SUCC(ret) && j < cnt; ++j) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < insert_stmt->get_check_constraint_exprs_size(); ++j) {
           ObSEArray<ObRawExpr*, 4> old_column_exprs;
           ObSEArray<ObRawExpr*, 4> new_column_exprs;
           ObRawExpr* check_cst_exprs = insert_stmt->get_check_constraint_exprs().at(j);

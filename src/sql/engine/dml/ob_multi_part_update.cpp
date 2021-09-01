@@ -233,7 +233,19 @@ int ObMultiPartUpdate::shuffle_update_row(ObExecContext& ctx, bool& got_row) con
             global_index_dml_infos.at(0).dml_subplans_.at(UPDATE_OP).subplan_root_, *update_ctx, old_row, new_row));
         OZ(ObPhyOperator::filter_row_for_check_cst(
             update_ctx->expr_ctx_, new_row, sub_update->check_constraint_exprs(), is_filtered));
-        OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+        if (OB_SUCC(ret) && is_filtered) {
+          if (share::is_mysql_mode() && is_ignore_) {
+            is_updated = false; //skip this row
+            update_ctx->changed_rows_ --;
+            update_ctx->affected_rows_ --;
+            LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+            LOG_WARN("check constraint violated, skip row", K(ret));
+            continue;
+          } else {
+            ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+            LOG_WARN("constraint violated", K(ret));
+          }
+        }
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < global_index_dml_infos.count(); ++i) {
         const ObTableLocation* old_tbl_loc = NULL;

@@ -62,6 +62,7 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator& allocator)
       row_matched_count_(0),
       row_duplicated_count_(0),
       row_deleted_count_(0),
+      warning_count_(0),
       is_error_ignored_(false),
       is_select_into_(false),
       is_result_accurate_(true),

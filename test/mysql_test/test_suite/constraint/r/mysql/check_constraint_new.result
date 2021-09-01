@@ -188,6 +188,8 @@ INSERT INTO t1 VALUES(2, NULL);
 INSERT INTO t1 VALUES(3, 1000);
 ERROR HY000: check constraint violated
 INSERT IGNORE INTO t1 VALUES (3, 1000);
+Warnings:
+Warning	3819	check constraint violated
 SELECT * FROM t1;
 f1	f2
 1	1
@@ -199,6 +201,9 @@ f1	f2
 1	1
 2	NULL
 INSERT IGNORE INTO t1 SELECT * FROM t2;
+Warnings:
+Warning	3819	check constraint violated
+Warning	3819	check constraint violated
 SELECT * FROM t1;
 f1	f2
 1	1
@@ -235,6 +240,13 @@ UPDATE t1 SET f2 = NULL;
 UPDATE t1 SET f2 = 1000;
 ERROR HY000: check constraint violated
 UPDATE IGNORE t1 SET f2 = 1000;
+Warnings:
+Warning	3819	check constraint violated
+Warning	3819	check constraint violated
+Warning	3819	check constraint violated
+Warning	3819	check constraint violated
+Warning	3819	check constraint violated
+Warning	3819	check constraint violated
 SELECT * FROM t1;
 f1	f2
 1	NULL
@@ -254,6 +266,8 @@ INSERT INTO t2 VALUES (4, 24);
 UPDATE t1,t2  SET t1.f2 = t1.f2 + 20 WHERE t1.f1 = t2.f1;
 ERROR HY000: check constraint violated
 UPDATE IGNORE t1,t2  SET t1.f2 = t1.f2 + 20 WHERE t1.f1 = t2.f1;
+Warnings:
+Warning	3819	check constraint violated
 DROP TABLE t1, t2;
 CREATE TABLE t1 (
 `f1` int(10) unsigned NOT NULL auto_increment,
@@ -271,6 +285,9 @@ INSERT INTO t2 VALUES (496,500);
 UPDATE t2,t1 set t2.f4 = t2.f4 + 1;
 ERROR HY000: check constraint violated
 UPDATE IGNORE t2,t1 set t2.f4 = t2.f4 + 1;
+Warnings:
+Warning	3819	check constraint violated
+Warning	3819	check constraint violated
 DROP TABLE t1, t2;
 #-----------------------------------------------------------------------
 # Test case to verify check constraint with INSERT ON DUPLICATE
@@ -279,11 +296,15 @@ CREATE TABLE t1(f1 INT PRIMARY KEY, f2 INT CHECK (f2 < 10));
 INSERT INTO t1 VALUES (2, 10) ON DUPLICATE KEY UPDATE f2 = 4;
 ERROR HY000: check constraint violated
 INSERT IGNORE INTO t1 VALUES (2, 10) ON DUPLICATE KEY UPDATE f2 = 4;
+Warnings:
+Warning	3819	check constraint violated
 INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 4;
 INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 4;
 INSERT INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 10;
 ERROR HY000: check constraint violated
 INSERT IGNORE INTO t1 VALUES (1, 1) ON DUPLICATE KEY UPDATE f2 = 10;
+Warnings:
+Warning	3819	check constraint violated
 INSERT INTO t1 VALUES (1, 10) ON DUPLICATE KEY UPDATE f2 = 5;
 ERROR HY000: check constraint violated
 SELECT * FROM t1;
@@ -370,7 +391,7 @@ ALTER TABLE t1 ALTER CHECK ck0 ENFORCED;
 INSERT INTO t1(f2) VALUES(1);
 INSERT INTO t1(f2) VALUES(2);
 ALTER TABLE t1 ADD CONSTRAINT ck4 CHECK(f2>5) ENFORCED;
-ERROR HY000: check constraint 'ck4' is violated
+ERROR HY000: check constraint violated
 DELETE FROM t1 WHERE f2 < 4;
 ALTER TABLE t1 ADD CONSTRAINT ck4 CHECK(f2>5) ENFORCED;
 DROP TABLE t1;
@@ -627,7 +648,7 @@ DROP TABLE t1;
 CREATE TABLE t1 (c1 ENUM ('a','b'));
 INSERT INTO t1 VALUES('a');
 alter table t1 add CONSTRAINT CK CHECK(c1 IN ('c','d'));
-ERROR HY000: check constraint 'CK' is violated
+ERROR HY000: check constraint violated
 INSERT INTO t1 VALUES('c');
 ERROR 01000: Data truncated for argument
 DROP TABLE t1;
@@ -887,6 +908,8 @@ PARTITION p3 VALUES LESS THAN (1990)
 INSERT INTO t1 VALUES('1940-01-01');
 ERROR HY000: check constraint violated
 INSERT IGNORE INTO t1 VALUES('1940-01-01');
+Warnings:
+Warning	3819	check constraint violated
 INSERT INTO t1 VALUES('1960-01-01');
 SELECT * FROM t1;
 d

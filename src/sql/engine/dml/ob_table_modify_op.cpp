@@ -1091,7 +1091,7 @@ int ObTableModifyOp::filter_row_for_check_cst(
   ObDatum* datum = NULL;
   int ret = OB_SUCCESS;
   filtered = false;
-  if (beg_idx == OB_INVALID_ID && end_idx == OB_INVALID_ID) {
+  if (OB_INVALID_ID == beg_idx && OB_INVALID_ID == end_idx) {
     beg_idx = 0;
     end_idx = check_constraint_exprs.count();
   } else if (OB_UNLIKELY(end_idx > check_constraint_exprs.count())) {

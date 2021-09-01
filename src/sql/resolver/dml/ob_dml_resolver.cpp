@@ -8595,6 +8595,7 @@ int ObDMLResolver::resolve_check_constraints(const TableItem* table_item)
   int ret = OB_SUCCESS;
   ObDMLStmt* dml_stmt = NULL;
   const ObTableSchema* table_schema = NULL;
+  int orig_cst_count = 0;
   if (OB_ISNULL(table_item) || OB_ISNULL(schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table item is null", K(ret));
@@ -8606,10 +8607,14 @@ int ObDMLResolver::resolve_check_constraints(const TableItem* table_item)
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get tale schema", K(ret), K(table_schema));
+  } else {
+    orig_cst_count = dml_stmt->get_check_constraint_exprs_size();
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(add_check_constraint_to_stmt(table_schema))) {
     LOG_WARN("fail to add check constraint to stmt", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < dml_stmt->get_check_constraint_exprs_size(); i++) {
+    for (int64_t i = orig_cst_count; OB_SUCC(ret) && i < dml_stmt->get_check_constraint_exprs_size(); i++) {
       ObRawExpr*& expr = dml_stmt->get_check_constraint_exprs().at(i);
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;

@@ -17,10 +17,8 @@
 #include "share/mysql_errno.h"
 #include "lib/ob_errno.h"
 
-namespace oceanbase
-{
-namespace common
-{
+namespace oceanbase {
+namespace common {
 
 constexpr int OB_LAST_ERROR_CODE = -38105;
 constexpr int OB_ERR_SQL_START = -5000;
@@ -2209,7 +2207,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_SUBQUERY_USE__USER_ERROR_MSG "subquery not allowed here"
 #define OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST__USER_ERROR_MSG "date or system variable wrongly specified in CHECK constraint"
 #define OB_ERR_NONEXISTENT_CONSTRAINT__USER_ERROR_MSG "Constraint \'%.*s\' does not exist."
-#define OB_ERR_CHECK_CONSTRAINT_VIOLATED__USER_ERROR_MSG "check constraint \'%.*s\' is violated"
+#define OB_ERR_CHECK_CONSTRAINT_VIOLATED__USER_ERROR_MSG "check constraint violated"
 #define OB_ERR_GROUP_FUNC_NOT_ALLOWED__USER_ERROR_MSG "group function is not allowed here"
 #define OB_ERR_POLICY_STRING_NOT_FOUND__USER_ERROR_MSG "policy string not found"
 #define OB_ERR_INVALID_LABEL_STRING__USER_ERROR_MSG "invalid label string"
@@ -3637,7 +3635,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_SUBQUERY_USE__ORA_USER_ERROR_MSG "ORA-02251: subquery not allowed here"
 #define OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST__ORA_USER_ERROR_MSG "ORA-02436: date or system variable wrongly specified in CHECK constraint"
 #define OB_ERR_NONEXISTENT_CONSTRAINT__ORA_USER_ERROR_MSG "ORA-02443: Cannot drop constraint \'%.*s\' - nonexistent constraint"
-#define OB_ERR_CHECK_CONSTRAINT_VIOLATED__ORA_USER_ERROR_MSG "ORA-02290: check constraint \'%.*s\' is violated"
+#define OB_ERR_CHECK_CONSTRAINT_VIOLATED__ORA_USER_ERROR_MSG "ORA-02290: check constraint violated"
 #define OB_ERR_GROUP_FUNC_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00934: group function is not allowed here"
 #define OB_ERR_POLICY_STRING_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-12416: policy string not found"
 #define OB_ERR_INVALID_LABEL_STRING__ORA_USER_ERROR_MSG "ORA-12401: invalid label string"

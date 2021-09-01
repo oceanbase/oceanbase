@@ -129,6 +129,7 @@ public:
   // Dangerous: there is a dragon!!!
   int generate_rt_expr(const ObRawExpr& raw_expr, ObExpr*& rt_expr);
   int generate_rt_exprs(const common::ObIArray<ObRawExpr*>& src, common::ObIArray<ObExpr*>& dst);
+  int generate_rt_exprs(const common::ObIArray<ObRawExpr*>& src, common::ObIArray<ObExpr*>& dst, int idx_begin, int idx_end);
 
 private:
   bool enable_pushdown_filter_to_storage(const ObLogTableScan& op);
@@ -328,8 +329,8 @@ private:
   int convert_duplicate_key_checker(ObLogDupKeyChecker& log_dupkey_checker, ObDuplicatedKeyChecker& phy_dupkey_checker);
   int convert_multi_table_replace_info(ObLogInsert& op, ObMultiTableReplaceSpec& phy_op);
   int convert_global_index_update_info(ObLogUpdate& op, const TableColumns& table_columns,
-      common::ObIArray<ObOpSpec*>& subplan_roots, ObTableDMLInfo& table_dml_info);
-  int convert_update_subplan(ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan);
+      common::ObIArray<ObOpSpec*>& subplan_roots, ObTableDMLInfo& table_dml_info, int &check_cst_idx);
+  int convert_update_subplan(ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan, int64_t cst_begin_idx = OB_INVALID_ID);
   int convert_for_update_subplan(
       ObLogForUpdate& op, const uint64_t table_id, ObOpSpec*& subplan_root, ObTableDMLInfo& table_dml_info);
   int generate_basic_transmit_spec(ObLogExchange& op, ObPxTransmitSpec& spec, const bool in_root_job);
@@ -356,6 +357,7 @@ private:
       ObLogicalOperator& op, const common::ObIArray<ObColumnRefRawExpr*>& all_columns, OP_SPEC& spec);
 
   int convert_check_constraint(ObLogDelUpd& log_op, ObTableModifySpec& spec);
+  int convert_check_constraint_for_multi_tables(ObLogDelUpd& log_op, ObTableModifySpec& spec, int64_t cst_begin_idx);
 
   int convert_foreign_keys(ObLogDelUpd& log_op, ObTableModifySpec& spec);
   int add_fk_arg_to_phy_op(ObForeignKeyArg& fk_arg, uint64_t name_table_id,
@@ -376,7 +378,7 @@ private:
   int convert_insert_index_info(ObLogInsert& op, ObMultiPartInsertSpec& spec);
   int convert_global_index_delete_info(ObLogDelUpd& op, const TableColumns& table_columns,
       common::ObIArray<ObOpSpec*>& subplan_roots, ObTableDMLInfo& table_dml_info);
-  int convert_insert_subplan(ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan);
+  int convert_insert_subplan(ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan, int64_t cst_begin_idx = OB_INVALID_ID);
   int convert_delete_subplan(ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan);
   int convert_common_dml_subplan(ObLogDelUpd& op, ObPhyOperatorType phy_op_type, ObIArray<ObExpr*>& access_columns,
       const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan);

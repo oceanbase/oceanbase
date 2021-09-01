@@ -331,9 +331,14 @@ int ObTableInsert::get_next_row(ObExecContext& ctx, const ObNewRow*& insert_row)
       LOG_WARN("fail to copy cur row failed", K(ret));
     } else if (OB_FAIL(process_row(ctx, insert_ctx, insert_row, is_filtered))) {
       LOG_WARN("fail to process the row", K(ret));
-    } else if (is_filtered && !(insert_ctx->dml_param_.is_ignore_ && share::is_mysql_mode())) { //in mysql mode, insert ignore operation skips violated rows
-      ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-      LOG_WARN("row is filtered by check filters, running is stopped");
+    } else if (is_filtered) {
+      if (share::is_mysql_mode() && insert_ctx->dml_param_.is_ignore_) { //in mysql mode, insert ignore operation skips violated rows
+        LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+        LOG_WARN("check constraint violated, skip row", K(ret));
+      } else {
+        ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+        LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
+      }
     } else {
       insert_ctx->curr_row_num_++;
     }
@@ -398,9 +403,11 @@ int ObTableInsert::get_next_rows(ObExecContext& ctx, const ObNewRow*& insert_row
       } else if (is_filtered) {
         if (insert_ctx->dml_param_.is_ignore_ && share::is_mysql_mode()) {
           //ignore flag ,skip this row
+          LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+          LOG_WARN("check constraint violated, skip row", K(ret));
         } else {
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-          LOG_WARN("row is filtered by check filters, running is stopped");
+          LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
         }
       } else if (OB_FAIL(deep_copy_row(insert_ctx, insert_row))) {
         LOG_WARN("fail to deep copy the row", K(insert_row), K(ret));

@@ -1080,7 +1080,7 @@ DEFINE_ERROR(OB_ARRAY_BINDING_ROLLBACK, -5689, -1, "HY000", "array binding need 
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SUBQUERY_USE, -5690, -1, "HY000", "subquery not allowed here", 2251, "subquery not allowed here");
 DEFINE_ORACLE_ERROR(OB_ERR_DATE_OR_SYS_VAR_CANNOT_IN_CHECK_CST, -5691, -1, "HY000", "date or system variable wrongly specified in CHECK constraint", 2436, "date or system variable wrongly specified in CHECK constraint");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_NONEXISTENT_CONSTRAINT, -5692, ER_CONSTRAINT_NOT_FOUND, "HY000", "Constraint does not exist.", "Constraint \'%.*s\' does not exist.", 2443, "Cannot drop constraint  - nonexistent constraint", "Cannot drop constraint \'%.*s\' - nonexistent constraint");
-DEFINE_ORACLE_ERROR_EXT(OB_ERR_CHECK_CONSTRAINT_VIOLATED, -5693, ER_CHECK_CONSTRAINT_VIOLATED, "HY000", "check constraint violated", "check constraint \'%.*s\' is violated", 2290, "check constraint violated", "check constraint \'%.*s\' is violated");
+DEFINE_ORACLE_ERROR(OB_ERR_CHECK_CONSTRAINT_VIOLATED, -5693, ER_CHECK_CONSTRAINT_VIOLATED, "HY000", "check constraint violated", 2290, "check constraint violated");
 DEFINE_ORACLE_ERROR(OB_ERR_GROUP_FUNC_NOT_ALLOWED, -5694, -1, "HY000", "group function is not allowed here", 934, "group function is not allowed here");
 DEFINE_ORACLE_ERROR(OB_ERR_POLICY_STRING_NOT_FOUND, -5695, -1, "HY000", "policy string not found", 12416, "policy string not found");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_LABEL_STRING, -5696, -1, "HY000", "invalid label string", 12401, "invalid label string");

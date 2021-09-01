@@ -268,6 +268,8 @@ int ObTableInsertOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
     } else if (is_filtered) {
       if (MY_SPEC.is_ignore_ && is_filtered && share::is_mysql_mode()) {
         /*insert ignore, skip row*/
+        LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+        LOG_WARN("check constraint violated, skip row", K(ret));
       } else {
         ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
         LOG_WARN("check constraint violated", K(ret));

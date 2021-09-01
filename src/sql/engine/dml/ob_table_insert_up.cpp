@@ -323,7 +323,7 @@ int ObTableInsertUp::get_next_row(ObExecContext& ctx, const ObNewRow*& row) cons
     ret = OB_ITER_END;
   } else {
     bool is_filtered = false;
-    if (update_ctx->get_count_ == 0) {
+    if (0 == update_ctx->get_count_) {
       update_ctx->get_update_row().projector_ = old_projector_;
       update_ctx->get_update_row().projector_size_ = old_projector_size_;
       row = const_cast<const ObNewRow*>(&update_ctx->get_update_row());
@@ -347,6 +347,8 @@ int ObTableInsertUp::get_next_row(ObExecContext& ctx, const ObNewRow*& row) cons
         LOG_WARN("failed to handle check constraint", K(ret), K(old_row), K(*row));
       } else if (is_filtered) {
         if (update_ctx->dml_param_.is_ignore_) {
+          LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+          LOG_WARN("check constraint violated, skip row", K(ret));
           ret = OB_ITER_END; //ignore flag ,skip this row
         } else {
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
@@ -455,7 +457,7 @@ int ObTableInsertUp::do_table_insert_up(ObExecContext& ctx) const
   } else {
     NG_TRACE(insertup_start_do);
     bool is_filtered = false;
-    while (OB_SUCC(ret) && OB_SUCCESS == (ret = child_op_->get_next_row(ctx, insert_row))) {
+    while (OB_SUCC(ret) && OB_SUCC(child_op_->get_next_row(ctx, insert_row))) {
       NG_TRACE_TIMES(2, insertup_start_calc_insert_row);
       is_filtered = false;
       if (OB_FAIL(calc_insert_row(ctx, expr_ctx, insert_row))) {
@@ -473,6 +475,8 @@ int ObTableInsertUp::do_table_insert_up(ObExecContext& ctx) const
       } else if (is_filtered) {
         if (insert_update_ctx->dml_param_.is_ignore_) {
           //ignore flag ,skip this row
+          LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+          LOG_WARN("check constraint violated, skip row", K(ret));
         } else {
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
           LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
@@ -713,7 +717,7 @@ int ObTableInsertUp::process_on_duplicate_update(ObExecContext& ctx, ObNewRowIte
           LOG_WARN(
               "update rows to partition storage failed", K(ret), K(update_related_column_ids_), K(updated_column_ids_));
         }
-      } else if (cur_affected == 1) {
+      } else if (1 == cur_affected) {
         NG_TRACE_TIMES(2, insertup_end_update_row);
         // The affected-rows value per row is 1 if the row is inserted as a new row,
         // 2 if an existing row is updated, and 0 if an existing row is set to its current values

@@ -1179,7 +1179,6 @@ int ObRawExprUtils::build_check_constraint_expr(ObRawExprFactory& expr_factory, 
     } else {/*do nothing*/
     }
   } else { //mysql mode
-    LOG_INFO("sysfunc:",K(get_type_name(expr->get_expr_type())),K(expr->get_expr_type()));
     if (OB_UNLIKELY(sys_vars.count() > 0)) {
       ret = OB_ERR_CHECK_CONSTRAINT_VARIABLES;
       LOG_WARN("system variable wrongly specified in CHECK constraint", K(ret),K(sys_vars.count()), K(expr->has_flag(IS_USER_VARIABLE)));

@@ -251,6 +251,8 @@ int ObTableUpdateOp::prepare_next_storage_row(const ObExprPtrIArray*& output)
                 changed_rows_ --;
                 affected_rows_ --;
                 need_update_ = false;
+                LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+                LOG_WARN("check constraint violated, skip row", K(ret));
               } else {
                 ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
                 LOG_WARN("row is filtered by check filters, running is stopped", K(ret));

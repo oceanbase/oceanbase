@@ -419,6 +419,32 @@ int ObStaticEngineCG::generate_rt_exprs(const ObIArray<ObRawExpr*>& src, ObIArra
   return ret;
 }
 
+
+int ObStaticEngineCG::generate_rt_exprs(const ObIArray<ObRawExpr*>& src, ObIArray<ObExpr*>& dst, int idx_begin, int idx_end)
+{
+  int ret = OB_SUCCESS;
+  dst.reset();
+  if (!src.empty()) {
+    if (OB_FAIL(dst.reserve(src.count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(src.count()));
+    } else if (idx_begin < 0 || idx_end > src.count()) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      ObRawExpr *const *raw_expr;
+      for (int i = idx_begin; OB_SUCC(ret) && i < idx_end ; ++i) {
+        raw_expr = &src.at(i);
+        ObExpr* e = NULL;
+        CK(OB_NOT_NULL(*raw_expr));
+        OZ(generate_rt_expr(*(*raw_expr), e));
+        CK(OB_NOT_NULL(e));
+        OZ(dst.push_back(e));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator& op, ObOpSpec& spec, const bool check_eval_once)
 {
   int ret = OB_SUCCESS;
@@ -1708,8 +1734,8 @@ int ObStaticEngineCG::convert_insert_index_info(ObLogInsert& op, ObMultiPartInse
 }
 
 int ObStaticEngineCG::convert_insert_subplan(
-    ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan)
-{
+    ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan, int64_t cst_begin_idx)
+{ // cst_begin_idx is the index of table's first check constraint in op, convert all constraints when OB_INVALID_ID == cst_begin_idx
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(phy_plan_));
   if (OB_SUCC(ret)) {
@@ -1719,8 +1745,14 @@ int ObStaticEngineCG::convert_insert_subplan(
   if (OB_SUCC(ret) && log_op_def::LOG_INSERT == op.get_type()) {
     if (OB_FAIL(convert_foreign_keys(op, *dml_subplan.subplan_root_))) {
       LOG_WARN("failed to convert foreign keys", K(ret));
-    } else if (OB_FAIL(convert_check_constraint(op, *dml_subplan.subplan_root_))) {
-      LOG_WARN("failed to convert check constraint", K(ret));
+    } else if (OB_INVALID_ID == cst_begin_idx) {
+      if (OB_FAIL(convert_check_constraint(op, *dml_subplan.subplan_root_))) {
+        LOG_WARN("failed to convert check constraint", K(ret));
+      }
+    } else {
+      if (OB_FAIL(convert_check_constraint_for_multi_tables(op, *dml_subplan.subplan_root_, cst_begin_idx))) {
+        LOG_WARN("failed to convert check constraint", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret) && log_op_def::LOG_INSERT == op.get_type()) {
@@ -2321,11 +2353,12 @@ int ObStaticEngineCG::generate_spec(ObLogUpdate& op, ObMultiPartUpdateSpec& spec
   //     phy_op->set_stmt_id_idx(stmt_id_idx);
   //   }
   // }
+  int check_cst_index = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < all_table_columns->count(); ++i) {
     ObTableDMLInfo table_dml_info;
     const TableColumns& table_columns = all_table_columns->at(i);
     const ObTableAssignment& ta = tas->at(i);
-    OZ(convert_global_index_update_info(op, table_columns, subplan_roots, table_dml_info));
+    OZ(convert_global_index_update_info(op, table_columns, subplan_roots, table_dml_info, check_cst_index));
     auto &dst_assign_cols = spec.table_dml_infos_.at(i).assign_columns_;
     OX(dst_assign_cols.old_row_.set_allocator(&phy_plan_->get_allocator()));
     OX(dst_assign_cols.new_row_.set_allocator(&phy_plan_->get_allocator()));
@@ -2343,12 +2376,16 @@ int ObStaticEngineCG::generate_spec(ObLogUpdate& op, ObMultiPartUpdateSpec& spec
     OZ(append_op->set_child(static_cast<int32_t>(i), subplan_roots.at(i)));
   }
 
+  if (OB_SUCC(ret) && share::is_mysql_mode()) {
+    spec.is_ignore_ = op.is_ignore();
+    phy_plan_->set_ignore(op.is_ignore());
+  }
   return ret;
 }
 
 int ObStaticEngineCG::convert_global_index_update_info(ObLogUpdate& op, const TableColumns& table_columns,
-    common::ObIArray<ObOpSpec*>& subplan_roots, ObTableDMLInfo& table_dml_info)
-{
+    common::ObIArray<ObOpSpec*>& subplan_roots, ObTableDMLInfo& table_dml_info, int &check_cst_idx)
+{ // cst_begin_idx is the index of table's first check constraint in op
   int ret = OB_SUCCESS;
   ObSqlSchemaGuard* schema_guard = NULL;
   if (OB_ISNULL(op.get_plan()) || OB_ISNULL(op.get_plan()->get_optimizer_context().get_sql_schema_guard())) {
@@ -2405,7 +2442,7 @@ int ObStaticEngineCG::convert_global_index_update_info(ObLogUpdate& op, const Ta
     // update in seme partition: update in the partition.
     // update across partition: delete from the old partition and insert into the new partition.
     // generate update subplan first, then delete and insert subplan can reuse old_row and new_row.
-    OZ(convert_update_subplan(op, index_dml_info, subplans.at(ObMultiPartUpdate::UPDATE_OP)));
+    OZ(convert_update_subplan(op, index_dml_info, subplans.at(ObMultiPartUpdate::UPDATE_OP), check_cst_idx));
     ObTableUpdateSpec* update_spec =
         static_cast<ObTableUpdateSpec*>(subplans.at(ObMultiPartUpdate::UPDATE_OP).subplan_root_);
     CK(OB_NOT_NULL(update_spec));
@@ -2418,21 +2455,23 @@ int ObStaticEngineCG::convert_global_index_update_info(ObLogUpdate& op, const Ta
     OZ(convert_delete_subplan(op, index_dml_info, subplans.at(ObMultiPartUpdateOp::DELETE_OP)));
 
     OZ(subplans.at(ObMultiPartUpdateOp::INSERT_OP).access_exprs_.assign(update_spec->new_row_));
-    OZ(convert_insert_subplan(op, index_dml_info, subplans.at(ObMultiPartUpdateOp::INSERT_OP)));
+    OZ(convert_insert_subplan(op, index_dml_info, subplans.at(ObMultiPartUpdateOp::INSERT_OP), check_cst_idx));
 
     OZ(subplan_roots.push_back(subplans.at(ObMultiPartUpdateOp::DELETE_OP).subplan_root_));
     OZ(subplan_roots.push_back(subplans.at(ObMultiPartUpdateOp::INSERT_OP).subplan_root_));
     OZ(subplan_roots.push_back(subplans.at(ObMultiPartUpdateOp::UPDATE_OP).subplan_root_));
+    check_cst_idx += subplans.at(ObMultiPartUpdateOp::UPDATE_OP).subplan_root_->check_constraint_exprs_.count();
   }  // for index_dml_infos end
   OZ(convert_update_assignments(table_columns.index_dml_infos_.at(0).column_exprs_,
       table_columns.index_dml_infos_.at(0).assignments_,
       table_dml_info.assign_columns_));
+  
   return ret;
 }
 
 int ObStaticEngineCG::convert_update_subplan(
-    ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan)
-{
+    ObLogDelUpd& op, const IndexDMLInfo& index_dml_info, SeDMLSubPlan& dml_subplan, int64_t cst_begin_idx)
+{ // cst_begin_idx is the index of table's first check constraint in op
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
     int64_t access_cnt =
@@ -2468,7 +2507,15 @@ int ObStaticEngineCG::convert_update_subplan(
       LOG_WARN("failed to convert foreign keys", K(ret));
     }
   }
-  OZ(convert_check_constraint(op, *dml_subplan.subplan_root_));
+  if (OB_INVALID_ID == cst_begin_idx) {
+    if (OB_FAIL(convert_check_constraint(op, *dml_subplan.subplan_root_))) {
+      LOG_WARN("failed to convert check constraint", K(ret));
+    }
+  } else {
+    if (OB_FAIL(convert_check_constraint_for_multi_tables(op, *dml_subplan.subplan_root_, cst_begin_idx))) {
+      LOG_WARN("failed to convert check constraint", K(ret));
+    }
+  }
   OZ(convert_table_dml_param(op, *dml_subplan.subplan_root_));
 
   return ret;
@@ -4552,7 +4599,7 @@ int ObStaticEngineCG::add_table_column_ids(ObLogicalOperator& op, ObTableModifyS
 }
 
 int ObStaticEngineCG::convert_check_constraint(ObLogDelUpd& log_op, ObTableModifySpec& spec)
-{
+{ //convert all check constraints in log_op into spec
   int ret = OB_SUCCESS;
   ObLogPlan* log_plan = NULL;
   ObSqlSchemaGuard* schema_guard = NULL;
@@ -4566,7 +4613,7 @@ int ObStaticEngineCG::convert_check_constraint(ObLogDelUpd& log_op, ObTableModif
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(log_op), K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(spec.index_tid_, table_schema))) {
-    LOG_WARN("failed to get table schema", K(spec.index_tid_), K(ret));
+    LOG_WARN("failed to get table schema", K(ret), K(spec.index_tid_));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(spec.index_tid_), K(ret));
@@ -4579,6 +4626,39 @@ int ObStaticEngineCG::convert_check_constraint(ObLogDelUpd& log_op, ObTableModif
         table_schema->get_table_type());
   } else {
     OZ(generate_rt_exprs(*log_op.get_check_constraint_exprs(), spec.check_constraint_exprs_));
+  }
+
+  return ret;
+}
+
+int ObStaticEngineCG::convert_check_constraint_for_multi_tables(ObLogDelUpd& log_op, ObTableModifySpec& spec, int64_t cst_begin_idx)
+{ //convert check constraints in table spec.index_tid_ into spec, cst_begin_idx is index of the table's first constraint in log_op
+  int ret = OB_SUCCESS;
+  ObLogPlan* log_plan = NULL;
+  ObSqlSchemaGuard* schema_guard = NULL;
+  const ObTableSchema* table_schema = NULL;
+
+  if (OB_ISNULL(log_op.get_check_constraint_exprs())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check constraint exprs is NULL", K(ret));
+  } else if (OB_ISNULL(log_plan = log_op.get_plan()) ||
+             OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(log_op), K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(spec.index_tid_, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(spec.index_tid_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(spec.index_tid_), K(ret));
+  } else if (!(table_schema->is_user_table() || table_schema->is_tmp_table())) {
+    // do nothing, especially for global index.
+    LOG_DEBUG("skip convert constraint",
+        "table_id",
+        table_schema->get_table_name_str(),
+        "table_type",
+        table_schema->get_table_type());
+  } else {
+    OZ(generate_rt_exprs(*log_op.get_check_constraint_exprs(), spec.check_constraint_exprs_, cst_begin_idx, cst_begin_idx + table_schema->get_constraint_count()));
   }
 
   return ret;

@@ -4851,7 +4851,7 @@ int ObCodeGeneratorImpl::convert_replace(ObLogInsert& op, const PhyOpsDesc& chil
     RowDesc extra_row_desc;
     OZ(extra_row_desc.init());
     OZ(generate_insert_new_row_desc(op.get_table_columns(), op.get_value_exprs(), *out_row_desc, extra_row_desc));
-    if (OB_SUCC(ret) && !op.is_multi_part_dml() &&OB_FAIL(convert_check_constraint(op, *phy_op, extra_row_desc))) {
+    if (OB_SUCC(ret) && !op.is_multi_part_dml() && OB_FAIL(convert_check_constraint(op, *phy_op, extra_row_desc))) {
       LOG_WARN("failed to convert check constraints", K(ret));
     }
     OZ(add_compute(op.get_output_exprs(), *out_row_desc, &extra_row_desc, *phy_op),
@@ -6464,6 +6464,8 @@ int ObCodeGeneratorImpl::convert_multi_table_update(ObLogUpdate& op, const PhyOp
   OZ(set_need_check_pk_is_null(op, phy_op));
   if (OB_SUCC(ret)) {
     phy_op->set_subplan_root(append_op);
+    phy_plan_->set_ignore(op.is_ignore());
+    phy_op->set_ignore(op.is_ignore());
   }
   if (OB_SUCC(ret) && op.get_stmt_id_expr() != nullptr) {
     int64_t stmt_id_idx = OB_INVALID_INDEX;

@@ -38,35 +38,35 @@ void ObInfoSchemaCheckConstraintsTable::reset()
   ObVirtualTableScannerIterator::reset();
 }
 
-int ObInfoSchemaCheckConstraintsTable::inner_get_next_row(common::ObNewRow*& row)
+int ObInfoSchemaCheckConstraintsTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == allocator_ || NULL == schema_guard_ || OB_INVALID_ID == tenant_id_)) {
+  if (OB_UNLIKELY(OB_ISNULL(allocator_) || OB_ISNULL(schema_guard_) || OB_INVALID_ID == tenant_id_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN,
         "allocator or schema_guard is NULL or tenant_id is invalid!",
+        K(ret),
         K_(schema_guard),
         K_(allocator),
-        K_(tenant_id),
-        K(ret));
+        K_(tenant_id));
   }
-  if (OB_SUCCESS == ret && !start_to_read_) {
+  if (OB_SUCC(ret) && !start_to_read_) {
     ObSArray<const ObDatabaseSchema*> database_schemas;
     if (OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_, database_schemas))) {
-      SERVER_LOG(WARN, "failed to get database schema of tenant", K_(tenant_id));
+      SERVER_LOG(WARN, "failed to get database schema of tenant", K(ret), K_(tenant_id));
     } else {
-      ObObj* cells = NULL;
+      ObObj *cells = NULL;
       const int64_t col_count = output_column_ids_.count();
       if (0 > col_count || col_count > CHECK_CONSTRAINTS_COLUMN_COUNT) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "column count error ", K(ret), K(col_count));
-      } else if (NULL == (cells = cur_row_.cells_)) {
+      } else if (OB_ISNULL((cells = cur_row_.cells_))) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
       } else {
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < database_schemas.count(); ++i) {
-        const ObDatabaseSchema* database_schema = database_schemas.at(i);
+        const ObDatabaseSchema *database_schema = database_schemas.at(i);
         if (OB_ISNULL(database_schema)) {
           ret = OB_ERR_BAD_DATABASE;
           SERVER_LOG(WARN, "database not exist", K(ret));
@@ -88,7 +88,7 @@ int ObInfoSchemaCheckConstraintsTable::inner_get_next_row(common::ObNewRow*& row
     }
   }
 
-  if (OB_SUCCESS == ret && start_to_read_) {
+  if (OB_SUCC(ret) && start_to_read_) {
     if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
       if (OB_ITER_END != ret) {
         SERVER_LOG(WARN, "fail to get next row", K(ret));
@@ -101,7 +101,7 @@ int ObInfoSchemaCheckConstraintsTable::inner_get_next_row(common::ObNewRow*& row
 }
 
 int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
-    const ObDatabaseSchema& database_schema, ObObj* cells, const int64_t col_count)
+    const ObDatabaseSchema &database_schema, ObObj *cells, const int64_t col_count)
 {
   int ret = OB_SUCCESS;
   ObSArray<const ObTableSchema*> table_schemas;
@@ -113,15 +113,15 @@ int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
     SERVER_LOG(WARN, "failed to get table schema in database", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
-      const ObTableSchema* table_schema = table_schemas.at(i);
+      const ObTableSchema *table_schema = table_schemas.at(i);
       if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         SERVER_LOG(WARN, "table schema not exist", K(ret));
       } else if (table_schema->is_index_table() || table_schema->is_view_table()) {
         continue;
-      } else if (!table_schema->is_tmp_table() && OB_FAIL(
+      } else if (!table_schema->is_mysql_tmp_table() && OB_FAIL(
                      add_check_constraints(*table_schema, database_schema.get_database_name_str(), cells, col_count))) {
-        SERVER_LOG(WARN, "failed to add table constraint of table schema", "table_schema", *table_schema, K(ret));
+        SERVER_LOG(WARN, "failed to add table constraint of table schema", K(ret), "table_schema", *table_schema);
       }
     }
   }
@@ -129,7 +129,7 @@ int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
 }
 
 int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
-    const ObTableSchema& table_schema, const ObString& database_name, ObObj* cells, const int64_t col_count)
+    const ObTableSchema &table_schema, const ObString &database_name, ObObj *cells, const int64_t col_count)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema_guard_) || OB_ISNULL(cells)) {
@@ -138,7 +138,7 @@ int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
   }
 
   for (ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
-       OB_SUCCESS == ret && iter != table_schema.constraint_end();
+       OB_SUCC(ret) && iter != table_schema.constraint_end();
        ++iter) {
     if (OB_ISNULL(*iter)) {
       ret = OB_ERR_UNEXPECTED;
@@ -146,14 +146,13 @@ int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
     } else if ((*iter)->get_constraint_type() != CONSTRAINT_TYPE_CHECK) {
       continue;
     } else {
-      const ObConstraint* constraint = *iter;
-      int64_t cell_idx = 0;
+      const ObConstraint *constraint = *iter;
       if (col_count > reserved_column_cnt_) {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "cells count is error", K(col_count), K_(reserved_column_cnt), K(ret));
+        SERVER_LOG(WARN, "cells count is error", K(ret), K(col_count), K_(reserved_column_cnt));
       }
-      for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
-        uint64_t col_id = output_column_ids_.at(j);
+      for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < col_count; ++cell_idx) {
+        uint64_t col_id = output_column_ids_.at(cell_idx);
         switch (col_id) {
           case CONSTRAINT_CATALOG: {
             cells[cell_idx].set_varchar(ObString("def"));
@@ -177,15 +176,12 @@ int ObInfoSchemaCheckConstraintsTable::add_check_constraints(
           }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(j), K(output_column_ids_), K(col_id));
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
             break;
           }
         }
-        if (OB_SUCC(ret)) {
-          cell_idx++;
-        }
       }
-      if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
+      if (OB_SUCC(ret) && OB_FAIL(scanner_.add_row(cur_row_))) {
         SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
       }
     }

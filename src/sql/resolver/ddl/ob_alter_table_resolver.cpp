@@ -264,8 +264,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
     SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
   } else {
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-    ObArray<int> drop_col_act_position_list;
-    if (OB_FAIL(table_schema_->get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
+    ObArray<int> drop_col_act_position_list; //use in mysql mode, resolve drop column nodes after drop constraint nodes resolved
+     if (OB_FAIL(table_schema_->get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
       LOG_WARN("get simple_index_infos without delay_deleted_tid failed", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
@@ -409,7 +409,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
                   action_node->children_[0]->str_value_, static_cast<int32_t>(action_node->children_[0]->str_len_));
             }
             if (OB_SUCC(ret)) { //drop constraint
-              if (!table_schema_->is_tmp_table() || share::is_oracle_mode()) { //1.oracle mode 2.non-tmp table in mysql mode
+              if (!table_schema_->is_mysql_tmp_table()) {
                 if (OB_FAIL(schema_guard->get_constraint_id(table_schema_->get_tenant_id(),
                       table_schema_->get_database_id(),
                       constraint_name,
@@ -520,7 +520,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
     }
     //deal with drop column affer drop constraint (mysql mode)
     if (OB_SUCC(ret) && share::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
-      for (int i = 0; i < drop_col_act_position_list.count(); ++i) {
+      for (uint64_t i = 0; i < drop_col_act_position_list.count(); ++i) {
         if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)]))) {
           SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
         }
@@ -599,7 +599,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode& node)
         }
       }
     }
-    if (OB_SUCC(ret)) { //oracle/mysql mode
+    if (OB_SUCC(ret)) {
       if (cnt_alter_table > 1) {
         if (0 != add_or_modify_check_cst_times_) {
           ret = OB_NOT_SUPPORTED;
@@ -1644,10 +1644,10 @@ int ObAlterTableResolver::resolve_drop_constraint(const ParseNode& node)
         }
         if (OB_FAIL(ret)) {
         } else if (table_schema_->constraint_end() == iter) {
-          if( node.value_ == 3) { //drop constraint <name>
+          if (T_DROP_CONSTRAINT == node.type_) { //drop constraint <name>
             ret = OB_ERR_NONEXISTENT_CONSTRAINT;
             LOG_USER_ERROR(OB_ERR_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
-          } else { //drop check <name>
+          } else { //drop check <name> | drop {constraint|check} '(' <name_list> ')'
             ret = OB_ERR_CHECK_CONSTRAINT_NOT_FOUND;
             LOG_USER_ERROR(OB_ERR_CHECK_CONSTRAINT_NOT_FOUND, constraint_name.length(), constraint_name.ptr());
           }
@@ -2216,12 +2216,10 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode& node)
         }
         break;
       }
-      case T_CHECK_CONSTRAINT: {
-        if (share::is_oracle_mode()) {
-          const ParseNode* check_cst_node = node.children_[0];
-          if (OB_FAIL(resolve_constraint_options(*check_cst_node))) {
-            SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
-          }
+      case T_CHECK_CONSTRAINT: { // for racle mode
+        const ParseNode* check_cst_node = node.children_[0];
+        if (OB_FAIL(resolve_constraint_options(*check_cst_node))) {
+          SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
         }
         break;
       }
@@ -2271,7 +2269,7 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode& node)
             } else if (OB_INVALID_ID != constraint_id) {
               // check if check constraint exist
               bool is_constraint = false;
-              if (!table_schema_->is_tmp_table() && OB_FAIL(schema_guard->get_constraint_id(table_schema_->get_tenant_id(),
+              if (!table_schema_->is_mysql_tmp_table() && OB_FAIL(schema_guard->get_constraint_id(table_schema_->get_tenant_id(),
                     table_schema_->get_database_id(),
                     constraint_name,
                     constraint_id))) { //non-tmp_table
@@ -2282,7 +2280,7 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode& node)
                     K(constraint_name));
               } else if (OB_INVALID_ID != constraint_id) {
                 is_constraint = true;
-              } else if (table_schema_->is_tmp_table()) {
+              } else if (table_schema_->is_mysql_tmp_table()) {
                 ObTableSchema::const_constraint_iterator iter = table_schema_->constraint_begin();
                 for (; OB_SUCC(ret) && iter != table_schema_->constraint_end(); ++iter) {
                   if (0 == constraint_name.case_compare((*iter)->get_constraint_name_str())) {
@@ -2753,32 +2751,22 @@ int ObAlterTableResolver::resolve_constraint_options(const ParseNode& node)
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "constraint_node is null", K(ret), K(constraint_node));
       } else {
-        switch (constraint_node->value_) {
-          case 0:     //drop check <name>
-          case 3: {   //drop constraint <name>
-            if (OB_FAIL(resolve_drop_constraint(*constraint_node))) {
-              SQL_RESV_LOG(WARN, "Resolve drop constraint error!", K(ret));
-            } else {
-              alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
-            }
-            break;
+        if (T_DROP_CONSTRAINT == constraint_node->type_ || (T_CHECK_CONSTRAINT == constraint_node->type_ && 0 == constraint_node->value_)) {
+          if (OB_FAIL(resolve_drop_constraint(*constraint_node))) {
+            SQL_RESV_LOG(WARN, "Resolve drop constraint error!", K(ret));
+          } else {
+            alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
           }
-          case 1: {
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(resolve_add_constraint(*constraint_node))) {
-                SQL_RESV_LOG(WARN, "Resolve add constraint error!", K(ret));
-              } else {
-                alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::ADD_CONSTRAINT;
-                ++add_or_modify_check_cst_times_;
-              }
-            }
-            break;
+        } else if (1 == constraint_node->value_) {
+          if (OB_FAIL(resolve_add_constraint(*constraint_node))) {
+            SQL_RESV_LOG(WARN, "Resolve add constraint error!", K(ret));
+          } else {
+            alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::ADD_CONSTRAINT;
+            ++add_or_modify_check_cst_times_;
           }
-          default: {
-            ret = OB_NOT_SUPPORTED;
-            SQL_RESV_LOG(WARN, "Unknown alter constraint option!", "option type", node.children_[0]->value_, K(ret));
-            break;
-          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "Unknown alter constraint option!", "option type", node.children_[0]->value_, K(ret));
         }
       }
     }

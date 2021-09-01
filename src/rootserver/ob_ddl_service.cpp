@@ -6173,7 +6173,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int
       }
       // check check constraint info
       if (OB_FAIL(ret)) {
-      } else if (alter_table_arg.alter_constraint_type_ == obrpc::ObAlterTableArg::ADD_CONSTRAINT) {
+      } else if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_) {
         ObTableSchema::const_constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin();
         if (iter + 1 != alter_table_arg.alter_table_schema_.constraint_end()) {
           ret = OB_ERR_UNEXPECTED;

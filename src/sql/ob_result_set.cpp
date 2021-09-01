@@ -616,6 +616,13 @@ int ObResultSet::set_mysql_info()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx* plan_ctx = get_exec_context().get_physical_plan_ctx();
   int64_t pos = 0;
+  const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+  uint64_t warning_count = 0;
+  if (OB_ISNULL(warnings_buf)) {
+    LOG_WARN("can not get thread warnings buffer");
+  } else {
+    warning_count = warnings_buf->get_readable_warning_count();
+  }
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "fail to get physical plan ctx");
@@ -625,7 +632,7 @@ int ObResultSet::set_mysql_info()
         OB_UPDATE_MSG_FMT,
         plan_ctx->get_row_matched_count(),
         plan_ctx->get_row_duplicated_count(),
-        warning_count_);
+        warning_count);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to snprintf to buff", K(ret));
@@ -639,7 +646,7 @@ int ObResultSet::set_mysql_info()
           OB_INSERT_MSG_FMT,
           plan_ctx->get_row_matched_count(),
           plan_ctx->get_row_duplicated_count(),
-          warning_count_);
+          warning_count);
       if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to snprintf to buff", K(ret));
@@ -652,7 +659,7 @@ int ObResultSet::set_mysql_info()
         plan_ctx->get_row_matched_count(),
         plan_ctx->get_row_deleted_count(),
         plan_ctx->get_row_duplicated_count(),
-        warning_count_);
+        warning_count);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to snprintf to buff", K(ret));

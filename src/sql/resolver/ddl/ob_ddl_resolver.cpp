@@ -2058,7 +2058,7 @@ int ObDDLResolver::resolve_uk_name_from_column_attribute(ParseNode* attrs_node, 
 
   if (OB_ISNULL(attrs_node)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("attrs_node is invalid");
+    LOG_WARN("attrs_node is invalid", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < attrs_node->num_child_; ++i) {
     ParseNode* attr_node = attrs_node->children_[i];
@@ -2096,7 +2096,7 @@ int ObDDLResolver::resolve_normal_column_attribute(
   }
   if (OB_ISNULL(attrs_node)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("attrs_node is invalid");
+    LOG_WARN("attrs_node is invalid", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < attrs_node->num_child_; ++i) {
     ParseNode* attr_node = attrs_node->children_[i];
@@ -2377,7 +2377,7 @@ int ObDDLResolver::resolve_normal_column_attribute(
   }
   if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type() && alter_csts.count() > 0) {
     AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
-    for (int i = 0;OB_SUCC(ret) && i < alter_csts.count(); ++i) {
+    for (int64_t i = 0;OB_SUCC(ret) && i < alter_csts.count(); ++i) {
       if (OB_FAIL(alter_table_schema.add_constraint(alter_csts.at(i)))) {
         SQL_RESV_LOG(WARN, "add constraint failed", K(ret));
       }
@@ -4520,7 +4520,7 @@ int ObDDLResolver::check_column_in_check_constraint(
               if (share::is_mysql_mode()) {
                 //check if constraint has been droped
                 ObTableSchema::const_constraint_iterator iter_dropped = alter_table_schema.constraint_begin();
-                for(int i = 0; i < cst_cnt && (iter_dropped != alter_table_schema.constraint_end()); ++i) {
+                for (int64_t i = 0; i < cst_cnt && (iter_dropped != alter_table_schema.constraint_end()); ++i) {
                   if ((*iter)->get_constraint_id() == (*iter_dropped)->get_constraint_id()) {
                     is_dropped = true;
                     break;

@@ -50,7 +50,7 @@ int ObInfoSchemaTableConstraintsTable::inner_get_next_row(common::ObNewRow*& row
         K_(tenant_id),
         K(ret));
   }
-  if (OB_SUCCESS == ret && !start_to_read_) {
+  if (OB_SUCC(ret) && !start_to_read_) {
     ObSArray<const ObDatabaseSchema*> database_schemas;
     if (OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_, database_schemas))) {
       SERVER_LOG(WARN, "failed to get database schema of tenant", K_(tenant_id));
@@ -88,7 +88,7 @@ int ObInfoSchemaTableConstraintsTable::inner_get_next_row(common::ObNewRow*& row
     }
   }
 
-  if (OB_SUCCESS == ret && start_to_read_) {
+  if (OB_SUCC(ret) && start_to_read_) {
     if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
       if (OB_ITER_END != ret) {
         SERVER_LOG(WARN, "fail to get next row", K(ret));
@@ -138,13 +138,13 @@ int ObInfoSchemaTableConstraintsTable::add_table_constraints(
       SERVER_LOG(WARN, "fail to add rowkey indexes", K(ret));
     }
   }
-  if (OB_SUCCESS == ret && OB_FAIL(add_index_constraints(table_schema, database_name, cells, col_count))) {
+  if (OB_SUCC(ret) && OB_FAIL(add_index_constraints(table_schema, database_name, cells, col_count))) {
     SERVER_LOG(WARN, "fail to add normal indexes", K(ret));
   }
-  if (!table_schema.is_tmp_table() && OB_SUCCESS == ret && OB_FAIL(add_check_constraints(table_schema, database_name, cells, col_count))) {
+  if (OB_SUCC(ret) && !table_schema.is_mysql_tmp_table() && OB_FAIL(add_check_constraints(table_schema, database_name, cells, col_count))) {
     SERVER_LOG(WARN, "fail to add check constraintes", K(ret));
   }
-  if (OB_SUCCESS == ret && OB_FAIL(add_foreign_key_constraints(table_schema, database_name, cells, col_count))) {
+  if (OB_SUCC(ret) && OB_FAIL(add_foreign_key_constraints(table_schema, database_name, cells, col_count))) {
     SERVER_LOG(WARN, "fail to add check constraintes", K(ret));
   }
   return ret;
@@ -207,7 +207,7 @@ int ObInfoSchemaTableConstraintsTable::add_rowkey_constraints(
       cell_idx++;
     }
   }
-  if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
+  if (OB_SUCC(ret) && OB_FAIL(scanner_.add_row(cur_row_))) {
     SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
   }
   return ret;
@@ -298,7 +298,7 @@ int ObInfoSchemaTableConstraintsTable::add_index_constraints(
           cell_idx++;
         }
       }
-      if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
+      if (OB_SUCC(ret) && OB_FAIL(scanner_.add_row(cur_row_))) {
         SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
       }
     }
@@ -369,7 +369,7 @@ int ObInfoSchemaTableConstraintsTable::add_foreign_key_constraints(const share::
           cell_idx++;
         }
       }
-      if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
+      if (OB_SUCC(ret) && OB_FAIL(scanner_.add_row(cur_row_))) {
         SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
       }
     }
@@ -387,7 +387,7 @@ int ObInfoSchemaTableConstraintsTable::add_check_constraints(
   }
 
   for (ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
-       OB_SUCCESS == ret && iter != table_schema.constraint_end();
+       OB_SUCC(ret) && iter != table_schema.constraint_end();
        ++iter) {
     if (OB_ISNULL(*iter)) {
       ret = OB_ERR_UNEXPECTED;
@@ -449,7 +449,7 @@ int ObInfoSchemaTableConstraintsTable::add_check_constraints(
           cell_idx++;
         }
       }
-      if (OB_SUCCESS == ret && OB_FAIL(scanner_.add_row(cur_row_))) {
+      if (OB_SUCC(ret) && OB_FAIL(scanner_.add_row(cur_row_))) {
         SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
       }
     }

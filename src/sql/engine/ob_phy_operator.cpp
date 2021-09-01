@@ -618,7 +618,7 @@ int ObPhyOperator::filter_row_for_check_cst(
 {
   int ret = OB_SUCCESS;
   is_filtered = false;
-  if (beg_idx == OB_INVALID_ID && end_idx == OB_INVALID_ID) {
+  if (OB_INVALID_ID == beg_idx && OB_INVALID_ID == end_idx) {
     beg_idx = 0;
     end_idx = filters.get_size();
   } else if (OB_UNLIKELY(end_idx > filters.get_size())) {
@@ -628,7 +628,7 @@ int ObPhyOperator::filter_row_for_check_cst(
         K(end_idx),
         K(filters.get_size()));
   }
-  if (OB_UNLIKELY(NULL == row.cells_ || row.count_ <= 0)) {
+  if (OB_UNLIKELY(OB_ISNULL(row.cells_) || row.count_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row is not init", K(ret));
   } else if (!filters.is_empty()) {

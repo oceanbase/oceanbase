@@ -202,7 +202,7 @@ int ObMultiTableInsertUp::shuffle_insert_up_row(ObExecContext& ctx, bool& got_ro
         LOG_WARN("fail to handle check constraint", K(ret));
       } else if (is_filtered) {
         ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-        LOG_WARN("row is filtered by check filters, running is stopped");
+        LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
       }
       // check if duplicate
       OZ(duplicate_key_checker_.check_duplicate_rowkey(
@@ -324,7 +324,7 @@ int ObMultiTableInsertUp::shuffle_update_row(ObExecContext& ctx, ObPartMgr& part
     LOG_WARN("fail to handle check constraint", K(ret), K(tmp_new_row));
   } else if (is_filtered) {
     ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-    LOG_WARN("row is filtered by check filters, running is stopped");
+    LOG_WARN("row is filtered by check filters, running is stopped", K(ret));
   } 
   if (!is_row_changed) {
     ++insert_up_ctx.duplicate_rows_;

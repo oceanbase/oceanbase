@@ -10505,8 +10505,7 @@ opt_set table_option_list_space_seperated
 |
 DROP CONSTRAINT constraint_name
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_CONSTRAINT, 1, $3);
-  $$->value_ = 3; // drop foreign key or check constraint, to be compatible with mysql
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_CONSTRAINT, 1, $3); // drop foreign key or check constraint, to be compatible with mysql
 }
 /*  | ORDER BY column_list
 //    {
@@ -10742,12 +10741,12 @@ ADD key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list '
 | ALTER CONSTRAINT constraint_name check_state
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_CONSTRAINT_OPTION, 2, $3, $4);
-  $$->value_ = 0; //修改check约束或外键约束状态
+  $$->value_ = 0; // alter state of a check constraint or foreign key
 }
 | ALTER CHECK constraint_name check_state
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_CONSTRAINT_OPTION, 2, $3, $4);
-  $$->value_ = 1; //修改check约束状态
+  $$->value_ = 1; // alter state of a check constraint
 }
 ;
 
@@ -12929,6 +12928,7 @@ ACCOUNT
 |       ENCRYPTION
 |       END
 |       ENDS
+|       ENFORCED
 |       ENGINE_
 |       ENGINES
 |       ENUM

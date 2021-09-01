@@ -878,9 +878,6 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
               (*iter)->get_constraint_name_str().ptr());
         } else { //mysql mode
           ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
-          LOG_USER_ERROR(OB_ERR_CHECK_CONSTRAINT_VIOLATED,
-              (*iter)->get_constraint_name_str().length(),
-              (*iter)->get_constraint_name_str().ptr());
         }
       }
     }

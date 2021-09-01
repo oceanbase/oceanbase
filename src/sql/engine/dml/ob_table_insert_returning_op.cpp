@@ -45,7 +45,7 @@ int ObTableInsertReturningOp::get_next_row()
   } else if (OB_FAIL(prepare_next_storage_row(output))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row failed", K(ret));
-   } else if (NULL == output) {
+   } else if (OB_ISNULL(output)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL output returned", K(ret));
    } else if (OB_FAIL(ObTableModifyOp::project_row(output->get_data(), output->count(), new_row_))) {

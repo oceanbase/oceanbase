@@ -171,10 +171,18 @@ int ObMultiPartUpdateOp::shuffle_update_row(bool& got_row)
       if (OB_SUCC(ret) && is_updated) {
         OZ(ForeignKeyHandle::do_handle(*this, sub_update->fk_args_, sub_update->old_row_, sub_update->new_row_));
         OZ(filter_row_for_check_cst(sub_update->check_constraint_exprs_, is_filtered));
-        if (OB_SUCC(ret) && share::is_mysql_mode() && is_filtered && MY_SPEC.is_ignore_) {
-          is_updated = false;
-        } else {
-          OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+        if (OB_SUCC(ret) && is_filtered) {
+          if (share::is_mysql_mode() && MY_SPEC.is_ignore_) { //skip row
+            is_updated = false;
+            affected_rows_ --;
+            changed_rows_ --;
+            LOG_USER_WARN(OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+            LOG_WARN("check constraint violated, skip row", K(ret));
+            continue;
+          } else {
+            ret = OB_ERR_CHECK_CONSTRAINT_VIOLATED;
+            LOG_WARN("constraint violated", K(ret));
+          }
         }
       }
       // OZ(TriggerHandle::do_handle_after_row(*sub_update, *update_ctx),

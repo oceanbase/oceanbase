@@ -361,7 +361,6 @@ EXCEPT                        { REPUT_TOKEN_NEG_SIGN(EXCEPT); }
 MINUS                         { REPUT_TOKEN_NEG_SIGN(MINUS); }
 INTERSECT                     { REPUT_TOKEN_NEG_SIGN(INTERSECT); }
 ISNULL                        { REPUT_TOKEN_NEG_SIGN(ISNULL); }
-ENFORCED                      { REPUT_TOKEN_NEG_SIGN(ENFORCED);}
 NOT {
   int32_t token_ret = NOT; /*fast parameterize don't care NOT or NOT2*/
   if (!(IS_FAST_PARAMETERIZE)) {
