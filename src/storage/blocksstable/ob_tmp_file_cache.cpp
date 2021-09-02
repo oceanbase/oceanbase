@@ -168,6 +168,9 @@ int ObTmpPageCache::prefetch(
         }
       }
     }
+    if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+      allocator_.free(buf);
+    }
   }
   return ret;
 }
@@ -732,6 +735,8 @@ int ObTmpTenantMemBlockManager::free_macro_block(const int64_t block_id)
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
   } else if (OB_FAIL(t_mblk_map_.erase_refactored(block_id))) {
     STORAGE_LOG(WARN, "fail to erase tmp macro block", K(ret));
+  } else {
+    free_page_nums_ -= mblk_page_nums_;
   }
   return ret;
 }
@@ -959,12 +964,10 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id, ObTm
   } else if (NULL == wash_block) {
     STORAGE_LOG(WARN, "The washing block is null", K(ret));
   } else {
-    int64_t free_page_nums = wash_block->get_free_page_nums();
     bool is_all_close = false;
     if (OB_FAIL(wash_block->close(is_all_close))) {
       STORAGE_LOG(WARN, "fail to close the wash block", K(ret));
     } else if (is_all_close) {
-      free_page_nums_ = free_page_nums_ + wash_block->get_free_page_nums() - free_page_nums;
       if (wash_block->is_empty()) {
         // this block don't need to wash.
         if (OB_FAIL(refresh_dir_to_blk_map(wash_block->get_dir_id(), wash_block))) {
