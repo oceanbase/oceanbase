@@ -130,7 +130,8 @@ int ObLocalityChecker::try_accumulate_task_info(common::ObIArray<ObTypeTransform
       } else if (cur_replica.server_->server_ == this_task_info->get_dest().get_server() &&
                  cur_replica.replica_type_ == this_task_info->get_src_member().get_replica_type() &&
                  dst_type == this_task_info->get_dest().get_replica_type() && cur_leader == this_leader &&
-                 (is_standby && this_task_info->can_accumulate_in_standby(task_info))) {
+                 (!is_standby  // primary cluster or can accumulate in standby
+                     || (is_standby && this_task_info->can_accumulate_in_standby(task_info)))) {
         if (cur_partition->is_primary() && this_task.get_sub_task_count() >= MAX_BATCH_TYPE_TRANSFORM_COUNT) {
           if (OB_FAIL(task_mgr_->add_task(this_task, task_cnt))) {
             LOG_WARN("fail to add task", K(ret));
