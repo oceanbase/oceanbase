@@ -678,7 +678,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     } else {
       snapshot.init_weak_read(snapshot_version);
     }
-    // 1) acquire snapshot verison when insert operator is executed
+    // 1) acquire snapshot version when insert operator is executed
     // 2) don't resolve RR and SERIALIZABLE isolation scenario temporarily, because of remote stmt plan
   } else if (plan->is_plain_insert()
           && session->get_tx_isolation() != ObTxIsolationLevel::SERIAL
