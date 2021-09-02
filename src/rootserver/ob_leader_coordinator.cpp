@@ -869,7 +869,13 @@ int ObLeaderCoordinator::LcBalanceGroupContainer::collect_balance_group_array_in
           } else if (OB_FAIL(collect_balance_group_single_index(bg_index.balance_group_id_, i, bg_index))) {
             LOG_WARN("fail to collect balance group single element", K(ret), K(pkey), K(bg_index));
           } else if (OB_FAIL(partition.get_leader(curr_leader))) {
-            LOG_WARN("fail to get leader addr", K(ret));
+            if (OB_LEADER_NOT_EXIST != ret) {
+              LOG_WARN("fail to get leader addr", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              pa_ptr->set_anchor_pos(j);  // easy to find
+              LOG_INFO("partition don't have leader", K(pkey));
+            }
           } else {
             pa_ptr->set_anchor_pos(j);  // easy to find
             pa_ptr->set_advised_leader(curr_leader);
