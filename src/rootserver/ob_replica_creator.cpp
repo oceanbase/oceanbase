@@ -147,8 +147,8 @@ int ObReplicaCreator::alloc_tablegroup_partitions_for_create(const share::schema
  * partition replicas are aligned to the partition replicas
  * already exist of this tablegroup.
  */
-int ObReplicaCreator::alloc_partitions_for_create(const ObTableSchema& table, obrpc::ObCreateTableMode create_mode,
-    ObITablePartitionAddr& addr, ObIArray<TenantUnitRepCnt*>& ten_unit_arr)
+int ObReplicaCreator::alloc_partitions_for_create(const ObSimpleTableSchemaV2& table,
+    obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr, ObIArray<TenantUnitRepCnt*>& ten_unit_arr)
 {
   int ret = OB_SUCCESS;
   RS_TRACE(alloc_replica_begin);
@@ -1170,7 +1170,7 @@ int ObReplicaCreator::init_addr_allocator_parameter(const share::schema::ObParti
   return ret;
 }
 
-int ObReplicaCreator::get_pg_partitions(const ObTableSchema& table, ObITablePartitionAddr& addr)
+int ObReplicaCreator::get_pg_partitions(const ObSimpleTableSchemaV2& table, ObITablePartitionAddr& addr)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
@@ -1330,7 +1330,7 @@ int ObReplicaCreator::check_all_partition_allocated(
 // sample_info: logonly replicas on logonly unit are filtered already
 // only replicas on non logonly unit are concerned
 int ObReplicaCreator::set_same_addr_ignore_logonly(const share::ObPartitionInfo& sample_info,
-    share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObTableSchema& table_schema,
+    share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObSimpleTableSchemaV2& table_schema,
     const int64_t replica_num, ObPartitionAddr& paddr)
 {
   int ret = OB_SUCCESS;
@@ -1432,7 +1432,7 @@ int ObReplicaCreator::partition_all_replica(
     const uint64_t table_id, const uint64_t partition_id, share::ObPartitionInfo& partition_info)
 {
   int ret = OB_SUCCESS;
-  const ObTableSchema* table = NULL;
+  const ObSimpleTableSchemaV2* table = NULL;
   const ObTablegroupSchema* tablegroup = NULL;
   const uint64_t tenant_id = extract_tenant_id(table_id);
   ObReplicaFilterHolder filter;
@@ -1479,7 +1479,7 @@ int ObReplicaCreator::table_all_partition(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = extract_tenant_id(table_id);
-  const ObTableSchema* table = NULL;
+  const ObSimpleTableSchemaV2* table = NULL;
   ObReplicaFilterHolder filter;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> unit_ids;
@@ -1750,7 +1750,7 @@ int ObReplicaCreator::process_replica_in_logonly_unit(const share::schema::ObPar
   return ret;
 }
 
-int ObReplicaCreator::standby_alloc_partitions_for_split(const share::schema::ObTableSchema& table,
+int ObReplicaCreator::standby_alloc_partitions_for_split(const share::schema::ObSimpleTableSchemaV2& table,
     const common::ObIArray<int64_t>& source_part_ids, const common::ObIArray<int64_t>& partition_ids,
     ObITablePartitionAddr& addr)
 {
@@ -1797,7 +1797,7 @@ int ObReplicaCreator::standby_alloc_partitions_for_split(const share::schema::Ob
   RS_TRACE(alloc_replica_end);
   return ret;
 }
-int ObReplicaCreator::alloc_table_partitions_for_standby(const share::schema::ObTableSchema& schema,
+int ObReplicaCreator::alloc_table_partitions_for_standby(const share::schema::ObSimpleTableSchemaV2& schema,
     const common::ObIArray<ObPartitionKey>& keys, obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr,
     share::schema::ObSchemaGetterGuard& guard)
 {

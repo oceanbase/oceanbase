@@ -67,8 +67,9 @@ public:
       const obrpc::ObCreateTableMode create_mode, common::ObIArray<ObPartitionAddr>& tablegroup_addr,
       ObIArray<share::TenantUnitRepCnt*>& ten_unit_arr);
   // add partition for create table
-  int alloc_partitions_for_create(const share::schema::ObTableSchema& table, obrpc::ObCreateTableMode create_mode,
-      ObITablePartitionAddr& addr, ObIArray<share::TenantUnitRepCnt*>& ten_unit_arr);
+  int alloc_partitions_for_create(const share::schema::ObSimpleTableSchemaV2& table,
+      obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr,
+      ObIArray<share::TenantUnitRepCnt*>& ten_unit_arr);
   // add partition for add partition
   template <typename SCHEMA>
   int alloc_partitions_for_add(const SCHEMA& table, const SCHEMA& inc_table, const obrpc::ObCreateTableMode create_mode,
@@ -76,10 +77,10 @@ public:
   // add partition for split
   int alloc_partitions_for_split(const share::schema::ObPartitionSchema& table,
       const share::schema::ObPartitionSchema& inc_table, ObITablePartitionAddr& addr);
-  int standby_alloc_partitions_for_split(const share::schema::ObTableSchema& table,
+  int standby_alloc_partitions_for_split(const share::schema::ObSimpleTableSchemaV2& table,
       const common::ObIArray<int64_t>& source_part_ids, const common::ObIArray<int64_t>& dest_partition_ids,
       ObITablePartitionAddr& addr);
-  int alloc_table_partitions_for_standby(const share::schema::ObTableSchema& table,
+  int alloc_table_partitions_for_standby(const share::schema::ObSimpleTableSchemaV2& table,
       const common::ObIArray<ObPartitionKey>& keys, obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr,
       share::schema::ObSchemaGetterGuard& guard);
   int alloc_tablegroup_partitions_for_standby(const share::schema::ObTablegroupSchema& table_group,
@@ -117,7 +118,7 @@ private:
       balancer::ObSinglePtBalanceContainer& pt_balance_container,
       common::ObIArray<common::ObZone>& high_priority_zone_array,
       common::ObSEArray<share::ObRawPrimaryZoneUtil::ZoneScore, MAX_ZONE_NUM>& zone_score_array);
-  int get_pg_partitions(const share::schema::ObTableSchema& table, ObITablePartitionAddr& addr);
+  int get_pg_partitions(const share::schema::ObSimpleTableSchemaV2& table, ObITablePartitionAddr& addr);
   int init_addr_allocator_parameter(const share::schema::ObPartitionSchema& partition_schema,
       const obrpc::ObCreateTableMode create_mode, ObIArray<common::ObZone>& zone_list, ZoneUnitArray& unit_pool,
       ObIArray<share::ObZoneReplicaAttrSet>& zone_locality, ZoneUnitPtrArray& all_zone_units_alive,
@@ -184,7 +185,7 @@ private:
   int partition_all_replica(const uint64_t table_id, const uint64_t partition_id, share::ObPartitionInfo& part);
 
   int set_same_addr_ignore_logonly(const share::ObPartitionInfo& info, share::schema::ObSchemaGetterGuard& schema_guard,
-      const share::schema::ObTableSchema& table, const int64_t replica_num, ObPartitionAddr& addr);
+      const share::schema::ObSimpleTableSchemaV2& table, const int64_t replica_num, ObPartitionAddr& addr);
   int set_same_addr(const share::ObPartitionInfo& sample_info, ObPartitionAddr& paddr);
 
   // Get tenant all online (has heartbeat with rs) unit grouped by zone.

@@ -25,7 +25,7 @@ class ObPartitionTableOperator;
 namespace schema {
 class ObMultiVersionSchemaService;
 class ObSchemaGetterGuard;
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObTenantSchema;
 }  // namespace schema
 }  // namespace share

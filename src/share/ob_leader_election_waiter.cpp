@@ -96,7 +96,7 @@ int ObLeaderElectionWaiter::wait(const ObTablegroupSchema& tablegroup_schema, co
   return ret;
 }
 
-int ObLeaderElectionWaiter::wait(const ObTableSchema& table_schema, const int64_t timeout)
+int ObLeaderElectionWaiter::wait(const ObSimpleTableSchemaV2& table_schema, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::current_time();

@@ -329,15 +329,15 @@ int ObRootBalancer::alloc_tablegroup_partitions_for_create(const share::schema::
   return ret;
 }
 
-int ObRootBalancer::standby_alloc_partitions_for_split(const share::schema::ObTableSchema& table,
+int ObRootBalancer::standby_alloc_partitions_for_split(const share::schema::ObSimpleTableSchemaV2& table,
     const common::ObIArray<int64_t>& source_partition_ids, const common::ObIArray<int64_t>& dest_partition_ids,
     ObITablePartitionAddr& addr)
 {
   return replica_creator_.standby_alloc_partitions_for_split(table, source_partition_ids, dest_partition_ids, addr);
 }
 
-int ObRootBalancer::alloc_partitions_for_create(
-    const share::schema::ObTableSchema& table, obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr)
+int ObRootBalancer::alloc_partitions_for_create(const share::schema::ObSimpleTableSchemaV2& table,
+    obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(refresh_unit_replica_cnt_lock_);
@@ -355,7 +355,7 @@ int ObRootBalancer::alloc_partitions_for_create(
   return ret;
 }
 
-int ObRootBalancer::alloc_table_partitions_for_standby(const share::schema::ObTableSchema& table,
+int ObRootBalancer::alloc_table_partitions_for_standby(const share::schema::ObSimpleTableSchemaV2& table,
     const common::ObIArray<ObPartitionKey>& keys, obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr,
     share::schema::ObSchemaGetterGuard& guard)
 {

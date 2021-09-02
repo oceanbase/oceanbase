@@ -2562,7 +2562,7 @@ int ObPartitionLocationCache::get(const uint64_t table_id, ObIArray<ObPartitionL
     LOG_WARN("location cache is not inited", K(ret));
   } else {
     if (!is_virtual_table(table_id)) {
-      const ObTableSchema* table = NULL;
+      const ObSimpleTableSchemaV2* table = NULL;
       ObSchemaGetterGuard schema_guard;
       const uint64_t tenant_id = extract_tenant_id(table_id);
       if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {

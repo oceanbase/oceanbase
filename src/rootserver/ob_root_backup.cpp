@@ -2661,7 +2661,7 @@ int ObTenantBackup::generate_standalone_backup_task(const share::ObTenantBackupT
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> table_ids;
-  const ObTableSchema* table_schema = NULL;
+  const ObSimpleTableSchemaV2* table_schema = NULL;
   int64_t table_id_index = 0;
 
   if (!is_inited_) {
@@ -3059,7 +3059,7 @@ int ObTenantBackup::add_standalone_key_to_extern_list(ObExternPGListMgr& pg_list
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> table_ids;
-  const ObTableSchema* table_schema = NULL;
+  const ObSimpleTableSchemaV2* table_schema = NULL;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant backup do not init", K(ret));
@@ -3616,7 +3616,7 @@ int ObTenantBackup::get_table_count_with_partition(const uint64_t tenant_id, con
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
       const uint64_t table_id = table_ids.at(i);
-      const ObTableSchema* table_schema = NULL;
+      const ObSimpleTableSchemaV2* table_schema = NULL;
       if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
@@ -3631,7 +3631,7 @@ int ObTenantBackup::get_table_count_with_partition(const uint64_t tenant_id, con
 }
 
 int ObTenantBackup::check_standalone_table_need_backup(
-    const share::schema::ObTableSchema* table_schema, bool& need_backup)
+    const share::schema::ObSimpleTableSchemaV2* table_schema, bool& need_backup)
 {
   int ret = OB_SUCCESS;
   ObIndexStatus status;

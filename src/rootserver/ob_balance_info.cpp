@@ -1559,7 +1559,7 @@ int TenantBalanceStat::get_partition_locality(const Partition& partition,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid schema guard", K(ret), K_(schema_guard));
   } else if (!is_tablegroup_id(partition.table_id_)) {
-    const ObTableSchema* table_schema = nullptr;
+    const ObSimpleTableSchemaV2* table_schema = nullptr;
     const uint64_t table_id = partition.table_id_;
     if (OB_FAIL(schema_guard_->get_table_schema(table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(table_id));
@@ -3254,7 +3254,7 @@ int TenantBalanceStat::get_full_replica_num(const Partition& p, int64_t& count) 
     const uint64_t schema_id = p.table_id_;
     int64_t full_count = 0;
     if (!is_tablegroup_id(schema_id)) {
-      const ObTableSchema* table_schema = nullptr;
+      const ObSimpleTableSchemaV2* table_schema = nullptr;
       if (OB_FAIL(schema_guard_->get_table_schema(schema_id, table_schema))) {
         LOG_WARN("fail to get table schema", "table_id", schema_id);
       } else if (OB_UNLIKELY(NULL == table_schema)) {
@@ -3309,7 +3309,7 @@ int TenantBalanceStat::get_schema_quorum_size(const Partition& p, int64_t& quoru
     const uint64_t schema_id = p.table_id_;
     int64_t paxos_count = 0;
     if (!is_tablegroup_id(schema_id)) {
-      const ObTableSchema* table_schema = nullptr;
+      const ObSimpleTableSchemaV2* table_schema = nullptr;
       if (OB_FAIL(schema_guard_->get_table_schema(schema_id, table_schema))) {
         LOG_WARN("fail to get table schema", "table_id", schema_id);
       } else if (OB_UNLIKELY(NULL == table_schema)) {

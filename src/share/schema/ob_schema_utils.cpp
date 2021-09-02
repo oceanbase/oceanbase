@@ -303,7 +303,7 @@ int ObSchemaUtils::get_primary_zone_array(common::PageArena<>& alloc, const ObTa
   return ret;
 }
 
-int ObSchemaUtils::get_primary_zone_array(common::PageArena<>& alloc, const ObTableSchema& table_schema,
+int ObSchemaUtils::get_primary_zone_array(common::PageArena<>& alloc, const ObSimpleTableSchemaV2& table_schema,
     ObSchemaGetterGuard& schema_guard, common::ObIArray<ObZoneScore>& primary_zone_array)
 {
   int ret = OB_SUCCESS;

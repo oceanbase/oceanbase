@@ -42,7 +42,7 @@ class ObPartitionTableOperator;
 class ObIBackupLeaseService;
 
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObMultiVersionSchemaService;
 class ObSchemaGetterGuard;
 }  // namespace schema
@@ -306,7 +306,7 @@ private:
   int cancel_doing_pg_tasks(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans);
   int get_table_count_with_partition(const uint64_t tenant_id, const int64_t tablegroup_id,
       share::schema::ObSchemaGetterGuard& schema_guard, int64_t& table_count);
-  int check_standalone_table_need_backup(const share::schema::ObTableSchema* table_schema, bool& need_backup);
+  int check_standalone_table_need_backup(const share::schema::ObSimpleTableSchemaV2* table_schema, bool& need_backup);
   int commit_trans(ObMySQLTransaction& trans);
   int start_trans(ObTimeoutCtx& timeout_ctx, ObMySQLTransaction& trans);
   int cancel_pending_pg_tasks(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans);

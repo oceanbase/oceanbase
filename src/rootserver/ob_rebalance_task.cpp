@@ -1435,7 +1435,7 @@ int ObAddTaskInfo::check_quorum(const share::ObPartitionInfo& partition, const b
         // we need to try to modify quorum at the same time
         int64_t paxos_num = OB_INVALID_COUNT;
         if (!is_tablegroup_id(partition.get_table_id())) {
-          const share::schema::ObTableSchema* schema = NULL;
+          const share::schema::ObSimpleTableSchemaV2* schema = NULL;
           if (OB_FAIL(schema_guard.get_table_schema(partition.get_table_id(), schema))) {
             LOG_WARN("get table schema failed", K(ret), "table", partition.get_table_id());
           } else if (OB_ISNULL(schema)) {

@@ -96,8 +96,9 @@ public:
   int split_tablegroup_partition(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTablegroupSchema& tablegroup_schema, common::ObISQLClient& client,
       share::ObSplitProgress& split_status);
-  int split_table_partition(const share::schema::ObTableSchema& schema, share::ObPartitionTableOperator& pt_operator,
-      obrpc::ObSrvRpcProxy& rpc_proxy, obrpc::ObSplitPartitionArg& arg, share::ObSplitProgress& split_process);
+  int split_table_partition(const share::schema::ObSimpleTableSchemaV2& schema,
+      share::ObPartitionTableOperator& pt_operator, obrpc::ObSrvRpcProxy& rpc_proxy, obrpc::ObSplitPartitionArg& arg,
+      share::ObSplitProgress& split_process);
   int split_binding_tablegroup_partition(const share::schema::ObTablegroupSchema& schema,
       share::ObPartitionTableOperator& pt_operator, obrpc::ObSrvRpcProxy& rpc_proxy, obrpc::ObSplitPartitionArg& arg,
       share::ObSplitProgress& split_process);

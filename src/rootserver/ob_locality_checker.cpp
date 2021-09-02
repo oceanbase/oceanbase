@@ -619,7 +619,7 @@ int ObLocalityChecker::check_can_modify_quorum(const balancer::HashIndexCollecti
     ret = OB_EAGAIN;
     LOG_WARN("locality changed, generate task next round", K(ret));
   } else if (!is_tablegroup_id(table_id)) {
-    const ObTableSchema* table_schema = NULL;
+    const ObSimpleTableSchemaV2* table_schema = NULL;
     if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(table_id));
     } else if (OB_ISNULL(table_schema)) {
@@ -738,7 +738,7 @@ int ObLocalityChecker::get_partition_locality(ObFilterLocalityUtility& checker, 
     ret = OB_EAGAIN;
     LOG_WARN("locality changed, generate task next round", K(ret));
   } else if (!is_tablegroup_id(table_id)) {
-    const ObTableSchema* table_schema = nullptr;
+    const ObSimpleTableSchemaV2* table_schema = nullptr;
     if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(table_id));
     } else if (OB_UNLIKELY(nullptr == table_schema)) {

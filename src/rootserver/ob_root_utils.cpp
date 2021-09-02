@@ -349,7 +349,7 @@ int ObTenantUtils::remove_ineffective_task(ObMySQLTransaction& trans, const uint
   return ret;
 }
 
-bool ObTenantUtils::is_balance_target_schema(const share::schema::ObTableSchema& table_schema)
+bool ObTenantUtils::is_balance_target_schema(const share::schema::ObSimpleTableSchemaV2& table_schema)
 {
   return USER_TABLE == table_schema.get_table_type() || TMP_TABLE == table_schema.get_table_type() ||
          MATERIALIZED_VIEW == table_schema.get_table_type() || TMP_TABLE_ORA_SESS == table_schema.get_table_type() ||
