@@ -98,6 +98,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
   right_resolver.set_current_level(current_level_);
   right_resolver.set_in_set_query(true);
   right_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
+  right_resolver.set_resolver(&left_resolver);
 
   OC((left_resolver.set_cte_ctx)(cte_ctx_));
   OC((right_resolver.set_cte_ctx)(cte_ctx_));
@@ -124,6 +125,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
     LOG_WARN("failed to identify anchor member", K(ret));
   } else if (!need_swap_child) {
     left_select_stmt = identify_anchor_resolver.get_child_stmt();
+    right_resolver.set_resolver(&identify_anchor_resolver);
   } else {
     left_member = PARSE_SELECT_LATER;
     right_member = PARSE_SELECT_FORMER;
@@ -133,6 +135,26 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
       LOG_WARN("failed to resolve child stmt", K(ret));
     } else {
       left_select_stmt = left_resolver.get_child_stmt();
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!params_.has_cte_param_list_ && right_resolver.saved_left_resolver != NULL &&
+        !right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.empty()) {
+      right_resolver.cte_ctx_.cte_col_names_.reset();
+      cte_ctx_.cte_col_names_.reset();
+      for (int64_t i = 0; OB_SUCC(ret) && i < right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.count(); ++i) {
+        if (OB_FAIL(right_resolver.cte_ctx_.cte_col_names_.push_back(
+                right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to right resolver
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pass cte column name to child resolver failed");
+        }
+        if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(
+                right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to parent resolver
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pass cte column name to child resolver failed");
+        }
+      }
     }
   }
 
@@ -449,6 +471,7 @@ int ObSelectResolver::set_cte_ctx(ObCteResolverCtx& cte_ctx, bool copy_col_name 
 {
   int ret = OB_SUCCESS;
   cte_ctx_ = cte_ctx;
+  cte_ctx_.is_recursive_cte_ = false;
   cte_ctx_.cte_col_names_.reset();
   cte_ctx_.is_cte_subquery_ = in_subquery;
   if (cte_ctx_.is_with_resolver())
@@ -1517,6 +1540,13 @@ int ObSelectResolver::resolve_field_list(const ParseNode& node)
     } else { /*do nothing*/
     }
 
+    // add for cte:
+    if (OB_SUCC(ret) && !params_.has_cte_param_list_) {
+      if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(select_item.alias_name_))) {
+        LOG_WARN("push back column alia name failed", K(ret));
+      }
+    }
+
   }  // end for
 
   // for aggr exprs in having clause to remove duplicate;
@@ -2130,12 +2160,12 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
   ObSelectStmt* select_stmt = NULL;
   TableItem* table_item = NULL;
   bool duplicate_name = false;
+  if (NULL != node && cte_ctx_.is_with_resolver() && same_level == false){
+    LOG_DEBUG("same_level = false, oracle not supported, mysql feature");
+  }
   if (OB_ISNULL(select_stmt = get_select_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(select_stmt), K_(node->type));
-  } else if (NULL != node && cte_ctx_.is_with_resolver() && same_level == false) {
-    ret = OB_ERR_UNSUPPORTED_USE_OF_CTE;
-    LOG_WARN("invalid argument, oracle cte do not support a with clause nest", K(select_stmt), K_(node->type));
   } else if (OB_ISNULL(node)) {
     // do nothing
   } else if (OB_UNLIKELY(node->type_ != T_WITH_CLAUSE_LIST)) {
@@ -2144,6 +2174,10 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
     LOG_WARN("resolver with_clause_as met unexpected node type", K_(node->type));
   } else {
     int num_child = node->num_child_;
+    if (node->value_ == 0)
+      params_.has_recursive_word = false;
+    else
+      params_.has_recursive_word = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < num_child; ++i) {
       // alias tblname [(alia colname1, alia colname2)](subquery) [search clause][cycle clause]
       ParseNode* child_node = node->children_[i];
@@ -2981,7 +3015,7 @@ int ObSelectResolver::add_fake_schema(ObSelectStmt* left_stmt)
             ObColumnRefRawExpr* select_expr = static_cast<ObColumnRefRawExpr*>(expr);
             ObColumnSchemaV2* new_col = static_cast<ObColumnSchemaV2*>(allocator_->alloc(sizeof(ObColumnSchemaV2)));
             new_col = new (new_col) ObColumnSchemaV2(allocator_);
-            new_col->set_column_name(cte_ctx_.cte_col_names_.at(i));
+            new_col->set_column_name(saved_left_resolver->cte_ctx_.cte_col_names_.at(i));
             new_col->set_tenant_id(tbl_schema->get_tenant_id());
             new_col->set_table_id(magic_table_id);
             new_col->set_column_id(magic_col_id + i);
@@ -3010,7 +3044,9 @@ int ObSelectResolver::get_opt_alias_colnames_for_recursive_cte(ObIArray<ObString
   int ret = OB_SUCCESS;
   if (OB_ISNULL(parse_tree)) {
     LOG_DEBUG("the opt_alias_colnames parse tree is null");
+    params_.has_cte_param_list_ = false;
   } else {
+    params_.has_cte_param_list_ = true;
     int64_t alias_num = parse_tree->num_child_;
     for (int64_t i = 0; OB_SUCC(ret) && i < alias_num; ++i) {
       if (parse_tree->children_[i]->str_len_ <= 0) {
@@ -5456,7 +5492,12 @@ int ObSelectResolver::identify_anchor_member(
   if (OB_FAIL(identify_anchor_resolver.resolve_child_stmt(parse_tree))) {
     if (OB_ERR_NEED_INIT_BRANCH_IN_RECURSIVE_CTE == ret) {
       need_swap_childa = true;
-      ret = OB_SUCCESS;
+      if (is_oracle_mode()){
+        ret = OB_SUCCESS;
+      } else if (params_.has_recursive_word) {
+        ret = OB_ERR_CTE_NEED_QUERY_BLOCKS;  // mysql error: Recursive Common Table Expression 'cte' should have one or
+                                             // more non-recursive query blocks followed by one or more recursive ones
+      }
     } else {
       LOG_WARN("Failed to find anchor member", K(ret));
     }

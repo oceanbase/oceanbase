@@ -12013,6 +12013,16 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_ERR_ILL_NAME_STRING] = 21560;
     ORACLE_STR_ERROR[-OB_ERR_ILL_NAME_STRING] = "ORA-21560: unexpected name string '%.*s'";
     ORACLE_STR_USER_ERROR[-OB_ERR_ILL_NAME_STRING] = "ORA-21560: unexpected name string '%.*s'";
+    ERROR_NAME[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "OB_ERR_CTE_NEED_QUERY_BLOCKS";
+    ERROR_CAUSE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Internal Error";
+    ERROR_SOLUTION[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Contact OceanBase Support";
+    MYSQL_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = -1;
+    SQLSTATE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "HY000";
+    STR_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones";
+    STR_USER_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s";
+    ORACLE_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = 600;
+    ORACLE_STR_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "ORA-00600: internal error code, arguments: -5933, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones";
+    ORACLE_STR_USER_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "ORA-00600: internal error code, arguments: -5933, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s";
     ERROR_NAME[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "OB_ERR_INCORRECT_VALUE_FOR_FUNCTION";
     ERROR_CAUSE[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "Internal Error";
     ERROR_SOLUTION[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "Contact OceanBase Support";

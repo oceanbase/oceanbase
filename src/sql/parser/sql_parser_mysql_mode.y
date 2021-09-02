@@ -331,6 +331,7 @@ END_P SET_VAR DELIMITER
 %type <node> insert_vals_list insert_vals value_or_values
 %type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set select_clause_set_left select_clause_set_right  select_clause_set_with_order_and_limit
 %type <node> simple_select no_table_select limit_clause select_expr_list
+%type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name 
 %type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause
 %type <node> opt_limit_clause limit_expr opt_for_update opt_for_update_wait
 %type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id
@@ -6645,6 +6646,10 @@ select_no_parens opt_when
 {
   $$ = $1;
 }
+| with_select
+{
+  $$ = $1;
+}
 ;
 
 // for select_into
@@ -6667,7 +6672,10 @@ select_no_parens into_clause
 select_with_parens:
 '(' select_no_parens ')'      { $$ = $2; }
 | '(' select_with_parens ')'  { $$ = $2; }
-;
+| '(' with_select ')'
+{
+  $$ = $2;
+};
 
 select_no_parens:
 select_clause opt_for_update
@@ -8879,6 +8887,135 @@ opt_outer:
 OUTER                    { $$ = NULL; }
 | /* EMPTY */               { $$ = NULL; }
 ;
+
+/*****************************************************************************
+ *
+ *	with clause (common table expression) (Mysql CTE grammer implement)
+ *  
+ *
+*****************************************************************************/
+
+
+with_select:
+with_clause select_no_parens opt_when
+{
+  $$ = $2;
+  $$->children_[PARSE_SELECT_WHEN] = $3;
+  if (NULL == $$->children_[PARSE_SELECT_FOR_UPD] && NULL != $3)
+  {
+    malloc_terminal_node($$->children_[PARSE_SELECT_FOR_UPD], result->malloc_pool_, T_INT);
+    $$->children_[PARSE_SELECT_FOR_UPD]->value_ = -1;
+  }
+  $$->children_[PARSE_SELECT_WITH] = $1;
+}
+| with_clause select_with_parens
+{
+  $$ = $2;
+  $$->children_[PARSE_SELECT_WITH] = $1;
+}
+;
+
+with_clause:
+WITH with_list
+{
+  ParseNode *with_list = NULL;
+  merge_nodes(with_list, result, T_WITH_CLAUSE_LIST, $2);
+  $$ = with_list;
+  $$->value_ = 0;
+}
+| 
+WITH RECURSIVE with_list
+{
+  ParseNode *with_list = NULL;
+  merge_nodes(with_list, result, T_WITH_CLAUSE_LIST, $3);
+  $$ = with_list;
+  $$->value_ = 1;
+}/*
+|
+WITH RECURSIVE common_table_expr
+{
+  $$ = $3;
+  $$->value_ = 0;
+}*/
+;
+
+with_list:
+with_list ',' common_table_expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+|common_table_expr
+{
+  $$ = $1;
+}
+;
+
+
+common_table_expr:
+relation_name opt_column_alias_name_list AS '(' select_no_parens ')' 
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WITH_CLAUSE_AS, 5, $1, $2, $5, NULL, NULL);
+}
+| relation_name opt_column_alias_name_list AS '(' with_select ')' 
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WITH_CLAUSE_AS, 5, $1, $2, $5, NULL, NULL);
+}
+| relation_name opt_column_alias_name_list AS '(' select_with_parens ')' 
+{
+  if ($5->children_[PARSE_SELECT_ORDER] != NULL && $5->children_[PARSE_SELECT_FETCH] == NULL) {
+    yyerror(NULL, result, "only order by clause can't occur subquery\n");
+    YYABORT_PARSE_SQL_ERROR;
+  } else {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_WITH_CLAUSE_AS, 5, $1, $2, $5, NULL, NULL);
+  }
+}
+;
+
+opt_column_alias_name_list:
+'(' alias_name_list ')'
+{
+  ParseNode *col_alias_list = NULL;
+  merge_nodes(col_alias_list, result, T_COLUMN_LIST, $2);
+  $$ = col_alias_list;
+}
+|/*EMPTY*/
+{ $$ = NULL; }
+;
+
+alias_name_list:
+column_alias_name
+{
+  $$ = $1;
+}
+|alias_name_list ',' column_alias_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+column_alias_name:
+column_name
+{
+  $$ = $1;
+}
+;
+
+
+/*
+search_list:
+search_key
+{ $$ = $1; }
+| search_list ',' search_key
+{ malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3); }
+;
+
+search_key:
+column_name opt_asc_desc
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SORT_KEY, 2, $1, $2);
+}
+;*/
+
 
 /*****************************************************************************
  *
@@ -13189,6 +13326,7 @@ ACCOUNT
 |       REBUILD
 |       RECOVER
 |       RECOVERY
+|       RECURSIVE
 |       RECYCLE
 |       RECYCLEBIN
 |       ROTATE

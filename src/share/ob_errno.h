@@ -1026,6 +1026,7 @@ constexpr int OB_ERR_WINDOW_NAME_IS_NOT_DEFINE = -5929;
 constexpr int OB_ERR_OPEN_CURSORS_EXCEEDED = -5930;
 constexpr int OB_ERR_ARG_INVALID = -5931;
 constexpr int OB_ERR_ILL_NAME_STRING = -5932;
+constexpr int OB_ERR_CTE_NEED_QUERY_BLOCKS = -5933;
 constexpr int OB_ERR_INCORRECT_VALUE_FOR_FUNCTION = -5936;
 constexpr int OB_ERR_USER_EXCEED_RESOURCE = -5967;
 constexpr int OB_TRANSACTION_SET_VIOLATION = -6001;
@@ -2428,6 +2429,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_OPEN_CURSORS_EXCEEDED__USER_ERROR_MSG "maximum open cursors exceeded"
 #define OB_ERR_ARG_INVALID__USER_ERROR_MSG "argument is null, invalid, or out of range"
 #define OB_ERR_ILL_NAME_STRING__USER_ERROR_MSG "unexpected name string"
+#define OB_ERR_CTE_NEED_QUERY_BLOCKS__USER_ERROR_MSG "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s"
 #define OB_ERR_INCORRECT_VALUE_FOR_FUNCTION__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for function %.*s"
 #define OB_ERR_USER_EXCEED_RESOURCE__USER_ERROR_MSG "User '%.*s' has exceeded the '%s' resource (current value: %lu)"
 #define OB_TRANSACTION_SET_VIOLATION__USER_ERROR_MSG "Transaction set changed during the execution"
@@ -3848,6 +3850,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_OPEN_CURSORS_EXCEEDED__ORA_USER_ERROR_MSG "ORA-01000: maximum open cursors exceeded"
 #define OB_ERR_ARG_INVALID__ORA_USER_ERROR_MSG "ORA-21560: argument %.*s is null, invalid, or out of range"
 #define OB_ERR_ILL_NAME_STRING__ORA_USER_ERROR_MSG "ORA-21560: unexpected name string '%.*s'"
+#define OB_ERR_CTE_NEED_QUERY_BLOCKS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5933, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s"
 #define OB_ERR_INCORRECT_VALUE_FOR_FUNCTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5936, Incorrect %.*s value: '%.*s' for function %.*s"
 #define OB_ERR_USER_EXCEED_RESOURCE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5967, User '%.*s' has exceeded the '%s' resource (current value: %lu)"
 #define OB_TRANSACTION_SET_VIOLATION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6001, Transaction set changed during the execution"
