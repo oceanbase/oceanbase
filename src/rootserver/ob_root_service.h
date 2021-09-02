@@ -1166,16 +1166,15 @@ public:
   int logical_restore_partitions(const obrpc::ObRestorePartitionsArg& arg);
 
   int check_is_log_sync(bool& is_log_sync, const common::ObIArray<common::ObAddr>& stop_server);
+  int generate_log_in_sync_sql(const common::ObIArray<common::ObAddr> &dest_server_array, common::ObSqlString &sql);
   int generate_stop_server_log_in_sync_dest_server_array(const common::ObIArray<common::ObAddr>& alive_server_array,
       const common::ObIArray<common::ObAddr>& excluded_server_array,
       common::ObIArray<common::ObAddr>& dest_server_array);
-  int generate_log_in_sync_dest_server_buff(common::ObIAllocator& allocator,
-      const common::ObIArray<common::ObAddr>& dest_server_array, common::ObString& dest_server_buff);
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg& arg);
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg& arg);
   int check_other_rs_exist(bool& is_other_rs_exist);
   ObRsGtsManager& get_rs_gts_manager()
-  {
+    {
     return rs_gts_manager_;
   }
   ObFreezeInfoManager& get_freeze_manager()
