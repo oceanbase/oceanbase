@@ -2098,6 +2098,7 @@ int ObDMLResolver::expand_view(TableItem& view_item)
     ObViewTableResolver view_resolver(params_, get_view_db_name(), get_view_name());
     view_resolver.set_current_level(current_level_);
     view_resolver.set_current_view_item(view_item);
+    view_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
     if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
       LOG_WARN("do expand view resolve failed", K(ret));
     }
