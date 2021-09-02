@@ -91,6 +91,30 @@ int ObRpcValidateBackupBatchP::process()
   return ret;
 }
 
+int ObRpcBackupArchiveLogBatchP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->backup_archive_log(arg_);
+  }
+  return ret;
+}
+
+int ObRpcBackupBackupsetBatchP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->backup_backupset_batch(arg_);
+  }
+  return ret;
+}
+
 int ObRpcSetConfigP::process()
 {
   LOG_INFO("process set config", K(arg_));
@@ -315,6 +339,18 @@ int ObRpcGetTenantLogArchiveStatusP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->get_tenant_log_archive_status(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcGetTenantLogArchiveStatusV2P::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->get_tenant_log_archive_status_v2(arg_, result_);
   }
   return ret;
 }

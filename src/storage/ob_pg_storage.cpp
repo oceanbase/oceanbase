@@ -780,8 +780,8 @@ int ObPGStorage::get_all_pg_partition_keys_(ObPartitionArray& pkeys, const bool 
   return ret;
 }
 
-int ObPGStorage::check_can_replay_add_partition_to_pg_log(
-    const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts, bool& can_replay)
+int ObPGStorage::check_can_replay_add_partition_to_pg_log(const common::ObPartitionKey& pkey, const uint64_t log_id,
+    const int64_t log_ts, const int64_t schema_version, bool& can_replay)
 {
   int ret = OB_SUCCESS;
 
@@ -801,11 +801,45 @@ int ObPGStorage::check_can_replay_add_partition_to_pg_log(
       can_replay = true;
       const int64_t publish_version = get_publish_version();
       if (log_ts <= publish_version) {
-        TRANS_LOG(INFO, "no need to replay current log", K(pkey), K(log_id), K(log_ts), K(publish_version));
+        STORAGE_LOG(INFO, "no need to replay current log", K(pkey), K(log_id), K(log_ts), K(publish_version));
         can_replay = false;
       }
     } else {
       can_replay = false;
+    }
+
+    if (OB_SUCC(ret) && (!is_inner_table(pkey.get_table_id())) && can_replay) {
+      // check can replay in physical restore
+      // only user tables need be checked
+      TCRLockGuard guard(lock_);
+      const int64_t restore_snapshot_version = meta_->restore_snapshot_version_;
+      const int64_t restore_schema_version = meta_->restore_schema_version_;
+      const uint64_t last_restore_log_id = meta_->last_restore_log_id_;
+      if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
+        // pg in physical restore or after physical restore
+        if (OB_INVALID_TIMESTAMP == restore_schema_version) {
+          // just replay
+          STORAGE_LOG(WARN,
+              "invalid restore_schema_version, may during upgrade",
+              K(ret),
+              K(pkey),
+              K(log_id),
+              K(log_ts),
+              K(meta_));
+        } else if (OB_INVALID_ID == last_restore_log_id || log_id <= last_restore_log_id) {
+          can_replay = (schema_version <= restore_schema_version);
+          if (!can_replay) {
+            STORAGE_LOG(INFO,
+                "add_partition_to_pg is skipped because of restore_schema_version",
+                K(pkey),
+                K(log_id),
+                K(log_ts),
+                K(meta_));
+          }
+        } else {
+          can_replay = true;
+        }
+      }
     }
   }
 
@@ -967,7 +1001,9 @@ int ObPGStorage::init_pg_meta_(const ObCreatePGParam& param, ObPartitionGroupMet
     pg_meta.create_timestamp_ = param.create_timestamp_;
     pg_meta.create_frozen_version_ = param.create_frozen_version_;
     pg_meta.last_restore_log_id_ = param.last_restore_log_id_;
+    pg_meta.last_restore_log_ts_ = param.last_restore_log_ts_;
     pg_meta.restore_snapshot_version_ = param.restore_snapshot_version_;
+    pg_meta.restore_schema_version_ = param.restore_schema_version_;
     pg_meta.migrate_status_ = param.migrate_status_;
     if (OB_FAIL(pg_meta.storage_info_.deep_copy(param.info_))) {
       LOG_WARN("failed to deep copy storage info", K(ret), K(param.info_));
@@ -1039,6 +1075,9 @@ int ObPGStorage::replay_partition_schema_version_change_log(const int64_t schema
     STORAGE_LOG(INFO, "split source partition, no need to replay schema change log", K_(pkey));
   } else if (!pg_memtable_mgr_.has_memtable()) {
     STORAGE_LOG(INFO, "current pg has no memstores, maybe data replica, need skip", K(schema_version), K_(pkey));
+  } else if (OB_FAIL(
+                 ObPartitionService::get_instance().check_standby_cluster_schema_condition(pkey_, schema_version))) {
+    STORAGE_LOG(WARN, "failed to check_standby_cluster_schema_condition", K(schema_version), K_(pkey));
   } else if (OB_FAIL(guard.refresh_and_protect_pg_memtable(*this, tables_handle))) {
     STORAGE_LOG(WARN, "fail to protect table", K(ret), K(pkey_), K(schema_version));
   } else if (OB_FAIL(tables_handle.get_last_memtable(mem_store))) {
@@ -2896,7 +2935,8 @@ int ObPGStorage::set_pg_storage_info(const ObSavedStorageInfoV2& info)
   } else if (meta_->storage_info_.get_data_info().get_publish_version() > info.get_data_info().get_publish_version() &&
              ObReplicaRestoreStatus::REPLICA_RESTORE_DATA != meta_->is_restore_ &&
              ObReplicaRestoreStatus::REPLICA_RESTORE_CUT_DATA != meta_->is_restore_ &&
-             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY != meta_->is_restore_) {
+             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY != meta_->is_restore_ &&
+             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY_CUT != meta_->is_restore_) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "new storage info's publish version should not smaller than local", K(ret), K(*meta_), K(info));
   } else if (OB_FAIL(alloc_meta_(next_meta_ptr))) {
@@ -3714,8 +3754,9 @@ int ObPGStorage::check_for_restore_(ObIPartitionReport& report)
         }
       } else if (REPLICA_RESTORE_DUMP_MEMTABLE == status) {
         // minor merge finish, change restore state REPLICA_RESTORE_WAIT_ALL_DUMPED
-        if (OB_FAIL(set_restore_flag(
-                REPLICA_RESTORE_WAIT_ALL_DUMPED, OB_INVALID_TIMESTAMP /*not update restore_snapshot_version */))) {
+        if (OB_FAIL(set_restore_flag(REPLICA_RESTORE_WAIT_ALL_DUMPED,
+                OB_INVALID_TIMESTAMP /*not update restore_snapshot_version */,
+                OB_INVALID_TIMESTAMP /*not update restore_schema_version */))) {
           LOG_WARN("failed to set restore flag REPLICA_RESTORE_WAIT_ALL_DUMPED", K(ret), K_(pkey));
         } else if (OB_FAIL(report.submit_pt_update_task(pkey_))) {
           LOG_WARN("Failed to submit pg pt update task", K(ret), K_(pkey));
@@ -3733,13 +3774,15 @@ int ObPGStorage::check_restore_flag(const int16_t old_flag, const int16_t new_fl
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(new_flag < REPLICA_NOT_RESTORE || new_flag > REPLICA_RESTORE_MEMBER_LIST)) {
+  if (OB_UNLIKELY(new_flag < REPLICA_NOT_RESTORE || new_flag > REPLICA_RESTORE_STANDBY_CUT)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "invalid restore flag", K(ret), K(old_flag), K(new_flag));
   } else {
     switch (old_flag) {
       case REPLICA_NOT_RESTORE:
-        ret = OB_STATE_NOT_MATCH;
+        if (REPLICA_RESTORE_STANDBY_CUT != new_flag) {
+          ret = OB_STATE_NOT_MATCH;
+        }
         break;
       case REPLICA_LOGICAL_RESTORE_DATA:
         if (REPLICA_NOT_RESTORE != new_flag) {
@@ -3786,6 +3829,12 @@ int ObPGStorage::check_restore_flag(const int16_t old_flag, const int16_t new_fl
           ret = OB_STATE_NOT_MATCH;
         }
         break;
+      case REPLICA_RESTORE_STANDBY_CUT:
+        if (REPLICA_NOT_RESTORE != new_flag) {
+          ret = OB_STATE_NOT_MATCH;
+        }
+        break;
+
       default:
         ret = OB_ERR_UNEXPECTED;
         break;
@@ -4647,7 +4696,8 @@ OB_INLINE int64_t ObPGStorage::get_bucket_idx_(const ObPartitionKey& pkey) const
   return pkey.hash() % BUCKET_LOCK_BUCKET_CNT;
 }
 
-int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t restore_snapshot_version)
+int ObPGStorage::set_restore_flag(
+    const int16_t restore_flag, const int64_t restore_snapshot_version, const int64_t restore_schema_version)
 {
   int ret = OB_SUCCESS;
   ObPartitionGroupMeta* next_meta_ptr = nullptr;
@@ -4661,11 +4711,18 @@ int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t rest
     } else if (is_removed_) {
       ret = OB_PG_IS_REMOVED;
       LOG_WARN("pg is removed", K(ret), K(pkey_));
-    } else if (meta_->restore_snapshot_version_ != OB_INVALID_TIMESTAMP &&
-               restore_snapshot_version != OB_INVALID_TIMESTAMP &&
-               meta_->restore_snapshot_version_ != restore_snapshot_version) {
+    } else if ((meta_->restore_snapshot_version_ != OB_INVALID_TIMESTAMP &&
+                   restore_snapshot_version != OB_INVALID_TIMESTAMP &&
+                   meta_->restore_snapshot_version_ != restore_snapshot_version) ||
+               (meta_->restore_schema_version_ != OB_INVALID_TIMESTAMP &&
+                   restore_schema_version != OB_INVALID_TIMESTAMP &&
+                   meta_->restore_schema_version_ != restore_schema_version)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid restore_snapshot_version", K(ret), K(restore_snapshot_version), K(*meta_));
+      LOG_WARN("invalid restore_snapshot_version",
+          K(ret),
+          K(restore_snapshot_version),
+          K(restore_schema_version),
+          K(*meta_));
     } else if (restore_flag == meta_->is_restore_) {
       LOG_INFO("set same restore, ignore", K(ret), K(pkey_), K(restore_flag), K(*meta_));
     } else if (OB_FAIL(check_restore_flag(meta_->is_restore_, restore_flag))) {
@@ -4688,19 +4745,24 @@ int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t rest
         if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
           next_meta.restore_snapshot_version_ = restore_snapshot_version;
         }
+        if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
+          next_meta.restore_schema_version_ = restore_schema_version;
+        }
+
         if (OB_FAIL(write_update_pg_meta_trans(next_meta, OB_LOG_SET_RESTORE_FLAG))) {
           LOG_WARN("failed to write_update_pg_meta_trans", K(ret), K(*meta_), K(next_meta));
         } else {
           {
             switch_meta_(next_meta_ptr);
           }
-          // TODO(haofan): this func cannot rollback, should not return ret.
+          // TODO(): this func cannot rollback, should not return ret.
           if (OB_FAIL(pls_->set_archive_restore_state(restore_flag))) {
             LOG_WARN("set_archive_restore_state failed", K(ret), K_(pkey));
           }
           FLOG_INFO("set is_restore",
               K(restore_flag),
               K(restore_snapshot_version),
+              K(restore_schema_version),
               K_(pkey),
               "tenant_id",
               pkey_.get_tenant_id(),
@@ -4781,7 +4843,7 @@ int ObPGStorage::set_last_restore_log_info(const uint64_t last_restore_log_id, c
 }
 
 int ObPGStorage::get_restore_replay_info(
-    uint64_t &last_restore_log_id, int64_t &last_restore_log_ts, int64_t &restore_snapshot_version)
+    uint64_t& last_restore_log_id, int64_t& last_restore_log_ts, int64_t& restore_snapshot_version)
 {
   int ret = OB_SUCCESS;
 
@@ -7389,6 +7451,7 @@ int ObPGStorage::prepare_partition_store_map_(
   const int64_t max_kept_major_version_number = GCONF.max_kept_major_version_number;
   store_map = nullptr;
   if (ctx.handle_.empty()) {
+    LOG_INFO("handle is empty, skip prepare_partition_store_map_");
   } else if (OB_ISNULL(partition = part_guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get pg partition failed", K(ret), K(ctx));
@@ -8148,7 +8211,7 @@ int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const
   const int64_t publish_version = meta_->storage_info_.get_data_info().get_publish_version();
   if (is_inner_table(pkey_.get_table_id())) {
     tenant_id = OB_SYS_TENANT_ID;
-    real_schema_version = minor_schema_version;
+    real_schema_version = OB_INVALID_VERSION;
     is_sys_table = true;
   } else {
     tenant_id = pkey_.get_tenant_id();
@@ -8224,7 +8287,12 @@ int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(schema_filter.check_if_table_miss_by_schema(pg_meta.pg_key_, table_id_set))) {
-          STORAGE_LOG(WARN, "failed to check if table miss by schema", K(ret), K(pg_meta));
+          STORAGE_LOG(WARN,
+              "failed to check if table miss by schema",
+              K(ret),
+              K(pg_meta),
+              K(real_schema_version),
+              K(minor_schema_version));
         }
       }
 

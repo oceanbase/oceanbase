@@ -85,6 +85,7 @@ compile_commands.json
 test/tmp
 test/var
 *.ccls-cache/
+.cproject
 
 ###### Docs website files
 docs/site

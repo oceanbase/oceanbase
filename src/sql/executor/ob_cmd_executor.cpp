@@ -704,6 +704,14 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
       DEFINE_EXECUTE_CMD(ObDropDbLinkStmt, ObDropDbLinkExecutor);
       break;
     }
+    case stmt::T_BACKUP_BACKUPSET: {
+      DEFINE_EXECUTE_CMD(ObBackupBackupsetStmt, ObBackupBackupsetExecutor);
+      break;
+    }
+    case stmt::T_BACKUP_ARCHIVELOG: {
+      DEFINE_EXECUTE_CMD(ObBackupArchiveLogStmt, ObBackupArchiveLogExecutor);
+      break;
+    }
     case stmt::T_BACKUP_SET_ENCRYPTION: {
       DEFINE_EXECUTE_CMD(ObBackupSetEncryptionStmt, ObBackupSetEncryptionExecutor);
       break;
@@ -726,6 +734,18 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
     }
     case stmt::T_DROP_RESTORE_POINT: {
       DEFINE_EXECUTE_CMD(ObDropRestorePointStmt, ObDropRestorePointExecutor);
+      break;
+    }
+    case stmt::T_BACKUP_BACKUPPIECE: {
+      DEFINE_EXECUTE_CMD(ObBackupBackupPieceStmt, ObBackupBackupPieceExecutor);
+      break;
+    }
+    case stmt::T_ADD_RESTORE_SOURCE: {
+      DEFINE_EXECUTE_CMD(ObAddRestoreSourceStmt, ObAddRestoreSourceExecutor);
+      break;
+    }
+    case stmt::T_CLEAR_RESTORE_SOURCE: {
+      DEFINE_EXECUTE_CMD(ObClearRestoreSourceStmt, ObClearRestoreSourceExecutor);
       break;
     }
     case stmt::T_CS_DISKMAINTAIN:

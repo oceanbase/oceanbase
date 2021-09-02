@@ -50,7 +50,7 @@ using namespace transaction;
 
 namespace storage {
 
-ObPartGroupBackupTask::ObPartGroupBackupTask() : ObPartGroupTask()
+ObPartGroupBackupTask::ObPartGroupBackupTask() : ObPartGroupTask(), backup_data_type_()
 {}
 
 ObPartGroupBackupTask::~ObPartGroupBackupTask()
@@ -116,6 +116,7 @@ int ObPartGroupBackupTask::init(const ObIArray<ObReplicaOpArg>& task_list, const
         is_finished_ = false;
         need_idle_ = true;
         change_member_option_ = change_member_option;
+        backup_data_type_.reset();
         STORAGE_LOG(INFO, "succeed to init pg group backup task", K(*this));
       }
     }
@@ -263,6 +264,10 @@ int ObPartGroupBackupTask::do_backup_task(const ObBackupDataType& backup_data_ty
         STORAGE_LOG(WARN, "failed to check is task cancel", K(tmp_ret));
       }
 
+      if (OB_SUCCESS != (tmp_ret = check_disk_space())) {
+        STORAGE_LOG(WARN, "failed to check disk space", K(tmp_ret));
+      }
+
       if (OB_SUCCESS != (tmp_ret = try_schedule_new_partition_backup(backup_data_type))) {
         STORAGE_LOG(WARN, "failed to try_schedule_new_partition_migration", K(tmp_ret));
       }
@@ -288,33 +293,25 @@ int ObPartGroupBackupTask::do_backup_task(const ObBackupDataType& backup_data_ty
 
   ObTaskController::get().allow_next_syslog();
   const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-  LOG_INFO("group backup task finish", K(cost_ts), K(task_list_), K(backup_data_type));
+  LOG_INFO("do sub group backup task finish", K(cost_ts), K(backup_data_type_), K(first_error_code_), K(task_list_));
   return ret;
 }
 
 int ObPartGroupBackupTask::do_part_group_backup_minor_task()
 {
   int ret = OB_SUCCESS;
-  ObBackupDataType backup_data_type;
-  int first_error_code = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else if (FALSE_IT(reset_tasks_status())) {
-  } else if (FALSE_IT(backup_data_type.set_minor_data_backup())) {
-  } else if (OB_FAIL(do_backup_task(backup_data_type))) {
+  } else if (FALSE_IT(backup_data_type_.set_minor_data_backup())) {
+  } else if (OB_FAIL(do_backup_task(backup_data_type_))) {
     STORAGE_LOG(WARN, "failed to do backup task", K(ret));
   } else {
-    {
-      common::SpinRLockGuard guard(lock_);
-      first_error_code = first_error_code_;
-    }
-
-    if (OB_SUCCESS != first_error_code) {
-      ret = first_error_code;
-      STORAGE_LOG(WARN, "first error code has set, set failed", K(ret), K(first_error_code));
-    }
+    common::SpinRLockGuard guard(lock_);
+    ret = first_error_code_;
+    STORAGE_LOG(WARN, "first error code has set, set failed", K(ret), K(first_error_code_));
   }
   return ret;
 }
@@ -322,26 +319,18 @@ int ObPartGroupBackupTask::do_part_group_backup_minor_task()
 int ObPartGroupBackupTask::do_part_group_backup_major_task()
 {
   int ret = OB_SUCCESS;
-  ObBackupDataType backup_data_type;
-  int first_error_code = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else if (FALSE_IT(reset_tasks_status())) {
-  } else if (FALSE_IT(backup_data_type.set_major_data_backup())) {
-  } else if (OB_FAIL(do_backup_task(backup_data_type))) {
+  } else if (FALSE_IT(backup_data_type_.set_major_data_backup())) {
+  } else if (OB_FAIL(do_backup_task(backup_data_type_))) {
     STORAGE_LOG(WARN, "failed to do backup task", K(ret));
   } else {
-    {
-      common::SpinRLockGuard guard(lock_);
-      first_error_code = first_error_code_;
-    }
-
-    if (OB_SUCCESS != first_error_code) {
-      ret = first_error_code;
-      STORAGE_LOG(WARN, "first error code has set, set failed", K(ret), K(first_error_code));
-    }
+    common::SpinRLockGuard guard(lock_);
+    ret = first_error_code_;
+    STORAGE_LOG(WARN, "first error code has set, set failed", K(ret), K(first_error_code_));
   }
   return ret;
 }
@@ -386,13 +375,19 @@ int ObPartGroupBackupTask::finish_group_backup_task()
 {
   int ret = OB_SUCCESS;
   int first_error_code = OB_SUCCESS;
+  LOG_INFO("start finish_group_backup_task");
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else {
     {
-      common::SpinRLockGuard guard(lock_);
+      common::SpinWLockGuard guard(lock_);
+
+      if (!backup_data_type_.is_major_backup() && OB_SUCCESS == first_error_code_) {
+        first_error_code_ = OB_ERR_SYS;
+        LOG_ERROR("major backup is not finished, set first error code", K(ret), K(backup_data_type_));
+      }
       first_error_code = first_error_code_;
     }
     SMART_VAR(ObReportPartMigrationTask, tmp_task)
@@ -404,15 +399,30 @@ int ObPartGroupBackupTask::finish_group_backup_task()
         ObPartMigrationTask& sub_task = task_list_[i];
         if (ObIPartMigrationTask::INIT == sub_task.status_) {
           sub_task.result_ = first_error_code;
+        } else if (OB_SUCCESS == sub_task.result_ && !backup_data_type_.is_major_backup()) {
+          sub_task.result_ = first_error_code;
         }
         tmp_task.arg_ = sub_task.arg_;
         tmp_task.status_ = ObIPartMigrationTask::FINISH;
         tmp_task.result_ = sub_task.result_;
         tmp_task.need_report_checksum_ = sub_task.ctx_.need_report_checksum_;
+        tmp_task.data_statics_ = sub_task.ctx_.data_statics_;
         tmp_task.ctx_ = &sub_task.ctx_;
         if (OB_FAIL(report_list_.push_back(tmp_task))) {
           // report_list is reserved before, should not fail here
           STORAGE_LOG(ERROR, "failed to add report list", K(ret));
+        } else {
+          LOG_INFO("add report task", K_(backup_data_type), K_(first_error_code), K(tmp_task));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        ObArray<ObPartMigrationRes> report_res_list;
+        if (OB_SUCCESS != (tmp_ret = ObMigrateUtil::get_report_result(report_list_, report_res_list))) {
+          LOG_WARN("failed to get report result", K(tmp_ret), K(report_list_));
+        } else if (OB_SUCCESS != (tmp_ret = partition_service_->report_pg_backup_task(report_res_list))) {
+          LOG_WARN("failed to report pg backup task", K(tmp_ret), K(report_res_list));
         }
       }
 
@@ -421,6 +431,7 @@ int ObPartGroupBackupTask::finish_group_backup_task()
       }
     }
   }
+  LOG_INFO("finish finish_group_backup_task");
   return ret;
 }
 
@@ -687,6 +698,9 @@ int ObPartGroupBackupTask::check_pg_backup_point_created(
       if (ObPartGroupMigrator::get_instance().is_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         STORAGE_LOG(WARN, "server is stopping", K(ret));
+      } else if (OB_FAIL(check_disk_space())) {
+        LOG_WARN("failed to check disk space", K(ret));
+        break;
       } else {
         ObIPartitionGroupGuard guard;
         ObIPartitionGroup* partition_group = NULL;
@@ -720,6 +734,35 @@ int ObPartGroupBackupTask::check_pg_backup_point_created(
       }
     }
   }
+  return ret;
+}
+
+int ObPartGroupBackupTask::check_disk_space()
+{
+  int ret = OB_SUCCESS;
+  const int64_t required_size = 0;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(ERROR, "not inited", K(ret));
+  } else if (OB_FAIL(OB_STORE_FILE.check_disk_full(required_size))) {
+    ObTaskController::get().allow_next_syslog();
+    STORAGE_LOG(WARN, "failed to check_is_disk_full, cannot backup", K(ret), K(required_size));
+    common::SpinWLockGuard guard(lock_);
+    if (OB_SUCCESS == first_error_code_) {
+      first_error_code_ = ret;
+    }
+  }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_DISK_ERROR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "fake EN_DISK_ERROR", K(ret));
+      first_error_code_ = ret;
+    }
+  }
+#endif
   return ret;
 }
 
@@ -770,10 +813,10 @@ int ObBackupPrepareTask::prepare_backup_reader()
     ret = OB_NOT_INIT;
     STORAGE_LOG(ERROR, "not inited", K(ret));
   } else if (BACKUP_REPLICA_OP == ctx_->replica_op_arg_.type_) {
-    if (OB_ISNULL(ctx_->backup_meta_reader_ = cp_fty_->get_partition_group_meta_backup_reader())) {
+    if (OB_ISNULL(backup_meta_reader_ = cp_fty_->get_partition_group_meta_backup_reader())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg meta reader should not be NULL", K(ret));
-    } else if (OB_FAIL(ctx_->backup_meta_reader_->init(ctx_->pg_meta_, ctx_->replica_op_arg_.backup_arg_))) {
+    } else if (OB_FAIL(backup_meta_reader_->init(ctx_->pg_meta_, ctx_->replica_op_arg_.backup_arg_))) {
       STORAGE_LOG(WARN, "fail to init backup meta reader", K(ret));
     }
   }
@@ -1545,10 +1588,10 @@ int ObBackupPrepareTask::get_partition_table_info_backup_reader(
   } else if (OB_ISNULL(tmp_reader = cp_fty_->get_pg_info_backup_reader())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to get macro block ob reader", K(ret));
-  } else if (OB_ISNULL(ctx_->backup_meta_reader_)) {
+  } else if (OB_ISNULL(backup_meta_reader_)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("ctx_->backup_meta_reader_ must not null", K(ret));
-  } else if (OB_FAIL(tmp_reader->init(ctx_->pg_meta_.partitions_, ctx_->backup_meta_reader_))) {
+  } else if (OB_FAIL(tmp_reader->init(ctx_->pg_meta_.partitions_, backup_meta_reader_))) {
     LOG_WARN("fail to init partition table info restore reader", K(ret));
   } else {
     reader = tmp_reader;
@@ -1612,7 +1655,7 @@ int ObBackupPrepareTask::check_backup_data_continues()
           ret = OB_LOG_ARCHIVE_STAT_NOT_MATCH;
           LOG_WARN("log archive status is not match", K(ret), K(pg_log_archive_status));
         } else if (last_replay_log_id + 1 < pg_log_archive_status.round_start_log_id_) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA;
           LOG_WARN("base data and log archive data do not continues",
               K(ret),
               K(pg_log_archive_status),
@@ -1622,7 +1665,7 @@ int ObBackupPrepareTask::check_backup_data_continues()
           break;
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_LOG_ARCHIVE_STAT_NOT_MATCH;
         LOG_WARN("log archive status is unexpected", K(ret), K(pg_log_archive_status));
       }
 

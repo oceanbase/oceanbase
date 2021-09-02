@@ -53,7 +53,8 @@ enum ObReplicaRestoreStatus {
   REPLICA_RESTORE_WAIT_ALL_DUMPED = 7,  // waiting for all replicas in cluster to finish dumping
   REPLICA_RESTORE_MEMBER_LIST = 8,      // waiting for member list persistence to majority
   REPLICA_RESTORE_MAX,
-  REPLICA_RESTORE_STANDBY = 100,  // standby replica restore
+  REPLICA_RESTORE_STANDBY = 100,      // standby replica restore
+  REPLICA_RESTORE_STANDBY_CUT = 101,  // standby replica cut sstable
   REPLICA_RESTORE_STANDBY_MAX,
 };
 

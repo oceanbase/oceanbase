@@ -26,13 +26,14 @@ public:
   virtual ~ObTenantBackupCleanInfoUpdater() = default;
   int init(common::ObISQLClient& sql_proxy);
   int insert_backup_clean_info(const uint64_t tenant_id, const ObBackupCleanInfo& clean_info);
-  int get_backup_clean_info(const uint64_t tenant_id, ObBackupCleanInfo& tenant_backup_task);
+  int get_backup_clean_info(const uint64_t tenant_id, const bool for_update, ObBackupCleanInfo& tenant_backup_task);
   int update_backup_clean_info(
       const uint64_t tenant_id, const ObBackupCleanInfo& src_clean_info, const ObBackupCleanInfo& dest_clean_info);
   int remove_clean_info(const uint64_t tenant_id, const ObBackupCleanInfo& clean_info);
   int get_backup_clean_info_status(
       const uint64_t tenant_id, common::ObISQLClient& trans, ObBackupCleanInfoStatus::STATUS& status);
   int get_deleted_tenant_clean_infos(common::ObIArray<ObBackupCleanInfo>& deleted_tenant_clean_infos);
+  int check_clean_task_is_dong(bool& is_doing);
 
 private:
   int check_can_update_backup_clean_info(

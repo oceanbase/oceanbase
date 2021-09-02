@@ -198,6 +198,15 @@ int ObServerReloadConfig::operator()()
     }
   }
 
+  {
+    // backup zone and region support
+    if (OB_FAIL(ObServer::get_instance().get_partition_service().enable_backup_white_list())) {
+      ObString backup_zone_str = GCONF.backup_zone.get_value_string();
+      ObString backup_region_str = GCONF.backup_region.get_value_string();
+      LOG_WARN("failed to enable backup white list", K(ret), K(backup_region_str), K(backup_zone_str));
+    }
+  }
+
   const int64_t cache_size = GCONF.memory_chunk_cache_size;
   const int cache_cnt = cache_size > 0 ? cache_size / INTACT_ACHUNK_SIZE : INT32_MAX;
   lib::AChunkMgr::instance().set_max_chunk_cache_cnt(cache_cnt);

@@ -389,13 +389,15 @@ bool ObPGPartitionMetaInfo::is_valid() const
          table_info_.count() == table_id_list_.count();
 }
 
-OB_SERIALIZE_MEMBER(ObFetchPGInfoResult, pg_meta_, major_version_, is_log_sync_, pg_file_id_, compat_version_);
+OB_SERIALIZE_MEMBER(ObFetchPGInfoResult, pg_meta_, major_version_, is_log_sync_, recovery_point_key_array_, pg_file_id_,
+    compat_version_);
 
 void ObFetchPGInfoResult::reset()
 {
   pg_meta_.reset();
   major_version_ = 0;
   is_log_sync_ = false;
+  recovery_point_key_array_.reset();
   pg_file_id_ = OB_INVALID_DATA_FILE_ID;
   compat_version_ = 0;
 }
@@ -405,6 +407,8 @@ int ObFetchPGInfoResult::assign(const ObFetchPGInfoResult& result)
   int ret = OB_SUCCESS;
   if (OB_FAIL(pg_meta_.deep_copy(result.pg_meta_))) {
     STORAGE_LOG(WARN, "fail to copy partition group meta", K(ret), K(result));
+  } else if (OB_FAIL(recovery_point_key_array_.assign(result.recovery_point_key_array_))) {
+    STORAGE_LOG(WARN, "failed to assign recovery point key array", K(ret), K(result));
   } else {
     major_version_ = result.major_version_;
     is_log_sync_ = result.is_log_sync_;
@@ -529,6 +533,47 @@ bool ObHandoverPartitionArg::is_valid() const
 {
   return type_ > PARTITION_HANDOVER_TYPE_INVALID && type_ < PARTITION_HANDOVER_TYPE_MAX && pg_key_.is_valid() &&
          (PARTITION_HANDOVER_TYPE_MIGRATE_OUT == type_ ? src_file_id_ > 0 : true) && candidate_server_.is_valid();
+}
+
+OB_SERIALIZE_MEMBER(ObFetchPGRecoveryPointMetaInfoArg, pg_key_, recovery_point_key_array_);
+ObFetchPGRecoveryPointMetaInfoArg::ObFetchPGRecoveryPointMetaInfoArg() : pg_key_(), recovery_point_key_array_()
+{}
+
+void ObFetchPGRecoveryPointMetaInfoArg::reset()
+{
+  pg_key_.reset();
+  recovery_point_key_array_.reset();
+}
+
+bool ObFetchPGRecoveryPointMetaInfoArg::is_valid() const
+{
+  return pg_key_.is_valid() && recovery_point_key_array_.count() >= 0;
+}
+
+OB_SERIALIZE_MEMBER(ObFetchPGRecoveryPointMetaInfoRes, recovery_point_meta_info_);
+ObFetchPGRecoveryPointMetaInfoRes::ObFetchPGRecoveryPointMetaInfoRes() : recovery_point_meta_info_()
+{}
+
+bool ObFetchPGRecoveryPointMetaInfoRes::is_valid() const
+{
+  return recovery_point_meta_info_.is_valid();
+}
+
+int ObFetchPGRecoveryPointMetaInfoRes::assign(const ObFetchPGRecoveryPointMetaInfoRes& res)
+{
+  int ret = OB_SUCCESS;
+  if (!res.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("assign ObFetchPGRecoveryPointMetaInfoRes get invalid argument", K(ret), K(res));
+  } else if (OB_FAIL(recovery_point_meta_info_.assign(res.recovery_point_meta_info_))) {
+    LOG_WARN("failed to assign recovery point meta info", K(ret), K(res));
+  }
+  return ret;
+}
+
+void ObFetchPGRecoveryPointMetaInfoRes::reset()
+{
+  recovery_point_meta_info_.reset();
 }
 
 // 1.4x old rpc to fetch store info
@@ -2029,6 +2074,13 @@ int ObFetchPartitionGroupInfoP::process()
     }
   }
 
+  // fetch recovery point key
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(pg_storage->get_recovery_data_mgr().get_all_recovery_point_key(result_.recovery_point_key_array_))) {
+      STORAGE_LOG(WARN, "failed to get all recovery point key", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     STORAGE_LOG(DEBUG, "succ to get partition group info", K_(result), K(ret));
   }
@@ -2102,6 +2154,71 @@ int ObFetchPGPartitioninfoP::process()
   }
   return ret;
 }
+
+/**
+ * ------------------------------------ObRecoveryPoint--------------------------------------
+ */
+
+ObFetchRecoveryPointMetaInfoP::ObFetchRecoveryPointMetaInfoP(
+    ObPartitionService* partition_service, common::ObInOutBandwidthThrottle* bandwidth_throttle)
+    : ObCommonPartitionServiceRpcP(partition_service, bandwidth_throttle)
+{}
+
+int ObFetchRecoveryPointMetaInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalBaseMetaProducer producer;
+  ObSSTableBaseMeta sstable_meta(allocator_);
+  common::ObArray<blocksstable::ObSSTablePair> macro_block_list;
+  char* buf = NULL;
+  ObRecoveryPointMetaInfo recovery_point_meta_info;
+
+  if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_MALLOC_BIG_BLOCK_SIZE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc migrate data buffer.", K(ret));
+  } else if (!result_.set_data(buf, OB_MALLOC_BIG_BLOCK_SIZE)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed set data to result", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg_.recovery_point_key_array_.count(); ++i) {
+      const ObRecoveryPointKey& recovery_point_key = arg_.recovery_point_key_array_.at(i);
+      recovery_point_meta_info.reset();
+      if (OB_FAIL(get_recovery_point_meta_info(recovery_point_key, recovery_point_meta_info))) {
+        STORAGE_LOG(WARN, "failed to get_recovery_point_meta_info", K(ret), K_(arg));
+      } else if (OB_FAIL(fill_data(recovery_point_meta_info))) {
+        STORAGE_LOG(WARN, "failed to encode recovery point meta info", K(ret), K(recovery_point_meta_info));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFetchRecoveryPointMetaInfoP::get_recovery_point_meta_info(
+    const ObRecoveryPointKey& recovery_point_key, storage::ObRecoveryPointMetaInfo& recovery_point_meta_info)
+{
+  int ret = OB_SUCCESS;
+  ObIPartitionGroupGuard guard;
+  ObIPartitionGroup* partition = NULL;
+  recovery_point_meta_info.reset();
+  if (!arg_.is_valid() || OB_ISNULL(partition_service_) || !recovery_point_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN,
+        "get recovery point meta info get invalid argument",
+        K(arg_),
+        KP(partition_service_),
+        K(recovery_point_key));
+  } else if (OB_FAIL(partition_service_->get_partition(arg_.pg_key_, guard))) {
+    STORAGE_LOG(WARN, "failed to get partition", K(ret), K(arg_));
+  } else if (OB_ISNULL(partition = guard.get_partition_group())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "partition should not be NULL", K(arg_), KP(partition));
+  } else if (OB_FAIL(partition->get_pg_storage().get_recovery_data_mgr().get_recovery_point_meta_info(
+                 recovery_point_key, recovery_point_meta_info))) {
+    STORAGE_LOG(WARN, "failed to get recovery point meta info", K(ret), K(arg_));
+  }
+  return ret;
+}
+
 }  // namespace obrpc
 
 namespace storage {
@@ -2509,6 +2626,46 @@ int ObPartitionServiceRpc::post_batch_validate_backup_res(
       STORAGE_LOG(WARN, "post batch validate backup res fail", K(ret), K(res));
     } else {
       STORAGE_LOG(TRACE, "post batch validate backup res successfully", K(res));
+    }
+  }
+  return ret;
+}
+
+int ObPartitionServiceRpc::post_batch_backup_backupset_res(
+    const common::ObAddr& server, const obrpc::ObBackupBackupsetBatchRes& res)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObPartitionServiceRpc is not inited", KR(ret));
+  } else if (!server.is_valid() || !res.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(server), K(res));
+  } else {
+    if (OB_SUCCESS != (ret = rs_rpc_proxy_->to(server).backup_backupset_batch_res(res))) {
+      STORAGE_LOG(WARN, "post batch backup backupset res fail", KR(ret), K(res));
+    } else {
+      STORAGE_LOG(TRACE, "post batch backup backupset res successfully");
+    }
+  }
+  return ret;
+}
+
+int ObPartitionServiceRpc::post_batch_backup_archivelog_res(
+    const common::ObAddr& server, const obrpc::ObBackupArchiveLogBatchRes& res)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObPartitionServiceRpc is not inited", KR(ret));
+  } else if (!server.is_valid() || !res.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(server), K(res));
+  } else {
+    if (OB_SUCCESS != (ret = rs_rpc_proxy_->to(server).backup_archive_log_batch_res(res))) {
+      STORAGE_LOG(WARN, "post batch backup backupset res fail", KR(ret), K(res));
+    } else {
+      STORAGE_LOG(TRACE, "post batch backup backupset res successfully", K(server));
     }
   }
   return ret;

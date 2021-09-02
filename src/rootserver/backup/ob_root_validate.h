@@ -152,6 +152,7 @@ private:
   ObPartitionValidate pg_validate_;
   share::ObIBackupLeaseService* backup_lease_service_;
   mutable ObRootValidateIdling idling_;
+  share::ObBackupInnerTableVersion inner_table_version_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootValidate);
@@ -190,7 +191,7 @@ public:
   int cancel_doing_pg_tasks(const share::ObTenantValidateTaskInfo& task_info);
 
   int fetch_all_pg_list(const share::ObClusterBackupDest& backup_dest, const int64_t log_archive_round,
-      const int64_t full_backup_set_id, const int64_t inc_backup_set_id,
+      const int64_t full_backup_set_id, const int64_t inc_backup_set_id, const int64_t backup_snapshot_version,
       const share::ObTenantValidateTaskInfo& tenant_task_info, common::ObIArray<common::ObPartitionKey>& normal_pkeys);
 
 private:

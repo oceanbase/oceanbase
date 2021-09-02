@@ -6307,8 +6307,10 @@ int ObPartitionStorage::ObDMLRunningCtx::init(const ObIArray<uint64_t>* column_i
     STORAGE_LOG(WARN, "failed to get relative table", K(ret));
   } else if (OB_UNLIKELY(!pkey.is_pg() &&
                          (extract_pure_id(pkey.get_table_id()) == OB_ALL_TABLE_HISTORY_TID ||
-                             extract_pure_id(pkey.get_table_id()) == OB_ALL_TABLE_V2_HISTORY_TID) &&
+                             extract_pure_id(pkey.get_table_id()) == OB_ALL_TABLE_V2_HISTORY_TID ||
+                             extract_pure_id(pkey.get_table_id()) == OB_ALL_BACKUP_PIECE_FILES_TID) &&
                          relative_tables_.get_index_tables_buf_count() != 1)) {
+    // __all_table_history and __all_backup_piece_files should always have one index
     ret = OB_SCHEMA_EAGAIN;
     STORAGE_LOG(WARN,
         "__all_table_history should have one index table",

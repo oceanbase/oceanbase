@@ -419,10 +419,11 @@ public:
   int xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStmtParam& stmt_param);
   // elr statistic
   int dump_elr_statistic();
-  int set_last_restore_log_ts(const ObPartitionKey &pkey, const int64_t last_restore_log_ts);
+  int set_last_restore_log_info(
+      const ObPartitionKey& pkey, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int set_restore_snapshot_version(const ObPartitionKey& pkey, const int64_t restore_snapshot_version);
-  int update_restore_replay_info(
-      const ObPartitionKey &partition, const int64_t restore_snapshot_version, const int64_t last_restore_log_ts);
+  int update_restore_replay_info(const ObPartitionKey& partition, const int64_t restore_snapshot_version,
+      const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int xa_start_v2(
       const ObXATransID& xid, const int64_t flags, const int64_t xa_end_timeout_seconds, ObTransDesc& trans_desc);
   int xa_end_v2(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
@@ -734,12 +735,9 @@ private:
 
   int do_dist_rollback_(
       ObTransDesc& trans_desc, const int64_t sql_no, const common::ObPartitionArray& rollback_partitions);
-  int acquire_sche_ctx_(ObTransDesc &trans_desc,
-                        ObScheTransCtx *&sche_ctx,
-                        bool &use_tmp_sche_ctx);
-  void release_sche_ctx_(ObTransDesc &trans_desc,
-                         ObScheTransCtx *sche_ctx,
-                         const bool use_tmp_sche_ctx);
+  int acquire_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx*& sche_ctx, bool& use_tmp_sche_ctx);
+  void release_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx* sche_ctx, const bool use_tmp_sche_ctx);
+
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
   // max task count in message process queue

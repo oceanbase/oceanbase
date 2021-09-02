@@ -152,6 +152,7 @@ public:
   virtual uint64_t get_next_index_log_id() const = 0;
   virtual int do_fetch_log(const uint64_t start_id, const uint64_t end_id,
       const enum ObFetchLogExecuteType& fetch_log_execute_type, bool& is_fetched) = 0;
+  virtual int set_log_archive_accum_checksum(const uint64_t log_id, const int64_t accum_checksum) = 0;
   virtual int set_log_confirmed(const uint64_t log_id, const bool batch_committed) = 0;
   virtual uint64_t get_max_log_id() const = 0;
 };
@@ -408,6 +409,7 @@ public:
   int process_sync_standby_max_confirmed_id(const uint64_t standby_max_confirmed_id, const uint64_t reconfirm_next_id);
   int set_log_flushed_succ(const uint64_t log_id, const common::ObProposalID proposal_id, const ObLogCursor& log_cursor,
       const int64_t after_consume_timestamp, bool& majority);
+  int set_log_archive_accum_checksum(const uint64_t log_id, const int64_t accum_checksum);
   int set_log_confirmed(const uint64_t log_id, const bool batch_committed) override;
   int receive_confirmed_info(const uint64_t log_id, const ObConfirmedInfo& confirmed_info, const bool batch_committed);
   int majority_cb(const uint64_t log_id, const bool batch_committed, const bool batch_first_participant);
@@ -467,7 +469,6 @@ public:
   {
     return saved_accum_checksum_;
   }
-  int reset_next_log_ts(const common::ObBaseStorageInfo& base_storage_info);
   void record_last_update_next_replay_log_id_info_ts()
   {
     last_update_next_replay_log_id_info_ts_ = common::ObTimeUtility::current_time();
@@ -476,8 +477,6 @@ public:
   {
     return last_update_next_replay_log_id_info_ts_;
   }
-  bool can_submit_replay_task(const char* log_buf, const int64_t log_buf_len, int64_t& log_type) const;
-  bool can_submit_aggre_replay_task() const;
   int do_fetch_log(const uint64_t start_id, const uint64_t end_id,
       const enum ObFetchLogExecuteType& fetch_log_execute_type, bool& is_fetched) override final;
   int backfill_log(const uint64_t log_id, const common::ObProposalID& proposal_id, const char* serialize_buff,

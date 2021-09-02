@@ -576,6 +576,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       case T_SHOW_RECYCLEBIN:
       case T_SHOW_CREATE_TABLEGROUP:
       case T_SHOW_TRIGGERS:
+      case T_SHOW_RESTORE_PREVIEW:
       case T_SHOW_STATUS: {
         REGISTER_STMT_RESOLVER(Show);
         break;
@@ -811,12 +812,32 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
         REGISTER_STMT_RESOLVER(DropDbLink);
         break;
       }
+      case T_BACKUP_BACKUPSET: {
+        REGISTER_STMT_RESOLVER(BackupBackupset);
+        break;
+      }
+      case T_BACKUP_ARCHIVELOG: {
+        REGISTER_STMT_RESOLVER(BackupArchiveLog);
+        break;
+      }
       case T_BACKUP_SET_ENCRYPTION: {
         REGISTER_STMT_RESOLVER(BackupSetEncryption);
         break;
       }
       case T_BACKUP_SET_DECRYPTION: {
         REGISTER_STMT_RESOLVER(BackupSetDecryption);
+        break;
+      }
+      case T_BACKUP_BACKUPPIECE: {
+        REGISTER_STMT_RESOLVER(BackupBackupPiece);
+        break;
+      }
+      case T_ADD_RESTORE_SOURCE: {
+        REGISTER_STMT_RESOLVER(AddRestoreSource);
+        break;
+      }
+      case T_CLEAR_RESTORE_SOURCE: {
+        REGISTER_STMT_RESOLVER(ClearRestoreSource);
         break;
       }
       case T_CREATE_RESTORE_POINT: {

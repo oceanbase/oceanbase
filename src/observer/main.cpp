@@ -484,6 +484,7 @@ int main(int argc, char* argv[])
       ObWorker worker;
 
       ObServer& observer = ObServer::get_instance();
+      LOG_INFO("observer is start", "observer_version", PACKAGE_STRING);
       if (OB_FAIL(observer.init(opts, log_cfg))) {
         LOG_ERROR("observer init fail", K(ret));
       } else if (OB_FAIL(observer.start())) {
@@ -499,7 +500,7 @@ int main(int argc, char* argv[])
     unlink(PID_FILE_NAME);
   }
 
-  LOG_INFO("observer is exit");
+  LOG_INFO("observer is exit", "observer_version", PACKAGE_STRING);
   OB_LOGGER.set_stop_append_log();
   OB_LOGGER.destroy();
   return ret;

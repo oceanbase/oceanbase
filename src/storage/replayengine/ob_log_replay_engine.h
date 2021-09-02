@@ -198,6 +198,8 @@ private:
   // consecutive failures of each thread, which is used to control cpu usage
   int get_throttle_end_time_(
       const uint64_t tenant_id, const bool create_if_not_exist_in_map, ObThrottleEndTime*& throttle_end_time);
+  int check_need_replay_with_physical_restore_(
+      storage::ObIPartitionGroup* partition, ObReplayLogTask* replay_task, bool& need_replay) const;
 
 private:
   const int64_t MAX_REPLAY_TIME_PER_ROUND = 10 * 1000;                             // 10ms

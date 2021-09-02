@@ -4747,6 +4747,9 @@ int ObServerSchemaService::try_fetch_publish_sys_schemas(const ObRefreshSchemaSt
     } else if (OB_FAIL(sys_table_ids.push_back(
                    combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_V2_HISTORY_IDX_DATA_TABLE_ID_TID)))) {
       LOG_WARN("add index table id failed", K(ret));
+    } else if (OB_FAIL(sys_table_ids.push_back(
+                   combine_id(OB_SYS_TENANT_ID, OB_ALL_BACKUP_PIECE_FILES_IDX_DATA_TABLE_ID_TID)))) {
+      LOG_WARN("add index table id failed", K(ret));
     } else if (OB_FAIL(schema_service_->get_sys_table_schemas(sys_table_ids, sql_client, allocator1, sys_schemas))) {
       LOG_WARN("get_batch_table_schema failed", K(sys_table_ids), K(ret));
     } else if (OB_FAIL(get_schema_version_in_inner_table(sql_client, schema_status, new_schema_version))) {

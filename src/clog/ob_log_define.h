@@ -516,7 +516,8 @@ public:
   TO_STRING_KV(K_(status), "status_str", share::ObLogArchiveStatus::get_str(status_), K_(round_start_ts),
       K_(round_start_log_id), K_(round_snapshot_version), K_(round_log_submit_ts), K_(round_clog_epoch_id),
       K_(round_accum_checksum), K_(archive_incarnation), K_(log_archive_round), K_(last_archived_log_id),
-      K_(last_archived_checkpoint_ts), K_(last_archived_log_submit_ts), K_(clog_epoch_id), K_(accum_checksum));
+      K_(last_archived_checkpoint_ts), K_(last_archived_log_submit_ts), K_(clog_epoch_id), K_(accum_checksum),
+      K_(cur_piece_id));
 
 public:
   share::ObLogArchiveStatus::STATUS status_;
@@ -541,6 +542,8 @@ public:
   // used for getting start log point during the migration process
   int64_t clog_epoch_id_;
   int64_t accum_checksum_;
+  // add by dir management
+  int64_t cur_piece_id_;
 };
 
 enum ObArchiveFetchLogResult {

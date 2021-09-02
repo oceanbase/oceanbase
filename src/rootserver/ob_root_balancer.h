@@ -39,6 +39,7 @@
 #include "ob_partition_backup.h"
 #include "share/ob_unit_replica_counter.h"
 #include "ob_single_partition_balance.h"
+#include "rootserver/backup/ob_backup_backupset.h"
 
 namespace oceanbase {
 namespace common {
@@ -199,6 +200,7 @@ public:
   int refresh_unit_replica_counter(const uint64_t tenant_id);
   int create_unit_replica_counter(const uint64_t tenant_id);
   int destory_tenant_unit_array();
+  int get_backup_start_snapshot(int64_t& task_backup_snapshot);
 
 private:
   int multiple_zone_deployment_tenant_balance(const uint64_t tenant_id,
@@ -247,6 +249,7 @@ private:
   ObSingleZoneModeMigrateReplica single_zone_mode_migrate_replica_;
   ObPartitionBackup pg_backup_;
   ObPartitionValidate pg_validate_;
+  ObPartitionBackupBackupset pg_backup_backupset_;
   bool has_server_deleting_;
   ObBalancerTargetSchemaInfo target_schema_info_;
   // root balancer hopes to use a sufficiently new schema to check the status of the replica

@@ -997,9 +997,8 @@ int ObPartTransCtx::end_task_(
   if (OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
 
-    if (is_changing_leader_
-        && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::STATEMENT_NOT_FINISH
-        && stmt_info_.is_task_match()) {
+    if (is_changing_leader_ && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::STATEMENT_NOT_FINISH &&
+        stmt_info_.is_task_match()) {
       if (0 == submit_log_count_) {
         if (OB_SUCCESS != (tmp_ret = submit_log_incrementally_(true /*need state log*/))) {
           TRANS_LOG(WARN,
@@ -4127,10 +4126,10 @@ int ObPartTransCtx::replay_commit_log(const ObTransCommitLog& log, const int64_t
 bool ObPartTransCtx::need_rollback_when_restore_(const int64_t commit_version)
 {
   const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
-  const int64_t last_restore_log_ts = partition_mgr_->get_last_restore_log_ts();
-  return restore_snapshot_version > 0 &&
-         (last_restore_log_ts == OB_INVALID_TIMESTAMP || min_log_ts_ <= last_restore_log_ts) &&
-         commit_version > restore_snapshot_version;
+  const uint64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
+  return restore_snapshot_version > 0
+    && (last_restore_log_id == OB_INVALID_ID || min_log_id_ <= last_restore_log_id)
+    && commit_version > restore_snapshot_version;
 }
 
 // TODO: duotian
@@ -7548,8 +7547,7 @@ int ObPartTransCtx::handle_2pc_prepare_redo_request_raw_(int status)
             } else if (OB_FAIL(post_2pc_response_(coordinator_, OB_TRANS_2PC_PREPARE_RESPONSE))) {
               TRANS_LOG(WARN, "submit 2pc response error", KR(ret), K(*this));
             } else {
-              TRANS_LOG(INFO, "submit response for prepare redo due to error status",
-                  KR(ret), K(*this));
+              TRANS_LOG(INFO, "submit response for prepare redo due to error status", KR(ret), K(*this));
             }
           } else {
             bool can_alloc_log = false;
@@ -11809,13 +11807,12 @@ void ObPartTransCtx::get_audit_info(int64_t& lock_for_read_elapse) const
 // not neccessary to the physical recovery. So we should mark the transaction
 // dead even the transaction is committed in transaction table without commit
 // log to explicitly suicide. (See details in ObPartTransCtx::fake_kill_).
-int ObPartTransCtx::clear_trans_after_restore(
-    const int64_t restore_version, const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
+int ObPartTransCtx::clear_trans_after_restore(const int64_t restore_version, const uint64_t last_restore_log_id,
+    const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
   const int64_t state = get_state_();
-
   if (IS_NOT_INIT) {
     // skip the uninitialized transactions
     ret = OB_SUCCESS;
@@ -11823,15 +11820,17 @@ int ObPartTransCtx::clear_trans_after_restore(
         "transaction is not initted",
         K(*this),
         K(restore_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts),
         K(fake_terminate_log_ts));
-  } else if (min_log_ts_ > last_restore_log_ts) {
+  } else if (min_log_id_ > last_restore_log_id) {
     // skip new transactions after restore completes
     ret = OB_SUCCESS;
     TRANS_LOG(INFO,
         "new transactions after restore completes",
         K(*this),
         K(restore_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts),
         K(fake_terminate_log_ts));
   } else {
@@ -11850,7 +11849,8 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case1.1",
             K(*this),
             K(restore_version),
-            K(last_restore_log_ts),
+            K(last_restore_log_id),
+            K(last_restore_log_id),
             K(fake_terminate_log_ts));
         ret = fake_kill_(fake_terminate_log_ts);
       } else {
@@ -11863,6 +11863,7 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case1.2",
             K(*this),
             K(restore_version),
+            K(last_restore_log_id),
             K(last_restore_log_ts),
             K(fake_terminate_log_ts));
         (void)set_exiting_();
@@ -11876,6 +11877,7 @@ int ObPartTransCtx::clear_trans_after_restore(
           "transaction in recover case2",
           K(*this),
           K(restore_version),
+          K(last_restore_log_id),
           K(last_restore_log_ts),
           K(fake_terminate_log_ts));
       (void)set_exiting_();
@@ -11889,6 +11891,7 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case3.1",
             K(*this),
             K(restore_version),
+            K(last_restore_log_id),
             K(last_restore_log_ts),
             K(fake_terminate_log_ts));
         ret = kill_v2_(fake_terminate_log_ts);
@@ -11903,6 +11906,7 @@ int ObPartTransCtx::clear_trans_after_restore(
               "transaction in recover case3.2",
               K(*this),
               K(restore_version),
+              K(last_restore_log_id),
               K(last_restore_log_ts),
               K(fake_terminate_log_ts));
 
@@ -11912,6 +11916,7 @@ int ObPartTransCtx::clear_trans_after_restore(
                 "unexpected transaction status",
                 K(*this),
                 K(restore_version),
+                K(last_restore_log_id),
                 K(last_restore_log_ts),
                 K(fake_terminate_log_ts));
           }
@@ -11931,6 +11936,7 @@ int ObPartTransCtx::clear_trans_after_restore(
               "transaction in recover case3.3",
               K(*this),
               K(restore_version),
+              K(last_restore_log_id),
               K(last_restore_log_ts),
               K(fake_terminate_log_ts));
           ret = kill_v2_(fake_terminate_log_ts);
@@ -11942,6 +11948,7 @@ int ObPartTransCtx::clear_trans_after_restore(
           "unknown state",
           K(*this),
           K(restore_version),
+          K(last_restore_log_id),
           K(last_restore_log_ts),
           K(fake_terminate_log_ts),
           K(status));

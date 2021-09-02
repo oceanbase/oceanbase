@@ -138,8 +138,8 @@ public:
 
 private:
   int drop_tenant_force(const common::ObString& tenant_name);
-  int record_log_archive_history_(const uint64_t tenant_id, const int64_t drop_schema_version,
-      const int64_t drop_tenant_time, bool& is_delay_delete);
+  int check_deley_delete_(const uint64_t tenant_id, const int64_t drop_schema_version, const int64_t drop_tenant_time,
+      bool& is_delay_delete);
 
 private:
   static const int64_t CHECK_DROP_TENANT_INTERVAL = 600 * 1000 * 1000L;  // 10min

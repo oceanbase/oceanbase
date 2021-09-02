@@ -5514,8 +5514,14 @@ int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema& table_schema)
 {
   int ret = OB_SUCCESS;
   ObAutoincrementService& autoinc_service = share::ObAutoincrementService::get_instance();
-  if (0 != table_schema.get_autoinc_column_id()) {
-    uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t tenant_id = table_schema.get_tenant_id();
+  bool is_restore = false;
+  if (OB_FAIL(schema_service_.check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+    LOG_WARN("fail to check if tenant is restore", KR(ret), K(tenant_id));
+  } else if (is_restore) {
+    // bugfix:https://work.aone.alibaba-inc.com/issue/33571720
+    // skip
+  } else if (0 != table_schema.get_autoinc_column_id()) {
     uint64_t table_id = table_schema.get_table_id();
     uint64_t autoinc_column_id = table_schema.get_autoinc_column_id();
     LOG_INFO("begin to clear all auto-increment cache", K(tenant_id), K(table_id), K(autoinc_column_id));

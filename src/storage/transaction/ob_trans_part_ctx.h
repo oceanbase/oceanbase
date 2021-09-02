@@ -384,8 +384,8 @@ public:
     return stmt_info_.is_task_match();
   }
   void remove_trans_table();
-  int clear_trans_after_restore(
-      const int64_t restore_version, const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts);
+  int clear_trans_after_restore(const int64_t restore_version, const uint64_t last_restore_log_id,
+      const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts);
   bool is_in_trans_table_state();
   virtual int64_t get_part_trans_action() const override;
   int rollback_stmt(const int64_t from_sql_no, const int64_t to_sql_no);

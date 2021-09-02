@@ -29,14 +29,16 @@ ObBackupDataMgr::ObBackupDataMgr()
       cluster_backup_dest_(),
       full_backup_set_id_(0),
       inc_backup_set_id_(0),
-      tenant_id_(OB_INVALID_ID)
+      tenant_id_(OB_INVALID_ID),
+      backup_date_(0),
+      compatible_(0)
 {}
 
 ObBackupDataMgr::~ObBackupDataMgr()
 {}
 
 int ObBackupDataMgr::init(const share::ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id,
-    const int64_t full_backup_set_id, const int64_t inc_backup_set_id)
+    const ObExternBackupInfo& extern_backup_info)
 {
   int ret = OB_SUCCESS;
   ObBackupBaseDataPathInfo path_info;
@@ -45,27 +47,27 @@ int ObBackupDataMgr::init(const share::ObClusterBackupDest& cluster_backup_dest,
   ObArray<common::ObString> file_names;
   ObArenaAllocator allocator;
   int64_t meta_file_count = 0;
-  const bool need_check_completed = false;
+  ObFakeBackupLeaseService fake_lease_service;
   const int64_t fake_compatible = 0;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup data mgr init twice", K(ret));
-  } else if (!cluster_backup_dest.is_valid() || OB_INVALID_ID == tenant_id || full_backup_set_id <= 0 ||
-             inc_backup_set_id <= 0) {
+  } else if (!cluster_backup_dest.is_valid() || OB_INVALID_ID == tenant_id || !extern_backup_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup data mgr init get invalid argument",
         K(ret),
         K(cluster_backup_dest),
         K(tenant_id),
-        K(full_backup_set_id),
-        K(inc_backup_set_id));
+        K(extern_backup_info));
+  } else if (OB_FAIL(path_info.set(cluster_backup_dest,
+                 tenant_id,
+                 extern_backup_info.full_backup_set_id_,
+                 extern_backup_info.inc_backup_set_id_,
+                 extern_backup_info.date_,
+                 extern_backup_info.compatible_))) {
+    LOG_WARN("failed to set backup path info", K(ret), K(cluster_backup_dest));
   } else {
-    path_info.dest_ = cluster_backup_dest;
-    path_info.tenant_id_ = tenant_id;
-    path_info.full_backup_set_id_ = full_backup_set_id;
-    path_info.inc_backup_set_id_ = inc_backup_set_id;
-
     if (OB_FAIL(ObBackupPathUtil::get_tenant_data_inc_backup_set_path(path_info, path))) {
       STORAGE_LOG(WARN, "failed to get inc backup path", K(ret));
     } else if (OB_FAIL(util.list_files(path.get_obstr(), path_info.dest_.get_storage_info(), allocator, file_names))) {
@@ -85,16 +87,21 @@ int ObBackupDataMgr::init(const share::ObClusterBackupDest& cluster_backup_dest,
     if (OB_FAIL(ret)) {
     } else if (0 == meta_file_count) {
       // do nothing
-    } else if (OB_FAIL(meta_index_.init(path_info, fake_compatible, need_check_completed))) {
+    } else if (OB_FAIL(meta_index_.init(path_info,
+                   fake_compatible,
+                   true, /*need_check_all_meta_files*/
+                   false /*need_check_completed*/))) {
       LOG_WARN("failed to init meta index", K(ret), K(path_info));
     }
 
     if (OB_FAIL(ret)) {
     } else {
       cluster_backup_dest_ = cluster_backup_dest;
-      full_backup_set_id_ = full_backup_set_id;
-      inc_backup_set_id_ = inc_backup_set_id;
+      full_backup_set_id_ = extern_backup_info.full_backup_set_id_;
+      inc_backup_set_id_ = extern_backup_info.inc_backup_set_id_;
       tenant_id_ = tenant_id;
+      backup_date_ = extern_backup_info.date_;
+      compatible_ = extern_backup_info.compatible_;
       is_inited_ = true;
     }
   }
@@ -119,7 +126,8 @@ int ObBackupDataMgr::get_base_data_table_id_list(common::ObIArray<int64_t>& tabl
     for (iter = meta_index_map.begin(); OB_SUCC(ret) && iter != meta_index_map.end(); ++iter) {
       const ObMetaIndexKey& meta_index_key = iter->first;
       const int64_t table_id = meta_index_key.table_id_;
-      if (ObBackupMetaType::PARTITION_GROUP_META != meta_index_key.meta_type_) {
+      if (ObBackupMetaType::PARTITION_GROUP_META != meta_index_key.meta_type_ &&
+          ObBackupMetaType::PARTITION_GROUP_META_INFO != meta_index_key.meta_type_) {
         // do nothing
       } else if (OB_FAIL(table_id_set.set_refactored_1(table_id, overwrite_key))) {
         LOG_WARN("failed to set table id into set", K(ret), K(table_id));
@@ -153,7 +161,8 @@ int ObBackupDataMgr::get_table_pg_meta_index(
     for (iter = meta_index_map.begin(); OB_SUCC(ret) && iter != meta_index_map.end(); ++iter) {
       const ObMetaIndexKey& meta_index_key = iter->first;
       const ObBackupMetaIndex& meta_index = iter->second;
-      if (ObBackupMetaType::PARTITION_GROUP_META != meta_index_key.meta_type_) {
+      if (ObBackupMetaType::PARTITION_GROUP_META != meta_index_key.meta_type_ &&
+          ObBackupMetaType::PARTITION_GROUP_META_INFO != meta_index_key.meta_type_) {
         // do nothing
       } else if (meta_index_key.table_id_ != table_id) {
         // do nothing
@@ -204,42 +213,56 @@ int ObBackupDataMgr::get_pg_meta(const ObPartitionKey& pkey, ObPartitionGroupMet
     LOG_WARN("get pg meta get invalid argument", K(ret), K(pkey));
   } else if (OB_FAIL(get_pg_meta_index(pkey, meta_index))) {
     LOG_WARN("failed to get pg meta index", K(ret), K(pkey));
-  } else {
-    path_info.dest_ = cluster_backup_dest_;
-    path_info.tenant_id_ = tenant_id_;
-    path_info.full_backup_set_id_ = full_backup_set_id_;
-    path_info.inc_backup_set_id_ = inc_backup_set_id_;
-    if (OB_FAIL(ObBackupPathUtil::get_tenant_data_meta_file_path(path_info, meta_index.task_id_, path))) {
-      LOG_WARN("fail to get meta file path", K(ret));
-    } else if (OB_FAIL(ObRestoreFileUtil::read_partition_group_meta(
-                   path.get_ptr(), path_info.dest_.get_storage_info(), meta_index, pg_meta))) {
-      LOG_WARN("fail to get partition meta", K(ret), K(path), K(meta_index));
-    }
+  } else if (OB_FAIL(path_info.set(cluster_backup_dest_,
+                 tenant_id_,
+                 full_backup_set_id_,
+                 inc_backup_set_id_,
+                 backup_date_,
+                 compatible_))) {
+    LOG_WARN("failed to set backup base data path info", K(ret), K(cluster_backup_dest_));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_data_meta_file_path(path_info, meta_index.task_id_, path))) {
+    LOG_WARN("fail to get meta file path", K(ret));
+  } else if (OB_FAIL(ObRestoreFileUtil::read_partition_group_meta(
+                 path.get_ptr(), path_info.dest_.get_storage_info(), meta_index, pg_meta))) {
+    LOG_WARN("fail to get partition meta", K(ret), K(path), K(meta_index));
   }
   return ret;
 }
 
 ObBackupListDataMgr::ObBackupListDataMgr()
-    : is_inited_(false), cluster_backup_dest_(), log_archive_round_(0), tenant_id_(OB_INVALID_ID)
+    : is_inited_(false),
+      cluster_backup_dest_(),
+      log_archive_round_(0),
+      tenant_id_(OB_INVALID_ID),
+      backup_piece_id_(0),
+      create_piece_ts_(0)
 {}
 
 ObBackupListDataMgr::~ObBackupListDataMgr()
 {}
 
-int ObBackupListDataMgr::init(
-    const share::ObClusterBackupDest& cluster_backup_dest, const int64_t log_archive_round, const uint64_t tenant_id)
+int ObBackupListDataMgr::init(const share::ObClusterBackupDest& cluster_backup_dest, const int64_t log_archive_round,
+    const uint64_t tenant_id, const int64_t backup_piece_id, const int64_t create_piece_ts)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup list data mgr init twice", K(ret));
-  } else if (!cluster_backup_dest.is_valid() || log_archive_round <= 0 || OB_INVALID_ID == tenant_id) {
+  } else if (!cluster_backup_dest.is_valid() || log_archive_round <= 0 || OB_INVALID_ID == tenant_id ||
+             backup_piece_id < 0 || create_piece_ts < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init backup list data mgr get invalid argument", K(ret), K(cluster_backup_dest), K(log_archive_round));
+    LOG_WARN("init backup list data mgr get invalid argument",
+        K(ret),
+        K(cluster_backup_dest),
+        K(log_archive_round),
+        K(backup_piece_id),
+        K(create_piece_ts));
   } else {
     cluster_backup_dest_ = cluster_backup_dest;
     log_archive_round_ = log_archive_round;
     tenant_id_ = tenant_id;
+    backup_piece_id_ = backup_piece_id;
+    create_piece_ts_ = create_piece_ts;
     is_inited_ = true;
   }
   return ret;
@@ -251,12 +274,14 @@ int ObBackupListDataMgr::get_clog_pkey_list(common::ObIArray<ObPartitionKey>& pk
   pkey_list.reset();
   share::ObBackupPath path;
   ObStorageUtil util(false /*need_retry*/);
+  ObArenaAllocator allocator;
+  ObArray<ObString> file_names;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data mgr do not init", K(ret));
   } else if (OB_FAIL(ObBackupPathUtil::get_clog_archive_key_prefix(
-                 cluster_backup_dest_, tenant_id_, log_archive_round_, path))) {
+                 cluster_backup_dest_, tenant_id_, log_archive_round_, backup_piece_id_, create_piece_ts_, path))) {
     LOG_WARN("failed to get tenant clog data path", K(ret), K(cluster_backup_dest_));
   } else if (OB_FAIL(util.get_pkeys_from_dir(path.get_ptr(), cluster_backup_dest_.get_storage_info(), pkey_list))) {
     if (OB_DIR_NOT_EXIST == ret) {
@@ -265,7 +290,7 @@ int ObBackupListDataMgr::get_clog_pkey_list(common::ObIArray<ObPartitionKey>& pk
       LOG_WARN("failed to get pkeys from dir", K(ret), K(path));
     }
   }
-  LOG_INFO("get clog pkey list count", K(pkey_list.count()));
+  LOG_INFO("get clog pkey list", K(ret), "count", pkey_list.count());
   return ret;
 }
 

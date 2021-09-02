@@ -201,10 +201,12 @@ int ObRebalanceTaskQueue::do_push_task(ObRebalanceTaskMgr& task_mgr, const ObReb
                 task_info->get_src_server_stat()->v_.in_schedule_out_cnt_ < out_cnt_lmt) ||
             ((NULL != task_info->get_dest_server_stat() && BACKUP_REPLICA != task_info->get_rebalance_task_type() &&
                  VALIDATE_BACKUP != task_info->get_rebalance_task_type() &&
+                 BACKUP_BACKUPSET != task_info->get_rebalance_task_type() &&
                  task_info->get_dest_server_stat()->v_.in_schedule_in_cnt_ < in_cnt_lmt) ||
                 (NULL != task_info->get_dest_server_stat() &&
                     (BACKUP_REPLICA == task_info->get_rebalance_task_type() ||
-                        VALIDATE_BACKUP == task_info->get_rebalance_task_type()) &&
+                        VALIDATE_BACKUP == task_info->get_rebalance_task_type() ||
+                        BACKUP_BACKUPSET == task_info->get_rebalance_task_type()) &&
                     task_info->get_dest_server_stat()->v_.in_schedule_backup_cnt_ <
                         share::OB_GROUP_BACKUP_CONCURRENCY))) {
           task_mgr.clear_reach_concurrency_limit();
@@ -265,7 +267,8 @@ int ObRebalanceTaskQueue::pop_task(ObRebalanceTask*& task)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("task info ptr is null", K(ret));
         } else if (BACKUP_REPLICA == task_info->get_rebalance_task_type() ||
-                   VALIDATE_BACKUP == task_info->get_rebalance_task_type()) {
+                   VALIDATE_BACKUP == task_info->get_rebalance_task_type() ||
+                   BACKUP_BACKUPSET == task_info->get_rebalance_task_type()) {
           if (OB_FAIL(check_backup_task_can_pop(task_info, task_info_can_schedule))) {
             LOG_WARN("failed to check backup task can pop", K(ret), K(*task_info));
           }
@@ -317,7 +320,8 @@ int ObRebalanceTaskQueue::check_balance_task_can_pop(const ObRebalanceTaskInfo* 
   int64_t interval = ObRebalanceTaskMgr::DATA_IN_CLEAR_INTERVAL;
 
   if (OB_ISNULL(task_info) || BACKUP_REPLICA == task_info->get_rebalance_task_type() ||
-      VALIDATE_BACKUP == task_info->get_rebalance_task_type()) {
+      VALIDATE_BACKUP == task_info->get_rebalance_task_type() ||
+      BACKUP_BACKUPSET == task_info->get_rebalance_task_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check balance task can pop get invalid argument", K(ret), KP(task_info));
   } else if (task_info->is_sibling_in_schedule()) {
@@ -342,7 +346,8 @@ int ObRebalanceTaskQueue::check_backup_task_can_pop(const ObRebalanceTaskInfo* t
   int64_t interval = ObRebalanceTaskMgr::DATA_IN_CLEAR_INTERVAL;
   ObRebalanceTaskType task_type = task_info->get_rebalance_task_type();
 
-  if (OB_ISNULL(task_info) || (BACKUP_REPLICA != task_type && VALIDATE_BACKUP != task_type)) {
+  if (OB_ISNULL(task_info) ||
+      (BACKUP_REPLICA != task_type && VALIDATE_BACKUP != task_type && BACKUP_BACKUPSET != task_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check balance task can pop get invalid argument", K(ret), KP(task_info));
   } else if (task_info->is_sibling_in_schedule()) {
@@ -590,11 +595,11 @@ int ObRebalanceTaskQueue::get_schedule_task(const ObRebalanceTask& input_task, O
   return ret;
 }
 
-int ObRebalanceTaskQueue::get_schedule_task(
-    const ObRebalanceTaskInfo& task_info, const ObAddr& dest, ObRebalanceTask*& task)
+int ObRebalanceTaskQueue::check_rebalance_task_exist(
+    const ObRebalanceTaskInfo& task_info, const ObAddr& dest, bool& is_exist)
 {
   int ret = OB_SUCCESS;
-  task = NULL;
+  is_exist = false;
   const ObRebalanceTaskInfo* sample_task_info = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -608,7 +613,7 @@ int ObRebalanceTaskQueue::get_schedule_task(
     const ObRebalanceTask* sample_task = NULL;
     if (OB_FAIL(task_info_map_.get_refactored(sample_task_key, task_info_in_map))) {
       if (OB_HASH_NOT_EXIST == ret) {
-        task = NULL;
+        is_exist = false;
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("get task info from map failed", K(ret));
@@ -617,17 +622,15 @@ int ObRebalanceTaskQueue::get_schedule_task(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null task info from map", K(ret));
     } else if (NULL == (sample_task = task_info_in_map->get_host())) {
-      task = NULL;
+      is_exist = false;
     } else if (ObRebalanceTaskType::SQL_BACKGROUND_DIST_TASK == sample_task->get_rebalance_task_type()) {
-      task = const_cast<ObRebalanceTask*>(sample_task);
-    } else if (!sample_task->in_schedule()) {
-      task = NULL;
+      is_exist = true;
     } else if (sample_task->get_dest() != dest) {
-      task = NULL;
+      is_exist = false;
     } else if (sample_task->get_rebalance_task_type() != task_info.get_rebalance_task_type()) {
-      task = NULL;
+      is_exist = false;
     } else {
-      task = const_cast<ObRebalanceTask*>(sample_task);
+      is_exist = true;
     }
   }
   return ret;
@@ -2047,12 +2050,11 @@ int ObRebalanceTaskMgr::get_all_tasks_count(
   return ret;
 }
 
-int ObRebalanceTaskMgr::get_schedule_task(
-    const ObRebalanceTaskInfo& task_info, const ObAddr& dest, common::ObIAllocator& allocator, ObRebalanceTask*& task)
+int ObRebalanceTaskMgr::check_rebalance_task_exist(
+    const ObRebalanceTaskInfo& task_info, const ObAddr& dest, bool& is_exist)
 {
   int ret = OB_SUCCESS;
-  task = NULL;
-  ObRebalanceTask* tmp_task = NULL;
+  is_exist = false;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -2062,27 +2064,10 @@ int ObRebalanceTaskMgr::get_schedule_task(
   } else {
     ObThreadCond& cond = get_cond();
     ObThreadCondGuard guard(cond);
-    if (OB_FAIL(get_high_priority_queue().get_schedule_task(task_info, dest, tmp_task))) {
+    if (OB_FAIL(get_high_priority_queue().check_rebalance_task_exist(task_info, dest, is_exist))) {
       LOG_WARN("failed to get schedule task", K(ret), K(task_info), K(dest));
-    } else if (OB_ISNULL(tmp_task) && OB_FAIL(get_low_priority_queue().get_schedule_task(task_info, dest, tmp_task))) {
+    } else if (!is_exist && OB_FAIL(get_low_priority_queue().check_rebalance_task_exist(task_info, dest, is_exist))) {
       LOG_WARN("failed to get schedule task", K(ret), K(task_info), K(dest));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_NOT_NULL(tmp_task)) {
-        void* raw_ptr = nullptr;
-        const int64_t task_deep_copy_size = tmp_task->get_deep_copy_size();
-        if (nullptr == (raw_ptr = allocator.alloc(task_deep_copy_size))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate task", K(ret));
-        } else if (OB_FAIL(tmp_task->clone(raw_ptr, task))) {
-          LOG_WARN("fail to clone new task", K(ret));
-        } else if (OB_UNLIKELY(nullptr == task)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("new task ptr is null", K(ret));
-        } else if (FALSE_IT(task->set_generate_time(tmp_task->get_generate_time()))) {
-          // false it, shall never be here
-        }
-      }
     }
   }
   return ret;

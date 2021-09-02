@@ -164,7 +164,7 @@ int ObInnerTableSchema::cdb_ob_backup_archivelog_summary_schema(ObTableSchema &t
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(    SELECT     INCARNATION,     LOG_ARCHIVE_ROUND,     TENANT_ID,     STATUS,     MIN_FIRST_TIME,     MAX_NEXT_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY     FROM ( select tenant_id,        incarnation,        log_archive_round,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count,        'STOP' as status        from __all_backup_log_archive_status_history where effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() union select tenant_id,        incarnation,        log_archive_round,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count ,        status        from __all_virtual_backup_log_archive_status where (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()) and status != 'STOP'); )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(    SELECT     INCARNATION,     LOG_ARCHIVE_ROUND,     TENANT_ID,     STATUS,     START_PIECE_ID,     BACKUP_PIECE_ID,     CASE       WHEN time_to_usec(MIN_FIRST_TIME) = 0         THEN ''       ELSE         MIN_FIRST_TIME       END AS MIN_FIRST_TIME,     CASE       WHEN time_to_usec(MAX_NEXT_TIME) = 0         THEN ''       ELSE         MAX_NEXT_TIME       END AS MAX_NEXT_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY     FROM ( select tenant_id,        incarnation,        log_archive_round,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count,        'STOP' as status,        start_piece_id,        backup_piece_id        from oceanbase.__all_backup_log_archive_status_history  union select tenant_id,        incarnation,        log_archive_round,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count ,        status,        start_piece_id,        backup_piece_id        from oceanbase.__all_backup_log_archive_status_v2 where status != 'STOP') )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -216,7 +216,7 @@ int ObInnerTableSchema::cdb_ob_backup_job_details_schema(ObTableSchema &table_sc
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     DEVICE_TYPE AS OUTPUT_DEVICE_TYPE,     ROUND((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000,0) AS ELAPSED_SECONDES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     INPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) AS INPUT_BYTES_PER_SEC,     OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) AS OUTPUT_BYTES_PER_SEC,     CASE         WHEN STATUS = 'FINISH' AND RESULT != 0             THEN 'FAILED'         WHEN STATUS = 'FINISH' AND RESULT = 0             THEN 'COMPLETED'         ELSE             'RUNNING'         END AS STATUS,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN INPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) /1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(INPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) /1024/1024,2), 'MB/S')         END  AS INPUT_BYTES_PER_SEC_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_BYTES_PER_SEC_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY     FROM __all_virtual_backup_task     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     DEVICE_TYPE AS OUTPUT_DEVICE_TYPE,     ROUND((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000,0) AS ELAPSED_SECONDES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     INPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) AS INPUT_BYTES_PER_SEC,     OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) AS OUTPUT_BYTES_PER_SEC,     CASE         WHEN STATUS = 'FINISH' AND RESULT != 0             THEN 'FAILED'         WHEN STATUS = 'FINISH' AND RESULT = 0             THEN 'COMPLETED'         ELSE             'RUNNING'         END AS STATUS,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN INPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) /1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(INPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) /1024/1024,2), 'MB/S')         END  AS INPUT_BYTES_PER_SEC_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_BYTES_PER_SEC_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,     START_REPLAY_LOG_TS,     DATE     FROM oceanbase.__all_virtual_backup_task )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -268,7 +268,7 @@ int ObInnerTableSchema::cdb_ob_backup_set_details_schema(ObTableSchema &table_sc
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,     CASE         WHEN IS_MARK_DELETED = 1             THEN 'DELETING'         WHEN RESULT != 0             THEN 'FAILED'         ELSE             'COMPLETED'         END AS STATUS     FROM __all_backup_task_history     WHERE status = 'FINISH' and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     '0' AS COPY_ID,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,     CASE         WHEN IS_MARK_DELETED = 1             THEN 'DELETING'         WHEN RESULT != 0             THEN 'FAILED'         ELSE             'COMPLETED'         END AS STATUS     FROM oceanbase.__all_backup_task_history     WHERE status = 'FINISH'  )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -320,7 +320,7 @@ int ObInnerTableSchema::cdb_ob_backup_set_expired_schema(ObTableSchema &table_sc
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY     FROM __all_backup_task_history,         (select CONVERT(value, SIGNED INTEGER) as days                 from __all_virtual_sys_parameter_stat where name = 'backup_recovery_window' and SVR_IP=host_ip() and SVR_PORT=rpc_port() limit 1)     WHERE status = 'COMPLETED'         and (days = 0 or TIMESTAMPDIFF(DAY, END_TIME, now()) > days)         and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     '0' AS COPY_ID,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((TIME_TO_USEC(END_TIME) - TIME_TO_USEC(START_TIME))/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY     FROM oceanbase.__all_backup_task_history     WHERE INCARNATION = 0 )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -372,7 +372,7 @@ int ObInnerTableSchema::cdb_ob_backup_progress_schema(ObTableSchema &table_schem
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     TENANT_ID,     PARTITION_COUNT,     MACRO_BLOCK_COUNT,     FINISH_PARTITION_COUNT,     FINISH_MACRO_BLOCK_COUNT,     INPUT_BYTES,     OUTPUT_BYTES,     START_TIME,     END_TIME AS COMPLETION_TIME,     CASE         WHEN STATUS = 'FINISH' AND RESULT != 0             THEN 'FAILED'         WHEN STATUS = 'FINISH' AND RESULT = 0             THEN 'COMPLETED'         ELSE             'RUNNING'         END AS STATUS     FROM __all_virtual_backup_task     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     TENANT_ID,     PARTITION_COUNT,     MACRO_BLOCK_COUNT,     FINISH_PARTITION_COUNT,     FINISH_MACRO_BLOCK_COUNT,     INPUT_BYTES,     OUTPUT_BYTES,     START_TIME,     END_TIME AS COMPLETION_TIME,     CASE         WHEN STATUS = 'FINISH' AND RESULT != 0             THEN 'FAILED'         WHEN STATUS = 'FINISH' AND RESULT = 0             THEN 'COMPLETED'         ELSE             'RUNNING'         END AS STATUS     FROM oceanbase.__all_virtual_backup_task )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -424,7 +424,7 @@ int ObInnerTableSchema::cdb_ob_backup_archivelog_progress_schema(ObTableSchema &
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     LOG_ARCHIVE_ROUND,     SVR_IP,     SVR_PORT,     TABLE_ID,     PARTITION_ID,     usec_to_time(log_archive_start_ts) as MIN_FIRST_TIME,     usec_to_time(log_archive_cur_ts) as MAX_NEXT_TIME,     CASE         WHEN log_archive_status = 1             THEN 'STOP'         WHEN log_archive_status = 2             THEN 'BEGINNING'         WHEN log_archive_status = 3             THEN 'DOING'         WHEN log_archive_status = 4             THEN 'STOPPING'         WHEN log_archive_status = 5             THEN 'INTERRUPTED'         WHEN log_archive_status = 6             THEN 'MIXED'         ELSE             'INVALID'         END as STATUS     FROM __all_virtual_pg_backup_log_archive_status     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     LOG_ARCHIVE_ROUND,     CUR_PIECE_ID,     SVR_IP,     SVR_PORT,     TABLE_ID,     PARTITION_ID,     usec_to_time(log_archive_start_ts) as MIN_FIRST_TIME,     usec_to_time(log_archive_cur_ts) as MAX_NEXT_TIME,     CASE         WHEN log_archive_status = 1             THEN 'STOP'         WHEN log_archive_status = 2             THEN 'BEGINNING'         WHEN log_archive_status = 3             THEN 'DOING'         WHEN log_archive_status = 4             THEN 'STOPPING'         WHEN log_archive_status = 5             THEN 'INTERRUPTED'         WHEN log_archive_status = 6             THEN 'MIXED'         ELSE             'INVALID'         END as STATUS     FROM oceanbase.__all_virtual_pg_backup_log_archive_status )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -476,7 +476,7 @@ int ObInnerTableSchema::cdb_ob_backup_clean_history_schema(ObTableSchema &table_
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID AS BS_KEY,     START_TIME,     END_TIME,     INCARNATION,     TYPE,     STATUS,     PARAMETER,     ERROR_MSG,     COMMENT     FROM __all_backup_clean_info_history     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID AS BS_KEY,     COPY_ID,     START_TIME,     END_TIME,     INCARNATION,     TYPE,     STATUS,     PARAMETER,     ERROR_MSG,     COMMENT     FROM oceanbase.__all_backup_clean_info_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -528,7 +528,7 @@ int ObInnerTableSchema::cdb_ob_backup_task_clean_history_schema(ObTableSchema &t
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     INCARNATION,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     PARTITION_COUNT,     MACRO_BLOCK_COUNT,     FINISH_PARTITION_COUNT,     FINISH_MACRO_BLOCK_COUNT,     INPUT_BYTES,     OUTPUT_BYTES,     START_TIME,     END_TIME AS COMPLETION_TIME,     STATUS     FROM __all_backup_task_clean_history     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     INCARNATION,     BACKUP_SET_ID AS BS_KEY,     COPY_ID,     BACKUP_TYPE,     PARTITION_COUNT,     MACRO_BLOCK_COUNT,     FINISH_PARTITION_COUNT,     FINISH_MACRO_BLOCK_COUNT,     INPUT_BYTES,     OUTPUT_BYTES,     START_TIME,     END_TIME AS COMPLETION_TIME,     STATUS     FROM oceanbase.__all_backup_task_clean_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -580,7 +580,7 @@ int ObInnerTableSchema::cdb_ob_restore_progress_schema(ObTableSchema &table_sche
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       EXTERNAL_JOB_ID,       TENANT_ID,       TENANT_NAME,       BACKUP_TENANT_ID,       BACKUP_TENANT_NAME,       BACKUP_CLUSTER_ID,       BACKUP_CLUSTER_NAME,       STATUS,       START_TIME,       COMPLETION_TIME,       PARTITION_COUNT,       MACRO_BLOCK_COUNT,       FINISH_PARTITION_COUNT,       FINISH_MACRO_BLOCK_COUNT,       RESTORE_START_TIMESTAMP,       RESTORE_FINISH_TIMESTAMP,       RESTORE_CURRENT_TIMESTAMP,       INFO     FROM __all_restore_progress )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       EXTERNAL_JOB_ID,       TENANT_ID,       TENANT_NAME,       BACKUP_TENANT_ID,       BACKUP_TENANT_NAME,       BACKUP_CLUSTER_ID,       BACKUP_CLUSTER_NAME,       WHITE_LIST,       STATUS,       START_TIME,       COMPLETION_TIME,       PARTITION_COUNT,       MACRO_BLOCK_COUNT,       FINISH_PARTITION_COUNT,       FINISH_MACRO_BLOCK_COUNT,       RESTORE_START_TIMESTAMP,       RESTORE_FINISH_TIMESTAMP,       RESTORE_CURRENT_TIMESTAMP,       BACKUP_SET_LIST,       BACKUP_PIECE_LIST,       INFO     FROM oceanbase.__all_restore_progress )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -632,7 +632,7 @@ int ObInnerTableSchema::cdb_ob_restore_history_schema(ObTableSchema &table_schem
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       EXTERNAL_JOB_ID,       TENANT_ID,       TENANT_NAME,       BACKUP_TENANT_ID,       BACKUP_TENANT_NAME,       BACKUP_CLUSTER_ID,       BACKUP_CLUSTER_NAME,       STATUS,       START_TIME,       COMPLETION_TIME,       PARTITION_COUNT,       MACRO_BLOCK_COUNT,       FINISH_PARTITION_COUNT,       FINISH_MACRO_BLOCK_COUNT,       RESTORE_START_TIMESTAMP,       RESTORE_FINISH_TIMESTAMP,       RESTORE_CURRENT_TIMESTAMP,       INFO     FROM __all_restore_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       EXTERNAL_JOB_ID,       TENANT_ID,       TENANT_NAME,       BACKUP_TENANT_ID,       BACKUP_TENANT_NAME,       BACKUP_CLUSTER_ID,       BACKUP_CLUSTER_NAME,       WHITE_LIST,       STATUS,       START_TIME,       COMPLETION_TIME,       PARTITION_COUNT,       MACRO_BLOCK_COUNT,       FINISH_PARTITION_COUNT,       FINISH_MACRO_BLOCK_COUNT,       RESTORE_START_TIMESTAMP,       RESTORE_FINISH_TIMESTAMP,       RESTORE_CURRENT_TIMESTAMP,       BACKUP_SET_LIST,       BACKUP_PIECE_LIST,       INFO           FROM oceanbase.__all_restore_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1204,7 +1204,7 @@ int ObInnerTableSchema::cdb_ob_backup_validation_job_schema(ObTableSchema &table
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       TENANT_NAME,       INCARNATION,       BACKUP_SET_ID,       PROGRESS_PERCENT,       STATUS     FROM __all_backup_validation_job )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       TENANT_NAME,       INCARNATION,       BACKUP_SET_ID,       PROGRESS_PERCENT,       STATUS     FROM oceanbase.__all_backup_validation_job )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1256,7 +1256,7 @@ int ObInnerTableSchema::cdb_ob_backup_validation_job_history_schema(ObTableSchem
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       TENANT_NAME,       INCARNATION,       BACKUP_SET_ID,       PROGRESS_PERCENT,       STATUS     FROM __all_backup_validation_job_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       TENANT_NAME,       INCARNATION,       BACKUP_SET_ID,       PROGRESS_PERCENT,       STATUS     FROM oceanbase.__all_backup_validation_job_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1308,7 +1308,7 @@ int ObInnerTableSchema::cdb_ob_tenant_backup_validation_task_schema(ObTableSchem
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TASK_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       STATUS,       BACKUP_DEST,       START_TIME,       END_TIME,       TOTAL_PG_COUNT,       FINISH_PG_COUNT,       TOTAL_PARTITION_COUNT,       FINISH_PARTITION_COUNT,       TOTAL_MACRO_BLOCK_COUNT,       FINISH_MACRO_BLOCK_COUNT,       LOG_SIZE     FROM __all_virtual_backup_validation_task     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TASK_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       STATUS,       BACKUP_DEST,       START_TIME,       END_TIME,       TOTAL_PG_COUNT,       FINISH_PG_COUNT,       TOTAL_PARTITION_COUNT,       FINISH_PARTITION_COUNT,       TOTAL_MACRO_BLOCK_COUNT,       FINISH_MACRO_BLOCK_COUNT,       LOG_SIZE     FROM oceanbase.__all_virtual_backup_validation_task  )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1360,7 +1360,7 @@ int ObInnerTableSchema::cdb_ob_backup_validation_task_history_schema(ObTableSche
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TASK_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       STATUS,       BACKUP_DEST,       START_TIME,       END_TIME,       TOTAL_PG_COUNT,       FINISH_PG_COUNT,       TOTAL_PARTITION_COUNT,       FINISH_PARTITION_COUNT,       TOTAL_MACRO_BLOCK_COUNT,       FINISH_MACRO_BLOCK_COUNT,       LOG_SIZE     FROM __all_backup_validation_task_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TASK_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       STATUS,       BACKUP_DEST,       START_TIME,       END_TIME,       TOTAL_PG_COUNT,       FINISH_PG_COUNT,       TOTAL_PARTITION_COUNT,       FINISH_PARTITION_COUNT,       TOTAL_MACRO_BLOCK_COUNT,       FINISH_MACRO_BLOCK_COUNT,       LOG_SIZE     FROM oceanbase.__all_backup_validation_task_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1464,7 +1464,7 @@ int ObInnerTableSchema::cdb_ob_backup_set_obsolete_schema(ObTableSchema &table_s
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,     CASE         WHEN IS_MARK_DELETED = 1             THEN 'DELETING'         WHEN RESULT != 0             THEN 'FAILED'         ELSE             'COMPLETED'         END AS STATUS     FROM __all_virtual_backupset_history_mgr     WHERE backup_recovery_window > 0         and (backup_recovery_window + snapshot_version <= time_to_usec(now(6)))         and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,     CASE         WHEN IS_MARK_DELETED = 1             THEN 'DELETING'         WHEN RESULT != 0             THEN 'FAILED'         ELSE             'COMPLETED'         END AS STATUS     FROM oceanbase.__all_virtual_backupset_history_mgr     WHERE backup_recovery_window > 0         and (backup_recovery_window + snapshot_version <= time_to_usec(now(6))) )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1516,7 +1516,7 @@ int ObInnerTableSchema::cdb_ob_backup_backupset_job_schema(ObTableSchema &table_
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       CASE           WHEN BACKUP_BACKUPSET_TYPE = 'A'               THEN 'ALL_BACKUP_SET'           WHEN BACKUP_BACKUPSET_TYPE = 'S'               THEN 'SINGLE_BACKUP_SET'           ELSE               'UNKNOWN'           END AS TYPE,       TENANT_NAME,       STATUS     FROM __all_backup_backupset_job )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       CASE           WHEN BACKUP_BACKUPSET_TYPE = 'A'               THEN 'ALL_BACKUP_SET'           WHEN BACKUP_BACKUPSET_TYPE = 'S'               THEN 'SINGLE_BACKUP_SET'           ELSE               'UNKNOWN'           END AS TYPE,       TENANT_NAME,       STATUS,       BACKUP_DEST,       MAX_BACKUP_TIMES,       RESULT     FROM oceanbase.__all_backup_backupset_job  )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1568,7 +1568,7 @@ int ObInnerTableSchema::cdb_ob_backup_backupset_job_history_schema(ObTableSchema
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       CASE           WHEN BACKUP_BACKUPSET_TYPE = 'A'               THEN 'ALL_BACKUP_SET'           WHEN BACKUP_BACKUPSET_TYPE = 'S'               THEN 'SINGLE_BACKUP_SET'           ELSE               'UNKNOWN'           END AS TYPE,       TENANT_NAME,       STATUS     FROM __all_backup_backupset_job_history )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       JOB_ID,       TENANT_ID,       INCARNATION,       BACKUP_SET_ID,       CASE           WHEN BACKUP_BACKUPSET_TYPE = 'A'               THEN 'ALL_BACKUP_SET'           WHEN BACKUP_BACKUPSET_TYPE = 'S'               THEN 'SINGLE_BACKUP_SET'           ELSE               'UNKNOWN'           END AS TYPE,       TENANT_NAME,       STATUS,       BACKUP_DEST,       MAX_BACKUP_TIMES,       RESULT     FROM oceanbase.__all_backup_backupset_job_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1620,7 +1620,7 @@ int ObInnerTableSchema::cdb_ob_backup_backupset_task_schema(ObTableSchema &table
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     BACKUP_SET_ID AS BS_KEY,     COPY_ID,     BACKUP_TYPE,     TENANT_ID,     TOTAL_PG_COUNT,     FINISH_PG_COUNT,     TOTAL_PARTITION_COUNT,     TOTAL_MACRO_BLOCK_COUNT,     FINISH_PARTITION_COUNT,     FINISH_MACRO_BLOCK_COUNT,     INPUT_BYTES,     OUTPUT_BYTES,     START_TIME,     END_TIME AS COMPLETION_TIME,     CASE         WHEN STATUS = 'FINISH' AND RESULT != 0             THEN 'FAILED'         WHEN STATUS = 'FINISH' AND RESULT = 0             THEN 'COMPLETED'         ELSE             'RUNNING'         END AS STATUS     FROM __all_virtual_backup_backupset_task     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     BACKUP_SET_ID AS BS_KEY,     COPY_ID,     BACKUP_TYPE,     TENANT_ID,     TOTAL_PG_COUNT,     FINISH_PG_COUNT,     TOTAL_PARTITION_COUNT,     TOTAL_MACRO_BLOCK_COUNT,     FINISH_PARTITION_COUNT,     FINISH_MACRO_BLOCK_COUNT,     INPUT_BYTES,     OUTPUT_BYTES,     START_TIME,     END_TIME AS COMPLETION_TIME,     CASE         WHEN STATUS = 'FINISH' AND RESULT != 0             THEN 'FAILED'         WHEN STATUS = 'FINISH' AND RESULT = 0             THEN 'COMPLETED'         ELSE             'RUNNING'         END AS STATUS     FROM oceanbase.__all_virtual_backup_backupset_task  )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1672,7 +1672,7 @@ int ObInnerTableSchema::cdb_ob_backup_backupset_task_history_schema(ObTableSchem
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     COPY_ID,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     SRC_DEVICE_TYPE,     DST_DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,     CASE         WHEN IS_MARK_DELETED = 1             THEN 'DELETING'         WHEN RESULT != 0             THEN 'FAILED'         ELSE             'COMPLETED'         END AS STATUS     FROM __all_backup_backupset_task_history     WHERE status = 'FINISH' and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()) )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     COPY_ID,     BACKUP_TYPE,     ENCRYPTION_MODE,     START_TIME,     END_TIME AS COMPLETION_TIME,     ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     SRC_DEVICE_TYPE,     DST_DEVICE_TYPE,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(END_TIME, START_TIME) AS TIME_TAKEN_DISPLAY,     CASE         WHEN IS_MARK_DELETED = 1             THEN 'DELETING'         WHEN RESULT != 0             THEN 'FAILED'         ELSE             'COMPLETED'         END AS STATUS     FROM oceanbase.__all_backup_backupset_task_history )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1724,7 +1724,475 @@ int ObInnerTableSchema::cdb_ob_backup_backup_archivelog_summary_schema(ObTableSc
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     LOG_ARCHIVE_ROUND,     COPY_ID,     TENANT_ID,     STATUS,     MIN_FIRST_TIME,     MAX_NEXT_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY     FROM ( select tenant_id,        incarnation,        log_archive_round,        copy_id,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count,        'STOP' as status        from __all_backup_backup_log_archive_status_history        where effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() union select tenant_id,        incarnation,        log_archive_round,        copy_id,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count,        status        from __all_virtual_backup_backup_log_archive_status        where effective_tenant_id() = 1 OR tenant_id = effective_tenant_id() and status != 'STOP'); )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     LOG_ARCHIVE_ROUND,     COPY_ID,     TENANT_ID,     STATUS,     CASE       WHEN time_to_usec(MIN_FIRST_TIME) = 0         THEN ''       ELSE         MIN_FIRST_TIME       END AS MIN_FIRST_TIME,     CASE       WHEN time_to_usec(MAX_NEXT_TIME) = 0         THEN ''       ELSE         MAX_NEXT_TIME       END AS MAX_NEXT_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY     FROM ( select tenant_id,        incarnation,        log_archive_round,        copy_id,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count,        'STOP' as status        from oceanbase.__all_backup_backup_log_archive_status_history union select tenant_id,        incarnation,        log_archive_round,        copy_id,        min_first_time,        max_next_time,        input_bytes,        output_bytes,        deleted_input_bytes,        deleted_output_bytes,        pg_count,        status        from oceanbase.__all_backup_backup_log_archive_status_v2 where status != 'STOP') )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_piece_files_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_PIECE_FILES_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_PIECE_FILES_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(    SELECT     INCARNATION,     TENANT_ID,     ROUND_ID,     BACKUP_PIECE_ID,     COPY_ID,     CREATE_DATE,     CASE          WHEN START_TS = 0           THEN ''         ELSE           USEC_TO_TIME(START_TS)         END AS START_TS,     CASE          WHEN CHECKPOINT_TS = 0           THEN ''         ELSE           USEC_TO_TIME(CHECKPOINT_TS)         END AS CHECKPOINT_TS,     CASE         WHEN MAX_TS = 0           THEN ''         WHEN MAX_TS = 9223372036854775807           THEN 'MAX'         ELSE           USEC_TO_TIME(MAX_TS)         END AS MAX_TS,     STATUS,     FILE_STATUS,     COMPATIBLE,     START_PIECE_ID     FROM oceanbase.__all_backup_piece_files; )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_set_files_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_SET_FILES_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_SET_FILES_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     TENANT_ID,     BACKUP_SET_ID AS BS_KEY,     COPY_ID,     BACKUP_TYPE,     ENCRYPTION_MODE,     STATUS,     FILE_STATUS,     USEC_TO_TIME(START_TIME) AS START_TIME,     USEC_TO_TIME(END_TIME) AS COMPLETION_TIME,     ROUND((END_TIME - START_TIME)/1000/1000,0) AS ELAPSED_SECONDES,     'NO' AS KEEP,     '' AS KEEP_UNTIL,     'NO' AS COMPRESSED,     OUTPUT_BYTES,     OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)  AS  OUTPUT_RATE_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000) >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024/1024,2), 'GB/S')         ELSE             CONCAT(ROUND(OUTPUT_BYTES / ((END_TIME - START_TIME)/1000/1000)/1024/1024,2), 'MB/S')         END  AS OUTPUT_RATE_BYTES_DISPLAY,     TIMEDIFF(USEC_TO_TIME(END_TIME), USEC_TO_TIME(START_TIME)) AS TIME_TAKEN_DISPLAY     FROM oceanbase.__all_backup_set_files )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_backuppiece_job_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_BACKUPPIECE_JOB_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_BACKUPPIECE_JOB_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     TENANT_ID,     INCARNATION,     BACKUP_PIECE_ID,     MAX_BACKUP_TIMES,     RESULT,     STATUS,     BACKUP_DEST,     COMMENT,     TYPE     FROM oceanbase.__all_backup_backuppiece_job )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_backuppiece_job_history_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_BACKUPPIECE_JOB_HISTORY_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_BACKUPPIECE_JOB_HISTORY_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     TENANT_ID,     INCARNATION,     BACKUP_PIECE_ID,     MAX_BACKUP_TIMES,     RESULT,     STATUS,     BACKUP_DEST,     COMMENT,     TYPE     FROM oceanbase.__all_backup_backuppiece_job_history )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_backuppiece_task_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_BACKUPPIECE_TASK_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_BACKUPPIECE_TASK_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     TENANT_ID,     ROUND_ID,     BACKUP_PIECE_ID,     COPY_ID,     START_TIME,     END_TIME,     STATUS,     BACKUP_DEST,     RESULT,     COMMENT     FROM oceanbase.__all_backup_backuppiece_task )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_backuppiece_task_history_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_BACKUPPIECE_TASK_HISTORY_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_BACKUPPIECE_TASK_HISTORY_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     JOB_ID,     INCARNATION,     TENANT_ID,     ROUND_ID,     BACKUP_PIECE_ID,     COPY_ID,     START_TIME,     END_TIME,     STATUS,     BACKUP_DEST,     RESULT,     COMMENT     FROM oceanbase.__all_backup_backuppiece_task_history )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::v_ob_all_clusters_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_V_OB_ALL_CLUSTERS_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_V_OB_ALL_CLUSTERS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(       SELECT cluster_id,              cluster_name,              cluster_role,              cluster_status,              rootservice_list,              redo_transport_options       FROM oceanbase.__all_virtual_all_clusters       )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_archivelog_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_ARCHIVELOG_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_ARCHIVELOG_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(    SELECT     INCARNATION,     LOG_ARCHIVE_ROUND,     TENANT_ID,     STATUS,     START_PIECE_ID,     BACKUP_PIECE_ID,     CASE       WHEN time_to_usec(MIN_FIRST_TIME) = 0         THEN ''       ELSE         MIN_FIRST_TIME       END AS MIN_FIRST_TIME,     CASE       WHEN time_to_usec(MAX_NEXT_TIME) = 0         THEN ''       ELSE         MAX_NEXT_TIME       END AS MAX_NEXT_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY     FROM oceanbase.__all_backup_log_archive_status_v2; )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(FLAT_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+
+  table_schema.set_max_used_column_id(column_id);
+  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
+  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_backup_backup_archivelog_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
+  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
+  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_CDB_OB_BACKUP_BACKUP_ARCHIVELOG_TID));
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_BACKUP_BACKUP_ARCHIVELOG_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+  table_schema.set_create_mem_version(1);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     INCARNATION,     LOG_ARCHIVE_ROUND,     COPY_ID,     TENANT_ID,     STATUS,     START_PIECE_ID,     BACKUP_PIECE_ID,     CASE       WHEN time_to_usec(MIN_FIRST_TIME) = 0         THEN ''       ELSE         MIN_FIRST_TIME       END AS MIN_FIRST_TIME,     CASE       WHEN time_to_usec(MAX_NEXT_TIME) = 0         THEN ''       ELSE         MAX_NEXT_TIME       END AS MAX_NEXT_TIME,     INPUT_BYTES,     OUTPUT_BYTES,     ROUND(OUTPUT_BYTES / INPUT_BYTES, 2) AS COMPRESSION_RATIO,     CASE         WHEN INPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN INPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN INPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(INPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(INPUT_BYTES/1024/1024,2), 'MB')         END  AS INPUT_BYTES_DISPLAY,     CASE         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024/1024,2), 'PB')         WHEN OUTPUT_BYTES >= 1024*1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024/1024,2), 'TB')         WHEN OUTPUT_BYTES >= 1024*1024*1024             THEN CONCAT(ROUND(OUTPUT_BYTES/1024/1024/1024,2), 'GB')         ELSE             CONCAT(ROUND(OUTPUT_BYTES/1024/1024,2), 'MB')         END  AS OUTPUT_BYTES_DISPLAY     FROM oceanbase.__all_backup_backup_log_archive_status_v2; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

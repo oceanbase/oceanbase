@@ -284,7 +284,8 @@ int ObMultiVersionSchemaService::update_schema_cache(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema is null", K(ret));
     } else if ((OB_ALL_TABLE_HISTORY_TID == extract_pure_id(table->get_table_id()) ||
-                   OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table->get_table_id())) &&
+                   OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table->get_table_id()) ||
+                   OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(table->get_table_id())) &&
                table->get_index_tid_count() <= 0) {
       // Prevent resetting index_tid_array in the second stage of refreshing the schema
       uint64_t index_id = OB_INVALID_ID;
@@ -292,6 +293,8 @@ int ObMultiVersionSchemaService::update_schema_cache(
         index_id = combine_id(table->get_tenant_id(), OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID);
       } else if (OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table->get_table_id())) {
         index_id = combine_id(table->get_tenant_id(), OB_ALL_TABLE_V2_HISTORY_IDX_DATA_TABLE_ID_TID);
+      } else if (OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(table->get_table_id())) {
+        index_id = combine_id(table->get_tenant_id(), OB_ALL_BACKUP_PIECE_FILES_IDX_DATA_TABLE_ID_TID);
       }
       if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_2000) {
         // skip
@@ -317,7 +320,8 @@ int ObMultiVersionSchemaService::update_schema_cache(common::ObIArray<ObTableSch
   for (int64_t i = 0; OB_SUCC(ret) && i < schema_array.count(); ++i) {
     ObTableSchema& table = schema_array.at(i);
     if ((OB_ALL_TABLE_HISTORY_TID == extract_pure_id(table.get_table_id()) ||
-            OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table.get_table_id())) &&
+            OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table.get_table_id()) ||
+            OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(table.get_table_id())) &&
         table.get_index_tid_count() <= 0) {
       // Prevent resetting index_tid_array in the second stage of refreshing the schema
       uint64_t index_id = OB_INVALID_ID;
@@ -325,6 +329,8 @@ int ObMultiVersionSchemaService::update_schema_cache(common::ObIArray<ObTableSch
         index_id = combine_id(table.get_tenant_id(), OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID);
       } else if (OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table.get_table_id())) {
         index_id = combine_id(table.get_tenant_id(), OB_ALL_TABLE_V2_HISTORY_IDX_DATA_TABLE_ID_TID);
+      } else if (OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(table.get_table_id())) {
+        index_id = combine_id(table.get_tenant_id(), OB_ALL_BACKUP_PIECE_FILES_IDX_DATA_TABLE_ID_TID);
       }
       if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_2000) {
         // skip
@@ -678,7 +684,8 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr* mgr, const ObRefr
                          (table_schema->is_view_table() && !table_schema->is_materialized_view())) {
                 // do-nothing
               } else if ((OB_ALL_TABLE_HISTORY_TID == extract_pure_id(fetch_schema_id) ||
-                             OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(fetch_schema_id)) &&
+                             OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(fetch_schema_id) ||
+                             OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(fetch_schema_id)) &&
                          (!ObSchemaService::g_liboblog_mode_ || GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_2000)) {
                 // The new version of OB and liboblog connect to clusters greater than 2.0, the system table index
                 // has taken effect, and index_tid_array can be constructed directly
@@ -687,6 +694,8 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr* mgr, const ObRefr
                   index_id = combine_id(extract_tenant_id(schema_id), OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID);
                 } else if (OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(fetch_schema_id)) {
                   index_id = combine_id(extract_tenant_id(schema_id), OB_ALL_TABLE_V2_HISTORY_IDX_DATA_TABLE_ID_TID);
+                } else if (OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(fetch_schema_id)) {
+                  index_id = combine_id(extract_tenant_id(schema_id), OB_ALL_BACKUP_PIECE_FILES_IDX_DATA_TABLE_ID_TID);
                 }
                 if (OB_FAIL(table_schema->add_simple_index_info(
                         ObAuxTableMetaInfo(index_id, USER_INDEX, OB_INVALID_VERSION)))) {
@@ -759,7 +768,8 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr* mgr, const ObRefr
             precise_version = table_schema->get_schema_version();
             // add debug info
             if (OB_ALL_TABLE_HISTORY_TID == extract_pure_id(table_schema->get_table_id()) ||
-                OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table_schema->get_table_id())) {
+                OB_ALL_TABLE_V2_HISTORY_TID == extract_pure_id(table_schema->get_table_id()) ||
+                OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(table_schema->get_table_id())) {
               ObTaskController::get().allow_next_syslog();
               LOG_INFO("fetch __all_table_history schema",
                   K(ret),

@@ -122,6 +122,7 @@ public:
   virtual ~ObStorageOssMultiPartWriter();
   int open(const common::ObString& uri, const common::ObString& storage_info);
   int write(const char* buf, const int64_t size);
+  int pwrite(const char* buf, const int64_t size, const int64_t offset);
   int close();
   int cleanup();
   int64_t get_length() const
@@ -199,6 +200,12 @@ public:
   virtual int get_pkeys_from_dir(const common::ObString& dir_path, const common::ObString& storage_info,
       common::ObIArray<common::ObPartitionKey>& pkeys);
   virtual int delete_tmp_files(const common::ObString& dir_path, const common::ObString& storage_info);
+  virtual int is_empty_directory(
+      const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);
+  virtual int check_backup_dest_lifecycle(
+      const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle);
+  virtual int list_directories(const common::ObString& uri, const common::ObString& storage_info,
+      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directories_names);
 
 private:
   int strtotime(const char* date_time, int64_t& time);
@@ -212,6 +219,7 @@ public:
 public:
   int open(const common::ObString& uri, const common::ObString& storage_info);
   int write(const char* buf, const int64_t size);
+  int pwrite(const char* buf, const int64_t size, const int64_t offset);
   int close();
   int64_t get_length() const
   {
@@ -221,6 +229,9 @@ public:
   {
     return is_opened_;
   }
+
+private:
+  int do_write(const char* buf, const int64_t size, const int64_t offset, const bool is_pwrite);
 
 private:
   bool is_opened_;

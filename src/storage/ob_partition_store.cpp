@@ -4125,7 +4125,7 @@ int ObPartitionStore::prepare_new_store_map(const ObTablesHandle& sstables, cons
     LOG_WARN("partition is removed", K(ret), K(pkey_));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(meta_->replica_type_)) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("replica type is without sstable, cannot add it", K(ret), K(*meta_));
+    LOG_WARN("replica type is without sstable, cannot add it", K(ret), K(*meta_), K(sstables));
   } else if (OB_FAIL(tmp_handle.assign(sstables))) {
     LOG_WARN("failed to assign tables", K(ret), K_(pkey));
   } else if (OB_FAIL(create_new_store_map_(new_store_map))) {

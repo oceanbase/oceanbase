@@ -57,6 +57,8 @@ class ObAllVirtualBackupSetHistoryMgr : public common::ObVirtualTableScannerIter
     ENCRYPTION_MODE,
     PASSWD,
     BACKUP_RECOVERY_WINDOW,
+    START_REPLAY_LOG_TS,
+    DATE,
   };
 
 public:

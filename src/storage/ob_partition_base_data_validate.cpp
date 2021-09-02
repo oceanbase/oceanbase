@@ -117,13 +117,19 @@ int ObBackupMetaIndexStore::init_from_remote_file(const common::ObString& path, 
     ObBackupMetaIndex meta_index;
     while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
       common_header = NULL;
-      if (OB_FAIL(buffer_reader.get(common_header))) {
+      if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
+        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(buffer_reader.remain()));
+        break;
+      } else if (OB_FAIL(buffer_reader.get(common_header))) {
         STORAGE_LOG(WARN, "failed to read meta index common header", K(ret));
       } else if (OB_ISNULL(common_header)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "meta index common header is null", K(ret));
       } else if (OB_FAIL(common_header->check_valid())) {
         STORAGE_LOG(WARN, "meta index common header is not valid", K(ret));
+      } else if (common_header->data_length_ + common_header->align_length_ > buffer_reader.remain()) {
+        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(*common_header), K(buffer_reader.remain()));
+        break;
       } else if (BACKUP_FILE_END_MARK == common_header->data_type_) {
         STORAGE_LOG(INFO, "meta index file reach end mark", K(ret));
         break;
@@ -179,6 +185,8 @@ int ObBackupMacroIndexStore::init(const share::ObBackupBaseDataPathInfo& path_in
                  path_info.full_backup_set_id_,
                  path_info.inc_backup_set_id_,
                  path_info.dest_,
+                 path_info.backup_date_,
+                 path_info.compatible_,
                  fake_lease_service))) {
     STORAGE_LOG(WARN, "failed to init extern pg list mgr", K(ret));
   } else if (OB_FAIL(pg_list_mgr.get_normal_pg_list(normal_pg_keys))) {
@@ -272,15 +280,22 @@ int ObBackupMacroIndexStore::init_from_remote_file(
     const ObBackupCommonHeader* common_header = NULL;
     ObBackupMacroIndex macro_index;
     ObArray<ObBackupMacroIndex> macro_index_list;
+
     while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
       common_header = NULL;
-      if (OB_FAIL(buffer_reader.get(common_header))) {
+      if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
+        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(buffer_reader.remain()));
+        break;
+      } else if (OB_FAIL(buffer_reader.get(common_header))) {
         STORAGE_LOG(WARN, "failed to read macro index common header", K(ret));
       } else if (OB_ISNULL(common_header)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "macro index common header is null", K(ret));
       } else if (OB_FAIL(common_header->check_valid())) {
         STORAGE_LOG(WARN, "macro index common header is invalid", K(ret));
+      } else if (common_header->data_length_ + common_header->align_length_ > buffer_reader.remain()) {
+        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(*common_header), K(buffer_reader.remain()));
+        break;
       } else if (BACKUP_FILE_END_MARK == common_header->data_type_) {
         STORAGE_LOG(INFO, "macro index file reach end mark", K(ret));
         break;
@@ -288,7 +303,7 @@ int ObBackupMacroIndexStore::init_from_remote_file(
         ret = OB_BUF_NOT_ENOUGH;
         STORAGE_LOG(WARN, "buffer_read not enough", K(ret));
       } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_length_))) {
-        // log error
+        STORAGE_LOG(WARN, "failed to check data checksum", K(ret), K(*common_header));
       } else {
         int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
         for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
@@ -482,7 +497,8 @@ int ObValidatePrepareTask::init(ObMigrateCtx& migrate_ctx, ObValidateBackupPGCtx
 {
   int ret = OB_SUCCESS;
   const ObBackupBaseDataPathInfo& path_info = validate_pg_ctx.path_info_;
-
+  const int64_t fake_piece_id = 0;
+  const int64_t fake_piece_create_date = 0;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "can not init twice", K(ret));
@@ -495,7 +511,9 @@ int ObValidatePrepareTask::init(ObMigrateCtx& migrate_ctx, ObValidateBackupPGCtx
                  path_info.dest_.cluster_id_,
                  path_info.tenant_id_,
                  path_info.dest_.incarnation_,
-                 validate_pg_ctx.archive_round_))) {
+                 validate_pg_ctx.archive_round_,
+                 fake_piece_id,
+                 fake_piece_create_date))) {
     STORAGE_LOG(WARN, "failed to init archive log file store", K(ret));
   } else {
     migrate_ctx_ = &migrate_ctx;
@@ -525,6 +543,8 @@ int ObValidatePrepareTask::process()
   bool first_log_entry = true;
   clog::ObLogEntry log_entry;
   archive::ObArchiveEntryIterator iter;
+  bool unused_flag = false;
+  int64_t unused_accum_checksum = 0;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -547,7 +567,7 @@ int ObValidatePrepareTask::process()
     last_replay_log_id = migrate_ctx_->pg_meta_.storage_info_.get_data_info().get_last_replay_log_id();
     validate_pg_ctx_->last_replay_log_id_ = last_replay_log_id;
     while (OB_SUCC(ret) && first_log_entry) {
-      if (OB_FAIL(iter.next_entry(log_entry))) {
+      if (OB_FAIL(iter.next_entry(log_entry, unused_flag, unused_accum_checksum))) {
         break;
       } else if (first_log_entry) {
         uint64_t log_id = log_entry.get_header().get_log_id();
@@ -631,6 +651,8 @@ int ObValidateClogDataTask::process()
   LOG_INFO("start to validate clog data", K(cur_clog_file_id_), K(validate_pg_ctx_->pg_key_));
   clog::ObLogEntry log_entry;
   archive::ObArchiveEntryIterator iter;
+  bool unused_flag = false;
+  int64_t unused_accum_checksum = 0;
   const int64_t start_offset = 0;
   const bool need_limit_bandwidth = true;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -647,7 +669,7 @@ int ObValidateClogDataTask::process()
     STORAGE_LOG(WARN, "failed to init ObArchiveEntryIterator", K(ret));
   } else {
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(iter.next_entry(log_entry))) {
+      if (OB_FAIL(iter.next_entry(log_entry, unused_flag, unused_accum_checksum))) {
         if (OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "failed to get next entry", K(ret));
         }
@@ -830,6 +852,7 @@ int ObValidateBaseDataTask::fetch_macro_block(
   } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_file_path(validate_pg_ctx_->path_info_,
                  macro_index.table_id_,
                  macro_index.partition_id_,
+                 validate_pg_ctx_->path_info_.full_backup_set_id_,
                  validate_pg_ctx_->backup_set_id_,
                  macro_index.sub_task_id_,
                  backup_path))) {
@@ -926,6 +949,7 @@ int ObValidateFinishTask::process()
   ObPGValidateTaskInfo pg_info;
   const ObPGKey& pg_key = validate_pg_ctx_.pg_key_;
   const int64_t backup_set_id = validate_pg_ctx_.backup_set_id_;
+  DEBUG_SYNC(BACKUP_DATA_VALIDATE_STATUS_DOING);
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;

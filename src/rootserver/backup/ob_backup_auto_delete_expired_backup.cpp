@@ -49,7 +49,8 @@ ObBackupAutoDeleteExpiredData::ObBackupAutoDeleteExpiredData()
       idling_(stop_),
       backup_data_clean_(NULL),
       is_working_(false),
-      backup_lease_service_(nullptr)
+      backup_lease_service_(nullptr),
+      delete_obsolete_action_(ObBackupDeleteObsoleteAction::NONE)
 {}
 
 ObBackupAutoDeleteExpiredData::~ObBackupAutoDeleteExpiredData()
@@ -130,36 +131,19 @@ void ObBackupAutoDeleteExpiredData::run3()
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
-  bool can_auto_delete = true;
   while (!stop_) {
     ret = OB_SUCCESS;
-    const bool auto_delete_expired_backup = config_->auto_delete_expired_backup;
-    int64_t backup_recovery_window = config_->backup_recovery_window;
-    can_auto_delete = true;
-    LOG_INFO("got backup_recovery_window", K(backup_recovery_window));
-
-#ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = E(EventTable::EN_BACKUP_RECOVERY_WINDOW) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        backup_recovery_window = 10 * 1000 * 1000L;  // 10s
-        ret = OB_SUCCESS;
-      }
-    }
-#endif
 
     if (stop_) {
       ret = OB_RS_SHUTDOWN;
       LOG_WARN("rootservice shutdown", K(ret));
-    } else if (backup_recovery_window < 0 || INT64_MAX == backup_recovery_window) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("backup_recovery_window is invalid", K(ret), K(backup_recovery_window));
-    } else if (OB_FAIL(check_can_auto_delete(auto_delete_expired_backup, backup_recovery_window, can_auto_delete))) {
-      LOG_WARN("failed to check can backup", K(ret));
-    } else if (!can_auto_delete) {
-      // do nothing
-    } else if (OB_FAIL(schedule_auto_delete_expired_data(backup_recovery_window))) {
-      LOG_WARN("failed to schedule auto delete expired data", K(ret), K(backup_recovery_window));
+    } else if (ObBackupDeleteObsoleteAction::NONE == delete_obsolete_action_) {
+      switch_delete_obsolete_action();
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schedule_auto_delete_obsolete())) {
+      LOG_WARN("failed to schedule auto delete obsolete", K(ret));
     }
 
     if (OB_FAIL(idle())) {
@@ -171,8 +155,8 @@ void ObBackupAutoDeleteExpiredData::run3()
   is_working_ = false;
 }
 
-int ObBackupAutoDeleteExpiredData::check_can_auto_delete(
-    const bool auto_delete_expired_backup, const int64_t backup_recovery_window, bool& can_auto_delete)
+int ObBackupAutoDeleteExpiredData::check_can_auto_handle_backup(
+    const bool is_auto, const int64_t backup_recovery_window, bool& can_auto_delete)
 {
   int ret = OB_SUCCESS;
   can_auto_delete = true;
@@ -182,29 +166,39 @@ int ObBackupAutoDeleteExpiredData::check_can_auto_delete(
   } else if (OB_FAIL(backup_lease_service_->get_lease_status(can_auto_delete))) {
     LOG_WARN("failed to check can backup", K(ret));
   } else if (can_auto_delete) {
-    can_auto_delete = (auto_delete_expired_backup && backup_recovery_window > 0);
+    can_auto_delete = (is_auto && backup_recovery_window > 0);
   }
   return ret;
 }
 
-int ObBackupAutoDeleteExpiredData::get_last_succeed_delete_expired_snapshot(int64_t& last_succ_delete_expired_snapshot)
+int ObBackupAutoDeleteExpiredData::get_last_succeed_delete_obsolete_snapshot(
+    int64_t& last_succ_delete_obsolete_snapshot)
 {
   int ret = OB_SUCCESS;
   ObBackupInfoManager backup_info_manager;
-  last_succ_delete_expired_snapshot = 0;
+  last_succ_delete_obsolete_snapshot = 0;
   ObMySQLTransaction trans;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup auto delete expired data do not init", K(ret));
+  } else if (ObBackupDeleteObsoleteAction::NONE == delete_obsolete_action_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delete obsolete action is none, cannot get last succed delete obsolete snapshot",
+        K(ret),
+        K(delete_obsolete_action_));
   } else if (OB_FAIL(backup_info_manager.init(OB_SYS_TENANT_ID, *sql_proxy_))) {
     LOG_WARN("failed to init backup info manager", K(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_))) {
     LOG_WARN("failed to start trans", K(ret));
   } else {
-    if (OB_FAIL(backup_info_manager.get_last_delete_expired_data_snapshot(
-            OB_SYS_TENANT_ID, trans, last_succ_delete_expired_snapshot))) {
-      LOG_WARN("failed to get last delete expired data snapshot", K(ret));
+    const ObBackupManageArg::Type type =
+        ObBackupDeleteObsoleteAction::DELETE_OBSOLETE_BACKUP_BACKUP == delete_obsolete_action_
+            ? ObBackupManageArg::DELETE_OBSOLETE_BACKUP_BACKUP
+            : ObBackupManageArg::DELETE_OBSOLETE_BACKUP;
+    if (OB_FAIL(backup_info_manager.get_delete_obsolete_snapshot(
+            OB_SYS_TENANT_ID, type, trans, last_succ_delete_obsolete_snapshot))) {
+      LOG_WARN("failed to get last delete obsolete data snapshot", K(ret), K(type));
     }
 
     if (OB_SUCC(ret)) {
@@ -224,7 +218,7 @@ int ObBackupAutoDeleteExpiredData::get_last_succeed_delete_expired_snapshot(int6
 int ObBackupAutoDeleteExpiredData::schedule_auto_delete_expired_data(const int64_t backup_recovery_window)
 {
   int ret = OB_SUCCESS;
-  int64_t last_succ_delete_expired_snapshot = 0;
+  int64_t last_succ_delete_obsolete_snapshot = 0;
   const int64_t now_ts = ObTimeUtil::current_time();
   ObBackupDataCleanScheduler backup_data_clean_scheduler;
   if (!is_inited_) {
@@ -233,14 +227,19 @@ int ObBackupAutoDeleteExpiredData::schedule_auto_delete_expired_data(const int64
   } else if (backup_recovery_window <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schedule auto delete expired data get invalid argument", K(ret), K(backup_recovery_window));
-  } else if (OB_FAIL(get_last_succeed_delete_expired_snapshot(last_succ_delete_expired_snapshot))) {
-    LOG_WARN("failed to get last succ delete expired snapshot", K(ret), K(last_succ_delete_expired_snapshot));
-  } else if (now_ts - last_succ_delete_expired_snapshot < backup_recovery_window / 2) {
-    // do nothing
+  } else if (OB_FAIL(get_last_succeed_delete_obsolete_snapshot(last_succ_delete_obsolete_snapshot))) {
+    LOG_WARN("failed to get last succ delete obsolete snapshot", K(ret), K(last_succ_delete_obsolete_snapshot));
+  } else if (now_ts - last_succ_delete_obsolete_snapshot < backup_recovery_window / 2) {
+    switch_delete_obsolete_action();
+    if (delete_obsolete_action_ != ObBackupDeleteObsoleteAction::NONE) {
+      wakeup();
+    }
   } else {
     obrpc::ObBackupManageArg arg;
     arg.tenant_id_ = OB_SYS_TENANT_ID;
-    arg.type_ = ObBackupManageArg::DELETE_OBSOLETE_BACKUP;
+    arg.type_ = ObBackupDeleteObsoleteAction::DELETE_OBSOLETE_BACKUP_BACKUP == delete_obsolete_action_
+                    ? ObBackupManageArg::DELETE_OBSOLETE_BACKUP_BACKUP
+                    : ObBackupManageArg::DELETE_OBSOLETE_BACKUP;
     arg.value_ = now_ts - backup_recovery_window;
     if (OB_FAIL(backup_data_clean_scheduler.init(arg, *schema_service_, *sql_proxy_, backup_data_clean_))) {
       LOG_WARN("failed to init backup data clean scheduler", K(ret), K(arg));
@@ -250,9 +249,71 @@ int ObBackupAutoDeleteExpiredData::schedule_auto_delete_expired_data(const int64
       } else {
         LOG_WARN("failed to schedule backup data clean", K(ret), K(arg));
       }
+    } else {
+      switch_delete_obsolete_action();
     }
   }
   return ret;
+}
+
+int ObBackupAutoDeleteExpiredData::schedule_auto_delete_obsolete()
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestOpt backup_dest_option;
+  bool is_backup_backup = false;
+  bool is_auto = true;
+  int64_t backup_recovery_window = 0;
+  bool can_auto_delete = true;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup auto delete expired data do not init", K(ret));
+  } else if (ObBackupDeleteObsoleteAction::NONE == delete_obsolete_action_) {
+    // do nothing
+  } else if (FALSE_IT(is_backup_backup =
+                          delete_obsolete_action_ == ObBackupDeleteObsoleteAction::DELETE_OBSOLETE_BACKUP_BACKUP
+                              ? true
+                              : false)) {
+  } else if (OB_FAIL(backup_dest_option.init(is_backup_backup))) {
+    LOG_WARN("failed to init backup dest option", K(ret));
+  } else {
+    is_auto = backup_dest_option.auto_delete_obsolete_backup_ || backup_dest_option.auto_touch_reserved_backup_;
+    backup_recovery_window = backup_dest_option.recovery_window_;
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = E(EventTable::EN_BACKUP_RECOVERY_WINDOW) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        backup_recovery_window = 10 * 1000 * 1000L;  // 10s
+        ret = OB_SUCCESS;
+      }
+    }
+#endif
+
+    if (OB_FAIL(check_can_auto_handle_backup(is_auto, backup_recovery_window, can_auto_delete))) {
+      LOG_WARN("failed to check can backup", K(ret));
+    } else if (!can_auto_delete) {
+      // do nothing
+      switch_delete_obsolete_action();
+      if (delete_obsolete_action_ != ObBackupDeleteObsoleteAction::NONE) {
+        wakeup();
+      }
+    } else if (OB_FAIL(schedule_auto_delete_expired_data(backup_recovery_window))) {
+      LOG_WARN("failed to schedule auto delete expired data", K(ret), K(backup_recovery_window));
+    }
+  }
+  return ret;
+}
+
+void ObBackupAutoDeleteExpiredData::switch_delete_obsolete_action()
+{
+  if (ObBackupDeleteObsoleteAction::NONE == delete_obsolete_action_) {
+    delete_obsolete_action_ = ObBackupDeleteObsoleteAction::DELETE_OBSOLETE_BACKUP;
+  } else if (ObBackupDeleteObsoleteAction::DELETE_OBSOLETE_BACKUP == delete_obsolete_action_) {
+    delete_obsolete_action_ = ObBackupDeleteObsoleteAction::DELETE_OBSOLETE_BACKUP_BACKUP;
+  } else if (ObBackupDeleteObsoleteAction::DELETE_OBSOLETE_BACKUP_BACKUP == delete_obsolete_action_) {
+    delete_obsolete_action_ = ObBackupDeleteObsoleteAction::NONE;
+  }
 }
 
 }  // namespace rootserver

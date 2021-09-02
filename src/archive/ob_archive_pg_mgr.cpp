@@ -80,7 +80,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       ARCHIVE_LOG(WARN, "invalid argument", KR(ret), K(pg_key), K(pg_mgr_));
     } else if (OB_FAIL(ObPartitionService::get_instance().get_partition(pg_key, guard))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
+      if (OB_PARTITION_NOT_EXIST == ret) {
         ARCHIVE_LOG(TRACE, "partition not exist", KR(ret), K(pg_key));
       } else {
         ARCHIVE_LOG(WARN, "get_partition fail", KR(ret), K(pg_key));
@@ -818,8 +818,24 @@ bool ObArchivePGMgr::need_check_start_archive_()
 void ObArchivePGMgr::handle_check_start_archive_round_()
 {
   int ret = OB_SUCCESS;
+  bool do_start = false;
+  share::ObLogArchiveBackupInfo info;
   if (!archive_mgr_->is_in_archive_status()) {
     ARCHIVE_LOG(WARN, "not in archive mode, skip");
+  } else if (OB_FAIL(share::ObBackupInfoMgr::get_instance().get_log_archive_backup_info(info))) {
+    if (REACH_TIME_INTERVAL(30 * 1000 * 1000L)) {
+      ARCHIVE_LOG(WARN, "get_log_archive_backup_info fail", KR(ret));
+    }
+  } else if (OB_UNLIKELY(!info.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "ObLogArchiveBackupInfo is not valid", KR(ret), K(info));
+  } else if (share::ObLogArchiveStatus::STATUS::DOING == info.status_.status_) {
+    // When observer restart, it will lose its archive status, and it should transfer
+    // its status to doing, then it can do clog archive.
+    // RS archive status is permanent and if RS archive status is doing, observer can
+    // transfer its status to doing safely.
+    do_start = true;
+    ARCHIVE_LOG(INFO, "ObLogArchiveStatus is doing, start observer archive", K(info));
   } else {
     const bool add_pg_finish = archive_round_mgr_->get_add_pg_finish_flag();
     if (add_pg_finish && is_prepare_pg_empty()) {
@@ -829,13 +845,17 @@ void ObArchivePGMgr::handle_check_start_archive_round_()
       } else if (!functor.return_start_flag()) {
         ARCHIVE_LOG(INFO, "return_start_flag is false, do dothing");
       } else {
-        notify_start_archive_round_succ_();
-        ARCHIVE_LOG(INFO, "notify_start_archive_round_succ_");
+        do_start = true;
       }
     } else {
       ARCHIVE_LOG(
           DEBUG, "can not entry into doing period so far", K(add_pg_finish), "is_quque_empty", is_prepare_pg_empty());
     }
+  }
+
+  if (OB_SUCC(ret) && do_start) {
+    notify_start_archive_round_succ_();
+    ARCHIVE_LOG(INFO, "notify_start_archive_round_succ_");
   }
 }
 
@@ -933,9 +953,9 @@ int ObArchivePGMgr::handle_add_task_(
     ObString storage_info(archive_round_mgr_->storage_info_);
     StartArchiveHelper start_archive_helper(pg_key,
         create_timestamp,
+        leader_epoch,
         incarnation_,
         log_archive_round_,
-        leader_epoch,
         leader_takeover_ts,
         compatible,
         start_archive_ts_,
@@ -947,15 +967,20 @@ int ObArchivePGMgr::handle_add_task_(
       ARCHIVE_LOG(WARN, "start_archive_helper handle fail", KR(ret), K(start_archive_helper));
     } else if (OB_FAIL(insert_or_update_pg_(start_archive_helper, task))) {
       ARCHIVE_LOG(WARN, "insert_or_update_pg_ fail", KR(ret), K(pg_key), K(start_archive_helper));
-    } else if (OB_FAIL(record_for_residual_data_file_(start_archive_helper, task))) {
-      ARCHIVE_LOG(WARN, "record_for_residual_data_file_ fail", KR(ret), K(start_archive_helper));
-    } else if (OB_FAIL(generate_and_submit_first_log_(start_archive_helper))) {
-      ARCHIVE_LOG(WARN, "generate_and_submit_first_log_ fail", KR(ret), K(start_archive_helper));
-    } else if (OB_FAIL(add_pg_to_ilog_fetch_queue_(start_archive_helper))) {
-      ARCHIVE_LOG(WARN, "add_pg_to_ilog_fetch_queue_ fail", KR(ret), K(start_archive_helper));
     } else {
-      archive_round_mgr_->inc_started_pg();
-      ARCHIVE_LOG(INFO, "add_pg_task succ", K(start_archive_helper), KPC(task));
+      if (OB_FAIL(generate_and_submit_first_log_(start_archive_helper))) {
+        ARCHIVE_LOG(WARN, "generate_and_submit_first_log_ fail", KR(ret), K(start_archive_helper));
+      } else if (OB_FAIL(add_pg_to_ilog_fetch_queue_(start_archive_helper))) {
+        ARCHIVE_LOG(WARN, "add_pg_to_ilog_fetch_queue_ fail", KR(ret), K(start_archive_helper));
+      } else {
+        archive_round_mgr_->inc_started_pg();
+        ARCHIVE_LOG(INFO, "add_pg_task succ", K(start_archive_helper), KPC(task));
+      }
+      // It is ambiguous if two different kickoff log are generated, so we guarantee to add pg
+      // into queue success. Elsewhiere, we can remove pg from map if failure occurs.
+      if (OB_FAIL(ret)) {
+        (void)pg_map_.del(pg_key);
+      }
     }
   }
 
@@ -1011,50 +1036,34 @@ bool ObArchivePGMgr::get_and_check_compatible_(bool& compatible)
   return bret;
 }
 
-int ObArchivePGMgr::record_for_residual_data_file_(StartArchiveHelper& helper, ObPGArchiveTask* task)
-{
-  int ret = OB_SUCCESS;
-  ObArchiveSender* sender = NULL;
-
-  if (OB_ISNULL(archive_mgr_) || OB_ISNULL(sender = archive_mgr_->get_sender()) || OB_ISNULL(task)) {
-    ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(ERROR, "invalid argument", KR(ret), K(archive_mgr_), K(sender), K(task));
-  } else if (!helper.data_file_exist_unrecorded_) {
-    // skip it
-  } else if (OB_FAIL(sender->record_index_info(*task, helper.epoch_, helper.incarnation_, helper.archive_round_))) {
-    ARCHIVE_LOG(WARN, "record_index_info fail", KR(ret), K(helper), KPC(task));
-  } else if (OB_FAIL(task->switch_archive_file(
-                 helper.epoch_, helper.incarnation_, helper.archive_round_, LOG_ARCHIVE_FILE_TYPE_DATA))) {
-    ARCHIVE_LOG(WARN, "switch data file fail", KR(ret), K(helper), KPC(task));
-  }
-
-  if (OB_SUCC(ret) && !helper.need_kickoff_log_) {
-    task->mark_pg_first_record_finish(helper.epoch_, incarnation_, log_archive_round_);
-  }
-
-  return ret;
-}
-
 int ObArchivePGMgr::add_pg_to_ilog_fetch_queue_(StartArchiveHelper& helper)
 {
   int ret = OB_SUCCESS;
   const ObPGKey& pg_key = helper.pg_key_;
-  const uint64_t start_log_id = helper.start_log_id_;
+  const uint64_t start_log_id = helper.get_start_log_id();
   const file_id_t ilog_file_id = helper.start_ilog_file_id_;
   PGFetchTask task;
   task.pg_key_ = helper.pg_key_;
   task.incarnation_ = helper.incarnation_;
   task.archive_round_ = helper.archive_round_;
   task.epoch_ = helper.epoch_;
-  task.start_log_id_ = helper.start_log_id_;
+  task.start_log_id_ = start_log_id;
   task.ilog_file_id_ = helper.start_ilog_file_id_;
   ObArchiveIlogFetchTaskMgr* ilog_fetch_task_mgr = NULL;
 
   if (OB_ISNULL(archive_mgr_) || OB_ISNULL(ilog_fetch_task_mgr = &archive_mgr_->ilog_fetch_task_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "ilog_fetch_task_mgr get fail", KR(ret), K(archive_mgr_), K(ilog_fetch_task_mgr));
-  } else if (OB_FAIL(ilog_fetch_task_mgr->add_ilog_fetch_task(task))) {
-    ARCHIVE_LOG(WARN, "add_ilog_fetch_task fail", KR(ret), K(pg_key), K(start_log_id), K(ilog_file_id));
+  } else {
+    // guarantee success
+    const int64_t start_ts = ObTimeUtility::fast_current_time();
+    do {
+      if (OB_FAIL(ilog_fetch_task_mgr->add_ilog_fetch_task(task))) {
+        const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+        ARCHIVE_LOG(WARN, "add_ilog_fetch_task fail", KR(ret), K(pg_key), K(start_log_id), K(ilog_file_id), K(cost_ts));
+        usleep(100 * 1000);  // only memory not enough reach here
+      }
+    } while (OB_FAIL(ret) && !has_set_stop() && archive_mgr_->is_in_archive_status());
   }
 
   return ret;
@@ -1069,7 +1078,7 @@ int ObArchivePGMgr::generate_and_submit_first_log_(StartArchiveHelper& helper)
       OB_UNLIKELY(!helper.is_valid())) {
     ARCHIVE_LOG(WARN, "invalid argument", K(archive_mgr_), K(ilog_fetcher), K(helper));
     ret = OB_INVALID_ARGUMENT;
-  } else if (!helper.need_kickoff_log_) {
+  } else if (!helper.need_kickoff()) {
     // skip it
   } else if (OB_FAIL(ilog_fetcher->generate_and_submit_pg_first_log(helper))) {
     ARCHIVE_LOG(WARN, "generate_and_submit_pg_first_log fail", KR(ret), K(helper));
@@ -1158,8 +1167,8 @@ int ObArchivePGMgr::insert_or_update_pg_(StartArchiveHelper& helper, ObPGArchive
 
     if (OB_FAIL(ret) && NULL != pg_archive_task) {
       (void)pg_map_.del(pg_key);
+      // corresponding to (insert and get), add one reference
       pg_map_.free_value(pg_archive_task);
-      pg_archive_task->~ObPGArchiveTask();
       pg_archive_task = NULL;
     }
   } else {

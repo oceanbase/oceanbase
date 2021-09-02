@@ -61,7 +61,7 @@ class ObIPartitionMacroBlockReader {
 public:
   enum Type {
     MACRO_BLOCK_OB_READER = 0,
-    MACRO_BLOCK_RESTORE_READER = 1,
+    MACRO_BLOCK_RESTORE_READER = 1,  // not used anymore
     MACRO_BLOCK_BACKUP_READER = 2,
     MACRO_BLOCK_RESTORE_READER_V1 = 3,  // not used any more
     MACRO_BLOCK_RESTORE_READER_V2 = 4,
@@ -120,7 +120,7 @@ class ObIPhysicalBaseMetaReader {
 public:
   enum Type {
     BASE_DATA_META_OB_READER,
-    BASE_DATA_META_RESTORE_READER,
+    BASE_DATA_META_RESTORE_READER,  // not used anymore
     BASE_DATA_META_OB_COMPAT_READER,
     BASE_DATA_META_BACKUP_READER,
     BASE_DATA_META_RESTORE_READER_V1,
@@ -144,7 +144,7 @@ public:
   enum Type {
     BASE_DATA_META_OB_READER = 0,
     BASE_DATA_META_OB_COMPAT_READER = 1,
-    BASE_DATA_META_OB_RESTORE_READER = 2,
+    BASE_DATA_META_OB_RESTORE_READER = 2,  // not used anymore
     BASE_DATA_META_OB_BACKUP_READER = 3,
     BASE_DATA_META_OB_RESTORE_READER_V1 = 4,
     BASE_DATA_META_OB_RESTORE_READER_V2 = 5,
@@ -226,7 +226,7 @@ private:
 class ObIPartitionGroupMetaRestoreReader {
 public:
   enum Type {
-    PG_META_RESTORE_READER,
+    PG_META_RESTORE_READER,  // not used anymore
     PG_META_RESTORE_READER_V1,
     PG_META_RESTORE_READER_V2,
   };

@@ -349,7 +349,6 @@ private:
       TenantMinSSTableSchemaVersionMap& tmp_map, const int64_t table_id, const int64_t min_schema_version);
   int update_to_map(TenantMinSSTableSchemaVersionMap& tmp_map);
   int check_partition_exist(const ObPartitionKey& pkey, bool& exist);
-  int can_schedule_partition(const ObMergeType merge_type, bool& can_schedule);
 
 private:
   typedef common::hash::ObHashMap<uint64_t, ObMinorMergeHistory*, common::hash::NoPthreadDefendMode>

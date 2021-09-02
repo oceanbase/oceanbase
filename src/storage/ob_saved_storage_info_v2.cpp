@@ -263,7 +263,8 @@ int ObSavedStorageInfoV2::clear_recover_points_for_physical_flashback(const int6
   return OB_NOT_IMPLEMENT;
 }
 
-OB_SERIALIZE_MEMBER(ObRecoverPoint, snapshot_version_, recover_log_id_, checksum_, epoch_id_, submit_timestamp_);
+OB_SERIALIZE_MEMBER(ObRecoverPoint, snapshot_version_, recover_log_id_, checksum_, epoch_id_, submit_timestamp_,
+    recover_next_timestamp_);
 
 OB_SERIALIZE_MEMBER(ObRecoverVec, recover_vec_);
 

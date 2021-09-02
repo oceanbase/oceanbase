@@ -357,6 +357,18 @@ bool ObArchiveRoundStartInfo::is_valid() const
   return ((0 != start_log_id_ && OB_INVALID_ID != start_log_id_) && (start_ts_ >= 0) && log_submit_ts_ >= 0 &&
           snapshot_version_ >= 0 && clog_epoch_id_ >= 0);
 }
+
+void ObArchiveDataFileMeta::reset()
+{
+  need_record_index_ = false;
+  has_effective_data_ = false;
+  data_file_id_ = OB_INVALID_ARCHIVE_FILE_ID;
+  min_log_id_ = OB_INVALID_ID;
+  min_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_log_id_ = OB_INVALID_ID;
+  max_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
+}
 //=======================start of ObArchiveIndexFileInfo======================//
 DEFINE_SERIALIZE(ObArchiveIndexFileInfo)
 {
@@ -370,8 +382,8 @@ DEFINE_SERIALIZE(ObArchiveIndexFileInfo)
     ARCHIVE_LOG(WARN, "failed to encode record_len_", KP(buf), K(buf_len), K(pos), K(ret));
   } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, INDEX_FILE_VERSION))) {
     ARCHIVE_LOG(WARN, "failed to encode version_", KP(buf), K(buf_len), K(pos), K(ret));
-  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, is_valid_))) {
-    ARCHIVE_LOG(WARN, "failed to encode is_valid_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, is_effective_))) {
+    ARCHIVE_LOG(WARN, "failed to encode is_effective_", KP(buf), K(buf_len), K(pos), K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, data_file_id_))) {
     ARCHIVE_LOG(WARN, "failed to encode data_file_id_", KP(buf), K(buf_len), K(pos), K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, input_bytes_))) {
@@ -427,8 +439,8 @@ DEFINE_DESERIALIZE(ObArchiveIndexFileInfo)
     if (data_len >= record_len_) {
       if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &version_))) {
         ARCHIVE_LOG(WARN, "failed to decode version_", KP(buf), K(data_len), K(pos), K(ret));
-      } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &is_valid_))) {
-        ARCHIVE_LOG(WARN, "failed to decode is_valid_", KP(buf), K(data_len), K(pos), K(ret));
+      } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &is_effective_))) {
+        ARCHIVE_LOG(WARN, "failed to decode is_effective_", KP(buf), K(data_len), K(pos), K(ret));
       } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, reinterpret_cast<int64_t*>(&data_file_id_)))) {
         ARCHIVE_LOG(WARN, "failed to decode data_file_id_", KP(buf), K(data_len), K(pos), K(ret));
       } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &input_bytes_))) {
@@ -478,7 +490,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObArchiveIndexFileInfo)
   size += serialization::encoded_length_i16(magic_);
   size += serialization::encoded_length_i16(record_len_);
   size += serialization::encoded_length_i16(version_);
-  size += serialization::encoded_length_i16(is_valid_);
+  size += serialization::encoded_length_i16(is_effective_);
   size += serialization::encoded_length_i64(data_file_id_);
   size += serialization::encoded_length_i64(input_bytes_);
   size += serialization::encoded_length_i64(output_bytes_);
@@ -506,7 +518,7 @@ void ObArchiveIndexFileInfo::reset()
   magic_ = 0;
   record_len_ = 0;
   version_ = 0;
-  is_valid_ = 0;
+  is_effective_ = 0;
   data_file_id_ = 0;
 
   input_bytes_ = 0;
@@ -530,18 +542,21 @@ void ObArchiveIndexFileInfo::reset()
   checksum_ = 0;
 }
 
-bool ObArchiveIndexFileInfo::is_valid()
+bool ObArchiveIndexFileInfo::check_integrity() const
 {
-  bool bret = true;
+  return ((MAGIC_NUM == magic_) && (checksum_ == calc_checksum_()));
+}
 
-  if (OB_UNLIKELY(MAGIC_NUM != magic_) || OB_UNLIKELY(0 == data_file_id_) || OB_UNLIKELY(0 >= version_) ||
-      OB_UNLIKELY(!is_valid_) || OB_UNLIKELY(0 == round_start_log_id_ || OB_INVALID_ID == round_start_log_id_) ||
-      OB_UNLIKELY(checksum_ != calc_checksum_())) {
-    bret = false;
-    ARCHIVE_LOG(WARN, "illegal index info", KPC(this), "new_checksum", calc_checksum_());
-  }
+bool ObArchiveIndexFileInfo::is_valid() const
+{
+  return (
+      OB_INVALID_ARCHIVE_FILE_ID != data_file_id_ && 0 != round_start_log_id_ && OB_INVALID_ID != round_start_log_id_);
+}
 
-  return bret;
+bool ObArchiveIndexFileInfo::is_effective() const
+{
+  return (is_effective_ && OB_INVALID_ARCHIVE_FILE_ID != data_file_id_ && 0 != round_start_log_id_ &&
+          OB_INVALID_ID != round_start_log_id_);
 }
 
 int ObArchiveIndexFileInfo::build_valid_record(const uint64_t data_file_id, const uint64_t min_log_id,
@@ -571,7 +586,7 @@ int ObArchiveIndexFileInfo::build_valid_record(const uint64_t data_file_id, cons
   } else {
     magic_ = MAGIC_NUM;
     version_ = INDEX_FILE_VERSION;
-    is_valid_ = 1;
+    is_effective_ = 1;
     data_file_id_ = data_file_id;
     min_log_id_ = min_log_id;
     min_log_ts_ = min_log_submit_ts;
@@ -595,10 +610,11 @@ int ObArchiveIndexFileInfo::build_valid_record(const uint64_t data_file_id, cons
 
 int ObArchiveIndexFileInfo::build_invalid_record(const uint64_t data_file_id, const uint64_t max_log_id,
     const int64_t checkpoint_ts, const int64_t max_log_submit_ts, const int64_t clog_epoch_id,
-    const int64_t accum_checksum, const ObArchiveRoundStartInfo& round_start_info)
+    const int64_t accum_checksum, const ObArchiveRoundStartInfo& round_start_info, const bool need_check_data_file)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 == data_file_id || OB_INVALID_ID == max_log_id || OB_INVALID_TIMESTAMP == max_log_submit_ts ||
+  if (OB_UNLIKELY((need_check_data_file && (0 == data_file_id || OB_INVALID_ARCHIVE_FILE_ID == data_file_id)) ||
+                  OB_INVALID_ID == max_log_id || OB_INVALID_TIMESTAMP == max_log_submit_ts ||
                   OB_INVALID_TIMESTAMP == checkpoint_ts || 0 > clog_epoch_id || (!round_start_info.is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(ERROR,
@@ -610,11 +626,12 @@ int ObArchiveIndexFileInfo::build_invalid_record(const uint64_t data_file_id, co
         K(checkpoint_ts),
         K(clog_epoch_id),
         K(accum_checksum),
-        K(round_start_info));
+        K(round_start_info),
+        K(need_check_data_file));
   } else {
     magic_ = MAGIC_NUM;
     version_ = INDEX_FILE_VERSION;
-    is_valid_ = 0;
+    is_effective_ = 0;
     data_file_id_ = data_file_id;
     min_log_id_ = max_log_id;
     min_log_ts_ = max_log_submit_ts;
@@ -664,6 +681,118 @@ int64_t ObArchiveIndexFileInfo::calc_checksum_() const
 
 //=======================end of ObArchiveIndexFileInfo========================//
 
+DEFINE_SERIALIZE(ObArchiveKeyContent)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || (0 >= buf_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid arguments", KP(buf), K(buf_len), K(ret));
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, magic_))) {
+    ARCHIVE_LOG(WARN, "failed to encode magic_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, ARCHIVE_KEY_VERSION))) {
+    ARCHIVE_LOG(WARN, "failed to encode version_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, is_first_piece_))) {
+    ARCHIVE_LOG(WARN, "failed to encode is_first_piece", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i16(buf, buf_len, pos, reserved_))) {
+    ARCHIVE_LOG(WARN, "failed to encode reserved_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, max_index_file_id_))) {
+    ARCHIVE_LOG(WARN, "failed to encode max_index_file_id_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(index_info_.serialize(buf, buf_len, pos))) {
+    ARCHIVE_LOG(WARN, "failed to encode index_info_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, checksum_))) {
+    ARCHIVE_LOG(WARN, "failed to encode checksum_", KP(buf), K(buf_len), K(pos), K(ret));
+  } else { /*do nothing*/
+  }
+  return ret;
+}
+
+DEFINE_DESERIALIZE(ObArchiveKeyContent)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || 0 > data_len) {
+    ret = OB_INVALID_DATA;
+    ARCHIVE_LOG(WARN, "invalid arguments", KP(buf), K(data_len), K(ret));
+  } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &magic_))) {
+    ARCHIVE_LOG(WARN, "failed to decode magic_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &version_))) {
+    ARCHIVE_LOG(WARN, "failed to decode version_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &is_first_piece_))) {
+    ARCHIVE_LOG(WARN, "failed to decode is_first_piece_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &reserved_))) {
+    ARCHIVE_LOG(WARN, "failed to decode reserved_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, reinterpret_cast<int64_t*>(&max_index_file_id_)))) {
+    ARCHIVE_LOG(WARN, "failed to decode max_index_file_id_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(index_info_.deserialize(buf, data_len, pos))) {
+    ARCHIVE_LOG(WARN, "failed to decode index_info_", KP(buf), K(data_len), K(pos), K(ret));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &checksum_))) {
+    ARCHIVE_LOG(WARN, "failed to decode checksum_", KP(buf), K(data_len), K(pos), K(ret));
+  } else { /*do nothing*/
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObArchiveKeyContent)
+{
+  int64_t size = 0;
+  size += serialization::encoded_length_i16(magic_);
+  size += serialization::encoded_length_i16(version_);
+  size += serialization::encoded_length_i16(is_first_piece_);
+  size += serialization::encoded_length_i16(reserved_);
+  size += serialization::encoded_length_i64(max_index_file_id_);
+  size += index_info_.get_serialize_size();
+  size += serialization::encoded_length_i64(checksum_);
+  return size;
+}
+
+void ObArchiveKeyContent::reset()
+{
+  magic_ = 0;
+  version_ = 0;
+  is_first_piece_ = 0;
+  reserved_ = 0;
+  max_index_file_id_ = OB_INVALID_ARCHIVE_FILE_ID;
+  index_info_.reset();
+  checksum_ = 0;
+}
+
+int ObArchiveKeyContent::generate(
+    const bool is_first_piece, const uint64_t index_file_id, const ObArchiveIndexFileInfo& index_info)
+{
+  int ret = OB_SUCCESS;
+  ;
+  if (OB_UNLIKELY(OB_INVALID_ARCHIVE_FILE_ID == index_file_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(index_file_id), K(index_info));
+  } else {
+    magic_ = MAGIC_NUM;
+    version_ = ARCHIVE_KEY_VERSION;
+    is_first_piece_ = is_first_piece ? 1 : 0;
+    reserved_ = 0;
+    max_index_file_id_ = index_file_id;
+    index_info_ = index_info;
+    checksum_ = calc_checksum_();
+  }
+  return ret;
+}
+
+bool ObArchiveKeyContent::check_integrity() const
+{
+  return ((MAGIC_NUM == magic_) && (checksum_ == calc_checksum_()));
+}
+
+bool ObArchiveKeyContent::is_valid() const
+{
+  return MAGIC_NUM == magic_ &&
+         (is_first_piece_ || (OB_INVALID_ARCHIVE_FILE_ID != max_index_file_id_ && index_info_.is_valid()));
+}
+
+int64_t ObArchiveKeyContent::calc_checksum_() const
+{
+  // handle compat if more members added
+  int64_t calc_checksum_len = get_serialize_size() - sizeof(checksum_);
+  return ob_crc64(this, calc_checksum_len);
+}
+
 //=======================start of MaxArchivedIndexInfo =======================//
 MaxArchivedIndexInfo::MaxArchivedIndexInfo()
 {
@@ -679,8 +808,7 @@ void MaxArchivedIndexInfo::reset()
 {
   data_file_collect_ = false;
   archived_log_collect_ = false;
-  round_start_info_collect_ = false;
-  max_record_data_file_id_ = 0;
+  max_record_data_file_id_ = OB_INVALID_ARCHIVE_FILE_ID;
   max_record_log_id_ = OB_INVALID_ID;
   max_record_checkpoint_ts_ = OB_INVALID_TIMESTAMP;
   max_record_log_submit_ts_ = OB_INVALID_TIMESTAMP;
@@ -689,16 +817,16 @@ void MaxArchivedIndexInfo::reset()
   round_start_info_.reset();
 }
 
-bool MaxArchivedIndexInfo::is_index_info_collected_()
+bool MaxArchivedIndexInfo::is_index_record_collected() const
 {
-  return data_file_collect_ && archived_log_collect_ && round_start_info_collect_;
+  return data_file_collect_ && archived_log_collect_;
 }
 
 void MaxArchivedIndexInfo::set_data_file_id(const uint64_t file_id)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(0 == file_id)) {
+  if (OB_UNLIKELY(0 == file_id || OB_INVALID_ARCHIVE_FILE_ID == file_id)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "invalid file_id", K(file_id), K(ret));
   } else if (data_file_collect_) {
@@ -747,11 +875,9 @@ int MaxArchivedIndexInfo::set_round_start_info(const ObArchiveIndexFileInfo& ind
                   OB_INVALID_TIMESTAMP == index_info.round_log_submit_ts_ || index_info.round_clog_epoch_id_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(WARN, "invalid arguments", K(index_info), KR(ret));
-  } else if (round_start_info_collect_) {
+  } else if (is_round_start_info_collected()) {
     // skip it
   } else {
-    round_start_info_collect_ = true;
-
     round_start_info_.start_ts_ = index_info.round_start_ts_;
     round_start_info_.start_log_id_ = index_info.round_start_log_id_;
     round_start_info_.snapshot_version_ = index_info.round_snapshot_version_;

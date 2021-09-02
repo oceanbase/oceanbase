@@ -51,7 +51,8 @@ int ObTenantBackupCleanInfoUpdater::insert_backup_clean_info(
   return ret;
 }
 
-int ObTenantBackupCleanInfoUpdater::get_backup_clean_info(const uint64_t tenant_id, ObBackupCleanInfo& clean_info)
+int ObTenantBackupCleanInfoUpdater::get_backup_clean_info(
+    const uint64_t tenant_id, const bool for_update, ObBackupCleanInfo& clean_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -60,7 +61,8 @@ int ObTenantBackupCleanInfoUpdater::get_backup_clean_info(const uint64_t tenant_
   } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == clean_info.tenant_id_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get tenant backup clean info get invalid argument", K(ret), K(tenant_id), K(clean_info));
-  } else if (OB_FAIL(ObTenantBackupCleanInfoOperator::get_tenant_clean_info(tenant_id, clean_info, *sql_proxy_))) {
+  } else if (OB_FAIL(ObTenantBackupCleanInfoOperator::get_tenant_clean_info(
+                 tenant_id, for_update, clean_info, *sql_proxy_))) {
     if (OB_BACKUP_CLEAN_INFO_NOT_EXIST != ret) {
       LOG_WARN("failed to get tenant backup clean info", K(ret), K(tenant_id));
     }
@@ -176,6 +178,28 @@ int ObTenantBackupCleanInfoUpdater::get_deleted_tenant_clean_infos(
   } else if (OB_FAIL(ObTenantBackupCleanInfoOperator::get_deleted_tenant_clean_infos(
                  *sql_proxy_, deleted_tenant_clean_infos))) {
     LOG_WARN("failed to get tenant backup clean info", K(ret));
+  }
+  return ret;
+}
+
+int ObTenantBackupCleanInfoUpdater::check_clean_task_is_dong(bool& is_doing)
+{
+  int ret = OB_SUCCESS;
+  is_doing = false;
+  ObBackupCleanInfoStatus::STATUS status = ObBackupCleanInfoStatus::MAX;
+  const int64_t tenant_id = OB_SYS_TENANT_ID;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant clean info updater do not init", K(ret));
+  } else if (OB_FAIL(get_backup_clean_info_status(tenant_id, *sql_proxy_, status))) {
+    if (OB_ITER_END == ret) {
+      is_doing = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get backup clean info status", K(ret), K(tenant_id));
+    }
+  } else if (ObBackupCleanInfoStatus::STOP != status) {
+    is_doing = true;
   }
   return ret;
 }

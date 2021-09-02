@@ -29,6 +29,9 @@ void ObArchiveDestination::reset()
 {
   is_inited_ = false;
   compatible_ = false;
+  need_switch_piece_on_beginning_ = false;
+  cur_piece_id_ = OB_BACKUP_INVALID_PIECE_ID;
+  cur_piece_create_date_ = OB_INVALID_TIMESTAMP;
   cur_index_file_id_ = 0;
   index_file_offset_ = 0;
   cur_data_file_id_ = 0;
@@ -41,13 +44,15 @@ void ObArchiveDestination::reset()
 }
 
 int ObArchiveDestination::init(const common::ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+    const bool need_switch_piece_on_beginning, const int64_t piece_id, const int64_t piece_create_date,
     const bool compatible, const uint64_t cur_index_file_id, const int64_t index_file_offset,
-    const uint64_t cur_data_file_id, const int64_t data_file_offset)
+    const uint64_t cur_data_file_id, const int64_t data_file_offset, const int64_t force_switch_data_file)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(0 >= incarnation) || OB_UNLIKELY(0 >= round) ||
-      OB_UNLIKELY(OB_INVALID_ID == cur_index_file_id) || OB_UNLIKELY(index_file_offset < 0) ||
-      OB_UNLIKELY(OB_INVALID_ID == cur_data_file_id) || OB_UNLIKELY(data_file_offset < 0)) {
+      OB_UNLIKELY(0 > piece_id) || OB_UNLIKELY(OB_INVALID_ARCHIVE_FILE_ID == cur_index_file_id) ||
+      OB_UNLIKELY(index_file_offset < 0) || OB_UNLIKELY(OB_INVALID_ARCHIVE_FILE_ID == cur_data_file_id) ||
+      OB_UNLIKELY(data_file_offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments",
         KR(ret),
@@ -60,30 +65,39 @@ int ObArchiveDestination::init(const common::ObPGKey& pg_key, const int64_t inca
         K(data_file_offset));
   } else {
     compatible_ = compatible;
+    need_switch_piece_on_beginning_ = need_switch_piece_on_beginning;
+    cur_piece_id_ = piece_id;
+    cur_piece_create_date_ = piece_create_date;
     cur_index_file_id_ = cur_index_file_id;
     index_file_offset_ = index_file_offset;
     cur_data_file_id_ = cur_data_file_id;
     data_file_offset_ = index_file_offset;
+    force_switch_data_file_ = force_switch_data_file;
     is_inited_ = true;
   }
   return ret;
 }
 
 int ObArchiveDestination::init_with_valid_residual_data_file(const common::ObPGKey& pg_key, const int64_t incarnation,
-    const int64_t round, const bool compatible, const uint64_t cur_index_file_id, const int64_t index_file_offset,
-    const uint64_t cur_data_file_id, const int64_t data_file_offset, const uint64_t min_log_id,
-    const int64_t min_log_ts)
+    const int64_t round, const bool need_switch_piece_on_beginning, const int64_t piece_id,
+    const int64_t piece_create_date, const bool compatible, const uint64_t cur_index_file_id,
+    const int64_t index_file_offset, const uint64_t cur_data_file_id, const int64_t data_file_offset,
+    const int64_t force_switch_data_file, const uint64_t min_log_id, const int64_t min_log_ts)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(init(pg_key,
           incarnation,
           round,
+          need_switch_piece_on_beginning,
+          piece_id,
+          piece_create_date,
           compatible,
           cur_index_file_id,
           index_file_offset,
           cur_data_file_id,
-          data_file_offset))) {
+          data_file_offset,
+          force_switch_data_file))) {
     LOG_WARN("ObArchiveDestination init fail",
         KR(ret),
         K(pg_key),
@@ -126,6 +140,45 @@ int ObArchiveDestination::switch_file(
   return ret;
 }
 
+int ObArchiveDestination::switch_piece(const ObPGKey& pg_key, const int64_t piece_id, const int64_t piece_create_date)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_), K(pg_key));
+  } else if (OB_UNLIKELY(!pg_key.is_valid() ||
+                         ((!need_switch_piece_on_beginning_) && (piece_id != (cur_piece_id_ + 1))) ||
+                         (need_switch_piece_on_beginning_ && (piece_id != cur_piece_id_)))) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid arguments", K(ret), KPC(this), K(piece_id));
+  } else if (OB_FAIL(update_file_meta_info_(LOG_ARCHIVE_FILE_TYPE_DATA))) {
+    LOG_WARN("fail to update file meta info of data file", K(ret), K(pg_key));
+  } else if (OB_FAIL(update_file_meta_info_(LOG_ARCHIVE_FILE_TYPE_INDEX))) {
+    LOG_WARN("fail to update file meta info of index file", K(ret), K(pg_key));
+  } else {
+    reset_file_meta_info_();
+    if (need_switch_piece_on_beginning_) {
+      need_switch_piece_on_beginning_ = false;
+      LOG_INFO("success to switch_piece on beginning",
+          K(pg_key),
+          K(piece_id),
+          K(piece_create_date),
+          K(cur_data_file_id_),
+          K(cur_index_file_id_));
+    } else {
+      cur_piece_id_ = piece_id;
+      cur_piece_create_date_ = piece_create_date;
+      LOG_INFO("success to switch_piece",
+          K(pg_key),
+          K(piece_id),
+          K(piece_create_date),
+          K(cur_data_file_id_),
+          K(cur_index_file_id_));
+    }
+  }
+  return ret;
+}
+
 int ObArchiveDestination::update_file_meta_info_(const LogArchiveFileType file_type)
 {
   int ret = OB_SUCCESS;
@@ -150,6 +203,14 @@ int ObArchiveDestination::update_file_meta_info_(const LogArchiveFileType file_t
       LOG_ERROR("invalid file type", KR(ret), K(file_type));
   }
   return ret;
+}
+
+void ObArchiveDestination::reset_file_meta_info_()
+{
+  cur_data_file_id_ = 1;
+  data_file_offset_ = 0;
+  cur_index_file_id_ = 1;
+  index_file_offset_ = 0;
 }
 
 int ObArchiveDestination::update_file_offset(const int64_t buf_len, const LogArchiveFileType file_type)
@@ -214,13 +275,27 @@ int ObArchiveDestination::get_file_info(const common::ObPGKey& pg_key, const Log
   switch (file_type) {
     case LOG_ARCHIVE_FILE_TYPE_INDEX:
       offset = index_file_offset_;
-      ret = util.build_archive_file_path(
-          pg_key, LOG_ARCHIVE_FILE_TYPE_INDEX, cur_index_file_id_, incarnation, round, path_len, file_path);
+      ret = util.build_archive_file_path(pg_key,
+          LOG_ARCHIVE_FILE_TYPE_INDEX,
+          cur_index_file_id_,
+          incarnation,
+          round,
+          cur_piece_id_,
+          cur_piece_create_date_,
+          path_len,
+          file_path);
       break;
     case LOG_ARCHIVE_FILE_TYPE_DATA:
       offset = data_file_offset_;
-      ret = util.build_archive_file_path(
-          pg_key, LOG_ARCHIVE_FILE_TYPE_DATA, cur_data_file_id_, incarnation, round, path_len, file_path);
+      ret = util.build_archive_file_path(pg_key,
+          LOG_ARCHIVE_FILE_TYPE_DATA,
+          cur_data_file_id_,
+          incarnation,
+          round,
+          cur_piece_id_,
+          cur_piece_create_date_,
+          path_len,
+          file_path);
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -262,6 +337,21 @@ int ObArchiveDestination::get_data_file_min_log_info(uint64_t& min_log_id, int64
   }
 
   return ret;
+}
+
+bool ObArchiveDestination::has_current_data_file_been_written() const
+{
+  return data_file_offset_ > 0;
+}
+
+uint64_t ObArchiveDestination::get_last_archived_index_file_id() const
+{
+  return (index_file_offset_ > 0) ? cur_index_file_id_ : (cur_index_file_id_ - 1);
+}
+
+uint64_t ObArchiveDestination::get_last_archived_data_file_id() const
+{
+  return (data_file_offset_ > 0) ? cur_data_file_id_ : (cur_data_file_id_ - 1);
 }
 
 }  // namespace archive

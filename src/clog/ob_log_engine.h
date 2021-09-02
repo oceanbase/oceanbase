@@ -495,6 +495,9 @@ public:
       const uint64_t log_id, transaction::ObTransID& trans_id, int64_t& submit_timestamp) override;
   int get_clog_file_id_range(file_id_t& min_file_id, file_id_t& max_file_id) override;
   int delete_all_clog_files();
+  int check_clog_exist(const common::ObPartitionKey &partition_key,
+                       const uint64_t log_id,
+                       bool &exist);
   // ================== interface for ObIlogStorage begin====================
   int get_cursor_batch(
       const common::ObPartitionKey& pkey, const uint64_t query_log_id, ObGetCursorResult& result) override;

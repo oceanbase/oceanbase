@@ -1099,6 +1099,18 @@ ERRSIM_DEF_INT(skip_report_pg_backup_task_table_id, OB_CLUSTER_PARAMETER, "0", "
     "skip_report_pg_backup_task table id"
     "Range: [0,) in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(fake_archive_log_checkpoint_ts, OB_CLUSTER_PARAMETER, "0", "[0,)",
+    "fake_archive_log_checkpoint_ts"
+    "Range: [0,) in integer",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(fake_archive_log_status, OB_CLUSTER_PARAMETER, "0", "[0,)",
+    "fake_archive_log_status"
+    "Range: [0,) in integer",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(fake_once_init_restore_macro_index_store, OB_CLUSTER_PARAMETER, "0", "[0,)",
+    "0 for not fake, 1 for major, 2 for minor"
+    "Range: [0,) in integer",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(enable_disk_error_test, OB_CLUSTER_PARAMETER, "False",
     "when disk error test mode is enabled, observer send disk error "
     "status to rs in lease request",
@@ -1150,6 +1162,22 @@ ERRSIM_DEF_INT(fake_wait_batch_member_chagne_done, OB_CLUSTER_PARAMETER, "0", "[
     "fake_wait_batch_member_chagne_done"
     "Range: [0,100] in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(backup_backup_archive_log_batch_count, OB_CLUSTER_PARAMETER, "0", "[1,1024]",
+    "backup_backup_archive_log_batch_count"
+    "Range: [1,1024] in integer",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_TIME(backup_backup_archivelog_retry_interval, OB_CLUSTER_PARAMETER, "0", "[0s, 1h]",
+    "control backup backup archivelog retry interval. "
+    "Range: [0s, 1h]",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(backup_backupset_batch_count, OB_CLUSTER_PARAMETER, "0", "[1,1024]",
+    "backup_backupset_batch_count"
+    "Range: [1,1024] in integer",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_TIME(backup_backupset_retry_interval, OB_CLUSTER_PARAMETER, "0", "[0s, 1h]",
+    "control backup backupset retry interval. "
+    "Range: [0s, 1h]",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(max_wait_batch_member_change_done_us, OB_CLUSTER_PARAMETER, "300s", "[0s,24h]",
     "max_wait_batch_member_change_done_us. "
     "The default value is 300s. Range: [0s,24h]",
@@ -1182,6 +1210,10 @@ ERRSIM_DEF_INT(_max_block_per_backup_task, OB_CLUSTER_PARAMETER, "0", "[0,)",
     "the max macro block count per backup sub task"
     "Range: [0,max) in integer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(_max_backup_piece_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
+    "the max backup log archive piece id that the RS can switch to, Range: [0,max) in integer, 0 means that RS can "
+    "switch to any piece",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_TIME(ilog_flush_trigger_time, OB_CLUSTER_PARAMETER, "1800s", "[0s, 24h]",
     "max trigger time for ilog flush."
     "The default value is 1800s. Range: [0s, 24h]",
@@ -1205,7 +1237,19 @@ ERRSIM_DEF_INT(incremental_backup_limit, OB_CLUSTER_PARAMETER, "0", "[0,)",
 ERRSIM_DEF_TIME(backup_lease_takeover_time, OB_CLUSTER_PARAMETER, "10s", "[1s, 5m]",
     "Lease Takeover Time for Rootserver Backup heartbeat. Range: [1s, 5m]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(fake_report_server_tenant_start_ts, OB_CLUSTER_PARAMETER, "0", "[0,)",
+    "for test start ts rollback"
+    "Range: [0,max) in integer",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+ERRSIM_DEF_INT(_backup_pg_retry_max_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the max of one pg backup retry count, Range: [0,max) in integer, 0 means that pg backup no need retry",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        
+ERRSIM_DEF_INT(_backup_pg_max_batch_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
+        "the max of pg backup batch count, Range: [0,max) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        
 #ifdef TRANS_MODULE_TEST
 DEF_INT(module_test_trx_memory_errsim_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100]",
     "the percentage of memory errsim. Rang:[0, 100]",
@@ -1259,6 +1303,12 @@ DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,)",
 // backup
 DEF_STR(backup_dest, OB_CLUSTER_PARAMETER, "", "backup dest",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(backup_backup_dest, OB_CLUSTER_PARAMETER, "", "backup backup dest",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(backup_dest_option, OB_CLUSTER_PARAMETER, "", "backup_dest_option",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(backup_backup_dest_option, OB_CLUSTER_PARAMETER, "", "backup_backup_dest_option",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(backup_log_archive_option, OB_CLUSTER_PARAMETER, "OPTIONAL",
     common::ObConfigLogArchiveOptionsChecker, "backup log archive option, support MANDATORY/OPTIONAL, COMPRESSION",
@@ -1302,6 +1352,10 @@ DEF_CAP(log_archive_batch_buffer_limit, OB_CLUSTER_PARAMETER, "1G", "[4M,)",
     "Range: [4M, max)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(gc_wait_archive, OB_CLUSTER_PARAMETER, "True",
+         "control whether partition GC need to wait for all partition log be archived",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(backup_recovery_window, OB_CLUSTER_PARAMETER, "0", "[0,)",
     "backup expired day limit, 0 means not expired"
     "Range: [0, max) in time interval, for example 7d",
@@ -1310,7 +1364,16 @@ DEF_TIME(backup_recovery_window, OB_CLUSTER_PARAMETER, "0", "[0,)",
 DEF_STR_WITH_CHECKER(backup_region, OB_CLUSTER_PARAMETER, "", common::ObConfigBackupRegionChecker,
     "user suggest backup region", ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(backup_zone, OB_CLUSTER_PARAMETER, "", common::ObConfigBackupRegionChecker,
+    "user suggest backup zone, format like z1,z2;z3,z4;z5",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(auto_delete_expired_backup, OB_CLUSTER_PARAMETER, "False", "control if auto delete expired backup",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_auto_update_reserved_backup_timestamp, OB_CLUSTER_PARAMETER, "False",
+    "control if auto update reserved backup timestamp.True means only updating needed backup data file "
+    "timestamp which usually used in OSS without delete permission.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_backup_retry_timeout, OB_CLUSTER_PARAMETER, "10m", "[10s, 1h]",

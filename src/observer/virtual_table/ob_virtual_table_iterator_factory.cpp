@@ -175,6 +175,7 @@
 #include "observer/virtual_table/ob_all_virtual_dump_tenant_info.h"
 #include "observer/virtual_table/ob_all_virtual_reserved_table_mgr.h"
 #include "observer/virtual_table/ob_all_virtual_dag_warning_history.h"
+#include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/table/ob_virtual_table_ctx.h"
@@ -191,6 +192,7 @@
 #include "ob_all_virtual_pg_log_archive_stat.h"
 #include "observer/virtual_table/ob_virtual_open_cursor_table.h"
 #include "observer/virtual_table/ob_all_virtual_backupset_history_mgr.h"
+#include "observer/virtual_table/ob_all_virtual_backup_clean_info.h"
 
 namespace oceanbase {
 using namespace common;
@@ -1273,6 +1275,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam& params, ObVirtualTableIte
             ret = OB_NOT_SUPPORTED;
             break;
           }
+          case OB_VIRTUAL_SHOW_RESTORE_PREVIEW_TID: {
+            ObTenantShowRestorePreview* restore_preview = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObTenantShowRestorePreview, restore_preview))) {
+              SERVER_LOG(WARN, "ObTenantShowRestorePreview construct fail", K(ret));
+            } else if (OB_FAIL(restore_preview->init())) {
+              SERVER_LOG(WARN, "ObTenantShowRestorePreview init fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator*>(restore_preview);
+            }
+            break;
+          }
           case OB_TENANT_VIRTUAL_OBJECT_DEFINITION_TID: {
             ObGetObjectDefinition* get_object_def = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObGetObjectDefinition, get_object_def))) {
@@ -2326,6 +2339,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam& params, ObVirtualTableIte
               SERVER_LOG(WARN, "failed to init backup_set_history_mgr", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator*>(backup_set_history_mgr);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_BACKUP_CLEAN_INFO_TID: {
+            ObAllVirtualBackupCleanInfo* backup_clean_info_table = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualBackupCleanInfo, backup_clean_info_table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualBackupCleanInfo construct failed", K(ret));
+            } else if (OB_FAIL(backup_clean_info_table->init(*GCTX.sql_proxy_))) {
+              SERVER_LOG(WARN, "failed to init virtual backup clean info table", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator*>(backup_clean_info_table);
             }
             break;
           }

@@ -1484,7 +1484,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult& result)
                T_COMMIT == type || T_ROLLBACK == type || T_VARIABLE_SET == type ||
                T_SET_NAMES == type       // read only not restrict it
                || T_SET_CHARSET == type  // read only not restrict it
-               || T_SHOW_RECYCLEBIN == type || T_SHOW_TENANT == type) {
+               || T_SHOW_RECYCLEBIN == type || T_SHOW_TENANT == type || T_SHOW_RESTORE_PREVIEW == type) {
       ret = true;
     }
   }

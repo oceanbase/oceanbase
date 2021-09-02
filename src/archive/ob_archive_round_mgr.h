@@ -38,19 +38,35 @@ public:
 public:
   int init();
   void destroy();
-  int64_t get_current_archive_round()
+  int64_t get_current_archive_round() const
   {
     return current_archive_round_;
   }
-  int64_t get_current_archive_incarnation()
+  int64_t get_current_archive_incarnation() const
   {
     return incarnation_;
   }
-  int64_t get_total_pg_count()
+  int64_t get_cur_piece_id() const
+  {
+    return cur_piece_id_;
+  }
+  int64_t get_cur_piece_create_date() const
+  {
+    return cur_piece_create_date_;
+  }
+  bool is_compatible() const
+  {
+    return compatible_;
+  }
+  bool is_oss() const
+  {
+    return is_oss_;
+  }
+  int64_t get_total_pg_count() const
   {
     return total_pg_count_;
   }
-  bool get_add_pg_finish_flag()
+  bool get_add_pg_finish_flag() const
   {
     return add_pg_finish_;
   }
@@ -58,15 +74,22 @@ public:
   void inc_total_pg_count();
   void dec_total_pg_count();
   void inc_started_pg();
+  const char* get_storage_info() const
+  {
+    return storage_info_;
+  }
   // return OB_EAGAIN wheren incarnation or archive_round is not the same
   int mark_fatal_error(const common::ObPartitionKey& pg_key, const int64_t incarnation, const int64_t archive_round);
   // used for observer report archive_status to rs
   bool has_encounter_fatal_error(const int64_t incarnation, const int64_t archive_round);
-  int set_archive_start(const int64_t incarnation, const int64_t archive_round,
-      const share::ObTenantLogArchiveStatus::COMPATIBLE compatible);
+  int set_archive_start(const int64_t incarnation, const int64_t archive_round, const int64_t piece_id,
+      const int64_t piece_create_date, const bool is_oss, const share::ObTenantLogArchiveStatus::COMPATIBLE compatible);
   void set_archive_force_stop(const int64_t incarnation, const int64_t archive_round);
-  void get_archive_round_info(
-      int64_t& incarnation, int64_t& archive_round, LogArchiveStatus& log_archive_status, bool& has_encount_error);
+  int update_cur_piece_info(const int64_t incarnation, const int64_t archive_round, const int64_t new_piece_id,
+      const int64_t new_piece_create_date);
+  void get_archive_round_info(int64_t& incarnation, int64_t& archive_round, int64_t& cur_piece_id,
+      int64_t& cur_piece_create_date, bool& is_oss, LogArchiveStatus& log_archive_status,
+      bool& has_encount_error) const;
   void get_archive_round_compatible(int64_t& incarnation, int64_t& archive_round, bool& compatible);
   bool need_handle_error();
 
@@ -81,8 +104,8 @@ public:
   LogArchiveStatus get_log_archive_status();
 
   void set_has_handle_error(bool has_handle);
-  TO_STRING_KV(K(add_pg_finish_), K(total_pg_count_), K(started_pg_count_), K(current_archive_round_), K(start_tstamp_),
-      K(root_path_), K(storage_info_));
+  TO_STRING_KV(K(add_pg_finish_), K(total_pg_count_), K(started_pg_count_), K(incarnation_), K(current_archive_round_),
+      K(cur_piece_id_), K(cur_piece_create_date_), K(compatible_), K(is_oss_), K(root_path_), K(storage_info_));
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
@@ -96,9 +119,11 @@ public:
 
   int64_t incarnation_;
   int64_t current_archive_round_;
-  int64_t start_tstamp_;
-  bool compatible_;  // for compatible
+  int64_t cur_piece_id_;
+  int64_t cur_piece_create_date_;
+  bool compatible_;
 
+  bool is_oss_;  // no need to create dir before writing a file
   char root_path_[OB_MAX_ARCHIVE_PATH_LENGTH];
   char storage_info_[OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH];
 

@@ -601,39 +601,11 @@ bool ObConfigBoolItem::parse(const char* str, bool& valid) const
   if (OB_ISNULL(str)) {
     valid = false;
     OB_LOG(ERROR, "Get bool config item fail, str is NULL!");
-  } else if (0 == STRCASECMP(str, "false")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "true")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "off")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "on")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "no")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "yes")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "f")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "t")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "1")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "0")) {
-    valid = true;
-    value = false;
   } else {
-    OB_LOG(ERROR, "Get bool config item fail", K(str));
-    valid = false;
+    value = ObConfigBoolParser::get(str, valid);
+    if (!valid) {
+      OB_LOG(ERROR, "Get bool config item fail", K(valid), K(str));
+    }
   }
   return value;
 }

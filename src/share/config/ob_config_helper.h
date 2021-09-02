@@ -540,6 +540,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigTimeParser);
 };
 
+struct ObConfigBoolParser {
+  static bool get(const char* str, bool& valid);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey, ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 }  // namespace common
 }  // namespace oceanbase

@@ -28,6 +28,44 @@ void print_access_storage_log(
 int get_storage_type_from_path(const common::ObString& uri, ObStorageType& type);
 int get_storage_type_from_name(const char* type_str, ObStorageType& type);
 const char* get_storage_type_str(const ObStorageType& type);
+bool is_io_error(const int result);
+
+// A singleton base class offering an easy way to create singleton.
+template <typename T>
+class ObSingleton {
+public:
+  // not thread safe
+  static T& get_instance()
+  {
+    static T instance;
+    return instance;
+  }
+
+  virtual ~ObSingleton()
+  {}
+
+protected:
+  ObSingleton()
+  {}
+
+private:
+  ObSingleton(const ObSingleton&);
+  ObSingleton& operator=(const ObSingleton&);
+};
+
+class ObStorageGlobalIns : public ObSingleton<ObStorageGlobalIns> {
+public:
+  int init();
+
+  void fin();
+  // When the observer is in not in white list, no matter read or write io is not allowed.
+  void set_io_prohibited(bool prohibited);
+
+  bool is_io_prohibited() const;
+
+private:
+  bool io_prohibited_;
+};
 
 enum ObAppendStrategy {
   // Each write will be done by the following operations:
@@ -90,6 +128,11 @@ public:
       common::ObIArray<common::ObPartitionKey>& pkeys);
   // uri is directory
   int delete_tmp_files(const common::ObString& uri, const common::ObString& storage_info);
+  int is_empty_directory(const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);
+  int check_backup_dest_lifecycle(
+      const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle);
+  int list_directories(const common::ObString& dir_path, const common::ObString& storage_info,
+      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directory_names);
 
 private:
   int get_util(const common::ObString& uri, ObIStorageUtil*& util);
@@ -166,6 +209,7 @@ public:
   // TODO: out of date interface, to be deprecated.
   int open_deprecated(const common::ObString& uri, const common::ObString& storage_info);
   int write(const char* buf, const int64_t size);
+  int pwrite(const char* buf, const int64_t size, const int64_t offset);
   int close();
   bool is_opened() const
   {

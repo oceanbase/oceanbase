@@ -59,7 +59,7 @@ ObArchiveEntryIterator::ObArchiveEntryIterator()
       io_count_(0),
       limit_bandwidth_cost_(0),
       has_load_entire_file_(false),
-      last_block_meta_()
+      cur_block_meta_()
 {}
 
 void ObArchiveEntryIterator::reset()
@@ -97,7 +97,7 @@ void ObArchiveEntryIterator::reset()
   io_count_ = 0;
   limit_bandwidth_cost_ = 0;
   has_load_entire_file_ = false;
-  last_block_meta_.reset();
+  cur_block_meta_.reset();
 }
 
 int ObArchiveEntryIterator::init(ObIArchiveLogFileStore* file_store, const ObPGKey& pg_key, const uint64_t file_id,
@@ -143,9 +143,12 @@ int ObArchiveEntryIterator::init(ObIArchiveLogFileStore* file_store, const ObPGK
   return ret;
 }
 
-int ObArchiveEntryIterator::next_entry(clog::ObLogEntry& entry)
+int ObArchiveEntryIterator::next_entry(clog::ObLogEntry& entry, bool& is_accum_checksum_valid, int64_t& accum_checksum)
 {
   int ret = OB_SUCCESS;
+  clog::ObLogEntry tmp_entry;
+  is_accum_checksum_valid = false;
+  accum_checksum = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -183,7 +186,18 @@ int ObArchiveEntryIterator::next_entry(clog::ObLogEntry& entry)
           ARCHIVE_LOG(TRACE, "prepare buffer succ", K(pg_key_), K(file_id_));
         }
       }
+
+      // print warn
+      if (io_cost_ > PRINT_WARN_TIME) {
+        ARCHIVE_LOG(WARN, "iterate archive log entry cost too much time", KR(ret), KPC(this));
+      }
     } while (OB_EAGAIN == ret || (OB_SUCCESS == ret && !done));
+  }
+
+  // 3. check if return the accum checksum of the max log in current block
+  if (OB_SUCC(ret) && entry.get_header().get_log_id() == cur_block_meta_.get_max_log_id()) {
+    is_accum_checksum_valid = true;
+    accum_checksum = cur_block_meta_.get_max_log_accum_checksum();
   }
 
   ARCHIVE_LOG(TRACE, "raw iter next_entry", KR(ret), K(entry));
@@ -206,7 +220,8 @@ int ObArchiveEntryIterator::prepare_buffer_()
   if (OB_FAIL(file_store_->read_data_direct(param, rbuf_, read_res))) {
     if (OB_BACKUP_FILE_NOT_EXIST == ret) {
       ret = OB_ITER_END;
-    } else if (is_io_error(ret) || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret) {
+    } else if (is_io_error(ret) || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret ||
+               OB_BACKUP_IO_PROHIBITED == ret) {
       // do nothing
     } else {
       ARCHIVE_LOG(ERROR, "failed to read_data_direct", KR(ret), K(param), KPC(this));
@@ -395,7 +410,6 @@ int ObArchiveEntryIterator::try_construct_log_buf_()
 {
   int ret = OB_SUCCESS;
   ObArchiveItemType item_type = UNKNOWN_TYPE;
-  ObArchiveBlockMeta block_meta;
 
   // reset log buf package
   reset_log_buf_package_();
@@ -403,16 +417,16 @@ int ObArchiveEntryIterator::try_construct_log_buf_()
   if (NULL == buf_end_ || buf_end_ - buf_cur_ <= 0) {
     // no data exist, need prepare buffer
     ret = OB_BUF_NOT_ENOUGH;
-  } else if (OB_FAIL(extract_block_meta_(block_meta))) {
+  } else if (OB_FAIL(extract_block_meta_())) {
     if (OB_BUF_NOT_ENOUGH != ret) {
       ARCHIVE_LOG(WARN, "extract_block_meta_ fail", KR(ret), K(pg_key_));
     }
   } else if (OB_FAIL(get_entry_type_(item_type))) {
-    ARCHIVE_LOG(WARN, "get_entry_type_ fail", KR(ret), K(pg_key_), K(block_meta));
+    ARCHIVE_LOG(WARN, "get_entry_type_ fail", KR(ret), K(pg_key_), K(cur_block_meta_));
   } else {
     switch (item_type) {
       case ARCHIVE_COMPRESSED_CHUNK:
-        ret = decompress_buf_(block_meta);
+        ret = decompress_buf_();
         break;
       case ARCHIVE_ENCRYPTED_CHUNK:
         ret = OB_NOT_SUPPORTED;
@@ -421,11 +435,11 @@ int ObArchiveEntryIterator::try_construct_log_buf_()
         ret = OB_NOT_SUPPORTED;
         break;
       case CLOG_ENTRY:
-        ret = fill_origin_buf_(block_meta);
+        ret = fill_origin_buf_();
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
-        ARCHIVE_LOG(ERROR, "unexpected archive item type", KR(ret), K(item_type), K(pg_key_), K(block_meta));
+        ARCHIVE_LOG(ERROR, "unexpected archive item type", KR(ret), K(item_type), K(pg_key_));
         break;
     }
   }
@@ -433,21 +447,22 @@ int ObArchiveEntryIterator::try_construct_log_buf_()
   return ret;
 }
 
-int ObArchiveEntryIterator::extract_block_meta_(ObArchiveBlockMeta& meta)
+int ObArchiveEntryIterator::extract_block_meta_()
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
+  ObArchiveBlockMeta meta;
 
   if (OB_FAIL(meta.deserialize(buf_cur_, buf_end_ - buf_cur_, pos))) {
     handle_serialize_ret_(ret);
+  } else if (!meta.check_magic_number(meta.magic_) || !meta.check_meta_checksum()) {
+    ret = OB_ITER_END;
+    ARCHIVE_LOG(WARN, "archive block meta is not valid", KR(ret), K(meta), KPC(this));
   } else if (buf_end_ - buf_cur_ < meta.get_total_len()) {
     ret = OB_BUF_NOT_ENOUGH;
-  } else if (OB_UNLIKELY(!meta.check_meta_checksum())) {
-    ret = OB_INVALID_DATA;
-    ARCHIVE_LOG(WARN, "check block meta checksum error, maybe not integrated block", KR(ret), K(pg_key_), K(meta));
   } else {
     const int64_t len = pos + meta.get_data_len() + ARCHIVE_BLOCK_META_OFFSET_ENCODE_SIZE;
-    last_block_meta_ = meta;
+    cur_block_meta_ = meta;
     advance_(len);
     block_end_ = buf_cur_ + len;
     buf_cur_ += pos;
@@ -457,19 +472,19 @@ int ObArchiveEntryIterator::extract_block_meta_(ObArchiveBlockMeta& meta)
   return ret;
 }
 
-int ObArchiveEntryIterator::decompress_buf_(ObArchiveBlockMeta& block_meta)
+int ObArchiveEntryIterator::decompress_buf_()
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   const int64_t dst_buf_size = MAX_ARCHIVE_BLOCK_SIZE;
   int64_t decompress_data_size = 0;
-  const int64_t chunk_size = block_meta.get_data_len();
+  const int64_t chunk_size = cur_block_meta_.get_data_len();
   ObArchiveCompressedChunk compress_chunk;
   const ObArchiveCompressedChunkHeader& compress_header = compress_chunk.get_header();
 
   // 1. deserialize CompressedChunk
   if (OB_FAIL(compress_chunk.deserialize(buf_cur_, chunk_size, pos))) {
-    ARCHIVE_LOG(WARN, "compress chunk deserialize fail", KR(ret), K(pg_key_), K(block_meta));
+    ARCHIVE_LOG(WARN, "compress chunk deserialize fail", KR(ret), K(pg_key_), K(cur_block_meta_));
   } else if (OB_UNLIKELY(!compress_header.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "invalid compress header", KR(ret), K(pg_key_), K(compress_header));
@@ -488,10 +503,10 @@ int ObArchiveEntryIterator::decompress_buf_(ObArchiveBlockMeta& block_meta)
             dd_buf_.rbuf_.buf_,
             dst_buf_size,
             decompress_data_size))) {
-      ARCHIVE_LOG(WARN, "decompress_ fail", KR(ret), K(pg_key_), K(block_meta), K(compress_data_len));
+      ARCHIVE_LOG(WARN, "decompress_ fail", KR(ret), K(pg_key_), K(cur_block_meta_), K(compress_data_len));
     } else {
       fill_log_package_(dd_buf_.rbuf_.buf_, decompress_data_size);
-      ARCHIVE_LOG(TRACE, "decompress buf succ", K(pg_key_), K(file_id_), K(block_meta));
+      ARCHIVE_LOG(TRACE, "decompress buf succ", K(pg_key_), K(file_id_), K(cur_block_meta_));
     }
   }
 
@@ -529,10 +544,10 @@ void ObArchiveEntryIterator::fill_log_package_(char* buf, const int64_t buf_len)
   dd_buf_.end_ = buf + buf_len;
 }
 
-int ObArchiveEntryIterator::fill_origin_buf_(ObArchiveBlockMeta& block_meta)
+int ObArchiveEntryIterator::fill_origin_buf_()
 {
   int ret = OB_SUCCESS;
-  const int64_t log_buf_len = block_meta.get_data_len();
+  const int64_t log_buf_len = cur_block_meta_.get_data_len();
   origin_buf_.rbuf_.buf_ = buf_cur_;
   origin_buf_.rbuf_.buf_len_ = log_buf_len;
 

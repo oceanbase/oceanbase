@@ -36,10 +36,13 @@ public:
   int join_macro_block_file(const int64_t backup_set_id, const int64_t sub_task_id);
   int join_macro_block_index(const int64_t backup_set_id, const int64_t retry_cnt = 0);
   int join_sstable_macro_index(const int64_t backup_set_id, const int64_t retry_cnt = 0);
+  int join_archive_pg_key(const common::ObPGKey& pg_key);
+  int join_round_and_piece(const int64_t round, const int64_t piece_id, const int64_t piece_create_date);
   bool is_empty() const
   {
     return 0 == cur_pos_;
   }
+  int join_backup_set(const int64_t full_backup_set_id, const int64_t inc_set_id, const int64_t backup_date);
 
   const char* get_ptr() const
   {
@@ -68,80 +71,139 @@ struct ObBackupPathUtil {
   // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/tenant_clog_backup_info
   static int get_tenant_clog_backup_info_path(
       const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path);
+  // oss:/backup/cluster_name/cluster_id/incarnation_1/cluster_clog_backup_piece_info
+  static int get_cluster_clog_backup_piece_info_path(
+      const ObClusterBackupDest& dest, const bool is_backup_backup, ObBackupPath& path);
+  // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/tenant_clog_backup_piece_info
+  static int get_tenant_clog_backup_piece_info_path(
+      const ObClusterBackupDest& dest, const uint64_t tenant_id, const bool is_backup_backup, ObBackupPath& path);
+  // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/piece_dir
+  static int get_tenant_clog_backup_piece_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
+      const int64_t round_id, const int64_t backup_piece_id, const int64_t create_date, ObBackupPath& path);
+  // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/piece_dir/tenant_clog_backup_single_piece_info
+  static int get_tenant_clog_backup_single_piece_info_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
+      const int64_t round_id, const int64_t backup_piece_id, const int64_t create_date, ObBackupPath& path);
   // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round
-  static int get_cluster_clog_prefix_path(
-      const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round, ObBackupPath& path);
+  static int get_cluster_clog_prefix_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
+      const int64_t round, const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path);
   // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/clog/round/mount_file
   static int get_tenant_clog_mount_file_path(
       const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round, ObBackupPath& path);
   // oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1
   static int get_tenant_data_full_backup_set_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
+  static int get_tenant_data_inc_backup_set_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path);
   // "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/backup_2"
   static int get_tenant_data_inc_backup_set_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
   // assert task_id is not duplicate
   // "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/backup_2/sys_meta_index_file_1"
   static int get_tenant_data_meta_index_path(
       const ObBackupBaseDataPathInfo& path_info, const int64_t task_id, ObBackupPath& path);
+  static int get_tenant_data_meta_index_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
+  static int get_tenant_data_meta_file_path(
+      const share::ObSimpleBackupSetPath& simple_path, const int64_t task_id, ObBackupPath& path);
   static int get_tenant_data_meta_file_path(
       const ObBackupBaseDataPathInfo& path_info, const int64_t task_id, ObBackupPath& path);
   // "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/data/table_id/part_id"
   static int get_tenant_pg_data_path(
       const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, const int64_t part_id, ObBackupPath& path);
+  static int get_tenant_pg_data_path(
+      const ObBackupPath& base_path, const int64_t table_id, const int64_t part_id, ObBackupPath& path);
   static int get_sstable_macro_index_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
       const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path);
   static int get_macro_block_index_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
       const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path);
+  static int get_macro_block_index_path(const share::ObSimpleBackupSetPath& simple_path, const int64_t table_id,
+      const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path);
   static int get_macro_block_file_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
-      const int64_t part_id, const int64_t backup_set_id, const int64_t sub_task_id, ObBackupPath& path);
+      const int64_t part_id, const int64_t full_backup_set_id, const int64_t inc_backup_set_id,
+      const int64_t sub_task_id, ObBackupPath& path);
   static int get_major_macro_block_file_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
       const int64_t part_id, const int64_t backup_set_id, const int64_t sub_task_id, ObBackupPath& path);
+  static int get_major_macro_block_file_path(const ObSimpleBackupSetPath& path_info, const int64_t table_id,
+      const int64_t part_id, const int64_t backup_set_id, const int64_t sub_task_id, ObBackupPath& path);
   static int get_minor_macro_block_file_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
+      const int64_t part_id, const int64_t backup_set_id, const int64_t backup_tsk_id, const int64_t sub_task_id,
+      ObBackupPath& path);
+  static int get_minor_macro_block_file_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
       const int64_t part_id, const int64_t backup_set_id, const int64_t backup_tsk_id, const int64_t sub_task_id,
       ObBackupPath& path);
   static int get_cluster_data_backup_info_path(const ObClusterBackupDest& dest, ObBackupPath& path);
   static int get_tenant_data_backup_info_path(
       const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path);
-  static int get_tenant_backup_set_info_path(
-      const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t full_backup_set_id, ObBackupPath& path);
-  static int get_tenant_sys_pg_list_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-      const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObBackupPath& path);
-  static int get_tenant_normal_pg_list_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-      const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObBackupPath& path);
+  static int get_tenant_backup_set_info_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
+  static int get_tenant_sys_pg_list_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path);
+  static int get_tenant_sys_pg_list_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
+  static int get_tenant_normal_pg_list_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path);
+  static int get_tenant_normal_pg_list_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
   static int get_tenant_info_path(const ObClusterBackupDest& dest, ObBackupPath& path);
   // "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_name_info"
   static int get_tenant_name_info_path(const ObClusterBackupDest& dest, ObBackupPath& path);
-  static int get_tenant_locality_info_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-      const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObBackupPath& path);
-  static int get_tenant_backup_diagnose_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
-      const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObBackupPath& path);
+  static int get_tenant_locality_info_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path);
+  static int get_tenant_locality_info_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
+  static int get_tenant_backup_diagnose_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
   static int get_table_clog_data_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round,
-      const int64_t table_id, const int64_t part_id, ObBackupPath& path);
+      const int64_t piece_id, const int64_t piece_create_date, const int64_t table_id, const int64_t part_id,
+      ObBackupPath& path);
   static int get_table_clog_index_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round,
-      const int64_t table_id, const int64_t part_id, ObBackupPath& path);
+      const int64_t piece_id, const int64_t piece_create_date, const int64_t table_id, const int64_t part_id,
+      ObBackupPath& path);
   static int get_tenant_table_data_path(
       const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, ObBackupPath& path);
-  static int get_tenant_clog_data_path(
-      const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round, ObBackupPath& path);
-  static int get_tenant_clog_index_path(
-      const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round, ObBackupPath& path);
+  static int get_tenant_clog_data_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path);
+  static int get_tenant_clog_index_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path);
   static int get_tenant_backup_data_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path);
   static int get_tenant_clog_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path);
   static int get_tenant_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, ObBackupPath& path);
   static int get_cluster_clog_info(const ObClusterBackupDest& dest, ObBackupPath& path);
-  static int get_clog_archive_key_prefix(
-      const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round, ObBackupPath& path);
+  static int get_cluster_clog_info_file_path(
+      const ObClusterBackupDest& dest, const common::ObString& file_name, ObBackupPath& path);
+  static int get_clog_archive_key_prefix(const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date, ObBackupPath& path);
+  static int get_clog_archive_key_path(const ObClusterBackupDest& dest, const uint64_t tenant_id, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date, const common::ObPGKey& pg_key, ObBackupPath& path);
 
   // 3.x new backup format
   // "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/data/table_id/part_id/major_data/"
   static int get_tenant_pg_major_data_path(
       const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, const int64_t part_id, ObBackupPath& path);
+  static int get_tenant_pg_major_data_path(
+      const ObSimpleBackupSetPath& simple_path, const int64_t table_id, const int64_t part_id, ObBackupPath& path);
   // "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/data/table_id/part_id/minor_data/task_id/"
   static int get_tenant_pg_minor_data_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
       const int64_t part_id, const int64_t task_id, ObBackupPath& path);
+  static int get_tenant_pg_minor_data_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
+      const int64_t part_id, const int64_t task_id, ObBackupPath& path);
+  // "oss:/backup/cluster_name/cluster_id/incarnation_1/tenant_id/data/backup_set_1/data/table_id/part_id/minor_data/"
+  static int get_tenant_pg_minor_dir_path(
+      const ObBackupBaseDataPathInfo& path_info, const int64_t table_id, const int64_t part_id, ObBackupPath& path);
+  static int get_tenant_pg_minor_dir_path(
+      const ObSimpleBackupSetPath& simple_path, const int64_t table_id, const int64_t part_id, ObBackupPath& path);
   static int get_major_macro_block_index_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
+      const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path);
+  static int get_major_macro_block_index_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
       const int64_t part_id, const int64_t retry_cnt, ObBackupPath& path);
   static int get_minor_macro_block_index_path(const ObBackupBaseDataPathInfo& path_info, const int64_t table_id,
       const int64_t part_id, const int64_t task_id, const int64_t retry_cnt, ObBackupPath& path);
+  static int get_minor_macro_block_index_path(const ObSimpleBackupSetPath& simple_path, const int64_t table_id,
+      const int64_t part_id, const int64_t task_id, const int64_t retry_cnt, ObBackupPath& path);
+  static int get_cluster_backup_set_file_info_path(
+      const ObClusterBackupDest& dest, const bool is_backup_backup, ObBackupPath& path);
+  static int get_tenant_backup_set_file_info_path(
+      const ObClusterBackupDest& dest, const uint64_t tenant_id, const bool is_backup_backup, ObBackupPath& path);
+  static int get_tenant_single_backup_set_info_path(const ObSimpleBackupSetPath& simple_path, ObBackupPath& path);
+  static int get_tenant_single_backup_set_info_path(const ObBackupBaseDataPathInfo& path_info, ObBackupPath& path);
+  static int get_table_clog_data_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
+      const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const uint64_t table_id,
+      ObBackupPath& path);
+  static int get_table_clog_index_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
+      const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const uint64_t table_id,
+      ObBackupPath& path);
+  static int get_tenant_clog_backup_piece_data_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
+      const int64_t round_id, const int64_t backup_piece_id, const int64_t create_date, ObBackupPath& path);
+  static int get_tenant_clog_backup_piece_index_dir_path(const ObClusterBackupDest& dest, const uint64_t tenant_id,
+      const int64_t round_id, const int64_t backup_piece_id, const int64_t create_date, ObBackupPath& path);
 };
 
 class ObBackupMountFile final {

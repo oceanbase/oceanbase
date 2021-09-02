@@ -52,8 +52,8 @@ public:
     return PART_GROUP_BACKUP_TASK;
   }
 
-  TO_STRING_KV(K_(task_id), K_(is_inited), K_(is_finished), K_(is_batch_mode), KP_(partition_service),
-      K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
+  TO_STRING_KV(K_(task_id), K_(is_inited), K_(backup_data_type), K_(is_finished), K_(is_batch_mode),
+      KP_(partition_service), K_(first_error_code), K_(type), "sub_task_count", task_list_.count(), K_(task_list));
 
 private:
   int check_partition_validation();  // only invoked before executing, so without concurrency invoke
@@ -74,8 +74,10 @@ private:
   void reset_tasks_status();
   int check_all_pg_backup_point_created();
   int check_pg_backup_point_created(const ObPartitionKey& pg_key, const int64_t backup_snapshot_version);
+  int check_disk_space();
 
 private:
+  share::ObBackupDataType backup_data_type_;
   DISALLOW_COPY_AND_ASSIGN(ObPartGroupBackupTask);
 };
 

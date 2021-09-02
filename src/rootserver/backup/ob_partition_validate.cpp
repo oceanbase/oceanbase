@@ -263,12 +263,19 @@ int ObPartitionValidate::get_all_tenant_log_archive_infos(
   bool for_update = false;
   ObLogArchiveBackupInfoMgr log_archive_mgr;
   ObLogArchiveBackupInfo cur_info;
+  ObBackupInnerTableVersion inner_table_version = OB_BACKUP_INNER_TABLE_VMAX;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("root validate do not init", K(ret));
-  } else if (OB_FAIL(log_archive_mgr.get_log_archive_backup_info(*sql_proxy_, for_update, tenant_id, cur_info))) {
-    LOG_WARN("failed to get log achive backup info", K(ret), K(tenant_id));
-  } else if (OB_FAIL(log_archive_mgr.get_log_archvie_history_infos(*sql_proxy_, tenant_id, for_update, log_infos))) {
+  } else if (OB_FAIL(ObBackupInfoOperator::get_inner_table_version(*sql_proxy_, inner_table_version))) {
+    LOG_WARN("Failed to get inner table version", K(ret));
+  } else if (inner_table_version < OB_BACKUP_INNER_TABLE_V3) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("backup validation should not null scheduler before v3", K(ret), K(inner_table_version));
+  } else if (OB_FAIL(log_archive_mgr.get_log_archive_backup_info(
+                 *sql_proxy_, for_update, tenant_id, inner_table_version, cur_info))) {
+    LOG_WARN("failed to get log archive backup info", K(ret), K(tenant_id));
+  } else if (OB_FAIL(log_archive_mgr.get_log_archive_history_infos(*sql_proxy_, tenant_id, for_update, log_infos))) {
     LOG_WARN("failed to get log archive history infos", K(ret), K(tenant_id));
   } else if (OB_FAIL(log_infos.push_back(cur_info))) {
     LOG_WARN("failed to push back current log archive backup info", K(ret), K(tenant_id), K(cur_info));
@@ -287,6 +294,9 @@ int ObPartitionValidate::get_all_tenant_backup_task_infos(
   ObTenantBackupTaskUpdater task_updater;
   ObBackupTaskHistoryUpdater history_updater;
   ObTenantBackupTaskInfo tenant_backup_task;
+  const bool is_backup_backup = false;
+  const bool for_update = false;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition validate do not init", K(ret));
@@ -294,9 +304,9 @@ int ObPartitionValidate::get_all_tenant_backup_task_infos(
     LOG_WARN("failed to init tenant backup task updater", K(ret), K(tenant_id));
   } else if (OB_FAIL(history_updater.init(*sql_proxy_))) {
     LOG_WARN("failed to init backup task history updater", K(ret));
-  } else if (OB_FAIL(task_updater.get_tenant_backup_task(tenant_id, tenant_backup_task))) {
+  } else if (OB_FAIL(task_updater.get_tenant_backup_task(tenant_id, for_update, tenant_backup_task))) {
     LOG_WARN("failed to get tenant backup task", K(ret), K(tenant_id));
-  } else if (OB_FAIL(history_updater.get_tenant_backup_tasks(tenant_id, backup_infos))) {
+  } else if (OB_FAIL(history_updater.get_tenant_backup_tasks(tenant_id, is_backup_backup, backup_infos))) {
     LOG_WARN("failed to get tenant backup history tasks", K(ret));
   } else if (OB_FAIL(backup_infos.push_back(tenant_backup_task))) {
     LOG_WARN("failed to push back tenant backup task", K(ret), K(tenant_id), K(tenant_backup_task));
@@ -309,12 +319,14 @@ int ObPartitionValidate::get_all_tenant_backup_task_infos(
 
 int ObPartitionValidate::get_extern_backup_set_infos(const int64_t backup_set_id,
     const common::ObArray<share::ObTenantBackupTaskInfo>& backup_infos, int64_t& full_backup_set_id,
-    int64_t& inc_backup_set_id, int64_t& cluster_version)
+    int64_t& inc_backup_set_id, int64_t& cluster_version, int64_t& backup_date, int64_t& compatible)
 {
   int ret = OB_SUCCESS;
   full_backup_set_id = 0;
   inc_backup_set_id = 0;
   cluster_version = 0;
+  backup_date = 0;
+  compatible = 0;
   typedef ObArray<ObTenantBackupTaskInfo>::const_iterator ArrayIter;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -329,14 +341,15 @@ int ObPartitionValidate::get_extern_backup_set_infos(const int64_t backup_set_id
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to find previous backup set info", K(ret), K(backup_set_id), K(backup_infos));
     } else {
+      cluster_version = iter->cluster_version_;
+      compatible = iter->compatible_;
+      backup_date = iter->date_;
       if (ObBackupType::FULL_BACKUP == iter->backup_type_.type_) {
         full_backup_set_id = backup_set_id;
         inc_backup_set_id = backup_set_id;
-        cluster_version = iter->cluster_version_;
       } else if (ObBackupType::INCREMENTAL_BACKUP == iter->backup_type_.type_) {
         full_backup_set_id = iter->prev_full_backup_set_id_;
         inc_backup_set_id = backup_set_id;
-        cluster_version = iter->cluster_version_;
       } else {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected ObBackupType", K(ret));
@@ -710,7 +723,8 @@ int ObPartitionValidate::get_log_archive_max_next_time(
   } else if (OB_INVALID_ID == tenant_id || incarnation <= 0 || log_archive_round <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("partition validate get invalid argument", K(ret), K(tenant_id), K(incarnation), K(log_archive_round));
-  } else if (OB_FAIL(log_archive_mgr.get_log_archive_checkpoint(*sql_proxy_, tenant_id, max_next_time))) {
+  } else if (OB_FAIL(log_archive_mgr.get_log_archive_checkpoint(
+                 *sql_proxy_, tenant_id, max_next_time))) {  // TODO(yanfeng): remove it ?
     LOG_WARN("failed to get log archive checkpoint", K(ret), K(tenant_id));
   }
   UNUSED(incarnation);
@@ -769,13 +783,17 @@ int ObPartitionValidate::generate_batch_pg_task(const bool is_dropped_tenant,
           int64_t full_backup_set_id = 0;
           int64_t inc_backup_set_id = 0;
           int64_t cluster_version = 0;
+          int64_t backup_date = 0;
+          int64_t compatible = 0;
           if (OB_FAIL(check_need_validate_clog(validate_job, pg_info, log_infos, backup_infos, need_validate_clog))) {
             LOG_WARN("failed to check need validate clog", K(ret), K(validate_job), K(pg_info));
           } else if (OB_FAIL(get_extern_backup_set_infos(pg_info.backup_set_id_,
                          backup_infos,
                          full_backup_set_id,
                          inc_backup_set_id,
-                         cluster_version))) {
+                         cluster_version,
+                         backup_date,
+                         compatible))) {
             LOG_WARN("failed to get prev full backup set id and prev inc backup set id", K(ret));
           } else if (OB_FAIL(build_physical_validate_arg(is_dropped_tenant,
                          need_validate_clog,
@@ -786,6 +804,8 @@ int ObPartitionValidate::generate_batch_pg_task(const bool is_dropped_tenant,
                          addr,
                          trace_id,
                          cluster_version,
+                         backup_date,
+                         compatible,
                          arg))) {
             LOG_WARN("failed to build physical validate arg", K(ret));
           } else if (FALSE_IT(task_info.set_transmit_data_size(2 * 1024 * 1024))) {
@@ -823,7 +843,7 @@ int ObPartitionValidate::build_physical_validate_arg(const bool is_dropped_tenan
     const int64_t backup_set_id, const int64_t log_archive_round,
     const share::ObTenantValidateTaskInfo& tenant_task_info, const common::ObPartitionKey& pg_key,
     const common::ObAddr& server, const share::ObTaskId& trace_id, const int64_t cluster_version,
-    share::ObPhysicalValidateArg& arg)
+    const int64_t backup_date, const int64_t compatible, share::ObPhysicalValidateArg& arg)
 {
   int ret = OB_SUCCESS;
   char storage_info[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = "";
@@ -866,6 +886,8 @@ int ObPartitionValidate::build_physical_validate_arg(const bool is_dropped_tenan
       // arg.full_backup_set_id_ = full_backup_set_id;
       // arg.inc_backup_set_id_ = inc_backup_set_id;
       arg.cluster_version_ = cluster_version;
+      arg.backup_date_ = backup_date;
+      arg.compatible_ = compatible;
     }
   }
   return ret;

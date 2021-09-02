@@ -97,6 +97,8 @@ private:
   void mark_fatal_error_(
       const ObPGKey& pg_key, const int64_t epoch, const int64_t incarnation, const int64_t round, const int ret_code);
 
+  bool is_stale_leader_task_(const ObPGKey& pg_key, const int64_t epoch);
+
 private:
   bool inited_;
   bool start_flag_;

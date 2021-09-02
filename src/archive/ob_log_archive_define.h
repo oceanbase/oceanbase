@@ -21,13 +21,14 @@ namespace archive {
 typedef uint32_t file_id_t;
 typedef int32_t offset_t;
 //================ start of const define =================//
+// TODO(yaoying.yyy):reconfirm path length with duotian
 const int64_t OB_MAX_ARCHIVE_PATH_LENGTH = 1536;  // MAX_URI_LENGTH + 512
 const int64_t OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH = 512;
 const int64_t MAX_PG_MGR_THREAD_NUM = 5;
 const int64_t ARCHIVE_HASH_NUM = 47;
 const int64_t DEFAULT_ARCHIVE_DATA_FILE_SIZE = 64 * 1024 * 1024L;
 const int64_t DEFAULT_ARCHIVE_INDEX_FILE_SIZE = 64 * 1024L;
-const int64_t DEFAULT_ARCHIVE_WAIT_TIME_AFTER_EAGAIN = 100;
+const int64_t DEFAULT_ARCHIVE_WAIT_TIME_AFTER_EAGAIN = 1000 * 1000L;
 const int64_t ARCHIVE_IO_MAX_RETRY_TIME = 15 * 60 * 1000 * 1000L;
 const int64_t DEFAULT_ARCHIVE_RETRY_INTERVAL = 5 * 1000 * 1000L;
 const int64_t ARCHIVE_BLOCK_META_OFFSET_ENCODE_SIZE = sizeof(int32_t);
@@ -53,6 +54,7 @@ static const int64_t MAX_ARCHIVE_THREAD_NAME_LENGTH = 50;
 
 static const int64_t MAX_ARCHIVE_TASK_STATUS_QUEUE_CAPACITY = common::OB_MAX_PARTITION_NUM_PER_SERVER;
 static const int64_t MAX_ARCHIVE_TASK_STATUS_POP_TIMEOUT = 100 * 1000L;
+static const uint64_t OB_INVALID_ARCHIVE_FILE_ID = UINT64_MAX;
 enum LogArchiveFileType {
   LOG_ARCHIVE_FILE_TYPE_INVALID = 0,
   LOG_ARCHIVE_FILE_TYPE_INDEX = 1,

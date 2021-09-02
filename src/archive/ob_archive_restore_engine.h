@@ -39,6 +39,120 @@ class ObPartitionService;
 }
 
 namespace archive {
+typedef common::ObIntWarp ObTenantID;
+typedef common::LinkHashNode<ObTenantID> RestoreMetaNode;
+typedef common::LinkHashValue<ObTenantID> RestoreMetaValue;
+class ObTenantPhysicalRestoreMeta : public RestoreMetaValue {
+public:
+  ObTenantPhysicalRestoreMeta()
+      : is_inited_(false),
+        cur_restore_concurrency_(0),
+        restore_concurrency_threshold_(-1),
+        file_store_buf_(NULL),
+        restore_info_(),
+        file_store_array_()
+  {}
+  ~ObTenantPhysicalRestoreMeta()
+  {
+    destroy();
+  }
+  void destroy();
+  bool is_inited() const
+  {
+    return is_inited_;
+  }
+  int init(const uint64_t tenant_id);
+  int init(share::ObPhysicalRestoreInfo& info);
+  uint64_t get_tenant_id() const
+  {
+    return restore_info_.tenant_id_;
+  }
+  int64_t get_snapshot_version() const
+  {
+    return restore_info_.restore_snapshot_version_;
+  }
+  int64_t get_cur_restore_concurrency() const
+  {
+    return ATOMIC_LOAD(&cur_restore_concurrency_);
+  }
+  int64_t get_restore_concurrency_threshold() const
+  {
+    return ATOMIC_LOAD(&restore_concurrency_threshold_);
+  }
+  void set_restore_concurrency_threshold(int64_t concurrency)
+  {
+    ATOMIC_SET(&restore_concurrency_threshold_, concurrency);
+  }
+  void inc_cur_restore_concurrency()
+  {
+    ATOMIC_INC(&cur_restore_concurrency_);
+  }
+  void dec_cur_restore_concurrency()
+  {
+    ATOMIC_DEC(&cur_restore_concurrency_);
+  }
+  int get_last_file_store(ObArchiveLogFileStore*& file_store);
+  int locate_log(const ObPGKey& restore_pg_key, const ObPGKey& archive_pg_key, const uint64_t start_log_id,
+      ObArchiveLogFileStore*& file_store, int64_t& total_piece_cnt, int64_t& start_piece_idx, int64_t& end_piece_idx,
+      uint64_t& target_file_id, uint64_t& start_file_id, uint64_t& end_file_id) const;
+
+  int get_pg_piece_file_store_info(const ObPartitionKey& pg_key, const int64_t cur_piece_idx, uint64_t& start_file_id,
+      uint64_t& end_file_id, ObArchiveLogFileStore*& file_store);
+  bool is_switch_piece_mode() const
+  {
+    return restore_info_.is_switch_piece_mode();
+  }
+  // check sys table if need fetch log in restore progress
+  // @retval OB_SUCCESS          check success
+  // @retval other code          check fail
+  int check_need_fetch_archived_log(const common::ObPGKey& pg_key, bool& is_need);
+  TO_STRING_KV(K(is_inited_), K(cur_restore_concurrency_), K(restore_concurrency_threshold_), KP(file_store_buf_),
+      K(restore_info_), K(file_store_array_));
+
+private:
+  int init_file_store_array_();
+  int locate_piece_(const ObPGKey& restore_pg_key, const ObPGKey& archive_pg_key, const uint64_t start_log_id,
+      int64_t& start_piece_idx, int64_t& end_piece_idx, uint64_t& last_piece_base_log_id, int64_t& total_piece_cnt,
+      ObArchiveLogFileStore*& file_store) const;
+  int locate_start_file_id_in_piece_(const ObPGKey& restore_pg_key, const ObPGKey& archive_pg_key,
+      ObArchiveLogFileStore* file_store, const uint64_t start_log_id, const int64_t start_piece_idx,
+      const int64_t end_piece_idx, const uint64_t last_piece_base_log_id, uint64_t& target_file_id,
+      uint64_t& start_file_id, uint64_t& end_file_id) const;
+
+public:
+  static const int64_t DEFAULT_RESTORE_CONCURRENCY_THRESHOLD = 4;
+
+private:
+  bool is_inited_;
+  int64_t cur_restore_concurrency_;        // num of pg in restore logs simultaneously, to avoid too much memory cost
+  int64_t restore_concurrency_threshold_;  // max num of pg in restore logs simultaneously
+  char* file_store_buf_;
+  share::ObPhysicalRestoreInfo restore_info_;
+  ObArray<ObArchiveLogFileStore*> file_store_array_;
+};
+
+struct ObPhysicalRestoreCLogStat {
+public:
+  ObPhysicalRestoreCLogStat()
+  {
+    reset();
+  }
+  ~ObPhysicalRestoreCLogStat()
+  {
+    reset();
+  }
+  void reset();
+
+public:
+  int64_t retry_sleep_interval_;   //控制重试频率触发的sleep 时间间隔
+  int64_t fetch_log_entry_count_;  //迭代的日志条数
+  int64_t fetch_log_entry_cost_;   //迭代日志的耗时
+  int64_t io_cost_;                // io总耗时
+  int64_t io_count_;               // io总耗时
+  int64_t limit_bandwidth_cost_;   //因带宽限速等待的时间
+  int64_t total_cost_;             //该次处理总的耗时
+};
+
 class ObPGArchiveRestoreTask : public common::ObLink {
 public:
   ObPGArchiveRestoreTask()
@@ -49,14 +163,17 @@ public:
   {
     reset();
   }
-  int init(const common::ObPGKey& restore_pg_key, const common::ObPGKey& archive_pg_key,
-      ObArchiveLogFileStore* file_store, uint64_t start_log_id, int64_t start_log_ts, int64_t end_snapshot_version,
-      int64_t leader_takeover_ts);
+  int init_basic_info(const common::ObPGKey& restore_pg_key, const common::ObPGKey& archive_pg_key,
+      ObTenantPhysicalRestoreMeta* tenant_restore_meta, uint64_t start_log_id, int64_t start_log_ts,
+      int64_t end_snapshot_version, int64_t leader_takeover_ts);
+  // bool is_file_store_valid() const {return NULL != file_store;}
   void reset();
-  void switch_file();
+  int switch_file();
 
 public:
   int locate_file_range();
+  void record_io_stat(const ObPhysicalRestoreCLogStat& stat);
+  void report_io_stat();
   bool is_finished() const;
   bool is_expired() const
   {
@@ -66,16 +183,12 @@ public:
   {
     is_expired_ = is_expired;
   }
-  void set_cur_offset(const int64_t offset)
+  void set_cur_file_offset(const int64_t offset)
   {
-    cur_offset_ = offset;
+    cur_file_offset_ = offset;
   }
   int set_last_fetched_log_info(
       const clog::ObLogType log_type, const uint64_t log_id, const int64_t checkpoint_ts, const int64_t log_submit_ts);
-  bool has_located_file_range() const
-  {
-    return has_located_file_range_;
-  }
 
   const common::ObPGKey& get_restore_pg_key() const
   {
@@ -105,17 +218,17 @@ public:
   {
     return last_fetched_log_submit_ts_;
   }
-  int64_t get_cur_offset() const
+  int64_t get_cur_file_offset() const
   {
-    return cur_offset_;
+    return cur_file_offset_;
   }
-  uint64_t get_cur_log_file_id() const
+  uint64_t get_cur_file_id() const
   {
-    return cur_log_file_id_;
+    return cur_file_id_in_cur_piece_;
   }
-  uint64_t get_end_log_file_id() const
+  uint64_t get_end_file_id() const
   {
-    return end_log_file_id_;
+    return end_file_id_in_cur_piece_;
   }
   int64_t get_retry_cnt() const
   {
@@ -146,46 +259,66 @@ public:
     io_fail_cnt_ = 0;
     retry_cnt_ = 0;
   }
-  bool is_restoring_last_log_file() const
-  {
-    return (cur_log_file_id_ == end_log_file_id_);
-  }
-  ObArchiveLogFileStore* get_file_store()
-  {
-    return file_store_;
-  };
+  bool is_restoring_last_log_file() const;
   int reconfirm_fetch_log_result();
+  ObArchiveLogFileStore* get_cur_file_store()
+  {
+    return cur_file_store_;
+  }
+
+  ObTenantPhysicalRestoreMeta* get_tenant_restore_meta()
+  {
+    return tenant_restore_meta_;
+  }
+  void reset_tenant_restore_meta()
+  {
+    tenant_restore_meta_ = NULL;
+  }
+  int check_and_locate_start_log_info();
+  bool is_dropped_pg_() const;
+  // archived log entry with log_id no less than start_log_id_ exists
+  bool should_fetched_log_() const;
 
 public:
-  TO_STRING_KV(K(restore_pg_key_), K(archive_pg_key_), K(is_expired_), K(has_located_file_range_), K(start_log_id_),
-      K(start_log_ts_), K(end_snapshot_version_), K(leader_takeover_ts_), K(last_fetched_log_id_),
-      K(last_checkpoint_ts_), K(last_fetched_log_submit_ts_), K(cur_offset_), K(cur_log_file_id_), K(end_log_file_id_),
-      K(retry_cnt_),    // Number of consecutive failed retries
-      K(io_fail_cnt_),  // Number of consecutive IO failures
-      K(fetch_log_result_));
+  TO_STRING_KV(K(is_inited_), K(is_expired_), K(has_located_log_), K(start_log_id_), K(start_log_ts_),
+      K(end_snapshot_version_), K(leader_takeover_ts_), K(last_fetched_log_id_), K(last_checkpoint_ts_),
+      K(last_fetched_log_submit_ts_), K(total_piece_cnt_), K(start_piece_idx_), K(cur_piece_idx_), K(end_piece_idx_),
+      K(start_file_id_in_cur_piece_), K(end_file_id_in_cur_piece_), K(cur_file_id_in_cur_piece_), K(cur_file_offset_),
+      KP(cur_file_store_), KP(tenant_restore_meta_), K(retry_cnt_), K(io_fail_cnt_), K(restore_pg_key_),
+      K(archive_pg_key_), K(fetch_log_result_));
 
 private:
   int locate_start_file_id_(uint64_t& start_file_id);
 
 private:
-  common::ObPGKey restore_pg_key_;  // restore partition pkey
-  common::ObPGKey archive_pg_key_;  // archive partition pkey, pure key same as restore partition and tenant_id is
-                                    // different
+  bool is_inited_;
   bool is_expired_;
-  bool has_located_file_range_;
-  uint64_t start_log_id_;               // the start log_id to pull logs
-  uint64_t start_log_ts_;               // the start log_ts to pull logs
-  int64_t end_snapshot_version_;        // the largest log to be pulled
-  int64_t leader_takeover_ts_;          // restore leader takeover time
-  uint64_t last_fetched_log_id_;        // the last log_id to be fetched and submited
-  int64_t last_checkpoint_ts_;          // the last checkpoint_ts fetched
-  int64_t last_fetched_log_submit_ts_;  // the last log_TS to be fetched and submited
-  int64_t cur_offset_;
-  uint64_t cur_log_file_id_;  // current file id to be pulled, 0 is inited
-  uint64_t end_log_file_id_;  // the max file id to be pulled
+  bool has_located_log_;
+  uint64_t start_log_id_;
+  uint64_t start_log_ts_;
+  int64_t end_snapshot_version_;
+  int64_t leader_takeover_ts_;
+  uint64_t last_fetched_log_id_;
+  int64_t last_checkpoint_ts_;
+  int64_t last_fetched_log_submit_ts_;
+
+  int64_t total_piece_cnt_;
+  int64_t start_piece_idx_;
+  int64_t cur_piece_idx_;
+  int64_t end_piece_idx_;
+  uint64_t start_file_id_in_cur_piece_;
+  uint64_t end_file_id_in_cur_piece_;
+  uint64_t cur_file_id_in_cur_piece_;
+  int64_t cur_file_offset_;
+  ObArchiveLogFileStore* cur_file_store_;
+  ObTenantPhysicalRestoreMeta* tenant_restore_meta_;
+
   int64_t retry_cnt_;
-  int64_t io_fail_cnt_;  // io fail count, task stop if it > MAX_FETCH_LOG_IO_FAIL_CNT
+  int64_t io_fail_cnt_;
+  common::ObPGKey restore_pg_key_;
+  common::ObPGKey archive_pg_key_;
   clog::ObArchiveFetchLogResult fetch_log_result_;
+  ObPhysicalRestoreCLogStat stat_;
   ObArchiveLogFileStore* file_store_;
 };
 
@@ -286,13 +419,12 @@ public:
     share::ObPhysicalRestoreInfo restore_info_;
     ObArchiveLogFileStore file_store_;
   };
-
   // for ObLinkHashMap
-  TenantRestoreMeta* alloc_value()
+  ObTenantPhysicalRestoreMeta* alloc_value()
   {
     return NULL;
   }
-  void free_value(TenantRestoreMeta* meta)
+  void free_value(ObTenantPhysicalRestoreMeta* meta)
   {
     if (NULL != meta) {
       meta->destroy();
@@ -301,7 +433,7 @@ public:
     }
   }
 
-  RestoreMetaNode* alloc_node(TenantRestoreMeta* meta)
+  RestoreMetaNode* alloc_node(ObTenantPhysicalRestoreMeta* meta)
   {
     UNUSED(meta);
     return op_reclaim_alloc(RestoreMetaNode);
@@ -315,47 +447,27 @@ public:
     }
   }
 
-  struct ObPhysicalRestoreCLogStat {
-  public:
-    ObPhysicalRestoreCLogStat()
-    {
-      reset();
-    }
-    ~ObPhysicalRestoreCLogStat()
-    {
-      reset();
-    }
-    void reset();
-
-  public:
-    int64_t retry_sleep_interval_;   // sleep time before retry
-    int64_t fetch_log_entry_count_;  // fetch log entry count
-    int64_t fetch_log_entry_cost_;   // fetch log entry time cost
-    int64_t io_cost_;                // toal io time cost
-    int64_t io_count_;               // total io count
-    int64_t limit_bandwidth_cost_;   // wait time because of bandwidth limit
-    int64_t total_cost_;             // total time cost
-  };
-
 private:
   bool need_retry_ret_code_(const int ret);
-  bool is_io_fail_ret_code_(const int ret);
-  int get_tenant_restore_meta_(const uint64_t tenant_id, TenantRestoreMeta*& restore_meta);
+  int get_tenant_restore_meta_(const uint64_t tenant_id, ObTenantPhysicalRestoreMeta*& restore_meta);
   int handle_single_task_(ObPGArchiveRestoreTask& task, ObPhysicalRestoreCLogStat& stat);
   int convert_pkey_(const common::ObPGKey& src_pkey, const uint64_t dest_tenant_id, common::ObPGKey& dest_pkey);
   int try_replace_tenant_id_(const uint64_t new_tenant_id, clog::ObLogEntryHeader& log_entry_header);
   int fetch_and_submit_archive_log_(
       ObPGArchiveRestoreTask& task, ObPhysicalRestoreCLogStat& stat, clog::ObIPartitionLogService* log_service);
-  int process_normal_clog_(const clog::ObLogEntry& log_entry, const bool is_batch_committed,
-      clog::ObIPartitionLogService* log_service, ObPGArchiveRestoreTask& task);
+  int process_normal_clog_(const clog::ObLogEntry& log_entry, const bool is_accum_checksum_valid,
+      const int64_t accum_checksum, const bool is_batch_committed, clog::ObIPartitionLogService* log_service,
+      ObPGArchiveRestoreTask& task);
   int push_into_task_queue_(ObPGArchiveRestoreTask* task);
   int calc_restore_concurrency_threshold_(const uint64_t tenant_id, int64_t& new_threshold);
   int report_fatal_error_(const ObPartitionKey& restore_pkey, const ObPartitionKey& archive_pkey, const int err_ret);
-  void revert_tenant_restore_meta_(TenantRestoreMeta*& restore_meta);
+  void revert_tenant_restore_meta_(ObTenantPhysicalRestoreMeta*& restore_meta);
+  void release_restore_task_(ObPGArchiveRestoreTask*& task);
   void statistic_(const ObPhysicalRestoreCLogStat& inc_stat);
 
 private:
-  typedef common::ObLinkHashMap<ObTenantID, TenantRestoreMeta, ObArchiveRestoreEngine&> TenantRestoreMetaMap;
+  typedef common::ObLinkHashMap<ObTenantID, ObTenantPhysicalRestoreMeta, ObArchiveRestoreEngine&>
+      ObTenantPhysicalRestoreMetaMap;
   const int64_t MAX_FETCH_LOG_IO_FAIL_CNT = 5 * 100;
   const int64_t TASK_NUM_LIMIT = 1000000;
   const int64_t ACCESS_LOG_FILE_STORE_TIMEOUT = 3 * 1000 * 1000L;
@@ -366,10 +478,9 @@ private:
   common::ObLatch lock_;                // to guarantee task_queue_ poped one thread by one thread
   common::ObSpScLinkQueue task_queue_;  // global pg fetch task queue
   storage::ObPartitionService* partition_service_;
-  // TODO: cleanup expired restore_meta
   common::ObSmallAllocator task_allocator_;
   common::ObSmallAllocator restore_meta_allocator_;
-  TenantRestoreMetaMap restore_meta_map_;
+  ObTenantPhysicalRestoreMetaMap restore_meta_map_;
 };
 }  // end of namespace archive
 }  // namespace oceanbase

@@ -2268,6 +2268,36 @@ int ObLogEngine::delete_all_clog_files()
   return ret;
 }
 
+int ObLogEngine::check_clog_exist(const common::ObPartitionKey &partition_key,
+    const uint64_t log_id,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObLogCursorExt log_cursor;
+  exist = false;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "not init", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == log_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_id), K(partition_key));
+  } else if (OB_FAIL(get_cursor(partition_key, log_id, log_cursor))) {
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_EAGAIN;
+    } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      CLOG_LOG(WARN, "log not exist, may be recycled", K(ret), K(log_id), K(partition_key));
+      ret = OB_SUCCESS;
+    } else {
+      CLOG_LOG(WARN, "log not exist", K(ret), K(log_id), K(partition_key));
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(clog_env_.get_log_file_store()->exist(log_cursor.get_file_id(), exist))) {
+    // return ret
+    CLOG_LOG(WARN, "check file exist failed", K(ret), K(log_id), K(partition_key));
+  }
+  return ret;
+}
+
 // ================== interface for ObIlogStorage begin====================
 int ObLogEngine::get_cursor_batch(
     const common::ObPartitionKey& pkey, const uint64_t query_log_id, ObGetCursorResult& result)

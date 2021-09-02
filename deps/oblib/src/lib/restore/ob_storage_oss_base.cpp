@@ -99,7 +99,7 @@ int get_bucket_object_name(const ObString& uri, ObString& bucket, ObString& obje
     for (int64_t i = bucket_start; OB_SUCC(ret) && i < uri.length() - 2; i++) {
       if ('/' == *(uri.ptr() + i) && '/' == *(uri.ptr() + i + 1)) {
         ret = OB_INVALID_ARGUMENT;
-        OB_LOG(WARN, "uri has two // ", K(uri), K(ret));
+        OB_LOG(WARN, "uri has two // ", K(uri), K(ret), K(i));
         break;
       }
     }
@@ -333,7 +333,7 @@ int ObStorageOssBase::parse_oss_arg(const common::ObString& storage_info)
     OB_LOG(WARN, "oss client init twice", K(ret));
   } else if (OB_ISNULL(storage_info.ptr()) || storage_info.length() >= OB_MAX_URI_LENGTH) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "uri is too long", K(ret), K(storage_info));
+    OB_LOG(WARN, "uri is too long", K(ret), K(storage_info), K(storage_info.length()));
   } else {
     // host=xxxx&access_id=xxx&access_key=xxx
     char tmp[OB_MAX_URI_LENGTH];
@@ -715,6 +715,13 @@ int ObStorageOssMultiPartWriter::write(const char* buf, const int64_t size)
   if (OB_SUCCESS == ret) {
     file_length_ += size;
   }
+  return ret;
+}
+
+int ObStorageOssMultiPartWriter::pwrite(const char* buf, const int64_t size, const int64_t offset)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSEDx(buf, size, offset);
   return ret;
 }
 
@@ -1362,6 +1369,9 @@ int ObStorageOssUtil::list_files(const common::ObString& dir_path, const common:
   aos_status_t* aos_ret = NULL;
   oss_list_object_params_t* params = NULL;
   const char* next_marker = "/";
+  const char end_marker = '\0';
+  // object_str end with '\0', so object_str.length() need > 2
+  const int64_t min_object_str_len = 2;
 
   if (dir_path.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1370,9 +1380,15 @@ int ObStorageOssUtil::list_files(const common::ObString& dir_path, const common:
     OB_LOG(WARN, "failed to init storage_info", K(ret), K(storage_info));
   } else if (OB_FAIL(get_bucket_object_name(dir_path, bucket_str, object_str, tmp_allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(dir_path), K(bucket_str), K(object_str));
+  } else if (object_str.length() < min_object_str_len) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "object str length is unepxected", K(ret), K(object_str), "length", object_str.length());
   } else {
     // make path end with '/'
-    if (object_str.ptr()[object_str.length() - 1] == *next_marker) {
+    if (object_str.ptr()[object_str.length() - 1] != end_marker) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "object str not end with '\0'", K(ret), K(object_str));
+    } else if (object_str.ptr()[object_str.length() - 2] == *next_marker) {
       object_dir_ptr = object_str.ptr();
     } else {
       int n = snprintf(object_dir_str, OB_MAX_URI_LENGTH, "%s/", object_str.ptr());
@@ -1555,6 +1571,271 @@ int ObStorageOssUtil::delete_tmp_files(const common::ObString& uri, const common
   return ret;
 }
 
+int ObStorageOssUtil::is_empty_directory(
+    const common::ObString& dir_path, const common::ObString& storage_info, bool& is_empty_directory)
+{
+  int ret = OB_SUCCESS;
+  is_empty_directory = false;
+  common::ObArenaAllocator tmp_allocator;
+  ObString bucket_str;
+  ObString object_str;
+  char object_dir_str[OB_MAX_URI_LENGTH] = {0};
+  const char* object_dir_ptr = NULL;
+  aos_status_t* aos_ret = NULL;
+  oss_list_object_params_t* params = NULL;
+  const char* next_marker = "/";
+  const char end_marker = '\0';
+  // object_str end with '\0', so object_str.length() need > 2
+  const int64_t min_object_str_len = 2;
+  ObArray<ObString> file_names;
+
+  if (dir_path.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "name is empty", K(ret), K(dir_path));
+  } else if (OB_FAIL(init(storage_info))) {
+    OB_LOG(WARN, "failed to init storage_info", K(ret), K(storage_info));
+  } else if (OB_FAIL(get_bucket_object_name(dir_path, bucket_str, object_str, tmp_allocator))) {
+    OB_LOG(WARN, "bucket or object name is empty", K(ret), K(dir_path), K(bucket_str), K(object_str));
+  } else if (object_str.length() < min_object_str_len) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "object str length is unepxected", K(ret), K(object_str), "length", object_str.length());
+  } else {
+    // make path end with '/'
+    if (object_str.ptr()[object_str.length() - 1] != end_marker) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "object str not end with '\0'", K(ret), K(object_str));
+    } else if (object_str.ptr()[object_str.length() - 2] == *next_marker) {
+      object_dir_ptr = object_str.ptr();
+    } else {
+      int n = snprintf(object_dir_str, OB_MAX_URI_LENGTH, "%s/", object_str.ptr());
+      if (n <= 0 || n >= OB_MAX_URI_LENGTH) {
+        ret = OB_SIZE_OVERFLOW;
+        OB_LOG(WARN,
+            "fail to deep copy object",
+            K(object_str),
+            K(object_str.length()),
+            K(n),
+            K(OB_MAX_URI_LENGTH),
+            K(ret));
+      } else {
+        object_dir_ptr = object_dir_str;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(params = oss_create_list_object_params(aos_pool_))) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "fail to create list object params", K(ret), K(dir_path), K(storage_info));
+  } else {
+    aos_str_set(&params->prefix, object_dir_ptr);
+    aos_str_set(&params->marker, next_marker);
+    aos_string_t bucket;
+    aos_str_set(&bucket, bucket_str.ptr());
+    ObString tmp_string;
+    ObString file_name;
+
+    tmp_string.reset();
+    file_name.reset();
+    if (OB_ISNULL(aos_ret = oss_list_object(oss_option_, &bucket, params, NULL)) || !aos_status_is_ok(aos_ret)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to list all object", K(ret));
+      print_oss_info(aos_ret);
+    } else {
+      is_empty_directory = static_cast<bool>(aos_list_empty(&params->object_list));
+    }
+  }
+
+  // 最后重置，保证该接口可重复调用
+  OB_LOG(DEBUG, "is empty directory", K(dir_path));
+  return ret;
+}
+
+int ObStorageOssUtil::check_backup_dest_lifecycle(
+    const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator allocator;
+  ObString bucket_str;
+  ObString object_str;
+  aos_status_t* aos_ret = NULL;
+  aos_list_t lifecycle_rule_list;
+  oss_lifecycle_rule_content_t* rule_content = NULL;
+  aos_string_t bucket;
+  ObString rule_id;
+  ObString prefix;
+  ObString status;
+  ObString date;
+  int days = 0;
+  is_set_lifecycle = false;
+
+  if (path.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "name is empty", K(ret));
+  } else if (OB_FAIL(init(storage_info))) {
+    OB_LOG(WARN, "failed to init storage_info", K(ret), K(storage_info));
+  } else if (OB_SUCCESS != (ret = get_bucket_object_name(path, bucket_str, object_str, allocator))) {
+    OB_LOG(WARN, "bucket or object name is empty", K(bucket_str), K(object_str), K(ret));
+  } else {
+    aos_str_set(&bucket, bucket_str.ptr());
+    aos_list_init(&lifecycle_rule_list);
+    if (OB_ISNULL(aos_ret = oss_get_bucket_lifecycle(oss_option_, &bucket, &lifecycle_rule_list, NULL)) ||
+        !aos_status_is_ok(aos_ret)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to list all object", K(ret));
+      print_oss_info(aos_ret);
+    } else {
+      aos_list_for_each_entry(oss_lifecycle_rule_content_t, rule_content, &lifecycle_rule_list, node)
+      {
+        prefix = apr_psprintf(aos_pool_, "%.*s", rule_content->prefix.len, rule_content->prefix.data);
+        status = apr_psprintf(aos_pool_, "%.*s", rule_content->status.len, rule_content->status.data);
+        date = apr_psprintf(aos_pool_, "%.*s", rule_content->date.len, rule_content->date.data);
+        days = rule_content->days;
+        if (object_str.prefix_match(prefix)) {
+          if (days > 0 || !date.empty()) {
+            is_set_lifecycle = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  reset();
+  return ret;
+}
+
+int ObStorageOssUtil::list_directories(
+      const common::ObString &dir_path,
+      const common::ObString &storage_info,
+      common::ObIAllocator &allocator,
+      common::ObIArray <common::ObString> &directory_names)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_allocator;
+  ObString bucket_str;
+  ObString object_str;
+  char object_dir_str[OB_MAX_URI_LENGTH] = {0};
+  const char *object_dir_ptr = NULL;
+  aos_status_t *aos_ret = NULL;
+  oss_list_object_params_t *params = NULL;
+  const char *next_marker = "";
+  const char end_marker = '\0';
+  const char *delimiter = "/";
+  //object_str end with '\0', so object_str.length() need > 2
+  const int64_t min_object_str_len = 2;
+
+  if (dir_path.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "name is empty", K(ret), K(dir_path));
+  } else if (OB_FAIL(init(storage_info))) {
+    OB_LOG(WARN, "failed to init storage_info", K(ret), K(storage_info));
+  } else if (OB_FAIL(get_bucket_object_name(dir_path, bucket_str, object_str, tmp_allocator))) {
+    OB_LOG(WARN, "bucket or object name is empty", K(ret), K(dir_path), K(bucket_str), K(object_str));
+  } else if (object_str.length() < min_object_str_len) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "object str length is unepxected", K(ret), K(object_str), "length", object_str.length());
+  } else {
+    //make path end with '/'
+    if (object_str.ptr()[object_str.length() - 1] != end_marker) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "object str not end with '\0'", K(ret), K(object_str));
+    } else if (object_str.ptr()[object_str.length() - 2] == *delimiter) {
+      object_dir_ptr = object_str.ptr();
+    } else {
+      int n = snprintf(object_dir_str, OB_MAX_URI_LENGTH, "%s/", object_str.ptr());
+      if (n <= 0 || n >= OB_MAX_URI_LENGTH) {
+        ret = OB_SIZE_OVERFLOW;
+        OB_LOG(WARN, "fail to deep copy object", K(object_str), K(object_str.length()),
+            K(n), K(OB_MAX_URI_LENGTH), K(ret));
+      } else {
+        object_dir_ptr = object_dir_str;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(params = oss_create_list_object_params(aos_pool_))) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "fail to create list object params", K(ret), K(dir_path), K(storage_info));
+  } else {
+    aos_str_set(&params->prefix, object_dir_ptr);
+    aos_str_set(&params->marker, next_marker);
+    aos_str_set(&params->delimiter, delimiter);
+    aos_string_t bucket;
+    aos_str_set(&bucket, bucket_str.ptr());
+    oss_list_object_common_prefix_t *common_prefix = NULL;
+    ObString tmp_string;
+    ObString directory_name;
+
+    do {
+      tmp_string.reset();
+      directory_name.reset();
+      if (OB_ISNULL(aos_ret = oss_list_object(oss_option_, &bucket, params, NULL))
+          || !aos_status_is_ok(aos_ret)) {
+        ret = OB_OSS_ERROR;
+        OB_LOG(WARN, "fail to list all object", K(ret));
+        print_oss_info(aos_ret);
+      } else {
+        aos_list_for_each_entry(oss_list_object_common_prefix_t, common_prefix, &params->common_prefix_list, node) {
+          //key.data has prefix object_str, we only get the file name
+          tmp_string.assign(common_prefix->prefix.data, common_prefix->prefix.len);
+          const int64_t object_len = strlen(object_dir_ptr);
+          const int64_t prefix_len = strlen(common_prefix->prefix.data);
+          if (prefix_len < object_len) {
+            ret = OB_OSS_ERROR;
+            OB_LOG(WARN, "the object prefix len should not be smaller than directory len", K(ret), K(tmp_string),
+                K(object_str), K(tmp_string.length()), K(object_len), K(object_len), K(prefix_len));
+          } else if (0 != MEMCMP(tmp_string.ptr(), object_dir_ptr, object_len)) {
+            ret = OB_OSS_ERROR;
+            OB_LOG(WARN, "the date has no object prefix", K(ret), K(tmp_string),
+                K(object_str), K(tmp_string.length()), K(object_len));
+          } else  if (*delimiter != tmp_string.ptr()[common_prefix->prefix.len - 1]) {
+            ret = OB_OSS_ERROR;
+            OB_LOG(WARN, "the date has no directory", K(ret), K(tmp_string),
+                K(object_str), K(tmp_string.length()), K(object_len));
+          } else {
+            const int64_t directory_name_pos = object_len;
+            const int32_t name_length = static_cast<int32_t>(common_prefix->prefix.len - directory_name_pos) - 1; //remove '/'
+            if (name_length <= 0) {
+              ret = OB_OSS_ERROR;
+              OB_LOG(WARN, "the object do not exist", K(ret), K(tmp_string),
+                  K(object_str), K(tmp_string.length()), K(object_len), K(name_length), K(directory_name_pos));
+            } else {
+              ObString tmp_directory_name(name_length, name_length, common_prefix->prefix.data + directory_name_pos);
+              if (OB_FAIL(ob_write_string(allocator, tmp_directory_name, directory_name, true /* c_style */))) {
+                OB_LOG(WARN, "fail to allocate memory to save file name", K(ret), K(tmp_directory_name));
+              } else if (OB_FAIL(directory_names.push_back(directory_name))) {
+                OB_LOG(WARN, "fail to push back file name", K(ret), K(directory_name));
+              }
+            }
+            OB_LOG(DEBUG, "get directory name", K(tmp_string), K(directory_name));
+          }
+          if (OB_FAIL(ret)) {
+            break;
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (NULL == (next_marker = apr_psprintf(aos_pool_, "%.*s", params->next_marker.len, params->next_marker.data))) {
+          ret = OB_OSS_ERROR;
+          OB_LOG(WARN, "next marker is NULL", K(ret), KP(next_marker));
+        } else {
+          aos_str_set(&params->marker, next_marker);
+          aos_list_init(&params->object_list);
+          aos_list_init(&params->common_prefix_list);
+        }
+      }
+    } while (AOS_TRUE == params->truncated && OB_SUCC(ret));
+  }
+
+  // Finally reset to ensure that the interface can be called repeatedly
+  reset();
+  OB_LOG(INFO, "list directory count", K(dir_path), K(directory_names.count()));
+  return ret;
+}
+
+
+
 ObStorageOssAppendWriter::ObStorageOssAppendWriter()
     : is_opened_(false), file_length_(-1), allocator_(ObModIds::BACKUP), bucket_(), object_()
 {}
@@ -1585,6 +1866,62 @@ int ObStorageOssAppendWriter::open(const common::ObString& uri, const common::Ob
 }
 
 int ObStorageOssAppendWriter::write(const char* buf, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t fake_offset = 0;
+  const bool is_pwrite = false;
+
+  if (!is_inited()) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss client not inited", K(ret));
+  } else if (NULL == buf || size < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "buf is NULL or size is invalid", K(buf), K(size), K(ret));
+  } else if (OB_FAIL(do_write(buf, size, fake_offset, is_pwrite))) {
+    OB_LOG(WARN, "failed to do write", K(ret), K(buf), K(size));
+  }
+  return ret;
+}
+
+int ObStorageOssAppendWriter::pwrite(const char* buf, const int64_t size, const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+  const bool is_pwrite = true;
+
+  if (!is_inited()) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss client not inited", K(ret));
+  } else if (NULL == buf || size < 0 || offset < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "buf is NULL or size is invalid", K(buf), K(size), K(ret));
+  } else if (OB_FAIL(do_write(buf, size, offset, is_pwrite))) {
+    OB_LOG(WARN, "failed to do write", K(ret), K(buf), K(size), K(offset));
+  }
+  return ret;
+}
+
+int ObStorageOssAppendWriter::close()
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited()) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "oss client not inited", K(ret));
+  } else if (!is_opened_) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "oss writer cannot close before it is opened");
+  } else {
+    is_opened_ = false;
+    // 释放内存
+    allocator_.clear();
+
+    reset();
+  }
+
+  return ret;
+}
+
+int ObStorageOssAppendWriter::do_write(const char* buf, const int64_t size, const int64_t offset, const bool is_pwrite)
 {
   int ret = OB_SUCCESS;
 
@@ -1630,6 +1967,11 @@ int ObStorageOssAppendWriter::write(const char* buf, const int64_t size)
           char* next_append_position = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
           position = aos_atoi64(next_append_position);
         }
+      }
+
+      if (is_pwrite && position != offset) {
+        ret = OB_EAGAIN;
+        OB_LOG(WARN, "position and offset do not match", K(ret), K(position), K(offset));
       }
 
       if (OB_SUCC(ret)) {
@@ -1678,27 +2020,6 @@ int ObStorageOssAppendWriter::write(const char* buf, const int64_t size)
       }
     }
   }
-  return ret;
-}
-
-int ObStorageOssAppendWriter::close()
-{
-  int ret = OB_SUCCESS;
-
-  if (!is_inited()) {
-    ret = OB_NOT_INIT;
-    OB_LOG(WARN, "oss client not inited", K(ret));
-  } else if (!is_opened_) {
-    ret = OB_OSS_ERROR;
-    OB_LOG(WARN, "oss writer cannot close before it is opened");
-  } else {
-    is_opened_ = false;
-    // Release memory
-    allocator_.clear();
-
-    reset();
-  }
-
   return ret;
 }
 

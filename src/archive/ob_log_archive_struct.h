@@ -425,6 +425,32 @@ public:
   char* buf_;
 };
 
+struct ObArchiveDataFileMeta {
+
+public:
+  ObArchiveDataFileMeta()
+  {
+    reset();
+  }
+  ~ObArchiveDataFileMeta()
+  {
+    reset();
+  }
+  void reset();
+  TO_STRING_KV(K(need_record_index_), K(has_effective_data_), K(data_file_id_), K(min_log_id_), K(min_log_ts_),
+      K(max_log_id_), K(max_log_ts_), K(max_checkpoint_ts_));
+
+public:
+  bool need_record_index_;
+  bool has_effective_data_;
+  uint64_t data_file_id_;
+  uint64_t min_log_id_;
+  uint64_t min_log_ts_;
+  uint64_t max_log_id_;
+  uint64_t max_log_ts_;
+  uint64_t max_checkpoint_ts_;
+};
+
 struct ObArchiveIndexFileInfo {
 public:
   ObArchiveIndexFileInfo()
@@ -437,11 +463,13 @@ public:
       const int64_t clog_epoch_id, const int64_t accum_checksum, const ObArchiveRoundStartInfo& round_start_info);
   int build_invalid_record(const uint64_t data_file_id, const uint64_t max_log_id, const int64_t checkpoint_ts,
       const int64_t max_log_submit_ts, const int64_t clog_epoch_id, const int64_t accum_checksum,
-      const ObArchiveRoundStartInfo& round_start_info);
-  bool is_valid();
+      const ObArchiveRoundStartInfo& round_start_info, const bool need_check_data_file);
+  bool check_integrity() const;
+  bool is_valid() const;
+  bool is_effective() const;
   int get_real_record_length(const char* buf, const int64_t buf_len, int64_t& record_len);
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K(magic_), K(record_len_), K(version_), K(is_valid_), K(data_file_id_), K(input_bytes_),
+  TO_STRING_KV(K(magic_), K(record_len_), K(version_), K(is_effective_), K(data_file_id_), K(input_bytes_),
       K(output_bytes_), K(clog_epoch_id_), K(accum_checksum_), K(min_log_id_), K(min_log_ts_), K(max_log_id_),
       K(max_checkpoint_ts_), K(max_log_submit_ts_), K(round_start_ts_), K(round_start_log_id_),
       K(round_snapshot_version_), K(round_log_submit_ts_), K(round_clog_epoch_id_), K(round_accum_checksum_),
@@ -458,7 +486,8 @@ public:
   int16_t magic_;
   int16_t record_len_;
   int16_t version_;
-  int16_t is_valid_;
+  int16_t is_effective_;  // in case of  the data file refered contain valid archive data, set true, otherwise set
+                          // false.
   uint64_t data_file_id_;
 
   // TODO:stat in
@@ -485,20 +514,65 @@ public:
   int64_t checksum_;
 };
 
+/*index_info in ObArchiveKeyContent is a bit different from index_info in index file.
+ data_file_id in index_info of ObArchiveKeyContent may be zero if previous piece has no data file*/
+struct ObArchiveKeyContent {
+public:
+  ObArchiveKeyContent()
+  {
+    reset();
+  }
+  ~ObArchiveKeyContent()
+  {
+    reset();
+  }
+  void reset();
+  int generate(const bool is_first_piece, const uint64_t index_file_id, const ObArchiveIndexFileInfo& index_info);
+  bool check_integrity() const;
+  bool is_valid() const;
+  int64_t calc_checksum_() const;
+  uint64_t get_max_archived_log_id() const
+  {
+    return index_info_.max_log_id_;
+  }
+  NEED_SERIALIZE_AND_DESERIALIZE;
+  TO_STRING_KV(
+      K(magic_), K(version_), K(reserved_), K(is_first_piece_), K(max_index_file_id_), K(index_info_), K(checksum_));
+
+public:
+  static const int16_t MAGIC_NUM = share::ObBackupFileType::BACKUP_ARCHIVE_KEY_FILE;  // AI means ARCHIVE INDEX
+  static const int16_t ARCHIVE_KEY_VERSION = 1;
+  int16_t magic_;
+  int16_t version_;
+  int16_t is_first_piece_;
+  int16_t reserved_;
+  uint64_t max_index_file_id_;  // max index_file_id of prev piece
+  ObArchiveIndexFileInfo index_info_;
+  // crc64 requires 64-bit alignment
+  int64_t checksum_;
+};
+
 struct MaxArchivedIndexInfo {
 public:
   MaxArchivedIndexInfo();
   ~MaxArchivedIndexInfo();
   void reset();
-  bool is_index_info_collected_();
+  bool is_index_record_collected() const;
+  bool is_round_start_info_collected() const
+  {
+    return round_start_info_.is_valid();
+  }
+  bool is_data_file_collected() const
+  {
+    return data_file_collect_;
+  }
   void set_data_file_id(const uint64_t file_id);
   int set_log_info(const uint64_t max_log_id, const int64_t max_checkpoint_ts, const int64_t max_log_submit_ts,
       const int64_t clog_epoch_id, const int64_t accum_checksum);
   int set_round_start_info(const ObArchiveIndexFileInfo& index_info);
   // flag of index record searched or not
-  bool data_file_collect_;
-  bool archived_log_collect_;
-  bool round_start_info_collect_;
+  bool data_file_collect_;     // same as max_record_data_file_id_ != 0
+  bool archived_log_collect_;  // same as max_record_log_id_ != OB_INVALID_ID
   uint64_t max_record_data_file_id_;
   uint64_t max_record_log_id_;
   int64_t max_record_checkpoint_ts_;
@@ -509,9 +583,9 @@ public:
   ObArchiveRoundStartInfo round_start_info_;
   // round_start info
 
-  TO_STRING_KV(K(data_file_collect_), K(archived_log_collect_), K(round_start_info_collect_),
-      K(max_record_data_file_id_), K(max_record_log_id_), K(max_record_checkpoint_ts_), K(max_record_log_submit_ts_),
-      K(clog_epoch_id_), K(accum_checksum_), K(round_start_info_));
+  TO_STRING_KV(K(data_file_collect_), K(archived_log_collect_), K(max_record_data_file_id_), K(max_record_log_id_),
+      K(max_record_checkpoint_ts_), K(max_record_log_submit_ts_), K(clog_epoch_id_), K(accum_checksum_),
+      K(round_start_info_));
 };
 
 struct ObArchiveStartTimestamp {

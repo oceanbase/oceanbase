@@ -208,6 +208,9 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_tenant_all_tables.cpp
   virtual_table/ob_tenant_partition_stat.cpp
   virtual_table/ob_tenant_show_tables.cpp
+  virtual_table/ob_tenant_show_tables.h
+  virtual_table/ob_tenant_show_restore_preview.cpp
+  virtual_table/ob_tenant_show_restore_preview.h
   virtual_table/ob_tenant_virtual_charset.cpp
   virtual_table/ob_tenant_virtual_collation.cpp
   virtual_table/ob_tenant_virtual_concurrent_limit_sql.cpp
@@ -240,6 +243,8 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_all_virtual_reserved_table_mgr.cpp
   virtual_table/ob_all_virtual_dag_warning_history.cpp
   virtual_table/ob_all_virtual_backupset_history_mgr.cpp
+  virtual_table/ob_all_virtual_backup_clean_info.h
+  virtual_table/ob_all_virtual_backup_clean_info.cpp
 )
 
 ob_set_subtarget(ob_server table

@@ -24,33 +24,47 @@
 #include "share/backup/ob_backup_operator.h"
 #include "share/backup/ob_backup_manager.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/backup/ob_backup_backupset_operator.h"
+#include "share/backup/ob_backup_backuppiece_operator.h"
 #include "lib/utility/utility.h"
+#include "ob_backup_manager.h"
 using namespace oceanbase;
 using namespace common;
 using namespace share;
 using namespace common;
 
-ObLogArchiveInfoMgr::ObLogArchiveSimpleInfo::ObLogArchiveSimpleInfo()
+ObLogArchiveSimpleInfo::ObLogArchiveSimpleInfo()
     : update_ts_(0),
       checkpoint_ts_(0),
       start_ts_(0),
       status_(share::ObLogArchiveStatus::INVALID),
-      tenant_id_(OB_INVALID_ID)
+      tenant_id_(OB_INVALID_ID),
+      cur_piece_id_(0),
+      cur_piece_create_date_(0),
+      is_piece_freezing_(false),
+      prev_piece_id_(0),
+      prev_piece_create_date_(0)
 {}
 
-void ObLogArchiveInfoMgr::ObLogArchiveSimpleInfo::reset()
+void ObLogArchiveSimpleInfo::reset()
 {
   update_ts_ = 0;
   checkpoint_ts_ = 0;
   start_ts_ = 0;
-  status_ = share::ObLogArchiveStatus::INVALID;
+  status_ = ObLogArchiveStatus::INVALID;
   tenant_id_ = OB_INVALID_ID;
+  cur_piece_id_ = 0;
+  cur_piece_create_date_ = 0;
+  is_piece_freezing_ = false;
+  prev_piece_id_ = 0;
+  prev_piece_create_date_ = 0;
 }
 
-bool ObLogArchiveInfoMgr::ObLogArchiveSimpleInfo::is_valid() const
+bool ObLogArchiveSimpleInfo::is_valid() const
 {
   return update_ts_ > 0 && checkpoint_ts_ >= 0 && start_ts_ >= 0 && ObLogArchiveStatus::is_valid(status_) &&
-         OB_INVALID_ID != tenant_id_;
+         OB_INVALID_ID != tenant_id_ && cur_piece_id_ >= 0 && cur_piece_create_date_ >= 0 &&
+         (!is_piece_freezing_ || (prev_piece_id_ > 0 && prev_piece_create_date_ > 0));
 }
 
 ObLogArchiveInfoMgr::ObLogArchiveInfoMgr()
@@ -180,26 +194,58 @@ int ObLogArchiveInfoMgr::renew_log_archive_status_(const uint64_t tenant_id, ObL
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
-  const bool for_update = false;
   ObLogArchiveBackupInfo info;
+  ObLogArchiveBackupInfo sys_backup_info;
+  ObNonFrozenBackupPieceInfo sys_backup_piece;
+  bool got_tenant_info = false;
   status.reset();
 
   lib::ObMutexGuard mutex_guard(mutex_);
+  status.update_ts_ = ObTimeUtility::current_time();
+  status.tenant_id_ = tenant_id;
 
   if (OB_FAIL(try_retire_status_())) {
     LOG_WARN("failed to try_retire_status_", K(ret));
-  } else if (OB_FAIL(info_mgr.get_log_archive_backup_info(*sql_proxy_, for_update, tenant_id, info))) {
-    LOG_WARN("failed to get log archive backup info", K(ret));
-    usleep(100 * 1000);  // sleep 100ms
+  } else if (OB_FAIL(info_mgr.get_log_archive_backup_info_compatible(*sql_proxy_, tenant_id, info))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get log archive backup info", K(ret), K(tenant_id));
+      usleep(100 * 1000);  // sleep 100ms
+    } else {
+      LOG_INFO("new tenant log archive info maybe not exist, treat is as beginning status", K(tenant_id));
+      status.checkpoint_ts_ = 0;
+      status.start_ts_ = 0;
+      status.status_ = ObLogArchiveStatus::BEGINNING;
+      ret = OB_SUCCESS;
+    }
   } else if (info.status_.tenant_id_ != tenant_id) {
     ret = OB_ERR_SYS;
     LOG_ERROR("invalid tennat_id", K(ret), K(tenant_id), K(info));
   } else {
-    status.update_ts_ = ObTimeUtility::current_time();
+    got_tenant_info = true;
     status.checkpoint_ts_ = info.status_.checkpoint_ts_;
     status.start_ts_ = info.status_.start_ts_;
     status.status_ = info.status_.status_;
-    status.tenant_id_ = tenant_id;
+  }
+
+  if (FAILEDx(ObBackupInfoMgr::fetch_sys_log_archive_backup_info_and_piece(
+          *sql_proxy_, sys_backup_info, sys_backup_piece))) {
+    LOG_WARN("Failed to fetch_sys_log_archive_backup_info_and_piece", K(ret));
+    usleep(100 * 1000);  // sleep 100ms
+  } else if (got_tenant_info && sys_backup_piece.cur_piece_info_.key_.round_id_ != info.status_.round_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("round id not match", K(ret), K(info), K(sys_backup_piece), K(sys_backup_info));
+  } else {
+    status.cur_piece_id_ = sys_backup_piece.cur_piece_info_.key_.backup_piece_id_;
+    status.cur_piece_create_date_ = sys_backup_piece.cur_piece_info_.create_date_;
+    if (sys_backup_piece.has_prev_piece_info_) {
+      status.is_piece_freezing_ = true;
+      status.prev_piece_id_ = sys_backup_piece.prev_piece_info_.key_.backup_piece_id_;
+      status.prev_piece_create_date_ = sys_backup_piece.prev_piece_info_.create_date_;
+    } else {
+      status.is_piece_freezing_ = false;
+      status.prev_piece_id_ = -1;
+      status.prev_piece_create_date_ = -1;
+    }
     ++update_count_;
     FLOG_INFO("succeed to renew log archive status", K_(update_count), K(tenant_id), K(status));
     SpinWLockGuard guard(lock_);
@@ -233,12 +279,15 @@ ObBackupInfoMgr::ObBackupInfoMgr()
       timer_(),
       update_task_(),
       cur_backup_info_(nullptr),
+      cur_backup_piece_(nullptr),
       cur_restore_job_(nullptr),
       cur_base_backup_started_(nullptr),
       lock_(ObLatchIds::BACKUP_INFO_MGR_LOCK),
       mutex_(ObLatchIds::BACKUP_INFO_MGR_LOCK),
-      is_loaded_(false),
-      backup_dest_detector_(nullptr)
+      is_backup_loaded_(false),
+      is_restore_loaded_(false),
+      backup_dest_detector_(nullptr),
+      log_archive_checkpoint_interval_()
 {}
 
 ObBackupInfoMgr::~ObBackupInfoMgr()
@@ -254,9 +303,12 @@ int ObBackupInfoMgr::init(common::ObMySQLProxy& sql_proxy, ObBackupDestDetector&
     LOG_WARN("cannot init twice", K(ret));
   } else if (OB_FAIL(timer_.init("BackupInfoUpdate"))) {
     LOG_WARN("failed to init backup info update task", K(ret));
+  } else if (OB_FAIL(update_log_archive_checkpoint_interval_())) {
+    LOG_WARN("failed to update_log_archive_checkpoint_interval_", K(ret));
   } else {
     sql_proxy_ = &sql_proxy;
     cur_backup_info_ = &backup_infos_[0];
+    cur_backup_piece_ = &backup_pieces_[0];
     cur_base_backup_started_ = &is_base_backup_started_[0];
     backup_dest_detector_ = &backup_dest_detector;
     is_inited_ = true;
@@ -297,6 +349,17 @@ void ObBackupInfoMgr::destroy()
 int ObBackupInfoMgr::get_log_archive_backup_info(ObLogArchiveBackupInfo& info)
 {
   int ret = OB_SUCCESS;
+  ObNonFrozenBackupPieceInfo backup_piece;
+  if (OB_FAIL(get_log_archive_backup_info_and_piece(info, backup_piece))) {
+    LOG_WARN("failed to get_log_archive_backup_info_and_piece", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupInfoMgr::get_log_archive_backup_info_and_piece(
+    ObLogArchiveBackupInfo& info, ObNonFrozenBackupPieceInfo& piece)
+{
+  int ret = OB_SUCCESS;
   bool is_loaded = true;
 
   if (!is_inited_) {
@@ -304,9 +367,10 @@ int ObBackupInfoMgr::get_log_archive_backup_info(ObLogArchiveBackupInfo& info)
     LOG_WARN("not inited", K(ret));
   } else {
     SpinRLockGuard guard(lock_);
-    is_loaded = is_loaded_;
+    is_loaded = is_backup_loaded_;
     if (is_loaded) {
       info = *cur_backup_info_;
+      piece = *cur_backup_piece_;
     }
   }
 
@@ -316,11 +380,13 @@ int ObBackupInfoMgr::get_log_archive_backup_info(ObLogArchiveBackupInfo& info)
       if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
         LOG_WARN("not loaded yet, try again", K(ret));
       }
-    } else if (!info.is_valid()) {
+    } else if (!info.is_valid() ||
+               (ObLogArchiveStatus::STOP != info.status_.status_ &&
+                   info.status_.compatible_ >= ObTenantLogArchiveStatus::COMPATIBLE_VERSION_2 && !piece.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid info", K(ret), K(info));
+      LOG_WARN("invalid info", K(ret), K(info), K(piece));
     } else if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
-      FLOG_INFO("get_log_archive_backup_info", K(ret), K(info));
+      FLOG_INFO("get_log_archive_backup_info", K(ret), K(info), K(piece));
     }
   }
   return ret;
@@ -335,7 +401,7 @@ int ObBackupInfoMgr::get_restore_info_from_cache(const uint64_t tenant_id, ObSim
     LOG_WARN("not inited", K(ret));
   } else {
     SpinRLockGuard guard(lock_);
-    if (is_loaded_) {
+    if (is_restore_loaded_) {
       for (int64_t i = 0; i < cur_restore_job_->count(); ++i) {
         ObPhysicalRestoreJob& cur_job = cur_restore_job_->at(i);
         if (cur_job.tenant_id_ == tenant_id) {
@@ -361,7 +427,7 @@ int ObBackupInfoMgr::get_restore_status_from_cache(const uint64_t tenant_id, Phy
     LOG_WARN("not inited", K(ret));
   } else {
     SpinRLockGuard guard(lock_);
-    if (is_loaded_) {
+    if (is_restore_loaded_) {
       for (int64_t i = 0; i < cur_restore_job_->count(); ++i) {
         ObPhysicalRestoreJob& cur_job = cur_restore_job_->at(i);
         if (cur_job.tenant_id_ == tenant_id) {
@@ -378,16 +444,33 @@ int ObBackupInfoMgr::get_restore_status_from_cache(const uint64_t tenant_id, Phy
 
 int ObBackupInfoMgr::get_restore_info(const uint64_t tenant_id, ObPhysicalRestoreInfo& info)
 {
+  return get_restore_info(false /*need_valid_restore_schema_version*/, tenant_id, info);
+}
+
+int ObBackupInfoMgr::get_restore_info(
+    const bool need_valid_restore_schema_version, const uint64_t tenant_id, ObPhysicalRestoreInfo& info)
+{
   int ret = OB_SUCCESS;
   ObSimplePhysicalRestoreJob simple_job_info;
 
+  bool need_reload = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get_restore_info_from_cache", K(ret), K(tenant_id));
-    } else if (OB_FAIL(reload())) {
+    } else {
+      ret = OB_SUCCESS;
+      need_reload = true;
+    }
+  } else if (need_valid_restore_schema_version && (simple_job_info.restore_info_.restore_schema_version_ <= 0)) {
+    need_reload = true;
+    simple_job_info.reset();
+  }
+
+  if (OB_SUCC(ret) && need_reload) {
+    if (OB_FAIL(reload())) {
       LOG_WARN("failed to reload", K(ret));
     } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
       LOG_WARN("failed to get restore info from cache again", K(ret), K(tenant_id));
@@ -395,12 +478,15 @@ int ObBackupInfoMgr::get_restore_info(const uint64_t tenant_id, ObPhysicalRestor
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(simple_job_info.copy_to(info))) {
+    if (need_valid_restore_schema_version && simple_job_info.restore_info_.restore_schema_version_ <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid restore_info", K(ret), K(simple_job_info), K(need_valid_restore_schema_version));
+    } else if (OB_FAIL(simple_job_info.copy_to(info))) {
       LOG_WARN("failed to copy physical restore info", K(ret), K(simple_job_info));
     }
 
     if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
-      FLOG_INFO("get_restore_info", K(ret), K(tenant_id), K(simple_job_info));
+      FLOG_INFO("get_restore_info", K(ret), K(tenant_id), K(simple_job_info), K(need_valid_restore_schema_version));
     }
   }
   return ret;
@@ -432,6 +518,67 @@ int ObBackupInfoMgr::get_restore_job_id(const uint64_t tenant_id, int64_t& job_i
   }
   return ret;
 }
+
+int ObBackupInfoMgr::get_restore_piece_list(
+    const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupPiecePath>& piece_list)
+{
+  int ret = OB_SUCCESS;
+  ObSimplePhysicalRestoreJob simple_job_info;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get_restore_info_from_cache", K(ret), K(tenant_id));
+    } else if (OB_FAIL(reload())) {
+      LOG_WARN("failed to reload", K(ret));
+    } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
+      LOG_WARN("failed to get restore info from cache again", K(ret), K(tenant_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(piece_list.assign(simple_job_info.restore_info_.get_backup_piece_path_list()))) {
+      LOG_WARN("failed to assign piece list", KR(ret));
+    }
+    if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
+      FLOG_INFO("get_restore_job_id", K(ret), K(tenant_id), K(simple_job_info));
+    }
+  }
+  return ret;
+}
+
+int ObBackupInfoMgr::get_restore_set_list(
+    const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupSetPath>& set_list)
+{
+  int ret = OB_SUCCESS;
+  ObSimplePhysicalRestoreJob simple_job_info;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get_restore_info_from_cache", K(ret), K(tenant_id));
+    } else if (OB_FAIL(reload())) {
+      LOG_WARN("failed to reload", K(ret));
+    } else if (OB_FAIL(get_restore_info_from_cache(tenant_id, simple_job_info))) {
+      LOG_WARN("failed to get restore info from cache again", K(ret), K(tenant_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(set_list.assign(simple_job_info.restore_info_.get_backup_set_path_list()))) {
+      LOG_WARN("failed to assign set list", KR(ret));
+    }
+    if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
+      FLOG_INFO("get_restore_job_id", K(ret), K(tenant_id), K(simple_job_info));
+    }
+  }
+  return ret;
+}
+
 int ObBackupInfoMgr::get_restore_status(const uint64_t tenant_id, PhysicalRestoreStatus& status)
 {
   int ret = OB_SUCCESS;
@@ -476,7 +623,7 @@ int ObBackupInfoMgr::get_backup_snapshot_version(int64_t& backup_snapshot_versio
   } else if (OB_FAIL(ObTenantBackupInfoOperation::get_backup_snapshot_version(
                  *sql_proxy_, real_tenant_id, backup_snapshot_version))) {
     LOG_WARN("failed to get backup snapshot_version", K(ret));
-  } else {
+  } else if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {  // for each 60s
     LOG_INFO("get_backup_snapshot_version", K(ret), K(real_tenant_id), K(backup_snapshot_version));
   }
 
@@ -506,30 +653,6 @@ int ObBackupInfoMgr::get_log_archive_checkpoint(int64_t& snapshot_version)
   return ret;
 }
 
-int ObBackupInfoMgr::record_drop_tenant_log_archive_history(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObLogArchiveBackupInfoMgr info_mgr;
-  ObLogArchiveBackupInfo info;
-  ObFakeBackupLeaseService backup_lease_service;
-  const int64_t cluster_version = GET_MIN_CLUSTER_VERSION();
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tenant_id));
-  } else if (CLUSTER_VERSION_2250 > cluster_version) {
-    LOG_INFO("skip record_drop_tenant_log_archive_history for old cluster version", K(cluster_version));
-  } else if (OB_FAIL(info_mgr.get_log_archive_backup_info(*sql_proxy_, false /*for update*/, tenant_id, info))) {
-    LOG_WARN("failed to get log archive backup info", K(ret), K(tenant_id));
-  } else if (OB_FAIL(info_mgr.update_log_archive_status_history(*sql_proxy_, info, backup_lease_service))) {
-    LOG_WARN("failed to update log archive status history", K(ret), K(tenant_id));
-  }
-  return ret;
-}
-
 int ObBackupInfoMgr::get_delay_delete_schema_version(const uint64_t tenant_id,
     share::schema::ObMultiVersionSchemaService& schema_service, bool& is_backup, int64_t& reserved_schema_version)
 {
@@ -554,8 +677,8 @@ int ObBackupInfoMgr::get_delay_delete_schema_version(const uint64_t tenant_id,
   } else if (OB_FAIL(ObTenantBackupInfoOperation::get_backup_schema_version(
                  *sql_proxy_, tenant_id, reserved_schema_version))) {
     LOG_WARN("failed to get backup snapshot_version", K(ret));
-  } else if (OB_FAIL(info_mgr.is_doing_log_archive(*sql_proxy_, OB_SYS_TENANT_ID, is_backup))) {
-    LOG_WARN("failed to get log archive checkpoint", K(ret));
+  } else if (OB_FAIL(check_if_doing_backup(is_backup))) {
+    LOG_WARN("failed to check_if_doing_backup", K(ret));
   } else {
     if (OB_SYS_TENANT_ID == tenant_id) {
       if (OB_FAIL(ObTenantBackupInfoOperation::get_tenant_name_backup_schema_version(
@@ -566,7 +689,7 @@ int ObBackupInfoMgr::get_delay_delete_schema_version(const uint64_t tenant_id,
       }
     }
 
-    LOG_TRACE("get_delay_delete_schema_version",
+    LOG_INFO("get_delay_delete_schema_version",
         K(ret),
         K(tenant_id),
         K(tenant_name_backup_schema_version),
@@ -600,7 +723,7 @@ int ObBackupInfoMgr::check_if_doing_backup(bool& is_doing)
   } else if (0 != STRCMP("STOP", item.get_value_ptr())) {
     is_doing = true;
     FLOG_INFO("doing base data backup", K(item));
-  } else if (OB_FAIL(info_mgr.get_log_archive_backup_info(*sql_proxy_, for_update, real_tenant_id, log_archive_info))) {
+  } else if (OB_FAIL(info_mgr.get_log_archive_backup_info_compatible(*sql_proxy_, real_tenant_id, log_archive_info))) {
     LOG_WARN("failed to get log archive backup info", K(ret));
   } else if (log_archive_info.status_.status_ != ObLogArchiveStatus::STOP) {
     is_doing = true;
@@ -611,23 +734,80 @@ int ObBackupInfoMgr::check_if_doing_backup(bool& is_doing)
   return ret;
 }
 
+int ObBackupInfoMgr::check_if_doing_backup_backup(bool& is_doing)
+{
+  int ret = OB_SUCCESS;
+  is_doing = false;
+  ObBackupInfoManager manager;
+  bool enable_backup_archivelog = false;
+  ObArray<ObBackupBackupsetJobInfo> backup_set_jobs;
+  ObArray<ObBackupBackupPieceJobInfo> backup_piece_jobs;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    if (OB_FAIL(manager.init(OB_SYS_TENANT_ID, *sql_proxy_))) {
+      LOG_WARN("failed to init backup info manager", KR(ret));
+    } else if (OB_FAIL(manager.get_enable_auto_backup_archivelog(
+                   OB_SYS_TENANT_ID, *sql_proxy_, enable_backup_archivelog))) {
+      LOG_WARN("failed to update enable auto backup archivelog", KR(ret));
+    } else if (OB_FAIL(ObBackupBackupsetOperator::get_one_task(backup_set_jobs, *sql_proxy_))) {
+      LOG_WARN("failed to get all task items", K(ret));
+    } else if (OB_FAIL(ObBackupBackupPieceJobOperator::get_one_job(*sql_proxy_, backup_piece_jobs))) {
+      LOG_WARN("failed to get all job items", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      is_doing = !backup_set_jobs.empty() || !backup_piece_jobs.empty() || enable_backup_archivelog;
+    }
+  }
+  return ret;
+}
+
+int ObBackupInfoMgr::update_log_archive_checkpoint_interval_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t log_archive_checkpoint_interval = GCONF.log_archive_checkpoint_interval;
+  ObBackupDestOpt backup_dest_opt;
+
+  if (OB_SUCCESS != (tmp_ret = backup_dest_opt.init(false /*is_backup_backup*/))) {
+    LOG_WARN("failed to get_backup_dest_opt", K(tmp_ret), K(lbt()));
+  } else {
+    log_archive_checkpoint_interval = backup_dest_opt.log_archive_checkpoint_interval_;
+  }
+
+  const int64_t cur_log_archive_checkpoint_interval = ATOMIC_LOAD(&log_archive_checkpoint_interval_);
+  if (log_archive_checkpoint_interval != cur_log_archive_checkpoint_interval) {
+    FLOG_INFO("update log_archive_checkpoint_interval",
+        K(cur_log_archive_checkpoint_interval),
+        K(log_archive_checkpoint_interval));
+    ATOMIC_STORE(&log_archive_checkpoint_interval_, log_archive_checkpoint_interval);
+  }
+  return ret;
+}
+
 int ObBackupInfoMgr::reload()
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
   ObPhysicalRestoreTableOperator restore_operator;
   ObBackupInfoManager info_manager;
-  const bool for_update = false;
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
 
   lib::ObMutexGuard mutex_guard(mutex_);
   ObLogArchiveBackupInfo* new_backup_info = &backup_infos_[0];
+  ObNonFrozenBackupPieceInfo* new_backup_piece = &backup_pieces_[0];
   RestoreJobArray* new_restore_job = &restore_jobs_[0];
   bool* new_is_backup_started = &is_base_backup_started_[0];
 
   if (new_backup_info == cur_backup_info_) {
     new_backup_info = &backup_infos_[1];
   }
+  if (new_backup_piece == cur_backup_piece_) {
+    new_backup_piece = &backup_pieces_[1];
+  }
+
   if (new_restore_job == cur_restore_job_) {
     new_restore_job = &restore_jobs_[1];
   }
@@ -636,31 +816,31 @@ int ObBackupInfoMgr::reload()
     new_is_backup_started = &is_base_backup_started_[1];
   }
 
+  // reload backup info
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(info_mgr.get_log_archive_backup_info(*sql_proxy_, for_update, tenant_id, *new_backup_info))) {
-    LOG_WARN("failed to get log archive backup info", K(ret));
-  } else if (OB_FAIL(restore_operator.init(sql_proxy_))) {
-    LOG_WARN("failed to init restore operator", K(ret));
-  } else if (OB_FAIL(restore_operator.get_jobs(*new_restore_job))) {
-    LOG_WARN("failed to get new restore info", K(ret));
+  } else if (OB_FAIL(update_log_archive_checkpoint_interval_())) {
+    LOG_WARN("failed to update_log_archive_checkpoint_interval_", K(ret));
+  } else if (OB_FAIL(fetch_sys_log_archive_backup_info_and_piece(*sql_proxy_, *new_backup_info, *new_backup_piece))) {
+    LOG_WARN("failed to get log archive backup info and piece", K(ret));
   } else if (OB_FAIL(info_manager.init(tenant_id, *sql_proxy_))) {
     LOG_WARN("failed to init info manager", K(ret));
   } else if (OB_FAIL(info_manager.is_backup_started(*new_is_backup_started))) {
     LOG_WARN("failed to check is backup started", K(ret));
   } else if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL) ||
              new_backup_info->status_.status_ != cur_backup_info_->status_.status_ ||
-             new_backup_info->status_.round_ != cur_backup_info_->status_.round_) {
-    FLOG_INFO("succeed to reload backup info", K(ret), K(*new_backup_info), K(*new_restore_job));
+             new_backup_info->status_.round_ != cur_backup_info_->status_.round_ ||
+             new_backup_info->status_.backup_piece_id_ != cur_backup_info_->status_.backup_piece_id_) {
+    FLOG_INFO("succeed to reload backup info", K(ret), K(*new_backup_info), K(*new_backup_piece));
   }
 
   if (OB_SUCC(ret)) {
     SpinWLockGuard guard(lock_);
     cur_backup_info_ = new_backup_info;
-    cur_restore_job_ = new_restore_job;
+    cur_backup_piece_ = new_backup_piece;
     cur_base_backup_started_ = new_is_backup_started;
-    is_loaded_ = true;
+    is_backup_loaded_ = true;
   }
 
   if (OB_SUCC(ret)) {
@@ -668,7 +848,90 @@ int ObBackupInfoMgr::reload()
       LOG_WARN("failed to update backup info", K(ret));
     }
   }
+
+  // reload restore info
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(restore_operator.init(sql_proxy_))) {
+      LOG_WARN("failed to init restore operator", K(ret));
+    } else if (OB_FAIL(restore_operator.get_jobs(*new_restore_job))) {
+      LOG_WARN("failed to get new restore info", K(ret));
+    } else {
+      if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL) ||
+          new_restore_job->count() != cur_restore_job_->count()) {
+        FLOG_INFO("succeed to reload restore job", K(*new_restore_job));
+      }
+      SpinWLockGuard guard(lock_);
+      cur_restore_job_ = new_restore_job;
+      is_restore_loaded_ = true;
+    }
+  }
   return ret;
+}
+
+int ObBackupInfoMgr::fetch_sys_log_archive_backup_info_and_piece(common::ObMySQLProxy& sql_proxy,
+    ObLogArchiveBackupInfo& new_backup_info, ObNonFrozenBackupPieceInfo& new_backup_piece)
+{
+  int ret = OB_SUCCESS;
+  ObLogArchiveBackupInfoMgr info_mgr;
+  const bool for_update = false;
+  bool need_retry = true;
+  const uint64_t tenant_id = OB_SYS_TENANT_ID;
+  int64_t retry_count = 0;
+  const int64_t MAX_RETRY_COUNT = 3;
+
+  while (OB_SUCC(ret) && need_retry) {
+    new_backup_info.reset();
+    new_backup_piece.reset();
+    need_retry = false;
+
+    if (OB_FAIL(info_mgr.get_log_archive_backup_info_compatible(sql_proxy, tenant_id, new_backup_info))) {
+      LOG_WARN("failed to get log archive backup info", K(ret));
+    } else if (ObLogArchiveStatus::STOP == new_backup_info.status_.status_) {
+      LOG_INFO("log archive is stop, no need to get non frozen piece", K(ret), K(new_backup_info));
+    } else if (new_backup_info.status_.compatible_ < ObTenantLogArchiveStatus::COMPATIBLE_VERSION_1) {
+      LOG_INFO("old version log archive has no piece info", K(ret), "compatible", new_backup_info.status_.compatible_);
+      if (OB_FAIL(new_backup_info.get_piece_key(new_backup_piece.cur_piece_info_.key_))) {
+        LOG_WARN("Failed to get piece key", K(ret), K(new_backup_info));
+      } else if (OB_FAIL(new_backup_piece.cur_piece_info_.backup_dest_.assign(new_backup_info.backup_dest_))) {
+        LOG_WARN("failed to copy backup dest", K(ret), K(new_backup_info));
+      } else {
+        new_backup_piece.cur_piece_info_.status_ = ObBackupPieceStatus::BACKUP_PIECE_ACTIVE;
+        new_backup_piece.cur_piece_info_.file_status_ = ObBackupFileStatus::BACKUP_FILE_AVAILABLE;
+        new_backup_piece.cur_piece_info_.start_ts_ = new_backup_info.status_.start_ts_;
+        new_backup_piece.cur_piece_info_.checkpoint_ts_ = new_backup_info.status_.checkpoint_ts_;
+        new_backup_piece.cur_piece_info_.create_date_ = 0;
+        new_backup_piece.cur_piece_info_.max_ts_ = INT64_MAX;
+        new_backup_piece.cur_piece_info_.compatible_ = ObTenantLogArchiveStatus::NONE;
+        new_backup_piece.cur_piece_info_.start_piece_id_ = 0;
+      }
+    } else if (OB_FAIL(
+                   info_mgr.get_non_frozen_backup_piece(sql_proxy, for_update, new_backup_info, new_backup_piece))) {
+      LOG_WARN("failed to get non frozen backup piece", K(ret), K(new_backup_info));
+    } else if (ObLogArchiveStatus::STOPPING != new_backup_info.status_.status_ &&
+               ObBackupPieceStatus::BACKUP_PIECE_ACTIVE != new_backup_piece.cur_piece_info_.status_) {
+      ++retry_count;
+      if (retry_count > MAX_RETRY_COUNT) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("backup info and piece not match, expect retry will get matched info piece and once",
+            K(ret),
+            K(new_backup_info),
+            K(new_backup_piece));
+      } else {
+        need_retry = true;
+        FLOG_INFO(
+            "backup info and piece not match, need retry", K(retry_count), K(new_backup_info), K(new_backup_piece));
+      }
+    } else {
+      LOG_INFO("fetch_sys_log_archive_backup_info_and_piece", K(retry_count), K(new_backup_info), K(new_backup_piece));
+    }
+  }
+
+  return ret;
+}
+
+int64_t ObBackupInfoMgr::get_log_archive_checkpoint_interval() const
+{
+  return ATOMIC_LOAD(&log_archive_checkpoint_interval_);
 }
 
 int ObBackupInfoMgr::is_base_backup_start(bool& is_started)
@@ -682,7 +945,7 @@ int ObBackupInfoMgr::is_base_backup_start(bool& is_started)
     LOG_WARN("not inited", K(ret));
   } else {
     SpinRLockGuard guard(lock_);
-    is_loaded = is_loaded_;
+    is_loaded = is_backup_loaded_;
     if (is_loaded) {
       is_started = *cur_base_backup_started_;
     }
@@ -738,7 +1001,64 @@ ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::GetRestoreBackupInfoParam()
       passwd_array_(nullptr)
 {}
 
+int ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::get_largest_backup_set_path(
+    share::ObSimpleBackupSetPath& simple_path) const
+{
+  int ret = OB_SUCCESS;
+  simple_path.reset();
+  int64_t idx = -1;
+  int64_t largest_backup_set_id = -1;
+  for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_path_list_.count(); ++i) {
+    const share::ObSimpleBackupSetPath& path = backup_set_path_list_.at(i);
+    if (path.backup_set_id_ > largest_backup_set_id) {
+      largest_backup_set_id = path.backup_set_id_;
+      idx = i;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (idx >= 0) {
+      simple_path = backup_set_path_list_.at(idx);
+      LOG_INFO("largest backup set path", K(simple_path));
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_INFO("backup set path not found", K(backup_set_path_list_));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::get_smallest_backup_piece_path(
+    share::ObSimpleBackupPiecePath& simple_path) const
+{
+  int ret = OB_SUCCESS;
+  simple_path.reset();
+  if (backup_piece_path_list_.empty()) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("backup piece path list should not be empty", K(ret));
+  } else {
+    simple_path = backup_piece_path_list_.at(0);
+  }
+  return ret;
+}
+
 int ObRestoreBackupInfoUtil::get_restore_backup_info(const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info)
+{
+  int ret = OB_SUCCESS;
+  bool is_cluster_level = param.backup_set_path_list_.empty();
+  if (is_cluster_level) {
+    if (OB_FAIL(get_restore_backup_info_v1_(param, info))) {
+      LOG_WARN("failed to get restore backup info v1", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(get_restore_backup_info_v2_(param, info))) {
+      LOG_WARN("failed to get restore backup info v1", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreBackupInfoUtil::get_restore_backup_info_v1_(
+    const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest dest;
@@ -808,6 +1128,8 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info(const GetRestoreBackupInfoP
                  backup_info.full_backup_set_id_,
                  backup_info.inc_backup_set_id_,
                  dest,
+                 backup_info.date_,
+                 backup_info.compatible_,
                  fake_backup_lease))) {
     LOG_WARN("failed to init tenant locality info mgr", K(ret), K(tenant_info));
   } else if (OB_FAIL(tenant_locality_info_mgr.get_extern_tenant_locality_info(tenant_locality_info))) {
@@ -819,10 +1141,15 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info(const GetRestoreBackupInfoP
                  backup_info.full_backup_set_id_,
                  backup_info.inc_backup_set_id_,
                  dest,
+                 backup_info.date_,
+                 backup_info.compatible_,
                  fake_backup_lease))) {
     LOG_WARN("failed to init pg list mgr", K(ret), K(backup_info), K(dest));
   } else if (OB_FAIL(pg_list_mgr.get_sys_pg_list(info.sys_pg_key_list_))) {
     LOG_WARN("failed to get sys pg list", K(ret), K(backup_info), K(dest));
+  } else if (info.sys_pg_key_list_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys pg key list should not be empty", K(ret), K(backup_info), K(dest));
   } else {
     info.compat_mode_ = tenant_info.compat_mode_;
     info.frozen_data_version_ = backup_info.backup_data_version_;
@@ -842,7 +1169,93 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info(const GetRestoreBackupInfoP
     info.physical_restore_info_.log_archive_round_ = log_archive_status.round_;
     info.physical_restore_info_.compatible_ = backup_info.compatible_;
     info.physical_restore_info_.cluster_version_ = backup_info.cluster_version_;
+    info.physical_restore_info_.backup_date_ = backup_info.date_;
     FLOG_INFO("get_restore_backup_info", K(info), K(log_archive_status), K(backup_info));
+  }
+  return ret;
+}
+
+int ObRestoreBackupInfoUtil::get_restore_backup_info_v2_(
+    const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info)
+{
+  int ret = OB_SUCCESS;
+  ObFakeBackupLeaseService fake_backup_lease;
+  ObExternSingleBackupSetInfoMgr backup_info_mgr;
+  ObLogArchiveBackupInfoMgr log_archive_backup_info_mgr;
+  ObExternTenantLocalityInfoMgr tenant_locality_info_mgr;
+  ObExternPGListMgr pg_list_mgr;
+  ObSimpleBackupSetPath simple_set_path;      // largest backup set path
+  ObSimpleBackupPiecePath simple_piece_path;  // smallest backup piece path
+  ObBackupPath piece_backup_path;
+  const char* backup_dest = param.backup_dest_;
+  const char* backup_cluster_name = param.backup_cluster_name_;
+  const int64_t cluster_id = param.cluster_id_;
+  const int64_t incarnation = param.incarnation_;
+  const int64_t restore_timestamp = param.restore_timestamp_;
+  const char* passwd_array = param.passwd_array_;
+  const int64_t cluster_version = ObClusterVersion::get_instance().get_cluster_version();
+
+  ObExternLogArchiveBackupInfo log_archive_backup_info;
+  ObTenantLogArchiveStatus log_archive_status;
+  ObExternTenantLocalityInfo tenant_locality_info;
+  ObBackupPieceInfo piece_info;
+  ObBackupSetFileInfo backup_set_info;
+
+  if (OB_FAIL(param.get_smallest_backup_piece_path(simple_piece_path))) {
+    LOG_WARN("failed to get smallest simple backup piece path", K(ret));
+  } else if (OB_FAIL(param.get_largest_backup_set_path(simple_set_path))) {
+    LOG_WARN("failed to get smallest largest backup set path", K(ret));
+  } else if (OB_FAIL(backup_info_mgr.init(simple_set_path, fake_backup_lease))) {
+    LOG_WARN("failed to init backup info mgr", K(ret), K(simple_set_path));
+  } else if (OB_FAIL(backup_info_mgr.get_extern_backup_set_file_info(passwd_array, backup_set_info))) {
+    LOG_WARN("failed to find backup info", K(ret), K(restore_timestamp));
+  } else if (OB_FAIL(piece_backup_path.init(simple_piece_path.get_simple_path()))) {
+    LOG_WARN("failed to init piece backup path", K(ret));
+  } else if (OB_FAIL(piece_backup_path.join(OB_STR_TENANT_CLOG_SINGLE_BACKUP_PIECE_INFO))) {
+    LOG_WARN("failed to join single backup piece info");
+  } else if (OB_FAIL(log_archive_backup_info_mgr.read_external_single_backup_piece_info(
+                 piece_backup_path, simple_piece_path.get_storage_info(), piece_info, fake_backup_lease))) {
+    LOG_WARN("failed to read external single backup piece info", K(ret), K(piece_backup_path), K(simple_piece_path));
+  } else if (backup_set_info.snapshot_version_ < piece_info.start_ts_) {
+    ret = OB_ISOLATED_BACKUP_SET;
+    LOG_WARN("log archive status is not continues with backup info", K(ret), K(backup_set_info));
+  } else if (OB_FAIL(tenant_locality_info_mgr.init(simple_set_path, fake_backup_lease))) {
+    LOG_WARN("failed to init tenant locality info mgr", K(ret), K(simple_set_path));
+  } else if (OB_FAIL(tenant_locality_info_mgr.get_extern_tenant_locality_info(tenant_locality_info))) {
+    LOG_WARN("failed to find tenant locality info", K(ret));
+  } else if (backup_set_info.cluster_version_ > cluster_version) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("cannot restore from newer cluster to older cluster", K(ret), K(cluster_version), K(backup_set_info));
+  } else if (OB_FAIL(pg_list_mgr.init(simple_set_path, fake_backup_lease))) {
+    LOG_WARN("failed to get sys pg list", K(ret), K(backup_set_info), K(simple_set_path));
+  } else if (OB_FAIL(pg_list_mgr.get_sys_pg_list(info.sys_pg_key_list_))) {
+    LOG_WARN("failed to get sys pg list", K(ret), K(backup_set_info));
+  } else if (info.sys_pg_key_list_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys pg key list should not be empty", K(ret), K(backup_set_info));
+  } else {
+    info.compat_mode_ = tenant_locality_info.compat_mode_;
+    info.frozen_data_version_ = backup_set_info.backup_data_version_;
+    info.frozen_schema_version_ = backup_set_info.backup_schema_version_;
+    info.frozen_snapshot_version_ = backup_set_info.snapshot_version_;
+    info.schema_version_ = backup_set_info.backup_schema_version_;
+    info.snapshot_version_ = backup_set_info.snapshot_version_;
+    STRCPY(info.locality_, tenant_locality_info.locality_.ptr());
+    STRCPY(info.primary_zone_, tenant_locality_info.primary_zone_.ptr());
+    STRCPY(info.physical_restore_info_.backup_dest_, backup_dest);
+    STRCPY(info.physical_restore_info_.cluster_name_, backup_cluster_name);
+    info.physical_restore_info_.cluster_id_ = cluster_id;
+    info.physical_restore_info_.full_backup_set_id_ = ObBackupType::FULL_BACKUP == backup_set_info.backup_type_.type_
+                                                          ? backup_set_info.backup_set_id_
+                                                          : backup_set_info.prev_full_backup_set_id_;
+    info.physical_restore_info_.inc_backup_set_id_ = backup_set_info.backup_set_id_;
+    info.physical_restore_info_.incarnation_ = incarnation;
+    info.physical_restore_info_.tenant_id_ = tenant_locality_info.tenant_id_;
+    info.physical_restore_info_.log_archive_round_ = piece_info.key_.round_id_;
+    info.physical_restore_info_.compatible_ = backup_set_info.compatible_;
+    info.physical_restore_info_.cluster_version_ = backup_set_info.cluster_version_;
+    info.physical_restore_info_.backup_date_ = backup_set_info.date_;
+    FLOG_INFO("get_restore_backup_info", K(info), K(piece_info), K(backup_set_info));
   }
   return ret;
 }

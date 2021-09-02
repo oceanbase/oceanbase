@@ -54,7 +54,14 @@ public:
   {
     return meta_checksum_;
   }
-
+  uint64_t get_max_log_id() const
+  {
+    return max_log_id_;
+  }
+  int64_t get_max_log_accum_checksum() const
+  {
+    return accum_checksum_;
+  }
   void set_total_len(const int64_t len)
   {
     total_len_ = len;

@@ -61,6 +61,8 @@ public:
   RPC_S(PR5 add_replica, OB_ADD_REPLICA, (ObAddReplicaArg));
   RPC_S(PR5 get_tenant_log_archive_status, OB_GET_TENANT_LOG_ARCHIVE_STATUS, (share::ObGetTenantLogArchiveStatusArg),
       share::ObTenantLogArchiveStatusWrapper);
+  RPC_S(PR5 get_tenant_log_archive_status_v2, OB_GET_TENANT_LOG_ARCHIVE_STATUS_V2,
+      (share::ObGetTenantLogArchiveStatusArg), share::ObServerTenantLogArchiveStatusWrapper);
   RPC_S(PR5 remove_non_paxos_replica, OB_REMOVE_NON_PAXOS_REPLICA, (ObRemoveNonPaxosReplicaArg));
   RPC_S(PR5 remove_member, OB_REMOVE_MEMBER, (ObMemberChangeArg));
   RPC_S(PR5 migrate_replica, OB_MIGRATE_REPLICA, (ObMigrateReplicaArg));
@@ -84,6 +86,8 @@ public:
   RPC_S(PR5 backup_replica_batch, OB_BACKUP_REPLICA_BATCH, (ObBackupBatchArg));
   RPC_S(PR5 check_backup_task_exist, OB_CHECK_BACKUP_TASK_EXIST, (int64_t), obrpc::Bool);
   RPC_S(PR5 validate_backup_batch, OB_VALIDATE_BACKUP_BATCH, (ObValidateBatchArg));
+  RPC_S(PR5 backup_archive_log_batch, OB_BACKUP_ARCHIVE_LOG_BATCH, (ObBackupArchiveLogBatchArg));
+  RPC_S(PR5 backup_backupset_batch, OB_BACKUP_BACKUPSET_BATCH, (ObBackupBackupsetBatchArg));
 
   RPC_AP(PR5 minor_freeze, OB_MINOR_FREEZE, (ObMinorFreezeArg), obrpc::Int64);
   RPC_AP(PR5 prepare_major_freeze, OB_PREPARE_MAJOR_FREEZE, (ObMajorFreezeArg), obrpc::Int64);

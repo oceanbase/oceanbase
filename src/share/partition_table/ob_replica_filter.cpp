@@ -937,7 +937,7 @@ int ObCutdataStatusFilter::check(const ObPartitionReplica& replica, bool& pass) 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica));
   } else {
-    pass = (REPLICA_RESTORE_CUT_DATA == replica.is_restore_);
+    pass = (REPLICA_RESTORE_STANDBY_CUT == replica.is_restore_);
   }
   return ret;
 }

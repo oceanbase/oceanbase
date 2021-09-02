@@ -77,6 +77,7 @@ int ObCancelDeleteBackupScheduler::inner_schedule_cancel_delete_backup()
   ObBackupCleanInfo tenant_backup_clean_info;
   tenant_backup_clean_info.tenant_id_ = tenant_id_;
   ObBackupCleanInfo dest_tenant_backup_clean_info;
+  const bool for_update = true;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -86,7 +87,7 @@ int ObCancelDeleteBackupScheduler::inner_schedule_cancel_delete_backup()
   } else {
     if (OB_FAIL(updater.init(trans))) {
       LOG_WARN("failed to init tenant backup clean info updater", K(ret));
-    } else if (OB_FAIL(updater.get_backup_clean_info(tenant_id_, tenant_backup_clean_info))) {
+    } else if (OB_FAIL(updater.get_backup_clean_info(tenant_id_, for_update, tenant_backup_clean_info))) {
       LOG_WARN("failed to get backup clean info", K(ret), K(tenant_id_), K(tenant_backup_clean_info));
       if (OB_BACKUP_CLEAN_INFO_NOT_EXIST == ret) {
         ret = OB_CANCEL_DELETE_BACKUP_NOT_ALLOWED;

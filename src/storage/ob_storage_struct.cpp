@@ -178,7 +178,7 @@ OB_SERIALIZE_MEMBER(ObPGPartitionStoreMeta, pkey_, report_status_, multi_version
 OB_SERIALIZE_MEMBER(ObPartitionGroupMeta, pg_key_, is_restore_, replica_type_, replica_property_, saved_split_state_,
     migrate_status_, migrate_timestamp_, storage_info_, split_info_, partitions_, report_status_,
     create_schema_version_, ddl_seq_num_, create_timestamp_, create_frozen_version_, last_restore_log_id_,
-    restore_snapshot_version_, last_restore_log_ts_);
+    restore_snapshot_version_, last_restore_log_ts_, restore_schema_version_);
 
 ObPartitionGroupMeta::ObPartitionGroupMeta()
 {
@@ -195,7 +195,11 @@ bool ObPartitionGroupMeta::is_valid() const
   return pg_key_.is_valid() && (is_restore_ >= 0) && ObReplicaTypeCheck::is_replica_type_valid(replica_type_) &&
          replica_property_.is_valid() && storage_info_.is_valid() && create_schema_version_ >= 0 && ddl_seq_num_ >= 0 &&
          create_frozen_version_ >= 0 && restore_snapshot_version_ >= OB_INVALID_TIMESTAMP &&
-         (is_restore_ != REPLICA_RESTORE_LOG || restore_snapshot_version_ > 0);
+         restore_schema_version_ >= OB_INVALID_TIMESTAMP &&
+         (is_restore_ != REPLICA_RESTORE_LOG || restore_snapshot_version_ > 0) &&
+         (is_inner_table(pg_key_.get_table_id()) ||
+             (!is_inner_table(pg_key_.get_table_id()) &&
+                 (is_restore_ != REPLICA_RESTORE_LOG || restore_schema_version_ > 0)));
 }
 
 void ObPartitionGroupMeta::reset()
@@ -217,6 +221,7 @@ void ObPartitionGroupMeta::reset()
   last_restore_log_id_ = OB_INVALID_ID;
   restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
   last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
+  restore_schema_version_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObPartitionGroupMeta::deep_copy(const ObPartitionGroupMeta& meta)
@@ -250,6 +255,7 @@ int ObPartitionGroupMeta::deep_copy(const ObPartitionGroupMeta& meta)
     last_restore_log_id_ = meta.last_restore_log_id_;
     restore_snapshot_version_ = meta.restore_snapshot_version_;
     last_restore_log_ts_ = meta.last_restore_log_ts_;
+    restore_schema_version_ = meta.restore_schema_version_;
   }
 
   return ret;
@@ -646,6 +652,7 @@ ObCreatePGParam::ObCreatePGParam()
       last_restore_log_id_(OB_INVALID_ID),
       last_restore_log_ts_(OB_INVALID_TIMESTAMP),
       restore_snapshot_version_(OB_INVALID_TIMESTAMP),
+      restore_schema_version_(OB_INVALID_TIMESTAMP),
       migrate_status_(ObMigrateStatus::OB_MIGRATE_STATUS_NONE)
 {}
 
@@ -666,6 +673,7 @@ void ObCreatePGParam::reset()
   last_restore_log_id_ = OB_INVALID_ID;
   last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
   restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
+  restore_schema_version_ = OB_INVALID_TIMESTAMP;
   migrate_status_ = ObMigrateStatus::OB_MIGRATE_STATUS_NONE;
 }
 
@@ -674,7 +682,7 @@ bool ObCreatePGParam::is_valid() const
   return info_.is_valid() && ObReplicaTypeCheck::is_replica_type_valid(replica_type_) && replica_property_.is_valid() &&
          (is_restore_ >= 0) && create_timestamp_ >= 0 && nullptr != file_handle_ && nullptr != file_mgr_ &&
          create_frozen_version_ >= 0 && restore_snapshot_version_ >= OB_INVALID_TIMESTAMP &&
-         migrate_status_ < ObMigrateStatus::OB_MIGRATE_STATUS_MAX;
+         restore_schema_version_ >= OB_INVALID_TIMESTAMP && migrate_status_ < ObMigrateStatus::OB_MIGRATE_STATUS_MAX;
 }
 
 int ObCreatePGParam::assign(const ObCreatePGParam& param)
@@ -701,6 +709,7 @@ int ObCreatePGParam::assign(const ObCreatePGParam& param)
     last_restore_log_id_ = param.last_restore_log_id_;
     last_restore_log_ts_ = param.last_restore_log_ts_;
     restore_snapshot_version_ = param.restore_snapshot_version_;
+    restore_schema_version_ = param.restore_schema_version_;
     migrate_status_ = param.migrate_status_;
   }
   return ret;

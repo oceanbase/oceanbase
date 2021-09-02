@@ -475,6 +475,8 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg& other)
     LOG_WARN("fail to assign sys var list", K(ret), K(other));
   } else if (OB_FAIL(restore_pkeys_.assign(other.restore_pkeys_))) {
     LOG_WARN("fail to assign restore pkeys", K(ret), K(other));
+  } else if (OB_FAIL(restore_log_pkeys_.assign(other.restore_log_pkeys_))) {
+    LOG_WARN("fail to assign log restore pkeys", K(ret), K(other));
   } else {
     if_not_exist_ = other.if_not_exist_;
     name_case_mode_ = other.name_case_mode_;
@@ -492,12 +494,13 @@ DEF_TO_STRING(ObCreateTenantArg)
       K_(sys_var_list),
       K_(name_case_mode),
       K_(is_restore),
-      K_(restore_pkeys));
+      K_(restore_pkeys),
+      K_(restore_log_pkeys));
   return pos;
 }
 
 OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg), tenant_schema_, pool_list_, if_not_exist_, sys_var_list_,
-    name_case_mode_, is_restore_, restore_pkeys_);
+    name_case_mode_, is_restore_, restore_pkeys_, restore_log_pkeys_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {
@@ -3291,11 +3294,13 @@ bool ObPhysicalRestoreTenantArg::is_valid() const
 {
   return !tenant_name_.empty() && tenant_name_.length() < common::OB_MAX_TENANT_NAME_LENGTH_STORE &&
          !backup_tenant_name_.empty() && backup_tenant_name_.length() < common::OB_MAX_TENANT_NAME_LENGTH_STORE &&
-         !uri_.empty() && uri_.length() < share::OB_MAX_BACKUP_DEST_LENGTH && !restore_option_.empty() &&
-         restore_option_.length() < common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH && restore_timestamp_ > 0;
+         (!uri_.empty() || !multi_uri_.empty()) && uri_.length() < share::OB_MAX_BACKUP_DEST_LENGTH &&
+         !restore_option_.empty() && restore_option_.length() < common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH &&
+         restore_timestamp_ > 0;
 }
+
 OB_SERIALIZE_MEMBER((ObPhysicalRestoreTenantArg, ObCmdArg), tenant_name_, uri_, restore_option_, restore_timestamp_,
-    backup_tenant_name_, passwd_array_);
+    backup_tenant_name_, passwd_array_, table_items_, multi_uri_);
 
 ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
     : ObCmdArg(),
@@ -3304,8 +3309,33 @@ ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
       restore_option_(),
       restore_timestamp_(common::OB_INVALID_TIMESTAMP),
       backup_tenant_name_(),
-      passwd_array_()
+      passwd_array_(),
+      table_items_(),
+      multi_uri_()
 {}
+
+int ObPhysicalRestoreTenantArg::assign(const ObPhysicalRestoreTenantArg& other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+    // skip
+  } else if (OB_FAIL(table_items_.assign(other.table_items_))) {
+    LOG_WARN("fail to assign table_items", KR(ret));
+  } else {
+    tenant_name_ = other.tenant_name_;
+    uri_ = other.uri_;
+    restore_option_ = other.restore_option_;
+    restore_timestamp_ = other.restore_timestamp_;
+    backup_tenant_name_ = other.backup_tenant_name_;
+    passwd_array_ = other.passwd_array_;
+  }
+  return ret;
+}
+
+int ObPhysicalRestoreTenantArg::add_table_item(const ObTableItem& item)
+{
+  return table_items_.push_back(item);
+}
 
 OB_SERIALIZE_MEMBER((ObRestoreTenantArg, ObCmdArg), tenant_name_, oss_uri_);
 
@@ -3569,7 +3599,7 @@ OB_SERIALIZE_MEMBER(ObFetchAliveServerArg, cluster_id_);
 
 OB_SERIALIZE_MEMBER(ObFetchAliveServerResult, active_server_list_, inactive_server_list_);
 
-OB_SERIALIZE_MEMBER(ObAdminSetTPArg, event_no_, event_name_, occur_, trigger_freq_, error_code_);
+OB_SERIALIZE_MEMBER(ObAdminSetTPArg, event_no_, event_name_, occur_, trigger_freq_, error_code_, server_, zone_);
 
 OB_SERIALIZE_MEMBER(ObCancelTaskArg, task_id_);
 OB_SERIALIZE_MEMBER(ObReportSingleReplicaArg, partition_key_);
@@ -4337,7 +4367,309 @@ bool ObBackupDatabaseArg::is_valid() const
   return share::ObBackupEncryptionMode::is_valid(encryption_mode_);
 }
 
-OB_SERIALIZE_MEMBER(ObBackupManageArg, tenant_id_, type_, value_);
+OB_SERIALIZE_MEMBER(ObPGBackupArchiveLogArg, archive_round_, pg_key_);
+
+ObPGBackupArchiveLogArg::ObPGBackupArchiveLogArg() : archive_round_(-1), pg_key_()
+{}
+
+bool ObPGBackupArchiveLogArg::is_valid() const
+{
+  return archive_round_ > 0 && pg_key_.is_valid();
+}
+
+int ObPGBackupArchiveLogArg::assign(const ObPGBackupArchiveLogArg& arg)
+{
+  int ret = OB_SUCCESS;
+  archive_round_ = arg.archive_round_;
+  pg_key_ = arg.pg_key_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObPGBackupArchiveLogRes, result_, finished_, pg_key_, checkpoint_ts_);
+
+ObPGBackupArchiveLogRes::ObPGBackupArchiveLogRes() : result_(0), finished_(false), checkpoint_ts_(), pg_key_()
+{}
+
+bool ObPGBackupArchiveLogRes::is_valid() const
+{
+  return pg_key_.is_valid();
+}
+
+int ObPGBackupArchiveLogRes::assign(const ObPGBackupArchiveLogRes& arg)
+{
+  int ret = OB_SUCCESS;
+  result_ = arg.result_;
+  finished_ = arg.finished_;
+  pg_key_ = arg.pg_key_;
+  checkpoint_ts_ = arg.checkpoint_ts_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupArchiveLogBatchArg, tenant_id_, archive_round_, piece_id_, create_date_, job_id_,
+    checkpoint_ts_, task_id_, src_root_path_, src_storage_info_, dst_root_path_, dst_storage_info_, arg_array_);
+
+ObBackupArchiveLogBatchArg::ObBackupArchiveLogBatchArg()
+    : tenant_id_(OB_INVALID_ID),
+      archive_round_(-1),
+      piece_id_(-1),
+      create_date_(-1),
+      job_id_(-1),
+      checkpoint_ts_(-1),
+      task_id_(),
+      src_root_path_(),
+      src_storage_info_(),
+      dst_root_path_(),
+      dst_storage_info_(),
+      arg_array_()
+{}
+
+bool ObBackupArchiveLogBatchArg::is_valid() const
+{
+  bool bret = true;
+  for (int64_t i = 0; bret && i < arg_array_.count(); ++i) {
+    const ObPGBackupArchiveLogArg& arg = arg_array_.at(i);
+    if (!arg.is_valid()) {
+      bret = false;
+    }
+  }
+  return bret;
+}
+
+int ObBackupArchiveLogBatchArg::assign(const ObBackupArchiveLogBatchArg& arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(copy_assign(arg_array_, arg.arg_array_))) {
+    SHARE_LOG(WARN, "failed to assign arg_array_", K(ret));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    archive_round_ = arg.archive_round_;
+    piece_id_ = arg.piece_id_;
+    create_date_ = arg.create_date_;
+    job_id_ = arg.job_id_;
+    checkpoint_ts_ = arg.checkpoint_ts_;
+    task_id_ = arg.task_id_;
+    STRNCPY(src_root_path_, arg.src_root_path_, OB_MAX_BACKUP_PATH_LENGTH);
+    STRNCPY(src_storage_info_, arg.src_storage_info_, OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
+    STRNCPY(dst_root_path_, arg.dst_root_path_, OB_MAX_BACKUP_PATH_LENGTH);
+    STRNCPY(dst_storage_info_, arg.dst_storage_info_, OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(
+    ObBackupArchiveLogBatchRes, server_, tenant_id_, archive_round_, piece_id_, job_id_, checkpoint_ts_, res_array_);
+
+ObBackupArchiveLogBatchRes::ObBackupArchiveLogBatchRes()
+    : server_(), tenant_id_(OB_INVALID_ID), archive_round_(0), piece_id_(0), job_id_(0), checkpoint_ts_(0), res_array_()
+{}
+
+bool ObBackupArchiveLogBatchRes::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && archive_round_ > 0 && piece_id_ >= 0 && server_.is_valid();
+}
+
+bool ObBackupArchiveLogBatchRes::is_interrupted() const
+{
+  bool bret = false;
+  for (int64_t i = 0; i < res_array_.count(); ++i) {
+    const ObPGBackupArchiveLogRes& res = res_array_.at(i);
+    if (OB_LOG_ARCHIVE_INTERRUPTED == res.result_) {
+      bret = true;
+      break;
+    }
+  }
+  return bret;
+}
+
+int ObBackupArchiveLogBatchRes::assign(const ObBackupArchiveLogBatchRes& arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(copy_assign(res_array_, arg.res_array_))) {
+    SHARE_LOG(WARN, "failed to assgin res array", KR(ret));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    archive_round_ = arg.archive_round_;
+    piece_id_ = arg.piece_id_;
+    job_id_ = arg.job_id_;
+    checkpoint_ts_ = arg.checkpoint_ts_;
+    server_ = arg.server_;
+  }
+  return ret;
+}
+
+int ObBackupArchiveLogBatchRes::get_min_checkpoint_ts(int64_t& checkpoint_ts) const
+{
+  int ret = OB_SUCCESS;
+  checkpoint_ts = INT64_MAX;
+  for (int64_t i = 0; OB_SUCC(ret) && i < res_array_.count(); ++i) {
+    const ObPGBackupArchiveLogRes& res = res_array_.at(i);
+    checkpoint_ts = std::min(checkpoint_ts, res.checkpoint_ts_);
+  }
+  return ret;
+}
+
+int ObBackupArchiveLogBatchRes::get_finished_pg_list(common::ObIArray<common::ObPGKey>& pg_list) const
+{
+  int ret = OB_SUCCESS;
+  pg_list.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < res_array_.count(); ++i) {
+    const ObPGBackupArchiveLogRes& res = res_array_.at(i);
+    const bool finished = OB_SUCCESS == res.result_;
+    if (finished) {
+      if (OB_FAIL(pg_list.push_back(res.pg_key_))) {
+        SHARE_LOG(WARN, "failed to push back pg key", KR(ret), K(res));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupArchiveLogBatchRes::get_failed_pg_list(common::ObIArray<common::ObPGKey>& pg_list) const
+{
+  int ret = OB_SUCCESS;
+  pg_list.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < res_array_.count(); ++i) {
+    const ObPGBackupArchiveLogRes& res = res_array_.at(i);
+    if (OB_SUCCESS != res.result_) {
+      if (OB_FAIL(pg_list.push_back(res.pg_key_))) {
+        SHARE_LOG(WARN, "failed to push back pg key", KR(ret), K(res));
+      }
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObMigrateBackupsetArg, backup_set_id_, pg_key_, backup_backupset_arg_);
+ObMigrateBackupsetArg::ObMigrateBackupsetArg() : backup_set_id_(-1), pg_key_(), backup_backupset_arg_()
+{}
+
+int ObMigrateBackupsetArg::assign(const ObMigrateBackupsetArg& arg)
+{
+  int ret = OB_SUCCESS;
+  backup_set_id_ = arg.backup_set_id_;
+  pg_key_ = arg.pg_key_;
+  backup_backupset_arg_ = arg.backup_backupset_arg_;
+  return ret;
+}
+
+bool ObMigrateBackupsetArg::is_valid() const
+{
+  return backup_set_id_ > 0 && pg_key_.is_valid() && backup_backupset_arg_.is_valid();
+}
+
+OB_SERIALIZE_MEMBER(
+    ObBackupBackupsetArg, tenant_id_, backup_set_id_, tenant_name_, backup_backup_dest_, max_backup_times_);
+
+ObBackupBackupsetArg::ObBackupBackupsetArg()
+    : tenant_id_(OB_INVALID_ID), backup_set_id_(-1), tenant_name_(), backup_backup_dest_(""), max_backup_times_(-1)
+{}
+
+bool ObBackupBackupsetArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && backup_set_id_ >= 0;
+}
+
+int ObBackupBackupsetArg::assign(const ObBackupBackupsetArg& o)
+{
+  int ret = OB_SUCCESS;
+
+  tenant_id_ = o.tenant_id_;
+  backup_set_id_ = o.backup_set_id_;
+  tenant_name_ = o.tenant_name_;
+  MEMCPY(backup_backup_dest_, o.backup_backup_dest_, sizeof(backup_backup_dest_));
+  max_backup_times_ = o.max_backup_times_;
+  return ret;
+}
+
+int ObBackupArchiveLogArg::assign(const ObBackupArchiveLogArg& o)
+{
+  int ret = OB_SUCCESS;
+
+  enable_ = o.enable_;
+  return ret;
+}
+
+int ObBackupBackupPieceArg::assign(const ObBackupBackupPieceArg& o)
+{
+  int ret = OB_SUCCESS;
+
+  tenant_id_ = o.tenant_id_;
+  piece_id_ = o.piece_id_;
+  tenant_name_ = o.tenant_name_;
+  MEMCPY(backup_backup_dest_, o.backup_backup_dest_, sizeof(backup_backup_dest_));
+  max_backup_times_ = o.max_backup_times_;
+  backup_all_ = o.backup_all_;
+  with_active_piece_ = o.with_active_piece_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupBackupsetBatchArg, arg_array_, timeout_ts_, task_id_, tenant_dropped_);
+
+int ObBackupBackupsetBatchArg::assign(const ObBackupBackupsetBatchArg& arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(copy_assign(arg_array_, arg.arg_array_))) {
+    SHARE_LOG(WARN, "failed to assign res_array", KR(ret));
+  } else {
+    timeout_ts_ = arg.timeout_ts_;
+    task_id_ = arg.task_id_;
+    tenant_dropped_ = arg.tenant_dropped_;
+  }
+  return ret;
+}
+
+bool ObBackupBackupsetBatchArg::is_valid() const
+{
+  bool is_valid = true;
+  for (int64_t i = 0; i < arg_array_.count() && is_valid; ++i) {
+    is_valid = arg_array_.at(i).is_valid();
+  }
+  return is_valid;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupBackupsetReplicaRes, key_, dst_, arg_, result_);
+ObBackupBackupsetReplicaRes::ObBackupBackupsetReplicaRes()
+{}
+
+int ObBackupBackupsetReplicaRes::assign(const ObBackupBackupsetReplicaRes& res)
+{
+  int ret = OB_SUCCESS;
+  key_ = res.key_;
+  dst_ = res.dst_;
+  arg_ = res.arg_;
+  result_ = res.result_;
+  return ret;
+}
+
+bool ObBackupBackupsetReplicaRes::is_valid() const
+{
+  return key_.is_valid() && dst_.is_valid() && arg_.is_valid();
+}
+
+OB_SERIALIZE_MEMBER(ObBackupBackupsetBatchRes, res_array_);
+
+int ObBackupBackupsetBatchRes::assign(const ObBackupBackupsetBatchRes& res)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(copy_assign(res_array_, res.res_array_))) {
+    SHARE_LOG(WARN, "failed to assign res_array", KR(ret));
+  }
+  return ret;
+}
+
+bool ObBackupBackupsetBatchRes::is_valid() const
+{
+  bool is_valid = true;
+  for (int64_t i = 0; i < res_array_.count() && is_valid; ++i) {
+    is_valid = res_array_.at(i).is_valid();
+  }
+  return is_valid;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupArchiveLogArg, enable_);
+OB_SERIALIZE_MEMBER(ObBackupBackupPieceArg, tenant_id_, piece_id_, tenant_name_, backup_backup_dest_, max_backup_times_,
+    backup_all_, with_active_piece_);
+OB_SERIALIZE_MEMBER(ObBackupManageArg, tenant_id_, type_, value_, copy_id_);
 OB_SERIALIZE_MEMBER(
     CheckLeaderRpcIndex, switchover_timestamp_, epoch_, ml_pk_index_, pkey_info_start_index_, tenant_id_);
 OB_SERIALIZE_MEMBER(ObBatchCheckLeaderArg, pkeys_, index_, trace_id_);
@@ -4346,6 +4678,15 @@ OB_SERIALIZE_MEMBER(ObCheckFlashbackInfoArg, min_weak_read_timestamp_);
 OB_SERIALIZE_MEMBER(ObCheckFlashbackInfoResult, addr_, pkey_, result_, switchover_timestamp_, ret_code_);
 OB_SERIALIZE_MEMBER(ObBatchWriteCutdataClogArg, pkeys_, index_, trace_id_, switchover_timestamp_, flashback_ts_,
     schema_version_, query_end_time_);
+
+ObBackupBackupPieceArg::ObBackupBackupPieceArg()
+    : tenant_id_(OB_INVALID_ID),
+      piece_id_(-1),
+      tenant_name_(),
+      backup_backup_dest_(""),
+      max_backup_times_(-1),
+      backup_all_(false)
+{}
 
 int ObCheckFlashbackInfoArg::assign(const ObCheckFlashbackInfoArg& other)
 {

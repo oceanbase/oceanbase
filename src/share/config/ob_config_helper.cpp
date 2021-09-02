@@ -465,5 +465,50 @@ bool ObConfigUseLargePagesChecker::check(const ObConfigItem& t) const
   return is_valid;
 }
 
+bool ObConfigBoolParser::get(const char* str, bool& valid)
+{
+  bool value = true;
+  valid = false;
+
+  if (OB_ISNULL(str)) {
+    valid = false;
+    OB_LOG(ERROR, "Get bool config item fail, str is NULL!");
+  } else if (0 == STRCASECMP(str, "false")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "true")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "off")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "on")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "no")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "yes")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "f")) {
+    valid = true;
+    value = false;
+  } else if (0 == STRCASECMP(str, "t")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "1")) {
+    valid = true;
+    value = true;
+  } else if (0 == STRCASECMP(str, "0")) {
+    valid = true;
+    value = false;
+  } else {
+    OB_LOG(ERROR, "Get bool config item fail", K(str));
+    valid = false;
+  }
+  return value;
+}
+
 }  // namespace common
 }  // end of namespace oceanbase

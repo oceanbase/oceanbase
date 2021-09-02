@@ -18,6 +18,9 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "lib/string/ob_sql_string.h"
 #include "ob_root_backup.h"
+#include "share/backup/ob_backup_struct.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "share/backup/ob_backup_backupset_operator.h"
 
 namespace oceanbase {
 using namespace common;
@@ -54,6 +57,18 @@ int ObBackupCancelScheduler::init(
 int ObBackupCancelScheduler::start_schedule_backup_cancel()
 {
   int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("cancel backup scheduler do not init", K(ret));
+  } else if (OB_FAIL(inner_schedule_cancel_backup())) {
+    LOG_WARN("failed to inner schedule cancel backup", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+int ObBackupCancelScheduler::inner_schedule_cancel_backup()
+{
+  int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
   ObBackupInfoManager info_manager;
   ObBaseBackupInfoStruct backup_info;
@@ -62,7 +77,7 @@ int ObBackupCancelScheduler::start_schedule_backup_cancel()
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("backup scheduler do not init", K(ret));
+    LOG_WARN("cancel backup scheduler do not init", K(ret));
   } else if (OB_FAIL(tenant_ids.push_back(tenant_id_))) {
     LOG_WARN("failed to push tenant id into array", K(ret), K(tenant_id_));
   } else if (OB_FAIL(info_manager.init(tenant_ids, *proxy_))) {

@@ -25,8 +25,10 @@ ObArchiveRoundMgr::ObArchiveRoundMgr()
       started_pg_count_(0),
       incarnation_(-1),
       current_archive_round_(-1),
-      start_tstamp_(OB_INVALID_TIMESTAMP),
+      cur_piece_id_(0),
+      cur_piece_create_date_(OB_INVALID_TIMESTAMP),
       compatible_(false),
+      is_oss_(false),
       has_handle_error_(false),
       has_encount_error_(false),
       log_archive_status_(LOG_ARCHIVE_INVALID_STATUS),
@@ -53,8 +55,10 @@ void ObArchiveRoundMgr::destroy()
   started_pg_count_ = 0;
   incarnation_ = -1;
   current_archive_round_ = -1;
-  start_tstamp_ = OB_INVALID_TIMESTAMP;
+  cur_piece_id_ = 0;
+  cur_piece_create_date_ = OB_INVALID_TIMESTAMP;
   compatible_ = false;
+  is_oss_ = false;
   has_encount_error_ = false;
 
   memset(root_path_, 0, share::OB_MAX_BACKUP_PATH_LENGTH);
@@ -126,23 +130,29 @@ bool ObArchiveRoundMgr::has_encounter_fatal_error(const int64_t incarnation, con
   return b_ret;
 }
 
-int ObArchiveRoundMgr::set_archive_start(const int64_t incarnation, const int64_t archive_round,
-    const share::ObTenantLogArchiveStatus::COMPATIBLE compatible)
+int ObArchiveRoundMgr::set_archive_start(const int64_t incarnation, const int64_t archive_round, const int64_t piece_id,
+    const int64_t piece_create_date, const bool is_oss, const share::ObTenantLogArchiveStatus::COMPATIBLE compatible)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
 
-  if (OB_UNLIKELY(0 >= incarnation || 0 > archive_round)) {
-    ARCHIVE_LOG(WARN, "invalid arguments", K(incarnation), K(archive_round));
+  if (OB_UNLIKELY(0 >= incarnation || 0 > archive_round || 0 > piece_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(
+        WARN, "invalid arguments", K(incarnation), K(archive_round), K(piece_id), K(piece_create_date), K(compatible));
   } else if (share::ObTenantLogArchiveStatus::COMPATIBLE::NONE != compatible &&
-             share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_1 != compatible) {
+             share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_1 != compatible &&
+             share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2 != compatible) {
     ret = OB_NOT_SUPPORTED;
     ARCHIVE_LOG(ERROR, "compatible not support", K(incarnation), K(archive_round), K(compatible));
   } else {
     incarnation_ = incarnation;
     current_archive_round_ = archive_round;
-    compatible_ = compatible >= share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_1;
+    cur_piece_id_ = piece_id;
+    cur_piece_create_date_ = piece_create_date;
+    compatible_ = compatible >= share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2;
     log_archive_status_ = LOG_ARCHIVE_BEGINNING;
+    is_oss_ = is_oss;
     has_handle_error_ = false;
     has_encount_error_ = false;
   }
@@ -163,12 +173,39 @@ void ObArchiveRoundMgr::set_archive_force_stop(const int64_t incarnation, const 
   }
 }
 
-void ObArchiveRoundMgr::get_archive_round_info(
-    int64_t& incarnation, int64_t& archive_round, LogArchiveStatus& log_archive_status, bool& has_encount_error)
+int ObArchiveRoundMgr::update_cur_piece_info(const int64_t incarnation, const int64_t archive_round,
+    const int64_t new_piece_id, const int64_t new_piece_create_date)
+{
+  int ret = OB_SUCCESS;
+  WLockGuard guard(rwlock_);
+  if (OB_UNLIKELY(incarnation != incarnation_ || current_archive_round_ != archive_round || 0 == cur_piece_id_ ||
+                  new_piece_id != cur_piece_id_ + 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN,
+        "invalid arguments",
+        K(incarnation),
+        K(archive_round),
+        K(new_piece_id),
+        K(new_piece_create_date),
+        K(incarnation_),
+        K(current_archive_round_),
+        K(cur_piece_id_));
+  } else {
+    cur_piece_id_ = new_piece_id;
+    cur_piece_create_date_ = new_piece_create_date;
+  }
+  return ret;
+}
+
+void ObArchiveRoundMgr::get_archive_round_info(int64_t& incarnation, int64_t& archive_round, int64_t& cur_piece_id,
+    int64_t& cur_piece_create_date, bool& is_oss, LogArchiveStatus& log_archive_status, bool& has_encount_error) const
 {
   RLockGuard guard(rwlock_);
   incarnation = incarnation_;
   archive_round = current_archive_round_;
+  cur_piece_id = cur_piece_id_;
+  cur_piece_create_date = cur_piece_create_date_;
+  is_oss = is_oss_;
   log_archive_status = log_archive_status_;
   has_encount_error = has_encount_error_;
 }

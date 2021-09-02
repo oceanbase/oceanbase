@@ -1662,10 +1662,32 @@ int ObBackupManageExecutor::execute(ObExecContext& ctx, ObBackupManageStmt& stmt
     arg.tenant_id_ = stmt.get_tenant_id();
     arg.type_ = stmt.get_type();
     arg.value_ = stmt.get_value();
+    arg.copy_id_ = stmt.get_copy_id();
     if (OB_FAIL(common_proxy->backup_manage(arg))) {
       LOG_WARN("backup_manage rpc failed", K(ret), K(arg), "dst", common_proxy->get_server());
     }
   }
+  return ret;
+}
+
+int ObBackupBackupsetExecutor::execute(ObExecContext& ctx, ObBackupBackupsetStmt& stmt)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSEDx(ctx, stmt);
+  return ret;
+}
+
+int ObBackupArchiveLogExecutor::execute(ObExecContext& ctx, ObBackupArchiveLogStmt& stmt)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSEDx(ctx, stmt);
+  return ret;
+}
+
+int ObBackupBackupPieceExecutor::execute(ObExecContext& ctx, ObBackupBackupPieceStmt& stmt)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSEDx(ctx, stmt);
   return ret;
 }
 
@@ -1755,5 +1777,78 @@ int ObBackupSetDecryptionExecutor::execute(ObExecContext& ctx, ObBackupSetDecryp
   }
   return ret;
 }
+
+int ObAddRestoreSourceExecutor::execute(ObExecContext& ctx, ObAddRestoreSourceStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  common::ObCurTraceId::mark_user_request();
+  common::ObMySQLProxy* sql_proxy = nullptr;
+  ObSqlString add_restore_source_sql;
+  ObMySQLProxy::MySQLResult res;
+  sqlclient::ObISQLConnection* conn = nullptr;
+  observer::ObInnerSQLConnectionPool* pool = nullptr;
+  ObSQLSessionInfo* session_info = ctx.get_my_session();
+  int64_t affected_rows = 0;
+  ObObj value;
+
+  if (OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), KP(session_info));
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_) || OB_ISNULL(sql_proxy->get_pool())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy must not null", K(ret), KP(GCTX.sql_proxy_));
+  } else if (sqlclient::INNER_POOL != sql_proxy->get_pool()->get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool type must be inner", K(ret), "type", sql_proxy->get_pool()->get_type());
+  } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pool must not null", K(ret));
+  } else if (!session_info->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
+    LOG_INFO("no restore source specified before");
+  } else {
+    if (OB_FAIL(session_info->get_user_variable_value(OB_RESTORE_SOURCE_NAME_SESSION_STR, value))) {
+      LOG_WARN("failed to get user variable value", KR(ret));
+    } else if (OB_FAIL(stmt.add_restore_source(value.get_char()))) {
+      LOG_WARN("failed to add restore source", KR(ret), K(value));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(add_restore_source_sql.assign_fmt("set @%s = '%.*s'",
+                 OB_RESTORE_SOURCE_NAME_SESSION_STR,
+                 stmt.get_restore_source_array().length(),
+                 stmt.get_restore_source_array().ptr()))) {
+    LOG_WARN("failed to add restore source", K(ret), K(stmt));
+  } else if (OB_FAIL(pool->acquire(session_info, conn))) {
+    LOG_WARN("failed to get conn", K(ret));
+  } else if (OB_FAIL(conn->execute_write(
+                 session_info->get_effective_tenant_id(), add_restore_source_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to add restore source", K(ret), K(add_restore_source_sql));
+  } else {
+    LOG_INFO("ObAddRestoreSourceExecutor::execute", K(stmt), K(ctx), K(add_restore_source_sql));
+  }
+  return ret;
+}
+
+int ObClearRestoreSourceExecutor::execute(ObExecContext& ctx, ObClearRestoreSourceStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  common::ObCurTraceId::mark_user_request();
+  ObSQLSessionInfo* session_info = ctx.get_my_session();
+  if (OB_ISNULL(session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), KP(session_info));
+  } else {
+    if (session_info->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
+      if (OB_FAIL(session_info->remove_user_variable(OB_RESTORE_SOURCE_NAME_SESSION_STR))) {
+        LOG_WARN("failed to remove user variable", KR(ret));
+      }
+    }
+  }
+  UNUSED(stmt);
+  return ret;
+}
+
 }  // end namespace sql
 }  // end namespace oceanbase
