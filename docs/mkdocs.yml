@@ -140,6 +140,7 @@ nav:
       - OceanBase TPC-C 性能测试报告: docs-cn/3.performance-white-paper/6.mcso3a.md
     - 安装和部署:
       - 生产环境部署 OceanBase 数据库: docs-cn/4.installation-and-deployment/1.deploy-the-distributed-oceanbase-cluster.md
+      - 生产环境推荐配置: docs-cn/4.installation-and-deployment/recommend-config-for-production.md
       - 安装包下载说明: docs-cn/4.installation-and-deployment/2.instructions-for-downloading-the-installation-package.md
       - 资源准备: docs-cn/4.installation-and-deployment/3.resource-preparation.md
       - （可选）查看资源: docs-cn/4.installation-and-deployment/4.optional-check-the-operating-system.md
