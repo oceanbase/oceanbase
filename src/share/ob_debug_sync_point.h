@@ -210,6 +210,7 @@ class ObString;
   ACT(BEFORE_PHYSICAL_RESTORE_REBUILD_INDEX, )                     \
   ACT(BEFORE_PHYSICAL_RESTORE_POST_CHECK, )                        \
   ACT(BACKUP_BEFROE_CHOOSE_SRC, )                                  \
+  ACT(BACKUP_BEFROE_BUILD_TABLE_PARTITION_INFO,)                   \
   ACT(HANG_UPDATE_RS_LIST, )                                       \
   ACT(PARTITION_BACKUP_TASK_BEFORE_ADD_TASK_IN_MGR, )              \
   ACT(HANG_BEFORE_RESOLVER_FINISH, )                               \

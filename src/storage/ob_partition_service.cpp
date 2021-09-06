@@ -6037,17 +6037,7 @@ int ObPartitionService::backup_replica_batch(const obrpc::ObBackupBatchArg& arg)
       replica_op_arg.cluster_id_ = GCONF.cluster_id;
       replica_op_arg.type_ = type;
       replica_op_arg.switch_epoch_ = single_arg.switch_epoch_;
-      ObIPartitionGroupGuard guard;
-      ObIPartitionGroup* partition = NULL;
-      if (OB_FAIL(get_partition(single_arg.key_, guard))) {
-        STORAGE_LOG(WARN, "get partition failed", K(single_arg), K(ret));
-      } else if (OB_ISNULL(guard.get_partition_group())) {
-        ret = OB_ENTRY_NOT_EXIST;
-        STORAGE_LOG(WARN, "partition not exist, maybe migrate out", K(single_arg), K(ret));
-      } else if (OB_ISNULL(partition = guard.get_partition_group())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "partition should not be NULL", K(ret), K(single_arg));
-      } else if (OB_FAIL(task_list.push_back(replica_op_arg))) {
+      if (OB_FAIL(task_list.push_back(replica_op_arg))) {
         LOG_WARN("failed to push replica op arg into array", K(ret), K(replica_op_arg));
       }
     }

@@ -1541,6 +1541,8 @@ int ObBackupPrepareTask::build_table_partition_info(
   ObArray<uint64_t> table_id_list;
   ObPGPartitionMetaInfo partition_meta_info;
 
+  DEBUG_SYNC(BACKUP_BEFROE_BUILD_TABLE_PARTITION_INFO);
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("migrate prepare task do not init", K(ret));
@@ -1572,6 +1574,7 @@ int ObBackupPrepareTask::build_table_partition_info(
       }
     }
   }
+
   return ret;
 }
 

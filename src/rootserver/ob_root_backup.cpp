@@ -2548,6 +2548,10 @@ int ObRootBackup::check_tenant_can_backup(const uint64_t tenant_id, ObSchemaGett
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
   } else if (tenant_schema->is_restore()) {
     can_backup = false;
+    LOG_WARN("tenant is doing restore", K(tenant_id));
+  } else if (tenant_schema->is_dropping()) {
+    can_backup = false;
+    LOG_WARN("tenant is dropping", K(tenant_id));
   }
   return ret;
 }
