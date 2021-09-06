@@ -612,7 +612,7 @@ private:
   // it is used to record the last restore log id pulling by physical backup and recovery
   uint64_t last_restore_log_id_;
   // it is used to record the last restore log ts pulling by physical backup and recovery
-  uint64_t last_restore_log_ts_;
+  int64_t last_restore_log_ts_;
   // the statistics for elr
   // number of trans with prev
   uint64_t with_dependency_trx_count_;

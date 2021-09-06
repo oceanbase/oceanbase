@@ -4123,21 +4123,35 @@ int ObPartTransCtx::replay_commit_log(const ObTransCommitLog& log, const int64_t
   return ret;
 }
 
+// For pg restored in 3.x, restore_snapshot_version and last_restore_log_ts is used to
+// rollback trans which is restored and superfluous
+//
+// For pg restored in 2.x, last_restore_log_id is used instead of last_restore_log_ts,
+// as last_restore_log_ts is not maintained in pg restored from 2.x
 bool ObPartTransCtx::need_rollback_when_restore_(const int64_t commit_version)
 {
+  bool bret = false;
   const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
   const uint64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
-  return restore_snapshot_version > 0
-    && (last_restore_log_id == OB_INVALID_ID || min_log_id_ <= last_restore_log_id)
-    && commit_version > restore_snapshot_version;
+  const int64_t last_restore_log_ts = partition_mgr_->get_last_restore_log_ts();
+  // restore_snapshot_version is invalid, all trans need not rollback
+  if (OB_INVALID_TIMESTAMP == restore_snapshot_version) {
+    bret = false;
+  } else if (OB_INVALID_TIMESTAMP != last_restore_log_ts) {
+    // last_restore_log_ts is valid, pg is restored in 3.x
+    bret = min_log_ts_ <= last_restore_log_ts && commit_version > restore_snapshot_version;
+  } else if (OB_INVALID_ID != last_restore_log_id) {
+    // last_restore_log_ts is invalid and last_restore_log_id is valid, pg is restored in 2.x
+    bret = min_log_id_ <= last_restore_log_id && commit_version > restore_snapshot_version;
+  } else {
+    // last_restore_log_ts and last_restore_log_id are invalid, pg is in restoring
+    bret = commit_version > restore_snapshot_version;
+  }
+  return bret;
 }
 
-// TODO: duotian
-bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int64_t log_ts)
+bool ObPartTransCtx::need_update_schema_version(const uint64_t log_id, const int64_t log_ts)
 {
-  UNUSED(log_id);
-  UNUSED(log_ts);
-  /*
   const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
   const int64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
   bool need_update = true;
@@ -4146,8 +4160,6 @@ bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int6
     need_update = false;
   }
   return need_update;
-  */
-  return true;
 }
 
 int ObPartTransCtx::trans_replay_commit_(const int64_t commit_version, const int64_t checksum)
@@ -11800,6 +11812,7 @@ void ObPartTransCtx::get_audit_info(int64_t& lock_for_read_elapse) const
 // which transactions should be kept and the log ts who is the last log ts during
 // restore phase. fake_terminate_log_ts is mocked as terminate_log_ts of
 // aborted dirty transaction. (See details in ObPartTransCtx::fake_kill_).
+// For pg restored from 2.x, last_restore_log_id is used instead of last_restore_log_ts
 
 // NB: We should also take dirty txn into account. Of course, Dirty txns are
 // more complicated. For example, the transaction status of dirty txn may be
@@ -11811,8 +11824,19 @@ int ObPartTransCtx::clear_trans_after_restore(const int64_t restore_version, con
     const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
 {
   int ret = OB_SUCCESS;
+  bool need_clear = false;
   CtxLockGuard guard(lock_);
   const int64_t state = get_state_();
+  {
+    // For pg restored from 2.x, last_restore_log_ts is invalid and last_restore_log_id is valid
+    if (OB_INVALID_TIMESTAMP == last_restore_log_ts) {
+      if (cluster_version_ < CLUSTER_VERSION_3000 && OB_INVALID_ID != last_restore_log_id) {
+        need_clear = min_log_id_ <= last_restore_log_id;
+      }
+    } else {
+      need_clear = min_log_ts_ <= last_restore_log_ts;
+    }
+  }
   if (IS_NOT_INIT) {
     // skip the uninitialized transactions
     ret = OB_SUCCESS;
@@ -11823,7 +11847,7 @@ int ObPartTransCtx::clear_trans_after_restore(const int64_t restore_version, con
         K(last_restore_log_id),
         K(last_restore_log_ts),
         K(fake_terminate_log_ts));
-  } else if (min_log_id_ > last_restore_log_id) {
+  } else if (!need_clear) {
     // skip new transactions after restore completes
     ret = OB_SUCCESS;
     TRANS_LOG(INFO,

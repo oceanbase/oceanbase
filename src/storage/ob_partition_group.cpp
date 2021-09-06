@@ -6025,16 +6025,14 @@ int ObPartitionGroup::clear_trans_after_restore_log(const uint64_t last_restore_
   } else if (OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id)
       || OB_UNLIKELY(OB_INVALID_TIMESTAMP == last_restore_log_ts)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid last_restore_log_info", KR(ret), K_(pkey),
-                K(last_restore_log_id), K(last_restore_log_ts));
-  } else if (OB_FAIL(pg_storage_.set_last_restore_log_info(last_restore_log_id,
-                                                           last_restore_log_ts))) {
-    STORAGE_LOG(WARN, "failed to set_last_restore_log_info", K(ret), K_(pkey),
-                K(last_restore_log_id), K(last_restore_log_ts));
-  } else if (OB_FAIL(txs_->set_last_restore_log_info(pkey_, last_restore_log_id,
-                                                     last_restore_log_ts))) {
-    STORAGE_LOG(WARN, "failed to set_last_restore_log_ts", KR(ret), K_(pkey),
-                K(last_restore_log_id), K(last_restore_log_ts));
+    STORAGE_LOG(
+        WARN, "invalid last_restore_log_info", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
+  } else if (OB_FAIL(pg_storage_.set_last_restore_log_info(last_restore_log_id, last_restore_log_ts))) {
+    STORAGE_LOG(
+        WARN, "failed to set_last_restore_log_info", K(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
+  } else if (OB_FAIL(txs_->set_last_restore_log_info(pkey_, last_restore_log_id, last_restore_log_ts))) {
+    STORAGE_LOG(
+        WARN, "failed to set_last_restore_log_info", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else {
     ATOMIC_SET(&has_clear_trans_after_restore_, true);
   }
