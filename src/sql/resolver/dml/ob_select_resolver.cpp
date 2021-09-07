@@ -3015,7 +3015,10 @@ int ObSelectResolver::add_fake_schema(ObSelectStmt* left_stmt)
             ObColumnRefRawExpr* select_expr = static_cast<ObColumnRefRawExpr*>(expr);
             ObColumnSchemaV2* new_col = static_cast<ObColumnSchemaV2*>(allocator_->alloc(sizeof(ObColumnSchemaV2)));
             new_col = new (new_col) ObColumnSchemaV2(allocator_);
-            new_col->set_column_name(saved_left_resolver->cte_ctx_.cte_col_names_.at(i));
+            if (!OB_ISNULL(saved_left_resolver))
+              new_col->set_column_name(saved_left_resolver->cte_ctx_.cte_col_names_.at(i));
+            else
+              new_col->set_column_name(cte_ctx_.cte_col_names_.at(i));
             new_col->set_tenant_id(tbl_schema->get_tenant_id());
             new_col->set_table_id(magic_table_id);
             new_col->set_column_id(magic_col_id + i);
