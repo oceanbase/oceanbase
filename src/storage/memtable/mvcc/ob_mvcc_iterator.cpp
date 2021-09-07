@@ -77,9 +77,7 @@ int ObMvccValueIterator::init(const ObIMvccCtx& ctx, const ObTransSnapInfo& snap
       TRANS_LOG(WARN, "fail to find start pos for iterator", K(ret));
     } else {
       if (GCONF.enable_sql_audit) {
-        if (OB_SUCCESS != (ret = mark_trans_node_for_elr(snapshot_info.get_snapshot_version(), query_flag.is_prewarm()))) {
-          //do nothing
-        }
+        mark_trans_node(snapshot_info.get_snapshot_version(), query_flag.is_prewarm());
       }
       // set has_read_relocated_row flag true when reading relocated row
       if (value->is_has_relocated()) {
@@ -93,29 +91,24 @@ int ObMvccValueIterator::init(const ObIMvccCtx& ctx, const ObTransSnapInfo& snap
   return ret;
 }
 
-int ObMvccValueIterator::mark_trans_node_for_elr(const int64_t read_snapshot, const bool is_prewarm)
+void ObMvccValueIterator::mark_trans_node(const int64_t read_snapshot, const bool is_prewarm)
 {
-  int ret = OB_SUCCESS;
   if (NULL != version_iter_) {
-    ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(ctx_));
-    transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
-    if (NULL != trans_ctx) {
-        if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
-          TRANS_LOG(WARN, "strong consistent read follower", K(*trans_ctx), K(ctx_));
-          ret = OB_NOT_MASTER;
-        }
-    }
     // do not set barrier info when transaction node is ELR node
     if (!is_prewarm && !version_iter_->is_elr()) {
       version_iter_->clear_safe_read_barrier();
+      ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(ctx_));
+      transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
       if (NULL != trans_ctx) {
+        if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
+          TRANS_LOG(WARN, "strong consistent read follower", K(trans_ctx->get_trans_id()), K(ctx_));
+        }
         version_iter_->set_safe_read_barrier(trans_ctx->is_bounded_staleness_read());
         version_iter_->set_inc_num(trans_ctx->get_trans_id().get_inc_num());
       }
       version_iter_->set_snapshot_version_barrier(read_snapshot);
     }
   }
-  return ret;
 }
 
 int ObMvccValueIterator::find_start_pos(const int64_t read_snapshot)
@@ -313,6 +306,16 @@ bool ObMvccValueIterator::read_by_sql_no(
   if (can_read_by_sql_no) {
     if (query_flag.is_read_latest()) {
       version_iter_ = iter;
+      if (NULL != version_iter_) {
+        ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(&ctx));
+        transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
+        if (NULL != trans_ctx) {
+          if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
+            TRANS_LOG(WARN, "strong consistent read follower", K(trans_ctx->get_trans_id()), K(ctx));
+            ret = OB_NOT_MASTER;
+          }
+        }
+      }
     } else {
       if (!is_locked) {
         value->latch_.lock();
