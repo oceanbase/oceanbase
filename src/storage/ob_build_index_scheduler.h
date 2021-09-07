@@ -193,7 +193,7 @@ private:
 
 private:
   static const int64_t DEFAULT_DDL_BUCKET_NUM = 100000;
-  static const int64_t CHECK_TENANT_SCHEMA_INTERVAL_US = 100 * 1000L;
+  static const int64_t CHECK_TENANT_SCHEMA_INTERVAL_US = 1 * 1000L;
   bool is_inited_;
   share::ObDDLTaskExecutor task_executor_;
   common::ObSpinLock lock_;

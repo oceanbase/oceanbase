@@ -511,6 +511,417 @@ int ObObj::build_not_strict_default_value()
   return ret;
 }
 
+int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size, ObSortkeyExtraData* extra_param)
+{
+  int ret = OB_SUCCESS;
+  int64_t buf = 0;
+  int32_t copied = 0;
+  char* buf_ptr = reinterpret_cast<char*>(&buf);
+  char* ptr = reinterpret_cast<char*>(&v_);
+  if (offset == 0) {
+    to[0] = 1;
+    offset = 1;
+    copied = 1;
+  }
+  const ObObjType& data_type = meta_.get_type();
+  switch (data_type) {
+    case ObNullType: {
+      to[0] = 0;
+      offset = 0;
+      size = 1;
+      break;
+    }
+    case ObTinyIntType: {
+      buf_ptr[0] = (char)(ptr[0] ^ 128);
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObSmallIntType: {
+      buf_ptr[0] = (char)(ptr[1] ^ 128);
+      buf_ptr[1] = ptr[0];
+      size = std::min(size - copied, 2 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 3) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObMediumIntType:
+    case ObInt32Type: {
+      buf_ptr[0] = (char)(ptr[3] ^ 128);
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObIntType: {
+      buf_ptr[0] = (char)(ptr[7] ^ 128);
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUTinyIntType: {
+      buf_ptr[0] = ptr[0];
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUSmallIntType: {
+      buf_ptr[0] = ptr[1];
+      buf_ptr[1] = ptr[0];
+      size = std::min(size - copied, 2 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 3) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUMediumIntType:
+    case ObUInt32Type: {
+      buf_ptr[0] = ptr[3];
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUInt64Type: {
+      buf_ptr[0] = ptr[7];
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUFloatType:
+    case ObFloatType: {
+      if (v_.float_ == 0.0f) v_.float_ = 0.0;
+      int32_t tmp;
+      memcpy(&tmp, &(v_.float_), sizeof(v_.float_));
+      tmp = (tmp ^ (tmp >> 31)) | ((~tmp) & 0x80000000);
+      char* ptr1 = reinterpret_cast<char*>(&tmp);
+      buf_ptr[0] = ptr1[3];
+      buf_ptr[1] = ptr1[2];
+      buf_ptr[2] = ptr1[1];
+      buf_ptr[3] = ptr1[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObUDoubleType:
+    case ObDoubleType: {
+      if (v_.double_ == 0.0) v_.double_ = 0.0;
+      int64_t tmp;
+      memcpy(&tmp, &(v_.double_), sizeof(v_.double_));
+      tmp = (tmp ^ (tmp >> 63)) | ((~tmp) & 0x8000000000000000ULL);
+      char* ptr1 = reinterpret_cast<char*>(&tmp);
+      buf_ptr[0] = ptr1[7];
+      buf_ptr[1] = ptr1[6];
+      buf_ptr[2] = ptr1[5];
+      buf_ptr[3] = ptr1[4];
+      buf_ptr[4] = ptr1[3];
+      buf_ptr[5] = ptr1[2];
+      buf_ptr[6] = ptr1[1];
+      buf_ptr[7] = ptr1[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObBitType:
+    case ObEnumType:
+    case ObSetType:
+    case ObTimeType:
+    case ObDateTimeType:
+    case ObTimestampType: {
+      buf_ptr[0] = ptr[7];
+      buf_ptr[1] = ptr[6];
+      buf_ptr[2] = ptr[5];
+      buf_ptr[3] = ptr[4];
+      buf_ptr[4] = ptr[3];
+      buf_ptr[5] = ptr[2];
+      buf_ptr[6] = ptr[1];
+      buf_ptr[7] = ptr[0];
+      size = std::min(size - copied, 8 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 9) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObDateType: {
+      buf_ptr[0] = ptr[3];
+      buf_ptr[1] = ptr[2];
+      buf_ptr[2] = ptr[1];
+      buf_ptr[3] = ptr[0];
+      size = std::min(size - copied, 4 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 5) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObYearType: {
+      buf_ptr[0] = ptr[0];
+      size = std::min(size - copied, 1 - offset + 1);
+      memcpy(to + copied, buf_ptr + offset - 1, size);
+      offset += size;
+      size += copied;
+      if (offset == 2) {
+        offset = 0;
+      }
+      break;
+    }
+    case ObVarcharType:
+    case ObCharType: {
+      if ((get_meta().get_collation_type() == CS_TYPE_BINARY) || 
+              (get_meta().get_collation_type() == CS_TYPE_UTF8MB4_BIN)) {
+        int32_t ids = 0;
+        int32_t ids1 = offset - 1;
+        int32_t ids2;
+        int32_t t = val_len_ % 8;
+        int32_t mem_len = (val_len_ / 8) * 9 + (t ? 9 : 0);
+        size = std::min(mem_len - offset + 1, size - copied);
+        while (ids < size) {
+          if ((ids1 + 1) % 9 == 0) {
+            if (ids1 == mem_len - 1) {
+              to[ids + copied] = (t == 0) ? 8 : t;
+            } else {
+              to[ids + copied] = 9;
+            }
+          } else {
+            ids2 = (ids1 / 9) * 8 + (ids1 % 9);
+            if (ids2 >= val_len_) {
+              to[ids + copied] = 0;
+            } else {
+              to[ids + copied] = v_.string_[ids2];
+            }
+          }
+          ids1 += 1;
+          ids += 1;
+        }
+        offset += size;
+        size += copied;
+        if (offset > mem_len) {
+          offset = 0;
+        }
+      } else {
+        if (offset == 1) {
+          extra_param->reset();
+        }
+        // For mysql varchar type, 'xxx' and 'xxx ' are equal.
+        // So remove space here.
+        int32_t val_len = val_len_;
+        if (data_type == ObVarcharType) {
+          while (val_len > 0 && v_.string_[val_len - 1] == ' ') {
+            val_len--;
+          }
+        }
+        int32_t sortkey_offset = extra_param->sortkey_offset;
+        int32_t str_offset = extra_param->str_offset;
+        if (extra_param->extra_buf_size != 0) {
+          int32_t ids = 0;
+          while (copied < size && extra_param->extra_buf_size > 0) {
+            to[copied] = extra_param->extra_buf[ids];
+            copied++;
+            ids++;
+            extra_param->extra_buf_size--;
+          }
+          offset += copied;
+        }
+        if (copied < size) {
+          if (str_offset < val_len) {
+            int32_t t1 = (offset - 1) % 9;
+            int32_t t2 = ((offset - 1) + size - copied) % 9;
+            int32_t sortkey_start = (offset - 1) / 9 * 8 + (t1 ? t1 : 1);
+            int32_t sortkey_end = ((offset - 1) + size - copied) / 9 * 8 + (t2 ? t2 : 1);
+            if (offset - 1 == 0) {
+                sortkey_start = 0;
+            }
+            if ((offset - 1) + size - copied == 0) {
+                sortkey_end = 0;
+            }
+            int64_t sortkey_len = sortkey_end - sortkey_start;
+            int64_t str_len = val_len - str_offset;
+            bool is_valid_collation = false;
+            char buf[16];
+            ObCharset::sortkey_v2(get_collation_type(), 
+                    get_string_ptr() + str_offset, 
+                    str_len, 
+                    buf, 
+                    sortkey_len, 
+                    is_valid_collation, 
+                    16);
+            if (is_valid_collation) {
+              sortkey_offset += sortkey_len;
+              str_offset += str_len;
+              int32_t ids = 0;
+              int32_t ids1 = 0;
+              while (ids < sortkey_len && copied < size) {
+                if (offset % 9 == 0) {
+                  to[copied] = 9;
+                } else {
+                  to[copied] = buf[ids];
+                  ids++;
+                }
+                offset++;
+                copied++;
+              }
+              extra_param->extra_buf_size = sortkey_len - ids;
+              while (ids < sortkey_len) {
+                extra_param->extra_buf[ids1] = buf[ids];
+                ids++;
+                ids1++;
+              }
+            } else {
+              while (copied < size && str_offset < val_len) {
+                if (offset % 9 == 0) {
+                  to[copied] = 9;
+                } else {
+                  to[copied] = v_.string_[str_offset];
+                  str_offset++;
+                }
+                copied++;
+                offset++;
+              }
+            }
+          }
+          extra_param->str_offset = str_offset;
+          extra_param->sortkey_offset = sortkey_offset;
+        }
+        while (str_offset == val_len && copied < size) {
+          if (offset % 9 == 0) {
+            int32_t t = sortkey_offset % 8;
+            to[copied] = t == 0 ? 8 : t;
+            copied++;
+            offset = 0;
+            break;
+          } else {
+            to[copied] = 0;
+            copied++;
+            offset++;
+          }
+        }
+        size = copied;
+      }
+      break;
+    }
+    case ObNumberType: 
+    case ObUNumberType: {
+      int32_t len = nmb_desc_.len_;
+      len = len << 2;
+      int32_t t = (len + 1) % 8;
+      int32_t ids = 0;
+      int32_t ids1 = offset - 1;
+      int32_t ids2;
+      char* num = reinterpret_cast<char*>(v_.nmb_digits_);
+      int32_t mem_len = (len + 1) / 8 * 9 + (t ? 9 : 0);
+      size = std::min(mem_len - offset + 1, size - copied);
+      while (ids < size) {
+        if ((ids1 + 1) % 9 == 0) {
+          if (ids1 == mem_len - 1) {
+            to[ids + copied] = (t == 0) ? 8 : t;
+          } else {
+            to[ids + copied] = 9;
+          }
+        } else {
+          if (ids1 == 0) {
+            to[ids + copied] = nmb_desc_.se_;
+          } else {
+            ids2 = ids1 - (ids1 / 9) - 1;
+            if (ids2 >= len) {
+              to[ids + copied] = 0;
+            } else {
+              int32_t n1 = ids2 / 4;
+              int32_t t1 = ids2 % 4;
+              to[ids + copied] = num[n1 * 4 + (3 - t1)];
+              if (nmb_desc_.sign_ == number::ObNumber::NEGATIVE) {
+                  to[ids + copied] = ~to[ids + copied];
+              }
+            }
+          }
+        }
+        ids += 1;
+        ids1 += 1;
+      }
+      offset += size;
+      size += copied;
+      if (offset > mem_len) {
+        offset = 0;
+      }
+      break;
+    }
+    default:
+      offset = 0;
+      ret = OB_INVALID_ARGUMENT;
+      _OB_LOG(WARN, "unexpected data type=%u", data_type);
+  }
+  return ret;
+}
+
 int ObObj::deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& pos)
 {
   int ret = OB_SUCCESS;

@@ -701,15 +701,15 @@ int ObIndexMergeTask::process()
 }
 
 int ObIndexMergeTask::merge_local_sort_index(const ObBuildIndexParam& param,
-    const ObIArray<ObExternalSort<ObStoreRow, ObStoreRowComparer>*>& local_sorters,
-    ObExternalSort<ObStoreRow, ObStoreRowComparer>& merge_sorter, ObBuildIndexContext* context,
+    const ObIArray<ObExternalSort<ObSortRow, ObSortRowComparer>*>& local_sorters,
+    ObExternalSort<ObSortRow, ObSortRowComparer>& merge_sorter, ObBuildIndexContext* context,
     ObTableHandle& new_sstable)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int comp_ret = OB_SUCCESS;
   ObArray<int64_t> sort_column_indexes;
-  ObStoreRowComparer comparer(comp_ret, sort_column_indexes);
+  ObSortRowComparer comparer(comp_ret, sort_column_indexes);
   ObCreateIndexKey key;
   ObCreateIndexSortTaskStat sort_task_stat;
   const int64_t file_buf_size = ObExternalSortConstant::DEFAULT_FILE_READ_WRITE_BUFFER;
@@ -757,7 +757,7 @@ int ObIndexMergeTask::merge_local_sort_index(const ObBuildIndexParam& param,
     } else {
       const bool is_final_merge = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < local_sorters.count(); ++i) {
-        ObExternalSort<ObStoreRow, ObStoreRowComparer>* local_sort = local_sorters.at(i);
+        ObExternalSort<ObSortRow, ObSortRowComparer>* local_sort = local_sorters.at(i);
         if (OB_ISNULL(local_sort)) {
           ret = OB_ERR_SYS;
           STORAGE_LOG(WARN, "local_sort must not be NULL", K(ret));
@@ -788,7 +788,7 @@ int ObIndexMergeTask::merge_local_sort_index(const ObBuildIndexParam& param,
 }
 
 int ObIndexMergeTask::add_build_index_sstable(const ObBuildIndexParam& param,
-    ObExternalSort<ObStoreRow, ObStoreRowComparer>& external_sort, ObBuildIndexContext* context,
+    ObExternalSort<ObSortRow, ObSortRowComparer>& external_sort, ObBuildIndexContext* context,
     ObTableHandle& new_sstable)
 {
   int ret = OB_SUCCESS;
@@ -829,23 +829,28 @@ int ObIndexMergeTask::add_build_index_sstable(const ObBuildIndexParam& param,
     STORAGE_LOG(WARN, "Fail to open macro block writer, ", K(ret));
   } else {
     common::ObArenaAllocator allocator(ObModIds::OB_SSTABLE_CREATE_INDEX);
-    const ObStoreRow* row = NULL;
+    const ObSortRow* sort_row = NULL;
+    ObStoreRow tmp_row;
+    tmp_row.flag_ = ObActionFlag::OP_ROW_EXIST;
     int64_t row_count = 0;
+
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(external_sort.get_next_item(row))) {
+      if (OB_FAIL(external_sort.get_next_item(sort_row))) {
         if (OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "Fail to get next row from external sort, ", K(ret));
         } else {
           ret = OB_SUCCESS;
           break;
         }
-      } else if (OB_FAIL(writer_.append_row(*row))) {
+      } else if (OB_FALSE_IT(tmp_row.row_val_ = sort_row->row_val_)) {
+          // do nothing
+      } else if (OB_FAIL(writer_.append_row(tmp_row))) {
         if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && param.index_schema_->is_unique_index()) {
           LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, "", static_cast<int>(sizeof("UNIQUE IDX") - 1), "UNIQUE IDX");
         } else {
           STORAGE_LOG(WARN, "Fail to append row to sstable, ", K(ret));
         }
-      } else if (OB_FAIL(checksum.calc_column_checksum(param.checksum_method_, row, NULL, NULL))) {
+      } else if (OB_FAIL(checksum.calc_column_checksum(param.checksum_method_, &tmp_row, NULL, NULL))) {
         STORAGE_LOG(WARN, "fail to calc column checksum", K(ret));
       } else {
 #ifdef ERRSIM

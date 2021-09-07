@@ -62,6 +62,7 @@ class ObBatch;
 class ObPartitionMergeDag;
 class ObPartitionStorage;
 class ObStoreRowComparer;
+class ObSortRowComparer;
 template <typename T, typename Compare>
 class ObExternalSort;
 class ObSSTableMergeContext;

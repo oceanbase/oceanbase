@@ -5,6 +5,8 @@ DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
 TOOLS_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/devtools
 CMAKE_COMMAND=${TOOLS_DIR}/bin/cmake
 CPU_CORES=`grep -c ^processor /proc/cpuinfo`
+HAS_AVX512F=`lscpu | grep avx512f`
+ENABLE_AVX512F=$([ -n "$HAS_AVX512F" ] && echo ON || echo OFF )
 
 ALL_ARGS=("$@")
 BUILD_ARGS=()
@@ -94,7 +96,7 @@ function do_build
 {
     TYPE=$1; shift
     prepare_build_dir $TYPE || return
-    ${CMAKE_COMMAND} ${TOPDIR} "$@"
+    ${CMAKE_COMMAND} -DENABLE_AVX512F=$ENABLE_AVX512F ${TOPDIR} "$@"
 }
 
 # clean build directories
@@ -110,7 +112,7 @@ function build
     set -- "${BUILD_ARGS[@]}"
     case "x$1" in
       xrelease)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo 
         ;;
       xdebug)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug

@@ -44,6 +44,20 @@ inline ObCmpNullPos default_null_pos()
   return lib::is_oracle_mode() ? NULL_LAST : NULL_FIRST;
 }
 
+struct ObSortkeyExtraData {
+  ObSortkeyExtraData() : extra_buf_size(0), str_offset(0), sortkey_offset(0)
+  {}
+  void reset() {
+    extra_buf_size = 0;
+    str_offset = 0;
+    sortkey_offset = 0;
+  }
+  char extra_buf[4];
+  uint16_t extra_buf_size;
+  uint16_t str_offset;
+  uint16_t sortkey_offset;
+};
+
 struct ObEnumSetInnerValue {
   OB_UNIS_VERSION_V(1);
 
@@ -1101,6 +1115,7 @@ public:
   inline void reset();
   // when in not strict sql mode, build default value refer to data type
   int build_not_strict_default_value();
+  int make_sort_key(char*, int16_t&, int32_t&, ObSortkeyExtraData*);
   static ObObj make_min_obj();
   static ObObj make_max_obj();
   static ObObj make_nop_obj();

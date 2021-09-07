@@ -10467,6 +10467,39 @@ size_t ob_strnxfrm_unicode(const ObCharsetInfo* cs, unsigned char* dst, size_t d
   return dst - dst_begin;
 }
 
+void ob_strnxfrm_unicode_v2(const ObCharsetInfo* cs, unsigned char* dst, size_t* dst_len, uint32_t nweights,
+    const unsigned char* src, size_t* src_len, int* is_valid_unicode, int buf_size)
+{
+  ob_wc_t wchar = 0;
+  int cur_len = 0;
+  unsigned char* dst_begin = dst;
+  const unsigned char* src_begin = src;
+  unsigned char* dst_end = dst + *dst_len;
+  const unsigned char* src_end = src + *src_len;
+  uint32_t** sort_pages = (cs->state & OB_CS_BINSORT) ? NULL : cs->caseinfo->sort_pages;
+  *is_valid_unicode = 1;
+
+  unsigned char* dst_buf_end = dst + buf_size;
+  for (; dst < dst_end && nweights; nweights--) {
+    if ((cur_len = cs->cset->mb_wc(src, src_end, &wchar)) <= 0) {
+      if (src < src_end) {
+        *is_valid_unicode = 0;
+      }
+      break;
+    }
+    src += cur_len;
+    if (sort_pages) {
+      ob_tosort_unicode(sort_pages, &wchar);
+    }
+    if ((cur_len = cs->cset->wc_mb(wchar, dst, dst_buf_end)) <= 0) {
+      break;
+    }
+    dst += cur_len;
+  }
+  *dst_len = dst - dst_begin;
+  *src_len = src - src_begin;
+  // ob_strnxfrm_unicode_help(&dst, &dst_end, nweights, &dst0);
+}
 //==============================================================
 
 static int ob_wildcmp_unicode_impl(const ObCharsetInfo* cs, const char* str, const char* str_end, const char* wildstr,
@@ -10721,6 +10754,7 @@ static ObCollationHandler ob_collation_utf8mb4_general_ci_handler = {
     ob_strnncoll_utf8mb4,
     ob_strnncollsp_utf8mb4,
     ob_strnxfrm_unicode,
+    ob_strnxfrm_unicode_v2,
     ob_like_range_mb,
     ob_wildcmp_utf8mb4,
     ob_instr_mb,
@@ -10731,6 +10765,7 @@ static ObCollationHandler ob_collation_utf8mb4_bin_handler = {
     ob_strnncoll_mb_bin,
     ob_strnncollsp_mb_bin,
     ob_strnxfrm_unicode_full_bin,
+    NULL,
     ob_like_range_mb,
     ob_wildcmp_mb_bin,
     ob_instr_mb,

@@ -54,6 +54,56 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow* left, const ObSt
     STORAGE_LOG(WARN, "Invaid argument, ", KP(left), KP(right), K(sort_column_index_.count()), K_(result_code));
   } else {
     for (int64_t i = 0; OB_LIKELY(common::OB_SUCCESS == result_code_) && i < sort_column_index_.count(); ++i) {
+      const int64_t index = sort_column_index_.at(i); if (index < left->row_val_.count_ && index < right->row_val_.count_) { const int cmp = left->row_val_.cells_[index].compare(right->row_val_.cells_[index]);
+        if (cmp < 0) {
+          bool_ret = true;
+          break;
+        } else if (cmp > 0) {
+          bool_ret = false;
+          break;
+        }
+      } else {
+        result_code_ = common::OB_INVALID_ARGUMENT;
+        STORAGE_LOG(WARN,
+            "index is out of bound",
+            K_(result_code),
+            K(index),
+            K(left->row_val_.count_),
+            K(right->row_val_.count_),
+            K(sort_column_index_.count()),
+            K(i));
+      }
+    }
+  }
+  return bool_ret;
+}
+
+class ObSortRowComparer {
+public:
+  ObSortRowComparer(int& comp_ret, const common::ObIArray<int64_t>& sort_column_index)
+      : result_code_(comp_ret), sort_column_index_(sort_column_index), cancel_(NULL), cmp_times_(0)
+  {}
+  virtual ~ObSortRowComparer()
+  {}
+  OB_INLINE bool operator()(const ObSortRow* left, const ObSortRow* right);
+  int& result_code_;
+
+private:
+  const common::ObIArray<int64_t>& sort_column_index_;
+  ObIComparerCancel* cancel_;
+  int64_t cmp_times_;
+};
+
+OB_INLINE bool ObSortRowComparer::operator()(const ObSortRow* left, const ObSortRow* right)
+{
+  bool bool_ret = false;
+  if (OB_UNLIKELY(common::OB_SUCCESS != result_code_)) {
+    // do nothing
+  } else if (OB_UNLIKELY(NULL == left) || OB_UNLIKELY(NULL == right) || OB_UNLIKELY(0 == sort_column_index_.count())) {
+    result_code_ = common::OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invaid argument, ", KP(left), KP(right), K(sort_column_index_.count()), K_(result_code));
+  } else {
+    for (int64_t i = 0; OB_LIKELY(common::OB_SUCCESS == result_code_) && i < sort_column_index_.count(); ++i) {
       const int64_t index = sort_column_index_.at(i);
       if (index < left->row_val_.count_ && index < right->row_val_.count_) {
         const int cmp = left->row_val_.cells_[index].compare(right->row_val_.cells_[index]);

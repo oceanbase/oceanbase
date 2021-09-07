@@ -5416,14 +5416,14 @@ int ObPartitionStorage::local_sort_index_by_range(
       false,
       false);
   int comp_ret = OB_SUCCESS;
-  ObStoreRowComparer comparer(comp_ret, sort_column_indexes);
+  ObSortRowComparer comparer(comp_ret, sort_column_indexes);
   const int64_t file_buf_size = ObExternalSortConstant::DEFAULT_FILE_READ_WRITE_BUFFER;
   const int64_t expire_timestamp = 0;  // no time limited
   const ObTableSchema* table_schema = NULL;
   const ObTableSchema* index_schema = NULL;
   const ObTableSchema* dep_table = NULL;
   const int64_t concurrent_cnt = index_param.concurrent_cnt_;
-  ObExternalSort<ObStoreRow, ObStoreRowComparer>* local_sort = NULL;
+  ObExternalSort<ObSortRow, ObSortRowComparer>* local_sort = NULL;
   int64_t unique_key_cnt = 0;
   int64_t macro_block_cnt = 0;
   ObCreateIndexKey key;
@@ -5438,6 +5438,7 @@ int ObPartitionStorage::local_sort_index_by_range(
     index_schema = index_param.index_schema_;
     dep_table = index_param.dep_table_schema_;
     local_sort = index_context.sorters_.at(idx);
+    local_sort->set_use_memcmp();
     tenant_id = extract_tenant_id(table_schema->get_table_id());
     if (index_schema->is_materialized_view()) {
       query_flag.join_type_ = sql::LEFT_OUTER_JOIN;
@@ -5810,6 +5811,8 @@ int ObPartitionStorage::local_sort_index_by_range(
               tmp_row.row_val_.cells_[k] = row->row_val_.cells_[k];
             }
           }
+          ObSortRow sort_row;
+          sort_row.row_val_ = tmp_row.row_val_;
 
           // process unique index shadow columns
           if (OB_SUCC(ret) && index_schema->is_unique_index()) {
@@ -5843,7 +5846,7 @@ int ObPartitionStorage::local_sort_index_by_range(
                 }
                 if (OB_SUCC(ret)) {
                   ObSEArray<ObString, 8> words;
-                  ObObj orig_obj = tmp_row.row_val_.cells_[pos];
+                  ObObj orig_obj = sort_row.row_val_.cells_[pos];
                   ObString orig_string = orig_obj.get_string();
                   if (-1 == pos) {
                     ret = OB_ERR_UNEXPECTED;
@@ -5855,14 +5858,14 @@ int ObPartitionStorage::local_sort_index_by_range(
                     trans_time += t3 - t2;
                     for (int64_t i = 0; OB_SUCC(ret) && i < words.count(); ++i) {
                       t3_1 = ObTimeUtility::current_time();
-                      tmp_row.row_val_.cells_[pos].set_string(tmp_row.row_val_.cells_[pos].get_type(), words.at(i));
+                      sort_row.row_val_.cells_[pos].set_string(sort_row.row_val_.cells_[pos].get_type(), words.at(i));
                       t3_2 = ObTimeUtility::current_time();
                       trans_time += t3_2 - t3_1;
-                      if (OB_FAIL(local_sort->add_item(tmp_row))) {
+                      if (OB_FAIL(local_sort->add_item(sort_row))) {
                         STORAGE_LOG(WARN, "Fail to add item to sort, ", K(ret));
                       }
                       ++row_count;
-                      index_table_size += tmp_row.get_serialize_size();
+                      index_table_size += sort_row.get_serialize_size();
                       t4 = ObTimeUtility::current_time();
                       add_item_time += t4 - t3_2;
                     }
@@ -5873,7 +5876,7 @@ int ObPartitionStorage::local_sort_index_by_range(
               }
             } else {
               t3 = ObTimeUtility::current_time();
-              if (OB_FAIL(local_sort->add_item(tmp_row))) {
+              if (OB_FAIL(local_sort->add_item(sort_row))) {
                 STORAGE_LOG(WARN, "Fail to add item to sort, ", K(ret));
               }
               ++row_count;

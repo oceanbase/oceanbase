@@ -346,7 +346,17 @@ ob_set_subtarget(ob_storage transaction
   transaction/ob_xa_inner_table_gc_worker.cpp
 )
 
+if (ENABLE_AVX512F)
+  ob_add_compile_option(-mavx512f 
+    ob_avx512_sort.h
+  )
+  ob_server_add_pchs(storage
+    ob_avx512_sort.h
+  )
+endif()
+
 ob_server_add_pchs(storage
+  ob_avx512_sort.h
   transaction/ob_trans_define.h
   transaction/ob_i_ts_source.h
   ob_col_map.h
@@ -424,3 +434,4 @@ ob_server_add_pchs(storage
 )
 
 ob_server_add_target(ob_storage)
+

@@ -858,6 +858,30 @@ size_t ObCharset::sortkey(ObCollationType collation_type, const char* str, int64
   return result;
 }
 
+void ObCharset::sortkey_v2(ObCollationType collation_type, const char* str, int64_t& str_len, char* key, int64_t& key_len,
+    bool& is_valid_unicode, int buf_size)
+{
+  int is_valid_unicode_tmp = 0;
+  size_t* tmp_key_len = (size_t*)&key_len;
+  size_t* tmp_str_len = (size_t*)&str_len;
+  if (is_argument_valid(collation_type, str, str_len, key, key_len)) {
+    ObCharsetInfo* cs = static_cast<ObCharsetInfo*>(ObCharset::charset_arr[collation_type]);
+
+    cs->coll->strnxfrm_v2(cs, 
+        reinterpret_cast<unsigned char*>(key), 
+        tmp_key_len, 
+        OB_MAX_WEIGHT,
+        reinterpret_cast<const unsigned char*>(str),
+        tmp_str_len, 
+        &is_valid_unicode_tmp,
+        buf_size);
+
+    is_valid_unicode = is_valid_unicode_tmp;
+    key_len = (int64_t)*tmp_key_len;
+    str_len = (int64_t)*tmp_str_len;
+  }
+}
+
 uint64_t ObCharset::hash(ObCollationType collation_type, const char* str, int64_t str_len, uint64_t seed,
     const bool calc_end_space, hash_algo hash_algo)
 {

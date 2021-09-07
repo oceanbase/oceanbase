@@ -209,6 +209,9 @@ typedef struct ObCollationHandler {
   size_t (*strnxfrm)(const struct ObCharsetInfo*, unsigned char* dst, size_t dst_len, uint32_t nweights,
       const unsigned char* src, size_t srclen, int* is_valid_unicode);
 
+  void (*strnxfrm_v2)(const struct ObCharsetInfo*, unsigned char* dst, size_t* dst_len, uint32_t nweights,
+      const unsigned char* src, size_t* srclen, int* is_valid_unicode, int buf_size);
+
   // like_range()  - creates a LIKE range, for optimizer
   int (*like_range)(const struct ObCharsetInfo* cs, const char* str, size_t str_len, int w_prefix, int w_one,
       int w_many, size_t res_length, char* min_str, char* max_str, size_t* min_len, size_t* max_len);
@@ -335,6 +338,9 @@ size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo* cs, unsigned char* dst,
 
 size_t ob_strnxfrm_unicode(const ObCharsetInfo* cs, unsigned char* dst, size_t dstlen, uint32_t nweights,
     const unsigned char* src, size_t src_len, int* is_valid_unicode);
+
+void ob_strnxfrm_unicode_v2(const ObCharsetInfo* cs, unsigned char* dst, size_t* dst_len, uint32_t nweights,
+    const unsigned char* src, size_t* src_len, int* is_valid_unicode, int buf_size);
 
 int ob_wildcmp_unicode(const ObCharsetInfo* cs, const char* str, const char* str_end, const char* wildstr,
     const char* wildend, int escape, int w_one, int w_many, uint32_t** weights);
