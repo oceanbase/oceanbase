@@ -447,9 +447,10 @@ int ObTableReplaceOp::check_values(bool& is_equal) const
         MY_SPEC.table_column_exprs_.at(i)->basic_funcs_->null_first_cmp_);
 
     if (schema::ObColumnSchemaV2::is_hidden_pk_column_id(MY_SPEC.column_ids_[i])) {
-    } else if (OB_FAIL(MY_SPEC.output_.at(i)->eval(eval_ctx_, insert_datum) ||
-                       OB_FAIL(MY_SPEC.table_column_exprs_.at(i)->eval(eval_ctx_, del_datum)))) {
-      LOG_WARN("eval expr failed", K(ret));
+    } else if (OB_FAIL(MY_SPEC.output_.at(i)->eval(eval_ctx_, insert_datum))) {
+      LOG_WARN("fail to eval insert when replace", K(ret));
+    } else if (OB_FAIL(MY_SPEC.table_column_exprs_.at(i)->eval(eval_ctx_, del_datum))) {
+      LOG_WARN("fail to eval delete when replace", K(ret));
     } else if (0 != MY_SPEC.output_.at(i)->basic_funcs_->null_first_cmp_(*insert_datum, *del_datum)) {
       is_equal = false;
     }
