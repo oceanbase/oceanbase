@@ -10406,7 +10406,7 @@ def_table_schema(
   gm_columns = [],
   rowkey_columns = [],
   view_definition = """
-  SELECT 'def' AS CATALOG_NAME, DATABASE_NAME AS SCHEMA_NAME, 'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME, 'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME, NULL AS SQL_PATH  FROM oceanbase.__all_virtual_database a WHERE a.tenant_id = effective_tenant_id() and in_recyclebin = 0 and database_name != '__recyclebin'
+  SELECT 'def' AS CATALOG_NAME, DATABASE_NAME AS SCHEMA_NAME, 'utf8mb4' AS DEFAULT_CHARACTER_SET_NAME, 'utf8mb4_general_ci' AS DEFAULT_COLLATION_NAME, NULL AS SQL_PATH, 'NO' as DEFAULT_ENCRYPTION FROM oceanbase.__all_virtual_database a WHERE a.tenant_id = effective_tenant_id() and in_recyclebin = 0 and database_name != '__recyclebin'
 """.replace("\n", " "),
 
   in_tenant_space = True,
@@ -14534,6 +14534,29 @@ def_table_schema(
         END  AS OUTPUT_BYTES_DISPLAY
     FROM oceanbase.__all_backup_backup_log_archive_status_v2;
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'COLUMN_PRIVILEGES',
+  table_id        = '21150',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+      CAST(NULL AS VARCHAR(292)) AS GRANTEE,
+      CAST('def' AS VARCHAR(512)) AS TABLE_CATALOG,
+      CAST(NULL AS VARCHAR(64)) AS TABLE_SCHEMA,
+      CAST(NULL AS VARCHAR(64)) AS TABLE_NAME,
+      CAST(NULL AS VARCHAR(64)) AS COLUMN_NAME,
+      CAST(NULL AS VARCHAR(64)) AS PRIVILEGE_TYPE,
+      CAST(NULL AS VARCHAR(3))  AS IS_GRANTABLE
+    FROM DUAL
+    WHERE 1 = 0
+""".replace("\n", " "),
 )
 
 ################################################################################
