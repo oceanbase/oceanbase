@@ -5760,19 +5760,32 @@ int ObLogicalOperator::inner_set_merge_sort(ObLogicalOperator* producer, ObLogic
     if (OB_SUCC(ret) && 0 < sort->get_sort_keys().count()) {
       // just use sort keys, avoid output_exprs are incorrect
       consumer_exchange->set_is_merge_sort(true);
-      consumer_exchange->set_local_order(!global_order);
-      need_remove = true;
-      if (global_order && OB_FAIL(producer_exchange->set_op_ordering(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set op ordering", K(ret));
-      } else if (!global_order && OB_FAIL(producer_exchange->set_local_ordering(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set local ordering", K(ret));
-      } else if (OB_FAIL(consumer_exchange->set_sort_keys(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set op ordering", K(ret));
-      } else {
-        LOG_TRACE("sort keys of exchange",
-            K(ret),
-            K(consumer_exchange->get_sort_keys()),
-            K(consumer_exchange->is_task_order()));
+      //for local merge sort in px_coord_merge_sort, we push down the sort operator
+      //keep the local order in sort op
+      if (!global_order && ObPQDistributeMethod::MAX_VALUE 
+                                      == consumer_exchange->get_dist_method()) {
+        if (OB_FAIL(producer_exchange->allocate_sort_below(0, sort->get_sort_keys()))) {
+          LOG_WARN("failed to allocate sort", K(ret));
+        } else {
+          global_order = true;
+          static_cast<ObLogSort *>(producer_exchange->get_child(0))->set_local_merge_sort(true);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        consumer_exchange->set_local_order(!global_order);
+        need_remove = true;
+        if (global_order && OB_FAIL(producer_exchange->set_op_ordering(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set op ordering", K(ret));
+        } else if (!global_order && OB_FAIL(producer_exchange->set_local_ordering(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set local ordering", K(ret));
+        } else if (OB_FAIL(consumer_exchange->set_sort_keys(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set op ordering", K(ret));
+        } else {
+          LOG_TRACE("sort keys of exchange",
+              K(ret),
+              K(consumer_exchange->get_sort_keys()),
+              K(consumer_exchange->is_task_order()));
+        }
       }
     }
   }

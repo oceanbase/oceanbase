@@ -642,7 +642,7 @@ int64_t ObHashDistinct::ObHashDistinctCtx::get_total_based_mem_used()
 int ObHashDistinct::ObHashDistinctCtx::open_cur_partition(ObChunkRowStore* row_store)
 {
   int ret = OB_SUCCESS;
-  int chunk_size = (NULL == ha_row_store_) ? row_store->get_file_size()
+  int64_t chunk_size = (NULL == ha_row_store_) ? row_store->get_file_size()
                                            : (ha_row_store_->get_mem_limit() > OB_DEFAULT_MACRO_BLOCK_SIZE
                                                      ? OB_DEFAULT_MACRO_BLOCK_SIZE
                                                      : ha_row_store_->get_mem_limit());
