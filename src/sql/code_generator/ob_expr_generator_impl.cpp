@@ -954,7 +954,12 @@ int ObExprGeneratorImpl::visit_enum_set_expr(ObNonTerminalRawExpr& expr, ObExprT
   } else if (OB_ISNULL(old_op = expr.get_op()) || OB_UNLIKELY(!IS_ENUM_SET_OP(old_op->get_type()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid old op", K(expr), K(ret));
-  } 
+  } else {
+    ObExprTypeToStr* type_to_str = static_cast<ObExprTypeToStr*>(old_op);
+    if (OB_FAIL(enum_set_op->deep_copy_str_values(type_to_str->get_str_values()))) {
+      LOG_WARN("failed to deep_copy_str_values", K(expr), K(ret));
+    }
+  }
   return ret;
 }
 
