@@ -533,9 +533,6 @@ int ObPxFifoReceive::get_one_row_from_channels(
       }
     }
   }
-  if (OB_SUCC(ret) && !got_row) {
-    ret = OB_EAGAIN;
-  }
   return ret;
 }
 

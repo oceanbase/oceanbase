@@ -200,10 +200,7 @@ int ObPhysicalPlan::copy_common_info(ObPhysicalPlan& src)
     ObSqlExpression* expr = NULL;
     DLIST_FOREACH(node, src.get_pre_calc_exprs())
     {
-      if (OB_ISNULL(node)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is null");
-      } else if (OB_FAIL(get_sql_expression_factory()->alloc(expr))) {
+      if (OB_FAIL(get_sql_expression_factory()->alloc(expr))) {
         LOG_WARN("fail to alloc sql expression", K(ret));
       } else if (OB_UNLIKELY(NULL == expr)) {
         ret = OB_ERR_UNEXPECTED;

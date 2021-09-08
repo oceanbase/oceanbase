@@ -59,9 +59,9 @@ int ObExprUnixTimestamp::calc_result_typeN(
     if (ObNullType == date_type.get_type()) {
       type.set_null();
     } else if (date_type.is_literal()) {  // literal
-      ret = calc_result_type_literal(type, date_type);
+      calc_result_type_literal(type, date_type);
     } else {  // column
-      ret = calc_result_type_column(type, date_type);
+      calc_result_type_column(type, date_type);
     }
     date_type.set_calc_type(ObTimestampType);
   }

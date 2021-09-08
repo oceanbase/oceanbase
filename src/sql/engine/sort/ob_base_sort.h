@@ -60,7 +60,7 @@ public:
       extra_info_ |= SORT_COL_EXTRA_BIT;
     }
   }
-  ObSortColumn(int64_t index, common::ObCollationType cs_type, bool is_asc) : ObSortColumnExtra()
+  ObSortColumn(int64_t index, common::ObCollationType cs_type, bool is_asc) : ObSortColumnExtra(), extra_info_(0)
   {
     index_ = index;
     cs_type_ = cs_type;

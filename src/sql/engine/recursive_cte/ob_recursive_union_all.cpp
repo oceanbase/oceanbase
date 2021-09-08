@@ -95,8 +95,10 @@ int ObRecursiveUnionAll::inner_open(ObExecContext& ctx) const
     LOG_WARN("Failed to create hash filter", K(ret));
   } else if (!cycle_value_.is_empty() && OB_FAIL(cycle_value_.calc(cte_ctx->expr_ctx_, empty_row, cycle_value))) {
     LOG_WARN("Failed to calculate cycle value", K(ret));
-  } else if (!cycle_default_value_.is_empty() &&
-             OB_FAIL(cycle_default_value_.calc(cte_ctx->expr_ctx_, empty_row, non_cycle_value))) {
+  } else if (cycle_default_value_.is_empty()) {
+    ret = OB_EMPTY_RESULT;
+    LOG_WARN("Failed to calculate non-cycle value", K(ret));
+  } else if (OB_FAIL(cycle_default_value_.calc(cte_ctx->expr_ctx_, empty_row, non_cycle_value))) {
     LOG_WARN("Failed to calculate non-cycle value", K(ret));
   } else {
     cte_ctx->inner_data_.set_left_child(get_child(FIRST_CHILD));

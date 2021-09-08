@@ -381,8 +381,8 @@ int ObRecursiveInnerData::add_pseudo_column(const ObNewRow* output_row, bool cyc
           LOG_WARN("Failed to create ObNumber", K(ret));
         } else {
           val.set_number(num);
+          output_row->cells_[cell_idx] = val;
         }
-        output_row->cells_[cell_idx] = val;
         ++ordering_column_;
       }
     } else {

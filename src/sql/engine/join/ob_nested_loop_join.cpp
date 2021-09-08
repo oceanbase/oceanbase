@@ -588,6 +588,9 @@ int ObNestedLoopJoin::bij_fill_left_rows(ObExecContext& exec_ctx) const
   } else if (PHY_TABLE_SCAN != right_op_->get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("right op is not TABLE_SCAN type, plan is incorrect", K(ret), K(right_op_->get_type()));
+  } else if(OB_ISNULL(join_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get nested loop join ctx", K(ret));
   } else if (OB_FAIL(open_right_child(*join_ctx))) {
     LOG_WARN("failed to open right child", K(ret));
   } else {

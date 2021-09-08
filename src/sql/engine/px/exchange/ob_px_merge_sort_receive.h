@@ -90,6 +90,8 @@ public:
     explicit GlobalOrderInput(uint64_t tenant_id) : MergeSortInput(nullptr, nullptr, 0, false, true)
     {
       tenant_id_ = tenant_id;
+      add_saved_pos_ = 0;
+      get_pos_ = 0;
     }
     virtual ~GlobalOrderInput()
     {

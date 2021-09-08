@@ -90,9 +90,6 @@ int ObExprOracleTrunc::calc_resultN(ObObj& result, const ObObj* params, int64_t 
     ret = calc_result1(result, params[0], expr_ctx);
   } else if (2 == params_count) {
     ret = calc_result2(result, params[0], params[1], expr_ctx);
-  } else {
-    ret = OB_INVALID_NUMERIC;
-    LOG_WARN("Invalid numeric. trunc expected number or date", K(ret), K(params[0]), K(params_count));
   }
   return ret;
 }
