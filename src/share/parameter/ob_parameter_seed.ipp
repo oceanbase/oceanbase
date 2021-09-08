@@ -109,7 +109,7 @@ DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_one_phase_commit, OB_CLUSTER_PARAMETER, "False", "enable one phase commit optimization",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_pg, OB_CLUSTER_PARAMETER, "False", "open partition group",
+DEPRECATED_DEF_BOOL(enable_pg, OB_CLUSTER_PARAMETER, "False", "open partition group",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_record_trace_log, OB_CLUSTER_PARAMETER, "False",
     "specifies whether to always record the trace log. The default value is False.",
