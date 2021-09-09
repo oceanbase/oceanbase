@@ -280,10 +280,10 @@ public:
 
 private:
   int add_recovery_point_(const ObRecoveryPointType point_type, const int64_t snapshot_version,
-      const ObPartitionGroupMeta& pg_meta, const ObIArray<ObPGPartitionStoreMeta>& partition_store_metas,
-      const ObTablesHandle& tables_handle, ObRecoveryData& recovery_data);
-  int write_add_data_slog_(const ObRecoveryPointType point_type, ObRecoveryPointData& point_data);
-  int write_remove_data_slogs_(const ObRecoveryPointType point_type, ObIArray<ObRecoveryPointData*>& points_data);
+      const ObPartitionGroupMeta &pg_meta, const ObIArray<ObPGPartitionStoreMeta> &partition_store_metas,
+      const ObTablesHandle &tables_handle);
+  int write_add_data_slog_(const ObRecoveryPointType point_type, ObRecoveryPointData &point_data);
+  int write_remove_data_slogs_(const ObRecoveryPointType point_type, ObIArray<ObRecoveryPointData *> &points_data);
   // for restore point
   int replay_add_restore_point_(const ObRecoveryPointData& point_data);
   int replay_remove_restore_point_(const int64_t snapshot_version);

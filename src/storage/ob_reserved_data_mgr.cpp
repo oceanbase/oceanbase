@@ -1647,8 +1647,8 @@ int ObRecoveryDataMgr::init(const ObPartitionKey& pg_key)
 }
 
 int ObRecoveryDataMgr::add_recovery_point_(const ObRecoveryPointType point_type, const int64_t snapshot_version,
-    const ObPartitionGroupMeta& pg_meta, const ObIArray<ObPGPartitionStoreMeta>& partition_store_metas,
-    const ObTablesHandle& tables_handle, ObRecoveryData& recovery_data)
+    const ObPartitionGroupMeta &pg_meta, const ObIArray<ObPGPartitionStoreMeta> &partition_store_metas,
+    const ObTablesHandle &tables_handle)
 {
   int ret = OB_SUCCESS;
   ObRecoveryPointData* new_data = NULL;
@@ -1658,19 +1658,24 @@ int ObRecoveryDataMgr::add_recovery_point_(const ObRecoveryPointType point_type,
   } else if (OB_UNLIKELY(snapshot_version <= 0) || OB_UNLIKELY(!pg_meta.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("pg meta is not valid", K(ret), K(snapshot_version), K(pg_meta));
-  } else if (OB_FAIL(recovery_data.create_recovery_point(
-                 snapshot_version, pg_meta, partition_store_metas, tables_handle, new_data))) {
-    LOG_WARN("failed to alllocate recovery point data", K(ret));
-  } else if (OB_FAIL(write_add_data_slog_(point_type, *new_data))) {
-    LOG_WARN("failed to write add recovery point data slog", K(ret));
-  } else if (OB_FAIL(recovery_data.insert_recovery_point(new_data))) {
-    LOG_WARN("failed to add recovery point data", K(ret));
-    ob_abort();
   } else {
-    LOG_INFO("succeed to add a new recovery point data", KPC(new_data));
-  }
-  if (OB_FAIL(ret) && NULL != new_data) {
-    recovery_data.free_recovery_point(new_data);
+    // There must be only restore point and backup point
+    ObRecoveryData &recovery_data =
+        (point_type == ObRecoveryPointType::RESTORE_POINT ? restore_point_data_ : backup_point_data_);
+    if (OB_FAIL(recovery_data.create_recovery_point(
+            snapshot_version, pg_meta, partition_store_metas, tables_handle, new_data))) {
+      LOG_WARN("failed to alllocate recovery point data", K(ret));
+    } else if (OB_FAIL(write_add_data_slog_(point_type, *new_data))) {
+      LOG_WARN("failed to write add recovery point data slog", K(ret));
+    } else if (OB_FAIL(recovery_data.insert_recovery_point(new_data))) {
+      LOG_WARN("failed to add recovery point data", K(ret));
+      ob_abort();
+    } else {
+      LOG_INFO("succeed to add a new recovery point data", KPC(new_data));
+    }
+    if (OB_FAIL(ret) && NULL != new_data) {
+      recovery_data.free_recovery_point(new_data);
+    }
   }
   return ret;
 }
@@ -1914,9 +1919,8 @@ int ObRecoveryDataMgr::add_restore_point(const int64_t snapshot_version, const O
                  snapshot_version,
                  pg_meta,
                  partition_store_metas,
-                 tables_handle,
-                 restore_point_data_))) {
-    LOG_WARN("failed to add restore point", K(ret), K(pg_meta));
+                 tables_handle))) {
+    LOG_WARN("faild to add restore point", K(ret), K(pg_meta));
   }
   return ret;
 }
@@ -2112,8 +2116,7 @@ int ObRecoveryDataMgr::add_backup_point(const int64_t snapshot_version, const Ob
                  snapshot_version,
                  pg_meta,
                  partition_store_metas,
-                 tables_handle,
-                 backup_point_data_))) {
+                 tables_handle))) {
     LOG_WARN("failed to add backup point", K(ret), K(pg_meta));
   }
   return ret;
@@ -2452,8 +2455,7 @@ int ObRecoveryDataMgr::add_recovery_point(const ObRecoveryPointKey& recovery_poi
                  recovery_point_key.snapshot_version_,
                  recovery_point_meta_info.pg_meta_,
                  recovery_point_meta_info.partition_store_metas_,
-                 tables_handle,
-                 restore_point_data_))) {
+                 tables_handle))) {
     LOG_WARN("faild to add restore point", K(ret), K(recovery_point_meta_info));
   }
   return ret;
