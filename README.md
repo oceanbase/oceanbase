@@ -48,6 +48,7 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 | OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| UOS | 20 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
 ## How to build
 
@@ -55,7 +56,7 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 
 Before building, you need to confirm that your device has installed the necessary software.
 
-#### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, etc.)
+#### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, UOS, etc.)
 
 ```sh
 yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
