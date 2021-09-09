@@ -10,6 +10,8 @@ add_executable(ob_admin
   clog_tool/ob_log_entry_filter.h
   clog_tool/ob_log_entry_parser.cpp
   clog_tool/ob_log_entry_parser.h
+  usec_tool/ob_admin_usec_executor.cpp
+  usec_tool/ob_admin_usec_executor.h
   ob_admin_executor.h
   ob_admin_executor.cpp
   main.cpp)

@@ -17,34 +17,40 @@
 #include "share/ob_define.h"
 #include "ob_admin_executor.h"
 #include "clog_tool/ob_admin_clog_v2_executor.h"
+#include "usec_tool/ob_admin_usec_executor.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::tools;
 
 void print_usage()
 {
-  fprintf(stderr, "\nUsage: ob_admin clog_tool\n");
+  fprintf(stderr,
+      "\nUSAGE:\n"
+      "        ob_admin clog_tool\n"
+      "        ob_admin usec_tool\n");
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   int ret = 0;
   OB_LOGGER.set_log_level("INFO");
   OB_LOGGER.set_file_name("ob_admin.log", true, false);
-  const char* log_level = getenv("OB_ADMIN_LOG_LEVEL");
+  const char *log_level = getenv("OB_ADMIN_LOG_LEVEL");
   if (NULL != log_level) {
     OB_LOGGER.set_log_level(log_level);
   }
   std::ostringstream ss;
-  copy(argv, argv + argc, std::ostream_iterator<char*>(ss, " "));
+  copy(argv, argv + argc, std::ostream_iterator<char *>(ss, " "));
   _OB_LOG(INFO, "cmd: [%s]", ss.str().c_str());
 
-  ObAdminExecutor* executor = NULL;
+  ObAdminExecutor *executor = NULL;
   if (argc < 2) {
     print_usage();
   } else {
     if (0 == strcmp("clog_tool", argv[1])) {
       executor = new ObAdminClogV2Executor();
+    } else if (0 == strcmp("usec_tool", argv[1])) {
+      executor = new ObAdminUsecExecutor();
     } else {
       print_usage();
     }

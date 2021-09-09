@@ -10,34 +10,36 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OB_ADMIN_EXECUTOR_H_
-#define OB_ADMIN_EXECUTOR_H_
-#include <stdlib.h>
-#include <stdio.h>
-#include <getopt.h>
-#include "share/ob_define.h"
+#ifndef OB_ADMIN_USEC_EXECUTOR_H_
+#define OB_ADMIN_USEC_EXECUTOR_H_
+#include "../ob_admin_executor.h"
 
 namespace oceanbase {
 namespace tools {
-class ObAdminExecutor {
+
+enum ObAdminUsecCmd {
+  TO_TIME,
+  MAX_CMD,
+};
+
+class ObAdminUsecExecutor : public ObAdminExecutor {
 public:
-  ObAdminExecutor() : DB_port_(-1), tenant_id_(0), config_file_(NULL), wallet_file_(NULL)
-  {}
-  virtual ~ObAdminExecutor()
-  {}
-  virtual int execute(int argc, char *argv[]) = 0;
+  ObAdminUsecExecutor();
+  virtual ~ObAdminUsecExecutor() = default;
+  virtual int execute(int argc, char *argv[]);
+  void reset();
 
-protected:
-  int parse_options(int argc, char *argv[]);
+private:
+  int parse_cmd(int argc, char *argv[]);
+  void print_usage();
 
-protected:
-  common::ObString DB_host_;
-  int32_t DB_port_;
-  uint64_t tenant_id_;
-  const char *config_file_;
-  const char *wallet_file_;
+private:
+  ObAdminUsecCmd cmd_;
+  int64_t usec_;
+  common::ObString time_zone_;
+  ObTimeZoneInfo tz_info_;
 };
 }  // namespace tools
 }  // namespace oceanbase
 
-#endif /* OB_ADMIN_EXECUTOR_H_ */
+#endif /* OB_ADMIN_USEC_EXECUTOR_H_ */

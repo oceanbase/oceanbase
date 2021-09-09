@@ -15,7 +15,7 @@
 namespace oceanbase {
 using namespace common;
 namespace tools {
-int ObAdminExecutor::parse_options(int argc, char* argv[])
+int ObAdminExecutor::parse_options(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
   int option_index = 0;
