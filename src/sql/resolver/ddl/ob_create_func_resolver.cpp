@@ -53,9 +53,10 @@ int ObCreateFuncResolver::resolve(const ParseNode& parse_tree)
     }
 
     ObObj plugin_path;
-    session_info_->get_sys_variable(SYS_VAR_PLUGIN_DIR, plugin_path);
     ObString plugin_path_str;
-    if (OB_FAIL(plugin_path.get_string(plugin_path_str))) {
+    if (OB_FAIL(session_info_->get_sys_variable(SYS_VAR_PLUGIN_DIR, plugin_path))) {
+      LOG_WARN("get sys variable failed", K(ret));
+    } else if (OB_FAIL(plugin_path.get_string(plugin_path_str))) {
       LOG_WARN("get plugin path failed", K(ret));
     } else {
       create_func_arg.udf_.set_name(
