@@ -303,22 +303,13 @@ int ObNetEasy::set_easy_keepalive(int easy_keepalive_enabled)
   return OB_SUCCESS;
 }
 
-int ObNetEasy::load_ssl_config(const bool use_bkmi, const bool use_sm, const common::ObString& cert,
-    const common::ObString& public_cert, const common::ObString& private_key)
+int ObNetEasy::load_ssl_config(const bool use_bkmi,
+    const bool use_sm,
+    const char *ca_ptr,
+    const char *cert_ptr,
+    const char *key_ptr)
 {
   int ret = OB_SUCCESS;
-  const char* ca_ptr = NULL;
-  const char* cert_ptr = NULL;
-  const char* key_ptr = NULL;
-  if (use_bkmi) {
-    ca_ptr = cert.ptr();
-    cert_ptr = public_cert.ptr();
-    key_ptr = private_key.ptr();
-  } else {
-    ca_ptr = OB_SSL_CA_FILE;
-    cert_ptr = OB_SSL_CERT_FILE;
-    key_ptr = OB_SSL_KEY_FILE;
-  }
   const int from_file = use_bkmi ? 0 : 1;
   const int use_babassl = use_sm ? 1 : 0;
   if (EASY_OK != (easy_ssl_ob_config_load(mysql_eio_, ca_ptr, cert_ptr, key_ptr, from_file, use_babassl, 0))) {

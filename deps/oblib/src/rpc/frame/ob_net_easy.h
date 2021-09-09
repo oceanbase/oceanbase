@@ -79,8 +79,11 @@ public:
   int add_mysql_listen(const uint32_t port, ObReqHandler& handler, ObReqTransport*& transport);
   int add_mysql_unix_listen(const char* path, ObReqHandler& handler);
   int set_easy_keepalive(int easy_keepalive_enabled);
-  int load_ssl_config(const bool use_bkmi, const bool use_sm, const common::ObString& cert,
-      const common::ObString& public_cert, const common::ObString& private_key);
+  int load_ssl_config(const bool use_bkmi,
+                      const bool use_sm,
+                      const char *cert,
+                      const char *public_cert,
+                      const char *private_key);
 
   void on_ioth_start();
 
