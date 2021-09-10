@@ -483,7 +483,7 @@ int ObIndexPrepareTask::add_monitor_info(ObBuildIndexDag* dag)
         }
         // local sort task and merge task
         for (int64_t i = concurrent_cnt; OB_SUCC(ret) && i < total_task_cnt; ++i) {
-          ObCreateIndexScanTaskStat task_stat;
+          ObCreateIndexSortTaskStat task_stat;
           task_stat.task_id_ = i;
           task_stat.type_ = ObILongOpsTaskStat::TaskType::SORT;
           if (OB_FAIL(LONG_OPS_MONITOR_INSTANCE.update_task_stat(key, task_stat))) {
