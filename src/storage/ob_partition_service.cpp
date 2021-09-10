@@ -4249,6 +4249,8 @@ int ObPartitionService::inner_del_partition_impl(const ObPartitionKey& pkey, con
       STORAGE_LOG(WARN, "remove election from election mgr error", K(ret), K(pkey));
     } else if (OB_FAIL(pg_mgr_.del_pg(pkey, file_id))) {
       STORAGE_LOG(WARN, "pg mgr remove partition group error", K(ret), K(pkey));
+    } else if (OB_FAIL(pg->get_pg_storage().post_del_pg())) {
+      STORAGE_LOG(WARN, "failed to call post del_pg", K(ret), K(pkey));
     } else if (OB_FAIL(pg->get_pg_storage().remove_all_pg_index())) {
       STORAGE_LOG(WARN, "failed to remove all pg index", K(ret), K(pkey));
     } else {
