@@ -416,7 +416,7 @@ int ObLeaderCoordinator::ServerReplicaMsgContainer::collect_replica(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("replica not in member list should not be here", K(ret), K(replica));
   } else {
-    const bool is_leader = replica.is_leader_like();
+    const bool is_leader = replica.is_leader_by_election();
     const common::ObZone& zone = replica.zone_;
     const common::ObAddr& server = replica.server_;
     // 0. collect server leader info map
@@ -875,6 +875,7 @@ int ObLeaderCoordinator::LcBalanceGroupContainer::collect_balance_group_array_in
               ret = OB_SUCCESS;
               pa_ptr->set_anchor_pos(j);  // easy to find
               LOG_INFO("partition don't have leader", K(pkey));
+              break;
             }
           } else {
             pa_ptr->set_anchor_pos(j);  // easy to find
@@ -7582,7 +7583,7 @@ int ObLeaderCoordinator::NewLeaderStrategy::switch_to_exp_max_leader(const ObIAr
       LOG_WARN("server leader msg is null", KR(ret), K(server));
     } else {
       const int64_t max_round = server_leader_msg->curr_leader_cnt_;
-      while (!is_balance && tmp_max_round < max_round) {
+      while (!is_balance && tmp_max_round < max_round && OB_SUCC(ret)) {
         if (OB_FAIL(execute_new_leader_strategy(server, to_exp_max_leader, is_balance))) {
           LOG_WARN("fail to do new leader strateg", KR(ret), K(server));
         } else {
