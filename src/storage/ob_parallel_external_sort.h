@@ -1573,8 +1573,6 @@ int ObMemorySortRound<T, Compare>::build_fragment()
 #ifdef ENABLE_AVX512F
       uint64_t* keys = NULL;
       T** values = NULL;
-      uint64_t* key_buf = NULL;
-      uint64_t* value_buf = NULL;
       int64_t items_size = item_list_.size();
       if (OB_ISNULL(keys = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
@@ -1582,19 +1580,13 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       } else if (OB_ISNULL(values = static_cast<T**>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-      } else if (OB_ISNULL(key_buf = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-      } else if (OB_ISNULL(value_buf = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-      }
+      } 
       for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
         values[i] = item_list_.at(i);
       }
       if (OB_SUCC(ret)) {
         STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
-        ret = sort(keys, values, items_size, key_buf, value_buf);
+        ret = sort(keys, values, items_size);
         if (OB_FAIL(ret)) {
           STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
         }
@@ -1607,6 +1599,7 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       std::sort(item_list_.begin(), item_list_.end(), *compare_);
       if (OB_FAIL(compare_->result_code_)) {
         ret = compare_->result_code_;
+        STORAGE_LOG(WARN, "fail to sort item list", K(ret));
       }
 #endif
     } else {
@@ -1614,6 +1607,7 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       std::sort(item_list_.begin(), item_list_.end(), *compare_);
       if (OB_FAIL(compare_->result_code_)) {
         ret = compare_->result_code_;
+        STORAGE_LOG(WARN, "fail to sort item list", K(ret));
       }
     } 
     const int64_t sort_fragment_time = common::ObTimeUtility::current_time() - start;
@@ -1665,19 +1659,13 @@ int ObMemorySortRound<T, Compare>::finish()
       } else if (OB_ISNULL(values = static_cast<T**>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-      } else if (OB_ISNULL(key_buf = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
-      } else if (OB_ISNULL(value_buf = static_cast<uint64_t*>(allocator_.alloc(sizeof(uint64_t) * items_size)))) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
         values[i] = item_list_.at(i);
       }
       if (OB_SUCC(ret)) {
         STORAGE_LOG(INFO, "use avx512 sort", K(items_size));
-        ret = sort(keys, values, items_size, key_buf, value_buf);
+        ret = sort(keys, values, items_size);
         if (OB_FAIL(ret)) {
           STORAGE_LOG(WARN, "avx512 sort failed", K(ret));
         }
@@ -1689,6 +1677,7 @@ int ObMemorySortRound<T, Compare>::finish()
       STORAGE_LOG(INFO, "use std::sort");
       std::sort(item_list_.begin(), item_list_.end(), *compare_);
       if (OB_FAIL(compare_->result_code_)) {
+        ret=compare_->result_code_;
         STORAGE_LOG(WARN, "fail to sort item list", K(ret));
       }
 #endif

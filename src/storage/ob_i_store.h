@@ -668,11 +668,6 @@ public:
     trans_id_ptr_ = NULL;
   }
 
-  void reset_cells_projector() {
-    row_val_.projector_ = NULL;
-    row_val_.projector_size_ = 0;
-  }
-
   int get_sort_key(uint64_t* key_ptr __attribute__((unused))) const {
     int ret = OB_INVALID_ARGUMENT;
     return ret;

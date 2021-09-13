@@ -1,3 +1,10 @@
+set_source_files_properties(ob_avx512_sort.cpp  PROPERTIES COMPILE_FLAGS -mavx512f)
+ob_set_subtarget(ob_storage_simd common
+  ob_avx512_sort.cpp
+)
+ob_server_add_target(ob_storage_simd)
+disable_pch(ob_storage_simd)
+
 ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_block_cache_working_set.cpp
   blocksstable/ob_block_index_intermediate.cpp
@@ -346,17 +353,7 @@ ob_set_subtarget(ob_storage transaction
   transaction/ob_xa_inner_table_gc_worker.cpp
 )
 
-if (ENABLE_AVX512F)
-  ob_add_compile_option(-mavx512f 
-    ob_avx512_sort.h
-  )
-  ob_server_add_pchs(storage
-    ob_avx512_sort.h
-  )
-endif()
-
 ob_server_add_pchs(storage
-  ob_avx512_sort.h
   transaction/ob_trans_define.h
   transaction/ob_i_ts_source.h
   ob_col_map.h
