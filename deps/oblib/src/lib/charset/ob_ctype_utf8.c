@@ -10498,7 +10498,6 @@ void ob_strnxfrm_unicode_v2(const ObCharsetInfo* cs, unsigned char* dst, size_t*
   }
   *dst_len = dst - dst_begin;
   *src_len = src - src_begin;
-  // ob_strnxfrm_unicode_help(&dst, &dst_end, nweights, &dst0);
 }
 //==============================================================
 

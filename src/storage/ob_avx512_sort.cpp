@@ -21,7 +21,8 @@ namespace storage {
 // idx:  3 2 1 0 7 6 5 4 (需要转制一下4 5 6 7 0 1 2 3)
 // m: 0xF0
 inline void compare_and_exchange_1v(__m512i& keys, __m512i& values, 
-                                      __m512i& idx, __mmask8 m) {
+                                      __m512i& idx, __mmask8 m)
+{
   __m512i perm_keys = _mm512_permutexvar_epi64(idx, keys);
   // (将第4个元素10放到第1个位置, 第5个元素4放到第2个位置...)
   // 得到perm_keys: 10 4 3 2 1 5 6 9
@@ -42,16 +43,17 @@ inline void compare_and_exchange_1v(__m512i& keys, __m512i& values,
 // keys1为: 1 5 6 9 10 11 13 16
 // keys2为: 2 3 4 7 8  12 14 15
 inline void compare_and_exchange_2v(__m512i& keys1, __m512i& keys2, 
-                                      __m512i& values1, __m512i& values2) {
+                                      __m512i& values1, __m512i& values2)
+{
   __m512i idx = _mm512_set_epi64(0, 1, 2, 3, 4, 5, 6, 7);
   __m512i perm_keys = _mm512_permutexvar_epi64(idx, keys2);
-  // keys1:     1  5  6  9 10 11 13 16
-  // perm_keys: 15 14 12 8 7  4  3  2
-  // 此时perm_keys与keys1组成一个双调序列
+  // perm_keys: 16 13 11 10 9 6 5 1 
+     // keys2为: 2 3  4  7  8  12 14 15
+  // 此时perm_keys与keys2组成一个双调序列
   __m512i tmp_keys1 = _mm512_min_epu64(keys1, perm_keys);
   __m512i tmp_keys2 = _mm512_max_epu64(keys1, perm_keys);
-  // tmp_keys1: 1  5  6  8 7  4  3  2 (双调序列)
-  // tmp_keys2: 15 14 12 9 10 11 13 16 (双调序列)
+  // tmp_keys1: 2  3  4  7  8 6  5  1 (双调序列)
+  // tmp_keys2: 16 13 11 10 9 12 14 15 (双调序列)
   __m512i perm_values = _mm512_permutexvar_epi64(idx, values2);
 
   values2 = _mm512_mask_mov_epi64(values1, 
@@ -71,7 +73,8 @@ inline void compare_and_exchange_2v(__m512i& keys1, __m512i& keys2,
 // keys2为: 15 14 12 8 7  4  3  2 
 inline void compare_and_exchange_2v_without_perm(__m512i& keys1, __m512i& keys2, 
                                                    __m512i& values1,
-                                                   __m512i& values2) {
+                                                   __m512i& values2)
+{
   __m512i tmp_keys1 = _mm512_min_epu64(keys2, keys1);
   __m512i tmp_keys2 = _mm512_max_epu64(keys2, keys1);
   // tmp_keys1: 1  5  6  8 7  4  3  2 (双调序列)
@@ -91,7 +94,8 @@ inline void compare_and_exchange_2v_without_perm(__m512i& keys1, __m512i& keys2,
 
 //  将双调序列的向量进行双调排序
 //  如果keys是一个双调序列里面元素为 1 5 6 9 10 4 3 2
-inline void sort_bitonic_sequence(__m512i& keys, __m512i& values) {
+inline void sort_bitonic_sequence(__m512i& keys, __m512i& values)
+{
   // keys: 1  5 6 9 10 4 3 2
   //       10 4 3 2 1  5 6 9
   // min:  1  4 3 2 1  4 3 2 
@@ -116,7 +120,8 @@ inline void sort_bitonic_sequence(__m512i& keys, __m512i& values) {
 // 将由两个向量组成的双调序列进行双调排序
 // 如果keys1为 1 5 6 9 10 11 13 16, keys2为 15 14 12 8 7 4 3 2 
 inline void sort_bitonic_sequence_2v(__m512i& keys1, __m512i& keys2,
-                                       __m512i& values1, __m512i& values2){
+                                       __m512i& values1, __m512i& values2)
+{
   compare_and_exchange_2v_without_perm(keys1, keys2, values1, values2);
   // keys1: 1  5  6  8 7  4  3  2 (双调序列)
   // keys2: 15 14 12 9 10 11 13 16 (双调序列)
@@ -126,7 +131,8 @@ inline void sort_bitonic_sequence_2v(__m512i& keys1, __m512i& keys2,
 
 inline void sort_bitonic_sequence_3v(__m512i& keys1, __m512i& keys2, 
                                        __m512i& keys3, __m512i& values1, 
-                                       __m512i& values2, __m512i& values3){
+                                       __m512i& values2, __m512i& values3)
+{
   compare_and_exchange_2v_without_perm(keys1, keys3, values1, values3);
   sort_bitonic_sequence_2v(keys1, keys2, values1, values2);
   sort_bitonic_sequence(keys3, values3);
@@ -135,7 +141,8 @@ inline void sort_bitonic_sequence_3v(__m512i& keys1, __m512i& keys2,
 inline void sort_bitonic_sequence_4v(__m512i& keys1, __m512i& keys2, 
                                      __m512i& keys3, __m512i& keys4,
                                      __m512i& values1, __m512i& values2, 
-                                     __m512i& values3, __m512i& values4){
+                                     __m512i& values3, __m512i& values4)
+{
   compare_and_exchange_2v_without_perm(keys1, keys3, values1, values3);
   compare_and_exchange_2v_without_perm(keys2, keys4, values2, values4);
   sort_bitonic_sequence_2v(keys1, keys2, values1, values2);
@@ -146,7 +153,8 @@ inline void sort_bitonic_sequence_5v(__m512i& keys1, __m512i& keys2,
                                        __m512i& keys3, __m512i& keys4,
                                        __m512i& keys5, __m512i& values1, 
                                        __m512i& values2, __m512i& values3, 
-                                       __m512i& values4, __m512i& values5){
+                                       __m512i& values4, __m512i& values5)
+{
   compare_and_exchange_2v_without_perm(keys1, keys5, values1, values5);
   sort_bitonic_sequence_4v(keys1, keys2, keys3, keys4, 
                              values1, values2, values3, values4);
@@ -158,7 +166,8 @@ inline void sort_bitonic_sequence_6v(__m512i& keys1, __m512i& keys2,
                                        __m512i& keys5, __m512i& keys6,
                                        __m512i& values1, __m512i& values2,
                                        __m512i& values3, __m512i& values4,
-                                       __m512i& values5, __m512i& values6){
+                                       __m512i& values5, __m512i& values6)
+{
   compare_and_exchange_2v_without_perm(keys1, keys5, values1, values5);
   compare_and_exchange_2v_without_perm(keys2, keys6, values2, values6);
 
@@ -173,7 +182,8 @@ inline void sort_bitonic_sequence_7v(__m512i& keys1, __m512i& keys2,
                                        __m512i& keys7, __m512i& values1,
                                        __m512i& values2, __m512i& values3, 
                                        __m512i& values4, __m512i& values5, 
-                                       __m512i& values6, __m512i& values7){
+                                       __m512i& values6, __m512i& values7)
+{
   compare_and_exchange_2v_without_perm(keys1, keys5, values1, values5);
   compare_and_exchange_2v_without_perm(keys2, keys6, values2, values6);
   compare_and_exchange_2v_without_perm(keys3, keys7, values3, values7);
@@ -190,7 +200,8 @@ inline void sort_bitonic_sequence_8v(__m512i& keys1, __m512i& keys2,
                                        __m512i& values1, __m512i& values2,
                                        __m512i& values3, __m512i& values4,
                                        __m512i& values5, __m512i& values6, 
-                                       __m512i& values7, __m512i& values8){
+                                       __m512i& values7, __m512i& values8)
+{
   compare_and_exchange_2v_without_perm(keys1, keys5, values1, values5);
   compare_and_exchange_2v_without_perm(keys2, keys6, values2, values6);
   compare_and_exchange_2v_without_perm(keys3, keys7, values3, values7);
@@ -203,7 +214,8 @@ inline void sort_bitonic_sequence_8v(__m512i& keys1, __m512i& keys2,
 
 
 // 将一个无序序列进行双调排序
-inline void bitonic_sort_1v(__m512i& keys, __m512i& values){
+inline void bitonic_sort_1v(__m512i& keys, __m512i& values)
+{
     // step1: 形成一个双调序列
     __m512i idx = _mm512_set_epi64(6, 7, 4, 5, 2, 3, 0, 1);
     compare_and_exchange_1v(keys, values, idx, 0x66);
@@ -217,7 +229,8 @@ inline void bitonic_sort_1v(__m512i& keys, __m512i& values){
 
 
 inline void bitonic_sort_2v(__m512i& keys1, __m512i& keys2,
-                                 __m512i& values1, __m512i& values2){
+                                 __m512i& values1, __m512i& values2)
+{
   bitonic_sort_1v(keys1, values1);
   bitonic_sort_1v(keys2, values2);
   compare_and_exchange_2v(keys1, keys2, values1, values2); 
@@ -227,7 +240,8 @@ inline void bitonic_sort_2v(__m512i& keys1, __m512i& keys2,
 
 inline void bitonic_sort_3v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values1, __m512i& values2, 
-                              __m512i& values3){
+                              __m512i& values3)
+{
   bitonic_sort_2v(keys1, keys2, values1, values2);
   bitonic_sort_1v(keys3, values3);
   compare_and_exchange_2v(keys2, keys3, values2, values3);
@@ -239,7 +253,8 @@ inline void bitonic_sort_3v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
 inline void bitonic_sort_4v(__m512i& keys1, __m512i& keys2, __m512i& keys3, 
                              __m512i& keys4, __m512i& values1, 
                              __m512i& values2, __m512i& values3, 
-                             __m512i& values4){
+                             __m512i& values4)
+{
   bitonic_sort_2v(keys1, keys2, values1, values2);
   bitonic_sort_2v(keys3, keys4, values3, values4);
   compare_and_exchange_2v(keys1, keys4, values1, values4);
@@ -251,7 +266,8 @@ inline void bitonic_sort_4v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
 inline void bitonic_sort_5v(__m512i& keys1, __m512i& keys2, __m512i& keys3, 
                              __m512i& keys4, __m512i& keys5, __m512i& values1, 
                              __m512i& values2, __m512i& values3, 
-                             __m512i& values4, __m512i& values5){
+                             __m512i& values4, __m512i& values5)
+{
   bitonic_sort_4v(keys1, keys2, keys3, keys4, values1, values2, values3,
                     values4);
   bitonic_sort_1v(keys5, values5);
@@ -265,7 +281,8 @@ inline void bitonic_sort_6v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                              __m512i& keys4, __m512i& keys5, __m512i& keys6,
                              __m512i& values1, __m512i& values2, 
                              __m512i& values3, __m512i& values4,
-                             __m512i& values5, __m512i& values6){
+                             __m512i& values5, __m512i& values6)
+{
   bitonic_sort_4v(keys1, keys2, keys3, keys4, values1, values2, values3,
                     values4);
   bitonic_sort_2v(keys5, keys6, values5, values6);
@@ -281,8 +298,8 @@ inline void bitonic_sort_7v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& keys7, __m512i& values1, 
                               __m512i& values2, __m512i& values3, 
                               __m512i& values4, __m512i& values5, 
-                              __m512i& values6, __m512i& values7){
-
+                              __m512i& values6, __m512i& values7)
+{
   bitonic_sort_4v(keys1, keys2, keys3, keys4, values1, values2, values3,
                     values4);
   bitonic_sort_3v(keys5, keys6, keys7, values5, values6, values7);
@@ -300,12 +317,12 @@ inline void bitonic_sort_8v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values2, __m512i& values3, 
                               __m512i& values4, __m512i& values5, 
                               __m512i& values6, __m512i& values7, 
-                              __m512i& values8){
+                              __m512i& values8)
+{
   bitonic_sort_4v(keys1, keys2, keys3, keys4, values1, values2, values3,
                     values4);
   bitonic_sort_4v(keys5, keys6, keys7, keys8, values5, values6, values7, 
                     values8);
-
   compare_and_exchange_2v(keys4, keys5, values4, values5);
   compare_and_exchange_2v(keys3, keys6, values3, values6);
   compare_and_exchange_2v(keys2, keys7, values2, values7);
@@ -323,13 +340,13 @@ inline void bitonic_sort_9v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values3, __m512i& values4,
                               __m512i& values5, __m512i& values6,
                               __m512i& values7, __m512i& values8,
-                              __m512i& values9){
+                              __m512i& values9)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
   bitonic_sort_1v(keys9, values9);
   compare_and_exchange_2v(keys8, keys9, values8, values9);
-
   sort_bitonic_sequence_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7,
                              keys8, values1, values2, values3, values4,
                              values5, values6, values7, values8);
@@ -344,7 +361,8 @@ inline void bitonic_sort_10v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values3, __m512i& values4,
                               __m512i& values5, __m512i& values6,
                               __m512i& values7, __m512i& values8,
-                              __m512i& values9, __m512i& values10){
+                              __m512i& values9, __m512i& values10)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
@@ -366,7 +384,8 @@ inline void bitonic_sort_11v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values5, __m512i& values6,
                               __m512i& values7, __m512i& values8,
                               __m512i& values9, __m512i& values10,
-                              __m512i& values11){
+                              __m512i& values11)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
@@ -374,7 +393,6 @@ inline void bitonic_sort_11v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
   compare_and_exchange_2v(keys8, keys9, values8, values9);
   compare_and_exchange_2v(keys7, keys10, values7, values10);
   compare_and_exchange_2v(keys6, keys11, values6, values11);
-
   sort_bitonic_sequence_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7,
                              keys8, values1, values2, values3, values4,
                              values5, values6, values7, values8);
@@ -391,18 +409,17 @@ inline void bitonic_sort_12v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values5, __m512i& values6,
                               __m512i& values7, __m512i& values8,
                               __m512i& values9, __m512i& values10,
-                              __m512i& values11, __m512i& values12){
+                              __m512i& values11, __m512i& values12)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
   bitonic_sort_4v(keys9, keys10, keys11, keys12, values9, values10, values11,
                     values12);
-
   compare_and_exchange_2v(keys8, keys9, values8, values9);
   compare_and_exchange_2v(keys7, keys10, values7, values10);
   compare_and_exchange_2v(keys6, keys11, values6, values11);
   compare_and_exchange_2v(keys5, keys12, values5, values12);
-
   sort_bitonic_sequence_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7,
                              keys8, values1, values2, values3, values4,
                              values5, values6, values7, values8);
@@ -421,19 +438,18 @@ inline void bitonic_sort_13v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values7, __m512i& values8,
                               __m512i& values9, __m512i& values10,
                               __m512i& values11, __m512i& values12,
-                              __m512i& values13){
+                              __m512i& values13)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
   bitonic_sort_5v(keys9, keys10, keys11, keys12, keys13, values9, values10, 
                     values11, values12, values13);
-
   compare_and_exchange_2v(keys8, keys9, values8, values9);
   compare_and_exchange_2v(keys7, keys10, values7, values10);
   compare_and_exchange_2v(keys6, keys11, values6, values11);
   compare_and_exchange_2v(keys5, keys12, values5, values12);
   compare_and_exchange_2v(keys4, keys13, values4, values13);
-
   sort_bitonic_sequence_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7,
                              keys8, values1, values2, values3, values4,
                              values5, values6, values7, values8);
@@ -452,20 +468,19 @@ inline void bitonic_sort_14v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values7, __m512i& values8,
                               __m512i& values9, __m512i& values10,
                               __m512i& values11, __m512i& values12,
-                              __m512i& values13, __m512i& values14){
+                              __m512i& values13, __m512i& values14)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
   bitonic_sort_6v(keys9, keys10, keys11, keys12, keys13, keys14, values9, 
                     values10, values11, values12, values13, values14);
-
   compare_and_exchange_2v(keys8, keys9, values8, values9);
   compare_and_exchange_2v(keys7, keys10, values7, values10);
   compare_and_exchange_2v(keys6, keys11, values6, values11);
   compare_and_exchange_2v(keys5, keys12, values5, values12);
   compare_and_exchange_2v(keys4, keys13, values4, values13);
   compare_and_exchange_2v(keys3, keys14, values3, values14);
-
   sort_bitonic_sequence_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7,
                              keys8, values1, values2, values3, values4,
                              values5, values6, values7, values8);
@@ -486,14 +501,14 @@ inline void bitonic_sort_15v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values9, __m512i& values10,
                               __m512i& values11, __m512i& values12,
                               __m512i& values13, __m512i& values14,
-                              __m512i& values15){
+                              __m512i& values15)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
   bitonic_sort_7v(keys9, keys10, keys11, keys12, keys13, keys14, keys15,
                     values9, values10, values11, values12, values13,
                     values14, values15);
-
   compare_and_exchange_2v(keys8, keys9, values8, values9);
   compare_and_exchange_2v(keys7, keys10, values7, values10);
   compare_and_exchange_2v(keys6, keys11, values6, values11);
@@ -501,7 +516,6 @@ inline void bitonic_sort_15v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
   compare_and_exchange_2v(keys4, keys13, values4, values13);
   compare_and_exchange_2v(keys3, keys14, values3, values14);
   compare_and_exchange_2v(keys2, keys15, values2, values15);
-
   sort_bitonic_sequence_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7,
                              keys8, values1, values2, values3, values4,
                              values5, values6, values7, values8);
@@ -523,14 +537,14 @@ inline void bitonic_sort_16v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                               __m512i& values9, __m512i& values10,
                               __m512i& values11, __m512i& values12,
                               __m512i& values13, __m512i& values14,
-                              __m512i& values15, __m512i& values16){
+                              __m512i& values15, __m512i& values16)
+{
   bitonic_sort_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8,
                     values1, values2, values3, values4, values5, values6, 
                     values7, values8);
   bitonic_sort_8v(keys9, keys10, keys11, keys12, keys13, keys14, keys15, keys16,
                     values9, values10, values11, values12, values13,
                     values14, values15, values16);
-
   compare_and_exchange_2v(keys8, keys9, values8, values9);
   compare_and_exchange_2v(keys7, keys10, values7, values10);
   compare_and_exchange_2v(keys6, keys11, values6, values11);
@@ -539,7 +553,6 @@ inline void bitonic_sort_16v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
   compare_and_exchange_2v(keys3, keys14, values3, values14);
   compare_and_exchange_2v(keys2, keys15, values2, values15);
   compare_and_exchange_2v(keys1, keys16, values1, values16);
-
   sort_bitonic_sequence_8v(keys1, keys2, keys3, keys4, keys5, keys6, keys7,
                              keys8, values1, values2, values3, values4,
                              values5, values6, values7, values8);
@@ -548,8 +561,8 @@ inline void bitonic_sort_16v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                              values12, values13, values14, values15, values16);
 }
 
-
-inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest) {
+inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest)
+{
   __m512i last_vec = _mm512_or_si512(_mm512_maskz_loadu_epi64(0xFF>>rest, ptr),
                                        _mm512_maskz_set1_epi64(
                                          0xFF<<last_vec_size, 
@@ -557,105 +570,118 @@ inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest)
   return last_vec;
 }
 
-inline void store_last_vec(uint64_t* ptr, __m512i& vec, int32_t rest) {
+inline void store_last_vec(uint64_t* ptr, __m512i& vec, int32_t rest)
+{
   _mm512_mask_compressstoreu_epi64(ptr, 0xFF>>rest, vec);
 }
 
-inline void load_1v(uint64_t* ptr, __m512i& vec) {
+inline void load_1v(uint64_t* ptr, __m512i& vec)
+{
   vec  = _mm512_loadu_si512(ptr);
 }
 
-inline void store_1v(uint64_t* ptr, __m512i& vec) {
+inline void store_1v(uint64_t* ptr, __m512i& vec)
+{
   _mm512_storeu_si512(ptr, vec);
 }
 
-// 2
-inline void load_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2) {
+inline void load_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2)
+{
   vec1  = _mm512_loadu_si512(ptr);
   vec2  = _mm512_loadu_si512(ptr + 8);
 }
 
-inline void store_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2) {
+inline void store_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2)
+{
   _mm512_storeu_si512(ptr, vec1);
   _mm512_storeu_si512(ptr + 8, vec2);
 }
 
-// 3
 inline void load_3v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
-                      __m512i& vec3) {
+                      __m512i& vec3)
+{
   load_2v(ptr, vec1, vec2);
   vec3  = _mm512_loadu_si512(ptr + 16);
 }
 
 inline void store_3v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
-                      __m512i& vec3) {
+                      __m512i& vec3)
+{
   store_2v(ptr, vec1, vec2);
   _mm512_storeu_si512(ptr + 16, vec3);
 }
 
-// 4
 inline void load_4v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
-                      __m512i& vec3, __m512i& vec4) {
+                      __m512i& vec3, __m512i& vec4)
+{
   load_3v(ptr, vec1, vec2, vec3);
   vec4  = _mm512_loadu_si512(ptr + 24);
 }
 
 inline void store_4v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
-                      __m512i& vec3, __m512i& vec4) {
+                      __m512i& vec3, __m512i& vec4)
+{
   store_3v(ptr, vec1, vec2, vec3);
   _mm512_storeu_si512(ptr + 24, vec4);
 }
 
-// 5
 inline void load_5v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
-                      __m512i& vec3, __m512i& vec4, __m512i& vec5) {
+                      __m512i& vec3, __m512i& vec4, __m512i& vec5)
+{
   load_4v(ptr, vec1, vec2, vec3, vec4);
   vec5  = _mm512_loadu_si512(ptr + 32);
 }
 inline void store_5v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
-                      __m512i& vec3, __m512i& vec4, __m512i& vec5) {
+                      __m512i& vec3, __m512i& vec4, __m512i& vec5)
+{
   store_4v(ptr, vec1, vec2, vec3, vec4);
   _mm512_storeu_si512(ptr + 32, vec5);
 }
 
 inline void load_6v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
-                      __m512i& vec6) {
+                      __m512i& vec6)
+{
   load_5v(ptr, vec1, vec2, vec3, vec4, vec5);
   vec6  = _mm512_loadu_si512(ptr + 40);
 }
 
 inline void store_6v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
-                      __m512i& vec6) {
+                      __m512i& vec6)
+{
   store_5v(ptr, vec1, vec2, vec3, vec4, vec5);
   _mm512_storeu_si512(ptr + 40, vec6);
 }
 
 inline void load_7v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
-                      __m512i& vec6, __m512i& vec7) {
+                      __m512i& vec6, __m512i& vec7)
+{
   load_6v(ptr, vec1, vec2, vec3, vec4, vec5, vec6);
   vec7  = _mm512_loadu_si512(ptr + 48);
 }
 
 inline void store_7v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
-                      __m512i& vec6, __m512i& vec7) {
+                      __m512i& vec6, __m512i& vec7)
+{
   store_6v(ptr, vec1, vec2, vec3, vec4, vec5, vec6);
   _mm512_storeu_si512(ptr + 48, vec7);
 }
 
 inline void load_8v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
-                      __m512i& vec6, __m512i& vec7, __m512i& vec8) {
+                      __m512i& vec6, __m512i& vec7, __m512i& vec8)
+{
   load_7v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7);
   vec8  = _mm512_loadu_si512(ptr + 56);
 }
 
 inline void store_8v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
-                      __m512i& vec6, __m512i& vec7, __m512i& vec8) {
+                      __m512i& vec6, __m512i& vec7, __m512i& vec8)
+{
   store_7v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7);
   _mm512_storeu_si512(ptr + 56, vec8);
 }
@@ -663,7 +689,8 @@ inline void store_8v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 inline void load_9v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
-                      __m512i& vec9) {
+                      __m512i& vec9)
+{
   load_8v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8);
   vec9 = _mm512_loadu_si512(ptr + 64);
 }
@@ -671,7 +698,8 @@ inline void load_9v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 inline void store_9v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
-                      __m512i& vec9) {
+                      __m512i& vec9)
+{
   store_8v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8);
   _mm512_storeu_si512(ptr + 64, vec9);
 }
@@ -679,7 +707,8 @@ inline void store_9v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 inline void load_10v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
-                      __m512i& vec9, __m512i& vec10) {
+                      __m512i& vec9, __m512i& vec10)
+{
   load_9v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9);
   vec10 = _mm512_loadu_si512(ptr + 72);
 }
@@ -687,7 +716,8 @@ inline void load_10v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 inline void store_10v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
-                      __m512i& vec9, __m512i& vec10) {
+                      __m512i& vec9, __m512i& vec10)
+{
   store_9v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9);
   _mm512_storeu_si512(ptr + 72, vec10);
 }
@@ -695,7 +725,8 @@ inline void store_10v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 inline void load_11v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
-                      __m512i& vec9, __m512i& vec10, __m512i& vec11) {
+                      __m512i& vec9, __m512i& vec10, __m512i& vec11)
+{
   load_10v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10);
   vec11 = _mm512_loadu_si512(ptr + 80);
 }
@@ -703,7 +734,8 @@ inline void load_11v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 inline void store_11v(uint64_t* ptr, __m512i& vec1, __m512i& vec2, 
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
-                      __m512i& vec9, __m512i& vec10, __m512i& vec11) {
+                      __m512i& vec9, __m512i& vec10, __m512i& vec11)
+{
   store_10v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10);
   _mm512_storeu_si512(ptr + 80, vec11);
 }
@@ -712,7 +744,8 @@ inline void load_12v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
-                      __m512i& vec12) {
+                      __m512i& vec12)
+{
   load_11v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11);
   vec12 = _mm512_loadu_si512(ptr + 88);
@@ -722,7 +755,8 @@ inline void store_12v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
-                      __m512i& vec12) {
+                      __m512i& vec12)
+{
   store_11v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11);
   _mm512_storeu_si512(ptr + 88, vec12);
@@ -732,7 +766,8 @@ inline void load_13v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
-                      __m512i& vec12, __m512i& vec13) {
+                      __m512i& vec12, __m512i& vec13)
+{
   load_12v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11, vec12);
   vec13 = _mm512_loadu_si512(ptr + 96);
@@ -742,7 +777,8 @@ inline void store_13v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
-                      __m512i& vec12, __m512i& vec13) {
+                      __m512i& vec12, __m512i& vec13)
+{
   store_12v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11, vec12);
   _mm512_storeu_si512(ptr + 96, vec13);
@@ -752,7 +788,8 @@ inline void load_14v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
-                      __m512i& vec12, __m512i& vec13, __m512i& vec14) {
+                      __m512i& vec12, __m512i& vec13, __m512i& vec14)
+{
   load_13v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11, vec12, vec13);
   vec14 = _mm512_loadu_si512(ptr + 104);
@@ -762,7 +799,8 @@ inline void store_14v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec3, __m512i& vec4, __m512i& vec5,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
-                      __m512i& vec12, __m512i& vec13, __m512i& vec14) {
+                      __m512i& vec12, __m512i& vec13, __m512i& vec14)
+{
   store_13v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11, vec12, vec13);
   _mm512_storeu_si512(ptr + 104, vec14);
@@ -773,7 +811,8 @@ inline void load_15v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
                       __m512i& vec12, __m512i& vec13, __m512i& vec14,
-                      __m512i& vec15) {
+                      __m512i& vec15)
+{
   load_14v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11, vec12, vec13, vec14);
   vec15 = _mm512_loadu_si512(ptr + 112);
@@ -784,7 +823,8 @@ inline void store_15v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
                       __m512i& vec6, __m512i& vec7, __m512i& vec8,
                       __m512i& vec9, __m512i& vec10, __m512i& vec11,
                       __m512i& vec12, __m512i& vec13, __m512i& vec14,
-                      __m512i& vec15) {
+                      __m512i& vec15)
+{
   store_14v(ptr, vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8, vec9, vec10,
              vec11, vec12, vec13, vec14);
   _mm512_storeu_si512(ptr + 112, vec15);
@@ -792,10 +832,10 @@ inline void store_15v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 
 inline void bitonic_sort(uint64_t* __restrict__ ptr_keys, 
                            uint64_t* __restrict__ ptr_values, 
-                           const int64_t len) {
+                           const int64_t len)
+{
   const int32_t vec_cap = 8;
   const int32_t n = (len + 7) / vec_cap;
-
   const int32_t rest = n * vec_cap - len;
   const int last_vec_size = vec_cap - rest;
 
@@ -805,7 +845,6 @@ inline void bitonic_sort(uint64_t* __restrict__ ptr_keys,
   __m512i values1, values2, values3, values4, values5, values6, values7; 
   __m512i values8, values9, values10, values11, values12, values13, values14;
   __m512i values15, values16;
-
   switch(n){
   case 1: {
     keys1 = load_last_vec(ptr_keys, last_vec_size, rest);
@@ -1069,12 +1108,8 @@ inline void bitonic_sort(uint64_t* __restrict__ ptr_keys,
   }
 }
 
-inline int popcount(__mmask16 mask){
-    //    int res = int(mask);
-    //    res = (0x5555 & res) + (0x5555 & (res >> 1));
-    //    res = (res & 0x3333) + ((res>>2) & 0x3333);
-    //    res = (res & 0x0F0F) + ((res>>4) & 0x0F0F);
-    //    return (res & 0xFF) + ((res>>8) & 0xFF);
+inline int popcount(__mmask16 mask)
+{
 #ifdef __INTEL_COMPILER
     return _mm_countbits_32(mask);
 #else
@@ -1085,7 +1120,8 @@ inline int popcount(__mmask16 mask){
 inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
                                 __m512i& pivotvec, __m512i& keys,
                                 __m512i& values, int64_t& left_w,
-                                int64_t& right_w) {
+                                int64_t& right_w)
+{
   const int32_t vec_cap = 8;
   __mmask8 mask = _mm512_cmp_epu64_mask(keys, pivotvec, _MM_CMPINT_LE);
   const int64_t nb_low = popcount(mask);
@@ -1101,7 +1137,8 @@ inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
 inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
                                 __m512i& pivotvec, __m512i& keys,
                                 __m512i& values, int64_t& left_w,
-                                int64_t& right_w, int64_t remaining) {
+                                int64_t& right_w, int64_t remaining)
+{
   __mmask8 mask = _mm512_cmp_epu64_mask(keys, pivotvec, _MM_CMPINT_LE);
   __mmask8 mask_low = mask & ~(0xFF << remaining);
   __mmask8 mask_high = (~mask) & ~(0xFF << remaining);
@@ -1116,8 +1153,8 @@ inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
 }
 
 static inline int64_t do_partition(uint64_t* keys, uint64_t* values, 
-        int64_t left, int64_t right, const uint64_t pivot){
-
+        int64_t left, int64_t right, const uint64_t pivot)
+{
   const int32_t vec_cap = 8;
   __m512i pivotvec = _mm512_set1_epi64(pivot);
   __m512i tmp_left = _mm512_loadu_si512(keys + left);
@@ -1158,14 +1195,16 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
   return left_w;
 }
 
-inline int64_t lg(int64_t n) {
+inline int64_t lg(int64_t n)
+{
   int64_t k;
   for (k = 0; n > 1; n >>= 1) ++k;
   return k;
 }
 
 inline int64_t get_pivot(const uint64_t* ptr, const int64_t left,
-                           const int64_t right) {
+                           const int64_t right)
+{
   const int64_t middle = ((right-left) / 2) + left;
   if(ptr[left] <= ptr[middle] && ptr[middle] <= ptr[right]) {
     return middle;
@@ -1176,7 +1215,8 @@ inline int64_t get_pivot(const uint64_t* ptr, const int64_t left,
 }
 
 inline int64_t partition(uint64_t* keys, uint64_t* values, const int64_t left,
-                           const int64_t right) {
+                           const int64_t right)
+{
   const int64_t idx = get_pivot(keys, left, right);
   std::swap(keys[idx], keys[right]);
   std::swap(values[idx], values[right]);
@@ -1186,7 +1226,8 @@ inline int64_t partition(uint64_t* keys, uint64_t* values, const int64_t left,
   return cut;
 }
 
-inline void heapify(uint64_t* keys, uint64_t* values, int64_t size, int64_t i) {
+inline void heapify(uint64_t* keys, uint64_t* values, int64_t size, int64_t i)
+{
   int64_t largest = i;
   int64_t l = 2 * i + 1;
   int64_t r = 2 * i + 2;
@@ -1202,7 +1243,8 @@ inline void heapify(uint64_t* keys, uint64_t* values, int64_t size, int64_t i) {
   }
 }
 
-inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size) {
+inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
+{
   for (int64_t i = size / 2 - 1; i >= 0; i--) {
     heapify(keys, values, size, i);
   }
@@ -1214,7 +1256,8 @@ inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size) {
 }
 
 inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left, 
-               const int64_t right, int64_t depth_limit) {
+               const int64_t right, int64_t depth_limit)
+{
   static const int32_t limit = 128;
   if(right - left < limit){
     bitonic_sort(keys + left, values + left, right - left + 1);
@@ -1236,7 +1279,8 @@ inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left,
 
 template <typename T>
 int sort_loop(uint64_t* keys, T** values, int64_t round, 
-                int64_t left, int64_t right) {
+                int64_t left, int64_t right)
+{
   int ret = OB_SUCCESS;
   for (int64_t i = left; OB_SUCC(ret) && i < right; i++) {
     ret = values[i]->get_sort_key(&keys[i]);
@@ -1269,7 +1313,8 @@ int sort_loop(uint64_t* keys, T** values, int64_t round,
 }
 
 template <typename T>
-int sort(uint64_t* keys, T** values, const int64_t size) {
+int sort(uint64_t* keys, T** values, const int64_t size)
+{
   int ret = OB_SUCCESS;
   if (keys == NULL || values == NULL || size < 0) {
     ret = OB_INVALID_ARGUMENT;

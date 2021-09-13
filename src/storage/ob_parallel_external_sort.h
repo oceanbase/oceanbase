@@ -1032,9 +1032,7 @@ public:
   int64_t get_fragment_count();
   int add_fragment_iter(ObFragmentIterator<T>* iter);
   int transfer_final_sorted_fragment_iter(ObExternalSortRound& dest_round);
-  void set_use_memcmp() {
-      use_memcmp_ = true;
-  }
+  void set_use_memcmp() { use_memcmp_ = true; }
 
 private:
   typedef ObFragmentReaderV2<T> FragmentReader;
@@ -1449,9 +1447,7 @@ public:
   {
     return has_data_;
   }
-  void set_use_memcmp() {
-      use_memcmp_ = true;
-  }
+  void set_use_memcmp() { use_memcmp_ = true; }
   void reset();
   int transfer_final_sorted_fragment_iter(ExternalSortRound& dest_round);
   TO_STRING_KV(K(is_inited_), K(is_in_memory_), K(has_data_), K(buf_mem_limit_), K(expire_timestamp_), KP(next_round_),
@@ -1594,6 +1590,8 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
         item_list_.at(i) = values[i];
       }
+      if (keys != NULL) { allocator_.free(keys); }
+      if (values != NULL) { allocator_.free(values); }
 #else
       STORAGE_LOG(INFO, "use std::sort");
       std::sort(item_list_.begin(), item_list_.end(), *compare_);

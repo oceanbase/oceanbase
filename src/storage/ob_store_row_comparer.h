@@ -54,7 +54,9 @@ OB_INLINE bool ObStoreRowComparer::operator()(const ObStoreRow* left, const ObSt
     STORAGE_LOG(WARN, "Invaid argument, ", KP(left), KP(right), K(sort_column_index_.count()), K_(result_code));
   } else {
     for (int64_t i = 0; OB_LIKELY(common::OB_SUCCESS == result_code_) && i < sort_column_index_.count(); ++i) {
-      const int64_t index = sort_column_index_.at(i); if (index < left->row_val_.count_ && index < right->row_val_.count_) { const int cmp = left->row_val_.cells_[index].compare(right->row_val_.cells_[index]);
+      const int64_t index = sort_column_index_.at(i);
+      if (index < left->row_val_.count_ && index < right->row_val_.count_) { 
+        const int cmp = left->row_val_.cells_[index].compare(right->row_val_.cells_[index]);
         if (cmp < 0) {
           bool_ret = true;
           break;

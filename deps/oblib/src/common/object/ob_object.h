@@ -47,11 +47,7 @@ inline ObCmpNullPos default_null_pos()
 struct ObSortkeyExtraData {
   ObSortkeyExtraData() : extra_buf_size(0), str_offset(0), sortkey_offset(0)
   {}
-  void reset() {
-    extra_buf_size = 0;
-    str_offset = 0;
-    sortkey_offset = 0;
-  }
+  void reset();
   char extra_buf[4];
   uint16_t extra_buf_size;
   uint16_t str_offset;

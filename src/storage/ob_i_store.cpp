@@ -1175,7 +1175,8 @@ OB_DEF_SERIALIZE_SIZE(ObSortRow)
   return len;
 }
   
-int ObSortRow::deep_copy(const ObSortRow& src, char* buf, const int64_t len, int64_t& pos) {
+int ObSortRow::deep_copy(const ObSortRow& src, char* buf, const int64_t len, int64_t& pos)
+{
   int ret = common::OB_SUCCESS;
   if (NULL == buf || len <= 0) {
     ret = common::OB_INVALID_ARGUMENT;
@@ -1190,7 +1191,8 @@ int ObSortRow::deep_copy(const ObSortRow& src, char* buf, const int64_t len, int
   return ret;
 }
 
-int ObSortRow::get_sort_key(uint64_t* key_ptr) {
+int ObSortRow::get_sort_key(uint64_t* key_ptr)
+{
   int ret = OB_SUCCESS;
   if (key_ptr == NULL) {
     ret = common::OB_INVALID_ARGUMENT;
