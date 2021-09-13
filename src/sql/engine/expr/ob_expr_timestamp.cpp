@@ -277,7 +277,7 @@ int ObExprToTimestampTZ::set_my_result_from_ob_time(ObExprCtx& expr_ctx, ObTime&
 
 
 ObExprTimestamp::ObExprTimestamp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TIMESTAMP, N_TIMESTAMP, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIMESTAMP, N_TIMESTAMP, ONE_OR_TWO, NOT_ROW_DIMENSION)
 {
 }
 
@@ -285,37 +285,121 @@ ObExprTimestamp::~ObExprTimestamp()
 {
 }
 
-int ObExprTimestamp::calc_result_type1(ObExprResType &type,
-                                  ObExprResType &type1,
+int ObExprTimestamp::calc_result_typeN(ObExprResType &type,
+                                  ObExprResType *types_array,
+                                  int64_t param_num,
                                   ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  //param will be casted to ObDatetimeType before calculation
-  type1.set_calc_type(ObDateTimeType);
-  type.set_type(ObDateTimeType);
-  //deduce scale now.
-  int16_t scale1 = MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL);
-  int16_t scale = (SCALE_UNKNOWN_YET == scale1) ? MAX_SCALE_FOR_TEMPORAL : scale1;
-  type.set_scale(scale);
-  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
+  if (OB_UNLIKELY(1 != param_num && 2 != param_num)) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid argument count of funtion timestmap", K(ret));
+  } else {
+    //param will be casted to ObDatetimeType before calculation
+    type.set_type(ObDateTimeType);
+    types_array[0].set_calc_type(ObDateTimeType);
+    if (2 == param_num) {
+      types_array[1].set_calc_type(ObTimeType);
+    }
+    //deduce scale now.
+    int16_t scale1 = MIN(types_array[0].get_scale(), MAX_SCALE_FOR_TEMPORAL);
+    scale1 = (SCALE_UNKNOWN_YET == scale1) ? MAX_SCALE_FOR_TEMPORAL : scale1;
+    int16_t scale2 = 0;
+    if (2 == param_num) {
+      scale2 = MIN(types_array[1].get_scale(), MAX_SCALE_FOR_TEMPORAL);
+      scale2 = (SCALE_UNKNOWN_YET == scale2) ? MAX_SCALE_FOR_TEMPORAL : scale2;
+    }
+    type.set_scale(MAX(scale1, scale2));
+    type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
+  }
   return ret;
 }
 
-int ObExprTimestamp::calc_result1(ObObj &result,
-                             const ObObj &obj,
-                             ObExprCtx &expr_ctx) const
+int ObExprTimestamp::calc_resultN(ObObj &result,
+                                  const common::ObObj *objs_array,
+                                  int64_t param_num,
+                                  ObExprCtx &expr_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(obj.is_null())) {
+  if (OB_UNLIKELY(objs_array[0].is_null())) {
     result.set_null();
   } else {
-    TYPE_CHECK(obj, ObDateTimeType);
-    result = obj;
+    TYPE_CHECK(objs_array[0], ObDateTimeType);
+    if (OB_FAIL(ret)) {
+    } else if (1 == param_num) {
+      result = objs_array[0];
+    } else if (2 == param_num) {
+      if (objs_array[1].is_null()) {
+        result.set_null();
+      } else if (ObTimeType != objs_array[1].get_type()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("expect time type param", K(ret), K(objs_array[1]));
+      } else {
+        int64_t datetime = objs_array[0].get_datetime();
+        int64_t time = objs_array[1].get_time();
+        result.set_datetime(datetime + time);
+      }
+    }
   }
   UNUSED(expr_ctx);
   return ret;
 }
 
+int ObExprTimestamp::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                    ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  if (1 == rt_expr.arg_cnt_) {
+    ObObjType type = rt_expr.args_[0]->datum_meta_.type_;
+    CK(ObNullType == type || ObDateTimeType == type);
+    if (OB_SUCC(ret)) {
+      rt_expr.eval_func_ = ObExprTimestamp::calc_timestamp1;
+    }
+  } else if (2 == rt_expr.arg_cnt_) {
+    ObObjType type1 = rt_expr.args_[0]->datum_meta_.type_;
+    ObObjType type2 = rt_expr.args_[1]->datum_meta_.type_;
+    CK(ObNullType == type1 || ObDateTimeType == type1);
+    CK(ObNullType == type2 || ObTimeType == type2);
+    if (OB_SUCC(ret)) {
+      rt_expr.eval_func_ = ObExprTimestamp::calc_timestamp2;
+    }
+  } else {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid argument count of funtion timestmap", K(ret));
+  }
+  return ret;
+}
+
+int ObExprTimestamp::calc_timestamp1(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &result)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *param = NULL;
+  if (OB_FAIL(expr.eval_param_value(ctx, param))) {
+    LOG_WARN("calc param failed", K(ret));
+  } else if (param->is_null()) {
+    result.set_null();
+  } else {
+    result.set_datetime(param->get_datetime());
+  }
+  return ret;
+}
+
+int ObExprTimestamp::calc_timestamp2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &result)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *datetime = NULL;
+  ObDatum *time = NULL;
+  if (OB_FAIL(expr.eval_param_value(ctx, datetime, time))) {
+    LOG_WARN("calc param failed", K(ret));
+  } else if (datetime->is_null() || time->is_null()) {
+    result.set_null();
+  } else {
+    result.set_datetime(datetime->get_datetime() + time->get_time());
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

@@ -36,9 +36,13 @@ int ObExprWeekOfYear::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& e
   int ret = OB_SUCCESS;
   int64_t week = 0;
   ObTime ot;
-  if (OB_UNLIKELY(obj.is_null())) {
+  if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session ptr or exec ctx is null", K(ret), K(expr_ctx.my_session_));
+  } else if (OB_UNLIKELY(obj.is_null())) {
     result.set_null();
-  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot, false))) {
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot,
+                get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx()), false))) {
     LOG_WARN("cast to ob time failed", K(ret), K(obj), K(expr_ctx.cast_mode_));
     if (CM_IS_WARN_ON_FAIL(expr_ctx.cast_mode_)) {
       ret = OB_SUCCESS;
@@ -116,9 +120,13 @@ int ObExprWeekDay::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr
   int ret = OB_SUCCESS;
   int64_t weekday = 0;
   ObTime ot;
-  if (OB_UNLIKELY(obj.is_null())) {
+  if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session ptr or exec ctx is null", K(ret), K(expr_ctx.my_session_));
+  } else if (OB_UNLIKELY(obj.is_null())) {
     result.set_null();
-  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot, false))) {
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot,
+                get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx()), false))) {
     LOG_WARN("cast to ob time failed", K(ret), K(obj), K(expr_ctx.cast_mode_));
     if (CM_IS_WARN_ON_FAIL(expr_ctx.cast_mode_)) {
       ret = OB_SUCCESS;
@@ -275,13 +283,17 @@ int ObExprYearWeek::calc_resultN(
   int64_t mode_value = 0;
   int64_t week = 0;
   ObTime ot;
-  if (OB_ISNULL(objs_stack)) {
+  if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session ptr or exec ctx is null", K(ret), K(expr_ctx.my_session_));
+  } else if (OB_ISNULL(objs_stack)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null stack", KP(objs_stack), K(ret));
   } else if (OB_UNLIKELY(param_num > 2)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param num error", K(param_num));
-  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(objs_stack[0], get_timezone_info(expr_ctx.my_session_), ot, false))) {
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(objs_stack[0], get_timezone_info(expr_ctx.my_session_),
+                  ot, get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx()), false))) {
     LOG_WARN("cast to ob time failed", K(ret), K(objs_stack[0]), K(expr_ctx.cast_mode_));
     ret = OB_SUCCESS;
     result.set_null();
@@ -407,6 +419,9 @@ int ObExprWeek::calc_resultN(ObObj& result, const ObObj* params, int64_t params_
   } else if (OB_UNLIKELY(params_count > 2)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param num error", K(params_count));
+  } else if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session ptr or exec ctx is null", K(ret), K(expr_ctx.my_session_));
   } else {
     const ObObj& date_arg = params[0];
     if (2 == params_count) {
@@ -414,7 +429,8 @@ int ObExprWeek::calc_resultN(ObObj& result, const ObObj* params, int64_t params_
     }
     if (OB_UNLIKELY(date_arg.is_null())) {
       result.set_null();
-    } else if (OB_FAIL(ob_obj_to_ob_time_with_date(date_arg, get_timezone_info(expr_ctx.my_session_), ot, false))) {
+    } else if (OB_FAIL(ob_obj_to_ob_time_with_date(date_arg, get_timezone_info(expr_ctx.my_session_),
+                  ot, get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx()), false))) {
       LOG_WARN("cast to ob time failed", K(ret), K(date_arg), K(expr_ctx.cast_mode_));
       if (CM_IS_WARN_ON_FAIL(expr_ctx.cast_mode_)) {
         LOG_WARN("cast to ob time failed", K(ret), K(expr_ctx.cast_mode_));

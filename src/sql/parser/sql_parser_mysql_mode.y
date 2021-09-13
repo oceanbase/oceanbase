@@ -2221,6 +2221,13 @@ MOD '(' expr ',' expr ')'
   make_name_node($$, result->malloc_pool_, "timestamp");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
 }
+| TIMESTAMP '(' expr ',' expr ')'
+{
+  ParseNode *params = NULL;
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 2, $3, $5);
+  make_name_node($$, result->malloc_pool_, "timestamp");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
 | MONTH '(' expr ')'
 {
   ParseNode *params = NULL;
@@ -4295,6 +4302,11 @@ DATETIME    { $$[0] = T_DATETIME; $$[1] = 0; }
 
 get_format_unit:
 DATETIME
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = GET_FORMAT_DATETIME;
+}
+| TIMESTAMP
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = GET_FORMAT_DATETIME;

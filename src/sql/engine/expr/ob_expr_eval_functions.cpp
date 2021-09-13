@@ -697,8 +697,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 438 */
     NULL,                                     /* 439 */
     NULL,                                     /* 440 */
-    NULL,                                     /* 441 */
-    NULL,                                     /* 442 */
+    ObExprTimestamp::calc_timestamp1,         /* 441 */
+    ObExprTimestamp::calc_timestamp2,         /* 442 */
     NULL,                                     /* 443 */
     NULL,                                     /* 444 */
     NULL,                                     /* 445 */

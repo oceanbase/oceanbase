@@ -900,6 +900,7 @@ static OB_INLINE int common_string_datetime(
       if (CAST_FAIL(ObTimeConverter::str_to_datetime(in_str, cvrt_ctx, out_val, &res_scale))) {
         LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
       }
+      LOG_INFO("stt, commont string to datetime", K(in_str), K(out_val), K(ret));
     }
     if (OB_SUCC(ret)) {
       SET_RES_DATETIME(out_val);

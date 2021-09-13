@@ -8272,7 +8272,7 @@ int ob_obj_accuracy_check_only(const ObAccuracy& accuracy, const ObCollationType
 }
 
 int ob_obj_to_ob_time_with_date(
-    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, bool is_dayofmonth /*false*/)
+    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, const int64_t cur_ts_value, bool is_dayofmonth /*false*/)
 {
   int ret = OB_SUCCESS;
   switch (obj.get_type_class()) {
@@ -8296,6 +8296,15 @@ int ob_obj_to_ob_time_with_date(
       break;
     }
     case ObTimeTC: {
+      int64_t datetime_val = 0;
+      if (OB_FAIL(
+              ObTimeConverter::time_to_datetime(obj.get_time(), cur_ts_value, NULL, datetime_val, ObDateTimeType))) {
+        LOG_WARN("time_to_datetime failed", K(ret), K(obj), K(cur_ts_value));
+      } else if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(datetime_val, NULL, ob_time))) {
+        LOG_WARN("datetime to time failed", K(ret));
+      }
+      break;
+
       ret = ObTimeConverter::time_to_ob_time(obj.get_time(), ob_time);
       break;
     }

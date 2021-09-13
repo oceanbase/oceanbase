@@ -257,7 +257,7 @@ typedef int (*ObCastEnumOrSetFunc)(
 bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_type, const ObObjType expect_type,
     const ObCollationType expect_cs_type);
 int ob_obj_to_ob_time_with_date(
-    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, bool is_dayofmonth = false);
+    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, const int64_t cur_ts_value, bool is_dayofmonth = false);
 int ob_obj_to_ob_time_without_date(const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time);
 
 // CM_STRING_INTEGER_TRUNC only affect string to [unsigned] integer cast.

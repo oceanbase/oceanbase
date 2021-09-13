@@ -394,14 +394,20 @@ int ObExprFuncRound::calc_with_date(ObObj& result, const ObObj& source, const Ob
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
-  if (OB_UNLIKELY(ObDateTimeTC != source.get_type_class())) {
+  if (OB_ISNULL(expr_ctx.exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
+  } else if (OB_UNLIKELY(ObDateTimeTC != source.get_type_class())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(source), K(format));
   } else if (OB_UNLIKELY(ObStringTC != format.get_type_class())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("inconsistent datatypes", K(ret), K(format));
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(source.get_type()), ob_obj_type_str(format.get_type()));
-  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(source, get_timezone_info(expr_ctx.my_session_), ob_time))) {
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(source,
+                 get_timezone_info(expr_ctx.my_session_),
+                 ob_time,
+                 get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx())))) {
     LOG_WARN("failed to convert obj to ob time", K(ret), K(source), K(format));
   } else {
     LOG_DEBUG("succ to get ob_time", K(ob_time), K(source));
