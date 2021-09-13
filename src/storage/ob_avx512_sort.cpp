@@ -45,13 +45,13 @@ inline void compare_and_exchange_2v(__m512i& keys1, __m512i& keys2,
                                       __m512i& values1, __m512i& values2) {
   __m512i idx = _mm512_set_epi64(0, 1, 2, 3, 4, 5, 6, 7);
   __m512i perm_keys = _mm512_permutexvar_epi64(idx, keys2);
-  // perm_keys: 16 13 11 10 9 6 5 1 
-     // keys2为: 2 3  4  7  8  12 14 15
-  // 此时perm_keys与keys2组成一个双调序列
+  // keys1:     1  5  6  9 10 11 13 16
+  // perm_keys: 15 14 12 8 7  4  3  2
+  // 此时perm_keys与keys1组成一个双调序列
   __m512i tmp_keys1 = _mm512_min_epu64(keys1, perm_keys);
   __m512i tmp_keys2 = _mm512_max_epu64(keys1, perm_keys);
-  // tmp_keys1: 2  3  4  7  8 6  5  1 (双调序列)
-  // tmp_keys2: 16 13 11 10 9 12 14 15 (双调序列)
+  // tmp_keys1: 1  5  6  8 7  4  3  2 (双调序列)
+  // tmp_keys2: 15 14 12 9 10 11 13 16 (双调序列)
   __m512i perm_values = _mm512_permutexvar_epi64(idx, values2);
 
   values2 = _mm512_mask_mov_epi64(values1, 
