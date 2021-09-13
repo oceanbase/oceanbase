@@ -50,6 +50,7 @@
 #include "ob_expr_like.h"
 #include "ob_expr_lower.h"
 #include "ob_expr_md5.h"
+#include "ob_expr_crc32.h"
 #include "ob_expr_mid.h"
 #include "ob_expr_minus.h"
 #include "ob_expr_mod.h"
@@ -715,6 +716,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprInetAton::calc_inet_aton,           /* 456 */
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
     ObExprConvertTZ::eval_convert_tz,         /* 458 */
+    ObExprCrc32::calc_crc32_expr,             /* 459 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

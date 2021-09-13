@@ -397,6 +397,7 @@
 #define N_INSERT "insert"
 #define N_SUBSTRING_INDEX "substring_index"
 #define N_MD5 "md5"
+#define N_CRC32 "crc32"
 #define N_HEX "hex"
 #define N_UNHEX "unhex"
 #define N_HEXTORAW "hextoraw"

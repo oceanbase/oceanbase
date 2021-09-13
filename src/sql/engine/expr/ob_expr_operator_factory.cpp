@@ -170,6 +170,7 @@
 #include "sql/engine/expr/ob_expr_reverse.h"
 #include "sql/engine/expr/ob_expr_right.h"
 #include "sql/engine/expr/ob_expr_md5.h"
+#include "sql/engine/expr/ob_expr_crc32.h"
 #include "sql/engine/expr/ob_expr_lrpad.h"
 #include "sql/engine/expr/ob_expr_conv.h"
 #include "sql/engine/expr/ob_expr_sign.h"
@@ -629,6 +630,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprIfNull);
   REG_OP(ObExprConcatWs);
   REG_OP(ObExprCmpMeta);
+  REG_OP(ObExprCrc32);
   REG_OP(ObExprQuote);
   REG_OP(ObExprPad);
   REG_OP(ObExprHostIP);
