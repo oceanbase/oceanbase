@@ -8082,10 +8082,12 @@ int obj_collation_check(const bool is_strict_mode, const ObCollationType cs_type
     int64_t well_formed_len = 0;
     if (ob_is_lob_locator(obj.get_type())) {
       if (OB_FAIL(obj.get_string(str))) {
-        STORAGE_LOG(WARN, "Failed to get payload from lob locator", K(ret), K(obj));
+        LOG_WARN("Failed to get payload from lob locator", K(ret), K(obj));
       }
     } else {
-      obj.get_string(str);
+      if (OB_FAIL(obj.get_string(str))) {
+        LOG_WARN("Failed to get payload from string", K(ret), K(obj));
+      }
     }
     if (OB_FAIL(ret)) {
 

@@ -573,7 +573,9 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
           } else {
             buf_obj1 = *to_type_obj;
             buf_obj1.set_collation(result_type_);
-            buf_obj1.get_string(text);
+            if (OB_FAIL(buf_obj1.get_string(text))) {
+              LOG_WARN("Failed to get buf_obj1 string", K(ret));
+            }
           }
 
           if (OB_FAIL(ret)) {
