@@ -1111,19 +1111,23 @@ inline void bitonic_sort(uint64_t* __restrict__ ptr_keys,
 inline int popcount(__mmask16 mask)
 {
 #ifdef __INTEL_COMPILER
-    return _mm_countbits_32(mask);
+  return _mm_countbits_32(mask);
 #else
-    return __builtin_popcount(mask);
+  return __builtin_popcount(mask);
 #endif
 }
 
 inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
                                 __m512i& pivotvec, __m512i& keys,
                                 __m512i& values, int64_t& left_w,
-                                int64_t& right_w)
-{
+                                int64_t& right_w, bool flag) {
   const int32_t vec_cap = 8;
-  __mmask8 mask = _mm512_cmp_epu64_mask(keys, pivotvec, _MM_CMPINT_LE);
+  __mmask8 mask;
+  if (flag) {
+    mask = _mm512_cmp_epu64_mask(keys, pivotvec, _MM_CMPINT_LT);
+  } else {
+    mask = _mm512_cmp_epu64_mask(keys, pivotvec, _MM_CMPINT_LE);
+  }
   const int64_t nb_low = popcount(mask);
   const int64_t nb_high = vec_cap - nb_low;
   _mm512_mask_compressstoreu_epi64(keys_ptr + left_w, mask, keys);
@@ -1175,12 +1179,15 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
       tmp = _mm512_loadu_si512(keys + left);
       tmp_val = _mm512_loadu_si512(values + left);
       left += vec_cap;
+      compare_and_store(keys, values, pivotvec, tmp, tmp_val, left_w,
+                          right_w, true);
     } else {
       right -= vec_cap;
       tmp = _mm512_loadu_si512(keys + right);
       tmp_val = _mm512_loadu_si512(values + right);
+      compare_and_store(keys, values, pivotvec, tmp, tmp_val, left_w,
+                          right_w, false);
     }
-    compare_and_store(keys, values, pivotvec, tmp, tmp_val, left_w, right_w);
   }
   const int64_t remaining = right - left;
   __m512i tmp = _mm512_loadu_si512(keys + left);
@@ -1189,9 +1196,9 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
   compare_and_store(keys, values, pivotvec, tmp, tmp_val, left_w, right_w,
                       remaining);
   compare_and_store(keys, values, pivotvec, tmp_left, tmp_left_val, left_w, 
-                      right_w);
+                      right_w, true);
   compare_and_store(keys, values, pivotvec, tmp_right, tmp_right_val, left_w, 
-                      right_w);
+                      right_w, false);
   return left_w;
 }
 
