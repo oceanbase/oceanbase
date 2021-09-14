@@ -604,7 +604,7 @@ bool ObConfigBoolItem::parse(const char* str, bool& valid) const
   } else {
     value = ObConfigBoolParser::get(str, valid);
     if (!valid) {
-      OB_LOG(ERROR, "Get bool config item fail", K(valid), K(str));
+      OB_LOG(WARN, "Get bool config item fail", K(valid), K(str));
     }
   }
   return value;
