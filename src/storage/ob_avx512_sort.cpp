@@ -216,21 +216,23 @@ inline void sort_bitonic_sequence_8v(__m512i& keys1, __m512i& keys2,
 // 将一个无序序列进行双调排序
 inline void bitonic_sort_1v(__m512i& keys, __m512i& values)
 {
-    // step1: 形成一个双调序列
-    __m512i idx = _mm512_set_epi64(6, 7, 4, 5, 2, 3, 0, 1);
-    compare_and_exchange_1v(keys, values, idx, 0x66);
-    idx = _mm512_set_epi64(5, 4, 7, 6, 1, 0, 3, 2);
-    compare_and_exchange_1v(keys, values, idx, 0x3C);
-    idx = _mm512_set_epi64(6, 7, 4, 5, 2, 3, 0, 1);
-    compare_and_exchange_1v(keys, values, idx, 0x5A);
-    // step2: 对双调序列进行双调排序
-    sort_bitonic_sequence(keys, values);
+  // step1: 形成一个双调序列
+  __m512i idx = _mm512_set_epi64(6, 7, 4, 5, 2, 3, 0, 1);
+  compare_and_exchange_1v(keys, values, idx, 0x66);
+  idx = _mm512_set_epi64(5, 4, 7, 6, 1, 0, 3, 2);
+  compare_and_exchange_1v(keys, values, idx, 0x3C);
+  idx = _mm512_set_epi64(6, 7, 4, 5, 2, 3, 0, 1);
+  compare_and_exchange_1v(keys, values, idx, 0x5A);
+  // step2: 对双调序列进行双调排序
+  sort_bitonic_sequence(keys, values);
 }
 
 
+// 对两个向量组成对无序序列进行双调排序
 inline void bitonic_sort_2v(__m512i& keys1, __m512i& keys2,
                                  __m512i& values1, __m512i& values2)
 {
+ 
   bitonic_sort_1v(keys1, values1);
   bitonic_sort_1v(keys2, values2);
   compare_and_exchange_2v(keys1, keys2, values1, values2); 
@@ -561,6 +563,11 @@ inline void bitonic_sort_16v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                              values12, values13, values14, values15, values16);
 }
 
+// 一个512bit向量寄存器可以包含8个64bit的变量，
+// 然而在待排序数组的可能不是8的倍数，
+// 我们用uint64的最大值（ULLONG_MAX）填充向量寄存器凑够8的倍数。
+//
+// 这样在load最后一个向量时，用ULLONG_MAX填充
 inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest)
 {
   __m512i last_vec = _mm512_or_si512(_mm512_maskz_loadu_epi64(0xFF>>rest, ptr),
@@ -570,27 +577,34 @@ inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest)
   return last_vec;
 }
 
+// 将最后一个向量回存到数组中。
+// 因为在加载时，我们用ULLONG_MAX填充了最后一个向量，
+// 在store时，将之前填充的部分忽略。
 inline void store_last_vec(uint64_t* ptr, __m512i& vec, int32_t rest)
 {
   _mm512_mask_compressstoreu_epi64(ptr, 0xFF>>rest, vec);
 }
 
+// 从数组中加载一个向量
 inline void load_1v(uint64_t* ptr, __m512i& vec)
 {
   vec  = _mm512_loadu_si512(ptr);
 }
 
+// 将vec回存到数组中
 inline void store_1v(uint64_t* ptr, __m512i& vec)
 {
   _mm512_storeu_si512(ptr, vec);
 }
 
+// 从数组中加载两个向量
 inline void load_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2)
 {
   vec1  = _mm512_loadu_si512(ptr);
   vec2  = _mm512_loadu_si512(ptr + 8);
 }
 
+// 将vec1, vec2回存到数组中
 inline void store_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2)
 {
   _mm512_storeu_si512(ptr, vec1);
@@ -830,13 +844,18 @@ inline void store_15v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
   _mm512_storeu_si512(ptr + 112, vec15);
 }
 
+// 双调排序，可用来排序长度小于128的数组
 inline void bitonic_sort(uint64_t* __restrict__ ptr_keys, 
                            uint64_t* __restrict__ ptr_values, 
                            const int64_t len)
 {
+  // 一个向量寄存器可以存放8个64bit变量
   const int32_t vec_cap = 8;
+  // 向量个数
   const int32_t n = (len + 7) / vec_cap;
+  // 最后一个向量填完余数以后剩余的空间
   const int32_t rest = n * vec_cap - len;
+  // 最后一个向量的有效数值的个数（余数）
   const int last_vec_size = vec_cap - rest;
 
   __m512i keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8, keys9, keys10;
@@ -1108,6 +1127,7 @@ inline void bitonic_sort(uint64_t* __restrict__ ptr_keys,
   }
 }
 
+// 计算mask里面bit 1的个数
 inline int popcount(__mmask16 mask)
 {
 #ifdef __INTEL_COMPILER
@@ -1117,6 +1137,14 @@ inline int popcount(__mmask16 mask)
 #endif
 }
 
+// pivotvec 为 pivot (快排时，用来分区的值）填充的向量
+// 如果pivot为10，则pivotvec则为[10,10,10,10,10,10,10,10]
+//
+// 将向量keys和pitvotvec比较，
+// 如果flag为true, 将小于pivot的部分写入keys_ptr + left_w, 
+// 剩下的部分写入keys_ptr + right_w。
+// 如果flag为false, 将小于等于pivot的部分写入keys_ptr + left_w, 
+// 剩下的部分写入keys_ptr + right_w。
 inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
                                 __m512i& pivotvec, __m512i& keys,
                                 __m512i& values, int64_t& left_w,
@@ -1138,6 +1166,8 @@ inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
   _mm512_mask_compressstoreu_epi64(values_ptr + right_w, ~mask, values);
 }
 
+// keys向量里面只有前remaining部分是有效的, 将有效部分的数值和pivotec对比。
+// 将小于等于pivot的部分写入keys_ptr + left_w, 剩下的部分写入keys_ptr + right_w。
 inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
                                 __m512i& pivotvec, __m512i& keys,
                                 __m512i& values, int64_t& left_w,
@@ -1156,11 +1186,13 @@ inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
   _mm512_mask_compressstoreu_epi64(values_ptr + right_w, mask_high, values);
 }
 
+// 分区函数，跟pivot将数组分成两部分。
 static inline int64_t do_partition(uint64_t* keys, uint64_t* values, 
         int64_t left, int64_t right, const uint64_t pivot)
 {
   const int32_t vec_cap = 8;
   __m512i pivotvec = _mm512_set1_epi64(pivot);
+  // 保存最左的8个值到向量 tmp_left
   __m512i tmp_left = _mm512_loadu_si512(keys + left);
   __m512i tmp_left_val = _mm512_loadu_si512(values + left);
   int64_t left_w = left;
@@ -1168,6 +1200,7 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
 
   int64_t right_w = right + 1;
   right -= vec_cap - 1;
+  // 保存最右的8个值到向量 tmp_right
   __m512i tmp_right = _mm512_loadu_si512(keys + right);
   __m512i tmp_right_val = _mm512_loadu_si512(values + right);
   while(left + vec_cap <= right) {
@@ -1189,12 +1222,14 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
                           right_w, false);
     }
   }
+  // 最后一部分不够8个数值，不能填充满一个向量，需要单独处理
   const int64_t remaining = right - left;
   __m512i tmp = _mm512_loadu_si512(keys + left);
   __m512i tmp_val = _mm512_loadu_si512(values + left);
   left = right;
   compare_and_store(keys, values, pivotvec, tmp, tmp_val, left_w, right_w,
                       remaining);
+  // 处理之前保存的tmp_left，和tmp_right
   compare_and_store(keys, values, pivotvec, tmp_left, tmp_left_val, left_w, 
                       right_w, true);
   compare_and_store(keys, values, pivotvec, tmp_right, tmp_right_val, left_w, 
@@ -1254,6 +1289,7 @@ inline void heapify(uint64_t* keys, uint64_t* values, int64_t idx, int64_t size)
   }
 }
 
+// 堆排序
 inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
 {
   for (int64_t i = size / 2 - 1; i >= 0; i--) {
@@ -1266,10 +1302,13 @@ inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
   }
 }
 
+// 首先将数组长度在小于128时调用双调排序。
+// 对于长度超过如128的，如果递归深度超过depth_limit，则该用堆排序，
+// 否则调用快排。
 inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left, 
                const int64_t right, int64_t depth_limit)
 {
-  static const int32_t limit = 128;
+  const int32_t limit = 128;
   if(right - left < limit){
     bitonic_sort(keys + left, values + left, right - left + 1);
   } else {
@@ -1288,17 +1327,32 @@ inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left,
   }
 }
 
+// 由于向量化实现的排序算法只能对数值数组进行排序，
+// 所以我们采用key-value的方式，对T类型数据进行排序。
+//
+// key用来排序，value存放T的指针，在排序过程中每次交换keysd的值时，也交换values。
 template <typename T>
 int sort_loop(uint64_t* keys, T** values, int64_t round, 
                 int64_t left, int64_t right)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = left; OB_SUCC(ret) && i < right; i++) {
+    // 通过T提供的get_sort_key来获取排序用的keys
     ret = values[i]->get_sort_key(&keys[i]);
   }
   if (OB_SUCC(ret)) {
+    // 对keys和values进行排序
     do_sort(keys, (uint64_t*)values, left, right - 1, lg(right - left) * 2);
   }
+  // 处理相同的值
+  // 
+  // 如果一个 struct T { uint64_t a, uint64_t b };
+  // 其compare(T& t1, T& t2) {return t1.a == t2.a ? t1.b < t2.b : t1.a < t2.a;}
+  // 由于向量实现的排序算法只能排序数值类型，我们先用T.a 作为key来排序，
+  // 在一轮排序以后，keys相同的值会被排序到一起，比如:
+  // 1 1 1 2 2 3 3 3 3 3 
+  //
+  // 对于T.a一样的T，我们需要以T.b为key进行下一轮排序。
   int64_t idx = left;
   while (OB_SUCC(ret)) {
     while (idx < right - 1 && keys[idx] != keys[idx + 1]) {
