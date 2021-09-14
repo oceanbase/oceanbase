@@ -1226,32 +1226,36 @@ inline int64_t partition(uint64_t* keys, uint64_t* values, const int64_t left,
   return cut;
 }
 
-inline void heapify(uint64_t* keys, uint64_t* values, int64_t size, int64_t i)
+inline void heapify(uint64_t* keys, uint64_t* values, int64_t idx, int64_t size)
 {
-  int64_t largest = i;
-  int64_t l = 2 * i + 1;
-  int64_t r = 2 * i + 2;
-  if (l < size && keys[l] > keys[largest]) {
-    largest = l;
-  } else if (r < size && keys[r] > keys[largest]) {
-    largest = r;
-  }
-  if (largest != i) {
-    std::swap(keys[i], keys[largest]);
-    std::swap(values[i], values[largest]);
-    heapify(keys, values, size, largest);
+  int i = idx;
+  while(true) {
+    int j = 2 * i + 1;
+    if (j >= size || j < 0) {
+      break;
+    }
+    int k = j + 1;
+    if (k < size && keys[j] < keys[k]) {
+      j = k;
+    }
+    if (keys[j] < keys[i]) {
+      break;
+    }
+    std::swap(keys[i], keys[j]);
+    std::swap(values[i], values[j]);
+    i = j;
   }
 }
 
 inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
 {
   for (int64_t i = size / 2 - 1; i >= 0; i--) {
-    heapify(keys, values, size, i);
+    heapify(keys, values, i, size);
   }
   for (int64_t i = size - 1; i > 0; i--) {
     std::swap(keys[0], keys[i]);
     std::swap(values[0], values[i]);
-    heapify(keys, values, i, 0);
+    heapify(keys, values, 0, i);
   }
 }
 
