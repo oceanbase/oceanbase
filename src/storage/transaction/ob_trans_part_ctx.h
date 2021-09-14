@@ -402,7 +402,7 @@ public:
       K(mt_ctx_.get_checksum_log_ts()), K_(is_changing_leader), K_(has_trans_state_log),
       K_(is_trans_state_sync_finished), K_(status), K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx),
       K(mt_ctx_.get_callback_count()), K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
-      K_(is_xa_trans_prepared));
+      K_(status), K_(is_xa_trans_prepared));
 
 public:
   static const int64_t OP_LOCAL_NUM = 16;

@@ -3095,12 +3095,14 @@ int ObPartTransCtx::leader_revoke(const bool first_check, bool& need_release, Ob
       if (!is_trans_state_sync_finished_) {
         TRANS_LOG(INFO, "transaction is killed", "context", *this);
       }
-    } else if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && 0 == submit_log_count_) {
-      // - When leader is revoking  and some non-2pc logs of txn has already been
+    } else if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && 0 == submit_log_count_ &&
+               FALSE_IT(mt_ctx_.clean_dirty_callbacks())) {
+      // - When leader is revoking and some non-2pc logs of txn has already been
       //   submitted to sliding window:
-      //   - If no on-the-fly log and state log is not synced successfully, remove all
-      //     marked_log_cnts
-      (void)mt_ctx_.clean_dirty_callbacks();
+      //   - Case 2.1: We only solve the case with no on-the-fly logs(because we have no idea
+      //     whether the on-the-fly log is paxos-choosen or not)
+      //   - If the state is not synced successfully(txn need abort), so we remove all
+      //     marked trans node
     } else if (OB_FAIL(mt_ctx_.commit_to_replay())) {
       TRANS_LOG(WARN, "commit to replay error", KR(ret), "context", *this);
     } else {
