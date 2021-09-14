@@ -612,10 +612,7 @@ int ObTableReplace::scan_row(ObExecContext& ctx, const ObPartitionKey& part_key,
         DLIST_FOREACH(node, virtual_column_exprs_)
         {
           const ObColumnExpression* expr = static_cast<const ObColumnExpression*>(node);
-          if (OB_ISNULL(expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("node or node expr is NULL", K(ret));
-          } else if (OB_FAIL(scan_param.virtual_column_exprs_.push_back(expr))) {
+          if (OB_FAIL(scan_param.virtual_column_exprs_.push_back(expr))) {
             LOG_WARN("fail to push back virtual column expr", K(ret));
           }
         }
