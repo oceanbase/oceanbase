@@ -19,6 +19,7 @@
 #include "lib/coro/co.h"
 #include "rpc/ob_request.h"
 #include "lib/coro/co_user_thread.h"
+#include "lib/thread/ob_thread_name.h"
 
 namespace oceanbase {
 
@@ -184,6 +185,7 @@ inline void ObThWorker::reset()
   ws_ = WStatus::STOPPED;
   active_ = false;
   unset_tidx();
+  lib::set_thread_name("OMT_FREE", ObWorker::get_tidx());
 }
 
 inline void ObThWorker::set_tenant(ObTenant* tenant)
