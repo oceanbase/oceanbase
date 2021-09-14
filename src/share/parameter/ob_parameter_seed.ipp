@@ -1277,9 +1277,6 @@ DEF_INT(_px_max_pipeline_depth, OB_CLUSTER_PARAMETER, "2", "[2,3]",
     "max parallel execution pipeline depth, "
     "range: [2,3]",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_split_partition, OB_TENANT_PARAMETER, "False",
-    "specifies whether to use split partition function. The default value is False",
-    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // ssl
 DEF_BOOL(ssl_client_authentication, OB_CLUSTER_PARAMETER, "False",
