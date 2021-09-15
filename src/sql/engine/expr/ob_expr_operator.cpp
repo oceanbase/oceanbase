@@ -2581,7 +2581,6 @@ int ObSubQueryRelationalExpr::check_exists(const ObExpr& expr, ObEvalCtx& ctx, b
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected argument count", K(ret));
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, v))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL subquery ref info returned", K(ret));
   } else if (OB_FAIL(ObExprSubQueryRef::get_subquery_iter(
                  ctx, ObExprSubQueryRef::ExtraInfo::get_info(v->get_int()), iter))) {
