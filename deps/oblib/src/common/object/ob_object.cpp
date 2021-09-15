@@ -518,6 +518,24 @@ int ObObj::build_not_strict_default_value()
   return ret;
 }
 
+/* 
+ * make sort key:
+ * Convert ob_object data into a byte array that can be compared by byte
+ * (called memcomparable format).
+ * For more information, please refer to the Memcomparable format of MyRocks.
+ *
+ * However, unlike MyRocks, our make sort key only converts part of it at a 
+ * time(`offset` to `offset+size`).
+ * 
+ * example:
+ * ob_object data -> (char* array)[ null-flag | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | ...]
+ *
+ * to : buffer to store the converted byte array
+ * offset: represents the offset of this byte array
+ * size: size represents the length of the buffer(t0)
+ * extra_param: help convert multi-byte encoded data to mencomparable format
+ *
+ */
 int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
                            ObSortkeyExtraData* extra_param)
 {
@@ -743,29 +761,31 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
       }
       break;
     }
+    /* 
+     * For variable-sized data types it depends on whether the data is 
+     * considered binary data (varbinary or varchar with a binary collation) or not. 
+     * For binary data we break the data in groups of 8 bytes to which we append 
+     * an extra byte that signals the number of significant bytes in the previous 
+     * section. The extra byte can range from 1 to 9. Values of 1 to 8 indicate 
+     * that many bytes were significant and this group is the last group - a value 
+     * of 9 indicates that all 8 bytes were significant and there is more data to come.
+     *
+     * example: 
+     *    raw data: v_.string_ = "hello world!"
+     *    memcomparable format: 
+     *(char* arrar) [ null-flag |'h' |'e'|'l'|'l'|'o'|' '|'w'|'o'| 9 |'r'|'l'|'d'|'!'| 0 | 0 | 0 | 0 | 4 ]
+     *
+     * */
     case ObVarcharType:
     case ObCharType: {
       if ((get_meta().get_collation_type() == CS_TYPE_BINARY)) {
-        // 对于变长的二进制数据，我们将数据分成 8 个字节的组，
-        // 我们在其上附加一个额外的字节，该字节表示上一节中的有效字节数。
-        // 额外字节的范围可以从 1 到 9，如是 9 表示后续还有数据。
-        //
-        // offset 表示当前一个字节数组的索引，字节数组如下所示：
-        // ｜null-flag ｜ v_.string_[0] | v_.string_[1] | v_.string_[2] | 
-        // v_.string_[3] | v_.string_[4] | v_.string_[5] | v_.string_[6] |
-        // v_.string_[7] | 9 | v_.string[8] | ...
-        // 该数组由一个null-flag和binary类型的memcomparable格式组成
-        //
-        int32_t ids = 0; // to字节数组索引
-        int32_t ids1 = offset - 1; // memcomparable字符数组索引
-        int32_t ids2; // 原数据索引
-        int32_t t = val_len_ % 8; // 最后一组数据的大小
-        int32_t mem_len = (val_len_ / 8) * 9 + (t ? 9 : 0); // memcomparable数组长度
-        // 需要拷贝数据的长度
-        // size - copied 表示 to数组剩余的大小; mem_len - offset + 1 表示memparable数组剩余大小
+        int32_t ids = 0;
+        int32_t ids1 = offset - 1;
+        int32_t ids2;
+        int32_t t = val_len_ % 8;
+        int32_t mem_len = (val_len_ / 8) * 9 + (t ? 9 : 0);
         size = std::min(mem_len - offset + 1, size - copied);
         while (ids < size) {
-          // 如果ids1 + 1是9的倍数，则该字节用来表示"上一节中的有效字节数"
           if ((ids1 + 1) % 9 == 0) {
             if (ids1 == mem_len - 1) {
               to[ids + copied] = (t == 0) ? 8 : t;
@@ -783,39 +803,50 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
           ids1 += 1;
           ids += 1;
         }
-        // 修改偏移
         offset += size;
-        // 计算一共拷贝了多少数据
         size += copied;
         if (offset > mem_len) {
-          // 如果这个ob_object的数据读完了，重置offset
+          // If all ob_object data is converted to memcomparable format, reset the offset.
           offset = 0;
         }
       } else {
-        // 对于非二进制的数据，首先将数据通过查表的方式转换为可以比较的二进制数据，
-        // 然后参考上面二进制数据转memcomparable格式的方法，
-        // 将查表得到的可以比较的二进制数据转换为memcomparable格式。
-        // 这里我们有三种类型的数据：
-        //      1. 原始数据
-        //      2. 查表得到的可以按字节比较的数据(用sortkey数组表示)
-        //      3. null-flag + ob_object的memcomparable格式的数据(用memcmp数据表示)
+        /*
+         * For variable-sized data types that are not binary data we need to 
+         * look up the table to convert the original data into a comparable 
+         * byte array, and then refers to the encoding method of the binary data.
+         * 
+         * Here we have three types of data:
+         *   1. raw data
+         *   2. a byte array obtained by looking up the table(the following is called the sortkey).
+         *   3. Encode the byte arary into memcomparable format.
+         *
+         * */
 
-        // 如果是第一次读取改ob_object，重置extra_param
+        // If it is the first time to convert this ob_object, reset extra_param.
         if (offset == 1) {
           extra_param->reset();
         }
-        // 对于mysql的varchar类型，其'xxx' and 'xxx '是相等的。首先要移除尾部' '
+        // for mysql's varchar，'xxx' and 'xxx ' are equal. We need to ignore trailing spaces
         int32_t val_len = val_len_;
         if (data_type == ObVarcharType) {
           while (val_len > 0 && v_.string_[val_len - 1] == ' ') {
             val_len--;
           }
         }
-        // sortkey_offset 表示sortkey数组已读的偏移
-        // str_offset 表示已读原数据已读的偏移
         int32_t sortkey_offset = extra_param->sortkey_offset;
         int32_t str_offset = extra_param->str_offset;
-        // 如果上一次读取的数据没有用完，先从上次剩下的数据填充to数组
+        /* 
+         * In the last conversion, if a character requires two-byte encoding,
+         * sortkey obtained by looking up the table is three bytes, but at this
+         * time buffer(to) only has one byte of space left.
+         *
+         * At this time, we need to save the remaining two bytes to 
+         * `extra_param->extra_buf` to facilitatethe next use.
+         *
+         * If the data read last time is not used up, first fill the buffer(to)
+         * with the remaining data from the last time.
+         *
+         * */
         if (extra_param->extra_buf_size != 0) {
           int32_t ids = 0;
           while (copied < size && extra_param->extra_buf_size > 0) {
@@ -831,20 +862,13 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
             int32_t need = size - copied;
             int32_t t1 = (offset - 1) % 9;
             int32_t t2 = ((offset - 1) + need) % 9;
-            // 用offset（memcmp数组的偏移）和 需要的数据的长度计算出：
-            // sortkey_start, sortkey_end
-            // 表示需要sortkey数组的sortkey_start到sortkey_end这段数据
             int32_t sortkey_start = (offset - 1) / 9 * 8 + t1;
             int32_t sortkey_end = ((offset - 1) + need) / 9 * 8 + t2;
-            // 需要的sortkey数组的长度
             int64_t sortkey_len = sortkey_end - sortkey_start;
-            // 原始数据还剩下的数据的长度（原始数据未读数据的长度）
             int64_t str_len = val_len - str_offset;
-            // 转换是否成功标记
             bool is_valid_collation = false;
-            // 存放转结果的buf
             char buf[16];
-            // 将原始数据转换为可以按字节比较的数据，转换得到的结果存放在buf里面
+            // convert raw data to sortkey.
             ObCharset::sortkey_v2(get_collation_type(), 
                     get_string_ptr() + str_offset, 
                     str_len, 
@@ -853,8 +877,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
                     is_valid_collation, 
                     16);
             if (is_valid_collation) {
-              // 成功转换
-              // 更新偏移，将数据转换为memcomparable格式
+              // Conversion is successful, encode sortkey into memcomparable format.
               sortkey_offset += sortkey_len;
               str_offset += str_len;
               int32_t ids = 0;
@@ -871,9 +894,15 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
                 offset++;
                 copied++;
               }
-              // 处理剩下的数据
-              // 比如一个字符占3个字节，转换出来4个字节的用来比较的数据，但是我们只需要2个字节。
-              // 在这种情况下，我们需要将剩下的两个字节存起来
+             /*
+              * If a character requires two-byte encoding, sortkey obtained by 
+              * looking up the table is three bytes, but at this time buffer(to) 
+              * only has one byte of space left.
+              *
+              * At this time, we need to save the remaining two bytes to 
+              * `extra_param->extra_buf` to facilitatethe next use.
+              *
+              * */
               extra_param->extra_buf_size = sortkey_len - ids;
               while (ids < sortkey_len) {
                 extra_param->extra_buf[ids1] = buf[ids];
@@ -881,7 +910,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
                 ids1++;
               }
             } else {
-              // 转换失败，直接用原始数据进行比较
+              // Conversion failed, encode raw data into memcomparable format.
               while (copied < size && str_offset < val_len) {
                 if (offset % 9 == 0) {
                   to[copied] = 9;
@@ -897,8 +926,6 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
           extra_param->str_offset = str_offset;
           extra_param->sortkey_offset = sortkey_offset;
         }
-        // 将原数据全部转换为memcomparable格式以后，剩下的部分填0，
-        // 最后一个字节用来表示"上一节中的有效字节数"
         while (str_offset == val_len && copied < size) {
           if (offset % 9 == 0) {
             int32_t t = sortkey_offset % 8;
@@ -918,20 +945,19 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
     }
     case ObNumberType: 
     case ObUNumberType: {
-      // 对于ObNumberType，我们先比较其符号位和指数位(一共占一个字节)，
-      // 如果符号位和指数位不相等，则能直接区分大小。
-      // 如果符号为和指数位相等，则需要逐个比较其uint32数组里面的数值大小。
-      //
-      // 所以，其memcomparable如下：
-      // | null-flag | sign+exp ｜ uint32[0][3] | uint32[0][2] | uint32[0][1] |
-      // uint32[0][0] | uint32[1][3] | uint32[1][2] | 9 | uint32[1][1] | ...
-      // 其中，uint32[i][j] 表示uint32数组的第i个数的第j的字节
-      //
-      // 注意，ObNumberType也是变长的二进制数据，我们需要将数据分成 8 个字节的组，
-      // 其上附加一个额外的字节，该字节表示上一节中的有效字节数。
-      // 额外字节的范围可以从 1 到 9，如是 9 表示后续还有数据。
+    /* 
+     * For ObNumberType, we first compare its sign bit and exponent bit (total 
+     * of one byte). If the sign bit and exponent bit are not equal, the size 
+     * can be directly distinguished. If the sign is equal to the exponent bit, 
+     * you need to compare the values in the uint32 array one by one.
+     *
+     * At the same time ObNumber is also variable-sized data. So memcomparable 
+     * format as following:
+     * (char* array)[ null-flag | sign+exp ｜ uint32[0][3] | uint32[0][2] | uint32[0][1] | 
+     * uint32[0][0] | uint32[1][3] | uint32[1][2] | 9 | uint32[1][1] | ...]
+     *
+     * */
       int32_t len = nmb_desc_.len_;
-      // len_ 表示的是uint32数组的长度，需要将len * 4 + 1，表示原字节数据组的长度
       len = len << 2;
       int32_t t = (len + 1) % 8;
       int32_t ids = 0;
@@ -958,8 +984,6 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
               int32_t n1 = ids2 / 4;
               int32_t t1 = ids2 % 4;
               to[ids + copied] = num[n1 * 4 + (3 - t1)];
-              // 如果是负数，数值越大，原值越小。
-              // 所以我们需要按位取反。
               if (nmb_desc_.sign_ == number::ObNumber::NEGATIVE) {
                   to[ids + copied] = ~to[ids + copied];
               }

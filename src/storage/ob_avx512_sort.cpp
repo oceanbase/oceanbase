@@ -16,22 +16,83 @@
 
 namespace oceanbase {
 namespace storage {
-// 根据idx比较和交换一个向量内对应元素
-// keys: 1 5 6 9 10 4 3 2
-// idx:  3 2 1 0 7 6 5 4 (需要转制一下4 5 6 7 0 1 2 3)
-// m: 0xF0
+/* 
+ * This cpp file implements quick sorting and bitonic sort through 
+ * vectorization. The sorting algorithm implemented by the vectorization
+ * method can only sort numerical arrays.We use key-value to solve this 
+ * problem. The key value array is used for comparison and sorting. When the 
+ * elements of the key array are exchanged, the elements of value are also 
+ * exchanged.
+ *
+ * Main sort function as follows:
+ *  1. bitonic_sort: vectorized bitonic, only numeric array with elements less 
+ *  than 128 can be sorted.
+ *  2. quick_sort: vectorized quick sort.
+ *  3. do_sort: entry function.
+ *
+ * The flow of the `do_sort function` is as follows:
+ *  1. use vector quick sort to sort the elements.
+ *  2. However, quick sort may have uneven partitions. When the recursion
+ *  reaches a certain depth, heap sort should be used.
+ *  3. In the process of quick sorting, the interval keeps shrinking. When the 
+ *  interval length is less than 128, the bitontic sorting realized by 
+ *  vectorization is needed.
+ *
+ * */
+
+/* Bitonic sort 
+ *
+ * Before reading the code, please learn the bitonic sorting.
+ *
+ * Main function:
+ *  1. bitonic_sort_1v : sort the elements in 1 vector.
+ *  2. bitonic_sort_2v : sort the elements in 2 vector.
+ *  3. bitonic_sort_3v : sort the elements in 3 vector.
+ *  4. bitonic_sort_4v : sort the elements in 4 vector.
+ *  5. bitonic_sort_5v : sort the elements in 5 vector.
+ *  6. bitonic_sort_6v : sort the elements in 6 vector.
+ *  7. bitonic_sort_7v : sort the elements in 7 vector.
+ *  8. bitonic_sort_8v : sort the elements in 8 vector.
+ *  9. bitonic_sort_9v : sort the elements in 9 vector.
+ *  10. bitonic_sort_10v : sort the elements in 10 vector.
+ *  11. bitonic_sort_11v : sort the elements in 11 vector.
+ *  12. bitonic_sort_12v : sort the elements in 12 vector.
+ *  13. bitonic_sort_13v : sort the elements in 13 vector.
+ *  14. bitonic_sort_14v : sort the elements in 14 vector.
+ *  15. bitonic_sort_15v : sort the elements in 15 vector.
+ *  16. bitonic_sort_16v : sort the elements in 16 vector.
+ *  17. bitonic_sort: vectorized bitonic, only numeric array with elements less 
+ * than 128 can be sorted.
+ *
+ * */
+
+/* 
+ * compare_and_exchange_1v : 
+ * 1. Exchange `keys` according to the index `idx` to get `perm_keys`.
+ * 2. Compare the values of the corresponding elements of `keys` and 
+ * `perm_keys` to get `min_keys` and `max_keys`.
+ * 3. Get the required value from `min_keys` and `max_keys` according to the mask `m`. 
+ *
+ * example:
+ * keys: 1 5 6 9 10 4 3 2
+ * idx:  3 2 1 0 7 6 5 4
+ * m: 0xF0
+ *
+ * 1. get `perm_keys: 10 4 3 2 1 5 6 9`
+ * 2. get `min_keys: 1  4 3 2 1  4 3 2 
+ *         max_keys: 10 5 6 9 10 5 6 9`
+ * 3. use mask `m 0xF0` to get `tmp_keys: 1 4 3 2 10 5 6 9` 
+ *
+ * */
+  __m512i tmp_keys = _mm512_mask_mov_epi64(min_keys, m, max_keys);
 inline void compare_and_exchange_1v(__m512i& keys, __m512i& values, 
                                       __m512i& idx, __mmask8 m)
 {
   __m512i perm_keys = _mm512_permutexvar_epi64(idx, keys);
-  // (将第4个元素10放到第1个位置, 第5个元素4放到第2个位置...)
-  // 得到perm_keys: 10 4 3 2 1 5 6 9
   __m512i min_keys = _mm512_min_epu64(perm_keys, keys);
   __m512i max_keys = _mm512_max_epu64(perm_keys, keys);
-  // min_keys: 1  4 3 2 1  4 3 2 
-  // max_keys: 10 5 6 9 10 5 6 9
   __m512i tmp_keys = _mm512_mask_mov_epi64(min_keys, m, max_keys);
-  // 按照mask 0xF0从min_keys，max_keys得到 1 4 3 2 10 5 6 9
+  /* When exchanging the values of keys, also need to exchange values. */
   values = _mm512_mask_mov_epi64(_mm512_permutexvar_epi64(idx, values), 
                                     _mm512_cmp_epu64_mask(tmp_keys, keys, 
                                                             _MM_CMPINT_EQ),
@@ -39,21 +100,28 @@ inline void compare_and_exchange_1v(__m512i& keys, __m512i& values,
   keys = tmp_keys;
 }
 
-// 将两个有序向量其中一个转置后，比较对应位置的元素
-// keys1为: 1 5 6 9 10 11 13 16
-// keys2为: 2 3 4 7 8  12 14 15
+/* 
+ * compare_and_exchange_2v:
+ *  1. Transpose the vector `keys2`.
+ *  2. Compare the values of the corresponding elements of `keys1` and 
+ * `perm_keys` to get `tmp_keys1` and `tmp_keys2`.
+ *
+ * example: 
+ * keys1: 1 5 6 9 10 11 13 16
+ * keys2: 2 3 4 7 8  12 14 15
+ *
+ *  1. get `perm_keys: 16 13 11 10 9 6 5 1` (now keys1 and perm_keys form a bitonic sequence)
+ *  2. get `tmp_keys1: 2  3  4  7  8 6  5  1 (双调序列)
+ *          tmp_keys2: 16 13 11 10 9 12 14 15 (双调序列)`
+ *
+ * */
 inline void compare_and_exchange_2v(__m512i& keys1, __m512i& keys2, 
                                       __m512i& values1, __m512i& values2)
 {
   __m512i idx = _mm512_set_epi64(0, 1, 2, 3, 4, 5, 6, 7);
   __m512i perm_keys = _mm512_permutexvar_epi64(idx, keys2);
-  // perm_keys: 16 13 11 10 9 6 5 1 
-     // keys2为: 2 3  4  7  8  12 14 15
-  // 此时perm_keys与keys2组成一个双调序列
   __m512i tmp_keys1 = _mm512_min_epu64(keys1, perm_keys);
   __m512i tmp_keys2 = _mm512_max_epu64(keys1, perm_keys);
-  // tmp_keys1: 2  3  4  7  8 6  5  1 (双调序列)
-  // tmp_keys2: 16 13 11 10 9 12 14 15 (双调序列)
   __m512i perm_values = _mm512_permutexvar_epi64(idx, values2);
 
   values2 = _mm512_mask_mov_epi64(values1, 
@@ -68,17 +136,18 @@ inline void compare_and_exchange_2v(__m512i& keys1, __m512i& keys2,
   keys2 = tmp_keys2;
 }
 
-// 将两个向量对应元素位置比较
-// keys1为: 1  5  6  9 10 11 13 16
-// keys2为: 15 14 12 8 7  4  3  2 
+/*
+ * compare_and_exchange_2v_without_perm:
+ *  Compare the values of the corresponding elements of `keys1` and `keys2` to 
+ *  get `tmp_keys1` and `tmp_keys2`.
+ *
+ * */
 inline void compare_and_exchange_2v_without_perm(__m512i& keys1, __m512i& keys2, 
                                                    __m512i& values1,
                                                    __m512i& values2)
 {
   __m512i tmp_keys1 = _mm512_min_epu64(keys2, keys1);
   __m512i tmp_keys2 = _mm512_max_epu64(keys2, keys1);
-  // tmp_keys1: 1  5  6  8 7  4  3  2 (双调序列)
-  // tmp_keys2: 15 14 12 9 10 11 13 16 (双调序列)
   __m512i copy_values1 = values1;
   values1 = _mm512_mask_mov_epi64(values2, 
                                     _mm512_cmp_epu64_mask(tmp_keys1, keys1,
@@ -92,8 +161,13 @@ inline void compare_and_exchange_2v_without_perm(__m512i& keys1, __m512i& keys2,
   keys2 = tmp_keys2;
 }
 
-//  将双调序列的向量进行双调排序
-//  如果keys是一个双调序列里面元素为 1 5 6 9 10 4 3 2
+/*
+ * sort_bitonic_sequence: sorting of a bitonal sequence in keys.
+ *
+ * example:
+ * keys: 1 5 6 9 10 4 3 2
+ *
+ * */
 inline void sort_bitonic_sequence(__m512i& keys, __m512i& values)
 {
   // keys: 1  5 6 9 10 4 3 2
@@ -117,14 +191,19 @@ inline void sort_bitonic_sequence(__m512i& keys, __m512i& values)
   // keys: 1 2 3 4 5 6 9 10 
 }
 
-// 将由两个向量组成的双调序列进行双调排序
-// 如果keys1为 1 5 6 9 10 11 13 16, keys2为 15 14 12 8 7 4 3 2 
+/*
+ * sort_bitonic_sequence: sorting of a bitonal sequence in keys1 and keys2
+ *
+ * example:
+ *  keys1: 1 5 6 9 10 11 13 16
+ *  keys2: 15 14 12 8 7 4 3 2 
+ * */
 inline void sort_bitonic_sequence_2v(__m512i& keys1, __m512i& keys2,
                                        __m512i& values1, __m512i& values2)
 {
   compare_and_exchange_2v_without_perm(keys1, keys2, values1, values2);
-  // keys1: 1  5  6  8 7  4  3  2 (双调序列)
-  // keys2: 15 14 12 9 10 11 13 16 (双调序列)
+  // keys1: 1  5  6  8 7  4  3   2 (bitonic sequence)
+  // keys2: 15 14 12 9 10 11 13 16 (bitonic sequence)
   sort_bitonic_sequence(keys1, values1);
   sort_bitonic_sequence(keys2, values2);
 }
@@ -170,7 +249,6 @@ inline void sort_bitonic_sequence_6v(__m512i& keys1, __m512i& keys2,
 {
   compare_and_exchange_2v_without_perm(keys1, keys5, values1, values5);
   compare_and_exchange_2v_without_perm(keys2, keys6, values2, values6);
-
   sort_bitonic_sequence_4v(keys1, keys2, keys3, keys4, 
                              values1, values2, values3, values4);
   sort_bitonic_sequence_2v(keys5, keys6, values5, values6);
@@ -187,7 +265,6 @@ inline void sort_bitonic_sequence_7v(__m512i& keys1, __m512i& keys2,
   compare_and_exchange_2v_without_perm(keys1, keys5, values1, values5);
   compare_and_exchange_2v_without_perm(keys2, keys6, values2, values6);
   compare_and_exchange_2v_without_perm(keys3, keys7, values3, values7);
-
   sort_bitonic_sequence_4v(keys1, keys2, keys3, keys4, 
                              values1, values2, values3, values4);
   sort_bitonic_sequence_3v(keys5, keys6, keys7, values5, values6, values7);
@@ -212,23 +289,27 @@ inline void sort_bitonic_sequence_8v(__m512i& keys1, __m512i& keys2,
                              values5, values6, values7, values8);
 }
 
-
-// 将一个无序序列进行双调排序
+/* 
+ * bitonic_sort_1v: sort the elements in the vector keys using bitonal sorting.
+ *
+ * */
 inline void bitonic_sort_1v(__m512i& keys, __m512i& values)
 {
-  // step1: 形成一个双调序列
+  // step1: the process of forming a bitonal sequence
   __m512i idx = _mm512_set_epi64(6, 7, 4, 5, 2, 3, 0, 1);
   compare_and_exchange_1v(keys, values, idx, 0x66);
   idx = _mm512_set_epi64(5, 4, 7, 6, 1, 0, 3, 2);
   compare_and_exchange_1v(keys, values, idx, 0x3C);
   idx = _mm512_set_epi64(6, 7, 4, 5, 2, 3, 0, 1);
   compare_and_exchange_1v(keys, values, idx, 0x5A);
-  // step2: 对双调序列进行双调排序
+  // step2: invoke the bitonic sort on a bitonic sequence
   sort_bitonic_sequence(keys, values);
 }
 
-
-// 对两个向量组成对无序序列进行双调排序
+/* 
+ * bitonic_sort_2v: sort the elements in the vector keys1 and keys2 using bitonal sorting.
+ *
+ * */
 inline void bitonic_sort_2v(__m512i& keys1, __m512i& keys2,
                                  __m512i& values1, __m512i& values2)
 {
@@ -563,11 +644,15 @@ inline void bitonic_sort_16v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
                              values12, values13, values14, values15, values16);
 }
 
-// 一个512bit向量寄存器可以包含8个64bit的变量，
-// 然而在待排序数组的可能不是8的倍数，
-// 我们用uint64的最大值（ULLONG_MAX）填充向量寄存器凑够8的倍数。
-//
-// 这样在load最后一个向量时，用ULLONG_MAX填充
+/*
+ * load_last_vec:
+ *
+ *  A 512bit vector register can contain 8 64bit variables. If the number of 
+ *  sorted elements is less than 8, for example, we have 5 sorted elements: 
+ *  5 7 8 3 2. In order to fill a vector to sort, we need to add the maximum 
+ *  value of 3 uint64_t.
+ *
+ * */
 inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest)
 {
   __m512i last_vec = _mm512_or_si512(_mm512_maskz_loadu_epi64(0xFF>>rest, ptr),
@@ -577,34 +662,43 @@ inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest)
   return last_vec;
 }
 
-// 将最后一个向量回存到数组中。
-// 因为在加载时，我们用ULLONG_MAX填充了最后一个向量，
-// 在store时，将之前填充的部分忽略。
+/*
+ * store_last_vec:
+ *
+ * As said in `load_last_vec`, there are 8 elements in a vector, but only the 
+ * first 5 are valid, and the valid elements are stored back into the array.
+ *
+ * */
 inline void store_last_vec(uint64_t* ptr, __m512i& vec, int32_t rest)
 {
   _mm512_mask_compressstoreu_epi64(ptr, 0xFF>>rest, vec);
 }
 
-// 从数组中加载一个向量
+/*
+ * load_1v: load a vector from the array
+ *
+ * */
 inline void load_1v(uint64_t* ptr, __m512i& vec)
 {
   vec  = _mm512_loadu_si512(ptr);
 }
 
-// 将vec回存到数组中
+/*
+ * store_1v: store a vector to the array
+ *
+ * */
+inline void load_1v(uint64_t* ptr, __m512i& vec)
 inline void store_1v(uint64_t* ptr, __m512i& vec)
 {
   _mm512_storeu_si512(ptr, vec);
 }
 
-// 从数组中加载两个向量
 inline void load_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2)
 {
   vec1  = _mm512_loadu_si512(ptr);
   vec2  = _mm512_loadu_si512(ptr + 8);
 }
 
-// 将vec1, vec2回存到数组中
 inline void store_2v(uint64_t* ptr, __m512i& vec1, __m512i& vec2)
 {
   _mm512_storeu_si512(ptr, vec1);
@@ -844,18 +938,31 @@ inline void store_15v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
   _mm512_storeu_si512(ptr + 112, vec15);
 }
 
-// 双调排序，可用来排序长度小于128的数组
+/*
+ * bitonic_sort: vectorized bitonic, only numeric array with elements less 
+ * than 128 can be sorted.
+ * 1. load elements of array to vectors.
+ * 2. sort vectors using bitonic sort.
+ * 3. store ordered elements in vectors to array.
+ *
+ * Since the length of the numeric array may not be a multiple of 8, the last 
+ * vector sequence is processed separately.
+ *
+ * example:
+ * ptr_keys: 8 2 9 7 5 6 1 7 4 3 9
+ * len: 11
+ *
+ * load `8 2 9 7 5 6 1 7` to keys1.
+ * laod `4 3 9 M M M M M` to keys2.(M represents the max of uint64_t)
+ *
+ **/
 inline void bitonic_sort(uint64_t* __restrict__ ptr_keys, 
                            uint64_t* __restrict__ ptr_values, 
                            const int64_t len)
 {
-  // 一个向量寄存器可以存放8个64bit变量
   const int32_t vec_cap = 8;
-  // 向量个数
   const int32_t n = (len + 7) / vec_cap;
-  // 最后一个向量填完余数以后剩余的空间
   const int32_t rest = n * vec_cap - len;
-  // 最后一个向量的有效数值的个数（余数）
   const int last_vec_size = vec_cap - rest;
 
   __m512i keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8, keys9, keys10;
@@ -1101,7 +1208,6 @@ inline void bitonic_sort(uint64_t* __restrict__ ptr_keys,
     store_last_vec(ptr_values + 112, values15, rest);
     break;
   }
-  //case 16:
   default: {
     load_15v(ptr_keys, keys1, keys2, keys3, keys4, keys5, keys6, keys7, keys8, 
               keys9, keys10, keys11, keys12, keys13, keys14, keys15);
@@ -1127,7 +1233,10 @@ inline void bitonic_sort(uint64_t* __restrict__ ptr_keys,
   }
 }
 
-// 计算mask里面bit 1的个数
+/* 
+ * popcount : count the number of bit 1 in the mask
+ *
+ */
 inline int popcount(__mmask16 mask)
 {
 #ifdef __INTEL_COMPILER
@@ -1137,14 +1246,24 @@ inline int popcount(__mmask16 mask)
 #endif
 }
 
-// pivotvec 为 pivot (快排时，用来分区的值）填充的向量
-// 如果pivot为10，则pivotvec则为[10,10,10,10,10,10,10,10]
-//
-// 将向量keys和pitvotvec比较，
-// 如果flag为true, 将小于pivot的部分写入keys_ptr + left_w, 
-// 剩下的部分写入keys_ptr + right_w。
-// 如果flag为false, 将小于等于pivot的部分写入keys_ptr + left_w, 
-// 剩下的部分写入keys_ptr + right_w。
+/*
+ * compare_and_store :
+ * Compare the `keys` and `pitvotvec`. If flag is true, write the part smaller 
+ * than pivot into `keys_ptr+left_w`, and write the remaining part into 
+ * `keys_ptr+right_w`. If flag is false, the part less than or equal to pivot 
+ * is written into `keys_ptr+left_w`, and the remaining part is written into 
+ * `keys_ptr+right_w`.
+ * The `pivotvec` contains 8 same values, similar to pivot in quick sort.
+ *
+ * example:
+ * keys:     8  10 17 6  5  12 7  10
+ * pivotvec: 10 10 10 10 10 10 10 10
+ * flag:     true
+ *
+ * 8  6  5  7  store into keys_ptr+left_w
+ * 10 17 12 10 store into keys_ptr+right_w
+ * 
+ * */
 inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
                                 __m512i& pivotvec, __m512i& keys,
                                 __m512i& values, int64_t& left_w,
@@ -1166,8 +1285,21 @@ inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
   _mm512_mask_compressstoreu_epi64(values_ptr + right_w, ~mask, values);
 }
 
-// keys向量里面只有前remaining部分是有效的, 将有效部分的数值和pivotec对比。
-// 将小于等于pivot的部分写入keys_ptr + left_w, 剩下的部分写入keys_ptr + right_w。
+/*
+ * compare_and_store:
+ *  Like compare_and_store, but only the value of the previous remaining part 
+ *  of the `keys` is valid.
+ *
+ * example:
+ * keys:      8  10 17 6  5  12 7  10
+ * pivotvec:  10 10 10 10 10 10 10 10
+ * flag:      true
+ * remaining: 6
+ *
+ * 8  6  5  store into keys_ptr+left_w
+ * 10 17 12 store into keys_ptr+right_w
+ * 
+ * */
 inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
                                 __m512i& pivotvec, __m512i& keys,
                                 __m512i& values, int64_t& left_w,
@@ -1186,13 +1318,15 @@ inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
   _mm512_mask_compressstoreu_epi64(values_ptr + right_w, mask_high, values);
 }
 
-// 分区函数，跟pivot将数组分成两部分。
+/*
+ * do_partition: divide the data into two parts according to pivot.
+ *
+ * */
 static inline int64_t do_partition(uint64_t* keys, uint64_t* values, 
         int64_t left, int64_t right, const uint64_t pivot)
 {
   const int32_t vec_cap = 8;
   __m512i pivotvec = _mm512_set1_epi64(pivot);
-  // 保存最左的8个值到向量 tmp_left
   __m512i tmp_left = _mm512_loadu_si512(keys + left);
   __m512i tmp_left_val = _mm512_loadu_si512(values + left);
   int64_t left_w = left;
@@ -1200,7 +1334,6 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
 
   int64_t right_w = right + 1;
   right -= vec_cap - 1;
-  // 保存最右的8个值到向量 tmp_right
   __m512i tmp_right = _mm512_loadu_si512(keys + right);
   __m512i tmp_right_val = _mm512_loadu_si512(values + right);
   while(left + vec_cap <= right) {
@@ -1222,14 +1355,12 @@ static inline int64_t do_partition(uint64_t* keys, uint64_t* values,
                           right_w, false);
     }
   }
-  // 最后一部分不够8个数值，不能填充满一个向量，需要单独处理
   const int64_t remaining = right - left;
   __m512i tmp = _mm512_loadu_si512(keys + left);
   __m512i tmp_val = _mm512_loadu_si512(values + left);
   left = right;
   compare_and_store(keys, values, pivotvec, tmp, tmp_val, left_w, right_w,
                       remaining);
-  // 处理之前保存的tmp_left，和tmp_right
   compare_and_store(keys, values, pivotvec, tmp_left, tmp_left_val, left_w, 
                       right_w, true);
   compare_and_store(keys, values, pivotvec, tmp_right, tmp_right_val, left_w, 
@@ -1256,7 +1387,7 @@ inline int64_t get_pivot(const uint64_t* ptr, const int64_t left,
   return right;
 }
 
-inline int64_t partition(uint64_t* keys, uint64_t* values, const int64_t left,
+inline int64_t quick_sort(uint64_t* keys, uint64_t* values, const int64_t left,
                            const int64_t right)
 {
   const int64_t idx = get_pivot(keys, left, right);
@@ -1289,7 +1420,6 @@ inline void heapify(uint64_t* keys, uint64_t* values, int64_t idx, int64_t size)
   }
 }
 
-// 堆排序
 inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
 {
   for (int64_t i = size / 2 - 1; i >= 0; i--) {
@@ -1302,9 +1432,15 @@ inline void heap_sort(uint64_t* keys, uint64_t* values, int64_t size)
   }
 }
 
-// 首先将数组长度在小于128时调用双调排序。
-// 对于长度超过如128的，如果递归深度超过depth_limit，则该用堆排序，
-// 否则调用快排。
+/*
+ * The flow of the `do_sort function` is as follows:
+ *  1. use vector quick sort to sort the elements.
+ *  2. However, quick sort may have uneven partitions. When the recursion
+ *  reaches a certain depth, heap sort should be used.
+ *  3. In the process of quick sorting, the interval keeps shrinking. When the 
+ *  interval length is less than 128, the bitontic sorting realized by 
+ *  vectorization is needed.
+ *  */
 inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left, 
                const int64_t right, int64_t depth_limit)
 {
@@ -1316,7 +1452,7 @@ inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left,
       heap_sort(keys + left, values + left, right - left + 1);
     } else {
       depth_limit--;
-      const int64_t cut = partition(keys, values, left, right);
+      const int64_t cut = quick_sort(keys, values, left, right);
       if(cut + 1 < right) {
         do_sort(keys, values, cut + 1, right, depth_limit);
       }
@@ -1327,32 +1463,46 @@ inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left,
   }
 }
 
-// 由于向量化实现的排序算法只能对数值数组进行排序，
-// 所以我们采用key-value的方式，对T类型数据进行排序。
-//
-// key用来排序，value存放T的指针，在排序过程中每次交换keysd的值时，也交换values。
+/*
+ * Due to the sorting algorithm implemented by the vectorization method can 
+ * only sort numerical arrays.We use key-value to solve this problem. The key 
+ * value array is used for comparison and sorting. When the elements of the key 
+ * array are exchanged, the elements of value are also exchanged.
+ *
+ * */
 template <typename T>
 int sort_loop(uint64_t* keys, T** values, int64_t round, 
                 int64_t left, int64_t right)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = left; OB_SUCC(ret) && i < right; i++) {
-    // 通过T提供的get_sort_key来获取排序用的keys
+    // Use the get_sort_key method provided by T to get the key needed for sorting
     ret = values[i]->get_sort_key(&keys[i]);
   }
   if (OB_SUCC(ret)) {
-    // 对keys和values进行排序
+    // sort the keys array
     do_sort(keys, (uint64_t*)values, left, right - 1, lg(right - left) * 2);
   }
-  // 处理相同的值
-  // 
-  // 如果一个 struct T { uint64_t a, uint64_t b };
-  // 其compare(T& t1, T& t2) {return t1.a == t2.a ? t1.b < t2.b : t1.a < t2.a;}
-  // 由于向量实现的排序算法只能排序数值类型，我们先用T.a 作为key来排序，
-  // 在一轮排序以后，keys相同的值会被排序到一起，比如:
-  // 1 1 1 2 2 3 3 3 3 3 
-  //
-  // 对于T.a一样的T，我们需要以T.b为key进行下一轮排序。
+  /*
+   * Process the same key value
+   *
+   * example:
+   * If we use the sorting algorithm to sort the type T:
+   *    struct T {
+   *      uint64_t a,
+   *      uint64_t b
+   *      };
+   * T's comparison function: 
+   *    compare(T& t1, T& t2) {return t1.a == t2.a ? t1.b < t2.b : t1.a < t2.a;}
+   *
+   * Since the sorting algorithm implemented by vectorization can only sort 
+   * numeric types, we first use T.a as the key to sort according to the 
+   * comparison function. After a round of sorting with T.a, the same value 
+   * of T.a will be sorted together, E.g: 
+   *    1 1 1 2 2 3 3 3 3 3
+   * For the same T as T.a, we need to use T.b as the key for the next round of sorting.
+   *
+   * */
   int64_t idx = left;
   while (OB_SUCC(ret)) {
     while (idx < right - 1 && keys[idx] != keys[idx + 1]) {
