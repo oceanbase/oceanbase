@@ -263,6 +263,8 @@ public:
       common::ObSArray<obrpc::ObCreateIndexArg>& index_arg_list, obrpc::ObCreateForeignKeyArg& arg, bool& is_match);
   static int check_match_columns(
       const common::ObIArray<ObString>& parent_columns, const common::ObIArray<ObString>& key_columns, bool& is_match);
+  static int check_match_columns_in_order(
+      const common::ObIArray<ObString>& parent_columns, const common::ObIArray<ObString>& key_columns, bool& is_match);
   static int check_match_columns_strict(
       const ObIArray<ObString>& columns_array_1, const ObIArray<ObString>& columns_array_2, bool& is_match);
   static int check_match_columns_strict_with_order(const share::schema::ObTableSchema* index_table_schema,

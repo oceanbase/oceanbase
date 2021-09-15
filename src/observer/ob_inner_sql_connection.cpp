@@ -16,6 +16,7 @@
 #include "share/ob_worker.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/profile/ob_trace_id.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "common/ob_timeout_ctx.h"
 #include "common/ob_smart_call.h"
 #include "share/ob_debug_sync.h"
@@ -37,6 +38,7 @@
 #include "ob_inner_sql_result.h"
 #include "storage/transaction/ob_trans_define.h"  // ObTransIsolation
 #include "sql/resolver/ob_schema_checker.h"
+
 
 namespace oceanbase {
 using namespace common;
@@ -808,20 +810,21 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor& executor, ObInnerSQLResu
         }
 
         int ret_code = OB_SUCCESS;
-        if (OB_FAIL(ret)) {
-          // do nothing
-        } else if (OB_FAIL(SMART_CALL(do_query(executor, res)))) {
-          ret_code = ret;
-          LOG_WARN("execute failed", K(ret), K(executor), K(retry_cnt));
-          int tmp_ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);
-          if (OB_SUCCESS != tmp_ret) {
-            LOG_WARN("failed to process retry", K(tmp_ret), K(ret), K(executor), K(retry_cnt));
-          }
-          ret = tmp_ret;
-          // moved here from ObInnerSQLConnection::do_query() -> ObInnerSQLResult::open().
-          int close_ret = res.force_close(need_retry);
-          if (OB_SUCCESS != close_ret) {
-            LOG_WARN("failed to close result", K(close_ret), K(ret));
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(SMART_CALL(do_query(executor, res))) ||
+              (res.result_set().is_user_sql() && retry_cnt < 3 && OB_FAIL(E(EventTable::EN_FORCE_QUERY_RETRY) ret))) {
+            ret_code = ret;
+            LOG_WARN("execute failed", K(ret), K(executor), K(retry_cnt));
+            int tmp_ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);
+            if (OB_SUCCESS != tmp_ret) {
+                LOG_WARN("failed to process retry", K(tmp_ret), K(ret), K(executor), K(retry_cnt));
+            }
+            ret = tmp_ret;
+            // moved here from ObInnerSQLConnection::do_query() -> ObInnerSQLResult::open().
+            int close_ret = res.force_close(need_retry);
+            if (OB_SUCCESS != close_ret) {
+              LOG_WARN("failed to close result", K(close_ret), K(ret));
+            }
           }
         }
         get_session().set_session_in_retry(need_retry, ret_code);

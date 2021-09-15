@@ -52,18 +52,24 @@ void ObCommonSqlProxy::operator=(const ObCommonSqlProxy& o)
 
 int ObCommonSqlProxy::read(ReadResult& result, const uint64_t tenant_id, const char* sql)
 {
+  int ret = read(result, tenant_id, sql, false);
+  return ret;
+}
+
+int ObCommonSqlProxy::read(ReadResult& result, const uint64_t tenant_id, const char* sql, bool is_user_sql)
+{
   int ret = OB_SUCCESS;
   ObISQLConnection* conn = NULL;
   if (OB_FAIL(acquire(conn))) {
     LOG_WARN("acquire connection failed", K(ret), K(conn));
-  } else if (OB_FAIL(read(conn, result, tenant_id, sql))) {
+  } else if (OB_FAIL(read(conn, result, tenant_id, sql, is_user_sql))) {
     LOG_WARN("read failed", K(ret));
   }
   close(conn, ret);
   return ret;
 }
 
-int ObCommonSqlProxy::read(ObISQLConnection* conn, ReadResult& result, const uint64_t tenant_id, const char* sql)
+int ObCommonSqlProxy::read(ObISQLConnection* conn, ReadResult& result, const uint64_t tenant_id, const char* sql, bool is_user_sql)
 {
   int ret = OB_SUCCESS;
   const int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
@@ -75,7 +81,7 @@ int ObCommonSqlProxy::read(ObISQLConnection* conn, ReadResult& result, const uin
     ret = OB_INACTIVE_SQL_CLIENT;
     LOG_WARN("in active sql client", K(ret), K(sql));
   } else {
-    if (OB_FAIL(conn->execute_read(tenant_id, sql, result))) {
+    if (OB_FAIL(conn->execute_read(tenant_id, sql, result, is_user_sql))) {
       LOG_WARN("query failed", K(ret), K(conn), K(start), K(sql));
     }
   }
@@ -265,7 +271,7 @@ int ObCommonSqlProxy::acquire(sqlclient::ObISQLConnection*& conn)
   return ret;
 }
 
-int ObCommonSqlProxy::read(ReadResult& result, const int64_t cluster_id, const uint64_t tenant_id, const char* sql)
+int ObCommonSqlProxy::read(ReadResult& result, const int64_t cluster_id, const uint64_t tenant_id, const char* sql, bool is_user_sql)
 {
   int ret = OB_SUCCESS;
   const int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
@@ -286,12 +292,18 @@ int ObCommonSqlProxy::read(ReadResult& result, const int64_t cluster_id, const u
     ret = OB_INACTIVE_SQL_CLIENT;
     LOG_WARN("in active sql client", K(ret), K(sql));
   } else {
-    if (OB_FAIL(conn->execute_read(tenant_id, sql, result))) {
+    if (OB_FAIL(conn->execute_read(tenant_id, sql, result, is_user_sql))) {
       LOG_WARN("query failed", K(ret), K(conn), K(start), K(sql));
     }
   }
   close(conn, ret);
   LOG_TRACE("execute sql", K(sql), K(ret));
+  return ret;
+}
+
+int ObCommonSqlProxy::read(ReadResult& result, const int64_t cluster_id, const uint64_t tenant_id, const char* sql)
+{
+  int ret = read(result, cluster_id, tenant_id, sql, false);
   return ret;
 }
 

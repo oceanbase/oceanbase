@@ -1,0 +1,36 @@
+connect  conn_sys,$OBMYSQL_MS0,root@sys,,test,$OBMYSQL_PORT;
+connection default;
+#-----------------------------------------------------------------------
+# Test case to verify retry to add fk in normal situation
+#-----------------------------------------------------------------------
+connection conn_sys;
+alter system set_tp tp_no = 244, error_code = 4242, frequency = 1;
+connection default;
+create table t1(id int primary key, col int);
+create table t2(id int primary key, col int);
+alter table t2 add constraint id_fk foreign key(col) references t1(id);
+alter table t2 drop foreign key id_fk;
+drop table t2;
+connection conn_sys;
+alter system set_tp tp_no = 244, error_code = 4012, frequency = 1;
+connection default;
+create table t2(id int primary key, col int);
+alter table t2 add constraint id_fk foreign key(col) references t1(id);
+alter table t2 drop foreign key id_fk;
+drop table t2;
+connection conn_sys;
+alter system set_tp tp_no = 244, error_code = 4550, frequency = 1;
+connection default;
+create table t2(id int primary key, col int);
+alter table t2 add constraint id_fk foreign key(col) references t1(id);
+alter table t2 drop foreign key id_fk;
+drop table t2;
+#-----------------------------------------------------------------------
+# Test case to verify retry to add fk in abnormal situation
+#-----------------------------------------------------------------------
+connection conn_sys;
+alter system set_tp tp_no = 244, error_code = 5151, frequency = 1;
+connection default;
+create table t2(id int primary key, col int);
+alter table t2 add constraint id_fk foreign key(col) references t1(id);
+ERROR 42P01: tablegroup not exist

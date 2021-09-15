@@ -701,7 +701,7 @@ OB_INLINE int ObMPQuery::do_process(
     // some statistics must be recorded for plan stat
     // even though sql audit disabled
     update_audit_info(total_wait_desc, audit_record);
-    // Tetry:
+    // Retry:
     // 1. rs.open fail
     // 2. no data send to client
     // 3. need_retry(result, ret): schema or location cache expired
