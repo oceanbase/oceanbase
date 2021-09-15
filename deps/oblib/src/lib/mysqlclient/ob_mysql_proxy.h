@@ -43,7 +43,9 @@ public:
   virtual int escape(
       const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size) override;
   // execute query and return data result
+  int read(ReadResult& res, const uint64_t tenant_id, const char* sql, bool is_user_sql);
   virtual int read(ReadResult& res, const uint64_t tenant_id, const char* sql) override;
+  int read(ReadResult& res, const int64_t cluster_id, const uint64_t tenant_id, const char* sql, bool is_user_sql);
   virtual int read(ReadResult& res, const int64_t cluster_id, const uint64_t tenant_id, const char* sql) override;
   using ObISQLClient::read;
   // execute update sql
@@ -73,7 +75,7 @@ public:
 
 protected:
   int acquire(sqlclient::ObISQLConnection*& conn);
-  int read(sqlclient::ObISQLConnection* conn, ReadResult& result, const uint64_t tenant_id, const char* sql);
+  int read(sqlclient::ObISQLConnection* conn, ReadResult& result, const uint64_t tenant_id, const char* sql, bool is_user_sql = false);
 
   sqlclient::ObISQLConnectionPool* pool_;
 

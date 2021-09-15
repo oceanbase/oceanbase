@@ -1709,7 +1709,7 @@ int ObAlterTableExecutor::check_data_validity_for_fk_by_inner_sql(
     }
     // check data valid
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql_proxy->read(res, alter_table_schema.get_tenant_id(), sql_string.ptr()))) {
+    } else if (OB_FAIL(sql_proxy->read(res, alter_table_schema.get_tenant_id(), sql_string.ptr(), true))) {
       LOG_WARN("execute sql failed", K(ret), K(sql_string.ptr()));
     } else if (OB_ISNULL(result = res.get_result())) {
       ret = OB_ERR_UNEXPECTED;

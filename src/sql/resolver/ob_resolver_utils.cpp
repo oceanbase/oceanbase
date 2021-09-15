@@ -4294,7 +4294,9 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema& 
     }  // do nothing
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(check_match_columns(parent_columns, pk_columns, is_match))) {
+    if (lib::is_mysql_mode() && OB_FAIL(check_match_columns_in_order(parent_columns, pk_columns, is_match))) {
+      LOG_WARN("Failed to check_match_columns_in_order", K(ret));
+    } else if (lib::is_oracle_mode() && OB_FAIL(check_match_columns(parent_columns, pk_columns, is_match))) {
       LOG_WARN("Failed to check_match_columns", K(ret));
     } else if (is_match) {
       arg.ref_cst_type_ = CONSTRAINT_TYPE_PRIMARY_KEY;
@@ -4321,7 +4323,9 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema& 
               LOG_WARN("push back index column failed", K(ret), K(sort_item.column_name_));
             }
           }
-          if (OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
+          if (lib::is_mysql_mode() && OB_FAIL(check_match_columns_in_order(parent_columns, uk_columns, is_match))) {
+            LOG_WARN("Failed to check_match_columns_in_order", K(ret));
+          } else if (lib::is_oracle_mode() && OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
             LOG_WARN("Failed to check_match_columns", K(ret));
           } else if (is_match) {
             arg.ref_cst_type_ = CONSTRAINT_TYPE_UNIQUE_KEY;
@@ -4357,7 +4361,9 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema& 
             }  // do nothing
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
+            if (lib::is_mysql_mode() && OB_FAIL(check_match_columns_in_order(parent_columns, uk_columns, is_match))) {
+              LOG_WARN("Failed to check_match_columns_in_order", K(ret));
+            } else if (lib::is_oracle_mode() && OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
               LOG_WARN("Failed to check_match_columns", K(ret));
             } else if (is_match) {
               arg.ref_cst_type_ = CONSTRAINT_TYPE_UNIQUE_KEY;
@@ -4429,6 +4435,7 @@ bool ObResolverUtils::is_match_columns_with_order(const common::ObIArray<uint64_
   return dup_foreign_keys_exist;
 }
 
+
 int ObResolverUtils::check_match_columns(
     const ObIArray<ObString>& parent_columns, const ObIArray<ObString>& key_columns, bool& is_match)
 {
@@ -4459,6 +4466,27 @@ int ObResolverUtils::check_match_columns(
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_match_columns_in_order(
+    const ObIArray<ObString>& parent_columns, const ObIArray<ObString>& key_columns, bool& is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+
+  if (parent_columns.count() > 0 && parent_columns.count() <= key_columns.count()) {
+    bool is_tmp_match = true;
+    for (int64_t i = 0; is_tmp_match && i < parent_columns.count(); ++i) {
+      if (0 != parent_columns.at(i).case_compare(key_columns.at(i))) {
+        is_tmp_match = false;
+      } 
+    }
+    if (is_tmp_match) {
+      is_match = true;
+    }
+    
   }
   return ret;
 }
