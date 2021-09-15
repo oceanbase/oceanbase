@@ -7397,7 +7397,8 @@ int ObPartTransCtx::handle_2pc_prepare_request_raw_(int status)
           // The coordinator will retry on failure
           ret = OB_SUCCESS;
         } else if (OB_SUCCESS != get_status_() || OB_SUCCESS != status) {
-          if (OB_FAIL(alloc_local_trans_version_(OB_LOG_TRANS_REDO_WITH_PREPARE))) {
+          TRANS_LOG(WARN, "2pc prepare status not ok, write prepare-no", K(status), K(status_), K(*this));
+          if (OB_FAIL(alloc_local_trans_version_(OB_LOG_TRANS_PREPARE))) {
             if (OB_EAGAIN != ret) {
               TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this);
             } else {
