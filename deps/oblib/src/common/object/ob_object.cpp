@@ -520,19 +520,19 @@ int ObObj::build_not_strict_default_value()
 
 /* 
  * make sort key:
- * Convert ob_object data into a byte array that can be compared by byte
+ * Convert ob_object data into a byte array that can be to compare ob_object.
  * (called memcomparable format).
  * For more information, please refer to the Memcomparable format of MyRocks.
  *
  * However, unlike MyRocks, our make sort key only converts part of it at a 
- * time(`offset` to `offset+size`).
+ * time(from `offset` to `offset+size`).
  * 
  * example:
- * ob_object data -> (char* array)[ null-flag | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | ...]
+ * ob_object's data(v_) -> (char* array)[ null-flag | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | ...]
  *
  * to : buffer to store the converted byte array
  * offset: represents the offset of this byte array
- * size: size represents the length of the buffer(t0)
+ * size: represents the length of the buffer(to)
  * extra_param: help convert multi-byte encoded data to mencomparable format
  *
  */
@@ -763,12 +763,12 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
     }
     /* 
      * For variable-sized data types it depends on whether the data is 
-     * considered binary data (varbinary or varchar with a binary collation) or not. 
-     * For binary data we break the data in groups of 8 bytes to which we append 
-     * an extra byte that signals the number of significant bytes in the previous 
-     * section. The extra byte can range from 1 to 9. Values of 1 to 8 indicate 
-     * that many bytes were significant and this group is the last group - a value 
-     * of 9 indicates that all 8 bytes were significant and there is more data to come.
+     * considered binary data or not. For binary data we break the data in 
+     * groups of 8 bytes to which we append an extra byte that signals the 
+     * number of significant bytes in the previous section. The extra byte can 
+     * range from 1 to 9. Values of 1 to 8 indicate that many bytes were 
+     * significant and this group is the last group - a value of 9 indicates 
+     * that all 8 bytes were significant and there is more data to come.
      *
      * example: 
      *    raw data: v_.string_ = "hello world!"
@@ -818,7 +818,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
          * Here we have three types of data:
          *   1. raw data
          *   2. a byte array obtained by looking up the table(the following is called the sortkey).
-         *   3. Encode the byte arary into memcomparable format.
+         *   3. encode the byte arary into memcomparable format.
          *
          * */
 
@@ -877,7 +877,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
                     is_valid_collation, 
                     16);
             if (is_valid_collation) {
-              // Conversion is successful, encode sortkey into memcomparable format.
+              // conversion is successful, encode sortkey into memcomparable format.
               sortkey_offset += sortkey_len;
               str_offset += str_len;
               int32_t ids = 0;
@@ -946,15 +946,17 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
     case ObNumberType: 
     case ObUNumberType: {
     /* 
-     * For ObNumberType, we first compare its sign bit and exponent bit (total 
-     * of one byte). If the sign bit and exponent bit are not equal, the size 
+     * For ObNumberType, we first compare its sign bit(1 bit) and exponent bit (7 bits) 
+     * (total of one byte). If the sign bit and exponent bit are not equal, the result 
      * can be directly distinguished. If the sign is equal to the exponent bit, 
-     * you need to compare the values in the uint32 array one by one.
+     * we need to compare the values in the uint32 array one by one.
      *
      * At the same time ObNumber is also variable-sized data. So memcomparable 
      * format as following:
      * (char* array)[ null-flag | sign+exp ｜ uint32[0][3] | uint32[0][2] | uint32[0][1] | 
      * uint32[0][0] | uint32[1][3] | uint32[1][2] | 9 | uint32[1][1] | ...]
+     *
+     * (uint32[i][j] represents the jth  byte of the ith element in the array.)
      *
      * */
       int32_t len = nmb_desc_.len_;

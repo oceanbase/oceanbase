@@ -18,11 +18,11 @@ namespace oceanbase {
 namespace storage {
 /* 
  * This cpp file implements quick sorting and bitonic sort through 
- * vectorization. The sorting algorithm implemented by the vectorization
+ * vectorization. However, the sorting algorithm implemented by the vectorization
  * method can only sort numerical arrays.We use key-value to solve this 
- * problem. The key value array is used for comparison and sorting. When the 
- * elements of the key array are exchanged, the elements of value are also 
- * exchanged.
+ * problem. The key array is used for comparison and sorting, the value array 
+ * holds pointers to sorted elements. When the elements of the key array are
+ * exchanged, the elements of value are also exchanged.
  *
  * Main sort function as follows:
  *  1. bitonic_sort: vectorized bitonic, only numeric array with elements less 
@@ -61,14 +61,14 @@ namespace storage {
  *  14. bitonic_sort_14v : sort the elements in 14 vector.
  *  15. bitonic_sort_15v : sort the elements in 15 vector.
  *  16. bitonic_sort_16v : sort the elements in 16 vector.
- *  17. bitonic_sort: vectorized bitonic, only numeric array with elements less 
- * than 128 can be sorted.
+ *  17. bitonic_sort: sort the elements in array by vectorized bitonic, but 
+ *  only numeric array with elements less than 128 can be used.
  *
  * */
 
 /* 
  * compare_and_exchange_1v : 
- * 1. Exchange `keys` according to the index `idx` to get `perm_keys`.
+ * 1. Exchange elements in `keys` according to the index `idx` to get `perm_keys`.
  * 2. Compare the values of the corresponding elements of `keys` and 
  * `perm_keys` to get `min_keys` and `max_keys`.
  * 3. Get the required value from `min_keys` and `max_keys` according to the mask `m`. 
@@ -78,9 +78,9 @@ namespace storage {
  * idx:  3 2 1 0 7 6 5 4
  * m: 0xF0
  *
- * 1. get `perm_keys: 10 4 3 2 1 5 6 9`
- * 2. get `min_keys: 1  4 3 2 1  4 3 2 
- *         max_keys: 10 5 6 9 10 5 6 9`
+ * 1. get `perm_keys: 10 4 3 2 1  5 6 9`
+ * 2. get `min_keys:  1  4 3 2 1  4 3 2 
+ *         max_keys:  10 5 6 9 10 5 6 9`
  * 3. use mask `m 0xF0` to get `tmp_keys: 1 4 3 2 10 5 6 9` 
  *
  * */
@@ -110,9 +110,9 @@ inline void compare_and_exchange_1v(__m512i& keys, __m512i& values,
  * keys1: 1 5 6 9 10 11 13 16
  * keys2: 2 3 4 7 8  12 14 15
  *
- *  1. get `perm_keys: 16 13 11 10 9 6 5 1` (now keys1 and perm_keys form a bitonic sequence)
- *  2. get `tmp_keys1: 2  3  4  7  8 6  5  1 (双调序列)
- *          tmp_keys2: 16 13 11 10 9 12 14 15 (双调序列)`
+ *  1. get `perm_keys: 16 13 11 10 9 6  5  1` (now keys1 and perm_keys form a bitonic sequence)
+ *  2. get `tmp_keys1: 2  3  4  7  8 6  5  1 (bitonic sequence)
+ *          tmp_keys2: 16 13 11 10 9 12 14 15 (bitonic sequence)`
  *
  * */
 inline void compare_and_exchange_2v(__m512i& keys1, __m512i& keys2, 
@@ -165,7 +165,7 @@ inline void compare_and_exchange_2v_without_perm(__m512i& keys1, __m512i& keys2,
  * sort_bitonic_sequence: sorting of a bitonal sequence in keys.
  *
  * example:
- * keys: 1 5 6 9 10 4 3 2
+ * keys: 1 5 6 9 10 4 3 2 (bitonic sequence)
  *
  * */
 inline void sort_bitonic_sequence(__m512i& keys, __m512i& values)
@@ -197,6 +197,8 @@ inline void sort_bitonic_sequence(__m512i& keys, __m512i& values)
  * example:
  *  keys1: 1 5 6 9 10 11 13 16
  *  keys2: 15 14 12 8 7 4 3 2 
+ *  (keys1 and keys2 form a bitonic sequence)
+ *
  * */
 inline void sort_bitonic_sequence_2v(__m512i& keys1, __m512i& keys2,
                                        __m512i& values1, __m512i& values2)
@@ -649,8 +651,8 @@ inline void bitonic_sort_16v(__m512i& keys1, __m512i& keys2, __m512i& keys3,
  *
  *  A 512bit vector register can contain 8 64bit variables. If the number of 
  *  sorted elements is less than 8, for example, we have 5 sorted elements: 
- *  5 7 8 3 2. In order to fill a vector to sort, we need to add the maximum 
- *  value of 3 uint64_t.
+ *  5 7 8 3 2. In order to fill a vector to sort, we need to add 3 the maximum 
+ *  value of uint64_t.
  *
  * */
 inline __m512i load_last_vec(uint64_t* ptr, int32_t last_vec_size, int32_t rest)
@@ -939,8 +941,8 @@ inline void store_15v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
 }
 
 /*
- * bitonic_sort: vectorized bitonic, only numeric array with elements less 
- * than 128 can be sorted.
+ * bitonic_sort: sort the elements in array by vectorized bitonic, but only 
+ * numeric array with elements less than 128 can be sorted.
  * 1. load elements of array to vectors.
  * 2. sort vectors using bitonic sort.
  * 3. store ordered elements in vectors to array.
@@ -952,8 +954,11 @@ inline void store_15v(uint64_t* ptr, __m512i& vec1, __m512i& vec2,
  * ptr_keys: 8 2 9 7 5 6 1 7 4 3 9
  * len: 11
  *
- * load `8 2 9 7 5 6 1 7` to keys1.
- * laod `4 3 9 M M M M M` to keys2.(M represents the max of uint64_t)
+ * 1. load `8 2 9 7 5 6 1 7` to keys1.
+ *    laod `4 3 9 M M M M M` to keys2.
+ *    (M represents the max of uint64_t)
+ * 2. sort keys1 ane keys2 using sort_bitonic_sequence_2v
+ * 3. store elements in `keys1` and `keys2` to `ptr_keys`
  *
  **/
 inline void bitonic_sort(uint64_t* __restrict__ ptr_keys, 
@@ -1287,7 +1292,7 @@ inline void compare_and_store(uint64_t* keys_ptr, uint64_t* values_ptr,
 
 /*
  * compare_and_store:
- *  Like compare_and_store, but only the value of the previous remaining part 
+ *  Like compare_and_store, but only the value of the previous `remaining` part 
  *  of the `keys` is valid.
  *
  * example:
@@ -1466,8 +1471,9 @@ inline void do_sort(uint64_t* keys, uint64_t* values, const int64_t left,
 /*
  * Due to the sorting algorithm implemented by the vectorization method can 
  * only sort numerical arrays.We use key-value to solve this problem. The key 
- * value array is used for comparison and sorting. When the elements of the key 
- * array are exchanged, the elements of value are also exchanged.
+ * value array is used for comparison and sorting, the value array holds pointers 
+ * to sorted elements. When the elements of the key exchanged, the elements 
+ * of value are also exchanged.
  *
  * */
 template <typename T>
@@ -1500,6 +1506,7 @@ int sort_loop(uint64_t* keys, T** values, int64_t round,
    * comparison function. After a round of sorting with T.a, the same value 
    * of T.a will be sorted together, E.g: 
    *    1 1 1 2 2 3 3 3 3 3
+   *
    * For the same T as T.a, we need to use T.b as the key for the next round of sorting.
    *
    * */
