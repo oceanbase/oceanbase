@@ -1564,7 +1564,6 @@ int ObMemorySortRound<T, Compare>::build_fragment()
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObMemorySortRound has not been inited", K(ret));
   } else if (item_list_.size() > 0) {
-    int64_t start = common::ObTimeUtility::current_time();
     if (use_memcmp_) {
 #ifdef ENABLE_AVX512F
       uint64_t* keys = NULL;
@@ -1608,10 +1607,9 @@ int ObMemorySortRound<T, Compare>::build_fragment()
         STORAGE_LOG(WARN, "fail to sort item list", K(ret));
       }
     } 
-    const int64_t sort_fragment_time = common::ObTimeUtility::current_time() - start;
-    STORAGE_LOG(INFO, "ObMemorySortRound", K(sort_fragment_time), K(item_list_.size()));
+    STORAGE_LOG(INFO, "ObMemorySortRound", K(item_list_.size()));
 
-    start = common::ObTimeUtility::current_time();
+    int64_t start = common::ObTimeUtility::current_time();
     for (int64_t i = 0; OB_SUCC(ret) && i < item_list_.size(); ++i) {
       if (OB_FAIL(next_round_->add_item(*item_list_.at(i)))) {
         STORAGE_LOG(WARN, "fail to add item", K(ret));

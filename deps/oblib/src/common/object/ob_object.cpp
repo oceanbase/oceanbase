@@ -828,19 +828,14 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
         }
         if (copied < size) {
           if (str_offset < val_len) {
+            int32_t need = size - copied;
             int32_t t1 = (offset - 1) % 9;
-            int32_t t2 = ((offset - 1) + size - copied) % 9;
+            int32_t t2 = ((offset - 1) + need) % 9;
             // 用offset（memcmp数组的偏移）和 需要的数据的长度计算出：
             // sortkey_start, sortkey_end
             // 表示需要sortkey数组的sortkey_start到sortkey_end这段数据
-            int32_t sortkey_start = (offset - 1) / 9 * 8 + (t1 ? t1 : 1);
-            int32_t sortkey_end = ((offset - 1) + size - copied) / 9 * 8 + (t2 ? t2 : 1);
-            if (offset - 1 == 0) {
-                sortkey_start = 0;
-            }
-            if ((offset - 1) + size - copied == 0) {
-                sortkey_end = 0;
-            }
+            int32_t sortkey_start = (offset - 1) / 9 * 8 + t1;
+            int32_t sortkey_end = ((offset - 1) + need) / 9 * 8 + t2;
             // 需要的sortkey数组的长度
             int64_t sortkey_len = sortkey_end - sortkey_start;
             // 原始数据还剩下的数据的长度（原始数据未读数据的长度）
@@ -864,12 +859,14 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
               str_offset += str_len;
               int32_t ids = 0;
               int32_t ids1 = 0;
-              while (ids < sortkey_len && copied < size) {
+              while (copied < size) {
                 if (offset % 9 == 0) {
                   to[copied] = 9;
-                } else {
+                } else if (ids < sortkey_len) {
                   to[copied] = buf[ids];
                   ids++;
+                } else {
+                  break;
                 }
                 offset++;
                 copied++;
