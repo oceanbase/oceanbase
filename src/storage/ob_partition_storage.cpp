@@ -5669,6 +5669,7 @@ int ObPartitionStorage::local_sort_index_by_range(
     ObTableAccessContext access_ctx;
     ObBlockCacheWorkingSet block_cache_ws;
     ObStoreCtx ctx;
+    ObStoreRow result_row;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(access_param.out_col_desc_param_.init())) {
         LOG_WARN("init out cols fail", K(ret));
@@ -5682,6 +5683,17 @@ int ObPartitionStorage::local_sort_index_by_range(
         access_param.iter_param_.out_cols_ = &access_param.out_col_desc_param_.get_col_descs();
         access_param.out_cols_param_ = &col_params;
         access_param.reserve_cell_cnt_ = output_projector.count();
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (NULL == (cells_buf = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * extended_col_ids.count())))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(ERROR, "failed to alloc cells buf", K(ret), K(extended_col_ids.count()));
+      } else {
+        result_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+        result_row.row_val_.cells_ = new ObObj[extended_col_ids.count()];
+        result_row.row_val_.count_ = extended_col_ids.count();
       }
     }
 
@@ -5782,18 +5794,30 @@ int ObPartitionStorage::local_sort_index_by_range(
           t2 = ObTimeUtility::current_time();
           get_next_row_time += t2 - t1;
           DEBUG_SYNC(BEFORE_BUILD_LOCAL_INDEX_REFRESH_TABLES_MID);
+          // fill default value if column is not generated column
+          for (int64_t k = 0; OB_SUCC(ret) && k < row->row_val_.count_; ++k) {
+            if (row->row_val_.cells_[k].is_nop_value()) {
+              if (k >= org_col_ids.count()) {
+                // do nothing
+              } else if (nullptr == dependent_exprs.at(k)) {
+                result_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];
+              }
+            } else {
+              result_row.row_val_.cells_[k] = row->row_val_.cells_[k];
+            }
+          }
           for (int64_t k = 0; OB_SUCC(ret) && k < org_col_ids.count(); ++k) {
             if (row->row_val_.cells_[k].is_nop_value()) {
               if (NULL != dependent_exprs.at(k)) {  // generated column
                 if (OB_FAIL(sql::ObSQLUtils::calc_sql_expression(dependent_exprs.at(k),
                         *table_schema,
                         org_extended_col_ids,
-                        row->row_val_,
+                        result_row.row_val_,
                         calc_buf,
                         expr_ctx,
                         tmp_row.row_val_.cells_[k]))) {
                   STORAGE_LOG(WARN, "failed to calc expr", K(row->row_val_), K(org_col_ids),
-                      K(dependent_exprs.at(k)), K(ret));
+                      K(dependent_exprs.at(k)), K(ret), K(result_row.row_val_));
                 } else if (OB_UNLIKELY(!tmp_row.row_val_.cells_[k].is_null()
                                        && !sql::ObSQLUtils::is_same_type_for_compare(
                                                 gen_col_schemas.at(k)->get_meta_type(),
