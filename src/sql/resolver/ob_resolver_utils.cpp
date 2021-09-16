@@ -4476,14 +4476,15 @@ int ObResolverUtils::check_match_columns_in_order(
   int ret = OB_SUCCESS;
   is_match = true;
 
-  if (parent_columns.count() > 0 && parent_columns.count() <= key_columns.count()) {
+  if (parent_columns.count() <= 0 || parent_columns.count() > key_columns.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parent_columns.count() is illegal", K(parent_columns.count()), K(key_columns.count()));
+  } else {
     for (int64_t i = 0; is_match && i < parent_columns.count(); ++i) {
       if (0 != parent_columns.at(i).case_compare(key_columns.at(i))) {
         is_match = false;
       } 
     }
-  } else {
-    is_match = false;
   }
   return ret;
 }
