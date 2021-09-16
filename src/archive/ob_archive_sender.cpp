@@ -458,6 +458,15 @@ int ObArchiveSender::do_statisfy_converge_strategy_(const ObPGKey& pg_key, const
     } else if (ObTimeUtility::current_time() - checkpoint_ts >= max_delay_time) {
       can_send = true;
       ARCHIVE_LOG(TRACE, "can send due to pg checkpoint ts delay reach limit", K(pg_key));
+    } else if (log_id == 0) {
+      // For new pg created after archive starts, its checkpoint ts is faked while max archived log id is zero.
+      // Other modules depend on archive will be waited util max archived log id is bigger than zero,
+      // so this task should be archived immediately.
+      can_send = true;
+      ARCHIVE_LOG(TRACE, "can send due to max archived log id is zero", K(pg_key));
+    } else if (!is_first_record_finish) {
+      can_send = true;
+      ARCHIVE_LOG(TRACE, "can send due to kickoff log not finish", K(pg_key));
     }
   }
 
