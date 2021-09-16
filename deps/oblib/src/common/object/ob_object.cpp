@@ -530,10 +530,10 @@ int ObObj::build_not_strict_default_value()
  * example:
  * ob_object's data(v_) -> (char* array)[ null-flag | b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7 | b8 | ...]
  *
- * to : buffer to store the converted byte array
- * offset: represents the offset of this byte array
- * size: represents the length of the buffer(to)
- * extra_param: help convert multi-byte encoded data to mencomparable format
+ * to          : buffer to store the converted byte array
+ * offset      : represents the offset of this byte array
+ * size        : represents the length of the buffer(to)
+ * extra_param : help convert multi-byte encoded data to mencomparable format
  *
  */
 int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
@@ -771,8 +771,8 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
      * that all 8 bytes were significant and there is more data to come.
      *
      * example: 
-     *    raw data: v_.string_ = "hello world!"
-     *    memcomparable format: 
+     *    raw data(v_.string_) : "hello world!"
+     *    memcomparable format : 
      *(char* arrar) [ null-flag |'h' |'e'|'l'|'l'|'o'|' '|'w'|'o'| 9 |'r'|'l'|'d'|'!'| 0 | 0 | 0 | 0 | 4 ]
      *
      * */
@@ -817,8 +817,8 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
          * 
          * Here we have three types of data:
          *   1. raw data
-         *   2. a byte array obtained by looking up the table(the following is called the sortkey).
-         *   3. encode the byte arary into memcomparable format.
+         *   2. a byte array obtained by looking up the table(the following is called the sortkey)
+         *   3. encode the byte arary into memcomparable format
          *
          * */
 
@@ -841,7 +841,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
          * time buffer(to) only has one byte of space left.
          *
          * At this time, we need to save the remaining two bytes to 
-         * `extra_param->extra_buf` to facilitatethe next use.
+         * `extra_param->extra_buf` to facilitate the next use.
          *
          * If the data read last time is not used up, first fill the buffer(to)
          * with the remaining data from the last time.
@@ -900,7 +900,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
               * only has one byte of space left.
               *
               * At this time, we need to save the remaining two bytes to 
-              * `extra_param->extra_buf` to facilitatethe next use.
+              * `extra_param->extra_buf` to facilitate the next use.
               *
               * */
               extra_param->extra_buf_size = sortkey_len - ids;
@@ -910,7 +910,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
                 ids1++;
               }
             } else {
-              // Conversion failed, encode raw data into memcomparable format.
+              // conversion failed, encode raw data into memcomparable format.
               while (copied < size && str_offset < val_len) {
                 if (offset % 9 == 0) {
                   to[copied] = 9;
@@ -946,7 +946,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
     case ObNumberType: 
     case ObUNumberType: {
     /* 
-     * For ObNumberType, we first compare its sign bit(1 bit) and exponent bit (7 bits) 
+     * For ObNumberType, we first compare its sign bit(1 bit) and exponent bit(7 bits) 
      * (total of one byte). If the sign bit and exponent bit are not equal, the result 
      * can be directly distinguished. If the sign is equal to the exponent bit, 
      * we need to compare the values in the uint32 array one by one.
@@ -956,7 +956,7 @@ int ObObj::make_sort_key(char* to, int16_t& offset, int32_t& size,
      * (char* array)[ null-flag | sign+exp ｜ uint32[0][3] | uint32[0][2] | uint32[0][1] | 
      * uint32[0][0] | uint32[1][3] | uint32[1][2] | 9 | uint32[1][1] | ...]
      *
-     * (uint32[i][j] represents the jth  byte of the ith element in the array.)
+     * (uint32[i][j] represents the jth byte of the ith element in the array.)
      *
      * */
       int32_t len = nmb_desc_.len_;
