@@ -6736,7 +6736,7 @@ select_with_opt_hint opt_query_expression_option_list select_expr_list into_opt
   setup_token_pos_info(select_node, @1.first_column - 1, 6);
 }
 | select_with_opt_hint opt_query_expression_option_list select_expr_list into_opt
-FROM DUAL opt_where opt_named_windows
+FROM DUAL opt_where opt_groupby opt_having opt_named_windows
 {
   ParseNode *project_list = NULL;
   merge_nodes(project_list, result, T_PROJECT_LIST, $3);
@@ -6748,7 +6748,9 @@ FROM DUAL opt_where opt_named_windows
   select_node->children_[PARSE_SELECT_WHERE] = $7;
   select_node->children_[PARSE_SELECT_HINTS] = $1;
   select_node->children_[PARSE_SELECT_INTO] = $4;
-  select_node->children_[PARSE_SELECT_NAMED_WINDOWS] = $8;
+  select_node->children_[PARSE_SELECT_GROUP] = $8;
+  select_node->children_[PARSE_SELECT_HAVING] = $9;
+  select_node->children_[PARSE_SELECT_NAMED_WINDOWS] = $10;
   $$ = select_node;
 
   setup_token_pos_info(select_node, @1.first_column - 1, 6);
