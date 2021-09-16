@@ -493,10 +493,6 @@ int ObInsertLogPlan::generate_values_op_as_child(ObLogicalOperator*& top)
       /*do nothing*/
     } else if (OB_FAIL(values_op->add_values_expr(insert_stmt->get_value_vectors()))) {
       LOG_WARN("failed to add values expr", K(ret));
-    } else if (NULL != exec_ctx && NULL != exec_ctx->get_my_session() &&
-               exec_ctx->get_my_session()->use_static_typing_engine() &&
-               OB_FAIL(values_op->add_str_values_array(insert_stmt->get_column_conv_functions()))) {
-      LOG_WARN("fail to add_str_values_array", K(ret));
     } else { /*do nothing*/
     }
   }
