@@ -111,6 +111,7 @@
 %nonassoc LOWER_PARENS
 //%nonassoc STRING_VALUE
 %left   '(' ')'
+%nonassoc SQL_CACHE SQL_NO_CACHE /*for shift/reduce conflict between opt_query_expresion_option_list and SQL_CACHE*/
 %nonassoc HIGHER_PARENS TRANSACTION /*for simple_expr conflict*/
 %left   '.'
 %right  NOT NOT2
@@ -315,7 +316,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_resource_unit_option_list resource_unit_option
 %type <node> tenant_option zone_list resource_pool_list
 %type <node> opt_partition_option partition_option hash_partition_option key_partition_option opt_use_partition use_partition range_partition_option subpartition_option opt_range_partition_list opt_range_subpartition_list range_partition_list range_subpartition_list range_partition_element range_subpartition_element range_partition_expr range_expr_list range_expr opt_part_id sample_clause opt_block seed sample_percent opt_sample_scope modify_partition_info modify_tg_partition_info opt_partition_range_or_list column_partition_option opt_column_partition_option auto_partition_option auto_range_type partition_size auto_partition_type
-%type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list
+%type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
 %type <node> explain_stmt explainable_stmt format_name kill_stmt create_outline_stmt alter_outline_stmt drop_outline_stmt opt_outline_target
@@ -5598,11 +5599,20 @@ hash_subpartition_element
 }
 
 hash_subpartition_element:
-SUBPARTITION relation_factor
+SUBPARTITION relation_factor opt_engine_option
 {
+  UNUSED($3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_ELEMENT, 5, $2, NULL, NULL, NULL, NULL);
 }
 ;
+
+opt_engine_option:
+ENGINE_ COMP_EQ INNODB 
+{
+  // fix the error report by xabank.xyhf_mysql
+  $$ = NULL;
+}
+| /* empty */{$$=NULL;};
 
 opt_range_subpartition_list:
 '(' range_subpartition_list ')'
@@ -7857,11 +7867,15 @@ opt_having:
 ;
 
 opt_query_expression_option_list:
-query_expression_option_list
+query_expression_option_list %prec LOWER_PARENS
 {
-  merge_nodes($$, result, T_QEURY_EXPRESSION_LIST, $1);
+  if ($1 == NULL) {
+    $$ = NULL;
+  } else {
+    merge_nodes($$, result, T_QEURY_EXPRESSION_LIST, $1);
+  }
 }
-|
+| %prec LOWER_PARENS
 {
   $$ = NULL;
 }
@@ -7872,9 +7886,13 @@ query_expression_option
 {
   $$ = $1;
 }
-| query_expression_option  query_expression_option
+| query_expression_option_list  query_expression_option
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  if ($1 == NULL) {
+    $$ = $2;
+  } else {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  }
 }
 ;
 
@@ -7894,8 +7912,19 @@ ALL
 | SQL_CALC_FOUND_ROWS
 {
   malloc_terminal_node($$, result->malloc_pool_, T_FOUND_ROWS);
+} 
+| SQL_NO_CACHE 
+{
+  // SQL_NO_CACHE/SQL_CACHE is deprecated and will be removed in a future release 
+  // we only support it in parser, but actually do nothing.
+  $$=NULL; 
+}
+| SQL_CACHE
+{ 
+  $$=NULL; 
 }
 ;
+
 projection:
 expr %prec LOWER_PARENS
 {
