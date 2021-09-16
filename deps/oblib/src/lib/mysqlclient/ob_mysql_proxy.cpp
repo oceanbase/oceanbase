@@ -52,8 +52,7 @@ void ObCommonSqlProxy::operator=(const ObCommonSqlProxy& o)
 
 int ObCommonSqlProxy::read(ReadResult& result, const uint64_t tenant_id, const char* sql)
 {
-  int ret = read(result, tenant_id, sql, false);
-  return ret;
+  return read(result, tenant_id, sql, false);  /* is_user_sql = false*/
 }
 
 int ObCommonSqlProxy::read(ReadResult& result, const uint64_t tenant_id, const char* sql, bool is_user_sql)
@@ -303,8 +302,7 @@ int ObCommonSqlProxy::read(ReadResult& result, const int64_t cluster_id, const u
 
 int ObCommonSqlProxy::read(ReadResult& result, const int64_t cluster_id, const uint64_t tenant_id, const char* sql)
 {
-  int ret = read(result, cluster_id, tenant_id, sql, false);
-  return ret;
+  return read(result, cluster_id, tenant_id, sql, false); /* is_user_sql = false*/
 }
 
 int ObDbLinkProxy::init(ObDbLinkConnectionPool* pool)
@@ -403,7 +401,7 @@ int ObDbLinkProxy::dblink_read(const uint64_t dblink_id, ReadResult& result, con
   ObMySQLConnection* dblink_conn = NULL;
   if (OB_FAIL(acquire_dblink(dblink_id, dblink_conn))) {
     LOG_WARN("acquire dblink failed", K(ret));
-  } else if (OB_FAIL(read(dblink_conn, result, OB_INVALID_TENANT_ID, sql))) {
+  } else if (OB_FAIL(read(dblink_conn, result, OB_INVALID_TENANT_ID, sql, false))) {/* is_user_sql = false*/
     LOG_WARN("read from dblink failed", K(ret));
   } else if (OB_FAIL(release_dblink(dblink_conn))) {
     LOG_WARN("release dblink failed", K(ret));
@@ -416,7 +414,7 @@ int ObDbLinkProxy::dblink_read(ObMySQLConnection* dblink_conn, ReadResult& resul
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn)) {
     LOG_WARN("dblink conn is NULL", K(ret));
-  } else if (OB_FAIL(read(dblink_conn, result, OB_INVALID_TENANT_ID, sql))) {
+  } else if (OB_FAIL(read(dblink_conn, result, OB_INVALID_TENANT_ID, sql, false))) {/* is_user_sql = false*/
     LOG_WARN("read from dblink failed", K(ret));
   }
   return ret;

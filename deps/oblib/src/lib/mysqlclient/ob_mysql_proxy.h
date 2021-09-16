@@ -75,7 +75,7 @@ public:
 
 protected:
   int acquire(sqlclient::ObISQLConnection*& conn);
-  int read(sqlclient::ObISQLConnection* conn, ReadResult& result, const uint64_t tenant_id, const char* sql, bool is_user_sql = false);
+  int read(sqlclient::ObISQLConnection* conn, ReadResult& result, const uint64_t tenant_id, const char* sql, bool is_user_sql);
 
   sqlclient::ObISQLConnectionPool* pool_;
 

@@ -34,3 +34,6 @@ connection default;
 create table t2(id int primary key, col int);
 --error 5151
 alter table t2 add constraint id_fk foreign key(col) references t1(id);
+connection conn_sys;
+alter system set_tp tp_no = 244, error_code = 0, frequency = 1;
+connection default;

@@ -811,8 +811,12 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor& executor, ObInnerSQLResu
 
         int ret_code = OB_SUCCESS;
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(SMART_CALL(do_query(executor, res))) ||
-              (res.result_set().is_user_sql() && retry_cnt < 3 && OB_FAIL(E(EventTable::EN_FORCE_QUERY_RETRY) ret))) {
+          // if activate Event EN_FORCE_QUERY_RETRY, whatever the ret of do_query is, 
+          // the query will be forced to retry several times by the define of FORCE_RETRY_CNT for testing retry mechanism
+          static const int64_t FORCE_RETRY_CNT = 3;
+          if (OB_FAIL(SMART_CALL(do_query(executor, res))) || 
+              (res.result_set().is_user_sql() && retry_cnt < FORCE_RETRY_CNT && 
+                OB_FAIL(E(EventTable::EN_FORCE_QUERY_RETRY) ret))) {
             ret_code = ret;
             LOG_WARN("execute failed", K(ret), K(executor), K(retry_cnt));
             int tmp_ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);

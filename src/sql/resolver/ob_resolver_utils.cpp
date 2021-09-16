@@ -4474,19 +4474,16 @@ int ObResolverUtils::check_match_columns_in_order(
     const ObIArray<ObString>& parent_columns, const ObIArray<ObString>& key_columns, bool& is_match)
 {
   int ret = OB_SUCCESS;
-  is_match = false;
+  is_match = true;
 
   if (parent_columns.count() > 0 && parent_columns.count() <= key_columns.count()) {
-    bool is_tmp_match = true;
-    for (int64_t i = 0; is_tmp_match && i < parent_columns.count(); ++i) {
+    for (int64_t i = 0; is_match && i < parent_columns.count(); ++i) {
       if (0 != parent_columns.at(i).case_compare(key_columns.at(i))) {
-        is_tmp_match = false;
+        is_match = false;
       } 
     }
-    if (is_tmp_match) {
-      is_match = true;
-    }
-    
+  } else {
+    is_match = false;
   }
   return ret;
 }
