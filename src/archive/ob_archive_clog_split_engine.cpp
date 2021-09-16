@@ -999,6 +999,11 @@ int ObArCLogSplitEngine::fetch_log_(const ObPGKey& pg_key, ObArchiveLogCursor& l
       int64_t pos = 0;
       if (OB_FAIL(log_entry.deserialize(res.buf_, res.data_len_, pos))) {
         ARCHIVE_LOG(WARN, "failed to deserialize log_entry", K(ret), K(pg_key), K(log_cursor), K(res));
+      } else if (OB_UNLIKELY(!log_entry.check_integrity(true /*ignore_batch_commited*/))) {
+        // NB: batch_commited is for one phase commit, which is forbidden,
+        // but for cluster upgraded from lower version, it may be still open.
+        ret = OB_INVALID_DATA;
+        ARCHIVE_LOG(ERROR, "invalid log entry", KR(ret), K(pg_key), K(log_entry));
       }
     }
   }
