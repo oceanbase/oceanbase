@@ -84,7 +84,6 @@ namespace storage {
  * 3. use mask `m 0xF0` to get `tmp_keys: 1 4 3 2 10 5 6 9` 
  *
  * */
-  __m512i tmp_keys = _mm512_mask_mov_epi64(min_keys, m, max_keys);
 inline void compare_and_exchange_1v(__m512i& keys, __m512i& values, 
                                       __m512i& idx, __mmask8 m)
 {
@@ -123,7 +122,6 @@ inline void compare_and_exchange_2v(__m512i& keys1, __m512i& keys2,
   __m512i tmp_keys1 = _mm512_min_epu64(keys1, perm_keys);
   __m512i tmp_keys2 = _mm512_max_epu64(keys1, perm_keys);
   __m512i perm_values = _mm512_permutexvar_epi64(idx, values2);
-
   values2 = _mm512_mask_mov_epi64(values1, 
                                     _mm512_cmp_epu64_mask(tmp_keys2, perm_keys, 
                                                             _MM_CMPINT_EQ),
