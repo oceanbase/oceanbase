@@ -1548,6 +1548,7 @@ int ObTransformGroupByPlacement::check_groupby_pullup_validity(ObDMLStmt* stmt, 
 {
   int ret = OB_SUCCESS;
   bool can_pullup = false;
+  bool has_rand = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(stmt), K(table), K(ret));
@@ -1573,6 +1574,11 @@ int ObTransformGroupByPlacement::check_groupby_pullup_validity(ObDMLStmt* stmt, 
     } else if (OB_FAIL(check_null_propagate(stmt, sub_stmt, helper, can_pullup))) {
       LOG_WARN("failed to check null propagate select expr", K(ret));
     } else if (!can_pullup) {
+      // do nothing
+    } else if (OB_FAIL(sub_stmt->has_rand(has_rand))) {
+      LOG_WARN("failed to check stmt has rand func", K(ret));
+      // stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
+    } else if (!(can_pullup = !has_rand)) {
       // do nothing
     } else if (OB_FALSE_IT(helper.need_merge_ = sub_stmt->get_stmt_hint().enable_view_merge())) {
     } else if (OB_FAIL(valid_views.push_back(helper))) {
