@@ -12361,11 +12361,6 @@ int ObMigrateFinishTask::process()
         ctx_->replica_op_arg_.key_,
         "type",
         ctx_->replica_op_arg_.type_);
-  } else if (ADD_REPLICA_OP == ctx_->replica_op_arg_.type_ &&
-             ((ctx_->is_restore_ > REPLICA_NOT_RESTORE && ctx_->is_restore_ < REPLICA_RESTORE_MAX) ||
-                 REPLICA_RESTORE_STANDBY == ctx_->is_restore_)) {
-    is_add_replica_during_restore = true;
-    LOG_INFO("no need check read add replica during restore", K(ctx_->is_restore_), "pkey", ctx_->replica_op_arg_.key_);
   } else if (OB_FAIL(ctx_->change_replica_with_data(is_change_replica_with_data))) {
     LOG_WARN("failed to check replica", K(ret), K(*ctx_));
   } else if (is_change_replica_with_data) {
@@ -12374,6 +12369,12 @@ int ObMigrateFinishTask::process()
     LOG_WARN("failed to merge trans table", K(ret));
   } else if (OB_FAIL(create_pg_partition_if_need())) {
     LOG_WARN("Failed to create pg partition if need", K(ret));
+  }  else if (ADD_REPLICA_OP == ctx_->replica_op_arg_.type_
+      && ((ctx_->is_restore_ > REPLICA_NOT_RESTORE && ctx_->is_restore_ < REPLICA_RESTORE_MAX)
+          || REPLICA_RESTORE_STANDBY == ctx_->is_restore_)) {
+     is_add_replica_during_restore = true;
+     LOG_INFO("no need check read add replica during restore", K(ctx_->is_restore_),
+         "pkey", ctx_->replica_op_arg_.key_);
   } else {
     if (ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->replica_op_arg_.dst_.get_replica_type())) {
       if (OB_FAIL(check_pg_partition_ready_for_read())) {
