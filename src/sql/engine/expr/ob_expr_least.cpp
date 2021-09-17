@@ -45,61 +45,56 @@ int ObExprBaseLeastGreatest::calc_result_typeN_oracle(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("types is null or param_num is wrong", K(types), K(param_num), K(ret));
   } else {
-    if (OB_ISNULL(types) || OB_UNLIKELY(param_num < 1)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("types is null or param_num is wrong", K(types), K(param_num), K(ret));
+    ObExprResType& first_type = types[0];
+    type = first_type;
+    if (ObIntTC == first_type.get_type_class() || ObUIntTC == first_type.get_type_class() ||
+        ObNumberTC == first_type.get_type_class()) {
+      type.set_type(ObNumberType);
+      type.set_calc_type(ObNumberType);
+      type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+      type.set_precision(PRECISION_UNKNOWN_YET);
+    } else if (ObLongTextType == type.get_type()) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("lob type parameter not expected", K(ret));
     } else {
-      ObExprResType& first_type = types[0];
-      type = first_type;
-      if (ObIntTC == first_type.get_type_class() || ObUIntTC == first_type.get_type_class() ||
-          ObNumberTC == first_type.get_type_class()) {
-        type.set_type(ObNumberType);
-        type.set_calc_type(ObNumberType);
-        type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
-        type.set_precision(PRECISION_UNKNOWN_YET);
-      } else if (ObLongTextType == type.get_type()) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("lob type parameter not expected", K(ret));
-      } else {
-        type.set_type(first_type.get_type());
-        type.set_calc_type(first_type.get_type());
-      }
+      type.set_type(first_type.get_type());
+      type.set_calc_type(first_type.get_type());
+    }
 
-      if (ObStringTC == type.get_type_class()) {
-        int64_t max_length = 0;
-        int64_t all_char = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
-          int64_t item_length = 0;
-          if (ObStringTC == types[i].get_type_class() || ObLongTextType == types[i].get_type()) {
-            item_length = types[i].get_length();
-            if (LS_CHAR == types[i].get_length_semantics()) {
-              item_length = item_length * 4;
-              all_char++;
-            }
-          } else if (ObNumberTC == types[i].get_type_class() || ObIntTC == types[i].get_type_class() ||
-                     ObUIntTC == types[i].get_type_class()) {
-            item_length = number::ObNumber::MAX_PRECISION - number::ObNumber::MIN_SCALE;
-          } else if (ObOTimestampTC == types[i].get_type_class() || ObFloatTC == types[i].get_type_class() ||
-                     ObDoubleTC == types[i].get_type_class() || ObNullTC == types[i].get_type_class()) {
-            item_length = 40;
-          } else if (ObDateTimeTC == types[i].get_type_class()) {
-            item_length = 19;
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("unsupported type", K(ret), K(types[i]), K(types[i].get_type_class()));
+    if (ObStringTC == type.get_type_class()) {
+      int64_t max_length = 0;
+      int64_t all_char = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
+        int64_t item_length = 0;
+        if (ObStringTC == types[i].get_type_class() || ObLongTextType == types[i].get_type()) {
+          item_length = types[i].get_length();
+          if (LS_CHAR == types[i].get_length_semantics()) {
+            item_length = item_length * 4;
+            all_char++;
           }
-
-          if (OB_SUCC(ret)) {
-            max_length = MAX(max_length, item_length);
-          }
+        } else if (ObNumberTC == types[i].get_type_class() || ObIntTC == types[i].get_type_class() ||
+                    ObUIntTC == types[i].get_type_class()) {
+          item_length = number::ObNumber::MAX_PRECISION - number::ObNumber::MIN_SCALE;
+        } else if (ObOTimestampTC == types[i].get_type_class() || ObFloatTC == types[i].get_type_class() ||
+                    ObDoubleTC == types[i].get_type_class() || ObNullTC == types[i].get_type_class()) {
+          item_length = 40;
+        } else if (ObDateTimeTC == types[i].get_type_class()) {
+          item_length = 19;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported type", K(ret), K(types[i]), K(types[i].get_type_class()));
         }
+
         if (OB_SUCC(ret)) {
-          if (all_char == param_num) {
-            type.set_length(static_cast<ObLength>(max_length / 4));
-            type.set_length_semantics(LS_CHAR);
-          } else {
-            type.set_length(static_cast<ObLength>(max_length));
-          }
+          max_length = MAX(max_length, item_length);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (all_char == param_num) {
+          type.set_length(static_cast<ObLength>(max_length / 4));
+          type.set_length_semantics(LS_CHAR);
+        } else {
+          type.set_length(static_cast<ObLength>(max_length));
         }
       }
     }

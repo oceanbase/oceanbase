@@ -182,6 +182,7 @@ class ObExprInOrNotIn : public ObVectorExprOperator {
   public:
     ObExprInCtx()
         : ObExprOperatorCtx(),
+          row_dimension_(-1),
           right_has_null(false),
           hash_func_buff_(NULL),
           funcs_ptr_set(false),

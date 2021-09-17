@@ -403,7 +403,6 @@ int ObExprDiv::div_interval(
   res.set_scale(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][res.get_type()].get_scale());
   UNUSED(calc_scale);
   return ret;
-  return ret;
 }
 
 const ObScale ObExprDiv::DIV_CALC_SCALE = 9;
