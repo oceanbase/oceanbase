@@ -1269,15 +1269,9 @@ int ObSelectResolver::resolve_order_item(const ParseNode& sort_node, OrderItem& 
     }
     if (OB_FAIL(resolve_sql_expr(*(sort_node.children_[0]), order_item.expr_))) {
       LOG_WARN("resolve sql expression failed", K(ret));
+    } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), order_item.expr_, order_item, select_stmt))) {
+        LOG_WARN("fail to resolve literal order item", K(ret), K(*order_item.expr_));
     } else {
-      ObRawExpr* expr = order_item.expr_;
-      if (expr->has_flag(CNT_SET_OP) && !expr->has_flag(IS_SET_OP)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Orderby expression after set operation");
-      } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), expr, order_item, select_stmt))) {
-        LOG_WARN("fail to resolve literal order item", K(ret), K(*expr));
-      } else {
-      }
     }
   }
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
