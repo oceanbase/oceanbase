@@ -3400,10 +3400,10 @@ static int year_bit(
   if (OB_UNLIKELY(ObYearTC != in.get_type_class() || ObBitTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(year_string(ObVarcharType, params, in, tmp_val, cast_mode))) {
-    LOG_WARN("fail to cast datetime to string", K(ret), K(expect_type), K(in), K(tmp_val));
-  } else if (OB_FAIL(string_bit(expect_type, params, tmp_val, out, cast_mode))) {
-    LOG_WARN("fail to cast string to bit", K(ret), K(expect_type), K(in), K(tmp_val));
+  } else if (OB_FAIL(year_int(ObIntType, params, in, tmp_val, cast_mode))) {
+    LOG_WARN("fail to cast datetime to int", K(ret), K(expect_type), K(in), K(tmp_val));
+  } else if (OB_FAIL(int_bit(expect_type, params, tmp_val, out, cast_mode))) {
+    LOG_WARN("fail to cast int to bit", K(ret), K(expect_type), K(in), K(tmp_val));
   }
   return ret;
 }

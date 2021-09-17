@@ -3273,16 +3273,12 @@ CAST_FUNC_NAME(year, bit)
 {
   EVAL_ARG()
   {
-    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
-    int64_t len = 0;
+    int64_t year_int = 0;
     uint8_t in_val = child_res->get_uint8();
-    if (OB_FAIL(ObTimeConverter::year_to_str(in_val, buf, sizeof(buf), len))) {
-      LOG_WARN("year_to_str failed", K(ret));
-    } else {
-      ObString in_str(len, buf);
-      if (OB_FAIL(common_string_bit(expr, in_str, ctx, res_datum))) {
-        LOG_WARN("common_string_bit failed", K(ret), K(in_str));
-      }
+    if (OB_FAIL(ObTimeConverter::year_to_int(in_val, year_int))) {
+      LOG_WARN("year_to_int failed", K(ret), K(in_val));
+    } else if (OB_FAIL(common_uint_bit(expr, year_int, ctx, res_datum))) {
+      LOG_WARN("common_uint_bit failed", K(ret), K(year_int));
     }
   }
   return ret;
