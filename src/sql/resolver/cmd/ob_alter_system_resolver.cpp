@@ -1632,7 +1632,7 @@ int check_backup_dest_opt(const bool is_backup_backup, const ObString& opt_str)
       }
     }
     if (OB_SUCC(ret)) {
-      if (new_opt.backup_copies_ < 0 || new_opt.backup_copies_ > OB_MAX_BACKUP_COPIES) {
+      if (0 != new_opt.backup_copies_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("invalid backup copies", K(ret), K(opt_str), K(new_opt));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup_copies out of range [0,8] is");
