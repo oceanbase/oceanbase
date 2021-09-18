@@ -25,16 +25,19 @@ namespace oceanbase {
 namespace common {
 static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG};
 
-static inline void handler(int sig, siginfo_t* s, void* p)
+#ifndef OB_USE_ASAN
+static inline void handler(int sig, siginfo_t *s, void *p)
 {
   if (tl_handler != nullptr) {
     tl_handler(sig, s, p);
   }
 }
+#endif
 
 int install_ob_signal_handler()
 {
   int ret = OB_SUCCESS;
+#ifndef OB_USE_ASAN
   struct sigaction sa;
   sa.sa_flags = SA_SIGINFO | SA_RESTART | SA_NODEFER | SA_ONSTACK;
   sa.sa_sigaction = handler;
@@ -44,6 +47,7 @@ int install_ob_signal_handler()
       ret = OB_INIT_FAIL;
     }
   }
+#endif
   return ret;
 }
 

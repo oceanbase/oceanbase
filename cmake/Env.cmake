@@ -60,6 +60,12 @@ if (OB_USE_CLANG)
   set(BUILD_OPT "${BUILD_OPT} -I${DEVTOOLS_DIR}/lib/clang/11.0.1/include")
   set(LD_OPT "${LD_OPT} -Wl,-z,noexecstack")
 
+  if (OB_USE_ASAN)
+    ob_define(CMAKE_ASAN_FLAG "-fstack-protector-strong -fsanitize=address -fno-optimize-sibling-calls")
+    set(BUILD_OPT "${BUILD_OPT} ${CMAKE_ASAN_FLAG} ")
+  endif()
+
+
   if (OB_USE_LLVM_LIBTOOLS)
     set(LD_OPT "${LD_OPT} -fuse-ld=${LD_BIN}")
   endif()

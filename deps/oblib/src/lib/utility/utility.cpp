@@ -1103,7 +1103,7 @@ const char* get_default_if()
   if (file) {
     char dest[16] = {};
     char gw[16] = {};
-    char remain[1024] = {};
+    char remain[1024 + 1] = {};
     if (1 == fscanf(file, "%1024[^\n]\n", remain)) {
       while (1) {
         int r = fscanf(file, "%127s\t%15s\t%15s\t%1023[^\n]\n", ifname, dest, gw, remain);

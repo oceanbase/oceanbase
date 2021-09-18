@@ -21,6 +21,11 @@ if(WITH_OSS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_WITH_OSS")
 endif()
 
+if(OB_USE_ASAN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOB_USE_ASAN")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOB_USE_ASAN")
+endif()
+
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
 message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 

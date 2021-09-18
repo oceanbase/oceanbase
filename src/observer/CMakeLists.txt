@@ -320,13 +320,18 @@ if (OB_STATIC_LINK_LGPL_DEPS)
 endif()
 
 add_executable(observer)
+
+if (NOT OB_USE_ASAN) 
+  set(link_malloc_hook malloc_hook)
+endif()
+
 target_link_libraries(observer
   PRIVATE
   ob_main
   oceanbase_static
   -static-libgcc
   -static-libstdc++
-  malloc_hook
+  ${link_malloc_hook}
   ${LGPL_DEPS}
   )
 execute_process(

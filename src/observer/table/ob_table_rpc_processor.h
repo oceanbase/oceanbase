@@ -214,7 +214,18 @@ protected:
 };
 
 
-} // end namespace observer
-} // end namespace oceanbase
+
+template<class T>
+int64_t ObTableRpcProcessor<T>::get_timeout_ts() const
+{
+  int64_t ts = 0;
+  if (NULL != RpcProcessor::rpc_pkt_) {
+    ts = RpcProcessor::get_receive_timestamp() + RpcProcessor::rpc_pkt_->get_timeout();
+  }
+  return ts;
+}
+
+}  // end namespace observer
+}  // end namespace oceanbase
 
 #endif /* _OB_TABLE_RPC_PROCESSOR_H */

@@ -54,8 +54,8 @@ void* ObMallocAllocator::alloc(const int64_t size)
 
 void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAttr& attr)
 {
-#if PERF_MODE
-  UNUSED(_attr);
+#ifdef OB_USE_ASAN
+  UNUSED(attr);
   return ::malloc(size);
 #else
   int ret = E(EventTable::EN_4) OB_SUCCESS;
@@ -111,12 +111,12 @@ void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   }
 
   return ptr;
-#endif  // PERF_MODE
+#endif
 }
 
 void* ObMallocAllocator::realloc(const void* ptr, const int64_t size, const oceanbase::lib::ObMemAttr& attr)
 {
-#if PERF_MODE
+#ifdef OB_USE_ASAN
   UNUSED(attr);
   return ::realloc(const_cast<void*>(ptr), size);
 #else
@@ -157,12 +157,12 @@ void* ObMallocAllocator::realloc(const void* ptr, const int64_t size, const ocea
   }
   return nptr;
   ;
-#endif  // PERF_MODE
+#endif
 }
 
 void ObMallocAllocator::free(void* ptr)
 {
-#if PERF_MODE
+#ifdef OB_USE_ASAN
   ::free(ptr);
 #else
   // directly free object instead of using tenant allocator.

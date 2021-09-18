@@ -959,16 +959,6 @@ void ObTableRpcProcessor<T>::set_req_has_wokenup()
 }
 
 template<class T>
-int64_t ObTableRpcProcessor<T>::get_timeout_ts() const
-{
-  int64_t ts = 0;
-  if (NULL != RpcProcessor::rpc_pkt_) {
-    ts = RpcProcessor::get_receive_timestamp() + RpcProcessor::rpc_pkt_->get_timeout();
-  }
-  return ts;
-}
-
-template<class T>
 void ObTableRpcProcessor<T>::save_request_string()
 {
   int ret = OB_SUCCESS;
