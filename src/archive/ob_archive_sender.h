@@ -17,7 +17,6 @@
 #include "ob_archive_destination_mgr.h"
 #include "ob_archive_round_mgr.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"  // ObConcurrentFIFOAllocator
-#include "lib/lock/ob_spin_rwlock.h"                     // RWLock
 #include "ob_archive_thread_pool.h"
 
 namespace oceanbase {
@@ -73,7 +72,7 @@ public:
   int check_server_start_ts_exist(const int64_t incarnation, const int64_t round, int64_t& start_ts);
   int64_t cal_work_thread_num();
   void set_thread_name_str(char* str);
-  int handle_task_list(ObArchiveTaskStatus* task_status);
+  int handle_task_list(void* data);
 
 private:
   // void run1();
@@ -137,9 +136,6 @@ private:
   int push_archive_key_file_(const ObPGArchiveTask& pg_archive_task, const int64_t epoch_id, const int64_t incarnation,
       const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const bool is_first_piece);
 
-  typedef common::SpinRWLock RWLock;
-  typedef common::SpinWLockGuard WLockGuard;
-
 private:
   int64_t log_archive_round_;
   int64_t incarnation_;
@@ -149,8 +145,6 @@ private:
   ObArchiveMgr* archive_mgr_;
 
   ObArchiveAllocator* allocator_;
-
-  mutable RWLock rwlock_;
 };
 
 }  // namespace archive

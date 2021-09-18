@@ -33,8 +33,7 @@ ObArchiveSender::ObArchiveSender()
       pg_mgr_(NULL),
       archive_round_mgr_(NULL),
       archive_mgr_(NULL),
-      allocator_(NULL),
-      rwlock_()
+      allocator_(NULL)
 {}
 
 ObArchiveSender::~ObArchiveSender()
@@ -277,11 +276,11 @@ int ObArchiveSender::submit_send_task_(ObArchiveSendTask* task)
   return ret;
 }
 
-int ObArchiveSender::handle_task_list(ObArchiveTaskStatus* status)
+int ObArchiveSender::handle_task_list(void* data)
 {
   int ret = OB_SUCCESS;
   SendTaskArray task_array;
-  ObArchiveSendTaskStatus* task_status = static_cast<ObArchiveSendTaskStatus*>(status);
+  ObArchiveSendTaskStatus* task_status = static_cast<ObArchiveSendTaskStatus*>(data);
 
   if (OB_ISNULL(task_status)) {
     ret = OB_INVALID_ARGUMENT;

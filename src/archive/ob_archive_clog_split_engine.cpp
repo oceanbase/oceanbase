@@ -394,7 +394,7 @@ int ObArCLogSplitEngine::submit_split_task_(ObPGArchiveCLogTask* task)
   return ret;
 }
 
-int ObArCLogSplitEngine::handle_task_list(ObArchiveTaskStatus* status)
+int ObArCLogSplitEngine::handle_task_list(void* data)
 {
   int ret = OB_SUCCESS;
   const int64_t task_limit = 5;
@@ -403,7 +403,7 @@ int ObArCLogSplitEngine::handle_task_list(ObArchiveTaskStatus* status)
   bool jump = false;
   bool task_exist = false;
   ObPGArchiveCLogTask* task = NULL;
-  ObArchiveCLogTaskStatus* task_status = static_cast<ObArchiveCLogTaskStatus*>(status);
+  ObArchiveCLogTaskStatus* task_status = static_cast<ObArchiveCLogTaskStatus*>(data);
 
   if (OB_ISNULL(task_status)) {
     ret = OB_INVALID_ARGUMENT;
