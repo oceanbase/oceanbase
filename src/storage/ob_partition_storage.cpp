@@ -5687,13 +5687,14 @@ int ObPartitionStorage::local_sort_index_by_range(
     }
 
     if (OB_SUCC(ret)) {
-      if (NULL == (cells_buf = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * extended_col_ids.count())))) {
+      const int64_t cell_cnt = org_extended_col_ids.count();
+      if (NULL == (cells_buf = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * cell_cnt)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(ERROR, "failed to alloc cells buf", K(ret), K(extended_col_ids.count()));
+        STORAGE_LOG(ERROR, "failed to alloc cells buf", K(ret), K(cell_cnt));
       } else {
         result_row.flag_ = ObActionFlag::OP_ROW_EXIST;
-        result_row.row_val_.cells_ = new ObObj[extended_col_ids.count()];
-        result_row.row_val_.count_ = extended_col_ids.count();
+        result_row.row_val_.cells_ = new (cells_buf) ObObj[cell_cnt];
+        result_row.row_val_.count_ = cell_cnt;
       }
     }
 
@@ -5816,8 +5817,15 @@ int ObPartitionStorage::local_sort_index_by_range(
                         calc_buf,
                         expr_ctx,
                         tmp_row.row_val_.cells_[k]))) {
-                  STORAGE_LOG(WARN, "failed to calc expr", K(row->row_val_), K(org_col_ids),
-                      K(dependent_exprs.at(k)), K(ret), K(result_row.row_val_));
+                  STORAGE_LOG(WARN,
+                      "failed to calc expr",
+                      K(result_row.row_val_),
+                      K(org_col_ids),
+                      K(row->row_val_),
+                      K(dependent_exprs.at(k)),
+                      K(extended_col_ids),
+                      K(org_extended_col_ids),
+                      K(ret));
                 } else if (OB_UNLIKELY(!tmp_row.row_val_.cells_[k].is_null()
                                        && !sql::ObSQLUtils::is_same_type_for_compare(
                                                 gen_col_schemas.at(k)->get_meta_type(),
