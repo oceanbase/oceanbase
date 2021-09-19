@@ -30,7 +30,6 @@
 namespace oceanbase {
 namespace tests {
 namespace common {
-class ObjTest;
 class ObSqlString;
 }  // namespace common
 }  // namespace tests
