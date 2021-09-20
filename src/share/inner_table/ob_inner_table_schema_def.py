@@ -14559,6 +14559,42 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
+def_table_schema(
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_SYS_DATABASE_ID',
+  table_name      = 'SHOW_RABBIT',
+  table_id        = '21151',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT CONCAT('
+            ,-\\'\\'\\$|', (rand() * 10000000) & 0x6de9,'
+           (\\_ /+
+            \\_\\(
+            .-  \\
+            |    }
+           (| { //
+            \\' \\'-/
+            /  (
+           //  \\\\
+          / |   :\\'
+          \\'\\'/\\   :
+           (| \"  |\\
+            |  ) \\' )
+            | (_  (
+            \\'   \"\\_\\
+             \\     )\\'.
+             |\\
+  (\_/)      | \\\\
+ (=\\'.\\'=)     |  )_
+ (")_(")     / _/|
+            -\\'
+') RABBIT FROM DUAL
+""",
+)
+
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]

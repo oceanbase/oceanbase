@@ -201,6 +201,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"geometry", GEOMETRY},
     {"geometrycollection", GEOMETRYCOLLECTION},
     {"get_format", GET_FORMAT},
+    {"rabbit", RABBIT},
     {"global", GLOBAL},
     {"global_name", GLOBAL_NAME},
     {"grants", GRANTS},

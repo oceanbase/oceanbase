@@ -986,6 +986,19 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
         }
         break;
       }
+      case T_SHOW_RABBIT: {
+        [&] {
+          if (is_oracle_mode) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support show status in oracle mode", K(ret));
+          } else {
+            show_resv_ctx.stmt_type_ = stmt::T_SHOW_RABBIT;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_RABBIT);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_RABBIT, OB_SYS_DATABASE_NAME, OB_SHOW_RABBIT_TNAME);
+          }
+        }();
+        break;
+      }
       case T_SHOW_TENANT: {
         if (is_oracle_mode) {
           ret = OB_NOT_SUPPORTED;
@@ -2206,6 +2219,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_SYS_RECYCLEBIN, "SELECT OBJECT_NAME, ORIGINAL_NAME, 
     "gmt_create as CREATETIME FROM %s.%s where tenant_id = %lu OR TYPE = 7",
     NULL, NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_RESTORE_PREVIEW, NULL, "SELECT * FROM %s.%s", NULL, NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_RABBIT, "SELECT RABBIT", "SELECT RABBIT FROM %s.%s", NULL, NULL);
 
 }  // namespace sql
 }  // namespace oceanbase

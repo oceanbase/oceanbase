@@ -565,6 +565,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       case T_SHOW_WARNINGS:
       case T_SHOW_ERRORS:
       case T_SHOW_TRACE:
+      case T_SHOW_RABBIT:
       case T_SHOW_ENGINES:
       case T_SHOW_PRIVILEGES:
       case T_SHOW_CHARSET:

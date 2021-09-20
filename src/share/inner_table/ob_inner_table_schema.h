@@ -1075,6 +1075,7 @@ public:
   static int cdb_ob_backup_archivelog_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_backup_backup_archivelog_schema(share::schema::ObTableSchema &table_schema);
   static int column_privileges_schema(share::schema::ObTableSchema &table_schema);
+  static int show_rabbit_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -2128,6 +2129,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_backup_archivelog_schema,
   ObInnerTableSchema::cdb_ob_backup_backup_archivelog_schema,
   ObInnerTableSchema::column_privileges_schema,
+  ObInnerTableSchema::show_rabbit_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -2814,6 +2816,7 @@ const uint64_t tenant_space_tables [] = {
   OB_V_LOCK_TID,
   OB_V_RESTORE_POINT_TID,
   OB_COLUMN_PRIVILEGES_TID,
+  OB_SHOW_RABBIT_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_TID,
   OB_ALL_OBJECTS_TID,
@@ -3671,6 +3674,7 @@ const char* const tenant_space_table_names [] = {
   OB_V_LOCK_TNAME,
   OB_V_RESTORE_POINT_TNAME,
   OB_COLUMN_PRIVILEGES_TNAME,
+  OB_SHOW_RABBIT_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -4053,10 +4057,10 @@ static inline bool is_only_rs_virtual_table(const uint64_t tid)
 const int64_t OB_CORE_TABLE_COUNT = 5;
 const int64_t OB_SYS_TABLE_COUNT = 187;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 463;
-const int64_t OB_SYS_VIEW_COUNT = 360;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1016;
+const int64_t OB_SYS_VIEW_COUNT = 361;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1017;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1019;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1020;
 
 } // end namespace share
 } // end namespace oceanbase
