@@ -10573,7 +10573,7 @@ int ObPartitionService::check_can_start_service(
         is_all_unreachable_partition = false;
         // if the partition is more than 10s behind, the server cannot provide
         // external services during the restart process
-        if (timestamp <= ObTimeUtility::current_time() - 10 * 1000 * 1000) {
+        if (timestamp <= ObTimeUtility::current_time() - 30 * 1000 * 1000) {
           can_start_service = false;
         }
         if (timestamp < tmp_safe_weak_read_snapshot) {
