@@ -9695,7 +9695,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
-    } else if (0 == MEMCMP(item->name_.ptr(), _RECYCLEBIN_OBJECT_PURGE_FREQUENCY, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), _RECYCLEBIN_OBJECT_PURGE_FREQUENCY)) {
       int64_t purge_interval = ObConfigTimeParser::get(item->value_.ptr(), valid);
       if (!valid) {
         ret = OB_INVALID_ARGUMENT;
@@ -9705,7 +9705,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
         LOG_WARN("it is not allow that purge_interval is zero when daily merge is off", "item", *item, K(ret));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "_recyclebin_object_purge_frequency is zero when daily merge is off");
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), CLOG_DISK_USAGE_LIMIT_PERCENTAGE, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), CLOG_DISK_USAGE_LIMIT_PERCENTAGE)) {
       int64_t clog_disk_usage_limit_percent = ObConfigIntParser::get(item->value_.ptr(), valid);
       const int64_t clog_disk_utilization_threshold = ObServerConfig::get_instance().clog_disk_utilization_threshold;
       if (!valid) {
@@ -9722,7 +9722,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
             "clog_disk_usage_limit_percentage, it should be greater than clog_disk_utilization_threshold");
       } else {
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), CLOG_DISK_UTILIZATION_THRESHOLD, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), CLOG_DISK_UTILIZATION_THRESHOLD)) {
       int64_t clog_disk_utilization_threshold = ObConfigIntParser::get(item->value_.ptr(), valid);
       const int64_t clog_disk_usage_limit_percent = ObServerConfig::get_instance().clog_disk_usage_limit_percentage;
       if (!valid) {
@@ -9756,8 +9756,8 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
-    } else if (0 == MEMCMP(item->name_.ptr(), ENABLE_REBALANCE, strlen(item->name_.ptr())) ||
-               0 == MEMCMP(item->name_.ptr(), ENABLE_REREPLICATION, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), ENABLE_REBALANCE) ||
+               0 == STRCMP(item->name_.ptr(), ENABLE_REREPLICATION)) {
       ObString value(item->value_.ptr());
       ObString false_str("FALSE");
       ObString zero_str("0");
@@ -9769,28 +9769,28 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
       } else if (OB_FAIL(rebalance_task_mgr_.clear_task(tenant_ids, type))) {
         LOG_WARN("fail to clear balance task", K(ret));
       } else {
-        if (0 == MEMCMP(item->name_.ptr(), ENABLE_REREPLICATION, strlen(item->name_.ptr()))) {
+        if (0 == STRCMP(item->name_.ptr(), ENABLE_REREPLICATION)) {
           root_balancer_.reset_task_count();
           LOG_INFO("clear balance task after modify balance config", K(ret), K(arg));
         }
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), MERGER_CHECK_INTERVAL, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), MERGER_CHECK_INTERVAL)) {
       daily_merge_scheduler_.wakeup();
-    } else if (0 == MEMCMP(item->name_.ptr(), ENABLE_AUTO_LEADER_SWITCH, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), ENABLE_AUTO_LEADER_SWITCH)) {
       ObString value(item->value_.ptr());
       ObString false_str("FALSE");
       ObString zero_str("0");
       if (0 != value.case_compare(false_str) && 0 != value.case_compare(zero_str)) {
         leader_coordinator_.wakeup();
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), OBCONFIG_URL, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), OBCONFIG_URL)) {
       int tmp_ret = OB_SUCCESS;
       bool force_update = true;
       if (OB_SUCCESS != (tmp_ret = submit_update_rslist_task(force_update))) {
         LOG_WARN("fail to submit update rs list task", KR(ret), K(tmp_ret));
       }
       LOG_INFO("obconfig_url parameters updated, force submit update rslist task", KR(tmp_ret), KPC(item));
-    } else if (0 == MEMCMP(item->name_.ptr(), _SCHEMA_HISTORY_RECYCLE_INTERVAL, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), _SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
       schema_history_recycler_.wakeup();
       LOG_INFO("_schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
     }
