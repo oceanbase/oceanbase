@@ -162,7 +162,8 @@ ObExecContext::ObExecContext(ObIAllocator& allocator)
       calc_type_(CALC_NORMAL),
       fixed_id_(OB_INVALID_ID),
       expr_partition_id_(OB_INVALID_ID),
-      iters_(256, allocator)
+      iters_(256, allocator),
+      check_status_times_(0)
 {}
 
 ObExecContext::ObExecContext()
