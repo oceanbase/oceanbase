@@ -715,8 +715,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprIsIpv4Compat::calc_is_ipv4_compat,  /* 455 */
     ObExprInetAton::calc_inet_aton,           /* 456 */
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
-    ObExprConvertTZ::eval_convert_tz,         /* 458 */
-    ObExprCrc32::calc_crc32_expr,             /* 459 */
+    NULL,                                     // ObExprWeightString::eval_weight_string,  /* 458 */
+    ObExprConvertTZ::eval_convert_tz,         /* 459 */
+    ObExprCrc32::calc_crc32_expr,             /* 460 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));
