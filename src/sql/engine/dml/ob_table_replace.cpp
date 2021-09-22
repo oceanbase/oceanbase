@@ -217,7 +217,7 @@ int ObTableReplace::inner_close(ObExecContext& ctx) const
   return ObTableModify::inner_close(ctx);
 }
 
-int64_t ObTableReplace::to_string_kv(char* buf, int64_t buf_len) const
+int64_t ObTableReplace::to_string_kv(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_KV(N_TID, table_id_, N_CID, column_ids_, N_PRIMARY_CID, primary_key_ids_, N_HAS_INDEX, only_one_unique_key_);

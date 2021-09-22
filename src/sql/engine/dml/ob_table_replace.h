@@ -102,7 +102,7 @@ public:
    * Every op should implement this method.
    */
   virtual int inner_close(ObExecContext& ctx) const;
-  virtual int64_t to_string_kv(char* buf, int64_t buf_len) const;
+  virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   virtual int add_filter(ObSqlExpression* expr);
   virtual int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   virtual int init_op_ctx(ObExecContext& ctx) const;
