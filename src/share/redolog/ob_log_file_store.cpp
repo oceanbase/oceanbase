@@ -462,12 +462,15 @@ int ObLogFileStore::read(void* buf, int64_t count, int64_t offset, int64_t& read
         } else {
           aio_ret = static_cast<int>(io_events_[0].res2);
           event_res = static_cast<int64_t>(io_events_[0].res);
-          if (0 == aio_ret && event_res == rd_size) {  // full complete
+          if (OB_UNLIKELY(0 != aio_ret)) {
+            // res2 should always be 0
+            ret = OB_IO_ERROR;
+            COMMON_LOG(WARN, "aio error", K(i), K(event_res), K(ret), K(aio_ret));
+          } else if (event_res == rd_size) {  // full complete
             event_sz += rd_size;
-          } else if (0 == aio_ret && event_res == 0) {  // read nothing from file
+          } else if (event_res == 0) {  // read nothing from file
             ret = OB_READ_NOTHING;
-          } else if (0 == aio_ret && event_res > 0 && event_res < rd_size &&
-                     (0 == event_res % DIO_ALIGN_SIZE)) {  // partial complete
+          } else if (event_res > 0 && event_res < rd_size && (0 == event_res % DIO_ALIGN_SIZE)) {  // partial complete
             event_sz += event_res;
             COMMON_LOG(INFO, "re-submit read", K(i), K(event_res), K(rd_size), K(event_sz), K(count));
           } else {
@@ -996,11 +999,15 @@ int ObLogFileStore::process_io_getevents(int64_t& submitted, io_context_t ctx, s
       for (int32_t i = 0; i < gotten; i++) {
         aio_ret = static_cast<int>(events[i].res2);
         event_res = static_cast<int64_t>(events[i].res);
-        wr_info = reinterpret_cast<ObLogFileIOInfo*>(events[i].data);
-        if (0 == aio_ret && event_res == wr_info->size_) {  // full complete
+        wr_info = reinterpret_cast<ObLogFileIOInfo *>(events[i].data);
+        if (OB_UNLIKELY(0 != aio_ret)) {
+          // res2 should always be 0
+          ret = OB_IO_ERROR;
+          COMMON_LOG(WARN, "aio error", K(ret), K(wr_info->ret_), K(i), K(event_res), K(*wr_info), K(aio_ret));
+        } else if (event_res == wr_info->size_) {  // full complete
           wr_info->complete_ = true;
           wr_info->ret_ = OB_SUCCESS;
-        } else if (0 == aio_ret && event_res > 0 && event_res < wr_info->size_ &&
+        } else if (event_res > 0 && event_res < wr_info->size_ &&
                    (0 == event_res % DIO_ALIGN_SIZE)) {  // partial complete
           wr_info->buf_ = wr_info->buf_ + event_res;
           wr_info->size_ -= event_res;
@@ -1010,11 +1017,11 @@ int ObLogFileStore::process_io_getevents(int64_t& submitted, io_context_t ctx, s
           partial_write = true;
           COMMON_LOG(WARN, "re-submit", K(wr_info->ret_), K(i), K(event_res), K(*wr_info));
         } else {  // fail write, check if can retry
-          wr_info->complete_ = (-EAGAIN != aio_ret);
-          wr_info->ret_ = (-EAGAIN == aio_ret)   ? OB_EAGAIN
-                          : (-ENOSPC == aio_ret) ? OB_CS_OUTOF_DISK_SPACE
-                                                 : OB_IO_ERROR;
-          partial_write = (-EAGAIN == aio_ret) ? true : partial_write;
+          wr_info->complete_ = (-EAGAIN != event_res);
+          wr_info->ret_ = (-EAGAIN == event_res)   ? OB_EAGAIN
+                          : (-ENOSPC == event_res) ? OB_CS_OUTOF_DISK_SPACE
+                                                   : OB_IO_ERROR;
+          partial_write = (-EAGAIN == event_res) ? true : partial_write;
           COMMON_LOG(WARN, "write error", K(wr_info->ret_), K(i), K(event_res), K(*wr_info), K(aio_ret));
         }
       }
