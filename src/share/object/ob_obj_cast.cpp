@@ -4075,7 +4075,8 @@ static int string_set(const ObExpectType& expect_type, ObObjCastParams& params, 
   ObString in_str;
   ObString val_str;
   bool is_last_value = false;
-  if (OB_UNLIKELY(ObSetType != expect_type.get_type()) || OB_UNLIKELY(ObStringTC != in.get_type_class()) ||
+  if (OB_UNLIKELY(ObSetType != expect_type.get_type()) ||
+      OB_UNLIKELY(ObStringTC != in.get_type_class() && ObTextTC != in.get_type_class()) ||
       OB_ISNULL(type_infos = expect_type.get_type_infos()) || !ObCharset::is_valid_collation(cs_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(expect_type), K(in), K(cs_type), K(ret));
@@ -4693,8 +4694,8 @@ ObCastEnumOrSetFunc OB_CAST_ENUM_OR_SET[ObMaxTC][2] = {
     },
     {
         /*text -> enum_or_set*/
-        cast_not_support_enum_set, /*enum*/
-        cast_not_support_enum_set, /*set*/
+        string_enum, /*enum*/
+        string_set,  /*set*/
     },
     {
         /*bit -> enum_or_set*/
