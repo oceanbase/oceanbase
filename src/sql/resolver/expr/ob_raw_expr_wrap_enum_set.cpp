@@ -721,6 +721,7 @@ int ObRawExprWrapEnumSet::visit(ObSysFunRawExpr& expr)
         } else if (ob_is_enumset_tc(param_expr->get_data_type())) {
           ObObjType calc_type = expr.get_input_types().at(i).get_calc_type();
           ObSysFunRawExpr* wrapped_expr = NULL;
+          // Enumset warp to string in CAST expr will be handled here.
           if (OB_FAIL(wrap_type_to_str_if_necessary(
                   param_expr, calc_type, get_current_level(), is_same_need, wrapped_expr))) {
             LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(expr), K(ret));

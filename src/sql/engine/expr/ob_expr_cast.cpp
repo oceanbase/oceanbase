@@ -368,7 +368,19 @@ int ObExprCast::calc_result_type2(
         OZ(ObRawExprUtils::setup_extra_cast_utf8_type(dst_type, dst_type_utf8));
         OX(type1.set_calc_meta(dst_type_utf8.get_obj_meta()));
       } else {
-        type1.set_calc_meta(type1.get_obj_meta());
+        bool need_warp = false;
+        if (ob_is_enumset_tc(type1.get_type())) {
+          // For enum/set type, need to check whether warp to string is required.
+          if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(type1.get_type(), type1.get_calc_type(), false, need_warp))) {
+            LOG_WARN("need_wrap_to_string failed", K(ret), K(type1));
+          }
+        } else if (OB_LIKELY(need_warp)) {
+          // need_warp is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
+          // to string in ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr) later.
+        } else {
+          // need_warp is false, set calc_type to type1 itself.
+          type1.set_calc_meta(type1.get_obj_meta());
+        }
       }
     } else {
       // no need to set cast mode, already setup while deduce type.
