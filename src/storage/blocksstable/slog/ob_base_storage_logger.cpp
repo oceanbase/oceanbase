@@ -315,20 +315,15 @@ int ObBaseStorageLogger::abort()
   return ret;
 }
 
-int ObBaseStorageLogger::is_logger_ok(bool& is_ok)
+bool ObBaseStorageLogger::is_disk_warning() const
 {
-  int ret = OB_SUCCESS;
-  is_ok = true;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    STORAGE_REDO_LOG(WARN, "The ObBaseStorageLogger has not been inited.", K(ret));
+  bool b_ret = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    b_ret = false;
   } else {
-    is_ok = log_writer_.is_ok();
-    if (!is_ok) {
-      STORAGE_REDO_LOG(WARN, "storage log writer is not ok");
-    }
+    b_ret = log_writer_.is_disk_warning();
   }
-  return ret;
+  return b_ret;
 }
 
 int ObBaseStorageLogger::get_active_cursor(ObLogCursor& log_cursor)

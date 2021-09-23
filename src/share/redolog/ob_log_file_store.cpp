@@ -248,7 +248,8 @@ int ObILogFileStore::format_file_path(
   return ret;
 }
 
-ObLogFileStore::ObLogFileStore() : is_inited_(false), disk_mgr_(NULL), write_fd_(), io_ctx_(NULL)
+ObLogFileStore::ObLogFileStore()
+    : is_inited_(false), disk_mgr_(NULL), write_fd_(), io_ctx_(NULL), is_disk_warning_(false)
 {
   for (int32_t i = 0; i < MAX_DISK_COUNT; i++) {
     memset(&io_reqs_[i], 0, sizeof(io_reqs_[i]));
@@ -388,6 +389,7 @@ int ObLogFileStore::write(void* buf, int64_t count, int64_t offset)
   } else if (OB_FAIL(prepare_write_info(buf, count, offset))) {
     COMMON_LOG(ERROR, "prepare io info fail", K(ret));
   } else {
+    const int64_t write_begin_ts = common::ObTimeUtility::fast_current_time();
     while (need_retry) {
       ret = OB_SUCCESS;
       new_req_cnt = 0;
@@ -397,6 +399,17 @@ int ObLogFileStore::write(void* buf, int64_t count, int64_t offset)
         COMMON_LOG(ERROR, "process io submit fail", K(ret), K(new_req_cnt), K(submitted), K(retry_cnt), K_(write_fd));
       } else if (OB_FAIL(process_io_getevents(submitted, io_ctx_, io_events_))) {
         COMMON_LOG(ERROR, "process get events fail", K(ret), K(new_req_cnt), K(submitted), K(retry_cnt), K_(write_fd));
+      }
+      if (OB_SUCC(ret)) {
+        if (is_disk_warning()) {
+          set_disk_warning(false);
+        }
+      } else if (!is_disk_warning()) {
+        const int64_t write_finish_ts = common::ObTimeUtility::fast_current_time();
+        const int64_t log_write_timeout_us = GCONF.data_storage_warning_tolerance_time;
+        if (write_finish_ts - write_begin_ts > log_write_timeout_us) {
+          set_disk_warning(true);
+        }
       }
       need_retry = process_retry(ret, retry_cnt);
     }
@@ -439,7 +452,7 @@ int ObLogFileStore::read(void* buf, int64_t count, int64_t offset, int64_t& read
     int64_t rd_size = 0;
     int64_t rd_offset = 0;
     int64_t event_res = 0;
-    int retry = 0;
+    int64_t retry = 0;
     struct timespec timeout;
 
     for (int32_t i = 0; OB_SUCC(ret) && event_sz < count && i < write_fd_.count(); i++) {
@@ -518,6 +531,7 @@ void ObLogFileStore::destroy()
     ob_io_destroy(io_ctx_);
   }
   disk_mgr_ = NULL;
+  set_disk_warning(false);
   is_inited_ = false;
 }
 

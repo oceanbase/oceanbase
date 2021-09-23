@@ -57,7 +57,7 @@ public:
   // Thread safe.
   // abort a transaction
   virtual int abort();
-  int is_logger_ok(bool& is_ok);
+  bool is_disk_warning() const;
   // Thread safe
   virtual int get_active_cursor(common::ObLogCursor& log_cursor) override;
 

@@ -3920,6 +3920,7 @@ int ObPartitionLogService::on_get_election_priority(election::ObElectionPriority
     bool is_data_disk_error = false;
     bool is_disk_space_enough = log_engine_->is_disk_space_enough();
     bool is_clog_disk_hang = log_engine_->is_clog_disk_hang();
+    const bool is_slog_disk_warning = SLOGGER.is_disk_warning();
     const ObReplicaProperty replica_property = mm_.get_replica_property();
     const uint64_t log_id = sw_.get_max_confirmed_log_id();
     if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error(is_data_disk_error))) {
@@ -3952,6 +3953,9 @@ int ObPartitionLogService::on_get_election_priority(election::ObElectionPriority
       }
       if (is_data_disk_error) {
         priority.set_system_data_disk_error();
+      }
+      if (is_slog_disk_warning) {
+        priority.set_system_slog_disk_warning();
       }
       if (is_tenant_out_of_mem) {
         priority.set_system_tenant_out_of_memory();

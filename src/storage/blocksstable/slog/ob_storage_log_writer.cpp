@@ -237,6 +237,7 @@ int ObStorageLogWriter::ObSerializableBuffer::serialize(char* buf, int64_t limit
 
 ObStorageLogWriter::ObStorageLogWriter()
     : is_inited_(false),
+      is_started_(false),
       log_buffers_(),
       log_buffer_size_(0),
       log_item_allocator_(),
@@ -252,8 +253,6 @@ ObStorageLogWriter::ObStorageLogWriter()
       cur_file_id_(-1),
       write_cursor_(),
       flush_cursor_(),
-      is_ok_(false),
-      write_failed_times_(0),
       file_store_(nullptr),
       batch_write_buf_(nullptr),
       batch_write_len_(0),
@@ -317,9 +316,9 @@ int ObStorageLogWriter::init(
       write_cursor_.reset();
       flush_cursor_.reset();
 
-      set_ok(false);
-      write_failed_times_ = 0;
       is_inited_ = true;
+      LOG_INFO(
+          "storage log writer init finished", K(ret), K(log_dir), K(log_file_size), K(max_log_size), K(max_trans_cnt));
     }
   }
   return ret;
@@ -339,8 +338,6 @@ void ObStorageLogWriter::destroy()
   cur_file_id_ = -1;
   write_cursor_.reset();
   flush_cursor_.reset();
-  set_ok(false);
-  write_failed_times_ = 0;
   ObLogStoreFactory::destroy(file_store_);
   log_item_allocator_.reset();
   ObBaseLogWriter::destroy();
@@ -349,6 +346,7 @@ void ObStorageLogWriter::destroy()
     batch_write_buf_ = nullptr;
   }
   batch_write_len_ = 0;
+  is_started_ = false;
   is_inited_ = false;
 }
 
@@ -367,8 +365,7 @@ int ObStorageLogWriter::start_log(const ObLogCursor& start_cursor)
     build_cursor_ = start_cursor;
     write_cursor_ = start_cursor;
     flush_cursor_ = start_cursor;
-    set_ok(true);
-    write_failed_times_ = 0;
+    is_started_ = true;
     LOG_INFO("start log", K(start_cursor));
   }
   return ret;
@@ -380,9 +377,9 @@ int ObStorageLogWriter::flush_log(
   int ret = OB_SUCCESS;
   ObStorageLogItem* log_item = NULL;
   start_cursor.reset();
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(!is_started_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("log writer not started yet", K(ret), K_(is_started), K_(is_inited));
   } else if (log_buffer.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(log_buffer));
@@ -842,44 +839,10 @@ int ObStorageLogWriter::write_logs_local(common::ObIBaseLogItem** items, const i
   const int64_t offset = flush_cursor_.offset_;
   const int64_t start_ts = ObTimeUtility::fast_current_time();
 
-  // retry until success
-  while (OB_SUCC(ret)) {
-    ret = file_store_->write(write_buf, write_len, offset);
-    if (OB_SUCC(ret)) {
-      if (--write_failed_times_ <= 0) {
-        write_failed_times_ = 0;
-        set_ok(true);
-      }
-      break;
-    } else {
-      if (++write_failed_times_ >= 10) {
-        write_failed_times_ = 10;
-        set_ok(false);
-      }
-      if (REACH_TIME_INTERVAL(30 * 1000 * 1000)) {
-        LOG_ERROR("log write failed",
-            K(ret),
-            K(write_len),
-            K(flush_cursor_),
-            K(cur_file_id_),
-            K(item_cnt),
-            K(sync_idx),
-            K(cur_idx));
-      } else {
-        LOG_WARN("log write failed",
-            K(ret),
-            K(write_len),
-            K(flush_cursor_),
-            K(cur_file_id_),
-            K(item_cnt),
-            K(sync_idx),
-            K(cur_idx));
-      }
-      ret = OB_SUCCESS;
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(file_store_->write(write_buf, write_len, offset))) {
+    // should never happen
+    LOG_ERROR("failed to write slog", K(ret));
+  } else {
     batch_write_len_ = 0;
     const int64_t duration = ObTimeUtility::fast_current_time() - start_ts;
     if (duration > 10000) {
@@ -1004,7 +967,7 @@ int ObStorageLogWriter::write_and_sync_logs(
 int ObStorageLogWriter::sync_log(common::ObIBaseLogItem** items, int64_t& sync_index, const int64_t write_index)
 {
   int ret = OB_SUCCESS;
-  if (NULL == items || write_index < 0 || sync_index < -1) {
+  if (OB_UNLIKELY(NULL == items || write_index < 0 || sync_index < -1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(items), K(write_index), K(sync_index));
   } else {
@@ -1029,6 +992,11 @@ int ObStorageLogWriter::sync_log(common::ObIBaseLogItem** items, int64_t& sync_i
     }
   }
   return ret;
+}
+
+bool ObStorageLogWriter::is_disk_warning() const
+{
+  return is_started_ ? file_store_->is_disk_warning() : false;
 }
 }  // end namespace blocksstable
 }  // end namespace oceanbase
