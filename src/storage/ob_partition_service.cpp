@@ -1433,45 +1433,7 @@ int ObPartitionService::add_new_partition(ObIPartitionGroupGuard& partition_guar
   return ret;
 }
 
-int ObPartitionService::log_new_partition(ObIPartitionGroup* partition, const int64_t publish_version,
-    const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "partition service is not initialized", K(ret));
-  } else if (OB_ISNULL(partition) || publish_version < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(partition), K(publish_version), K(ret));
-  } else {
-    const ObPartitionKey pkey = partition->get_partition_key();
-    if (OB_FAIL(txs_->add_partition(pkey))) {
-      STORAGE_LOG(WARN, "add new partition to transaction service failed", K(ret), K(pkey));
-    } else if (OB_FAIL(txs_->update_publish_version(pkey, publish_version, true))) {
-      STORAGE_LOG(WARN, "update publish version failed", K(pkey), K(publish_version));
-    } else if (OB_FAIL(txs_->update_restore_replay_info(
-                   pkey, restore_snapshot_version, last_restore_log_id, last_restore_log_ts))) {
-      STORAGE_LOG(WARN,
-          "failed to update_restore_replay_info",
-          K(restore_snapshot_version),
-          K(last_restore_log_id),
-          K(last_restore_log_ts),
-          K(ret));
-    } else if (OB_FAIL(rp_eg_->add_partition(pkey))) {
-      STORAGE_LOG(WARN, "replay engine add partition failed", K(ret), K(pkey));
-    } else if (OB_FAIL(partition->set_valid())) {
-      STORAGE_LOG(WARN, "partition set valid failed", K(pkey), K(ret));
-    } else if (OB_FAIL(partition->get_pg_storage().restore_mem_trans_table())) {
-      LOG_WARN("failed to restore_mem_trans_table", K(pkey), K(ret));
-    } else {
-      partition->get_pg_storage().online();
-      STORAGE_LOG(INFO, "log new partition success", K(pkey));
-    }
-  }
-  return ret;
-}
-
-int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup*>& partitions)
+int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup *> &partitions)
 {
   int ret = OB_SUCCESS;
   int64_t added_pg_count = 0;
@@ -3308,6 +3270,8 @@ int ObPartitionService::online_partition(const ObPartitionKey& pkey, const int64
   } else if (OB_ISNULL(pg = guard.get_partition_group())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get partition failed", K(pkey), K(ret));
+  } else if (!pg->is_valid() && OB_FAIL(pg->set_valid())) {
+    STORAGE_LOG(WARN, "partition set valid failed", K(pkey), K(ret));
   } else {
     // set a mark for the partiion, and cancel the mark after clog is tracked within 500ms
     (void)guard.get_partition_group()->set_migrating_flag(true);

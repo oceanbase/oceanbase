@@ -8300,7 +8300,7 @@ int ObMigrateUtil::enable_replay_with_new_partition(ObMigrateCtx& ctx)
     LOG_WARN("partition should not be null", K(ret));
   } else if (OB_FAIL(partition->create_memtable())) {
     LOG_WARN("failed to create memtable", K(ret), "pkey", partition->get_partition_key());
-  } else if (OB_FAIL(ObPartitionService::get_instance().log_new_partition(partition,
+  } else if (OB_FAIL(ObPartitionService::get_instance().online_partition(partition->get_partition_key(),
                  ctx.pg_meta_.storage_info_.get_data_info().get_publish_version(),
                  ctx.pg_meta_.restore_snapshot_version_,
                  ctx.pg_meta_.last_restore_log_id_,
