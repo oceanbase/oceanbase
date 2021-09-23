@@ -193,11 +193,37 @@ int ObLogWriteFilePool::get_file_id_range(file_id_t& min_file_id, file_id_t& max
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
+    bool need_scan_dir = false;
     min_file_id = ATOMIC_LOAD(&min_file_id_);
     max_file_id = ATOMIC_LOAD(&max_file_id_);
     if (OB_INVALID_FILE_ID == min_file_id || OB_INVALID_FILE_ID == max_file_id) {
-      ret = log_dir_->get_file_id_range(min_file_id, max_file_id);
-      if (OB_SUCC(ret)) {
+      need_scan_dir = true;
+    } else {
+      bool b_exist = false;
+      const char *dir = get_dir_name();
+      // check min file id
+      if (!need_scan_dir && OB_FAIL(check_file_existence(dir, min_file_id, b_exist))) {
+        need_scan_dir = true;
+        CLOG_LOG(WARN, "failed to check file existence", K(ret), K(dir), K(min_file_id));
+      } else if (!need_scan_dir && !b_exist) {
+        need_scan_dir = true;
+        CLOG_LOG(WARN, "min file does not exist", K(min_file_id), K(b_exist));
+      }
+
+      // check max file id
+      if (!need_scan_dir && OB_FAIL(check_file_existence(dir, max_file_id, b_exist))) {
+        need_scan_dir = true;
+        CLOG_LOG(WARN, "failed to check file existence", K(ret), K(dir), K(max_file_id));
+      } else if (!need_scan_dir && !b_exist) {
+        need_scan_dir = true;
+        CLOG_LOG(WARN, "max file does not exist", K(max_file_id), K(b_exist));
+      }
+    }
+
+    if (need_scan_dir) {
+      if (OB_SUCC(log_dir_->get_file_id_range(min_file_id, max_file_id))) {
+        update_min_file_id(min_file_id);
+        update_max_file_id(max_file_id);
         CLOG_LOG(INFO, "get min/max file id from IO", K(min_file_id), K(max_file_id), K(lbt()));
       }
     }
@@ -577,6 +603,34 @@ int ObLogWriteFilePool::rename_file(
     ret = fsync_dir(dest_dir_fd);
   } else {
     // do nothing
+  }
+  return ret;
+}
+
+int ObLogWriteFilePool::check_file_existence(const char* dir, const file_id_t file_id, bool& b_exist)
+{
+  int ret = OB_SUCCESS;
+  b_exist = false;
+  char full_path[common::MAX_PATH_SIZE] = {0};
+  if (OB_ISNULL(dir) || OB_UNLIKELY(0 == STRLEN(dir)) || OB_UNLIKELY(!is_valid_file_id(file_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid args", K(ret), K(dir), K(file_id));
+  } else {
+    int pret = ::snprintf(full_path, sizeof(full_path), "%s/%u", dir, file_id);
+    if (OB_UNLIKELY(pret <= 0 || pret >= sizeof(full_path))) {
+      ret = OB_BUF_NOT_ENOUGH;
+      CLOG_LOG(WARN, "file name too long", K(ret), K(dir), K(file_id));
+    } else if (0 != ::access(full_path, F_OK)) {
+      if (errno == ENOENT) {
+        ret = OB_SUCCESS;
+        b_exist = false;
+      } else {
+        ret = OB_IO_ERROR;
+        CLOG_LOG(WARN, "failed to access file", K(ret), K(dir), K(file_id), KERRMSG);
+      }
+    } else {
+      b_exist = true;
+    }
   }
   return ret;
 }

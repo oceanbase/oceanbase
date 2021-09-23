@@ -1003,6 +1003,7 @@ int common_check_convert_string(const ObExpr& expr, ObEvalCtx& ctx, const ObStri
         LOG_WARN("fail to hextoraw_string for blob", K(ret), K(in_str));
       }
     } else {
+      ret = OB_NOT_SUPPORTED;
       LOG_ERROR("invalid use of blob type", K(ret), K(in_str), K(out_type));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to blob type");
     }
@@ -4607,34 +4608,22 @@ int string_to_enum(ObIAllocator& alloc, const ObString& orig_in_str, const ObCol
   } else if (OB_FAIL(find_type(str_values, cs_type, no_sp_val, pos))) {
     LOG_WARN("fail to find type", K(str_values), K(cs_type), K(no_sp_val), K(in_str), K(pos), K(ret));
   } else if (OB_UNLIKELY(pos < 0)) {
-    if (CM_IS_WARN_ON_FAIL(cast_mode)) {
-      value = 0;
-      warning = OB_ERR_DATA_TRUNCATED;
-      LOG_INFO("input value out of range, and set out value zero", K(no_sp_val), K(str_values), K(warning), K(expr));
-    } else {
+    // Bug30666903: check implicit cast logic to handle number cases
+    if (!in_str.is_numeric()) {
       ret = OB_ERR_DATA_TRUNCATED;
-      LOG_WARN("input value out of range", K(no_sp_val), K(str_values), K(expr), K(ret));
-      // Bug30666903: check implicit cast logic to handle number cases
-      if (in_str.is_numeric()) {
-        int err = 0;
-        value = ObCharset::strntoull(in_str.ptr(), in_str.length(), 10, &err);
-        if (err == 0) {
-          ret = OB_SUCCESS;
-          uint32_t val_cnt = str_values.count();
-          if (OB_UNLIKELY(val_cnt <= 0)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect val_cnt", K(val_cnt), K(ret));
-          } else if (value > val_cnt) {
-            value = 0;
-            ret = OB_ERR_DATA_TRUNCATED;
-            LOG_WARN("input value out of range", K(val_cnt), K(ret));
-          }
-          if (OB_FAIL(ret) && CM_IS_WARN_ON_FAIL(cast_mode)) {
-            warning = OB_ERR_DATA_TRUNCATED;
-            ret = OB_SUCCESS;
-          }
-        }
+    } else {
+      int err = 0;
+      int64_t val_cnt = str_values.count();
+      value = ObCharset::strntoull(in_str.ptr(), in_str.length(), 10, &err);
+      if (err != 0 || value > val_cnt) {
+        value = 0;
+        ret = OB_ERR_DATA_TRUNCATED;
+        LOG_WARN("input value out of range", K(val_cnt), K(ret), K(err));
       }
+    }
+    if (OB_FAIL(ret) && CM_IS_WARN_ON_FAIL(cast_mode)) {
+      warning = ret;
+      ret = OB_SUCCESS;
     }
   } else {
     value = pos + 1;  // enum start from 1
@@ -4777,8 +4766,15 @@ CAST_ENUMSET_FUNC_NAME(datetime, enum)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(
-            expr.args_[0]->datum_meta_.type_, ObVarcharType, 0, false, in_val, ctx, buf, sizeof(buf), len))) {
+    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+            ObVarcharType,
+            expr.args_[0]->datum_meta_.scale_,
+            false,
+            in_val,
+            ctx,
+            buf,
+            sizeof(buf),
+            len))) {
       LOG_WARN("common_datetime_string failed", K(ret));
     } else {
       ObString in_str(len, buf);
@@ -4805,8 +4801,15 @@ CAST_ENUMSET_FUNC_NAME(datetime, set)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(
-            expr.args_[0]->datum_meta_.type_, ObVarcharType, 0, false, in_val, ctx, buf, sizeof(buf), len))) {
+    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+            ObVarcharType,
+            expr.args_[0]->datum_meta_.scale_,
+            false,
+            in_val,
+            ctx,
+            buf,
+            sizeof(buf),
+            len))) {
       LOG_WARN("common_datetime_string failed", K(ret));
     } else {
       ObString in_str(len, buf);
