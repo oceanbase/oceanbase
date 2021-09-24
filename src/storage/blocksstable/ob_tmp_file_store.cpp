@@ -12,6 +12,9 @@
 
 #include "ob_tmp_file_store.h"
 #include "ob_tmp_file.h"
+#include "share/ob_task_define.h"
+
+using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace blocksstable {
@@ -408,7 +411,7 @@ int ObTmpMacroBlock::get_block_cache_handle(ObTmpBlockValueHandle& handle)
   } else if (OB_FAIL(ObTmpBlockCache::get_instance().get_block(key, handle))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "fail to get tmp block from cache", K(ret), K(key));
-    } else {
+    } else if (REACH_COUNT_INTERVAL(100)) {  // print one log per 100 times.
       STORAGE_LOG(INFO, "block cache miss", K(ret), K(key));
     }
   }
@@ -942,6 +945,7 @@ int ObTmpTenantFileStore::free_macro_block(ObTmpMacroBlock*& t_mblk)
                  OB_FAIL(tmp_mem_block_manager_.wait_write_io_finish())) {  // in case of doing write io
         STORAGE_LOG(WARN, "fail to wait write io finish", K(ret), K(t_mblk));
       }
+      ObTaskController::get().allow_next_syslog();
       STORAGE_LOG(INFO, "finish to free a block", K(ret), K(*t_mblk));
       t_mblk->~ObTmpMacroBlock();
       allocator_.free(t_mblk);

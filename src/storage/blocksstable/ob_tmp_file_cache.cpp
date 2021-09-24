@@ -13,12 +13,15 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "common/ob_smart_var.h"
+#include "storage/ob_file_system_router.h"
+#include "share/ob_task_define.h"
 #include "ob_tmp_file_cache.h"
 #include "ob_tmp_file.h"
 #include "ob_tmp_file_store.h"
 #include "ob_store_file.h"
 
 using namespace oceanbase::storage;
+using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace blocksstable {
@@ -760,7 +763,7 @@ int ObTmpTenantMemBlockManager::alloc_extent(const int64_t dir_id, const uint64_
       }
     }
   } else if (OB_FAIL(t_mblk_map_.get_refactored(block_id, t_mblk))) {
-    STORAGE_LOG(INFO, "the tmp macro block has been washed", K(ret), K(block_id));
+    STORAGE_LOG(DEBUG, "the tmp macro block has been washed", K(ret), K(block_id));
     if (OB_FAIL(get_macro_block(dir_id, tenant_id, page_nums, t_mblk, free_blocks))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "fail to get macro block", K(ret));
@@ -926,7 +929,7 @@ int ObTmpTenantMemBlockManager::refresh_dir_to_blk_map(const int64_t dir_id, con
     if (OB_FAIL(t_mblk_map_.get_refactored(block_id, dir_mblk))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = dir_to_blk_map_.set_refactored(dir_id, t_mblk->get_block_id(), 1);
-        STORAGE_LOG(INFO, "the tmp macro block has been removed or washed", K(ret), K(block_id));
+        STORAGE_LOG(DEBUG, "the tmp macro block has been removed or washed", K(ret), K(block_id));
       } else {
         STORAGE_LOG(WARN, "fail to get block", K(ret), K(block_id));
       }
@@ -997,6 +1000,7 @@ int ObTmpTenantMemBlockManager::wash_with_no_wait(const uint64_t tenant_id, ObTm
           if (OB_FAIL(t_mblk_map_.erase_refactored(wash_block->get_block_id(), &wash_block))) {
             STORAGE_LOG(WARN, "fail to erase t_mblk_map", K(ret));
           } else {
+            ObTaskController::get().allow_next_syslog();
             STORAGE_LOG(INFO, "succeed to wash a block", K(*wash_block));
           }
         }
