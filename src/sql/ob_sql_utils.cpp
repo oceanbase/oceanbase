@@ -3890,3 +3890,16 @@ int ObSQLUtils::handle_audit_record(
   session.reset_audit_record();
   return ret;
 }
+
+bool ObSQLUtils::is_one_part_table_can_skip_part_calc(const ObTableSchema &schema)
+{
+  bool can_skip = false;
+  if (!schema.is_partitioned_table()) {
+    can_skip = true;
+  } else if (schema.get_all_part_num() == 1 && schema.is_hash_part()) {
+    can_skip = true;
+  } else {
+    can_skip = false;
+  }
+  return can_skip;
+}

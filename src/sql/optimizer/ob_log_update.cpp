@@ -269,7 +269,7 @@ int ObLogUpdate::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
       LOG_WARN("schema guard is null");
     } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, tbl_schema))) {
       LOG_WARN("get table schema failed", K(ret));
-    } else if (is_update_part_key && tbl_schema->get_all_part_num() > 1) {
+    } else if (is_update_part_key && !ObSQLUtils::is_one_part_table_can_skip_part_calc(*tbl_schema)) {
       is_needed = true;
       sharding_info.reset();
     }
