@@ -515,7 +515,7 @@ DEF_TIME(get_leader_candidate_rpc_timeout, OB_CLUSTER_PARAMETER, "9s", "[2s, 180
     "the time during a get leader candidate rpc request "
     "is permitted to execute before it is terminated. Range: [2s, 180s]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.0", "the min observer version",
+DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.1", "the min observer version",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True",
     "specifies whether DDL operation is turned on. "

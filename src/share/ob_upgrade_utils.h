@@ -181,7 +181,7 @@ public:
   static bool check_cluster_version_exist(const uint64_t version);
 
 public:
-  static const int64_t CLUTER_VERSION_NUM = 32;
+  static const int64_t CLUTER_VERSION_NUM = 33;
   static const uint64_t UPGRADE_PATH[CLUTER_VERSION_NUM];
 };
 
@@ -230,6 +230,7 @@ public:
 DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 76);
 // 3.1.0
 DEF_SIMPLE_UPGRARD_PROCESSER(3, 1, 0);
+DEF_SIMPLE_UPGRARD_PROCESSER(3, 1, 1);
 
 /* =========== upgrade processor end ============= */
 

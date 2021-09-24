@@ -61,7 +61,8 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[CLUTER_VERSION_NUM] = {
     CALC_CLUSTER_VERSION(2UL, 2UL, 74UL),  // 2.2.74
     CALC_CLUSTER_VERSION(2UL, 2UL, 75UL),  // 2.2.75
     CALC_CLUSTER_VERSION(2UL, 2UL, 76UL),  // 2.2.76
-    CALC_CLUSTER_VERSION(3UL, 1UL, 0UL)    // 3.1.0
+    CALC_CLUSTER_VERSION(3UL, 1UL, 0UL),    // 3.1.0
+    CALC_CLUSTER_VERSION(3UL, 1UL, 1UL)    //3.1.1
 };
 
 bool ObUpgradeChecker::check_cluster_version_exist(const uint64_t version)
@@ -1125,6 +1126,7 @@ int ObUpgradeProcesserSet::init(ObBaseUpgradeProcessor::UpgradeMode mode, common
     INIT_PROCESSOR_BY_VERSION(2, 2, 75);
     INIT_PROCESSOR_BY_VERSION(2, 2, 76);
     INIT_PROCESSOR_BY_VERSION(3, 1, 0);
+    INIT_PROCESSOR_BY_VERSION(3, 1, 1);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }
