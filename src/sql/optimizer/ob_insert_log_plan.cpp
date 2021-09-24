@@ -93,7 +93,8 @@ int ObInsertLogPlan::generate_plan()
                  GEN_SIGNATURE,
                  GEN_LOCATION_CONSTRAINT,
                  PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     LOG_WARN("failed to do plan traverse", K(ret));
   } else if (location_type_ != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
     location_type_ = phy_plan_type_;

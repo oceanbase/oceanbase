@@ -115,7 +115,7 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr* expr, const EqualSets& e
   } else if (expr->has_flag(CNT_AGG)) {
     //do nothing
   } else if (expr->get_expr_levels().has_member(stmt_level_)) {
-    if (child_tables_.is_superset(expr->get_relation_ids())) {
+    if (!expr->get_relation_ids().is_empty() && child_tables_.is_superset(expr->get_relation_ids())) {
       is_in_child = true;
     }
     for (int64_t i = 0; OB_SUCC(ret) && !is_in_child && i < equal_sets.count(); ++i) {
@@ -130,7 +130,8 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr* expr, const EqualSets& e
         if (OB_ISNULL(cur_expr = equal_set->at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null expr", K(ret));
-        } else if (!child_tables_.is_superset(cur_expr->get_relation_ids())) {
+        } else if (cur_expr->get_relation_ids().is_empty() ||
+                   !child_tables_.is_superset(cur_expr->get_relation_ids())) {
           // do nothing
         } else if (OB_FAIL(ObRawExprUtils::expr_is_order_consistent(cur_expr, expr, is_consistent))) {
           LOG_WARN("failed to check expr is order consistent", K(ret));

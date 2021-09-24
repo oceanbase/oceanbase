@@ -93,7 +93,8 @@ int ObMergeLogPlan::generate_plan()
                  CG_PREPARE,
                  GEN_SIGNATURE,
                  GEN_LOCATION_CONSTRAINT,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     LOG_WARN("fail to travers logical plan", K(ret));
   } else if (location_type_ != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
     location_type_ = phy_plan_type_;

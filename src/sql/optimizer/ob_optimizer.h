@@ -104,6 +104,7 @@ enum TraverseOp {
   // dblink
   ALLOC_LINK,
   GEN_LINK_STMT,
+  ALLOC_STARTUP_EXPR,
   TRAVERSE_OP_END
 };
 

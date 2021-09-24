@@ -295,7 +295,17 @@ int ObRawExprCanonicalizerImpl::pull_and_factor(ObRawExpr*& expr)
               expr = new_and;
             }
           } else if (1 == new_and->get_param_count()) {
-            expr = new_and->get_param_expr(0);
+            ObRawExpr *const_false = NULL;
+            ObSEArray<ObRawExpr *, 2> new_exprs;
+            if (OB_FAIL(ObRawExprUtils::build_const_bool_expr(&ctx_.expr_factory_, const_false, false))) {
+              LOG_WARN("failed to build const expr", K(ret));
+            } else if (OB_FAIL(new_exprs.push_back(const_false))) {
+              LOG_WARN("failed to push back expr", K(ret));
+            } else if (OB_FAIL(new_exprs.push_back(new_and->get_param_expr(0)))) {
+              LOG_WARN("failed to push back expr", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(ctx_.expr_factory_, new_exprs, expr))) {
+              LOG_WARN("failed to build or expr", K(ret));
+            }
           } else {
             expr = new_and;
           }

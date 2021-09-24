@@ -1595,7 +1595,7 @@ not(not(a))
 }
 A or (A And B) or (A And C) 
 {
-  "item_type":"T_REF_COLUMN",
+  "item_type":"T_OP_OR",
   "result_type": {
     "meta": {
       "type":"",
@@ -1615,27 +1615,84 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
-    "IS_COLUMN",
-    "CNT_COLUMN"
   ],
   "rel_id": [
   ],
-  "table_id":-1,
-  "column_id":-1,
-  "database_name":"",
-  "table_name":"",
-  "synonym_name":"",
-  "synonym_db_name":"",
-  "column_name":"",
-  "expr_level":-1,
   "expr_levels": [
   ],
-  "column_flags":0,
-  "enum_set_values": [
-  ],
-  "is_lob_column":false,
-  "is_unpivot_mocked_column":false,
-  "is_hidden":false
+  "children": [
+     {
+      "item_type":"T_BOOL",
+      "result_type": {
+        "meta": {
+          "type":"TINYINT",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+      ],
+      "rel_id": [
+      ],
+      "value": {
+        "TINYINT":0
+      }
+    },
+     {
+      "item_type":"T_REF_COLUMN",
+      "result_type": {
+        "meta": {
+          "type":"",
+          "collation":"binary",
+          "coercibility":"NUMERIC"
+        },
+        "accuracy": {
+          "length":-1,
+          "precision":-1,
+          "scale":-1
+        },
+        "flag":0,
+        "calc_type": {
+          "type":"NULL",
+          "collation":"invalid_type",
+          "coercibility":"INVALID"
+        }
+      },
+      "expr_info": [
+        "IS_COLUMN",
+        "CNT_COLUMN"
+      ],
+      "rel_id": [
+      ],
+      "table_id":-1,
+      "column_id":-1,
+      "database_name":"",
+      "table_name":"",
+      "synonym_name":"",
+      "synonym_db_name":"",
+      "column_name":"",
+      "expr_level":-1,
+      "expr_levels": [
+      ],
+      "column_flags":0,
+      "enum_set_values": [
+      ],
+      "is_lob_column":false,
+      "is_unpivot_mocked_column":false,
+      "is_hidden":false
+    }
+  ]
 }
 (A and B) or (A and C and D) 
 {

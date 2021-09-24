@@ -126,7 +126,7 @@ public:
   int allocate_granule_pre(AllocGIContext& ctx) override;
   int allocate_granule_post(AllocGIContext& ctx) override;
   virtual int compute_one_row_info() override;
-
+  int allocate_startup_expr_post() override;
 protected:
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> exec_params_;
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> onetime_exprs_;

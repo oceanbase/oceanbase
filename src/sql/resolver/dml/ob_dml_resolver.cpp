@@ -2994,6 +2994,7 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode& node, ObIArray<Ob
     ObExprResolveContext ctx(*params_.expr_factory_, session_info_->get_timezone_info(), OB_NAME_CASE_INVALID);
     ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
     ctx.query_ctx_ = params_.query_ctx_;
+    ctx.session_info_ = params_.session_info_;
     ObRawExprCanonicalizerImpl canonicalizer(ctx);
     if (OB_FAIL(resolve_sql_expr(node, expr))) {
       LOG_WARN("resolve sql expr failed", K(ret));

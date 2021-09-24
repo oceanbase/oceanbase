@@ -4149,12 +4149,6 @@ int ObLogPlan::allocate_access_path(AccessPath* ap, ObLogicalOperator*& out_acce
       }
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(append(scan->get_startup_exprs(), get_startup_filters()))) {
-          LOG_WARN("failed to append startup filters", K(ret));
-        }
-      }
-
-      if (OB_SUCC(ret)) {
         if (ap->is_global_index_ && is_index_back) {
           ObLogicalOperator* temp_op = NULL;
           if (OB_FAIL(allocate_table_lookup(
@@ -5451,6 +5445,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp& operation, void* ctx)
       case EXPLAIN_WRITE_BUFFER_OUTPUT:
       case EXPLAIN_WRITE_BUFFER_OUTLINE:
       case EXPLAIN_INDEX_SELECTION_INFO:
+      case ALLOC_STARTUP_EXPR:
       default:
         break;
     }

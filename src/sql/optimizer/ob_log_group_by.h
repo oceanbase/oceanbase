@@ -127,6 +127,7 @@ public:
     from_pivot_ = value;
   }
   int get_group_rollup_exprs(common::ObIArray<ObRawExpr*>& group_rollup_exprs) const;
+  int allocate_startup_expr_post() override;
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(avg_div_exprs),
       K_(approx_count_distinct_estimate_ndv_exprs), K_(algo), K_(distinct_card));
 

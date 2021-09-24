@@ -97,7 +97,6 @@ int ObTransformUtils::is_correlated_subquery(ObSelectStmt* subquery,
   return ret;
 }
 
-
 int ObTransformUtils::is_direct_correlated_expr(
     const ObRawExpr* expr, int32_t correlated_level, bool& is_direct_correlated)
 {

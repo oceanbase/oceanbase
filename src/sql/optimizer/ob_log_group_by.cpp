@@ -1306,3 +1306,14 @@ int ObLogGroupBy::compute_one_row_info()
   }
   return ret;
 }
+
+int ObLogGroupBy::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  if (SCALAR_AGGREGATE == algo_) {
+    // do nothing
+  } else if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post())) {
+    LOG_WARN("failed to allocate startup exprs post", K(ret));
+  }
+  return ret;
+}
