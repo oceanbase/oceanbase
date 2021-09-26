@@ -350,7 +350,7 @@ DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
     "memstore_limit_percentage = memstore_limit / min_memory, min_memory, "
     "where MIN_MEMORY is determined when the tenant is created. Range: (0, 100)",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(freeze_trigger_percentage, OB_CLUSTER_PARAMETER, "30", "(0, 100)",
+DEF_INT(freeze_trigger_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
     "the threshold of the size of the mem store when freeze will be triggered. Range: (0, 100)",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
