@@ -1323,7 +1323,7 @@ DEFINE_ERROR_EXT(OB_ERR_WINDOW_NAME_IS_NOT_DEFINE, -5929, -1, "HY000", "Window n
 DEFINE_ORACLE_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, -5930, -1, "HY000", "maximum open cursors exceeded", 1000, "maximum open cursors exceeded");
 DEFINE_ORACLE_ERROR(OB_ERR_ARG_INVALID, -5931, -1, "HY000", "argument is null, invalid, or out of range", 21560, "argument %.*s is null, invalid, or out of range");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_NAME_STRING, -5932, -1, "HY000", "unexpected name string", 21560, "unexpected name string '%.*s'");
-DEFINE_ERROR_EXT(OB_ERR_CTE_NEED_QUERY_BLOCKS, -5933, -1, "HY000", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s");
+DEFINE_ERROR_EXT(OB_ERR_CTE_NEED_QUERY_BLOCKS, -5976, -1, "HY000", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s");
 DEFINE_ERROR_EXT(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION, -5936, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect value for function", "Incorrect %.*s value: '%.*s' for function %.*s");
 DEFINE_ERROR_EXT(OB_ERR_USER_EXCEED_RESOURCE, -5967, 1226, "42000", "User has exceeded the resource", "User '%.*s' has exceeded the '%s' resource (current value: %lu)");
 
