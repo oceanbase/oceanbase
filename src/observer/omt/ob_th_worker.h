@@ -185,7 +185,6 @@ inline void ObThWorker::reset()
   ws_ = WStatus::STOPPED;
   active_ = false;
   unset_tidx();
-  lib::set_thread_name("OMT_FREE", ObWorker::get_tidx());
 }
 
 inline void ObThWorker::set_tenant(ObTenant* tenant)
