@@ -738,22 +738,24 @@ int ObStorageLogWriter::process_logs_in_batch(
     }
   }
 
-  if (OB_FAIL(ret)) {  // wake up logs not sync
+  if (OB_FAIL(ret)) {
+    // wake up logs not sync
     for (int64_t i = sync_index + 1; i < item_cnt; ++i) {
-      if (NULL == items[i]) {
+      if (OB_ISNULL(items[i])) {
         LOG_ERROR("log_item in items is null", K(ret), KP(items[i]));
       } else {
-        ObStorageLogItem* log_item = reinterpret_cast<ObStorageLogItem*>(items[i]);
+        ObStorageLogItem *log_item = reinterpret_cast<ObStorageLogItem *>(items[i]);
+        if (i == sync_index + 1) {
+          // set build cursor and write cursor with the specified log item in queue
+          ObMutexGuard guard(build_log_mutex_);
+          build_cursor_ = log_item->start_cursor_;
+          write_cursor_ = log_item->start_cursor_;
+        }
         // aggregate_logs_to_buffer may fail for invalid cursor arguments,
         // we just finish flush and let upper layer retry
         log_item->finish_flush(ret);
       }
     }
-
-    ObMutexGuard guard(build_log_mutex_);
-    ObStorageLogItem* log_item = reinterpret_cast<ObStorageLogItem*>(items[sync_index + 1]);
-    build_cursor_ = log_item->start_cursor_;
-    write_cursor_ = log_item->start_cursor_;
     LOG_ERROR("slog write failed, record cursor", K(ret), K_(build_cursor), K_(write_cursor));
   }
   finish_cnt = item_cnt;
@@ -775,7 +777,7 @@ int ObStorageLogWriter::prepare_fd(const int64_t file_id)
     // close last log file opened
     if (-1 != cur_file_id_ && OB_FAIL(file_store_->close())) {
       ret = OB_IO_ERROR;
-      LOG_ERROR("close error", K_(cur_file_id), KERRMSG);
+      LOG_ERROR("close error", K_(cur_file_id), K(file_id), KERRMSG);
     }
 
     if (OB_SUCC(ret)) {
