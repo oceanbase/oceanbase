@@ -2886,32 +2886,8 @@ int ObSQLUtils::clear_evaluated_flag(const ObExprPtrIArray& calc_exprs, ObEvalCt
 int ObSQLUtils::copy_and_convert_string_charset(
     ObIAllocator& allocator, const ObString& src, ObString& dst, ObCollationType src_coll, ObCollationType dst_coll)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!ObCharset::is_valid_collation(src_coll) || !ObCharset::is_valid_collation(dst_coll))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid input collation", K(ret), K(src_coll), K(dst_coll));
-  } else if (OB_ISNULL(src.ptr()) || OB_UNLIKELY(0 >= src.length())) {
-    dst.reset();
-  } else if (ObCharset::charset_type_by_coll(src_coll) == ObCharset::charset_type_by_coll(dst_coll)) {
-    OZ(ob_write_string(allocator, src, dst));
-  } else {
-    const int32_t CharConvertFactorNum = 4;
-    char* buf = nullptr;
-    int32_t buf_len = src.length() * CharConvertFactorNum;
-    uint32_t result_len = 0;
-    if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), "len", buf_len);
-    } else if (OB_FAIL(
-                   ObCharset::charset_convert(src_coll, src.ptr(), src.length(), dst_coll, buf, buf_len, result_len))) {
-      LOG_WARN("fail to do charset convert", K(ret));
-    } else {
-      dst.assign_ptr(buf, result_len);
-    }
-  }
-
-  return ret;
+  return ObCharset::charset_convert(allocator, src, src_coll, dst_coll, dst,
+                                    ObCharset::COPY_STRING_ON_SAME_CHARSET);
 }
 
 int ObSQLUtils::update_session_last_schema_version(
