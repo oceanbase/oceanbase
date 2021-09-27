@@ -58,7 +58,7 @@ OB_DEF_SERIALIZE(ObTask)
     ret = OB_NOT_INIT;
     LOG_WARN("task not init", K_(op_root), K_(exec_ctx), K_(ser_phy_plan));
   } else if (ser_phy_plan_->is_dist_insert_or_replace_plan() && location_idx_ != OB_INVALID_INDEX) {
-    OZ(exec_ctx_->reset_one_row_id_list(exec_ctx_->get_part_row_manager().get_row_id_list(location_idx_)));
+    IGNORE_RETURN exec_ctx_->reset_one_row_id_list(exec_ctx_->get_part_row_manager().get_row_id_list(location_idx_));
   }
   LST_DO_CODE(OB_UNIS_ENCODE, *ser_phy_plan_);
   LST_DO_CODE(OB_UNIS_ENCODE, *exec_ctx_);
@@ -184,7 +184,7 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
     LOG_ERROR("task not init", K_(exec_ctx), K_(ser_phy_plan));
   } else {
     if (ser_phy_plan_->is_dist_insert_or_replace_plan() && location_idx_ != OB_INVALID_INDEX) {
-      exec_ctx_->reset_one_row_id_list(exec_ctx_->get_part_row_manager().get_row_id_list(location_idx_));
+      IGNORE_RETURN exec_ctx_->reset_one_row_id_list(exec_ctx_->get_part_row_manager().get_row_id_list(location_idx_));
     }
     LST_DO_CODE(OB_UNIS_ADD_LEN, *ser_phy_plan_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, *exec_ctx_);
