@@ -4739,6 +4739,12 @@ int ObPGStorage::set_restore_flag(
       ObPartitionGroupMeta& next_meta = *next_meta_ptr;
       if (REPLICA_RESTORE_LOG == restore_flag) {
         if (!is_sys_table(pkey_.get_table_id())) {
+          ObRole role;
+          if (OB_FAIL(pg_->get_role(role))) {
+            LOG_WARN("failed to get role", K(ret));
+          } else if (ObRole::FOLLOWER == role) {
+            DEBUG_SYNC(FOLLOWER_BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG);
+          }
           DEBUG_SYNC(BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG);
         }
       }

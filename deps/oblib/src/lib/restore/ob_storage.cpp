@@ -18,10 +18,10 @@
 namespace oceanbase {
 namespace common {
 
-const char* OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS"};
+const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS"};
 
 void print_access_storage_log(
-    const char* msg, const common::ObString& uri, const int64_t start_ts, const int64_t size, bool* is_slow)
+    const char *msg, const common::ObString &uri, const int64_t start_ts, const int64_t size, bool *is_slow)
 {
   if (NULL != is_slow) {
     *is_slow = false;
@@ -48,7 +48,7 @@ void print_access_storage_log(
   }
 }
 
-int get_storage_type_from_path(const common::ObString& uri, ObStorageType& type)
+int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
 {
   int ret = OB_SUCCESS;
   type = OB_STORAGE_MAX_TYPE;
@@ -66,9 +66,9 @@ int get_storage_type_from_path(const common::ObString& uri, ObStorageType& type)
   return ret;
 }
 
-const char* get_storage_type_str(const ObStorageType& type)
+const char *get_storage_type_str(const ObStorageType &type)
 {
-  const char* str = "UNKNOWN";
+  const char *str = "UNKNOWN";
   STATIC_ASSERT(
       static_cast<int64_t>(OB_STORAGE_MAX_TYPE) == ARRAYSIZEOF(OB_STORAGE_TYPES_STR), "ObStorageType count mismatch");
   if (type >= 0 && type < OB_STORAGE_MAX_TYPE) {
@@ -82,7 +82,7 @@ bool is_io_error(const int result)
   return OB_IO_ERROR == result || OB_OSS_ERROR == result;
 }
 
-int get_storage_type_from_name(const char* type_str, ObStorageType& type)
+int get_storage_type_from_name(const char *type_str, ObStorageType &type)
 {
   int ret = OB_SUCCESS;
   type = ObStorageType::OB_STORAGE_MAX_TYPE;
@@ -131,11 +131,11 @@ ObStorageUtil::ObStorageUtil(const bool need_retry, const int64_t max_retry_dura
   }
 }
 
-int ObStorageUtil::is_exist(const common::ObString& uri, const common::ObString& storage_info, bool& exist)
+int ObStorageUtil::is_exist(const common::ObString &uri, const common::ObString &storage_info, bool &exist)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   exist = false;
 
 #ifdef ERRSIM
@@ -156,11 +156,11 @@ int ObStorageUtil::is_exist(const common::ObString& uri, const common::ObString&
 }
 
 int ObStorageUtil::get_file_length(
-    const common::ObString& uri, const common::ObString& storage_info, int64_t& file_length)
+    const common::ObString &uri, const common::ObString &storage_info, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   file_length = -1;
   int64_t retry_times = 0;
   bool need_retry = true;
@@ -203,11 +203,11 @@ int ObStorageUtil::get_file_length(
   return ret;
 }
 
-int ObStorageUtil::del_file(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::del_file(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
 
 #ifdef ERRSIM
   ret = E(EventTable::EN_BACKUP_IO_BEFORE_DEL_FILE) OB_SUCCESS;
@@ -252,11 +252,11 @@ int ObStorageUtil::del_file(const common::ObString& uri, const common::ObString&
   return ret;
 }
 
-int ObStorageUtil::mkdir(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::mkdir(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
 
   STORAGE_LOG(DEBUG, "mkdir", K(uri));
 #ifdef ERRSIM
@@ -280,7 +280,7 @@ int ObStorageUtil::mkdir(const common::ObString& uri, const common::ObString& st
   return ret;
 }
 
-int ObStorageUtil::mk_parent_dir(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::mk_parent_dir(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   char path[OB_MAX_URI_LENGTH];
@@ -318,8 +318,8 @@ int ObStorageUtil::mk_parent_dir(const common::ObString& uri, const common::ObSt
   return ret;
 }
 
-int ObStorageUtil::read_single_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, int64_t& read_size)
+int ObStorageUtil::read_single_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -354,8 +354,8 @@ int ObStorageUtil::read_single_file(const common::ObString& uri, const common::O
   return ret;
 }
 
-int ObStorageUtil::do_read_single_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, int64_t& read_size)
+int ObStorageUtil::do_read_single_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -384,7 +384,7 @@ int ObStorageUtil::do_read_single_file(const common::ObString& uri, const common
 
 // has '\0' in the end
 int ObStorageUtil::read_single_text_file(
-    const common::ObString& uri, const common::ObString& storage_info, char* buf, const int64_t buf_size)
+    const common::ObString &uri, const common::ObString &storage_info, char *buf, const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   int64_t read_size = -1;
@@ -404,11 +404,11 @@ int ObStorageUtil::read_single_text_file(
   return ret;
 }
 
-int ObStorageUtil::update_file_modify_time(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::update_file_modify_time(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -446,12 +446,12 @@ int ObStorageUtil::update_file_modify_time(const common::ObString& uri, const co
   return ret;
 }
 
-int ObStorageUtil::list_files(const common::ObString& uri, const common::ObString& storage_info,
-    common::ObIAllocator& allocator, common::ObIArray<common::ObString>& file_names)
+int ObStorageUtil::list_files(const common::ObString &uri, const common::ObString &storage_info,
+    common::ObIAllocator &allocator, common::ObIArray<common::ObString> &file_names)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -492,11 +492,11 @@ int ObStorageUtil::list_files(const common::ObString& uri, const common::ObStrin
 }
 
 int ObStorageUtil::write_single_file(
-    const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t size)
+    const common::ObString &uri, const common::ObString &storage_info, const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -544,7 +544,7 @@ int ObStorageUtil::write_single_file(
   return ret;
 }
 
-int ObStorageUtil::get_util(const common::ObString& uri, ObIStorageUtil*& util)
+int ObStorageUtil::get_util(const common::ObString &uri, ObIStorageUtil *&util)
 {
   int ret = OB_SUCCESS;
   ObStorageType type = OB_STORAGE_MAX_TYPE;
@@ -568,8 +568,8 @@ int ObStorageUtil::get_util(const common::ObString& uri, ObIStorageUtil*& util)
   return ret;
 }
 
-int ObStorageUtil::read_part_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, const int64_t offset, int64_t& read_size)
+int ObStorageUtil::read_part_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, const int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -600,8 +600,8 @@ int ObStorageUtil::read_part_file(const common::ObString& uri, const common::ObS
   return ret;
 }
 
-int ObStorageUtil::do_read_part_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, const int64_t offset, int64_t& read_size)
+int ObStorageUtil::do_read_part_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, const int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -623,11 +623,11 @@ int ObStorageUtil::do_read_part_file(const common::ObString& uri, const common::
   return ret;
 }
 
-int ObStorageUtil::del_dir(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::del_dir(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -657,11 +657,11 @@ int ObStorageUtil::del_dir(const common::ObString& uri, const common::ObString& 
 }
 
 int ObStorageUtil::get_pkeys_from_dir(
-    const common::ObString& uri, const common::ObString& storage_info, common::ObIArray<common::ObPartitionKey>& pkeys)
+    const common::ObString &uri, const common::ObString &storage_info, common::ObIArray<common::ObPartitionKey> &pkeys)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -695,11 +695,11 @@ int ObStorageUtil::get_pkeys_from_dir(
   return ret;
 }
 
-int ObStorageUtil::delete_tmp_files(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::delete_tmp_files(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -738,7 +738,7 @@ int ObStorageUtil::delete_tmp_files(const common::ObString& uri, const common::O
 }
 
 int ObStorageUtil::check_backup_dest_lifecycle(
-    const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle)
+    const common::ObString &path, const common::ObString &storage_info, bool &is_set_lifecycle)
 {
 
   int ret = OB_NOT_SUPPORTED;
@@ -785,12 +785,12 @@ int ObStorageUtil::check_backup_dest_lifecycle(
 }
 
 int ObStorageUtil::is_empty_directory(
-    const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory)
+    const common::ObString &uri, const common::ObString &storage_info, bool &is_empty_directory)
 {
   int ret = OB_SUCCESS;
   is_empty_directory = false;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -819,12 +819,12 @@ int ObStorageUtil::is_empty_directory(
   return ret;
 }
 
-int ObStorageUtil::list_directories(const common::ObString& uri, const common::ObString& storage_info,
-    common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directory_names)
+int ObStorageUtil::list_directories(const common::ObString &uri, const common::ObString &storage_info,
+    common::ObIAllocator &allocator, common::ObIArray<common::ObString> &directory_names)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -857,8 +857,7 @@ int ObStorageUtil::list_directories(const common::ObString& uri, const common::O
   return ret;
 }
 
-ObStorageReader::ObStorageReader()
-    : file_length_(-1), reader_(NULL), start_ts_(0)
+ObStorageReader::ObStorageReader() : file_length_(-1), reader_(NULL), start_ts_(0)
 {
   uri_[0] = '\0';
 }
@@ -870,7 +869,7 @@ ObStorageReader::~ObStorageReader()
   }
 }
 
-int ObStorageReader::open(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageReader::open(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -921,7 +920,7 @@ int ObStorageReader::open(const common::ObString& uri, const common::ObString& s
   return ret;
 }
 
-int ObStorageReader::pread(char* buf, const int64_t buf_size, int64_t offset, int64_t& read_size)
+int ObStorageReader::pread(char *buf, const int64_t buf_size, int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   read_size = 0;
@@ -987,7 +986,7 @@ ObStorageWriter::~ObStorageWriter()
   }
 }
 
-int ObStorageWriter::open(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageWriter::open(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1035,7 +1034,7 @@ int ObStorageWriter::open(const common::ObString& uri, const common::ObString& s
   return ret;
 }
 
-int ObStorageWriter::write(const char* buf, const int64_t size)
+int ObStorageWriter::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
 
@@ -1103,7 +1102,7 @@ ObStorageAppender::~ObStorageAppender()
 }
 
 int ObStorageAppender::open(
-    const common::ObString& uri, const common::ObString& storage_info, const AppenderParam& param)
+    const common::ObString &uri, const common::ObString &storage_info, const AppenderParam &param)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1156,7 +1155,7 @@ int ObStorageAppender::open(
   return ret;
 }
 
-int ObStorageAppender::open_deprecated(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageAppender::open_deprecated(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1206,7 +1205,7 @@ int ObStorageAppender::open_deprecated(const common::ObString& uri, const common
   return ret;
 }
 
-int ObStorageAppender::write(const char* buf, const int64_t size)
+int ObStorageAppender::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
 
@@ -1235,7 +1234,7 @@ int ObStorageAppender::write(const char* buf, const int64_t size)
   return ret;
 }
 
-int ObStorageAppender::pwrite(const char* buf, const int64_t size, const int64_t offset)
+int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t offset)
 {
   int ret = OB_SUCCESS;
 
@@ -1294,11 +1293,11 @@ ObStorageMetaWrapper::ObStorageMetaWrapper() : file_meta_()
 ObStorageMetaWrapper::~ObStorageMetaWrapper()
 {}
 
-int ObStorageMetaWrapper::get(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, int64_t& read_size)
+int ObStorageMetaWrapper::get(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
-  ObIStorageMetaWrapper* meta = NULL;
+  ObIStorageMetaWrapper *meta = NULL;
 
   const int64_t start_ts = ObTimeUtility::current_time();
   if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -1320,10 +1319,10 @@ int ObStorageMetaWrapper::get(const common::ObString& uri, const common::ObStrin
 }
 
 int ObStorageMetaWrapper::set(
-    const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t size)
+    const common::ObString &uri, const common::ObString &storage_info, const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  ObIStorageMetaWrapper* meta = NULL;
+  ObIStorageMetaWrapper *meta = NULL;
 
   const int64_t start_ts = ObTimeUtility::current_time();
   if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
@@ -1344,7 +1343,7 @@ int ObStorageMetaWrapper::set(
   return ret;
 }
 
-int ObStorageMetaWrapper::get_meta(const common::ObString& uri, ObIStorageMetaWrapper*& meta)
+int ObStorageMetaWrapper::get_meta(const common::ObString &uri, ObIStorageMetaWrapper *&meta)
 {
   int ret = OB_SUCCESS;
   ObStorageType type = OB_STORAGE_MAX_TYPE;

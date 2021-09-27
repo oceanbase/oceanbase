@@ -19,10 +19,10 @@
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "share/backup/ob_backup_struct.h"
+#include "rootserver/ob_backup_data_clean.h"
 #undef private
 #include <algorithm>
 #include "lib/hash/ob_hashmap.h"
-
 using namespace oceanbase;
 using namespace common;
 using namespace share;
@@ -450,6 +450,101 @@ TEST(ObLogArchiveBackupInfoMgr, log_archive_info_cmp)
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
 }
+
+
+TEST(ObLogArchiveBackupInfoMgr, log_archive_info_cmp2)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObLogArchiveBackupInfo> log_infos;
+  ObLogArchiveBackupInfo log_info;
+  log_info.status_.start_ts_ = 1;
+  log_info.status_.checkpoint_ts_ = 0;
+  log_info.status_.round_ = 1;
+  ret = log_infos.push_back(log_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  log_info.reset();
+  log_info.status_.start_ts_ = 1;
+  log_info.status_.checkpoint_ts_ = 0;
+  log_info.status_.round_ = 2;
+  ret = log_infos.push_back(log_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  log_info.reset();
+  log_info.status_.start_ts_ = 1;
+  log_info.status_.checkpoint_ts_ = 0;
+  log_info.status_.round_ = 3;
+  ret = log_infos.push_back(log_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+
+  typedef ObArray<ObLogArchiveBackupInfo>::iterator ArrayIter;
+  rootserver::ObBackupDataClean::CompareLogArchiveSnapshotVersion cmp;
+  ArrayIter iter = std::lower_bound(log_infos.begin(),
+                                    log_infos.end(),
+                                    1,
+                                    cmp);
+  if (iter == log_infos.end()) {
+    --iter;
+  } else if (iter != log_infos.begin()
+      && iter->status_.start_ts_ > 1) {
+    --iter;
+  }
+  log_info = *iter;
+  LOG_INFO("log info", K(log_info));
+
+}
+
+
+TEST(ObBackupDataClean, duplicate_task)
+{
+  int ret = OB_SUCCESS;
+  ObTenantBackupTaskInfo task_info;
+  ObArray<ObTenantBackupTaskInfo> task_infos;
+
+  //mock task info
+  //array backup set id is : 1, 2, 1, 2
+  task_info.tenant_id_ = OB_SYS_TENANT_ID;
+  task_info.incarnation_ = 1;
+  task_info.backup_set_id_ = 1;
+  task_info.copy_id_ = 0;
+  task_info.status_ = ObTenantBackupTaskInfo::FINISH;
+  ret = task_infos.push_back(task_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  task_info.reset();
+  task_info.tenant_id_ = OB_SYS_TENANT_ID;
+  task_info.incarnation_ = 1;
+  task_info.backup_set_id_ = 2;
+  ret = task_infos.push_back(task_info);
+  task_info.copy_id_ = 0;
+  task_info.status_ = ObTenantBackupTaskInfo::FINISH;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  task_info.reset();
+  task_info.tenant_id_ = OB_SYS_TENANT_ID;
+  task_info.incarnation_ = 1;
+  task_info.backup_set_id_ = 1;
+  task_info.copy_id_ = 0;
+  task_info.status_ = ObTenantBackupTaskInfo::DOING;
+  ret = task_infos.push_back(task_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  task_info.reset();
+  task_info.tenant_id_ = OB_SYS_TENANT_ID;
+  task_info.incarnation_ = 1;
+  task_info.backup_set_id_ = 2;
+  task_info.copy_id_ = 0;
+  task_info.status_ = ObTenantBackupTaskInfo::DOING;
+  ret = task_infos.push_back(task_info);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  rootserver::ObBackupDataClean data_clean;
+  data_clean.is_inited_ = true;
+  ret = data_clean.duplicate_task_info(task_infos);
+  ASSERT_EQ(2, task_infos.count());
+  ASSERT_EQ(1, task_infos.at(0).backup_set_id_);
+  ASSERT_EQ(ObTenantBackupTaskInfo::DOING, task_infos.at(0).status_);
+  ASSERT_EQ(2, task_infos.at(1).backup_set_id_);
+  ASSERT_EQ(ObTenantBackupTaskInfo::DOING, task_infos.at(1).status_);
+
+}
+
 
 int main(int argc, char **argv)
 {

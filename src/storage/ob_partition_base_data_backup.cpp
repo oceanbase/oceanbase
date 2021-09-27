@@ -3822,6 +3822,7 @@ int ObBackupFinishTask::init(ObMigrateCtx& ctx)
 int ObBackupFinishTask::process()
 {
   int ret = OB_SUCCESS;
+  ObBackupDataType data_type;
 
   if (NULL != ctx_) {
     STORAGE_LOG(INFO, "start ObBackupFinishTask process", "pkey", ctx_->replica_op_arg_.key_);
@@ -3829,12 +3830,15 @@ int ObBackupFinishTask::process()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
+  } else if(FALSE_IT(data_type.type_ = ctx_->physical_backup_ctx_.get_backup_data_type())) {
   } else if (OB_FAIL(ctx_->physical_backup_ctx_.close())) {
     STORAGE_LOG(WARN, "failed to close physical backup ctx", K(ret), "pkey", ctx_->replica_op_arg_.key_);
   } else {
     const int64_t end_macro_index_pos = ctx_->physical_backup_ctx_.macro_index_appender_.get_upload_size();
     ctx_->data_statics_.output_bytes_ += end_macro_index_pos;
-    ctx_->data_statics_.finish_partition_count_ = ctx_->data_statics_.partition_count_;
+    if (data_type.is_major_backup()) {
+      ctx_->data_statics_.finish_partition_count_ = ctx_->data_statics_.partition_count_;
+    }
     STORAGE_LOG(INFO, "backup task finished", K(ctx_->pg_meta_));
   }
 

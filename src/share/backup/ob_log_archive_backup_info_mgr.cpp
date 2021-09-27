@@ -1971,7 +1971,7 @@ int ObLogArchiveBackupInfoMgr::delete_log_archive_info(
                  info.status_.tenant_id_,
                  info.status_.round_))) {
     LOG_WARN("failed to assign sql", K(ret), K(info));
-  } else if (is_backup_backup_ && OB_FAIL(sql.append(" and copy_id = %ld", info.status_.copy_id_))) {
+  } else if (is_backup_backup_ && OB_FAIL(sql.append_fmt(" and copy_id = %ld", info.status_.copy_id_))) {
     LOG_WARN("failed to apend copy id", K(ret), K(sql));
   } else if (OB_FAIL(sql_client.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to write sql", K(ret), K(sql));
@@ -4051,4 +4051,40 @@ bool ObLogArchiveBackupInfoMgr::CompareBackupPieceInfo::operator()(
   }
 
   return b_ret;
+}
+
+int ObLogArchiveBackupInfoMgr::get_tenant_backup_piece_infos_with_file_status(
+    common::ObISQLClient &sql_client,
+    const int64_t incarnation,
+    const uint64_t tenant_id,
+    const ObBackupFileStatus::STATUS &file_status,
+    const bool is_backup_backup,
+    common::ObIArray<share::ObBackupPieceInfo> &piece_infos)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  piece_infos.reset();
+
+  if (OB_INVALID_ID == tenant_id || incarnation <= 0 || !ObBackupFileStatus::is_valid(file_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(incarnation), K(file_status));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT * FROM %s WHERE incarnation = %ld AND tenant_id = %lu AND file_status = '%s'",
+      OB_ALL_BACKUP_PIECE_FILES_TNAME, incarnation, tenant_id, ObBackupFileStatus::get_str(file_status)))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(incarnation), K(tenant_id));
+  } else if (is_backup_backup) {
+    if (OB_FAIL(sql.append_fmt(" AND copy_id > 0"))) {
+      LOG_WARN("failed to apend sql", K(ret));
+    }
+  } else {
+    if (OB_FAIL(sql.append_fmt(" AND copy_id = 0"))) {
+      LOG_WARN("failed to apend sql", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_backup_piece_list_(sql_client, sql, piece_infos))) {
+    LOG_WARN("failed to get backup piece list", KR(ret), K(sql));
+  }
+  return ret;
 }

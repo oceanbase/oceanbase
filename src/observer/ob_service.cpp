@@ -1916,7 +1916,18 @@ int ObService::migrate_replica_batch(const obrpc::ObMigrateReplicaBatchArg& arg)
 int ObService::standby_cutdata_batch_task(const obrpc::ObStandbyCutDataBatchTaskArg& arg)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("receive standby_cutdata_batch_task request", K(arg));
+  LOG_INFO("receive standby cut data batch request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(gctx_.par_ser_->standby_cut_data_batch(arg))) {
+    LOG_WARN("add migrate batch fail", K(arg), K(ret));
+  } else {
+    LOG_INFO("standby cut data batch successfully", K(arg));
+  }
 
   return ret;
 }
@@ -3728,3 +3739,4 @@ int ObService::broadcast_locations(const obrpc::ObPartitionBroadcastArg& arg, ob
 
 }  // end namespace observer
 }  // end namespace oceanbase
+

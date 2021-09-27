@@ -949,7 +949,9 @@ public:
   bool is_same_task(const ObTenantBackupTaskItem& other) const;
   bool is_result_succeed() const;
   const char* get_backup_task_status_str() const;
-  int set_backup_task_status(const char* buf);
+  int set_backup_task_status(const char *buf);
+  uint64_t hash() const;
+  bool operator==(const ObTenantBackupTaskItem &other) const;
 
   TO_STRING_KV(K_(tenant_id), K_(backup_set_id), K_(incarnation), K_(snapshot_version), K_(prev_full_backup_set_id),
       K_(prev_inc_backup_set_id), K_(prev_backup_data_version), K_(pg_count), K_(macro_block_count),

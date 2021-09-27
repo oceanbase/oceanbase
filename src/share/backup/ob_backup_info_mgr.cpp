@@ -79,13 +79,13 @@ ObLogArchiveInfoMgr::ObLogArchiveInfoMgr()
 ObLogArchiveInfoMgr::~ObLogArchiveInfoMgr()
 {}
 
-ObLogArchiveInfoMgr& ObLogArchiveInfoMgr::get_instance()
+ObLogArchiveInfoMgr &ObLogArchiveInfoMgr::get_instance()
 {
   static ObLogArchiveInfoMgr mgr;
   return mgr;
 }
 
-int ObLogArchiveInfoMgr::init(common::ObMySQLProxy& sql_proxy)
+int ObLogArchiveInfoMgr::init(common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   lib::ObLabel label("BACKUP_LR_INFO");
@@ -103,7 +103,7 @@ int ObLogArchiveInfoMgr::init(common::ObMySQLProxy& sql_proxy)
 }
 
 int ObLogArchiveInfoMgr::get_log_archive_status(
-    const uint64_t tenant_id, const int64_t need_ts, ObLogArchiveSimpleInfo& status)
+    const uint64_t tenant_id, const int64_t need_ts, ObLogArchiveSimpleInfo &status)
 {
   int ret = OB_SUCCESS;
   const int64_t CACHE_EXPIRED_TIME = 1 * 1000 * 1000;  // 1s
@@ -145,7 +145,7 @@ int ObLogArchiveInfoMgr::get_log_archive_status(
   return ret;
 }
 
-int ObLogArchiveInfoMgr::get_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo& status)
+int ObLogArchiveInfoMgr::get_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo &status)
 {
   int ret = OB_SUCCESS;
 
@@ -168,7 +168,7 @@ int ObLogArchiveInfoMgr::try_retire_status_()
   if (status_map_.size() >= OB_MAX_SERVER_TENANT_CNT) {
     for (STATUS_MAP::const_iterator it = status_map_.begin(); OB_SUCC(ret) && it != status_map_.end(); ++it) {
       const uint64_t tenant_id = it->first;
-      const ObLogArchiveSimpleInfo& status = it->second;
+      const ObLogArchiveSimpleInfo &status = it->second;
       if (status.update_ts_ < del_ts) {
         del_tenant_id = tenant_id;
         del_ts = status.update_ts_;
@@ -190,7 +190,7 @@ int ObLogArchiveInfoMgr::try_retire_status_()
   return ret;
 }
 
-int ObLogArchiveInfoMgr::renew_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo& status)
+int ObLogArchiveInfoMgr::renew_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo &status)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -267,7 +267,7 @@ void ObBackupInfoMgr::ObBackupInfoUpdateTask::runTimerTask()
   }
 }
 
-ObBackupInfoMgr& ObBackupInfoMgr::get_instance()
+ObBackupInfoMgr &ObBackupInfoMgr::get_instance()
 {
   static ObBackupInfoMgr backup_info;
   return backup_info;
@@ -281,7 +281,6 @@ ObBackupInfoMgr::ObBackupInfoMgr()
       cur_backup_info_(nullptr),
       cur_backup_piece_(nullptr),
       cur_restore_job_(nullptr),
-      cur_base_backup_started_(nullptr),
       lock_(ObLatchIds::BACKUP_INFO_MGR_LOCK),
       mutex_(ObLatchIds::BACKUP_INFO_MGR_LOCK),
       is_backup_loaded_(false),
@@ -295,7 +294,7 @@ ObBackupInfoMgr::~ObBackupInfoMgr()
   destroy();
 }
 
-int ObBackupInfoMgr::init(common::ObMySQLProxy& sql_proxy, ObBackupDestDetector& backup_dest_detector)
+int ObBackupInfoMgr::init(common::ObMySQLProxy &sql_proxy, ObBackupDestDetector &backup_dest_detector)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -309,7 +308,6 @@ int ObBackupInfoMgr::init(common::ObMySQLProxy& sql_proxy, ObBackupDestDetector&
     sql_proxy_ = &sql_proxy;
     cur_backup_info_ = &backup_infos_[0];
     cur_backup_piece_ = &backup_pieces_[0];
-    cur_base_backup_started_ = &is_base_backup_started_[0];
     backup_dest_detector_ = &backup_dest_detector;
     is_inited_ = true;
   }
@@ -346,7 +344,7 @@ void ObBackupInfoMgr::destroy()
   is_inited_ = false;
 }
 
-int ObBackupInfoMgr::get_log_archive_backup_info(ObLogArchiveBackupInfo& info)
+int ObBackupInfoMgr::get_log_archive_backup_info(ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObNonFrozenBackupPieceInfo backup_piece;
@@ -357,7 +355,7 @@ int ObBackupInfoMgr::get_log_archive_backup_info(ObLogArchiveBackupInfo& info)
 }
 
 int ObBackupInfoMgr::get_log_archive_backup_info_and_piece(
-    ObLogArchiveBackupInfo& info, ObNonFrozenBackupPieceInfo& piece)
+    ObLogArchiveBackupInfo &info, ObNonFrozenBackupPieceInfo &piece)
 {
   int ret = OB_SUCCESS;
   bool is_loaded = true;
@@ -392,7 +390,7 @@ int ObBackupInfoMgr::get_log_archive_backup_info_and_piece(
   return ret;
 }
 
-int ObBackupInfoMgr::get_restore_info_from_cache(const uint64_t tenant_id, ObSimplePhysicalRestoreJob& simple_job_info)
+int ObBackupInfoMgr::get_restore_info_from_cache(const uint64_t tenant_id, ObSimplePhysicalRestoreJob &simple_job_info)
 {
   int ret = OB_ENTRY_NOT_EXIST;
 
@@ -403,7 +401,7 @@ int ObBackupInfoMgr::get_restore_info_from_cache(const uint64_t tenant_id, ObSim
     SpinRLockGuard guard(lock_);
     if (is_restore_loaded_) {
       for (int64_t i = 0; i < cur_restore_job_->count(); ++i) {
-        ObPhysicalRestoreJob& cur_job = cur_restore_job_->at(i);
+        ObPhysicalRestoreJob &cur_job = cur_restore_job_->at(i);
         if (cur_job.tenant_id_ == tenant_id) {
           if (OB_FAIL(cur_job.copy_to(simple_job_info))) {
             LOG_WARN("failed to copy to simple job info", K(ret), K(cur_job));
@@ -417,7 +415,7 @@ int ObBackupInfoMgr::get_restore_info_from_cache(const uint64_t tenant_id, ObSim
   return ret;
 }
 
-int ObBackupInfoMgr::get_restore_status_from_cache(const uint64_t tenant_id, PhysicalRestoreStatus& status)
+int ObBackupInfoMgr::get_restore_status_from_cache(const uint64_t tenant_id, PhysicalRestoreStatus &status)
 {
   int ret = OB_ENTRY_NOT_EXIST;
   status = PHYSICAL_RESTORE_MAX_STATUS;
@@ -429,7 +427,7 @@ int ObBackupInfoMgr::get_restore_status_from_cache(const uint64_t tenant_id, Phy
     SpinRLockGuard guard(lock_);
     if (is_restore_loaded_) {
       for (int64_t i = 0; i < cur_restore_job_->count(); ++i) {
-        ObPhysicalRestoreJob& cur_job = cur_restore_job_->at(i);
+        ObPhysicalRestoreJob &cur_job = cur_restore_job_->at(i);
         if (cur_job.tenant_id_ == tenant_id) {
           status = cur_job.status_;
           ret = OB_SUCCESS;
@@ -442,13 +440,13 @@ int ObBackupInfoMgr::get_restore_status_from_cache(const uint64_t tenant_id, Phy
   return ret;
 }
 
-int ObBackupInfoMgr::get_restore_info(const uint64_t tenant_id, ObPhysicalRestoreInfo& info)
+int ObBackupInfoMgr::get_restore_info(const uint64_t tenant_id, ObPhysicalRestoreInfo &info)
 {
   return get_restore_info(false /*need_valid_restore_schema_version*/, tenant_id, info);
 }
 
 int ObBackupInfoMgr::get_restore_info(
-    const bool need_valid_restore_schema_version, const uint64_t tenant_id, ObPhysicalRestoreInfo& info)
+    const bool need_valid_restore_schema_version, const uint64_t tenant_id, ObPhysicalRestoreInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSimplePhysicalRestoreJob simple_job_info;
@@ -492,7 +490,7 @@ int ObBackupInfoMgr::get_restore_info(
   return ret;
 }
 
-int ObBackupInfoMgr::get_restore_job_id(const uint64_t tenant_id, int64_t& job_id)
+int ObBackupInfoMgr::get_restore_job_id(const uint64_t tenant_id, int64_t &job_id)
 {
   int ret = OB_SUCCESS;
   ObSimplePhysicalRestoreJob simple_job_info;
@@ -520,7 +518,7 @@ int ObBackupInfoMgr::get_restore_job_id(const uint64_t tenant_id, int64_t& job_i
 }
 
 int ObBackupInfoMgr::get_restore_piece_list(
-    const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupPiecePath>& piece_list)
+    const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupPiecePath> &piece_list)
 {
   int ret = OB_SUCCESS;
   ObSimplePhysicalRestoreJob simple_job_info;
@@ -550,7 +548,7 @@ int ObBackupInfoMgr::get_restore_piece_list(
 }
 
 int ObBackupInfoMgr::get_restore_set_list(
-    const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupSetPath>& set_list)
+    const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupSetPath> &set_list)
 {
   int ret = OB_SUCCESS;
   ObSimplePhysicalRestoreJob simple_job_info;
@@ -579,7 +577,7 @@ int ObBackupInfoMgr::get_restore_set_list(
   return ret;
 }
 
-int ObBackupInfoMgr::get_restore_status(const uint64_t tenant_id, PhysicalRestoreStatus& status)
+int ObBackupInfoMgr::get_restore_status(const uint64_t tenant_id, PhysicalRestoreStatus &status)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -606,7 +604,7 @@ int ObBackupInfoMgr::get_restore_status(const uint64_t tenant_id, PhysicalRestor
   return ret;
 }
 
-int ObBackupInfoMgr::get_backup_snapshot_version(int64_t& backup_snapshot_version)
+int ObBackupInfoMgr::get_backup_snapshot_version(int64_t &backup_snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -630,7 +628,7 @@ int ObBackupInfoMgr::get_backup_snapshot_version(int64_t& backup_snapshot_versio
   return ret;
 }
 
-int ObBackupInfoMgr::get_log_archive_checkpoint(int64_t& snapshot_version)
+int ObBackupInfoMgr::get_log_archive_checkpoint(int64_t &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -654,7 +652,7 @@ int ObBackupInfoMgr::get_log_archive_checkpoint(int64_t& snapshot_version)
 }
 
 int ObBackupInfoMgr::get_delay_delete_schema_version(const uint64_t tenant_id,
-    share::schema::ObMultiVersionSchemaService& schema_service, bool& is_backup, int64_t& reserved_schema_version)
+    share::schema::ObMultiVersionSchemaService &schema_service, bool &is_backup, int64_t &reserved_schema_version)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -700,7 +698,7 @@ int ObBackupInfoMgr::get_delay_delete_schema_version(const uint64_t tenant_id,
   return ret;
 }
 
-int ObBackupInfoMgr::check_if_doing_backup(bool& is_doing)
+int ObBackupInfoMgr::check_if_doing_backup(bool &is_doing)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -734,7 +732,7 @@ int ObBackupInfoMgr::check_if_doing_backup(bool& is_doing)
   return ret;
 }
 
-int ObBackupInfoMgr::check_if_doing_backup_backup(bool& is_doing)
+int ObBackupInfoMgr::check_if_doing_backup_backup(bool &is_doing)
 {
   int ret = OB_SUCCESS;
   is_doing = false;
@@ -796,10 +794,9 @@ int ObBackupInfoMgr::reload()
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
 
   lib::ObMutexGuard mutex_guard(mutex_);
-  ObLogArchiveBackupInfo* new_backup_info = &backup_infos_[0];
-  ObNonFrozenBackupPieceInfo* new_backup_piece = &backup_pieces_[0];
-  RestoreJobArray* new_restore_job = &restore_jobs_[0];
-  bool* new_is_backup_started = &is_base_backup_started_[0];
+  ObLogArchiveBackupInfo *new_backup_info = &backup_infos_[0];
+  ObNonFrozenBackupPieceInfo *new_backup_piece = &backup_pieces_[0];
+  RestoreJobArray *new_restore_job = &restore_jobs_[0];
 
   if (new_backup_info == cur_backup_info_) {
     new_backup_info = &backup_infos_[1];
@@ -812,10 +809,6 @@ int ObBackupInfoMgr::reload()
     new_restore_job = &restore_jobs_[1];
   }
 
-  if (new_is_backup_started == is_base_backup_started_) {
-    new_is_backup_started = &is_base_backup_started_[1];
-  }
-
   // reload backup info
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -826,8 +819,6 @@ int ObBackupInfoMgr::reload()
     LOG_WARN("failed to get log archive backup info and piece", K(ret));
   } else if (OB_FAIL(info_manager.init(tenant_id, *sql_proxy_))) {
     LOG_WARN("failed to init info manager", K(ret));
-  } else if (OB_FAIL(info_manager.is_backup_started(*new_is_backup_started))) {
-    LOG_WARN("failed to check is backup started", K(ret));
   } else if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL) ||
              new_backup_info->status_.status_ != cur_backup_info_->status_.status_ ||
              new_backup_info->status_.round_ != cur_backup_info_->status_.round_ ||
@@ -839,7 +830,6 @@ int ObBackupInfoMgr::reload()
     SpinWLockGuard guard(lock_);
     cur_backup_info_ = new_backup_info;
     cur_backup_piece_ = new_backup_piece;
-    cur_base_backup_started_ = new_is_backup_started;
     is_backup_loaded_ = true;
   }
 
@@ -868,8 +858,8 @@ int ObBackupInfoMgr::reload()
   return ret;
 }
 
-int ObBackupInfoMgr::fetch_sys_log_archive_backup_info_and_piece(common::ObMySQLProxy& sql_proxy,
-    ObLogArchiveBackupInfo& new_backup_info, ObNonFrozenBackupPieceInfo& new_backup_piece)
+int ObBackupInfoMgr::fetch_sys_log_archive_backup_info_and_piece(common::ObMySQLProxy &sql_proxy,
+    ObLogArchiveBackupInfo &new_backup_info, ObNonFrozenBackupPieceInfo &new_backup_piece)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -934,36 +924,7 @@ int64_t ObBackupInfoMgr::get_log_archive_checkpoint_interval() const
   return ATOMIC_LOAD(&log_archive_checkpoint_interval_);
 }
 
-int ObBackupInfoMgr::is_base_backup_start(bool& is_started)
-{
-  int ret = OB_SUCCESS;
-  bool is_loaded = true;
-  is_started = false;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else {
-    SpinRLockGuard guard(lock_);
-    is_loaded = is_backup_loaded_;
-    if (is_loaded) {
-      is_started = *cur_base_backup_started_;
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (!is_loaded) {
-      if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
-        LOG_WARN("not loaded yet, try again", K(ret));
-      }
-    } else if (REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
-      FLOG_INFO("is_base_backup_start", K(ret), K(is_started));
-    }
-  }
-  return ret;
-}
-
-int ObBackupInfoMgr::get_base_data_restore_schema_version(const uint64_t tenant_id, int64_t& schema_version)
+int ObBackupInfoMgr::get_base_data_restore_schema_version(const uint64_t tenant_id, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
   ObSimplePhysicalRestoreJob simple_job_info;
@@ -1002,14 +963,14 @@ ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::GetRestoreBackupInfoParam()
 {}
 
 int ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::get_largest_backup_set_path(
-    share::ObSimpleBackupSetPath& simple_path) const
+    share::ObSimpleBackupSetPath &simple_path) const
 {
   int ret = OB_SUCCESS;
   simple_path.reset();
   int64_t idx = -1;
   int64_t largest_backup_set_id = -1;
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_path_list_.count(); ++i) {
-    const share::ObSimpleBackupSetPath& path = backup_set_path_list_.at(i);
+    const share::ObSimpleBackupSetPath &path = backup_set_path_list_.at(i);
     if (path.backup_set_id_ > largest_backup_set_id) {
       largest_backup_set_id = path.backup_set_id_;
       idx = i;
@@ -1028,7 +989,7 @@ int ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::get_largest_backup_set_p
 }
 
 int ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::get_smallest_backup_piece_path(
-    share::ObSimpleBackupPiecePath& simple_path) const
+    share::ObSimpleBackupPiecePath &simple_path) const
 {
   int ret = OB_SUCCESS;
   simple_path.reset();
@@ -1041,7 +1002,7 @@ int ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam::get_smallest_backup_piec
   return ret;
 }
 
-int ObRestoreBackupInfoUtil::get_restore_backup_info(const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info)
+int ObRestoreBackupInfoUtil::get_restore_backup_info(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   bool is_cluster_level = param.backup_set_path_list_.empty();
@@ -1058,7 +1019,7 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info(const GetRestoreBackupInfoP
 }
 
 int ObRestoreBackupInfoUtil::get_restore_backup_info_v1_(
-    const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info)
+    const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest dest;
@@ -1075,13 +1036,13 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v1_(
   ObTenantNameSimpleMgr tenant_name_mgr;
   ObExternPGListMgr pg_list_mgr;
   uint64_t backup_tenant_id = 0;
-  const char* backup_dest = param.backup_dest_;
-  const char* backup_cluster_name = param.backup_cluster_name_;
+  const char *backup_dest = param.backup_dest_;
+  const char *backup_cluster_name = param.backup_cluster_name_;
   const int64_t cluster_id = param.cluster_id_;
   const int64_t incarnation = param.incarnation_;
-  const char* backup_tenant_name = param.backup_tenant_name_;
+  const char *backup_tenant_name = param.backup_tenant_name_;
   const int64_t restore_timestamp = param.restore_timestamp_;
-  const char* passwd_array = param.passwd_array_;
+  const char *passwd_array = param.passwd_array_;
   ObFakeBackupLeaseService fake_backup_lease;
 
   if (OB_ISNULL(backup_dest) || OB_ISNULL(backup_cluster_name) || cluster_id <= 0 || incarnation < 0 ||
@@ -1176,7 +1137,7 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v1_(
 }
 
 int ObRestoreBackupInfoUtil::get_restore_backup_info_v2_(
-    const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info)
+    const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObFakeBackupLeaseService fake_backup_lease;
@@ -1187,12 +1148,12 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v2_(
   ObSimpleBackupSetPath simple_set_path;      // largest backup set path
   ObSimpleBackupPiecePath simple_piece_path;  // smallest backup piece path
   ObBackupPath piece_backup_path;
-  const char* backup_dest = param.backup_dest_;
-  const char* backup_cluster_name = param.backup_cluster_name_;
+  const char *backup_dest = param.backup_dest_;
+  const char *backup_cluster_name = param.backup_cluster_name_;
   const int64_t cluster_id = param.cluster_id_;
   const int64_t incarnation = param.incarnation_;
   const int64_t restore_timestamp = param.restore_timestamp_;
-  const char* passwd_array = param.passwd_array_;
+  const char *passwd_array = param.passwd_array_;
   const int64_t cluster_version = ObClusterVersion::get_instance().get_cluster_version();
 
   ObExternLogArchiveBackupInfo log_archive_backup_info;
@@ -1261,13 +1222,13 @@ int ObRestoreBackupInfoUtil::get_restore_backup_info_v2_(
 }
 
 int ObRestoreBackupInfoUtil::get_restore_sys_table_ids(
-    const ObPhysicalRestoreInfo& info, common::ObIArray<common::ObPartitionKey>& pkey_list)
+    const ObPhysicalRestoreInfo &info, common::ObIArray<common::ObPartitionKey> &pkey_list)
 {
   UNUSEDx(info, pkey_list);
   return OB_SUCCESS;
 }
 
-ObRestoreFatalErrorReporter& ObRestoreFatalErrorReporter::get_instance()
+ObRestoreFatalErrorReporter &ObRestoreFatalErrorReporter::get_instance()
 {
   static ObRestoreFatalErrorReporter reporter;
   return reporter;
@@ -1284,7 +1245,7 @@ ObRestoreFatalErrorReporter::ObRestoreFatalErrorReporter()
 ObRestoreFatalErrorReporter::~ObRestoreFatalErrorReporter()
 {}
 
-int ObRestoreFatalErrorReporter::init(obrpc::ObCommonRpcProxy& rpc_proxy, share::ObRsMgr& rs_mgr)
+int ObRestoreFatalErrorReporter::init(obrpc::ObCommonRpcProxy &rpc_proxy, share::ObRsMgr &rs_mgr)
 {
   int ret = OB_SUCCESS;
 
@@ -1299,8 +1260,8 @@ int ObRestoreFatalErrorReporter::init(obrpc::ObCommonRpcProxy& rpc_proxy, share:
   return ret;
 }
 
-int ObRestoreFatalErrorReporter::add_restore_error_task(const uint64_t tenant_id, const PhysicalRestoreMod& mod,
-    const int32_t result, const int64_t job_id, const common::ObAddr& addr)
+int ObRestoreFatalErrorReporter::add_restore_error_task(const uint64_t tenant_id, const PhysicalRestoreMod &mod,
+    const int32_t result, const int64_t job_id, const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -1400,7 +1361,7 @@ int ObRestoreFatalErrorReporter::report_restore_errors()
 
   if (OB_SUCC(ret) && report_results.count() > 0) {
     for (int64_t i = 0; !has_set_stop() && i < report_results.count(); ++i) {  // ignore ret
-      obrpc::ObPhysicalRestoreResult& result = report_results.at(i);
+      obrpc::ObPhysicalRestoreResult &result = report_results.at(i);
       if (OB_SUCCESS != (tmp_ret = report_restore_error_(result))) {
         ret = OB_SUCC(ret) ? tmp_ret : ret;
         LOG_WARN("failed to report restore error", K(tmp_ret), K(ret), K(result));
@@ -1413,7 +1374,7 @@ int ObRestoreFatalErrorReporter::report_restore_errors()
   return ret;
 }
 
-int ObRestoreFatalErrorReporter::remove_restore_error_task_(const obrpc::ObPhysicalRestoreResult& result)
+int ObRestoreFatalErrorReporter::remove_restore_error_task_(const obrpc::ObPhysicalRestoreResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -1436,7 +1397,7 @@ int ObRestoreFatalErrorReporter::remove_restore_error_task_(const obrpc::ObPhysi
   return ret;
 }
 
-int ObRestoreFatalErrorReporter::report_restore_error_(const obrpc::ObPhysicalRestoreResult& result)
+int ObRestoreFatalErrorReporter::report_restore_error_(const obrpc::ObPhysicalRestoreResult &result)
 {
   int ret = OB_SUCCESS;
   common::ObAddr rs_addr;
@@ -1457,7 +1418,7 @@ int ObRestoreFatalErrorReporter::report_restore_error_(const obrpc::ObPhysicalRe
   return ret;
 }
 
-ObBackupDestDetector& ObBackupDestDetector::get_instance()
+ObBackupDestDetector &ObBackupDestDetector::get_instance()
 {
   static ObBackupDestDetector detector;
   return detector;
@@ -1554,7 +1515,7 @@ void ObBackupDestDetector::wakeup()
   (void)cond_.broadcast();  // ignore ret
 }
 
-int ObBackupDestDetector::get_is_backup_dest_bad(const int64_t round_id, bool& is_bad)
+int ObBackupDestDetector::get_is_backup_dest_bad(const int64_t round_id, bool &is_bad)
 {
   int ret = OB_SUCCESS;
   is_bad = false;
@@ -1590,7 +1551,7 @@ int ObBackupDestDetector::get_is_backup_dest_bad(const int64_t round_id, bool& i
   return ret;
 }
 
-int ObBackupDestDetector::update_backup_info(const ObLogArchiveBackupInfo& info)
+int ObBackupDestDetector::update_backup_info(const ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   bool is_changed = false;
@@ -1658,7 +1619,7 @@ int ObBackupDestDetector::check_backup_dest()
   return ret;
 }
 
-int ObBackupDestDetector::check_backup_dest_(ObLogArchiveBackupInfo& backup_info, bool& is_bad)
+int ObBackupDestDetector::check_backup_dest_(ObLogArchiveBackupInfo &backup_info, bool &is_bad)
 {
   int ret = OB_SUCCESS;
   bool need_check = false;

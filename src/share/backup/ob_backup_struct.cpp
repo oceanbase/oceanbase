@@ -2020,7 +2020,8 @@ bool ObTenantBackupTaskItem::is_valid() const
 
 bool ObTenantBackupTaskItem::is_same_task(const ObTenantBackupTaskItem& other) const
 {
-  return tenant_id_ == other.tenant_id_ && backup_set_id_ == other.backup_set_id_ && incarnation_ == other.incarnation_;
+  return tenant_id_ == other.tenant_id_ && backup_set_id_ == other.backup_set_id_ &&
+      incarnation_ == other.incarnation_ && copy_id_ == other.copy_id_;
 }
 
 bool ObTenantBackupTaskItem::is_result_succeed() const
@@ -2065,6 +2066,21 @@ int ObTenantBackupTaskItem::set_backup_task_status(const char* buf)
     }
   }
   return ret;
+}
+
+uint64_t ObTenantBackupTaskItem::hash() const
+{
+  uint64_t hash_val = 0;
+  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
+  hash_val = murmurhash(&incarnation_, sizeof(incarnation_), hash_val);
+  hash_val = murmurhash(&backup_set_id_, sizeof(backup_set_id_), hash_val);
+  hash_val = murmurhash(&copy_id_, sizeof(copy_id_), hash_val);
+  return hash_val;
+}
+
+bool ObTenantBackupTaskItem::operator==(const ObTenantBackupTaskItem &other) const
+{
+  return is_same_task(other);
 }
 
 ObPGBackupTaskItem::ObPGBackupTaskItem()

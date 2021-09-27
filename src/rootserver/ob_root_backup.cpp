@@ -61,11 +61,11 @@ ObRootBackup::ObRootBackup()
 ObRootBackup::~ObRootBackup()
 {}
 
-int ObRootBackup::init(common::ObServerConfig& cfg, share::schema::ObMultiVersionSchemaService& schema_service,
-    ObMySQLProxy& sql_proxy, ObRootBalancer& root_balancer, ObFreezeInfoManager& freeze_info_mgr,
-    ObServerManager& server_mgr, ObRebalanceTaskMgr& rebalancer_mgr, ObZoneManager& zone_mgr,
-    obrpc::ObSrvRpcProxy& rpc_proxy, share::ObIBackupLeaseService& backup_lease_service,
-    ObRestorePointService& restore_point_service)
+int ObRootBackup::init(common::ObServerConfig &cfg, share::schema::ObMultiVersionSchemaService &schema_service,
+    ObMySQLProxy &sql_proxy, ObRootBalancer &root_balancer, ObFreezeInfoManager &freeze_info_mgr,
+    ObServerManager &server_mgr, ObRebalanceTaskMgr &rebalancer_mgr, ObZoneManager &zone_mgr,
+    obrpc::ObSrvRpcProxy &rpc_proxy, share::ObIBackupLeaseService &backup_lease_service,
+    ObRestorePointService &restore_point_service)
 {
   int ret = OB_SUCCESS;
   const int root_backup_thread_cnt = 1;
@@ -215,7 +215,7 @@ int ObRootBackup::check_inner_table_version_()
   return ret;
 }
 
-int ObRootBackup::get_need_backup_tenant_ids(ObIArray<uint64_t>& tenant_ids)
+int ObRootBackup::get_need_backup_tenant_ids(ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   tenant_ids.reset();
@@ -283,7 +283,7 @@ int ObRootBackup::get_need_backup_tenant_ids(ObIArray<uint64_t>& tenant_ids)
   return ret;
 }
 
-int ObRootBackup::get_all_tenant_ids(ObIArray<uint64_t>& tenant_ids)
+int ObRootBackup::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
@@ -345,7 +345,7 @@ int ObRootBackup::get_all_tenant_ids(ObIArray<uint64_t>& tenant_ids)
   return ret;
 }
 
-int ObRootBackup::get_need_backup_info(const uint64_t tenant_id, ObBackupInfoManager& info_manager, bool& need_add)
+int ObRootBackup::get_need_backup_info(const uint64_t tenant_id, ObBackupInfoManager &info_manager, bool &need_add)
 {
   int ret = OB_SUCCESS;
   need_add = false;
@@ -379,7 +379,7 @@ int ObRootBackup::get_need_backup_info(const uint64_t tenant_id, ObBackupInfoMan
   return ret;
 }
 
-int ObRootBackup::do_root_scheduler(const ObIArray<uint64_t>& tenant_ids)
+int ObRootBackup::do_root_scheduler(const ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -425,7 +425,7 @@ int ObRootBackup::do_root_scheduler(const ObIArray<uint64_t>& tenant_ids)
   return ret;
 }
 
-int ObRootBackup::do_tenant_scheduler(const uint64_t tenant_id, ObBackupInfoManager& info_manager)
+int ObRootBackup::do_tenant_scheduler(const uint64_t tenant_id, ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx timeout_ctx;
@@ -468,7 +468,7 @@ int ObRootBackup::do_tenant_scheduler(const uint64_t tenant_id, ObBackupInfoMana
   return ret;
 }
 
-int ObRootBackup::do_with_status(share::ObBackupInfoManager& info_manager, const ObBaseBackupInfoStruct& info)
+int ObRootBackup::do_with_status(share::ObBackupInfoManager &info_manager, const ObBaseBackupInfoStruct &info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -483,7 +483,7 @@ int ObRootBackup::do_with_status(share::ObBackupInfoManager& info_manager, const
   } else if (OB_FAIL(check_can_backup())) {
     LOG_WARN("failed to check can backup", K(ret), K(info));
   } else {
-    const ObBackupInfoStatus& status = info.backup_status_;
+    const ObBackupInfoStatus &status = info.backup_status_;
     switch (status.status_) {
       case ObBackupInfoStatus::STOP:
         break;
@@ -519,7 +519,7 @@ int ObRootBackup::do_with_status(share::ObBackupInfoManager& info_manager, const
   return ret;
 }
 
-int ObRootBackup::do_scheduler(const ObBaseBackupInfoStruct& info, ObBackupInfoManager& info_manager)
+int ObRootBackup::do_scheduler(const ObBaseBackupInfoStruct &info, ObBackupInfoManager &info_manager)
 {
   // TODO() sys tenant and normal tenant
   LOG_INFO("start do backup scheduler", K(info));
@@ -604,6 +604,7 @@ int ObRootBackup::do_scheduler(const ObBaseBackupInfoStruct& info, ObBackupInfoM
       }
       // Forbidden check backup dest lifecycle, because oss has bug which make observer core
       /*
+
       if (OB_SUCC(ret)) {
         if (OB_SYS_TENANT_ID == info.tenant_id_) {
           int tmp_ret = OB_SUCCESS;
@@ -623,7 +624,7 @@ int ObRootBackup::do_scheduler(const ObBaseBackupInfoStruct& info, ObBackupInfoM
   return ret;
 }
 
-int ObRootBackup::do_backup(const ObBaseBackupInfoStruct& info, ObBackupInfoManager& info_manager)
+int ObRootBackup::do_backup(const ObBaseBackupInfoStruct &info, ObBackupInfoManager &info_manager)
 {
   LOG_INFO("start do backup", K(info));
   int ret = OB_SUCCESS;
@@ -653,7 +654,7 @@ int ObRootBackup::do_backup(const ObBaseBackupInfoStruct& info, ObBackupInfoMana
 }
 
 int ObRootBackup::do_sys_tenant_backup(
-    const share::ObBaseBackupInfoStruct& info, share::ObBackupInfoManager& info_manager)
+    const share::ObBaseBackupInfoStruct &info, share::ObBackupInfoManager &info_manager)
 {
   // TODO() fix it later, use tenant backup task check result
   int ret = OB_SUCCESS;
@@ -691,7 +692,7 @@ int ObRootBackup::do_sys_tenant_backup(
   return ret;
 }
 
-int ObRootBackup::do_tenant_backup(const share::ObBaseBackupInfoStruct& info, share::ObBackupInfoManager& info_manager)
+int ObRootBackup::do_tenant_backup(const share::ObBaseBackupInfoStruct &info, share::ObBackupInfoManager &info_manager)
 {
   LOG_INFO("start do backup", K(info));
   int ret = OB_SUCCESS;
@@ -745,11 +746,27 @@ int ObRootBackup::do_tenant_backup(const share::ObBaseBackupInfoStruct& info, sh
   } else {
     int64_t start_replay_log_ts = 0;
     ObTenantBackupTaskInfo dest_task_info;
+
     if (OB_FAIL(calculate_tenant_start_replay_log_ts(task_info, *backup_lease_service_, start_replay_log_ts))) {
       LOG_WARN("failed to do get tenant start relay log ts", K(ret), K(task_info));
     } else {
       dest_task_info = task_info;
       dest_task_info.start_replay_log_ts_ = start_replay_log_ts;
+    }
+
+#ifdef ERRSIM
+    ret = E(EventTable::EN_BACKUP_UPDATE_START_REPLAY_LOG_TS) OB_SUCCESS;
+#endif
+
+    if (OB_FAIL(ret)) {
+      if (ObBackupUtils::is_need_retry_error(ret)) {
+        //do nothing
+      } else {
+        dest_task_info = task_info;
+        dest_task_info.result_ = ret;
+        inner_error_ = ret;
+        ret = OB_SUCCESS;
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -788,7 +805,7 @@ int ObRootBackup::do_tenant_backup(const share::ObBaseBackupInfoStruct& info, sh
   return ret;
 }
 
-int ObRootBackup::do_cleanup(const share::ObBaseBackupInfoStruct& info, share::ObBackupInfoManager& info_manager)
+int ObRootBackup::do_cleanup(const share::ObBaseBackupInfoStruct &info, share::ObBackupInfoManager &info_manager)
 {
   LOG_INFO("start do cleanup", K(info));
   int ret = OB_SUCCESS;
@@ -898,7 +915,7 @@ int ObRootBackup::do_cleanup(const share::ObBaseBackupInfoStruct& info, share::O
 }
 
 int ObRootBackup::do_cleanup_pg_backup_tasks(
-    const ObTenantBackupTaskInfo& tenant_task_info, bool& all_task_deleted, common::ObISQLClient& trans)
+    const ObTenantBackupTaskInfo &tenant_task_info, bool &all_task_deleted, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObPGBackupTaskUpdater pg_task_updater;
@@ -930,7 +947,7 @@ int ObRootBackup::do_cleanup_pg_backup_tasks(
   return ret;
 }
 
-int ObRootBackup::do_cleanup_tenant_backup_task(const ObBaseBackupInfoStruct& info, common::ObISQLClient& trans)
+int ObRootBackup::do_cleanup_tenant_backup_task(const ObBaseBackupInfoStruct &info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskUpdater tenant_task_updater;
@@ -950,7 +967,7 @@ int ObRootBackup::do_cleanup_tenant_backup_task(const ObBaseBackupInfoStruct& in
 }
 
 int ObRootBackup::do_insert_tenant_backup_task_his(
-    const ObTenantBackupTaskInfo& tenant_task_info, common::ObISQLClient& trans)
+    const ObTenantBackupTaskInfo &tenant_task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObBackupTaskHistoryUpdater backup_task_history_updater;
@@ -969,7 +986,7 @@ int ObRootBackup::do_insert_tenant_backup_task_his(
   return ret;
 }
 
-int ObRootBackup::do_cancel(const share::ObBaseBackupInfoStruct& info, share::ObBackupInfoManager& info_manager)
+int ObRootBackup::do_cancel(const share::ObBaseBackupInfoStruct &info, share::ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -995,7 +1012,7 @@ int ObRootBackup::do_cancel(const share::ObBaseBackupInfoStruct& info, share::Ob
 }
 
 int ObRootBackup::get_tenant_backup_task(
-    common::ObISQLClient& trans, const share::ObBaseBackupInfoStruct& info, share::ObTenantBackupTaskInfo& task_info)
+    common::ObISQLClient &trans, const share::ObBaseBackupInfoStruct &info, share::ObTenantBackupTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskUpdater tenant_task_updater;
@@ -1014,7 +1031,7 @@ int ObRootBackup::get_tenant_backup_task(
 }
 
 int ObRootBackup::get_tenant_backup_task(const uint64_t tenant_id, const int64_t backup_set_id,
-    const int64_t incarnation, common::ObISQLClient& trans, share::ObTenantBackupTaskInfo& task_info)
+    const int64_t incarnation, common::ObISQLClient &trans, share::ObTenantBackupTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskUpdater tenant_task_updater;
@@ -1034,7 +1051,7 @@ int ObRootBackup::get_tenant_backup_task(const uint64_t tenant_id, const int64_t
 }
 
 int ObRootBackup::insert_tenant_backup_task(
-    ObMySQLTransaction& trans, const ObBaseBackupInfoStruct& info, const ObExternBackupInfo& extern_backup_info)
+    ObMySQLTransaction &trans, const ObBaseBackupInfoStruct &info, const ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskUpdater tenant_task_updater;
@@ -1053,9 +1070,9 @@ int ObRootBackup::insert_tenant_backup_task(
   return ret;
 }
 
-int ObRootBackup::update_tenant_backup_info(const share::ObBaseBackupInfoStruct& src_info,
-    const share::ObBaseBackupInfoStruct& dest_info, ObBackupInfoManager& info_manager,
-    share::ObBackupItemTransUpdater& updater)
+int ObRootBackup::update_tenant_backup_info(const share::ObBaseBackupInfoStruct &src_info,
+    const share::ObBaseBackupInfoStruct &dest_info, ObBackupInfoManager &info_manager,
+    share::ObBackupItemTransUpdater &updater)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1072,14 +1089,14 @@ int ObRootBackup::update_tenant_backup_info(const share::ObBaseBackupInfoStruct&
   return ret;
 }
 
-int ObRootBackup::get_tenant_total_partition_cnt(const uint64_t tenant_id, int64_t& total_partition_cnt)
+int ObRootBackup::get_tenant_total_partition_cnt(const uint64_t tenant_id, int64_t &total_partition_cnt)
 {
   // total_partition_cnt contains both normal pg and mark dropped pg
   // here interface just use to get partition count to calc query_time and trx_time
   int ret = OB_SUCCESS;
   total_partition_cnt = 0;
   ObSchemaGetterGuard schema_guard;
-  ObArray<const ObSimpleTableSchemaV2*> schemas;
+  ObArray<const ObSimpleTableSchemaV2 *> schemas;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1090,7 +1107,7 @@ int ObRootBackup::get_tenant_total_partition_cnt(const uint64_t tenant_id, int64
     LOG_WARN("failed to get table schema in tenant", K(ret), K(tenant_id));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < schemas.count(); ++i) {
-      const ObSimpleTableSchemaV2* schema = schemas.at(i);
+      const ObSimpleTableSchemaV2 *schema = schemas.at(i);
       // FIXME: doesn't involve the delay delete objects
       total_partition_cnt += schema->get_all_part_num();
     }
@@ -1098,9 +1115,9 @@ int ObRootBackup::get_tenant_total_partition_cnt(const uint64_t tenant_id, int64
   return ret;
 }
 
-int ObRootBackup::update_extern_backup_infos(const share::ObBaseBackupInfoStruct& info,
-    const ObExternBackupInfo::ExternBackupInfoStatus& status, const bool is_force_stop,
-    ObExternBackupInfo& extern_backup_info)
+int ObRootBackup::update_extern_backup_infos(const share::ObBaseBackupInfoStruct &info,
+    const ObExternBackupInfo::ExternBackupInfoStatus &status, const bool is_force_stop,
+    ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   ObExternBackupInfoMgr extern_backup_info_mgr;
@@ -1129,9 +1146,9 @@ int ObRootBackup::update_extern_backup_infos(const share::ObBaseBackupInfoStruct
   return ret;
 }
 
-int ObRootBackup::do_extern_backup_set_infos(const ObBaseBackupInfoStruct& info,
-    const ObTenantBackupTaskInfo& tenant_task_info, const ObExternBackupInfo& extern_backup_info,
-    const bool is_force_stop, ObExternBackupSetInfo& extern_backup_set_info)
+int ObRootBackup::do_extern_backup_set_infos(const ObBaseBackupInfoStruct &info,
+    const ObTenantBackupTaskInfo &tenant_task_info, const ObExternBackupInfo &extern_backup_info,
+    const bool is_force_stop, ObExternBackupSetInfo &extern_backup_set_info)
 {
   int ret = OB_SUCCESS;
   ObExternBackupSetInfoMgr extern_backup_set_info_mgr;
@@ -1179,13 +1196,13 @@ int ObRootBackup::do_extern_backup_set_infos(const ObBaseBackupInfoStruct& info,
   return ret;
 }
 
-int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoStruct& info,
-    const ObExternBackupInfo& extern_backup_info, const bool is_force_stop,
-    ObExternTenantLocalityInfo& extern_tenant_locality_info)
+int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoStruct &info,
+    const ObExternBackupInfo &extern_backup_info, const bool is_force_stop,
+    ObExternTenantLocalityInfo &extern_tenant_locality_info)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
-  const ObTenantSchema* tenant_info = NULL;
+  const ObTenantSchema *tenant_info = NULL;
   ObExternTenantLocalityInfoMgr extern_tenant_locality_info_mgr;
   ObClusterBackupDest backup_dest;
   const uint64_t tenant_id = info.tenant_id_;
@@ -1240,7 +1257,7 @@ int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoS
 }
 
 int ObRootBackup::do_extern_tenant_infos(
-    const share::ObBaseBackupInfoStruct& info, share::ObBackupInfoManager& info_manager)
+    const share::ObBaseBackupInfoStruct &info, share::ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -1263,7 +1280,7 @@ int ObRootBackup::do_extern_tenant_infos(
       const uint64_t tenant_id = tenant_ids.at(i);
       ObBaseBackupInfoStruct info;
       ObSchemaGetterGuard guard;
-      const ObTenantSchema* tenant_schema = NULL;
+      const ObTenantSchema *tenant_schema = NULL;
       ObExternTenantInfo tenant_info;
       if (OB_SYS_TENANT_ID == tenant_id) {
         // do nothing
@@ -1303,8 +1320,8 @@ int ObRootBackup::do_extern_tenant_infos(
 }
 
 int ObRootBackup::get_stopped_backup_tenant_task_infos(
-    const common::ObIArray<share::ObBaseBackupInfoStruct>& tenant_backup_infos,
-    common::ObIArray<share::ObTenantBackupTaskInfo>& tenant_task_infos)
+    const common::ObIArray<share::ObBaseBackupInfoStruct> &tenant_backup_infos,
+    common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_task_infos)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1312,7 +1329,7 @@ int ObRootBackup::get_stopped_backup_tenant_task_infos(
     LOG_WARN("root backup do not init", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_backup_infos.count(); ++i) {
-      const ObBaseBackupInfoStruct& info = tenant_backup_infos.at(i);
+      const ObBaseBackupInfoStruct &info = tenant_backup_infos.at(i);
       ObTenantBackupTaskUpdater updater;
       ObTenantBackupTaskInfo tenant_task_info;
       if (!info.backup_status_.is_stop_status()) {
@@ -1336,9 +1353,9 @@ int ObRootBackup::get_stopped_backup_tenant_task_infos(
   return ret;
 }
 
-int ObRootBackup::get_stopped_backup_tenant_infos(const share::ObBaseBackupInfoStruct& sys_backup_info,
-    const common::ObIArray<share::ObBaseBackupInfoStruct>& tenant_backup_infos, int32_t& result,
-    int64_t& min_start_replay_log_ts, ObBackupStatistics& backup_statistics)
+int ObRootBackup::get_stopped_backup_tenant_infos(const share::ObBaseBackupInfoStruct &sys_backup_info,
+    const common::ObIArray<share::ObBaseBackupInfoStruct> &tenant_backup_infos, int32_t &result,
+    int64_t &min_start_replay_log_ts, ObBackupStatistics &backup_statistics)
 {
   int ret = OB_SUCCESS;
   result = OB_SUCCESS;
@@ -1367,7 +1384,7 @@ int ObRootBackup::get_stopped_backup_tenant_infos(const share::ObBaseBackupInfoS
     }
   } else {
     for (int64_t i = 0; OB_SUCCESS == result && i < tenant_task_infos.count(); ++i) {
-      const ObTenantBackupTaskInfo& tenant_task_info = tenant_task_infos.at(i);
+      const ObTenantBackupTaskInfo &tenant_task_info = tenant_task_infos.at(i);
       result = tenant_task_info.result_;
       min_start_replay_log_ts = std::min(tenant_task_info.start_replay_log_ts_, min_start_replay_log_ts);
       if (OB_SUCCESS == result) {
@@ -1430,7 +1447,7 @@ int ObRootBackup::cleanup_stopped_backup_task_infos()
   return ret;
 }
 
-int ObRootBackup::cleanup_stopped_tenant_infos(const uint64_t tenant_id, ObBackupInfoManager& info_manager)
+int ObRootBackup::cleanup_stopped_tenant_infos(const uint64_t tenant_id, ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskInfo sys_tenant_backup_task;
@@ -1555,7 +1572,7 @@ int ObRootBackup::cleanup_stopped_tenant_infos(const uint64_t tenant_id, ObBacku
   return ret;
 }
 
-int ObRootBackup::get_lease_time(const uint64_t tenant_id, int64_t& lease_time)
+int ObRootBackup::get_lease_time(const uint64_t tenant_id, int64_t &lease_time)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1700,7 +1717,7 @@ void ObRootBackup::cleanup_prepared_infos()
 }
 
 int ObRootBackup::check_need_cleanup_prepared_infos(
-    const share::ObBaseBackupInfoStruct& sys_backup_info, bool& need_clean)
+    const share::ObBaseBackupInfoStruct &sys_backup_info, bool &need_clean)
 {
   int ret = OB_SUCCESS;
   need_clean = false;
@@ -1720,7 +1737,7 @@ int ObRootBackup::check_need_cleanup_prepared_infos(
 }
 
 int ObRootBackup::cleanup_tenant_prepared_infos(
-    const uint64_t tenant_id, ObISQLClient& sys_tenant_trans, ObBackupInfoManager& info_manager)
+    const uint64_t tenant_id, ObISQLClient &sys_tenant_trans, ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskInfo task_info;
@@ -1775,7 +1792,7 @@ int ObRootBackup::cleanup_tenant_prepared_infos(
 }
 
 int ObRootBackup::check_tenants_backup_task_failed(
-    const ObBaseBackupInfoStruct& info, ObBackupInfoManager& info_manager, common::ObISQLClient& sys_tenant_trans)
+    const ObBaseBackupInfoStruct &info, ObBackupInfoManager &info_manager, common::ObISQLClient &sys_tenant_trans)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -1893,8 +1910,8 @@ int ObRootBackup::check_tenants_backup_task_failed(
   return ret;
 }
 
-int ObRootBackup::update_tenant_backup_task(common::ObISQLClient& trans, const share::ObTenantBackupTaskInfo& src_info,
-    const share::ObTenantBackupTaskInfo& dest_info)
+int ObRootBackup::update_tenant_backup_task(common::ObISQLClient &trans, const share::ObTenantBackupTaskInfo &src_info,
+    const share::ObTenantBackupTaskInfo &dest_info)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskUpdater updater;
@@ -1914,7 +1931,7 @@ int ObRootBackup::update_tenant_backup_task(common::ObISQLClient& trans, const s
 }
 
 int ObRootBackup::do_normal_tenant_cancel(
-    const share::ObBaseBackupInfoStruct& info, share::ObBackupInfoManager& info_manager)
+    const share::ObBaseBackupInfoStruct &info, share::ObBackupInfoManager &info_manager)
 {
   LOG_INFO("start do normal tenant cancel", K(info));
   int ret = OB_SUCCESS;
@@ -2013,7 +2030,7 @@ int ObRootBackup::do_normal_tenant_cancel(
 }
 
 int ObRootBackup::do_sys_tenant_cancel(
-    const share::ObBaseBackupInfoStruct& info, share::ObBackupInfoManager& info_manager)
+    const share::ObBaseBackupInfoStruct &info, share::ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -2081,7 +2098,7 @@ int ObRootBackup::do_sys_tenant_cancel(
 }
 
 int ObRootBackup::set_normal_tenant_cancel(
-    const uint64_t tenant_id, share::ObBackupInfoManager& sys_info_manager, common::ObISQLClient& sys_tenant_tran)
+    const uint64_t tenant_id, share::ObBackupInfoManager &sys_info_manager, common::ObISQLClient &sys_tenant_tran)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -2137,9 +2154,9 @@ int ObRootBackup::set_normal_tenant_cancel(
   return ret;
 }
 
-int ObRootBackup::update_sys_tenant_backup_task(ObMySQLTransaction& trans, const share::ObBaseBackupInfoStruct& info,
-    const int32_t result, const int64_t min_start_relay_log_ts, const ObBackupStatistics& backup_statistics,
-    share::ObTenantBackupTaskInfo& tenant_task_info)
+int ObRootBackup::update_sys_tenant_backup_task(ObMySQLTransaction &trans, const share::ObBaseBackupInfoStruct &info,
+    const int32_t result, const int64_t min_start_relay_log_ts, const ObBackupStatistics &backup_statistics,
+    share::ObTenantBackupTaskInfo &tenant_task_info)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskInfo src_backup_task;
@@ -2192,9 +2209,9 @@ int ObRootBackup::check_can_backup()
   return ret;
 }
 
-int ObRootBackup::do_extern_diagnose_info(const ObBaseBackupInfoStruct& info,
-    const ObExternBackupInfo& extern_backup_info, const ObExternBackupSetInfo& extern_backup_set_info,
-    const ObExternTenantLocalityInfo& tenant_locality_info, const bool is_force_stop)
+int ObRootBackup::do_extern_diagnose_info(const ObBaseBackupInfoStruct &info,
+    const ObExternBackupInfo &extern_backup_info, const ObExternBackupSetInfo &extern_backup_set_info,
+    const ObExternTenantLocalityInfo &tenant_locality_info, const bool is_force_stop)
 {
   int ret = OB_SUCCESS;
   ObExternTenantBackupDiagnoseMgr extern_backup_diagnose_mgr;
@@ -2239,7 +2256,7 @@ int ObRootBackup::do_extern_diagnose_info(const ObBaseBackupInfoStruct& info,
   return ret;
 }
 
-int ObRootBackup::check_tenant_is_dropped(const uint64_t tenant_id, bool& is_dropped)
+int ObRootBackup::check_tenant_is_dropped(const uint64_t tenant_id, bool &is_dropped)
 {
   int ret = OB_SUCCESS;
   is_dropped = false;
@@ -2256,8 +2273,8 @@ int ObRootBackup::check_tenant_is_dropped(const uint64_t tenant_id, bool& is_dro
   return ret;
 }
 
-int ObRootBackup::do_with_all_finished_info(const share::ObBaseBackupInfoStruct& info,
-    share::ObBackupItemTransUpdater& sys_updater, share::ObBackupInfoManager& info_manager)
+int ObRootBackup::do_with_all_finished_info(const share::ObBaseBackupInfoStruct &info,
+    share::ObBackupItemTransUpdater &sys_updater, share::ObBackupInfoManager &info_manager)
 {
   // TODO() fix it later, use tenant backup task check result
   int ret = OB_SUCCESS;
@@ -2345,7 +2362,7 @@ int ObRootBackup::do_with_all_finished_info(const share::ObBaseBackupInfoStruct&
 }
 
 int ObRootBackup::update_tenant_backup_meta_info(
-    const ObPartitionKey& pkey, const int64_t pg_count, const int64_t partition_count)
+    const ObPartitionKey &pkey, const int64_t pg_count, const int64_t partition_count)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -2368,7 +2385,7 @@ void ObRootBackup::reset_tenant_backup_meta_info()
   backup_meta_info_.reset();
 }
 
-int ObRootBackup::get_tenant_backup_meta_info(ObTenantBackupMetaInfo& meta_info)
+int ObRootBackup::get_tenant_backup_meta_info(ObTenantBackupMetaInfo &meta_info)
 {
   int ret = OB_SUCCESS;
   meta_info.reset();
@@ -2381,7 +2398,7 @@ int ObRootBackup::get_tenant_backup_meta_info(ObTenantBackupMetaInfo& meta_info)
   return ret;
 }
 
-int ObRootBackup::check_tenant_backup_inner_error(const share::ObBaseBackupInfoStruct& info)
+int ObRootBackup::check_tenant_backup_inner_error(const share::ObBaseBackupInfoStruct &info)
 {
   int ret = OB_SUCCESS;
   int64_t global_broadcase_version = 0;
@@ -2415,8 +2432,8 @@ int ObRootBackup::check_tenant_backup_inner_error(const share::ObBaseBackupInfoS
   return ret;
 }
 
-int ObRootBackup::insert_tenant_backup_task_failed(ObMySQLTransaction& trans, const share::ObBaseBackupInfoStruct& info,
-    share::ObTenantBackupTaskInfo& tenant_backup_task)
+int ObRootBackup::insert_tenant_backup_task_failed(ObMySQLTransaction &trans, const share::ObBaseBackupInfoStruct &info,
+    share::ObTenantBackupTaskInfo &tenant_backup_task)
 {
   int ret = OB_SUCCESS;
   ObBackupDest backup_dest;
@@ -2482,7 +2499,7 @@ int ObRootBackup::drop_backup_point(const uint64_t tenant_id, const int64_t back
   return ret;
 }
 
-int ObRootBackup::commit_trans(share::ObBackupItemTransUpdater& updater)
+int ObRootBackup::commit_trans(share::ObBackupItemTransUpdater &updater)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2499,8 +2516,8 @@ int ObRootBackup::commit_trans(share::ObBackupItemTransUpdater& updater)
   return ret;
 }
 
-int ObRootBackup::add_backup_info_lock(const share::ObBaseBackupInfoStruct& info,
-    share::ObBackupItemTransUpdater& updater, share::ObBackupInfoManager& info_manager)
+int ObRootBackup::add_backup_info_lock(const share::ObBaseBackupInfoStruct &info,
+    share::ObBackupItemTransUpdater &updater, share::ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObBaseBackupInfoStruct src_info;
@@ -2518,7 +2535,7 @@ int ObRootBackup::add_backup_info_lock(const share::ObBaseBackupInfoStruct& info
   return ret;
 }
 
-int ObRootBackup::start_trans(ObTimeoutCtx& timeout_ctx, share::ObBackupItemTransUpdater& updater)
+int ObRootBackup::start_trans(ObTimeoutCtx &timeout_ctx, share::ObBackupItemTransUpdater &updater)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_EXECUTE_TIMEOUT_US = 600L * 1000 * 1000;  // 600s
@@ -2533,10 +2550,10 @@ int ObRootBackup::start_trans(ObTimeoutCtx& timeout_ctx, share::ObBackupItemTran
   return ret;
 }
 
-int ObRootBackup::check_tenant_can_backup(const uint64_t tenant_id, ObSchemaGetterGuard& guard, bool& can_backup)
+int ObRootBackup::check_tenant_can_backup(const uint64_t tenant_id, ObSchemaGetterGuard &guard, bool &can_backup)
 {
   int ret = OB_SUCCESS;
-  const ObSimpleTenantSchema* tenant_schema = NULL;
+  const ObSimpleTenantSchema *tenant_schema = NULL;
   can_backup = true;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2557,8 +2574,8 @@ int ObRootBackup::check_tenant_can_backup(const uint64_t tenant_id, ObSchemaGett
 }
 
 // TODO() use inner table replace it
-int ObRootBackup::get_tenant_backup_set_file_info(const share::ObBaseBackupInfoStruct& info,
-    const share::ObExternBackupInfo& extern_backup_info, share::ObBackupSetFileInfo& backup_set_file_info)
+int ObRootBackup::get_tenant_backup_set_file_info(const share::ObBaseBackupInfoStruct &info,
+    const share::ObExternBackupInfo &extern_backup_info, share::ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   backup_set_file_info.reset();
@@ -2575,7 +2592,7 @@ int ObRootBackup::get_tenant_backup_set_file_info(const share::ObBaseBackupInfoS
 }
 
 int ObRootBackup::get_tenant_backup_set_file_info(
-    const share::ObTenantBackupTaskInfo& tenant_task_info, share::ObBackupSetFileInfo& backup_set_file_info)
+    const share::ObTenantBackupTaskInfo &tenant_task_info, share::ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   backup_set_file_info.reset();
@@ -2592,7 +2609,7 @@ int ObRootBackup::get_tenant_backup_set_file_info(
 }
 
 int ObRootBackup::add_extern_backup_set_file_info(
-    const ObBackupSetFileInfo& backup_set_file_info, const bool is_force_stop)
+    const ObBackupSetFileInfo &backup_set_file_info, const bool is_force_stop)
 {
   int ret = OB_SUCCESS;
   ObExternBackupSetFileInfoMgr extern_backup_set_file_info_mgr;
@@ -2625,7 +2642,7 @@ int ObRootBackup::add_extern_backup_set_file_info(
 }
 
 int ObRootBackup::update_extern_backup_set_file_info(
-    const ObBackupSetFileInfo& backup_set_file_info, const bool is_force_stop)
+    const ObBackupSetFileInfo &backup_set_file_info, const bool is_force_stop)
 {
   int ret = OB_SUCCESS;
   ObExternBackupSetFileInfoMgr extern_backup_set_file_info_mgr;
@@ -2657,7 +2674,7 @@ int ObRootBackup::update_extern_backup_set_file_info(
   return ret;
 }
 
-int ObRootBackup::add_backup_set_file_info(const ObBackupSetFileInfo& backup_set_file_info)
+int ObRootBackup::add_backup_set_file_info(const ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -2673,7 +2690,7 @@ int ObRootBackup::add_backup_set_file_info(const ObBackupSetFileInfo& backup_set
 }
 
 int ObRootBackup::update_backup_set_file_info(
-    const ObBackupSetFileInfo& backup_set_file_info, common::ObISQLClient& trans)
+    const ObBackupSetFileInfo &backup_set_file_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -2689,7 +2706,7 @@ int ObRootBackup::update_backup_set_file_info(
 }
 
 int ObRootBackup::update_backup_set_file_info(
-    const share::ObBackupSetFileInfo& backup_set_file_info, common::ObMySQLTransaction& trans)
+    const share::ObBackupSetFileInfo &backup_set_file_info, common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   ObBackupSetFileInfo src_backup_set_file_info;
@@ -2716,7 +2733,7 @@ int ObRootBackup::update_backup_set_file_info(
   return ret;
 }
 
-int ObRootBackup::get_dropped_tenant_id_list(const int64_t sys_backup_schema_version, ObIArray<uint64_t>& tenant_ids)
+int ObRootBackup::get_dropped_tenant_id_list(const int64_t sys_backup_schema_version, ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   tenant_ids.reset();
@@ -2750,7 +2767,7 @@ int ObRootBackup::get_dropped_tenant_id_list(const int64_t sys_backup_schema_ver
 }
 
 int ObRootBackup::update_dropped_tenants_backup_set_file_info(
-    const common::ObIArray<ObBackupSetFileInfo>& backup_set_file_infos, common::ObISQLClient& trans)
+    const common::ObIArray<ObBackupSetFileInfo> &backup_set_file_infos, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   const bool for_update = true;
@@ -2763,7 +2780,7 @@ int ObRootBackup::update_dropped_tenants_backup_set_file_info(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_file_infos.count(); ++i) {
       src_backup_set_file_info.reset();
-      const ObBackupSetFileInfo& dst_backup_set_file_info = backup_set_file_infos.at(i);
+      const ObBackupSetFileInfo &dst_backup_set_file_info = backup_set_file_infos.at(i);
       if (OB_FAIL(ObBackupSetFilesOperator::get_tenant_backup_set_file_info(dst_backup_set_file_info.tenant_id_,
               dst_backup_set_file_info.backup_set_id_,
               dst_backup_set_file_info.incarnation_,
@@ -2785,7 +2802,7 @@ int ObRootBackup::update_dropped_tenants_backup_set_file_info(
 }
 
 int ObRootBackup::update_dropped_tenant_backup_set_file_info(
-    const ObBackupSetFileInfo& sys_backup_set_file_info, const uint64_t tenant_id, ObISQLClient& trans)
+    const ObBackupSetFileInfo &sys_backup_set_file_info, const uint64_t tenant_id, ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   const bool for_update = true;
@@ -2830,7 +2847,7 @@ int ObRootBackup::update_dropped_tenant_backup_set_file_info(
 }
 
 int ObRootBackup::do_extern_single_backup_set_info(
-    const share::ObBackupSetFileInfo& backup_set_file_info, const bool is_force_stop)
+    const share::ObBackupSetFileInfo &backup_set_file_info, const bool is_force_stop)
 {
   int ret = OB_SUCCESS;
   ObExternSingleBackupSetInfoMgr extern_single_backup_set_info_mgr;
@@ -2864,8 +2881,8 @@ int ObRootBackup::do_extern_single_backup_set_info(
   return ret;
 }
 
-int ObRootBackup::calculate_tenant_start_replay_log_ts(const share::ObTenantBackupTaskInfo& tenant_task_info,
-    share::ObIBackupLeaseService& backup_lease_service, int64_t& start_replay_log_ts)
+int ObRootBackup::calculate_tenant_start_replay_log_ts(const share::ObTenantBackupTaskInfo &tenant_task_info,
+    share::ObIBackupLeaseService &backup_lease_service, int64_t &start_replay_log_ts)
 {
   int ret = OB_SUCCESS;
   ObBackupBaseDataPathInfo path_info;
@@ -2907,9 +2924,9 @@ int ObRootBackup::calculate_tenant_start_replay_log_ts(const share::ObTenantBack
   return ret;
 }
 
-int ObRootBackup::do_tenant_backup_index_reform(const share::ObTenantBackupTaskInfo& tenant_task_info,
-    const ObBackupBaseDataPathInfo& path_info, share::ObIBackupLeaseService& backup_lease_service,
-    storage::ObPhyRestoreMetaIndexStore& meta_index_store)
+int ObRootBackup::do_tenant_backup_index_reform(const share::ObTenantBackupTaskInfo &tenant_task_info,
+    const ObBackupBaseDataPathInfo &path_info, share::ObIBackupLeaseService &backup_lease_service,
+    storage::ObPhyRestoreMetaIndexStore &meta_index_store)
 {
   int ret = OB_SUCCESS;
   storage::ObBackupMetaIndexReformer meta_index_reformer;
@@ -2928,9 +2945,9 @@ int ObRootBackup::do_tenant_backup_index_reform(const share::ObTenantBackupTaskI
   return ret;
 }
 
-int ObRootBackup::do_get_tenant_start_replay_log_ts(const share::ObTenantBackupTaskInfo& tenant_task_info,
-    const ObBackupBaseDataPathInfo& path_info, storage::ObPhyRestoreMetaIndexStore& meta_index_store,
-    int64_t& start_replay_log_ts)
+int ObRootBackup::do_get_tenant_start_replay_log_ts(const share::ObTenantBackupTaskInfo &tenant_task_info,
+    const ObBackupBaseDataPathInfo &path_info, storage::ObPhyRestoreMetaIndexStore &meta_index_store,
+    int64_t &start_replay_log_ts)
 {
   int ret = OB_SUCCESS;
   start_replay_log_ts = INT64_MAX;
@@ -2971,8 +2988,8 @@ int ObRootBackup::do_get_tenant_start_replay_log_ts(const share::ObTenantBackupT
   return ret;
 }
 
-int ObRootBackup::get_dropped_tenant_backup_set_file_info(const share::ObTenantBackupTaskInfo& sys_task_info,
-    const common::ObIArray<uint64_t>& tenant_ids, common::ObIArray<share::ObBackupSetFileInfo>& backup_set_file_infos)
+int ObRootBackup::get_dropped_tenant_backup_set_file_info(const share::ObTenantBackupTaskInfo &sys_task_info,
+    const common::ObIArray<uint64_t> &tenant_ids, common::ObIArray<share::ObBackupSetFileInfo> &backup_set_file_infos)
 {
   int ret = OB_SUCCESS;
   ObBackupSetFileInfo sys_backup_set_file_info;
@@ -3024,7 +3041,7 @@ int ObRootBackup::get_dropped_tenant_backup_set_file_info(const share::ObTenantB
 }
 
 int ObRootBackup::update_dropped_tenants_extern_backup_set_file_info(
-    const common::ObIArray<ObBackupSetFileInfo>& backup_set_file_infos)
+    const common::ObIArray<ObBackupSetFileInfo> &backup_set_file_infos)
 {
   int ret = OB_SUCCESS;
   bool is_force_stop = false;
@@ -3036,7 +3053,7 @@ int ObRootBackup::update_dropped_tenants_extern_backup_set_file_info(
   } else if (FALSE_IT(is_force_stop = OB_SUCCESS != extern_device_error_)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_file_infos.count(); ++i) {
-      const ObBackupSetFileInfo& backup_set_file_info = backup_set_file_infos.at(i);
+      const ObBackupSetFileInfo &backup_set_file_info = backup_set_file_infos.at(i);
       if (OB_FAIL(update_extern_backup_set_file_info(backup_set_file_info, is_force_stop))) {
         LOG_WARN("failed to update dropped tenants extern backup set file info", K(ret), K(backup_set_file_info));
       }
@@ -3046,7 +3063,7 @@ int ObRootBackup::update_dropped_tenants_extern_backup_set_file_info(
 }
 
 int ObRootBackup::insert_tenant_backup_set_file_failed(
-    ObMySQLTransaction& trans, const share::ObTenantBackupTaskInfo& task_info)
+    ObMySQLTransaction &trans, const share::ObTenantBackupTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
   ObBackupSetFileInfo backup_set_file_info;
@@ -3069,7 +3086,7 @@ int ObRootBackup::insert_tenant_backup_set_file_failed(
 }
 
 int ObRootBackup::do_tenant_update_task_his_and_backup_set_file(
-    const share::ObTenantBackupTaskInfo& tenant_task_info, const ObBackupSetFileInfo& backup_set_file_info)
+    const share::ObTenantBackupTaskInfo &tenant_task_info, const ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -3127,10 +3144,10 @@ ObTenantBackup::ObTenantBackup()
       backup_lease_service_(NULL)
 {}
 
-int ObTenantBackup::init(const ObBaseBackupInfoStruct& info, share::schema::ObMultiVersionSchemaService& schema_service,
-    ObRootBalancer& root_balancer, common::ObMySQLProxy& sql_proxy, ObServerManager& server_mgr,
-    ObRebalanceTaskMgr& rebalancer_mgr, obrpc::ObSrvRpcProxy& rpc_proxy, ObRootBackup& root_backup,
-    share::ObIBackupLeaseService& backup_lease_service)
+int ObTenantBackup::init(const ObBaseBackupInfoStruct &info, share::schema::ObMultiVersionSchemaService &schema_service,
+    ObRootBalancer &root_balancer, common::ObMySQLProxy &sql_proxy, ObServerManager &server_mgr,
+    ObRebalanceTaskMgr &rebalancer_mgr, obrpc::ObSrvRpcProxy &rpc_proxy, ObRootBackup &root_backup,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -3161,7 +3178,7 @@ int ObTenantBackup::init(const ObBaseBackupInfoStruct& info, share::schema::ObMu
   return ret;
 }
 
-int ObTenantBackup::get_tenant_backup_task_info(ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+int ObTenantBackup::get_tenant_backup_task_info(ObTenantBackupTaskInfo &task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   task_info.reset();
@@ -3197,7 +3214,7 @@ int ObTenantBackup::do_backup()
     if (OB_FAIL(get_tenant_backup_task_info(task_info, trans))) {
       LOG_WARN("failed to get tenant backup task info", K(ret), K(tenant_id_), K(backup_set_id_), K(incarnation_));
     } else {
-      const ObTenantBackupTaskInfo::BackupStatus& status = task_info.status_;
+      const ObTenantBackupTaskInfo::BackupStatus &status = task_info.status_;
       switch (status) {
         case ObTenantBackupTaskInfo::GENERATE:
           if (OB_FAIL(do_generate(task_info, trans))) {
@@ -3241,7 +3258,7 @@ int ObTenantBackup::do_backup()
   return ret;
 }
 
-int ObTenantBackup::do_generate(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+int ObTenantBackup::do_generate(const share::ObTenantBackupTaskInfo &task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   int64_t MAX_BATCH_GENERATE_TASK_NUM = 1024;
@@ -3320,14 +3337,14 @@ int ObTenantBackup::do_generate(const share::ObTenantBackupTaskInfo& task_info, 
   return ret;
 }
 
-int ObTenantBackup::generate_tablegroup_backup_task(const share::ObTenantBackupTaskInfo& task_info,
-    const ObBreakPointPGInfo& point_pg_info, const int64_t max_batch_generate_task_num,
-    ObIArray<share::ObPGBackupTaskInfo>& pg_backup_task_infos, bool& is_finish)
+int ObTenantBackup::generate_tablegroup_backup_task(const share::ObTenantBackupTaskInfo &task_info,
+    const ObBreakPointPGInfo &point_pg_info, const int64_t max_batch_generate_task_num,
+    ObIArray<share::ObPGBackupTaskInfo> &pg_backup_task_infos, bool &is_finish)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> tablegroup_ids;
-  const ObTablegroupSchema* tablegroup_schema = NULL;
+  const ObTablegroupSchema *tablegroup_schema = NULL;
   is_finish = false;
   int64_t table_id_index = 0;
   ObBreakPointPGInfo point_info = point_pg_info;
@@ -3413,14 +3430,14 @@ int ObTenantBackup::generate_tablegroup_backup_task(const share::ObTenantBackupT
   return ret;
 }
 
-int ObTenantBackup::generate_standalone_backup_task(const share::ObTenantBackupTaskInfo& task_info,
-    const ObBreakPointPGInfo& point_pg_info, const int64_t max_batch_generate_task_num,
-    ObIArray<share::ObPGBackupTaskInfo>& pg_backup_task_infos)
+int ObTenantBackup::generate_standalone_backup_task(const share::ObTenantBackupTaskInfo &task_info,
+    const ObBreakPointPGInfo &point_pg_info, const int64_t max_batch_generate_task_num,
+    ObIArray<share::ObPGBackupTaskInfo> &pg_backup_task_infos)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> table_ids;
-  const ObSimpleTableSchemaV2* table_schema = NULL;
+  const ObSimpleTableSchemaV2 *table_schema = NULL;
   int64_t table_id_index = 0;
 
   if (!is_inited_) {
@@ -3489,8 +3506,8 @@ int ObTenantBackup::generate_standalone_backup_task(const share::ObTenantBackupT
   return ret;
 }
 
-int ObTenantBackup::inner_generate_pg_backup_task(const share::ObTenantBackupTaskInfo& task_info, const ObPGKey& pg_key,
-    share::ObPGBackupTaskInfo& pg_backup_task_info)
+int ObTenantBackup::inner_generate_pg_backup_task(const share::ObTenantBackupTaskInfo &task_info, const ObPGKey &pg_key,
+    share::ObPGBackupTaskInfo &pg_backup_task_info)
 {
   int ret = OB_SUCCESS;
   pg_backup_task_info.reset();
@@ -3516,7 +3533,7 @@ int ObTenantBackup::inner_generate_pg_backup_task(const share::ObTenantBackupTas
   return ret;
 }
 
-int ObTenantBackup::do_backup(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+int ObTenantBackup::do_backup(const share::ObTenantBackupTaskInfo &task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -3560,7 +3577,7 @@ int ObTenantBackup::do_backup(const share::ObTenantBackupTaskInfo& task_info, co
       int64_t output_bytes = 0;
 
       for (int64_t i = 0; i < pg_task_infos.count(); ++i) {
-        const ObPGBackupTaskInfo& pg_task_info = pg_task_infos.at(i);
+        const ObPGBackupTaskInfo &pg_task_info = pg_task_infos.at(i);
         const int32_t pg_backup_result = pg_task_info.result_;
         if (OB_SUCCESS == task_info_result) {
           task_info_result = pg_backup_result;
@@ -3603,8 +3620,8 @@ int ObTenantBackup::do_backup(const share::ObTenantBackupTaskInfo& task_info, co
   return ret;
 }
 
-int ObTenantBackup::update_tenant_backup_task(const share::ObTenantBackupTaskInfo& src_info,
-    const share::ObTenantBackupTaskInfo& dest_info, common::ObISQLClient& trans)
+int ObTenantBackup::update_tenant_backup_task(const share::ObTenantBackupTaskInfo &src_info,
+    const share::ObTenantBackupTaskInfo &dest_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   share::ObTenantBackupTaskUpdater tenant_task_updater;
@@ -3623,8 +3640,8 @@ int ObTenantBackup::update_tenant_backup_task(const share::ObTenantBackupTaskInf
   return ret;
 }
 
-int ObTenantBackup::get_finished_backup_task(const share::ObTenantBackupTaskInfo& task_info,
-    common::ObIArray<ObPGBackupTaskInfo>& pg_task_infos, common::ObISQLClient& trans)
+int ObTenantBackup::get_finished_backup_task(const share::ObTenantBackupTaskInfo &task_info,
+    common::ObIArray<ObPGBackupTaskInfo> &pg_task_infos, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   pg_task_infos.reset();
@@ -3650,7 +3667,7 @@ int ObTenantBackup::get_finished_backup_task(const share::ObTenantBackupTaskInfo
   return ret;
 }
 
-int ObTenantBackup::get_breakpoint_pg_info(ObBreakPointPGInfo& breakpoint_pg_info)
+int ObTenantBackup::get_breakpoint_pg_info(ObBreakPointPGInfo &breakpoint_pg_info)
 {
   int ret = OB_SUCCESS;
   ObPGBackupTaskInfo pg_task_info;
@@ -3672,7 +3689,7 @@ int ObTenantBackup::get_breakpoint_pg_info(ObBreakPointPGInfo& breakpoint_pg_inf
 }
 
 int ObTenantBackup::find_break_table_id_index(
-    const common::ObIArray<uint64_t>& table_ids, const ObBreakPointPGInfo& breakpoint_pg_info, int64_t& index)
+    const common::ObIArray<uint64_t> &table_ids, const ObBreakPointPGInfo &breakpoint_pg_info, int64_t &index)
 {
   int ret = OB_SUCCESS;
   index = 0;
@@ -3698,7 +3715,7 @@ int ObTenantBackup::find_break_table_id_index(
 }
 
 int ObTenantBackup::find_tg_partition_index(
-    const ObBreakPointPGInfo& breakpoint_pg_info, share::schema::ObTablegroupPartitionKeyIter& pkey_iter)
+    const ObBreakPointPGInfo &breakpoint_pg_info, share::schema::ObTablegroupPartitionKeyIter &pkey_iter)
 {
   int ret = OB_SUCCESS;
   if (!breakpoint_pg_info.is_valid()) {
@@ -3721,7 +3738,7 @@ int ObTenantBackup::find_tg_partition_index(
 }
 
 int ObTenantBackup::find_sd_partition_index(
-    const ObBreakPointPGInfo& breakpoint_pg_info, share::schema::ObTablePartitionKeyIter& pkey_iter)
+    const ObBreakPointPGInfo &breakpoint_pg_info, share::schema::ObTablePartitionKeyIter &pkey_iter)
 {
   int ret = OB_SUCCESS;
   if (!breakpoint_pg_info.is_valid()) {
@@ -3743,7 +3760,7 @@ int ObTenantBackup::find_sd_partition_index(
   return ret;
 }
 
-int ObTenantBackup::do_finish(const share::ObTenantBackupTaskInfo& task_info)
+int ObTenantBackup::do_finish(const share::ObTenantBackupTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -3756,7 +3773,7 @@ int ObTenantBackup::do_finish(const share::ObTenantBackupTaskInfo& task_info)
   return ret;
 }
 
-int ObTenantBackup::upload_pg_list(const ObTenantBackupTaskInfo& task_info)
+int ObTenantBackup::upload_pg_list(const ObTenantBackupTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
   ObExternPGListMgr pg_list_mgr;
@@ -3789,12 +3806,12 @@ int ObTenantBackup::upload_pg_list(const ObTenantBackupTaskInfo& task_info)
   return ret;
 }
 
-int ObTenantBackup::add_tablegroup_key_to_extern_list(ObExternPGListMgr& pg_list_mgr)
+int ObTenantBackup::add_tablegroup_key_to_extern_list(ObExternPGListMgr &pg_list_mgr)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> tablegroup_ids;
-  const ObTablegroupSchema* tablegroup_schema = NULL;
+  const ObTablegroupSchema *tablegroup_schema = NULL;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant backup do not init", K(ret));
@@ -3831,12 +3848,12 @@ int ObTenantBackup::add_tablegroup_key_to_extern_list(ObExternPGListMgr& pg_list
   return ret;
 }
 
-int ObTenantBackup::add_standalone_key_to_extern_list(ObExternPGListMgr& pg_list_mgr)
+int ObTenantBackup::add_standalone_key_to_extern_list(ObExternPGListMgr &pg_list_mgr)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> table_ids;
-  const ObSimpleTableSchemaV2* table_schema = NULL;
+  const ObSimpleTableSchemaV2 *table_schema = NULL;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tenant backup do not init", K(ret));
@@ -3876,7 +3893,7 @@ int ObTenantBackup::add_standalone_key_to_extern_list(ObExternPGListMgr& pg_list
   return ret;
 }
 
-int ObTenantBackup::check_doing_pg_tasks(const ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+int ObTenantBackup::check_doing_pg_tasks(const ObTenantBackupTaskInfo &task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -3909,7 +3926,7 @@ int ObTenantBackup::check_doing_pg_tasks(const ObTenantBackupTaskInfo& task_info
     LOG_WARN("failed to get doing pg task", K(ret), K(task_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pg_backup_tasks.count(); ++i) {
-      const ObPGBackupTaskInfo& pg_task_info = pg_backup_tasks.at(i);
+      const ObPGBackupTaskInfo &pg_task_info = pg_backup_tasks.at(i);
       if (OB_SUCCESS != (tmp_ret = check_doing_pg_task(pg_task_info, task_start_time, current_time, trans))) {
         LOG_WARN("failed to check doing pg task", K(tmp_ret), K(pg_task_info));
       }
@@ -3918,8 +3935,8 @@ int ObTenantBackup::check_doing_pg_tasks(const ObTenantBackupTaskInfo& task_info
   return ret;
 }
 
-int ObTenantBackup::check_doing_pg_task(const ObPGBackupTaskInfo& pg_backup_task, const int64_t task_start_time,
-    const int64_t current_time, common::ObISQLClient& trans)
+int ObTenantBackup::check_doing_pg_task(const ObPGBackupTaskInfo &pg_backup_task, const int64_t task_start_time,
+    const int64_t current_time, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
 
@@ -3964,7 +3981,7 @@ int ObTenantBackup::check_doing_pg_task(const ObPGBackupTaskInfo& pg_backup_task
   return ret;
 }
 
-int ObTenantBackup::check_backup_task_on_progress(const ObPGBackupTaskInfo& pg_task_info, bool& is_exist)
+int ObTenantBackup::check_backup_task_on_progress(const ObPGBackupTaskInfo &pg_task_info, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   is_exist = true;
@@ -3977,7 +3994,7 @@ int ObTenantBackup::check_backup_task_on_progress(const ObPGBackupTaskInfo& pg_t
     LOG_WARN("check backup task on progress get invalid argument", K(ret), K(pg_task_info));
   } else {
     share::ObServerStatus server_status;
-    const common::ObAddr& dest = pg_task_info.server_;
+    const common::ObAddr &dest = pg_task_info.server_;
     if (OB_FAIL(server_mgr_->is_server_exist(dest, is_exist))) {
       LOG_WARN("fail to check server exist", K(ret));
     } else if (!is_exist) {
@@ -3997,7 +4014,7 @@ int ObTenantBackup::check_backup_task_on_progress(const ObPGBackupTaskInfo& pg_t
   return ret;
 }
 
-int ObTenantBackup::check_task_in_rebalancer_mgr(const ObPGBackupTaskInfo& pg_task_info, bool& is_exist)
+int ObTenantBackup::check_task_in_rebalancer_mgr(const ObPGBackupTaskInfo &pg_task_info, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   ObBackupTaskInfo mock_backup_task_info;
@@ -4023,7 +4040,7 @@ int ObTenantBackup::check_task_in_rebalancer_mgr(const ObPGBackupTaskInfo& pg_ta
 }
 
 int ObTenantBackup::check_doing_task_finished(
-    const ObPGBackupTaskInfo& pg_task_info, common::ObISQLClient& trans, bool& is_finished)
+    const ObPGBackupTaskInfo &pg_task_info, common::ObISQLClient &trans, bool &is_finished)
 {
   int ret = OB_SUCCESS;
   ObPartitionKey pkey;
@@ -4050,7 +4067,7 @@ int ObTenantBackup::check_doing_task_finished(
   return ret;
 }
 
-int ObTenantBackup::update_lost_task_finished(const ObPGBackupTaskInfo& pg_task_info, common::ObISQLClient& trans)
+int ObTenantBackup::update_lost_task_finished(const ObPGBackupTaskInfo &pg_task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObArray<ObPartitionKey> pkeys;
@@ -4074,7 +4091,7 @@ int ObTenantBackup::update_lost_task_finished(const ObPGBackupTaskInfo& pg_task_
     ObPartitionKey pkey;
     for (int64_t i = 0; OB_SUCC(ret) && i < pg_task_infos.count(); ++i) {
       pkey.reset();
-      const ObPGBackupTaskInfo& pg_backup_task = pg_task_infos.at(i);
+      const ObPGBackupTaskInfo &pg_backup_task = pg_task_infos.at(i);
       if (ObPGBackupTaskInfo::FINISH == pg_backup_task.status_) {
         // do nothing
       } else if (OB_FAIL(pkey.init(pg_backup_task.table_id_, pg_backup_task.partition_id_, 0))) {
@@ -4096,9 +4113,9 @@ int ObTenantBackup::update_lost_task_finished(const ObPGBackupTaskInfo& pg_task_
   return ret;
 }
 
-int ObTenantBackup::do_with_finished_task(const share::ObTenantBackupTaskInfo& task_info,
-    const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_infos, common::ObISQLClient& trans,
-    bool& can_report_task)
+int ObTenantBackup::do_with_finished_task(const share::ObTenantBackupTaskInfo &task_info,
+    const common::ObIArray<share::ObPGBackupTaskInfo> &pg_task_infos, common::ObISQLClient &trans,
+    bool &can_report_task)
 {
   int ret = OB_SUCCESS;
   can_report_task = false;
@@ -4120,9 +4137,9 @@ int ObTenantBackup::do_with_finished_task(const share::ObTenantBackupTaskInfo& t
   return ret;
 }
 
-int ObTenantBackup::check_finished_task_result(const share::ObTenantBackupTaskInfo& task_info,
-    const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_infos, common::ObISQLClient& trans, bool& need_retry,
-    bool& can_report_task)
+int ObTenantBackup::check_finished_task_result(const share::ObTenantBackupTaskInfo &task_info,
+    const common::ObIArray<share::ObPGBackupTaskInfo> &pg_task_infos, common::ObISQLClient &trans, bool &need_retry,
+    bool &can_report_task)
 {
   int ret = OB_SUCCESS;
   need_retry = false;
@@ -4141,7 +4158,7 @@ int ObTenantBackup::check_finished_task_result(const share::ObTenantBackupTaskIn
     LOG_WARN("failed to do with finished task", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pg_task_infos.count(); ++i) {
-      const ObPGBackupTaskInfo& pg_task_info = pg_task_infos.at(i);
+      const ObPGBackupTaskInfo &pg_task_info = pg_task_infos.at(i);
       // TODO() add ret_code with not need retry
       const int32_t result = pg_task_info.result_;
       if (OB_SUCCESS == result) {
@@ -4179,7 +4196,7 @@ int ObTenantBackup::check_finished_task_result(const share::ObTenantBackupTaskIn
 }
 
 int ObTenantBackup::reset_pg_backup_tasks(
-    const common::ObIArray<ObPGBackupTaskInfo>& pg_task_infos, common::ObISQLClient& trans)
+    const common::ObIArray<ObPGBackupTaskInfo> &pg_task_infos, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObArray<ObPGBackupTaskInfo> reset_task_infos;
@@ -4190,7 +4207,7 @@ int ObTenantBackup::reset_pg_backup_tasks(
     LOG_WARN("tenant backup do not init", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pg_task_infos.count(); ++i) {
-      const ObPGBackupTaskInfo& pg_task_info = pg_task_infos.at(i);
+      const ObPGBackupTaskInfo &pg_task_info = pg_task_infos.at(i);
       if (OB_SUCCESS == pg_task_info.result_) {
         // do nothing
       } else {
@@ -4229,7 +4246,7 @@ int ObTenantBackup::reset_pg_backup_tasks(
 }
 
 int ObTenantBackup::update_tenant_backup_task_result(
-    const ObTenantBackupTaskInfo& task_info, const int32_t result, common::ObISQLClient& trans)
+    const ObTenantBackupTaskInfo &task_info, const int32_t result, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObTenantBackupTaskInfo dest_task_info;
@@ -4248,8 +4265,8 @@ int ObTenantBackup::update_tenant_backup_task_result(
   return ret;
 }
 
-int ObTenantBackup::do_tenat_backup_when_succeed(const share::ObTenantBackupTaskInfo& task_info,
-    const ObIArray<ObPGBackupTaskInfo>& pg_task_infos, common::ObISQLClient& trans, bool& can_report_task)
+int ObTenantBackup::do_tenat_backup_when_succeed(const share::ObTenantBackupTaskInfo &task_info,
+    const ObIArray<ObPGBackupTaskInfo> &pg_task_infos, common::ObISQLClient &trans, bool &can_report_task)
 {
   int ret = OB_SUCCESS;
   can_report_task = false;
@@ -4266,8 +4283,8 @@ int ObTenantBackup::do_tenat_backup_when_succeed(const share::ObTenantBackupTask
   return ret;
 }
 
-int ObTenantBackup::do_tenant_backup_when_failed(const share::ObTenantBackupTaskInfo& task_info,
-    const ObIArray<ObPGBackupTaskInfo>& pg_task_infos, common::ObISQLClient& trans, bool& can_report_task)
+int ObTenantBackup::do_tenant_backup_when_failed(const share::ObTenantBackupTaskInfo &task_info,
+    const ObIArray<ObPGBackupTaskInfo> &pg_task_infos, common::ObISQLClient &trans, bool &can_report_task)
 {
   int ret = OB_SUCCESS;
   can_report_task = false;
@@ -4288,7 +4305,7 @@ int ObTenantBackup::do_tenant_backup_when_failed(const share::ObTenantBackupTask
 }
 
 // TODO() need add obtest
-int ObTenantBackup::cancel_doing_pg_tasks(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+int ObTenantBackup::cancel_doing_pg_tasks(const share::ObTenantBackupTaskInfo &task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObArray<ObPGBackupTaskInfo> pg_backup_tasks;
@@ -4308,8 +4325,8 @@ int ObTenantBackup::cancel_doing_pg_tasks(const share::ObTenantBackupTaskInfo& t
   } else {
     LOG_INFO("get one doing pg task", K(pg_backup_tasks.count()));
     for (int64_t i = 0; OB_SUCC(ret) && i < pg_backup_tasks.count(); ++i) {
-      const ObPGBackupTaskInfo& pg_backup_task = pg_backup_tasks.at(i);
-      const ObAddr& task_server = pg_backup_task.server_;
+      const ObPGBackupTaskInfo &pg_backup_task = pg_backup_tasks.at(i);
+      const ObAddr &task_server = pg_backup_task.server_;
       obrpc::ObCancelTaskArg rpc_arg;
       rpc_arg.task_id_ = pg_backup_task.trace_id_;
       if (OB_FAIL(rpc_proxy_->to(task_server).cancel_sys_task(rpc_arg))) {
@@ -4325,7 +4342,7 @@ int ObTenantBackup::cancel_doing_pg_tasks(const share::ObTenantBackupTaskInfo& t
   return ret;
 }
 
-int ObTenantBackup::clean_pg_backup_task(common::ObISQLClient& trans, const share::ObTenantBackupTaskInfo& task_info)
+int ObTenantBackup::clean_pg_backup_task(common::ObISQLClient &trans, const share::ObTenantBackupTaskInfo &task_info)
 {
   // TODO backup fix it
   int ret = OB_SUCCESS;
@@ -4334,7 +4351,7 @@ int ObTenantBackup::clean_pg_backup_task(common::ObISQLClient& trans, const shar
   return ret;
 }
 
-int ObTenantBackup::do_cancel(const share::ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+int ObTenantBackup::do_cancel(const share::ObTenantBackupTaskInfo &task_info, common::ObISQLClient &trans)
 {
   LOG_INFO("start do cancel", K(task_info));
   int ret = OB_SUCCESS;
@@ -4405,7 +4422,7 @@ int ObTenantBackup::do_cancel(const share::ObTenantBackupTaskInfo& task_info, co
 }
 
 int ObTenantBackup::get_table_count_with_partition(const uint64_t tenant_id, const int64_t tablegroup_id,
-    share::schema::ObSchemaGetterGuard& schema_guard, int64_t& table_count)
+    share::schema::ObSchemaGetterGuard &schema_guard, int64_t &table_count)
 {
   int ret = OB_SUCCESS;
   table_count = 0;
@@ -4419,7 +4436,7 @@ int ObTenantBackup::get_table_count_with_partition(const uint64_t tenant_id, con
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
       const uint64_t table_id = table_ids.at(i);
-      const ObSimpleTableSchemaV2* table_schema = NULL;
+      const ObSimpleTableSchemaV2 *table_schema = NULL;
       if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
@@ -4434,7 +4451,7 @@ int ObTenantBackup::get_table_count_with_partition(const uint64_t tenant_id, con
 }
 
 int ObTenantBackup::check_standalone_table_need_backup(
-    const share::schema::ObSimpleTableSchemaV2* table_schema, bool& need_backup)
+    const share::schema::ObSimpleTableSchemaV2 *table_schema, bool &need_backup)
 {
   int ret = OB_SUCCESS;
   ObIndexStatus status;
@@ -4460,7 +4477,7 @@ int ObTenantBackup::check_standalone_table_need_backup(
   return ret;
 }
 
-int ObTenantBackup::cancel_pending_pg_tasks(const ObTenantBackupTaskInfo& task_info, common::ObISQLClient& trans)
+int ObTenantBackup::cancel_pending_pg_tasks(const ObTenantBackupTaskInfo &task_info, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   share::ObPGBackupTaskUpdater pg_task_updater;
@@ -4479,7 +4496,7 @@ int ObTenantBackup::cancel_pending_pg_tasks(const ObTenantBackupTaskInfo& task_i
   return ret;
 }
 
-int ObTenantBackup::commit_trans(ObMySQLTransaction& trans)
+int ObTenantBackup::commit_trans(ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -4496,7 +4513,7 @@ int ObTenantBackup::commit_trans(ObMySQLTransaction& trans)
   return ret;
 }
 
-int ObTenantBackup::start_trans(ObTimeoutCtx& timeout_ctx, ObMySQLTransaction& trans)
+int ObTenantBackup::start_trans(ObTimeoutCtx &timeout_ctx, ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_EXECUTE_TIMEOUT_US = 600L * 1000 * 1000;  // 600s
@@ -4512,7 +4529,7 @@ int ObTenantBackup::start_trans(ObTimeoutCtx& timeout_ctx, ObMySQLTransaction& t
 }
 
 int ObTenantBackup::add_finish_backup_rootservice_event(
-    const share::ObTenantBackupTaskInfo& tenant_backup_task, const share::ObPGBackupTaskInfo& pg_backup_task)
+    const share::ObTenantBackupTaskInfo &tenant_backup_task, const share::ObPGBackupTaskInfo &pg_backup_task)
 {
   int ret = OB_SUCCESS;
   char comment[MAX_ROOTSERVICE_EVENT_VALUE_LENGTH] = "";
@@ -4573,7 +4590,7 @@ int ObTenantBackup::add_finish_backup_rootservice_event(
   return ret;
 }
 
-int ObBackupUtil::check_sys_tenant_trans_alive(share::ObBackupInfoManager& info_manager, common::ObISQLClient& trans)
+int ObBackupUtil::check_sys_tenant_trans_alive(share::ObBackupInfoManager &info_manager, common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
@@ -4591,7 +4608,7 @@ int ObBackupUtil::check_sys_tenant_trans_alive(share::ObBackupInfoManager& info_
   return ret;
 }
 
-int ObBackupUtil::check_sys_clean_info_trans_alive(common::ObISQLClient& trans)
+int ObBackupUtil::check_sys_clean_info_trans_alive(common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
@@ -4609,14 +4626,14 @@ int ObBackupUtil::check_sys_clean_info_trans_alive(common::ObISQLClient& trans)
   return ret;
 }
 
-int ObBackupUtil::get_now_time(common::ObISQLClient& trans, int64_t& now_ts)
+int ObBackupUtil::get_now_time(common::ObISQLClient &trans, int64_t &now_ts)
 {
   int ret = OB_SUCCESS;
   now_ts = 0;
   ObSqlString sql;
   const int64_t tenant_id = OB_SYS_TENANT_ID;
   ObMySQLProxy::MySQLResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   if (OB_FAIL(sql.assign_fmt("SELECT TIME_TO_USEC(now(6)) AS now_ts"))) {
     LOG_WARN("fail to assign sql", K(ret));
   } else if (OB_FAIL(trans.read(res, tenant_id, sql.ptr()))) {
@@ -4639,7 +4656,7 @@ int ObBackupUtil::get_now_time(common::ObISQLClient& trans, int64_t& now_ts)
 }
 
 int ObBackupUtil::check_backup_dest_lifecycle(
-    const share::ObBackupDest& backup_dest, const bool is_update_reserved_backup_timestamp)
+    const share::ObBackupDest &backup_dest, const bool is_update_reserved_backup_timestamp)
 {
   int ret = OB_SUCCESS;
   ObStorageUtil util(false /*need_retry*/);
