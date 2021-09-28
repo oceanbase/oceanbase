@@ -747,6 +747,7 @@ int ObPartTransCtx::start_task(const ObTransDesc& trans_desc, const int64_t snap
     pg_ = ob_partition;
     if (stmt_info_.main_stmt_change(sql_no) ||
         (cluster_version_before_2271_() && stmt_info_.main_stmt_change_compat(sql_no))) {
+      set_cur_stmt_type(trans_desc.get_cur_stmt_desc().get_stmt_type(), trans_desc.get_cur_stmt_desc().is_sfu());
       if (OB_FAIL(mt_ctx_.sub_trans_begin(snapshot_version_, expired_time, false, trx_lock_timeout))) {
         TRANS_LOG(ERROR,
             "sub transaction begin should never fail",

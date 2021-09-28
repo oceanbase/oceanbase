@@ -310,16 +310,6 @@ int ObMvccValueIterator::read_by_sql_no(
   if (can_read_by_sql_no) {
     if (query_flag.is_read_latest()) {
       version_iter_ = iter;
-      if (NULL != version_iter_) {
-        ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(&ctx));
-        transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
-        if (NULL != trans_ctx) {
-          if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
-            TRANS_LOG(WARN, "strong consistent read follower", K(trans_ctx->get_trans_id()), K(ctx));
-            ret = OB_NOT_MASTER;
-          }
-        }
-      }
     } else {
       if (!is_locked) {
         value->latch_.lock();
@@ -339,6 +329,18 @@ int ObMvccValueIterator::read_by_sql_no(
           break;
         } else {
           iter = iter->prev_;
+        }
+      }
+    }
+    if (NULL != version_iter_) {
+      ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(&ctx));
+      if (curr_mt_ctx->is_for_replay()) {
+        transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
+        if (NULL != trans_ctx) {
+          if (!trans_ctx->is_bounded_staleness_read() && !trans_ctx->is_stmt_readonly()) {
+            TRANS_LOG(WARN, "strong consistent read follower", K(trans_ctx->get_trans_id()), K(ctx));
+            ret = OB_NOT_MASTER;
+          }
         }
       }
     }
