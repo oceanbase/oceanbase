@@ -144,6 +144,7 @@ nav:
       - （可选）创建用户: docs-cn/4.installation-and-deployment/11.optional-create-a-user.md
       - 使用 RPM 包安装 OceanBase 数据库: docs-cn/4.installation-and-deployment/12.install-the-oceanbase-database-by-using-the-rpm-package.md
       - 使用源码构建 OceanBase 数据库: docs-cn/4.installation-and-deployment/13.get-the-oceanbase-database-by-using-source-code.md
+      - 安装路径说明: docs-cn/4.installation-and-deployment/installation-directory.md
     - 概括:
       - 整体架构: docs-cn/5.overview/1.overall-architecture.md
       - 数据分布:
