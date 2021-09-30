@@ -100,7 +100,7 @@ public:
    *
    */
 
-  inline int clone(const ObString& rv, ObDataBuffer& buf);
+  int clone(const ObString& rv, ObDataBuffer& buf);
 
   // reset
   void reset()
