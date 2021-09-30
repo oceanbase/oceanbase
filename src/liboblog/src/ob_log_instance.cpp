@@ -399,11 +399,11 @@ int ObLogInstance::init_logger_()
     }
 
     _LOG_INFO("====================liboblog start====================");
-    _LOG_INFO("liboblog %s %s", PACKAGE_VERSION, RELEASEID);
+    _LOG_INFO("liboblog CE %s %s", PACKAGE_VERSION, RELEASEID);
     _LOG_INFO("BUILD_VERSION: %s", build_version());
     _LOG_INFO("BUILD_TIME: %s %s", build_date(), build_time());
     _LOG_INFO("BUILD_FLAGS: %s", build_flags());
-    _LOG_INFO("Copyright (c) 2007-2016 Alipay Inc.");
+    _LOG_INFO("Copyright (c) 2021 Ant Group Co., Ltd.");
     _LOG_INFO("======================================================");
     _LOG_INFO("\n");
   }
@@ -415,11 +415,11 @@ int ObLogInstance::init_logger_()
 
 void ObLogInstance::print_version()
 {
-  MPRINT("liboblog %s %s", PACKAGE_VERSION, RELEASEID);
+  MPRINT("liboblog CE %s %s", PACKAGE_VERSION, RELEASEID);
   MPRINT("REVISION: %s", build_version());
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s\n", build_flags());
-  MPRINT("Copyright (c) 2007-2016 Alipay Inc.");
+  MPRINT("Copyright (c) 2021 Ant Group Co., Ltd.");
   MPRINT();
 }
 

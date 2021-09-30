@@ -48,15 +48,19 @@ install(FILES
   DESTINATION etc
   COMPONENT server)
 
-## oceanbase-sql-parser
+## oceanbase-devel
+# liboblog.so and libob_sql_proxy_parser_static.a
 install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so
+  ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1
+  ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1.0.0
   ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
   DESTINATION lib
-  COMPONENT sql-parser
-  EXCLUDE_FROM_ALL
-  )
+  COMPONENT devel)
 
 install(FILES
+  src/liboblog/src/liboblog.h
+  deps/oblib/src/lib/ob_errno.h
   deps/oblib/src/common/sql_mode/ob_sql_mode.h
   src/sql/parser/ob_item_type.h
   src/sql/parser/ob_sql_parser.h
@@ -64,9 +68,12 @@ install(FILES
   src/sql/parser/parser_proxy_func.h
   src/sql/parser/parse_node.h
   DESTINATION include
-  COMPONENT sql-parser
-  EXCLUDE_FROM_ALL
-  )
+  COMPONENT devel)
+
+install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/src/liboblog/tests/oblog_tailf
+  DESTINATION bin
+  COMPONENT devel)
 
 ## oceanbase-libs
 install(PROGRAMS
