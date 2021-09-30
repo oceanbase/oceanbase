@@ -90,6 +90,9 @@ test/var
 ###### Docs website files
 docs/site
 
+##### Git Sub Module
+deps/logmessage
+
 ###### Intellij files
 .idea
 cmake-build-debug
