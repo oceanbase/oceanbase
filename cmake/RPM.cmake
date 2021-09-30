@@ -9,7 +9,9 @@ set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 set(CPACK_RPM_PACKAGE_RELEASE ${OB_RELEASEID})
 set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
 # RPM package informations.
+set(CPACK_RPM_RELOCATION_PATHS /usr /home/admin/oceanbase)
 set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
+list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin/oceanbase")
 set(CPACK_PACKAGE_NAME "oceanbase-ce")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase CE is a distributed relational database")
 set(CPACK_PACKAGE_VENDOR "Ant Group CO., Ltd.")
@@ -77,6 +79,18 @@ install(PROGRAMS
   COMPONENT libs
   )
 
+# utils
+install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+  ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
+  DESTINATION /usr/bin
+  COMPONENT utils
+)
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/utils_post.script "/sbin/ldconfig /home/admin/oceanbase/lib")
+set(CPACK_RPM_UTILS_POST_INSTALL_SCRIPT_FILE  ${CMAKE_CURRENT_BINARY_DIR}/utils_post.script)
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/utils_postun.script "/sbin/ldconfig")
+set(CPACK_RPM_UTILS_POST_UNINSTALL_SCRIPT_FILE  ${CMAKE_CURRENT_BINARY_DIR}/utils_postun.script)
+
 # install cpack to make everything work
 include(CPack)
 
@@ -84,4 +98,5 @@ include(CPack)
 add_custom_target(rpm
   COMMAND +make package
   DEPENDS
-  observer ob_sql_proxy_parser_static)
+  observer ob_admin ob_error
+  ob_sql_proxy_parser_static)

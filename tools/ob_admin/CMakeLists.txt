@@ -16,6 +16,7 @@ add_executable(ob_admin
   ob_admin_executor.cpp
   main.cpp)
 
+set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb -laio")
 if (OB_STATIC_LINK_LGPL_DEPS)
    set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a -l:libaio.a")
 endif()
