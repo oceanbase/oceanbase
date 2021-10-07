@@ -276,7 +276,7 @@ int ObEGVoteMsgPool::get_eg_centralized_majority_(common::ObAddr& cur_leader, co
       ELECT_ASYNC_LOG(WARN, "message t1 timestamp not match", K(i), K(hash), K(t1), K(msg), K(msg_cnt));
       // yes, continue
     } else {
-      int64_t ticket = 0;       // total ticket
+      int64_t ticket = 0;       // totle ticket
       int64_t eg_vote_cnt = 0;  // the ticket in same version
       bool is_leader_sender = false;
       tmp_cur_leader = msg.get_cur_leader();
@@ -313,7 +313,7 @@ int ObEGVoteMsgPool::get_eg_centralized_majority_(common::ObAddr& cur_leader, co
         if (eg_vote_cnt > replica_num / 2) {
           if (false == is_all_part_merged_in) {  // first merge-in, need check lease of every election
             process_vote_cnt_(eg_vote_cnt, replica_num, part_state_array, is_eg_majority, cur_ts);
-          } else {  // already in merge-in state, no need to check lease of signal election, cause that lease is not
+          } else {  // already in merge-in state, no need to check lease of singal election, cause that lease is not
                     // maintained anymore
             is_eg_majority = true;
           }
