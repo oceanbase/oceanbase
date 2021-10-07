@@ -63,7 +63,7 @@ int ObElectionPriority::compare_without_logid(const ObElectionPriority& priority
 
 /* function:compare_with_buffered_logid
  * features:compare election priority with log_id(imprecise),used when count valid_candidates,allow caller's log behind
- * in a range(50000) limits  :this function can only called from follower_prioriy, arg setted as leader_priority
+ * in a range(50000) limits  :this function can only called from follower_priority, arg setted as leader_priority
  */
 int ObElectionPriority::compare_with_buffered_logid(const ObElectionPriority& priority) const
 {
@@ -81,7 +81,7 @@ int ObElectionPriority::compare_with_buffered_logid(const ObElectionPriority& pr
 }
 
 /* function:compare_with_accurate_logid
- * function:compare election priority with log_id(precise), used in decentralized voting, for elecing a highest priority
+ * function:compare election priority with log_id(precise), used in decentralized voting, for electing a highest priority
  * leader.
  */
 int ObElectionPriority::compare_with_accurate_logid(const ObElectionPriority& priority) const
