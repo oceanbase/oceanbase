@@ -427,7 +427,7 @@ typedef enum ObItemType {
   T_FUN_SYS_BIT_LENGTH = 712,
   T_FUN_SYS_PI = 713,
   T_FUN_SYS_EXPORT_SET = 721,
-  
+
   T_FUN_SYS_INET6NTOA = 722,
   T_FUN_SYS_INET6ATON = 723,
   T_FUN_SYS_IS_IPV4 = 724,
@@ -436,6 +436,7 @@ typedef enum ObItemType {
   T_FUN_SYS_IS_IPV4_COMPAT = 727,
   T_FUN_SYS_INETATON = 728,
   T_FUN_SYS_CRC32 = 730,
+  T_FUN_SYS_HELLO = 798,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
