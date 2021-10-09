@@ -33,7 +33,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_subdirectory(deps/easy)
 add_subdirectory(deps/oblib)
-add_subdirectory(deps/logmessage)
 add_subdirectory(src)
 
 include(CMakeDependentOption)

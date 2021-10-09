@@ -1,7 +1,7 @@
 add_library(oblog_base INTERFACE)
 target_include_directories(oblog_base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(oblog_base
-  INTERFACE ob_base oblogmsg
+  INTERFACE ob_base oblogmsg_static
   )
 
 add_library(oblog_miner INTERFACE)

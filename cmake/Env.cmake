@@ -12,6 +12,7 @@ ob_define(OB_ENABLE_LIB_PCH ${OB_ENABLE_PCH})
 ob_define(OB_ENABLE_SERVER_PCH ${OB_ENABLE_PCH})
 ob_define(OB_ENALBE_UNITY ON)
 ob_define(OB_MAX_UNITY_BATCH_SIZE 30)
+ob_define(OB_BUILD_LIBOBLOG OFF)
 
 ob_define(OB_RELEASEID 1)
 
@@ -25,7 +26,7 @@ set(LD_OPT "-Wl,--build-id=uuid")
 set(BUILD_OPT "${DEBUG_PREFIX}")
 
 if (OB_USE_LLVM_LIBTOOLS)
-  # use llvm-ar llvm-ranlib llvm-objcopy ld.lld... 
+  # use llvm-ar llvm-ranlib llvm-objcopy ld.lld...
   set(_CMAKE_TOOLCHAIN_PREFIX llvm-)
   set(_CMAKE_TOOLCHAIN_LOCATION "${DEVTOOLS_DIR}/bin")
   set(LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
