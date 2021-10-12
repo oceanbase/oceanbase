@@ -1856,6 +1856,32 @@ def_table_schema(**all_foreign_key_column_def)
 
 def_table_schema(**gen_history_table_def(169, all_foreign_key_column_def))
 
+all_creating_foreign_key_def = dict(
+  table_name    = '__all_creating_foreign_key',
+  table_id      = '170',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('foreign_key_id', 'int'),
+  ],
+  partition_expr = ['key_v2', 'tenant_id', 16 ],
+  partition_columns = ['tenant_id'],
+  rs_restart_related = False,
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('child_table_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('creating_time', 'int'),
+  ],
+
+  columns_with_tenant_id = ['foreign_key_id', 'child_table_id'],
+)
+
+def_table_schema(**all_creating_foreign_key_def)
+
 all_synonym_def = dict(
   table_name    = '__all_synonym',
   table_id      = '180',

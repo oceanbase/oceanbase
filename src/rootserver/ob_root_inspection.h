@@ -238,6 +238,25 @@ private:
   ObRootService& rs_;
 };
 
+
+// Class I: check invalid constraint in the background
+class ObCheckConstraintTask : public common::ObAsyncTimerTask {
+public:
+  explicit ObCheckConstraintTask(ObRootService& rs);
+  virtual ~ObCheckConstraintTask()
+  {}
+
+  virtual int process() override;
+  virtual int64_t get_deep_copy_size() const override
+  {
+    return sizeof(*this);
+  }
+  virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
+
+private:
+  ObRootService& root_service_;
+};
+
 // Class I: purge recyclebin in the background
 class ObPurgeRecyclebinTask : public common::ObAsyncTimerTask {
 public:

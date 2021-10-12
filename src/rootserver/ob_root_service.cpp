@@ -767,6 +767,7 @@ ObRootService::ObRootService()
       inspector_task_(*this),
       purge_recyclebin_task_(*this),
       force_drop_schema_task_(*this),
+      check_constraint_task_(*this),
       global_index_builder_(),
       partition_spliter_(),
       snapshot_manager_(),
@@ -1170,7 +1171,7 @@ int ObRootService::init(ObServerConfig& config, ObConfigManager& config_mgr, ObS
       LOG_WARN("init restore scheduler failed", K(ret));
     }
   }
-
+  
   // init major freeze launcher
   if (OB_SUCC(ret)) {
     if (OB_FAIL(major_freeze_launcher_.init(*this, common_proxy_, *config_, self_addr_, freeze_info_manager_))) {
@@ -2352,6 +2353,18 @@ int ObRootService::schedule_force_drop_schema_task(int64_t delay)
   return ret;
 }
 
+int ObRootService::schedule_check_constraint_task(int64_t delay)
+{
+  int ret = OB_SUCCESS;
+  const bool did_repeat = false;
+
+  if (OB_FAIL(get_inspect_task_queue().add_timer_task(check_constraint_task_, delay, did_repeat))) {
+    LOG_ERROR("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
+  }
+
+  return ret;
+}
+
 int ObRootService::schedule_inspector_task()
 {
   int ret = OB_SUCCESS;
@@ -2370,6 +2383,8 @@ int ObRootService::schedule_inspector_task()
   if (purge_interval > 0 && expire_time > 0) {
     delay = purge_interval;
   }
+
+  int64_t check_interval = GCONF.constraint_check_interval;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -2382,8 +2397,11 @@ int ObRootService::schedule_inspector_task()
   } else if (!inspect_task_queue_.exist_timer_task(purge_recyclebin_task_) &&
              OB_FAIL(inspect_task_queue_.add_timer_task(purge_recyclebin_task_, delay, false))) {
     LOG_WARN("failed to add purge recyclebin task", KR(ret));
+  } else if (!inspect_task_queue_.exist_timer_task(check_constraint_task_) &&
+             OB_FAIL(inspect_task_queue_.add_timer_task(check_constraint_task_, delay, false))) {
+    LOG_WARN("failed to add purge recyclebin task", KR(ret));
   } else {
-    LOG_INFO("schedule inspector task", K(inspect_interval), K(purge_interval));
+    LOG_INFO("schedule inspector task", K(inspect_interval), K(purge_interval), K(check_interval));
   }
   return ret;
 }
@@ -6114,6 +6132,7 @@ int ObRootService::stop_timer_tasks()
     inspect_task_queue_.cancel_timer_task(inspector_task_);
     inspect_task_queue_.cancel_timer_task(purge_recyclebin_task_);
     inspect_task_queue_.cancel_timer_task(force_drop_schema_task_);
+    inspect_task_queue_.cancel_timer_task(check_constraint_task_);
   }
 
   // stop other timer tasks here

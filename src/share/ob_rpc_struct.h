@@ -1900,7 +1900,10 @@ public:
         is_modify_validate_flag_(false),
         rely_flag_(false),
         is_modify_rely_flag_(false),
-        is_modify_fk_state_(false)
+        is_modify_fk_state_(false),
+        atom_creating_flag_(false),
+        svr_ip_(),
+        port_(-1)
   {}
   virtual ~ObCreateForeignKeyArg()
   {}
@@ -1924,6 +1927,9 @@ public:
     rely_flag_ = false;
     is_modify_rely_flag_ = false;
     is_modify_fk_state_ = false;
+    atom_creating_flag_ = true;
+    svr_ip_.reset();
+    port_ = -1;
   }
   bool is_valid() const;
   DECLARE_VIRTUAL_TO_STRING;
@@ -1945,6 +1951,9 @@ public:
   bool rely_flag_;
   bool is_modify_rely_flag_;
   bool is_modify_fk_state_;
+  bool atom_creating_flag_;
+  common::ObString svr_ip_;
+  int32_t port_;
 };
 
 struct ObDropForeignKeyArg : public ObIndexArg {

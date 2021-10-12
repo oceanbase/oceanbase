@@ -1834,7 +1834,10 @@ DEF_TO_STRING(ObCreateForeignKeyArg)
       K_(is_modify_validate_flag),
       K_(rely_flag),
       K_(is_modify_rely_flag),
-      K_(is_modify_fk_state));
+      K_(is_modify_fk_state),
+      K_(atom_creating_flag),
+      K_(svr_ip),
+      K_(port));
   J_OBJ_END();
   return pos;
 }
@@ -1842,7 +1845,7 @@ DEF_TO_STRING(ObCreateForeignKeyArg)
 OB_SERIALIZE_MEMBER((ObCreateForeignKeyArg, ObIndexArg), parent_database_, parent_table_, child_columns_,
     parent_columns_, update_action_, delete_action_, foreign_key_name_, enable_flag_, is_modify_enable_flag_,
     ref_cst_type_, ref_cst_id_, validate_flag_, is_modify_validate_flag_, rely_flag_, is_modify_rely_flag_,
-    is_modify_fk_state_);
+    is_modify_fk_state_, atom_creating_flag_, svr_ip_, port_);
 
 bool ObDropForeignKeyArg::is_valid() const
 {

@@ -10,6 +10,7 @@ ob_set_subtarget(ob_rootserver common
   ob_balance_info.cpp
   ob_balancer_interface.cpp
   ob_bootstrap.cpp
+  ob_constraint_checker.cpp
   ob_daily_merge_scheduler.cpp
   ob_daily_merge_sequence_generator.cpp
   ob_server_recovery_machine.cpp

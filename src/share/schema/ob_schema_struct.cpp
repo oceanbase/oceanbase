@@ -10547,6 +10547,9 @@ ObForeignKeyInfo::ObForeignKeyInfo(ObIAllocator* allocator)
       rely_flag_(false),
       is_modify_rely_flag_(false),
       is_modify_fk_state_(false),
+      atom_creating_flag_(true),
+      svr_ip_(nullptr),
+      port_(-1),
       ref_cst_type_(CONSTRAINT_TYPE_INVALID),
       ref_cst_id_(common::OB_INVALID_ID)
 {}
@@ -10573,6 +10576,9 @@ int ObForeignKeyInfo::assign(const ObForeignKeyInfo& other)
     rely_flag_ = other.rely_flag_;
     is_modify_rely_flag_ = other.is_modify_rely_flag_;
     is_modify_fk_state_ = other.is_modify_fk_state_;
+    atom_creating_flag_= other.atom_creating_flag_;
+    svr_ip_= other.svr_ip_;
+    port_= other.port_;
     ref_cst_type_ = other.ref_cst_type_;
     ref_cst_id_ = other.ref_cst_id_;
     foreign_key_name_ = other.foreign_key_name_;  // Shallow copy
@@ -10586,7 +10592,7 @@ const char* ObForeignKeyInfo::reference_action_str_[ACTION_MAX + 1] = {
     "", "RESTRICT", "CASCADE", "SET NULL", "NO ACTION", "SET DEFAULT", "ACTION_CHECK_EXIST", ""};
 
 OB_SERIALIZE_MEMBER(ObForeignKeyInfo, table_id_, foreign_key_id_, child_table_id_, parent_table_id_, child_column_ids_,
-    parent_column_ids_, update_action_, delete_action_, foreign_key_name_, ref_cst_type_, ref_cst_id_);
+    parent_column_ids_, update_action_, delete_action_, foreign_key_name_, atom_creating_flag_, svr_ip_, port_, ref_cst_type_, ref_cst_id_);
 
 OB_SERIALIZE_MEMBER(ObSimpleForeignKeyInfo, tenant_id_, database_id_, table_id_, foreign_key_name_, foreign_key_id_);
 

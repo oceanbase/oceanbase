@@ -44,6 +44,7 @@ class ObString;
   ACT(OBSERVICE_GET_LEADER_CANDIDATES, )                           \
   ACT(CHECK_NEW_TENANT, )                                          \
   ACT(BEFORE_CHECK_MAJOR_FREEZE_DONE, )                            \
+  ACT(CHECK_CONSTRAINTS, )                                         \
   ACT(SET_FORCE_STOP_HB_DONE, )                                    \
   ACT(UPDATE_WITH_PARTITION_FLAG_DONE, )                           \
   ACT(MAJOR_FREEZE_AFTER_SYS_COMMIT, )                             \

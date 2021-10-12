@@ -541,6 +541,9 @@ DEF_TIME(recyclebin_object_expire_time, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
     "default 0 that means auto purge recyclebin off. Range: [0s, +∞)",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_TIME(constraint_check_interval, OB_CLUSTER_PARAMETER, "10m", "[1m,)",
+    "the time to check invaild constraints. Range: [1m, +∞)",
+    ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// load balance config
 
 DEF_INT(resource_soft_limit, OB_CLUSTER_PARAMETER, "50", "(0, 10000]",

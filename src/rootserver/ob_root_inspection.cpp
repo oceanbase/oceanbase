@@ -35,6 +35,7 @@
 #include "share/ob_upgrade_utils.h"
 #include "share/rc/ob_context.h"
 #include "share/schema/ob_schema_mgr.h"
+#include "ob_constraint_checker.h"
 
 namespace oceanbase {
 using namespace common;
@@ -1590,6 +1591,46 @@ ObAsyncTask* ObInspector::deep_copy(char* buf, const int64_t buf_size) const
     LOG_WARN("buffer not large enough", K(buf_size));
   } else {
     task = new (buf) ObInspector(rs_);
+  }
+  return task;
+}
+
+////////////////////////////////////////////////////////////////
+ObCheckConstraintTask::ObCheckConstraintTask(ObRootService& rs)
+    : ObAsyncTimerTask(rs.get_inspect_task_queue()), root_service_(rs)
+{}
+
+int ObCheckConstraintTask::process()
+{
+  LOG_INFO("check constraint task begin");
+  int ret = OB_SUCCESS;
+  int64_t check_interval = GCONF.constraint_check_interval;
+
+  ObConstraintChecker checker;
+  checker.init(root_service_);
+  if (OB_FAIL(checker.check())) {
+    LOG_WARN("fail to check constraint", KR(ret));
+  }
+  // the error code is only for outputtion log, the function will return success.
+  // the task no need retry, because it will be triggered periodically.
+  if (OB_FAIL(root_service_.schedule_check_constraint_task(check_interval))) {
+    LOG_WARN("schedule check constraint task failed", KR(ret), K(check_interval));
+  } else {
+    LOG_INFO("submit check constraint task success", K(check_interval));
+  }
+  
+  LOG_INFO("check constraint task end", K(check_interval));
+
+  return OB_SUCCESS;
+}
+
+ObAsyncTask* ObCheckConstraintTask::deep_copy(char* buf, const int64_t buf_size) const
+{
+  ObCheckConstraintTask* task = NULL;
+  if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
+    LOG_WARN("buffer not large enough", K(buf_size));
+  } else {
+    task = new (buf) ObCheckConstraintTask(root_service_);
   }
   return task;
 }

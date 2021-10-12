@@ -217,6 +217,8 @@ private:
   int delete_from_all_foreign_key_column(common::ObISQLClient& sql_client, const uint64_t tenant_id,
       const uint64_t foreign_key_id, const uint64_t child_column_id, const uint64_t parent_column_id,
       const int64_t new_schema_version);
+  int delete_from_all_creating_foreign_key(ObISQLClient& sql_client, const uint64_t tenant_id, const uint64_t oreign_key_id);
+  int add_creating_foreign_key(ObISQLClient& sql_client, const uint64_t exec_tenant_id, const uint64_t tenant_id, const ObForeignKeyInfo& foreign_key_info);
   int gen_foreign_key_dml(const uint64_t exec_tenant_id, uint64_t tenant_id, const ObForeignKeyInfo& foreign_key_info,
       share::ObDMLSqlSplicer& dml);
   int gen_foreign_key_column_dml(const uint64_t exec_tenant_id, uint64_t tenant_id, uint64_t foreign_key_id,

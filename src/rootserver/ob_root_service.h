@@ -73,6 +73,7 @@
 #include "rootserver/ob_create_inner_schema_executor.h"
 #include "rootserver/ob_schema_revise_executor.h"
 #include "rootserver/ob_root_backup.h"
+#include "rootserver/ob_constraint_checker.h"
 #include "rootserver/backup/ob_root_validate.h"
 #include "rootserver/ob_update_rs_list_task.h"
 #include "rootserver/ob_schema_history_recycler.h"
@@ -1150,6 +1151,7 @@ public:
   int schedule_inner_table_monitor_task();
   int schedule_recyclebin_task(int64_t delay);
   int schedule_force_drop_schema_task(int64_t delay);
+  int schedule_check_constraint_task(int64_t delay);
   // @see ObInspector
   int schedule_inspector_task();
   int schedule_update_rs_list_task();
@@ -1440,6 +1442,7 @@ private:
   ObInspector inspector_task_;                    // repeat & no retry
   ObPurgeRecyclebinTask purge_recyclebin_task_;   // not repeat & no retry
   ObForceDropSchemaTask force_drop_schema_task_;  // not repeat & no retry
+  ObCheckConstraintTask check_constraint_task_;   // not repeat & no retry
   // for set_config
   ObLatch set_config_lock_;
 

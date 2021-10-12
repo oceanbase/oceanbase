@@ -4487,6 +4487,31 @@ int ObTableSqlService::delete_from_all_foreign_key_column(ObISQLClient& sql_clie
   return ret;
 }
 
+int ObTableSqlService::delete_from_all_creating_foreign_key(ObISQLClient& sql_client, const uint64_t tenant_id,
+    const uint64_t foreign_key_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+
+  // delete from __all_creating_foreign_key
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu AND foreign_key_id = %lu",
+            OB_ALL_CREATING_FOREIGN_KEY_TNAME,
+            ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+            ObSchemaUtils::get_extract_schema_id(exec_tenant_id, foreign_key_id)))) {
+      LOG_WARN("assign_fmt failed", K(ret));
+    } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", K(sql), K(ret));
+    } else {
+      // this table only records the infomation of creating fk, which means a created fk will be not found in here.
+      // thus, checking affected rows here is unnecessary.
+    }
+  }
+  return ret;
+}
+
 int ObTableSqlService::delete_foreign_key(
     common::ObISQLClient& sql_client, const ObTableSchema& table_schema, const int64_t new_schema_version)
 {
@@ -4498,6 +4523,8 @@ int ObTableSqlService::delete_foreign_key(
     uint64_t foreign_key_id = foreign_key_info.foreign_key_id_;
     if (OB_FAIL(delete_from_all_foreign_key(sql_client, tenant_id, new_schema_version, foreign_key_info))) {
       LOG_WARN("failed to delete __all_foreign_key_history", K(table_schema), K(ret));
+    } else if (OB_FAIL(delete_from_all_creating_foreign_key(sql_client, tenant_id, foreign_key_id))) {
+      LOG_WARN("failed to delete __all_creating_foreign_key_history", K(tenant_id), K(foreign_key_id), K(ret));
     } else if (OB_UNLIKELY(foreign_key_info.child_column_ids_.count() != foreign_key_info.parent_column_ids_.count())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("child column num and parent column num should be equal",
@@ -4512,7 +4539,7 @@ int ObTableSqlService::delete_foreign_key(
         if (OB_FAIL(delete_from_all_foreign_key_column(
                 sql_client, tenant_id, foreign_key_id, child_column_id, parent_column_id, new_schema_version))) {
           LOG_WARN("failed to delete __all_foreign_key_column_history", K(ret));
-        }
+        } 
       }
     }
   }
@@ -4640,12 +4667,49 @@ int ObTableSqlService::update_foreign_key(common::ObISQLClient& sql_client, cons
             LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
           }
         }
+        if (OB_SUCC(ret) && !foreign_key_info.atom_creating_flag_) {
+          if (OB_FAIL(delete_from_all_creating_foreign_key(sql_client,
+                ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                ObSchemaUtils::get_extract_schema_id(exec_tenant_id, foreign_key_info.foreign_key_id_)))) {
+            LOG_WARN("fail to delete from __all_creating_foreign_key", K(tenant_id), K(foreign_key_info.foreign_key_id_), K(ret));
+          }
+        }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(update_data_table_schema_version(sql_client, foreign_key_info.parent_table_id_))) {
             LOG_WARN("failed to update parent table schema version", K(ret));
           }
         }
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObTableSqlService::add_creating_foreign_key(ObISQLClient& sql_client, const uint64_t exec_tenant_id, const uint64_t tenant_id, const ObForeignKeyInfo& foreign_key_info)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer dml;
+
+  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id))) ||
+      OB_FAIL(dml.add_pk_column(
+          "foreign_key_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, foreign_key_info.foreign_key_id_))) ||
+      OB_FAIL(dml.add_column(
+          "child_table_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, foreign_key_info.child_table_id_))) ||
+      OB_FAIL(dml.add_column("svr_ip", ObHexEscapeSqlStr(foreign_key_info.svr_ip_))) ||
+      OB_FAIL(dml.add_column("svr_port", foreign_key_info.port_)) ||
+      OB_FAIL(dml.add_column("creating_time", ObTimeUtility::current_time())) ||
+      OB_FAIL(dml.add_gmt_create()) ||
+      OB_FAIL(dml.add_gmt_modified())) {
+    LOG_WARN("failed to add column", K(ret));
+  } else {
+    ObDMLExecHelper exec(sql_client, exec_tenant_id);
+    int64_t affected_rows = 0;
+    if (OB_FAIL(exec.exec_insert(OB_ALL_CREATING_FOREIGN_KEY_TNAME, dml, affected_rows))) {
+      LOG_WARN("failed to insert foreign key", K(ret));
+    } else if (!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
     }
   }
 
@@ -4694,6 +4758,11 @@ int ObTableSqlService::add_foreign_key(ObISQLClient& sql_client, const ObTableSc
         } else if (!is_single_row(affected_rows)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && !foreign_key_info.atom_creating_flag_) {
+        if (OB_FAIL(add_creating_foreign_key(sql_client, exec_tenant_id, tenant_id, foreign_key_info))) {
+          LOG_WARN("fail to add creating foreign key", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -4791,6 +4860,8 @@ int ObTableSqlService::drop_foreign_key(const int64_t new_schema_version, ObISQL
           K(ret),
           K(foreign_key_info->child_column_ids_.count()),
           K(foreign_key_info->parent_column_ids_.count()));
+    } else if (OB_FAIL(delete_from_all_creating_foreign_key(sql_client, tenant_id, foreign_key_info->foreign_key_id_))) {
+      LOG_WARN("failed to delete __all_creating_foreign_key_history", K(tenant_id), K(foreign_key_info->foreign_key_id_), K(ret));
     } else {
       uint64_t foreign_key_id = foreign_key_info->foreign_key_id_;
       for (int64_t j = 0; OB_SUCC(ret) && j < foreign_key_info->child_column_ids_.count(); j++) {

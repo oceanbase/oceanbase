@@ -4486,7 +4486,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg& alter_table_arg, 
               LOG_WARN("alter table foreign keys failed", K(ret));
             }
           }
-
           // table indexs
           if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_) {
             need_process_failed = true;
@@ -6152,6 +6151,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int
           }
         }
         // Check whether the foreign key constraint name is repeated end
+
         if (OB_SUCC(ret) && foreign_key_arg.is_modify_fk_state_) {
           bool is_found = false;
           const ObIArray<ObForeignKeyInfo>& foreign_key_infos = orig_table_schema->get_foreign_key_infos();
@@ -6171,6 +6171,9 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int
               if (foreign_key_arg.is_modify_rely_flag_) {
                 foreign_key_info.is_modify_rely_flag_ = true;
                 foreign_key_info.rely_flag_ = foreign_key_arg.rely_flag_;
+              }
+              if (!foreign_key_arg.atom_creating_flag_) {
+                foreign_key_info.atom_creating_flag_ = false;
               }
             }
           }
@@ -6259,7 +6262,11 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg& alter_table_arg, const int
             foreign_key_info.rely_flag_ = foreign_key_arg.rely_flag_;
             foreign_key_info.ref_cst_type_ = foreign_key_arg.ref_cst_type_;
             foreign_key_info.ref_cst_id_ = foreign_key_arg.ref_cst_id_;
+            foreign_key_info.atom_creating_flag_ = foreign_key_arg.atom_creating_flag_;
+            foreign_key_info.svr_ip_ = foreign_key_arg.svr_ip_;
+            foreign_key_info.port_ = foreign_key_arg.port_;
           }
+
           // add foreign key info.
           if (OB_SUCC(ret)) {
             ObSchemaService* schema_service = schema_service_->get_schema_service();

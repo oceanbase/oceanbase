@@ -364,6 +364,7 @@ public:
   static int all_foreign_key_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_foreign_key_column_schema(share::schema::ObTableSchema &table_schema);
   static int all_foreign_key_column_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_creating_foreign_key_schema(share::schema::ObTableSchema &table_schema);
   static int all_synonym_schema(share::schema::ObTableSchema &table_schema);
   static int all_synonym_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_sequence_v2_schema(share::schema::ObTableSchema &table_schema);
@@ -1393,6 +1394,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_foreign_key_history_schema,
   ObInnerTableSchema::all_foreign_key_column_schema,
   ObInnerTableSchema::all_foreign_key_column_history_schema,
+  ObInnerTableSchema::all_creating_foreign_key_schema,
   ObInnerTableSchema::all_synonym_schema,
   ObInnerTableSchema::all_synonym_history_schema,
   ObInnerTableSchema::all_sequence_v2_schema,
@@ -2393,6 +2395,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_FOREIGN_KEY_HISTORY_TID,
   OB_ALL_FOREIGN_KEY_COLUMN_TID,
   OB_ALL_FOREIGN_KEY_COLUMN_HISTORY_TID,
+  OB_ALL_CREATING_FOREIGN_KEY_TID,
   OB_ALL_SYNONYM_TID,
   OB_ALL_SYNONYM_HISTORY_TID,
   OB_ALL_SEQUENCE_V2_TID,
@@ -3250,6 +3253,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_FOREIGN_KEY_HISTORY_TNAME,
   OB_ALL_FOREIGN_KEY_COLUMN_TNAME,
   OB_ALL_FOREIGN_KEY_COLUMN_HISTORY_TNAME,
+  OB_ALL_CREATING_FOREIGN_KEY_TNAME,
   OB_ALL_SYNONYM_TNAME,
   OB_ALL_SYNONYM_HISTORY_TNAME,
   OB_ALL_SEQUENCE_V2_TNAME,
@@ -4051,12 +4055,12 @@ static inline bool is_only_rs_virtual_table(const uint64_t tid)
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 5;
-const int64_t OB_SYS_TABLE_COUNT = 187;
+const int64_t OB_SYS_TABLE_COUNT = 188;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 463;
 const int64_t OB_SYS_VIEW_COUNT = 360;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1016;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1017;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1019;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1020;
 
 } // end namespace share
 } // end namespace oceanbase

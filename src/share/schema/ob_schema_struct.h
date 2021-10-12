@@ -7187,6 +7187,9 @@ public:
         rely_flag_(false),
         is_modify_rely_flag_(false),
         is_modify_fk_state_(false),
+        atom_creating_flag_(true),
+        svr_ip_(nullptr),
+        port_(-1),
         ref_cst_type_(CONSTRAINT_TYPE_INVALID),
         ref_cst_id_(common::OB_INVALID_ID)
   {}
@@ -7252,6 +7255,19 @@ public:
   {
     is_modify_fk_state_ = is_modify_fk_state;
   }
+  inline void set_atom_creating_flag(const bool atom_creating_flag)
+  {
+    atom_creating_flag_ = atom_creating_flag;
+  }
+  inline int set_svr_ip(const common::ObString& svr_ip)
+  {
+    svr_ip_ = svr_ip;
+    return common::OB_SUCCESS;
+  }
+  inline void set_port(const int32_t port)
+  {
+    port_ = port;
+  }
   inline void set_ref_cst_type(ObConstraintType ref_cst_type)
   {
     ref_cst_type_ = ref_cst_type;
@@ -7294,6 +7310,9 @@ public:
     rely_flag_ = false;
     is_modify_rely_flag_ = false;
     is_modify_fk_state_ = false;
+    atom_creating_flag_ = true;
+    svr_ip_.reset();
+    port_ = -1;
     ref_cst_type_ = CONSTRAINT_TYPE_INVALID;
     ref_cst_id_ = common::OB_INVALID_ID;
   }
@@ -7309,7 +7328,7 @@ public:
   TO_STRING_KV(K_(table_id), K_(foreign_key_id), K_(child_table_id), K_(parent_table_id), K_(child_column_ids),
       K_(parent_column_ids), K_(update_action), K_(delete_action), K_(foreign_key_name), K_(enable_flag),
       K_(is_modify_enable_flag), K_(validate_flag), K_(is_modify_validate_flag), K_(rely_flag), K_(is_modify_rely_flag),
-      K_(is_modify_fk_state), K_(ref_cst_type), K_(ref_cst_id));
+      K_(is_modify_fk_state), K_(atom_creating_flag), K_(svr_ip), K_(port), K_(ref_cst_type), K_(ref_cst_id));
 
 public:
   uint64_t table_id_;  // table_id is not in __all_foreign_key.
@@ -7328,6 +7347,9 @@ public:
   bool rely_flag_;
   bool is_modify_rely_flag_;
   bool is_modify_fk_state_;
+  bool atom_creating_flag_;
+  common::ObString svr_ip_;
+  int32_t port_;
   ObConstraintType ref_cst_type_;
   uint64_t ref_cst_id_;
 

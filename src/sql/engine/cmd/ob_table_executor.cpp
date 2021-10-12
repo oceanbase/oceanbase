@@ -765,6 +765,7 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
   obrpc::ObAlterTableRes res;
   bool is_sync_ddl_user = false;
   bool need_modify_fk_validate = false;
+
   ObArenaAllocator allocator(ObModIds::OB_SQL_EXECUTOR);
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("get first statement failed", K(ret));
@@ -804,6 +805,17 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
           ObString empty_stmt;
           alter_table_arg.ddl_stmt_str_ = empty_stmt;
           alter_table_arg.foreign_key_arg_list_.at(0).validate_flag_ = false;
+          alter_table_arg.foreign_key_arg_list_.at(0).atom_creating_flag_ = false;
+          common::ObAddr& addr = GCTX.self_addr_;
+          char ip_str[OB_MAX_SERVER_ADDR_SIZE] = {};
+          alter_table_arg.foreign_key_arg_list_.at(0).port_ = addr.get_port();
+          if (addr.ip_to_string(ip_str, OB_MAX_SERVER_ADDR_SIZE)) {
+            alter_table_arg.foreign_key_arg_list_.at(0).svr_ip_ = common::ObString(ip_str);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get the server ip", K(ret));
+          }
+
         }
       }
       if (OB_SUCC(ret) && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100)) {
@@ -941,7 +953,12 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
               fk_arg.foreign_key_name_.ptr());
         }
       }
-      if (OB_FAIL(ret) && !is_data_valid) {
+      // using EN_CHECK_FOREIGN_KEY_VALIDYTY_FAILED event to imitate errors occuring in checking foreign key.
+      // When you activate this event, if set the debug_ret as OB_ERR_ORPHANED_CHILD_RECORD_EXISTS, here will rollback
+      // the nonatomic creating foreign key; if set debug_ret as the others error codes, here will do nothing, 
+      // which means leaving dirty foreign key in meta table.
+      int debug_ret = E(EventTable::EN_CHECK_FOREIGN_KEY_VALIDYTY_FAILED) ret;
+      if ((OB_FAIL(ret) && !is_data_valid) || debug_ret == OB_ERR_ORPHANED_CHILD_RECORD_EXISTS) {
         int tmp_ret = ret;
         ret = OB_SUCCESS;
         obrpc::ObAlterTableRes tmp_res;
@@ -979,6 +996,8 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
         }
         alter_table_arg.index_arg_list_.reset();
         ret = tmp_ret;
+      } else if (debug_ret != OB_SUCCESS) {
+        // do nothing
       } else if (OB_SUCC(ret) && need_modify_fk_validate) {
         obrpc::ObAlterTableRes tmp_res;
         alter_table_arg.ddl_stmt_str_ = first_stmt;
@@ -989,6 +1008,8 @@ int ObAlterTableExecutor::execute(ObExecContext& ctx, ObAlterTableStmt& stmt)
           LOG_WARN("alter table modify fk validate failed", K(ret), K(alter_table_arg));
         }
       }
+
+      ret = debug_ret == OB_SUCCESS ? ret : debug_ret;
     }
   }
 
