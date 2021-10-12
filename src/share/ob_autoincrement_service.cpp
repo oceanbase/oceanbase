@@ -634,8 +634,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
         LOG_WARN("failed to get lock", K(ret));
       } else if (OB_ENTRY_NOT_EXIST == (ret = node_map_.get(key, table_node))) {
         LOG_INFO("alloc table node for auto increment key", K(key));
-        if (NULL == (table_node = op_alloc(TableNode))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
+        if (OB_FAIL(node_map_.alloc_value(table_node))) {
           LOG_ERROR("failed to alloc table node", K(param), K(ret));
         } else if (OB_FAIL(table_node->init(param.autoinc_table_part_num_))) {
           LOG_ERROR("failed to init table node", K(param), K(ret));
@@ -649,7 +648,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam& param, TableNode*
           }
         }
         if (OB_FAIL(ret) && table_node != nullptr) {
-          op_free(table_node);
+          node_map_.free_value(table_node);
           table_node = NULL;
         }
       }
