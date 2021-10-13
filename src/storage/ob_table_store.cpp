@@ -3789,9 +3789,10 @@ int ObTableStore::get_multi_version_start(int64_t &multi_version_start)
       }
     }
     multi_version_start = tables_[idx]->get_multi_version_start();
-    for (int64_t i = start_pos_; i < inc_pos_ - 1; ++i) {
-      if (tables_[i]->get_snapshot_version() >= tables_[idx]->get_base_version()) {
+    for (int64_t i = start_pos_; i < inc_pos_; ++i) {
+      if (tables_[i]->get_snapshot_version() >= tables_[inc_pos_]->get_base_version()) {
         multi_version_start = MAX(multi_version_start, tables_[i]->get_snapshot_version());
+        break;
       }
     }
   }
