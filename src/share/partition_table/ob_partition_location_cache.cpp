@@ -2002,6 +2002,24 @@ int ObLocationAsyncUpdateQueueSet::init(ObServerConfig& config)
   return ret;
 }
 
+int ObLocationAsyncUpdateQueueSet::set_thread_count(const int64_t thread_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!lib::is_mini_mode() && thread_cnt > 0) {
+    if (OB_FAIL(tenant_space_update_queue_.set_thread_count(thread_cnt))) {
+      LOG_ERROR("fail to set thread count", KR(ret), K(thread_cnt));
+    } else if (OB_FAIL(user_update_queue_.set_thread_count(thread_cnt))) {
+      LOG_ERROR("fail to set thread count", KR(ret), K(thread_cnt));
+    } else {
+      LOG_INFO("[LOCATION] location queue may change thread cnt", K(thread_cnt));
+    }
+  }
+  return ret;
+}
+
 int ObLocationAsyncUpdateQueueSet::add_task(const ObLocationAsyncUpdateTask& task)
 {
   int ret = OB_SUCCESS;
@@ -2181,6 +2199,13 @@ int ObPartitionLocationCache::reload_config()
     LOG_WARN("not init", K(ret));
   } else {
     sem_.set_max_count(config_->location_fetch_concurrency);
+    int64_t thread_cnt = config_->location_refresh_thread_count;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = local_async_queue_set_.set_thread_count(thread_cnt))) {
+      LOG_WARN("fail to set thread count", KR(tmp_ret), K(thread_cnt));
+    } else if (OB_SUCCESS != (tmp_ret = remote_async_queue_set_.set_thread_count(thread_cnt))) {
+      LOG_WARN("fail to set thread count", KR(tmp_ret), K(thread_cnt));
+    }
   }
   return ret;
 }

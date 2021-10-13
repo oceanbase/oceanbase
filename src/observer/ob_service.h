@@ -286,6 +286,10 @@ public:
   int64_t get_partition_table_updater_user_queue_size() const;
   int64_t get_partition_table_updater_sys_queue_size() const;
   int64_t get_partition_table_updater_core_queue_size() const;
+  ObPartitionLocationUpdater &get_partition_location_updater()
+  {
+    return partition_location_updater_;
+  }
 
   int get_all_partition_status(int64_t& inactive_num, int64_t& total_num) const;
   int get_root_server_status(obrpc::ObGetRootserverRoleResult& get_role_result);
