@@ -825,6 +825,7 @@ int ObIndexMergeTask::add_build_index_sstable(const ObBuildIndexParam& param,
                  pg->get_partition_key(),
                  pg->get_storage_file_handle()))) {
     STORAGE_LOG(WARN, "Fail to init data store desc, ", K(ret));
+  } else if (FALSE_IT(data_desc_.is_unique_index_ = param.index_schema_->is_unique_index())) {
   } else if (OB_FAIL(writer_.open(data_desc_, macro_start_seq))) {
     STORAGE_LOG(WARN, "Fail to open macro block writer, ", K(ret));
   } else {
