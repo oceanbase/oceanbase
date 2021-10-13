@@ -29,6 +29,22 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCurrentUser);
 };
+
+class ObExprHello: public ObStringExprOperator
+{
+public:
+  explicit ObExprHello(common::ObIAllocator& alloc);
+  virtual ~ObExprHello() = default;
+
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
+  static int eval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+private:
+  static const char hello_prefix[];
+  static const int64_t prefix_len;
+  DISABLE_COPY_ASSIGN(ObExprHello);
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_CURRENT_USER_ */

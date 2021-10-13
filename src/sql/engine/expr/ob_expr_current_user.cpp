@@ -81,5 +81,58 @@ int ObExprCurrentUser::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr
   return OB_SUCCESS;
 }
 
+////////////////////////////////////////////////////////////////
+const char ObExprHello::hello_prefix[] = "Hello, ";
+const int64_t ObExprHello::prefix_len = sizeof(hello_prefix) - 1;
+
+ObExprHello::ObExprHello(common::ObIAllocator& alloc)
+    :ObStringExprOperator(alloc, T_FUN_SYS_HELLO, "hello", 1)
+{
+}
+
+int ObExprHello::calc_result_type1(ObExprResType& res_type, ObExprResType& param_type, ObExprTypeCtx& type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(type_ctx);
+
+  res_type.set_varchar();
+  res_type.set_default_collation_type();
+  res_type.set_collation_level(CS_LEVEL_SYSCONST);
+  param_type.set_calc_meta(res_type);
+  res_type.set_length(static_cast<ObLength>(param_type.get_length() + prefix_len));
+  return ret;
+}
+
+int ObExprHello::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+{
+  UNUSED(raw_expr);
+  UNUSED(op_cg_ctx);
+  rt_expr.eval_func_ = ObExprHello::eval;
+  return OB_SUCCESS;
+}
+
+int ObExprHello::eval(const ObExpr& expr, ObEvalCtx &ctx, ObDatum& expr_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum* text_datum = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, text_datum))) {
+    LOG_WARN("eval param value failed", K(ret));
+  } else if (text_datum->is_null()) {
+    expr_datum.set_null();
+  } else {
+    ObString text_name = text_datum->get_string();
+    char *buf = expr.get_str_res_mem(ctx, prefix_len + text_name.length());
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      MEMCPY(buf, hello_prefix, prefix_len);
+      MEMCPY(buf + prefix_len, text_name.ptr(), text_name.length());
+      expr_datum.set_string(buf, prefix_len + text_name.length());
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
