@@ -354,6 +354,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_pi.cpp
   engine/expr/ob_expr_pi.h
   engine/expr/ob_expr_radians.cpp
+  engine/expr/ob_expr_degrees.cpp
+  engine/expr/ob_expr_degrees.h
   engine/expr/ob_expr_res_type_map.cpp
   engine/expr/ob_expr_result_type_util.cpp
   engine/expr/ob_expr_reverse.cpp

@@ -2013,6 +2013,29 @@ static int double_time(
   return ret;
 }
 
+static int double_year(const ObObjType expect_type, ObObjCastParams &params,
+                       const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObDoubleTC != in.get_type_class()
+                  || ObYearTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type",
+        K(ret), K(in), K(expect_type));
+  } else {
+    uint8_t value = 0;
+    double in_val = in.get_double();
+    in_val = in_val < 0 ? INT_MIN : in_val + 0.5;
+    uint64_t intvalue = static_cast<uint64_t>(in_val);
+    if (CAST_FAIL(ObTimeConverter::int_to_year(intvalue, value))) {
+    } else {
+      SET_RES_YEAR(out);
+    }
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, DEFAULT_SCALE_FOR_YEAR, DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
 static int double_string(
     const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
 {
@@ -2382,6 +2405,10 @@ static int number_year(
     if (OB_ISNULL(value)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pointer", K(ret), K(value));
+    } else if (in.get_number().is_negative()) {
+      uint8_t value = 0;
+      if (CAST_FAIL(ObTimeConverter::int_to_year(INT_MIN, value))) {
+      }
     } else {
       ObObj from;
       from.set_varchar(value, static_cast<ObString::obstr_size_t>(strlen(value)));
@@ -5772,7 +5799,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         double_datetime,         /*datetime*/
         double_date,             /*date*/
         double_time,             /*time*/
-        cast_not_support,        /*year*/
+        double_year,             /*year*/
         double_string,           /*string*/
         cast_not_support,        /*extend*/
         cast_not_support,        /*unknown*/

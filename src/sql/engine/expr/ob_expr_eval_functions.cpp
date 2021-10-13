@@ -184,6 +184,7 @@
 #include "ob_expr_to_single_byte.h"
 #include "ob_expr_to_multi_byte.h"
 #include "ob_expr_convert_tz.h"
+#include "ob_expr_degrees.h"
 
 namespace oceanbase {
 using namespace common;
@@ -671,7 +672,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 411 */
     NULL,                                     /* 412 */
     NULL,                                     /* 413 */
-    NULL,                                     /* 414 */
+    ObExprDegrees::calc_degrees_expr,         /* 414 */
     NULL,                                     /* 415 */
     NULL,                                     /* 416 */
     NULL,                                     /* 417 */
@@ -717,7 +718,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
     NULL,                                     // ObExprWeightString::eval_weight_string,  /* 458 */
     ObExprConvertTZ::eval_convert_tz,         /* 459 */
-    ObExprCrc32::calc_crc32_expr,             /* 460 */
+    ObExprCrc32::calc_crc32_expr              /* 460 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

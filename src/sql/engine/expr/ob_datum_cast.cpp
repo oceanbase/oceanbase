@@ -2230,7 +2230,14 @@ CAST_FUNC_NAME(number, year)
     if (OB_ISNULL(nmb_buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pointer", K(ret), K(nmb_buf));
-    } else if (OB_FAIL(common_string_year(expr, ObString(strlen(nmb_buf), nmb_buf), res_datum))) {
+    } else if (nmb.is_negative()) {
+      // the year shouldn't accept a negative number, if we use the common_string_year.
+      // number like -0.4 could be converted to year, which should raise error in mysql
+      if (OB_FAIL(common_int_year(expr, INT_MIN, res_datum))) {
+        LOG_WARN("common_int_year failed", K(ret));
+      }
+    } else if (OB_FAIL(common_string_year(expr, ObString(strlen(nmb_buf), nmb_buf),
+                                          res_datum))) {
       LOG_WARN("common_string_year failed", K(ret));
     }
   }
@@ -2630,6 +2637,24 @@ CAST_FUNC_NAME(double, time)
     double in_val = child_res->get_double();
     if (OB_FAIL(common_double_time(expr, in_val, res_datum))) {
       LOG_WARN("common_double_time failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(double, year)
+{
+  EVAL_ARG()
+  {
+    // When we insert 999999999999999999999.9(larger than max int) into a year field in mysql
+    // Mysql raise the same error as we insert 100 into a year field (1264).
+    // So the cast from double to int won't raise extra error. That's why we directly use
+    // static_cast here. Mysql will convert the double to nearest int and insert it to the year field.
+    double in_val = child_res->get_double();
+    in_val = in_val < 0 ? INT_MIN : in_val + 0.5;
+    int64_t val_int = static_cast<int64_t>(in_val);
+    if (OB_FAIL(common_int_year(expr, val_int, res_datum))) {
+      LOG_WARN("common_int_time failed", K(ret), K(val_int));
     }
   }
   return ret;
@@ -5916,7 +5941,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*datetime*/
         cast_not_expected,       /*date*/
         cast_not_expected,       /*time*/
-        cast_not_expected,       /*year*/
+        double_year,             /*year*/
         double_string,           /*string*/
         cast_not_expected,       /*extend*/
         cast_not_expected,       /*unknown*/

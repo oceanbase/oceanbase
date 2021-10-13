@@ -268,6 +268,7 @@
 #include "sql/engine/expr/ob_expr_quarter.h"
 #include "sql/engine/expr/ob_expr_bit_length.h"
 #include "sql/engine/expr/ob_expr_convert_tz.h"
+#include "sql/engine/expr/ob_expr_degrees.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -677,6 +678,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprLastDay);
   REG_OP(ObExprTimeFormat);
   REG_OP(ObExprTimestamp);
+  REG_OP(ObExprDegrees);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);

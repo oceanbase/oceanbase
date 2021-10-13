@@ -117,6 +117,7 @@
 #define N_NUM "num"
 #define N_SINH "sinh"
 #define N_COSH "cosh"
+#define N_DEGREES "degrees"
 #define N_TANH "tanh"
 #define N_RADIANS "radians"
 #define N_IS_JOIN "is_join"
