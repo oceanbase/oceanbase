@@ -667,7 +667,9 @@ int ObRawExprWrapEnumSet::visit(ObCaseOpRawExpr& expr)
 int ObRawExprWrapEnumSet::visit(ObAggFunRawExpr& expr)
 {
   int ret = OB_SUCCESS;
-  if (expr.has_enum_set_column() && T_FUN_GROUP_CONCAT == expr.get_expr_type()) {
+  if (expr.has_enum_set_column() && (T_FUN_GROUP_CONCAT == expr.get_expr_type() ||
+                                     T_FUN_MAX == expr.get_expr_type() ||
+                                     T_FUN_MIN == expr.get_expr_type())) {
     const ObIArray<ObRawExpr*>& real_parm_exprs = expr.get_real_param_exprs();
     const bool is_same_need = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
