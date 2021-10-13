@@ -269,6 +269,10 @@ int ObPartGroupBackupTask::do_backup_task(const ObBackupDataType &backup_data_ty
 
       if (OB_SUCCESS != (tmp_ret = check_disk_space())) {
         STORAGE_LOG(WARN, "failed to check disk space", K(tmp_ret));
+        common::SpinWLockGuard guard(lock_);
+        if (OB_SUCCESS == first_error_code_) {
+          first_error_code_ = ret;
+        }
       }
 
       if (OB_SUCCESS != (tmp_ret = try_schedule_new_partition_backup(backup_data_type))) {
@@ -723,7 +727,7 @@ int ObPartGroupBackupTask::check_pg_backup_point_created(
       if (ObPartGroupMigrator::get_instance().is_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         STORAGE_LOG(WARN, "server is stopping", K(ret));
-      } else if (OB_FAIL(check_disk_space())) {
+       } else if (OB_FAIL(check_disk_space())) {
         LOG_WARN("failed to check disk space", K(ret));
         break;
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_id_, is_cancel))) {
@@ -789,10 +793,6 @@ int ObPartGroupBackupTask::check_disk_space()
   } else if (OB_FAIL(OB_STORE_FILE.check_disk_full(required_size))) {
     ObTaskController::get().allow_next_syslog();
     STORAGE_LOG(WARN, "failed to check_is_disk_full, cannot backup", K(ret), K(required_size));
-    common::SpinWLockGuard guard(lock_);
-    if (OB_SUCCESS == first_error_code_) {
-      first_error_code_ = ret;
-    }
   }
 
 #ifdef ERRSIM
