@@ -202,6 +202,14 @@ int OB_INLINE ObExprOperator::cast_operand_type(
     LOG_DEBUG(
         "need cast operand", K(res_type), K(res_type.get_calc_meta().get_scale()), K(res_obj), K(res_obj.get_scale()));
     ObCastMode cast_mode = get_cast_mode();
+    // In PAD expression, we need add COLUMN_CONVERT to cast mode when cast is
+    // from bit to binary and column convert is set in column_conv_ctx_. The COLUMN_CONVERT
+    // cast mode is used in bit_to_string to decide which cast way is appropriate.
+    if (OB_UNLIKELY(T_FUN_PAD == get_type() && ob_is_bit_tc(param_type) &&
+                    ob_is_varbinary_type(calc_type, calc_collation_type) &&
+                    CM_IS_COLUMN_CONVERT(expr_ctx.column_conv_ctx_.cast_mode_))) {
+      cast_mode |= CM_COLUMN_CONVERT;
+    }
 
     if (ob_is_string_or_lob_type(res_type.get_calc_type()) && res_type.is_zerofill()) {
       // For zerofilled string

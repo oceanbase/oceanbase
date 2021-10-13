@@ -4422,25 +4422,36 @@ static int bit_datetime(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   int64_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObDateTimeTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
-  } else {
-    ObString str(pos, buf);
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
     ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
-    if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, value, &res_scale))) {
-    } else {
-      SET_RES_DATETIME(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+    if (CAST_FAIL(ObTimeConverter::int_to_datetime(bit_value, 0, cvrt_ctx, value))) {
+      LOG_WARN("int_to_datetime failed", K(ret), K(bit_value));
     }
+  } else {
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char buf[BUF_LEN];
+    MEMSET(buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+    } else {
+      ObString str(pos, buf);
+      ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
+      if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, value, &res_scale))) {
+        LOG_WARN("int_to_datetime failed", K(ret), K(bit_value), K(str));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SET_RES_DATETIME(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4451,24 +4462,34 @@ static int bit_date(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   int32_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObDateTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
-  } else {
-    ObString str(pos, buf);
-    if (CAST_FAIL(ObTimeConverter::str_to_date(str, value))) {
-    } else {
-      SET_RES_DATE(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
+    if (CAST_FAIL(ObTimeConverter::int_to_date(bit_value, value))) {
+      LOG_WARN("int_to_date failed", K(ret), K(bit_value));
     }
+  } else {
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char buf[BUF_LEN];
+    MEMSET(buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+    } else {
+      ObString str(pos, buf);
+      if (CAST_FAIL(ObTimeConverter::str_to_date(str, value))) {
+        LOG_WARN("str_to_date failed", K(ret), K(bit_value), K(str));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SET_RES_DATE(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4479,24 +4500,34 @@ static int bit_time(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   int64_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObTimeTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
-  } else {
-    ObString str(pos, buf);
-    if (CAST_FAIL(ObTimeConverter::str_to_time(str, value, &res_scale))) {
-    } else {
-      SET_RES_TIME(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
+    if (CAST_FAIL(ObTimeConverter::int_to_time(bit_value, value))) {
+      LOG_WARN("int_to_time failed", K(ret), K(bit_value));
     }
+  } else {
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char buf[BUF_LEN];
+    MEMSET(buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+    } else {
+      ObString str(pos, buf);
+      if (CAST_FAIL(ObTimeConverter::str_to_time(str, value, &res_scale))) {
+        LOG_WARN("str_to_date failed", K(ret), K(bit_value), K(str));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SET_RES_TIME(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4507,24 +4538,15 @@ static int bit_year(
   int ret = OB_SUCCESS;
   uint64_t bit_value = in.get_bit();
   uint8_t value = 0;
-  ObScale scale = in.get_scale();
   ObScale res_scale = -1;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() || ObYearTC != ob_obj_type_class(expect_type)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
-  } else if (OB_FAIL(bit_to_char_array(bit_value, scale, buf, BUF_LEN, pos))) {
-    LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(bit_value), K(pos));
+  } else if (CAST_FAIL(ObTimeConverter::int_to_year(bit_value, value))) {
+    LOG_WARN("int_to_year faile", K(ret), K(bit_value));
   } else {
-    ObString str(pos, buf);
-    if (CAST_FAIL(ObTimeConverter::str_to_year(str, value))) {
-    } else {
-      SET_RES_YEAR(out);
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
-    }
+    SET_RES_YEAR(out);
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, res_scale, DEFAULT_LENGTH_FOR_TEMPORAL);
   }
   return ret;
 }
@@ -4533,24 +4555,45 @@ static int bit_string(
     const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-  UNUSED(cast_mode);
-  ObLength res_length = -1;
-  int32_t bytes_length = 0;
-  const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-  ObScale scale = in.get_scale();
-  int64_t pos = 0;
-  char buf[BUF_LEN];
-  MEMSET(buf, 0, BUF_LEN);
   uint64_t value = in.get_bit();
+  ObLength res_length = -1;
+  char *res_buf;
+  int32_t bytes_length = 0;
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() ||
                    (ObStringTC != ob_obj_type_class(expect_type) && ObTextTC != ob_obj_type_class(expect_type))))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (CM_IS_COLUMN_CONVERT(cast_mode)) {
+    // if cast mode is column convert, using bit as int64 to do cast.
+    ObFastFormatInt ffi(value);
+    ObString tmp_str;
+    if (OB_FAIL(convert_string_collation(ObString(ffi.length(), ffi.ptr()),
+            ObCharset::get_system_collation(),
+            tmp_str,
+            params.dest_collation_,
+            params))) {
+      LOG_WARN("fail to convert string collation", K(ret));
+    } else {
+      res_buf = tmp_str.ptr();
+      bytes_length = tmp_str.length();
+    }
   } else {
-    if (OB_FAIL(bit_to_char_array(value, scale, buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", KP(buf), K(BUF_LEN), K(value), K(pos));
-    } else if (OB_FAIL(copy_string(params, expect_type, buf, pos, out))) {
-      LOG_WARN("fail to copy string", KP(buf), K(bytes_length), K(value), K(out), K(expect_type));
+    // using bit as char array to do cast.
+    ObScale scale = in.get_scale();
+    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+    int64_t pos = 0;
+    char tmp_buf[BUF_LEN];
+    MEMSET(tmp_buf, 0, BUF_LEN);
+    if (OB_FAIL(bit_to_char_array(value, scale, tmp_buf, BUF_LEN, pos))) {
+      LOG_WARN("fail to store val", KP(tmp_buf), K(BUF_LEN), K(value), K(pos));
+    } else {
+      res_buf = tmp_buf;
+      bytes_length = pos;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(copy_string(params, expect_type, res_buf, bytes_length, out))) {
+      LOG_WARN("fail to copy string", KP(res_buf), K(bytes_length), K(value), K(out), K(expect_type));
     } else {
       res_length = static_cast<ObLength>(out.get_string_len());
       SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_STRING, res_length);
