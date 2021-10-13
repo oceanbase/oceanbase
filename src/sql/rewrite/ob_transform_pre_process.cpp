@@ -3362,7 +3362,7 @@ int ObTransformPreProcess::create_equal_expr_for_case_expr(ObRawExprFactory& exp
   int ret = OB_SUCCESS;
   ObObjType obj_type = ObMaxType;
   const ObExprResType& arg_type = arg_expr->get_result_type();
-  const ObExprResType& when_type = arg_expr->get_result_type();
+  const ObExprResType& when_type = when_expr->get_result_type();
   ObRawExpr* new_when_expr = NULL;  // cast expr may added
   ObRawExpr* new_arg_expr = NULL;
   if (OB_ISNULL(arg_expr) || OB_ISNULL(when_expr)) {
