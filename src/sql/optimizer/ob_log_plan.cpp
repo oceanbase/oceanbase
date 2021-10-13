@@ -3405,6 +3405,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr* query_ref)
       ObArray<std::pair<int64_t, ObRawExpr*>> exec_params;
       ObLogPlan* logical_plan = NULL;
       if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create plan", K(ret), K(subquery->get_sql_stmt()));
       } else if (OB_FAIL(logical_plan->init_plan_info())) {
         LOG_WARN("failed to init equal sets", K(ret));

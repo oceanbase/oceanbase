@@ -4834,8 +4834,14 @@ inline bool ObSelectResolver::column_need_check_group_by(const ObQualifiedName& 
 int ObSelectResolver::wrap_alias_column_ref(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr)
 {
   int ret = OB_SUCCESS;
-  if (q_name.parent_aggr_level_ >= 0 && current_level_ <= q_name.parent_aggr_level_) {
-    ObAliasRefRawExpr* alias_expr = NULL;
+  // aggr in window function isn't used to wrap column ref, just only expand alias column, and do
+  // wrap alias column ref is used to help analyze aggregate pullup for alias column in aggr. the
+  // other situation should expand alias column directly.
+  // eg: select sum(t1.c1) from t1 order by (select sum(t1.c1) from t2);
+  // sum(t1.c1) in subquery is from parent stmt.
+  if (!q_name.parents_expr_info_.has_member(IS_WINDOW_FUNC) && q_name.parent_aggr_level_ >= 0 &&
+      current_level_ <= q_name.parent_aggr_level_) {
+    ObAliasRefRawExpr *alias_expr = NULL;
     if (OB_FAIL(ObRawExprUtils::build_alias_column_expr(
             *params_.expr_factory_, real_ref_expr, current_level_, alias_expr))) {
       LOG_WARN("build alias column expr failed", K(ret));
