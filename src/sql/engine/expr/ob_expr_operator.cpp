@@ -3613,8 +3613,11 @@ int ObBitwiseExprOperator::get_int64_from_number_type(
 {
   int ret = OB_SUCCESS;
   int64_t tmp_int = 0;
-  number::ObNumber nmb(datum.get_number());
-  if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
+  ObNumStackAllocator<> num_allocator;
+  number::ObNumber nmb;
+  if (OB_FAIL(nmb.from(datum.get_number(), num_allocator))) {
+    LOG_WARN("number copy failed", K(ret));
+  } else if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
     LOG_WARN("round/trunc failed", K(ret), K(is_round), K(nmb));
   } else if (nmb.is_valid_int64(tmp_int)) {
     out = tmp_int;
@@ -3632,10 +3635,13 @@ int ObBitwiseExprOperator::get_uint64_from_number_type(
     const ObDatum& datum, bool is_round, uint64_t& out, const ObCastMode& cast_mode)
 {
   int ret = OB_SUCCESS;
-  number::ObNumber nmb(datum.get_number());
+  ObNumStackAllocator<> num_allocator;
+  number::ObNumber nmb;
   int64_t tmp_int = 0;
   uint64_t tmp_uint = 0;
-  if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
+  if (OB_FAIL(nmb.from(datum.get_number(), num_allocator))) {
+    LOG_WARN("number copy failed", K(ret));
+  } else if (OB_UNLIKELY(!nmb.is_integer() && OB_FAIL(is_round ? nmb.round(0) : nmb.trunc(0)))) {
     LOG_WARN("round/trunc failed", K(ret), K(is_round), K(nmb));
   } else if (nmb.is_valid_int64(tmp_int)) {
     out = static_cast<uint64_t>(tmp_int);
