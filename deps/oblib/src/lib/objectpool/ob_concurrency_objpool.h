@@ -722,7 +722,7 @@ struct OPNum {
 
   template <class Type, bool Cond = true>
   struct GetOPLabel {
-    static const int64_t v = Type::OP_LABEL;
+    static constexpr const char *v = Type::OP_LABEL;
   };
 
   template <class Type>
