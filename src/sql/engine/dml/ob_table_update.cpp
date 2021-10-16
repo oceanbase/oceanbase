@@ -320,17 +320,12 @@ int ObTableUpdate::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
     const ObNewRow& new_row = update_ctx->new_row_;
     DLIST_FOREACH(cur_expr, new_spk_exprs_)
     {
-      if (OB_ISNULL(cur_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("current new spke expr is null", K(new_spk_exprs_));
-      } else {
-        const ObColumnExpression* new_spk_expr = static_cast<const ObColumnExpression*>(cur_expr);
-        int64_t result_idx = new_spk_expr->get_result_index();
-        if (OB_UNLIKELY(result_idx < 0) || OB_UNLIKELY(result_idx >= new_row.count_)) {
-          LOG_WARN("result index is invalid", K(ret), K(result_idx), K(new_row.count_));
-        } else if (OB_FAIL(new_spk_expr->calc(update_ctx->expr_ctx_, new_row, new_row.cells_[result_idx]))) {
-          LOG_WARN("calc new spk expr failed", K(ret), KPC(new_spk_expr), K(result_idx), K(new_row));
-        }
+      const ObColumnExpression* new_spk_expr = static_cast<const ObColumnExpression*>(cur_expr);
+      int64_t result_idx = new_spk_expr->get_result_index();
+      if (OB_UNLIKELY(result_idx < 0) || OB_UNLIKELY(result_idx >= new_row.count_)) {
+        LOG_WARN("result index is invalid", K(ret), K(result_idx), K(new_row.count_));
+      } else if (OB_FAIL(new_spk_expr->calc(update_ctx->expr_ctx_, new_row, new_row.cells_[result_idx]))) {
+        LOG_WARN("calc new spk expr failed", K(ret), KPC(new_spk_expr), K(result_idx), K(new_row));
       }
     }
     if (OB_SUCC(ret)) {

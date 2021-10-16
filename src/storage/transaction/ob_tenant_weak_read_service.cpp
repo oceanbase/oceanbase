@@ -118,6 +118,7 @@ void ObTenantWeakReadService::destroy()
 
   TG_STOP(tg_id_);
   TG_WAIT(tg_id_);
+  TG_DESTROY(tg_id_);
 
   cluster_service_.destroy();
 

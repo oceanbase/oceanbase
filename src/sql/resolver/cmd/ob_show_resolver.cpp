@@ -1124,6 +1124,18 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
         }
         break;
       }
+      case T_SHOW_RESTORE_PREVIEW: {
+        if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_SHOW_RESTORE_PREVIEW;
+          GEN_SQL_STEP_1(ObShowSqlSet::SHOW_RESTORE_PREVIEW);
+          GEN_SQL_STEP_2(
+              ObShowSqlSet::SHOW_RESTORE_PREVIEW, OB_SYS_DATABASE_NAME, OB_VIRTUAL_SHOW_RESTORE_PREVIEW_TNAME);
+        }
+        break;
+      }
       default:
         /* won't be here */
         ret = OB_NOT_IMPLEMENT;
@@ -2193,6 +2205,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_SYS_RECYCLEBIN, "SELECT OBJECT_NAME, ORIGINAL_NAME, 
     "then 'DATABASE' when 5 then 'AUX_VP' when 6 then 'TRIGGER' when 7 then 'TENANT' else 'INVALID' end as TYPE, "
     "gmt_create as CREATETIME FROM %s.%s where tenant_id = %lu OR TYPE = 7",
     NULL, NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_RESTORE_PREVIEW, NULL, "SELECT * FROM %s.%s", NULL, NULL);
 
 }  // namespace sql
 }  // namespace oceanbase

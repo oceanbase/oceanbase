@@ -33,22 +33,32 @@ public:
   int push_log(const char* path, const int64_t data_len, char* data, const bool new_file, const bool compatible,
       const bool is_data_file, const int64_t epoch);
 
-  int get_index_file_range(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round, uint64_t& min_file_id,
-      uint64_t& max_file_id);
+  int get_index_file_range(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date, uint64_t& min_file_id, uint64_t& max_file_id);
 
-  int get_data_file_range(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round, uint64_t& min_file_id,
-      uint64_t& max_file_id);
-
-  int check_and_make_dir(const ObPGKey& pg_key, ObString& uri);
+  int get_data_file_range(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round, const int64_t piece_id,
+      const int64_t piece_create_date, uint64_t& min_file_id, uint64_t& max_file_id);
 
   int check_file_exist(const ObPGKey& pg_key, const char* path, bool& file_exist);
 
+  int get_archived_info_from_archive_key(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date, ObArchiveKeyContent& key_content);
   int get_max_archived_index_info(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
-      const uint64_t min_index_file_id, const uint64_t max_index_file_id, MaxArchivedIndexInfo& info);
+      const int64_t piece_id, const int64_t piece_create_date, const uint64_t min_index_file_id,
+      const uint64_t max_index_file_id, MaxArchivedIndexInfo& info);
+
+  // data dir and index dir
+  int check_and_make_dir_for_archive(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date);
+  int check_and_make_single_dir_(const ObPGKey& pg_key, const LogArchiveFileType file_type, const int64_t incarnation,
+      const int64_t round, const int64_t piece_id, const int64_t piece_create_date);
+  int check_and_make_archive_key_dir_(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date);
 
 private:
   int get_file_range_(const ObPGKey& pg_key, const LogArchiveFileType file_type, const int64_t incarnation,
-      const int64_t round, uint64_t& min_file_id, uint64_t& max_file_id);
+      const int64_t round, const int64_t piece_id, const int64_t piece_create_date, uint64_t& min_file_id,
+      uint64_t& max_file_id);
 
   int get_append_param_(const bool is_data_file, const int64_t epoch, ObStorageAppender::AppenderParam& param);
 

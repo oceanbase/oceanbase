@@ -116,6 +116,7 @@ void ObTableMgr::stop()
   LOG_INFO("ObTableMgr::stop");
   TG_STOP(lib::TGDefIDs::TableMgrGC);
   TG_WAIT(lib::TGDefIDs::TableMgrGC);
+  is_gc_started_ = false;
   LOG_INFO("timer stopped");
   ObBucketWLockAllGuard guard(sstable_bucket_lock_);
   enable_write_log_ = false;

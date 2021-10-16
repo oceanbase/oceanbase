@@ -108,6 +108,7 @@ void oceanbase::observer::init_srv_xlator_for_migrator(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(ObFetchPGPartitioninfoP, gctx_.par_ser_, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObCheckMemberPGMajorSSTableEnoughP, gctx_.par_ser_);
   RPC_PROCESSOR(ObFetchReplicaInfoP, gctx_.par_ser_);
+  RPC_PROCESSOR(ObFetchRecoveryPointMetaInfoP, gctx_.par_ser_, gctx_.bandwidth_throttle_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator* xlator)

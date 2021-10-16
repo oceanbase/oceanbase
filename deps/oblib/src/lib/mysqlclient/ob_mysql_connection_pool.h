@@ -113,6 +113,8 @@ public:
   {
     return is_updated_;
   }
+  bool is_use_ssl() const { return is_use_ssl_; }
+  void disable_ssl() { is_use_ssl_ = false; }
   int64_t to_string(char* buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
@@ -179,6 +181,7 @@ protected:
 
   bool is_updated_;
   bool is_stop_;
+  bool is_use_ssl_;
   ObMySQLConnection::Mode mode_;
 
   int tg_id_;

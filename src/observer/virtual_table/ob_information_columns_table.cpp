@@ -597,6 +597,46 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
             break;
           }
           case PRIVILEGES: {
+            char *buf = NULL;
+            int64_t buf_len = 200;
+            int64_t pos = 0;
+            ObSessionPrivInfo session_priv;
+            session_->get_session_priv_info(session_priv);
+            if (OB_UNLIKELY(!session_priv.is_valid())) {
+              ret = OB_INVALID_ARGUMENT;
+              SERVER_LOG(WARN,
+                  "session priv is invalid",
+                  "tenant_id",
+                  session_priv.tenant_id_,
+                  "user_id",
+                  session_priv.user_id_,
+                  K(ret));
+            } else if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(buf_len)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              SERVER_LOG(WARN, "fail to allocate memory", K(ret));
+            } else {
+              ObNeedPriv need_priv(
+                  database_name, table_schema->get_table_name(), OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
+              if (OB_FAIL(fill_col_privs(session_priv, need_priv, OB_PRIV_SELECT, "select,", buf, buf_len, pos))) {
+                SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
+              } else if (OB_FAIL(
+                             fill_col_privs(session_priv, need_priv, OB_PRIV_INSERT, "insert,", buf, buf_len, pos))) {
+                SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
+              } else if (OB_FAIL(
+                             fill_col_privs(session_priv, need_priv, OB_PRIV_UPDATE, "update,", buf, buf_len, pos))) {
+                SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
+              } else if (OB_FAIL(fill_col_privs(
+                             session_priv, need_priv, OB_PRIV_REFERENCES, "reference,", buf, buf_len, pos))) {
+                SERVER_LOG(WARN, "fail to fill col priv", K(need_priv), K(ret));
+              } else {
+                if (pos > 0) {
+                  cur_row_.cells_[cell_idx].set_varchar(ObString(0, pos - 1, buf));
+                } else {
+                  cur_row_.cells_[cell_idx].set_varchar(ObString(""));
+                }
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              }
+            }
             break;
           }
           case COLUMN_COMMENT: {
@@ -627,6 +667,23 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
     }
   }
 
+  return ret;
+}
+
+int ObInfoSchemaColumnsTable::fill_col_privs(ObSessionPrivInfo &session_priv, ObNeedPriv &need_priv, ObPrivSet priv_set,
+    const char *priv_str, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+
+  need_priv.priv_set_ = priv_set;
+  if (OB_ISNULL(schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "data member is not init", KP(schema_guard_), K(ret));
+  } else if (OB_SUCC(schema_guard_->check_single_table_priv(session_priv, need_priv))) {
+    ret = databuff_printf(buf, buf_len, pos, "%s", priv_str);
+  } else if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
+    ret = OB_SUCCESS;
+  }
   return ret;
 }
 

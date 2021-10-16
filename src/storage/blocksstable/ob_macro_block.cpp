@@ -263,6 +263,8 @@ void ObDataStoreDesc::reset()
   need_check_order_ = true;
   progressive_merge_round_ = 0;
   major_working_cluster_version_ = 0;
+  iter_complement_ = false;
+  is_unique_index_ = false;
 }
 
 int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
@@ -302,6 +304,7 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
   pg_key_ = desc.pg_key_;
   need_check_order_ = desc.need_check_order_;
   major_working_cluster_version_ = desc.major_working_cluster_version_;
+  is_unique_index_ = desc.is_unique_index_;
   if (OB_FAIL(file_handle_.assign(desc.file_handle_))) {
     STORAGE_LOG(WARN, "failed to assign file handle", K(ret), K(desc.file_handle_));
   }
@@ -681,7 +684,9 @@ int ObMacroBlock::flush(
           macro_handle.get_macro_id(),
           K(*header_),
           K(full_meta),
-          KP(&macro_handle));
+          KP(&macro_handle),
+          "iter_to_complement",
+          spec_->iter_complement_);
     }
   }
   return ret;

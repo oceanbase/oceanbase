@@ -29,6 +29,7 @@
 #include "observer/ob_server.h"
 #include "storage/ob_partition_scheduler.h"
 #include "storage/ob_partition_migrator.h"
+#include "observer/ob_service.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -198,6 +199,83 @@ int ObServerReloadConfig::operator()()
     }
   }
 
+  {
+    // backup zone and region support
+    if (OB_FAIL(ObServer::get_instance().get_partition_service().enable_backup_white_list())) {
+      ObString backup_zone_str = GCONF.backup_zone.get_value_string();
+      ObString backup_region_str = GCONF.backup_region.get_value_string();
+      LOG_WARN("failed to enable backup white list", K(ret), K(backup_region_str), K(backup_zone_str));
+    }
+  }
+
+  // backup zone and region support
+  {
+    ObString backup_zone_str = GCONF.backup_zone.get_value_string();
+    ObString backup_region_str = GCONF.backup_region.get_value_string();
+
+    bool prev_io_stat = ObStorageGlobalIns::get_instance().is_io_prohibited();
+    bool prohibited = true;
+    LOG_INFO("backup zone and region", K(backup_zone_str), K(backup_region_str));
+
+    if (backup_zone_str.empty() && backup_region_str.empty()) {
+      // Both backup region and zone are not set, IO operation is allowed.
+      prohibited = false;
+    } else if (!backup_zone_str.empty() && !backup_region_str.empty()) {
+      // Both backup region and zone exist, not allowed, something wrong unexpected.
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("backup region and zone both are set, which are unexpected.", K(ret), K(backup_zone_str), K(backup_region_str));
+    } else if (!backup_zone_str.empty()) {
+      // Backup zone is set.
+      ObArray<ObBackupZone> backup_zone;
+      if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone_str, MAX_ZONE_LENGTH, backup_zone))) {
+        LOG_WARN("failed to parse backup zone format", K(ret), K(backup_zone_str));
+      } else if (backup_zone.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup zone is empty", K(ret), K(backup_zone_str));
+      } else {
+        const ObZone zone = GCONF.zone.str();
+        LOG_INFO("set backup zone", K(zone), K(backup_zone_str), K(backup_zone));
+        for (int64_t i = 0; i < backup_zone.count(); i++) {
+          // I am in black list, IO operations are allowed.
+          if (zone == backup_zone[i].zone_) {
+            prohibited = false;
+            break;
+          }
+        }
+      }
+    } else {
+      // Backup region is set.
+      ObArray<ObBackupRegion> backup_region;
+      ObRegion region;
+      if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_region_str, MAX_REGION_LENGTH, backup_region))) {
+        LOG_WARN("failed to parse backup region format", K(ret), K(backup_region_str));
+      } else if (backup_region.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup region is empty", K(ret), K(backup_region_str));
+      } else if (OB_FAIL(ObServer::get_instance().get_partition_service().get_locality_manager()->load_region())) {
+        LOG_WARN("get local region failed", K(ret), K(backup_region_str));
+      } else if (OB_FAIL(ObServer::get_instance().get_partition_service().get_locality_manager()->get_local_region(region))) {
+        LOG_WARN("get local region failed", K(ret), K(backup_region_str));
+      } else {
+        LOG_INFO("set backup region", K(region), K(backup_region_str), K(backup_region));
+        for (int64_t i = 0; i < backup_region.count(); i++) {
+          // I am in black list, IO operations are allowed.
+          if (region == backup_region[i].region_) {
+            prohibited = false;
+            break;
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && prev_io_stat != prohibited) {
+      ObStorageGlobalIns::get_instance().set_io_prohibited(prohibited);
+      if (prev_io_stat != prohibited) {
+        FLOG_WARN("backup set_io_prohibited", K(ret), K(prohibited), K(prev_io_stat));
+      }
+    }
+  }
+
   const int64_t cache_size = GCONF.memory_chunk_cache_size;
   const int cache_cnt = cache_size > 0 ? cache_size / INTACT_ACHUNK_SIZE : INT32_MAX;
   lib::AChunkMgr::instance().set_max_chunk_cache_cnt(cache_cnt);
@@ -260,6 +338,14 @@ int ObServerReloadConfig::operator()()
   ObPartitionScheduler::get_instance().reload_minor_merge_schedule_interval();
   {
     OB_STORE_FILE.resize_file(GCONF.datafile_size, GCONF.datafile_disk_percentage);
+  }
+  {
+    const int64_t location_thread_cnt = GCONF.location_refresh_thread_count;
+    if (OB_NOT_NULL(GCTX.ob_service_) &&
+        OB_FAIL(GCTX.ob_service_->get_partition_location_updater().set_thread_cnt(location_thread_cnt))) {
+      real_ret = ret;
+      LOG_WARN("fail to set location updater's thread cnt", KR(ret), K(location_thread_cnt));
+    }
   }
   return real_ret;
 }

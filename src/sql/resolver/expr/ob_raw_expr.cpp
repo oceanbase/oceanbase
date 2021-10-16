@@ -2667,6 +2667,14 @@ bool ObSysFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
           bool_ret = false;
         }
       }
+      if (0 == get_param_count()
+          && (T_FUN_SYS_CUR_TIMESTAMP == get_expr_type()
+              || T_FUN_SYS_SYSDATE == get_expr_type()
+              || T_FUN_SYS_CUR_TIME == get_expr_type()
+              || T_FUN_SYS_UTC_TIMESTAMP == get_expr_type()
+              || T_FUN_SYS_UTC_TIME == get_expr_type())) {
+        bool_ret = result_type_.get_scale() == s_expr->get_result_type().get_scale();
+      }
     }
   }
   return bool_ret;

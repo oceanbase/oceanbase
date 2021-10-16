@@ -53,6 +53,7 @@ add_subdirectory(archive)
 add_subdirectory(election)
 add_subdirectory(storage)
 add_subdirectory(observer)
+add_subdirectory(liboblog)
 
 if (OB_ENABLE_SERVER_PCH)
   target_precompile_headers(ob_base INTERFACE ${ob_server_pchs})

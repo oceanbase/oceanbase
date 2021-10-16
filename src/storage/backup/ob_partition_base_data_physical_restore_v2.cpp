@@ -541,7 +541,7 @@ ObPartitionMacroBlockRestoreReaderV2::ObPartitionMacroBlockRestoreReaderV2()
       macro_idx_(0),
       read_size_(0),
       table_id_(OB_INVALID_ID),
-      backup_path_info_(),
+      simple_path_(),
       macro_indexs_(nullptr),
       bandwidth_throttle_(nullptr),
       backup_pgkey_(),
@@ -569,8 +569,6 @@ int ObPartitionMacroBlockRestoreReaderV2::init(common::ObInOutBandwidthThrottle&
   } else if (OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "table key is invalid", K(ret), K(table_key));
-  } else if (OB_FAIL(restore_info.get_backup_base_data_info(backup_path_info_))) {
-    LOG_WARN("failed to get backup_base_data_info", K(ret));
   } else if (OB_FAIL(restore_info.get_backup_pgkey(backup_pgkey_))) {
     LOG_WARN("failed to get backup pgkey", K(ret));
   } else if (OB_FAIL(restore_info.trans_to_backup_schema_id(table_key.pkey_.get_table_id(), backup_table_id))) {
@@ -578,6 +576,20 @@ int ObPartitionMacroBlockRestoreReaderV2::init(common::ObInOutBandwidthThrottle&
   } else if (OB_FAIL(restore_info.trans_to_backup_schema_id(table_key.table_id_, backup_index_id))) {
     STORAGE_LOG(WARN, "failed to get backup block info", K(ret), K(table_key));
   } else {
+    const bool is_compat_backup_path = !restore_info.restore_info_.multi_restore_path_list_.is_compat_backup_path();
+    if (is_compat_backup_path) {
+      if (OB_FAIL(restore_info.get_largest_backup_set_path(simple_path_))) {
+        STORAGE_LOG(WARN, "failed to get largest backup set path", K(ret), K(restore_info));
+      }
+    } else {
+      ObBackupBaseDataPathInfo path_info;
+      if (OB_FAIL(restore_info.get_backup_base_data_info(path_info))) {
+        STORAGE_LOG(WARN, "failed to get backup_base_data_info", K(ret));
+      } else if (OB_FAIL(simple_path_.set(path_info))) {
+        STORAGE_LOG(WARN, "failed to set simple path", K(ret), K(path_info));
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < list.count(); ++i) {
       if (OB_FAIL(macro_list_.push_back(list.at(i).fetch_arg_))) {
         LOG_WARN("failed to add macro list", K(ret));
@@ -625,7 +637,7 @@ int ObPartitionMacroBlockRestoreReaderV2::get_next_macro_block(blocksstable::ObF
   } else if (OB_FAIL(get_macro_block_path(macro_index, path))) {
     STORAGE_LOG(WARN, "failed to get macro block path", K(ret), K(macro_index));
   } else if (OB_FAIL(ObRestoreFileUtil::read_macroblock_data(path.get_obstr(),
-                 backup_path_info_.dest_.get_storage_info(),
+                 simple_path_.get_storage_info(),
                  macro_index,
                  allocator_,
                  new_schema,
@@ -701,7 +713,7 @@ int ObPartitionMacroBlockRestoreReaderV2::get_macro_block_path(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get macro block path get invalid argument", K(ret), K(macro_index));
   } else if (backup_table_key_.is_major_sstable()) {
-    if (OB_FAIL(ObBackupPathUtil::get_major_macro_block_file_path(backup_path_info_,
+    if (OB_FAIL(ObBackupPathUtil::get_major_macro_block_file_path(simple_path_,
             backup_pgkey_.get_table_id(),
             backup_pgkey_.get_partition_id(),
             macro_index.backup_set_id_,
@@ -710,7 +722,7 @@ int ObPartitionMacroBlockRestoreReaderV2::get_macro_block_path(
       STORAGE_LOG(WARN, "fail to get meta file path", K(ret));
     }
   } else if (backup_table_key_.is_minor_sstable()) {
-    if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(backup_path_info_,
+    if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(simple_path_,
             backup_pgkey_.get_table_id(),
             backup_pgkey_.get_partition_id(),
             macro_index.backup_set_id_,
@@ -1573,7 +1585,6 @@ int ObPhyRestoreMacroIndexStoreV2::init(
     const int64_t backup_task_id, const share::ObPhysicalRestoreArg& arg, const ObReplicaRestoreStatus& restore_status)
 {
   int ret = OB_SUCCESS;
-  ObBackupBaseDataPathInfo path_info;
   ObStorageUtil util(true /*need retry*/);
   ObBackupPath path;
   common::ObPartitionKey pkey;
@@ -1582,20 +1593,36 @@ int ObPhyRestoreMacroIndexStoreV2::init(
     STORAGE_LOG(WARN, "physical restore macro index store init twice", K(ret));
   } else if (backup_task_id < 0 || OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "init physical restore macro index get invalid argument", K(ret), K(backup_task_id), K(arg));
-  } else if (OB_FAIL(arg.get_backup_base_data_info(path_info))) {
-    STORAGE_LOG(WARN, "get backup base data info fail", K(ret));
+    STORAGE_LOG(WARN, "init physcial restore macro index get invalid argument", K(ret), K(backup_task_id), K(arg));
   } else if (OB_FAIL(arg.get_backup_pgkey(pkey))) {
     STORAGE_LOG(WARN, "failed to get backup pgkey", K(ret));
   } else if (OB_FAIL(index_map_.create(BUCKET_SIZE, ObModIds::RESTORE))) {
     STORAGE_LOG(WARN, "failed to create partition reader map", K(ret));
-  } else if (OB_FAIL(init_major_macro_index(pkey, path_info, restore_status))) {
-    STORAGE_LOG(WARN, "failed to init major macro index", K(ret), K(pkey), K(path_info));
-  } else if (OB_FAIL(init_minor_macro_index(backup_task_id, pkey, path_info, restore_status))) {
-    STORAGE_LOG(WARN, "failed to init minor macro index", K(ret), K(backup_task_id), K(pkey));
   } else {
-    backup_task_id_ = backup_task_id;
-    is_inited_ = true;
+    const bool is_compat_backup_path = !arg.restore_info_.multi_restore_path_list_.is_compat_backup_path();
+    if (is_compat_backup_path) {
+      ObSimpleBackupSetPath simple_path;
+      if (OB_FAIL(arg.get_largest_backup_set_path(simple_path))) {
+        LOG_WARN("failed to get largest backup set path", KR(ret), K(arg));
+      } else if (OB_FAIL(init_major_macro_index(pkey, simple_path, restore_status))) {
+        STORAGE_LOG(WARN, "failed to init major macro index", K(ret), K(pkey), K(simple_path));
+      } else if (OB_FAIL(init_minor_macro_index(backup_task_id, pkey, simple_path, restore_status))) {
+        STORAGE_LOG(WARN, "failed to init minor macro index", K(ret), K(backup_task_id), K(pkey));
+      }
+    } else {
+      ObBackupBaseDataPathInfo path_info;
+      if (OB_FAIL(arg.get_backup_base_data_info(path_info))) {
+        STORAGE_LOG(WARN, "get backup base data info fail", K(ret), K(arg));
+      } else if (OB_FAIL(init_major_macro_index(pkey, path_info, restore_status))) {
+        STORAGE_LOG(WARN, "failed to init major macro index", K(ret), K(pkey), K(path_info));
+      } else if (OB_FAIL(init_minor_macro_index(backup_task_id, pkey, path_info, restore_status))) {
+        STORAGE_LOG(WARN, "failed to init minor macro index", K(ret), K(backup_task_id), K(pkey));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      backup_task_id_ = backup_task_id;
+      is_inited_ = true;
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1608,27 +1635,40 @@ int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartit
     const ObBackupBaseDataPathInfo& path_info, const ObReplicaRestoreStatus& restore_status)
 {
   int ret = OB_SUCCESS;
+  ObSimpleBackupSetPath simple_path;
+  if (OB_FAIL(simple_path.set(path_info))) {
+    STORAGE_LOG(WARN, "failed to set simple path", K(ret), K(path_info));
+  } else if (OB_FAIL(init_major_macro_index(backup_pg_key, simple_path, restore_status))) {
+    STORAGE_LOG(WARN, "failed to init major macro index", KR(ret), K(backup_pg_key), K(simple_path), K(restore_status));
+  }
+  return ret;
+}
+
+int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartitionKey& backup_pg_key,
+    const ObSimpleBackupSetPath& simple_path, const ObReplicaRestoreStatus& restore_status)
+{
+  int ret = OB_SUCCESS;
   bool is_exist = true;
   bool last_file_complete = false;
   ObBackupPath path;
   ObStorageUtil util(true /*need retry*/);
 
-  if (!backup_pg_key.is_valid() || !path_info.is_valid()) {
+  if (!backup_pg_key.is_valid() || !simple_path.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "init major macro index get invalid argument", K(ret), K(backup_pg_key), K(path_info));
+    STORAGE_LOG(WARN, "init major macro index get invalid argument", K(ret), K(backup_pg_key), K(simple_path));
   } else {
     int64_t retry_cnt_index = 0;
     while (OB_SUCC(ret) && is_exist) {
       path.reset();
       if (OB_FAIL(ObBackupPathUtil::get_major_macro_block_index_path(
-              path_info, backup_pg_key.get_table_id(), backup_pg_key.get_partition_id(), retry_cnt_index, path))) {
-        STORAGE_LOG(WARN, "failed to get major macro block index path", K(ret), K(path_info), K(backup_pg_key));
-      } else if (OB_FAIL(util.is_exist(path.get_obstr(), path_info.dest_.get_storage_info(), is_exist))) {
+              simple_path, backup_pg_key.get_table_id(), backup_pg_key.get_partition_id(), retry_cnt_index, path))) {
+        STORAGE_LOG(WARN, "failed to get major macro block index path", K(ret), K(simple_path), K(backup_pg_key));
+      } else if (OB_FAIL(util.is_exist(path.get_obstr(), simple_path.get_storage_info(), is_exist))) {
         STORAGE_LOG(WARN, "fail to check index file exist or not", K(ret));
       } else if (!is_exist) {
         break;
-      } else if (OB_FAIL(init_one_file(path.get_obstr(), path_info.dest_.get_storage_info()))) {
-        STORAGE_LOG(WARN, "fail to init index file", K(ret), K(path));
+      } else if (OB_FAIL(init_one_file(path.get_obstr(), simple_path.get_storage_info()))) {
+        STORAGE_LOG(WARN, "fail to init index file", K(ret), K(path), K(simple_path));
       } else {
         ++retry_cnt_index;
         last_file_complete = true;
@@ -1639,7 +1679,7 @@ int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartit
   if (OB_SUCC(ret) && !last_file_complete && REPLICA_RESTORE_DATA == restore_status) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(
-        WARN, "last macro index file is not complete", K(ret), K(backup_pg_key), K(path_info), K(restore_status));
+        WARN, "last macro index file is not complete", K(ret), K(backup_pg_key), K(simple_path), K(restore_status));
   }
   return ret;
 }
@@ -1649,32 +1689,50 @@ int ObPhyRestoreMacroIndexStoreV2::init_minor_macro_index(const int64_t backup_t
     const ObReplicaRestoreStatus& restore_status)
 {
   int ret = OB_SUCCESS;
+  ObSimpleBackupSetPath simple_path;
+  if (OB_FAIL(simple_path.set(path_info))) {
+    STORAGE_LOG(WARN, "failed to set simple path", K(ret), K(path_info));
+  } else if (OB_FAIL(init_minor_macro_index(backup_task_id, backup_pg_key, simple_path, restore_status))) {
+    STORAGE_LOG(WARN, "failed to init minor macro index", KR(ret), K(backup_pg_key), K(path_info), K(restore_status));
+  }
+  return ret;
+}
+
+int ObPhyRestoreMacroIndexStoreV2::init_minor_macro_index(const int64_t backup_task_id,
+    const common::ObPartitionKey& backup_pg_key, const ObSimpleBackupSetPath& simple_path,
+    const ObReplicaRestoreStatus& restore_status)
+{
+  int ret = OB_SUCCESS;
   bool is_exist = true;
   bool last_file_complete = false;
   ObBackupPath path;
   ObStorageUtil util(true /*need retry*/);
 
-  if (backup_task_id < 0 || !backup_pg_key.is_valid() || !path_info.is_valid()) {
+  if (backup_task_id < 0 || !backup_pg_key.is_valid() || !simple_path.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(
-        WARN, "init minor macro index get invalid argument", K(ret), K(backup_pg_key), K(path_info), K(backup_task_id));
+    STORAGE_LOG(WARN,
+        "init minor macro index get invalid argument",
+        K(ret),
+        K(backup_pg_key),
+        K(simple_path),
+        K(backup_task_id));
   } else {
     int64_t retry_cnt_index = 0;
     while (OB_SUCC(ret) && is_exist) {
       path.reset();
-      if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_index_path(path_info,
+      if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_index_path(simple_path,
               backup_pg_key.get_table_id(),
               backup_pg_key.get_partition_id(),
               backup_task_id,
               retry_cnt_index,
               path))) {
-        STORAGE_LOG(WARN, "failed to get major macro block index path", K(ret), K(path_info), K(backup_pg_key));
-      } else if (OB_FAIL(util.is_exist(path.get_obstr(), path_info.dest_.get_storage_info(), is_exist))) {
+        STORAGE_LOG(WARN, "failed to get major macro block index path", K(ret), K(simple_path), K(backup_pg_key));
+      } else if (OB_FAIL(util.is_exist(path.get_obstr(), simple_path.get_storage_info(), is_exist))) {
         STORAGE_LOG(WARN, "fail to check index file exist or not", K(ret));
       } else if (!is_exist) {
         break;
-      } else if (OB_FAIL(init_one_file(path.get_obstr(), path_info.dest_.get_storage_info()))) {
-        STORAGE_LOG(WARN, "fail to init index file", K(ret), K(path));
+      } else if (OB_FAIL(init_one_file(path.get_obstr(), simple_path.get_storage_info()))) {
+        STORAGE_LOG(WARN, "fail to init index file", K(ret), K(path), K(simple_path));
       } else {
         ++retry_cnt_index;
         last_file_complete = true;
@@ -1685,8 +1743,9 @@ int ObPhyRestoreMacroIndexStoreV2::init_minor_macro_index(const int64_t backup_t
   if (OB_SUCC(ret) && !last_file_complete && REPLICA_RESTORE_DATA == restore_status) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(
-        WARN, "last macro index file is not complete", K(ret), K(backup_pg_key), K(path_info), K(restore_status));
+        WARN, "last macro index file is not complete", K(ret), K(backup_pg_key), K(simple_path), K(restore_status));
   }
+
   return ret;
 }
 

@@ -125,6 +125,8 @@ public:
       const storage::ObRebuildSwitch& rebuild_switch) override;
   virtual int update_pg_backup_task_info(
       const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_info_array) override;
+  virtual int report_pg_backup_backupset_task(const common::ObIArray<share::ObBackupBackupsetArg>& args,
+      const common::ObIArray<int32_t>& results, const share::ObPGBackupBackupsetTaskInfo::TaskStatus& status) override;
   // ObIPartitionReport interface
   int submit_pt_remove_task(const common::ObPartitionKey& part_key) override;
 
@@ -173,6 +175,8 @@ public:
   int physical_restore_replica(const obrpc::ObPhyRestoreReplicaArg& arg, const share::ObTaskId& task_id);
   int get_tenant_log_archive_status(
       const share::ObGetTenantLogArchiveStatusArg& arg, share::ObTenantLogArchiveStatusWrapper& result);
+  int get_tenant_log_archive_status_v2(
+      const share::ObGetTenantLogArchiveStatusArg& arg, share::ObServerTenantLogArchiveStatusWrapper& result);
   int copy_sstable_batch(const obrpc::ObCopySSTableBatchArg& arg);
   // ObRpcMigrateReplicaP @RS load balance
   int migrate_replica(const obrpc::ObMigrateReplicaArg& arg, const share::ObTaskId& task_id);
@@ -197,6 +201,8 @@ public:
   int standby_cutdata_batch_task(const obrpc::ObStandbyCutDataBatchTaskArg& arg);
 
   int validate_backup_batch(const obrpc::ObValidateBatchArg& arg);
+  int backup_backupset_batch(const obrpc::ObBackupBackupsetBatchArg& arg);
+  int backup_archive_log(const obrpc::ObBackupArchiveLogBatchArg& arg);
 
   int change_replica_batch(const obrpc::ObChangeReplicaBatchArg& arg);
   int check_sys_task_exist(const share::ObTaskId& arg, bool& res);
@@ -280,6 +286,10 @@ public:
   int64_t get_partition_table_updater_user_queue_size() const;
   int64_t get_partition_table_updater_sys_queue_size() const;
   int64_t get_partition_table_updater_core_queue_size() const;
+  ObPartitionLocationUpdater &get_partition_location_updater()
+  {
+    return partition_location_updater_;
+  }
 
   int get_all_partition_status(int64_t& inactive_num, int64_t& total_num) const;
   int get_root_server_status(obrpc::ObGetRootserverRoleResult& get_role_result);

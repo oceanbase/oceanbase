@@ -21,9 +21,9 @@ using namespace common;
 using namespace share::schema;
 namespace sql {
 // for hash/key/range_func part or insert statement
-int ObPartMgrAD::get_part(ObPartMgr* part_mgr, const int64_t table_id, const ObPartitionLevel part_level,
-    const ObPartitionFuncType part_type, const bool insert_or_replace, const int64_t p_id, const ObObj& value,
-    ObIArray<int64_t>& partition_ids, int64_t* part_idx)
+int ObPartMgrAD::get_part(ObPartMgr *part_mgr, const int64_t table_id, const ObPartitionLevel part_level,
+    const ObPartitionFuncType part_type, const bool report_err_if_partition_not_exist, const int64_t p_id,
+    const ObObj &value, ObIArray<int64_t> &partition_ids, int64_t *part_idx)
 {
   int ret = common::OB_SUCCESS;
   ObRowkey rowkey(const_cast<ObObj*>(&value), 1);
@@ -31,8 +31,15 @@ int ObPartMgrAD::get_part(ObPartMgr* part_mgr, const int64_t table_id, const ObP
   ObSEArray<int64_t, 1> part_ids;
   if (OB_FAIL(range.build_range(table_id, rowkey))) {
     LOG_WARN("Failed to build range", K(ret));
-  } else if (OB_FAIL(get_part(
-                 part_mgr, table_id, part_level, part_type, insert_or_replace, p_id, range, partition_ids, part_idx))) {
+  } else if (OB_FAIL(get_part(part_mgr,
+                 table_id,
+                 part_level,
+                 part_type,
+                 report_err_if_partition_not_exist,
+                 p_id,
+                 range,
+                 partition_ids,
+                 part_idx))) {
     LOG_WARN("Failed to get part", K(ret));
   } else {
   }  // do nothing
@@ -42,8 +49,8 @@ int ObPartMgrAD::get_part(ObPartMgr* part_mgr, const int64_t table_id, const ObP
 
 int ObPartMgrAD::get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
     const share::schema::ObPartitionLevel part_level, const share::schema::ObPartitionFuncType part_type,
-    const bool insert_or_replace, const int64_t p_id, const common::ObNewRow& row,
-    common::ObIArray<int64_t>& partition_ids, int64_t* part_idx)
+    const bool report_err_if_partition_not_exist, const int64_t p_id, const common::ObNewRow &row,
+    common::ObIArray<int64_t> &partition_ids, int64_t *part_idx)
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 1> part_ids;
@@ -53,7 +60,7 @@ int ObPartMgrAD::get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
   } else if (OB_FAIL(part_mgr->get_part(table_id, part_level, p_id, row, part_ids))) {
     LOG_WARN("Failed to get part from part_mgr", K(ret));
   } else if (0 == part_ids.count()) {
-    if (insert_or_replace) {  // For Insert or replace stmt, if no partition, report error
+    if (report_err_if_partition_not_exist) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
     } else if (share::schema::is_hash_like_part(part_type)) {  // For other stmt
@@ -126,8 +133,8 @@ int ObPartMgrAD::get_all_part(ObPartMgr* part_mgr, const int64_t table_id, const
 
 int ObPartMgrAD::get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
     const share::schema::ObPartitionLevel part_level, const share::schema::ObPartitionFuncType part_type,
-    const bool insert_or_replace, const int64_t p_id, const common::ObNewRange& range,
-    common::ObIArray<int64_t>& partition_ids, int64_t* part_idx)
+    const bool report_err_if_partition_not_exist, const int64_t p_id, const common::ObNewRange &range,
+    common::ObIArray<int64_t> &partition_ids, int64_t *part_idx)
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 1> part_ids;
@@ -137,7 +144,7 @@ int ObPartMgrAD::get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
   } else if (OB_FAIL(part_mgr->get_part(table_id, part_level, p_id, range, false, part_ids))) {
     LOG_WARN("Failed to get part from part_mgr", K(ret));
   } else if (0 == part_ids.count()) {
-    if (insert_or_replace) {  // For Insert or replace stmt, if no partition, report error
+    if (report_err_if_partition_not_exist) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
     } else if (PARTITION_FUNC_TYPE_RANGE != part_type && PARTITION_FUNC_TYPE_RANGE_COLUMNS != part_type &&

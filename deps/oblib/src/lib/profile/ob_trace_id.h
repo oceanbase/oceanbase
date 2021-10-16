@@ -130,6 +130,20 @@ struct ObCurTraceId {
       return 0 != id_.is_user_request_;
     }
 
+    inline int set(const char* buf)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(buf)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        int32_t return_value = sscanf(buf, TRACE_ID_FORMAT, &uval_[0], &uval_[1]);
+        if (0 != return_value && 2 != return_value) {
+          ret = OB_ERR_UNEXPECTED;
+        }
+      }
+      return ret;
+    }
+
   private:
     union {
       struct {
@@ -211,6 +225,14 @@ struct ObCurTraceId {
   inline static bool is_user_request()
   {
     return get_trace_id()->is_user_request();
+  }
+
+  inline static void set(const char* buf)
+  {
+    TraceId* trace_id = get_trace_id();
+    if (NULL != trace_id) {
+      trace_id->set(buf);
+    }
   }
 };
 

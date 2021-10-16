@@ -50,6 +50,7 @@ public:
   }
   void set_system_clog_disk_hang();
   void set_system_data_disk_error();
+  void set_system_slog_disk_warning();
   void set_system_service_not_started();
 
   int compare(const ObElectionGroupPriority& priority) const;

@@ -53,7 +53,8 @@ public:
       const common::ObIArray<int32_t>& results, const ObPGBackupTaskInfo::BackupStatus& status);
   int get_one_pg_task(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id,
       ObPGBackupTaskInfo& pg_task_info);
-  int update_status_and_result_and_statics(const common::ObIArray<ObPGBackupTaskInfo>& pg_task_info_array);
+  int update_status_and_result_and_statics(const common::ObIArray<ObPGBackupTaskInfo>& pg_task_info_array,
+      common::ObISQLClient& trans, ObBackupStatistics& backup_statistics);
   int cancel_pending_tasks(const uint64_t tenant_id, const int64_t incarnation, const int64_t backup_set_id);
 
 private:

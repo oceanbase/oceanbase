@@ -17,6 +17,7 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "lib/ob_replica_define.h"
 #include "common/ob_trace_profile.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_bg_thread_monitor.h"
@@ -1642,14 +1643,40 @@ int ObLogSlidingWindow::submit_confirmed_info_(
             K(log_task),
             K_(partition_key));
       }
-      log_task->set_confirmed_info(confirmed_info);
 
-      if (can_set_log_confirmed_(log_task)) {
-        log_task->set_log_confirmed();
+      if (log_task->is_archive_accum_checksum_exist()) {
+        // restore_leader check accum_checksum in physical restore log state
+        if (log_task->get_accum_checksum() != confirmed_info.get_accum_checksum()) {
+          ret = OB_ERR_UNEXPECTED;
+          CLOG_LOG(ERROR, "log_task and confirmed_info's accum_checksum not match", K(ret), K_(partition_key),
+                   K(log_id), K(*log_task), K(confirmed_info));
+          // record error event
+          SERVER_EVENT_ADD("clog_restore", "clog accum_checksum is not match witch archived log",
+              "partition", partition_key_, "log_id", log_id);
+          // report restore error
+          const uint64_t tenant_id = partition_key_.get_tenant_id();
+          int64_t job_id = 0;
+          if (OB_SUCCESS != (tmp_ret = ObBackupInfoMgr::get_instance().get_restore_job_id(tenant_id, job_id))) {
+            if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+              CLOG_LOG(WARN, "failed to get restore info", KR(ret), KR(tmp_ret), K(tenant_id));
+            } else {
+              CLOG_LOG(WARN, "physical restore info not exist", K(tenant_id), KR(tmp_ret), KR(ret));
+            }
+          } else if (OB_SUCCESS != (tmp_ret = ObRestoreFatalErrorReporter::get_instance().add_restore_error_task(
+                      tenant_id, PHYSICAL_RESTORE_MOD_CLOG, ret, job_id, self_))) {
+            CLOG_LOG(WARN, "failed to report restore error", KR(tmp_ret), K(tenant_id), KR(ret));
+          } else {/*do nothing*/}
+        }
       }
 
-      if (batch_committed) {
-        log_task->set_batch_committed();
+      if (OB_SUCC(ret)) {
+        log_task->set_confirmed_info(confirmed_info);
+        if (can_set_log_confirmed_(log_task)) {
+          log_task->set_log_confirmed();
+        }
+        if (batch_committed) {
+          log_task->set_batch_committed();
+        }
       }
     }
   }
@@ -2393,8 +2420,8 @@ int ObLogSlidingWindow::restore_leader_try_confirm_log()
   int64_t unused_version = OB_INVALID_TIMESTAMP;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(partition_service_->get_restore_replay_info(
-                 partition_key_, last_restore_log_id, unused_log_ts, unused_version))) {
+  } else if (OB_FAIL(partition_service_->get_restore_replay_info(partition_key_,
+          last_restore_log_id, unused_log_ts, unused_version))) {
     CLOG_LOG(WARN, "get_restore_replay_info failed", K_(partition_key), K(ret));
   } else if (OB_INVALID_ID == last_restore_log_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -2413,6 +2440,34 @@ int ObLogSlidingWindow::restore_leader_try_confirm_log()
         CLOG_LOG(INFO, "set_log_confirmed success", K_(partition_key), K(ret), K(log_id), K(last_restore_log_id));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogSlidingWindow::set_log_archive_accum_checksum(const uint64_t log_id, const int64_t accum_checksum)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const int64_t *ref = NULL;
+  ObILogExtRingBufferData *log_data = NULL;
+  ObLogTask *log_task = NULL;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(sw_.get(static_cast<int64_t>(log_id), log_data, ref))) {
+    CLOG_LOG(WARN, "get log task from sliding window failed", K_(partition_key), K(ret));
+  } else if (NULL == (log_task = static_cast<ObLogTask *>(log_data))) {
+    CLOG_LOG(WARN, "get NULL log from sliding window", K_(partition_key), K(log_id));
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    log_task->lock();
+    log_task->set_archive_accum_checksum(accum_checksum);
+    log_task->unlock();
+  }
+  if (NULL != ref && OB_SUCCESS != (tmp_ret = sw_.revert(ref))) {
+    CLOG_LOG(ERROR, "revert failed", K_(partition_key), K(tmp_ret));
+  } else {
+    ref = NULL;
   }
   return ret;
 }
@@ -2796,7 +2851,8 @@ int ObLogSlidingWindow::get_next_replay_log_timestamp(int64_t& next_replay_log_t
   return ret;
 }
 
-void ObLogSlidingWindow::get_last_replay_log_id_and_ts(uint64_t &last_replay_log_id, int64_t &last_replay_log_ts)
+void ObLogSlidingWindow::get_last_replay_log_id_and_ts(uint64_t &last_replay_log_id,
+                                                       int64_t &last_replay_log_ts)
 {
   last_replay_log_.get(last_replay_log_id, last_replay_log_ts);
 }
@@ -4278,7 +4334,7 @@ int ObLogSlidingWindow::submit_index_log_(const uint64_t log_id, const ObLogTask
       // attention : acquire_accum_checksum() is not reentrant!!!
       // any failure must print ERROR
       CLOG_LOG(ERROR, "acquire_accum_checksum failed", K_(partition_key), K(ret), K(data_checksum));
-    } else if (log_task->is_confirmed_info_exist() && !need_skip_checksum_cmp && accum_checksum != log_accum_checksum) {
+    } else if (log_task->is_confirmed_info_exist() && accum_checksum != log_accum_checksum) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(
           ERROR, "accum_checksum not match with log_task", K_(partition_key), K(ret), K(accum_checksum), K(*log_task));

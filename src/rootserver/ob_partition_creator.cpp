@@ -421,6 +421,9 @@ int ObPartitionCreator::try_check_reach_server_partition_limit()
     // no need to check with binding true
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2220) {
     // no need to check in upgrading
+  } else if (obrpc::OB_CREATE_TABLE_MODE_LOOSE != create_mode_ && obrpc::OB_CREATE_TABLE_MODE_STRICT != create_mode_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("create_mode is invalid", KR(ret), K_(create_mode));
   } else if (OB_FAIL(dest_count_map.create(HASHMAP_SERVER_CNT, ObModIds::OB_SERVER_ARPCARGS_MAP))) {
     LOG_WARN("fail to create des count map", K(ret));
   } else {

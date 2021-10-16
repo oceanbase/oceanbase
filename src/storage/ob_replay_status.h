@@ -735,8 +735,7 @@ private:
 private:
   static const int64_t PENDING_COUNT_THRESHOLD = 100;
   static const int64_t EAGAIN_COUNT_THRESHOLD = 50000;
-  static const int64_t EAGAIN_INTERVAL_NORMAL_THRESHOLD = 10 * 1000 * 1000LL;    // 10s for normal retry
-  static const int64_t EAGAIN_INTERVAL_BIG_THRESHOLD = 10 * 60 * 1000 * 1000LL;  // 10min for wait_schema_refresh
+  static const int64_t EAGAIN_INTERVAL_THRESHOLD = 10 * 60 * 1000 * 1000LL;  // 10min
   bool is_inited_;
   int64_t ref_cnt_;                  // guarantee the effectiveness of self memory
   SafeRef2 safe_ref_;                // guarntee the effectiveness of partition when accesing partition

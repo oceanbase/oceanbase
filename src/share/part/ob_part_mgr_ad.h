@@ -34,15 +34,15 @@ public:
   // for hash/key/range_func part or insert statement
   static int get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
       const share::schema::ObPartitionLevel part_level, const share::schema::ObPartitionFuncType part_type,
-      const bool insert_or_replace, const int64_t p_id,
-      const common::ObObj& value,  // part func result
-      common::ObIArray<int64_t>& partition_ids, int64_t* part_idx);
+      const bool report_err_if_partition_not_exist, const int64_t p_id,
+      const common::ObObj &value,  // part func result
+      common::ObIArray<int64_t> &partition_ids, int64_t *part_idx);
 
   // For range columns
   static int get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
       const share::schema::ObPartitionLevel part_level, const share::schema::ObPartitionFuncType part_type,
-      const bool insert_or_replace, const int64_t p_id, const common::ObNewRow& row,
-      common::ObIArray<int64_t>& partition_ids, int64_t* part_idx = NULL);
+      const bool report_err_if_partition_not_exist, const int64_t p_id, const common::ObNewRow &row,
+      common::ObIArray<int64_t> &partition_ids, int64_t *part_idx = NULL);
 
   /////////The for range range partition must only contain column. If there are multiple columns, range represents the
   /// column vector in the schema//////
@@ -58,8 +58,8 @@ private:
   // Get point values range partition id
   static int get_part(common::ObPartMgr* part_mgr, const int64_t table_id,
       const share::schema::ObPartitionLevel part_level, const share::schema::ObPartitionFuncType part_type,
-      const bool insert_or_replace, const int64_t p_id, const common::ObNewRange& value,
-      common::ObIArray<int64_t>& partition_ids, int64_t* part_idx = NULL);
+      const bool report_err_if_partition_not_exist, const int64_t p_id, const common::ObNewRange &value,
+      common::ObIArray<int64_t> &partition_ids, int64_t *part_idx = NULL);
 };
 
 }  // namespace sql

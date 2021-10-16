@@ -54,6 +54,8 @@ public:
   virtual int report_rebuild_replica_async(
       const common::ObPartitionKey& part_key, const common::ObAddr& server, const ObRebuildSwitch& rebuild_switch) = 0;
   virtual int update_pg_backup_task_info(const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_info_array) = 0;
+  virtual int report_pg_backup_backupset_task(const common::ObIArray<share::ObBackupBackupsetArg>& arg,
+      const common::ObIArray<int32_t>& results, const share::ObPGBackupBackupsetTaskInfo::TaskStatus& status) = 0;
 };
 
 }  // namespace storage

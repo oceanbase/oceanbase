@@ -75,6 +75,27 @@ int ObNetClient::init()
   return ret;
 }
 
+int ObNetClient::load_ssl_config(const char *ca_cert,
+                                 const char *public_cert,
+                                 const char *private_key)
+{
+  int ret = OB_SUCCESS;
+  bool use_bkmi = false;
+  bool use_sm = false;
+  if (OB_ISNULL(ca_cert) || OB_ISNULL(public_cert) || OB_ISNULL(private_key)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(ERROR, "invalid argument", K(ret));
+  } else if (OB_FAIL(net_.load_ssl_config(use_bkmi, use_sm, ca_cert, public_cert, private_key))) {
+    OB_LOG(ERROR, "ObNetEasy load_ssl_config failed", K(ret), K(use_bkmi), K(use_sm));
+  } else {
+  	set_pkt_handler_ssl_opt();
+  	set_transport_ssl_opt();
+    LOG_INFO("ObNetClient load_ssl_config succ", K(use_bkmi), K(use_sm));
+  }
+
+  return ret;
+}
+
 int ObNetClient::init(const ObNetOptions opts)
 {
   return init_(opts);

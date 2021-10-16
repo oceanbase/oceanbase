@@ -286,6 +286,8 @@ int ObRootBalancer::init(common::ObServerConfig& cfg, share::schema::ObMultiVers
     LOG_WARN("init failed", K(ret));
   } else if (OB_FAIL(pg_validate_.init(sql_proxy, task_mgr, server_mgr, zone_mgr))) {
     LOG_WARN("failed to init partition validator", K(ret));
+  } else if (OB_FAIL(pg_backup_backupset_.init(sql_proxy, zone_mgr, server_mgr, task_mgr))) {
+    LOG_WARN("failed to init partition backup backupset", K(ret));
   } else {
     config_ = &cfg;
     zone_mgr_ = &zone_mgr;
@@ -329,15 +331,15 @@ int ObRootBalancer::alloc_tablegroup_partitions_for_create(const share::schema::
   return ret;
 }
 
-int ObRootBalancer::standby_alloc_partitions_for_split(const share::schema::ObTableSchema& table,
+int ObRootBalancer::standby_alloc_partitions_for_split(const share::schema::ObSimpleTableSchemaV2& table,
     const common::ObIArray<int64_t>& source_partition_ids, const common::ObIArray<int64_t>& dest_partition_ids,
     ObITablePartitionAddr& addr)
 {
   return replica_creator_.standby_alloc_partitions_for_split(table, source_partition_ids, dest_partition_ids, addr);
 }
 
-int ObRootBalancer::alloc_partitions_for_create(
-    const share::schema::ObTableSchema& table, obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr)
+int ObRootBalancer::alloc_partitions_for_create(const share::schema::ObSimpleTableSchemaV2& table,
+    obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(refresh_unit_replica_cnt_lock_);
@@ -355,7 +357,7 @@ int ObRootBalancer::alloc_partitions_for_create(
   return ret;
 }
 
-int ObRootBalancer::alloc_table_partitions_for_standby(const share::schema::ObTableSchema& table,
+int ObRootBalancer::alloc_table_partitions_for_standby(const share::schema::ObSimpleTableSchemaV2& table,
     const common::ObIArray<ObPartitionKey>& keys, obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr,
     share::schema::ObSchemaGetterGuard& guard)
 {
@@ -1040,6 +1042,12 @@ int ObRootBalancer::multiple_zone_deployment_tenant_balance(const uint64_t tenan
     }
   }
 
+  if (OB_SUCCESS == ret) {
+    if (OB_FAIL(pg_backup_backupset_.partition_backup_backupset(tenant_id))) {
+      LOG_WARN("failed to partition backup backupset", KR(ret), K(tenant_id));
+    }
+  }
+
   // step4: The status of the operation unit migration
   if (OB_FAIL(migrate_unit_.unit_migrate_finish(task_cnt))) {
     LOG_WARN("check unit migrate finish failed", K(ret), K(tenant_id));
@@ -1360,6 +1368,19 @@ int ObRootBalancer::fill_faillist(const int64_t count, const common::ObIArray<ui
 int64_t ObRootBalancer::get_schedule_interval() const
 {
   return idling_.get_idle_interval_us();
+}
+
+int ObRootBalancer::get_backup_start_snapshot(int64_t &task_start_snapshot)
+{
+  int ret = OB_SUCCESS;
+  task_start_snapshot = 0;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(pg_backup_.get_task_start_snapshot(task_start_snapshot))) {
+    LOG_WARN("failed to get task start snapshot", K(ret));
+  }
+  return ret;
 }
 
 int64_t ObBlacklistProcess::get_deep_copy_size() const

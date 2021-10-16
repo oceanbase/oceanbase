@@ -141,6 +141,44 @@ int ObConfigManager::load_config(const char* path)
   return ret;
 }
 
+int ObConfigManager::check_header_change(const char* path, const char* buf) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(path) || OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    PageArena<> pa;
+    char *cmp_buf = nullptr;
+    FILE* fp = NULL;
+    ObRecordHeader header;
+    int64_t header_len = header.get_serialize_size();
+    if (OB_ISNULL(cmp_buf = pa.alloc(header_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("alloc buffer failed", K(header_len), K(ret));
+    } else if (OB_ISNULL(fp = fopen(path, "rb"))) {
+      if (ENOENT != errno) {
+        ret = OB_IO_ERROR;
+        LOG_ERROR("Can't open file", K(path), K(errno), K(ret));
+      }
+    } else {
+      MEMSET(cmp_buf, 0, header_len);
+      int64_t len = fread(cmp_buf, 1, header_len, fp);
+      int64_t pos = 0;
+      if (OB_UNLIKELY(0 != ferror(fp))) {  // read with error
+        ret = OB_IO_ERROR;
+        LOG_ERROR("Read config file error", K(path), K(ret));
+      } else if (MEMCMP(buf, cmp_buf, header_len) == 0) {
+        ret = OB_EAGAIN;
+      }
+      if (OB_UNLIKELY(0 != fclose(fp))) {
+        ret = OB_IO_ERROR;
+        LOG_ERROR("Close config file failed", K(errno));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObConfigManager::dump2file(const char* path) const
 {
   int ret = OB_SUCCESS;
@@ -189,6 +227,8 @@ int ObConfigManager::dump2file(const char* path) const
     if (OB_SUCC(ret)) {
       if (OB_FAIL(server_config_.serialize(buf, OB_MAX_PACKET_LENGTH, pos))) {
         LOG_WARN("Serialize server config fail!", K(ret));
+      } else if (OB_FAIL(check_header_change(path, buf)) && OB_EAGAIN == ret) {
+        LOG_INFO("Header not change, no need to write server config!");
       } else if ((fd = ::open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP)) < 0) {
         ret = OB_IO_ERROR;
         LOG_WARN("fail to create config file", K(tmp_path), KERRMSG, K(ret));
@@ -211,7 +251,6 @@ int ObConfigManager::dump2file(const char* path) const
         LOG_INFO("Write server config successfully!");
       }
     }
-
     if (OB_SUCC(ret)) {
       if (0 != ::rename(path, hist_path) && errno != ENOENT) {
         ret = OB_ERR_SYS;
@@ -221,6 +260,8 @@ int ObConfigManager::dump2file(const char* path) const
         ret = OB_ERR_SYS;
         LOG_WARN("fail to move tmp config file", KERRMSG, K(ret));
       }
+    } else if (OB_EAGAIN == ret) {
+      ret = OB_SUCCESS;
     }
   }
   return ret;

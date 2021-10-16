@@ -65,6 +65,8 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(ObRpcRebuildReplicaP, gctx_);
   RPC_PROCESSOR(ObRpcChangeReplicaP, gctx_);
   RPC_PROCESSOR(ObRpcAddReplicaBatchP, gctx_);
+  RPC_PROCESSOR(ObRpcGetTenantLogArchiveStatusP, gctx_);
+  RPC_PROCESSOR(ObRpcGetTenantLogArchiveStatusV2P, gctx_);
   RPC_PROCESSOR(ObRpcRemoveNonPaxosReplicaBatchP, gctx_);
   RPC_PROCESSOR(ObRpcRemoveMemberBatchP, gctx_);
   RPC_PROCESSOR(ObRpcModifyQuorumBatchP, gctx_);
@@ -120,7 +122,6 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(ObUpdateClusterInfoP, gctx_);
   RPC_PROCESSOR(ObSetMemberListBatchP, gctx_);
   RPC_PROCESSOR(ObGetRemoteTenantGroupStringP, gctx_);
-  RPC_PROCESSOR(ObRpcGetTenantLogArchiveStatusP, gctx_);
   RPC_PROCESSOR(ObCheckPhysicalFlashbackSUCCP, gctx_);
   RPC_PROCESSOR(ObRpcBackupReplicaBatchP, gctx_);
   RPC_PROCESSOR(ObRpcCheckBackupTaskExistP, gctx_);
@@ -128,4 +129,6 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(ObRpcBroadcastRsListP, gctx_);
   RPC_PROCESSOR(ObRpcBatchGetProtectionLevelP, gctx_);
   RPC_PROCESSOR(ObRpcValidateBackupBatchP, gctx_);
+  RPC_PROCESSOR(ObRpcBackupArchiveLogBatchP, gctx_);
+  RPC_PROCESSOR(ObRpcBackupBackupsetBatchP, gctx_);
 }

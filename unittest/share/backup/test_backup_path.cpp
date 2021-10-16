@@ -54,7 +54,7 @@ TEST(ObBackupPathUtil, trim_right_backslash)
 TEST(ObBackupPathUtil, base_data_path)
 {
   ObBackupPath path;
-  const char* backup_root_path = "oss://root_backup_dir";
+  const char* backup_root_path = "oss://root_backup_dir?host=xxx&access_id=xxx&access_key=xxx";
   const char* cluster_name = "cluster_name";
   const uint64_t cluster_id = 1;
   const uint64_t incarnation = 1;
@@ -94,6 +94,7 @@ TEST(ObBackupPathUtil, base_data_path)
   test_backup_path_info.tenant_id_ = tenant_id;
   test_backup_path_info.full_backup_set_id_ = full_backup_set_id;
   test_backup_path_info.inc_backup_set_id_ = inc_backup_set_id;
+  test_backup_path_info.compatible_ = OB_BACKUP_COMPATIBLE_VERSION_V1;
   LOG_INFO("dump path", K(test_backup_path_info));
   ASSERT_EQ(true, test_backup_path_info.is_valid());
 
@@ -170,8 +171,13 @@ TEST(ObBackupPathUtil, base_data_path)
   path.reset();
 
   ASSERT_EQ(OB_SUCCESS,
-      ObBackupPathUtil::get_macro_block_file_path(
-          test_backup_path_info, table_id, part_id, test_backup_path_info.inc_backup_set_id_, sub_task_id, path));
+      ObBackupPathUtil::get_macro_block_file_path(test_backup_path_info,
+          table_id,
+          part_id,
+          test_backup_path_info.full_backup_set_id_,
+          test_backup_path_info.inc_backup_set_id_,
+          sub_task_id,
+          path));
   expect_path = macro_block_path;
   ret = path.get_obstr().compare(expect_path);
   LOG_INFO("dump path", K(path), K(expect_path));

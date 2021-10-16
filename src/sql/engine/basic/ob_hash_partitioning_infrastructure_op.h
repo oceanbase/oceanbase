@@ -84,6 +84,7 @@ public:
         hash_funcs_(nullptr),
         sort_collations_(nullptr),
         cmp_funcs_(nullptr),
+        eval_ctx_(nullptr),
         sql_mem_processor_(nullptr)
   {}
   ~ObHashPartitionExtendHashTable()

@@ -149,6 +149,7 @@ public:
   }
   int check_and_refresh_major_compact_trigger();
   bool in_upgrade_mode() const;
+  int check_backup_manager_parameter();
 
   // Compatibility requirements, compatible with the old SPFILE format
   int deserialize_with_compat(const char* buf, const int64_t data_len, int64_t& pos);

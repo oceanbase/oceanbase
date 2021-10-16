@@ -49,8 +49,7 @@ inline int init_sql_factories()
   // ATTENTION: don't delete this log, it's used to init thread local variable LogBufferMgr in ObLog.
   SQL_LOG(INFO, "init sql factories");
   int ret = common::OB_SUCCESS;
-  if (OB_FAIL(ObAPMiniTaskMgrGFactory::get_instance()->init())) {
-  } else if (OB_FAIL(ObPxSqcHandlerFactory::get_instance()->init())) {
+  if (OB_FAIL(ObPxSqcHandlerFactory::get_instance()->init())) {
     SQL_LOG(ERROR, "failed to init sqc handler", K(ret));
   } else {
     ObExprOperatorFactory::register_expr_operators();

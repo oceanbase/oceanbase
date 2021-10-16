@@ -31,7 +31,7 @@ namespace schema {
 class ObZoneRegion;
 class ObSchemaGetterGuard;
 class ObLocality;
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObTablegroupSchema;
 class ObTenantSchema;
 class ObDatabaseSchema;

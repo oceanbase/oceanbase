@@ -250,7 +250,7 @@ int ObAlterLocalityChecker::check_alter_locality_finished_by_tenant(const uint64
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
         bool table_locality_finished = true;
-        const ObTableSchema* table_schema = NULL;
+        const ObSimpleTableSchemaV2* table_schema = NULL;
         if (OB_FAIL(check_stop())) {
           LOG_WARN("root balancer stop", K(ret));
         } else if (OB_FAIL(schema_guard.get_table_schema(table_ids.at(i), table_schema))) {
@@ -504,7 +504,7 @@ int ObAlterLocalityChecker::check_locality_match_replica_distribution(
  *   the argument null_locality_table_match is an input/output argument
  */
 int ObAlterLocalityChecker::process_single_table(share::schema::ObSchemaGetterGuard& schema_guard,
-    const share::schema::ObTableSchema& table_schema, const share::schema::ObTenantSchema& tenant_schema,
+    const share::schema::ObSimpleTableSchemaV2& table_schema, const share::schema::ObTenantSchema& tenant_schema,
     const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
     bool& null_locality_table_match, bool& table_locality_finished)
 {
@@ -654,7 +654,7 @@ int ObAlterLocalityChecker::process_single_non_binding_tablegroup(share::schema:
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count() && tablegroup_locality_finished; ++i) {
         bool table_locality_finished = true;
-        const ObTableSchema* table_schema = NULL;
+        const ObSimpleTableSchemaV2* table_schema = NULL;
         if (OB_FAIL(check_stop())) {
           LOG_WARN("root balancer stop", K(ret));
         } else if (OB_FAIL(schema_guard.get_table_schema(table_ids.at(i), table_schema))) {
@@ -732,7 +732,8 @@ int ObAlterLocalityChecker::process_single_tablegroup(share::schema::ObSchemaGet
 }
 
 int ObAlterLocalityChecker::process_single_table_under_new_tablegroup(share::schema::ObSchemaGetterGuard& schema_guard,
-    const share::schema::ObTableSchema& table_schema, const share::schema::ObTablegroupSchema& tablegroup_schema,
+    const share::schema::ObSimpleTableSchemaV2& table_schema,
+    const share::schema::ObTablegroupSchema& tablegroup_schema,
     const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
     bool& table_locality_finished)
 {

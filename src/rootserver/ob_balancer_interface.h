@@ -21,7 +21,7 @@ namespace oceanbase {
 
 namespace share {
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObSchemaGetterGuard;
 }  // namespace schema
 }  // namespace share
@@ -105,7 +105,7 @@ public:
   // Obtaining the table list from StatFinder is a snapshot, not because of map_balancer
   // The result of each call in the running process is different
   static int get_need_balance_table_schemas_in_tenant(share::schema::ObSchemaGetterGuard& schema_guard,
-      uint64_t tenant_id, common::ObIArray<const share::schema::ObTableSchema*>& tables);
+      uint64_t tenant_id, common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& tables);
 };
 
 class IUnitProvider {

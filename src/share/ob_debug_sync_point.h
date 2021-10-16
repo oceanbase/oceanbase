@@ -124,6 +124,7 @@ class ObString;
   ACT(DEFORE_OBS_CREATE_PARTITION, )                               \
   ACT(DEFORE_FETCH_LOGIC_ROW_SRC, )                                \
   ACT(BEFORE_BUILD_MIGRATE_PARTITION_INFO, )                       \
+  ACT(BEFORE_BUILD_MIGRATE_PARTITION_INFO_USER_TABLE, )            \
   ACT(BEFORE_GET_MAJOR_MGERGE_TABLES, )                            \
   ACT(BEFORE_GET_MINOR_MGERGE_TABLES, )                            \
   ACT(BEFORE_GET_MAJOR_MERGE_TABLE_IDS, )                          \
@@ -209,6 +210,7 @@ class ObString;
   ACT(BEFORE_PHYSICAL_RESTORE_REBUILD_INDEX, )                     \
   ACT(BEFORE_PHYSICAL_RESTORE_POST_CHECK, )                        \
   ACT(BACKUP_BEFROE_CHOOSE_SRC, )                                  \
+  ACT(BACKUP_BEFROE_BUILD_TABLE_PARTITION_INFO, )                  \
   ACT(HANG_UPDATE_RS_LIST, )                                       \
   ACT(PARTITION_BACKUP_TASK_BEFORE_ADD_TASK_IN_MGR, )              \
   ACT(HANG_BEFORE_RESOLVER_FINISH, )                               \
@@ -228,6 +230,8 @@ class ObString;
   ACT(REPLAY_REDO_LOG, )                                           \
   ACT(BEFORE_RECYCLE_PHYSICAL_RESTORE_JOB, )                       \
   ACT(BACKUP_DATA_CLEAN_STATUS_PREPARE, )                          \
+  ACT(BACKUP_BEFORE_TRIGGER_FREEZE_PIECES, )                       \
+  ACT(BACKUP_BEFORE_FROZEN_PIECES, )                               \
   ACT(BACKUP_DATA_SYS_CLEAN_STATUS_DOING, )                        \
   ACT(BACKUP_DATA_NORMAL_TENANT_CLEAN_STATUS_DOING, )              \
   ACT(BACKUP_DATA_CLEAN_STATUS_SCHEDULE, )                         \
@@ -260,6 +264,7 @@ class ObString;
   ACT(DEL_TRIGGER_BEFORE_MAP, )                                    \
   ACT(STANDBY_CLUSTER_PARTITION_CREATE, )                          \
   ACT(AFTER_PREPARE_TENANT_BEGINNING_STATUS, )                     \
+  ACT(AFTER_PREPARE_TENANT_BACKUP_BACKUP_BEGINNING, )              \
   ACT(PREPARE_TENANT_BEGINNING_STATUS, )                           \
   ACT(DOING_MARK_AND_SWEEP, )                                      \
   ACT(BEFORE_FINISH_SET_PROTECTION_MODE, )                         \
@@ -269,8 +274,23 @@ class ObString;
   ACT(BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG, )                    \
   ACT(SLOW_TXN_DURING_2PC_COMMIT_PHASE_FOR_PHYSICAL_BACKUP_1055, ) \
   ACT(BEFORE_FORCE_DROP_SCHEMA, )                                  \
-  ACT(BLOCK_CLOG_PRIMARY_RECONFIRM,)                               \
+  ACT(BLOCK_CLOG_PRIMARY_RECONFIRM, )                              \
+  ACT(BEFORE_DEAL_WITH_FAILED_BACKUP_BACKUPSET_TASK, )             \
+  ACT(BEFORE_START_BACKUP_ARCHIVELOG_TASK, )                       \
   ACT(SYNC_REPORT, )                                               \
+  ACT(BEFORE_PERSIST_MEMBER_LIST, )                                \
+  ACT(BEFORE_SEND_SET_MEMBER_LIST_RPC, )                           \
+  ACT(BEFORE_ALTER_TABLE_COLUMN, )                                 \
+  ACT(BEFORE_REPORT_BACKUP_BACKUPSET_TASK, )                       \
+  ACT(BEFORE_FINISH_BACKUP_ARCHIVELOG_TASK, )                      \
+  ACT(BEFORE_BACKUP_BACKUPSET_FINISH, )                            \
+  ACT(BEFORE_CALC_BACKUP_BACKUPSET_COPY_ID, )                      \
+  ACT(BEFORE_GET_BACKUP_BACKUPSET_COPY_ID, )                       \
+  ACT(BACKUP_BACKUPSET_COPYING, )                                  \
+  ACT(BEFORE_BACKUP_BACKUPPIECE_TASK_COMMIT, )                     \
+  ACT(BEFORE_CHECK_BACKUP_TASK_DATA_AVAILABLE, )                   \
+  ACT(BACKUP_BACKUPPIECE_AFTER_SCHEDULE, )                         \
+  ACT(FOLLOWER_BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG, )           \
   ACT(MAX_DEBUG_SYNC_POINT, )
 
 DECLARE_ENUM(ObDebugSyncPoint, debug_sync_point, OB_DEBUG_SYNC_POINT_DEF);

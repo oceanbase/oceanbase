@@ -2993,7 +2993,19 @@ ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, const ObString &col_na
   return item;
 }
 
-int ObDMLStmt::add_column_item(ObIArray<ColumnItem>& column_items)
+ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, uint64_t column_id)
+{
+  ColumnItem *item = NULL;
+  for (int64_t i = 0; i < column_items_.count(); ++i) {
+    if (table_id == column_items_[i].table_id_ && column_id == column_items_[i].column_id_) {
+      item = &column_items_.at(i);
+      break;
+    }
+  }
+  return item;
+}
+
+int ObDMLStmt::add_column_item(ObIArray<ColumnItem> &column_items)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); i++) {

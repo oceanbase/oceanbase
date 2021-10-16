@@ -52,7 +52,7 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
     int64_t str_num = 2;
     const uint64_t max_len = std::max(on_len, off_len);
     // when bits exceed uint_max or int_min, ob is not compatible to mysql.
-    types_array[0].set_calc_type(common::ObBitType); 
+    types_array[0].set_calc_type(common::ObUInt64Type);
     types_array[1].set_calc_type(common::ObVarcharType);
     types_array[2].set_calc_type(common::ObVarcharType);
     if (3 < param_num) {
@@ -130,7 +130,7 @@ int ObExprExportSet::calc_export_set(ObObj& result, const ObObj& bits, const ObO
     local_on = on.get_string();
     local_off = off.get_string();
     local_sep = sep.get_string();
-    if (OB_FAIL(bits.get_bit(local_bits))) {
+    if (OB_FAIL(bits.get_uint64(local_bits))) {
       LOG_WARN("fail to get bit", K(ret), K(bits));
     } else if (OB_FAIL(n_bits.get_int(local_n_bits))) {
       LOG_WARN("fail to get int", K(ret), K(n_bits));

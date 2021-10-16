@@ -773,7 +773,7 @@ private:
       const int64_t paxos_replica_num, const int64_t non_paxos_replica_num,
       const common::ObIArray<int64_t>& partition_ids, const ObITablePartitionAddr& table_addr,
       const common::ObIArray<share::schema::ObTableSchema>& schemas, const bool is_bootstrap, const bool is_standby,
-      obrpc::ObCreateTableMode create_mode, const share::ObSimpleFrozenStatus& frozen_status,
+      obrpc::ObCreateTableMode create_mode, const int64_t restore, const share::ObSimpleFrozenStatus& frozen_status,
       const uint64_t last_replay_log_id = 0);
 
   virtual int prepare_create_partitions(ObPartitionCreator& creator, const share::schema::ObTableSchema& new_schema,
@@ -781,7 +781,7 @@ private:
       const int64_t paxos_replica_num, const int64_t non_paxos_replica_num,
       const common::ObIArray<int64_t>& partition_ids, const ObITablePartitionAddr& table_addr,
       const common::ObIArray<share::schema::ObTableSchema>& schemas, const bool is_bootstrap, const bool is_standby,
-      obrpc::ObCreateTableMode create_mode, const share::ObSimpleFrozenStatus& frozen_status,
+      obrpc::ObCreateTableMode create_mode, const int64_t restore, const share::ObSimpleFrozenStatus& frozen_status,
       const uint64_t last_replay_log_id = 0);
   int fill_partition_member_list(const ObPartitionAddr& part_addr, const int64_t timestamp,
       const int64_t paxos_replica_count, obrpc::ObCreatePartitionArg& arg);
@@ -791,7 +791,7 @@ private:
   int construct_create_partition_creator(const common::ObPartitionKey& pkey,
       const common::ObIArray<share::schema::ObTableSchema>& schemas, const int64_t paxos_replica_num,
       const int64_t non_paxos_replica_num, const int64_t schema_version, const int64_t last_replay_log_id,
-      const obrpc::ObCreateTableMode create_mode, const ObPartitionAddr& partition_addr,
+      const obrpc::ObCreateTableMode create_mode, const int64_t restore, const ObPartitionAddr& partition_addr,
       const share::ObSplitPartition& split_info, const share::ObSimpleFrozenStatus& frozen_status,
       const bool is_standby, const bool is_bootstrap, ObPartitionCreator& creator);
   int fill_create_binding_partition_arg(const common::ObPartitionKey& pkey, const common::ObPGKey& pgkey,
@@ -803,6 +803,8 @@ private:
       const int64_t non_paxos_replica_num, const int64_t partition_id, const ObReplicaAddr& replica_addr,
       const int64_t lease_start_ts, const bool is_bootstrap, const bool is_standby, const int64_t restore,
       const share::ObSimpleFrozenStatus& frozen_status, obrpc::ObCreatePartitionArg& arg);
+  int set_flag_role(const bool initial_leader, const bool is_standby, const int64_t restore, const uint64_t table_id,
+      common::ObRole& role);
   int fill_flag_replica(const uint64_t table_id, const int64_t partition_cnt, const int64_t partition_id,
       const obrpc::ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr,
       share::ObPartitionReplica& flag_replica);

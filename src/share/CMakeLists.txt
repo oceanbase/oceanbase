@@ -313,6 +313,17 @@ ob_set_subtarget(ob_share backup
   backup/ob_tenant_validate_task_updater.cpp
   backup/ob_pg_validate_task_updater.cpp
   backup/ob_validate_operator.cpp
+  backup/ob_backup_backupset_operator.h
+  backup/ob_backup_backupset_operator.cpp
+  backup/ob_backup_backuppiece_operator.h
+  backup/ob_backup_backuppiece_operator.cpp
+  backup/ob_backup_meta_store.h
+  backup/ob_backup_meta_store.cpp
+  backup/ob_backup_archive_log_round_stat.h
+  backup/ob_backup_archive_log_round_stat.cpp
+  backup/ob_multi_backup_dest_util.h
+  backup/ob_multi_backup_dest_util.cpp
+  ob_priv_common.cpp
 )
 
 ob_set_subtarget(ob_share interrupt

@@ -66,7 +66,7 @@
 
 #define TRACEPOINT_CALL(name, ...)                                      \
   ({                                                                    \
-    static void** func_ptr = ::oceanbase::common::tracepoint_get(name); \
+    static void **func_ptr = ::oceanbase::common::tracepoint_get(name); \
     (NULL != func_ptr) ? TP_CALL_FUNC(func_ptr, ##__VA_ARGS__) : 0;     \
   })
 
@@ -77,13 +77,13 @@
 #define OB_I(...)
 #endif
 
-bool& get_tp_switch();
+bool &get_tp_switch();
 
 #define TP_SWITCH_GUARD(v) ::oceanbase::lib::ObSwitchGuard<get_tp_switch> osg_##__COUNTER__##_(v)
 
 namespace oceanbase {
 namespace lib {
-using GetSwitchFunc = bool&();
+using GetSwitchFunc = bool &();
 
 template <GetSwitchFunc fn>
 class ObSwitchGuard {
@@ -130,23 +130,23 @@ private:
   }
 
 #define TP_SET(file_name, func_name, key, trace_func) \
-  *::oceanbase::common::tracepoint_get(refine_tp_key(file_name, func_name, key)) = (void*)(trace_func)
+  *::oceanbase::common::tracepoint_get(refine_tp_key(file_name, func_name, key)) = (void *)(trace_func)
 #define TP_SET_ERROR(file_name, func_name, key, err) \
   TP_SET(file_name, func_name, key, (int (*)()) & tp_const_error<(err)>)
 
 namespace oceanbase {
 namespace common {
-inline const char* tp_basename(const char* path)
+inline const char *tp_basename(const char *path)
 {
-  const char* ret = OB_ISNULL(path) ? NULL : strrchr(path, '/');
+  const char *ret = OB_ISNULL(path) ? NULL : strrchr(path, '/');
   return (NULL == ret) ? path : ++ret;
 }
 
-inline const char* refine_tp_key(const char* s1, const char* s2, const char* s3)
+inline const char *refine_tp_key(const char *s1, const char *s2, const char *s3)
 {
   const int32_t BUFFER_SIZE = 256;
   static RLOCAL(lib::ByteBuf<BUFFER_SIZE>, buffer);
-  const char* cret = nullptr;
+  const char *cret = nullptr;
   if (OB_ISNULL(s1) || OB_ISNULL(s2) || OB_ISNULL(s3)) {
   } else {
     s1 = tp_basename(s1);
@@ -168,13 +168,13 @@ public:
   {}
   ~TPSymbolTable()
   {}
-  void** get(const char* name)
+  void **get(const char *name)
   {
     return (NULL != name) ? do_get(name) : NULL;
   }
 
 private:
-  static uint64_t BKDRHash(const char* str);
+  static uint64_t BKDRHash(const char *str);
   enum { SYMBOL_SIZE_LIMIT = 128, SYMBOL_COUNT_LIMIT = 64 * 1024 };
 
   struct SymbolEntry {
@@ -186,19 +186,19 @@ private:
     ~SymbolEntry()
     {}
 
-    bool find(const char* name);
+    bool find(const char *name);
 
     int lock_;
-    void* value_;
+    void *value_;
     char name_[SYMBOL_SIZE_LIMIT];
   };
 
-  void** do_get(const char* name);
+  void **do_get(const char *name);
 
   SymbolEntry symbol_table_[SYMBOL_COUNT_LIMIT];
 };
 
-inline void** tracepoint_get(const char* name)
+inline void **tracepoint_get(const char *name)
 {
   static TPSymbolTable symbol_table;
   return symbol_table.get(name);
@@ -233,7 +233,7 @@ struct EventItem {
 };
 
 struct NamedEventItem : public ObDLinkBase<NamedEventItem> {
-  NamedEventItem(const char* name, ObDList<NamedEventItem>& l) : name_(name)
+  NamedEventItem(const char *name, ObDList<NamedEventItem> &l) : name_(name)
   {
     l.add_last(this);
   }
@@ -242,7 +242,7 @@ struct NamedEventItem : public ObDLinkBase<NamedEventItem> {
     return item_.call();
   }
 
-  const char* name_;
+  const char *name_;
   EventItem item_;
 };
 
@@ -430,7 +430,22 @@ public:
     EN_BACKUP_BACKUP_LOG_ARCHIVE_INTERRUPTED = 168,
     EN_BACKUP_BACKUPSET_EXTERN_INFO_ERROR = 169,
     EN_BACKUP_SCHEDULER_GET_SCHEMA_VERSION_ERROR = 170,
-
+    EN_BACKUP_BACKUPSET_FILE_TASK = 171,
+    EN_LOG_ARCHIVE_RESTORE_ACCUM_CHECKSUM_TAMPERED = 172,
+    EN_BACKUP_BACKUPPIECE_FILE_TASK = 173,
+    EN_BACKUP_RS_BLOCK_FROZEN_PIECE = 174,
+    EN_LOG_ARCHIVE_BLOCK_SWITCH_PIECE = 175,
+    EN_BACKUP_ARCHIVELOG_RPC_FAILED = 176,
+    EN_BACKUP_AFTER_UPDATE_EXTERNAL_ROUND_INFO_FOR_USER = 177,
+    EN_BACKUP_AFTER_UPDATE_EXTERNAL_ROUND_INFO_FOR_SYS = 178,
+    EN_BACKUP_AFTER_UPDATE_EXTERNAL_BOTH_PIECE_INFO_FOR_USER = 179,
+    EN_BACKUP_AFTER_UPDATE_EXTERNAL_BOTH_PIECE_INFO_FOR_SYS = 180,
+    EN_BACKUP_BACKUPPIECE_FINISH_UPDATE_EXTERN_AND_INNER_INFO = 181,
+    EN_BACKUP_BACKUPPIECE_DO_SCHEDULE = 182,
+    EN_BACKUP_UPDATE_START_REPLAY_LOG_TS = 183,
+    EN_BACKUP_BACKUPSET_DO_SCHEDULE = 184,
+    EN_BACKUP_CHECK_BACKUP_POINT_EXIST = 185,
+    // 下面请从201开始
     EN_CHECK_STANDBY_CLUSTER_SCHEMA_CONDITION = 201,
     EN_ALLOCATE_LOB_BUF_FAILED = 202,
     EN_ALLOCATE_DESERIALIZE_LOB_BUF_FAILED = 203,
@@ -495,14 +510,14 @@ public:
   }
 
   /* set an event value */
-  inline void set_event(int64_t index, const EventItem& item)
+  inline void set_event(int64_t index, const EventItem &item)
   {
     if (index >= 0 && index < SIZE_OF_EVENT_TABLE) {
       event_table_[index] = item;
     }
   }
 
-  static inline void set_event(const char* name, const EventItem& item)
+  static inline void set_event(const char *name, const EventItem &item)
   {
     DLIST_FOREACH_NORET(i, global_item_list())
     {
@@ -512,13 +527,13 @@ public:
     }
   }
 
-  static ObDList<NamedEventItem>& global_item_list()
+  static ObDList<NamedEventItem> &global_item_list()
   {
     static ObDList<NamedEventItem> g_list;
     return g_list;
   }
 
-  static EventTable& instance()
+  static EventTable &instance()
   {
     static EventTable et;
     return et;
@@ -533,7 +548,7 @@ private:
 };
 
 inline void event_access(int64_t index, /* tracepoint number */
-    EventItem& item, bool is_get)       /* is a 'get' */
+    EventItem &item, bool is_get)       /* is a 'get' */
 {
   if (is_get)
     item = EventTable::instance().get_event(index);

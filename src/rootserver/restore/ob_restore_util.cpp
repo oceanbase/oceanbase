@@ -19,8 +19,13 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_rpc_struct.h"
+#include "share/backup/ob_backup_path.h"
+#include "share/backup/ob_tenant_name_mgr.h"
 #include "rootserver/restore/ob_restore_table_operator.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "share/backup/ob_multi_backup_dest_util.h"
+#include "share/backup/ob_log_archive_backup_info_mgr.h"
+#include "share/backup/ob_extern_backup_info_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -428,6 +433,7 @@ int ObRestoreUtil::fill_physical_restore_job(
     const int64_t job_id, const obrpc::ObPhysicalRestoreTenantArg& arg, ObPhysicalRestoreJob& job)
 {
   int ret = OB_SUCCESS;
+
   if (job_id < 0 || !arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(job_id), K(arg));
@@ -441,19 +447,7 @@ int ObRestoreUtil::fill_physical_restore_job(
     job.tenant_name_[common::OB_MAX_TENANT_NAME_LENGTH_STORE - 1] = '\0';
     STRNCPY(job.backup_tenant_name_, arg.backup_tenant_name_.ptr(), common::OB_MAX_TENANT_NAME_LENGTH_STORE);
     job.backup_tenant_name_[common::OB_MAX_TENANT_NAME_LENGTH_STORE - 1] = '\0';
-    // check uri
-    if (OB_SUCC(ret)) {
-      ObBackupDest backup_dest;
-      if (OB_FAIL(backup_dest.set(arg.uri_.ptr()))) {
-        LOG_WARN("uri is invalid", K(ret), K(arg), K(job_id));
-      } else if (!backup_dest.is_valid()) {
-        ret = OB_URI_ERROR;
-        LOG_WARN("uri is invalid", K(ret), K(arg), K(job_id));
-      } else {
-        STRNCPY(job.backup_dest_, arg.uri_.ptr(), share::OB_MAX_BACKUP_DEST_LENGTH);
-        job.backup_dest_[share::OB_MAX_BACKUP_DEST_LENGTH - 1] = '\0';
-      }
-    }
+
     // check restore option
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObPhysicalRestoreOptionParser::parse(arg.restore_option_, job))) {
@@ -464,12 +458,28 @@ int ObRestoreUtil::fill_physical_restore_job(
       }
     }
 
+    // check multi uri
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(fill_backup_path(arg, job))) {
+        LOG_WARN("failed to fill backup path", KR(ret), K(arg), K(job));
+      }
+    }
+
     if (FAILEDx(databuff_printf(job.passwd_array_,
             sizeof(job.passwd_array_),
             "%.*s",
             arg.passwd_array_.length(),
             arg.passwd_array_.ptr()))) {
       LOG_WARN("failed to copy passwd array", K(ret), K(arg));
+    }
+
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg.table_items_.count(); i++) {
+        const obrpc::ObTableItem& item = arg.table_items_.at(i);
+        if (OB_FAIL(job.white_list_.add_table_item(item))) {
+          LOG_WARN("fail to add table item", KR(ret), K(item));
+        }
+      }
     }
   }
 
@@ -520,5 +530,202 @@ int ObRestoreUtil::check_has_physical_restore_job(
       }
     }
   }
+  return ret;
+}
+
+int ObRestoreUtil::fill_backup_path(const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job)
+{
+  int ret = OB_SUCCESS;
+  const bool has_multi_url = arg.multi_uri_.length() > 0;
+  LOG_INFO("start fill backup path", K(arg));
+
+  if (has_multi_url) {
+    if (OB_FAIL(fill_multi_backup_path(arg, job))) {
+      LOG_WARN("failed to fill multi backup path", K(ret), K(arg));
+    }
+  } else {
+    // used backup before 2277
+    if (OB_FAIL(fill_compat_backup_path(arg, job))) {
+      LOG_WARN("failed to fill compat backup path", K(ret), K(arg));
+    }
+  }
+  FLOG_INFO("finish fill backup path", K(arg), K(job));
+
+  return ret;
+}
+
+int ObRestoreUtil::fill_multi_backup_path(
+    const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObArray<ObString> uri_list;
+  bool is_same_type = false;
+  ObMultiBackupPathType path_type;
+  uint64_t backup_tenant_id = OB_INVALID_ID;
+  const int64_t restore_timestamp = arg.restore_timestamp_;
+  ObArray<ObSimpleBackupSetPath> backup_set_list;
+  ObArray<ObSimpleBackupPiecePath> backup_piece_list;
+  ObArray<ObBackupPieceInfo> piece_info_list;
+  ObArray<ObBackupSetFileInfo> set_info_list;
+  bool is_complete = false;
+
+  if (arg.multi_uri_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args, cannot fill multi backup path with empty multi uri", K(ret), K(arg));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::parse_multi_uri(arg.multi_uri_, allocator, uri_list))) {
+    LOG_WARN("failed to parse multi piece uri", KR(ret), "multi_uri", arg.multi_uri_);
+  } else if (uri_list.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("uri list is empty", KR(ret), K(arg));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::check_all_path_is_same_type(uri_list, is_same_type, path_type))) {
+    LOG_WARN("failed to check all is same type", KR(ret), K(uri_list));
+  } else if (!is_same_type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("should all address be same type", KR(ret));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::get_backup_tenant_id(uri_list,
+                 path_type,
+                 job.backup_cluster_name_,
+                 job.cluster_id_,
+                 job.backup_tenant_name_,
+                 job.restore_timestamp_,
+                 backup_tenant_id))) {
+    LOG_WARN("failed to get backup tenant id", KR(ret), K(job));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::get_multi_backup_path_list(false /*is_preview*/,
+                 job.backup_cluster_name_,
+                 job.cluster_id_,
+                 backup_tenant_id,
+                 restore_timestamp,
+                 uri_list,
+                 backup_set_list,
+                 backup_piece_list))) {
+    LOG_WARN("failed to get backup path list", KR(ret), K(uri_list));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::filter_duplicate_path_list(backup_set_list, backup_piece_list))) {
+    LOG_WARN("failed to filter duplicate path list", KR(ret));
+  } else if (OB_FAIL(job.multi_restore_path_list_.set(backup_set_list, backup_piece_list))) {
+    LOG_WARN("failed to set mutli restore path list", KR(ret));
+  } else if (OB_FAIL(
+                 get_multi_path_file_info_list(backup_set_list, backup_piece_list, set_info_list, piece_info_list))) {
+    LOG_WARN("failed to get multi path file info list", KR(ret), K(backup_set_list), K(backup_piece_list));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::check_multi_path_is_complete(
+                 arg.restore_timestamp_, set_info_list, piece_info_list, is_complete))) {
+    LOG_WARN("failed to check multi path is complete", KR(ret), K(arg), K(set_info_list), K(piece_info_list));
+  } else if (!is_complete) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("multi path is not complete", KR(ret));
+  } else {
+    LOG_INFO("extract multi backup path success, has multi url", K(arg), K(path_type), K(job));
+  }
+
+  return ret;
+}
+
+int ObRestoreUtil::fill_compat_backup_path(
+    const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job)
+{
+  int ret = OB_SUCCESS;
+
+  if (!arg.multi_uri_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(arg));
+  } else {
+    // for compat backup path, data restore use backup dest
+    ObBackupDest backup_dest;
+    if (OB_FAIL(backup_dest.set(arg.uri_.ptr()))) {
+      LOG_WARN("uri is invalid", K(ret), K(arg));
+    } else if (!backup_dest.is_valid()) {
+      ret = OB_URI_ERROR;
+      LOG_WARN("uri is invalid", K(ret), K(arg));
+    } else if (OB_FAIL(databuff_printf(job.backup_dest_, sizeof(job.backup_dest_), arg.uri_.ptr()))) {
+      LOG_WARN("failed to copy backup dest", K(ret), K(arg));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // for compat backup path, clog restore use multi restore path
+    if (OB_FAIL(fill_clog_path_list(arg.uri_, arg, job))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to fill clog path list", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRestoreUtil::fill_clog_path_list(
+    const ObString& uri, const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObString> uri_list;
+  uint64_t backup_tenant_id = OB_INVALID_ID;
+  const int64_t restore_timestamp = arg.restore_timestamp_;
+  ObArray<ObSimpleBackupSetPath> backup_set_list;
+  ObArray<ObSimpleBackupSetPath> fake_backup_set_list;
+  ObArray<ObSimpleBackupPiecePath> backup_piece_list;
+  if (OB_FAIL(uri_list.push_back(uri))) {
+    LOG_WARN("failed to push back", KR(ret), K(uri));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::get_backup_tenant_id(uri_list,
+                 ObMultiBackupPathType::BACKUP_PATH_CLUSTER_LEVEL,
+                 job.backup_cluster_name_,
+                 job.cluster_id_,
+                 job.backup_tenant_name_,
+                 job.restore_timestamp_,
+                 backup_tenant_id))) {
+    LOG_WARN("failed to get backup tenant id", KR(ret), K(job));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::get_multi_backup_path_list(false /*is_preview*/,
+                 job.backup_cluster_name_,
+                 job.cluster_id_,
+                 backup_tenant_id,
+                 restore_timestamp,
+                 uri_list,
+                 backup_set_list,
+                 backup_piece_list))) {
+    LOG_WARN("failed to get backup path list", KR(ret), K(uri_list));
+  } else if (OB_FAIL(job.multi_restore_path_list_.set(fake_backup_set_list, backup_piece_list))) {
+    LOG_WARN("failed to set mutli restore path list", KR(ret));
+  }
+  return ret;
+}
+
+int ObRestoreUtil::get_multi_path_file_info_list(const common::ObArray<share::ObSimpleBackupSetPath>& backup_set_list,
+    const common::ObArray<share::ObSimpleBackupPiecePath>& backup_piece_list,
+    common::ObArray<share::ObBackupSetFileInfo>& set_info_list,
+    common::ObArray<share::ObBackupPieceInfo>& piece_info_list)
+{
+  int ret = OB_SUCCESS;
+  ObFakeBackupLeaseService fake_lease;
+  for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_list.count(); ++i) {
+    const ObSimpleBackupSetPath& simple_path = backup_set_list.at(i);
+    ObBackupSetFileInfo set_info;
+    ObExternSingleBackupSetInfoMgr set_mgr;
+    if (OB_FAIL(set_mgr.init(simple_path, fake_lease))) {
+      LOG_WARN("failed to init extern single backup set info mgr", KR(ret), K(simple_path));
+    } else if (OB_FAIL(set_mgr.get_extern_backup_set_file_info(set_info))) {
+      LOG_WARN("failed to get extern backup set file info", KR(ret));
+    } else if (OB_FAIL(set_info_list.push_back(set_info))) {
+      LOG_WARN("failed to push back", KR(ret), K(set_info));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_list.count(); ++i) {
+    const ObSimpleBackupPiecePath& simple_path = backup_piece_list.at(i);
+    ObBackupPath backup_path;
+    ObBackupPieceInfo piece_info;
+    ObLogArchiveBackupInfoMgr piece_mgr;
+    if (OB_FAIL(backup_path.init(simple_path.get_simple_path()))) {
+      LOG_WARN("failed to init set info path", KR(ret), K(simple_path));
+    } else if (OB_FAIL(backup_path.join(OB_STR_TENANT_CLOG_SINGLE_BACKUP_PIECE_INFO))) {
+      LOG_WARN("failed to join single backup piece info", K(ret));
+    } else if (OB_FAIL(piece_mgr.read_external_single_backup_piece_info(
+                   backup_path, simple_path.get_storage_info(), piece_info, fake_lease))) {
+      LOG_WARN("failed to read external single backup piece info", KR(ret), K(backup_path), K(simple_path));
+    } else if (OB_FAIL(piece_info_list.push_back(piece_info))) {
+      LOG_WARN("failed to push back", KR(ret), K(piece_info));
+    }
+  }
+
   return ret;
 }

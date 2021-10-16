@@ -85,9 +85,13 @@ compile_commands.json
 test/tmp
 test/var
 *.ccls-cache/
+.cproject
 
 ###### Docs website files
 docs/site
+
+##### Git Sub Module
+deps/logmessage
 
 ###### Intellij files
 .idea

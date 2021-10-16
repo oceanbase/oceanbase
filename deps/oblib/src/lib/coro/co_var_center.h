@@ -72,9 +72,9 @@ public:
     return pos;
   }
 
-  int register_hook(CoVarHook* hook);
-  void at_routine_create();
-  void at_routine_exit();
+  int register_hook(CoVarHook *hook);
+  void at_routine_create(char *buffer);
+  void at_routine_exit(char *buffer);
 
   static CoVarCenter& instance()
   {

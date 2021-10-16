@@ -37,7 +37,7 @@ namespace storage {
 ObBackupArchiveLogPGCtx::ObBackupArchiveLogPGCtx()
     : is_opened_(false),
       pg_key_(),
-      log_archive_round_(-1),
+      piece_triple_(),
       checkpoint_ts_(-1),
       rs_checkpoint_ts_(-1),
       src_backup_dest_(),
@@ -69,7 +69,9 @@ int ObBackupArchiveLogPGCtx::open(
     LOG_WARN("failed to databuff printf", KR(ret), K(arg));
   } else {
     pg_key_ = pg_key;
-    log_archive_round_ = arg.log_archive_round_;
+    piece_triple_.round_id_ = arg.log_archive_round_;
+    piece_triple_.piece_id_ = arg.piece_id_;
+    piece_triple_.create_date_ = arg.create_date_;
     rs_checkpoint_ts_ = arg.rs_checkpoint_ts_;
     mig_ctx_ = &mig_ctx;
     throttle_ = &throttle;
@@ -109,8 +111,56 @@ int ObBackupArchiveLogPGTask::init(ObMigrateCtx& mig_ctx, ObBackupArchiveLogPGCt
 int ObBackupArchiveLogPGTask::process()
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_BACKUP_BACKUPPIECE_FILE_TASK) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim transfer file", KR(ret));
+    }
+  }
+#endif
+  DEBUG_SYNC(BEFORE_START_BACKUP_ARCHIVELOG_TASK);
+  if (OB_FAIL(ret)) {
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup archive log pipeline do not init", K(ret));
+  } else if (OB_FAIL(do_task_with_retry())) {
+    LOG_WARN("failed to do task with retry", KR(ret));
+  }
+  return ret;
+}
+
+int ObBackupArchiveLogPGTask::do_task_with_retry()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t retry_times = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup archive log pipeline do not init", K(ret));
+  } else {
+    while (retry_times < MAX_RETRY_TIMES) {
+      if (OB_SUCCESS != (tmp_ret = do_task())) {
+        LOG_WARN("failed to do task", KR(tmp_ret));
+      }
+
+      if (OB_SUCCESS == tmp_ret) {
+        break;
+      } else {
+        ++retry_times;
+        usleep(MAX_RETRY_TIME_INTERVAL);
+      }
+    }
+    // use the last tmp_ret if failed
+    ret = tmp_ret;
+  }
+  return ret;
+}
+
+int ObBackupArchiveLogPGTask::do_task()
+{
+  int ret = OB_SUCCESS;
   bool is_mounted = true;
-  int64_t round = 0;
   FileRange index_delta_range;
   FileRange data_delta_range;
   if (IS_NOT_INIT) {
@@ -119,21 +169,17 @@ int ObBackupArchiveLogPGTask::process()
   } else if (OB_ISNULL(pg_ctx_)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("pg ctx should not be null", KR(ret), K(pg_ctx_));
-  } else if (FALSE_IT(round = pg_ctx_->log_archive_round_)) {
-    // assign
   } else if (OB_FAIL(check_nfs_mounted_if_nfs(*pg_ctx_, is_mounted))) {
     LOG_WARN("failed to check nfs mounted", KR(ret));
   } else if (!is_mounted) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_ERROR("nfs is not mounted", KR(ret));
-  } else if (OB_FAIL(try_touch_archive_key(*pg_ctx_, OB_START_INCARNATION, round))) {
+  } else if (OB_FAIL(try_touch_archive_key(*pg_ctx_, OB_START_INCARNATION, pg_ctx_->piece_triple_))) {
     LOG_WARN("failed to try touch archive key", KR(ret));
   } else if (OB_FAIL(converge_task(LOG_ARCHIVE_FILE_TYPE_INDEX, *pg_ctx_, index_delta_range))) {
     LOG_WARN("failed to converge index task", K(ret));
   } else if (OB_FAIL(converge_task(LOG_ARCHIVE_FILE_TYPE_DATA, *pg_ctx_, data_delta_range))) {
     LOG_WARN("failed to converge data task", K(ret));
-  } else if (OB_FAIL(extract_last_log_in_data_file(*pg_ctx_, data_delta_range.max_file_id_))) {
-    LOG_WARN("failed to extract last log in data file", K(ret), K(data_delta_range));
   } else if (OB_FAIL(catchup_archive_log(LOG_ARCHIVE_FILE_TYPE_INDEX, *pg_ctx_, index_delta_range))) {
     LOG_WARN("failed to catch up index archive log", K(ret));
   } else if (OB_FAIL(catchup_archive_log(LOG_ARCHIVE_FILE_TYPE_DATA, *pg_ctx_, data_delta_range))) {
@@ -163,7 +209,8 @@ int ObBackupArchiveLogPGTask::check_nfs_mounted_if_nfs(const ObBackupArchiveLogP
     LOG_WARN("failed to set backup dest", KR(ret), K(pg_ctx));
   } else if (OB_FAIL(cluster_dest.set(backup_dest, OB_START_INCARNATION))) {
     LOG_WARN("failed to set cluster backup dest", KR(ret), K(backup_dest));
-  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_name_info_path(cluster_dest, path))) {
+  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_clog_mount_file_path(
+                 cluster_dest, OB_SYS_TENANT_ID, pg_ctx.piece_triple_.round_id_, path))) {
     LOG_WARN("failed to get cluster clog backup info path", KR(ret), K(cluster_dest));
   } else {
     ObString uri(path.get_obstr());
@@ -188,18 +235,17 @@ int ObBackupArchiveLogPGTask::converge_task(
   const ObPGKey& pg_key = pg_ctx.pg_key_;
   ObString src_storage_info(pg_ctx.src_storage_info_);
   ObString dst_storage_info(pg_ctx.dst_storage_info_);
-  const int64_t log_archive_round = pg_ctx.log_archive_round_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
   } else if (OB_FAIL(get_file_range(
-                 pg_ctx.src_backup_dest_, src_storage_info, file_type, log_archive_round, pg_key, src_file_range))) {
+                 pg_ctx.src_backup_dest_, src_storage_info, file_type, pg_ctx.piece_triple_, pg_key, src_file_range))) {
     LOG_WARN("failed to get src data file range", K(ret), K(pg_ctx));
   } else if (OB_FAIL(get_file_range(
-                 pg_ctx.dst_backup_dest_, dst_storage_info, file_type, log_archive_round, pg_key, dst_file_range))) {
+                 pg_ctx.dst_backup_dest_, dst_storage_info, file_type, pg_ctx.piece_triple_, pg_key, dst_file_range))) {
     LOG_WARN("failed to get src data file range", K(ret), K(pg_ctx));
-  } else if (OB_FAIL(
-                 cal_data_file_range_delta(pg_key, log_archive_round, src_file_range, dst_file_range, delta_range))) {
+  } else if (OB_FAIL(cal_data_file_range_delta(
+                 pg_key, pg_ctx.piece_triple_, src_file_range, dst_file_range, delta_range))) {
     LOG_WARN("failed to calculate data file range delta", K(ret), K(src_file_range), K(dst_file_range));
   } else {
     LOG_DEBUG("converge task info", K(delta_range));
@@ -222,17 +268,16 @@ int ObBackupArchiveLogPGTask::catchup_archive_log(
   } else {
     int64_t start = 0 == delta_range.min_file_id_ ? 1 : delta_range.min_file_id_;
     int64_t end = delta_range.max_file_id_;
-    const int64_t round = task.log_archive_round_;
     for (int64_t i = start; OB_SUCC(ret) && i <= end; ++i) {
       FileInfo src_info;
       FileInfo dst_info;
-      bool file_exist = false;
+      bool src_file_exist = false;
       if (OB_FAIL(get_file_path_info(task.src_backup_dest_,
               task.src_storage_info_,
               pg_key,
               file_type,
               OB_START_INCARNATION,
-              round,
+              task.piece_triple_,
               i,
               src_info))) {
         LOG_WARN("failed to get file path info", K(ret), K(pg_key));
@@ -241,14 +286,16 @@ int ObBackupArchiveLogPGTask::catchup_archive_log(
                      pg_key,
                      file_type,
                      OB_START_INCARNATION,
-                     round,
+                     task.piece_triple_,
                      i,
                      dst_info))) {
         LOG_WARN("failed to get file path info", K(ret), K(pg_key));
-      } else if (OB_FAIL(check_file_exist(dst_info, file_exist))) {
-        LOG_WARN("failed to check file exist", K(ret), K(dst_info));
-      } else if (OB_FAIL(do_file_transfer(file_type, task, src_info, dst_info, file_exist))) {
-        LOG_WARN("failed to do file transfer", K(ret), K(src_info), K(dst_info), K(file_exist));
+      } else if (OB_FAIL(check_file_exist(src_info, src_file_exist))) {
+        LOG_WARN("failed to check file exist", KR(ret), K(src_info));
+      } else if (!src_file_exist) {
+        // do nothing
+      } else if (OB_FAIL(do_file_transfer(src_info, dst_info))) {
+        LOG_WARN("failed to do file transfer", K(ret), K(src_info), K(dst_info));
       }
     }
   }
@@ -256,7 +303,7 @@ int ObBackupArchiveLogPGTask::catchup_archive_log(
 }
 
 int ObBackupArchiveLogPGTask::get_file_range(const char* backup_dest, const common::ObString& storage_info,
-    const archive::LogArchiveFileType file_type, const int64_t log_archive_round, const common::ObPGKey& pg_key,
+    const archive::LogArchiveFileType file_type, const ObBackupPieceTriple& piece_triple, const common::ObPGKey& pg_key,
     FileRange& file_range)
 {
   int ret = OB_SUCCESS;
@@ -268,7 +315,7 @@ int ObBackupArchiveLogPGTask::get_file_range(const char* backup_dest, const comm
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
   } else if (OB_FAIL(build_archive_file_prefix(
-                 backup_dest, pg_key, file_type, OB_START_INCARNATION, log_archive_round, path, pos))) {
+                 backup_dest, storage_info.ptr(), pg_key, file_type, OB_START_INCARNATION, piece_triple, path, pos))) {
     LOG_WARN("failed to build archive file prefix", KR(ret), K(pg_key));
   } else {
     ObString uri(path);
@@ -298,8 +345,17 @@ int ObBackupArchiveLogPGTask::init_archive_file_store_(
   const uint64_t tenant_id = task.pg_key_.get_tenant_id();
   const char* cluster_name = GCTX.config_->cluster;
   const int64_t cluster_id = GCTX.config_->cluster_id;
-  if (OB_FAIL(file_store.init(
-          task.src_backup_dest_, task.src_storage_info_, cluster_name, cluster_id, tenant_id, incarnation, round))) {
+  const int64_t piece_id = task.piece_triple_.piece_id_;
+  const int64_t piece_create_date = task.piece_triple_.create_date_;
+  if (OB_FAIL(file_store.init(task.src_backup_dest_,
+          task.src_storage_info_,
+          cluster_name,
+          cluster_id,
+          tenant_id,
+          incarnation,
+          round,
+          piece_id,
+          piece_create_date))) {
     LOG_WARN("archive file store init fail", KR(ret), K(task), K(incarnation), K(round));
   }
   return ret;
@@ -307,14 +363,14 @@ int ObBackupArchiveLogPGTask::init_archive_file_store_(
 
 int ObBackupArchiveLogPGTask::get_file_path_info(const char* backup_dest, const char* storage_info,
     const common::ObPGKey& pg_key, const archive::LogArchiveFileType file_type, const int64_t incarnation,
-    const int64_t round, const int64_t file_id, FileInfo& file_info)
+    const ObBackupPieceTriple& triple, const int64_t file_id, FileInfo& file_info)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
   } else if (OB_FAIL(build_archive_file_path(
-                 backup_dest, pg_key, file_type, incarnation, round, file_id, file_info.dest_path_))) {
+                 backup_dest, storage_info, pg_key, file_type, incarnation, triple, file_id, file_info.dest_path_))) {
     LOG_WARN("failed to build archive file path", K(ret));
   } else if (OB_FAIL(databuff_printf(file_info.storage_info_, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, "%s", storage_info))) {
     LOG_WARN("failed to data buff printf", KR(ret), K(storage_info));
@@ -325,6 +381,7 @@ int ObBackupArchiveLogPGTask::get_file_path_info(const char* backup_dest, const 
   return ret;
 }
 
+// extract last log may fail
 int ObBackupArchiveLogPGTask::extract_last_log_in_data_file(ObBackupArchiveLogPGCtx& task, const int64_t file_id)
 {
   int ret = OB_SUCCESS;
@@ -335,7 +392,6 @@ int ObBackupArchiveLogPGTask::extract_last_log_in_data_file(ObBackupArchiveLogPG
   archive::ObArchiveBlockMeta block_meta;
   clog::ObLogEntry log_entry;
   ObLogArchiveInnerLog inner_log;
-  const int64_t log_archive_round = task.log_archive_round_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
@@ -344,11 +400,11 @@ int ObBackupArchiveLogPGTask::extract_last_log_in_data_file(ObBackupArchiveLogPG
                  task.pg_key_,
                  file_type,
                  OB_START_INCARNATION,
-                 log_archive_round,
+                 task.piece_triple_,
                  file_id,
                  file_info))) {
     LOG_WARN("failed to get file path info", K(ret));
-  } else if (OB_FAIL(init_archive_file_store_(task, OB_START_INCARNATION, log_archive_round, file_store))) {
+  } else if (OB_FAIL(init_archive_file_store_(task, OB_START_INCARNATION, task.piece_triple_.round_id_, file_store))) {
     LOG_WARN("failed to get archive file store", K(ret));
   } else if (OB_FAIL(util.extract_last_log_in_data_file(task.pg_key_,
                  file_id,
@@ -368,8 +424,9 @@ int ObBackupArchiveLogPGTask::extract_last_log_in_data_file(ObBackupArchiveLogPG
   return ret;
 }
 
-int ObBackupArchiveLogPGTask::cal_data_file_range_delta(const common::ObPGKey& pkey, const int64_t log_archive_round,
-    const FileRange& src_file_range, const FileRange& dst_file_range, FileRange& delta_file_range)
+int ObBackupArchiveLogPGTask::cal_data_file_range_delta(const common::ObPGKey& pkey,
+    const ObBackupPieceTriple& piece_triple, const FileRange& src_file_range, const FileRange& dst_file_range,
+    FileRange& delta_file_range)
 {
   int ret = OB_SUCCESS;
   bool interrupted = false;
@@ -377,84 +434,66 @@ int ObBackupArchiveLogPGTask::cal_data_file_range_delta(const common::ObPGKey& p
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else if (log_archive_round < 0 || !src_file_range.is_valid() || !dst_file_range.is_valid()) {
+  } else if (!piece_triple.is_valid() || !src_file_range.is_valid() || !dst_file_range.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cal data file range delta get invalid argument",
         K(ret),
-        K(log_archive_round),
+        K(piece_triple),
         K(src_file_range),
         K(dst_file_range));
-  } else if (OB_FAIL(check_archive_log_interrupted(log_archive_round, src_file_range, dst_file_range, interrupted))) {
-    LOG_WARN("failed to check archive log interrupted", KR(ret), K(pkey), K(log_archive_round));
+  } else if (OB_FAIL(check_archive_log_interrupted(piece_triple, src_file_range, dst_file_range, interrupted))) {
+    LOG_WARN("failed to check archive log interrupted", KR(ret), K(pkey), K(piece_triple));
   } else if (interrupted) {
     ret = OB_LOG_ARCHIVE_INTERRUPTED;
     FLOG_WARN("log archive interrupted, missing files",
         KR(ret),
         K(pkey),
-        K(log_archive_round),
+        K(piece_triple),
         K(src_file_range),
         K(dst_file_range));
   } else {
-    delta_file_range.min_file_id_ = dst_file_range.max_file_id_;
-    delta_file_range.max_file_id_ = src_file_range.max_file_id_;
+    if (0 == piece_triple.piece_id_) {
+      delta_file_range.min_file_id_ = dst_file_range.max_file_id_;
+      delta_file_range.max_file_id_ = src_file_range.max_file_id_;
+    } else {
+      delta_file_range.min_file_id_ = src_file_range.min_file_id_;
+      delta_file_range.max_file_id_ = src_file_range.max_file_id_;
+    }
   }
   return ret;
 }
 
 // o indicates not exist, x indicates exist
-// case-1: there is not any file in whether src or dst
-//      1 2 3 4 5
-//  src o o o o o
-//  dst o o o o o no cutoff
-// case 0: exist in src, not exist in dst, src start from 1
-//      1 2 3 4 5
-//  src x x x x x
-//  dst o o o o o no cutoff
-// case 1: 4,5 exist in src; 1,2,3 exist in dest
-//      1 2 3 4 5
-//  src o o o x x
-//  dst x x x o o no cutoff
-// TODO : need handle 3 is incomplete
-// case 2: 4,5 exist in src; 1,2 exist in dst
-//      1 2 3 4 5
-//  src o o o x x
-//  dst x x o o o cutoff
-// case 3: 3,4,5 exist in src; 1,2,3 in dst
-//      1 2 3 4 5
-//  src o o x x x
-//  dst x x x o o no cutoff
-// case 4: 3,4,5 exist in src; nothing in dst
-//      1 2 3 4 5
-//  src o o x x x
-//  dst o o o o o cutoff
-int ObBackupArchiveLogPGTask::check_archive_log_interrupted(const int64_t log_archive_round,
+// // case-1: there is not any file in whether src or dst
+// //      1 2 3 4 5
+// //  src o o o o o
+// //  dst o o o o o no cutoff
+// // case 0: exist in src, not exist in dst, src start from 1
+// //      1 2 3 4 5
+// //  src x x x x x
+// //  dst o o o o o no cutoff
+// // case 1: 4,5 exist in src; 1,2,3 exist in dest
+// //      1 2 3 4 5
+// //  src o o o x x
+// //  dst x x x o o no cutoff
+// // case 2: 4,5 exist in src; 1,2 exist in dst
+// //      1 2 3 4 5
+// //  src o o o x x
+// //  dst x x o o o cutoff
+// // case 3: 3,4,5 exist in src; 1,2,3 in dst
+// //      1 2 3 4 5
+// //  src o o x x x
+// //  dst x x x o o no cutoff
+// // case 4: 3,4,5 exist in src; nothing in dst
+// //      1 2 3 4 5
+// //  src o o x x x
+// //  dst o o o o o cutoff
+int ObBackupArchiveLogPGTask::check_archive_log_interrupted(const ObBackupPieceTriple& piece_triple,
     const FileRange& src_file_range, const FileRange& dst_file_range, bool& interrupted)
 {
   int ret = OB_SUCCESS;
+  UNUSEDx(piece_triple, src_file_range, dst_file_range);
   interrupted = false;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else if (log_archive_round < 0 || !src_file_range.is_valid() || !dst_file_range.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cal data file range delta get invalid argument",
-        K(ret),
-        K(log_archive_round),
-        K(src_file_range),
-        K(dst_file_range));
-  } else if (0 == src_file_range.min_file_id_ || 1 == src_file_range.min_file_id_) {
-    // do nothing
-  } else if (src_file_range.min_file_id_ - dst_file_range.max_file_id_ > 1) {
-    interrupted = true;
-  }
-#ifdef ERRSIM
-  if (1 == log_archive_round) {
-    ret = E(EventTable::EN_BACKUP_BACKUP_LOG_ARCHIVE_INTERRUPTED) OB_SUCCESS;
-  }
-  if (OB_FAIL(ret)) {
-    LOG_WARN("cal data file range delta err sim", KR(ret));
-  }
-#endif
   return ret;
 }
 
@@ -475,6 +514,7 @@ int ObBackupArchiveLogPGTask::check_file_exist(const FileInfo& file_info, bool& 
 int ObBackupArchiveLogPGTask::get_file_length(const FileInfo& file_info, int64_t& file_length)
 {
   int ret = OB_SUCCESS;
+  file_length = 0;
   ObStorageUtil util(false);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -493,7 +533,6 @@ int ObBackupArchiveLogPGTask::check_and_mkdir(
   int ret = OB_SUCCESS;
   // TODO
   int64_t pos = 0;
-  const int64_t archive_round = pg_task.log_archive_round_;
   // if uri prefix matches OB_OSS_PREFIX
   char file_prefix_path[OB_MAX_ARCHIVE_PATH_LENGTH] = "";
   ObStorageUtil util(false);
@@ -501,10 +540,11 @@ int ObBackupArchiveLogPGTask::check_and_mkdir(
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
   } else if (OB_FAIL(build_archive_file_prefix(pg_task.dst_backup_dest_,
+                 pg_task.dst_storage_info_,
                  pg_task.pg_key_,
                  file_type,
                  OB_START_INCARNATION,
-                 archive_round,
+                 pg_task.piece_triple_,
                  file_prefix_path,
                  pos))) {
     LOG_WARN("failed to build archive file prefix", K(ret), K(pg_task));
@@ -520,60 +560,10 @@ int ObBackupArchiveLogPGTask::check_and_mkdir(
   return ret;
 }
 
-int ObBackupArchiveLogPGTask::do_file_transfer(const archive::LogArchiveFileType file_type,
-    const ObBackupArchiveLogPGCtx& pg_task, const FileInfo& src_info, const FileInfo& dst_info, const bool dst_exist)
+int ObBackupArchiveLogPGTask::do_file_transfer(const FileInfo& src_info, const FileInfo& dst_info)
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else {
-    if (dst_exist) {
-      if (OB_FAIL(do_part_file_transfer(src_info, dst_info))) {
-        LOG_WARN("failed to do part file transfer", K(ret), K(src_info), K(dst_info));
-      }
-    } else {
-      if (OB_FAIL(do_single_file_transfer(file_type, pg_task, src_info, dst_info))) {
-        LOG_WARN("failed to do single file transfer", K(ret), K(pg_task), K(src_info), K(dst_info));
-      }
-    }
-  }
-  return ret;
-}
-
-// TODO : log file verification
-int ObBackupArchiveLogPGTask::do_single_file_transfer(const archive::LogArchiveFileType file_type,
-    const ObBackupArchiveLogPGCtx& pg_task, const FileInfo& src_info, const FileInfo& dst_info)
-{
-  int ret = OB_SUCCESS;
-  ObStorageUtil util(false);
-  clog::ObReadBuf rbuf;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else if (OB_FAIL(get_file_length(src_info, rbuf.buf_len_))) {
-    LOG_WARN("failed to get file length", K(ret), K(src_info));
-  } else if (OB_ISNULL(rbuf.buf_ = static_cast<char*>(ob_archive_malloc(rbuf.buf_len_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_FAIL(read_single_file(src_info, rbuf))) {
-    LOG_WARN("failed to read single file", K(ret), K(src_info), K(rbuf));
-  } else if (OB_FAIL(check_and_mkdir(file_type, pg_task))) {
-    LOG_WARN("failed to mkdir for pg key", K(ret), K(pg_task));
-  } else if (OB_FAIL(write_part_file(dst_info, rbuf))) {
-    LOG_WARN("failed to write single file", K(ret), K(src_info), K(rbuf));
-  }
-
-  if (NULL != rbuf.buf_) {
-    ob_archive_free(rbuf.buf_);
-    rbuf.reset();
-  }
-  return ret;
-}
-
-int ObBackupArchiveLogPGTask::do_part_file_transfer(const FileInfo& src_info, const FileInfo& dst_info)
-{
-  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t src_file_len = 0;
   int64_t dst_file_len = 0;
   clog::ObReadBuf rbuf;
@@ -586,56 +576,46 @@ int ObBackupArchiveLogPGTask::do_part_file_transfer(const FileInfo& src_info, co
   } else if (OB_FAIL(dst_appender.open(dst_info.uri_, dst_info.storage_info_, param))) {
     LOG_WARN("failed to open dst storage appender", KR(ret), K(dst_info));
   } else if (OB_FAIL(get_file_length(src_info, src_file_len))) {
-    LOG_WARN("failed to get src file len", K(ret), K(src_info));
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      src_file_len = 0;
+    } else {
+      LOG_WARN("failed to get src file len", K(ret), K(src_info));
+    }
   } else if (OB_FAIL(get_file_length(dst_info, dst_file_len))) {
-    LOG_WARN("failed to get dst file len", K(ret), K(dst_info));
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      dst_file_len = 0;
+    } else {
+      LOG_WARN("failed to get dst file len", K(ret), K(dst_info));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (0 == src_file_len) {
+    // do nothing if src file is empty
   } else if (dst_file_len == src_file_len) {
-    LOG_INFO("no need to do file transfer if size match", K(dst_file_len), K(src_file_len));
+    LOG_DEBUG("no need to do file transfer if size match", K(dst_file_len), K(src_file_len));
   } else if (dst_file_len > src_file_len) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dst file len should not greater than src file len", K(ret), K(src_file_len), K(dst_file_len));
   } else if (FALSE_IT(rbuf.buf_len_ = src_file_len - dst_file_len)) {
-  } else if (OB_ISNULL(rbuf.buf_ = static_cast<char*>(ob_archive_malloc(rbuf.buf_len_)))) {
+  } else if (OB_ISNULL(rbuf.buf_ = static_cast<char*>(bb_malloc(rbuf.buf_len_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(rbuf));
   } else if (OB_FAIL(read_part_file(src_info, dst_file_len, rbuf))) {
     LOG_WARN("failed to read part file", K(ret), K(src_info));
-  } else if (OB_FAIL(write_part_file(dst_info, rbuf))) {
-    LOG_WARN("failed to write part file", K(ret), K(dst_info));
+  } else if (OB_FAIL(dst_appender.pwrite(rbuf.buf_, rbuf.buf_len_, dst_file_len))) {
+    LOG_WARN("failed to write to storage appender", K(ret), K(rbuf));
   }
   if (NULL != rbuf.buf_) {
-    ob_archive_free(rbuf.buf_);
+    bb_free(rbuf.buf_);
     rbuf.reset();
   }
-  return ret;
-}
-
-int ObBackupArchiveLogPGTask::read_single_file(const FileInfo& file, clog::ObReadBuf& rbuf)
-{
-  int ret = OB_SUCCESS;
-  int64_t read_len = 0;
-  ObStorageUtil util(false);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else if (OB_FAIL(util.read_single_file(file.uri_, file.storage_info_, rbuf.buf_, rbuf.buf_len_, read_len))) {
-    LOG_WARN("failed to read single file", K(ret), K(file));
-  } else if (read_len != rbuf.buf_len_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("read len not expected", K(ret), K(read_len), K(rbuf));
-  }
-  return ret;
-}
-
-int ObBackupArchiveLogPGTask::write_single_file(const FileInfo& file, const clog::ObReadBuf& buf)
-{
-  int ret = OB_SUCCESS;
-  ObStorageUtil util(false);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else if (util.write_single_file(file.uri_, file.storage_info_, buf.buf_, buf.buf_len_)) {
-    LOG_WARN("failed to write single file", K(ret), K(file));
+  if (OB_SUCCESS != (tmp_ret = dst_appender.close())) {
+    LOG_WARN("failed to close storage appender", KR(ret), KR(tmp_ret));
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }
   return ret;
 }
@@ -658,33 +638,9 @@ int ObBackupArchiveLogPGTask::read_part_file(const FileInfo& file_info, const in
   return ret;
 }
 
-int ObBackupArchiveLogPGTask::write_part_file(const FileInfo& file_info, const clog::ObReadBuf& buf)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  bool write_succ = true;
-  ObStorageAppender appender;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else if (OB_FAIL(appender.open(file_info.uri_, file_info.storage_info_))) {
-    LOG_WARN("failed to open storage appender", K(ret), K(file_info));
-  } else if (OB_FAIL(appender.write(buf.buf_, buf.buf_len_))) {
-    write_succ = false;
-    LOG_WARN("failed to write to storage appender", K(ret), K(buf));
-  } else if (OB_FAIL(appender.close())) {
-    LOG_WARN("failed to close storage appender", K(ret), K(buf));
-  }
-  if (!write_succ) {
-    if (OB_SUCCESS != (tmp_ret = appender.close())) {
-      LOG_WARN("failed to close storage appender", KR(tmp_ret));
-    }
-  }
-  return ret;
-}
-
-int ObBackupArchiveLogPGTask::build_archive_file_prefix(const char* backup_dest, const common::ObPGKey& pg_key,
-    const LogArchiveFileType file_type, const int64_t incarnation, const int64_t round, char* dest_path, int64_t& pos)
+int ObBackupArchiveLogPGTask::build_archive_file_prefix(const char* root_path, const char* storage_info,
+    const common::ObPGKey& pg_key, const LogArchiveFileType file_type, const int64_t incarnation,
+    const ObBackupPieceTriple& triple, char* dest_path, int64_t& pos)
 {
   int ret = OB_SUCCESS;
   int64_t cluster_id = GCTX.config_->cluster_id;
@@ -692,15 +648,21 @@ int ObBackupArchiveLogPGTask::build_archive_file_prefix(const char* backup_dest,
   const uint64_t tenant_id = pg_key.get_tenant_id();
   char base_path[OB_MAX_BACKUP_PATH_LENGTH] = "";
   ObArchivePathUtil util;
+  ObBackupDest backup_dest;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
+  } else if (OB_FAIL(backup_dest.set(root_path, storage_info))) {
+    LOG_WARN("failed to set backup dest", K(ret), K(backup_dest), K(storage_info));
   } else if (OB_FAIL(util.build_base_path(backup_dest,
                  cluster_name,
                  cluster_id,
                  tenant_id,
                  incarnation,
-                 round,
+                 triple.round_id_,
+                 triple.piece_id_,
+                 triple.create_date_,
                  OB_MAX_BACKUP_PATH_LENGTH,
                  base_path))) {
     LOG_WARN("failed to build_base_path", K(ret), K(pg_key));
@@ -710,16 +672,17 @@ int ObBackupArchiveLogPGTask::build_archive_file_prefix(const char* backup_dest,
   return ret;
 }
 
-int ObBackupArchiveLogPGTask::build_archive_file_path(const char* backup_dest, const common::ObPGKey& pg_key,
-    const LogArchiveFileType file_type, const int64_t incarnation, const int64_t round, const int64_t file_id,
-    char* dest_path)
+int ObBackupArchiveLogPGTask::build_archive_file_path(const char* backup_dest, const char* storage_info,
+    const common::ObPGKey& pg_key, const LogArchiveFileType file_type, const int64_t incarnation,
+    const ObBackupPieceTriple& triple, const int64_t file_id, char* dest_path)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", K(ret));
-  } else if (OB_FAIL(build_archive_file_prefix(backup_dest, pg_key, file_type, incarnation, round, dest_path, pos))) {
+  } else if (OB_FAIL(build_archive_file_prefix(
+                 backup_dest, storage_info, pg_key, file_type, incarnation, triple, dest_path, pos))) {
     LOG_WARN("failed to build archive file prefix", KR(ret), K(pg_key), K(file_type));
   } else if (OB_FAIL(databuff_printf(dest_path, OB_MAX_BACKUP_PATH_LENGTH, pos, "/%lu", file_id))) {
     LOG_WARN("failed to data buff printf", K(ret));
@@ -770,7 +733,7 @@ const char* ObBackupArchiveLogPGTask::get_file_prefix_with_type(const LogArchive
 }
 
 int ObBackupArchiveLogPGTask::try_touch_archive_key(
-    const ObBackupArchiveLogPGCtx& task, const int64_t incarnation, const int64_t round)
+    const ObBackupArchiveLogPGCtx& task, const int64_t incarnation, const ObBackupPieceTriple& triple)
 {
   int ret = OB_SUCCESS;
   const ObPGKey& pg_key = task.pg_key_;
@@ -778,19 +741,24 @@ int ObBackupArchiveLogPGTask::try_touch_archive_key(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", KR(ret));
-  } else if (OB_FAIL(build_archive_key_prefix(task, pg_key, incarnation, round))) {
-    LOG_WARN("build_archive_key_prefix fail", KR(ret), K(incarnation), K(round), K(pg_key));
-  } else if (OB_FAIL(touch_archive_key_file(task, incarnation, round, pg_key))) {
-    LOG_WARN("touch_archive_key_file fail", KR(ret), K(incarnation), K(round), K(pg_key));
+  } else if (OB_FAIL(build_archive_key_prefix(task, pg_key, incarnation, triple))) {
+    LOG_WARN("build_archive_key_prefix fail", KR(ret), K(incarnation), K(triple), K(pg_key));
   } else {
-    LOG_DEBUG("try_touch_archive_key_ succ", KR(ret), K(incarnation), K(round), K(pg_key));
+    if (0 == triple.piece_id_) {
+      if (OB_FAIL(touch_archive_key_file(task, incarnation, triple, pg_key))) {
+        LOG_WARN("touch_archive_key_file fail", KR(ret), K(incarnation), K(triple), K(pg_key));
+      }
+    } else {
+      if (OB_FAIL(copy_archive_key_file(task, incarnation, triple, pg_key))) {
+        LOG_WARN("copy_archive_key file fail", KR(ret), K(incarnation), K(triple), K(pg_key));
+      }
+    }
   }
-
   return ret;
 }
 
-int ObBackupArchiveLogPGTask::build_archive_key_prefix(
-    const ObBackupArchiveLogPGCtx& task, const ObPGKey& pg_key, const int64_t incarnation, const int64_t round)
+int ObBackupArchiveLogPGTask::build_archive_key_prefix(const ObBackupArchiveLogPGCtx& task, const ObPGKey& pg_key,
+    const int64_t incarnation, const ObBackupPieceTriple& triple)
 {
   int ret = OB_SUCCESS;
   ObBackupDest backup_dest;
@@ -803,9 +771,13 @@ int ObBackupArchiveLogPGTask::build_archive_key_prefix(
     LOG_WARN("failed to set backup dest", KR(ret), K(task));
   } else if (OB_FAIL(cluster_dest.set(backup_dest, incarnation))) {
     LOG_WARN("failed to set cluster backup dest", KR(ret), K(backup_dest));
-  } else if (OB_FAIL(ObBackupPathUtil::get_clog_archive_key_prefix(
-                 cluster_dest, pg_key.get_tenant_id(), round, archive_key_prefix_path))) {
-    LOG_WARN("failed to get clog archive key prefix path", KR(ret), K(cluster_dest), K(pg_key), K(round));
+  } else if (OB_FAIL(ObBackupPathUtil::get_clog_archive_key_prefix(cluster_dest,
+                 pg_key.get_tenant_id(),
+                 triple.round_id_,
+                 triple.piece_id_,
+                 triple.create_date_,
+                 archive_key_prefix_path))) {
+    LOG_WARN("failed to get clog archive key prefix path", KR(ret), K(cluster_dest), K(pg_key), K(triple));
   } else {
     ObString uri(archive_key_prefix_path.get_obstr());
     ObString storage_info(task.dst_storage_info_);
@@ -817,8 +789,8 @@ int ObBackupArchiveLogPGTask::build_archive_key_prefix(
   return ret;
 }
 
-int ObBackupArchiveLogPGTask::touch_archive_key_file(
-    const ObBackupArchiveLogPGCtx& task, const int64_t incarnation, const int64_t round, const ObPGKey& pg_key)
+int ObBackupArchiveLogPGTask::touch_archive_key_file(const ObBackupArchiveLogPGCtx& task, const int64_t incarnation,
+    const ObBackupPieceTriple& triple, const ObPGKey& pg_key)
 {
   int ret = OB_SUCCESS;
   ObBackupPath archive_key_path;
@@ -826,8 +798,8 @@ int ObBackupArchiveLogPGTask::touch_archive_key_file(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", KR(ret));
-  } else if (OB_FAIL(build_archive_key_path(task, incarnation, round, pg_key, archive_key_path))) {
-    LOG_WARN("failed to build archive key path", KR(ret), K(pg_key));
+  } else if (OB_FAIL(build_archive_key_path(task, incarnation, triple, pg_key, false /*is_src*/, archive_key_path))) {
+    LOG_WARN("failed to build archive key path", KR(ret), K(triple), K(pg_key));
   } else {
     ObString uri(archive_key_path.get_obstr());
     ObString storage_info(task.dst_storage_info_);
@@ -839,8 +811,31 @@ int ObBackupArchiveLogPGTask::touch_archive_key_file(
   return ret;
 }
 
+int ObBackupArchiveLogPGTask::copy_archive_key_file(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation,
+    const ObBackupPieceTriple& triple, const ObPGKey& pg_key)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath src_path, dst_path;
+  FileInfo src_file_info, dst_file_info;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup archive log pipeline do not init", KR(ret));
+  } else if (OB_FAIL(build_archive_key_path(pg_ctx, incarnation, triple, pg_key, true /*is_src*/, src_path))) {
+    LOG_WARN("failed to build archive key path", KR(ret));
+  } else if (OB_FAIL(build_archive_key_path(pg_ctx, incarnation, triple, pg_key, false /*is_src*/, dst_path))) {
+    LOG_WARN("failed to build archive key path", KR(ret));
+  } else if (OB_FAIL(get_archive_key_file_info(pg_ctx, src_path, true /*is_src*/, src_file_info))) {
+    LOG_WARN("failed to get archive key file info", KR(ret), K(src_path));
+  } else if (OB_FAIL(get_archive_key_file_info(pg_ctx, dst_path, false /*is_src*/, dst_file_info))) {
+    LOG_WARN("failed to get archive key file info", KR(ret), K(src_path));
+  } else if (OB_FAIL(do_file_transfer(src_file_info, dst_file_info))) {
+    LOG_WARN("failed to do file transfer", KR(ret), K(src_file_info), K(dst_file_info));
+  }
+  return ret;
+}
+
 int ObBackupArchiveLogPGTask::build_archive_key_path(const ObBackupArchiveLogPGCtx& task, const int64_t incarnation,
-    const int64_t round, const ObPGKey& pg_key, ObBackupPath& archive_key_path)
+    const ObBackupPieceTriple& triple, const ObPGKey& pg_key, const bool is_src, ObBackupPath& archive_key_path)
 {
   int ret = OB_SUCCESS;
   ObBackupDest backup_dest;
@@ -848,15 +843,59 @@ int ObBackupArchiveLogPGTask::build_archive_key_path(const ObBackupArchiveLogPGC
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log pipeline do not init", KR(ret));
-  } else if (OB_FAIL(backup_dest.set(task.dst_backup_dest_, task.dst_storage_info_))) {
+  } else if (is_src && OB_FAIL(backup_dest.set(task.src_backup_dest_, task.src_storage_info_))) {
+    LOG_WARN("failed to set backup dest", KR(ret), K(task));
+  } else if (!is_src && OB_FAIL(backup_dest.set(task.dst_backup_dest_, task.dst_storage_info_))) {
     LOG_WARN("failed to set backup dest", KR(ret), K(task));
   } else if (OB_FAIL(cluster_dest.set(backup_dest, incarnation))) {
     LOG_WARN("failed to set cluster backup dest", KR(ret), K(backup_dest));
-  } else if (OB_FAIL(ObBackupPathUtil::get_clog_archive_key_path(
-                 cluster_dest, pg_key.get_tenant_id(), round, pg_key, archive_key_path))) {
-    LOG_WARN("failed to get clog archive key path", KR(ret), K(cluster_dest), K(pg_key), K(round));
+  } else if (OB_FAIL(ObBackupPathUtil::get_clog_archive_key_path(cluster_dest,
+                 pg_key.get_tenant_id(),
+                 triple.round_id_,
+                 triple.piece_id_,
+                 triple.create_date_,
+                 pg_key,
+                 archive_key_path))) {
+    LOG_WARN("failed to get clog archive key path", KR(ret), K(cluster_dest), K(pg_key), K(triple));
   }
   return ret;
+}
+
+int ObBackupArchiveLogPGTask::get_archive_key_file_info(const ObBackupArchiveLogPGCtx& pg_ctx,
+    const share::ObBackupPath& archive_key_path, const bool is_src, FileInfo& file_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup archive log pipeline do not init", K(ret));
+  } else if (OB_FAIL(
+                 databuff_printf(file_info.dest_path_, OB_MAX_BACKUP_PATH_LENGTH, "%s", archive_key_path.get_ptr()))) {
+    LOG_WARN("failed to data buff printf", KR(ret), K(pg_ctx));
+  } else if (is_src &&
+             OB_FAIL(databuff_printf(
+                 file_info.storage_info_, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, "%s", pg_ctx.src_storage_info_))) {
+    LOG_WARN("failed to data buff printf", KR(ret), K(pg_ctx));
+  } else if (!is_src &&
+             OB_FAIL(databuff_printf(
+                 file_info.storage_info_, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, "%s", pg_ctx.dst_storage_info_))) {
+    LOG_WARN("failed to data buff printf", KR(ret), K(pg_ctx));
+  } else {
+    file_info.uri_ = ObString::make_string(file_info.dest_path_);
+    file_info.info_ = ObString::make_string(file_info.storage_info_);
+  }
+  return ret;
+}
+
+void* ObBackupArchiveLogPGTask::bb_malloc(const int64_t nbyte)
+{
+  ObMemAttr memattr;
+  memattr.label_ = "BB_CLOG_FILE";
+  return ob_malloc(nbyte, memattr);
+}
+
+void ObBackupArchiveLogPGTask::bb_free(void* ptr)
+{
+  ob_free(ptr);
 }
 
 ObBackupArchiveLogFinishTask::ObBackupArchiveLogFinishTask()

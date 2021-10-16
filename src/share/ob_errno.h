@@ -378,6 +378,10 @@ constexpr int OB_ADD_CLUSTER_NOT_ALLOWED = -4709;
 constexpr int OB_ERR_CONSUMER_GROUP_NOT_EXIST = -4710;
 constexpr int OB_CLUSTER_NOT_ACCESSIBLE = -4711;
 constexpr int OB_TENANT_RESOURCE_UNIT_EXIST = -4712;
+constexpr int OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX = -4713;
+constexpr int OB_ERR_ATLER_TABLE_ILLEGAL_FK = -4714;
+constexpr int OB_ERR_NO_RESOURCE_MANAGER_PRIVILEGE = -4715;
+constexpr int OB_ERR_RES_MGR_PLAN_NOT_EXIST = -4718;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1028,6 +1032,7 @@ constexpr int OB_ERR_ARG_INVALID = -5931;
 constexpr int OB_ERR_ILL_NAME_STRING = -5932;
 constexpr int OB_ERR_INCORRECT_VALUE_FOR_FUNCTION = -5936;
 constexpr int OB_ERR_USER_EXCEED_RESOURCE = -5967;
+constexpr int OB_ERR_CTE_NEED_QUERY_BLOCKS = -5976;
 constexpr int OB_TRANSACTION_SET_VIOLATION = -6001;
 constexpr int OB_TRANS_ROLLBACKED = -6002;
 constexpr int OB_ERR_EXCLUSIVE_LOCK_CONFLICT = -6003;
@@ -1195,8 +1200,10 @@ constexpr int OB_BACKUP_MOUNT_FILE_NOT_VALID = -9051;
 constexpr int OB_BACKUP_CLEAN_INFO_NOT_MATCH = -9052;
 constexpr int OB_CANCEL_DELETE_BACKUP_NOT_ALLOWED = -9053;
 constexpr int OB_BACKUP_CLEAN_INFO_NOT_EXIST = -9054;
-constexpr int OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX = -9055;
-constexpr int OB_ERR_ATLER_TABLE_ILLEGAL_FK = -9056;
+constexpr int OB_CANNOT_SET_BACKUP_REGION = -9057;
+constexpr int OB_CANNOT_SET_BACKUP_ZONE = -9058;
+constexpr int OB_BACKUP_BACKUP_REACH_MAX_BACKUP_TIMES = -9059;
+constexpr int OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA = -9064;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_ERR_DUPLICATE_HAVING_CLAUSE_IN_TABLE_EXPRESSION = -9501;
@@ -1699,6 +1706,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CONSUMER_GROUP_NOT_EXIST__USER_ERROR_MSG "consumer group %.*s does not exist"
 #define OB_CLUSTER_NOT_ACCESSIBLE__USER_ERROR_MSG "cluster is not accessible, cluster_id: %ld"
 #define OB_TENANT_RESOURCE_UNIT_EXIST__USER_ERROR_MSG "tenant already has resource unit configured, tenant_id: %ld, observer: \'%s\'"
+#define OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX__USER_ERROR_MSG "rebuild global index:'%.*s' failed when drop/truncate partitions"
+#define OB_ERR_ATLER_TABLE_ILLEGAL_FK__USER_ERROR_MSG "unique/primary keys in table referenced by enabled foreign keys"
+#define OB_ERR_NO_RESOURCE_MANAGER_PRIVILEGE__USER_ERROR_MSG "insufficient Resource Manager privileges"
+#define OB_ERR_RES_MGR_PLAN_NOT_EXIST__USER_ERROR_MSG "specified resource manager plan does not exist in the data dictionary"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -2430,6 +2441,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILL_NAME_STRING__USER_ERROR_MSG "unexpected name string"
 #define OB_ERR_INCORRECT_VALUE_FOR_FUNCTION__USER_ERROR_MSG "Incorrect %.*s value: '%.*s' for function %.*s"
 #define OB_ERR_USER_EXCEED_RESOURCE__USER_ERROR_MSG "User '%.*s' has exceeded the '%s' resource (current value: %lu)"
+#define OB_ERR_CTE_NEED_QUERY_BLOCKS__USER_ERROR_MSG "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s"
 #define OB_TRANSACTION_SET_VIOLATION__USER_ERROR_MSG "Transaction set changed during the execution"
 #define OB_TRANS_ROLLBACKED__USER_ERROR_MSG "transaction is rolled back"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT__USER_ERROR_MSG "Lock wait timeout exceeded; try restarting transaction"
@@ -2614,9 +2626,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_CLEAN_INFO_NOT_MATCH__USER_ERROR_MSG "backup clean info not match"
 #define OB_CANCEL_DELETE_BACKUP_NOT_ALLOWED__USER_ERROR_MSG "cancel delete backup do not allow"
 #define OB_BACKUP_CLEAN_INFO_NOT_EXIST__USER_ERROR_MSG "backup clean info not exists"
-#define OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX__USER_ERROR_MSG "rebuild global index:'%.*s' failed when drop/truncate partitions"
-#define OB_ERR_ATLER_TABLE_ILLEGAL_FK__USER_ERROR_MSG "unique/primary keys in table referenced by enabled foreign keys"
-#define OB_IO_LIMIT__USER_ERROR_MSG "IO limit"
+#define OB_CANNOT_SET_BACKUP_REGION__USER_ERROR_MSG "can not set backup region, because %s"
+#define OB_CANNOT_SET_BACKUP_ZONE__USER_ERROR_MSG "can not set backup zone, because %s"
+#define OB_BACKUP_BACKUP_REACH_MAX_BACKUP_TIMES__USER_ERROR_MSG "backup backup has reached max backup times"
+#define OB_BACKUP_BACKUP_REACH_COPY_LIMIT__USER_ERROR_MSG "reach backup backup copy limit"
+#define OB_BACKUP_IO_PROHIBITED__USER_ERROR_MSG "backup io is prohibited"
+#define OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA__USER_ERROR_MSG "the archive log and backup data are not continuous"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_ERR_DUPLICATE_HAVING_CLAUSE_IN_TABLE_EXPRESSION__USER_ERROR_MSG "Duplicate having-clause in table expression"
@@ -3119,6 +3134,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CONSUMER_GROUP_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-29368: consumer group %.*s does not exist"
 #define OB_CLUSTER_NOT_ACCESSIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4711, cluster is not accessible, cluster_id: %ld"
 #define OB_TENANT_RESOURCE_UNIT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4712, tenant already has resource unit configured, tenant_id: %ld, observer: \'%s\'"
+#define OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4713, rebuild global index:'%.*s' failed when drop/truncate partitions"
+#define OB_ERR_ATLER_TABLE_ILLEGAL_FK__ORA_USER_ERROR_MSG "ORA-02266: unique/primary keys in table referenced by enabled foreign keys"
+#define OB_ERR_NO_RESOURCE_MANAGER_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-56713: insufficient Resource Manager privileges"
+#define OB_ERR_RES_MGR_PLAN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-07452: specified resource manager plan does not exist in the data dictionary"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -3850,6 +3869,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILL_NAME_STRING__ORA_USER_ERROR_MSG "ORA-21560: unexpected name string '%.*s'"
 #define OB_ERR_INCORRECT_VALUE_FOR_FUNCTION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5936, Incorrect %.*s value: '%.*s' for function %.*s"
 #define OB_ERR_USER_EXCEED_RESOURCE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5967, User '%.*s' has exceeded the '%s' resource (current value: %lu)"
+#define OB_ERR_CTE_NEED_QUERY_BLOCKS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5976, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s"
 #define OB_TRANSACTION_SET_VIOLATION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6001, Transaction set changed during the execution"
 #define OB_TRANS_ROLLBACKED__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-30006: resource busy; acquire with WAIT timeout expired"
@@ -4034,9 +4054,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_CLEAN_INFO_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9052, backup clean info not match"
 #define OB_CANCEL_DELETE_BACKUP_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9053, cancel delete backup do not allow"
 #define OB_BACKUP_CLEAN_INFO_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9054, backup clean info not exists"
-#define OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9055, rebuild global index:'%.*s' failed when drop/truncate partitions"
-#define OB_ERR_ATLER_TABLE_ILLEGAL_FK__ORA_USER_ERROR_MSG "ORA-02266: unique/primary keys in table referenced by enabled foreign keys"
-#define OB_IO_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9061, IO limit"
+#define OB_CANNOT_SET_BACKUP_REGION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9057, can not set backup region, because %s"
+#define OB_CANNOT_SET_BACKUP_ZONE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9058, can not set backup zone, because %s"
+#define OB_BACKUP_BACKUP_REACH_MAX_BACKUP_TIMES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9059, backup backup has reached max backup times"
+#define OB_BACKUP_BACKUP_REACH_COPY_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9062, reach backup backup copy limit"
+#define OB_BACKUP_IO_PROHIBITED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9063, backup io is prohibited"
+#define OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_ERR_DUPLICATE_HAVING_CLAUSE_IN_TABLE_EXPRESSION__ORA_USER_ERROR_MSG "PLS-00119: Duplicate having-clause in table expression"

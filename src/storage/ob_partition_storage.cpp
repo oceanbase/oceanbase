@@ -5669,6 +5669,7 @@ int ObPartitionStorage::local_sort_index_by_range(
     ObTableAccessContext access_ctx;
     ObBlockCacheWorkingSet block_cache_ws;
     ObStoreCtx ctx;
+    ObStoreRow result_row;
     if (OB_SUCC(ret)) {
       if (OB_FAIL(access_param.out_col_desc_param_.init())) {
         LOG_WARN("init out cols fail", K(ret));
@@ -5682,6 +5683,18 @@ int ObPartitionStorage::local_sort_index_by_range(
         access_param.iter_param_.out_cols_ = &access_param.out_col_desc_param_.get_col_descs();
         access_param.out_cols_param_ = &col_params;
         access_param.reserve_cell_cnt_ = output_projector.count();
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t cell_cnt = org_extended_col_ids.count();
+      if (NULL == (cells_buf = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * cell_cnt)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(ERROR, "failed to alloc cells buf", K(ret), K(cell_cnt));
+      } else {
+        result_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+        result_row.row_val_.cells_ = new (cells_buf) ObObj[cell_cnt];
+        result_row.row_val_.count_ = cell_cnt;
       }
     }
 
@@ -5782,18 +5795,37 @@ int ObPartitionStorage::local_sort_index_by_range(
           t2 = ObTimeUtility::current_time();
           get_next_row_time += t2 - t1;
           DEBUG_SYNC(BEFORE_BUILD_LOCAL_INDEX_REFRESH_TABLES_MID);
+          // fill default value if column is not generated column
+          for (int64_t k = 0; OB_SUCC(ret) && k < row->row_val_.count_; ++k) {
+            if (row->row_val_.cells_[k].is_nop_value()) {
+              if (k >= org_col_ids.count()) {
+                // do nothing
+              } else if (nullptr == dependent_exprs.at(k)) {
+                result_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];
+              }
+            } else {
+              result_row.row_val_.cells_[k] = row->row_val_.cells_[k];
+            }
+          }
           for (int64_t k = 0; OB_SUCC(ret) && k < org_col_ids.count(); ++k) {
             if (row->row_val_.cells_[k].is_nop_value()) {
               if (NULL != dependent_exprs.at(k)) {  // generated column
                 if (OB_FAIL(sql::ObSQLUtils::calc_sql_expression(dependent_exprs.at(k),
                         *table_schema,
                         org_extended_col_ids,
-                        row->row_val_,
+                        result_row.row_val_,
                         calc_buf,
                         expr_ctx,
                         tmp_row.row_val_.cells_[k]))) {
-                  STORAGE_LOG(WARN, "failed to calc expr", K(row->row_val_), K(org_col_ids),
-                      K(dependent_exprs.at(k)), K(ret));
+                  STORAGE_LOG(WARN,
+                      "failed to calc expr",
+                      K(result_row.row_val_),
+                      K(org_col_ids),
+                      K(row->row_val_),
+                      K(dependent_exprs.at(k)),
+                      K(extended_col_ids),
+                      K(org_extended_col_ids),
+                      K(ret));
                 } else if (OB_UNLIKELY(!tmp_row.row_val_.cells_[k].is_null()
                                        && !sql::ObSQLUtils::is_same_type_for_compare(
                                                 gen_col_schemas.at(k)->get_meta_type(),
@@ -6307,8 +6339,10 @@ int ObPartitionStorage::ObDMLRunningCtx::init(const ObIArray<uint64_t>* column_i
     STORAGE_LOG(WARN, "failed to get relative table", K(ret));
   } else if (OB_UNLIKELY(!pkey.is_pg() &&
                          (extract_pure_id(pkey.get_table_id()) == OB_ALL_TABLE_HISTORY_TID ||
-                             extract_pure_id(pkey.get_table_id()) == OB_ALL_TABLE_V2_HISTORY_TID) &&
+                             extract_pure_id(pkey.get_table_id()) == OB_ALL_TABLE_V2_HISTORY_TID ||
+                             extract_pure_id(pkey.get_table_id()) == OB_ALL_BACKUP_PIECE_FILES_TID) &&
                          relative_tables_.get_index_tables_buf_count() != 1)) {
+    // __all_table_history and __all_backup_piece_files should always have one index
     ret = OB_SCHEMA_EAGAIN;
     STORAGE_LOG(WARN,
         "__all_table_history should have one index table",

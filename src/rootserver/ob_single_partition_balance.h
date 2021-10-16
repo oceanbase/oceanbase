@@ -24,7 +24,7 @@ class ObPartitionReplica;
 namespace schema {
 class ObTenantSchema;
 class ObTablegroupSchema;
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObSchemaMgr;
 class ObSchemaGetterGuard;
 }  // namespace schema

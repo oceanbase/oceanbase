@@ -1306,7 +1306,7 @@ int ObFullMetaTableIterator::get_part_num(const uint64_t table_id, int64_t& part
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
-  const ObTableSchema* table = NULL;
+  const ObSimpleTableSchemaV2* table = NULL;
   const uint64_t tenant_id = extract_tenant_id(table_id);
   if (!inited_) {
     ret = OB_NOT_INIT;

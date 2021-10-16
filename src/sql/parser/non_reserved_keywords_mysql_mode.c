@@ -665,7 +665,14 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"network", NETWORK},
     {"logical_reads", LOGICAL_READS},
     {"queue_time", QUEUE_TIME},
-    {"obsolete", OBSOLETE}};
+    {"obsolete", OBSOLETE},
+    {"backuppiece", BACKUPPIECE},
+    {"backup_backup_dest", BACKUP_BACKUP_DEST},
+    {"backed", BACKED},
+    {"preview", PREVIEW},
+    {"up", UP},
+    {"times", TIMES},
+    {"backupround", BACKUPROUND}};
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html
  ALTER TABLE

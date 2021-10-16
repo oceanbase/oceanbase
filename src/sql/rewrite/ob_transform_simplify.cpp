@@ -3006,36 +3006,31 @@ int ObTransformSimplify::try_remove_redundent_select(ObSelectStmt& stmt, ObSelec
   }
   return ret;
 }
-
 /**
  * @brief check_subquery_valid
- * check subquery return equal or less than one row
+ * check subquery return equal one row, if empty do nothing
+ * has limit 可能使结果为空不做改写;
+ * select ... where rownum >2; rownum不包含1必空，包含判断较难，暂不处理
  * subquery should in format of:
- * 1. select ... from dual;
- * 2. select aggr() ...;  <- no group by
- * 3. select ... limit 0/1;
- * 4. select ... where rownum < 2;
- * case 3 and 4 is not ignored at the present
+ * 1. select ... from dual;  no where condition
+ * 2. select aggr() ...;  <- no group by, no having
  */
 int ObTransformSimplify::check_subquery_valid(ObSelectStmt& stmt, bool& is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  int64_t limit = -1;
-  if (stmt.has_set_op() || stmt.is_hierarchical_query()) {
+  ObRawExpr *sel_expr = NULL;
+  if (stmt.is_set_stmt() || stmt.is_hierarchical_query()) {
     // do nothing
-  } else if (0 == stmt.get_from_item_size()) {
-    is_valid = true;
-  } else if (OB_FAIL(ObTransformUtils::get_stmt_limit_value(stmt, limit))) {
-    LOG_WARN("failed to get stmt limit value", K(ret));
-  } else if (0 == limit || 1 == limit) {
-    is_valid = true;
-  } else if (0 == stmt.get_group_expr_size()) {
-    ObRawExpr* sel_expr = NULL;
+  } else {
     if (OB_UNLIKELY(1 != stmt.get_select_item_size()) || OB_ISNULL(sel_expr = stmt.get_select_item(0).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected subquery", K(ret), K(stmt.get_select_item_size()), K(sel_expr));
-    } else if (sel_expr->has_flag(CNT_AGG)) {
+    } else if (OB_NOT_NULL(stmt.get_limit_expr())) {
+      // do nothing
+    } else if (0 == stmt.get_from_item_size() && 0 == stmt.get_condition_size()) {
+      is_valid = true;
+    } else if (0 == stmt.get_group_expr_size() && 0 == stmt.get_having_expr_size() && sel_expr->has_flag(CNT_AGG)) {
       is_valid = true;
     }
   }

@@ -272,6 +272,7 @@ READ                          { REPUT_TOKEN_NEG_SIGN(READ); }
 READ_WRITE                    { REPUT_TOKEN_NEG_SIGN(READ_WRITE); }
 READS                         { REPUT_TOKEN_NEG_SIGN(READS); }
 REAL                          { REPUT_TOKEN_NEG_SIGN(REAL); }
+RECURSIVE                     { REPUT_TOKEN_NEG_SIGN(RECURSIVE); }
 RELEASE                       { REPUT_TOKEN_NEG_SIGN(RELEASE); }
 REFERENCES                    { REPUT_TOKEN_NEG_SIGN(REFERENCES); }
 REGEXP                        { REPUT_TOKEN_NEG_SIGN(REGEXP); }

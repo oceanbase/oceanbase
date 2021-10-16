@@ -64,6 +64,9 @@ function get_os_release() {
     sles)
       version_ge "15" && compat_centos7 && return
       ;;
+    uos)
+      version_ge "20" && compat_centos7 && return
+      ;;
   esac
   not_supported && return 1 
 }

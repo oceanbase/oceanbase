@@ -89,6 +89,7 @@ int ObMacroBlockBuilder::open(storage::ObSSTableMergeCtx& ctx, const int64_t idx
     ObMacroDataSeq macro_start_seq(0);
     task_idx_ = idx;
     desc_.merge_info_ = &sstable_merge_info_;
+    desc_.iter_complement_ = iter_complement;
     mark_deletion_maker_ = NULL;
     if (desc_.need_prebuild_bloomfilter_) {
       ObIPartitionGroup* pg = ctx.pg_guard_.get_partition_group();

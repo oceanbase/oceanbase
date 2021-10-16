@@ -66,6 +66,7 @@ static const char* rebalance_task_type_strs[] = {"MIGRATE_REPLICA",
     "FAST_RECOVERY_TASK",
     "VALIDATE_BACKUP",
     "STANDBY_CUTDATA",
+    "BACKUP_BACKUPSET",
     "MAX_TYPE"};
 
 bool ObRebalanceTaskKey::is_valid() const
@@ -208,7 +209,8 @@ int ObRebalanceTaskInfo::set_tenant_stat(ObTenantTaskStatMap::Item* tenant_stat,
 
 void ObRebalanceTaskInfo::set_schedule()
 {
-  if (BACKUP_REPLICA == get_rebalance_task_type() || VALIDATE_BACKUP == get_rebalance_task_type()) {
+  if (BACKUP_REPLICA == get_rebalance_task_type() || VALIDATE_BACKUP == get_rebalance_task_type() ||
+      BACKUP_BACKUPSET == get_rebalance_task_type()) {
     if (NULL != dest_server_stat_) {
       dest_server_stat_->v_.in_schedule_backup_cnt_++;
     }
@@ -237,7 +239,8 @@ int ObRebalanceTaskInfo::set_host(const ObRebalanceTask* host)
 
 void ObRebalanceTaskInfo::clean_server_and_tenant_ref(const ObRebalanceTask& task)
 {
-  if (BACKUP_REPLICA == task.get_rebalance_task_type() || VALIDATE_BACKUP == task.get_rebalance_task_type()) {
+  if (BACKUP_REPLICA == task.get_rebalance_task_type() || VALIDATE_BACKUP == task.get_rebalance_task_type() ||
+      BACKUP_BACKUPSET == task.get_rebalance_task_type()) {
     if (NULL != src_server_stat_) {
       src_server_stat_->v_.total_out_cnt_--;
       src_server_stat_->v_.total_out_data_size_ -= get_accumulate_transmit_src_data_size();
@@ -483,7 +486,7 @@ int ObRebalanceTaskInfo::set_skip_change_member_list(const ObRebalanceTaskType t
              PHYSICAL_RESTORE_REPLICA == task_type || MODIFY_QUORUM == task_type ||
              COPY_GLOBAL_INDEX_SSTABLE == task_type || COPY_LOCAL_INDEX_SSTABLE == task_type ||
              COPY_SSTABLE == task_type || SQL_BACKGROUND_DIST_TASK == task_type || BACKUP_REPLICA == task_type ||
-             VALIDATE_BACKUP == task_type || STANDBY_CUTDATA == task_type) {
+             VALIDATE_BACKUP == task_type || STANDBY_CUTDATA == task_type || BACKUP_BACKUPSET == task_type) {
     skip_change_member_list_ = true;
   } else if (MEMBER_CHANGE == task_type) {
     skip_change_member_list_ = false;
@@ -1149,6 +1152,37 @@ int ObValidateTaskInfo::assign(const ObValidateTaskInfo& that)
   return ret;
 }
 
+int ObBackupBackupsetTaskInfo::build(const common::ObReplicaMember& data_src, const share::ObBackupBackupsetArg& arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(task_key_.init(arg.job_id_,
+                 arg.backup_set_id_,
+                 arg.pg_key_.get_table_id(),
+                 arg.pg_key_.get_partition_id(),
+                 RebalanceKeyType::BACKUP_MANAGER_KEY))) {
+    LOG_WARN("failed to build task key", KR(ret), K(arg));
+  } else {
+    data_src_ = data_src;
+    backup_backupset_arg_ = arg;
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTaskInfo::assign(const ObBackupBackupsetTaskInfo& that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRebalanceTaskInfo::assign(that))) {
+    LOG_WARN("failed to assign base info", KR(ret));
+  } else {
+    data_src_ = that.data_src_;
+    backup_backupset_arg_ = that.backup_backupset_arg_;
+  }
+  return ret;
+}
+
 int ObMigrateTaskInfo::check_quorum(const share::ObPartitionInfo& partition) const
 {
   int ret = OB_SUCCESS;
@@ -1435,7 +1469,7 @@ int ObAddTaskInfo::check_quorum(const share::ObPartitionInfo& partition, const b
         // we need to try to modify quorum at the same time
         int64_t paxos_num = OB_INVALID_COUNT;
         if (!is_tablegroup_id(partition.get_table_id())) {
-          const share::schema::ObTableSchema* schema = NULL;
+          const share::schema::ObSimpleTableSchemaV2* schema = NULL;
           if (OB_FAIL(schema_guard.get_table_schema(partition.get_table_id(), schema))) {
             LOG_WARN("get table schema failed", K(ret), "table", partition.get_table_id());
           } else if (OB_ISNULL(schema)) {
@@ -1813,6 +1847,28 @@ int ObValidateTaskInfo::check_before_execute(const ObRebalanceTask& task, const 
   return ret;
 }
 
+int ObBackupBackupsetTaskInfo::check_before_execute(const ObRebalanceTask& task,
+    const share::ObPartitionInfo& partition, const bool is_admin_force, common::ObAddr& leader) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(task);
+  UNUSED(partition);
+  UNUSED(is_admin_force);
+  UNUSED(leader);
+  if (GCTX.get_switch_epoch2() != switchover_epoch_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("task status is change",
+        K(ret),
+        "switch epoch",
+        GCTX.get_switch_epoch2(),
+        "task switchover epoch",
+        switchover_epoch_,
+        "task_info",
+        *this);
+  }
+  return ret;
+}
+
 int ObMigrateTaskInfo::get_execute_transmit_size(int64_t& execute_transmit_size) const
 {
   int ret = OB_SUCCESS;
@@ -1952,6 +2008,13 @@ int ObValidateTaskInfo::get_execute_transmit_size(int64_t& execute_transmit_size
   return ret;
 }
 
+int ObBackupBackupsetTaskInfo::get_execute_transmit_size(int64_t& execute_transmit_size) const
+{
+  int ret = OB_SUCCESS;
+  execute_transmit_size = transmit_data_size_;
+  return ret;
+}
+
 int ObMigrateTaskInfo::get_virtual_rebalance_task_stat_info(
     common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const
 {
@@ -2085,6 +2148,17 @@ int ObBackupTaskInfo::get_virtual_rebalance_task_stat_info(
 }
 
 int ObValidateTaskInfo::get_virtual_rebalance_task_stat_info(
+    common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(src);
+  UNUSED(data_src);
+  UNUSED(dest);
+  UNUSED(offline);
+  return ret;
+}
+
+int ObBackupBackupsetTaskInfo::get_virtual_rebalance_task_stat_info(
     common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const
 {
   int ret = OB_SUCCESS;
@@ -4220,6 +4294,40 @@ int ObValidateTask::build_by_task_result(const obrpc::ObValidateBatchRes& arg)
   return ret;
 }
 
+int ObStandbyCutDataTask::check_can_execute_on_dest(ObRebalanceTaskMgr& task_mgr, bool& is_available) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(task_mgr);
+  is_available = true;
+  return ret;
+}
+
+int ObBackupBackupsetTask::build(const common::ObIArray<ObBackupBackupsetTaskInfo>& task_infos,
+    const common::ObAddr& dst, const bool tenant_dropped, const char* comment)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(task_infos.count() <= 0 || !dst.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_infos.count()), K(dst));
+  } else if (OB_FAIL(set_task_id(GCTX.self_addr_))) {
+    LOG_WARN("failed to set task id", KR(ret));
+  } else {
+    task_infos_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_infos.count(); ++i) {
+      if (OB_FAIL(task_infos_.push_back(task_infos.at(i)))) {
+        LOG_WARN("failed to push back", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      dst_ = dst;
+      comment_ = comment;
+      tenant_dropped_ = tenant_dropped;
+      priority_ = ObRebalanceTaskPriority::HIGH_PRI;
+    }
+  }
+  return ret;
+}
+
 int ObMigrateReplicaTask::check_can_execute_on_dest(ObRebalanceTaskMgr& task_mgr, bool& is_available) const
 {
   int ret = OB_SUCCESS;
@@ -4367,6 +4475,14 @@ int ObBackupTask::check_can_execute_on_dest(ObRebalanceTaskMgr& task_mgr, bool& 
 }
 
 int ObValidateTask::check_can_execute_on_dest(ObRebalanceTaskMgr& task_mgr, bool& is_available) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(task_mgr);
+  is_available = true;
+  return ret;
+}
+
+int ObBackupBackupsetTask::check_can_execute_on_dest(ObRebalanceTaskMgr& task_mgr, bool& is_available) const
 {
   int ret = OB_SUCCESS;
   UNUSED(task_mgr);
@@ -4875,6 +4991,40 @@ int ObValidateTask::log_execute_result(const ObIArray<int>& rc_array) const
   return ret;
 }
 
+int ObBackupBackupsetTask::log_execute_result(const common::ObIArray<int>& rc_array) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  const int64_t elapsed = (get_executor_time() > 0) ? (now - get_executor_time()) : (now - get_schedule_time());
+  if (OB_UNLIKELY(task_infos_.count() != rc_array.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("task info count and ret code count not match",
+        K(ret),
+        "task_info_count",
+        task_infos_.count(),
+        "ret_code_count",
+        rc_array.count());
+  } else {
+    for (int64_t i = 0; i < task_infos_.count(); ++i) {
+      const ObBackupBackupsetTaskInfo& info = task_infos_.at(i);
+      const int result = rc_array.at(i);
+      ROOTSERVICE_EVENT_ADD("balancer",
+          "finish_backup_backupset",
+          "job_id",
+          info.get_backup_backupset_arg().job_id_,
+          "backup_set_id",
+          info.get_backup_backupset_arg().backup_set_id_,
+          "tenant_id",
+          info.get_backup_backupset_arg().pg_key_.get_tenant_id(),
+          "pg_key",
+          info.get_backup_backupset_arg().pg_key_,
+          K(result),
+          K(elapsed));
+    }
+  }
+  return ret;
+}
+
 int ObMigrateReplicaTask::clone(void* input_ptr, ObRebalanceTask*& output_task) const
 {
   int ret = OB_SUCCESS;
@@ -5179,6 +5329,31 @@ int ObValidateTask::clone(void* input_ptr, ObRebalanceTask*& output_task) const
       LOG_WARN("failed to deep copy base task", K(ret));
     } else if (OB_FAIL(my_task->task_infos_.assign(task_infos_))) {
       LOG_WARN("failed to assign task infos", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      output_task = my_task;
+    }
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTask::clone(void* input_ptr, ObRebalanceTask*& output_task) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == input_ptr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(input_ptr));
+  } else {
+    ObBackupBackupsetTask* my_task = new (input_ptr) ObBackupBackupsetTask();
+    if (OB_UNLIKELY(nullptr == my_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ObBackupBackupsetTask construct failed", KR(ret));
+    } else if (OB_FAIL(my_task->ObRebalanceTask::deep_copy(*this))) {
+      LOG_WARN("failed to deep copy base task", KR(ret));
+    } else if (OB_FAIL(my_task->task_infos_.assign(task_infos_))) {
+      LOG_WARN("failed to assign task infos", KR(ret));
+    } else {
+      my_task->tenant_dropped_ = tenant_dropped_;
     }
     if (OB_SUCC(ret)) {
       output_task = my_task;
@@ -5907,6 +6082,145 @@ int ObBackupTask::execute(
   return ret;
 }
 
+int ObBackupBackupsetTask::check_before_execute(
+    share::ObPartitionTableOperator& pt_operator, common::ObAddr& leader) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(pt_operator);
+  UNUSED(leader);
+  return ret;
+}
+
+int ObBackupBackupsetTask::execute(
+    obrpc::ObSrvRpcProxy& rpc_proxy, const common::ObAddr& dummy_leader, common::ObIArray<int>& dummy_rc_array) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(dummy_leader);
+  UNUSED(dummy_rc_array);
+  obrpc::ObBackupBackupsetBatchArg arg;
+  if (OB_FAIL(build_backup_backupset_rpc_arg(arg))) {
+    LOG_WARN("failed to build backup backupset replica rpc arg", KR(ret));
+  } else if (OB_FAIL(rpc_proxy.to(dst_).backup_backupset_batch(arg))) {
+    LOG_WARN("failed to backup backupset replica", KR(ret), K(arg));
+  } else {
+    LOG_INFO("start to backup backupset", K(arg));
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTask::get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
+    const int64_t min_task_timeout_us, int64_t& timeout_us) const
+{
+  int ret = OB_SUCCESS;
+  int64_t data_size = 0;
+  if (OB_UNLIKELY(network_bandwidth <= 0 || server_concurrency_limit <= 0 || min_task_timeout_us <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(network_bandwidth), K(server_concurrency_limit), K(min_task_timeout_us));
+  } else if (OB_FAIL(get_data_size(data_size))) {
+    LOG_WARN("fail to get data size", KR(ret));
+  } else if (data_size < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data size unexpected", KR(ret), K(data_size));
+  } else {
+    int64_t timeout_us_by_part_cnt = TIMEOUT_US_PER_PARTITION * task_infos_.count();
+    timeout_us = data_size / network_bandwidth * 1000000 * server_concurrency_limit;
+    timeout_us = std::max(min_task_timeout_us, timeout_us);
+    timeout_us = std::max(timeout_us_by_part_cnt, timeout_us);
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTask::build_backup_backupset_rpc_arg(obrpc::ObBackupBackupsetBatchArg& arg) const
+{
+  int ret = OB_SUCCESS;
+  int64_t timeout = 0;
+  if (OB_UNLIKELY(task_infos_.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(*this));
+  } else if (OB_FAIL(get_timeout(ObRebalanceTaskMgr::NETWORK_BANDWIDTH,
+                 std::max(GCONF.server_data_copy_in_concurrency.get(), GCONF.server_data_copy_out_concurrency.get()),
+                 GCONF.balancer_task_timeout,
+                 timeout))) {
+    LOG_WARN("fail to get timeout", K(ret));
+  } else if (OB_UNLIKELY(timeout <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("timeout value unexpected", K(ret), K(timeout));
+  } else {
+    arg.task_id_ = task_id_;
+    arg.timeout_ts_ = timeout + ObTimeUtility::current_time();
+    arg.tenant_dropped_ = tenant_dropped_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_infos_.count(); ++i) {
+      const ObBackupBackupsetTaskInfo& task_info = task_infos_.at(i);
+      const share::ObBackupBackupsetArg& backup_backupset_arg = task_info.get_backup_backupset_arg();
+      obrpc::ObMigrateBackupsetArg element;
+      element.backup_set_id_ = backup_backupset_arg.backup_set_id_;
+      element.pg_key_ = backup_backupset_arg.pg_key_;
+      element.backup_backupset_arg_ = backup_backupset_arg;
+      if (OB_FAIL(arg.arg_array_.push_back(element))) {
+        LOG_WARN("fail to push back", K(ret));
+      } else {
+      }  // no more to do
+    }
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTask::build_by_task_result(const obrpc::ObBackupBackupsetBatchRes& arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else {
+    task_infos_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.res_array_.count(); ++i) {
+      const ObBackupBackupsetReplicaRes& res = arg.res_array_.at(i);
+      ObBackupBackupsetTaskInfo task_info;
+      if (!res.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("res is invalid", KR(ret), K(res));
+      } else if (OB_FAIL(task_info.init_task_key(res.arg_.job_id_,
+                     res.arg_.backup_set_id_,
+                     res.arg_.pg_key_.get_table_id(),
+                     res.arg_.pg_key_.get_partition_id(),
+                     RebalanceKeyType::FORMAL_BALANCE_KEY))) {
+        LOG_WARN("failed to init task key", KR(ret), K(res));
+      } else {
+        // task_info.data_src_ = ??? // TODO
+        task_info.backup_backupset_arg_ = res.arg_;
+        if (OB_FAIL(task_infos_.push_back(task_info))) {
+          LOG_WARN("failed to push back task info", KR(ret));
+        } else {
+        }  // no more
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTask::assign(const ObBackupBackupsetTask& that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRebalanceTask::assign(that))) {
+    LOG_WARN("failed to deep copy base task", KR(ret));
+  } else if (OB_FAIL(task_infos_.assign(that.task_infos_))) {
+    LOG_WARN("failed to assign task infos", KR(ret));
+  } else {
+    tenant_dropped_ = that.tenant_dropped_;
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTask::get_data_size(int64_t& data_size) const
+{
+  int ret = OB_SUCCESS;
+  data_size = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < task_infos_.count(); ++i) {
+    data_size += task_infos_.at(i).get_transmit_data_size();
+  }
+  return ret;
+}
+
 int ObMigrateReplicaTask::log_execute_start() const
 {
   int ret = OB_SUCCESS;
@@ -6231,6 +6545,28 @@ int ObValidateTask::log_execute_start() const
         info.get_partition_key().get_table_id(),
         "partition",
         info.get_partition_key().get_partition_id());
+  }
+  return ret;
+}
+
+int ObBackupBackupsetTask::log_execute_start() const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < task_infos_.count(); ++i) {
+    const ObBackupBackupsetTaskInfo& info = task_infos_.at(i);
+    ROOTSERVICE_EVENT_ADD("balancer",
+        "start_backup_backupset",
+        "job_id",
+        info.get_backup_backupset_arg().job_id_,
+        "backup_set_id",
+        info.get_backup_backupset_arg().backup_set_id_,
+        "tenant_id",
+        info.get_backup_backupset_arg().pg_key_.get_tenant_id(),
+        "table_id",
+        info.get_backup_backupset_arg().pg_key_.get_table_id(),
+        "partition_id",
+        info.get_backup_backupset_arg().pg_key_.get_partition_id(),
+        K(info));
   }
   return ret;
 }

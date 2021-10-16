@@ -80,6 +80,7 @@ public:
   void set_system_clog_disk_hang();
   void set_system_tenant_out_of_memory();
   void set_system_data_disk_error();
+  void set_system_slog_disk_warning();
   void set_system_need_rebuild();
   void set_system_in_election_blacklist();
   void set_system_service_not_started();

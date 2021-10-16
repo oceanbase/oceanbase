@@ -1103,6 +1103,10 @@ public:
   {
     return startup_exprs_;
   }
+  inline int add_startup_exprs(const common::ObIArray<ObRawExpr *> &exprs)
+  {
+    return append(startup_exprs_, exprs);
+  }
 
   /**
    *  Get a specified child operator
@@ -1787,6 +1791,8 @@ public:
   virtual int set_exchange_cnt_pre(AdjustSortContext* ctx);
   virtual int set_exchange_cnt_post(AdjustSortContext* ctx);
   virtual int allocate_link_post();
+  virtual int allocate_startup_expr_post();
+  int allocate_startup_expr_post(int64_t child_idx);
   int allocate_link_node_above(int64_t child_idx);
 
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx);
@@ -1889,7 +1895,7 @@ public:
   bool is_dml_operator() const
   {
     return (log_op_def::LOG_UPDATE == type_ || log_op_def::LOG_DELETE == type_ || log_op_def::LOG_INSERT == type_ ||
-            log_op_def::LOG_INSERT_ALL == type_);
+            log_op_def::LOG_INSERT_ALL == type_ || log_op_def::LOG_MERGE == type_);
   }
   bool is_duplicated_checker_op() const
   {

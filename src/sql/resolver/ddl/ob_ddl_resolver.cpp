@@ -6361,14 +6361,6 @@ int ObDDLResolver::get_enable_split_partition(const int64_t tenant_id, bool& ena
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", K(ret), K(tenant_id));
-  } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (!tenant_config.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get tenant config", K(ret), K(tenant_id));
-    } else {
-      enable_split_partition = tenant_config->_enable_split_partition;
-    }
   }
   return ret;
 }

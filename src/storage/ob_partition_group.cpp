@@ -4126,13 +4126,31 @@ int ObPartitionGroup::get_curr_clog_info_(
             K(clog_info),
             K(log_archive_status));
       } else {
-        STORAGE_LOG(INFO, "update with archived clog info", K(pkey_), K(clog_info), K(log_archive_status));
-        if (log_archive_status.last_archived_log_id_ < clog_info.get_last_replay_log_id()) {
-          log_info_usable = true;
-          clog_info.set_last_replay_log_id(log_archive_status.last_archived_log_id_);
-          clog_info.set_submit_timestamp(log_archive_status.last_archived_log_submit_ts_);
-          clog_info.set_epoch_id(log_archive_status.clog_epoch_id_);
-          clog_info.set_accumulate_checksum(log_archive_status.accum_checksum_);
+        bool clog_exist = true;
+        const uint64_t last_archived_log_id = log_archive_status.last_archived_log_id_;
+        const bool is_mandatory = ObServerConfig::get_instance().backup_log_archive_option.is_mandatory();
+        if (! is_mandatory && last_archived_log_id < clog_info.get_last_replay_log_id()) {
+          // check next archive log exist, return clog_exist = true only on situation of log exist
+          if (OB_FAIL(pls_->check_log_exist(last_archived_log_id + 1, clog_exist))) {
+            STORAGE_LOG(WARN, "failed to check log exist", KR(ret), K(pkey_), K(log_archive_status));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        }
+        // if archive not in madatory mode and next archive log not exist, omit archive
+        else if (! is_mandatory && ! clog_exist) {
+          STORAGE_LOG(WARN, "attent!! archive had been omitted due to log based on archive not exist, maybe some error occur",
+              KR(ret), K(pkey_), K(log_archive_status));
+        } else {
+          STORAGE_LOG(INFO, "update with archived clog info", K(pkey_), K(clog_info), K(log_archive_status));
+          if (last_archived_log_id < clog_info.get_last_replay_log_id()) {
+            log_info_usable = true;
+            clog_info.set_last_replay_log_id(last_archived_log_id);
+            clog_info.set_submit_timestamp(log_archive_status.last_archived_log_submit_ts_);
+            clog_info.set_epoch_id(log_archive_status.clog_epoch_id_);
+            clog_info.set_accumulate_checksum(log_archive_status.accum_checksum_);
+          }
         }
       }
     } else { /*do nothing*/
@@ -4231,8 +4249,8 @@ int ObPartitionGroup::check_is_from_restore(bool& is_from_restore) const
   uint64_t last_restore_log_id = OB_INVALID_ID;
   int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
   int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
-  if (OB_FAIL(
-          pg_storage_.get_restore_replay_info(last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
+  if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id,
+          last_restore_log_ts, restore_snapshot_version))) {
     STORAGE_LOG(WARN, "fail to get_restore_replay_info", K(ret), K(pkey_));
   } else {
     is_from_restore = (OB_INVALID_ID != last_restore_log_id);
@@ -5992,8 +6010,8 @@ int ObPartitionGroup::check_can_physical_flashback(const int64_t flashback_scn)
   return ret;
 }
 
-int ObPartitionGroup::clear_trans_after_restore_log(
-    const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
+int ObPartitionGroup::clear_trans_after_restore_log(const uint64_t last_restore_log_id,
+    const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -6004,17 +6022,17 @@ int ObPartitionGroup::clear_trans_after_restore_log(
   } else if (OB_ISNULL(txs_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "txs_ is NULL", KR(ret), K_(pkey));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id) ||
-             OB_UNLIKELY(OB_INVALID_TIMESTAMP == last_restore_log_ts)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id)
+      || OB_UNLIKELY(OB_INVALID_TIMESTAMP == last_restore_log_ts)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(
         WARN, "invalid last_restore_log_info", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else if (OB_FAIL(pg_storage_.set_last_restore_log_info(last_restore_log_id, last_restore_log_ts))) {
     STORAGE_LOG(
         WARN, "failed to set_last_restore_log_info", K(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
-  } else if (OB_FAIL(txs_->set_last_restore_log_ts(pkey_, last_restore_log_ts))) {
+  } else if (OB_FAIL(txs_->set_last_restore_log_info(pkey_, last_restore_log_id, last_restore_log_ts))) {
     STORAGE_LOG(
-        WARN, "failed to set_last_restore_log_ts", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
+        WARN, "failed to set_last_restore_log_info", KR(ret), K_(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else {
     ATOMIC_SET(&has_clear_trans_after_restore_, true);
   }
@@ -6031,8 +6049,8 @@ int ObPartitionGroup::get_base_storage_info_(common::ObBaseStorageInfo& info)
     int64_t restore_snapshot_version = OB_INVALID_TIMESTAMP;
     uint64_t last_restore_log_id = OB_INVALID_ID;
     int64_t last_restore_log_ts = OB_INVALID_TIMESTAMP;
-    if (OB_FAIL(
-            pg_storage_.get_restore_replay_info(last_restore_log_id, last_restore_log_ts, restore_snapshot_version))) {
+    if (OB_FAIL(pg_storage_.get_restore_replay_info(last_restore_log_id,
+            last_restore_log_ts, restore_snapshot_version))) {
       STORAGE_LOG(WARN, "failed to get_restore_replay_info", KR(ret), K(pkey_));
     } else if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
       // The last_replay_log_id of recovered partition needs to be adjusted.

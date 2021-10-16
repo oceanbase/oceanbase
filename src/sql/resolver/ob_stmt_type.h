@@ -245,7 +245,10 @@ OB_STMT_TYPE_DEF(T_ADMIN_RUN_UPGRADE_JOB, get_sys_tenant_alter_system_priv, 257)
 OB_STMT_TYPE_DEF(T_ADMIN_STOP_UPGRADE_JOB, get_sys_tenant_alter_system_priv, 258)
 OB_STMT_TYPE_DEF(T_FLUSH_DAG_WARNINGS, get_sys_tenant_super_priv, 259)
 OB_STMT_TYPE_DEF(T_CLUSTER_ACTION_VERIFY, get_sys_tenant_super_priv, 260)
-
+OB_STMT_TYPE_DEF(T_BACKUP_BACKUPPIECE, get_sys_tenant_alter_system_priv, 261)
+OB_STMT_TYPE_DEF(T_ADD_RESTORE_SOURCE, get_sys_tenant_alter_system_priv, 262)
+OB_STMT_TYPE_DEF(T_CLEAR_RESTORE_SOURCE, get_sys_tenant_alter_system_priv, 263)
+OB_STMT_TYPE_DEF(T_SHOW_RESTORE_PREVIEW, err_stmt_type_priv, 264)
 OB_STMT_TYPE_DEF(T_MAX, err_stmt_type_priv, 500)
 #endif
 

@@ -569,7 +569,10 @@ DEFINE_ERROR_EXT(OB_ADD_CLUSTER_NOT_ALLOWED, -4709, -1, "HY000", "Add cluster no
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_CONSUMER_GROUP_NOT_EXIST, -4710, -1, "HY000", "consumer group does not exist", "consumer group %.*s does not exist", 29368, "consumer group does not exist", "consumer group %.*s does not exist");
 DEFINE_ERROR_EXT(OB_CLUSTER_NOT_ACCESSIBLE, -4711, -1, "HY000", "cluster is not accessible", "cluster is not accessible, cluster_id: %ld");
 DEFINE_ERROR_EXT(OB_TENANT_RESOURCE_UNIT_EXIST, -4712, -1, "HY000", "tenant already has resource unit configured", "tenant already has resource unit configured, tenant_id: %ld, observer: \'%s\'");
-
+DEFINE_ERROR_EXT(OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX, -4713, -1, "HY000", "rebuild global index failed when drop/truncate partitions", "rebuild global index:'%.*s' failed when drop/truncate partitions");
+DEFINE_ORACLE_ERROR(OB_ERR_ATLER_TABLE_ILLEGAL_FK, -4714, -1, "HY000", "unique/primary keys in table referenced by enabled foreign keys", 02266, "unique/primary keys in table referenced by enabled foreign keys");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_RESOURCE_MANAGER_PRIVILEGE, -4715, -1, "HY000", "insufficient Resource Manager privileges", 56713, "insufficient Resource Manager privileges");
+DEFINE_ORACLE_ERROR(OB_ERR_RES_MGR_PLAN_NOT_EXIST, -4718, -1, "HY000", "specified resource manager plan does not exist in the data dictionary", 7452, "specified resource manager plan does not exist in the data dictionary");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -1320,6 +1323,7 @@ DEFINE_ERROR_EXT(OB_ERR_WINDOW_NAME_IS_NOT_DEFINE, -5929, -1, "HY000", "Window n
 DEFINE_ORACLE_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, -5930, -1, "HY000", "maximum open cursors exceeded", 1000, "maximum open cursors exceeded");
 DEFINE_ORACLE_ERROR(OB_ERR_ARG_INVALID, -5931, -1, "HY000", "argument is null, invalid, or out of range", 21560, "argument %.*s is null, invalid, or out of range");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_NAME_STRING, -5932, -1, "HY000", "unexpected name string", 21560, "unexpected name string '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_CTE_NEED_QUERY_BLOCKS, -5976, -1, "HY000", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s");
 DEFINE_ERROR_EXT(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION, -5936, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect value for function", "Incorrect %.*s value: '%.*s' for function %.*s");
 DEFINE_ERROR_EXT(OB_ERR_USER_EXCEED_RESOURCE, -5967, 1226, "42000", "User has exceeded the resource", "User '%.*s' has exceeded the '%s' resource (current value: %lu)");
 
@@ -1529,9 +1533,14 @@ DEFINE_ERROR(OB_BACKUP_MOUNT_FILE_NOT_VALID, -9051, -1, "HY000", "backup mount f
 DEFINE_ERROR(OB_BACKUP_CLEAN_INFO_NOT_MATCH, -9052, -1, "HY000", "backup clean info not match");
 DEFINE_ERROR(OB_CANCEL_DELETE_BACKUP_NOT_ALLOWED, -9053, -1, "HY000", "cancel delete backup do not allow");
 DEFINE_ERROR(OB_BACKUP_CLEAN_INFO_NOT_EXIST, -9054, -1, "HY000", "backup clean info not exists");
-DEFINE_ERROR_EXT(OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX, -9055, -1, "HY000", "rebuild global index failed when drop/truncate partitions", "rebuild global index:'%.*s' failed when drop/truncate partitions");
-DEFINE_ORACLE_ERROR(OB_ERR_ATLER_TABLE_ILLEGAL_FK, -9056, -1, "HY000", "unique/primary keys in table referenced by enabled foreign keys", 02266, "unique/primary keys in table referenced by enabled foreign keys");
-DEFINE_ERROR(OB_IO_LIMIT, -9061, -1, "HY000", "IO limit");
+DEFINE_ERROR_EXT(OB_CANNOT_SET_BACKUP_REGION, -9057, -1, "HY000", "can not set backup region", "can not set backup region, because %s");
+DEFINE_ERROR_EXT(OB_CANNOT_SET_BACKUP_ZONE, -9058, -1, "HY000", "can not set backup zone", "can not set backup zone, because %s");
+DEFINE_ERROR(OB_BACKUP_BACKUP_REACH_MAX_BACKUP_TIMES, -9059, -1, "HY000", "backup backup has reached max backup times");
+DEFINE_ERROR_DEP(OB_COS_ERROR, -9060, -1, "HY000", "COS error");
+DEFINE_ERROR_DEP(OB_IO_LIMIT, -9061, -1, "HY000", "IO limit");
+DEFINE_ERROR(OB_BACKUP_BACKUP_REACH_COPY_LIMIT, -9062, -1, "HY000", "reach backup backup copy limit");
+DEFINE_ERROR(OB_BACKUP_IO_PROHIBITED, -9063, -1, "HY000", "backup io is prohibited");
+DEFINE_ERROR(OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA, -9064, -1, "HY000", "the archive log and backup data are not continuous");
 
 ////////////////////////////////////////////////////////////////
 //error code for STORAGE3.0 -9100 ~

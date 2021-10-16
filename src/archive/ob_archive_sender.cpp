@@ -19,8 +19,12 @@
 #include "share/ob_debug_sync.h"
 #include "ob_archive_task_queue.h"
 #include "lib/thread/ob_thread_name.h"
+#include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_backup_info_mgr.h"
+#include "lib/utility/ob_tracepoint.h"  // EventTable
 
 namespace oceanbase {
+using namespace share;
 namespace archive {
 
 ObArchiveSender::ObArchiveSender()
@@ -29,8 +33,7 @@ ObArchiveSender::ObArchiveSender()
       pg_mgr_(NULL),
       archive_round_mgr_(NULL),
       archive_mgr_(NULL),
-      allocator_(NULL),
-      rwlock_()
+      allocator_(NULL)
 {}
 
 ObArchiveSender::~ObArchiveSender()
@@ -273,20 +276,19 @@ int ObArchiveSender::submit_send_task_(ObArchiveSendTask* task)
   return ret;
 }
 
-int ObArchiveSender::handle_task_list(ObArchiveTaskStatus* status)
+int ObArchiveSender::handle_task_list(void* data)
 {
   int ret = OB_SUCCESS;
   SendTaskArray task_array;
-  ObArchiveSendTaskStatus* task_status = static_cast<ObArchiveSendTaskStatus*>(status);
+  ObArchiveSendTaskStatus* task_status = static_cast<ObArchiveSendTaskStatus*>(data);
 
   if (OB_ISNULL(task_status)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(ERROR, "invalid argument", KR(ret), K(task_status));
   } else if (OB_FAIL(converge_send_task_(*task_status, task_array))) {
-    ARCHIVE_LOG(WARN, "converge_send_task_ fail", KR(ret), KPC(task_status));
+    ARCHIVE_LOG(WARN, "converge send task_ fail", KR(ret), KPC(task_status));
   } else if (0 == task_array.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(WARN, "task_array count is 0", KR(ret), KPC(task_status));
+    ARCHIVE_LOG(TRACE, "no task need send, just skip", KR(ret), KPC(task_status));
   } else if (OB_SUCC(handle(*task_status, task_array))) {
     // do nothing
   } else if (is_not_leader_error_(ret)) {
@@ -295,8 +297,8 @@ int ObArchiveSender::handle_task_list(ObArchiveTaskStatus* status)
     ARCHIVE_LOG(WARN, "handle task array fail", KR(ret), KPC(task_status));
   }
 
-  if (OB_SUCC(ret)) {
-    const int64_t task_num = task_array.count();
+  const int64_t task_num = task_array.count();
+  if (OB_SUCC(ret) && task_num > 0) {
     if (OB_FAIL(task_status->pop_front(task_num))) {
       ARCHIVE_LOG(ERROR, "pop_front fail", KR(ret), K(task_num), KPC(task_status));
     } else if (OB_FAIL(release_task_array_(task_array))) {
@@ -315,8 +317,10 @@ int ObArchiveSender::handle_task_list(ObArchiveTaskStatus* status)
   }
 
   // if memory or IO failed, sleep 100ms
-  if (is_io_error(ret) || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret) {
+  if (is_io_error(ret) || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret || OB_BACKUP_IO_PROHIBITED == ret) {
     usleep(100 * 1000L);
+  } else if (0 == task_num) {
+    usleep(1000);
   }
 
   return ret;
@@ -361,6 +365,107 @@ int ObArchiveSender::converge_send_task_(ObArchiveSendTaskStatus& task_status, S
         task = next_task;
         need_break = (++task_num) > task_limit || (total_task_size += task->get_data_len()) >= max_task_size;
       }
+    }
+  }
+
+  // only tasks statisfied converge strategy can be archived
+  if (OB_SUCC(ret) && task_num > 0) {
+    bool can_send = true;
+    const ObPGKey& pg_key = array[0]->pg_key_;
+    const int64_t incarnation = array[0]->incarnation_;
+    const int64_t round = array[0]->log_archive_round_;
+    const int64_t epoch = array[0]->epoch_id_;
+    if (OB_FAIL(
+            do_statisfy_converge_strategy_(pg_key, epoch, incarnation, round, task_num, total_task_size, can_send))) {
+      ARCHIVE_LOG(WARN, "exam converge strategy fail", KR(ret), K(pg_key), K(epoch), K(incarnation), K(round));
+    } else if (can_send) {
+      // do nothing
+    } else {
+      // not statisfy, reset task array
+      array.reset();
+    }
+  }
+
+  return ret;
+}
+
+// overall
+// 1. pg task status total count
+// 2. ALL HOLDS
+//
+// pg
+// 3. array tasks total size
+// 4. array tasks total count
+// 5. checkpoint ts delay
+int ObArchiveSender::do_statisfy_converge_strategy_(const ObPGKey& pg_key, const int64_t epoch,
+    const int64_t incarnation, const int64_t round, const int64_t total_count, const int64_t total_size, bool& can_send)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_delay_time = share::ObBackupInfoMgr::get_instance().get_log_archive_checkpoint_interval() / 2;
+  const int64_t capcity = GCONF.log_archive_batch_buffer_limit;
+  const int64_t hold = allocator_->get_send_task_capacity();
+  const int64_t pg_task_count = ATOMIC_LOAD(&total_task_count_);
+  can_send = false;
+  if (OB_UNLIKELY(0 == total_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "array count is zero", KR(ret), K(pg_key));
+  } else if (pg_task_count >= MAX_PG_TASK_STATUS_LIMIT) {
+    can_send = true;
+    ARCHIVE_LOG(TRACE, "can send due to pg count reach limit", K(pg_key));
+  } else if (hold >= capcity * 0.7) {
+    can_send = true;
+    ARCHIVE_LOG(TRACE, "can send due to memory hold reach limit", K(pg_key));
+  } else if (total_count > MIN_CONVERGE_TASK_COUNT_LIMIT) {
+    can_send = true;
+    ARCHIVE_LOG(TRACE, "can send due to send task count reach limit", K(pg_key));
+  } else if (total_size > MIN_CONVERGE_TASK_SIZE_LIMIT) {
+    can_send = true;
+    ARCHIVE_LOG(TRACE, "can send due to send task size reach limit", K(pg_key));
+  } else {
+    ObPGArchiveTaskGuard guard(pg_mgr_);
+    ObPGArchiveTask* pg_archive_task = NULL;
+    uint64_t log_id = OB_INVALID_ID;
+    int64_t log_submit_ts = OB_INVALID_TIMESTAMP;
+    int64_t checkpoint_ts = OB_INVALID_TIMESTAMP;
+    int64_t piece_id = -1;
+    int64_t piece_create_date = -1;
+    bool need_switch_piece_on_beginning = false;
+    bool is_first_record_finish = false;
+    if (OB_FAIL(pg_mgr_->get_pg_archive_task_guard_with_status(pg_key, guard))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // rewrite ret
+        ret = OB_SUCCESS;
+        can_send = true;
+        ARCHIVE_LOG(TRACE, "pg not exist, just skip it", K(pg_key));
+      } else {
+        ARCHIVE_LOG(WARN, "get pg archive task guard fail", KR(ret), K(pg_key));
+      }
+    } else if (OB_ISNULL(pg_archive_task = guard.get_pg_archive_task())) {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(ERROR, "get_pg_archive_task fail", KR(ret), K(pg_key), K(guard));
+    } else if (OB_FAIL(pg_archive_task->get_max_archived_info(epoch,
+                   incarnation,
+                   round,
+                   piece_id,
+                   piece_create_date,
+                   need_switch_piece_on_beginning,
+                   is_first_record_finish,
+                   log_id,
+                   log_submit_ts,
+                   checkpoint_ts))) {
+      ARCHIVE_LOG(WARN, "get max archived info fail", KR(ret), K(pg_key));
+    } else if (ObTimeUtility::current_time() - checkpoint_ts >= max_delay_time) {
+      can_send = true;
+      ARCHIVE_LOG(TRACE, "can send due to pg checkpoint ts delay reach limit", K(pg_key));
+    } else if (log_id == 0) {
+      // For new pg created after archive starts, its checkpoint ts is faked while max archived log id is zero.
+      // Other modules depend on archive will be waited util max archived log id is bigger than zero,
+      // so this task should be archived immediately.
+      can_send = true;
+      ARCHIVE_LOG(TRACE, "can send due to max archived log id is zero", K(pg_key));
+    } else if (!is_first_record_finish) {
+      can_send = true;
+      ARCHIVE_LOG(TRACE, "can send due to kickoff log not finish", K(pg_key));
     }
   }
 
@@ -431,11 +536,13 @@ int ObArchiveSender::handle(ObArchiveSendTaskStatus& task_status, SendTaskArray&
     const int64_t archive_round = task->log_archive_round_;
     ObPGArchiveTaskGuard guard(pg_mgr_);
     ObPGArchiveTask* pg_archive_task = NULL;
+    int64_t pg_piece_id = OB_BACKUP_INVALID_PIECE_ID;
+    int64_t pg_piece_create_date = OB_INVALID_TIMESTAMP;
+    bool need_switch_piece_on_beginning = false;
+    bool is_first_record_finish = false;
     uint64_t max_archived_log_id = OB_INVALID_ID;
     int64_t max_archived_log_ts = OB_INVALID_TIMESTAMP;
     int64_t unused_archived_checkpoint_ts = OB_INVALID_TIMESTAMP;
-    int64_t unused_clog_epoch_id = OB_INVALID_TIMESTAMP;
-    int64_t unused_accum_checksum = 0;
 
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
       ARCHIVE_LOG(INFO, "ObArchiveSender handle task");
@@ -455,15 +562,26 @@ int ObArchiveSender::handle(ObArchiveSendTaskStatus& task_status, SendTaskArray&
     } else if (OB_FAIL(pg_archive_task->get_max_archived_info(epoch,
                    incarnation,
                    archive_round,
+                   pg_piece_id,
+                   pg_piece_create_date,
+                   need_switch_piece_on_beginning,
+                   is_first_record_finish,
                    max_archived_log_id,
                    max_archived_log_ts,
-                   unused_archived_checkpoint_ts,
-                   unused_clog_epoch_id,
-                   unused_accum_checksum))) {
-      ARCHIVE_LOG(WARN, "failed to get_max_archived_info", KR(ret), KPC(pg_archive_task));
+                   unused_archived_checkpoint_ts))) {
+      ARCHIVE_LOG(WARN, "faild to get_max_archived_info", KR(ret), KPC(pg_archive_task));
     } else if (OB_FAIL(check_can_send_task_(
                    epoch, incarnation, archive_round, max_archived_log_id, max_archived_log_ts, array))) {
       ARCHIVE_LOG(WARN, "check_can_send_task_ can't send this task", KR(ret), KPC(pg_archive_task));
+    } else if (OB_FAIL(check_and_switch_piece_(epoch,
+                   incarnation,
+                   archive_round,
+                   pg_piece_id,
+                   pg_piece_create_date,
+                   need_switch_piece_on_beginning,
+                   is_first_record_finish,
+                   *pg_archive_task))) {
+      ARCHIVE_LOG(WARN, "failed to check_and_switch_piece_", KR(ret), KPC(pg_archive_task), KPC(task));
     } else if (OB_FAIL(archive_log_(pg_key, *pg_archive_task, array))) {
       ARCHIVE_LOG(WARN, "archive_log_ fail", KR(ret), KPC(pg_archive_task));
     } else if (OB_FAIL(archive_log_callback_(*pg_archive_task, array))) {
@@ -480,7 +598,138 @@ int ObArchiveSender::handle(ObArchiveSendTaskStatus& task_status, SendTaskArray&
   return ret;
 }
 
-// only filter stale or unordered tasks
+int ObArchiveSender::check_need_switch_piece_(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+    const bool pg_task_need_switch, const int64_t pg_piece_id, const int64_t pg_piece_create_date, bool& is_oss,
+    bool& need_switch_piece, int64_t& switch_to_piece_id, int64_t& switch_to_piece_create_date)
+{
+  int ret = OB_SUCCESS;
+  int64_t server_incarnation = 0;
+  int64_t server_round = 0;
+  int64_t server_piece_id = OB_BACKUP_INVALID_PIECE_ID;
+  int64_t server_piece_create_date = OB_INVALID_TIMESTAMP;
+  bool has_encount_error = false;
+  ObArchiveRoundMgr::LogArchiveStatus log_archive_status;
+  (void)archive_mgr_->get_archive_round_mgr().get_archive_round_info(server_incarnation,
+      server_round,
+      server_piece_id,
+      server_piece_create_date,
+      is_oss,
+      log_archive_status,
+      has_encount_error);
+  if (OB_UNLIKELY(server_incarnation != incarnation || server_round != round)) {
+    ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
+    ARCHIVE_LOG(WARN,
+        "incarnation or round has changed",
+        K(pg_key),
+        K(server_incarnation),
+        K(server_round),
+        K(round),
+        K(incarnation),
+        K(ret));
+  } else if (pg_task_need_switch) {
+    need_switch_piece = true;
+    switch_to_piece_id = pg_piece_id;
+    switch_to_piece_create_date = pg_piece_create_date;
+  } else if (server_piece_id == pg_piece_id) {
+    need_switch_piece = false;
+  } else if (server_piece_id == pg_piece_id + 1) {
+    need_switch_piece = true;
+    switch_to_piece_id = server_piece_id;
+    switch_to_piece_create_date = server_piece_create_date;
+  } else if (pg_piece_id == server_piece_id + 1) {
+    // server_piece_id is not new enough in case of concurrent happen of switch_piece and
+    // switch_leader
+    need_switch_piece = false;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN,
+        "invalid server_piece_id",
+        K(pg_key),
+        K(server_piece_id),
+        K(pg_piece_id),
+        K(round),
+        K(incarnation),
+        K(ret));
+  }
+  return ret;
+}
+
+int ObArchiveSender::check_and_switch_piece_(const int64_t epoch_id, const int64_t incarnation, const int64_t round,
+    const int64_t pg_piece_id, const int64_t pg_piece_create_date, const bool pg_need_switch_piece,
+    const bool is_first_record_finish, ObPGArchiveTask& pg_archive_task)
+{
+  int ret = OB_SUCCESS;
+  const ObPGKey& pg_key = pg_archive_task.get_pg_key();
+  bool is_oss = false;
+  bool need_switch_piece = false;
+  int64_t switch_to_piece_id = OB_BACKUP_INVALID_PIECE_ID;
+  int64_t switch_to_piece_create_date = OB_INVALID_TIMESTAMP;
+  if (OB_BACKUP_NO_SWITCH_PIECE_ID == pg_piece_id) {
+    // in no_switch_piece mode
+  } else if (OB_FAIL(check_need_switch_piece_(pg_key,
+                 incarnation,
+                 round,
+                 pg_need_switch_piece,
+                 pg_piece_id,
+                 pg_piece_create_date,
+                 is_oss,
+                 need_switch_piece,
+                 switch_to_piece_id,
+                 switch_to_piece_create_date))) {
+    ARCHIVE_LOG(WARN,
+        "failed to check_need_switch_piece_",
+        K(pg_key),
+        K(incarnation),
+        K(round),
+        K(pg_piece_id),
+        K(pg_archive_task));
+  } else if (need_switch_piece) {
+    if (!is_oss && OB_FAIL(check_and_make_dir_for_switch_piece_(
+                       pg_key, incarnation, round, switch_to_piece_id, switch_to_piece_create_date))) {
+      ARCHIVE_LOG(WARN,
+          "failed to check_and_make_dir_for_switch_piece_",
+          K(pg_key),
+          K(switch_to_piece_id),
+          K(switch_to_piece_create_date),
+          K(round),
+          K(incarnation),
+          K(ret));
+    } else if (OB_FAIL(push_archive_key_file_(pg_archive_task,
+                   epoch_id,
+                   incarnation,
+                   round,
+                   switch_to_piece_id,
+                   switch_to_piece_create_date,
+                   !is_first_record_finish))) {
+      ARCHIVE_LOG(WARN,
+          "failed to check_and_make_dir_for_switch_piece_",
+          K(pg_key),
+          K(switch_to_piece_id),
+          K(switch_to_piece_create_date),
+          K(round),
+          K(incarnation),
+          K(ret));
+    } else if (OB_FAIL(pg_archive_task.switch_piece(
+                   epoch_id, incarnation, round, switch_to_piece_id, switch_to_piece_create_date))) {
+      ARCHIVE_LOG(WARN,
+          "failed to update_meta_after_switch_piece",
+          K(pg_archive_task),
+          K(switch_to_piece_id),
+          K(switch_to_piece_create_date),
+          K(round),
+          K(incarnation),
+          K(ret));
+
+    } else {
+      ARCHIVE_LOG(
+          INFO, "finished_switch_piece", K(pg_archive_task), K(switch_to_piece_id), K(switch_to_piece_create_date));
+    }
+  } else { /*do nothing*/
+  }
+
+  return ret;
+}
+
 int ObArchiveSender::check_can_send_task_(const int64_t epoch, const int64_t incarnation, const int64_t round,
     const uint64_t max_archived_log_id, const int64_t max_archived_log_ts, SendTaskArray& array)
 {
@@ -488,7 +737,7 @@ int ObArchiveSender::check_can_send_task_(const int64_t epoch, const int64_t inc
   int64_t pre_log_id = max_archived_log_id;
   int64_t pre_log_ts = max_archived_log_ts;
 
-  for (int64_t i = 0; i < array.count(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); i++) {
     ObArchiveSendTask* task = NULL;
     if (OB_ISNULL(task = array[i])) {
       ret = OB_ERR_UNEXPECTED;
@@ -620,8 +869,10 @@ int ObArchiveSender::fill_and_build_block_meta_(const int64_t epoch, const int64
   uint64_t unused_max_archived_log_id = OB_INVALID_ID;
   int64_t last_archived_log_submit_ts = OB_INVALID_TIMESTAMP;
   int64_t last_archived_checkpoint_ts = OB_INVALID_TIMESTAMP;
-  int64_t unused_clog_epoch_id = OB_INVALID_TIMESTAMP;
-  int64_t unused_accum_checksum = 0;
+  bool unused_need_switch_piece = false;
+  bool unused_is_first_record_finish = false;
+  int64_t unused_piece_id = OB_BACKUP_INVALID_PIECE_ID;
+  int64_t unused_piece_create_date = OB_INVALID_TIMESTAMP;
   uint64_t min_log_id_in_file = OB_INVALID_ID;
   int64_t min_log_ts_in_file = OB_INVALID_TIMESTAMP;
   bool min_log_exist_in_file = false;
@@ -629,11 +880,13 @@ int ObArchiveSender::fill_and_build_block_meta_(const int64_t epoch, const int64
   if (OB_FAIL(pg_archive_task.get_max_archived_info(epoch,
           incarnation,
           round,
+          unused_piece_id,
+          unused_piece_create_date,
+          unused_need_switch_piece,
+          unused_is_first_record_finish,
           unused_max_archived_log_id,
           last_archived_log_submit_ts,
-          last_archived_checkpoint_ts,
-          unused_clog_epoch_id,
-          unused_accum_checksum))) {
+          last_archived_checkpoint_ts))) {
     ARCHIVE_LOG(WARN, "get_max_archived_info fail", KR(ret), K(pg_archive_task));
   } else if (OB_FAIL(pg_archive_task.get_current_data_file_min_log_info(
                  epoch, incarnation, round, min_log_id_in_file, min_log_ts_in_file, min_log_exist_in_file))) {
@@ -824,7 +1077,7 @@ int ObArchiveSender::do_archive_log_(ObPGArchiveTask& pg_archive_task, const int
   bool compatible = false;
 
   // 0. touch archive_key if not data archived in this pg
-  if (OB_FAIL(try_touch_archive_key_(incarnation, round, pg_archive_task))) {
+  if (OB_FAIL(try_touch_archive_key_(epoch, incarnation, round, pg_archive_task))) {
     ARCHIVE_LOG(WARN, "touch archive_key fail", KR(ret), K(incarnation), K(round), K(pg_archive_task));
   }
 
@@ -847,7 +1100,7 @@ int ObArchiveSender::do_archive_log_(ObPGArchiveTask& pg_archive_task, const int
 
   // 3. switch data file
   if (OB_SUCC(ret) && need_switch_file) {
-    if (OB_FAIL(switch_file_(pg_archive_task, epoch, incarnation, round, LOG_ARCHIVE_FILE_TYPE_DATA))) {
+    if (OB_FAIL(pg_archive_task.switch_archive_file(epoch, incarnation, round, LOG_ARCHIVE_FILE_TYPE_DATA))) {
       ARCHIVE_LOG(WARN, "switch data file fail", KR(ret), K(pg_archive_task));
     }
   }
@@ -885,6 +1138,13 @@ int ObArchiveSender::do_archive_log_(ObPGArchiveTask& pg_archive_task, const int
     }
   }
 
+  // 7. check if leader valid when first write in data file
+  if (OB_SUCC(ret) && 0 == file_offset) {
+    if (OB_FAIL(check_leader_valid(pg_archive_task, epoch, incarnation, round))) {
+      ARCHIVE_LOG(WARN, "not leader now", KR(ret), K(pg_archive_task));
+    }
+  }
+
   bool has_inject_fault = false;
 #ifdef ERRSIM
   if (OB_SUCC(ret) && file_offset > 0) {
@@ -893,7 +1153,7 @@ int ObArchiveSender::do_archive_log_(ObPGArchiveTask& pg_archive_task, const int
       // inject error
       has_inject_fault = true;
       const int64_t real_buf_size = buf_size - 50;
-      ObString storage_info(archive_round_mgr_->storage_info_);
+      ObString storage_info(archive_round_mgr_->get_storage_info());
       ObArchiveIO archive_io(storage_info);
       if (OB_FAIL(archive_io.push_log(
               file_path, real_buf_size, buffer, need_switch_file, compatible, is_data_file, epoch))) {
@@ -914,55 +1174,54 @@ int ObArchiveSender::do_archive_log_(ObPGArchiveTask& pg_archive_task, const int
       }
     }
   }
-}
 #endif
 
-// 7. write data file
-if (OB_SUCC(ret) && !has_inject_fault) {
-  ObString storage_info(archive_round_mgr_->storage_info_);
-  ObArchiveIO archive_io(storage_info);
-  if (OB_FAIL(archive_io.push_log(file_path, buf_size, buffer, need_switch_file, compatible, is_data_file, epoch))) {
-    ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
+  // 8. push log
+  if (OB_SUCC(ret) && !has_inject_fault) {
+    ObString storage_info(archive_round_mgr_->get_storage_info());
+    ObArchiveIO archive_io(storage_info);
+    if (OB_FAIL(archive_io.push_log(file_path, buf_size, buffer, need_switch_file, compatible, is_data_file, epoch))) {
+      ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
 
-    // Do not switch file if returned error is not IO error.
-    if (is_io_error(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS !=
-          (tmp_ret = pg_archive_task.set_file_force_switch(epoch, incarnation, round, LOG_ARCHIVE_FILE_TYPE_DATA))) {
-        ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
-        ret = tmp_ret;
+      // Do not switch file if returned error is not IO error.
+      if (is_io_error(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS !=
+            (tmp_ret = pg_archive_task.set_file_force_switch(epoch, incarnation, round, LOG_ARCHIVE_FILE_TYPE_DATA))) {
+          ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
+          ret = tmp_ret;
+        }
       }
     }
   }
-}
 
-if (NULL != buffer) {
-  ob_archive_free(buffer);
-}
-
-// 8. record min_log/offset
-if (OB_SUCC(ret)) {
-  ObArchiveSendTask* task = array[0];
-  uint64_t min_log_id = task->start_log_id_;
-  int64_t min_log_ts = task->start_log_ts_;
-  if (OB_ARCHIVE_TASK_TYPE_KICKOFF == task->task_type_) {
-    min_log_id = task->start_log_id_ - 1;
-  } else if (OB_ARCHIVE_TASK_TYPE_CHECKPOINT == task->task_type_) {
-    // need send only if non-checkpoint log is included
-    min_log_id = task->start_log_id_ + 1;
+  if (NULL != buffer) {
+    ob_archive_free(buffer);
   }
-  if (OB_FAIL(update_data_file_info_(epoch, incarnation, round, min_log_id, min_log_ts, pg_archive_task, buf_size))) {
-    ARCHIVE_LOG(WARN, "update_data_file_info_ fail", KR(ret), K(pg_archive_task));
+
+  // 9. record min_log/offset
+  if (OB_SUCC(ret)) {
+    ObArchiveSendTask* task = array[0];
+    uint64_t min_log_id = task->start_log_id_;
+    int64_t min_log_ts = task->start_log_ts_;
+    if (OB_ARCHIVE_TASK_TYPE_KICKOFF == task->task_type_) {
+      min_log_id = task->start_log_id_ - 1;
+    } else if (OB_ARCHIVE_TASK_TYPE_CHECKPOINT == task->task_type_) {
+      // need send only if non-checkpoint log is included
+      min_log_id = task->start_log_id_ + 1;
+    }
+    if (OB_FAIL(update_data_file_info_(epoch, incarnation, round, min_log_id, min_log_ts, pg_archive_task, buf_size))) {
+      ARCHIVE_LOG(WARN, "update_data_file_info_ fail", KR(ret), K(pg_archive_task));
+    }
   }
-}
 
-// 9. statistic
-if (OB_SUCC(ret)) {
-  const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-  statistic(array, cost_ts);
-}
+  // 10. statistic
+  if (OB_SUCC(ret)) {
+    const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+    statistic(array, cost_ts);
+  }
 
-return ret;
+  return ret;
 }
 
 int ObArchiveSender::record_index_info(
@@ -1002,7 +1261,7 @@ int ObArchiveSender::record_index_info(
         K(index_file_info));
   }
 
-  // 5. update index file offset
+  // 6. update index file offset
   if (OB_SUCC(ret)) {
     if (OB_FAIL(pg_archive_task.update_pg_archive_file_offset(
             epoch, incarnation, round, buffer_len, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
@@ -1052,7 +1311,7 @@ int ObArchiveSender::record_index_info_(ObPGArchiveTask& pg_archive_task, const 
 
   // 2. switch index file
   if (OB_SUCC(ret) && need_switch_file) {
-    if (OB_FAIL(switch_file_(pg_archive_task, epoch, incarnation, round, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
+    if (OB_FAIL(pg_archive_task.switch_archive_file(epoch, incarnation, round, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
       ARCHIVE_LOG(WARN, "switch index file fail", KR(ret), K(pg_archive_task));
     }
   }
@@ -1071,6 +1330,13 @@ int ObArchiveSender::record_index_info_(ObPGArchiveTask& pg_archive_task, const 
     }
   }
 
+  // 4. check if leader valid when write index record
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_leader_valid(pg_archive_task, epoch, incarnation, round))) {
+      ARCHIVE_LOG(WARN, "not leader now", KR(ret), K(pg_archive_task));
+    }
+  }
+
   bool has_inject_fault = false;
 #ifdef ERRSIM
   if (OB_SUCC(ret) && file_offset > 0) {
@@ -1079,7 +1345,7 @@ int ObArchiveSender::record_index_info_(ObPGArchiveTask& pg_archive_task, const 
       // error injection
       has_inject_fault = true;
       const int64_t real_buffer_len = buffer_len - 5;
-      ObString storage_info(archive_round_mgr_->storage_info_);
+      ObString storage_info(archive_round_mgr_->get_storage_info());
       ObArchiveIO archive_io(storage_info);
       if (OB_FAIL(archive_io.push_log(
               file_path, real_buffer_len, buffer, need_switch_file, compatible, is_data_file, epoch))) {
@@ -1100,49 +1366,45 @@ int ObArchiveSender::record_index_info_(ObPGArchiveTask& pg_archive_task, const 
       }
     }
   }
-}
 #endif
-// 4. write index file
-if (OB_SUCC(ret) && !has_inject_fault) {
-  ObString storage_info(archive_round_mgr_->storage_info_);
-  ObArchiveIO archive_io(storage_info);
-  if (OB_FAIL(archive_io.push_log(file_path, buffer_len, buffer, need_switch_file, compatible, is_data_file, epoch))) {
-    ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
 
-    if (is_io_error(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS !=
-          (tmp_ret = pg_archive_task.set_file_force_switch(epoch, incarnation_, round, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
-        ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
-        ret = tmp_ret;
+  // 5. write index file
+  if (OB_SUCC(ret) && !has_inject_fault) {
+    ObString storage_info(archive_round_mgr_->get_storage_info());
+    ObArchiveIO archive_io(storage_info);
+    if (OB_FAIL(
+            archive_io.push_log(file_path, buffer_len, buffer, need_switch_file, compatible, is_data_file, epoch))) {
+      ARCHIVE_LOG(WARN, "push_log fail", KR(ret), K(pg_archive_task));
+
+      if (is_io_error(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = pg_archive_task.set_file_force_switch(
+                               epoch, incarnation_, round, LOG_ARCHIVE_FILE_TYPE_INDEX))) {
+          ARCHIVE_LOG(WARN, "set_file_force_switch fail", KR(tmp_ret), K(pg_archive_task));
+          ret = tmp_ret;
+        }
       }
     }
   }
+
+  return ret;
 }
 
-return ret;
-}
-
-// check leader before switch file
-int ObArchiveSender::switch_file_(ObPGArchiveTask& pg_archive_task, const int64_t epoch, const int64_t incarnation,
-    const int64_t round, const LogArchiveFileType file_type)
+// check if leader is valid
+int ObArchiveSender::check_leader_valid(
+    ObPGArchiveTask& pg_archive_task, const int64_t epoch, const int64_t incarnation, const int64_t round)
 {
   int ret = OB_SUCCESS;
   bool is_leader = true;
-  const ObPGKey& pg_key = pg_archive_task.get_pg_key();
-
-  if (OB_FAIL(check_is_leader(pg_key, epoch, is_leader))) {
-    is_leader = false;
-    ARCHIVE_LOG(WARN, "check_is_leader fail", KR(ret), K(pg_archive_task), K(file_type));
+  if (OB_FAIL(check_is_leader(pg_archive_task.get_pg_key(), epoch, is_leader))) {
     ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
-  } else if (OB_LIKELY(is_leader)) {
-    if (OB_FAIL(pg_archive_task.switch_archive_file(epoch, incarnation, round, file_type))) {
-      ARCHIVE_LOG(WARN, "switch index file fail", KR(ret), K(pg_archive_task), K(file_type));
-    }
-  } else if (OB_UNLIKELY(!is_leader)) {
     // mark delete pg_archive_task
     pg_archive_task.mark_pg_archive_task_del(epoch, incarnation, round);
+    ARCHIVE_LOG(WARN, "check_is_leader fail", KR(ret), K(pg_archive_task));
+  } else if (!is_leader) {
     ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
+    pg_archive_task.mark_pg_archive_task_del(epoch, incarnation, round);
+    ARCHIVE_LOG(INFO, "pg is not leader", KR(ret), K(pg_archive_task));
   }
 
   return ret;
@@ -1255,7 +1517,7 @@ int ObArchiveSender::handle_archive_error_(const ObPGKey& pg_key, const int64_t 
         K(incarnation),
         K(round));
   } else if ((is_not_leader_error_(ret_code) || is_io_error(ret_code) || OB_ALLOCATE_MEMORY_FAILED == ret_code ||
-                 OB_IO_LIMIT == ret_code) &&
+                 OB_IO_LIMIT == ret_code || OB_BACKUP_IO_PROHIBITED == ret_code) &&
              !io_error_trigger) {
     // skip IO error and not leader error code
     ARCHIVE_LOG(WARN,
@@ -1344,74 +1606,127 @@ void ObArchiveSender::statistic(SendTaskArray& array, const int64_t cost_ts)
   }
 }
 
-int ObArchiveSender::build_archive_key_prefix_(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round)
-{
-  int ret = OB_SUCCESS;
-  ObArchivePathUtil util;
-  const uint64_t tenant_id = pg_key.get_tenant_id();
-  char path[OB_MAX_ARCHIVE_PATH_LENGTH] = {'0'};
-  char info[OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH] = {'0'};
-
-  if (OB_FAIL(util.build_archive_key_prefix(
-          incarnation, round, tenant_id, OB_MAX_ARCHIVE_PATH_LENGTH, path, OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH, info))) {
-    ARCHIVE_LOG(WARN, "build_archive_key_prefix fail", KR(ret), K(pg_key), K(incarnation), K(round));
-  } else {
-    ObString uri(path);
-    ObString storage_info(info);
-    ObStorageUtil storage_util(false /*need retry*/);
-    if (OB_FAIL(storage_util.mkdir(uri, storage_info))) {
-      ARCHIVE_LOG(WARN, "make archive_key dir fail", KR(ret), K(pg_key), K(uri), K(storage_info));
-    }
-  }
-
-  return ret;
-}
-
-int ObArchiveSender::touch_archive_key_file_(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round)
+int ObArchiveSender::push_archive_key_file_(const ObPGArchiveTask& pg_archive_task, const int64_t epoch,
+    const int64_t incarnation, const int64_t round, const int64_t piece_id, const int64_t piece_create_date,
+    const bool is_first_piece)
 {
   int ret = OB_SUCCESS;
   ObArchivePathUtil util;
   char path[OB_MAX_ARCHIVE_PATH_LENGTH] = {'0'};
   char info[OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH] = {'0'};
 
-  if (OB_FAIL(util.build_archive_key_path(
-          pg_key, incarnation, round, OB_MAX_ARCHIVE_PATH_LENGTH, path, OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH, info))) {
-    ARCHIVE_LOG(WARN, "build_archive_key_path fail", KR(ret), K(pg_key), K(incarnation), K(round));
+  const ObPGKey& pg_key = pg_archive_task.get_pg_key();
+  ObArchiveKeyContent archive_key_content;
+  // 1.generate_archive_key_content
+  char* buffer = NULL;
+  const int64_t buffer_len = archive_key_content.get_serialize_size();
+  int64_t pos = 0;
+  if (OB_ISNULL(buffer = static_cast<char*>(ob_archive_malloc(buffer_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    ARCHIVE_LOG(WARN, "allocate memory fail", KR(ret), K(pg_archive_task));
+  } else if (OB_FAIL(pg_archive_task.build_archive_key_content(
+                 epoch, incarnation, round, is_first_piece, archive_key_content))) {
+    ARCHIVE_LOG(WARN,
+        "failed to build_data_file_index_record",
+        KR(ret),
+        K(pg_archive_task),
+        K(epoch),
+        K(incarnation),
+        K(piece_id),
+        K(round),
+        K(is_first_piece));
+  } else if (OB_FAIL(archive_key_content.serialize(buffer, buffer_len, pos))) {
+    ARCHIVE_LOG(WARN, "failed to serialize archive_key_content", KR(ret), K(pg_archive_task), K(archive_key_content));
+  } else if (OB_FAIL(util.build_archive_key_path(pg_key,
+                 incarnation,
+                 round,
+                 piece_id,
+                 piece_create_date,
+                 OB_MAX_ARCHIVE_PATH_LENGTH,
+                 path,
+                 OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH,
+                 info))) {
+    ARCHIVE_LOG(WARN,
+        "build_archive_key_path fail",
+        KR(ret),
+        K(pg_key),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(is_first_piece));
   } else {
     ObString uri(path);
     ObString storage_info(info);
-    ObArchiveFileUtils file_utils;
-    if (OB_FAIL(file_utils.create_file(uri, storage_info))) {
-      ARCHIVE_LOG(WARN, "create_file fail", KR(ret), K(uri), K(storage_info));
+    ObStorageUtil storage_util(false /* need retry*/);
+    if (OB_FAIL(storage_util.write_single_file(uri, storage_info, buffer, pos))) {
+      ARCHIVE_LOG(WARN,
+          "write_single_file failed",
+          KR(ret),
+          K(pg_key),
+          K(uri),
+          K(storage_info),
+          K(piece_id),
+          K(is_first_piece));
     }
+  }
+
+  if (NULL != buffer) {
+    ob_archive_free(buffer);
   }
 
   return ret;
 }
 
-int ObArchiveSender::try_touch_archive_key_(const int64_t incarnation, const int64_t round, ObPGArchiveTask& pg_task)
+int ObArchiveSender::try_touch_archive_key_(
+    const int64_t epoch_id, const int64_t incarnation, const int64_t round, ObPGArchiveTask& pg_task)
 {
   int ret = OB_SUCCESS;
   bool need_touch = false;
   const ObPGKey& pg_key = pg_task.get_pg_key();
+  int64_t piece_id = OB_BACKUP_INVALID_PIECE_ID;
+  int64_t piece_create_date = OB_INVALID_TIMESTAMP;
 
   if (OB_FAIL(pg_task.need_record_archive_key(incarnation, round, need_touch))) {
-    ARCHIVE_LOG(WARN, "get archive_key flag fail", KR(ret), K(incarnation), K(round), K(pg_key));
+    ARCHIVE_LOG(WARN,
+        "failed to check if need record archive_key_file ",
+        K(ret),
+        K(pg_key),
+        K(epoch_id),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
   } else if (!need_touch) {
     // skip it
-  } else if (OB_FAIL(build_archive_key_prefix_(pg_key, incarnation, round))) {
-    ARCHIVE_LOG(WARN, "build_archive_key_prefix fail", KR(ret), K(incarnation), K(round), K(pg_key));
-  } else if (OB_FAIL(touch_archive_key_file_(pg_key, incarnation, round))) {
-    ARCHIVE_LOG(WARN, "touch_archive_key_file fail", KR(ret));
+  } else if (OB_FAIL(pg_task.get_piece_info(epoch_id, incarnation, round, piece_id, piece_create_date))) {
+    ARCHIVE_LOG(WARN, "failed to get_piece_info", K(ret), K(pg_key), K(epoch_id), K(incarnation), K(round));
+  } else if (OB_FAIL(push_archive_key_file_(
+                 pg_task, epoch_id, incarnation, round, piece_id, piece_create_date, true /*is_first_piece*/))) {
+    ARCHIVE_LOG(WARN,
+        "failed to push_archive_key_file",
+        K(ret),
+        K(pg_key),
+        K(epoch_id),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
   } else {
-    ARCHIVE_LOG(DEBUG, "try_touch_archive_key_ succ", KR(ret), K(incarnation), K(round), K(pg_key));
+    ARCHIVE_LOG(DEBUG,
+        "success to touch archive_key file",
+        K(pg_key),
+        K(epoch_id),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
   }
 
   return ret;
 }
 
 int ObArchiveSender::save_server_start_archive_ts(
-    const int64_t incarnation, const int64_t round, const int64_t start_ts)
+    const int64_t incarnation, const int64_t round, const bool is_oss, const int64_t start_ts)
 {
   int ret = OB_SUCCESS;
   char* buffer = NULL;
@@ -1430,7 +1745,7 @@ int ObArchiveSender::save_server_start_archive_ts(
   } else if (OB_ISNULL(buffer = static_cast<char*>(ob_archive_malloc(buffer_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     ARCHIVE_LOG(WARN, "allocate memory fail", KR(ret), K(start_ts), K(buffer_len));
-  } else if (OB_FAIL(check_and_mk_server_start_ts_dir_(incarnation, round))) {
+  } else if (OB_FAIL(check_and_mk_server_start_ts_dir_(incarnation, round, is_oss))) {
     ARCHIVE_LOG(WARN, "check_and_mk_server_start_ts_dir_ fail", KR(ret));
   } else if (OB_FAIL(util.build_server_start_archive_path(
                  incarnation, round, OB_MAX_ARCHIVE_PATH_LENGTH, path, OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH, info))) {
@@ -1459,23 +1774,24 @@ int ObArchiveSender::save_server_start_archive_ts(
   return ret;
 }
 
-int ObArchiveSender::check_and_mk_server_start_ts_dir_(const int64_t incarnation, const int64_t round)
+int ObArchiveSender::check_and_mk_server_start_ts_dir_(
+    const int64_t incarnation, const int64_t round, const bool is_oss)
 {
   int ret = OB_SUCCESS;
   char prefix[OB_MAX_ARCHIVE_PATH_LENGTH] = {'0'};
   char info[OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH] = {'0'};
   ObArchivePathUtil path_util;
 
-  if (OB_FAIL(path_util.build_server_start_archive_prefix(
-          incarnation, round, OB_MAX_ARCHIVE_PATH_LENGTH, prefix, OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH, info))) {
+  if (is_oss) {
+    // skip
+  } else if (OB_FAIL(path_util.build_server_start_archive_prefix(
+                 incarnation, round, OB_MAX_ARCHIVE_PATH_LENGTH, prefix, OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH, info))) {
     ARCHIVE_LOG(WARN, "build_server_start_archive_prefix fail", KR(ret), K(incarnation), K(round));
   } else {
     ObString uri(prefix);
     ObString storage_info(info);
     ObStorageUtil util(false /*need retry*/);
-    if (uri.prefix_match(OB_OSS_PREFIX)) {
-      // skip
-    } else if (OB_FAIL(util.mkdir(uri, storage_info))) {
+    if (OB_FAIL(util.mkdir(uri, storage_info))) {
       ARCHIVE_LOG(WARN, "mkdir fail", K(ret), K(uri), K(storage_info));
     }
   }
@@ -1521,6 +1837,26 @@ int ObArchiveSender::check_server_start_ts_exist(
     }
   }
 
+  return ret;
+}
+
+int ObArchiveSender::check_and_make_dir_for_switch_piece_(const ObPGKey& pg_key, const int64_t incarnation,
+    const int64_t archive_round, const int64_t piece_id, const int64_t piece_create_date)
+{
+  int ret = OB_SUCCESS;
+  ObString storage_info(archive_round_mgr_->get_storage_info());
+  ObArchiveIO archive_io(storage_info);
+  if (OB_FAIL(
+          archive_io.check_and_make_dir_for_archive(pg_key, incarnation, archive_round, piece_id, piece_create_date))) {
+    ARCHIVE_LOG(WARN,
+        "failed to check_and_make_dir_for_archive",
+        K(ret),
+        K(pg_key),
+        K(incarnation),
+        K(archive_round),
+        K(piece_id),
+        K(piece_create_date));
+  }
   return ret;
 }
 

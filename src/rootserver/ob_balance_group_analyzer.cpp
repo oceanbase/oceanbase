@@ -87,7 +87,7 @@ int ShardGroupAnalyzer::analysis(uint64_t tenant_id)
 // 1. Partition function does not require equality
 // 2. The number of partitions is not required to be equal
 //    (this is to ensure that the ShardGroup will not be broken up when adding partitions)
-int ShardGroupAnalyzer::build_prefix_key(const ObTableSchema& table, TablePrefixKey& prefix_key)
+int ShardGroupAnalyzer::build_prefix_key(const ObSimpleTableSchemaV2& table, TablePrefixKey& prefix_key)
 {
   int ret = OB_SUCCESS;
   const ObString& table_name = table.get_table_name_str();
@@ -100,7 +100,7 @@ int ShardGroupAnalyzer::build_prefix_key(const ObTableSchema& table, TablePrefix
 int ShardGroupAnalyzer::build_prefix_map(uint64_t tenant_id, ShardGroupPrefixMap& prefix_map)
 {
   int ret = OB_SUCCESS;
-  ObArray<const ObTableSchema*> table_schemas;
+  ObArray<const ObSimpleTableSchemaV2*> table_schemas;
   // In the case of shardgroup, just process standlone table, not process tablegroup
   if (OB_FAIL(StatFinderUtil::get_need_balance_table_schemas_in_tenant(schema_guard_, tenant_id, table_schemas))) {
     LOG_WARN("fail get schemas in tenant", K(tenant_id), K(ret));
@@ -109,7 +109,7 @@ int ShardGroupAnalyzer::build_prefix_map(uint64_t tenant_id, ShardGroupPrefixMap
   for (int64_t i = 0; i < table_schemas.count() && OB_SUCC(ret); ++i) {
     ObIArray<TablePrefixValue>* prefix_info_array = NULL;
     TablePrefixKey prefix_key;
-    const ObTableSchema& table = *table_schemas.at(i);
+    const ObSimpleTableSchemaV2& table = *table_schemas.at(i);
     const ObString& table_name = table.get_table_name_str();
     if (OB_FAIL(build_prefix_key(table, prefix_key))) {
       LOG_WARN("fail extract prefix", K(ret), K(table_name), K(ret));
@@ -415,7 +415,7 @@ int ShardGroupAnalyzer::add_to_shardgroup(ObIArray<TablePrefixValue>& cur_shard,
   return ret;
 }
 
-int ShardGroupAnalyzer::next(ObIArray<const ObTableSchema*>& schemas)
+int ShardGroupAnalyzer::next(ObIArray<const ObSimpleTableSchemaV2*>& schemas)
 {
   int ret = OB_SUCCESS;
   if (cur_shard_group_idx_ >= shard_groups_.count()) {
@@ -586,7 +586,7 @@ int TableGroupAnalyzer::next(const share::schema::ObPartitionSchema*& partition_
 int PartitionTableAnalyzer::analysis(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  common::ObArray<const share::schema::ObTableSchema*> my_table_schemas;
+  common::ObArray<const share::schema::ObSimpleTableSchemaV2*> my_table_schemas;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
@@ -596,7 +596,7 @@ int PartitionTableAnalyzer::analysis(const uint64_t tenant_id)
   } else {
     table_schemas_.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < my_table_schemas.count(); ++i) {
-      const share::schema::ObTableSchema* table_schema = my_table_schemas.at(i);
+      const share::schema::ObSimpleTableSchemaV2* table_schema = my_table_schemas.at(i);
       int64_t part_num = 0;
       if (OB_UNLIKELY(nullptr == table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -621,7 +621,7 @@ int PartitionTableAnalyzer::analysis(const uint64_t tenant_id)
   return ret;
 }
 
-int PartitionTableAnalyzer::next(const share::schema::ObTableSchema*& table_schema)
+int PartitionTableAnalyzer::next(const share::schema::ObSimpleTableSchemaV2*& table_schema)
 {
   int ret = OB_SUCCESS;
   table_schema = nullptr;
@@ -636,7 +636,7 @@ int PartitionTableAnalyzer::next(const share::schema::ObTableSchema*& table_sche
 int NonPartitionTableAnalyzer::analysis(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  common::ObArray<const share::schema::ObTableSchema*> table_schemas;
+  common::ObArray<const share::schema::ObSimpleTableSchemaV2*> table_schemas;
   common::ObArray<const share::schema::ObTablegroupSchema*> tg_schemas;
   common::ObArray<const share::schema::ObPartitionSchema*> target_schemas;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
@@ -649,7 +649,7 @@ int NonPartitionTableAnalyzer::analysis(const uint64_t tenant_id)
     LOG_WARN("fail to get tablegroup schemas in tenant", K(ret), K(tenant_id));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
-      const ObTableSchema* schema = table_schemas.at(i);
+      const ObSimpleTableSchemaV2* schema = table_schemas.at(i);
       int64_t part_num = 0;
       if (OB_UNLIKELY(NULL == schema)) {
         ret = OB_ERR_UNEXPECTED;

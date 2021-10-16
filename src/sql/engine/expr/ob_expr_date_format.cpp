@@ -50,11 +50,9 @@ int ObExprDateFormat::calc_result2(ObObj& result, const ObObj& date, const ObObj
   } else if (OB_ISNULL(buf = static_cast<char*>(expr_ctx.calc_buf_->alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("no more memory to alloc for buf");
-  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(date, get_timezone_info(expr_ctx.my_session_), ob_time))) {
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(date, get_timezone_info(expr_ctx.my_session_), ob_time,
+                get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx())))) {
     LOG_WARN("failed to convert obj to ob time");
-    check_reset_status(expr_ctx, ret, result);
-  } else if (ObTimeType == date.get_type() && OB_FAIL(set_cur_date(get_timezone_info(expr_ctx.my_session_), ob_time))) {
-    LOG_WARN("failed to set current date to ob time");
     check_reset_status(expr_ctx, ret, result);
   } else if (OB_UNLIKELY(format.get_string().empty())) {
     result.set_null();
@@ -66,23 +64,6 @@ int ObExprDateFormat::calc_result2(ObObj& result, const ObObj& date, const ObObj
   } else {
     result.set_varchar(buf, static_cast<int32_t>(pos));
     result.set_collation(result_type_);
-  }
-  return ret;
-}
-
-int ObExprDateFormat::set_cur_date(const ObTimeZoneInfo* tz_info, ObTime& ob_time)
-{
-  int ret = OB_SUCCESS;
-  ObTime cur_date;
-  if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(ObTimeUtility::current_time(), tz_info, cur_date))) {
-    LOG_WARN("failed to convert current datetime to ob time");
-  } else {
-    ob_time.parts_[DT_YEAR] = cur_date.parts_[DT_YEAR];
-    ob_time.parts_[DT_MON] = cur_date.parts_[DT_MON];
-    ob_time.parts_[DT_MDAY] = cur_date.parts_[DT_MDAY];
-    ob_time.parts_[DT_DATE] = cur_date.parts_[DT_DATE];
-    ob_time.parts_[DT_YDAY] = cur_date.parts_[DT_YDAY];
-    ob_time.parts_[DT_WDAY] = cur_date.parts_[DT_WDAY];
   }
   return ret;
 }
@@ -145,13 +126,6 @@ int ObExprDateFormat::calc_date_format(const ObExpr& expr, ObEvalCtx& ctx, ObDat
                  ob_time,
                  get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx())))) {
     LOG_WARN("failed to convert datum to ob time");
-    if (CM_IS_WARN_ON_FAIL(cast_mode) && OB_ALLOCATE_MEMORY_FAILED != ret) {
-      ret = OB_SUCCESS;
-      expr_datum.set_null();
-    }
-  } else if (ObTimeType == expr.args_[0]->datum_meta_.type_ &&
-             OB_FAIL(set_cur_date(get_timezone_info(session), ob_time))) {
-    LOG_WARN("failed to set current date to ob time");
     if (CM_IS_WARN_ON_FAIL(cast_mode) && OB_ALLOCATE_MEMORY_FAILED != ret) {
       ret = OB_SUCCESS;
       expr_datum.set_null();

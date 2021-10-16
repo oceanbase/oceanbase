@@ -231,6 +231,8 @@ constexpr int OB_FILE_LENGTH_INVALID = -9007;
 constexpr int OB_BACKUP_FILE_NOT_EXIST = -9011;
 constexpr int OB_INVALID_BACKUP_DEST = -9026;
 constexpr int OB_IO_LIMIT = -9061;
+constexpr int OB_BACKUP_BACKUP_REACH_COPY_LIMIT = -9062;
+constexpr int OB_BACKUP_IO_PROHIBITED = -9063;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_MIN_RAISE_APPLICATION_ERROR = -20999;
 }  // namespace common

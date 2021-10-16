@@ -23,6 +23,8 @@
 #include "share/ob_encrypt_kms.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/ob_zone_table_operation.h"
+#include "share/backup/ob_backup_struct.h"
 
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/cmd/ob_alter_system_stmt.h"
@@ -230,6 +232,32 @@ int ObAlterSystemResolverUtil::resolve_tenant(
   return ret;
 }
 
+int ObAlterSystemResolverUtil::resolve_tenant_id(const ParseNode* parse_tree, uint64_t& tenant_id)
+{
+  int ret = OB_SUCCESS;
+  tenant_id = OB_INVALID_TENANT_ID;
+  if (NULL == parse_tree) {
+    tenant_id = OB_SYS_TENANT_ID;
+  } else if (T_TENANT_NAME != parse_tree->type_ && T_TENANT_ID != parse_tree->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse tree", K(ret), K(parse_tree));
+  } else {
+    if (T_TENANT_NAME == parse_tree->type_) {
+      ObSchemaGetterGuard schema_guard;
+      ObString tenant_name;
+      tenant_name.assign_ptr(parse_tree->str_value_, static_cast<int32_t>(parse_tree->str_len_));
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+        LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
+      } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, tenant_id))) {
+        LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tenant_name));
+      }
+    } else {
+      tenant_id = parse_tree->value_;
+    }
+  }
+  return ret;
+}
+
 int ObAlterSystemResolverUtil::resolve_partition_id(
     const uint64_t tenant_id, const ParseNode* parse_tree, ObPartitionKey& partition_key)
 {
@@ -372,6 +400,29 @@ int ObAlterSystemResolverUtil::resolve_relation_name(const ParseNode* node, ObSt
   }
   return ret;
 }
+
+int ObAlterSystemResolverUtil::check_same_with_gconf(const common::ObString& str, bool& is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = false;
+  ObBackupDest dst1, dst2;
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+  if (str.empty()) {
+    is_same = true;
+  } else if (OB_FAIL(dst1.set(str.ptr()))) {
+    LOG_WARN("failed to set backup dest", KR(ret));
+  } else if (OB_FAIL(GCONF.backup_backup_dest.copy(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+    LOG_WARN("failed to copy backup dest", KR(ret));
+  } else if (0 == strlen(backup_dest_str)) {
+    is_same = false;
+  } else if (OB_FAIL(dst2.set(backup_dest_str))) {
+    LOG_WARN("failed to set backup dest", KR(ret));
+  } else {
+    is_same = dst1.is_root_path_equal(dst2);
+  }
+  return ret;
+}
+
 int ObFreezeResolver::resolve(const ParseNode& parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -1446,6 +1497,7 @@ int check_backup_dest(const ObString& backup_dest)
   bool is_doing_backup = false;
   share::ObBackupDest dest;
   char backup_dest_buf[OB_MAX_BACKUP_DEST_LENGTH];
+  char backup_backup_dest_buf[OB_MAX_BACKUP_DEST_LENGTH];
   ObLogArchiveBackupInfoMgr backup_info_mgr;
   ObClusterBackupDest cluster_dest;
   ObTenantLogArchiveStatus last_status;
@@ -1477,9 +1529,188 @@ int check_backup_dest(const ObString& backup_dest)
     LOG_ERROR("cannot set backup dest with old backup data", K(ret), K(backup_dest_buf), K(last_status));
   }
 
-  ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "please wait backup enhance patch, recently backup ");
-  LOG_ERROR("not support backup now, please wait backup enhance code patch");
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(GCONF.backup_backup_dest.copy(backup_backup_dest_buf, sizeof(backup_backup_dest_buf)))) {
+      LOG_WARN("failed to set backup dest buf", K(ret));
+    } else if (strlen(backup_backup_dest_buf) > 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot change backup dest when backup backup dest is not empty", K(ret), K(backup_backup_dest_buf));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup dest with backup backup dest not empty is");
+    }
+  }
+
+  return ret;
+}
+
+int init_backup_dest_opt(
+    const bool is_backup_backup, const ObString& new_opt_str, ObBackupDestOpt& cur_opt, ObBackupDestOpt& new_opt)
+{
+  int ret = OB_SUCCESS;
+  char cur_opt_buf[OB_MAX_CONFIG_VALUE_LEN] = "";
+  char new_opt_buf[OB_MAX_CONFIG_VALUE_LEN] = "";
+  const bool global_auto_delete_obsolete_backup = GCONF.auto_delete_expired_backup;
+  const bool auto_update_reserved_backup_timestamp = GCONF._auto_update_reserved_backup_timestamp;
+  const int64_t global_backup_recovery_window = GCONF.backup_recovery_window;
+  const int64_t global_log_archive_checkount_interval = GCONF.log_archive_checkpoint_interval;
+
+  if (OB_FAIL(databuff_printf(new_opt_buf, sizeof(new_opt_buf), "%.*s", new_opt_str.length(), new_opt_str.ptr()))) {
+    LOG_WARN("failed to copy opt buf", K(ret), K(new_opt_str));
+  } else if (!is_backup_backup && OB_FAIL(GCONF.backup_dest_option.copy(cur_opt_buf, sizeof(cur_opt_buf)))) {
+    LOG_WARN("failed to copy backup dest option buf", K(ret));
+  } else if (is_backup_backup && OB_FAIL(GCONF.backup_backup_dest_option.copy(cur_opt_buf, sizeof(cur_opt_buf)))) {
+    LOG_WARN("failed to copy backup backup dest option buf", K(ret));
+  } else if (OB_FAIL(cur_opt.init(is_backup_backup,
+                 cur_opt_buf,
+                 global_auto_delete_obsolete_backup,
+                 global_backup_recovery_window,
+                 global_log_archive_checkount_interval,
+                 auto_update_reserved_backup_timestamp))) {
+    LOG_WARN("failed to init cur opt", K(ret));
+  } else if (OB_FAIL(new_opt.init(is_backup_backup,
+                 new_opt_buf,
+                 global_auto_delete_obsolete_backup,
+                 global_backup_recovery_window,
+                 global_log_archive_checkount_interval,
+                 auto_update_reserved_backup_timestamp))) {
+    LOG_WARN("failed to init new opt", K(ret));
+  }
+
+  return ret;
+}
+
+int check_backup_dest_opt(const bool is_backup_backup, const ObString& opt_str)
+{
+  int ret = OB_SUCCESS;
+  bool is_doing_backup = false;
+  ObLogArchiveBackupInfoMgr backup_info_mgr;
+  ObBackupDestOpt cur_opt;
+  ObBackupDestOpt new_opt;
+  const int64_t MIN_LOG_ARCHIVE_CHECKPOINT_INTERVAL = 5 * 1000LL * 1000LL;                // 5s
+  const int64_t MAX_LOG_ARCHIVE_CHECKPOINT_INTERVAL = 3600 * 1000LL * 1000LL;             // 1h
+  const int64_t MIN_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL = 24 * 3600 * 1000LL * 1000LL;      // 1d
+  const int64_t MAX_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL = 7 * 24 * 3600 * 1000LL * 1000LL;  // 7d
+  const int64_t OB_MAX_BACKUP_COPIES = 8;
+
+  if (OB_FAIL(init_backup_dest_opt(is_backup_backup, opt_str, cur_opt, new_opt))) {
+    LOG_WARN("failed to init backup dest opt", K(ret), K(is_backup_backup), K(opt_str));
+  } else {
+    // check field range
+    if (OB_SUCC(ret)) {
+      if (new_opt.log_archive_checkpoint_interval_ < MIN_LOG_ARCHIVE_CHECKPOINT_INTERVAL ||
+          new_opt.log_archive_checkpoint_interval_ > MAX_LOG_ARCHIVE_CHECKPOINT_INTERVAL) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invalid log_archive_checkpoint_interval", K(ret), K(opt_str), K(new_opt));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid log_archive_checkpoint_interval out of range [5s,1h] is");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (new_opt.recovery_window_ < 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invalid recovery_window", K(ret), K(opt_str), K(new_opt));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid recovery_window less than 0 is");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (new_opt.auto_delete_obsolete_backup_ && new_opt.auto_touch_reserved_backup_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("cannot auto delete and touch backup at same time", K(ret), K(opt_str), K(new_opt));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto delete and touch backup at same time is");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (0 != new_opt.piece_switch_interval_ &&
+          (new_opt.piece_switch_interval_ < MIN_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL ||
+              new_opt.piece_switch_interval_ > MAX_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL)) {
+#ifndef ERRSIM
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invalid piece_switch_interval", K(ret), K(opt_str), K(new_opt));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid piece_switch_interval out of range [1d,7d] is");
+#endif
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (0 != new_opt.backup_copies_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invalid backup copies", K(ret), K(opt_str), K(new_opt));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup_copies out of range [0,8] is");
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && is_backup_backup) {
+    if (new_opt.backup_copies_ > 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot set copies for backup backup dest", K(ret), K(opt_str), K(new_opt));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup_copies for backup backup dest is");
+    } else if (new_opt.piece_switch_interval_ != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot set piece_switch_interval for backup backup dest", K(ret), K(opt_str), K(new_opt));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set piece_switch_interval for backup backup dest is");
+    }
+  }
+
+  if (FAILEDx(share::ObBackupInfoMgr::get_instance().check_if_doing_backup(is_doing_backup))) {
+    LOG_WARN("failed to check_if_doing_backup", K(ret));
+  } else if (is_doing_backup) {
+    if (cur_opt.is_switch_piece() != new_opt.is_switch_piece()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot change switch piece mode during log archive is running", K(ret), K(cur_opt), K(new_opt));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "change switch piece mode during log archive running is");
+    }
+  }
+
+  return ret;
+}
+
+int check_backup_backup_dest(const ObString& backup_backup_dest)
+{
+  int ret = OB_SUCCESS;
+  bool is_empty_dir = false;
+  share::ObBackupDest src_dest;
+  share::ObBackupDest dst_dest;
+  ObStorageUtil util(false /*need_retry*/);
+  char backup_dest_buf[OB_MAX_BACKUP_DEST_LENGTH];
+  char backup_backup_dest_buf[OB_MAX_BACKUP_DEST_LENGTH];
+  bool is_doing_backup_backup = false;
+  if (OB_FAIL(share::ObBackupInfoMgr::get_instance().check_if_doing_backup_backup(is_doing_backup_backup))) {
+    LOG_WARN("failed to check_if_doing_backup_backup", K(ret));
+  } else if (is_doing_backup_backup) {
+    ret = OB_BACKUP_IN_PROGRESS;
+    LOG_WARN("cannot set backup dest during backup", K(ret), K(is_doing_backup_backup));
+  } else if (backup_backup_dest.empty()) {
+    // not check empty dest
+  } else if (OB_FAIL(GCONF.backup_dest.copy(backup_dest_buf, sizeof(backup_dest_buf)))) {
+    LOG_WARN("failed to set backup dest buf", K(ret));
+  } else if (OB_FAIL(databuff_printf(backup_backup_dest_buf,
+                 sizeof(backup_backup_dest_buf),
+                 "%.*s",
+                 backup_backup_dest.length(),
+                 backup_backup_dest.ptr()))) {
+    LOG_WARN("failed to print backup dest buf", K(ret), K(backup_backup_dest));
+  } else if (strlen(backup_dest_buf) == 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("set backup backup dest with empty backup dest is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup backup dest with empty backup dest is");
+  } else if (OB_FAIL(src_dest.set(backup_dest_buf))) {
+    LOG_WARN("failed to set dest", K(ret), K(backup_dest_buf));
+  } else if (OB_FAIL(dst_dest.set(backup_backup_dest_buf))) {
+    LOG_WARN("failed to set dest", K(ret), K(backup_backup_dest_buf));
+  } else if (dst_dest.is_cos_storage()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup backup do not support cos storage", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup on cos storage");
+  } else if (0 == STRNCMP(src_dest.root_path_, dst_dest.root_path_, OB_MAX_BACKUP_PATH_LENGTH)) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_ERROR("backup backup dest can not be same with backup dest", K(ret), K(backup_dest_buf));
+  } else if (OB_FAIL(util.is_empty_directory(dst_dest.root_path_, dst_dest.storage_info_, is_empty_dir))) {
+    LOG_WARN("failed to check is empty directory", K(ret), K(dst_dest));
+  } else if (!is_empty_dir) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_ERROR("cannot use backup backup dest with non empty directory", K(ret));
+  }
   return ret;
 }
 
@@ -1504,6 +1735,211 @@ int check_enable_log_archive(const ObString& is_enable)
   }
 
   FLOG_INFO("check_enable_log_archive", K(ret), K(is_doing_backup), K(is_enable));
+  return ret;
+}
+
+int check_backup_region(const ObString& backup_region)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupRegion> backup_region_array;
+  ObArray<ObRegion> region_array;
+  const int64_t ERROR_MSG_LENGTH = 1024;
+  char error_msg[ERROR_MSG_LENGTH] = "";
+  int tmp_ret = OB_SUCCESS;
+  int64_t pos = 0;
+
+  if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_region, MAX_REGION_LENGTH, backup_region_array))) {
+    LOG_WARN("failed to parse backup format input", K(ret), K(backup_region));
+  } else if (OB_FAIL(share::ObZoneTableOperation::get_region_list(*GCTX.sql_proxy_, region_array))) {
+    LOG_WARN("failed to get region list", K(ret));
+  } else {
+    for (int64_t i = 0; i < backup_region_array.count(); ++i) {
+      const ObRegion& tmp_region = backup_region_array.at(i).region_;
+      bool found = false;
+      for (int64_t j = 0; !found && j < region_array.count(); ++j) {
+        const ObRegion& region = region_array.at(j);
+        if (tmp_region == region) {
+          found = true;
+        }
+      }
+
+      if (!found) {
+        ret = OB_CANNOT_SET_BACKUP_REGION;
+        LOG_WARN("backup region is not exist in region list", K(ret), K(backup_region), K(region_array));
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg,
+                               ERROR_MSG_LENGTH,
+                               pos,
+                               "backup region do not exist in region list. backup region : %s.",
+                               backup_region.ptr()))) {
+          LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
+        } else {
+          LOG_USER_ERROR(OB_CANNOT_SET_BACKUP_REGION, error_msg);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObString backup_zone_str = GCONF.backup_zone.get_value_string();
+      if (!backup_zone_str.empty()) {
+        ret = OB_CANNOT_SET_BACKUP_REGION;
+        LOG_WARN("backup zone str is not empty", K(ret), K(backup_zone_str));
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg,
+                               ERROR_MSG_LENGTH,
+                               pos,
+                               "backup zone has been setup already. backup zone : %s.",
+                               backup_zone_str.ptr()))) {
+          LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
+        } else {
+          LOG_USER_ERROR(OB_CANNOT_SET_BACKUP_REGION, error_msg);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int check_backup_zone(const ObString& backup_zone)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupZone> backup_zone_array;
+  ObArray<ObZone> zone_array;
+  const int64_t ERROR_MSG_LENGTH = 1024;
+  char error_msg[ERROR_MSG_LENGTH] = "";
+  int tmp_ret = OB_SUCCESS;
+  int64_t pos = 0;
+
+  if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone, MAX_REGION_LENGTH, backup_zone_array))) {
+    LOG_WARN("failed to parse backup format input", K(ret), K(backup_zone));
+  } else if (OB_FAIL(share::ObZoneTableOperation::get_zone_list(*GCTX.sql_proxy_, zone_array))) {
+    LOG_WARN("failed to get region list", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < backup_zone_array.count(); ++i) {
+      const ObZone& tmp_zone = backup_zone_array.at(i).zone_;
+      bool found = false;
+      for (int64_t j = 0; !found && j < zone_array.count(); ++j) {
+        const ObZone& zone = zone_array.at(j);
+        if (tmp_zone == zone) {
+          found = true;
+        }
+      }
+
+      if (!found) {
+        ret = OB_CANNOT_SET_BACKUP_ZONE;
+        LOG_WARN("backup zone is not exist in zone list", K(ret), K(backup_zone), K(zone_array));
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg,
+                               ERROR_MSG_LENGTH,
+                               pos,
+                               "backup zone do not exist in zone list. backup zone : %s.",
+                               backup_zone.ptr()))) {
+          LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
+        } else {
+          LOG_USER_ERROR(OB_CANNOT_SET_BACKUP_ZONE, error_msg);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      ObString backup_region_str = GCONF.backup_region.get_value_string();
+      if (!backup_region_str.empty()) {
+        ret = OB_CANNOT_SET_BACKUP_ZONE;
+        LOG_WARN("backup region str is not empty", K(ret), K(backup_region_str));
+        if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg,
+                               ERROR_MSG_LENGTH,
+                               pos,
+                               "backup region has been setup already. backup region : %s.",
+                               backup_region_str.ptr()))) {
+          LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
+        } else {
+          LOG_USER_ERROR(OB_CANNOT_SET_BACKUP_ZONE, error_msg);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int check_auto_delete_expired_backup(const ObString& is_enable)
+{
+  int ret = OB_SUCCESS;
+  ObTenantBackupCleanInfoUpdater updater;
+  const bool auto_update_reserved_backup_timestamp = GCONF._auto_update_reserved_backup_timestamp;
+  bool is_doing = false;
+  bool is_enable_value = false;
+  bool is_valid = false;
+  ObBackupDestOpt backup_dest_opt;
+  ObBackupDestOpt backup_backup_dest_opt;
+
+  is_enable_value = ObConfigBoolParser::get(is_enable.ptr(), is_valid);
+  if (!is_valid) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid bool str", K(ret), K(is_enable));
+  } else if (!is_enable_value) {
+    // not check for false
+  } else if (OB_FAIL(backup_dest_opt.init(false /*is_backup_backup*/))) {
+    LOG_WARN("failed to init backup dest opt", K(ret));
+  } else if (OB_FAIL(backup_backup_dest_opt.init(true /*is_backup_backup*/))) {
+    LOG_WARN("failed to init backup backup dest opt", K(ret));
+  } else if (auto_update_reserved_backup_timestamp || backup_dest_opt.auto_touch_reserved_backup_ ||
+             backup_backup_dest_opt.auto_touch_reserved_backup_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto delete and touch backup at same time is");
+    LOG_WARN("set auto delete expired backup true when auto update reserved backup timestamp is true",
+        K(ret),
+        K(auto_update_reserved_backup_timestamp),
+        K(backup_dest_opt),
+        K(backup_backup_dest_opt));
+  } else if (OB_FAIL(updater.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("failed to init clean info updater", K(ret));
+  } else if (OB_FAIL(updater.check_clean_task_is_dong(is_doing))) {
+    LOG_WARN("failed to check clean task status", K(ret));
+  } else if (is_doing) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "can not set auto delete expired backup true when clean task is running");
+    LOG_WARN("can not set auto delete expired backup true when clean task is running", K(ret), K(is_doing));
+  }
+  return ret;
+}
+
+int check_auto_update_reserved_backup_timestamp(const ObString& is_enable)
+{
+  int ret = OB_SUCCESS;
+  ObTenantBackupCleanInfoUpdater updater;
+  const bool auto_delete_expired_backup = GCONF.auto_delete_expired_backup;
+  bool is_doing = false;
+  bool is_enable_value = false;
+  bool is_valid = false;
+  ObBackupDestOpt backup_dest_opt;
+  ObBackupDestOpt backup_backup_dest_opt;
+
+  is_enable_value = ObConfigBoolParser::get(is_enable.ptr(), is_valid);
+  if (!is_valid) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid bool str", K(ret), K(is_enable));
+  } else if (!is_enable_value) {
+    // not check for false
+  } else if (OB_FAIL(backup_dest_opt.init(false /*is_backup_backup*/))) {
+    LOG_WARN("failed to init backup dest opt", K(ret));
+  } else if (OB_FAIL(backup_backup_dest_opt.init(true /*is_backup_backup*/))) {
+    LOG_WARN("failed to init backup backup dest opt", K(ret));
+  } else if (auto_delete_expired_backup || backup_dest_opt.auto_delete_obsolete_backup_ ||
+             backup_backup_dest_opt.auto_delete_obsolete_backup_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto delete and touch backup at same time is");
+    LOG_WARN("set auto update reserved backup timestamp true when auto delete expired backup is true",
+        K(ret),
+        K(auto_delete_expired_backup),
+        K(backup_dest_opt),
+        K(backup_backup_dest_opt));
+  } else if (OB_FAIL(updater.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("failed to init clean info updater", K(ret));
+  } else if (OB_FAIL(updater.check_clean_task_is_dong(is_doing))) {
+    LOG_WARN("failed to check clean task status", K(ret));
+  } else if (is_doing) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "can not set auto update reserved backup timestamp true when clean is doing is ");
+    LOG_WARN(
+        "set auto update reserved backup timestamp true when clean is doing is not supported", K(ret), K(is_doing));
+  }
   return ret;
 }
 
@@ -1669,13 +2105,13 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
             if (OB_SUCC(ret)) {
               if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
                 LOG_WARN("add config item failed", K(ret), K(item));
-              } else if (0 == MEMCMP(item.name_.ptr(), MINOR_FREEZE_TIMES, item.name_.size()) ||
-                         0 == MEMCMP(item.name_.ptr(), MAJOR_COMPACT_TRIGGER, item.name_.size())) {
+              } else if (0 == STRCMP(item.name_.ptr(), MINOR_FREEZE_TIMES) ||
+                         0 == STRCMP(item.name_.ptr(), MAJOR_COMPACT_TRIGGER)) {
                 if (has_major_compact_trigger) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set minor_freeze_times and major_compact_trigger together");
                   LOG_WARN("minor_freeze_times and major_compact_trigger should not set together", K(ret));
-                } else if (0 == MEMCMP(item.name_.ptr(), MINOR_FREEZE_TIMES, item.name_.size())) {
+                } else if (0 == STRCMP(item.name_.ptr(), MINOR_FREEZE_TIMES)) {
                   if (OB_FAIL(item.name_.assign(MAJOR_COMPACT_TRIGGER))) {
                     LOG_WARN("assign config name to major_compact_trigger failed", K(item), K(ret));
                   }
@@ -1689,14 +2125,14 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                     has_major_compact_trigger = true;
                   }
                 }
-              } else if (0 == MEMCMP(item.name_.ptr(), ENABLE_PERF_EVENT, item.name_.size()) ||
-                         0 == MEMCMP(item.name_.ptr(), ENABLE_SQL_AUDIT, item.name_.size())) {
+              } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT) ||
+                         0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT)) {
                 if (has_perf_audit) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event and enable_sql_audit together");
                   LOG_WARN("enable_perf_event and enable_sql_audit should not set together", K(ret));
-                } else if (0 == MEMCMP(item.name_.ptr(), ENABLE_PERF_EVENT, item.name_.size()) &&
-                           0 == MEMCMP(item.value_.ptr(), CONFIG_FALSE_VALUE, item.value_.size())) {
+                } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT) &&
+                           0 == STRCMP(item.value_.ptr(), CONFIG_FALSE_VALUE)) {
                   if (GCONF.enable_sql_audit) {
                     ret = OB_NOT_SUPPORTED;
                     LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event to false when enable_sql_audit is true");
@@ -1706,9 +2142,8 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                   } else if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
                     LOG_WARN("add config item failed", K(ret), K(item));
                   }
-                } else if (0 == MEMCMP(item.name_.ptr(), ENABLE_SQL_AUDIT, item.name_.size()) &&
-                           0 == MEMCMP(item.value_.ptr(), CONFIG_TRUE_VALUE, item.value_.size()) &&
-                           !GCONF.enable_perf_event) {
+                } else if (0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT) &&
+                           0 == STRCMP(item.value_.ptr(), CONFIG_TRUE_VALUE) && !GCONF.enable_perf_event) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_sql_audit to true when enable_perf_event is false");
                   LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
@@ -1716,11 +2151,23 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                 if (OB_SUCC(ret)) {
                   has_perf_audit = true;
                 }
-              } else if (0 == MEMCMP(item.name_.ptr(), OB_STR_BACKUP_DEST, item.name_.size())) {
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST)) {
                 if (OB_FAIL(check_backup_dest(item.value_.str()))) {
                   LOG_WARN("failed to check backup dest", K(ret));
                 }
-              } else if (0 == MEMCMP(item.name_.ptr(), OB_STR_ENABLE_LOG_ARCHIVE, item.name_.size())) {
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_BACKUP_DEST)) {
+                if (OB_FAIL(check_backup_backup_dest(item.value_.str()))) {
+                  LOG_WARN("failed to check backup backup dest", K(ret));
+                }
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {
+                if (OB_FAIL(check_backup_dest_opt(false /*is backup backup*/, item.value_.str()))) {
+                  LOG_WARN("failed to check backup dest opt", K(ret), K(item));
+                }
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_BACKUP_DEST_OPT)) {
+                if (OB_FAIL(check_backup_dest_opt(true /*is backup backup*/, item.value_.str()))) {
+                  LOG_WARN("failed to check backup backup dest opt", K(ret), K(item));
+                }
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_ENABLE_LOG_ARCHIVE)) {
                 if (OB_FAIL(check_enable_log_archive(item.value_.str()))) {
                   LOG_WARN("cannot set enable log archive true", K(ret));
                 }
@@ -1728,6 +2175,22 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                 ret = OB_OP_NOT_ALLOW;
                 LOG_WARN("cluster_id is not allowed to modify");
                 LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter cluster_id");
+              } else if (0 == STRCMP(item.name_.ptr(), Ob_STR_BACKUP_REGION)) {
+                if (OB_FAIL(check_backup_region(item.value_.str()))) {
+                  LOG_WARN("failed to check backup dest", K(ret));
+                }
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_ZONE)) {
+                if (OB_FAIL(check_backup_zone(item.value_.str()))) {
+                  LOG_WARN("failed to check backup dest", K(ret));
+                }
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_AUTO_DELETE_EXPIRED_BACKUP)) {
+                if (OB_FAIL(check_auto_delete_expired_backup(item.value_.str()))) {
+                  LOG_WARN("cannot set enable log archive true", K(ret));
+                }
+              } else if (0 == STRCMP(item.name_.ptr(), OB_STR_AUTO_UPDATE_RESERVED_BACKUP_TIMESTAMP)) {
+                if (OB_FAIL(check_auto_update_reserved_backup_timestamp(item.value_.str()))) {
+                  LOG_WARN("cannot set enable log archive true", K(ret));
+                }
               }
             }
           }
@@ -1847,6 +2310,11 @@ int ObSetTPResolver::resolve(const ParseNode& parse_tree)
               } break;
               default:
                 break;
+            }
+          }
+          if (OB_SUCC(ret) && (2 <= parse_tree.num_child_) && (NULL != parse_tree.children_[1])) {
+            if (OB_FAIL(Util::resolve_server_or_zone(parse_tree.children_[1], stmt->get_rpc_arg()))) {
+              LOG_WARN("failed to resolve_server_or_zone", K(ret));
             }
           }
         }
@@ -2136,12 +2604,26 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode& parse_tree)
       } else if (OB_FAIL(
                      Util::resolve_relation_name(parse_tree.children_[1], stmt->get_rpc_arg().backup_tenant_name_))) {
         LOG_WARN("resolve tenant_name failed", K(ret));
-      } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[2], stmt->get_rpc_arg().uri_))) {
-        LOG_WARN("resolve string failed", K(ret));
+      } else {
+        if (OB_NOT_NULL(parse_tree.children_[2])) {
+          if (session_info_->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("invalid sql syntax", KR(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "should not have backup_dest and restore_source at the same time");
+          } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[2], stmt->get_rpc_arg().uri_))) {
+            LOG_WARN("resolve string failed", K(ret));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+        // do nothing
       } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[4], stmt->get_rpc_arg().restore_option_))) {
         LOG_WARN("resolve string failed", K(ret));
       } else if (OB_FAIL(resolve_decryption_passwd(stmt->get_rpc_arg()))) {
         LOG_WARN("failed to resolve decrytion passwd", K(ret));
+      } else if (OB_FAIL(resolve_restore_source_array(stmt->get_rpc_arg()))) {
+        LOG_WARN("failed to resolve restore source array", K(ret));
       } else {
         // resolve datetime
         int64_t time_val = 0;
@@ -2154,6 +2636,46 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode& parse_tree)
           LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
         } else {
           stmt->get_rpc_arg().restore_timestamp_ = time_val;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (6 == parse_tree.num_child_) {  // resolve table_list
+          const ParseNode* node = parse_tree.children_[5];
+          if (OB_ISNULL(node)) {
+            stmt->set_is_preview(false);
+          } else {
+            if (T_TABLE_LIST == node->type_) {
+              // store database_name/table_name with case sensitive.
+              // compare database_name/table_name with tenant's name_case_mode.
+              share::CompatModeGuard g(ObWorker::CompatMode::ORACLE);
+              for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
+                const ParseNode* table_node = node->children_[i];
+                if (OB_ISNULL(table_node)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("table_node is null", KR(ret));
+                } else {
+                  ObString table_name;
+                  ObString database_name;
+                  obrpc::ObTableItem table_item;
+                  if (OB_FAIL(resolve_table_relation_node(table_node, table_name, database_name))) {
+                    LOG_WARN("failed to resolve table name", KR(ret), K(table_item));
+                  } else {
+                    table_item.table_name_ = table_name;
+                    table_item.database_name_ = database_name;
+                    if (OB_FAIL(stmt->get_rpc_arg().add_table_item(table_item))) {
+                      LOG_WARN("failed to add table item", KR(ret), K(table_item));
+                    }
+                  }
+                }
+              }
+            } else if (T_PREVIEW == node->type_) {
+              stmt->set_is_preview(true);
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("node type is not right", K(ret), K(node));
+            }
+          }
         }
       }
     }
@@ -2179,6 +2701,26 @@ int ObPhysicalRestoreTenantResolver::resolve_decryption_passwd(ObPhysicalRestore
     LOG_INFO("succeed to resolve_decryption_passwd", "passwd", arg.passwd_array_);
   }
 
+  return ret;
+}
+
+int ObPhysicalRestoreTenantResolver::resolve_restore_source_array(obrpc::ObPhysicalRestoreTenantArg& arg)
+{
+  int ret = OB_SUCCESS;
+  ObObj value;
+
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (!session_info_->user_variable_exists(OB_RESTORE_SOURCE_NAME_SESSION_STR)) {
+    LOG_INFO("no restore source is specified");
+    arg.multi_uri_.reset();
+  } else if (OB_FAIL(session_info_->get_user_variable_value(OB_RESTORE_SOURCE_NAME_SESSION_STR, value))) {
+    LOG_WARN("failed to get user variable", KR(ret));
+  } else {
+    arg.multi_uri_ = value.get_varchar();
+    LOG_INFO("succeed to resolve_restore_source_array", "multi_uri", arg.multi_uri_);
+  }
   return ret;
 }
 
@@ -3121,7 +3663,7 @@ int ObBackupManageResolver::resolve(const ParseNode& parse_tree)
   } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null", K(ret));
-  } else if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+  } else if (OB_UNLIKELY(3 != parse_tree.num_child_ && 2 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
   } else if (OB_ISNULL(session_info_)) {
@@ -3129,15 +3671,92 @@ int ObBackupManageResolver::resolve(const ParseNode& parse_tree)
     LOG_WARN("session info should not be null", K(ret));
   } else {
     ObBackupManageStmt* stmt = create_stmt<ObBackupManageStmt>();
+    int64_t copy_id = 0;
     const uint64_t tenant_id = session_info_->get_login_tenant_id();
     const int64_t type = parse_tree.children_[0]->value_;
     const int64_t value = parse_tree.children_[1]->value_;
+    if (2 == parse_tree.num_child_) {
+      // do nothing
+    } else if (3 == parse_tree.num_child_) {
+      copy_id = NULL == parse_tree.children_[2] ? 0 : parse_tree.children_[2]->children_[0]->value_;
+    }
     if (NULL == stmt) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("create ObBackupManageResolver failed");
-    } else if (OB_FAIL(stmt->set_param(tenant_id, type, value))) {
-      LOG_WARN("Failed to set param", K(ret), K(tenant_id), K(type), K(value));
+    } else if (OB_FAIL(stmt->set_param(tenant_id, type, value, copy_id))) {
+      LOG_WARN("Failed to set param", K(ret), K(tenant_id), K(type), K(value), K(copy_id));
     } else {
+      stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
+int ObBackupBackupsetResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_BACKUP_BACKUPSET != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_BACKUP_BACKUPSET", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", KR(ret));
+  } else if (4 != parse_tree.num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObBackupBackupsetStmt* stmt = create_stmt<ObBackupBackupsetStmt>();
+    const int64_t backup_set_id = parse_tree.children_[0]->value_;
+    const ObString backup_dest = OB_ISNULL(parse_tree.children_[2]) ? "" : parse_tree.children_[2]->str_value_;
+    const int64_t max_backup_times = OB_ISNULL(parse_tree.children_[3]) ? -1 : parse_tree.children_[3]->value_;
+    uint64_t tenant_id = OB_INVALID_ID;
+    bool same_with_gconf = false;
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObBackupBackupsetStmt failed", KR(ret));
+    } else if (OB_FAIL(Util::check_same_with_gconf(backup_dest, same_with_gconf))) {
+      LOG_WARN("failed to check same with gconf", KR(ret), K(backup_dest));
+    } else if (same_with_gconf && max_backup_times > 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("do not support not backed up N times sql with backup_backup_dest same with gconf");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not backed up N times to the backup_backup_dest of sys parameter");
+    } else if (OB_FAIL(Util::resolve_tenant_id(parse_tree.children_[1], tenant_id))) {
+      LOG_WARN("failed to resolve tenant id", KR(ret));
+    } else if (OB_FAIL(stmt->set_param(tenant_id, backup_set_id, max_backup_times, backup_dest))) {
+      LOG_WARN("failed to set param", KR(ret), K(tenant_id), K(backup_set_id), K(max_backup_times));
+    } else {
+      stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
+int ObBackupArchiveLogResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_BACKUP_ARCHIVELOG != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_BACKUP_ARCHIVELOG", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(1 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObBackupArchiveLogStmt* stmt = create_stmt<ObBackupArchiveLogStmt>();
+    const int64_t is_enable = parse_tree.children_[0]->value_;
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObBackupArchiveLogStmt failed");
+    } else {
+      stmt->set_is_enable(is_enable);
       stmt_ = stmt;
     }
   }
@@ -3223,6 +3842,112 @@ int ObBackupSetDecryptionResolver::resolve(const ParseNode& parse_tree)
   }
 
   stmt_ = stmt;
+  return ret;
+}
+
+int ObBackupBackupPieceResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_BACKUP_BACKUPPIECE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_BACKUP_BACKUPPIECE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", KR(ret));
+  } else if (7 != parse_tree.num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    ObBackupBackupPieceStmt* stmt = create_stmt<ObBackupBackupPieceStmt>();
+    const int64_t piece_id = parse_tree.children_[0]->value_;
+    const int64_t backup_all = parse_tree.children_[1]->value_;
+    const int64_t max_times = parse_tree.children_[2]->value_;
+    const bool with_active_piece = NULL == parse_tree.children_[3] ? false : (1 == parse_tree.children_[3]->value_);
+    const ObString backup_dest = NULL == parse_tree.children_[5] ? "" : parse_tree.children_[5]->str_value_;
+    const bool support_active_piece = 0 == parse_tree.children_[6]->value_;
+    uint64_t tenant_id = OB_INVALID_ID;
+    bool same_with_gconf = false;
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObBackupBackupPieceStmt failed", KR(ret));
+    } else if (OB_FAIL(Util::check_same_with_gconf(backup_dest, same_with_gconf))) {
+      LOG_WARN("failed to check same with gconf", KR(ret), K(backup_dest));
+    } else if (same_with_gconf && max_times > 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("do not support not backed up N times sql with backup_backup_dest same with gconf");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not backed up N times to the backup_backup_dest of sys parameter");
+    } else if (OB_FAIL(Util::resolve_tenant_id(parse_tree.children_[4], tenant_id))) {
+      LOG_WARN("failed to resolve tenant id", KR(ret));
+    } else if (!support_active_piece && with_active_piece) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cluster level backup backup do not support backup active piece",
+          KR(ret),
+          K(tenant_id),
+          K(piece_id),
+          K(max_times),
+          K(with_active_piece),
+          K(parse_tree.children_[5]->value_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster level backup backup active piece");
+    } else if (OB_FAIL(stmt->set_param(tenant_id, piece_id, max_times, backup_all, with_active_piece, backup_dest))) {
+      LOG_WARN("failed to set param", KR(ret), K(tenant_id), K(piece_id), K(max_times), K(backup_all));
+    } else {
+      stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
+int ObAddRestoreSourceResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObAddRestoreSourceStmt* stmt = NULL;
+
+  if (OB_UNLIKELY(T_ADD_RESTORE_SOURCE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_ADD_RESTORE_SOURCE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", KR(ret));
+  } else if (1 != parse_tree.num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    const uint64_t tenant_id = session_info_->get_login_tenant_id();
+    const ObString source(parse_tree.children_[0]->str_len_, parse_tree.children_[0]->str_value_);
+    if (tenant_id != OB_SYS_TENANT_ID) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("only sys tenant can set add restore source", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(stmt = create_stmt<ObAddRestoreSourceStmt>())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to create ObAddRestoreSourceStmt", K(ret));
+    } else if (OB_FAIL(stmt->add_restore_source(source))) {
+      LOG_WARN("Failed to set param", K(ret), K(source));
+    } else {
+      stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
+int ObClearRestoreSourceResolver::resolve(const ParseNode& parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObClearRestoreSourceStmt* stmt = NULL;
+  if (OB_UNLIKELY(T_CLEAR_RESTORE_SOURCE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_CLEAR_RESTORE_SOURCE", "type", get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(stmt = create_stmt<ObClearRestoreSourceStmt>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("create ObClearRestoreSource failed", KR(ret));
+  } else {
+    stmt_ = stmt;
+  }
   return ret;
 }
 

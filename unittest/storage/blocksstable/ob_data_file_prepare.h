@@ -43,16 +43,16 @@ public:
   {
     destory();
   }
-  int init(const char* test_name, const int64_t macro_block_size = 64 * 1024, const int64_t macro_block_count = 100,
+  int init(const char *test_name, const int64_t macro_block_size = 64 * 1024, const int64_t macro_block_count = 100,
       const int64_t disk_num = 0);
   virtual int open();
   virtual int restart();
   virtual void destory();
-  ObStorageEnv& get_storage_env()
+  ObStorageEnv &get_storage_env()
   {
     return storage_env_;
   }
-  ObStoreFileSystem& get_file_system()
+  ObStoreFileSystem &get_file_system()
   {
     return OB_FILE_SYSTEM;
   }
@@ -78,33 +78,33 @@ private:
 class TestDataFilePrepare : public ::testing::Test {
 public:
   TestDataFilePrepare(
-      const char* test_name, const int64_t macro_block_size = 64 * 1024, const int64_t macro_block_count = 100);
+      const char *test_name, const int64_t macro_block_size = 64 * 1024, const int64_t macro_block_count = 100);
   virtual ~TestDataFilePrepare();
   virtual void SetUp();
   virtual void TearDown();
   virtual void fake_freeze_mgr();
-  const ObStorageEnv& get_storage_env()
+  const ObStorageEnv &get_storage_env()
   {
     return util_.get_storage_env();
   }
-  ObStoreFileSystem& get_file_system()
+  ObStoreFileSystem &get_file_system()
   {
     return util_.get_file_system();
   }
-  const ObStorageFileHandle& get_storage_file_handle();
+  const ObStorageFileHandle &get_storage_file_handle();
 
 protected:
   static const int64_t TENANT_ID = 1;
   static const int64_t TABLE_ID = 3001;
   TestDataFilePrepareUtil util_;
   ObArenaAllocator allocator_;
-  const char* test_name_;
+  const char *test_name_;
   const int64_t macro_block_size_;
   const int64_t macro_block_count_;
 };
 
 TestDataFilePrepare::TestDataFilePrepare(
-    const char* test_name, const int64_t macro_block_size, const int64_t macro_block_count)
+    const char *test_name, const int64_t macro_block_size, const int64_t macro_block_count)
     : util_(),
       allocator_(ObModIds::TEST),
       test_name_(test_name),
@@ -133,14 +133,12 @@ void TestDataFilePrepare::fake_freeze_mgr()
   common::ObArray<ObFreezeInfoSnapshotMgr::SchemaPair> gc_schema_version;
   common::ObArray<share::ObSnapshotInfo> snapshots;
   common::ObMySQLProxy sql_proxy;
-  ObFreezeInfoSnapshotMgr* freeze_mgr;
+  ObFreezeInfoSnapshotMgr *freeze_mgr;
   freeze_mgr = &ObFreezeInfoMgrWrapper::get_instance();
   if (!freeze_mgr->is_inited()) {
     ASSERT_EQ(OB_SUCCESS, freeze_mgr->init(sql_proxy, false));
 
     const int64_t snapshot_gc_ts = 500;
-    const int64_t backup_snapshot_version = snapshot_gc_ts - 100;
-    const int64_t delay_delete_snapshot_version = backup_snapshot_version;
     bool changed = false;
 
     ASSERT_EQ(OB_SUCCESS, gc_schema_version.push_back(ObFreezeInfoSnapshotMgr::SchemaPair(1, 210)));
@@ -150,18 +148,11 @@ void TestDataFilePrepare::fake_freeze_mgr()
     ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObFreezeInfoSnapshotMgr::FreezeInfoLite(4, 400, 0)));
 
     ASSERT_EQ(OB_SUCCESS,
-        freeze_mgr->update_info(snapshot_gc_ts,
-            gc_schema_version,
-            freeze_info,
-            snapshots,
-            backup_snapshot_version,
-            delay_delete_snapshot_version,
-            INT64_MAX,
-            changed));
+        freeze_mgr->update_info(snapshot_gc_ts, gc_schema_version, freeze_info, snapshots, INT64_MAX, changed));
   }
 }
 
-const ObStorageFileHandle& TestDataFilePrepare::get_storage_file_handle()
+const ObStorageFileHandle &TestDataFilePrepare::get_storage_file_handle()
 {
   ObPGKey pg_key(combine_id(1, 1001), 1, 0);
   ObIPartitionGroupGuard pg_guard;
@@ -174,7 +165,7 @@ TestDataFilePrepareUtil::TestDataFilePrepareUtil()
 {}
 
 int TestDataFilePrepareUtil::init(
-    const char* test_name, const int64_t macro_block_size, const int64_t macro_block_count, const int64_t disk_num)
+    const char *test_name, const int64_t macro_block_size, const int64_t macro_block_count, const int64_t disk_num)
 {
   int ret = OB_SUCCESS;
   char cur_dir[OB_MAX_FILE_NAME_LENGTH];

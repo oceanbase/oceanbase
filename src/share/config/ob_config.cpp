@@ -19,25 +19,25 @@
 using namespace oceanbase::share;
 namespace oceanbase {
 namespace common {
-const char* log_archive_config_keywords[] = {
+const char *log_archive_config_keywords[] = {
     "MANDATORY",
     "OPTIONAL",
     "COMPRESSION",
 };
 
-const char* log_archive_compression_values[] = {
+const char *log_archive_compression_values[] = {
     "disable",
     "enable",
     "lz4_1.0",
     "zstd_1.3.8",
 };
 
-const char* log_archive_encryption_mode_values[] = {
+const char *log_archive_encryption_mode_values[] = {
     "None",
     "Transparent Encryption",
 };
 
-const char* log_archive_encryption_algorithm_values[] = {
+const char *log_archive_encryption_algorithm_values[] = {
     "None",
     "",
 };
@@ -66,7 +66,7 @@ ObConfigItem::~ObConfigItem()
 }
 
 void ObConfigItem::init(
-    Scope::ScopeInfo scope_info, const char* name, const char* def, const char* info, const ObParameterAttr attr)
+    Scope::ScopeInfo scope_info, const char *name, const char *def, const char *info, const ObParameterAttr attr)
 {
   if (OB_ISNULL(name) || OB_ISNULL(def) || OB_ISNULL(info)) {
     OB_LOG(ERROR, "name or def or info is null", K(name), K(def), K(info));
@@ -84,8 +84,8 @@ void ObConfigItem::init(
 }
 
 // ObConfigIntListItem
-ObConfigIntListItem::ObConfigIntListItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigIntListItem::ObConfigIntListItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
     : value_()
 {
   if (OB_LIKELY(NULL != container)) {
@@ -94,12 +94,12 @@ ObConfigIntListItem::ObConfigIntListItem(ObConfigContainer* container, Scope::Sc
   init(scope_info, name, def, info, attr);
 }
 
-bool ObConfigIntListItem::set(const char* str)
+bool ObConfigIntListItem::set(const char *str)
 {
   UNUSED(str);
-  char* saveptr = NULL;
-  char* s = NULL;
-  char* endptr = NULL;
+  char *saveptr = NULL;
+  char *s = NULL;
+  char *endptr = NULL;
   value_.valid_ = true;
 
   while (value_.size_--) {
@@ -129,8 +129,8 @@ bool ObConfigIntListItem::set(const char* str)
 ObConfigStrListItem::ObConfigStrListItem() : value_()
 {}
 
-ObConfigStrListItem::ObConfigStrListItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigStrListItem::ObConfigStrListItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
     : value_()
 {
   if (OB_LIKELY(NULL != container)) {
@@ -139,11 +139,11 @@ ObConfigStrListItem::ObConfigStrListItem(ObConfigContainer* container, Scope::Sc
   init(scope_info, name, def, info, attr);
 }
 
-int ObConfigStrListItem::tryget(const int64_t idx, char* buf, const int64_t buf_len) const
+int ObConfigStrListItem::tryget(const int64_t idx, char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  const struct ObInnerConfigStrListItem* inner_value = &value_;
-  ObLatch& latch = const_cast<ObLatch&>(inner_value->rwlock_);
+  const struct ObInnerConfigStrListItem *inner_value = &value_;
+  ObLatch &latch = const_cast<ObLatch &>(inner_value->rwlock_);
   if (OB_ISNULL(buf) || OB_UNLIKELY(idx < 0) || OB_UNLIKELY(idx >= MAX_INDEX_SIZE) || OB_UNLIKELY(buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "input argument is invalid", K(buf), K(idx), K(buf_len), K(ret));
@@ -155,7 +155,7 @@ int ObConfigStrListItem::tryget(const int64_t idx, char* buf, const int64_t buf_
   } else {  // tryrdlock succ
     int print_size = 0;
     int32_t min_len = 0;
-    const char* segment_str = NULL;
+    const char *segment_str = NULL;
     if (idx >= inner_value->size_) {
       ret = OB_ARRAY_OUT_OF_RANGE;
     } else {
@@ -183,10 +183,10 @@ int ObConfigStrListItem::tryget(const int64_t idx, char* buf, const int64_t buf_
   return ret;
 }
 
-int ObConfigStrListItem::get(const int64_t idx, char* buf, const int64_t buf_len) const
+int ObConfigStrListItem::get(const int64_t idx, char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  const struct ObInnerConfigStrListItem* inner_value = &value_;
+  const struct ObInnerConfigStrListItem *inner_value = &value_;
   if (OB_ISNULL(buf) || idx < 0 || idx >= MAX_INDEX_SIZE || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "input argument is invalid", K(buf), K(idx), K(buf_len), K(ret));
@@ -196,8 +196,8 @@ int ObConfigStrListItem::get(const int64_t idx, char* buf, const int64_t buf_len
   } else {
     int print_size = 0;
     int32_t min_len = 0;
-    const char* segment_str = NULL;
-    ObLatch& latch = const_cast<ObLatch&>(inner_value->rwlock_);
+    const char *segment_str = NULL;
+    ObLatch &latch = const_cast<ObLatch &>(inner_value->rwlock_);
     ObLatchRGuard rd_guard(latch, ObLatchIds::CONFIG_LOCK);
     if (idx >= inner_value->size_) {
       ret = OB_ARRAY_OUT_OF_RANGE;
@@ -225,7 +225,7 @@ int ObConfigStrListItem::get(const int64_t idx, char* buf, const int64_t buf_len
   return ret;
 }
 
-bool ObConfigStrListItem::set(const char* str)
+bool ObConfigStrListItem::set(const char *str)
 {
   bool bret = true;
   UNUSED(str);
@@ -274,8 +274,8 @@ bool ObConfigStrListItem::set(const char* str)
 }
 
 // ObConfigIntegralItem
-void ObConfigIntegralItem::init(Scope::ScopeInfo scope_info, const char* name, const char* def, const char* range,
-    const char* info, const ObParameterAttr attr)
+void ObConfigIntegralItem::init(Scope::ScopeInfo scope_info, const char *name, const char *def, const char *range,
+    const char *info, const ObParameterAttr attr)
 {
   ObConfigItem::init(scope_info, name, def, info, attr);
   if (OB_ISNULL(range)) {
@@ -285,12 +285,12 @@ void ObConfigIntegralItem::init(Scope::ScopeInfo scope_info, const char* name, c
   }
 }
 
-bool ObConfigIntegralItem::parse_range(const char* range)
+bool ObConfigIntegralItem::parse_range(const char *range)
 {
   char buff[64] = {'\0'};
-  const char* p_left = NULL;
-  char* p_middle = NULL;
-  char* p_right = NULL;
+  const char *p_left = NULL;
+  char *p_middle = NULL;
+  char *p_right = NULL;
   bool bool_ret = true;
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -351,8 +351,8 @@ bool ObConfigIntegralItem::parse_range(const char* range)
 }
 
 // ObConfigDoubleItem
-ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* range, const char* info, const ObParameterAttr attr)
+ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *range, const char *info, const ObParameterAttr attr)
     : value_(0)
 {
   if (OB_LIKELY(NULL != container)) {
@@ -361,8 +361,8 @@ ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer* container, Scope::Scop
   init(scope_info, name, def, range, info, attr);
 }
 
-ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
     : value_(0)
 {
   if (OB_LIKELY(NULL != container)) {
@@ -371,8 +371,8 @@ ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer* container, Scope::Scop
   init(scope_info, name, def, "", info, attr);
 }
 
-void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info, const char* name, const char* def, const char* range,
-    const char* info, const ObParameterAttr attr)
+void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info, const char *name, const char *def, const char *range,
+    const char *info, const ObParameterAttr attr)
 {
   ObConfigItem::init(scope_info, name, def, info, attr);
   if (OB_ISNULL(range)) {
@@ -382,13 +382,13 @@ void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info, const char* name, con
   }
 }
 
-double ObConfigDoubleItem::parse(const char* str, bool& valid) const
+double ObConfigDoubleItem::parse(const char *str, bool &valid) const
 {
   double v = 0.0;
   if (OB_ISNULL(str) || OB_UNLIKELY('\0' == str[0])) {
     valid = false;
   } else {
-    char* endptr = NULL;
+    char *endptr = NULL;
     v = strtod(str, &endptr);
     if (OB_ISNULL(endptr) || OB_UNLIKELY('\0' != *endptr)) {
       valid = false;
@@ -399,12 +399,12 @@ double ObConfigDoubleItem::parse(const char* str, bool& valid) const
   return v;
 }
 
-bool ObConfigDoubleItem::parse_range(const char* range)
+bool ObConfigDoubleItem::parse_range(const char *range)
 {
   char buff[64] = {'\0'};
-  const char* p_left = NULL;
-  char* p_middle = NULL;
-  char* p_right = NULL;
+  const char *p_left = NULL;
+  char *p_middle = NULL;
+  char *p_right = NULL;
   bool bool_ret = true;
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -460,8 +460,8 @@ bool ObConfigDoubleItem::parse_range(const char* range)
 }
 
 // ObConfigCapacityItem
-ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* range, const char* info, const ObParameterAttr attr)
+ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *range, const char *info, const ObParameterAttr attr)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
@@ -469,8 +469,8 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer* container, Scope::
   init(scope_info, name, def, range, info, attr);
 }
 
-ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
@@ -478,7 +478,7 @@ ObConfigCapacityItem::ObConfigCapacityItem(ObConfigContainer* container, Scope::
   init(scope_info, name, def, "", info, attr);
 }
 
-int64_t ObConfigCapacityItem::parse(const char* str, bool& valid) const
+int64_t ObConfigCapacityItem::parse(const char *str, bool &valid) const
 {
   int64_t ret = ObConfigCapacityParser::get(str, valid);
   if (!valid) {
@@ -488,8 +488,8 @@ int64_t ObConfigCapacityItem::parse(const char* str, bool& valid) const
 }
 
 // ObConfigTimeItem
-ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* range, const char* info, const ObParameterAttr attr)
+ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *range, const char *info, const ObParameterAttr attr)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
@@ -497,8 +497,8 @@ ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer* container, Scope::ScopeInf
   init(scope_info, name, def, range, info, attr);
 }
 
-ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
@@ -506,7 +506,7 @@ ObConfigTimeItem::ObConfigTimeItem(ObConfigContainer* container, Scope::ScopeInf
   init(scope_info, name, def, "", info, attr);
 }
 
-int64_t ObConfigTimeItem::parse(const char* str, bool& valid) const
+int64_t ObConfigTimeItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigTimeParser::get(str, valid);
   if (!valid) {
@@ -516,8 +516,8 @@ int64_t ObConfigTimeItem::parse(const char* str, bool& valid) const
 }
 
 // ObConfigIntItem
-ObConfigIntItem::ObConfigIntItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* range, const char* info, const ObParameterAttr attr)
+ObConfigIntItem::ObConfigIntItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *range, const char *info, const ObParameterAttr attr)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
@@ -525,8 +525,8 @@ ObConfigIntItem::ObConfigIntItem(ObConfigContainer* container, Scope::ScopeInfo 
   init(scope_info, name, def, range, info, attr);
 }
 
-ObConfigIntItem::ObConfigIntItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigIntItem::ObConfigIntItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
@@ -534,7 +534,7 @@ ObConfigIntItem::ObConfigIntItem(ObConfigContainer* container, Scope::ScopeInfo 
   init(scope_info, name, def, "", info, attr);
 }
 
-int64_t ObConfigIntItem::parse(const char* str, bool& valid) const
+int64_t ObConfigIntItem::parse(const char *str, bool &valid) const
 {
   int64_t value = ObConfigIntParser::get(str, valid);
   if (!valid) {
@@ -544,8 +544,8 @@ int64_t ObConfigIntItem::parse(const char* str, bool& valid) const
 }
 
 // ObConfigMomentItem
-ObConfigMomentItem::ObConfigMomentItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigMomentItem::ObConfigMomentItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
     : value_()
 {
   if (OB_LIKELY(NULL != container)) {
@@ -554,7 +554,7 @@ ObConfigMomentItem::ObConfigMomentItem(ObConfigContainer* container, Scope::Scop
   init(scope_info, name, def, info, attr);
 }
 
-bool ObConfigMomentItem::set(const char* str)
+bool ObConfigMomentItem::set(const char *str)
 {
   int ret = true;
   struct tm tm_value;
@@ -573,8 +573,8 @@ bool ObConfigMomentItem::set(const char* str)
 }
 
 // ObConfigBoolItem
-ObConfigBoolItem::ObConfigBoolItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigBoolItem::ObConfigBoolItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
     : value_(false)
 {
   if (OB_LIKELY(NULL != container)) {
@@ -583,7 +583,7 @@ ObConfigBoolItem::ObConfigBoolItem(ObConfigContainer* container, Scope::ScopeInf
   init(scope_info, name, def, info, attr);
 }
 
-bool ObConfigBoolItem::set(const char* str)
+bool ObConfigBoolItem::set(const char *str)
 {
   bool valid = false;
   const bool value = parse(str, valid);
@@ -595,52 +595,24 @@ bool ObConfigBoolItem::set(const char* str)
   return valid;
 }
 
-bool ObConfigBoolItem::parse(const char* str, bool& valid) const
+bool ObConfigBoolItem::parse(const char *str, bool &valid) const
 {
   bool value = true;
   if (OB_ISNULL(str)) {
     valid = false;
     OB_LOG(ERROR, "Get bool config item fail, str is NULL!");
-  } else if (0 == STRCASECMP(str, "false")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "true")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "off")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "on")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "no")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "yes")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "f")) {
-    valid = true;
-    value = false;
-  } else if (0 == STRCASECMP(str, "t")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "1")) {
-    valid = true;
-    value = true;
-  } else if (0 == STRCASECMP(str, "0")) {
-    valid = true;
-    value = false;
   } else {
-    OB_LOG(ERROR, "Get bool config item fail", K(str));
-    valid = false;
+    value = ObConfigBoolParser::get(str, valid);
+    if (!valid) {
+      OB_LOG(WARN, "Get bool config item fail", K(valid), K(str));
+    }
   }
   return value;
 }
 
 // ObConfigStringItem
-ObConfigStringItem::ObConfigStringItem(ObConfigContainer* container, Scope::ScopeInfo scope_info, const char* name,
-    const char* def, const char* info, const ObParameterAttr attr)
+ObConfigStringItem::ObConfigStringItem(ObConfigContainer *container, Scope::ScopeInfo scope_info, const char *name,
+    const char *def, const char *info, const ObParameterAttr attr)
 {
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
@@ -648,10 +620,10 @@ ObConfigStringItem::ObConfigStringItem(ObConfigContainer* container, Scope::Scop
   init(scope_info, name, def, info, attr);
 }
 
-int ObConfigStringItem::copy(char* buf, const int64_t buf_len)
+int ObConfigStringItem::copy(char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  const char* inner_value = value_str_;
+  const char *inner_value = value_str_;
 
   if (OB_FAIL(databuff_printf(buf, buf_len, "%s", inner_value))) {
     OB_LOG(WARN, "buffer not enough", K(ret), K(buf_len), K_(value_str));
@@ -659,8 +631,8 @@ int ObConfigStringItem::copy(char* buf, const int64_t buf_len)
   return ret;
 }
 
-ObConfigLogArchiveOptionsItem::ObConfigLogArchiveOptionsItem(ObConfigContainer* container, Scope::ScopeInfo scope_info,
-    const char* name, const char* def, const char* info, const ObParameterAttr attr)
+ObConfigLogArchiveOptionsItem::ObConfigLogArchiveOptionsItem(ObConfigContainer *container, Scope::ScopeInfo scope_info,
+    const char *name, const char *def, const char *info, const ObParameterAttr attr)
     : value_()
 {
   if (OB_LIKELY(NULL != container)) {
@@ -669,7 +641,7 @@ ObConfigLogArchiveOptionsItem::ObConfigLogArchiveOptionsItem(ObConfigContainer* 
   init(scope_info, name, def, info, attr);
 }
 
-bool ObConfigLogArchiveOptionsItem::set(const char* str)
+bool ObConfigLogArchiveOptionsItem::set(const char *str)
 {
   UNUSED(str);
   value_.valid_ = true;
@@ -687,8 +659,8 @@ bool ObConfigLogArchiveOptionsItem::set(const char* str)
       value_.valid_ = false;
       OB_LOG(WARN, "failed to format_option_str", KR(ret), K(tmp_str));
     } else {
-      char* saveptr = NULL;
-      char* s = STRTOK_R(format_str_buf, " ", &saveptr);
+      char *saveptr = NULL;
+      char *s = STRTOK_R(format_str_buf, " ", &saveptr);
       bool is_equal_sign_demanded = false;
       int64_t key_idx = -1;
       if (OB_LIKELY(NULL != s)) {
@@ -741,7 +713,7 @@ bool ObConfigLogArchiveOptionsItem::set(const char* str)
   return value_.valid_;
 }
 
-int64_t ObConfigLogArchiveOptionsItem::get_keywords_idx(const char* str, bool& is_key)
+int64_t ObConfigLogArchiveOptionsItem::get_keywords_idx(const char *str, bool &is_key)
 {
   int64_t idx = -1;
   is_key = false;
@@ -754,7 +726,7 @@ int64_t ObConfigLogArchiveOptionsItem::get_keywords_idx(const char* str, bool& i
   return idx;
 }
 
-int64_t ObConfigLogArchiveOptionsItem::get_compression_option_idx(const char* str)
+int64_t ObConfigLogArchiveOptionsItem::get_compression_option_idx(const char *str)
 {
   int64_t idx = -1;
   for (int i = 0; i < ARRAYSIZEOF(log_archive_compression_values) && idx < 0; ++i) {
@@ -797,7 +769,7 @@ void ObConfigLogArchiveOptionsItem::process_isolated_option_(const int64_t idx)
   }
 }
 
-void ObConfigLogArchiveOptionsItem::process_kv_option_(const int64_t key_idx, const char* value)
+void ObConfigLogArchiveOptionsItem::process_kv_option_(const int64_t key_idx, const char *value)
 {
   static bool compression_state_map[] = {
       false,
@@ -869,7 +841,7 @@ bool ObConfigLogArchiveOptionsItem::ObInnerConfigLogArchiveOptionsItem::is_encry
   return is_valid;
 }
 
-int ObConfigLogArchiveOptionsItem::format_option_str(const char* src, int64_t src_len, char* dest, int64_t dest_len)
+int ObConfigLogArchiveOptionsItem::format_option_str(const char *src, int64_t src_len, char *dest, int64_t dest_len)
 
 {
   int ret = OB_SUCCESS;
@@ -877,8 +849,8 @@ int ObConfigLogArchiveOptionsItem::format_option_str(const char* src, int64_t sr
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", KR(ret), KP(src), KP(dest), K(src_len), K(dest_len));
   } else {
-    const char* source_str = src;
-    const char* locate_str = NULL;
+    const char *source_str = src;
+    const char *locate_str = NULL;
     int64_t source_left_len = src_len;
     int32_t locate = -1;
     int64_t pos = 0;

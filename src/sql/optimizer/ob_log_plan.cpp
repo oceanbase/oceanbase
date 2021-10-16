@@ -3405,6 +3405,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr* query_ref)
       ObArray<std::pair<int64_t, ObRawExpr*>> exec_params;
       ObLogPlan* logical_plan = NULL;
       if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create plan", K(ret), K(subquery->get_sql_stmt()));
       } else if (OB_FAIL(logical_plan->init_plan_info())) {
         LOG_WARN("failed to init equal sets", K(ret));
@@ -4145,12 +4146,6 @@ int ObLogPlan::allocate_access_path(AccessPath* ap, ObLogicalOperator*& out_acce
           OZ(scan->get_part_exprs(table_id, ref_table_id, part_level, part_expr, subpart_expr));
           scan->set_part_expr(part_expr);
           scan->set_subpart_expr(subpart_expr);
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(append(scan->get_startup_exprs(), get_startup_filters()))) {
-          LOG_WARN("failed to append startup filters", K(ret));
         }
       }
 
@@ -5451,6 +5446,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp& operation, void* ctx)
       case EXPLAIN_WRITE_BUFFER_OUTPUT:
       case EXPLAIN_WRITE_BUFFER_OUTLINE:
       case EXPLAIN_INDEX_SELECTION_INFO:
+      case ALLOC_STARTUP_EXPR:
       default:
         break;
     }

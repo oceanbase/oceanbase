@@ -168,9 +168,8 @@ public:
   int set_emergency_release();
   int get_active_memtable(ObTableHandle& handle);
 
-  // PG, pg partition
-  int get_pg_partition(const common::ObPartitionKey& pkey, ObPGPartitionGuard& guard);
-  const common::ObPartitionKey& get_partition_key() const
+  int get_pg_partition(const common::ObPartitionKey &pkey, ObPGPartitionGuard &guard) const;
+  const common::ObPartitionKey &get_partition_key() const
   {
     return pkey_;
   }
@@ -251,8 +250,8 @@ public:
   bool is_restoring_standby();
   int16_t get_restore_state() const;
   int get_all_pg_partitions(ObPGPartitionArrayGuard& guard);
-  int check_can_replay_add_partition_to_pg_log(
-      const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts, bool& can_replay);
+  int check_can_replay_add_partition_to_pg_log(const common::ObPartitionKey& pkey, const uint64_t log_id,
+      const int64_t log_ts, const int64_t schema_version, bool& can_replay);
   int check_can_replay_remove_partition_from_pg_log(
       const common::ObPartitionKey& pkey, const uint64_t log_id, bool& can_replay);
   int try_update_report_status(
@@ -278,9 +277,11 @@ public:
   int replay_pg_partition_meta(ObPGPartitionStoreMeta& meta);
   int add_sstable_for_merge(const ObPartitionKey& pkey, storage::ObSSTable* table,
       const int64_t max_kept_major_version_number, ObSSTable* complement_minor_sstable = nullptr);
-  int set_restore_flag(const int16_t restore_flag, const int64_t restore_snapshot_version);
+  int set_restore_flag(
+      const int16_t restore_flag, const int64_t restore_snapshot_version, const int64_t restore_schema_version);
   int set_last_restore_log_info(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
-  int get_restore_replay_info(uint64_t& last_restore_log_id, int64_t& last_restore_log_ts, int64_t& restore_snapshot_version);
+  int get_restore_replay_info(
+      uint64_t& last_restore_log_id, int64_t& last_restore_log_ts, int64_t& restore_snapshot_version);
   int set_partition_removed(const ObPartitionKey& pkey);
   int get_all_pg_partition_keys_with_lock(common::ObPartitionArray& pkeys, const bool include_trans_table = false);
   int clear_all_memtables();
@@ -306,8 +307,9 @@ public:
   {
     return pg_memtable_mgr_.get_readable_info();
   }
-  int get_pkey_for_table(const int64_t table_id, ObPartitionKey& pkey);
-  int update_split_state_after_merge(int64_t& split_state);
+  int get_pkey_for_table(const int64_t table_id, ObPartitionKey &pkey);
+  int update_split_state_after_merge(int64_t &split_state);
+  int post_del_pg();
   int remove_all_pg_index();
   int update_split_table_store(
       const common::ObPartitionKey& pkey, int64_t table_id, bool is_major_split, ObTablesHandle& handle);
@@ -446,6 +448,29 @@ private:
   private:
     ObPartitionArray& pkeys_;
   };
+  class LocalizePGPartitionFunctor {
+  public:
+    explicit LocalizePGPartitionFunctor(ObPGPartitionMap &map) : map_(map)
+    {}
+    ~LocalizePGPartitionFunctor()
+    {}
+    int operator()(const common::ObPartitionKey &pkey, ObPGPartition *&part)
+    {
+      int ret = OB_SUCCESS;
+      if (!pkey.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(ERROR, "invalid pkey", K(pkey));
+      } else if (OB_FAIL(map_.get(pkey, part))) {
+        STORAGE_LOG(ERROR, "fail to get part", K(ret), K(pkey));
+      } else {
+        STORAGE_LOG(INFO, "localize part OK", K(pkey), K(*part));
+      }
+      return ret;
+    }
+
+  private:
+    ObPGPartitionMap &map_;
+  };
   class RemovePGIndexFunctor {
   public:
     explicit RemovePGIndexFunctor(ObPartitionGroupIndex& pg_index) : pg_index_(pg_index)
@@ -460,6 +485,8 @@ private:
         STORAGE_LOG(ERROR, "invalid pkey", K(pkey));
       } else if (OB_FAIL(pg_index_.remove_partition(pkey))) {
         STORAGE_LOG(ERROR, "failed to remove pg index", K(ret), K(pkey));
+      } else {
+        STORAGE_LOG(INFO, "remove part from index OK", K(pkey));
       }
       return ret;
     }
@@ -501,13 +528,20 @@ private:
   public:
     RemovePGPartitionFunctor(ObPGPartitionMap& map) : map_(map)
     {}
-    void operator()(const common::ObPartitionKey& pkey)
+    int operator()(const common::ObPartitionKey &pkey, ObPGPartition *part = NULL)
     {
+      int ret = OB_SUCCESS;
       if (!pkey.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "invalid pkey", K(pkey));
       } else {
-        map_.del(pkey);
+        if (part != NULL) {
+          map_.revert(part);
+        } else if (OB_FAIL(map_.del(pkey))) {
+          STORAGE_LOG(WARN, "del pg partition from map fail", K(pkey));
+        }
       }
+      return ret;
     }
 
   private:
@@ -632,13 +666,14 @@ private:
   bool is_inited_;
   bool is_removed_;
   common::ObPartitionKey pkey_;
-  ObIPartitionComponentFactory* cp_fty_;
-  transaction::ObTransService* txs_;
-  clog::ObIPartitionLogService* pls_;
-  ObIPartitionGroup* pg_;
-  ObPGPartition* pg_partition_;
-  share::schema::ObMultiVersionSchemaService* schema_service_;
-  ObPartitionKeyList partition_list_;
+  ObIPartitionComponentFactory *cp_fty_;
+  transaction::ObTransService *txs_;
+  clog::ObIPartitionLogService *pls_;
+  ObIPartitionGroup *pg_;
+  ObPGPartition *pg_partition_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  ObPGPartitionList partition_list_;
+  bool part_list_contains_part_info_;  // true when pg removed
 
   // pg meta and memstore
   common::ObBucketLock bucket_lock_;

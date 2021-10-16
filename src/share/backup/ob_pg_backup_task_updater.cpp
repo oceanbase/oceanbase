@@ -142,41 +142,33 @@ int ObPGBackupTaskUpdater::get_pg_backup_tasks(const uint64_t tenant_id, const i
 }
 
 int ObPGBackupTaskUpdater::update_status_and_result_and_statics(
-    const common::ObIArray<ObPGBackupTaskInfo>& pg_task_info_array)
+    const common::ObIArray<ObPGBackupTaskInfo>& pg_task_info_array, common::ObISQLClient& trans,
+    ObBackupStatistics& backup_statistics)
 {
   int ret = OB_SUCCESS;
-  int64_t report_idx = 0;
+  int64_t affected_rows = 0;
+  backup_statistics.reset();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("pg backup task updater do not init", K(ret));
   } else {
-    while (OB_SUCC(ret) && report_idx < pg_task_info_array.count()) {
-      ObMySQLTransaction trans;
-      const int64_t remain_cnt = pg_task_info_array.count() - report_idx;
-      int64_t cur_batch_cnt = remain_cnt < MAX_BATCH_COUNT ? remain_cnt : MAX_BATCH_COUNT;
-      if (OB_FAIL(trans.start(sql_proxy_))) {
-        LOG_WARN("failed to start trans", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < pg_task_info_array.count(); ++i) {
+      const ObPGBackupTaskInfo& pg_task_info = pg_task_info_array.at(i);
+      affected_rows = 0;
+      if (OB_FAIL(ObPGBackupTaskOperator::update_result_and_status_and_statics(trans, pg_task_info, affected_rows))) {
+        LOG_WARN("failed to update addr", K(ret), K(pg_task_info));
+      } else if (0 == affected_rows) {
+        // do nothing
+      } else if (affected_rows > 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected rows is unexpected", K(ret), K(pg_task_info), K(affected_rows));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < cur_batch_cnt; ++i) {
-          const ObPGBackupTaskInfo& pg_task_info = pg_task_info_array.at(i + report_idx);
-          if (OB_FAIL(ObPGBackupTaskOperator::update_result_and_status_and_statics(trans, pg_task_info))) {
-            LOG_WARN("failed to update addr", K(ret), K(pg_task_info));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(trans.end(true /*commit*/))) {
-            OB_LOG(WARN, "fail to end transaction", K(ret), K(pg_task_info_array));
-          }
-        } else {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = trans.end(false /*not commit*/))) {
-            OB_LOG(WARN, "fail to end transaction", K(ret), K(tmp_ret), K(pg_task_info_array));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        report_idx += cur_batch_cnt;
+        backup_statistics.finish_partition_count_ += pg_task_info.finish_partition_count_;
+        backup_statistics.macro_block_count_ += pg_task_info.macro_block_count_;
+        backup_statistics.finish_macro_block_count_ += pg_task_info.finish_macro_block_count_;
+        backup_statistics.input_bytes_ += pg_task_info.input_bytes_;
+        backup_statistics.output_bytes_ += pg_task_info.output_bytes_;
       }
     }
   }

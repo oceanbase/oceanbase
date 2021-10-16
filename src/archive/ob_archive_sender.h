@@ -17,7 +17,6 @@
 #include "ob_archive_destination_mgr.h"
 #include "ob_archive_round_mgr.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"  // ObConcurrentFIFOAllocator
-#include "lib/lock/ob_spin_rwlock.h"                     // RWLock
 #include "ob_archive_thread_pool.h"
 
 namespace oceanbase {
@@ -42,6 +41,10 @@ public:
   // converge task
   static const int64_t MAX_CONVERGE_TASK_COUNT = 20 * 1000;
   static const int64_t MAX_CONVERGE_TASK_SIZE = 8 * 1024 * 1024L;
+  static const int64_t MIN_CONVERGE_TASK_COUNT_LIMIT = 50;
+  static const int64_t MIN_CONVERGE_TASK_SIZE_LIMIT = 1024 * 1024L;
+  // total pg task status count limit
+  static const int64_t MAX_PG_TASK_STATUS_LIMIT = 1000;
 
 public:
   ObArchiveSender();
@@ -64,20 +67,22 @@ public:
   int64_t get_pre_archive_task_capacity();
   int record_index_info(
       ObPGArchiveTask& pg_archive_task, const int64_t epoch, const int64_t incarnation, const int64_t round);
-  int save_server_start_archive_ts(const int64_t incarnation, const int64_t round, const int64_t start_ts);
+  int save_server_start_archive_ts(
+      const int64_t incarnation, const int64_t round, const bool is_oss, const int64_t start_ts);
   int check_server_start_ts_exist(const int64_t incarnation, const int64_t round, int64_t& start_ts);
   int64_t cal_work_thread_num();
   void set_thread_name_str(char* str);
-  int handle_task_list(ObArchiveTaskStatus* task_status);
+  int handle_task_list(void* data);
 
 private:
   // void run1();
   // void do_thread_task_();
   // int handle_task_list_(ObArchiveSendTaskStatus &task_status);
   bool is_not_leader_error_(const int ret_code);
-
   int try_retire_task_status_(ObArchiveSendTaskStatus& task_status);
   int converge_send_task_(ObArchiveSendTaskStatus& task_status, SendTaskArray& array);
+  int do_statisfy_converge_strategy_(const ObPGKey& pg_key, const int64_t epoch, const int64_t incarnation,
+      const int64_t round, const int64_t total_count, const int64_t total_size, bool& can_send);
   int release_task_array_(SendTaskArray& array);
   int handle(ObArchiveSendTaskStatus& status, SendTaskArray& array);
   int submit_send_task_(ObArchiveSendTask* task);
@@ -91,6 +96,9 @@ private:
   int build_send_buf_(const int64_t buf_len, char* buf, SendTaskArray& array);
   int archive_log_(const ObPGKey& pg_key, ObPGArchiveTask& pg_archive_task, SendTaskArray& array);
   int do_archive_log_(ObPGArchiveTask& pg_archive_task, const int64_t buf_size, SendTaskArray& array);
+  int check_need_switch_piece_(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+      const bool pg_task_need_switch, const int64_t pg_piece_id, const int64_t pg_piece_create_date, bool& is_oss,
+      bool& need_switch_piece, int64_t& new_piece_id, int64_t& new_piece_create_date);
   int check_can_send_task_(const int64_t epoch, const int64_t incarnation, const int64_t round,
       const uint64_t max_archived_log_id, const int64_t max_archived_log_ts, SendTaskArray& array);
   int check_start_archive_task_(const ObPGKey& pg_key, const uint64_t end_log_id);
@@ -100,8 +108,8 @@ private:
       const uint64_t max_archive_log_id, const int64_t max_archive_log_ts, const bool need_update_log_ts);
   bool check_need_switch_file_(
       const int64_t log_size, const int64_t offset, const bool force_switch, const bool is_data_file);
-  int switch_file_(ObPGArchiveTask& pg_archive_task, const int64_t epoch, const int64_t incarnation,
-      const int64_t round, const LogArchiveFileType file_type);
+  int check_leader_valid(
+      ObPGArchiveTask& pg_archive_task, const int64_t epoch, const int64_t incarnation, const int64_t round);
   int update_data_file_info_(const int64_t epoch, const int64_t incarnation, const int64_t round,
       const uint64_t min_log_id, const int64_t min_log_ts, ObPGArchiveTask& pg_archive_task, const int64_t buffer_len);
   int archive_log_callback_(ObPGArchiveTask& pg_archive_task, SendTaskArray& array);
@@ -113,13 +121,20 @@ private:
   void statistic(SendTaskArray& array, const int64_t cost_ts);
   int handle_archive_error_(const ObPGKey& pg_key, const int64_t epoch_id, const int64_t incarnation,
       const int64_t round, const int ret_code, ObArchiveSendTaskStatus& status);
-  int check_and_mk_server_start_ts_dir_(const int64_t incarnation, const int64_t round);
-  int try_touch_archive_key_(const int64_t incarnation, const int64_t round, ObPGArchiveTask& pg_task);
+  int check_and_mk_server_start_ts_dir_(const int64_t incarnation, const int64_t round, const bool is_oss);
+  int try_touch_archive_key_(
+      const int64_t epoch, const int64_t incarnation, const int64_t round, ObPGArchiveTask& pg_task);
   int touch_archive_key_file_(const ObPGKey& pkey, const int64_t incarnation, const int64_t round);
-  int build_archive_key_prefix_(const ObPGKey& pkey, const int64_t incarnation, const int64_t round);
+  int check_and_switch_piece_(const int64_t epoch_id, const int64_t incarnation, const int64_t round,
+      const int64_t pg_piece_id, const int64_t pg_piece_create_date, const bool pg_need_switch_piece,
+      const bool is_first_record_finish, ObPGArchiveTask& pg_archive_task);
+  int check_and_make_dir_for_switch_piece_(const ObPGKey& pg_key, const int64_t incarnation,
+      const int64_t archive_round, const int64_t piece_id, const int64_t piece_create_date);
 
-  typedef common::SpinRWLock RWLock;
-  typedef common::SpinWLockGuard WLockGuard;
+  int check_and_make_archive_key_dir(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+      const int64_t piece_id, const int64_t piece_create_date);
+  int push_archive_key_file_(const ObPGArchiveTask& pg_archive_task, const int64_t epoch_id, const int64_t incarnation,
+      const int64_t round, const int64_t piece_id, const int64_t piece_create_date, const bool is_first_piece);
 
 private:
   int64_t log_archive_round_;
@@ -130,8 +145,6 @@ private:
   ObArchiveMgr* archive_mgr_;
 
   ObArchiveAllocator* allocator_;
-
-  mutable RWLock rwlock_;
 };
 
 }  // namespace archive

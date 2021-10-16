@@ -39,7 +39,7 @@ int ObMemtableArrWrap::dec_active_trx_count_at_active_mt()
 {
   int ret = OB_SUCCESS;
   int64_t count = get_count_();
-  int64_t pos = (mt_end_ - 1) % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+  int64_t pos = (mt_end_ - 1) % common::MAX_MEMSTORE_CNT;
 
   if (pos < 0 || count == 0 || mt_end_ <= 0 || mt_start_ < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -68,7 +68,7 @@ int ObMemtableArrWrap::remove_mem_ctx_for_trans_ctx(ObMemtable* mt)
     TRANS_LOG(WARN, "remove mem ctx for trans ctx", K(ret), K(mt_start_), K(mt_end_));
   } else {
     if (0 != count) {
-      int64_t pos = mt_start_ % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+      int64_t pos = mt_start_ % common::MAX_MEMSTORE_CNT;
       if (mt == mt_[pos]) {
         mt_[pos]->dec_ref();
         mt_[pos] = NULL;
@@ -85,7 +85,7 @@ int ObMemtableArrWrap::clear_mt_arr()
   int ret = OB_SUCCESS;
 
   for (int64_t i = mt_start_; OB_SUCCESS == ret && i < mt_end_; i++) {
-    int64_t pos = i % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+    int64_t pos = i % common::MAX_MEMSTORE_CNT;
     if (NULL != mt_[pos]) {
       mt_[pos]->dec_active_trx_count();
       mt_[pos] = NULL;
@@ -108,11 +108,11 @@ int ObMemtableArrWrap::add_memtable(ObMemtable* memtable)
   if (NULL == memtable) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "add memtable get nullptr", K(memtable), K(ret), K(mt_start_), K(mt_end_));
-  } else if (count >= common::MAX_MEMSTORE_CNT_IN_STORAGE) {
+  } else if (count >= common::MAX_MEMSTORE_CNT) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "add memtable upper than allowed", K(memtable), K(ret), K(mt_start_), K(mt_end_));
   } else {
-    int64_t pos = mt_end_ % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+    int64_t pos = mt_end_ % common::MAX_MEMSTORE_CNT;
     mt_[pos] = memtable;
     mt_end_++;
   }
@@ -124,7 +124,7 @@ ObMemtable* ObMemtableArrWrap::get_active_mt() const
 {
   ObMemtable* ret = NULL;
   int64_t count = get_count_();
-  int64_t pos = (mt_end_ - 1) % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+  int64_t pos = (mt_end_ - 1) % common::MAX_MEMSTORE_CNT;
   if (count > 0 && pos >= 0) {
     ret = mt_[pos];
   }
@@ -134,7 +134,7 @@ ObMemtable* ObMemtableArrWrap::get_active_mt() const
 int ObMemtableArrWrap::inc_active_trx_count_at_active_mt(ObMemtable*& active_memtable)
 {
   int ret = OB_SUCCESS;
-  int64_t pos = (mt_end_ - 1) % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+  int64_t pos = (mt_end_ - 1) % common::MAX_MEMSTORE_CNT;
   int64_t count = get_count_();
 
   if (pos < 0 || count < 0) {
@@ -158,7 +158,7 @@ int ObMemtableArrWrap::update_max_trans_version_(const int64_t pos, const int64_
 {
   int ret = OB_SUCCESS;
 
-  if (pos < 0 || pos >= common::MAX_MEMSTORE_CNT_IN_STORAGE) {
+  if (pos < 0 || pos >= common::MAX_MEMSTORE_CNT) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "update_max_trans_version invalid argument", K(ret), K(pos));
   } else {
@@ -176,7 +176,7 @@ int ObMemtableArrWrap::update_max_schema_version_(const int64_t pos, const int64
 {
   int ret = OB_SUCCESS;
 
-  if (pos < 0 || pos >= common::MAX_MEMSTORE_CNT_IN_STORAGE) {
+  if (pos < 0 || pos >= common::MAX_MEMSTORE_CNT) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "update_max_schema_version invalid argument", K(ret), K(pos));
   } else {
@@ -193,7 +193,7 @@ int ObMemtableArrWrap::update_all_mt_max_trans_version(const int64_t trans_versi
   int ret = OB_SUCCESS;
 
   for (int64_t i = mt_start_; i < mt_end_; i++) {
-    int64_t pos = i % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+    int64_t pos = i % common::MAX_MEMSTORE_CNT;
     update_max_trans_version_(pos, trans_version);
   }
 
@@ -205,7 +205,7 @@ int ObMemtableArrWrap::update_all_mt_max_schema_version(const int64_t schema_ver
   int ret = OB_SUCCESS;
 
   for (int64_t i = mt_start_; i < mt_end_; i++) {
-    int64_t pos = i % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+    int64_t pos = i % common::MAX_MEMSTORE_CNT;
     update_max_schema_version_(pos, schema_version);
   }
 
@@ -217,7 +217,7 @@ bool ObMemtableArrWrap::is_contain_this_memtable(ObMemtable* memtable)
   int bool_ret = false;
 
   for (int64_t i = mt_start_; !bool_ret && i < mt_end_; i++) {
-    int64_t pos = i % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+    int64_t pos = i % common::MAX_MEMSTORE_CNT;
     if (mt_[pos] == memtable) {
       bool_ret = true;
     }
@@ -231,7 +231,7 @@ int ObMemtableArrWrap::check_memtable_count(int64_t& count)
   int ret = OB_SUCCESS;
 
   for (int64_t i = mt_start_; i < mt_end_; ++i) {
-    int64_t pos = i % common::MAX_MEMSTORE_CNT_IN_STORAGE;
+    int64_t pos = i % common::MAX_MEMSTORE_CNT;
     if (NULL != mt_[pos]) {
       ATOMIC_AAF(&count, 1);
     }

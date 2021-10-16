@@ -67,10 +67,13 @@ TEST_F(TestStorageFile, test_util)
   char uri[OB_MAX_URI_LENGTH];
   const ObString storage_info;
   bool is_exist = false;
+  bool is_empty_dir = false;
   char test_content[OB_MAX_URI_LENGTH] = "just_for_test";
   char read_buf[OB_MAX_URI_LENGTH];
   int64_t read_size = 0;
   ASSERT_EQ(OB_SUCCESS, util.mkdir(test_dir_uri_, storage_info));
+  ASSERT_EQ(OB_SUCCESS, util.is_empty_directory(test_dir_uri_, storage_info, is_empty_dir));
+  ASSERT_TRUE(is_empty_dir);
 
   ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "file://%s/test_file", test_dir_));
   ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, storage_info, is_exist));
@@ -80,6 +83,9 @@ TEST_F(TestStorageFile, test_util)
   ASSERT_EQ(strlen(test_content), read_size);
   ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, storage_info, is_exist));
   ASSERT_TRUE(is_exist);
+
+  ASSERT_EQ(OB_SUCCESS, util.is_empty_directory(test_dir_uri_, storage_info, is_empty_dir));
+  ASSERT_FALSE(is_empty_dir);
 
   ASSERT_EQ(OB_SUCCESS, util.del_file(uri, storage_info));
   ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, storage_info, is_exist));

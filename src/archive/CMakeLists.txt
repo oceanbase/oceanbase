@@ -26,4 +26,4 @@ ob_set_subtarget(ob_archive common
   ob_archive_clear.cpp
 )
 
-ob_server_add_target(ob_archive)
+   ob_server_add_target(ob_archive)

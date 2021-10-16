@@ -494,7 +494,9 @@ int ObAggregateProcessor::clone_cell(ObDatum& target_cell, const ObDatum& src_ce
   int64_t curr_size = 0;
   // length + magic num + data
   int64_t need_size = sizeof(int64_t) * 2 + (is_number ? ObNumber::MAX_BYTE_LEN : src_cell.len_);
-  if (target_cell.len_ > 0) {
+  // we can't decide reuse memory on target_cell.len_, because for null datum we 
+  // also have reserved buffer
+  if (OB_NOT_NULL(target_cell.ptr_)) {
     void* data_ptr = const_cast<char*>(target_cell.ptr_);
     const int64_t data_length = target_cell.len_;
     if (OB_ISNULL((char*)data_ptr - sizeof(int64_t)) ||
@@ -548,10 +550,11 @@ int ObAggregateProcessor::clone_cell(ObDatum& target_cell, const ObDatum& src_ce
   }
 
   if (OB_SUCC(ret)) {
-    int64_t pos = 0;
-    if (OB_FAIL(target_cell.deep_copy(src_cell, buf, need_size, pos))) {
-      LOG_WARN("fall to deep_copy", K(src_cell), K(ret));
-    }
+    // To reuse prealloc memory, we must use specialize deep_copy method
+    // Otherwise for null value, we won't reserve its orgin ptr in ObDatum::deep_copy
+    memcpy(buf, src_cell.ptr_, src_cell.len_);
+    target_cell.ptr_ = buf;
+    target_cell.pack_ = src_cell.pack_;
   }
   OX(LOG_DEBUG("succ to clone cell", K(src_cell), K(target_cell), K(curr_size), K(need_size)));
   return ret;

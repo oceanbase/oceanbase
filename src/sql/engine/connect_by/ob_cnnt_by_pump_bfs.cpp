@@ -150,7 +150,7 @@ int ObConnectByOpBFSPump::free_path_stack()
       for (int64_t i = 0; OB_SUCC(ret) && i < connect_by_path_count_; ++i) {
         if (pop_node.paths_.at(i).ptr() != NULL) {
           allocator_.free(pop_node.paths_.at(i).ptr());
-          pop_node.paths_.at(i).make_empty_string();
+          pop_node.paths_.at(i).reset();
         }
       }
     }
@@ -180,7 +180,7 @@ int ObConnectByOpBFSPump::free_pump_node_stack(ObIArray<PumpNode>& stack)
         if (pop_node.path_node_.paths_[i].ptr() != NULL) {
           LOG_ERROR("unexpected path value");
           allocator_.free(pop_node.path_node_.paths_.at(i).ptr());
-          pop_node.path_node_.paths_.at(i).make_empty_string();
+          pop_node.path_node_.paths_.at(i).reset();
         }
       }
     }
@@ -334,7 +334,7 @@ int ObConnectByOpBFSPump::add_path_stack(PathNode& path_node)
           for (int64_t i = 0; OB_SUCC(ret) && i < connect_by_path_count_; ++i) {
             if (pop_node.paths_[i].ptr() != NULL) {
               allocator_.free(pop_node.paths_.at(i).ptr());
-              pop_node.paths_.at(i).make_empty_string();
+              pop_node.paths_.at(i).reset();
             }
           }
           if (0 == path_stack_.count()) {  // current path_node is root node
@@ -501,7 +501,7 @@ int ObConnectByOpBFSPump::get_parent_path(int64_t idx, ObString& p_path) const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid path stack", K(node_cnt), K(ret));
   } else if (1 == node_cnt) {
-    p_path.make_empty_string();
+    p_path.reset();
   } else if (idx >= path_stack_.at(node_cnt - 1).paths_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid path stack", K(idx), K(path_stack_.at(node_cnt - 1).paths_.count()), K(ret));

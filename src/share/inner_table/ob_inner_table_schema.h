@@ -477,7 +477,16 @@ public:
   static int all_res_mgr_plan_schema(share::schema::ObTableSchema &table_schema);
   static int all_res_mgr_directive_schema(share::schema::ObTableSchema &table_schema);
   static int all_res_mgr_mapping_rule_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_backuppiece_job_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_backuppiece_job_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_backuppiece_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_backuppiece_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_piece_files_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_set_files_schema(share::schema::ObTableSchema &table_schema);
   static int all_res_mgr_consumer_group_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_log_archive_status_v2_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_backup_log_archive_status_v2_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -587,6 +596,8 @@ public:
   static int all_virtual_dump_tenant_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_parameter_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_dag_warning_history_schema(share::schema::ObTableSchema &table_schema);
+  static int virtual_show_restore_preview_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_master_key_version_info_schema(share::schema::ObTableSchema &table_schema);
   static int session_variables_schema(share::schema::ObTableSchema &table_schema);
   static int table_privileges_schema(share::schema::ObTableSchema &table_schema);
   static int user_privileges_schema(share::schema::ObTableSchema &table_schema);
@@ -721,7 +732,6 @@ public:
   static int all_virtual_objauth_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_objauth_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_backup_info_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_backup_log_archive_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_backup_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pg_backup_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pg_backup_log_archive_status_schema(share::schema::ObTableSchema &table_schema);
@@ -754,7 +764,6 @@ public:
   static int all_virtual_backupset_history_mgr_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_backup_backupset_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pg_backup_backupset_task_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_backup_backup_log_archive_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_global_transaction_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_agent_schema(share::schema::ObTableSchema &table_schema);
@@ -1056,6 +1065,16 @@ public:
   static int cdb_ob_backup_backupset_task_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_backup_backupset_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_backup_backup_archivelog_summary_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_piece_files_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_set_files_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_backuppiece_job_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_backuppiece_job_history_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_backuppiece_task_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_backuppiece_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_all_clusters_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_archivelog_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_backup_backup_archivelog_schema(share::schema::ObTableSchema &table_schema);
+  static int column_privileges_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -1273,6 +1292,7 @@ public:
   static int v_restore_point_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_rsrc_plan_ora_schema(share::schema::ObTableSchema &table_schema);
   static int triggers_schema(share::schema::ObTableSchema &table_schema);
+  static int all_backup_piece_files_idx_data_table_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_v2_history_idx_data_table_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_history_idx_data_table_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -1486,7 +1506,16 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_res_mgr_plan_schema,
   ObInnerTableSchema::all_res_mgr_directive_schema,
   ObInnerTableSchema::all_res_mgr_mapping_rule_schema,
+  ObInnerTableSchema::all_backup_backuppiece_job_schema,
+  ObInnerTableSchema::all_backup_backuppiece_job_history_schema,
+  ObInnerTableSchema::all_backup_backuppiece_task_schema,
+  ObInnerTableSchema::all_backup_backuppiece_task_history_schema,
+  ObInnerTableSchema::all_backup_piece_files_schema,
+  ObInnerTableSchema::all_backup_set_files_schema,
   ObInnerTableSchema::all_res_mgr_consumer_group_schema,
+  ObInnerTableSchema::all_backup_info_schema,
+  ObInnerTableSchema::all_backup_log_archive_status_v2_schema,
+  ObInnerTableSchema::all_backup_backup_log_archive_status_v2_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -1599,6 +1628,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_dump_tenant_info_schema,
   ObInnerTableSchema::all_virtual_tenant_parameter_info_schema,
   ObInnerTableSchema::all_virtual_dag_warning_history_schema,
+  ObInnerTableSchema::virtual_show_restore_preview_schema,
+  ObInnerTableSchema::all_virtual_master_key_version_info_schema,
   ObInnerTableSchema::session_variables_schema,
   ObInnerTableSchema::table_privileges_schema,
   ObInnerTableSchema::user_privileges_schema,
@@ -1733,7 +1764,6 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_objauth_schema,
   ObInnerTableSchema::all_virtual_objauth_history_schema,
   ObInnerTableSchema::all_virtual_backup_info_schema,
-  ObInnerTableSchema::all_virtual_backup_log_archive_status_schema,
   ObInnerTableSchema::all_virtual_backup_task_schema,
   ObInnerTableSchema::all_virtual_pg_backup_task_schema,
   ObInnerTableSchema::all_virtual_pg_backup_log_archive_status_schema,
@@ -1766,7 +1796,6 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_backupset_history_mgr_schema,
   ObInnerTableSchema::all_virtual_backup_backupset_task_schema,
   ObInnerTableSchema::all_virtual_pg_backup_backupset_task_schema,
-  ObInnerTableSchema::all_virtual_backup_backup_log_archive_status_schema,
   ObInnerTableSchema::all_virtual_global_transaction_schema,
   ObInnerTableSchema::all_virtual_table_agent_schema,
   ObInnerTableSchema::all_virtual_column_agent_schema,
@@ -2089,6 +2118,16 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_backup_backupset_task_schema,
   ObInnerTableSchema::cdb_ob_backup_backupset_task_history_schema,
   ObInnerTableSchema::cdb_ob_backup_backup_archivelog_summary_schema,
+  ObInnerTableSchema::cdb_ob_backup_piece_files_schema,
+  ObInnerTableSchema::cdb_ob_backup_set_files_schema,
+  ObInnerTableSchema::cdb_ob_backup_backuppiece_job_schema,
+  ObInnerTableSchema::cdb_ob_backup_backuppiece_job_history_schema,
+  ObInnerTableSchema::cdb_ob_backup_backuppiece_task_schema,
+  ObInnerTableSchema::cdb_ob_backup_backuppiece_task_history_schema,
+  ObInnerTableSchema::v_ob_all_clusters_schema,
+  ObInnerTableSchema::cdb_ob_backup_archivelog_schema,
+  ObInnerTableSchema::cdb_ob_backup_backup_archivelog_schema,
+  ObInnerTableSchema::column_privileges_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -2763,14 +2802,6 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_TIMESTAMP_SERVICE_TID,
   OB_GV_SSTABLE_TID,
   OB_V_SSTABLE_TID,
-  OB_CDB_OB_BACKUP_ARCHIVELOG_SUMMARY_TID,
-  OB_CDB_OB_BACKUP_JOB_DETAILS_TID,
-  OB_CDB_OB_BACKUP_SET_DETAILS_TID,
-  OB_CDB_OB_BACKUP_SET_EXPIRED_TID,
-  OB_CDB_OB_BACKUP_PROGRESS_TID,
-  OB_CDB_OB_BACKUP_ARCHIVELOG_PROGRESS_TID,
-  OB_CDB_OB_BACKUP_CLEAN_HISTORY_TID,
-  OB_CDB_OB_BACKUP_TASK_CLEAN_HISTORY_TID,
   OB_GV_SERVER_SCHEMA_INFO_TID,
   OB_V_SERVER_SCHEMA_INFO_TID,
   OB_CDB_CKPT_HISTORY_TID,
@@ -2781,9 +2812,8 @@ const uint64_t tenant_space_tables [] = {
   OB_V_MERGE_INFO_TID,
   OB_GV_LOCK_TID,
   OB_V_LOCK_TID,
-  OB_CDB_OB_TENANT_BACKUP_VALIDATION_TASK_TID,
   OB_V_RESTORE_POINT_TID,
-  OB_CDB_OB_BACKUP_SET_OBSOLETE_TID,
+  OB_COLUMN_PRIVILEGES_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_TID,
   OB_ALL_OBJECTS_TID,
@@ -3629,14 +3659,6 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_TIMESTAMP_SERVICE_TNAME,
   OB_GV_SSTABLE_TNAME,
   OB_V_SSTABLE_TNAME,
-  OB_CDB_OB_BACKUP_ARCHIVELOG_SUMMARY_TNAME,
-  OB_CDB_OB_BACKUP_JOB_DETAILS_TNAME,
-  OB_CDB_OB_BACKUP_SET_DETAILS_TNAME,
-  OB_CDB_OB_BACKUP_SET_EXPIRED_TNAME,
-  OB_CDB_OB_BACKUP_PROGRESS_TNAME,
-  OB_CDB_OB_BACKUP_ARCHIVELOG_PROGRESS_TNAME,
-  OB_CDB_OB_BACKUP_CLEAN_HISTORY_TNAME,
-  OB_CDB_OB_BACKUP_TASK_CLEAN_HISTORY_TNAME,
   OB_GV_SERVER_SCHEMA_INFO_TNAME,
   OB_V_SERVER_SCHEMA_INFO_TNAME,
   OB_CDB_CKPT_HISTORY_TNAME,
@@ -3647,9 +3669,8 @@ const char* const tenant_space_table_names [] = {
   OB_V_MERGE_INFO_TNAME,
   OB_GV_LOCK_TNAME,
   OB_V_LOCK_TNAME,
-  OB_CDB_OB_TENANT_BACKUP_VALIDATION_TASK_TNAME,
   OB_V_RESTORE_POINT_TNAME,
-  OB_CDB_OB_BACKUP_SET_OBSOLETE_TNAME,
+  OB_COLUMN_PRIVILEGES_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -3891,6 +3912,7 @@ const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_FREEZE_INFO_TID,
   OB_ALL_VIRTUAL_CLUSTER_TID,
   OB_ALL_VIRTUAL_CLUSTER_STATS_TID,
+  OB_ALL_VIRTUAL_BACKUP_CLEAN_INFO_TID,
   OB_ALL_VIRTUAL_BACKUPSET_HISTORY_MGR_TID,
   OB_ALL_VIRTUAL_PARTITION_TABLE_AGENT_TID,  };
 
@@ -4029,12 +4051,12 @@ static inline bool is_only_rs_virtual_table(const uint64_t tid)
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 5;
-const int64_t OB_SYS_TABLE_COUNT = 178;
+const int64_t OB_SYS_TABLE_COUNT = 187;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 463;
-const int64_t OB_SYS_VIEW_COUNT = 350;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 997;
+const int64_t OB_SYS_VIEW_COUNT = 360;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1016;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1000;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1019;
 
 } // end namespace share
 } // end namespace oceanbase

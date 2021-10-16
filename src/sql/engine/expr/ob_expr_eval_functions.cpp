@@ -50,6 +50,7 @@
 #include "ob_expr_like.h"
 #include "ob_expr_lower.h"
 #include "ob_expr_md5.h"
+#include "ob_expr_crc32.h"
 #include "ob_expr_mid.h"
 #include "ob_expr_minus.h"
 #include "ob_expr_mod.h"
@@ -183,6 +184,7 @@
 #include "ob_expr_to_single_byte.h"
 #include "ob_expr_to_multi_byte.h"
 #include "ob_expr_convert_tz.h"
+#include "ob_expr_degrees.h"
 
 namespace oceanbase {
 using namespace common;
@@ -666,15 +668,57 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprTimeFormat::calc_time_format,       /* 407 */
     ObExprMakedate::calc_makedate,            /* 408 */
     ObExprPeriodAdd::calc_periodadd,          /* 409 */
-    ObExprExportSet::eval_export_set,         /* 410 */
-    ObExprConvertTZ::eval_convert_tz,         /* 411 */
-    ObExprInet6Aton::calc_inet6_aton,         /* 412 */
-    ObExprIsIpv4::calc_is_ipv4,               /* 413 */
-    ObExprIsIpv6::calc_is_ipv6,               /* 414 */
-    ObExprIsIpv4Mapped::calc_is_ipv4_mapped,  /* 415 */
-    ObExprIsIpv4Compat::calc_is_ipv4_compat,  /* 416 */
-    ObExprInetAton::calc_inet_aton,           /* 417 */
-    ObExprInet6Ntoa::calc_inet6_ntoa,         /* 418 */
+    NULL,                                     /* 410 */
+    NULL,                                     /* 411 */
+    NULL,                                     /* 412 */
+    NULL,                                     /* 413 */
+    ObExprDegrees::calc_degrees_expr,         /* 414 */
+    NULL,                                     /* 415 */
+    NULL,                                     /* 416 */
+    NULL,                                     /* 417 */
+    NULL,                                     /* 418 */
+    NULL,                                     /* 419 */
+    NULL,                                     /* 420 */
+    NULL,                                     /* 421 */
+    NULL,                                     /* 422 */
+    NULL,                                     /* 423 */
+    NULL,                                     /* 424 */
+    NULL,                                     /* 425 */
+    NULL,                                     /* 426 */
+    NULL,                                     /* 427 */
+    NULL,                                     /* 428 */
+    NULL,                                     /* 429 */
+    NULL,                                     /* 430 */
+    NULL,                                     /* 431 */
+    NULL,                                     /* 432 */
+    NULL,                                     /* 433 */
+    NULL,                                     /* 434 */
+    NULL,                                     /* 435 */
+    NULL,                                     /* 436 */
+    NULL,                                     /* 437 */
+    NULL,                                     /* 438 */
+    NULL,                                     /* 439 */
+    NULL,                                     /* 440 */
+    ObExprTimestamp::calc_timestamp1,         /* 441 */
+    ObExprTimestamp::calc_timestamp2,         /* 442 */
+    NULL,                                     /* 443 */
+    NULL,                                     /* 444 */
+    NULL,                                     /* 445 */
+    NULL,                                     /* 446 */
+    NULL,                                     /* 447 */
+    NULL,                                     /* 448 */
+    NULL,                                     /* 449 */
+    ObExprExportSet::eval_export_set,         /* 450 */
+    ObExprInet6Aton::calc_inet6_aton,         /* 451 */
+    ObExprIsIpv4::calc_is_ipv4,               /* 452 */
+    ObExprIsIpv6::calc_is_ipv6,               /* 453 */
+    ObExprIsIpv4Mapped::calc_is_ipv4_mapped,  /* 454 */
+    ObExprIsIpv4Compat::calc_is_ipv4_compat,  /* 455 */
+    ObExprInetAton::calc_inet_aton,           /* 456 */
+    ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
+    NULL,                                     // ObExprWeightString::eval_weight_string,  /* 458 */
+    ObExprConvertTZ::eval_convert_tz,         /* 459 */
+    ObExprCrc32::calc_crc32_expr              /* 460 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

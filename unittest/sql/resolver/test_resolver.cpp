@@ -92,6 +92,7 @@ bool TestResolver::is_show_sql(const ParseNode& node) const
     case T_SHOW_PROCESSLIST:
     case T_SHOW_SERVER_STATUS:
     case T_SHOW_WARNINGS:
+    case T_SHOW_RESTORE_PREVIEW:
     case T_SHOW_GRANTS: {
       ret = true;
       break;

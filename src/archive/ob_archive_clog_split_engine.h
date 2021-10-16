@@ -53,7 +53,7 @@ public:
   void clear_archive_info();
   int64_t cal_work_thread_num();
   void set_thread_name_str(char* str);
-  int handle_task_list(ObArchiveTaskStatus* task_status);
+  int handle_task_list(void* data);
 
 public:
   int submit_split_task(ObPGArchiveCLogTask* task);

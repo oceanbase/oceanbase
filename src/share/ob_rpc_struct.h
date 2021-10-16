@@ -540,8 +540,10 @@ public:
   common::ObSArray<ObSysVarIdValue> sys_var_list_;
   common::ObNameCaseMode name_case_mode_;
   bool is_restore_;
-  common::ObSArray<common::ObPartitionKey> restore_pkeys_;  // The tenant-level system table pkeys backed up during
-                                                            // physical recovery
+  common::ObSArray<ObPartitionKey> restore_pkeys_;      // For physical restore, partitions that should be created with
+                                                        // is_restore = REPLICA_RESTORE_DATA
+  common::ObSArray<ObPartitionKey> restore_log_pkeys_;  // For physical restore, partitions that should be created with
+                                                        // is_restore = REPLICA_RESTORE_ARCHIVE_DATA
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg {
@@ -3061,6 +3063,21 @@ public:
   common::ObPartitionKey pkey_;
 };
 
+struct ObMigrateBackupsetArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObMigrateBackupsetArg();
+  int assign(const ObMigrateBackupsetArg& arg);
+  bool is_valid() const;
+
+  TO_STRING_KV(K_(backup_set_id), K_(pg_key), K_(backup_backupset_arg));
+
+  uint64_t backup_set_id_;
+  common::ObPartitionKey pg_key_;
+  share::ObBackupBackupsetArg backup_backupset_arg_;
+};
+
 struct ObBackupRes {
   OB_UNIS_VERSION(1);
 
@@ -3239,6 +3256,123 @@ public:
 
 public:
   common::ObSArray<ObValidateRes> res_array_;
+};
+
+struct ObPGBackupArchiveLogArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObPGBackupArchiveLogArg();
+
+public:
+  bool is_valid() const;
+  int assign(const ObPGBackupArchiveLogArg& arg);
+  TO_STRING_KV(K_(archive_round), K_(pg_key));
+
+public:
+  int64_t archive_round_;
+  common::ObPGKey pg_key_;
+};
+
+struct ObPGBackupArchiveLogRes {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObPGBackupArchiveLogRes();
+
+public:
+  bool is_valid() const;
+  int assign(const ObPGBackupArchiveLogRes& res);
+  TO_STRING_KV(K_(result), K_(finished), K_(checkpoint_ts), K_(pg_key));
+
+public:
+  int result_;
+  bool finished_;
+  int64_t checkpoint_ts_;
+  common::ObPGKey pg_key_;
+};
+
+struct ObBackupArchiveLogBatchArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupArchiveLogBatchArg();
+
+public:
+  bool is_valid() const;
+  int assign(const ObBackupArchiveLogBatchArg& arg);
+  TO_STRING_KV(K_(tenant_id), K_(archive_round), K_(checkpoint_ts), K_(task_id), K_(src_root_path),
+      K_(src_storage_info), K_(dst_root_path), K_(dst_storage_info), K_(arg_array));
+
+public:
+  uint64_t tenant_id_;
+  int64_t archive_round_;
+  int64_t piece_id_;
+  int64_t create_date_;
+  int64_t job_id_;
+  int64_t checkpoint_ts_;  // rs_checkpoint_ts
+  share::ObTaskId task_id_;
+  char src_root_path_[share::OB_MAX_BACKUP_PATH_LENGTH];
+  char src_storage_info_[share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
+  char dst_root_path_[share::OB_MAX_BACKUP_PATH_LENGTH];
+  char dst_storage_info_[share::OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
+  common::ObSArray<ObPGBackupArchiveLogArg> arg_array_;
+};
+
+struct ObBackupArchiveLogBatchRes {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupArchiveLogBatchRes();
+
+public:
+  bool is_valid() const;
+  bool is_interrupted() const;
+  int assign(const ObBackupArchiveLogBatchRes& arg);
+  int get_min_checkpoint_ts(int64_t& checkpoint_ts) const;
+  int get_finished_pg_list(common::ObIArray<common::ObPGKey>& pg_list) const;
+  int get_failed_pg_list(common::ObIArray<common::ObPGKey>& pg_list) const;
+  TO_STRING_KV(
+      K_(server), K_(tenant_id), K_(archive_round), K_(piece_id), K_(checkpoint_ts), K_(job_id), K_(res_array));
+
+public:
+  common::ObAddr server_;
+  uint64_t tenant_id_;
+  int64_t archive_round_;
+  int64_t piece_id_;
+  int64_t job_id_;
+  int64_t checkpoint_ts_;  // rs checkpoint ts
+  common::ObSArray<ObPGBackupArchiveLogRes> res_array_;
+};
+
+struct ObBackupBackupsetReplicaRes {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupBackupsetReplicaRes();
+
+public:
+  int assign(const ObBackupBackupsetReplicaRes& res);
+  bool is_valid() const;
+  TO_STRING_KV(K_(key), K_(dst), K_(result));
+
+public:
+  common::ObPartitionKey key_;
+  common::ObReplicaMember dst_;
+  share::ObBackupBackupsetArg arg_;
+  int result_;
+};
+
+struct ObBackupBackupsetBatchRes {
+  OB_UNIS_VERSION(1);
+
+public:
+  int assign(const ObBackupBackupsetBatchRes& res);
+  bool is_valid() const;
+  TO_STRING_KV(K_(res_array));
+
+public:
+  common::ObSArray<ObBackupBackupsetReplicaRes> res_array_;
 };
 
 // ---Structs for partition batch online/offline---
@@ -3445,6 +3579,25 @@ public:
   common::ObCurTraceId::TraceId fo_trace_id_;
   int64_t flashback_ts_;
   int64_t switchover_epoch_;
+};
+
+struct ObBackupBackupsetBatchArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupBackupsetBatchArg() : arg_array_(), timeout_ts_(), task_id_(), tenant_dropped_(false)
+  {}
+
+public:
+  int assign(const ObBackupBackupsetBatchArg& res);
+  bool is_valid() const;
+  TO_STRING_KV(K_(timeout_ts), K_(task_id), K_(tenant_dropped));
+
+public:
+  common::ObSArray<ObMigrateBackupsetArg> arg_array_;
+  int64_t timeout_ts_;
+  share::ObTaskId task_id_;
+  bool tenant_dropped_;
 };
 
 //----Structs for managing privileges----
@@ -4342,9 +4495,13 @@ struct ObPhysicalRestoreTenantArg : public ObCmdArg {
 
 public:
   ObPhysicalRestoreTenantArg();
+  virtual ~ObPhysicalRestoreTenantArg()
+  {}
   bool is_valid() const;
-  TO_STRING_KV(
-      K_(tenant_name), K_(uri), K_(restore_option), K_(restore_timestamp), K_(backup_tenant_name), K_(passwd_array));
+  int assign(const ObPhysicalRestoreTenantArg& other);
+  int add_table_item(const ObTableItem& item);
+  TO_STRING_KV(K_(tenant_name), K_(uri), K_(restore_option), K_(restore_timestamp), K_(backup_tenant_name),
+      K_(passwd_array), K_(table_items), K_(multi_uri));
 
   common::ObString tenant_name_;
   common::ObString uri_;
@@ -4352,6 +4509,8 @@ public:
   int64_t restore_timestamp_;
   common::ObString backup_tenant_name_;
   common::ObString passwd_array_;  // Password verification
+  common::ObSArray<ObTableItem> table_items_;
+  common::ObString multi_uri_;  // 备份拆分用
 };
 
 struct ObRestoreTenantArg : public ObCmdArg {
@@ -5334,7 +5493,7 @@ public:
     return (error_code_ <= 0 && (trigger_freq_ >= 0));
   }
 
-  TO_STRING_KV(K_(event_no), K_(event_name), K_(occur), K_(trigger_freq), K_(error_code));
+  TO_STRING_KV(K_(event_no), K_(event_name), K_(occur), K_(trigger_freq), K_(error_code), K_(server), K_(zone));
 
   int64_t event_no_;             // tracepoint no
   common::ObString event_name_;  // tracepoint name
@@ -7471,16 +7630,70 @@ public:
     VALIDATE_BACKUPSET = 6,
     CANCEL_VALIDATE = 7,
     DELETE_OBSOLETE_BACKUP = 8,
-    // CANCEL_BACKUP_BACKUPSET = 9,
+    CANCEL_BACKUP_BACKUPSET = 9,
     CANCEL_DELETE_BACKUP = 10,
+    DELETE_BACKUPPIECE = 11,
+    DELETE_OBSOLETE_BACKUP_BACKUP = 12,
+    CANCEL_BACKUP_BACKUPPIECE = 13,
+    DELETE_BACKUPROUND = 14,
     MAX_TYPE
   };
-  ObBackupManageArg() : tenant_id_(common::OB_INVALID_TENANT_ID), type_(MAX_TYPE), value_(0)
+  ObBackupManageArg() : tenant_id_(OB_INVALID_TENANT_ID), type_(MAX_TYPE), value_(0), copy_id_(0)
   {}
-  TO_STRING_KV(K_(type), K_(value));
+  TO_STRING_KV(K_(type), K_(value), K_(copy_id));
   uint64_t tenant_id_;
   Type type_;
   int64_t value_;
+  int64_t copy_id_;
+};
+
+struct ObBackupBackupsetArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupBackupsetArg();
+  bool is_valid() const;
+  int assign(const ObBackupBackupsetArg& o);
+  TO_STRING_KV(K_(tenant_id), K_(backup_set_id), K_(tenant_name), K_(backup_backup_dest), K_(max_backup_times));
+  uint64_t tenant_id_;
+  int64_t backup_set_id_;
+  common::ObString tenant_name_;
+  char backup_backup_dest_[share::OB_MAX_BACKUP_DEST_LENGTH];
+  int64_t max_backup_times_;
+};
+
+struct ObBackupArchiveLogArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupArchiveLogArg() : enable_(false)
+  {}
+  int assign(const ObBackupArchiveLogArg& o);
+  TO_STRING_KV(K_(enable));
+  bool enable_;
+};
+
+struct ObBackupBackupPieceArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObBackupBackupPieceArg();
+  ~ObBackupBackupPieceArg()
+  {}
+  bool is_valid() const
+  {
+    return OB_INVALID_ID != tenant_id_ && piece_id_ != -1;
+  }
+  int assign(const ObBackupBackupPieceArg& o);
+  TO_STRING_KV(K_(tenant_id), K_(piece_id), K_(max_backup_times), K_(backup_all), K_(backup_backup_dest));
+
+  uint64_t tenant_id_;
+  int64_t piece_id_;
+  common::ObString tenant_name_;
+  char backup_backup_dest_[share::OB_MAX_BACKUP_DEST_LENGTH];
+  int64_t max_backup_times_;
+  bool backup_all_;
+  bool with_active_piece_;
 };
 
 struct ObCheckStandbyCanAccessArg {

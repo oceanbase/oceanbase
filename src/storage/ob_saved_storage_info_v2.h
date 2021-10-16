@@ -36,9 +36,15 @@ public:
   int64_t checksum_;
   int64_t epoch_id_;
   int64_t submit_timestamp_;
+  int64_t recover_next_timestamp_;
 
   ObRecoverPoint()
-      : snapshot_version_(0), recover_log_id_(common::OB_INVALID_ID), checksum_(0), epoch_id_(0), submit_timestamp_(0)
+      : snapshot_version_(0),
+        recover_log_id_(common::OB_INVALID_ID),
+        checksum_(0),
+        epoch_id_(0),
+        submit_timestamp_(0),
+        recover_next_timestamp_(0)
   {}
   ObRecoverPoint(const int64_t snapshot_version, const uint64_t recover_id, const int64_t checksum,
       const int64_t epoch_id, const int64_t submit_timestamp)
@@ -46,7 +52,8 @@ public:
         recover_log_id_(recover_id),
         checksum_(checksum),
         epoch_id_(epoch_id),
-        submit_timestamp_(submit_timestamp)
+        submit_timestamp_(submit_timestamp),
+        recover_next_timestamp_(0)
   {}
   void set(const int64_t snapshot_version, const uint64_t recover_id, const int64_t checksum, const int64_t epoch_id,
       const int64_t submit_timestamp)

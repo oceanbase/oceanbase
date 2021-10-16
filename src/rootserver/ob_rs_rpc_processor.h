@@ -325,6 +325,10 @@ DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_VALIDATE_BACKUP_BATCH_RES, ObRpcValidateBackupBatchResP, receive_batch_balance_over(arg_));
 DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_STANDBY_CUTDATA_BATCH_TASK_RES, ObRpcStandbyCutDataBatchTaskResP, receive_batch_balance_over(arg_));
+DEFINE_RS_RPC_PROCESSOR(
+    obrpc::OB_BACKUP_BACKUPSET_BATCH_RES, ObRpcBackupBackupsetBatchResP, receive_batch_balance_over(arg_));
+DEFINE_RS_RPC_PROCESSOR(
+    obrpc::OB_BACKUP_ARCHIVE_LOG_BATCH_RES, ObRpcBackupArchiveLogBatchResP, handle_backup_archive_log_batch_res(arg_));
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_REBUILD_REPLICA, ObRpcAdminRebuildReplicaP, admin_rebuild_replica(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_DS_ACTION, ObBroadcastDSActionP, broadcast_ds_action(arg_));
@@ -538,6 +542,9 @@ DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_PHYSICAL_RESTORE_RES, ObRpcPhysicalRestoreResultP, send_physical_restore_result(arg_));
 DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_UPDATE_STANDBY_CLUSTER_INFO, ObUpdateStandbyClusterInfoP, update_standby_cluster_info(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_ARCHIVE_LOG, ObBackupArchiveLogP, handle_backup_archive_log(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPSET, ObBackupBackupsetP, handle_backup_backupset(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPPIECE, ObBackupBackupPieceP, handle_backup_backuppiece(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

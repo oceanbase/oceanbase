@@ -41,7 +41,7 @@ ObMultiVersionTableStore::ObMultiVersionTableStore()
 
 ObMultiVersionTableStore::~ObMultiVersionTableStore()
 {
-  ObTableStore* table_store = nullptr;
+  ObTableStore *table_store = nullptr;
 
   if (is_inited_) {
     while (head_ < tail_) {
@@ -62,11 +62,11 @@ ObMultiVersionTableStore::~ObMultiVersionTableStore()
   is_inited_ = false;
 }
 
-int ObMultiVersionTableStore::init(const common::ObPartitionKey& pkey, const uint64_t table_id,
-    ObFreezeInfoSnapshotMgr* freeze_info_mgr, ObPGMemtableMgr* pg_memtable_mgr, const int64_t schema_version)
+int ObMultiVersionTableStore::init(const common::ObPartitionKey &pkey, const uint64_t table_id,
+    ObFreezeInfoSnapshotMgr *freeze_info_mgr, ObPGMemtableMgr *pg_memtable_mgr, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* new_store = nullptr;
+  ObTableStore *new_store = nullptr;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -108,11 +108,11 @@ int ObMultiVersionTableStore::init(const common::ObPartitionKey& pkey, const uin
 
 // used in logic split, reference tables from parent partition
 int ObMultiVersionTableStore::set_reference_tables(
-    ObTablesHandle& handle, ObTableStore*& new_table_store, const int64_t memtable_base_version, bool& need_update)
+    ObTablesHandle &handle, ObTableStore *&new_table_store, const int64_t memtable_base_version, bool &need_update)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle latest_tables_handle;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   new_table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -143,10 +143,10 @@ int ObMultiVersionTableStore::set_reference_tables(
 
 // p0 Minor SSTable + memtable split and assign to p1
 int ObMultiVersionTableStore::prepare_update_split_table_store(
-    const bool is_major_split, ObTablesHandle& handle, bool& need_update, ObTableStore*& new_table_store)
+    const bool is_major_split, ObTablesHandle &handle, bool &need_update, ObTableStore *&new_table_store)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   ObTablesHandle old_handle;
   bool is_complete = false;
 
@@ -178,10 +178,10 @@ int ObMultiVersionTableStore::prepare_update_split_table_store(
 }
 
 int ObMultiVersionTableStore::check_need_split(
-    common::ObVersion& split_version, bool& need_split, bool& need_minor_split)
+    common::ObVersion &split_version, bool &need_split, bool &need_minor_split)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   ObTablesHandle old_handle;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -200,10 +200,10 @@ int ObMultiVersionTableStore::check_need_split(
   return ret;
 }
 
-int ObMultiVersionTableStore::check_can_migrate(bool& can_migrate)
+int ObMultiVersionTableStore::check_can_migrate(bool &can_migrate)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -216,10 +216,10 @@ int ObMultiVersionTableStore::check_can_migrate(bool& can_migrate)
   return ret;
 }
 
-int ObMultiVersionTableStore::check_complete(bool& is_complete)
+int ObMultiVersionTableStore::check_complete(bool &is_complete)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -232,10 +232,10 @@ int ObMultiVersionTableStore::check_complete(bool& is_complete)
   return ret;
 }
 
-int ObMultiVersionTableStore::is_physical_split_finished(bool& is_physical_split_finish)
+int ObMultiVersionTableStore::is_physical_split_finished(bool &is_physical_split_finish)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   ObTablesHandle old_handle;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -253,10 +253,10 @@ int ObMultiVersionTableStore::is_physical_split_finished(bool& is_physical_split
   return ret;
 }
 
-int ObMultiVersionTableStore::get_physical_split_info(ObVirtualPartitionSplitInfo& split_info)
+int ObMultiVersionTableStore::get_physical_split_info(ObVirtualPartitionSplitInfo &split_info)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -273,13 +273,13 @@ int ObMultiVersionTableStore::get_physical_split_info(ObVirtualPartitionSplitInf
 
 // add_sstable_with_prewarm is  used after merge
 int ObMultiVersionTableStore::prepare_add_sstable(
-    AddTableParam& param, ObTableStore*& new_table_store, bool& need_update)
+    AddTableParam &param, ObTableStore *&new_table_store, bool &need_update)
 {
   int ret = OB_SUCCESS;
   need_update = true;
   bool is_equal = false;
   bool can_split = false;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   ObTablesHandle latest_tables_handle;
   new_table_store = NULL;
   bool need_check_split = (NULL != param.table_ && param.table_->get_partition_key() != pkey_) ? true : false;
@@ -349,10 +349,10 @@ int ObMultiVersionTableStore::prepare_add_sstable(
 }
 
 int ObMultiVersionTableStore::prepare_remove_sstable(
-    AddTableParam& param, ObTablesHandle& handle, ObTableStore*& new_table_store, bool& is_equal)
+    AddTableParam &param, ObTablesHandle &handle, ObTableStore *&new_table_store, bool &is_equal)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   new_table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -404,7 +404,7 @@ int ObMultiVersionTableStore::prepare_remove_sstable(
   return ret;
 }
 
-int ObMultiVersionTableStore::alloc_table_store(ObTableStore*& new_table_store)
+int ObMultiVersionTableStore::alloc_table_store(ObTableStore *&new_table_store)
 {
   int ret = OB_SUCCESS;
 
@@ -417,7 +417,7 @@ int ObMultiVersionTableStore::alloc_table_store(ObTableStore*& new_table_store)
   return ret;
 }
 
-void ObMultiVersionTableStore::free_table_store(ObTableStore*& new_table_store)
+void ObMultiVersionTableStore::free_table_store(ObTableStore *&new_table_store)
 {
   if (NULL != new_table_store) {
     LOG_INFO("succeed to free_table_store", KP(new_table_store));
@@ -426,7 +426,7 @@ void ObMultiVersionTableStore::free_table_store(ObTableStore*& new_table_store)
   }
 }
 
-int ObMultiVersionTableStore::enable_table_store(const bool need_prewarm, ObTableStore& new_table_store)
+int ObMultiVersionTableStore::enable_table_store(const bool need_prewarm, ObTableStore &new_table_store)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -445,7 +445,7 @@ int ObMultiVersionTableStore::enable_table_store(const bool need_prewarm, ObTabl
 
   if (OB_SUCC(ret) && !need_prewarm) {
     while (OB_SUCC(ret) && head_ < tail_) {
-      ObTableStore* table_store = get_store(head_);
+      ObTableStore *table_store = get_store(head_);
       if (NULL != table_store) {
         LOG_INFO("retire table store",
             K(pkey_),
@@ -471,10 +471,10 @@ int ObMultiVersionTableStore::enable_table_store(const bool need_prewarm, ObTabl
 }
 
 int ObMultiVersionTableStore::get_read_tables(
-    const int64_t snapshot_version, ObTablesHandle& handle, const bool allow_not_ready, const bool print_dropped_alert)
+    const int64_t snapshot_version, ObTablesHandle &handle, const bool allow_not_ready, const bool print_dropped_alert)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -499,10 +499,10 @@ int ObMultiVersionTableStore::get_read_tables(
   return ret;
 }
 
-int ObMultiVersionTableStore::get_reference_tables(ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_reference_tables(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -516,10 +516,10 @@ int ObMultiVersionTableStore::get_reference_tables(ObTablesHandle& handle)
   return ret;
 }
 
-int ObMultiVersionTableStore::get_sample_read_tables(const common::SampleInfo& sample_info, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_sample_read_tables(const common::SampleInfo &sample_info, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -534,10 +534,10 @@ int ObMultiVersionTableStore::get_sample_read_tables(const common::SampleInfo& s
   return ret;
 }
 
-int ObMultiVersionTableStore::get_major_sstable(const ObVersion& version, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_major_sstable(const ObVersion &version, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -552,11 +552,11 @@ int ObMultiVersionTableStore::get_major_sstable(const ObVersion& version, ObTabl
   return ret;
 }
 
-int ObMultiVersionTableStore::get_all_tables(TableSet& table_set, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_all_tables(TableSet &table_set, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -574,7 +574,7 @@ int ObMultiVersionTableStore::get_all_tables(TableSet& table_set, ObTablesHandle
         LOG_WARN("failed to get all tables", K(ret), K(pkey_), K(table_id_));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < tmp_handle.get_count(); ++i) {
-          ObITable* table = tmp_handle.get_table(i);
+          ObITable *table = tmp_handle.get_table(i);
           int64_t table_addr = reinterpret_cast<int64_t>(table);
           if (OB_ISNULL(table)) {
             ret = OB_ERR_SYS;
@@ -606,10 +606,10 @@ int ObMultiVersionTableStore::get_all_tables(TableSet& table_set, ObTablesHandle
   return ret;
 }
 
-int ObMultiVersionTableStore::check_memtable_merged(const ObMemtable& memtable, bool& all_merged, bool& can_release)
+int ObMultiVersionTableStore::check_memtable_merged(const ObMemtable &memtable, bool &all_merged, bool &can_release)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -638,10 +638,10 @@ int ObMultiVersionTableStore::check_memtable_merged(const ObMemtable& memtable, 
   return ret;
 }
 
-int ObMultiVersionTableStore::get_effective_tables(const bool include_active_memtable, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_effective_tables(const bool include_active_memtable, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -660,10 +660,10 @@ int ObMultiVersionTableStore::get_effective_tables(const bool include_active_mem
   return ret;
 }
 
-int ObMultiVersionTableStore::get_latest_major_sstable(ObTableHandle& handle)
+int ObMultiVersionTableStore::get_latest_major_sstable(ObTableHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -680,7 +680,7 @@ int ObMultiVersionTableStore::get_latest_major_sstable(ObTableHandle& handle)
   return ret;
 }
 
-int ObMultiVersionTableStore::get_sstable_schema_version(int64_t& schema_version)
+int ObMultiVersionTableStore::get_sstable_schema_version(int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
   ObTableHandle handle;
@@ -700,10 +700,10 @@ int ObMultiVersionTableStore::get_sstable_schema_version(int64_t& schema_version
   return ret;
 }
 
-int ObMultiVersionTableStore::get_replay_tables(ObIArray<ObITable::TableKey>& replay_tables)
+int ObMultiVersionTableStore::get_replay_tables(ObIArray<ObITable::TableKey> &replay_tables)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -718,10 +718,10 @@ int ObMultiVersionTableStore::get_replay_tables(ObIArray<ObITable::TableKey>& re
   return ret;
 }
 
-int ObMultiVersionTableStore::get_oldest_read_tables(const int64_t snapshot_version, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_oldest_read_tables(const int64_t snapshot_version, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -739,10 +739,10 @@ int ObMultiVersionTableStore::get_oldest_read_tables(const int64_t snapshot_vers
 }
 
 int ObMultiVersionTableStore::get_merge_tables(
-    const ObGetMergeTablesParam& param, const int64_t multi_version_start, ObGetMergeTablesResult& result)
+    const ObGetMergeTablesParam &param, const int64_t multi_version_start, ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -776,10 +776,10 @@ int ObMultiVersionTableStore::get_merge_tables(
   return ret;
 }
 
-int ObMultiVersionTableStore::get_split_tables(const bool is_major_split, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_split_tables(const bool is_major_split, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -802,7 +802,7 @@ int ObMultiVersionTableStore::get_split_tables(const bool is_major_split, ObTabl
 int ObMultiVersionTableStore::retire_prewarm_store(const int64_t duration, const int64_t minor_deferred_gc_time)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
   const int64_t retire_ts = duration <= 0 ? INT64_MAX : ObTimeUtility::current_time() - duration;
   const int64_t retire_gc_sstbale_ts =
       minor_deferred_gc_time <= 0 ? INT64_MAX : ObTimeUtility::current_time() - minor_deferred_gc_time;
@@ -834,7 +834,7 @@ int ObMultiVersionTableStore::retire_prewarm_store(const int64_t duration, const
 
     for (int64_t i = gc_sstable_count_ - 1; OB_SUCC(ret) && i >= 0; --i) {
       if (gc_sstable_infos_[i].retired_ts_ < retire_gc_sstbale_ts) {
-        ObGCSSTableInfo& gc_sstable_info = gc_sstable_infos_[i];
+        ObGCSSTableInfo &gc_sstable_info = gc_sstable_infos_[i];
         LOG_INFO("retire gc sstable", K(gc_sstable_count_), K(minor_deferred_gc_time), K(gc_sstable_info));
         gc_sstable_info.sstable_->dec_ref();
         gc_sstable_info.reset();
@@ -851,7 +851,7 @@ int ObMultiVersionTableStore::retire_prewarm_store(const int64_t duration, const
 int ObMultiVersionTableStore::retire_head_store()
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -872,10 +872,10 @@ int ObMultiVersionTableStore::retire_head_store()
   return ret;
 }
 
-int ObMultiVersionTableStore::get_latest_table_count(int64_t& latest_table_count)
+int ObMultiVersionTableStore::get_latest_table_count(int64_t &latest_table_count)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -889,10 +889,10 @@ int ObMultiVersionTableStore::get_latest_table_count(int64_t& latest_table_count
   return ret;
 }
 
-int ObMultiVersionTableStore::check_latest_table_count_safe(bool& is_safe)
+int ObMultiVersionTableStore::check_latest_table_count_safe(bool &is_safe)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -906,10 +906,10 @@ int ObMultiVersionTableStore::check_latest_table_count_safe(bool& is_safe)
   return ret;
 }
 
-int ObMultiVersionTableStore::latest_has_major_sstable(bool& has_major)
+int ObMultiVersionTableStore::latest_has_major_sstable(bool &has_major)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -923,7 +923,7 @@ int ObMultiVersionTableStore::latest_has_major_sstable(bool& has_major)
   return ret;
 }
 
-int64_t ObMultiVersionTableStore::to_string(char* buf, const int64_t buf_len) const
+int64_t ObMultiVersionTableStore::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
@@ -940,13 +940,13 @@ int64_t ObMultiVersionTableStore::to_string(char* buf, const int64_t buf_len) co
         K_(head));
     J_ARRAY_START();
     for (int64_t tmp_pos = head_; tmp_pos < tail_; ++tmp_pos) {
-      const ObTableStore* table_store = table_stores_[get_idx(tmp_pos)];
+      const ObTableStore *table_store = table_stores_[get_idx(tmp_pos)];
       J_KV(K(tmp_pos), K(table_store));
     }
     J_ARRAY_END();
     J_ARRAY_START();
     for (int64_t i = 0; i < gc_sstable_count_; ++i) {
-      const ObGCSSTableInfo& gc_info = gc_sstable_infos_[i];
+      const ObGCSSTableInfo &gc_info = gc_sstable_infos_[i];
       if (gc_info.sstable_ != NULL) {
         J_KV("retired_ts", gc_info.retired_ts_, "table_key", gc_info.sstable_->get_key());
       } else {
@@ -975,10 +975,10 @@ int ObMultiVersionTableStore::finish_replay(const int64_t multi_version_start)
   return ret;
 }
 
-int ObMultiVersionTableStore::check_ready_for_read(bool& is_ready)
+int ObMultiVersionTableStore::check_ready_for_read(bool &is_ready)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -993,12 +993,11 @@ int ObMultiVersionTableStore::check_ready_for_read(bool& is_ready)
   return ret;
 }
 
-int ObMultiVersionTableStore::need_remove_old_table(const common::ObVersion& kept_min_version,
-    const int64_t multi_version_start, const int64_t backup_snapshot_verison, int64_t& real_kept_major_num,
-    bool& need_remove)
+int ObMultiVersionTableStore::need_remove_old_table(const common::ObVersion &kept_min_version,
+    const int64_t multi_version_start, int64_t &real_kept_major_num, bool &need_remove)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1007,16 +1006,16 @@ int ObMultiVersionTableStore::need_remove_old_table(const common::ObVersion& kep
     ret = OB_ERR_SYS;
     LOG_ERROR("store must not null", K(ret), K(pkey_), K(table_id_));
   } else if (OB_FAIL(table_store->need_remove_old_table(
-                 kept_min_version, multi_version_start, backup_snapshot_verison, real_kept_major_num, need_remove))) {
+                 kept_min_version, multi_version_start, real_kept_major_num, need_remove))) {
     LOG_WARN("fail to check need remove old table", K(ret), K(pkey_), K(table_id_));
   }
   return ret;
 }
 
-int ObMultiVersionTableStore::set_table_store(const ObTableStore& table_store)
+int ObMultiVersionTableStore::set_table_store(const ObTableStore &table_store)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* new_table_store = NULL;
+  ObTableStore *new_table_store = NULL;
   const bool need_prewarm = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1042,10 +1041,10 @@ int ObMultiVersionTableStore::set_table_store(const ObTableStore& table_store)
 }
 
 int ObMultiVersionTableStore::check_need_minor_merge(
-    const bool is_follower_data_rep, const ObMergeType merge_type, bool& need_merge)
+    const bool is_follower_data_rep, const ObMergeType merge_type, bool &need_merge)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1083,7 +1082,7 @@ void ObMultiVersionTableStore::ObGCSSTableInfo::reset()
   retired_ts_ = 0;
 }
 
-int64_t ObMultiVersionTableStore::ObGCSSTableInfo::to_string(char* buf, const int64_t buf_len) const
+int64_t ObMultiVersionTableStore::ObGCSSTableInfo::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
@@ -1100,7 +1099,7 @@ int64_t ObMultiVersionTableStore::ObGCSSTableInfo::to_string(char* buf, const in
   return pos;
 }
 
-int ObMultiVersionTableStore::record_gc_minor_sstable(ObTableStore& new_table_store)
+int ObMultiVersionTableStore::record_gc_minor_sstable(ObTableStore &new_table_store)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -1124,14 +1123,14 @@ int ObMultiVersionTableStore::record_gc_minor_sstable(ObTableStore& new_table_st
 
   if (OB_SUCC(ret) && old_tables_handle.get_count() > 0 && minor_deferred_gc_time > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < new_tables_handle.get_count(); ++i) {
-      ObITable* table = new_tables_handle.get_table(i);
+      ObITable *table = new_tables_handle.get_table(i);
       int64_t table_addr = reinterpret_cast<int64_t>(table);
       if (OB_FAIL(new_table_set.set_refactored(table_addr))) {
         LOG_WARN("failed to set table addr", K(ret));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < old_tables_handle.get_count(); ++i) {
-      ObITable* table = old_tables_handle.get_table(i);
+      ObITable *table = old_tables_handle.get_table(i);
       int64_t table_addr = reinterpret_cast<int64_t>(table);
       hash_ret = new_table_set.exist_refactored(table_addr);
       if (OB_ISNULL(table)) {
@@ -1140,7 +1139,7 @@ int ObMultiVersionTableStore::record_gc_minor_sstable(ObTableStore& new_table_st
       } else if (table->is_mini_minor_sstable() || (table->is_minor_sstable() && 1 == minor_deferred_gc_level)) {
         if (OB_HASH_NOT_EXIST == hash_ret) {
           if (OB_FAIL(add_gc_minor_sstable(
-                  cur_time, static_cast<ObSSTable*>(table), MAX_DEFERRED_GC_MINOR_SSTABLE_COUNT))) {
+                  cur_time, static_cast<ObSSTable *>(table), MAX_DEFERRED_GC_MINOR_SSTABLE_COUNT))) {
             LOG_WARN("failed to add gc minor sstable", K(ret));
           }
         } else if (OB_HASH_EXIST == hash_ret) {
@@ -1156,7 +1155,7 @@ int ObMultiVersionTableStore::record_gc_minor_sstable(ObTableStore& new_table_st
 }
 
 int ObMultiVersionTableStore::add_gc_minor_sstable(
-    const int64_t gc_ts, ObSSTable* table, const int64_t max_deferred_gc_count)
+    const int64_t gc_ts, ObSSTable *table, const int64_t max_deferred_gc_count)
 {
   int ret = OB_SUCCESS;
   int64_t find_pos = -1;
@@ -1179,7 +1178,7 @@ int ObMultiVersionTableStore::add_gc_minor_sstable(
   if (OB_SUCC(ret)) {
     if (-1 == find_pos) {  // add new
       if (gc_sstable_count_ == max_deferred_gc_count) {
-        ObGCSSTableInfo& last_info = gc_sstable_infos_[gc_sstable_count_ - 1];
+        ObGCSSTableInfo &last_info = gc_sstable_infos_[gc_sstable_count_ - 1];
         last_info.sstable_->dec_ref();
         last_info.reset();
         --gc_sstable_count_;
@@ -1209,7 +1208,7 @@ int ObMultiVersionTableStore::add_gc_minor_sstable(
   return ret;
 }
 
-int ObMultiVersionTableStore::get_gc_sstables(ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_gc_sstables(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
 
@@ -1229,7 +1228,7 @@ int ObMultiVersionTableStore::get_gc_sstables(ObTablesHandle& handle)
 }
 
 int ObMultiVersionTableStore::set_replay_sstables(
-    const bool is_replay_old, const common::ObIArray<ObSSTable*>& sstables)
+    const bool is_replay_old, const common::ObIArray<ObSSTable *> &sstables)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1244,10 +1243,10 @@ int ObMultiVersionTableStore::set_replay_sstables(
   return ret;
 }
 
-int ObMultiVersionTableStore::get_multi_version_start(int64_t& multi_version_start)
+int ObMultiVersionTableStore::get_multi_version_start(int64_t &multi_version_start)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1261,10 +1260,10 @@ int ObMultiVersionTableStore::get_multi_version_start(int64_t& multi_version_sta
   return ret;
 }
 
-int ObMultiVersionTableStore::get_max_major_sstable_snapshot(int64_t& max_snapshot_version)
+int ObMultiVersionTableStore::get_max_major_sstable_snapshot(int64_t &max_snapshot_version)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
   ObTableHandle handle;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1285,10 +1284,10 @@ int ObMultiVersionTableStore::get_max_major_sstable_snapshot(int64_t& max_snapsh
   return ret;
 }
 
-int ObMultiVersionTableStore::get_min_max_major_version(int64_t& min_version, int64_t& max_version)
+int ObMultiVersionTableStore::get_min_max_major_version(int64_t &min_version, int64_t &max_version)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1302,10 +1301,10 @@ int ObMultiVersionTableStore::get_min_max_major_version(int64_t& min_version, in
   return ret;
 }
 
-int ObMultiVersionTableStore::get_latest_minor_sstables(ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_latest_minor_sstables(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = nullptr;
+  ObTableStore *table_store = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -1318,7 +1317,7 @@ int ObMultiVersionTableStore::get_latest_minor_sstables(ObTablesHandle& handle)
   return ret;
 }
 
-int ObMultiVersionTableStore::add_complement_minor_sstable_if_needed_(AddTableParam& param, ObTableStore& store)
+int ObMultiVersionTableStore::add_complement_minor_sstable_if_needed_(AddTableParam &param, ObTableStore &store)
 {
   int ret = OB_SUCCESS;
   if (nullptr == param.complement_minor_sstable_) {
@@ -1327,10 +1326,10 @@ int ObMultiVersionTableStore::add_complement_minor_sstable_if_needed_(AddTablePa
   return ret;
 }
 
-int ObMultiVersionTableStore::get_latest_continue_tables(ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_latest_continue_tables(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* latest_store = NULL;
+  ObTableStore *latest_store = NULL;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -1343,11 +1342,11 @@ int ObMultiVersionTableStore::get_latest_continue_tables(ObTablesHandle& handle)
   return ret;
 }
 
-int ObMultiVersionTableStore::get_min_schema_version(int64_t& min_schema_version)
+int ObMultiVersionTableStore::get_min_schema_version(int64_t &min_schema_version)
 {
   int ret = OB_SUCCESS;
   min_schema_version = 0;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1361,10 +1360,10 @@ int ObMultiVersionTableStore::get_min_schema_version(int64_t& min_schema_version
   return ret;
 }
 
-int ObMultiVersionTableStore::get_flashback_major_tables(const int64_t flashback_scn, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_flashback_major_tables(const int64_t flashback_scn, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1379,10 +1378,10 @@ int ObMultiVersionTableStore::get_flashback_major_tables(const int64_t flashback
 }
 
 int ObMultiVersionTableStore::get_mark_deletion_tables(
-    const int64_t end_log_ts, const int64_t snapshot_version, ObTablesHandle& handle)
+    const int64_t end_log_ts, const int64_t snapshot_version, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = nullptr;
+  ObTableStore *table_store = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1399,7 +1398,7 @@ int ObMultiVersionTableStore::get_mark_deletion_tables(
 int ObMultiVersionTableStore::clear_complement_minor_sstable()
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = nullptr;
+  ObTableStore *table_store = nullptr;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1413,10 +1412,10 @@ int ObMultiVersionTableStore::clear_complement_minor_sstable()
   return ret;
 }
 
-int ObMultiVersionTableStore::get_schema_version(int64_t& schema_version)
+int ObMultiVersionTableStore::get_schema_version(int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = nullptr;
+  ObTableStore *table_store = nullptr;
   int64_t table_count = 0;
   schema_version = INT64_MAX;
 
@@ -1439,10 +1438,10 @@ int ObMultiVersionTableStore::get_schema_version(int64_t& schema_version)
 }
 
 int ObMultiVersionTableStore::get_needed_local_tables_for_migrate(
-    const ObMigrateRemoteTableInfo& remote_table_info, ObTablesHandle& handle)
+    const ObMigrateRemoteTableInfo &remote_table_info, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store;
+  ObTableStore *table_store;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("multi version table store is inited", K(ret));
@@ -1457,10 +1456,10 @@ int ObMultiVersionTableStore::get_needed_local_tables_for_migrate(
   return ret;
 }
 
-int ObMultiVersionTableStore::get_migrate_tables(ObTablesHandle& handle, bool& is_ready_for_read)
+int ObMultiVersionTableStore::get_migrate_tables(ObTablesHandle &handle, bool &is_ready_for_read)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
   is_ready_for_read = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1486,7 +1485,7 @@ int ObMultiVersionTableStore::set_drop_schema_info(const int64_t drop_schema_ver
   return ret;
 }
 
-int ObMultiVersionTableStore::get_drop_schema_info(int64_t& drop_schema_version, int64_t& drop_schema_refreshed_ts)
+int ObMultiVersionTableStore::get_drop_schema_info(int64_t &drop_schema_version, int64_t &drop_schema_refreshed_ts)
 {
   int ret = OB_SUCCESS;
   drop_schema_version = drop_schema_version_;
@@ -1494,10 +1493,10 @@ int ObMultiVersionTableStore::get_drop_schema_info(int64_t& drop_schema_version,
   return ret;
 }
 
-int ObMultiVersionTableStore::get_recovery_point_tables(const int64_t snapshot_version, ObTablesHandle& handle)
+int ObMultiVersionTableStore::get_recovery_point_tables(const int64_t snapshot_version, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTableStore* table_store = NULL;
+  ObTableStore *table_store = NULL;
   int64_t multi_version_start = 0;
 
   if (OB_UNLIKELY(!is_inited_)) {

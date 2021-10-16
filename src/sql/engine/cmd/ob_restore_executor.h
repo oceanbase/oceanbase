@@ -31,6 +31,9 @@ public:
   ObPhysicalRestoreTenantExecutor();
   virtual ~ObPhysicalRestoreTenantExecutor();
   int execute(ObExecContext& ctx, ObPhysicalRestoreTenantStmt& stmt);
+
+private:
+  int physical_restore_preview(ObExecContext& ctx, ObPhysicalRestoreTenantStmt& stmt);
 };
 }  // end namespace sql
 }  // end namespace oceanbase

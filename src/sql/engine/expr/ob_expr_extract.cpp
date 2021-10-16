@@ -90,8 +90,7 @@ inline int obj_to_time<ObObj, true>(
     const ObObj& date, ObObjType type, const ObTimeZoneInfo* tz_info, ObTime& ob_time, const int64_t cur_ts_value)
 {
   UNUSED(type);
-  UNUSED(cur_ts_value);
-  return ob_obj_to_ob_time_with_date(date, tz_info, ob_time);
+  return ob_obj_to_ob_time_with_date(date, tz_info, ob_time, cur_ts_value);
 }
 template <>
 inline int obj_to_time<ObObj, false>(

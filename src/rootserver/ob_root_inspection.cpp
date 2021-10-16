@@ -714,7 +714,7 @@ int ObDropTenantChecker::inspect(bool& passed, const char*& warning_info)
             bool is_delay_delete = false;
             if (drop_tenant_time + GCONF.schema_history_expire_time > current_time) {
               // skip
-            } else if (OB_SUCCESS != (tmp_ret = record_log_archive_history_(
+            } else if (OB_SUCCESS != (tmp_ret = check_deley_delete_(
                                           *tenant_id, drop_schema_version, drop_tenant_time, is_delay_delete))) {
               LOG_WARN("failed to record log archive history", K(tmp_ret), K(*tenant_id), K(tenant_name));
             } else if (is_delay_delete) {
@@ -750,7 +750,7 @@ int ObDropTenantChecker::inspect(bool& passed, const char*& warning_info)
   return ret;
 }
 
-int ObDropTenantChecker::record_log_archive_history_(
+int ObDropTenantChecker::check_deley_delete_(
     const uint64_t tenant_id, const int64_t drop_schema_version, const int64_t drop_tenant_time, bool& is_delay_delete)
 {
   int ret = OB_SUCCESS;
@@ -779,16 +779,8 @@ int ObDropTenantChecker::record_log_archive_history_(
         K(drop_tenant_time),
         K(safe_drop_time),
         K(checkpoint_ts));
-  } else if (OB_FAIL(ObBackupInfoMgr::get_instance().record_drop_tenant_log_archive_history(tenant_id))) {
-    LOG_WARN("failed to record log archive history", K(ret), K(tenant_id));
   } else {
     is_delay_delete = false;
-    LOG_INFO("succeed to record_log_archive_history",
-        K(tenant_id),
-        K(drop_schema_version),
-        K(drop_tenant_time),
-        K(checkpoint_ts),
-        K(is_delay_delete));
   }
 
   return ret;
@@ -1657,6 +1649,10 @@ int ObForceDropSchemaTask::process()
   delay = ObServerConfig::get_instance().schema_drop_gc_delay_time;
 #endif
 
+#ifdef ERRSIM
+  delay = ObServerConfig::get_instance().schema_drop_gc_delay_time;
+#endif
+
   ObForceDropSchemaChecker drop_schema_checker(root_service_,
       root_service_.get_schema_service(),
       root_service_.get_common_rpc_proxy(),
@@ -2396,7 +2392,7 @@ int ObRootInspection::check_table_schema(const ObTableSchema& hard_code_table)
         K(ret));
     can_retry_ = true;
   } else if (OB_FAIL(check_table_schema(hard_code_table, *table))) {
-    LOG_WARN("fail to check table schema", KR(ret));
+    LOG_WARN("fail to check table schema", KR(ret), K(hard_code_table), KPC(table));
   }
   return ret;
 }

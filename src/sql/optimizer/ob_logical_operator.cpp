@@ -1534,6 +1534,8 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp& op, void* ctx
         }
         break;
       }
+      case ALLOC_STARTUP_EXPR:
+        break;
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected access of default branch", K(op), K(ret));
@@ -1917,6 +1919,12 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp& op, void* ct
       case ALLOC_LINK: {
         if (OB_FAIL(allocate_link_post())) {
           LOG_WARN("failed to allocate link post", K(ret));
+        }
+        break;
+      }
+      case ALLOC_STARTUP_EXPR: {
+        if (OB_FAIL(allocate_startup_expr_post())) {
+          LOG_WARN("failed to alloc startup expr post", K(ret));
         }
         break;
       }
@@ -5760,19 +5768,32 @@ int ObLogicalOperator::inner_set_merge_sort(ObLogicalOperator* producer, ObLogic
     if (OB_SUCC(ret) && 0 < sort->get_sort_keys().count()) {
       // just use sort keys, avoid output_exprs are incorrect
       consumer_exchange->set_is_merge_sort(true);
-      consumer_exchange->set_local_order(!global_order);
-      need_remove = true;
-      if (global_order && OB_FAIL(producer_exchange->set_op_ordering(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set op ordering", K(ret));
-      } else if (!global_order && OB_FAIL(producer_exchange->set_local_ordering(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set local ordering", K(ret));
-      } else if (OB_FAIL(consumer_exchange->set_sort_keys(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set op ordering", K(ret));
-      } else {
-        LOG_TRACE("sort keys of exchange",
-            K(ret),
-            K(consumer_exchange->get_sort_keys()),
-            K(consumer_exchange->is_task_order()));
+      //for local merge sort in px_coord_merge_sort, we push down the sort operator
+      //keep the local order in sort op
+      if (!global_order && ObPQDistributeMethod::MAX_VALUE 
+                                      == consumer_exchange->get_dist_method()) {
+        if (OB_FAIL(producer_exchange->allocate_sort_below(0, sort->get_sort_keys()))) {
+          LOG_WARN("failed to allocate sort", K(ret));
+        } else {
+          global_order = true;
+          static_cast<ObLogSort *>(producer_exchange->get_child(0))->set_local_merge_sort(true);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        consumer_exchange->set_local_order(!global_order);
+        need_remove = true;
+        if (global_order && OB_FAIL(producer_exchange->set_op_ordering(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set op ordering", K(ret));
+        } else if (!global_order && OB_FAIL(producer_exchange->set_local_ordering(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set local ordering", K(ret));
+        } else if (OB_FAIL(consumer_exchange->set_sort_keys(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set op ordering", K(ret));
+        } else {
+          LOG_TRACE("sort keys of exchange",
+              K(ret),
+              K(consumer_exchange->get_sort_keys()),
+              K(consumer_exchange->is_task_order()));
+        }
       }
     }
   }
@@ -6690,6 +6711,74 @@ int ObLogicalOperator::generate_link_sql_pre(GenLinkStmtContext& link_ctx)
   UNUSED(link_ctx);
   return OB_SUCCESS;
 }
+
+int ObLogicalOperator::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    if (OB_FAIL(allocate_startup_expr_post(i))) {
+      LOG_WARN("failed to allocate startup expr post", K(i), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = get_child(child_idx);
+  if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null child", K(ret));
+  } else if (is_dml_operator() || 
+            log_op_def::LOG_TEMP_TABLE_INSERT == get_type()) {
+    //do nothing
+  } else if (child->get_startup_exprs().empty()) {
+    //do nothing
+  } else {
+    ObSEArray<ObRawExpr*, 4> non_startup_exprs, new_startup_exprs;
+    ObIArray<ObRawExpr*> &startup_exprs = child->get_startup_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < startup_exprs.count(); ++i) {
+      if (OB_ISNULL(startup_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (startup_exprs.at(i)->has_flag(CNT_ROWNUM) ||
+                 startup_exprs.at(i)->has_flag(CNT_EXEC_PARAM)) {
+        if (OB_FAIL(non_startup_exprs.push_back(startup_exprs.at(i)))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else if (OB_FAIL(new_startup_exprs.push_back(startup_exprs.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (get_startup_exprs().empty() &&
+          OB_FAIL(add_startup_exprs(new_startup_exprs))) {
+        LOG_WARN("failed to add startup exprs", K(ret));
+      } else {
+        bool mark_exchange_out = false;
+        if (log_op_def::LOG_EXCHANGE == child->get_type()) {
+          ObLogExchange *exchange_out = static_cast<ObLogExchange*>(child);
+          if (exchange_out->is_px_producer()) {
+            if (log_op_def::LOG_EXCHANGE == get_type()) {
+              ObLogExchange *exchange_in = static_cast<ObLogExchange*>(this);
+              if (!exchange_in->is_rescanable()) {
+                mark_exchange_out = true;
+              }
+            }
+          }
+        }
+        if (!mark_exchange_out) {
+          if (OB_FAIL(child->get_startup_exprs().assign(non_startup_exprs))) {
+            LOG_WARN("failed to assign exprs", K(ret));
+          } 
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObLogicalOperator::allocate_link_node_above(int64_t child_idx)
 {

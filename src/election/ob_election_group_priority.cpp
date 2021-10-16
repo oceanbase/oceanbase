@@ -74,6 +74,12 @@ void ObElectionGroupPriority::set_system_data_disk_error()
   system_score_ += SYSTEM_SCORE_DATA_DISK_ERROR * 100;
 }
 
+void ObElectionGroupPriority::set_system_slog_disk_warning()
+{
+  // slog use the same disk with sstable(data disk)
+  system_score_ += SYSTEM_SCORE_DATA_DISK_ERROR * 100;
+}
+
 void ObElectionGroupPriority::set_system_service_not_started()
 {
   system_score_ += SYSTEM_SCORE_SERVICE_NOT_STARTED * 100;

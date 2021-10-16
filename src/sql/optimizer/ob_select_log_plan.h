@@ -222,8 +222,10 @@ private:
   int adjust_late_materialization_structure(
       ObLogicalOperator* join, ObLogTableScan* index_scan, ObLogTableScan* table_scan, TableItem* table_item);
 
-  int convert_project_columns(
-      uint64_t table_id, uint64_t project_id, const ObString& project_table_name, ObIArray<uint64_t>& index_columns);
+  int convert_project_columns(uint64_t table_id, TableItem *project_table_item, ObIArray<uint64_t> &index_columns);
+
+  int project_generate_column(
+      uint64_t table_id, TableItem *project_table_item, ObIArray<uint64_t> &index_columns, ObColumnRefRawExpr *expr);
 
   int adjust_late_materialization_stmt_structure(
       ObLogTableScan* index_scan, ObLogTableScan* table_scan, TableItem* table_item);

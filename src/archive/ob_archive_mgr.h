@@ -119,6 +119,7 @@ public:
   // interface for inner call
   void notify_all_archive_round_started();
   bool has_encounter_fatal_err(const int64_t incarnation, const int64_t round);
+
   ObArchivePGMgr* get_pg_mgr()
   {
     return &pg_mgr_;
@@ -130,6 +131,10 @@ public:
   ObArchiveSender* get_sender()
   {
     return &archive_sender_;
+  }
+  const ObArchiveRoundMgr& get_archive_round_mgr() const
+  {
+    return archive_round_mgr_;
   }
 
 private:
@@ -145,9 +150,11 @@ private:
   int set_log_archive_stop_status_();
   int clear_pg_archive_task_();
   int clear_archive_info_();
-  int set_log_archive_info_(share::ObLogArchiveBackupInfo& info);
+  int set_log_archive_info_(
+      const share::ObLogArchiveBackupInfo& info, const int64_t piece_id, const int64_t piece_create_date);
 
-  int start_archive_(share::ObLogArchiveBackupInfo& info);
+  int start_archive_(
+      const share::ObLogArchiveBackupInfo& info, const int64_t rs_piece_id, const int64_t rs_piece_create_date);
   int stop_archive_();
 
 private:
@@ -161,9 +168,12 @@ private:
   void print_archive_status_();
   void do_force_stop_archive_work_threads_();
 
-  bool check_if_need_switch_log_archive_(
-      share::ObLogArchiveBackupInfo& info, bool& need_stop, bool& need_start, bool& need_force_stop);
-  int check_and_set_start_archive_ts_(const int64_t incarnation, const int64_t round, int64_t& start_ts);
+  int check_if_need_switch_log_archive_(const share::ObLogArchiveBackupInfo& backup_info,
+      const share::ObNonFrozenBackupPieceInfo& non_piece_info, bool& need_stop, bool& need_start, bool& need_force_stop,
+      bool& need_switch_piece, int64_t& rs_piece_id, int64_t& rs_piece_create_date);
+  int check_and_set_start_archive_ts_(
+      const int64_t incarnation, const int64_t round, const bool is_oss, int64_t& start_ts);
+  bool check_ob_ready_();
 
 private:
   bool inited_;

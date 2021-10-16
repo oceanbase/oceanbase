@@ -44,20 +44,16 @@ class ObMigrateCtx;
 class ObPartitionMacroBlockObReader;
 class ObPartitionMacroBlockOfsReader;
 class ObPartitionBaseDataMetaRestoreReader;
-class ObPartitionMacroBlockRestoreReader;
 class ObIPhysicalBaseMetaReader;
 class ObIPartitionMacroBlockReader;
 class ObPartGroupMigrationTask;
 class ObSSStore;
 class ObITable;
 class ObPhysicalBaseMetaReader;
-class ObPhysicalBaseMetaRestoreReader;
 class ObReplayStatus;
 class ObPartitionBaseDataMetaObReader;
 class ObIPGPartitionBaseDataMetaObReader;
 class ObPGPartitionBaseDataMetaObReader;
-class ObPGPartitionBaseDataMetaRestorReader;
-class ObPartitionGroupMetaRestoreReader;
 class ObPartitionGroupMetaBackupReader;
 class ObPhysicalBaseMetaBackupReader;
 class ObPartitionMacroBlockBackupReader;
@@ -101,13 +97,9 @@ public:
   virtual ObPhysicalBaseMetaReader* get_base_data_meta_ob_reader() = 0;
   virtual ObPartitionMacroBlockObReader* get_macro_block_ob_reader() = 0;
   virtual ObPartGroupMigrationTask* get_part_group_migration_task() = 0;
-  virtual ObPhysicalBaseMetaRestoreReader* get_base_data_meta_restore_reader() = 0;
-  virtual ObPartitionMacroBlockRestoreReader* get_macro_block_restore_reader() = 0;
   virtual ObPartitionBaseDataMetaRestoreReader* get_meta_restore_reader() = 0;
   virtual ObPartitionBaseDataMetaObReader* get_old_rpc_base_data_meta_reader() = 0;
   virtual ObPGPartitionBaseDataMetaObReader* get_pg_info_reader() = 0;
-  virtual ObPGPartitionBaseDataMetaRestorReader* get_pg_info_restore_reader() = 0;
-  virtual ObPartitionGroupMetaRestoreReader* get_partition_group_meta_restore_reader() = 0;
   virtual ObPartGroupBackupTask* get_part_group_backup_task() = 0;
 
   virtual ObPhysicalBaseMetaBackupReader* get_base_data_meta_backup_reader() = 0;
@@ -151,8 +143,6 @@ public:
   virtual void free(ObPartitionBaseDataMetaObReader* reader) = 0;
   virtual void free(ObPGPartitionBaseDataMetaObReader* reader) = 0;
   virtual void free(ObIPGPartitionBaseDataMetaObReader* reader) = 0;
-  virtual void free(ObPGPartitionBaseDataMetaRestorReader* reader) = 0;
-  virtual void free(ObPartitionGroupMetaRestoreReader* reader) = 0;
   virtual void free(ObPartGroupBackupTask*& task) = 0;
   virtual void free(ObPartGroupTask*& task) = 0;
 

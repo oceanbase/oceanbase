@@ -4581,313 +4581,6 @@ int ObInnerTableSchema::all_virtual_backup_info_schema(ObTableSchema &table_sche
   return ret;
 }
 
-int ObInnerTableSchema::all_virtual_backup_log_archive_status_schema(ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
-
-  //generated fields:
-  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
-  table_schema.set_tablegroup_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_TABLEGROUP_ID));
-  table_schema.set_database_id(combine_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID));
-  table_schema.set_table_id(combine_id(OB_SYS_TENANT_ID, OB_ALL_VIRTUAL_BACKUP_LOG_ARCHIVE_STATUS_TID));
-  table_schema.set_rowkey_split_pos(0);
-  table_schema.set_is_use_bloomfilter(false);
-  table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(3);
-  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
-  table_schema.set_table_type(VIRTUAL_TABLE);
-  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
-  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_ALL_VIRTUAL_BACKUP_LOG_ARCHIVE_STATUS_TNAME))) {
-      LOG_ERROR("fail to set table_name", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
-      LOG_ERROR("fail to set compress_func_name", K(ret));
-    }
-  }
-  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
-  table_schema.set_charset_type(ObCharset::get_default_charset());
-  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-  table_schema.set_create_mem_version(1);
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("tenant_id", //column_name
-      ++column_id, //column_id
-      1, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("incarnation", //column_name
-      ++column_id, //column_id
-      2, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("log_archive_round", //column_name
-      ++column_id, //column_id
-      3, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("gmt_create", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObTimestampType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("gmt_modified", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObTimestampType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("min_first_time", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObTimestampType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("max_next_time", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObTimestampType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj input_bytes_default;
-    input_bytes_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("input_bytes", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      input_bytes_default,
-      input_bytes_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj output_bytes_default;
-    output_bytes_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("output_bytes", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      output_bytes_default,
-      output_bytes_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj deleted_input_bytes_default;
-    deleted_input_bytes_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("deleted_input_bytes", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      deleted_input_bytes_default,
-      deleted_input_bytes_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj deleted_output_bytes_default;
-    deleted_output_bytes_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("deleted_output_bytes", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      deleted_output_bytes_default,
-      deleted_output_bytes_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj pg_count_default;
-    pg_count_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("pg_count", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      pg_count_default,
-      pg_count_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj status_default;
-    status_default.set_varchar(ObString::make_string(""));
-    ADD_COLUMN_SCHEMA_T("status", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      OB_DEFAULT_STATUS_LENTH, //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      status_default,
-      status_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj is_mount_file_created_default;
-    is_mount_file_created_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("is_mount_file_created", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      is_mount_file_created_default,
-      is_mount_file_created_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj compatible_default;
-    compatible_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("compatible", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      compatible_default,
-      compatible_default); //default_value
-  }
-  table_schema.set_index_using_type(USING_BTREE);
-  table_schema.set_row_store_type(FLAT_ROW_STORE);
-  table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
-  table_schema.set_progressive_merge_round(1);
-  table_schema.set_storage_format_version(3);
-
-  table_schema.set_max_used_column_id(column_id);
-  table_schema.get_part_option().set_max_used_part_id(table_schema.get_part_option().get_part_num() - 1);
-  table_schema.get_part_option().set_partition_cnt_within_partition_table(OB_ALL_CORE_TABLE_TID == common::extract_pure_id(table_schema.get_table_id()) ? 1 : 0);
-  return ret;
-}
-
 int ObInnerTableSchema::all_virtual_backup_task_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -5413,6 +5106,44 @@ int ObInnerTableSchema::all_virtual_backup_task_schema(ObTableSchema &table_sche
       false, //is_autoincrement
       passwd_default,
       passwd_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj start_replay_log_ts_default;
+    start_replay_log_ts_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("start_replay_log_ts", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      start_replay_log_ts_default,
+      start_replay_log_ts_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj date_default;
+    date_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("date", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      date_default,
+      date_default); //default_value
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(FLAT_ROW_STORE);
@@ -6095,6 +5826,21 @@ int ObInnerTableSchema::all_virtual_pg_backup_log_archive_status_schema(ObTableS
       false, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("cur_piece_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_func_type(PARTITION_FUNC_TYPE_HASH);
     if (OB_FAIL(table_schema.get_part_option().set_part_expr("hash (addr_to_partition_id(svr_ip, svr_port))"))) {
@@ -6257,6 +6003,21 @@ int ObInnerTableSchema::all_virtual_server_backup_log_archive_status_schema(ObTa
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("pg_count", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("cur_piece_id", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
@@ -7118,38 +6879,6 @@ int ObInnerTableSchema::all_virtual_backup_clean_info_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("gmt_create", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObTimestampType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("gmt_modified", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObTimestampType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
-  }
-
-  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("job_id", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -7165,35 +6894,33 @@ int ObInnerTableSchema::all_virtual_backup_clean_info_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("start_time", //column_name
+    ADD_COLUMN_SCHEMA("start_time", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObTimestampType, //column_type
+      ObIntType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
+      sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
+      false); //is_autoincrement
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA_TS("end_time", //column_name
+    ADD_COLUMN_SCHEMA("end_time", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObTimestampType, //column_type
+      ObIntType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      sizeof(ObPreciseDateTime), //column_length
+      sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
-      false, //is_autoincrement
-      false); //is_on_update_for_timestamp
+      false); //is_autoincrement
   }
 
   if (OB_SUCC(ret)) {
@@ -7247,9 +6974,9 @@ int ObInnerTableSchema::all_virtual_backup_clean_info_schema(ObTableSchema &tabl
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
+      ObIntType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      OB_INNER_TABLE_BACKUP_CLEAN_PARAMETER_LENGTH, //column_length
+      sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -7330,7 +7057,7 @@ int ObInnerTableSchema::all_virtual_backup_clean_info_schema(ObTableSchema &tabl
       false, //is_nullable
       false); //is_autoincrement
   }
-  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_index_using_type(USING_HASH);
   table_schema.set_row_store_type(FLAT_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_COMPACT_MYSQL);
   table_schema.set_progressive_merge_round(1);
@@ -8595,6 +8322,51 @@ int ObInnerTableSchema::all_virtual_pg_log_archive_stat_schema(ObTableSchema &ta
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("cur_data_file_offset", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("clog_split_task_num", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("send_task_num", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("cur_piece_id", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

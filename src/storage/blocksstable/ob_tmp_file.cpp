@@ -14,9 +14,12 @@
 #include "ob_tmp_file_cache.h"
 #include "observer/ob_server_struct.h"
 #include "storage/ob_file_system_util.h"
+#include "share/ob_task_define.h"
 
 namespace oceanbase {
 using namespace storage;
+using namespace share;
+
 namespace blocksstable {
 
 ObTmpFileIOInfo::ObTmpFileIOInfo() : fd_(0), dir_id_(0), size_(0), tenant_id_(OB_INVALID_ID), buf_(NULL), io_desc_()
@@ -1023,6 +1026,7 @@ int ObTmpFileManager::open(int64_t& fd, int64_t& dir)
   } else if (OB_FAIL(files_.set(fd, file))) {
     STORAGE_LOG(WARN, "fail to set tmp file", K(ret));
   } else {
+    ObTaskController::get().allow_next_syslog();
     STORAGE_LOG(INFO, "succeed to open a tmp file", K(fd), K(dir), K(common::lbt()));
   }
   return ret;
@@ -1209,6 +1213,7 @@ int ObTmpFileManager::remove(const int64_t fd)
   } else if (OB_FAIL(files_.erase(fd))) {
     STORAGE_LOG(WARN, "fail to erase from map", K(ret));
   } else {
+    ObTaskController::get().allow_next_syslog();
     STORAGE_LOG(INFO, "succeed to remove a tmp file", K(fd), K(common::lbt()));
   }
   return ret;

@@ -97,63 +97,6 @@ int ObLogExprValues::add_values_expr(const common::ObIArray<ObRawExpr*>& value_e
   return ret;
 }
 
-int ObLogExprValues::add_str_values_array(const common::ObIArray<ObRawExpr*>& expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(str_values_array_.reserve(expr.count()))) {
-    LOG_WARN("fail to prepare_allocate", K(ret), K(expr.count()));
-  } else {
-    for (int64_t i = 0; i < expr.count() && OB_SUCC(ret); ++i) {
-      ObRawExpr* raw_expr = expr.at(i);
-      if (OB_ISNULL(raw_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("raw_exprr is null", K(ret), K(raw_expr));
-      } else if (T_FUN_COLUMN_CONV != raw_expr->get_expr_type()) {
-        // do nothing
-        LOG_DEBUG("ignore", K(ret), K(i), KPC(raw_expr));
-      } else if (OB_UNLIKELY(raw_expr->get_param_count() != ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO &&
-                             raw_expr->get_param_count() != ObExprColumnConv::PARAMS_COUNT_WITHOUT_COLUMN_INFO)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("convert expr have invalid param number", K(ret));
-      } else if (raw_expr->get_param_expr(4)->is_column_ref_expr()) {
-        ObStrValues str_values(&my_plan_->get_allocator());
-        if (raw_expr->get_result_type().is_enum_or_set()) {
-          ObExprOperator* op = NULL;
-          if (OB_ISNULL(op = static_cast<ObSysFunRawExpr*>(raw_expr)->get_op())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get_op", K(ret), K(expr));
-          } else {
-            ObExprColumnConv* column_conv = static_cast<ObExprColumnConv*>(op);
-            str_values.assign(column_conv->get_str_values());
-            if (OB_FAIL(str_values.assign(column_conv->get_str_values()))) {
-              LOG_WARN("failed to push_back", K(ret), KPC(column_conv));
-            }
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(str_values_array_.push_back(str_values))) {
-            LOG_WARN("failed to push_back", K(ret), K(str_values));
-          }
-        }
-      } else if (raw_expr->get_param_expr(4)->has_flag(CNT_COLUMN)) {
-        ObStrValues str_values(&my_plan_->get_allocator());
-        if (OB_FAIL(str_values_array_.push_back(str_values))) {
-          LOG_WARN("failed to push_back", K(ret), K(str_values));
-        }
-        LOG_DEBUG("ignore", K(ret), K(i), KPC(raw_expr->get_param_expr(4)));
-      }
-    }
-    LOG_DEBUG("finish add_str_values_array",
-        K(ret),
-        K(expr.count()),
-        "count",
-        str_values_array_.count(),
-        K(str_values_array_));
-  }
-  return ret;
-}
-
 int ObLogExprValues::compute_fd_item_set()
 {
   int ret = OB_SUCCESS;

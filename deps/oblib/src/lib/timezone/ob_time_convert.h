@@ -416,7 +416,8 @@ public:
       const ObTimeZoneInfo* tz_info, const int64_t nmonth, ObOTimestampData& result_value);
   static int otimestamp_add_nsecond(const ObOTimestampData ori_value, const int64_t nsecond,
       const int32_t fractional_second, ObOTimestampData& result_value);
-  static int calc_last_date_of_the_month(const int64_t ori_date_value, int64_t& result_date_value, const ObObjType dest_type);
+  static int calc_last_date_of_the_month(
+      const int64_t ori_date_value, int64_t& result_date_value, const ObObjType dest_type, const bool is_dayofmonth);
   static int calc_next_date_of_the_wday(
       const int64_t ori_date_value, const ObString& wday_name, int64_t& result_date_value);
   static int calc_days_and_months_between_dates(

@@ -54,7 +54,6 @@ private:
   int check_backup_task_infos_status(const ObBaseBackupInfoStruct& info);
   int check_tenant_can_backup(const uint64_t tenant_id, const int64_t backup_schema_version, bool& can_backup);
   int check_gts_(const common::ObIArray<uint64_t>& tenant_ids);
-  int check_gts_(const uint64_t tenant_id);
   int init_frozen_schema_versions_(rootserver::ObFreezeInfoManager& freeze_info_manager, const int64_t frozen_version);
   int check_backup_schema_version_(const uint64_t tenant_id, const int64_t backup_schema_version);
   int create_backup_point(const uint64_t tenant_id);
@@ -77,6 +76,7 @@ private:
   rootserver::ObRootBackup* root_backup_;
   rootserver::ObFreezeInfoManager* freeze_info_manager_;
   rootserver::ObRestorePointService* restore_point_service_;
+  ObLogArchiveBackupInfo sys_log_archive_info_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupScheduler);
 };
 

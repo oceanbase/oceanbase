@@ -217,6 +217,12 @@ void ObElectionPriority::set_system_data_disk_error()
   system_score_ += SYSTEM_SCORE_DATA_DISK_ERROR * 100;
 }
 
+void ObElectionPriority::set_system_slog_disk_warning()
+{
+  // slog use the same disk with sstable(data disk)
+  system_score_ += SYSTEM_SCORE_DATA_DISK_ERROR * 100;
+}
+
 void ObElectionPriority::set_system_need_rebuild()
 {
   system_score_ += SYSTEM_SCORE_NEED_REBUILD * 100;

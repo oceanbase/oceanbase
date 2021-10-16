@@ -117,6 +117,7 @@ void ObThWorker::activate()
   run_cond_.signal();
 }
 
+static __thread uint64_t serving_tenant_id = 0;
 void ObThWorker::wait_active()
 {
   bool has_reset_pm = false;
@@ -132,6 +133,8 @@ void ObThWorker::wait_active()
       has_reset_pm = true;
     }
     waiting_active_ = true;
+    lib::set_thread_name("OMT_FREE_", NULL == tenant_ ? 0 : tenant_->id());
+    serving_tenant_id = 0;
     IGNORE_RETURN run_cond_.wait();
     waiting_active_ = false;
   }
@@ -342,19 +345,17 @@ void ObThWorker::set_th_worker_thread_name(uint64_t tenant_id)
   // fix compile issue
   UNUSED(tenant_id);
 
-  static __thread uint64_t serving_tenant_id = 0;
   char buf[32];
   if (serving_tenant_id != tenant_->id()) {
+    serving_tenant_id = tenant_->id();
     snprintf(buf, 32, "TNT_L%d_", get_worker_level());
     lib::set_thread_name(buf, tenant_->id());
-    serving_tenant_id = tenant_->id();
   }
 }
 
 void ObThWorker::worker(int64_t& tenant_id, int64_t& req_recv_timestamp, int32_t& worker_level)
 {
   int ret = OB_SUCCESS;
-  lib::set_thread_name("OMT_FREE", ObWorker::get_tidx());
   Worker::self_ = this;
   ObWorker::self_ = this;
   int64_t wait_start_time = 0;

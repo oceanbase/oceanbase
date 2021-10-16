@@ -16,6 +16,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_backup_manager.h"
 #include "rootserver/ob_root_backup.h"
+#include "rootserver/backup/ob_backup_backupset.h"
 
 namespace oceanbase {
 namespace rootserver {
@@ -26,6 +27,9 @@ public:
   virtual ~ObBackupCancelScheduler();
   int init(const uint64_t tenant_id, common::ObMySQLProxy& proxy, rootserver::ObRootBackup* root_backup);
   int start_schedule_backup_cancel();
+
+private:
+  int inner_schedule_cancel_backup();
 
 private:
   bool is_inited_;

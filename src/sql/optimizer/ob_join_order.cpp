@@ -4090,8 +4090,6 @@ int ObJoinOrder::generate_subquery_path(PathHelper& helper)
     /*do nothing*/
   } else if (FALSE_IT(log_plan->set_is_subplan_scan(true))) {
     // never reach
-  } else if (OB_FAIL(log_plan->add_startup_filters(get_plan()->get_startup_filters()))) {
-    LOG_WARN("failed to add startup filters", K(ret));
   } else if (OB_FAIL(select_log_plan->generate_raw_plan())) {
     LOG_WARN("failed to optimize sub-select", K(ret));
   } else if (OB_ISNULL(select_log_plan->get_plan_root()) || OB_ISNULL(child_stmt = select_log_plan->get_stmt())) {

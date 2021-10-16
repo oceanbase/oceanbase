@@ -1288,3 +1288,20 @@ int ObLogSet::extra_set_exprs(ObIArray<ObRawExpr*>& set_exprs)
   }
   return ret;
 }
+
+int ObLogSet::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  if (ObSelectStmt::UNION == set_op_) {
+    // do nothing
+  } else if (ObSelectStmt::INTERSECT == set_op_) {
+    if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post())) {
+      LOG_WARN("failed to allocate startup expr post", K(ret));
+    }
+  } else if (ObSelectStmt::EXCEPT == set_op_) {
+    if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post(first_child))) {
+      LOG_WARN("failed to allocate startup expr post", K(ret));
+    }
+  }
+  return ret;
+}

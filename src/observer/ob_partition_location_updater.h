@@ -66,6 +66,8 @@ public:
       obrpc::ObSrvRpcProxy*& srv_rpc_proxy, share::ObPartitionLocationCache*& location_cache,
       share::ObIAliveServerTracer& server_tracer);
 
+  int set_thread_cnt(const int64_t thread_cnt);
+
   void stop();
   void wait();
   void destroy();

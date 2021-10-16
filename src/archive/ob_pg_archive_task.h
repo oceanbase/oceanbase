@@ -43,14 +43,16 @@ public:
   typedef common::SpinWLockGuard WLockGuard;
 
 public:
-  int init(StartArchiveHelper& helper, ObArchiveAllocator* allocator);
+  int init(const StartArchiveHelper& helper, ObArchiveAllocator* allocator);
 
 public:
-  ObPGKey get_pg_key()
+  const ObPGKey& get_pg_key() const
   {
     return pg_key_;
   }
   void get_pg_log_archive_status(clog::ObPGLogArchiveStatus& status, int64_t& epoch);
+  // these three function no need use read lock because epoch_ 、incarnation_ and round can only be
+  // modified when init
   int64_t get_pg_leader_epoch()
   {
     return epoch_;
@@ -63,6 +65,7 @@ public:
   {
     return archive_round_;
   }
+
   bool is_pg_mark_delete()
   {
     return pg_been_deleted_;
@@ -71,15 +74,18 @@ public:
   {
     return is_first_record_finish_;
   }
-  void update_pg_archive_task_on_new_start(StartArchiveHelper& helper);
+  void update_pg_archive_task_on_new_start(const StartArchiveHelper& helper);
 
   int submit_send_task(ObArchiveSendTask* task);
   int submit_clog_task(ObPGArchiveCLogTask* task);
 
+  int get_piece_info(const int64_t epoch, const int64_t incarnation, const int64_t round, int64_t& piece_id,
+      int64_t& piece_create_date);
   int get_last_split_log_info(const int64_t epoch, const int64_t incarnation, const int64_t round,
       uint64_t& last_split_log_id, int64_t& last_split_log_ts, int64_t& last_split_checkpoint_ts);
-  int get_max_archived_info(const int64_t epoch, const int64_t incarnation, const int64_t round, uint64_t& max_log_id,
-      int64_t& max_log_ts, int64_t& checkpoint_ts, int64_t& clog_epoch_id, int64_t& accum_checksum);
+  int get_max_archived_info(const int64_t epoch, const int64_t incarnation, const int64_t round, int64_t& piece_id,
+      int64_t& piece_create_date, bool& need_switch_piece_on_beginning, bool& is_first_record_finish,
+      uint64_t& max_log_id, int64_t& max_log_ts, int64_t& checkpoint_ts);
   int update_pg_archive_progress(const bool need_update_log_ts, const int64_t epoch, const int64_t incarnation,
       const int64_t archive_round, const uint64_t archived_log_id, const int64_t tstamp, const int64_t checkpoint_ts,
       const int64_t clog_epoch_id, const int64_t accum_checksum);
@@ -102,12 +108,16 @@ public:
       const LogArchiveFileType type, int64_t& offset, bool& force_switch_flag);
   int get_current_data_file_min_log_info(const int64_t epoch, const int64_t incarnation, const int64_t round,
       uint64_t& min_log_id, int64_t& min_log_ts, bool& is_valid);
+  int build_archive_key_content(const int64_t epoch, const int64_t incarnation, const int64_t round,
+      const bool is_first_piece, ObArchiveKeyContent& key_content) const;
   int build_data_file_index_record(
-      const int64_t epoch, const uint64_t incarnation, const uint64_t round, ObArchiveIndexFileInfo& info);
+      const int64_t epoch, const int64_t incarnation, const int64_t round, ObArchiveIndexFileInfo& info) const;
   int update_pg_archive_file_offset(const int64_t epoch, const int64_t incarnation, const int64_t round,
       const int64_t buf_size, const LogArchiveFileType type);
   int switch_archive_file(
       const int64_t epoch, const int64_t incarnation, const int64_t round, const LogArchiveFileType type);
+  int switch_piece(const int64_t epoch, const int64_t incarnation, const int64_t round, const int64_t piece_id,
+      const int64_t piece_create_date);
   int set_file_force_switch(
       const int64_t epoch, const int64_t incarnation, const int64_t round, const LogArchiveFileType type);
   int set_pg_data_file_record_min_log_info(const int64_t epoch, const uint64_t incarnation, const uint64_t round,
@@ -121,14 +131,14 @@ public:
   int mock_push_task(ObArchiveSendTask& task, ObSpLinkQueue& queue);
   void mock_free_task_status();
   TO_STRING_KV(K(pg_been_deleted_), K(is_first_record_finish_), K(incarnation_), K(archive_round_), K(epoch_),
-      K(tenant_id_), K(current_ilog_id_), K(max_log_id_), K(round_start_info_), K(start_log_id_), K(archived_log_id_),
+      K(current_ilog_id_), K(max_log_id_), K(round_start_info_), K(start_log_id_), K(archived_log_id_),
       K(archived_log_timestamp_), K(archived_checkpoint_ts_), K(archived_clog_epoch_id_), K(archived_accum_checksum_),
       K(fetcher_max_split_log_id_), K(last_split_log_id_), K(last_split_log_submit_ts_), K(last_split_checkpoint_ts_),
-      K(mandatory_), K(archive_destination_), K(pg_key_));
+      K(archive_destination_), K(pg_key_));
 
 private:
   void destroy();
-  void update_unlock_(StartArchiveHelper& helper);
+  void update_unlock_(const StartArchiveHelper& helper);
   void free_task_status_();
 
 private:
@@ -138,7 +148,6 @@ private:
   int64_t incarnation_;
   int64_t archive_round_;
   int64_t epoch_;
-  uint64_t tenant_id_;
 
   file_id_t current_ilog_id_;
 
@@ -156,7 +165,6 @@ private:
   int64_t archived_checkpoint_ts_;  // archived max checkpoint ts
   int64_t archived_clog_epoch_id_;
   int64_t archived_accum_checksum_;
-  bool mandatory_;
 
   ObArchiveDestination archive_destination_;
   ObPGKey pg_key_;

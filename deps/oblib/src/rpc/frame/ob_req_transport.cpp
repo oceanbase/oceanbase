@@ -148,7 +148,7 @@ int ObReqTransport::AsyncCB::on_error(int)
 }
 
 ObReqTransport::ObReqTransport(easy_io_t* eio, easy_io_handler_pt* handler)
-    : eio_(eio), handler_(handler), sgid_(0), bucket_count_(0)
+    : eio_(eio), handler_(handler), sgid_(0), bucket_count_(0), enable_use_ssl_(false)
 {
   // empty
 }
@@ -230,9 +230,12 @@ int ObReqTransport::create_session(easy_session_t*& session, const ObAddr& addr,
     session->timeout = static_cast<ev_tstamp>(timeout / 1000);
 
     bool use_ssl = false;
-    if (NULL != handler_ && 1 == handler_->is_ssl && 0 == handler_->is_ssl_opt && NULL != eio_ && NULL != eio_->ssl) {
-      if (ssl_invited_nodes.empty() || 0 == ssl_invited_nodes.case_compare("NONE")) {
-        // nothing
+    if (NULL != handler_ && 1 == handler_->is_ssl && 0 == handler_->is_ssl_opt
+        && NULL != eio_ && NULL != eio_->ssl) {
+      if (enable_use_ssl_) {
+        use_ssl = true;
+      } else if (ssl_invited_nodes.empty() || 0 == ssl_invited_nodes.case_compare("NONE")) {
+        //nothing
       } else if (0 == ssl_invited_nodes.case_compare("ALL")) {
         use_ssl = true;
       } else {
@@ -246,7 +249,7 @@ int ObReqTransport::create_session(easy_session_t*& session, const ObAddr& addr,
         }
       }
     }
-    LOG_DEBUG("rpc connection session create", K(local_addr), "dest", addr, K(use_ssl), K(ssl_invited_nodes));
+    LOG_DEBUG("rpc connection session create", K(local_addr), "dest", addr, K(use_ssl), K(ssl_invited_nodes), K(enable_use_ssl_));
 
     if (use_ssl) {
       session->packet_id |= (EASY_CONNECT_SSL | EASY_CONNECT_SSL_OB);

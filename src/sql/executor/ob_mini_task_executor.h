@@ -17,10 +17,13 @@
 #include "lib/allocator/ob_safe_arena.h"
 namespace oceanbase {
 namespace sql {
-class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
+class ObAPMiniTaskMgr {
   static const int64_t MAX_FINISH_QUEUE_CAPACITY = 512;
 
 public:
+  static const int64_t OP_LOCAL_NUM = 1;
+  static constexpr const char *OP_LABEL = ObModIds::OB_SQL_EXECUTOR_MINI_TASK_MGR;
+
   ObAPMiniTaskMgr()
       : ref_count_(0),
         mgr_rcode_(common::OB_SUCCESS),
@@ -30,11 +33,8 @@ public:
         lock_()
   {}
   virtual ~ObAPMiniTaskMgr()
-  {}
-
-  int32_t get_type()
   {
-    return 0;
+    reset();
   }
   static ObAPMiniTaskMgr* alloc();
   static void free(ObAPMiniTaskMgr* item);
@@ -47,7 +47,7 @@ public:
     return ATOMIC_SAF((uint64_t*)&ref_count_, 1);
   }
   int init(ObSQLSessionInfo& session, ObExecutorRpcImpl* exec_rpc);
-  virtual void reset() override;
+  void reset();
   void set_mgr_rcode(int mgr_rcode)
   {
     mgr_rcode_ = mgr_rcode;
@@ -88,21 +88,9 @@ private:
   mutable common::ObSpinLock lock_;
 };
 
-typedef common::ObGlobalFactory<ObAPMiniTaskMgr, 1, common::ObModIds::OB_SQL_EXECUTOR_MINI_TASK_MGR>
-    ObAPMiniTaskMgrGFactory;
-typedef common::ObTCFactory<ObAPMiniTaskMgr, 1, common::ObModIds::OB_SQL_EXECUTOR_MINI_TASK_MGR>
-    ObApMiniTaskMgrTCFactory;
-
-inline ObAPMiniTaskMgr* ObAPMiniTaskMgr::alloc()
+inline ObAPMiniTaskMgr *ObAPMiniTaskMgr::alloc()
 {
-  ObAPMiniTaskMgr* ap_mini_task_mgr = NULL;
-  if (OB_ISNULL(ObApMiniTaskMgrTCFactory::get_instance())) {
-    SQL_EXE_LOG(ERROR, "get ap mini task mgr factory instance failed");
-    ap_mini_task_mgr = NULL;
-  } else {
-    ap_mini_task_mgr = ObApMiniTaskMgrTCFactory::get_instance()->get(0);
-  }
-  return ap_mini_task_mgr;
+  return op_reclaim_alloc(ObAPMiniTaskMgr);
 }
 
 inline void ObAPMiniTaskMgr::free(ObAPMiniTaskMgr* item)
@@ -111,13 +99,8 @@ inline void ObAPMiniTaskMgr::free(ObAPMiniTaskMgr* item)
     int64_t ref_count = item->def_ref_count();
     if (OB_LIKELY(0 == ref_count)) {
       // nobody reference this object, so free it
-      if (OB_ISNULL(ObApMiniTaskMgrTCFactory::get_instance())) {
-        SQL_EXE_LOG(ERROR, "get ap mini task mgr factory instance failed");
-      } else {
-        item->reset();
-        ObApMiniTaskMgrTCFactory::get_instance()->put(item);
-        item = NULL;
-      }
+      op_reclaim_free(item);
+      item = nullptr;
     } else if (OB_UNLIKELY(ref_count < 0)) {
       SQL_EXE_LOG(ERROR, "ref_count is invalid", K(ref_count));
     }

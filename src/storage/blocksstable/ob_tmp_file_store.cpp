@@ -12,6 +12,9 @@
 
 #include "ob_tmp_file_store.h"
 #include "ob_tmp_file.h"
+#include "share/ob_task_define.h"
+
+using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace blocksstable {
@@ -408,7 +411,7 @@ int ObTmpMacroBlock::get_block_cache_handle(ObTmpBlockValueHandle& handle)
   } else if (OB_FAIL(ObTmpBlockCache::get_instance().get_block(key, handle))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "fail to get tmp block from cache", K(ret), K(key));
-    } else {
+    } else if (REACH_COUNT_INTERVAL(100)) {  // print one log per 100 times.
       STORAGE_LOG(INFO, "block cache miss", K(ret), K(key));
     }
   }
@@ -564,11 +567,11 @@ int ObTmpTenantMacroBlockManager::alloc_macro_block(
   if (OB_FAIL(ret)) {
     if (NULL != t_mblk) {
       int tmp_ret = OB_SUCCESS;
-      t_mblk->~ObTmpMacroBlock();
-      allocator_->free(block_buf);
       if (OB_SUCCESS != (tmp_ret = blocks_.erase_refactored(t_mblk->get_block_id()))) {
         STORAGE_LOG(WARN, "fail to erase from tmp macro block map", K(tmp_ret), K(t_mblk));
       }
+      t_mblk->~ObTmpMacroBlock();
+      allocator_->free(block_buf);
     }
   }
   return ret;
@@ -942,6 +945,7 @@ int ObTmpTenantFileStore::free_macro_block(ObTmpMacroBlock*& t_mblk)
                  OB_FAIL(tmp_mem_block_manager_.wait_write_io_finish())) {  // in case of doing write io
         STORAGE_LOG(WARN, "fail to wait write io finish", K(ret), K(t_mblk));
       }
+      ObTaskController::get().allow_next_syslog();
       STORAGE_LOG(INFO, "finish to free a block", K(ret), K(*t_mblk));
       t_mblk->~ObTmpMacroBlock();
       allocator_.free(t_mblk);
@@ -953,6 +957,7 @@ int ObTmpTenantFileStore::free_macro_block(ObTmpMacroBlock*& t_mblk)
 int ObTmpTenantFileStore::alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock*& t_mblk)
 {
   int ret = OB_SUCCESS;
+  t_mblk = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has not been inited", K(ret));
@@ -973,7 +978,11 @@ int ObTmpTenantFileStore::alloc_macro_block(const int64_t dir_id, const uint64_t
         t_mblk->give_back_buf_into_cache();
       }
     }
+    if (OB_FAIL(ret) && OB_NOT_NULL(t_mblk)) {
+      allocator_.free(t_mblk);
+    }
   }
+
   return ret;
 }
 
@@ -1266,7 +1275,7 @@ int ObTmpFileStore::free_tenant_file_store(const uint64_t tenant_id)
     }
   } else if (OB_ISNULL(store)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexcepted error, store is null", K(ret));
+    STORAGE_LOG(WARN, "unexpected error, store is null", K(ret));
   } else {
     store->~ObTmpTenantFileStore();
     allocator_.free(store);

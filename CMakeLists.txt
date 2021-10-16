@@ -4,7 +4,7 @@ include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
 project("OceanBase CE"
-  VERSION 3.1.0
+  VERSION 3.1.1
   DESCRIPTION "OceanBase distributed database system"
   HOMEPAGE_URL "https://www.oceanbase.com/"
   LANGUAGES CXX C ASM)
@@ -19,6 +19,11 @@ endif()
 if(WITH_OSS)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_WITH_OSS")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_WITH_OSS")
+endif()
+
+if(OB_USE_ASAN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOB_USE_ASAN")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOB_USE_ASAN")
 endif()
 
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})

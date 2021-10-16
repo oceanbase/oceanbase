@@ -1378,8 +1378,17 @@ int ObMemtable::replay(const ObStoreCtx& ctx, const char* data, const int64_t da
             if (OB_ITER_END != ret) {
               TRANS_LOG(WARN, "get next row error", K(ret));
             }
-          } else if (OB_FAIL(check_standby_cluster_schema_condition_(ctx, table_id, table_version))) {
-            TRANS_LOG(WARN, "failed to check standby_cluster_schema_condition", K(ret), K(table_id), K(table_version));
+          } else if (OB_FAIL(ObPartitionService::get_instance().check_standby_cluster_schema_condition(
+                         key_.get_partition_key(), table_version))) {
+            if (OB_TRANS_WAIT_SCHEMA_REFRESH == ret) {
+              ctx.mem_ctx_->set_table_version(table_version);  // return to be used by replay engine
+            }
+            TRANS_LOG(WARN,
+                "failed to check standby_cluster_schema_condition",
+                K(ret),
+                K(table_id),
+                K_(key),
+                K(table_version));
           } else {
             // FIXME.
             transaction::ObPartTransCtx* part_ctx = static_cast<transaction::ObPartTransCtx*>(mt_ctx->get_trans_ctx());
@@ -2578,61 +2587,6 @@ int ObMemtable::get_merge_priority_info(ObMergePriorityInfo& merge_priority_info
 void ObMemtable::set_minor_merged()
 {
   minor_merged_time_ = ObTimeUtility::current_time();
-}
-
-int ObMemtable::check_standby_cluster_schema_condition_(
-    const ObStoreCtx& ctx, const int64_t table_id, const int64_t table_version)
-{
-  int ret = OB_SUCCESS;
-#ifdef ERRSIM
-  ret = E(EventTable::EN_CHECK_STANDBY_CLUSTER_SCHEMA_CONDITION) OB_SUCCESS;
-  if (OB_FAIL(ret) && !common::is_inner_table(table_id)) {
-    TRANS_LOG(WARN, "ERRSIM, replay row failed", K(ret));
-    return ret;
-  }
-#endif
-  if (GCTX.is_standby_cluster()) {
-    // only stand_by cluster need to be check
-    uint64_t tenant_id = extract_tenant_id(table_id);
-    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "invalid tenant_id", K(ret), K(tenant_id), K(table_id), K(table_version));
-    } else if (OB_SYS_TENANT_ID == tenant_id) {
-      // sys tenant do not need check
-    } else {
-      // user tables of normal tenants(not sys tenant) need to be checked by schema version of
-      // itself;
-      // sys tables of normal tenants(not sys tenant) need to be checked by schema version of sys tenent;
-      uint64_t referred_tenant_id = common::is_inner_table(table_id) ? OB_SYS_TENANT_ID : tenant_id;
-      int64_t tenant_schema_version = 0;
-      if (OB_FAIL(GSCHEMASERVICE.get_tenant_refreshed_schema_version(referred_tenant_id, tenant_schema_version))) {
-        TRANS_LOG(WARN,
-            "get_tenant_schema_version failed",
-            K(ret),
-            K(referred_tenant_id),
-            K(table_id),
-            K(tenant_id),
-            K(table_version));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          // tenant schema hasn't been flushed in the case of restart, rewrite OB_ENTRY_NOT_EXIST
-          ret = OB_TRANS_WAIT_SCHEMA_REFRESH;
-        }
-      } else if (table_version > tenant_schema_version) {
-        // replay is not allowed when data's table version is greater than tenant's schema version
-        ret = OB_TRANS_WAIT_SCHEMA_REFRESH;
-        ctx.mem_ctx_->set_table_version(table_version);  // return to be used by replay engine
-        TRANS_LOG(WARN,
-            "local table schema version is too small, cannot replay",
-            K(ret),
-            K(tenant_id),
-            K(referred_tenant_id),
-            K(table_version),
-            K(tenant_schema_version));
-      } else { /*do nothing*/
-      }
-    }
-  }
-  return ret;
 }
 
 int ObMemtable::prepare_freeze_log_ts()

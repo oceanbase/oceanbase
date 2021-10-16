@@ -208,6 +208,9 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_tenant_all_tables.cpp
   virtual_table/ob_tenant_partition_stat.cpp
   virtual_table/ob_tenant_show_tables.cpp
+  virtual_table/ob_tenant_show_tables.h
+  virtual_table/ob_tenant_show_restore_preview.cpp
+  virtual_table/ob_tenant_show_restore_preview.h
   virtual_table/ob_tenant_virtual_charset.cpp
   virtual_table/ob_tenant_virtual_collation.cpp
   virtual_table/ob_tenant_virtual_concurrent_limit_sql.cpp
@@ -240,6 +243,8 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_all_virtual_reserved_table_mgr.cpp
   virtual_table/ob_all_virtual_dag_warning_history.cpp
   virtual_table/ob_all_virtual_backupset_history_mgr.cpp
+  virtual_table/ob_all_virtual_backup_clean_info.h
+  virtual_table/ob_all_virtual_backup_clean_info.cpp
 )
 
 ob_set_subtarget(ob_server table
@@ -315,13 +320,18 @@ if (OB_STATIC_LINK_LGPL_DEPS)
 endif()
 
 add_executable(observer)
+
+if (NOT OB_USE_ASAN) 
+  set(link_malloc_hook malloc_hook)
+endif()
+
 target_link_libraries(observer
   PRIVATE
   ob_main
   oceanbase_static
   -static-libgcc
   -static-libstdc++
-  malloc_hook
+  ${link_malloc_hook}
   ${LGPL_DEPS}
   )
 execute_process(

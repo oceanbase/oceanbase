@@ -3330,7 +3330,7 @@ int ObAdminFlushCache::call_server(const common::ObAddr& server, const obrpc::Ob
 
 int ObAdminSetTP::execute(const obrpc::ObAdminSetTPArg& arg)
 {
-  LOG_INFO("execute report request", K(arg));
+  LOG_INFO("start execute set_tp request", K(arg));
   int ret = OB_SUCCESS;
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
@@ -3341,6 +3341,7 @@ int ObAdminSetTP::execute(const obrpc::ObAdminSetTPArg& arg)
   } else if (OB_FAIL(call_all(arg))) {
     LOG_WARN("execute report replica failed", K(ret), K(arg));
   }
+  LOG_INFO("end execute set_tp request", K(arg));
   return ret;
 }
 

@@ -18,6 +18,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "ob_backup_struct.h"
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase {
 namespace share {
@@ -105,6 +106,7 @@ public:
   ObBackupInfoItem::ItemList list_;
   // base data backup info
   ObBackupInfoItem backup_dest_;
+  ObBackupInfoItem backup_backup_dest_;
   ObBackupInfoItem backup_status_;
   ObBackupInfoItem backup_type_;
   ObBackupInfoItem backup_snapshot_version_;
@@ -148,8 +150,12 @@ public:
   int cancel_backup();
   int check_can_update(const ObBaseBackupInfoStruct& src_info, const ObBaseBackupInfoStruct& dest_info);
   int get_backup_info_without_trans(const uint64_t tenant_id, ObBaseBackupInfoStruct& info);
-  int get_detected_region(const uint64_t tenant_id, common::ObIArray<common::ObRegion>& detected_region);
+  int get_detected_region(const uint64_t tenant_id, common::ObIArray<ObBackupRegion>& detected_region);
   int get_backup_status(const uint64_t tenant_id, common::ObISQLClient& trans, ObBackupInfoStatus& status);
+  int get_backup_backup_dest(
+      const uint64_t tenant_id, common::ObISQLClient& trans, ObBaseBackupInfoStruct::BackupDest& backup_dest);
+  int update_backup_backup_dest(
+      const uint64_t tenant_id, common::ObISQLClient& trans, const ObBaseBackupInfoStruct::BackupDest& backup_dest);
   int get_backup_scheduler_leader(
       const uint64_t tenant_id, common::ObISQLClient& trans, common::ObAddr& scheduler_leader, bool& has_leader);
   int update_backup_scheduler_leader(
@@ -159,10 +165,13 @@ public:
   int get_job_id(int64_t& job_id);
   int get_base_backup_version(const uint64_t tenant_id, common::ObISQLClient& trans, int64_t& base_backup_version);
   int is_backup_started(bool& is_started);
-  int get_last_delete_expired_data_snapshot(
-      const uint64_t tenant_id, common::ObISQLClient& trans, int64_t& last_delete_expired_data_snapshot);
-  int update_last_delete_expired_data_snapshot(
-      const uint64_t tenant_id, const int64_t last_delete_expired_data_snapshot, common::ObISQLClient& trans);
+  int get_enable_auto_backup_archivelog(const uint64_t tenant_id, common::ObISQLClient& trans, bool& is_enable);
+  int update_enable_auto_backup_archivelog(const uint64_t tenant_id, const bool is_enable, common::ObISQLClient& trans);
+  int get_delete_obsolete_snapshot(const uint64_t tenant_id, const obrpc::ObBackupManageArg::Type& type,
+      common::ObISQLClient& trans, int64_t& last_delete_expired_data_snapshot);
+  int update_delete_obsolete_snapshot(const uint64_t tenant_id, const obrpc::ObBackupManageArg::Type& type,
+      const int64_t last_delete_obsolete_snapshot, common::ObISQLClient& trans);
+  int delete_last_delete_epxired_data_snapshot(const uint64_t tenant_id, common::ObISQLClient& trans);
 
 private:
   int convert_info_to_struct(const ObBaseBackupInfo& info, ObBaseBackupInfoStruct& info_struct);
@@ -195,7 +204,7 @@ public:
   ObBackupInfoChecker();
   ~ObBackupInfoChecker();
 
-  int init(common::ObMySQLProxy* sql_proxy);
+  int init(common::ObMySQLProxy* sql_proxy, const share::ObBackupInnerTableVersion& inner_table_version);
   int check(const common::ObIArray<uint64_t>& tenant_ids, share::ObIBackupLeaseService& backup_lease_service);
   int check(const uint64_t tenant_id);
 
@@ -212,6 +221,7 @@ private:
 private:
   bool is_inited_;
   common::ObMySQLProxy* sql_proxy_;
+  share::ObBackupInnerTableVersion inner_table_version_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupInfoChecker);
 };
 

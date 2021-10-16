@@ -100,7 +100,7 @@ public:
    *
    */
 
-  inline int clone(const ObString& rv, ObDataBuffer& buf);
+  int clone(const ObString& rv, ObDataBuffer& buf);
 
   // reset
   void reset()
@@ -609,7 +609,11 @@ public:
     if (OB_ISNULL(ptr_) || data_length_ == 0) {
       ret = false;
     } else {
-      for (int i = 0; i < data_length_; ++i) {
+      int i = 0;
+      if (data_length_ >= 2 && ptr_[0] == '-') {
+        i += 1;
+      }
+      for (; i < data_length_; ++i) {
         if (!isdigit(ptr_[i])) {
           ret = false;
         }

@@ -48,6 +48,7 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 | OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| UOS | 20 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
 ## 如何构建
 
@@ -55,7 +56,7 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 
 在构建前您需要确认您的机器已经安装必要的软件：
 
-#### Fedora 系列 （包括 CentOS，Fedora，OpenAnolis，RedHat 等）
+#### Fedora 系列 （包括 CentOS，Fedora，OpenAnolis，RedHat, UOS等）
 
 ```sh
 yum install git wget rpm* cpio make glibc-devel glibc-headers binutils

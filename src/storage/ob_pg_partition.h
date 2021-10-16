@@ -181,21 +181,31 @@ static const int64_t SHRINK_THRESHOLD = 128;
 typedef common::ObLinkHashMap<common::ObPartitionKey, ObPGPartition, PGPartitionInfoAlloc> ObPGPartitionMap;
 
 // thread safe
-class ObPartitionKeyList {
+class ObPGPartitionList {
 private:
   class Node : public ObDLinkBase<Node> {
   public:
-    Node(const common::ObPartitionKey& key) : key_(key)
+    Node(const common::ObPartitionKey &key) : key_(key), part_(NULL)
     {}
     const common::ObPartitionKey key_;
+    // no-NULL when PartitionGroup removed
+    ObPGPartition *part_;
+    TO_STRING_KV(K(key_), KP(part_));
   };
   typedef common::ObDList<Node> List;
 
 public:
-  ObPartitionKeyList() : lock_(), list_()
+  ObPGPartitionList() : lock_(), list_(), contains_part_info_(false)
   {}
+  void reset()
+  {
+    TCWLockGuard guard(lock_);
+    STORAGE_LOG(INFO, "reset partition list", K(this), K_(list), K_(contains_part_info), K(lbt()));
+    list_.reset();
+    contains_part_info_ = false;
+  }
 
-  inline int size()
+  inline int size() const
   {
     return list_.get_size();
   }
@@ -224,8 +234,7 @@ public:
   // NOTICE : _assumption_ : no concurrent remove of same `pkey`
   bool remove_latest(const common::ObPartitionKey& pkey)
   {
-    Node* n = NULL;
-
+    Node *n = NULL;
     {
       TCRLockGuard guard(lock_);
       DLIST_FOREACH_BACKWARD_X(curr, list_, NULL == n)
@@ -235,7 +244,6 @@ public:
         }
       }
     }
-
     if (NULL != n) {
       {
         TCWLockGuard guard(lock_);
@@ -243,7 +251,6 @@ public:
       }
       ob_free(n);
     }
-
     return NULL != n;
   }
 
@@ -266,14 +273,54 @@ public:
     DLIST_REMOVE_ALL_NORET(cur, list_)
     {
       cur->unlink();
-      fn(cur->key_);
+      fn(cur->key_, cur->part_);
       ob_free(cur);
     }
+  }
+  template <typename Fn>
+  int set_partition_info(Fn &fn)
+  {
+    int ret = OB_SUCCESS;
+    TCWLockGuard guard(lock_);
+    DLIST_FOREACH(cur, list_)
+    {
+      ret = fn(cur->key_, cur->part_);
+    }
+    if (OB_SUCC(ret)) {
+      contains_part_info_ = true;
+    }
+    STORAGE_LOG(INFO, "set_partition_info OK", K(this), K_(list), K_(contains_part_info));
+    return ret;
+  }
+  int get_part_info(const ObPartitionKey &pkey, ObPGPartition *&part) const
+  {
+    int ret = OB_ENTRY_NOT_EXIST;
+    bool found_pkey = false;
+    TCRLockGuard guard(lock_);
+    if (contains_part_info_) {
+      DLIST_FOREACH_NORET(cur, list_)
+      {
+        if (pkey == cur->key_) {
+          found_pkey = true;
+          part = cur->part_;
+          if (OB_NOT_NULL(part)) {
+            ret = OB_SUCCESS;
+          }
+          break;
+        }
+      }
+    }
+    if (OB_SUCCESS != ret) {
+      STORAGE_LOG(
+          WARN, "get_part_info fail", K(ret), K(pkey), K(found_pkey), K(this), K_(list), K_(contains_part_info));
+    }
+    return ret;
   }
 
 private:
   TCRWLock lock_;
   List list_;
+  bool contains_part_info_;
 };
 
 class ObPGPartitionGuard {
@@ -285,10 +332,30 @@ public:
     (void)set_pg_partition(pkey, map);
   }
 
-  int set_pg_partition(const common::ObPartitionKey& pkey, const ObPGPartitionMap& map)
+  ObPGPartitionGuard(const common::ObPartitionKey &pkey, const ObPGPartitionList &part_list)
+      : pg_partition_(NULL), map_(NULL)
+  {
+    (void)set_pg_partition(pkey, part_list);
+  }
+
+  int set_pg_partition(const common::ObPartitionKey &pkey, const ObPGPartitionList &part_list)
   {
     int ret = OB_SUCCESS;
+    if (!pkey.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid argument", K(ret), K(pkey));
+    } else if (OB_FAIL(part_list.get_part_info(pkey, pg_partition_))) {
+      STORAGE_LOG(WARN, "get pg part from partition list fail", K(ret), K(pkey), KP(&part_list));
+    } else {
+      pkey_ = pkey;
+      map_ = NULL;
+    }
+    return ret;
+  }
 
+  int set_pg_partition(const common::ObPartitionKey &pkey, const ObPGPartitionMap &map)
+  {
+    int ret = OB_SUCCESS;
     if (!pkey.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid argument", K(ret), K(pkey));
@@ -298,7 +365,6 @@ public:
       pkey_ = pkey;
       map_ = &const_cast<ObPGPartitionMap&>(map);
     }
-
     return ret;
   }
 

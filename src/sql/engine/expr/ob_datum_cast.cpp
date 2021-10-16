@@ -900,6 +900,7 @@ static OB_INLINE int common_string_datetime(
       if (CAST_FAIL(ObTimeConverter::str_to_datetime(in_str, cvrt_ctx, out_val, &res_scale))) {
         LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
       }
+      LOG_INFO("stt, commont string to datetime", K(in_str), K(out_val), K(ret));
     }
     if (OB_SUCC(ret)) {
       SET_RES_DATETIME(out_val);
@@ -1002,6 +1003,7 @@ int common_check_convert_string(const ObExpr& expr, ObEvalCtx& ctx, const ObStri
         LOG_WARN("fail to hextoraw_string for blob", K(ret), K(in_str));
       }
     } else {
+      ret = OB_NOT_SUPPORTED;
       LOG_ERROR("invalid use of blob type", K(ret), K(in_str), K(out_type));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to blob type");
     }
@@ -2228,7 +2230,14 @@ CAST_FUNC_NAME(number, year)
     if (OB_ISNULL(nmb_buf)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pointer", K(ret), K(nmb_buf));
-    } else if (OB_FAIL(common_string_year(expr, ObString(strlen(nmb_buf), nmb_buf), res_datum))) {
+    } else if (nmb.is_negative()) {
+      // the year shouldn't accept a negative number, if we use the common_string_year.
+      // number like -0.4 could be converted to year, which should raise error in mysql
+      if (OB_FAIL(common_int_year(expr, INT_MIN, res_datum))) {
+        LOG_WARN("common_int_year failed", K(ret));
+      }
+    } else if (OB_FAIL(common_string_year(expr, ObString(strlen(nmb_buf), nmb_buf),
+                                          res_datum))) {
       LOG_WARN("common_string_year failed", K(ret));
     }
   }
@@ -2628,6 +2637,24 @@ CAST_FUNC_NAME(double, time)
     double in_val = child_res->get_double();
     if (OB_FAIL(common_double_time(expr, in_val, res_datum))) {
       LOG_WARN("common_double_time failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(double, year)
+{
+  EVAL_ARG()
+  {
+    // When we insert 999999999999999999999.9(larger than max int) into a year field in mysql
+    // Mysql raise the same error as we insert 100 into a year field (1264).
+    // So the cast from double to int won't raise extra error. That's why we directly use
+    // static_cast here. Mysql will convert the double to nearest int and insert it to the year field.
+    double in_val = child_res->get_double();
+    in_val = in_val < 0 ? INT_MIN : in_val + 0.5;
+    int64_t val_int = static_cast<int64_t>(in_val);
+    if (OB_FAIL(common_int_year(expr, val_int, res_datum))) {
+      LOG_WARN("common_int_time failed", K(ret), K(val_int));
     }
   }
   return ret;
@@ -3272,16 +3299,12 @@ CAST_FUNC_NAME(year, bit)
 {
   EVAL_ARG()
   {
-    char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
-    int64_t len = 0;
+    int64_t year_int = 0;
     uint8_t in_val = child_res->get_uint8();
-    if (OB_FAIL(ObTimeConverter::year_to_str(in_val, buf, sizeof(buf), len))) {
-      LOG_WARN("year_to_str failed", K(ret));
-    } else {
-      ObString in_str(len, buf);
-      if (OB_FAIL(common_string_bit(expr, in_str, ctx, res_datum))) {
-        LOG_WARN("common_string_bit failed", K(ret), K(in_str));
-      }
+    if (OB_FAIL(ObTimeConverter::year_to_int(in_val, year_int))) {
+      LOG_WARN("year_to_int failed", K(ret), K(in_val));
+    } else if (OB_FAIL(common_uint_bit(expr, year_int, ctx, res_datum))) {
+      LOG_WARN("common_uint_bit failed", K(ret), K(year_int));
     }
   }
   return ret;
@@ -3361,28 +3384,41 @@ CAST_FUNC_NAME(bit, datetime)
   {
     GET_SESSION()
     {
-      const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-      int64_t pos = 0;
-      char buf[BUF_LEN] = {0};
-      uint64_t in_val = child_res->get_uint();
-      ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
-      if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-        LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
-      } else if (OB_ISNULL(session)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("session is NULL", K(ret));
-      } else {
-        int warning = OB_SUCCESS;
-        ObObjType out_type = expr.datum_meta_.type_;
-        ObString str(pos, buf);
-        ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
-        ObScale res_scale;
-        int64_t out_val = 0;
-        if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, out_val, &res_scale))) {
-          LOG_WARN("str_to_datetime failed", K(ret));
+      DEF_IN_OUT_VAL(uint64_t, int64_t, 0);
+      if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
+        // if cast mode is column convert, using bit as int64 to do cast.
+        int64_t int64 = 0;
+        if (OB_FAIL(common_uint_int(expr, ObIntType, in_val, ctx, int64))) {
+          LOG_WARN("common_uint_int failed", K(ret));
+        } else if (OB_UNLIKELY(0 > int64)) {
+          ret = OB_INVALID_DATE_FORMAT;
+          LOG_WARN("invalid date", K(ret), K(int64));
         } else {
-          SET_RES_DATETIME(out_val);
+          ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == expr.datum_meta_.type_);
+          if (CAST_FAIL(ObTimeConverter::int_to_datetime(int64, 0, cvrt_ctx, out_val))) {
+            LOG_WARN("int_datetime failed", K(ret), K(int64));
+          }
         }
+      } else {
+        // using bit as char array to do cast.
+        const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+        int64_t pos = 0;
+        char buf[BUF_LEN] = {0};
+        ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
+        if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
+          LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
+        } else {
+          ObObjType out_type = expr.datum_meta_.type_;
+          ObString str(pos, buf);
+          ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
+          ObScale res_scale;
+          if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, out_val, &res_scale))) {
+            LOG_WARN("str_to_datetime failed", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        SET_RES_DATETIME(out_val);
       }
     }
   }
@@ -3393,20 +3429,32 @@ CAST_FUNC_NAME(bit, date)
 {
   EVAL_ARG()
   {
-    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-    int64_t pos = 0;
-    char buf[BUF_LEN] = {0};
     DEF_IN_OUT_VAL(uint64_t, int32_t, 0);
-    ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
-    if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
-    } else {
-      ObString str(pos, buf);
-      if (CAST_FAIL(ObTimeConverter::str_to_date(str, out_val))) {
-        LOG_WARN("str_to_datetime failed", K(ret));
-      } else {
-        SET_RES_DATE(out_val);
+    if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
+      // if cast mode is column convert, using bit as int64 to do cast.
+      int64_t int64 = 0;
+      if (OB_FAIL(common_uint_int(expr, ObIntType, in_val, ctx, int64))) {
+        LOG_WARN("common_uint_int failed", K(ret));
+      } else if (CAST_FAIL(ObTimeConverter::int_to_date(int64, out_val))) {
+        LOG_WARN("int_to_date failed", K(ret), K(int64), K(out_val));
       }
+    } else {
+      // using bit as char array to do cast.
+      const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+      int64_t pos = 0;
+      char buf[BUF_LEN] = {0};
+      ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
+      if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
+        LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
+      } else {
+        ObString str(pos, buf);
+        if (CAST_FAIL(ObTimeConverter::str_to_date(str, out_val))) {
+          LOG_WARN("str_to_datetime failed", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      SET_RES_DATE(out_val);
     }
   }
   return ret;
@@ -3416,20 +3464,31 @@ CAST_FUNC_NAME(bit, time)
 {
   EVAL_ARG()
   {
-    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-    int64_t pos = 0;
-    char buf[BUF_LEN] = {0};
     DEF_IN_OUT_VAL(uint64_t, int64_t, 0);
-    ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
-    if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
+    if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
+      // if cast mode is column convert, using bit as int64 to do cast.
+      int64_t int64 = 0;
+      if (OB_FAIL(common_uint_int(expr, ObIntType, in_val, ctx, int64))) {
+        LOG_WARN("common_uint_int failed", K(ret), K(in_val));
+      } else if (OB_FAIL(common_int_time(expr, int64, res_datum))) {
+        LOG_WARN("common_int_time failed", K(ret), K(out_val));
+      }
     } else {
-      ObString str(pos, buf);
-      ObScale res_scale;
-      if (CAST_FAIL(ObTimeConverter::str_to_time(str, out_val, &res_scale))) {
-        LOG_WARN("str_to_datetime failed", K(ret));
+      // using bit as char array to do cast.
+      const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+      int64_t pos = 0;
+      char buf[BUF_LEN] = {0};
+      ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
+      if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
+        LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
       } else {
-        SET_RES_TIME(out_val);
+        ObString str(pos, buf);
+        ObScale res_scale;
+        if (CAST_FAIL(ObTimeConverter::str_to_time(str, out_val, &res_scale))) {
+          LOG_WARN("str_to_datetime failed", K(ret));
+        } else {
+          SET_RES_TIME(out_val);
+        }
       }
     }
   }
@@ -3440,20 +3499,13 @@ CAST_FUNC_NAME(bit, year)
 {
   EVAL_ARG()
   {
-    DEF_IN_OUT_VAL(uint64_t, uint8_t, 0);
-    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-    int64_t pos = 0;
-    char buf[BUF_LEN] = {0};
-    ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
-    if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
-    } else {
-      ObString str(pos, buf);
-      if (CAST_FAIL(ObTimeConverter::str_to_year(str, out_val))) {
-        LOG_WARN("str_to_datetime failed", K(ret));
-      } else {
-        SET_RES_YEAR(out_val);
-      }
+    // same as uint to year
+    uint64_t in_val = child_res->get_uint();
+    int64_t out_val = 0;
+    if (OB_FAIL(common_uint_int(expr, ObIntType, in_val, ctx, out_val))) {
+      LOG_WARN("common_uint_int failed", K(ret), K(in_val));
+    } else if (OB_FAIL(common_int_year(expr, out_val, res_datum))) {
+      LOG_WARN("common_int_year failed", K(ret), K(out_val));
     }
   }
   return ret;
@@ -3463,17 +3515,26 @@ CAST_FUNC_NAME(bit, string)
 {
   EVAL_ARG()
   {
-    const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
-    int64_t pos = 0;
-    char buf[BUF_LEN] = {0};
     uint64_t in_val = child_res->get_uint();
-    ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
-    if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
-      LOG_WARN("fail to store val", K(buf), K(BUF_LEN), K(in_val), K(pos));
+    if (CM_IS_COLUMN_CONVERT(expr.extra_)) {
+      // if cast mode is column convert, using bit as int64 to do cast.
+      ObFastFormatInt ffi(in_val);
+      if (OB_FAIL(common_copy_string_zf(expr, ObString(ffi.length(), ffi.ptr()), ctx, res_datum))) {
+        LOG_WARN("common_copy_string_zf failed", K(ret), K(ObString(ffi.length(), ffi.ptr())));
+      }
     } else {
-      ObString str(pos, buf);
-      if (OB_FAIL(common_copy_string(expr, str, ctx, res_datum))) {
-        LOG_WARN("common_copy_string failed", K(ret));
+      // using bit as char array to do cast.
+      const int32_t BUF_LEN = (OB_MAX_BIT_LENGTH + 7) / 8;
+      int64_t pos = 0;
+      char buf[BUF_LEN] = {0};
+      ObLengthSemantics length = expr.args_[0]->datum_meta_.length_semantics_;
+      if (OB_FAIL(bit_to_char_array(in_val, length, buf, BUF_LEN, pos))) {
+        LOG_WARN("fail to store val", K(ret), K(in_val), K(length), K(buf), K(BUF_LEN), K(pos));
+      } else {
+        ObString str(pos, buf);
+        if (OB_FAIL(common_copy_string(expr, str, ctx, res_datum))) {
+          LOG_WARN("common_copy_string failed", K(ret));
+        }
       }
     }
   }
@@ -4610,34 +4671,22 @@ int string_to_enum(ObIAllocator& alloc, const ObString& orig_in_str, const ObCol
   } else if (OB_FAIL(find_type(str_values, cs_type, no_sp_val, pos))) {
     LOG_WARN("fail to find type", K(str_values), K(cs_type), K(no_sp_val), K(in_str), K(pos), K(ret));
   } else if (OB_UNLIKELY(pos < 0)) {
-    if (CM_IS_WARN_ON_FAIL(cast_mode)) {
-      value = 0;
-      warning = OB_ERR_DATA_TRUNCATED;
-      LOG_INFO("input value out of range, and set out value zero", K(no_sp_val), K(str_values), K(warning), K(expr));
-    } else {
+    // Bug30666903: check implicit cast logic to handle number cases
+    if (!in_str.is_numeric()) {
       ret = OB_ERR_DATA_TRUNCATED;
-      LOG_WARN("input value out of range", K(no_sp_val), K(str_values), K(expr), K(ret));
-      // Bug30666903: check implicit cast logic to handle number cases
-      if (in_str.is_numeric()) {
-        int err = 0;
-        value = ObCharset::strntoull(in_str.ptr(), in_str.length(), 10, &err);
-        if (err == 0) {
-          ret = OB_SUCCESS;
-          uint32_t val_cnt = str_values.count();
-          if (OB_UNLIKELY(val_cnt <= 0)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect val_cnt", K(val_cnt), K(ret));
-          } else if (value > val_cnt) {
-            value = 0;
-            ret = OB_ERR_DATA_TRUNCATED;
-            LOG_WARN("input value out of range", K(val_cnt), K(ret));
-          }
-          if (OB_FAIL(ret) && CM_IS_WARN_ON_FAIL(cast_mode)) {
-            warning = OB_ERR_DATA_TRUNCATED;
-            ret = OB_SUCCESS;
-          }
-        }
+    } else {
+      int err = 0;
+      int64_t val_cnt = str_values.count();
+      value = ObCharset::strntoull(in_str.ptr(), in_str.length(), 10, &err);
+      if (err != 0 || value > val_cnt) {
+        value = 0;
+        ret = OB_ERR_DATA_TRUNCATED;
+        LOG_WARN("input value out of range", K(val_cnt), K(ret), K(err));
       }
+    }
+    if (OB_FAIL(ret) && CM_IS_WARN_ON_FAIL(cast_mode)) {
+      warning = ret;
+      ret = OB_SUCCESS;
     }
   } else {
     value = pos + 1;  // enum start from 1
@@ -4780,8 +4829,15 @@ CAST_ENUMSET_FUNC_NAME(datetime, enum)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(
-            expr.args_[0]->datum_meta_.type_, ObVarcharType, 0, false, in_val, ctx, buf, sizeof(buf), len))) {
+    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+            ObVarcharType,
+            expr.args_[0]->datum_meta_.scale_,
+            false,
+            in_val,
+            ctx,
+            buf,
+            sizeof(buf),
+            len))) {
       LOG_WARN("common_datetime_string failed", K(ret));
     } else {
       ObString in_str(len, buf);
@@ -4808,8 +4864,15 @@ CAST_ENUMSET_FUNC_NAME(datetime, set)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(
-            expr.args_[0]->datum_meta_.type_, ObVarcharType, 0, false, in_val, ctx, buf, sizeof(buf), len))) {
+    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+            ObVarcharType,
+            expr.args_[0]->datum_meta_.scale_,
+            false,
+            in_val,
+            ctx,
+            buf,
+            sizeof(buf),
+            len))) {
       LOG_WARN("common_datetime_string failed", K(ret));
     } else {
       ObString in_str(len, buf);
@@ -5878,7 +5941,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] = {
         cast_inconsistent_types, /*datetime*/
         cast_not_expected,       /*date*/
         cast_not_expected,       /*time*/
-        cast_not_expected,       /*year*/
+        double_year,             /*year*/
         double_string,           /*string*/
         cast_not_expected,       /*extend*/
         cast_not_expected,       /*unknown*/
@@ -7492,8 +7555,8 @@ ObExpr::EvalEnumSetFunc OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT[ObMaxTC][2] = {{
     },
     {
         /*text -> enum_or_set*/
-        cast_not_support_enum_set, /*enum*/
-        cast_not_support_enum_set, /*set*/
+        string_enum, /*enum*/
+        string_set,  /*set*/
     },
     {
         /*bit -> enum_or_set*/

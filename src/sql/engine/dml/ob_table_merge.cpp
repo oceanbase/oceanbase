@@ -355,10 +355,7 @@ int ObTableMerge::calc_condition(ObExprCtx& expr_ctx, const ObNewRow& left_row, 
   } else {
     DLIST_FOREACH(p, cond_exprs)
     {
-      if (OB_ISNULL(p)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is NULL", K(ret));
-      } else if (OB_FAIL(p->calc(expr_ctx, left_row, right_row, result))) {
+      if (OB_FAIL(p->calc(expr_ctx, left_row, right_row, result))) {
         LOG_WARN("failed to calc expression", K(ret), K(*p), "op_type", ob_phy_operator_type_str(get_type()));
       } else if (OB_FAIL(ObObjEvaluator::is_true(result, is_true))) {
         LOG_WARN("failed to call is true", K(ret));

@@ -872,9 +872,7 @@ int ObTransService::do_dist_rollback_(
   return ret;
 }
 
-int ObTransService::acquire_sche_ctx_(ObTransDesc& trans_desc,
-                                      ObScheTransCtx*& sche_ctx,
-                                      bool& use_tmp_sche_ctx)
+int ObTransService::acquire_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx*& sche_ctx, bool& use_tmp_sche_ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -883,11 +881,10 @@ int ObTransService::acquire_sche_ctx_(ObTransDesc& trans_desc,
   if (NULL != (sche_ctx = trans_desc.get_sche_ctx())) {
     TRANS_LOG(DEBUG, "get saved scheduler success", K(trans_desc));
   } else if (!trans_desc.is_nested_stmt()) {
-    TRANS_LOG(WARN, "Non-nested statements should not create a temporary scheduler",
-              K(trans_desc));
+    TRANS_LOG(WARN, "Non-nested statements should not create a temporary scheduler", K(trans_desc));
   } else {
     // 构建临时scheduler
-    const ObTransID &trans_id = trans_desc.get_trans_id();
+    const ObTransID& trans_id = trans_desc.get_trans_id();
     const bool for_replay = false;
     bool alloc = true;
     const bool is_readonly = false;
@@ -895,7 +892,7 @@ int ObTransService::acquire_sche_ctx_(ObTransDesc& trans_desc,
 
     if (OB_FAIL(sche_trans_ctx_mgr_.get_trans_ctx(SCHE_PARTITION_ID, trans_id, for_replay, is_readonly, alloc, ctx))) {
       TRANS_LOG(WARN, "get transaction context error", K(ret), K(trans_id));
-    } else if (FALSE_IT(sche_ctx = static_cast<ObScheTransCtx *>(ctx))) {
+    } else if (FALSE_IT(sche_ctx = static_cast<ObScheTransCtx*>(ctx))) {
     } else if (!alloc) {
       TRANS_LOG(DEBUG, "get existed scheduler success", K(SCHE_PARTITION_ID), K(trans_desc));
     } else {
@@ -943,9 +940,7 @@ int ObTransService::acquire_sche_ctx_(ObTransDesc& trans_desc,
   return ret;
 }
 
-void ObTransService::release_sche_ctx_(ObTransDesc& trans_desc,
-                                       ObScheTransCtx* sche_ctx,
-                                       const bool use_tmp_sche_ctx)
+void ObTransService::release_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx* sche_ctx, const bool use_tmp_sche_ctx)
 {
   if (NULL != sche_ctx && trans_desc.get_sche_ctx() != sche_ctx) {
     if (use_tmp_sche_ctx) {
@@ -9410,7 +9405,8 @@ int ObTransService::set_restore_snapshot_version(const ObPartitionKey& pkey, con
   return ret;
 }
 
-int ObTransService::set_last_restore_log_ts(const ObPartitionKey &pkey, const int64_t last_restore_log_ts)
+int ObTransService::set_last_restore_log_info(
+    const ObPartitionKey& pkey, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -9420,8 +9416,8 @@ int ObTransService::set_last_restore_log_ts(const ObPartitionKey &pkey, const in
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(part_trans_ctx_mgr_.set_last_restore_log_ts(pkey, last_restore_log_ts))) {
-    TRANS_LOG(WARN, "set last restore log ts error", K(ret), K(pkey), K(last_restore_log_ts));
+  } else if (OB_FAIL(part_trans_ctx_mgr_.set_last_restore_log_info(pkey, last_restore_log_id, last_restore_log_ts))) {
+    TRANS_LOG(WARN, "set last restore log ts error", K(ret), K(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else {
     // do nothing
   }
@@ -9429,8 +9425,8 @@ int ObTransService::set_last_restore_log_ts(const ObPartitionKey &pkey, const in
   return ret;
 }
 
-int ObTransService::update_restore_replay_info(
-    const ObPartitionKey &pkey, const int64_t restore_snapshot_version, const int64_t last_restore_log_ts)
+int ObTransService::update_restore_replay_info(const ObPartitionKey& pkey, const int64_t restore_snapshot_version,
+    const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -9440,13 +9436,14 @@ int ObTransService::update_restore_replay_info(
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(
-                 part_trans_ctx_mgr_.update_restore_replay_info(pkey, restore_snapshot_version, last_restore_log_ts))) {
+  } else if (OB_FAIL(part_trans_ctx_mgr_.update_restore_replay_info(
+                 pkey, restore_snapshot_version, last_restore_log_id, last_restore_log_ts))) {
     TRANS_LOG(WARN,
         "failed to update_restore_replay_info",
         K(ret),
         K(pkey),
         K(restore_snapshot_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts));
   } else {
     // do nothing

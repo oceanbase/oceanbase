@@ -208,9 +208,9 @@ int ObTableMergeOp::do_table_merge()
     } else {
       ret = OB_SUCCESS;
     }
-  }
-  if (OB_SUCC(ret)) {
-    plan_ctx->add_affected_rows(affected_rows_);
+    if (OB_SUCC(ret)) {
+      plan_ctx->add_affected_rows(affected_rows_);
+    }
   }
   return ret;
 }

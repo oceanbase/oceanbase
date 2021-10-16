@@ -182,8 +182,20 @@ int ObPxResourceAnalyzer::analyze(ObLogicalOperator& root_op, int64_t& max_paral
     LOG_WARN("fail convert log plan to nested px tree", K(ret));
   } else if (OB_FAIL(walk_through_px_trees(px_trees, max_parallel_thread_group_count))) {
     LOG_WARN("fail calc max parallel thread group count for resource reservation", K(ret));
+  } else {
+    release();
   }
   return ret;
+}
+
+void ObPxResourceAnalyzer::release()
+{
+  for (int64_t i = 0; i < dfos_.count(); ++i) {
+    DfoInfo* dfo = dfos_.at(i);
+    if (OB_LIKELY(nullptr != dfo)) {
+      dfo->~DfoInfo();
+    }
+  }
 }
 
 int ObPxResourceAnalyzer::convert_log_plan_to_nested_px_tree(ObIArray<PxInfo>& px_trees, ObLogicalOperator& root_op)
@@ -296,6 +308,8 @@ int ObPxResourceAnalyzer::create_dfo(DfoInfo*& dfo, int64_t dop)
   } else if (nullptr == (dfo = new (mem_ptr) DfoInfo())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Null ptr unexpected", KP(mem_ptr), K(ret));
+  } else if (OB_FAIL(dfos_.push_back(dfo))) {
+    LOG_WARN("fail push dfo. no memory!", K(ret));
   } else {
     dfo->set_dop(dop);
   }

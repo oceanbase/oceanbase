@@ -361,7 +361,9 @@ static void print_all_limits()
 
 int main(int argc, char* argv[])
 {
+#ifndef OB_USE_ASAN
   init_malloc_hook();
+#endif
   int64_t memory_used = get_virtual_memory_used();
   /**
     signal handler stack
@@ -484,6 +486,7 @@ int main(int argc, char* argv[])
       ObWorker worker;
 
       ObServer& observer = ObServer::get_instance();
+      LOG_INFO("observer is start", "observer_version", PACKAGE_STRING);
       if (OB_FAIL(observer.init(opts, log_cfg))) {
         LOG_ERROR("observer init fail", K(ret));
       } else if (OB_FAIL(observer.start())) {
@@ -499,7 +502,7 @@ int main(int argc, char* argv[])
     unlink(PID_FILE_NAME);
   }
 
-  LOG_INFO("observer is exit");
+  LOG_INFO("observer is exit", "observer_version", PACKAGE_STRING);
   OB_LOGGER.set_stop_append_log();
   OB_LOGGER.destroy();
   return ret;

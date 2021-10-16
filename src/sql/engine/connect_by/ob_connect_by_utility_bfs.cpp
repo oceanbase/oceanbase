@@ -491,10 +491,7 @@ int ObConnectByPumpBFS::calc_path_node(const ObNewRow& left_row, PumpNode& pump_
       int idx = 0;
       DLIST_FOREACH(expr, *connect_by_prior_exprs_)
       {
-        if (OB_ISNULL(expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expr is NULL", K(ret));
-        } else if (OB_FAIL(expr->calc(*expr_ctx_, left_row, row.cells_[idx]))) {
+        if (OB_FAIL(expr->calc(*expr_ctx_, left_row, row.cells_[idx]))) {
           LOG_WARN("fail to calc prior expr", KPC(expr));
         } else {
           ++idx;

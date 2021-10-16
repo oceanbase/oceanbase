@@ -31,7 +31,7 @@ class MockSchemaCache : public ObFreezeInfoSnapshotMgr::SchemaCache {
 public:
   MockSchemaCache() : SchemaCache(schema_query_set_), schema_query_set_(*this)
   {}
-  virtual int fetch_freeze_schema(const uint64_t, const int64_t, int64_t& schema_version) override
+  virtual int fetch_freeze_schema(const uint64_t, const int64_t, int64_t &schema_version) override
   {
     int ret = OB_SUCCESS;
     if (rand() % 4 == 0) {
@@ -43,8 +43,8 @@ public:
     return ret;
   }
 
-  virtual int fetch_freeze_schema(const uint64_t tenant_id, const int64_t, int64_t& schema_version,
-      common::ObIArray<ObFreezeInfoSnapshotMgr::SchemaPair>& freeze_schema) override
+  virtual int fetch_freeze_schema(const uint64_t tenant_id, const int64_t, int64_t &schema_version,
+      common::ObIArray<ObFreezeInfoSnapshotMgr::SchemaPair> &freeze_schema) override
   {
     int ret = OB_SUCCESS;
     for (int64_t i = 0; i < TEST_ALL_TENANT_NUM; i++) {
@@ -78,8 +78,6 @@ public:
     ObArray<ObFreezeInfoSnapshotMgr::SchemaPair> schemas;
     ObArray<ObFreezeInfoSnapshotMgr::FreezeInfoLite> infos;
     ObArray<share::ObSnapshotInfo> snapshots;
-    const int64_t backup_snapshot_version = 0;
-    const int64_t delay_delete_snapshot_version = 0;
 
     for (int i = 0; i < TEST_NUM; i++) {
       schemas.reset();
@@ -100,14 +98,7 @@ public:
       }
 
       bool changed;
-      mgr.update_info((i + 1) * 10,
-          schemas,
-          infos,
-          snapshots,
-          backup_snapshot_version,
-          INT64_MAX,
-          delay_delete_snapshot_version,
-          changed);
+      mgr.update_info((i + 1) * 10, schemas, infos, snapshots, INT64_MAX, changed);
 
       usleep(100000);
     }
@@ -125,7 +116,7 @@ TEST_F(TestFreezeInfoSnapshotMgr, test_rs_return_minus_one_for_gc_snapshot_info)
 
   for (int i = 0; i < TEST_NUM; i++) {
     for (int j = 0; j < TEST_TENANT_NUM; j++) {
-      ObFreezeInfoSnapshotMgr::NeighbourFreezeInfo& info_item = info[i][j];
+      ObFreezeInfoSnapshotMgr::NeighbourFreezeInfo &info_item = info[i][j];
       EXPECT_EQ(
           OB_SUCCESS, mgr.get_neighbour_major_freeze(((((int64_t)j + 1001) << 40) + 50001), i * 10 + 5, info[i][j]));
       STORAGE_LOG(WARN, "get neighbour major freeze", K(j + 1001), K(i * 10 + 5), K(info_item));
@@ -143,9 +134,9 @@ TEST_F(TestFreezeInfoSnapshotMgr, test_rs_return_minus_one_for_gc_snapshot_info)
 TEST_F(TestFreezeInfoSnapshotMgr, test_rs_return_minus_one_for_get_freeze_schema_evrsion)
 {
   MockSchemaCache cache;
-  MockSchemaCache::schema_node* p = NULL;
+  MockSchemaCache::schema_node *p = NULL;
 
-  p = (MockSchemaCache::schema_node*)cache.allocator_.alloc();
+  p = (MockSchemaCache::schema_node *)cache.allocator_.alloc();
   cache.head_ = cache.tail_ = p;
   cache.inited_ = true;
 
@@ -182,7 +173,7 @@ TEST_F(TestFreezeInfoSnapshotMgr, test_rs_return_minus_one_for_get_freeze_schema
     }
   }
 
-  MockSchemaCache::schema_node* curr = cache.head_->next;
+  MockSchemaCache::schema_node *curr = cache.head_->next;
   STORAGE_LOG(INFO, "start finding -1 in list");
   while (curr) {
     EXPECT_TRUE(curr->schema_version != -1);
@@ -193,7 +184,7 @@ TEST_F(TestFreezeInfoSnapshotMgr, test_rs_return_minus_one_for_get_freeze_schema
 }  // namespace unittest
 }  // namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_file_name("test_ob_freeze_info_snapshot_mgr.log");
   OB_LOGGER.set_log_level("INFO");

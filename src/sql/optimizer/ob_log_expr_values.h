@@ -34,7 +34,6 @@ public:
     return need_columnlized_;
   }
   int add_values_expr(const common::ObIArray<ObRawExpr*>& value_exprs);
-  int add_str_values_array(const common::ObIArray<ObRawExpr*>& expr);
 
   const common::ObIArray<ObRawExpr*>& get_value_exprs() const
   {
@@ -43,10 +42,6 @@ public:
   common::ObIArray<ObRawExpr*>& get_value_exprs()
   {
     return value_exprs_;
-  }
-  const common::ObIArray<ObStrValues>& get_str_values_array() const
-  {
-    return str_values_array_;
   }
   int check_range_param_continuous(bool& use_range_param) const;
   int get_value_param_range(int64_t row_index, int64_t& param_idx_start, int64_t& param_idx_end) const;
@@ -67,8 +62,6 @@ private:
 private:
   bool need_columnlized_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
-  // only engine 3.0 used
-  common::ObSEArray<ObStrValues, 4, common::ModulePageAllocator, true> str_values_array_;
   DISALLOW_COPY_AND_ASSIGN(ObLogExprValues);
 };
 }  // namespace sql

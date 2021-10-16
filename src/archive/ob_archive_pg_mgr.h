@@ -103,7 +103,6 @@ private:
       const ObPGKey& pg_key, const int64_t timestamp, const int64_t leader_epoch, const int64_t takeover_ts);
   int check_active_pg_archive_task_exist_(const ObPGKey& pg_key, const int64_t leader_epoch, bool& pg_exist);
   bool get_and_check_compatible_(bool& compatible);
-  int record_for_residual_data_file_(StartArchiveHelper& helper, ObPGArchiveTask* task);
   int handle_gc_task_(const ObPGKey& pg_key);
   int insert_or_update_pg_(StartArchiveHelper& helper, ObPGArchiveTask*& task);
   int remove_pg_(const ObPGKey& pg_key);

@@ -77,9 +77,9 @@ ObPartitionStore::ObPartitionStore()
   meta_ = &meta_buf_[0];
 }
 
-ObPGPartitionStoreMeta& ObPartitionStore::get_next_meta()
+ObPGPartitionStoreMeta &ObPartitionStore::get_next_meta()
 {
-  ObPGPartitionStoreMeta* meta = &meta_buf_[0];
+  ObPGPartitionStoreMeta *meta = &meta_buf_[0];
   if (meta == meta_) {
     meta = &meta_buf_[1];
   }
@@ -101,8 +101,8 @@ ObPartitionStore::~ObPartitionStore()
   destroy();
 }
 
-int ObPartitionStore::create_partition_store(const ObPGPartitionStoreMeta& meta, const bool write_slog,
-    ObIPartitionGroup* pg, ObFreezeInfoSnapshotMgr& freeze_info_mgr, ObPGMemtableMgr* pg_memtable_mgr)
+int ObPartitionStore::create_partition_store(const ObPGPartitionStoreMeta &meta, const bool write_slog,
+    ObIPartitionGroup *pg, ObFreezeInfoSnapshotMgr &freeze_info_mgr, ObPGMemtableMgr *pg_memtable_mgr)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("create_partition_store", 1000L * 1000L);
@@ -133,10 +133,10 @@ int ObPartitionStore::create_partition_store(const ObPGPartitionStoreMeta& meta,
 }
 
 int ObPartitionStore::init(
-    const ObPGPartitionStoreMeta& meta, ObIPartitionGroup* pg, ObFreezeInfoSnapshotMgr& freeze_info_mgr)
+    const ObPGPartitionStoreMeta &meta, ObIPartitionGroup *pg, ObFreezeInfoSnapshotMgr &freeze_info_mgr)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = nullptr;
+  ObMultiVersionTableStore *table_store = nullptr;
 
   freeze_info_mgr_ = &freeze_info_mgr;
   if (is_inited_) {
@@ -168,11 +168,11 @@ int ObPartitionStore::init(
   return ret;
 }
 
-void ObPartitionStore::destroy_store_map(TableStoreMap* store_map)
+void ObPartitionStore::destroy_store_map(TableStoreMap *store_map)
 {
   if (OB_NOT_NULL(store_map)) {
     for (TableStoreMap::iterator it = store_map->begin(); it != store_map->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_ISNULL(table_store)) {
         LOG_ERROR("table store must not null");
       } else {
@@ -211,7 +211,7 @@ int ObPartitionStore::set_removed()
   return ret;
 }
 
-void ObPartitionStore::set_replica_type(const common::ObReplicaType& replica_type)
+void ObPartitionStore::set_replica_type(const common::ObReplicaType &replica_type)
 {
   const bool need_clean_sstable = !ObReplicaTypeCheck::is_replica_with_ssstore(replica_type);
 
@@ -243,7 +243,7 @@ void ObPartitionStore::clear_sstores_no_lock()
   FLOG_INFO("clean sstables", "pkey", meta_->pkey_);
   cached_data_table_store_ = nullptr;
   for (TableStoreMap::iterator it = store_map_->begin(); it != store_map_->end(); ++it) {
-    ObMultiVersionTableStore* table_store = it->second;
+    ObMultiVersionTableStore *table_store = it->second;
     free_multi_version_table_store(table_store);
   }
   store_map_->clear();
@@ -263,7 +263,7 @@ common::ObReplicaType ObPartitionStore::get_replica_type() const
 int ObPartitionStore::create_index_table_store(const uint64_t table_id, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
 
   TCWLockGuard guard(lock_);
 
@@ -283,22 +283,22 @@ int ObPartitionStore::create_index_table_store(const uint64_t table_id, const in
   return ret;
 }
 
-int ObPartitionStore::check_table_store_exist(const uint64_t index_id, bool& exist)
+int ObPartitionStore::check_table_store_exist(const uint64_t index_id, bool &exist)
 {
-  ObMultiVersionTableStore* table_store = nullptr;
+  ObMultiVersionTableStore *table_store = nullptr;
   TCRLockGuard lock_guard(lock_);
   return check_table_store_exist_nolock(index_id, exist, table_store);
 }
 
 int ObPartitionStore::check_table_store_exist_with_lock(
-    const uint64_t index_id, bool& exist, ObMultiVersionTableStore*& got_table_store)
+    const uint64_t index_id, bool &exist, ObMultiVersionTableStore *&got_table_store)
 {
   TCRLockGuard lock_guard(lock_);
   return check_table_store_exist_nolock(index_id, exist, got_table_store);
 }
 
 int ObPartitionStore::check_table_store_exist_nolock(
-    const uint64_t index_id, bool& exist, ObMultiVersionTableStore*& got_table_store)
+    const uint64_t index_id, bool &exist, ObMultiVersionTableStore *&got_table_store)
 {
   int ret = OB_SUCCESS;
   got_table_store = NULL;
@@ -324,7 +324,7 @@ int ObPartitionStore::check_table_store_exist_nolock(
 int ObPartitionStore::drop_index(const uint64_t table_id, const bool write_slog)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* got_table_store = NULL;
+  ObMultiVersionTableStore *got_table_store = NULL;
   bool exist = false;
 
   {
@@ -371,7 +371,7 @@ int ObPartitionStore::drop_index(const uint64_t table_id, const bool write_slog)
 int ObPartitionStore::set_dropped_flag(const uint64_t table_id)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* got_table_store = NULL;
+  ObMultiVersionTableStore *got_table_store = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -390,8 +390,8 @@ int ObPartitionStore::set_dropped_flag(const uint64_t table_id)
 // add_sstable won't update partition meta
 // in_slog_trans == false, slog controlled by caller, drop partiton when failed
 // in_slog_trans == true, slog controlled by self
-int ObPartitionStore::add_sstable(storage::ObSSTable* table, const int64_t max_kept_major_version_number,
-    const bool in_slog_trans, const ObMigrateStatus& migrate_status, const bool is_in_dest_split,
+int ObPartitionStore::add_sstable(storage::ObSSTable *table, const int64_t max_kept_major_version_number,
+    const bool in_slog_trans, const ObMigrateStatus &migrate_status, const bool is_in_dest_split,
     const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
@@ -414,8 +414,7 @@ int ObPartitionStore::add_sstable(storage::ObSSTable* table, const int64_t max_k
     param.schema_version_ = schema_version;
 
     if (!param.in_slog_trans_) {
-      if (OB_FAIL(get_kept_multi_version_start(
-              is_in_dest_split, param.multi_version_start_, param.backup_snapshot_version_))) {
+      if (OB_FAIL(get_kept_multi_version_start(is_in_dest_split, param.multi_version_start_))) {
         LOG_WARN("failed to get_kept_multi_version_start", K(ret));
       }
     }
@@ -430,13 +429,13 @@ int ObPartitionStore::add_sstable(storage::ObSSTable* table, const int64_t max_k
 }
 
 int ObPartitionStore::do_add_sstable(
-    AddTableParam& param, const ObMigrateStatus& migrate_status, const bool is_in_source_split)
+    AddTableParam &param, const ObMigrateStatus &migrate_status, const bool is_in_source_split)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
-  ObMultiVersionTableStore* multi_version_store = NULL;
-  ObTableStore* new_table_store = NULL;
+  ObMultiVersionTableStore *multi_version_store = NULL;
+  ObTableStore *new_table_store = NULL;
   ObTableHandle handle;
   ObITable::TableKey table_key;
   bool need_abort_slog = false;
@@ -551,13 +550,13 @@ int ObPartitionStore::do_add_sstable(
 }
 
 int ObPartitionStore::check_new_table_store(
-    ObTableStore& new_table_store, const ObMigrateStatus migrate_status, const bool is_in_source_split)
+    ObTableStore &new_table_store, const ObMigrateStatus migrate_status, const bool is_in_source_split)
 {
   int ret = OB_SUCCESS;
-  memtable::ObMemtable* active_memtable = NULL;
+  memtable::ObMemtable *active_memtable = NULL;
   ObTablesHandle tmp_handle;
   ObTableHandle memtable_handle;
-  ObITable* last_table = nullptr;
+  ObITable *last_table = nullptr;
   if (OB_FAIL(pg_memtable_mgr_->get_active_memtable(memtable_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret || is_in_source_split) {
       ret = OB_SUCCESS;
@@ -596,9 +595,9 @@ int ObPartitionStore::check_new_table_store(
 }
 
 // max_kept_major_version_number means no need remove old versions
-int ObPartitionStore::add_sstable_for_merge(storage::ObSSTable* table, const int64_t max_kept_major_version_number,
-    const ObMigrateStatus& migrate_status, const bool is_in_restore, const bool is_in_source_split,
-    const bool is_in_dest_split, ObSSTable* complement_minor_sstable)
+int ObPartitionStore::add_sstable_for_merge(storage::ObSSTable *table, const int64_t max_kept_major_version_number,
+    const ObMigrateStatus &migrate_status, const bool is_in_restore, const bool is_in_source_split,
+    const bool is_in_dest_split, ObSSTable *complement_minor_sstable)
 {
   int ret = OB_SUCCESS;
   AddTableParam param;
@@ -612,8 +611,7 @@ int ObPartitionStore::add_sstable_for_merge(storage::ObSSTable* table, const int
     LOG_WARN("invalid args", K(ret), K(max_kept_major_version_number), KPC(table));
   } else if (is_in_restore) {
     // do nothing
-  } else if (OB_FAIL(get_kept_multi_version_start(
-                 is_in_dest_split, param.multi_version_start_, param.backup_snapshot_version_))) {
+  } else if (OB_FAIL(get_kept_multi_version_start(is_in_dest_split, param.multi_version_start_))) {
     LOG_WARN("failed to get_kept_multi_version_start", K(ret));
   }
 
@@ -642,15 +640,15 @@ int ObPartitionStore::add_sstable_for_merge(storage::ObSSTable* table, const int
   return ret;
 }
 
-int ObPartitionStore::set_reference_tables(const uint64_t table_id, ObTablesHandle& handle)
+int ObPartitionStore::set_reference_tables(const uint64_t table_id, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   bool tmp_ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
-  ObMultiVersionTableStore* multi_version_store = NULL;
-  ObTableStore* new_table_store = NULL;
+  ObMultiVersionTableStore *multi_version_store = NULL;
+  ObTableStore *new_table_store = NULL;
   bool need_update = false;
-  memtable::ObMemtable* active_memtable = NULL;
+  memtable::ObMemtable *active_memtable = NULL;
   ObTableHandle memtable_handle;
   TCWLockGuard lock_guard(lock_);
 
@@ -715,22 +713,22 @@ int ObPartitionStore::set_reference_tables(const uint64_t table_id, ObTablesHand
 }
 
 // caller must help lock_
-int ObPartitionStore::create_multi_version_store(const uint64_t table_id, ObMultiVersionTableStore*& out_table_store)
+int ObPartitionStore::create_multi_version_store(const uint64_t table_id, ObMultiVersionTableStore *&out_table_store)
 {
   return create_multi_version_store_(table_id, 0, out_table_store);
 }
 
 int ObPartitionStore::create_multi_version_store(
-    const uint64_t table_id, const int64_t schema_version, ObMultiVersionTableStore*& out_table_store)
+    const uint64_t table_id, const int64_t schema_version, ObMultiVersionTableStore *&out_table_store)
 {
   return create_multi_version_store_(table_id, schema_version, out_table_store);
 }
 
 int ObPartitionStore::create_multi_version_store_(
-    const uint64_t table_id, const int64_t schema_version, ObMultiVersionTableStore*& out_table_store)
+    const uint64_t table_id, const int64_t schema_version, ObMultiVersionTableStore *&out_table_store)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* tmp_table_store = NULL;
+  ObMultiVersionTableStore *tmp_table_store = NULL;
   out_table_store = NULL;
 
   if (OB_UNLIKELY(!meta_->is_valid())) {  // maybe called in init(), so only check meta
@@ -776,12 +774,12 @@ int ObPartitionStore::create_multi_version_store_(
 }
 
 int ObPartitionStore::get_index_status(const int64_t schema_version, const bool is_physical_restore,
-    common::ObIArray<share::schema::ObIndexTableStat>& index_status,
-    common::ObIArray<uint64_t>& deleted_and_error_index_ids)
+    common::ObIArray<share::schema::ObIndexTableStat> &index_status,
+    common::ObIArray<uint64_t> &deleted_and_error_index_ids)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
-  share::schema::ObMultiVersionSchemaService& schema_service =
+  share::schema::ObMultiVersionSchemaService &schema_service =
       share::schema::ObMultiVersionSchemaService::get_instance();
   const bool with_global_index = false;
   int64_t save_schema_version;
@@ -816,12 +814,12 @@ int ObPartitionStore::get_index_status(const int64_t schema_version, const bool 
     LOG_WARN("failed to get full tenant schema guard", K(ret), K(fetch_tenant_id), K(pkey_));
   } else if (OB_FAIL(schema_guard.get_schema_version(fetch_tenant_id, latest_schema_version))) {
     LOG_WARN("failed to get schema version", K(ret), K(fetch_tenant_id), K(pkey_));
-  } else if (latest_schema_version > save_schema_version
-      || (is_physical_restore && latest_schema_version >= save_schema_version)) {
+  } else if (latest_schema_version > save_schema_version ||
+             (is_physical_restore && latest_schema_version >= save_schema_version)) {
     // befor check the delete status of index, we should make sure the schema guard is refreshed
     for (int64_t i = 0; OB_SUCC(ret) && i < index_status.count(); ++i) {
-      const share::schema::ObTableSchema* table_schema = NULL;
-      share::schema::ObIndexTableStat& index_stat = index_status.at(i);
+      const share::schema::ObTableSchema *table_schema = NULL;
+      share::schema::ObIndexTableStat &index_stat = index_status.at(i);
       if (OB_FAIL(schema_guard.get_table_schema(index_stat.index_id_, table_schema))) {
         LOG_WARN("Failed to get table schema", K(ret), K(index_status.at(i)));
       } else if (NULL == table_schema || share::schema::INDEX_STATUS_INDEX_ERROR == table_schema->get_index_status()) {
@@ -841,12 +839,12 @@ int ObPartitionStore::get_index_status(const int64_t schema_version, const bool 
   return ret;
 }
 
-int ObPartitionStore::check_all_tables_merged(const memtable::ObMemtable& memtable,
-    const common::ObIArray<share::schema::ObIndexTableStat>& index_status,
-    const common::ObIArray<uint64_t>& deleted_index_ids, bool& all_merged, bool& can_release)
+int ObPartitionStore::check_all_tables_merged(const memtable::ObMemtable &memtable,
+    const common::ObIArray<share::schema::ObIndexTableStat> &index_status,
+    const common::ObIArray<uint64_t> &deleted_index_ids, bool &all_merged, bool &can_release)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   int64_t least_merged_snapshot_version = -1;
   int64_t latest_merged_snapshot_version = -1;
   int64_t least_merged_log_ts = -1;
@@ -869,7 +867,7 @@ int ObPartitionStore::check_all_tables_merged(const memtable::ObMemtable& memtab
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < index_status.count(); ++i) {
-    const share::schema::ObIndexTableStat& status = index_status.at(i);
+    const share::schema::ObIndexTableStat &status = index_status.at(i);
     bool can_skip = false;
     if (OB_FAIL(check_skip_check_index_merge_status(status, deleted_index_ids, can_skip))) {
       LOG_WARN("failed to check_skip_check_index_merge_status", K(ret), K(status));
@@ -935,10 +933,10 @@ int ObPartitionStore::check_all_tables_merged(const memtable::ObMemtable& memtab
   return ret;
 }
 
-int ObPartitionStore::create_table_store_if_need(const uint64_t table_id, bool& is_created)
+int ObPartitionStore::create_table_store_if_need(const uint64_t table_id, bool &is_created)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -955,7 +953,7 @@ int ObPartitionStore::create_table_store_if_need(const uint64_t table_id, bool& 
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       TCWLockGuard lock_guard(lock_);
-      ObMultiVersionTableStore* tmp_table_store = NULL;
+      ObMultiVersionTableStore *tmp_table_store = NULL;
       LOG_INFO("create index table store", K(table_id));
       is_created = true;
       if (OB_FAIL(create_multi_version_store(table_id, tmp_table_store))) {
@@ -966,8 +964,8 @@ int ObPartitionStore::create_table_store_if_need(const uint64_t table_id, bool& 
   return ret;
 }
 
-int ObPartitionStore::check_skip_check_index_merge_status(const share::schema::ObIndexTableStat& index_stat,
-    const common::ObIArray<uint64_t>& deleted_index_ids, bool& need_skip)
+int ObPartitionStore::check_skip_check_index_merge_status(const share::schema::ObIndexTableStat &index_stat,
+    const common::ObIArray<uint64_t> &deleted_index_ids, bool &need_skip)
 {
   int ret = OB_SUCCESS;
   const uint64_t index_id = index_stat.index_id_;
@@ -984,11 +982,11 @@ int ObPartitionStore::check_skip_check_index_merge_status(const share::schema::O
 }
 
 // ObTableHandle *main_table_handle is for index back
-int ObPartitionStore::get_read_tables(const uint64_t table_id, const int64_t snapshot_version, ObTablesHandle& handle,
+int ObPartitionStore::get_read_tables(const uint64_t table_id, const int64_t snapshot_version, ObTablesHandle &handle,
     const bool allow_not_ready, const bool need_safety_check, const bool reset_handle, const bool print_dropped_alert)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   if (reset_handle) {
     handle.reset();
   }
@@ -1049,10 +1047,10 @@ int ObPartitionStore::get_read_tables(const uint64_t table_id, const int64_t sna
 }
 
 int ObPartitionStore::get_read_frozen_tables(
-    const uint64_t table_id, const common::ObVersion& frozen_version, ObTablesHandle& handle, const bool reset_handle)
+    const uint64_t table_id, const common::ObVersion &frozen_version, ObTablesHandle &handle, const bool reset_handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   if (reset_handle) {
     handle.reset();
   }
@@ -1078,10 +1076,10 @@ int ObPartitionStore::get_read_frozen_tables(
 }
 
 int ObPartitionStore::get_sample_read_tables(
-    const common::SampleInfo& sample_info, const uint64_t table_id, ObTablesHandle& handle, const bool reset_handle)
+    const common::SampleInfo &sample_info, const uint64_t table_id, ObTablesHandle &handle, const bool reset_handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   ObTableHandle memtable_handle;
   if (reset_handle) {
     handle.reset();
@@ -1110,10 +1108,10 @@ int ObPartitionStore::get_sample_read_tables(
   return ret;
 }
 
-int ObPartitionStore::get_active_protection_clock(int64_t& active_protection_clock)
+int ObPartitionStore::get_active_protection_clock(int64_t &active_protection_clock)
 {
   int ret = OB_SUCCESS;
-  memtable::ObMemtable* memtable = NULL;
+  memtable::ObMemtable *memtable = NULL;
   ObTableHandle handle;
 
   TCRLockGuard guard(lock_);
@@ -1132,7 +1130,7 @@ int ObPartitionStore::get_active_protection_clock(int64_t& active_protection_clo
   return ret;
 }
 
-int ObPartitionStore::get_active_memtable(ObTableHandle& handle)
+int ObPartitionStore::get_active_memtable(ObTableHandle &handle)
 {
   int ret = OB_SUCCESS;
   handle.reset();
@@ -1145,7 +1143,7 @@ int ObPartitionStore::get_active_memtable(ObTableHandle& handle)
   return ret;
 }
 
-int ObPartitionStore::get_memtables(ObTablesHandle& handle, const bool reset_handle)
+int ObPartitionStore::get_memtables(ObTablesHandle &handle, const bool reset_handle)
 {
   int ret = OB_SUCCESS;
   if (reset_handle) {
@@ -1175,16 +1173,16 @@ bool ObPartitionStore::has_active_memtable()
   return pg_memtable_mgr_->has_active_memtable();
 }
 
-int ObPartitionStore::has_major_sstable(const uint64_t index_id, bool& has_major)
+int ObPartitionStore::has_major_sstable(const uint64_t index_id, bool &has_major)
 {
   TCRLockGuard guard(lock_);
   return has_major_sstable_nolock(index_id, has_major);
 }
 
-int ObPartitionStore::has_major_sstable_nolock(const uint64_t index_id, bool& has_major)
+int ObPartitionStore::has_major_sstable_nolock(const uint64_t index_id, bool &has_major)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -1203,7 +1201,7 @@ int ObPartitionStore::has_major_sstable_nolock(const uint64_t index_id, bool& ha
   return ret;
 }
 
-int ObPartitionStore::get_all_tables(ObTablesHandle& handle)
+int ObPartitionStore::get_all_tables(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   handle.reset();
@@ -1215,7 +1213,7 @@ int ObPartitionStore::get_all_tables(ObTablesHandle& handle)
   return ret;
 }
 
-int ObPartitionStore::get_all_tables_unlock(ObTablesHandle& handle)
+int ObPartitionStore::get_all_tables_unlock(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   ObMultiVersionTableStore::TableSet table_set;
@@ -1228,7 +1226,7 @@ int ObPartitionStore::get_all_tables_unlock(ObTablesHandle& handle)
     LOG_WARN("failed to create table set", K(ret), K(set_bucket_num));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_SYS;
         LOG_ERROR("table store is null", K(ret));
@@ -1256,7 +1254,7 @@ int ObPartitionStore::halt_prewarm()
     LOG_WARN("the partition has been removed, ", K(ret));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_SYS;
         LOG_ERROR("table store is null", K(ret));
@@ -1270,14 +1268,14 @@ int ObPartitionStore::halt_prewarm()
 }
 
 int ObPartitionStore::fill_checksum(
-    const uint64_t index_id, const int sstable_type, share::ObSSTableChecksumItem& checksum)
+    const uint64_t index_id, const int sstable_type, share::ObSSTableChecksumItem &checksum)
 {
   int ret = OB_SUCCESS;
-  ObSSTable* major_sstable = NULL;
+  ObSSTable *major_sstable = NULL;
   bool has_major = false;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   ObTablesHandle table_handle;
-  ObSSTableDataChecksumItem& data_checksum = checksum.data_checksum_;
+  ObSSTableDataChecksumItem &data_checksum = checksum.data_checksum_;
   data_checksum.sstable_id_ = index_id;
   data_checksum.sstable_type_ = sstable_type;
   data_checksum.replica_type_ = get_replica_type();
@@ -1306,9 +1304,9 @@ int ObPartitionStore::fill_checksum(
         data_checksum.data_checksum_ = major_sstable->get_meta().data_checksum_;
         data_checksum.row_count_ = major_sstable->get_meta().row_count_;
         data_checksum.snapshot_version_ = snapshot_version;
-        const ObIArray<ObSSTableColumnMeta>& column_metas = major_sstable->get_meta().column_metas_;
+        const ObIArray<ObSSTableColumnMeta> &column_metas = major_sstable->get_meta().column_metas_;
         for (int64_t i = 0; OB_SUCC(ret) && i < column_metas.count(); ++i) {
-          const ObSSTableColumnMeta& column_meta = column_metas.at(i);
+          const ObSSTableColumnMeta &column_meta = column_metas.at(i);
           ObSSTableColumnChecksumItem column_checksum;
           column_checksum.tenant_id_ = extract_tenant_id(index_id);
           column_checksum.data_table_id_ = meta_->data_table_id_;
@@ -1338,12 +1336,12 @@ int ObPartitionStore::fill_checksum(
         LOG_WARN("fail to get latest tables", K(ret));
       } else {
         for (int64_t i = tables_handle.get_count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-          ObITable* table = tables_handle.get_tables().at(i);
+          ObITable *table = tables_handle.get_tables().at(i);
           if (OB_ISNULL(table)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("error unexpected, table must not be NULL", K(ret));
           } else if (table->is_minor_sstable() && table->get_snapshot_version() == snapshot_version) {
-            ObSSTable* minor_sstable = static_cast<ObSSTable*>(table);
+            ObSSTable *minor_sstable = static_cast<ObSSTable *>(table);
             if (minor_sstable->get_key().table_type_ == sstable_type) {
               data_checksum.row_checksum_ = minor_sstable->get_meta().row_checksum_;
               data_checksum.data_checksum_ = minor_sstable->get_meta().data_checksum_;
@@ -1368,14 +1366,14 @@ int ObPartitionStore::fill_checksum(
   return ret;
 }
 
-int ObPartitionStore::calc_report_status(ObReportStatus& status)
+int ObPartitionStore::calc_report_status(ObReportStatus &status)
 {
   int ret = OB_SUCCESS;
   ObTableHandle main_handle;
-  ObSSTable* main_sstable = NULL;
+  ObSSTable *main_sstable = NULL;
   ObTablesHandle all_tables_handle;
   const int64_t macro_block_size = OB_FILE_SYSTEM.get_macro_block_size();
-  ObMultiVersionTableStore* data_table_store = NULL;
+  ObMultiVersionTableStore *data_table_store = NULL;
   int64_t last_index_id = 0;
   TCRLockGuard guard(lock_);
 
@@ -1414,7 +1412,7 @@ int ObPartitionStore::calc_report_status(ObReportStatus& status)
         ret = OB_ERR_SYS;
         LOG_ERROR("main_sstable must not null", K(ret));
       } else {
-        const blocksstable::ObSSTableMeta& meta = main_sstable->get_meta();
+        const blocksstable::ObSSTableMeta &meta = main_sstable->get_meta();
         status.data_version_ = main_sstable->get_version();
         status.row_count_ = meta.row_count_;
         status.row_checksum_ = meta.row_checksum_;
@@ -1430,12 +1428,12 @@ int ObPartitionStore::calc_report_status(ObReportStatus& status)
           status.required_size_ = 0;
           const int64_t table_cnt = all_tables_handle.get_count();
           for (int64_t i = 0; OB_SUCC(ret) && i < table_cnt; ++i) {
-            ObITable* table = all_tables_handle.get_tables().at(i);
+            ObITable *table = all_tables_handle.get_tables().at(i);
             if (OB_ISNULL(table)) {
               ret = OB_ERR_SYS;
               LOG_ERROR("table must not null", K(ret));
             } else if (table->is_major_sstable()) {
-              const blocksstable::ObSSTableMeta& meta = static_cast<ObSSTable*>(table)->get_meta();
+              const blocksstable::ObSSTableMeta &meta = static_cast<ObSSTable *>(table)->get_meta();
               if (meta.data_version_ == status.data_version_) {
                 status.data_size_ += meta.occupy_size_;
               }
@@ -1456,7 +1454,7 @@ int ObPartitionStore::calc_report_status(ObReportStatus& status)
   return ret;
 }
 
-int ObPartitionStore::get_all_table_ids(common::ObIArray<uint64_t>& index_tables)
+int ObPartitionStore::get_all_table_ids(common::ObIArray<uint64_t> &index_tables)
 {
   int ret = OB_SUCCESS;
   index_tables.reset();
@@ -1467,7 +1465,7 @@ int ObPartitionStore::get_all_table_ids(common::ObIArray<uint64_t>& index_tables
     LOG_WARN("not inited", K(ret));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_FAIL(index_tables.push_back(table_store->get_table_id()))) {
         LOG_WARN("failed to add merge index table ids", K(ret));
       }
@@ -1476,7 +1474,7 @@ int ObPartitionStore::get_all_table_ids(common::ObIArray<uint64_t>& index_tables
   return ret;
 }
 
-int ObPartitionStore::get_all_table_stats(common::ObIArray<TableStoreStat>& index_tables)
+int ObPartitionStore::get_all_table_stats(common::ObIArray<TableStoreStat> &index_tables)
 {
   int ret = OB_SUCCESS;
   index_tables.reset();
@@ -1488,7 +1486,7 @@ int ObPartitionStore::get_all_table_stats(common::ObIArray<TableStoreStat>& inde
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
       TableStoreStat stat;
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       stat.index_id_ = table_store->get_table_id();
       stat.has_dropped_flag_ = table_store->is_dropped_schema();
       if (OB_FAIL(index_tables.push_back(stat))) {
@@ -1499,10 +1497,10 @@ int ObPartitionStore::get_all_table_stats(common::ObIArray<TableStoreStat>& inde
   return ret;
 }
 
-int ObPartitionStore::get_reference_tables(int64_t table_id, ObTablesHandle& handle)
+int ObPartitionStore::get_reference_tables(int64_t table_id, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard guard(lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1521,7 +1519,7 @@ int ObPartitionStore::get_reference_tables(int64_t table_id, ObTablesHandle& han
 
 int ObPartitionStore::get_merge_table_ids(const ObMergeType merge_type, const bool using_remote_memstore,
     const bool is_in_dest_split, const int64_t trans_table_end_log_ts, const int64_t trans_table_timestamp,
-    common::ObVersion& frozen_version, common::ObIArray<uint64_t>& index_tables, bool& need_merge)
+    common::ObVersion &frozen_version, common::ObIArray<uint64_t> &index_tables, bool &need_merge)
 {
   int ret = OB_SUCCESS;
   bool is_complete = true;
@@ -1585,8 +1583,8 @@ int ObPartitionStore::get_merge_table_ids(const ObMergeType merge_type, const bo
   return ret;
 }
 
-int ObPartitionStore::get_major_merge_table_ids(const int64_t save_slave_read_version, common::ObVersion& merge_version,
-    common::ObIArray<uint64_t>& index_tables, bool& need_merge)
+int ObPartitionStore::get_major_merge_table_ids(const int64_t save_slave_read_version, common::ObVersion &merge_version,
+    common::ObIArray<uint64_t> &index_tables, bool &need_merge)
 {
   int ret = OB_SUCCESS;
   bool can_merge = false;
@@ -1603,7 +1601,7 @@ int ObPartitionStore::get_major_merge_table_ids(const int64_t save_slave_read_ve
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
       bool tmp_need_merge = false;
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_FAIL(
               check_need_major_merge(table_store, save_slave_read_version, merge_version, tmp_need_merge, can_merge))) {
         LOG_WARN("failed to check_need_major_merge", K(ret));
@@ -1632,7 +1630,7 @@ int ObPartitionStore::get_major_merge_table_ids(const int64_t save_slave_read_ve
 }
 
 int ObPartitionStore::get_minor_merge_table_ids(
-    const bool using_remote_memstore, const ObMergeType merge_type, common::ObIArray<uint64_t>& index_tables)
+    const bool using_remote_memstore, const ObMergeType merge_type, common::ObIArray<uint64_t> &index_tables)
 {
   int ret = OB_SUCCESS;
   index_tables.reset();
@@ -1644,7 +1642,7 @@ int ObPartitionStore::get_minor_merge_table_ids(
     bool need_merge = false;
 
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_FAIL(check_need_minor_merge(table_store->get_table_id(), need_merge))) {
         LOG_WARN("Failed to check need mini minor merge", K(ret), KPC(table_store));
       } else if (!need_merge) {
@@ -1661,8 +1659,8 @@ int ObPartitionStore::get_minor_merge_table_ids(
 }
 
 int ObPartitionStore::get_mini_merge_table_ids(const int64_t save_slave_read_version, const ObMergeType merge_type,
-    const int64_t trans_table_end_log_ts, const int64_t trans_table_timestamp, common::ObIArray<uint64_t>& index_tables,
-    bool& need_merge)
+    const int64_t trans_table_end_log_ts, const int64_t trans_table_timestamp, common::ObIArray<uint64_t> &index_tables,
+    bool &need_merge)
 {
   int ret = OB_SUCCESS;
   bool can_merge = false;
@@ -1676,7 +1674,7 @@ int ObPartitionStore::get_mini_merge_table_ids(const int64_t save_slave_read_ver
     LOG_DEBUG("has no memtable, cannot get minor merge version", K(ret));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_FAIL(check_need_mini_merge(table_store,
               merge_type,
               save_slave_read_version,
@@ -1700,7 +1698,7 @@ int ObPartitionStore::get_mini_merge_table_ids(const int64_t save_slave_read_ver
   return ret;
 }
 
-int ObPartitionStore::get_migrate_table_ids(common::ObIArray<uint64_t>& table_ids)
+int ObPartitionStore::get_migrate_table_ids(common::ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
 
@@ -1710,7 +1708,7 @@ int ObPartitionStore::get_migrate_table_ids(common::ObIArray<uint64_t>& table_id
     LOG_WARN("not inited", K(ret));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table id should not be null here", K(ret));
@@ -1723,7 +1721,7 @@ int ObPartitionStore::get_migrate_table_ids(common::ObIArray<uint64_t>& table_id
   return ret;
 }
 
-int ObPartitionStore::is_physical_split_finished(bool& is_physical_split_finish)
+int ObPartitionStore::is_physical_split_finished(bool &is_physical_split_finish)
 {
   int ret = OB_SUCCESS;
   is_physical_split_finish = true;
@@ -1735,7 +1733,7 @@ int ObPartitionStore::is_physical_split_finished(bool& is_physical_split_finish)
     LOG_WARN("not inited", K(ret));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* multi_version_table_store = it->second;
+      ObMultiVersionTableStore *multi_version_table_store = it->second;
 
       if (OB_ISNULL(multi_version_table_store)) {
         ret = OB_ERR_SYS;
@@ -1757,11 +1755,11 @@ int ObPartitionStore::is_physical_split_finished(bool& is_physical_split_finish)
   return ret;
 }
 
-int ObPartitionStore::get_physical_split_info(ObVirtualPartitionSplitInfo& split_info)
+int ObPartitionStore::get_physical_split_info(ObVirtualPartitionSplitInfo &split_info)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard lock_guard(lock_);
-  ObMultiVersionTableStore* data_table_store = get_data_table_store();
+  ObMultiVersionTableStore *data_table_store = get_data_table_store();
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1781,10 +1779,10 @@ int ObPartitionStore::get_physical_split_info(ObVirtualPartitionSplitInfo& split
 }
 
 int ObPartitionStore::check_need_split(
-    const int64_t& index_id, common::ObVersion& split_version, bool& need_split, bool& need_minor_split)
+    const int64_t &index_id, common::ObVersion &split_version, bool &need_split, bool &need_minor_split)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard guard(lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1801,7 +1799,7 @@ int ObPartitionStore::check_need_split(
   return ret;
 }
 
-int ObPartitionStore::check_can_migrate(bool& can_migrate)
+int ObPartitionStore::check_can_migrate(bool &can_migrate)
 {
   int ret = OB_SUCCESS;
   can_migrate = true;
@@ -1812,7 +1810,7 @@ int ObPartitionStore::check_can_migrate(bool& can_migrate)
     LOG_WARN("not inited", K(ret));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* multi_version_table_store = it->second;
+      ObMultiVersionTableStore *multi_version_table_store = it->second;
 
       if (OB_ISNULL(multi_version_table_store)) {
         ret = OB_ERR_SYS;
@@ -1831,7 +1829,7 @@ int ObPartitionStore::check_can_migrate(bool& can_migrate)
 }
 
 int ObPartitionStore::get_split_table_ids(
-    common::ObVersion& split_version, bool is_major_split, common::ObIArray<uint64_t>& index_tables)
+    common::ObVersion &split_version, bool is_major_split, common::ObIArray<uint64_t> &index_tables)
 {
   int ret = OB_SUCCESS;
   bool need_split = false;
@@ -1851,7 +1849,7 @@ int ObPartitionStore::get_split_table_ids(
     LOG_INFO("store is not complete, needs to wait", K_(pkey));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(table_store->check_need_split(split_version, need_split, need_minor_split))) {
@@ -1871,13 +1869,13 @@ int ObPartitionStore::get_split_table_ids(
   return ret;
 }
 
-int ObPartitionStore::check_need_major_merge(ObMultiVersionTableStore* table_store,
-    const int64_t save_slave_read_version, ObVersion& merge_version, bool& need_merge, bool& can_merge)
+int ObPartitionStore::check_need_major_merge(ObMultiVersionTableStore *table_store,
+    const int64_t save_slave_read_version, ObVersion &merge_version, bool &need_merge, bool &can_merge)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle handle;
-  ObITable* latest_major_sstable = NULL;
-  ObITable* latest_minor_sstable = NULL;
+  ObITable *latest_major_sstable = NULL;
+  ObITable *latest_minor_sstable = NULL;
   ObFreezeInfoSnapshotMgr::FreezeInfoLite freeze_info;
   common::ObVersion major_sstable_version;
   common::ObVersion split_version;
@@ -1898,7 +1896,7 @@ int ObPartitionStore::check_need_major_merge(ObMultiVersionTableStore* table_sto
 
   // find max major sstable
   for (int64_t i = 0; OB_SUCC(ret) && i < handle.get_count(); ++i) {
-    ObITable* tmp = handle.get_table(i);
+    ObITable *tmp = handle.get_table(i);
     if (OB_ISNULL(tmp)) {
       ret = OB_ERR_SYS;
       LOG_ERROR("table must not null", K(ret));
@@ -1953,15 +1951,15 @@ int ObPartitionStore::check_need_major_merge(ObMultiVersionTableStore* table_sto
   return ret;
 }
 
-int ObPartitionStore::check_need_mini_merge(ObMultiVersionTableStore* table_store, const ObMergeType merge_type,
+int ObPartitionStore::check_need_mini_merge(ObMultiVersionTableStore *table_store, const ObMergeType merge_type,
     const int64_t safe_slave_read_version, const int64_t trans_table_end_log_ts, const int64_t trans_table_timestamp,
-    bool& need_merge, bool& can_merge)
+    bool &need_merge, bool &can_merge)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle handle;
-  ObITable* latest_sstable = nullptr;
-  ObMemtable* first_frozen_memtable = nullptr;
-  ObMemtable* last_frozen_memtable = nullptr;
+  ObITable *latest_sstable = nullptr;
+  ObMemtable *first_frozen_memtable = nullptr;
+  ObMemtable *last_frozen_memtable = nullptr;
   ObGetMergeTablesParam param;
   ObFreezeInfoSnapshotMgr::NeighbourFreezeInfoLite freeze_info;
 
@@ -1982,7 +1980,7 @@ int ObPartitionStore::check_need_mini_merge(ObMultiVersionTableStore* table_stor
     LOG_WARN("failed to get_latest_tables", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < handle.get_count(); ++i) {
-      ObITable* tmp = handle.get_table(i);
+      ObITable *tmp = handle.get_table(i);
       if (OB_ISNULL(tmp)) {
         ret = OB_ERR_SYS;
         LOG_ERROR("table must not null", K(ret));
@@ -1993,9 +1991,9 @@ int ObPartitionStore::check_need_mini_merge(ObMultiVersionTableStore* table_stor
         latest_sstable = tmp;
       } else if (tmp->is_frozen_memtable()) {
         if (OB_ISNULL(first_frozen_memtable)) {
-          first_frozen_memtable = static_cast<ObMemtable*>(tmp);
+          first_frozen_memtable = static_cast<ObMemtable *>(tmp);
         }
-        last_frozen_memtable = static_cast<ObMemtable*>(tmp);
+        last_frozen_memtable = static_cast<ObMemtable *>(tmp);
       }
     }
 
@@ -2065,10 +2063,10 @@ int ObPartitionStore::check_need_mini_merge(ObMultiVersionTableStore* table_stor
   return ret;
 }
 
-int ObPartitionStore::check_need_minor_merge(const uint64_t table_id, bool& need_merge)
+int ObPartitionStore::check_need_minor_merge(const uint64_t table_id, bool &need_merge)
 {
   int ret = OB_SUCCESS;
-  share::schema::ObMultiVersionSchemaService& schema_service =
+  share::schema::ObMultiVersionSchemaService &schema_service =
       share::schema::ObMultiVersionSchemaService::get_instance();
   ObTablesHandle handle;
   bool is_exist = true;
@@ -2085,14 +2083,13 @@ int ObPartitionStore::check_need_minor_merge(const uint64_t table_id, bool& need
   return ret;
 }
 
-int ObPartitionStore::get_merge_tables(const ObGetMergeTablesParam& param, ObGetMergeTablesResult& result)
+int ObPartitionStore::get_merge_tables(const ObGetMergeTablesParam &param, ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   int64_t min_reserved_snapshot = 0;
   int64_t min_merged_version = INT64_MAX;
   ObTableHandle handle;
-  int64_t backup_snapshot_version = 0;
   TCRLockGuard guard(lock_);
   ObTableHandle memtable_handle;
 
@@ -2118,11 +2115,8 @@ int ObPartitionStore::get_merge_tables(const ObGetMergeTablesParam& param, ObGet
   if (OB_SUCC(ret)) {
     if (OB_FAIL(get_min_merged_version_(min_merged_version))) {
       LOG_WARN("failed to get_min_merged_version_", K(ret), K(pkey_));
-    } else if (OB_FAIL(ObFreezeInfoMgrWrapper::get_instance().get_min_reserved_snapshot(pkey_,
-                   min_merged_version,
-                   meta_->create_schema_version_,
-                   min_reserved_snapshot,
-                   backup_snapshot_version))) {
+    } else if (OB_FAIL(ObFreezeInfoMgrWrapper::get_instance().get_min_reserved_snapshot(
+                   pkey_, min_merged_version, meta_->create_schema_version_, min_reserved_snapshot))) {
       LOG_WARN("failed to get min reserved snapshot", K(ret), K(pkey_));
     } else if (OB_FAIL(table_store->get_merge_tables(param, min_reserved_snapshot, result))) {
       LOG_WARN("failed to get merge tables", K(ret), K(param), K(*this));
@@ -2134,10 +2128,10 @@ int ObPartitionStore::get_merge_tables(const ObGetMergeTablesParam& param, ObGet
   return ret;
 }
 
-int ObPartitionStore::get_split_tables(const bool is_major_split, const uint64_t index_id, ObTablesHandle& handle)
+int ObPartitionStore::get_split_tables(const bool is_major_split, const uint64_t index_id, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard guard(lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2161,10 +2155,10 @@ int ObPartitionStore::get_split_tables(const bool is_major_split, const uint64_t
 
 // for merge/backup/migrate
 int ObPartitionStore::get_major_sstable(
-    const uint64_t index_id, const common::ObVersion& merge_version, ObTablesHandle& handle)
+    const uint64_t index_id, const common::ObVersion &merge_version, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard guard(lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2184,10 +2178,10 @@ int ObPartitionStore::get_major_sstable(
   return ret;
 }
 
-int ObPartitionStore::get_last_major_sstable(const uint64_t index_id, ObTableHandle& handle)
+int ObPartitionStore::get_last_major_sstable(const uint64_t index_id, ObTableHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard guard(lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2211,7 +2205,7 @@ int ObPartitionStore::get_last_major_sstable(const uint64_t index_id, ObTableHan
   return ret;
 }
 
-int ObPartitionStore::get_last_all_major_sstable(ObTablesHandle& handle)
+int ObPartitionStore::get_last_all_major_sstable(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(lock_);
@@ -2222,7 +2216,7 @@ int ObPartitionStore::get_last_all_major_sstable(ObTablesHandle& handle)
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
       ObTableHandle tmp_handle;
       bool is_ready_for_read = false;
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_SYS;
         LOG_ERROR("table store must not null", K(ret));
@@ -2247,8 +2241,7 @@ int ObPartitionStore::remove_old_table(const int64_t frozen_version)
   int ret = OB_SUCCESS;
   int64_t multi_version_start = 0;
   const bool is_in_dest_split = false;
-  int64_t backup_snapshot_verison = 0;
-  ObSEArray<ObMultiVersionTableStore*, OB_MAX_INDEX_PER_TABLE> stores;
+  ObSEArray<ObMultiVersionTableStore *, OB_MAX_INDEX_PER_TABLE> stores;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2256,7 +2249,7 @@ int ObPartitionStore::remove_old_table(const int64_t frozen_version)
   } else if (is_removed_) {
     ret = OB_PARTITION_IS_REMOVED;
     LOG_WARN("the partition has been removed, ", K(ret));
-  } else if (OB_FAIL(get_kept_multi_version_start(is_in_dest_split, multi_version_start, backup_snapshot_verison))) {
+  } else if (OB_FAIL(get_kept_multi_version_start(is_in_dest_split, multi_version_start))) {
     LOG_WARN("failed to get_kept_multi_version_start", K(ret));
   } else {
     int64_t kept_major_num = GCONF.max_kept_major_version_number;
@@ -2267,7 +2260,7 @@ int ObPartitionStore::remove_old_table(const int64_t frozen_version)
     {
       TCRLockGuard lock_guard(lock_);
       for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-        ObMultiVersionTableStore* table_store = it->second;
+        ObMultiVersionTableStore *table_store = it->second;
         if (OB_ISNULL(table_store)) {
           ret = OB_ERR_SYS;
           LOG_ERROR("table_store must not null", K(ret));
@@ -2277,8 +2270,7 @@ int ObPartitionStore::remove_old_table(const int64_t frozen_version)
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < stores.count(); ++i) {
-      if (OB_FAIL(remove_old_table_(
-              kept_min_version, multi_version_start, kept_major_num, backup_snapshot_verison, *stores.at(i)))) {
+      if (OB_FAIL(remove_old_table_(kept_min_version, multi_version_start, kept_major_num, *stores.at(i)))) {
         LOG_WARN("faile to remove_old_table_", K(ret), K(pkey_));
       }
     }
@@ -2287,8 +2279,8 @@ int ObPartitionStore::remove_old_table(const int64_t frozen_version)
   return ret;
 }
 
-int ObPartitionStore::remove_old_table_(const common::ObVersion& kept_min_version, const int64_t multi_version_start,
-    const int64_t kept_major_num, const int64_t backup_snapshot_version, ObMultiVersionTableStore& table_store)
+int ObPartitionStore::remove_old_table_(const common::ObVersion &kept_min_version, const int64_t multi_version_start,
+    const int64_t kept_major_num, ObMultiVersionTableStore &table_store)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2301,12 +2293,12 @@ int ObPartitionStore::remove_old_table_(const common::ObVersion& kept_min_versio
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else if (OB_FAIL(table_store.need_remove_old_table(
-                 kept_min_version, multi_version_start, backup_snapshot_version, real_kept_major_num, need_remove))) {
+                 kept_min_version, multi_version_start, real_kept_major_num, need_remove))) {
     LOG_WARN("failed to need_remove_old_table", K(ret));
   }
 
   if (OB_SUCC(ret) && need_remove) {
-    ObTableStore* new_table_store = NULL;
+    ObTableStore *new_table_store = NULL;
     AddTableParam param;
 
     param.table_ = NULL;
@@ -2315,7 +2307,6 @@ int ObPartitionStore::remove_old_table_(const common::ObVersion& kept_min_versio
     param.in_slog_trans_ = false;
     param.need_prewarm_ = true;
     param.is_daily_merge_ = false;
-    param.backup_snapshot_version_ = backup_snapshot_version;
 
     if (param.multi_version_start_ < meta_->multi_version_start_) {
       ret = OB_INVALID_ARGUMENT;
@@ -2382,7 +2373,7 @@ int ObPartitionStore::retire_prewarm_store(const bool is_disk_full)
   }
 
   for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-    ObMultiVersionTableStore* table_store = it->second;
+    ObMultiVersionTableStore *table_store = it->second;
     if (OB_ISNULL(table_store)) {
       ret = OB_ERR_SYS;
       LOG_ERROR("table_store must not null", K(ret));
@@ -2410,8 +2401,8 @@ int64_t ObPartitionStore::get_serialize_size()
     serialize_size += meta_->get_serialize_size();
     serialize_size += serialization::encoded_length_i64(table_store_count);
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCCESS == tmp_ret && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* multi_table_store = it->second;
-      ObTableStore* table_store = NULL;
+      ObMultiVersionTableStore *multi_table_store = it->second;
+      ObTableStore *table_store = NULL;
 
       if (OB_ISNULL(multi_table_store)) {
         tmp_ret = OB_ERR_SYS;
@@ -2432,7 +2423,7 @@ int64_t ObPartitionStore::get_serialize_size()
   return serialize_size;
 }
 
-int ObPartitionStore::serialize(common::ObIAllocator& allocator, char*& new_buf, int64_t& serialize_size)
+int ObPartitionStore::serialize(common::ObIAllocator &allocator, char *&new_buf, int64_t &serialize_size)
 {
   int ret = OB_SUCCESS;
   int64_t need_size = 0;
@@ -2447,7 +2438,7 @@ int ObPartitionStore::serialize(common::ObIAllocator& allocator, char*& new_buf,
   } else if (0 >= (need_size = get_serialize_size())) {
     ret = OB_ERR_SYS;
     LOG_WARN("failed to get_serialize_need_size", K(ret));
-  } else if (OB_ISNULL(new_buf = static_cast<char*>(allocator.alloc(need_size)))) {
+  } else if (OB_ISNULL(new_buf = static_cast<char *>(allocator.alloc(need_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(need_size));
   } else if (OB_FAIL(serialization::encode_i64(new_buf, need_size, serialize_size, MAGIC_NUM_2))) {
@@ -2464,8 +2455,8 @@ int ObPartitionStore::serialize(common::ObIAllocator& allocator, char*& new_buf,
       LOG_WARN("failed to encode table count", K(ret));
     }
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* multi_table_store = it->second;
-      ObTableStore* table_store = NULL;
+      ObMultiVersionTableStore *multi_table_store = it->second;
+      ObTableStore *table_store = NULL;
 
       if (OB_ISNULL(multi_table_store)) {
         ret = OB_ERR_SYS;
@@ -2504,9 +2495,9 @@ int ObPartitionStore::serialize(common::ObIAllocator& allocator, char*& new_buf,
   return ret;
 }
 
-int ObPartitionStore::deserialize(ObIPartitionGroup* pg, ObPGMemtableMgr* pg_memtable_mgr,
-    const ObReplicaType replica_type, const char* buf, const int64_t buf_len, int64_t& pos, bool& is_old_meta,
-    ObPartitionStoreMeta& old_meta)
+int ObPartitionStore::deserialize(ObIPartitionGroup *pg, ObPGMemtableMgr *pg_memtable_mgr,
+    const ObReplicaType replica_type, const char *buf, const int64_t buf_len, int64_t &pos, bool &is_old_meta,
+    ObPartitionStoreMeta &old_meta)
 {
   int ret = OB_SUCCESS;
   int64_t magic_num = 0;
@@ -2581,7 +2572,7 @@ int ObPartitionStore::deserialize(ObIPartitionGroup* pg, ObPGMemtableMgr* pg_mem
   return ret;
 }
 
-int ObPartitionStore::write_create_partition_store_log(const ObPGPartitionStoreMeta& meta)
+int ObPartitionStore::write_create_partition_store_log(const ObPGPartitionStoreMeta &meta)
 {
   int ret = OB_SUCCESS;
   ObCreatePGPartitionStoreLogEntry log_entry;
@@ -2604,7 +2595,7 @@ int ObPartitionStore::write_create_partition_store_log(const ObPGPartitionStoreM
   return ret;
 }
 
-int ObPartitionStore::write_update_partition_meta_trans(const ObPGPartitionStoreMeta& meta, const LogCommand& cmd)
+int ObPartitionStore::write_update_partition_meta_trans(const ObPGPartitionStoreMeta &meta, const LogCommand &cmd)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2644,7 +2635,7 @@ int ObPartitionStore::write_update_partition_meta_trans(const ObPGPartitionStore
   return ret;
 }
 
-int ObPartitionStore::write_modify_table_store_log(ObTableStore& table_store, const int64_t multi_version_start)
+int ObPartitionStore::write_modify_table_store_log(ObTableStore &table_store, const int64_t multi_version_start)
 {
   int ret = OB_SUCCESS;
   ObModifyTableStoreLogEntry log_entry(table_store);
@@ -2671,7 +2662,7 @@ int ObPartitionStore::write_modify_table_store_log(ObTableStore& table_store, co
   return ret;
 }
 
-int ObPartitionStore::write_drop_index_trans(const common::ObPartitionKey& pkey, const uint64_t index_id)
+int ObPartitionStore::write_drop_index_trans(const common::ObPartitionKey &pkey, const uint64_t index_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2711,14 +2702,14 @@ int ObPartitionStore::write_drop_index_trans(const common::ObPartitionKey& pkey,
   return ret;
 }
 
-int ObPartitionStore::get_effective_tables(const uint64_t table_id, ObTablesHandle& handle, bool& is_ready_for_read)
+int ObPartitionStore::get_effective_tables(const uint64_t table_id, ObTablesHandle &handle, bool &is_ready_for_read)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   handle.reset();
   ObTableHandle memtable_handle;
-  memtable::ObMemtable* memtable = NULL;
-  ObITable* last_table = NULL;
+  memtable::ObMemtable *memtable = NULL;
+  ObITable *last_table = NULL;
   is_ready_for_read = false;
 
   TCRLockGuard guard(lock_);
@@ -2774,12 +2765,12 @@ int ObPartitionStore::get_effective_tables(const uint64_t table_id, ObTablesHand
   return ret;
 }
 
-int ObPartitionStore::get_gc_sstables(const uint64_t table_id, ObTablesHandle& handle)
+int ObPartitionStore::get_gc_sstables(const uint64_t table_id, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   handle.reset();
-  ObITable* last_table = NULL;
+  ObITable *last_table = NULL;
 
   TCRLockGuard guard(lock_);
 
@@ -2807,10 +2798,10 @@ int ObPartitionStore::get_gc_sstables(const uint64_t table_id, ObTablesHandle& h
   return ret;
 }
 
-int ObPartitionStore::get_replay_tables(const uint64_t table_id, ObIArray<ObITable::TableKey>& replay_tables)
+int ObPartitionStore::get_replay_tables(const uint64_t table_id, ObIArray<ObITable::TableKey> &replay_tables)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   replay_tables.reset();
 
   TCRLockGuard guard(lock_);
@@ -2840,7 +2831,7 @@ int ObPartitionStore::get_replay_tables(const uint64_t table_id, ObIArray<ObITab
 }
 
 // used for replay, no log
-int ObPartitionStore::replay_partition_meta(const ObPGPartitionStoreMeta& meta)
+int ObPartitionStore::replay_partition_meta(const ObPGPartitionStoreMeta &meta)
 {
   int ret = OB_SUCCESS;
 
@@ -2887,7 +2878,7 @@ int ObPartitionStore::finish_replay()
     }
 
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_SYS;
         LOG_ERROR("table store is null", K(ret));
@@ -2909,7 +2900,7 @@ int ObPartitionStore::finish_replay()
   return ret;
 }
 
-int ObPartitionStore::get_meta(ObPGPartitionStoreMeta& meta)
+int ObPartitionStore::get_meta(ObPGPartitionStoreMeta &meta)
 {
   int ret = OB_SUCCESS;
 
@@ -2923,7 +2914,7 @@ int ObPartitionStore::get_meta(ObPGPartitionStoreMeta& meta)
   return ret;
 }
 
-int ObPartitionStore::check_need_report(const common::ObVersion& version, bool& need_report)
+int ObPartitionStore::check_need_report(const common::ObVersion &version, bool &need_report)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(lock_);
@@ -2936,7 +2927,7 @@ int ObPartitionStore::check_need_report(const common::ObVersion& version, bool& 
   return ret;
 }
 
-int ObPartitionStore::check_major_merge_finished(const common::ObVersion& version, bool& finished)
+int ObPartitionStore::check_major_merge_finished(const common::ObVersion &version, bool &finished)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle tables_handle;
@@ -2950,7 +2941,7 @@ int ObPartitionStore::check_major_merge_finished(const common::ObVersion& versio
   } else {
     finished = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < tables_handle.get_count() && finished; ++i) {
-      ObITable* table = tables_handle.get_tables().at(i);
+      ObITable *table = tables_handle.get_tables().at(i);
       if (OB_ISNULL(table)) {
         ret = OB_ERR_SYS;
         STORAGE_LOG(WARN, "error sys, table must not be NULL", K(ret));
@@ -2963,10 +2954,10 @@ int ObPartitionStore::check_major_merge_finished(const common::ObVersion& versio
 }
 
 int ObPartitionStore::write_report_status(
-    const ObReportStatus& status, const uint64_t data_table_id, const bool write_slog)
+    const ObReportStatus &status, const uint64_t data_table_id, const bool write_slog)
 {
   int ret = OB_SUCCESS;
-  ObPGPartitionStoreMeta& meta = get_next_meta();
+  ObPGPartitionStoreMeta &meta = get_next_meta();
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2993,7 +2984,7 @@ int ObPartitionStore::write_report_status(
 int ObPartitionStore::update_multi_version_start(const int64_t multi_version_start)
 {
   int ret = OB_SUCCESS;
-  ObPGPartitionStoreMeta& meta = get_next_meta();
+  ObPGPartitionStoreMeta &meta = get_next_meta();
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -3038,10 +3029,10 @@ int ObPartitionStore::try_update_report_status(const uint64_t data_table_id, con
   return ret;
 }
 
-int ObPartitionStore::check_ready_for_read(const uint64_t table_id, bool& is_ready)
+int ObPartitionStore::check_ready_for_read(const uint64_t table_id, bool &is_ready)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard guard(lock_);
   is_ready = false;
 
@@ -3060,7 +3051,7 @@ int ObPartitionStore::check_ready_for_read(const uint64_t table_id, bool& is_rea
   return ret;
 }
 
-int ObPartitionStore::replay_modify_table_store(const ObModifyTableStoreLogEntry& log_entry)
+int ObPartitionStore::replay_modify_table_store(const ObModifyTableStoreLogEntry &log_entry)
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
@@ -3082,10 +3073,10 @@ int ObPartitionStore::replay_modify_table_store(const ObModifyTableStoreLogEntry
   return ret;
 }
 
-int ObPartitionStore::set_table_store(const ObTableStore& table_store)
+int ObPartitionStore::set_table_store(const ObTableStore &table_store)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* multi_table_store = NULL;
+  ObMultiVersionTableStore *multi_table_store = NULL;
   const uint64_t table_id = table_store.get_table_id();
   int64_t table_count = 0;
 
@@ -3130,7 +3121,7 @@ int64_t ObPartitionStore::get_multi_version_start()
   return meta_->multi_version_start_;
 }
 
-int ObPartitionStore::get_partition_store_info(ObPartitionStoreInfo& info)
+int ObPartitionStore::get_partition_store_info(ObPartitionStoreInfo &info)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(lock_);
@@ -3146,7 +3137,7 @@ int ObPartitionStore::get_partition_store_info(ObPartitionStoreInfo& info)
   return ret;
 }
 
-int ObPartitionStore::get_first_frozen_memtable(ObTableHandle& handle)
+int ObPartitionStore::get_first_frozen_memtable(ObTableHandle &handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -3160,15 +3151,15 @@ int ObPartitionStore::get_first_frozen_memtable(ObTableHandle& handle)
   return ret;
 }
 
-ObMultiVersionTableStore* ObPartitionStore::alloc_multi_version_table_store(const uint64_t tenant_id)
+ObMultiVersionTableStore *ObPartitionStore::alloc_multi_version_table_store(const uint64_t tenant_id)
 {
   ObMemAttr attr(tenant_id, ObModIds::OB_PARTITION_STORE, ObCtxIds::STORAGE_LONG_TERM_META_CTX_ID);
-  ObMultiVersionTableStore* store = OB_NEW_ALIGN32(ObMultiVersionTableStore, attr);
+  ObMultiVersionTableStore *store = OB_NEW_ALIGN32(ObMultiVersionTableStore, attr);
   LOG_INFO("alloc_multi_version_table_store", KP(store), K(lbt()));
   return store;
 }
 
-void ObPartitionStore::free_multi_version_table_store(ObMultiVersionTableStore*& table_store)
+void ObPartitionStore::free_multi_version_table_store(ObMultiVersionTableStore *&table_store)
 {
   if (NULL != table_store) {
     LOG_INFO("free_multi_version_table_store", KP(table_store), K(lbt()));
@@ -3177,8 +3168,7 @@ void ObPartitionStore::free_multi_version_table_store(ObMultiVersionTableStore*&
   }
 }
 
-int ObPartitionStore::get_kept_multi_version_start(
-    const bool is_in_dest_split, int64_t& multi_version_start, int64_t& backup_snapshot_version)
+int ObPartitionStore::get_kept_multi_version_start(const bool is_in_dest_split, int64_t &multi_version_start)
 {
   int ret = OB_SUCCESS;
   multi_version_start = 0;
@@ -3209,11 +3199,8 @@ int ObPartitionStore::get_kept_multi_version_start(
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObFreezeInfoMgrWrapper::get_instance().get_min_reserved_snapshot(pkey_,
-              min_merged_version,
-              meta_->create_schema_version_,
-              min_reserved_snapshot,
-              backup_snapshot_version))) {
+      if (OB_FAIL(ObFreezeInfoMgrWrapper::get_instance().get_min_reserved_snapshot(
+              pkey_, min_merged_version, meta_->create_schema_version_, min_reserved_snapshot))) {
         LOG_WARN("failed to get_kept_multi_version_start", K(ret), K(pkey_));
       }
     }
@@ -3231,8 +3218,8 @@ int ObPartitionStore::get_kept_multi_version_start(
   return ret;
 }
 
-int ObPartitionStore::check_all_merged(memtable::ObMemtable& memtable, const int64_t schema_version,
-    const bool is_physical_restore, bool& is_all_merged, bool& can_release)
+int ObPartitionStore::check_all_merged(memtable::ObMemtable &memtable, const int64_t schema_version,
+    const bool is_physical_restore, bool &is_all_merged, bool &can_release)
 {
   int ret = OB_SUCCESS;
   is_all_merged = false;
@@ -3282,7 +3269,7 @@ int ObPartitionStore::remove_uncontinues_inc_tables(const uint64_t table_id)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle handle;
-  ObMultiVersionTableStore* multi_table_store = NULL;
+  ObMultiVersionTableStore *multi_table_store = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
@@ -3305,13 +3292,13 @@ int ObPartitionStore::remove_uncontinues_inc_tables(const uint64_t table_id)
   return ret;
 }
 
-int ObPartitionStore::update_split_table_store(int64_t table_id, bool is_major_split, ObTablesHandle& handle)
+int ObPartitionStore::update_split_table_store(int64_t table_id, bool is_major_split, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObMultiVersionTableStore* multi_version_store = NULL;
+  ObMultiVersionTableStore *multi_version_store = NULL;
   bool need_update = false;
-  ObTableStore* new_table_store = NULL;
+  ObTableStore *new_table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -3356,7 +3343,7 @@ int ObPartitionStore::update_split_table_store(int64_t table_id, bool is_major_s
   return ret;
 }
 
-int ObPartitionStore::get_create_schema_version(int64_t& create_schema_version)
+int ObPartitionStore::get_create_schema_version(int64_t &create_schema_version)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard lock_guard(lock_);
@@ -3370,14 +3357,14 @@ int ObPartitionStore::get_create_schema_version(int64_t& create_schema_version)
   return ret;
 }
 
-int ObPartitionStore::inner_remove_uncontinues_inc_tables(ObMultiVersionTableStore* multi_table_store)
+int ObPartitionStore::inner_remove_uncontinues_inc_tables(ObMultiVersionTableStore *multi_table_store)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
   const int64_t max_kept_major_version_number = 0;
   const bool in_slog_trans = false;
-  ObTableStore* new_table_store = NULL;
+  ObTableStore *new_table_store = NULL;
   bool is_equal = true;
   bool need_abort_slog = false;
   int64_t lsn = 0;
@@ -3452,7 +3439,7 @@ int ObPartitionStore::inner_remove_uncontinues_inc_tables(ObMultiVersionTableSto
   return ret;
 }
 
-int ObPartitionStore::get_report_status(ObReportStatus& status)
+int ObPartitionStore::get_report_status(ObReportStatus &status)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard lock_guard(lock_);
@@ -3472,13 +3459,13 @@ int64_t ObPartitionStore::get_readable_ts_() const
 }
 
 int ObPartitionStore::get_major_frozen_versions(
-    const ObVersion& data_version, int64_t& publish_version, int64_t& schema_version)
+    const ObVersion &data_version, int64_t &publish_version, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle handle;
   schema_version = -1;
   publish_version = -1;
-  ObITable* table = NULL;
+  ObITable *table = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition store is not inited", K(ret));
@@ -3501,7 +3488,7 @@ int ObPartitionStore::get_major_frozen_versions(
   return ret;
 }
 
-int ObPartitionStore::get_min_sstable_version(int64_t& min_sstable_snapshot_version)
+int ObPartitionStore::get_min_sstable_version(int64_t &min_sstable_snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle handle;
@@ -3512,7 +3499,7 @@ int ObPartitionStore::get_min_sstable_version(int64_t& min_sstable_snapshot_vers
     LOG_WARN("failed to get read tables", K(ret), K_(pkey));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < handle.get_count(); i++) {
-      ObITable* table = handle.get_table(i);
+      ObITable *table = handle.get_table(i);
       if (OB_ISNULL(table)) {
         ret = OB_ERR_SYS;
         LOG_WARN("table should not be null", K(ret));
@@ -3537,12 +3524,12 @@ int64_t ObPartitionStore::get_table_store_cnt() const
   return store_map_->size();
 }
 
-int ObPartitionStore::get_data_table_latest_sstables(ObTablesHandle& handle)
+int ObPartitionStore::get_data_table_latest_sstables(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard lock_guard(lock_);
-  ObMultiVersionTableStore* data_table_store = nullptr;
-  ObTableStore* latest_table_store = nullptr;
+  ObMultiVersionTableStore *data_table_store = nullptr;
+  ObTableStore *latest_table_store = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition store is not inited", K(ret));
@@ -3559,10 +3546,10 @@ int ObPartitionStore::get_data_table_latest_sstables(ObTablesHandle& handle)
 }
 
 int ObPartitionStore::set_replay_sstables(
-    const uint64_t table_id, const bool is_replay_old, ObIArray<ObSSTable*>& sstables)
+    const uint64_t table_id, const bool is_replay_old, ObIArray<ObSSTable *> &sstables)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -3588,12 +3575,12 @@ int ObPartitionStore::set_replay_sstables(
   return ret;
 }
 
-int ObPartitionStore::get_max_major_sstable_snapshot(int64_t& max_snapshot_version)
+int ObPartitionStore::get_max_major_sstable_snapshot(int64_t &max_snapshot_version)
 {
   int ret = OB_SUCCESS;
   max_snapshot_version = 0;
   int64_t snapshot_version = 0;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
 
   TCRLockGuard lock_guard(lock_);
   for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
@@ -3611,14 +3598,14 @@ int ObPartitionStore::get_max_major_sstable_snapshot(int64_t& max_snapshot_versi
   return ret;
 }
 
-int ObPartitionStore::get_min_max_major_version(int64_t& min_version, int64_t& max_version)
+int ObPartitionStore::get_min_max_major_version(int64_t &min_version, int64_t &max_version)
 {
   int ret = OB_SUCCESS;
   min_version = INT64_MAX;
   max_version = INT64_MIN;
   int64_t tmp_min_version = 0;
   int64_t tmp_max_version = 0;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard lock_guard(lock_);
   for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
     table_store = it->second;
@@ -3635,7 +3622,7 @@ int ObPartitionStore::get_min_max_major_version(int64_t& min_version, int64_t& m
   return ret;
 }
 
-int ObPartitionStore::check_store_complete_(bool& is_complete)
+int ObPartitionStore::check_store_complete_(bool &is_complete)
 {
   int ret = OB_SUCCESS;
   is_complete = true;
@@ -3645,7 +3632,7 @@ int ObPartitionStore::check_store_complete_(bool& is_complete)
     LOG_WARN("not inited", K(ret));
   } else {
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* multi_version_table_store = it->second;
+      ObMultiVersionTableStore *multi_version_table_store = it->second;
 
       if (OB_ISNULL(multi_version_table_store)) {
         ret = OB_ERR_SYS;
@@ -3664,15 +3651,15 @@ int ObPartitionStore::check_store_complete_(bool& is_complete)
 }
 
 // lock_ must be held before calling this method
-int ObPartitionStore::get_min_merged_version_(int64_t& min_merged_version)
+int ObPartitionStore::get_min_merged_version_(int64_t &min_merged_version)
 {
   int ret = OB_SUCCESS;
   ObTableHandle tmp_handle;
   min_merged_version = -1;
   int64_t tmp_min_merged_version = INT64_MAX;
   for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-    ObMultiVersionTableStore* table_store = it->second;
-    ObSSTable* sstable = nullptr;
+    ObMultiVersionTableStore *table_store = it->second;
+    ObSSTable *sstable = nullptr;
     tmp_handle.reset();
     if (OB_ISNULL(table_store)) {
       ret = OB_ERR_SYS;
@@ -3698,10 +3685,10 @@ int ObPartitionStore::get_min_merged_version_(int64_t& min_merged_version)
   return ret;
 }
 
-int ObPartitionStore::get_latest_minor_sstables(const int64_t index_id, ObTablesHandle& handle)
+int ObPartitionStore::get_latest_minor_sstables(const int64_t index_id, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = nullptr;
+  ObMultiVersionTableStore *table_store = nullptr;
   handle.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -3727,7 +3714,7 @@ int ObPartitionStore::get_latest_minor_sstables(const int64_t index_id, ObTables
   return ret;
 }
 
-int ObPartitionStore::physical_flashback(const int64_t flashback_scn, ObVersion& data_version)
+int ObPartitionStore::physical_flashback(const int64_t flashback_scn, ObVersion &data_version)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> table_ids;
@@ -3744,7 +3731,7 @@ int ObPartitionStore::physical_flashback(const int64_t flashback_scn, ObVersion&
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
       const uint64_t table_id = table_ids.at(i);
-      ObMultiVersionTableStore* multi_table_store = NULL;
+      ObMultiVersionTableStore *multi_table_store = NULL;
       const bool is_data_table = table_id == pkey_.get_table_id();
       if (OB_FAIL(store_map_->get(table_id, multi_table_store))) {
         if (OB_HASH_NOT_EXIST != ret) {
@@ -3788,14 +3775,14 @@ int ObPartitionStore::physical_flashback(const int64_t flashback_scn, ObVersion&
 }
 
 int ObPartitionStore::get_mark_deletion_tables(
-    const uint64_t index_id, const int64_t end_log_ts, const int64_t snapshot_version, ObTablesHandle& handle)
+    const uint64_t index_id, const int64_t end_log_ts, const int64_t snapshot_version, ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ob_partition_store is not inited", K(ret));
   } else {
-    ObMultiVersionTableStore* table_store = nullptr;
+    ObMultiVersionTableStore *table_store = nullptr;
     TCRLockGuard lock_guard(lock_);
     if (OB_FAIL(store_map_->get(index_id, table_store))) {
       LOG_WARN("failed to multi version table store", K(ret), K(index_id), K_(pkey));
@@ -3806,7 +3793,7 @@ int ObPartitionStore::get_mark_deletion_tables(
   return ret;
 }
 
-int ObPartitionStore::get_all_latest_minor_sstables(ObTablesHandle& handle)
+int ObPartitionStore::get_all_latest_minor_sstables(ObTablesHandle &handle)
 {
   int ret = OB_SUCCESS;
   handle.reset();
@@ -3816,7 +3803,7 @@ int ObPartitionStore::get_all_latest_minor_sstables(ObTablesHandle& handle)
   } else {
     TCRLockGuard lock_guard(lock_);
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       const int64_t index_id = it->first;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3829,13 +3816,13 @@ int ObPartitionStore::get_all_latest_minor_sstables(ObTablesHandle& handle)
   return ret;
 }
 
-int ObPartitionStore::scan_trans_table(const ObTableIterParam& iter_param, ObTableAccessContext& access_context,
-    const ObExtStoreRange& whole_range, ObStoreRowIterator*& row_iter)
+int ObPartitionStore::scan_trans_table(const ObTableIterParam &iter_param, ObTableAccessContext &access_context,
+    const ObExtStoreRange &whole_range, ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* data_table_store = nullptr;
+  ObMultiVersionTableStore *data_table_store = nullptr;
   ObTableHandle handle;
-  ObSSTable* sstable = NULL;
+  ObSSTable *sstable = NULL;
   row_iter = NULL;
   TCRLockGuard lock_guard(lock_);
 
@@ -3862,21 +3849,21 @@ int ObPartitionStore::scan_trans_table(const ObTableIterParam& iter_param, ObTab
   return ret;
 }
 
-int ObPartitionStore::check_store_complete(bool& is_complete)
+int ObPartitionStore::check_store_complete(bool &is_complete)
 {
   TCRLockGuard lock_guard(lock_);
   return check_store_complete_(is_complete);
 }
 
 int ObPartitionStore::inner_physical_flashback(
-    const bool is_data_table, const int64_t flashback_scn, ObMultiVersionTableStore* multi_table_store)
+    const bool is_data_table, const int64_t flashback_scn, ObMultiVersionTableStore *multi_table_store)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
   const int64_t max_kept_major_version_number = 0;
   const bool in_slog_trans = false;
-  ObTableStore* new_table_store = NULL;
+  ObTableStore *new_table_store = NULL;
   bool is_equal = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -3911,7 +3898,7 @@ int ObPartitionStore::inner_physical_flashback(
         meta_->multi_version_start_ = 0;
       } else if (!is_equal) {
         TCWLockGuard guard(lock_);
-        ObSSTable* sstable = NULL;
+        ObSSTable *sstable = NULL;
         if (OB_FAIL(multi_table_store->enable_table_store(param.need_prewarm_, *new_table_store))) {
           LOG_WARN("failed to enable table store", K(ret), K(param));
         } else if (OB_FAIL(major_sstables_handle.get_first_sstable(sstable))) {
@@ -3937,12 +3924,12 @@ int ObPartitionStore::inner_physical_flashback(
   return ret;
 }
 
-int ObPartitionStore::get_trans_table_end_log_ts_and_timestamp(int64_t& end_log_ts, int64_t& timestamp)
+int ObPartitionStore::get_trans_table_end_log_ts_and_timestamp(int64_t &end_log_ts, int64_t &timestamp)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = nullptr;
+  ObMultiVersionTableStore *table_store = nullptr;
   ObTableHandle handle;
-  ObSSTable* table = nullptr;
+  ObSSTable *table = nullptr;
   TCRLockGuard lock_guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -3973,7 +3960,7 @@ int ObPartitionStore::clear_complement_minor_sstable()
   } else {
     TCWLockGuard lock_guard(lock_);
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       const int64_t index_id = it->first;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3986,7 +3973,7 @@ int ObPartitionStore::clear_complement_minor_sstable()
   return ret;
 }
 
-int ObPartitionStore::get_min_schema_version(int64_t& min_schema_version)
+int ObPartitionStore::get_min_schema_version(int64_t &min_schema_version)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_schema_version = 0;
@@ -3997,7 +3984,7 @@ int ObPartitionStore::get_min_schema_version(int64_t& min_schema_version)
   } else {
     TCRLockGuard lock_guard(lock_);
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       const int64_t index_id = it->first;
       if (OB_ISNULL(table_store)) {
         ret = OB_ERR_UNEXPECTED;
@@ -4012,12 +3999,12 @@ int ObPartitionStore::get_min_schema_version(int64_t& min_schema_version)
   return ret;
 }
 
-int ObPartitionStore::get_physical_flashback_publish_version(const int64_t flashback_scn, int64_t& publish_version)
+int ObPartitionStore::get_physical_flashback_publish_version(const int64_t flashback_scn, int64_t &publish_version)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* multi_table_store = NULL;
+  ObMultiVersionTableStore *multi_table_store = NULL;
   ObTablesHandle table_handle;
-  ObSSTable* sstable = NULL;
+  ObSSTable *sstable = NULL;
   publish_version = 0;
 
   if (IS_NOT_INIT) {
@@ -4054,9 +4041,7 @@ int ObPartitionStore::remove_unneed_store_within_trans(const TableStoreMap &new_
   int ret = OB_SUCCESS;
   ObMultiVersionTableStore *table_store = nullptr;
   TCRLockGuard lock_guard(lock_);
-  for (TableStoreMap::iterator it = store_map_->begin();
-      OB_SUCC(ret) && it != store_map_->end();
-      ++it) {
+  for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
     const int64_t index_id = it->second->get_table_id();
     if (OB_SUCC(new_store_map.get(index_id, table_store))) {
       // exist in new table store map
@@ -4064,8 +4049,8 @@ int ObPartitionStore::remove_unneed_store_within_trans(const TableStoreMap &new_
       LOG_WARN("Failed to get table store", K(ret), K(index_id));
     } else {
       int64_t subcmd = ObIRedoModule::gen_subcmd(OB_REDO_LOG_PARTITION, REDO_LOG_DROP_INDEX_SSTABLE_OF_STORE);
-      const ObStorageLogAttribute log_attr(pg_memtable_mgr_->get_pkey().get_tenant_id(),
-          pg_->get_pg_storage().get_storage_file()->get_file_id());
+      const ObStorageLogAttribute log_attr(
+          pg_memtable_mgr_->get_pkey().get_tenant_id(), pg_->get_pg_storage().get_storage_file()->get_file_id());
       ObDropIndexSSTableLogEntry log_entry;
       log_entry.pkey_ = meta_->pkey_;
       log_entry.index_id_ = index_id;
@@ -4091,7 +4076,7 @@ void ObPartitionStore::replace_store_map(TableStoreMap &store_map)
   destroy_store_map(cur_store_map);
 }
 
-int ObPartitionStore::create_new_store_map_(TableStoreMap*& new_store_map)
+int ObPartitionStore::create_new_store_map_(TableStoreMap *&new_store_map)
 {
   int ret = OB_SUCCESS;
   new_store_map = nullptr;
@@ -4111,8 +4096,8 @@ int ObPartitionStore::create_new_store_map_(TableStoreMap*& new_store_map)
 }
 
 // !!!Attention!!! this function only used in migration
-int ObPartitionStore::prepare_new_store_map(const ObTablesHandle& sstables, const int64_t max_kept_major_version_number,
-    const bool need_reuse_local_minor, TableStoreMap*& new_store_map)
+int ObPartitionStore::prepare_new_store_map(const ObTablesHandle &sstables, const int64_t max_kept_major_version_number,
+    const bool need_reuse_local_minor, TableStoreMap *&new_store_map)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle tmp_handle;
@@ -4125,7 +4110,7 @@ int ObPartitionStore::prepare_new_store_map(const ObTablesHandle& sstables, cons
     LOG_WARN("partition is removed", K(ret), K(pkey_));
   } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(meta_->replica_type_)) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("replica type is without sstable, cannot add it", K(ret), K(*meta_));
+    LOG_WARN("replica type is without sstable, cannot add it", K(ret), K(*meta_), K(sstables));
   } else if (OB_FAIL(tmp_handle.assign(sstables))) {
     LOG_WARN("failed to assign tables", K(ret), K_(pkey));
   } else if (OB_FAIL(create_new_store_map_(new_store_map))) {
@@ -4139,9 +4124,9 @@ int ObPartitionStore::prepare_new_store_map(const ObTablesHandle& sstables, cons
     } else {
       ObTablesHandle index_handle;
       for (int64_t i = 0; OB_SUCC(ret) && i <= tmp_handle.get_count(); ++i) {
-        ObMultiVersionTableStore* multi_version_table_store = nullptr;
-        ObITable* last_table = 0 == i ? nullptr : tmp_handle.get_table(i - 1);
-        ObITable* cur_table = i < tmp_handle.get_count() ? tmp_handle.get_table(i) : nullptr;
+        ObMultiVersionTableStore *multi_version_table_store = nullptr;
+        ObITable *last_table = 0 == i ? nullptr : tmp_handle.get_table(i - 1);
+        ObITable *cur_table = i < tmp_handle.get_count() ? tmp_handle.get_table(i) : nullptr;
         bool added = false;
         if (i > 0 && OB_ISNULL(last_table)) {
           ret = OB_ERR_SYS;
@@ -4173,7 +4158,7 @@ int ObPartitionStore::prepare_new_store_map(const ObTablesHandle& sstables, cons
         }
       }
       if (OB_SUCC(ret) && !index_handle.empty()) {
-        ObMultiVersionTableStore* multi_version_table_store = nullptr;
+        ObMultiVersionTableStore *multi_version_table_store = nullptr;
         if (OB_FAIL(prepare_new_table_store_(
                 index_handle, max_kept_major_version_number, need_reuse_local_minor, multi_version_table_store))) {
           LOG_WARN("failed to prepare new table store", K(ret), K(index_handle));
@@ -4197,10 +4182,10 @@ int ObPartitionStore::prepare_new_store_map(const ObTablesHandle& sstables, cons
   return ret;
 }
 
-int ObPartitionStore::get_table_schema_version(const uint64_t table_id, int64_t& schema_version)
+int ObPartitionStore::get_table_schema_version(const uint64_t table_id, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = nullptr;
+  ObMultiVersionTableStore *table_store = nullptr;
   TCRLockGuard lock_guard(lock_);
   if (OB_FAIL(store_map_->get(table_id, table_store))) {
     LOG_WARN("failed to get table store", K(ret), K(table_id));
@@ -4214,7 +4199,7 @@ int ObPartitionStore::get_table_schema_version(const uint64_t table_id, int64_t&
 }
 
 int ObPartitionStore::get_remote_table_info_(
-    const ObTablesHandle& index_handle, const bool need_reuse_local_minor, ObMigrateRemoteTableInfo& remote_table_info)
+    const ObTablesHandle &index_handle, const bool need_reuse_local_minor, ObMigrateRemoteTableInfo &remote_table_info)
 {
   int ret = OB_SUCCESS;
   if (need_reuse_local_minor) {
@@ -4224,7 +4209,7 @@ int ObPartitionStore::get_remote_table_info_(
     remote_table_info.reset();
     remote_table_info.need_reuse_local_minor_ = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_handle.get_count(); ++i) {
-      const ObITable* table = index_handle.get_table(i);
+      const ObITable *table = index_handle.get_table(i);
       if (OB_ISNULL(table)) {
         ret = OB_ERR_SYS;
         LOG_WARN("table should not be null", K(ret));
@@ -4239,9 +4224,9 @@ int ObPartitionStore::get_remote_table_info_(
 }
 
 // !!!Attention!!! this function only used in migration
-int ObPartitionStore::prepare_new_table_store_(ObTablesHandle& index_handle,
+int ObPartitionStore::prepare_new_table_store_(ObTablesHandle &index_handle,
     const int64_t max_kept_major_version_number, const bool need_reuse_local_minor,
-    ObMultiVersionTableStore*& multi_version_table_store)
+    ObMultiVersionTableStore *&multi_version_table_store)
 {
   int ret = OB_SUCCESS;
   multi_version_table_store = nullptr;
@@ -4263,8 +4248,7 @@ int ObPartitionStore::prepare_new_table_store_(ObTablesHandle& index_handle,
     // do nothing
     // no need get kept multi version start
   } else if (OB_FAIL(get_kept_multi_version_start(false, /*is_split*/
-                 param.multi_version_start_,
-                 param.backup_snapshot_version_))) {
+                 param.multi_version_start_))) {
     LOG_WARN("failed to get_kept_multi_version_start", K(ret), K(param));
   }
 
@@ -4281,8 +4265,8 @@ int ObPartitionStore::prepare_new_table_store_(ObTablesHandle& index_handle,
     } else {
       bool is_equal = false;
       const bool need_prewarm = false;
-      ObMultiVersionTableStore* cur_mv_table_store = nullptr;
-      ObTableStore* new_table_store = nullptr;
+      ObMultiVersionTableStore *cur_mv_table_store = nullptr;
+      ObTableStore *new_table_store = nullptr;
       {
         TCRLockGuard lock_guard(lock_);
         if (OB_FAIL(store_map_->get(index_id, cur_mv_table_store))) {
@@ -4293,7 +4277,7 @@ int ObPartitionStore::prepare_new_table_store_(ObTablesHandle& index_handle,
         } else if (OB_FAIL(cur_mv_table_store->get_needed_local_tables_for_migrate(remote_table_info, tables_handle))) {
           LOG_WARN("failed to get_major_sstables_after_start", K(ret), K(index_id), K(pkey_));
         } else {
-          ObITable* table = nullptr;
+          ObITable *table = nullptr;
           for (int64_t i = 0; OB_SUCC(ret) && i < index_handle.get_count(); i++) {
             if (OB_ISNULL(table = index_handle.get_table(i))) {
               ret = OB_ERR_SYS;
@@ -4301,7 +4285,7 @@ int ObPartitionStore::prepare_new_table_store_(ObTablesHandle& index_handle,
             } else if (table->is_complement_minor_sstable()) {
               // table ref is holded by index_handle
               // migrate complement_minor_sstable should ignore data
-              param.complement_minor_sstable_ = static_cast<ObSSTable*>(table);
+              param.complement_minor_sstable_ = static_cast<ObSSTable *>(table);
             } else if (OB_FAIL(tables_handle.add_table(table))) {
               LOG_WARN("Failed to add table to new table handle", K(ret), KPC(table), K(tables_handle));
             }
@@ -4338,12 +4322,12 @@ int ObPartitionStore::prepare_new_table_store_(ObTablesHandle& index_handle,
   return ret;
 }
 
-int ObPartitionStore::get_trans_table_status(ObTransTableStatus& status)
+int ObPartitionStore::get_trans_table_status(ObTransTableStatus &status)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* data_table_store = nullptr;
+  ObMultiVersionTableStore *data_table_store = nullptr;
   ObTableHandle handle;
-  ObSSTable* sstable = NULL;
+  ObSSTable *sstable = NULL;
   TCRLockGuard lock_guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -4369,10 +4353,10 @@ int ObPartitionStore::get_trans_table_status(ObTransTableStatus& status)
   return ret;
 }
 
-int ObPartitionStore::get_latest_table_count(const int64_t table_id, int64_t& table_count)
+int ObPartitionStore::get_latest_table_count(const int64_t table_id, int64_t &table_count)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   TCRLockGuard guard(lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4389,10 +4373,10 @@ int ObPartitionStore::get_latest_table_count(const int64_t table_id, int64_t& ta
   return ret;
 }
 
-int ObPartitionStore::get_migrate_tables(const uint64_t table_id, ObTablesHandle& handle, bool& is_ready_for_read)
+int ObPartitionStore::get_migrate_tables(const uint64_t table_id, ObTablesHandle &handle, bool &is_ready_for_read)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = NULL;
+  ObMultiVersionTableStore *table_store = NULL;
   handle.reset();
   is_ready_for_read = false;
 
@@ -4424,7 +4408,7 @@ int ObPartitionStore::get_migrate_tables(const uint64_t table_id, ObTablesHandle
 }
 
 int ObPartitionStore::get_restore_point_tables(const int64_t snapshot_version, const int64_t publish_version,
-    ObRecoveryPointSchemaFilter& schema_filter, ObTablesHandle& handle, bool& is_ready)
+    ObRecoveryPointSchemaFilter &schema_filter, ObTablesHandle &handle, bool &is_ready)
 {
   int ret = OB_SUCCESS;
   is_ready = true;
@@ -4444,7 +4428,7 @@ int ObPartitionStore::get_restore_point_tables(const int64_t snapshot_version, c
 }
 
 int ObPartitionStore::filter_read_sstables(
-    const ObTablesHandle& tmp_handle, const int64_t snapshot_version, ObTablesHandle& handle, bool& is_ready)
+    const ObTablesHandle &tmp_handle, const int64_t snapshot_version, ObTablesHandle &handle, bool &is_ready)
 {
   int ret = OB_SUCCESS;
   handle.reset();
@@ -4466,7 +4450,7 @@ int ObPartitionStore::filter_read_sstables(
 int ObPartitionStore::set_drop_schema_info(const int64_t index_id, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = nullptr;
+  ObMultiVersionTableStore *table_store = nullptr;
   TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -4483,10 +4467,10 @@ int ObPartitionStore::set_drop_schema_info(const int64_t index_id, const int64_t
 }
 
 int ObPartitionStore::get_drop_schema_info(
-    const int64_t index_id, int64_t& drop_schema_version, int64_t& drop_schema_refreshed_ts)
+    const int64_t index_id, int64_t &drop_schema_version, int64_t &drop_schema_refreshed_ts)
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionTableStore* table_store = nullptr;
+  ObMultiVersionTableStore *table_store = nullptr;
   TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -4503,7 +4487,7 @@ int ObPartitionStore::get_drop_schema_info(
 }
 
 int ObPartitionStore::get_restore_point_trans_tables_(
-    const int64_t snapshot_version, ObTablesHandle& handle, bool& is_ready)
+    const int64_t snapshot_version, ObTablesHandle &handle, bool &is_ready)
 {
   int ret = OB_SUCCESS;
   ObTablesHandle tmp_handles;
@@ -4518,7 +4502,7 @@ int ObPartitionStore::get_restore_point_trans_tables_(
     is_ready = false;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_handles.get_count(); ++i) {
-      ObITable* table = tmp_handles.get_table(i);
+      ObITable *table = tmp_handles.get_table(i);
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table should not be NULL", K(ret), KP(table));
@@ -4535,7 +4519,7 @@ int ObPartitionStore::get_restore_point_trans_tables_(
 }
 
 int ObPartitionStore::get_restore_point_normal_tables_(const int64_t snapshot_version, const int64_t publish_version,
-    ObRecoveryPointSchemaFilter& schema_filter, ObTablesHandle& handle, bool& is_ready)
+    ObRecoveryPointSchemaFilter &schema_filter, ObTablesHandle &handle, bool &is_ready)
 {
   int ret = OB_SUCCESS;
   is_ready = true;
@@ -4550,7 +4534,7 @@ int ObPartitionStore::get_restore_point_normal_tables_(const int64_t snapshot_ve
     ObArray<uint64_t> index_tables;
     TCRLockGuard lock_guard(lock_);
     for (TableStoreMap::iterator it = store_map_->begin(); OB_SUCC(ret) && it != store_map_->end(); ++it) {
-      ObMultiVersionTableStore* table_store = it->second;
+      ObMultiVersionTableStore *table_store = it->second;
       const uint64_t index_id = table_store->get_table_id();
       if (OB_FAIL(index_tables.push_back(table_store->get_table_id()))) {
         LOG_WARN("failed to add merge index table ids", K(ret));
@@ -4567,7 +4551,7 @@ int ObPartitionStore::get_restore_point_normal_tables_(const int64_t snapshot_ve
       const uint64_t index_id = index_tables.at(i);
       ObTablesHandle tmp_handle;
       ObTablesHandle new_handle;
-      ObMultiVersionTableStore* table_store = NULL;
+      ObMultiVersionTableStore *table_store = NULL;
       if (OB_FAIL(store_map_->get(index_id, table_store))) {
         LOG_WARN("failed to get table store", K(ret), K(index_id));
       } else if (OB_ISNULL(table_store)) {

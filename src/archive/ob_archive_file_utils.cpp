@@ -47,7 +47,7 @@ int ObArchiveFileUtils::get_file_range(
         // file_name not match, skip
       } else {
         ARCHIVE_LOG(DEBUG, "extract_file_id_ succ", K(file_name), K(tmp_file_id));
-        min_file_id = min_file_id == 0 ? tmp_file_id : std::min(min_file_id, tmp_file_id);
+        min_file_id = (0 == min_file_id) ? tmp_file_id : std::min(min_file_id, tmp_file_id);
         max_file_id = std::max(max_file_id, tmp_file_id);
         file_num++;
       }
@@ -87,7 +87,13 @@ int ObArchiveFileUtils::read_single_file(
   ObStorageUtil util(false /*need retry*/);
 
   if (OB_FAIL(util.read_single_file(uri, storage_info, buf, text_file_length, read_size))) {
-    ARCHIVE_LOG(WARN, "read_single_file fail", K(ret), K(text_file_length), K(uri));
+    if (OB_BACKUP_FILE_NOT_EXIST != ret) {
+      ARCHIVE_LOG(WARN, "read_single_file fail", K(ret), K(uri));
+    } else {
+      // rewrite ret
+      ret = OB_ENTRY_NOT_EXIST;
+      ARCHIVE_LOG(INFO, "read_single_file fail", K(ret), K(uri));
+    }
   }
 
   return ret;
@@ -114,6 +120,9 @@ int ObArchiveFileUtils::search_log_in_single_index_file(const ObString& uri, con
     ARCHIVE_LOG(WARN, "allocate fail", K(ret), K(file_len));
   } else if (OB_FAIL(read_single_file(uri, storage_info, buf, file_len, read_size))) {
     ARCHIVE_LOG(WARN, "read_text_file fail", K(ret), K(uri));
+  } else if (OB_UNLIKELY(file_len != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "unexpected read_size", K(ret), K(file_len), K(read_size), K(uri));
   } else if (OB_FAIL(locate_log_in_single_index_file_(
                  log_id, buf, file_len, data_file_id, log_exist, max_valid_index_info))) {
     ARCHIVE_LOG(WARN, "locate_log_in_single_index_file fail", K(ret), K(data_file_id), K(log_id));
@@ -150,6 +159,9 @@ int ObArchiveFileUtils::get_server_start_archive_ts(
     ARCHIVE_LOG(WARN, "allocate fail", K(ret), K(file_len));
   } else if (OB_FAIL(read_single_file(uri, storage_info, buf, file_len, read_size))) {
     ARCHIVE_LOG(WARN, "read_text_file fail", K(ret), K(uri));
+  } else if (OB_UNLIKELY(file_len != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "unexpected read_size", K(ret), K(file_len), K(read_size), K(uri));
   } else if (OB_FAIL(start_timestamp.deserialize(buf, file_len, pos))) {
     ARCHIVE_LOG(WARN, "deserialize fail", K(ret), K(buf), K(file_len), K(uri), K(storage_info));
   } else if (!start_timestamp.is_valid()) {
@@ -245,7 +257,7 @@ int ObArchiveFileUtils::get_max_data_file_when_index_not_exist(
   return ret;
 }
 
-int ObArchiveFileUtils::get_max_index_info_in_single_file(
+int ObArchiveFileUtils::get_max_valid_index_info_in_single_index_file(
     const ObString& uri, const ObString& storage_info, ObArchiveIndexFileInfo& info, bool& exist)
 {
   int ret = OB_SUCCESS;
@@ -269,6 +281,9 @@ int ObArchiveFileUtils::get_max_index_info_in_single_file(
     ARCHIVE_LOG(WARN, "allocate fail", K(ret), K(file_len));
   } else if (OB_FAIL(read_single_file(uri, storage_info, buf, file_len, read_size))) {
     ARCHIVE_LOG(WARN, "read_text_file fail", K(ret), K(uri));
+  } else if (OB_UNLIKELY(file_len != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "unexpected read_size", K(ret), K(file_len), K(read_size), K(uri));
   } else if (OB_FAIL(info.get_real_record_length(buf, file_len, info_size))) {
     ARCHIVE_LOG(WARN, "get_real_record_length fail", K(ret), K(buf), K(file_len));
   } else if (OB_UNLIKELY(0 == info_size)) {
@@ -292,9 +307,12 @@ int ObArchiveFileUtils::get_max_index_info_in_single_file(
       pos = index * info_size;
       if (OB_FAIL(info.deserialize(buf, file_len, pos))) {
         ARCHIVE_LOG(ERROR, "deserialize fail", K(ret), K(buf), K(file_len), K(index), K(record_num), K(pos));
-      } else if (OB_UNLIKELY(!info.is_valid())) {
+      } else if (OB_UNLIKELY(!info.check_integrity())) {
         // skip
-        ARCHIVE_LOG(WARN, "invalid index info, skip it", KP(buf), K(file_len), K(info));
+        ARCHIVE_LOG(WARN, " index info is not complete, skip it", KP(buf), K(file_len), K(info));
+      } else if (OB_UNLIKELY(!info.is_effective())) {
+        // skip
+        ARCHIVE_LOG(INFO, "index info is not effective", K(ret), K(uri), K(info));
       } else {
         exist = true;
       }
@@ -312,7 +330,8 @@ int ObArchiveFileUtils::get_max_index_info_in_single_file(
 // get max safe data file id for clean,
 // base: valid index file exist
 int ObArchiveFileUtils::get_max_safe_data_file_id(const ObString& uri, const ObString& storage_info,
-    const uint64_t log_id, const int64_t log_ts, const bool by_log_id, uint64_t& data_file_id)
+    const uint64_t log_id, const int64_t log_ts, const bool by_log_id, const int64_t retention_timestamp,
+    uint64_t& data_file_id)
 {
   int ret = OB_SUCCESS;
   char* buf = NULL;
@@ -336,6 +355,9 @@ int ObArchiveFileUtils::get_max_safe_data_file_id(const ObString& uri, const ObS
     ARCHIVE_LOG(WARN, "allocate fail", K(ret), K(file_len));
   } else if (OB_FAIL(read_single_file(uri, storage_info, buf, file_len, read_size))) {
     ARCHIVE_LOG(WARN, "read_text_file fail", K(ret), K(uri));
+  } else if (OB_UNLIKELY(file_len != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "unexpected read_size", K(ret), K(file_len), K(read_size), K(uri));
   } else {
     while (OB_SUCC(ret) && pos < file_len && !done) {
       info.reset();
@@ -353,11 +375,15 @@ int ObArchiveFileUtils::get_max_safe_data_file_id(const ObString& uri, const ObS
             K(by_log_id));
         ret = OB_SUCCESS;
         done = true;
-      } else if (OB_UNLIKELY(!info.is_valid())) {
+      } else if (OB_UNLIKELY(!info.check_integrity())) {
         // skip
-        ARCHIVE_LOG(WARN, "invalid index info, skip it", K(uri), K(info));
+        ARCHIVE_LOG(WARN, " index info is not valid data, skip it", KP(buf), K(file_len), K(info));
+      } else if (OB_UNLIKELY(!info.is_effective())) {
+        // skip
+        ARCHIVE_LOG(WARN, " index info is not effective, skip it", KP(buf), K(file_len), K(info));
       } else {
-        bool cmp = by_log_id ? info.max_log_id_ >= log_id : info.max_log_submit_ts_ >= log_ts;
+        bool cmp = (by_log_id ? info.max_log_id_ >= log_id : info.max_log_submit_ts_ >= log_ts) ||
+                   info.max_log_submit_ts_ >= retention_timestamp;
         if (cmp) {
           done = true;
           data_file_id = (0 == data_file_id) ? info.data_file_id_ - 1 : data_file_id;
@@ -434,18 +460,21 @@ int ObArchiveFileUtils::read_max_archived_info_(char* buf, const int64_t buf_len
     // no record, skip
   } else {
     int64_t index = record_num - 1;
-    for (; OB_SUCC(ret) && !archive_info.is_index_info_collected_() && index >= 0; index--) {
+    for (; OB_SUCC(ret) && !archive_info.is_index_record_collected() && index >= 0; index--) {
       index_info.reset();
       pos = index * info_size;
       if (OB_FAIL(index_info.deserialize(buf, buf_len, pos))) {
         ARCHIVE_LOG(ERROR, "deserialize fail", K(ret), K(buf), K(buf_len), K(index), K(record_num), K(pos));
+      } else if (OB_UNLIKELY(!index_info.check_integrity())) {
+        // skip
+        ARCHIVE_LOG(WARN, " index info is not valid data, skip it", KP(buf), K(index_info));
       } else {
         archive_info.set_data_file_id(index_info.data_file_id_);
-        if (OB_UNLIKELY(!index_info.is_valid())) {
-          // skip
-          ARCHIVE_LOG(WARN, "invalid index info, skip it", KP(buf), K(buf_len), K(index_info));
-        } else if (OB_FAIL(archive_info.set_round_start_info(index_info))) {
+        if (OB_FAIL(archive_info.set_round_start_info(index_info))) {
           ARCHIVE_LOG(ERROR, "failed to set_round_start_info", K(index_info), KR(ret));
+        } else if (OB_UNLIKELY(!index_info.is_effective())) {
+          // skip
+          ARCHIVE_LOG(WARN, " index info is not effective, skip it", KP(buf), K(index_info));
         } else if (OB_FAIL(archive_info.set_log_info(index_info.max_log_id_,
                        index_info.max_checkpoint_ts_,
                        index_info.max_log_submit_ts_,
@@ -468,7 +497,6 @@ int ObArchiveFileUtils::locate_log_in_single_index_file_(const uint64_t log_id, 
     uint64_t& file_id, bool& log_exist, ObArchiveIndexFileInfo& max_valid_index_info)
 {
   int ret = OB_SUCCESS;
-  ObArchiveIndexFileInfo info;
 
   if (OB_ISNULL(data) || OB_UNLIKELY(0 == log_id) || OB_UNLIKELY(0 >= data_len)) {
     ret = OB_INVALID_ARGUMENT;
@@ -476,15 +504,16 @@ int ObArchiveFileUtils::locate_log_in_single_index_file_(const uint64_t log_id, 
   } else {
     int64_t file_len = data_len;
     int64_t pos = 0;
+    ObArchiveIndexFileInfo info;
     while (OB_SUCC(ret) && pos < file_len && !log_exist) {
       info.reset();
       if (OB_FAIL(info.deserialize(data, data_len, pos))) {
         ARCHIVE_LOG(WARN, "deserialize fail", K(ret), K(data), K(data_len), K(pos));
         ret = OB_SUCCESS;
         break;
-      } else if (OB_UNLIKELY(!info.is_valid())) {
+      } else if (OB_UNLIKELY(!info.check_integrity() || !info.is_effective())) {
         // skip
-        ARCHIVE_LOG(WARN, "invalid index info, skip it", K(info));
+        ARCHIVE_LOG(WARN, "index info is not valid data, skip it", K(log_id), K(info));
       } else {
         max_valid_index_info = info;
         if (info.min_log_id_ <= log_id && info.max_log_id_ >= log_id) {
@@ -493,6 +522,45 @@ int ObArchiveFileUtils::locate_log_in_single_index_file_(const uint64_t log_id, 
         }
       }
     }
+  }
+
+  return ret;
+}
+
+int ObArchiveFileUtils::get_archived_info_from_archive_key(
+    const ObString& uri, const ObString& storage_info, ObArchiveKeyContent& archive_key_content)
+{
+  int ret = OB_SUCCESS;
+  int64_t file_len = 0;
+  char* buf = NULL;
+  int64_t read_size = 0;
+  int64_t pos = 0;
+
+  if (OB_FAIL(get_file_length(uri, storage_info, file_len))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      ARCHIVE_LOG(WARN, "failed to get_file_length", K(ret), K(uri));
+    }
+  } else if (OB_UNLIKELY(0 > file_len)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "invalid file len", KR(ret), K(uri), K(file_len));
+  } else if (OB_UNLIKELY(0 == file_len)) {
+    ARCHIVE_LOG(INFO, "archive_key_file is empty", K(ret), K(uri));
+  } else if (OB_ISNULL(buf = static_cast<char*>(ob_archive_malloc(file_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    ARCHIVE_LOG(WARN, "allocate fail", K(ret), K(uri), K(file_len));
+  } else if (OB_FAIL(read_single_file(uri, storage_info, buf, file_len, read_size))) {
+    ARCHIVE_LOG(WARN, "read_text_file fail", K(ret));
+  } else if (OB_UNLIKELY(file_len != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "unexpected read_size", K(ret), K(file_len), K(read_size), K(uri));
+  } else if (OB_FAIL(archive_key_content.deserialize(buf, read_size, pos))) {
+    ARCHIVE_LOG(ERROR, "failed to deserialize index_info", K(ret), K(buf), K(read_size), K(pos));
+  } else { /*do nothing*/
+  }
+
+  if (NULL != buf) {
+    ob_archive_free(buf);
+    buf = NULL;
   }
 
   return ret;
@@ -519,6 +587,9 @@ int ObArchiveFileUtils::get_max_archived_info_in_single_index_file(
     ARCHIVE_LOG(WARN, "allocate fail", K(ret), K(uri), K(file_len));
   } else if (OB_FAIL(read_single_file(uri, storage_info, buf, file_len, read_size))) {
     ARCHIVE_LOG(WARN, "read_text_file fail", K(ret));
+  } else if (OB_UNLIKELY(file_len != read_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "unexpected read_size", K(ret), K(file_len), K(read_size), K(uri));
   } else if (OB_FAIL(read_max_archived_info_(buf, file_len, info))) {
     ARCHIVE_LOG(WARN, "read_max_archived_info_ fail", K(ret), K(buf), K(file_len));
   }
@@ -526,28 +597,6 @@ int ObArchiveFileUtils::get_max_archived_info_in_single_index_file(
   if (NULL != buf) {
     ob_archive_free(buf);
     buf = NULL;
-  }
-
-  return ret;
-}
-
-int ObArchiveFileUtils::get_first_log(const ObPGKey& pg_key, const uint64_t file_id, ObIArchiveLogFileStore* file_store,
-    uint64_t& log_id, clog::ObLogType& log_type)
-{
-  int ret = OB_SUCCESS;
-  ObArchiveBlockMeta block_meta;
-  clog::ObLogEntry log_entry;
-  ObLogArchiveInnerLog inner_log;
-
-  if (OB_UNLIKELY(!pg_key.is_valid() || OB_UNLIKELY(0 >= file_id) || OB_ISNULL(file_store))) {
-    ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", KR(ret), K(pg_key), K(file_id), K(file_store));
-  } else if (OB_FAIL(extract_first_log_in_data_file(pg_key, file_id, file_store, block_meta, log_entry, inner_log))) {
-    ARCHIVE_LOG(WARN, "extract first log", KR(ret), K(pg_key), K(file_id));
-  } else {
-    const ObLogEntryHeader& log_header = log_entry.get_header();
-    log_id = log_header.get_log_id();
-    log_type = log_header.get_log_type();
   }
 
   return ret;
@@ -626,6 +675,17 @@ int ObArchiveFileUtils::extract_last_log_in_data_file(const ObPGKey& pg_key, con
                  pg_key, file_id, file_store, offset, block_meta, log_entry, inner_log))) {
     // 4. extract last info info
     ARCHIVE_LOG(WARN, "extract from specific block fail", KR(ret), K(pg_key), K(file_id), K(offset));
+  } else if (OB_UNLIKELY(file_len != offset + block_meta.get_total_len() + offset_size)) {
+    ret = OB_EAGAIN;
+    ARCHIVE_LOG(WARN,
+        "file len not match block len",
+        KR(ret),
+        K(pg_key),
+        K(file_id),
+        K(file_len),
+        K(file_len),
+        K(uri),
+        K(block_meta));
   }
 
   return ret;
@@ -639,6 +699,8 @@ int ObArchiveFileUtils::extract_log_info_from_specific_block_(const ObPGKey& pg_
   const bool ignore_batch_commit_flag = true;
   const int64_t UNUSED_TIME_OUT = 60 * 1000 * 1000L;
   const bool need_limit_bandwidth = false;
+  bool unused_flag = false;
+  int64_t unused_accum_checksum = 0;
   ObArchiveEntryIterator iter;
 
   if (OB_UNLIKELY(0 >= file_id || 0 > offset) || OB_ISNULL(file_store)) {
@@ -646,7 +708,7 @@ int ObArchiveFileUtils::extract_log_info_from_specific_block_(const ObPGKey& pg_
     ARCHIVE_LOG(WARN, "invalid argument", KR(ret), K(file_id), K(offset), K(file_store));
   } else if (OB_FAIL(iter.init(file_store, pg_key, file_id, offset, UNUSED_TIME_OUT, need_limit_bandwidth))) {
     ARCHIVE_LOG(WARN, "iter init fail", KR(ret), K(pg_key), K(file_id), K(offset));
-  } else if (OB_FAIL(iter.next_entry(log_entry))) {
+  } else if (OB_FAIL(iter.next_entry(log_entry, unused_flag, unused_accum_checksum))) {
     ARCHIVE_LOG(WARN, "iter next_entry fail", KR(ret));
   } else if (OB_UNLIKELY(!log_entry.check_integrity(ignore_batch_commit_flag))) {
     ret = OB_ERR_UNEXPECTED;

@@ -332,6 +332,7 @@ public:
 
   static int print_identifier(char* buf, const int64_t buf_len, int64_t& pos,
       common::ObCollationType connection_collation, const common::ObString& identifier_name);
+  static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString& name,
