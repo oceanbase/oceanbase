@@ -40,24 +40,24 @@ public:
   {
     destroy();
   }
-  int init(const common::ObAddr& self, ObIElection* election);
+  int init(const common::ObAddr &self, ObIElection *election);
   void reset();
   void destroy()
   {
     reset();
   }
   void correct_recordT1_if_necessary(int64_t T1_timestamp);
-  int store(const ObElectionVoteMsg& msg);
-  int get_decentralized_candidate(common::ObAddr& server,
-      ObElectionPriority& priority,  // get the highest prioirity of server
-      const int64_t replica_num, const int64_t t1, int64_t& lease_time);
-  int check_decentralized_majority(common::ObAddr& new_leader,
-      int64_t& ticket,  // check if votes for self reach majority
+  int store(const ObElectionVoteMsg &msg);
+  int get_decentralized_candidate(common::ObAddr &server,
+      ObElectionPriority &priority,  // get the highest priority of server
+      const int64_t replica_num, const int64_t t1, int64_t &lease_time);
+  int check_decentralized_majority(common::ObAddr &new_leader,
+      int64_t &ticket,  // check if votes for self reach majority
       const int64_t replica_num, const int64_t t1);
-  int check_centralized_majority(common::ObAddr& cur_leader,
-      common::ObAddr& new_leader,  // check if votes for self reach majority
-      ObElectionPriority& priority, const int64_t replica_num, const int64_t t1);
-  int get_centralized_candidate(common::ObAddr& cur_leader, common::ObAddr& new_leader,  // get the leader vote for
+  int check_centralized_majority(common::ObAddr &cur_leader,
+      common::ObAddr &new_leader,  // check if votes for self reach majority
+      ObElectionPriority &priority, const int64_t replica_num, const int64_t t1);
+  int get_centralized_candidate(common::ObAddr &cur_leader, common::ObAddr &new_leader,  // get the leader vote for
       const int64_t t1);
 
 private:
@@ -65,28 +65,28 @@ private:
     static const int64_t OB_MAX_ELECTION_MSG_COUNT = common::OB_MAX_MEMBER_NUMBER / 2 + 1;
 
   public:
-    MsgRecorder(ObIElection*& election, const common::ObPartitionKey& partition)
+    MsgRecorder(ObIElection *&election, const common::ObPartitionKey &partition)
         : cur_idx_(0), record_T1_timestamp_(common::OB_INVALID_TIMESTAMP), election_(election), partition_(partition)
     {}
     ~MsgRecorder() = default;
     void reset();
     void correct_recordT1_if_necessary(int64_t T1_timestamp);  // correct T1 ts if machine's time justed
-    int record_msg(const ObElectionVoteMsg& msg);
+    int record_msg(const ObElectionVoteMsg &msg);
     bool reach_majority(int replica_num_) const;
     int64_t get_record_T1_timestamp() const;
     int size() const;
-    const common::ObAddr& get_new_leader() const;
+    const common::ObAddr &get_new_leader() const;
 
   private:
     common::ObAddr record_member_[OB_MAX_ELECTION_MSG_COUNT];
     common::ObAddr new_leader_;
     int cur_idx_;
     int64_t record_T1_timestamp_;  // current record's T1
-    ObIElection*& election_;       // get the diff of time, judge if msg valid
-    const common::ObPartitionKey& partition_;
+    ObIElection *&election_;       // get the diff of time, judge if msg valid
+    const common::ObPartitionKey &partition_;
   };
   common::ObAddr self_;
-  ObIElection* election_;  // get the diff of time, judge if msg valid
+  ObIElection *election_;  // get the diff of time, judge if msg valid
   bool is_inited_ = false;
   common::ObPartitionKey partition_;  // self partition, for logging
   MsgRecorder deprepare_recorder_;

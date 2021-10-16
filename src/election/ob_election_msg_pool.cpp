@@ -33,7 +33,7 @@ void ObElectionVoteMsgPool::MsgRecorder::reset()
 void ObElectionVoteMsgPool::MsgRecorder::correct_recordT1_if_necessary(int64_t T1_timestamp)
 {
   if (record_T1_timestamp_ > T1_timestamp) {
-    void* p_this = this;
+    void *p_this = this;
     ELECT_ASYNC_LOG(
         WARN, "record t1 is corrected", KP(p_this), K_(partition), K_(record_T1_timestamp), K(T1_timestamp));
     reset();
@@ -46,7 +46,7 @@ void ObElectionVoteMsgPool::MsgRecorder::correct_recordT1_if_necessary(int64_t T
 // record messages, check if someone reach majority
 // @param [in] msg message for recording
 // @return error code
-int ObElectionVoteMsgPool::MsgRecorder::record_msg(const ObElectionVoteMsg& msg)
+int ObElectionVoteMsgPool::MsgRecorder::record_msg(const ObElectionVoteMsg &msg)
 {
   int ret = OB_SUCCESS;
   int64_t msg_T1 = msg.get_T1_timestamp();
@@ -74,7 +74,7 @@ int ObElectionVoteMsgPool::MsgRecorder::record_msg(const ObElectionVoteMsg& msg)
 
   if (OB_LIKELY(OB_SUCCESS == ret)) {
     if (msg.get_msg_type() == ObElectionMsgType::OB_ELECTION_VOTE_VOTE) {
-      const ObElectionMsgVote& casted_msg = static_cast<const ObElectionMsgVote&>(msg);
+      const ObElectionMsgVote &casted_msg = static_cast<const ObElectionMsgVote &>(msg);
       if (OB_UNLIKELY(!new_leader_.is_valid())) {
         new_leader_ = casted_msg.get_new_leader();
       } else if (OB_UNLIKELY(casted_msg.get_new_leader() != new_leader_)) {
@@ -92,7 +92,7 @@ int ObElectionVoteMsgPool::MsgRecorder::record_msg(const ObElectionVoteMsg& msg)
       if (OB_UNLIKELY(cur_idx_ >= OB_MAX_ELECTION_MSG_COUNT)) {
         // do nothing
       } else {
-        const common::ObAddr& sender = msg.get_sender();
+        const common::ObAddr &sender = msg.get_sender();
         for (int i = 0; i < cur_idx_; ++i) {
           if (OB_UNLIKELY(record_member_[i] == sender)) {
             ret = OB_ELECTION_ERROR_DUPLICATED_MSG;
@@ -125,14 +125,14 @@ int ObElectionVoteMsgPool::MsgRecorder::size() const
   return cur_idx_;
 }
 
-const ObAddr& ObElectionVoteMsgPool::MsgRecorder::get_new_leader() const
+const ObAddr &ObElectionVoteMsgPool::MsgRecorder::get_new_leader() const
 {
   return new_leader_;
 }
 
 /***********************[define for ObElectionVoteMsgPool]*******************/
 
-int ObElectionVoteMsgPool::init(const ObAddr& self, ObIElection* election)
+int ObElectionVoteMsgPool::init(const ObAddr &self, ObIElection *election)
 {
   int ret = OB_SUCCESS;
 
@@ -154,9 +154,9 @@ int ObElectionVoteMsgPool::init(const ObAddr& self, ObIElection* election)
       partition_ = election_info.get_partition();
     }
     is_inited_ = true;
-    void* p_vote_recorder = &vote_recorder_;
-    void* p_devote_recorder = &devote_recorder_;
-    void* p_deprepare_recorder = &deprepare_recorder_;
+    void *p_vote_recorder = &vote_recorder_;
+    void *p_devote_recorder = &devote_recorder_;
+    void *p_deprepare_recorder = &deprepare_recorder_;
     ELECT_ASYNC_LOG(INFO,
         "init success",
         KP(p_vote_recorder),
@@ -194,10 +194,10 @@ void ObElectionVoteMsgPool::correct_recordT1_if_necessary(int64_t T1_timestamp)
   vote_recorder_.correct_recordT1_if_necessary(T1_timestamp);
 }
 
-// record messages, in [decentralized prepare/decentralizes voting/centralized prepare/centralized voting]
-// @param [in] msg messgae for recording
+// record messages, in [decentralized prepare/decentralized voting/centralized prepare/centralized voting]
+// @param [in] msg message for recording
 // @return error code
-int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
+int ObElectionVoteMsgPool::store(const ObElectionVoteMsg &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -211,10 +211,10 @@ int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
     const int msg_type = msg.get_msg_type();
     switch (msg_type) {
       case ObElectionMsgType::OB_ELECTION_DEVOTE_PREPARE: {
-        const ObElectionMsgDEPrepare& casted_msg = static_cast<const ObElectionMsgDEPrepare&>(msg);
+        const ObElectionMsgDEPrepare &casted_msg = static_cast<const ObElectionMsgDEPrepare &>(msg);
         if (OB_UNLIKELY(!casted_msg.get_priority().is_candidate())) {
           ret = OB_ELECTION_WARN_NOT_CANDIDATE;
-          ELECT_ASYNC_LOG(ERROR, "deprepare msg sender is not candidiate", K_(partition), K(msg), K(ret));
+          ELECT_ASYNC_LOG(ERROR, "deprepare msg sender is not candidate", K_(partition), K(msg), K(ret));
         } else if (OB_UNLIKELY(OB_FAIL(deprepare_recorder_.record_msg(msg)))) {
           ELECT_ASYNC_LOG(WARN, "fail to store election msg", K_(partition), K(msg), K(ret));
         } else if (OB_UNLIKELY(casted_msg.get_T1_timestamp() > cached_devote_prepare_msg_.get_T1_timestamp())) {
@@ -243,7 +243,7 @@ int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
         break;
       }
       case ObElectionMsgType::OB_ELECTION_DEVOTE_VOTE: {
-        if (OB_UNLIKELY(static_cast<const ObElectionMsgDEVote&>(msg).get_vote_leader() != self_)) {
+        if (OB_UNLIKELY(static_cast<const ObElectionMsgDEVote &>(msg).get_vote_leader() != self_)) {
           ret = OB_ERR_UNEXPECTED;
           ELECT_ASYNC_LOG(ERROR, "receive devote msg vote for others", K_(partition), K(msg), K_(self), K(ret));
         } else if (OB_UNLIKELY(OB_FAIL(devote_recorder_.record_msg(msg)))) {
@@ -254,7 +254,7 @@ int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
         break;
       }
       case ObElectionMsgType::OB_ELECTION_VOTE_PREPARE: {
-        const ObElectionMsgPrepare& prepare_msg = static_cast<const ObElectionMsgPrepare&>(msg);
+        const ObElectionMsgPrepare &prepare_msg = static_cast<const ObElectionMsgPrepare &>(msg);
         if (OB_LIKELY(prepare_msg.get_T1_timestamp() > cached_vote_prepare_msg_.get_T1_timestamp())) {
           cached_vote_prepare_msg_ = prepare_msg;
         } else if (prepare_msg.get_T1_timestamp() == cached_vote_prepare_msg_.get_T1_timestamp()) {
@@ -269,7 +269,7 @@ int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
         break;
       }
       case ObElectionMsgType::OB_ELECTION_VOTE_VOTE: {
-        const ObElectionMsgVote& casted_msg = static_cast<const ObElectionMsgVote&>(msg);
+        const ObElectionMsgVote &casted_msg = static_cast<const ObElectionMsgVote &>(msg);
         if (OB_UNLIKELY(casted_msg.get_cur_leader() != self_)) {
           ret = OB_ERR_UNEXPECTED;
           ELECT_ASYNC_LOG(ERROR, "receive devote msg vote for others", K_(partition), K(msg), K_(self), K(ret));
@@ -304,7 +304,7 @@ int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
 // @param [out] lease_time
 // @return error code
 int ObElectionVoteMsgPool::get_decentralized_candidate(
-    ObAddr& server, ObElectionPriority& priority, const int64_t replica_num, const int64_t t1, int64_t& lease_time)
+    ObAddr &server, ObElectionPriority &priority, const int64_t replica_num, const int64_t t1, int64_t &lease_time)
 {
   int ret = OB_SUCCESS;
 
@@ -352,7 +352,7 @@ int ObElectionVoteMsgPool::get_decentralized_candidate(
 // @param [in] t1]
 // @return error code
 int ObElectionVoteMsgPool::check_decentralized_majority(
-    common::ObAddr& new_leader, int64_t& ticket, const int64_t replica_num, const int64_t t1)
+    common::ObAddr &new_leader, int64_t &ticket, const int64_t replica_num, const int64_t t1)
 {
   int ret = OB_SUCCESS;
 
@@ -389,7 +389,7 @@ int ObElectionVoteMsgPool::check_decentralized_majority(
 // @param [out] new_leader
 // @param [in] t1
 // @return error code
-int ObElectionVoteMsgPool::get_centralized_candidate(ObAddr& cur_leader, ObAddr& new_leader, const int64_t t1)
+int ObElectionVoteMsgPool::get_centralized_candidate(ObAddr &cur_leader, ObAddr &new_leader, const int64_t t1)
 {
   int ret = OB_SUCCESS;
 
@@ -418,7 +418,7 @@ int ObElectionVoteMsgPool::get_centralized_candidate(ObAddr& cur_leader, ObAddr&
 // @param [in] t1 t1 of request, if not match cached records, return error
 // @return error code
 int ObElectionVoteMsgPool::check_centralized_majority(
-    ObAddr& cur_leader, ObAddr& new_leader, ObElectionPriority& priority, const int64_t replica_num, const int64_t t1)
+    ObAddr &cur_leader, ObAddr &new_leader, ObElectionPriority &priority, const int64_t replica_num, const int64_t t1)
 {
   int ret = OB_SUCCESS;
 
@@ -440,7 +440,7 @@ int ObElectionVoteMsgPool::check_centralized_majority(
       if (OB_UNLIKELY(cached_new_leader_vote_msg_.get_new_leader() != vote_recorder_.get_new_leader() ||
                       t1 != cached_new_leader_vote_msg_.get_T1_timestamp())) {
         ret = OB_ELECTION_WAIT_LEADER_MESSAGE;
-        const ObAddr& vote_recorder_leader = vote_recorder_.get_new_leader();
+        const ObAddr &vote_recorder_leader = vote_recorder_.get_new_leader();
         ELECT_ASYNC_LOG(WARN,
             "waitting for new leader message",
             K_(partition),

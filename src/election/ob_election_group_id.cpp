@@ -24,12 +24,12 @@ using namespace common;
 namespace election {
 OB_SERIALIZE_MEMBER(ObElectionGroupId, server_, create_time_, hash_val_);
 
-int ObElectionGroupId::init(const ObAddr& server, const int64_t create_time)
+int ObElectionGroupId::init(const ObAddr &server, const int64_t create_time)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TIMESTAMP == create_time) {
     ret = OB_INVALID_ARGUMENT;
-    ELECT_ASYNC_LOG(WARN, "invalid arguemnt", K(ret), K(server), K(create_time));
+    ELECT_ASYNC_LOG(WARN, "invalid argument", K(ret), K(server), K(create_time));
   } else {
     server_ = server;
     create_time_ = create_time;
@@ -63,7 +63,7 @@ uint64_t ObElectionGroupId::cal_hash_() const
   return hash_val;
 }
 
-ObElectionGroupId& ObElectionGroupId::operator=(const ObElectionGroupId& other)
+ObElectionGroupId &ObElectionGroupId::operator=(const ObElectionGroupId &other)
 {
   if (this != &other) {
     server_ = other.get_server();
@@ -73,7 +73,7 @@ ObElectionGroupId& ObElectionGroupId::operator=(const ObElectionGroupId& other)
   return *this;
 }
 
-int ObElectionGroupId::compare(const ObElectionGroupId& other) const
+int ObElectionGroupId::compare(const ObElectionGroupId &other) const
 {
   int cmp_ret = 0;
 
