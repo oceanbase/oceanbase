@@ -7590,7 +7590,15 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRa
   } else if (OB_FAIL(check_context.init(select_stmt->get_query_ctx()))) {
     LOG_WARN("failed to init check context.", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+    int64_t param_cnt = expr->get_param_count();
+    // only first param should be replaced (if needed) for T_OP_IS and T_OP_IS_NOT expr
+    //    select null as aa group by aa having null is null;
+    // the first null in having exprs is allowed to be parameterized
+    // but the second null is not allowed
+    if (T_OP_IS == expr->get_expr_type() || T_OP_IS_NOT == expr->get_expr_type()) {
+      param_cnt = 1;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; i++) {
       if (OB_FAIL(SMART_CALL(replace_with_groupby_exprs(select_stmt, expr->get_param_expr(i))))) {
         LOG_WARN("failed to replace with groupby columns.", K(ret));
       } else { /*do nothing.*/
