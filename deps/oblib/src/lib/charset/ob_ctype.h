@@ -100,6 +100,8 @@ extern "C" {
 #define ob_isgraph(s, c) ((s)->ctype != NULL ? ((s)->ctype + 1)[(uchar)(c)] & (_MY_PNT | _MY_U | _MY_L | _MY_NMR) : 0)
 #define ob_iscntrl(s, c) ((s)->ctype != NULL ? ((s)->ctype + 1)[(uchar)(c)] & _MY_CTR : 0)
 
+extern void right_to_die_or_duty_to_live_c();
+
 #define ob_charset_assert(condition)  \
   if (!(condition)) {                 \
     right_to_die_or_duty_to_live_c(); \

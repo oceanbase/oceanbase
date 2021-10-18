@@ -411,6 +411,24 @@ int ObTime::set_tzd_abbr(const ObString& tzd_abbr)
   return ret;
 }
 
+DEF_TO_STRING(ObTime)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(mode_),
+      "parts",
+      ObArrayWrap<int32_t>(parts_, TOTAL_PART_CNT),
+      "tz_name",
+      ObString(OB_MAX_TZ_NAME_LEN, tz_name_),
+      "tzd_abbr",
+      ObString(OB_MAX_TZ_ABBR_LEN, tzd_abbr_),
+      K_(time_zone_id),
+      K_(transition_type_id),
+      K_(is_tz_name_valid));
+  J_OBJ_END();
+  return pos;
+}
+
 ////////////////////////////////
 // int / double / string -> datetime / date / time / year.
 int ObTimeConverter::int_to_datetime(

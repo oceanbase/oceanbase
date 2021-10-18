@@ -14,36 +14,23 @@
 #define SRC_LIB_UTILITY_OB_HANG_FATAL_ERROR_H_
 
 #include <exception>
+namespace oceanbase
+{
+namespace common
+{
+extern void right_to_die_or_duty_to_live();
 
-namespace oceanbase {
-namespace common {
-
-extern "C" {
-extern void right_to_die_or_duty_to_live_c();
-}
-
-struct OB_BASE_EXCEPTION : public std::exception {
-  virtual const char* what() const throw() override
-  {
-    return nullptr;
-  }
-  virtual int get_errno()
-  {
-    return 0;
-  }
+struct OB_BASE_EXCEPTION : public std::exception
+{
+  virtual const char *what() const throw() override { return nullptr; }
+  virtual int get_errno() { return 0; }
 };
 
 template <int ERRNO>
-struct OB_EXCEPTION : public OB_BASE_EXCEPTION {
-  virtual int get_errno()
-  {
-    return ERRNO;
-  }
+struct OB_EXCEPTION : public OB_BASE_EXCEPTION
+{
+  virtual int get_errno() { return ERRNO; }
 };
-
-// Hang th thread.
-// To die or to live, it's a problem.
-extern void right_to_die_or_duty_to_live();
 
 }  // namespace common
 }  // namespace oceanbase
