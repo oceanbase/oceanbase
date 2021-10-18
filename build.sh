@@ -6,6 +6,8 @@ TOOLS_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/devtools
 CMAKE_COMMAND=${TOOLS_DIR}/bin/cmake
 CPU_CORES=`grep -c ^processor /proc/cpuinfo`
 
+
+
 ALL_ARGS=("$@")
 BUILD_ARGS=()
 MAKE_ARGS=(-j $CPU_CORES)
