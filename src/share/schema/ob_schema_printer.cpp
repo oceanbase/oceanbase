@@ -119,10 +119,10 @@ int ObSchemaPrinter::print_table_definition(uint64_t table_id,
       SHARE_SCHEMA_LOG(WARN, "fail to print rowkeys", K(ret), K(*table_schema));
     } else if (!agent_mode && OB_FAIL(print_table_definition_foreign_keys(*table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print foreign keys", K(ret), K(*table_schema));
-    } else if (!agent_mode && OB_FAIL(print_table_definition_indexes(*table_schema, buf, buf_len, pos, true, sql_mode))) {
+    } else if (!agent_mode && OB_FAIL(print_table_definition_indexes(*table_schema, buf, buf_len, pos, true, tz_info, sql_mode))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print indexes", K(ret), K(*table_schema));
     } else if (!agent_mode && !share::is_oracle_mode()
-               && OB_FAIL(print_table_definition_indexes(*table_schema, buf, buf_len, pos, false, sql_mode))) {
+               && OB_FAIL(print_table_definition_indexes(*table_schema, buf, buf_len, pos, false, tz_info, sql_mode))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print indexes", K(ret), K(*table_schema));
     } else if (OB_FAIL(print_table_definition_constraints(*table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print constraints", K(ret), K(*table_schema));
@@ -410,6 +410,7 @@ int ObSchemaPrinter::print_table_definition_indexes(const ObTableSchema &table_s
                                                     const int64_t& buf_len,
                                                     int64_t& pos,
                                                     bool is_unique_index,
+                                                    const ObTimeZoneInfo *tz_info,
                                                     ObSQLMode sql_mode) const
 {
   int ret = OB_SUCCESS;
@@ -579,6 +580,13 @@ int ObSchemaPrinter::print_table_definition_indexes(const ObTableSchema &table_s
             }
           }
         }
+        
+        if (OB_SUCCESS == ret && !is_no_key_options(sql_mode) && index_schema->is_global_index_table()) {
+          if (OB_FAIL(
+                print_table_definition_partition_options(*index_schema, buf, buf_len, pos, false /* agent_mode*/, tz_info))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print partition options", K(ret), K(*index_schema));
+          }
+        } 
       }
     }
   }

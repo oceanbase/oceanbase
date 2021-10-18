@@ -2101,6 +2101,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode* node)
     ObColumnSortItem sort_item;
     ObString first_column_name;
     ObColumnSchemaV2* column_schema = NULL;
+    ObCreateIndexStmt create_index_stmt;
+    ObCreateIndexArg& create_index_arg = create_index_stmt.get_create_index_arg();
     ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     ObTableSchema& tbl_schema = create_table_stmt->get_create_table_arg().schema_;
     if (T_INDEX == node->type_) {
@@ -2358,6 +2360,24 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode* node)
         SQL_RESV_LOG(WARN, "failed to store part key", K(ret));
       } else if (OB_FAIL(generate_index_arg())) {
         SQL_RESV_LOG(WARN, "generate index arg failed", K(ret));
+      } else if (OB_FAIL(create_index_arg.assign(index_arg_))) {
+        LOG_WARN("fail to assign create index arg", K(ret));
+      } else if (NULL != node->children_[4]) {
+        // 0: Normal partition node
+        // 1: Vertical partition node, specify vertical partition when global index is not supported
+        if (2 != node->children_[4]->num_child_ || T_PARTITION_OPTION != node->children_[4]->type_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "column vertical partition for index table");
+          LOG_WARN("node is invalid", K(ret));
+        } else if (NULL == node->children_[4]->children_[0]) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("node is null", K(ret));
+        } else {
+          ParseNode* index_partition_node = node->children_[4]->children_[0];
+          if (OB_FAIL(resolve_index_partition_node(index_partition_node, &create_index_stmt))) {
+            LOG_WARN("fail to resolve index partition node", K(ret));
+          }
+        }
       } else {
         if (has_index_using_type_) {
           index_arg_.index_using_type_ = index_using_type_;
@@ -2365,33 +2385,16 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode* node)
       }
     }
     if (OB_SUCC(ret)) {
-      ObCreateIndexStmt create_index_stmt;
-      ObCreateIndexArg& create_index_arg = create_index_stmt.get_create_index_arg();
       ObSArray<ObPartitionResolveResult>& resolve_results = create_table_stmt->get_index_partition_resolve_results();
       ObSArray<obrpc::ObCreateIndexArg>& index_arg_list = create_table_stmt->get_index_arg_list();
       ObPartitionResolveResult resolve_result;
-      if (OB_FAIL(create_index_arg.assign(index_arg_))) {
-        LOG_WARN("fail to assign create index arg", K(ret));
-      } else if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+      resolve_result.get_part_fun_exprs() = create_index_stmt.get_part_fun_exprs();
+      resolve_result.get_part_values_exprs() = create_index_stmt.get_part_values_exprs();
+      if (OB_FAIL(resolve_results.push_back(resolve_result))) {
         LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
       } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
         LOG_WARN("fail to push back index_arg", K(ret));
       }
-      //      if (T_INDEX == node->type_ &&
-      //          NULL != node->children_[4] &&
-      //          OB_FAIL(resolve_index_partition_node(node->children_[4], &create_index_stmt))) {
-      //        LOG_WARN("fail to resolve partition option", K(ret));
-      //      } else {
-      //        ObPartitionResolveResult resolve_result;
-      //        resolve_result.get_partition_fun_expr() = create_index_stmt.get_partition_fun_expr();
-      //        resolve_result.get_range_values_exprs() = create_index_stmt.get_range_values_exprs();
-      //        resolve_result.get_list_values_exprs() = create_index_stmt.get_list_values_exprs();
-      //        if (OB_FAIL(resolve_results.push_back(resolve_result))) {
-      //          LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
-      //        } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
-      //          LOG_WARN("fail to push back index_arg", K(ret));
-      //        }
-      //      }
     }
   }
   return ret;

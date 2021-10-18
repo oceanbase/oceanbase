@@ -86,6 +86,7 @@ public:
                                      const int64_t& buf_len,
                                      int64_t& pos,
                                      bool is_unique_index,
+                                     const ObTimeZoneInfo *tz_info,
                                      ObSQLMode sql_mode = SMO_DEFAULT) const;
   int print_table_definition_constraints(
       const ObTableSchema& table_schema, char* buf, const int64_t& buf_len, int64_t& pos) const;

@@ -1,0 +1,115 @@
+
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+use test;
+
+--echo #-----------------------------------------------------------------------
+--echo # Check for partition table
+--echo #-----------------------------------------------------------------------
+
+create table t1(c1 int primary key, c2 int, c3 int) partition by hash(c1);
+create unique index t1_global_uk_c1 on t1(c1) partition by hash(c1);
+create index t1_global_idx_c1 on t1(c1) partition by key(c1);
+create index t1_global_idx_c2 on t1(c2) partition by range columns(c2) (
+Partition p0 values less than(10),
+Partition p1 values less than(20),
+Partition p2 values less than(30),
+Partition last values less than maxvalue
+);
+create index t1_global_idx_c3 on t1(c3) partition by list columns(c3) ( 
+Partition p0  values in (1, 2, 3),
+Partition p1  values in (5, 6),
+Partition p2  values in (DEFAULT)
+);
+create unique index t1_local_uk_c1 on t1(c1) local;
+create index t1_local_idx_c1 on t1(c1) local;
+create unique index t1_default_uk_c1 on t1(c1);
+create index t1_default_idx_c1 on t1(c1);
+Show create table t1;
+
+drop table t1;
+# the result of show create table
+CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`),
+  UNIQUE KEY `t1_global_uk_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL
+ partition by hash(c1)
+(partition p0),
+  UNIQUE KEY `t1_local_uk_c1` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  UNIQUE KEY `t1_default_uk_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL,
+  KEY `t1_global_idx_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL
+ partition by key(c1)
+(partition p0),
+  KEY `t1_global_idx_c2` (`c2`) BLOCK_SIZE 16384 GLOBAL
+ partition by range columns(c2)
+(partition p0 values less than (10),
+partition p1 values less than (20),
+partition p2 values less than (30),
+partition last values less than (MAXVALUE)),
+  KEY `t1_global_idx_c3` (`c3`) BLOCK_SIZE 16384 GLOBAL
+ partition by list columns(c3)
+(partition p0 values in (1,2,3),
+partition p1 values in (5,6),
+partition p2 values in (DEFAULT)),
+  KEY `t1_local_idx_c1` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  KEY `t1_default_idx_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by hash(c1)
+(partition p0);
+
+
+--echo #-----------------------------------------------------------------------
+--echo # Check for normal table
+--echo #-----------------------------------------------------------------------
+create table t2(c1 int primary key, c2 int, c3 int);
+create unique index t2_global_uk_c1 on t2(c1) partition by hash(c1);
+create index t2_global_idx_c1 on t2(c1) partition by key(c1);
+create index t2_global_idx_c2 on t2(c2) partition by range columns(c2) (
+Partition p0 values less than(10),
+Partition p1 values less than(20),
+Partition p2 values less than(30),
+Partition last values less than maxvalue
+);
+create index t2_global_idx_c3 on t2(c3) partition by list columns(c3) ( 
+Partition p0  values in (1, 2, 3),
+Partition p1  values in (5, 6),
+Partition p2  values in (DEFAULT)
+);
+create unique index t2_local_uk_c1 on t2(c1) local;
+create index t2_local_idx_c1 on t2(c1) local;
+create unique index t2_default_uk_c1 on t2(c1);
+create index t2_default_idx_c1 on t2(c1);
+Show create table t2;
+
+drop table t2;
+# the result of show create table
+CREATE TABLE `t2` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`),
+  UNIQUE KEY `t2_global_uk_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL
+ partition by hash(c1)
+(partition p0),
+  UNIQUE KEY `t2_local_uk_c1` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  UNIQUE KEY `t2_default_uk_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL,
+  KEY `t2_global_idx_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL
+ partition by key(c1)
+(partition p0),
+  KEY `t2_global_idx_c2` (`c2`) BLOCK_SIZE 16384 GLOBAL
+ partition by range columns(c2)
+(partition p0 values less than (10),
+partition p1 values less than (20),
+partition p2 values less than (30),
+partition last values less than (MAXVALUE)),
+  KEY `t2_global_idx_c3` (`c3`) BLOCK_SIZE 16384 GLOBAL
+ partition by list columns(c3)
+(partition p0 values in (1,2,3),
+partition p1 values in (5,6),
+partition p2 values in (DEFAULT)),
+  KEY `t2_local_idx_c1` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  KEY `t2_default_idx_c1` (`c1`) BLOCK_SIZE 16384 GLOBAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = COMPACT COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 1 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0;

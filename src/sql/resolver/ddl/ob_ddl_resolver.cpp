@@ -4739,7 +4739,7 @@ int ObDDLResolver::check_index_name_duplicate(const ObTableSchema& table_schema,
 
 // child 5 of root node, resolve index partition node,
 // 1 this index is global, we need to first generate index schema,
-//   than resolve global index partition info
+//   then resolve global index partition info
 // 2 this index is local, an error is raised since we cannot specify
 //   partition info for a local index
 int ObDDLResolver::resolve_index_partition_node(ParseNode* index_partition_node, ObCreateIndexStmt* crt_idx_stmt)

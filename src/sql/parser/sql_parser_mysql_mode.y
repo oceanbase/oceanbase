@@ -4177,24 +4177,24 @@ column_definition
   merge_nodes(col_list, result, T_COLUMN_LIST, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 3, col_list, NULL != $8 ? $8 : $4, $9);
 }
-| key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
+| key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
 {
   (void)($1);
   ParseNode *col_list = NULL;
   ParseNode *index_option = NULL;
   merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $5);
   merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $7);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 4, $2, col_list, index_option, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 5, $2, col_list, index_option, $3, $8);
   $$->value_ = 0;
 }
-| UNIQUE opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
+| UNIQUE opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
 {
   (void)($2);
   ParseNode *col_list = NULL;
   ParseNode *index_option = NULL;
   merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $6);
   merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $8);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 4, $3, col_list, index_option, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX, 5, $3, col_list, index_option, $4, $9);
   $$->value_ = 1;
 }
 | CONSTRAINT opt_constraint_name UNIQUE opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list
