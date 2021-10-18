@@ -245,6 +245,7 @@ ObSqlCtx::ObSqlCtx()
       can_reroute_sql_(false),
       reroute_info_()
 {
+  sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
 }
 
@@ -267,6 +268,7 @@ void ObSqlCtx::reset()
   force_print_trace_ = false;
   is_show_trace_stmt_ = false;
   retry_times_ = OB_INVALID_COUNT;
+  sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
   exec_type_ = InvalidType;
   is_prepare_protocol_ = false;
