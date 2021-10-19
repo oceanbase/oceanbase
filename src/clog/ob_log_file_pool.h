@@ -70,6 +70,10 @@ public:
   {
     return ATOMIC_LOAD(&min_using_file_id_);
   }
+  ObLogWritePoolType get_pool_type() const
+  {
+    return type_;
+  }
   void update_min_file_id(const file_id_t file_id);
   void update_max_file_id(const file_id_t file_id);
   void update_min_using_file_id(const file_id_t file_id);
