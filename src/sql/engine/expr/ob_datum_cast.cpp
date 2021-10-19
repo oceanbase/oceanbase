@@ -4783,9 +4783,9 @@ int string_to_set(ObIAllocator& alloc, const ObString& orig_in_str, const ObColl
         LOG_WARN("unexpect val_cnt", K(val_cnt), K(ret));
       } else if (val_cnt >= 64) {  // do nothing
       } else if (val_cnt < 64 && value > ((1ULL << val_cnt) - 1)) {
-        value = value & ((1ULL << val_cnt) - 1);
+        value = 0;
         ret = OB_ERR_DATA_TRUNCATED;
-        LOG_WARN("input value out of range", K(value), K(val_cnt), K(ret));
+        LOG_WARN("input value out of range", K(val_cnt), K(ret));
       }
       if (OB_FAIL(ret) && CM_IS_WARN_ON_FAIL(cast_mode)) {
         warning = OB_ERR_DATA_TRUNCATED;

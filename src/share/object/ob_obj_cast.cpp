@@ -4151,7 +4151,7 @@ static int string_set(const ObExpectType& expect_type, ObObjCastParams& params, 
           LOG_WARN("unexpect val_cnt", K(in), K(out), K(expect_type), K(ret));
         } else if (val_cnt >= 64) {  // do nothing
         } else if (val_cnt < 64 && value > ((1ULL << val_cnt) - 1)) {
-          value = value & ((1ULL << val_cnt) - 1);
+          value = 0;
           ret = OB_ERR_DATA_TRUNCATED;
           LOG_WARN("input value out of range", K(in), K(val_cnt), K(ret));
         }
