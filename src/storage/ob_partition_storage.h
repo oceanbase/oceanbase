@@ -556,7 +556,7 @@ private:
       const common::ObNewRow& row, common::ObNewRowIterator*& duplicated_rows);
   int multi_get_rows(const ObStoreCtx& store_ctx, const ObTableAccessParam& access_param,
       ObTableAccessContext& access_ctx, ObRelativeTable& relative_table, const GetRowkeyArray& rowkeys,
-      common::ObNewRowIterator*& duplicated_rows);
+      common::ObNewRowIterator*& duplicated_rows, int64_t data_table_rowkey_cnt);
   int get_conflict_rows(ObDMLRunningCtx& run_ctx, const ObInsertFlag flag,
       const common::ObIArray<uint64_t>& dup_col_ids, const common::ObNewRow& row,
       common::ObNewRowIterator*& duplicated_rows);
