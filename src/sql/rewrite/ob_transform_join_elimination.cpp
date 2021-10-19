@@ -60,7 +60,29 @@ int ObTransformJoinElimination::transform_one_stmt(
   return ret;
 }
 
-int ObTransformJoinElimination::eliminate_join_self_foreign_key(ObDMLStmt* stmt, bool& trans_happened)
+int ObTransformJoinElimination::check_table_can_be_eliminated(const ObDMLStmt *stmt, uint64_t table_id, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null stmt", K(ret));
+  } else if (stmt->is_delete_stmt() || stmt->is_update_stmt()) {
+    const ObDelUpdStmt *del_up_stmt = static_cast<const ObDelUpdStmt *>(stmt);
+    for (uint64_t i = 0; OB_SUCC(ret) && i < del_up_stmt->get_all_table_columns().count(); ++i) {
+      const TableColumns &tab_cols = del_up_stmt->get_all_table_columns().at(i);
+      const IndexDMLInfo &index_info = tab_cols.index_dml_infos_.at(0);
+      if (index_info.table_id_ == table_id) {
+        is_valid = false;
+      }
+    }
+  } else {
+    // TODO: add more cases if necessary
+  }
+  return ret;
+}
+
+int ObTransformJoinElimination::eliminate_join_self_foreign_key(ObDMLStmt *stmt, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   bool from_happedend = false;
@@ -1707,6 +1729,7 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
   trans_happened = false;
   EqualSets* equal_sets = &ctx_->equal_sets_;
   ObArenaAllocator allocator;
+  bool is_valid = true;
   if (conds.empty()) {
     /*do nothing*/
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(&allocator, conds, *equal_sets))) {
@@ -1721,6 +1744,10 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
         for (int64_t j = 0; OB_SUCC(ret) && j < candi_tables.count(); ++j) {
           if (i == j || removed_items.has_member(j)) {
             /*do nothing*/
+          } else if (OB_FAIL(check_table_can_be_eliminated(stmt, candi_tables.at(j)->table_id_, is_valid))) {
+            LOG_WARN("check table can be eliminated failed", K(ret));
+          } else if (!is_valid) {
+            // do nothing
           } else if (OB_FAIL(do_join_elimination_self_key(
                          stmt, candi_tables.at(i), candi_tables.at(j), is_happened, equal_sets))) {
             LOG_WARN("failed to eliminate self key join in base table", K(ret));
@@ -1734,8 +1761,13 @@ int ObTransformJoinElimination::eliminate_candi_tables(ObDMLStmt* stmt, ObIArray
         }
         is_happened = false;
         for (int64_t j = 0; OB_SUCC(ret) && !is_happened && j < child_candi_tables.count(); ++j) {
-          if (OB_FAIL(do_join_elimination_self_key(
-                  stmt, child_candi_tables.at(j), candi_tables.at(i), is_happened, equal_sets))) {
+          is_valid = true;
+          if (OB_FAIL(check_table_can_be_eliminated(stmt, candi_tables.at(i)->table_id_, is_valid))) {
+            LOG_WARN("check table can be eliminated failed", K(ret));
+          } else if (!is_valid) {
+            // do nothing
+          } else if (OB_FAIL(do_join_elimination_self_key(
+                         stmt, child_candi_tables.at(j), candi_tables.at(i), is_happened, equal_sets))) {
             LOG_WARN("failed to do join elimination erlf key", K(ret));
           } else if (!is_happened) {
             /*do nothing*/
