@@ -978,6 +978,7 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet& result, bool& is_readonly)
     case stmt::T_SHOW_TENANT:
     case stmt::T_SHOW_CREATE_TENANT:
     case stmt::T_SHOW_TRACE:
+    case stmt::T_SHOW_RABBIT:
     case stmt::T_SHOW_ENGINES:
     case stmt::T_SHOW_PRIVILEGES:
     case stmt::T_SHOW_RESTORE_PREVIEW:

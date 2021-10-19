@@ -843,6 +843,7 @@ const char* get_type_name(int type)
 	case T_SHOW_FUNCTION_STATUS : return "T_SHOW_FUNCTION_STATUS";
 	case T_SHOW_CREATE_TABLEGROUP : return "T_SHOW_CREATE_TABLEGROUP";
 	case T_SHOW_RESTORE_PREVIEW : return "T_SHOW_RESTORE_PREVIEW";
+	case T_SHOW_RABBIT : return "T_SHOW_RABBIT";
 	case T_SHOW_GRANTS : return "T_SHOW_GRANTS";
 	case T_SHOW_LIMIT : return "T_SHOW_LIMIT";
 	case T_CREATE_USER : return "T_CREATE_USER";
