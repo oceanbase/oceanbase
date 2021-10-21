@@ -67,6 +67,9 @@ function get_os_release() {
     uos)
       version_ge "20" && compat_centos7 && return
       ;;
+    alinux)
+      version_ge "2.1903" && compat_centos7 && return
+      ;;
   esac
   not_supported && return 1 
 }
