@@ -1265,14 +1265,14 @@ int ObSqlParameterization::get_select_item_param_info(
           SQL_PC_LOG(
               WARN, "invalid null children", K(ret), K(stack_frames.at(frame_idx).cur_node_->children_), K(frame_idx));
         } else {
-          TraverseStackFrame& frame = stack_frames.at(frame_idx);
+          TraverseStackFrame frame = stack_frames.at(frame_idx);
           for (int64_t i = frame.next_child_idx_; OB_SUCC(ret) && i < frame.cur_node_->num_child_; i++) {
             if (OB_ISNULL(frame.cur_node_->children_[i])) {
-              frame.next_child_idx_ = i + 1;
+              stack_frames.at(frame_idx).next_child_idx_ = i + 1;
             } else if (OB_FAIL(stack_frames.push_back(TraverseStackFrame{frame.cur_node_->children_[i], 0}))) {
               LOG_WARN("failed to push back eleemnt", K(ret));
             } else {
-              frame.next_child_idx_ = i + 1;
+              stack_frames.at(frame_idx).next_child_idx_ = i + 1;
               LOG_DEBUG("after pushing frame", K(stack_frames));
               break;
             }
