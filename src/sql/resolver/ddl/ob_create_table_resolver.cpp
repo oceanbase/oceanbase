@@ -2360,7 +2360,13 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode* node)
         SQL_RESV_LOG(WARN, "failed to store part key", K(ret));
       } else if (OB_FAIL(generate_index_arg())) {
         SQL_RESV_LOG(WARN, "generate index arg failed", K(ret));
-      } else if (OB_FAIL(create_index_arg.assign(index_arg_))) {
+      } else if (has_index_using_type_) {
+        index_arg_.index_using_type_ = index_using_type_;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(create_index_arg.assign(index_arg_))) {
         LOG_WARN("fail to assign create index arg", K(ret));
       } else if (NULL != node->children_[4]) {
         // 0: Normal partition node
@@ -2378,12 +2384,9 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode* node)
             LOG_WARN("fail to resolve index partition node", K(ret));
           }
         }
-      } else {
-        if (has_index_using_type_) {
-          index_arg_.index_using_type_ = index_using_type_;
-        }
       }
     }
+
     if (OB_SUCC(ret)) {
       ObSArray<ObPartitionResolveResult>& resolve_results = create_table_stmt->get_index_partition_resolve_results();
       ObSArray<obrpc::ObCreateIndexArg>& index_arg_list = create_table_stmt->get_index_arg_list();
