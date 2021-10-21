@@ -809,29 +809,32 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor& executor, ObInnerSQLResu
               local_sys_schema_version);
         }
 
-        int ret_code = OB_SUCCESS;
+        int query_ret = OB_SUCCESS;
         if (OB_SUCC(ret)) {
-          // if activate Event EN_FORCE_QUERY_RETRY, whatever the ret of do_query is, 
-          // the query will be forced to retry several times by the define of FORCE_RETRY_CNT for testing retry mechanism
+          // if activate Event EN_FORCE_QUERY_RETRY for testing retry mechanism,
+          // the query will be forced to retry, where the retry times is at most FORCE_RETRY_CNT
           static const int64_t FORCE_RETRY_CNT = 3;
-          if (OB_FAIL(SMART_CALL(do_query(executor, res))) || 
-              (res.result_set().is_user_sql() && retry_cnt < FORCE_RETRY_CNT && 
-                OB_FAIL(E(EventTable::EN_FORCE_QUERY_RETRY) ret))) {
-            ret_code = ret;
-            LOG_WARN("execute failed", K(ret), K(executor), K(retry_cnt));
-            int tmp_ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);
-            if (OB_SUCCESS != tmp_ret) {
-                LOG_WARN("failed to process retry", K(tmp_ret), K(ret), K(executor), K(retry_cnt));
+          if (OB_FAIL(SMART_CALL(do_query(executor, res)))) {
+            query_ret = ret;
+          } else if (OB_FAIL(E(EventTable::EN_FORCE_QUERY_RETRY) ret) && 
+              res.result_set().is_user_sql() && retry_cnt < FORCE_RETRY_CNT) {
+            query_ret = ret;
+          }
+
+          if (OB_FAIL(query_ret)) {
+            LOG_WARN("execute failed", K(query_ret), K(executor), K(retry_cnt));
+            int retry_ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);
+            if (OB_FAIL(retry_ret)) {
+                LOG_WARN("failed to process retry", K(retry_ret), K(query_ret), K(executor), K(retry_cnt));
             }
-            ret = tmp_ret;
-            // moved here from ObInnerSQLConnection::do_query() -> ObInnerSQLResult::open().
+
             int close_ret = res.force_close(need_retry);
             if (OB_SUCCESS != close_ret) {
               LOG_WARN("failed to close result", K(close_ret), K(ret));
             }
           }
         }
-        get_session().set_session_in_retry(need_retry, ret_code);
+        get_session().set_session_in_retry(need_retry, query_ret);
         execute_start_timestamp_ = res.get_execute_start_ts();
         execute_end_timestamp_ = res.get_execute_end_ts();
 
