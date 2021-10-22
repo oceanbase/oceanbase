@@ -1,0 +1,2 @@
+select version();
+show variables like 'version';
