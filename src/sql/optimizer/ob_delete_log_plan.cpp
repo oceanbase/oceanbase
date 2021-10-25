@@ -133,7 +133,7 @@ int ObDeleteLogPlan::generate_raw_plan()
   //                  EX OUT
   //                     DELETE (p1)
   //                        .....
-  // (2) norale delete plan:
+  // (2) normal delete plan:
   //      ....
   //         MULTI PART DELETE
   //                 EX IN
