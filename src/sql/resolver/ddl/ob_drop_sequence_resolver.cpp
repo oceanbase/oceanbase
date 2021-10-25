@@ -38,7 +38,7 @@ int ObDropSequenceResolver::resolve(const ParseNode& parse_tree)
   ObDropSequenceStmt* mystmt = NULL;
 
   if (OB_UNLIKELY(T_DROP_SEQUENCE != parse_tree.type_) || OB_ISNULL(parse_tree.children_) ||
-      OB_UNLIKELY(1 != parse_tree.num_child_)) {
+      OB_UNLIKELY(2 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid param", K(parse_tree.type_), K(parse_tree.num_child_), K(parse_tree.children_), K(ret));
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
@@ -55,30 +55,50 @@ int ObDropSequenceResolver::resolve(const ParseNode& parse_tree)
     }
   }
 
+  /* if_exist */
+  if (OB_SUCC(ret)) {
+    if (OB_LIKELY(NULL == parse_tree.children_[0])) {
+      mystmt->get_arg().set_exist_flag(false);
+    } else {
+      mystmt->get_arg().set_exist_flag(true);
+    }
+  }
+
   /* sequence name */
   if (OB_SUCC(ret)) {
-    ObString sequence_name;
-    ObString db_name;
-    if (OB_FAIL(resolve_ref_factor(parse_tree.children_[0], session_info_, sequence_name, db_name))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid parse_tree", K(ret));
-    } else if (sequence_name.length() > OB_MAX_SEQUENCE_NAME_LENGTH) {
-      ret = OB_ERR_TOO_LONG_IDENT;
-      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, sequence_name.length(), sequence_name.ptr());
-    } else {
-      mystmt->set_sequence_name(sequence_name);
-      mystmt->set_database_name(db_name);
-      mystmt->set_tenant_id(session_info_->get_effective_tenant_id());
-    }
-    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-      CK(OB_NOT_NULL(schema_checker_));
-      OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-             session_info_->get_priv_user_id(),
-             db_name,
-             stmt::T_DROP_SEQUENCE,
-             session_info_->get_enable_role_array()),
-          session_info_->get_effective_tenant_id(),
-          session_info_->get_user_id());
+    int64_t sequence_num = 0;
+    sequence_num = share::is_oracle_mode() ? 1 : parse_tree.children_[1]->num_child_;
+    ParseNode* sequence_node = NULL;
+
+    for (int i = 0; OB_SUCC(ret) && i < sequence_num; i++) {
+      sequence_node = share::is_oracle_mode() ? parse_tree.children_[1] 
+                                              : parse_tree.children_[1]->children_[i];
+      ObString sequence_name;
+      ObString db_name;
+      if (OB_FAIL(resolve_ref_factor(sequence_node, session_info_, sequence_name, db_name))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid parse_tree", K(ret));
+      } else if (sequence_name.length() > OB_MAX_SEQUENCE_NAME_LENGTH) {
+        ret = OB_ERR_TOO_LONG_IDENT;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, sequence_name.length(), sequence_name.ptr());
+      } else {
+        obrpc::ObSequenceItem sequence_item;
+        sequence_item.set_sequence_name(sequence_name);
+        sequence_item.set_database_name(db_name);
+        sequence_item.set_tenant_id(session_info_->get_effective_tenant_id());
+        mystmt->get_arg().get_seq_items().push_back(sequence_item);
+      }
+
+      if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+        CK(OB_NOT_NULL(schema_checker_));
+        OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+              session_info_->get_priv_user_id(),
+              db_name,
+              stmt::T_DROP_SEQUENCE,
+              session_info_->get_enable_role_array()),
+            session_info_->get_effective_tenant_id(),
+            session_info_->get_user_id());
+      }
     }
   }
 

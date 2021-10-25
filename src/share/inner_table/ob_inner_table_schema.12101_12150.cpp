@@ -167,6 +167,7 @@ int ObInnerTableSchema::all_virtual_package_history_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj package_name_default;
     package_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("package_name", //column_name
@@ -1155,6 +1156,7 @@ int ObInnerTableSchema::all_virtual_routine_param_schema(ObTableSchema &table_sc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj param_name_default;
     param_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("param_name", //column_name
@@ -1339,6 +1341,7 @@ int ObInnerTableSchema::all_virtual_routine_param_schema(ObTableSchema &table_sc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj type_name_default;
     type_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("type_name", //column_name
@@ -1358,6 +1361,7 @@ int ObInnerTableSchema::all_virtual_routine_param_schema(ObTableSchema &table_sc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj type_subname_default;
     type_subname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("type_subname", //column_name
@@ -1377,6 +1381,7 @@ int ObInnerTableSchema::all_virtual_routine_param_schema(ObTableSchema &table_sc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj extended_type_info_default;
     extended_type_info_default.set_varbinary(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("extended_type_info", //column_name
@@ -1594,6 +1599,7 @@ int ObInnerTableSchema::all_virtual_routine_param_history_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj param_name_default;
     param_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("param_name", //column_name
@@ -1763,6 +1769,7 @@ int ObInnerTableSchema::all_virtual_routine_param_history_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj type_name_default;
     type_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("type_name", //column_name
@@ -1782,6 +1789,7 @@ int ObInnerTableSchema::all_virtual_routine_param_history_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj type_subname_default;
     type_subname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("type_subname", //column_name
@@ -1801,6 +1809,7 @@ int ObInnerTableSchema::all_virtual_routine_param_history_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj extended_type_info_default;
     extended_type_info_default.set_varbinary(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("extended_type_info", //column_name
@@ -2078,6 +2087,7 @@ int ObInnerTableSchema::all_virtual_type_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj externname_default;
     externname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("externname", //column_name
@@ -2097,6 +2107,7 @@ int ObInnerTableSchema::all_virtual_type_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj helperclassname_default;
     helperclassname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("helperclassname", //column_name
@@ -2464,6 +2475,7 @@ int ObInnerTableSchema::all_virtual_type_history_schema(ObTableSchema &table_sch
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj externname_default;
     externname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("externname", //column_name
@@ -2483,6 +2495,7 @@ int ObInnerTableSchema::all_virtual_type_history_schema(ObTableSchema &table_sch
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj helperclassname_default;
     helperclassname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("helperclassname", //column_name
@@ -2865,6 +2878,7 @@ int ObInnerTableSchema::all_virtual_type_attr_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj externname_default;
     externname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("externname", //column_name
@@ -3232,6 +3246,7 @@ int ObInnerTableSchema::all_virtual_type_attr_history_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj externname_default;
     externname_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("externname", //column_name
@@ -5424,6 +5439,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj database_id_default;
     database_id_default.set_uint64(0);
     ADD_COLUMN_SCHEMA_T("database_id", //column_name
@@ -5443,6 +5459,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj schema_version_default;
     schema_version_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("schema_version", //column_name
@@ -5462,6 +5479,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj sql_id_default;
     sql_id_default.set_varbinary(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("sql_id", //column_name
@@ -5541,6 +5559,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj fixed_default;
     fixed_default.set_tinyint(false);
     ADD_COLUMN_SCHEMA_T("fixed", //column_name
@@ -5560,6 +5579,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj enabled_default;
     enabled_default.set_tinyint(true);
     ADD_COLUMN_SCHEMA_T("enabled", //column_name
@@ -5594,6 +5614,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj hints_all_worked_default;
     hints_all_worked_default.set_tinyint(true);
     ADD_COLUMN_SCHEMA_T("hints_all_worked", //column_name
@@ -5751,6 +5772,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_history_schema(ObTableS
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj database_id_default;
     database_id_default.set_uint64(0);
     ADD_COLUMN_SCHEMA_T("database_id", //column_name
@@ -5770,6 +5792,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_history_schema(ObTableS
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj sql_id_default;
     sql_id_default.set_varbinary(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("sql_id", //column_name
@@ -5849,6 +5872,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_history_schema(ObTableS
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj fixed_default;
     fixed_default.set_tinyint(false);
     ADD_COLUMN_SCHEMA_T("fixed", //column_name
@@ -5868,6 +5892,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_history_schema(ObTableS
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj enabled_default;
     enabled_default.set_tinyint(true);
     ADD_COLUMN_SCHEMA_T("enabled", //column_name
@@ -5902,6 +5927,7 @@ int ObInnerTableSchema::all_virtual_tenant_plan_baseline_history_schema(ObTableS
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj hints_all_worked_default;
     hints_all_worked_default.set_tinyint(true);
     ADD_COLUMN_SCHEMA_T("hints_all_worked", //column_name
@@ -8455,6 +8481,7 @@ int ObInnerTableSchema::all_virtual_tenant_partition_meta_table_schema(ObTableSc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj required_size_default;
     required_size_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("required_size", //column_name
@@ -8474,6 +8501,7 @@ int ObInnerTableSchema::all_virtual_tenant_partition_meta_table_schema(ObTableSc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj replica_type_default;
     replica_type_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("replica_type", //column_name
@@ -8493,6 +8521,7 @@ int ObInnerTableSchema::all_virtual_tenant_partition_meta_table_schema(ObTableSc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj status_default;
     status_default.set_varchar(ObString::make_string("REPLICA_STATUS_NORMAL"));
     ADD_COLUMN_SCHEMA_T("status", //column_name
@@ -8512,6 +8541,7 @@ int ObInnerTableSchema::all_virtual_tenant_partition_meta_table_schema(ObTableSc
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj data_checksum_default;
     data_checksum_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("data_checksum", //column_name
@@ -8654,6 +8684,7 @@ int ObInnerTableSchema::all_virtual_tenant_role_grantee_map_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj admin_option_default;
     admin_option_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("admin_option", //column_name
@@ -8673,6 +8704,7 @@ int ObInnerTableSchema::all_virtual_tenant_role_grantee_map_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj disable_flag_default;
     disable_flag_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("disable_flag", //column_name
@@ -8845,6 +8877,7 @@ int ObInnerTableSchema::all_virtual_tenant_role_grantee_map_history_schema(ObTab
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj admin_option_default;
     admin_option_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("admin_option", //column_name
@@ -8864,6 +8897,7 @@ int ObInnerTableSchema::all_virtual_tenant_role_grantee_map_history_schema(ObTab
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj disable_flag_default;
     disable_flag_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("disable_flag", //column_name
@@ -9021,6 +9055,7 @@ int ObInnerTableSchema::all_virtual_tenant_keystore_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj status_default;
     status_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("status", //column_name
@@ -9238,6 +9273,7 @@ int ObInnerTableSchema::all_virtual_tenant_keystore_history_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj status_default;
     status_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("status", //column_name
@@ -9963,6 +9999,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_catalog_default;
     table_catalog_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("TABLE_CATALOG", //column_name
@@ -9982,6 +10019,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj column_name_default;
     column_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("COLUMN_NAME", //column_name
@@ -10001,6 +10039,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj ordinal_position_default;
     ordinal_position_default.set_uint64(0);
     ADD_COLUMN_SCHEMA_T("ORDINAL_POSITION", //column_name
@@ -10035,6 +10074,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj is_nullable_default;
     is_nullable_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("IS_NULLABLE", //column_name
@@ -10054,6 +10094,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj data_type_default;
     data_type_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("DATA_TYPE", //column_name
@@ -10193,6 +10234,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj column_key_default;
     column_key_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("COLUMN_KEY", //column_name
@@ -10212,6 +10254,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj extra_default;
     extra_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("EXTRA", //column_name
@@ -10231,6 +10274,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj privileges_default;
     privileges_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("PRIVILEGES", //column_name
@@ -10250,6 +10294,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj column_comment_default;
     column_comment_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("COLUMN_COMMENT", //column_name
@@ -10269,6 +10314,7 @@ int ObInnerTableSchema::all_virtual_information_columns_schema(ObTableSchema &ta
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj generation_expression_default;
     generation_expression_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("GENERATION_EXPRESSION", //column_name
@@ -10514,6 +10560,7 @@ int ObInnerTableSchema::all_virtual_pg_partition_info_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj min_log_service_ts_default;
     min_log_service_ts_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("min_log_service_ts", //column_name
@@ -10533,6 +10580,7 @@ int ObInnerTableSchema::all_virtual_pg_partition_info_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj min_trans_service_ts_default;
     min_trans_service_ts_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("min_trans_service_ts", //column_name
@@ -10552,6 +10600,7 @@ int ObInnerTableSchema::all_virtual_pg_partition_info_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj min_replay_engine_ts_default;
     min_replay_engine_ts_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("min_replay_engine_ts", //column_name
@@ -10586,6 +10635,7 @@ int ObInnerTableSchema::all_virtual_pg_partition_info_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj weak_read_timestamp_default;
     weak_read_timestamp_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("weak_read_timestamp", //column_name
@@ -10605,6 +10655,7 @@ int ObInnerTableSchema::all_virtual_pg_partition_info_schema(ObTableSchema &tabl
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj replica_type_default;
     replica_type_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("replica_type", //column_name
@@ -10770,6 +10821,7 @@ int ObInnerTableSchema::all_virtual_tenant_user_failed_login_stat_schema(ObTable
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj last_failed_login_svr_ip_default;
     last_failed_login_svr_ip_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("last_failed_login_svr_ip", //column_name
@@ -10957,6 +11009,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_life_time_default;
     password_life_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_life_time", //column_name
@@ -10976,6 +11029,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_grace_time_default;
     password_grace_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_grace_time", //column_name
@@ -10995,6 +11049,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_reuse_time_default;
     password_reuse_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_reuse_time", //column_name
@@ -11014,6 +11069,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_reuse_max_default;
     password_reuse_max_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_reuse_max", //column_name
@@ -11033,6 +11089,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj inactive_account_time_default;
     inactive_account_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("inactive_account_time", //column_name
@@ -11250,6 +11307,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_history_schema(ObTableSchema 
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_life_time_default;
     password_life_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_life_time", //column_name
@@ -11269,6 +11327,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_history_schema(ObTableSchema 
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_grace_time_default;
     password_grace_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_grace_time", //column_name
@@ -11288,6 +11347,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_history_schema(ObTableSchema 
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_reuse_time_default;
     password_reuse_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_reuse_time", //column_name
@@ -11307,6 +11367,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_history_schema(ObTableSchema 
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj password_reuse_max_default;
     password_reuse_max_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("password_reuse_max", //column_name
@@ -11326,6 +11387,7 @@ int ObInnerTableSchema::all_virtual_tenant_profile_history_schema(ObTableSchema 
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj inactive_account_time_default;
     inactive_account_time_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("inactive_account_time", //column_name

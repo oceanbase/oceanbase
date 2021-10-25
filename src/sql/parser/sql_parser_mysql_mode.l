@@ -134,6 +134,8 @@ CURRENT_DATE                  { REPUT_TOKEN_NEG_SIGN(CURRENT_DATE); }
 CURRENT_TIME                  { REPUT_TOKEN_NEG_SIGN(CURRENT_TIME); }
 CURRENT_TIMESTAMP             { REPUT_TOKEN_NEG_SIGN(CURRENT_TIMESTAMP); }
 CURRENT_USER                  { REPUT_TOKEN_NEG_SIGN(CURRENT_USER); }
+LASTVAL                       { REPUT_TOKEN_NEG_SIGN(LASTVAL); }
+SETVAL                        { REPUT_TOKEN_NEG_SIGN(SETVAL); }
 {rowidPattern}                { REPUT_TOKEN_NEG_SIGN(WITH_ROWID); }
 CURSOR                        { REPUT_TOKEN_NEG_SIGN(CURSOR); }
 DAY_HOUR                      { REPUT_TOKEN_NEG_SIGN(DAY_HOUR); }
@@ -184,6 +186,7 @@ HIGH_PRIORITY                 { REPUT_TOKEN_NEG_SIGN(HIGH_PRIORITY); }
 HOUR_MICROSECOND              { REPUT_TOKEN_NEG_SIGN(HOUR_MICROSECOND); }
 HOUR_MINUTE                   { REPUT_TOKEN_NEG_SIGN(HOUR_MINUTE); }
 HOUR_SECOND                   { REPUT_TOKEN_NEG_SIGN(HOUR_SECOND); }
+INCREMENT                     { REPUT_TOKEN_NEG_SIGN(INCREMENT); }
 ID                            { REPUT_TOKEN_NEG_SIGN(ID); }
 IF                            { REPUT_TOKEN_NEG_SIGN(IF); }
 IN                            { REPUT_TOKEN_NEG_SIGN(IN); }
@@ -238,6 +241,7 @@ MASTER_BIND                   { REPUT_TOKEN_NEG_SIGN(MASTER_BIND); }
 MASTER_SSL_VERIFY_SERVER_CERT { REPUT_TOKEN_NEG_SIGN(MASTER_SSL_VERIFY_SERVER_CERT); }
 MATCH                         { REPUT_TOKEN_NEG_SIGN(MATCH); }
 MAXVALUE                      { REPUT_TOKEN_NEG_SIGN(MAXVALUE); }
+MINVALUE                      { REPUT_TOKEN_NEG_SIGN(MINVALUE); }
 MEDIUMBLOB                    { REPUT_TOKEN_NEG_SIGN(MEDIUMBLOB); }
 MEDIUMINT                     { REPUT_TOKEN_NEG_SIGN(MEDIUMINT); }
 MERGE                         { REPUT_TOKEN_NEG_SIGN(MERGE); }
@@ -248,6 +252,12 @@ MINUTE_SECOND                 { REPUT_TOKEN_NEG_SIGN(MINUTE_SECOND); }
 MOD                           { REPUT_TOKEN_NEG_SIGN(MOD); }
 MODE                          { REPUT_TOKEN_NEG_SIGN(MODE); }
 MODIFIES                      { REPUT_TOKEN_NEG_SIGN(MODIFIES); }
+NEXTVAL                       { REPUT_TOKEN_NEG_SIGN(NEXTVAL); }
+NOCACHE                       { REPUT_TOKEN_NEG_SIGN(NOCACHE); }
+NOCYCLE                       { REPUT_TOKEN_NEG_SIGN(NOCYCLE); }
+NOMAXVALUE                    { REPUT_TOKEN_NEG_SIGN(NOMAXVALUE); }
+NOMINVALUE                    { REPUT_TOKEN_NEG_SIGN(NOMINVALUE); }
+NOORDER                       { REPUT_TOKEN_NEG_SIGN(NOORDER); }
 NATURAL                       { REPUT_TOKEN_NEG_SIGN(NATURAL); }
 NO_WRITE_TO_BINLOG            { REPUT_TOKEN_NEG_SIGN(NO_WRITE_TO_BINLOG); }
 NUMERIC                       { REPUT_TOKEN_NEG_SIGN(NUMBER); }
@@ -261,6 +271,7 @@ OUT                           { REPUT_TOKEN_NEG_SIGN(OUT); }
 OUTER                         { REPUT_TOKEN_NEG_SIGN(OUTER); }
 OUTFILE                       { REPUT_TOKEN_NEG_SIGN(OUTFILE); }
 PARSER                        { REPUT_TOKEN_NEG_SIGN(PARSER); }
+PREVIOUS                      { REPUT_TOKEN_NEG_SIGN(PREVIOUS); }
 PROCEDURE                     { REPUT_TOKEN_NEG_SIGN(PROCEDURE); }
 PURGE                         { REPUT_TOKEN_NEG_SIGN(PURGE); }
 PARTITION                     { REPUT_TOKEN_NEG_SIGN(PARTITION); }
@@ -294,6 +305,7 @@ SCHEMAS                       { REPUT_TOKEN_NEG_SIGN(SCHEMAS); }
 SEPARATOR                     { REPUT_TOKEN_NEG_SIGN(SEPARATOR); }
 SET                           { REPUT_TOKEN_NEG_SIGN(SET); }
 SENSITIVE                     { REPUT_TOKEN_NEG_SIGN(SENSITIVE); }
+SEQUENCE                      { REPUT_TOKEN_NEG_SIGN(SEQUENCE); }
 SHOW                          { REPUT_TOKEN_NEG_SIGN(SHOW); }
 SIGNAL                        { REPUT_TOKEN_NEG_SIGN(SIGNAL); }
 SMALLINT                      { REPUT_TOKEN_NEG_SIGN(SMALLINT); }
@@ -336,6 +348,7 @@ USING                         { REPUT_TOKEN_NEG_SIGN(USING); }
 UTC_DATE                      { REPUT_TOKEN_NEG_SIGN(UTC_DATE); }
 UTC_TIME                      { REPUT_TOKEN_NEG_SIGN(UTC_TIME); }
 UTC_TIMESTAMP                 { REPUT_TOKEN_NEG_SIGN(UTC_TIMESTAMP); }
+VALUE                         { REPUT_TOKEN_NEG_SIGN(VALUE); }
 VALUES                        { REPUT_TOKEN_NEG_SIGN(VALUES); }
 VARBINARY                     { REPUT_TOKEN_NEG_SIGN(VARBINARY); }
 VARCHAR                       { REPUT_TOKEN_NEG_SIGN(VARCHAR); }

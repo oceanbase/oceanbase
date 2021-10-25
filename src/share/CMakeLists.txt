@@ -257,6 +257,7 @@ ob_set_subtarget(ob_share sequence
   sequence/ob_sequence_dml_proxy.cpp
   sequence/ob_sequence_option.cpp
   sequence/ob_sequence_option_builder.cpp
+  sequence/ob_sequence_sync_proxy.cpp
 )
 
 ob_set_subtarget(ob_share resource_manager

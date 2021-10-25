@@ -1163,7 +1163,7 @@ int ObSelectLogPlan::allocate_plan_top()
     if (OB_SUCC(ret)) {
       if (select_stmt->has_sequence()) {
         LOG_TRACE("SQL has sequence expr", "sql", select_stmt->get_sql_stmt(), K(ret));
-        if (OB_FAIL(candi_allocate_sequence())) {
+        if (OB_FAIL(lib::is_oracle_mode() && candi_allocate_sequence())) {
           LOG_WARN("failed to allocate sequence operator", "sql", select_stmt->get_sql_stmt(), K(ret));
         }
       } else {

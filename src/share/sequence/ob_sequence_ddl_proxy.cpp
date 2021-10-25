@@ -35,23 +35,29 @@ ObSequenceDDLProxy::ObSequenceDDLProxy(ObMultiVersionSchemaService& schema_servi
 ObSequenceDDLProxy::~ObSequenceDDLProxy()
 {}
 
-int ObSequenceDDLProxy::create_sequence(ObSequenceSchema& seq_schema, const common::ObBitSet<>& opt_bitset,
+int ObSequenceDDLProxy::create_sequence(ObSequenceSchema& seq_schema, const bool allow_existence, const common::ObBitSet<>& opt_bitset,
     common::ObMySQLTransaction& trans, share::schema::ObSchemaGetterGuard& schema_guard, const ObString* ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
   ObSequenceOptionBuilder opt_builder;
   uint64_t sequence_id = OB_INVALID_ID;
   ObArray<ObSchemaType> conflict_schema_types;
-  if (OB_FAIL(schema_guard.check_oracle_object_exist(seq_schema.get_tenant_id(),
-          seq_schema.get_database_id(),
-          seq_schema.get_sequence_name(),
-          SEQUENCE_SCHEMA,
-          false,
-          conflict_schema_types))) {
+  bool is_exist = false;
+
+  if (OB_FAIL(schema_guard.check_sequence_exist_with_name(seq_schema.get_tenant_id(), 
+          seq_schema.get_database_id(), 
+          seq_schema.get_sequence_name(), 
+          is_exist, 
+          sequence_id))) {
     LOG_WARN("fail to check oracle_object exist", K(ret), K(seq_schema));
-  } else if (conflict_schema_types.count() > 0) {
-    ret = OB_ERR_EXIST_OBJECT;
-    LOG_WARN("Name is already used by an existing object", K(ret), K(seq_schema));
+  } else if (is_exist) {
+    LOG_WARN("Name is already used by an existing object", K(ret), K(seq_schema), K(allow_existence));
+    if (allow_existence) {
+      // ret = OB_SUCC
+      LOG_WARN("the execution of creating sequence will do nothing");
+    } else {
+      ret = OB_ERR_EXIST_OBJECT;
+    }
   } else if (OB_FAIL(opt_builder.build_create_sequence_option(opt_bitset, seq_schema.get_sequence_option()))) {
     LOG_WARN("fail build create sequence option", K(seq_schema), K(ret));
   } else {
@@ -79,7 +85,7 @@ int ObSequenceDDLProxy::create_sequence(ObSequenceSchema& seq_schema, const comm
   return ret;
 }
 
-int ObSequenceDDLProxy::alter_sequence(share::schema::ObSequenceSchema& seq_schema,
+int ObSequenceDDLProxy::alter_sequence(share::schema::ObSequenceSchema& seq_schema, const bool allow_inexistence,
     const common::ObBitSet<>& opt_bitset, common::ObMySQLTransaction& trans,
     share::schema::ObSchemaGetterGuard& schema_guard, const common::ObString* ddl_stmt_str)
 {
@@ -98,9 +104,14 @@ int ObSequenceDDLProxy::alter_sequence(share::schema::ObSequenceSchema& seq_sche
           sequence_id))) {
     LOG_WARN("fail get sequence", K(seq_schema), K(ret));
   } else if (!exists) {
-    ret = OB_OBJECT_NAME_NOT_EXIST;
-    LOG_WARN("sequence not exists", K(sequence_id), K(ret));
-    LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "sequence");
+    LOG_WARN("sequence not exists", K(sequence_id), K(allow_inexistence), K(ret));
+    if (allow_inexistence) {
+      // ret = OB_SUCC
+      LOG_WARN("the execution of altering sequence will do nothing");
+    } else {
+      ret = OB_OBJECT_NAME_NOT_EXIST;
+      LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "sequence");
+    }
   } else if (OB_FAIL(schema_guard.get_sequence_schema(seq_schema.get_tenant_id(), sequence_id, cur_sequence_schema))) {
     LOG_WARN("fail get sequence schema", K(ret));
   } else if (OB_ISNULL(cur_sequence_schema)) {
@@ -130,8 +141,9 @@ int ObSequenceDDLProxy::alter_sequence(share::schema::ObSequenceSchema& seq_sche
   return ret;
 }
 
-int ObSequenceDDLProxy::drop_sequence(share::schema::ObSequenceSchema& seq_schema, common::ObMySQLTransaction& trans,
-    share::schema::ObSchemaGetterGuard& schema_guard, const common::ObString* ddl_stmt_str)
+int ObSequenceDDLProxy::drop_sequence(share::schema::ObSequenceSchema& seq_schema, const bool allow_inexistence,
+    common::ObMySQLTransaction& trans, share::schema::ObSchemaGetterGuard& schema_guard, 
+    const common::ObString* ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
 
@@ -155,21 +167,27 @@ int ObSequenceDDLProxy::drop_sequence(share::schema::ObSequenceSchema& seq_schem
           sequence_id))) {
     LOG_WARN("fail get sequence", K(seq_schema), K(ret));
   } else if (!exists) {
-    ret = OB_OBJECT_NAME_NOT_EXIST;
-    LOG_WARN("sequence does not exist", K(seq_schema), K(ret));
-    LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "sequence");
+    LOG_WARN("sequence does not exist", K(seq_schema), K(allow_inexistence), K(ret));
+    if (allow_inexistence) {
+      // ret = OB_SUCC
+      LOG_WARN("the execution of dropping sequence will do nothing");
+    } else {
+      ret = OB_OBJECT_NAME_NOT_EXIST;
+      LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "sequence");
+    }
   } else {
     seq_schema.set_sequence_id(sequence_id);
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_service->get_sequence_sql_service().drop_sequence(
-                 seq_schema, new_schema_version, &trans, ddl_stmt_str))) {
-    LOG_WARN("drop sequence info failed", K(seq_schema.get_sequence_name()), K(ret));
-  } else {
-    LOG_INFO("drop sequence", K(lbt()), K(seq_schema));
+  if (OB_SUCC(ret) && exists) {
+    if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+      LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_service->get_sequence_sql_service().drop_sequence(
+                  seq_schema, new_schema_version, &trans, ddl_stmt_str))) {
+      LOG_WARN("drop sequence info failed", K(seq_schema.get_sequence_name()), K(ret));
+    } else {
+      LOG_INFO("drop sequence", K(lbt()), K(seq_schema));
+    }
   }
 
   return ret;

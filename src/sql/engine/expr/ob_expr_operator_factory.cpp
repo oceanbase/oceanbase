@@ -221,6 +221,9 @@
 #include "sql/engine/expr/ob_expr_oracle_to_char.h"
 #include "sql/engine/expr/ob_expr_to_clob.h"
 #include "sql/engine/expr/ob_expr_seq_nextval.h"
+#include "sql/engine/expr/ob_expr_func_seq_nextval.h"
+#include "sql/engine/expr/ob_expr_func_seq_lastval.h"
+#include "sql/engine/expr/ob_expr_func_seq_setval.h"
 #include "sql/engine/expr/ob_expr_to_blob.h"
 #include "sql/engine/expr/ob_expr_to_number.h"
 #include "sql/engine/expr/ob_expr_spm.h"
@@ -655,7 +658,9 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprYearWeek);
   REG_OP(ObExprWeek);
   REG_OP(ObExprQuarter);
-  REG_OP(ObExprSeqNextval);
+  REG_OP(ObExprFuncSeqNextval);
+  REG_OP(ObExprFuncSeqLastval);
+  REG_OP(ObExprFuncSeqSetval);
   REG_OP(ObExprSpmLoadPlans);
   REG_OP(ObExprSpmAlterBaseline);
   REG_OP(ObExprSpmDropBaseline);

@@ -301,7 +301,7 @@ int ObInsertLogPlan::generate_raw_plan()
     ObLogicalOperator* values_root = NULL;
     if (!insert_stmt->value_from_select()) {
       // step. allocate inserted value exprs
-      if (get_stmt()->has_sequence() && OB_FAIL(allocate_sequence_as_top(values_root))) {
+      if (lib::is_oracle_mode() && get_stmt()->has_sequence() && OB_FAIL(allocate_sequence_as_top(values_root))) {
         LOG_WARN("failed to allocate sequence as top", K(ret));
       } else if (OB_FAIL(generate_values_op_as_child(values_root))) {
         LOG_WARN("generate values op as child failed", K(ret));
@@ -340,7 +340,7 @@ int ObInsertLogPlan::generate_raw_plan()
         if (insert_stmt->is_multi_insert_stmt()) {
           if (OB_FAIL(allocate_insert_all_op(*insert_stmt, insert_op_))) {
             LOG_WARN("allocate logical insert operator failed", K(ret));
-          } else if (insert_stmt->has_sequence() && OB_FAIL(allocate_sequence_as_top(values_root))) {
+          } else if (lib::is_oracle_mode() && insert_stmt->has_sequence() && OB_FAIL(allocate_sequence_as_top(values_root))) {
             LOG_WARN("failed to allocate sequence as top", K(ret));
           } else { /*do nothing*/
           }

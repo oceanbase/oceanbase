@@ -147,7 +147,7 @@ int ObUpdateLogPlan::generate_raw_plan()
     if (OB_SUCC(ret)) {
       if (get_stmt()->has_sequence()) {
         LOG_TRACE("SQL has sequence clause", "sql", get_stmt()->get_sql_stmt(), K(ret));
-        if (OB_FAIL(candi_allocate_sequence())) {
+        if (lib::is_oracle_mode() && OB_FAIL(candi_allocate_sequence())) {
           LOG_WARN("failed to allocate 'SEQUENCE' operator", "sql", get_stmt()->get_sql_stmt(), K(ret));
         }
       } else {

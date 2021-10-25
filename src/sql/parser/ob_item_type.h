@@ -428,7 +428,7 @@ typedef enum ObItemType {
   T_FUN_SYS_PI = 713,
   T_FUN_SYS_DEGREES = 715,
   T_FUN_SYS_EXPORT_SET = 721,
-  
+
   T_FUN_SYS_INET6NTOA = 722,
   T_FUN_SYS_INET6ATON = 723,
   T_FUN_SYS_IS_IPV4 = 724,
@@ -438,6 +438,12 @@ typedef enum ObItemType {
   T_FUN_SYS_INETATON = 728,
   T_FUN_SYS_WEIGHT_STRING = 729,
   T_FUN_SYS_CRC32 = 730,
+
+  T_FUN_SYS_MYSQL_SEQ_LASTVAL = 731,
+  T_FUN_SYS_MYSQL_SEQ_NEXTVAL = 732,
+  T_FUN_SYS_SEQ = 733,
+  T_FUN_SYS_MYSQL_SEQ_SETVAL = 734,
+  
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -775,6 +781,7 @@ typedef enum ObItemType {
   T_INDEX_SCOPE,
   T_DROP_TABLE,
   T_TABLE_LIST,
+  T_SEQUENCE_LIST,
   T_DROP_VIEW,
   T_VIEW_LIST,
   T_PARTITION_OPTION,

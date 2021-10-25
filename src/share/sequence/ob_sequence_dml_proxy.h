@@ -15,6 +15,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "share/sequence/ob_sequence_sync_proxy.h"
 
 namespace oceanbase {
 namespace common {
@@ -50,14 +51,30 @@ public:
       SequenceCacheNode& cache_range);
   int prefetch_next_batch(const uint64_t tenant_id, const uint64_t sequence_id, const share::ObSequenceOption& option,
       SequenceCacheNode& cache_range);
+  int set_next_batch(const uint64_t tenant_id, const uint64_t sequence_id, const bool increment_pos, 
+        const number::ObNumber& new_next_value, const number::ObNumber& new_round, ObSequenceSyncProxy& sync_proxy);
 
 private:
   /* functions */
   int set_pre_op_timeout(common::ObTimeoutCtx& ctx);
-  int init_sequence_value_table(common::ObMySQLTransaction& trans, common::ObSQLClientRetryWeak& sql_client_retry_weak,
-      common::ObIAllocator& allocator, uint64_t tenant_id, uint64_t sequence_id, const ObSequenceOption& option,
-      common::number::ObNumber& next_value);
-
+  int init_sequence_value_table(common::ObMySQLTransaction& trans,
+      ObSQLClientRetryWeak& sql_client_retry_weak, ObIAllocator& allocator, uint64_t tenant_id, uint64_t sequence_id,
+      const ObSequenceOption& option, number::ObNumber& next_value, number::ObNumber& cycle_count);
+  int calc_current_cache_value(const number::ObNumber& increment_by, const number::ObNumber& cache_size,
+      const number::ObNumber& min_value, const number::ObNumber& max_value, common::ObArenaAllocator& allocator, 
+      const number::ObNumber& next_value, const number::ObNumber& cycle_count,
+      number::ObNumber& cache_inclusive_start, number::ObNumber& cache_exclusive_end, number::ObNumber& cache_round);
+  int calc_next_cache_value(const number::ObNumber& increment_by, const bool cycle_flag, 
+      const number::ObNumber& min_value, const number::ObNumber& max_value, common::ObArenaAllocator& allocator, 
+      const number::ObNumber& cache_exclusive_end,
+      number::ObNumber& next_value, number::ObNumber& cycle_count);
+  int insert_sequence_value_table(common::ObMySQLTransaction& trans, uint64_t tenant_id, uint64_t sequence_id,
+      const number::ObNumber& next_value, const number::ObNumber& cycle_count);
+  int select_sequence_value_table(ObSQLClientRetryWeak& sql_client_retry_weak, 
+      ObIAllocator& allocator, uint64_t tenant_id, uint64_t sequence_id,
+      number::ObNumber& next_value, number::ObNumber& cycle_count);
+  int update_sequence_value_table(common::ObMySQLTransaction& trans, uint64_t tenant_id, uint64_t sequence_id,
+      const number::ObNumber& next_value, const number::ObNumber& cycle_count);
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObSequenceDMLProxy);
   share::schema::ObMultiVersionSchemaService* schema_service_;

@@ -366,6 +366,9 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_rownum.cpp
   engine/expr/ob_expr_rpc_port.cpp
   engine/expr/ob_expr_seq_nextval.cpp
+  engine/expr/ob_expr_func_seq_nextval.cpp
+  engine/expr/ob_expr_func_seq_lastval.cpp
+  engine/expr/ob_expr_func_seq_setval.cpp
   engine/expr/ob_expr_shadow_uk_project.cpp
   engine/expr/ob_expr_sign.cpp
   engine/expr/ob_expr_space.cpp

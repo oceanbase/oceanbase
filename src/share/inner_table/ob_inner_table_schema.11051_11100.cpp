@@ -934,6 +934,7 @@ int ObInnerTableSchema::tenant_virtual_outline_schema(ObTableSchema &table_schem
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj database_name_default;
     database_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("database_name", //column_name
@@ -953,6 +954,7 @@ int ObInnerTableSchema::tenant_virtual_outline_schema(ObTableSchema &table_schem
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj outline_name_default;
     outline_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("outline_name", //column_name
@@ -1123,6 +1125,7 @@ int ObInnerTableSchema::tenant_virtual_concurrent_limit_sql_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj database_name_default;
     database_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("database_name", //column_name
@@ -1142,6 +1145,7 @@ int ObInnerTableSchema::tenant_virtual_concurrent_limit_sql_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj outline_name_default;
     outline_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("outline_name", //column_name
@@ -1206,6 +1210,7 @@ int ObInnerTableSchema::tenant_virtual_concurrent_limit_sql_schema(ObTableSchema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj concurrent_num_default;
     concurrent_num_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("concurrent_num", //column_name
@@ -4606,6 +4611,7 @@ int ObInnerTableSchema::all_virtual_election_event_history_schema(ObTableSchema 
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj leader_default;
     leader_default.set_varchar(ObString::make_string("0.0.0.0"));
     ADD_COLUMN_SCHEMA_T("leader", //column_name
@@ -5711,6 +5717,7 @@ int ObInnerTableSchema::all_virtual_partition_migration_status_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj comment_default;
     comment_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("comment", //column_name
@@ -5875,6 +5882,7 @@ int ObInnerTableSchema::all_virtual_sys_task_status_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj comment_default;
     comment_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("comment", //column_name
@@ -6203,6 +6211,7 @@ int ObInnerTableSchema::all_virtual_macro_block_marker_status_schema(ObTableSche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj comment_default;
     comment_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("comment", //column_name

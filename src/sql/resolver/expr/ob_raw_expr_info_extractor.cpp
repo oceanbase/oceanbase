@@ -155,7 +155,8 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr& expr)
     CONST_ACTION(param_expr);
   }
   if (is_const_expr &&
-      (T_FUN_SYS_RAND == expr.get_expr_type() || T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type() ||
+      (T_FUN_SYS_MYSQL_SEQ_NEXTVAL == expr.get_expr_type() || T_FUN_SYS_MYSQL_SEQ_LASTVAL == expr.get_expr_type() || 
+        T_FUN_SYS_RAND == expr.get_expr_type() || T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type() ||
           T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type() || T_FUN_SYS_ROWNUM == expr.get_expr_type() ||
           T_FUN_SYS_ROWKEY_TO_ROWID == expr.get_expr_type() || T_OP_CONNECT_BY_ROOT == expr.get_expr_type() ||
           T_FUN_SYS_CONNECT_BY_PATH == expr.get_expr_type() || T_FUN_SYS_GUID == expr.get_expr_type() ||
@@ -230,7 +231,7 @@ bool ObRawExprInfoExtractor::not_calculable_expr(const ObRawExpr& expr)
 {
   return expr.has_generalized_column() || expr.has_flag(CNT_STATE_FUNC) || expr.has_flag(CNT_USER_VARIABLE) ||
          expr.has_flag(CNT_ALIAS) || expr.has_flag(CNT_ENUM_OR_SET) || expr.has_flag(CNT_VALUES) ||
-         expr.has_flag(CNT_SEQ_EXPR) || expr.has_flag(CNT_SYS_CONNECT_BY_PATH) || expr.has_flag(CNT_RAND_FUNC) ||
+         expr.has_flag(CNT_SEQ_EXPR) || expr.has_flag(CNT_SYS_CONNECT_BY_PATH) || expr.has_flag(CNT_RAND_FUNC) || 
          expr.has_flag(CNT_SO_UDF) || expr.has_flag(CNT_PRIOR) || expr.has_flag(CNT_EXEC_PARAM) ||
          expr.has_flag(CNT_VOLATILE_CONST) || expr.has_flag(CNT_VAR_EXPR);
 }
@@ -508,7 +509,9 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
       if (OB_FAIL(expr.add_flag(IS_ROWNUM))) {
         LOG_WARN("failed to add flag IS_ROWNUM", K(ret));
       }
-    } else if (T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type()) {
+    } else if (T_FUN_SYS_MYSQL_SEQ_NEXTVAL == expr.get_expr_type() ||
+        T_FUN_SYS_MYSQL_SEQ_LASTVAL == expr.get_expr_type() ||
+        T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_SEQ_EXPR))) {
         LOG_WARN("failed to add flag IS_SEQ_EXPR", K(ret));
       }
@@ -549,7 +552,8 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
       }
     }
 
-    if (OB_SUCC(ret) && !not_calculable_expr(expr) && T_FUN_SYS_STMT_ID != expr.get_expr_type() &&
+    if (OB_SUCC(ret) && !not_calculable_expr(expr) && 
+        T_FUN_SYS_STMT_ID != expr.get_expr_type() &&
         T_FUN_SYS_SLEEP != expr.get_expr_type()) {
       // The parameter of the function expression does not contain column information,
       // then this function can be calculated in advance before the plan is executed

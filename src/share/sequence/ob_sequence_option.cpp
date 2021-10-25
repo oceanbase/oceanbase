@@ -27,7 +27,7 @@ ObSequenceMaxMinInitializer::ObSequenceMaxMinInitializer()
   int ret = OB_SUCCESS;
   if (OB_FAIL(MAX_VALUE.set("9999999999999999999999999999"))) {
     LOG_ERROR("fail set max value", K(ret));
-  } else if (OB_FAIL(MIN_VALUE.set("-999999999999999999999999999"))) {
+  } else if (OB_FAIL(MIN_VALUE.set("-9999999999999999999999999999"))) {
     LOG_ERROR("fail set min value", K(ret));
   } else if (OB_FAIL(NO_MAX_VALUE.set("10000000000000000000000000000"))) {
     LOG_ERROR("fail set max value", K(ret));

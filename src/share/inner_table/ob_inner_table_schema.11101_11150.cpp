@@ -120,6 +120,7 @@ int ObInnerTableSchema::virtual_show_restore_preview_schema(ObTableSchema &table
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj file_status_default;
     file_status_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("file_status", //column_name

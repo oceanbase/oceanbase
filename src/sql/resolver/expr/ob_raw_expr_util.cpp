@@ -2222,6 +2222,19 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
           } else {
             dest = dest_seq;
           }
+        } else if (T_FUN_SYS_MYSQL_SEQ_SETVAL == origin->get_expr_type()) {
+          ObSequenceSetvalRawExpr* dest_seq = NULL;
+          const ObSequenceSetvalRawExpr* origin_seq = static_cast<const ObSequenceSetvalRawExpr*>(origin);
+          if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_seq))) {
+            LOG_WARN("failed to allocate raw expr", K(dest_seq), K(ret));
+          } else if (OB_ISNULL(dest_seq)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr is NULL", K(dest_seq), K(ret));
+          } else if (OB_FAIL(dest_seq->deep_copy(expr_factory, *origin_seq, COPY_REF_DEFAULT, use_new_allocator))) {
+            LOG_WARN("failed to deep copy sys func expr", K(ret));
+          } else {
+            dest = dest_seq;
+          }
         } else if (T_FUN_NORMAL_UDF == origin->get_expr_type()) {
           ObNormalDllUdfRawExpr* dest_nudf = NULL;
           const ObNormalDllUdfRawExpr* origin_nudf = static_cast<const ObNormalDllUdfRawExpr*>(origin);

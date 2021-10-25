@@ -207,7 +207,7 @@ END_P SET_VAR DELIMITER
         CODE COLLATION COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION
         COMPRESSED COMPRESSION CONCURRENT CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COUNT CPU CREATE_TIMESTAMP
-        CTX_ID CUBE CURDATE CURRENT CURTIME CURSOR_NAME CUME_DIST CYCLE
+        CTX_ID CUBE CURDATE CURRENT LASTVAL CURTIME CURSOR_NAME CUME_DIST CYCLE
 
         DAG DATA DATAFILE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPTION
         DEFAULT_AUTH DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESTINATION DIAGNOSTICS
@@ -226,7 +226,7 @@ END_P SET_VAR DELIMITER
 
         HANDLER HASH HELP HISTOGRAM HOST HOSTS HOUR
 
-        ID IDC IDENTIFIED IGNORE_SERVER_IDS ILOG IMPORT INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
+        ID INCREMENT IDC IDENTIFIED IGNORE_SERVER_IDS ILOG IMPORT INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IO_THREAD IPC ISOLATE ISOLATION ISSUER
         IS_TENANT_SYS_POOL INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL INNER_PARSE ILOGCACHE INPUT
 
@@ -244,12 +244,13 @@ END_P SET_VAR DELIMITER
         MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU
         MAX_DISK_SIZE MAX_IOPS MAX_MEMORY MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SESSION_NUM MAX_SIZE
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND
-        MIGRATE MIN MIN_CPU MIN_IOPS MIN_MEMORY MINOR MIN_ROWS MINUS MINUTE MODE MODIFY MONTH MOVE
+        MIGRATE MIN MIN_CPU MIN_IOPS MIN_MEMORY MINOR MIN_ROWS MINUS MINUTE MINVALUE MODE MODIFY MONTH MOVE
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
         MATERIALIZED MEMSTORE_PERCENT
 
-        NAME NAMES NATIONAL NCHAR NDB NDBCLUSTER NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT
-        NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NOPARALLEL
+        NAME NAMES NATIONAL NCHAR NDB NDBCLUSTER NEW NEXT NEXTVAL NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT
+        NO_WAIT NOCACHE NOCYCLE NOMAXVALUE NOMINVALUE NOORDER NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG 
+        NETWORK NOPARALLEL
 
         OBSOLETE OCCUR OF OFF OFFSET OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORIG_DEFAULT OWNER OLD_KEY OVER
 
@@ -257,7 +258,8 @@ END_P SET_VAR DELIMITER
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PROTECTION PRIORITY PL POOL PORT POSITION PREPARE PRESERVE PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK PRIMARY_ROOTSERVICE_LIST
-        PRIMARY_CLUSTER_ID PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS
+
+        PRIMARY_CLUSTER_ID PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PREVIOUS
 
         QUARTER QUERY QUEUE_TIME QUICK
 
@@ -269,9 +271,9 @@ END_P SET_VAR DELIMITER
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ONLY RECOVERY
 
-        SAMPLE SAVEPOINT SCHEDULE SCHEMA_NAME SCOPE SECOND SECURITY SEED SERIAL SERIALIZABLE SERVER
+        SAMPLE SAVEPOINT SCHEDULE SCHEMA_NAME SCOPE SECOND SECURITY SEED SEQUENCE SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
-        SET_TP SHARE SHUTDOWN SIGNED SIMPLE SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
+        SET_TP SETVAL SHARE SHUTDOWN SIGNED SIMPLE SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
         SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR STANDBY STAT START STARTS STATS_AUTO_RECALC
@@ -304,6 +306,7 @@ END_P SET_VAR DELIMITER
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option
+%type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num sequence_list
 %type <node> create_synonym_stmt drop_synonym_stmt opt_public opt_force synonym_name synonym_object opt_dlink
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
 %type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor
@@ -538,6 +541,9 @@ stmt:
   | unlock_tables_stmt
   { $$ = $1; check_question_mark($$, result); $$->value_ = 1; }
   | purge_stmt              { $$ = $1; check_question_mark($$, result); }
+  | create_sequence_stmt    { $$ = $1; check_question_mark($$, result); }
+  | alter_sequence_stmt     { $$ = $1; check_question_mark($$, result); }
+  | drop_sequence_stmt      { $$ = $1; check_question_mark($$, result); }
   | load_data_stmt          { $$ = $1; check_question_mark($$, result); }
   | xa_begin_stmt           { $$ = $1; check_question_mark($$, result); }
   | xa_end_stmt             { $$ = $1; check_question_mark($$, result); }
@@ -1432,6 +1438,16 @@ simple_expr collation %prec NEG
   merge_nodes(node, result, T_MATCH_COLUMN_LIST, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_MATCH_AGAINST, 2, node, $7);
   $$->value_ = $8[0];
+}
+| NEXT VALUE FOR relation_factor
+{
+  make_name_node($$, result->malloc_pool_, "mysql_seq_next_value");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_SEQ, 2, $$, $4);
+}
+| PREVIOUS VALUE FOR relation_factor
+{
+  make_name_node($$, result->malloc_pool_, "mysql_seq_last_value");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_SEQ, 2, $$, $4);
 }
 | case_expr
 {
@@ -2463,6 +2479,31 @@ MOD '(' expr ',' expr ')'
   merge_nodes(param_list_node, result, T_EXPR_LIST, param_list_node);
   make_name_node($$, result->malloc_pool_, "log");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, param_list_node);
+}
+| NEXTVAL '(' relation_factor ')'
+{
+  make_name_node($$, result->malloc_pool_, "mysql_seq_next_value");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_SEQ, 2, $$, $3);
+}
+| LASTVAL '(' relation_factor ')'
+{
+  make_name_node($$, result->malloc_pool_, "mysql_seq_last_value");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_SEQ, 2, $$, $3);
+}
+| SETVAL '(' relation_factor ',' simple_num opt_comma opt_expr_as_list ')'
+{
+  (void)($6);
+  make_name_node($$, result->malloc_pool_, "mysql_seq_set_value");
+  ParseNode *optional_params = NULL;
+  if (NULL != $7) {
+    merge_nodes(optional_params, result, T_EXPR_LIST, $7);
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MYSQL_SEQ_SETVAL, 4, $$, $3, $5, optional_params);
+}
+| COUNT '(' opt_all expr ')'
+{
+  malloc_terminal_node($3, result->malloc_pool_, T_ALL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_COUNT, 2, $3, $4);
 }
 | function_name '(' opt_expr_as_list ')'
 {
@@ -4317,6 +4358,24 @@ column_definition_ref data_type opt_column_attribute_list opt_position_column
   dup_expr_string($6, result, @6.first_column, @6.last_column);
   merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $9);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 6, $1, $2, attributes, $6, $8, $10);
+}
+| column_definition_ref data_type opt_generated_keyname AS opt_sequence_option_list opt_column_attribute_list
+{
+  (void)($3);
+  ParseNode *attributes = NULL;
+  ParseNode *sequence_option = NULL;
+  merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $6);
+  merge_nodes(sequence_option, result, T_SEQUENCE_OPTION_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 4, $1, $2, attributes, sequence_option);
+}
+| column_definition_ref opt_generated_keyname AS opt_sequence_option_list opt_column_attribute_list
+{
+  (void)($2);
+  ParseNode *attributes = NULL;
+  ParseNode *sequence_option = NULL;
+  merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $5);
+  merge_nodes(sequence_option, result, T_SEQUENCE_OPTION_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 4, $1, NULL, attributes, sequence_option);
 }
 ;
 
@@ -10173,6 +10232,197 @@ LOCAL {$$ = NULL;}
 
 /*****************************************************************************
  *
+ *	create sequence grammar
+ *
+ *****************************************************************************/
+create_sequence_stmt:
+CREATE SEQUENCE opt_if_not_exists relation_factor opt_sequence_option_list
+{
+  ParseNode *sequence_option = NULL;
+  merge_nodes(sequence_option, result, T_SEQUENCE_OPTION_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_SEQUENCE, 3, $3, $4, sequence_option);
+}
+;
+
+opt_sequence_option_list:
+sequence_option_list
+{
+  $$ = $1;
+}
+|
+{
+  $$ = NULL;
+}
+;
+
+sequence_option_list:
+sequence_option
+{
+  $$ = $1;
+}
+| sequence_option_list  sequence_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+sequence_option:
+INCREMENT BY simple_num
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INCREMENT_BY, 1, $3);
+}
+|
+INCREMENT opt_equal_mark simple_num
+{
+  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INCREMENT_BY, 1, $3);
+}
+|
+START WITH simple_num
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_START_WITH, 1, $3);
+}
+|
+START opt_equal_mark simple_num
+{
+  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_START_WITH, 1, $3);
+}
+|
+MAXVALUE opt_equal_mark simple_num
+{
+  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MAXVALUE, 1, $3);
+}
+|
+NOMAXVALUE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOMAXVALUE);
+}
+|
+NO MAXVALUE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOMAXVALUE);
+}
+|
+MINVALUE opt_equal_mark simple_num
+{
+  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MINVALUE, 1, $3);
+}
+|
+NOMINVALUE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOMINVALUE);
+}
+|
+NO MINVALUE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOMINVALUE);
+}
+|
+CYCLE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CYCLE);
+}
+|
+NOCYCLE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOCYCLE);
+}
+|
+CACHE opt_equal_mark simple_num
+{
+  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CACHE, 1, $3);
+}
+|
+NOCACHE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOCACHE);
+}
+|
+ORDER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ORDER);
+}
+|
+NOORDER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_NOORDER);
+}
+;
+
+simple_num:
+'+' INTNUM %prec '+'
+{
+  $$ = $2;
+}
+|
+'-' INTNUM %prec '-'
+{
+  $2->value_ = 0 - $2->value_;
+  $$ = $2;
+}
+|
+INTNUM
+{
+  $$ = $1;
+}
+| '+' DECIMAL_VAL %prec '+'
+{
+    $$ = $2;
+}
+| '-' DECIMAL_VAL %prec '-'
+{
+  int32_t len = $2->str_len_ + 2; /* 2 bytes for sign and terminator '\0' */
+  char *str_value = (char *)parse_malloc(len, result->malloc_pool_);
+  if (OB_LIKELY(NULL != str_value)) {
+    snprintf(str_value, len, "-%.*s", (int32_t)($2->str_len_), $2->str_value_);
+    $$ = $2;
+    $$->str_value_ = str_value;
+    $$->str_len_ = $2->str_len_ + 1;
+  } else {
+    yyerror(NULL, result, "No more space for copying expression string\n");
+    YYABORT_NO_MEMORY;
+  }
+}
+| DECIMAL_VAL
+{
+    $$ = $1;
+}
+;
+
+drop_sequence_stmt:
+DROP SEQUENCE opt_if_exists sequence_list
+{
+  ParseNode *sequences = NULL;
+  merge_nodes(sequences, result, T_SEQUENCE_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_SEQUENCE, 2, $3, sequences);
+}
+;
+
+sequence_list:
+relation_factor
+{
+  $$ = $1;
+}
+| sequence_list ',' relation_factor
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+alter_sequence_stmt:
+ALTER SEQUENCE opt_if_exists relation_factor opt_sequence_option_list
+{
+  ParseNode *sequence_option = NULL;
+  merge_nodes(sequence_option, result, T_SEQUENCE_OPTION_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_SEQUENCE, 3, $3, $4, sequence_option);
+}
+;
+/*****************************************************************************
+ *
  *  begin/start transaction grammer
  *
  ******************************************************************************/
@@ -13918,6 +14168,7 @@ ACCOUNT
 |       SECOND
 |       SECURITY
 |       SEED
+|       SEQUENCE
 |       SERIAL
 |       SERIALIZABLE
 |       SERVER

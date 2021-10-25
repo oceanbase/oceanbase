@@ -620,6 +620,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj key_name_default;
     key_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("key_name", //column_name
@@ -639,6 +640,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj seq_in_index_default;
     seq_in_index_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("seq_in_index", //column_name
@@ -658,6 +660,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_schema_default;
     table_schema_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("table_schema", //column_name
@@ -677,6 +680,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_default;
     table_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("table", //column_name
@@ -696,6 +700,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj non_unique_default;
     non_unique_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("non_unique", //column_name
@@ -715,6 +720,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj index_schema_default;
     index_schema_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("index_schema", //column_name
@@ -734,6 +740,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj column_name_default;
     column_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("column_name", //column_name
@@ -813,6 +820,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj null_default;
     null_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("null", //column_name
@@ -832,6 +840,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj index_type_default;
     index_type_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("index_type", //column_name
@@ -866,6 +875,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj index_comment_default;
     index_comment_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("index_comment", //column_name
@@ -885,6 +895,7 @@ int ObInnerTableSchema::tenant_virtual_table_index_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj is_visible_default;
     is_visible_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("is_visible", //column_name
@@ -1177,6 +1188,7 @@ int ObInnerTableSchema::tenant_virtual_session_variable_schema(ObTableSchema &ta
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj variable_name_default;
     variable_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("variable_name", //column_name
@@ -1333,6 +1345,7 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj id_default;
     id_default.set_uint64(0);
     ADD_COLUMN_SCHEMA_T("id", //column_name
@@ -1352,6 +1365,7 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj user_default;
     user_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("user", //column_name
@@ -1386,6 +1400,7 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj host_default;
     host_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("host", //column_name
@@ -1420,6 +1435,7 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj command_default;
     command_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("command", //column_name
@@ -1439,6 +1455,7 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj sql_id_default;
     sql_id_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("sql_id", //column_name
@@ -1458,6 +1475,7 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj time_default;
     time_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("time", //column_name
@@ -1657,6 +1675,7 @@ int ObInnerTableSchema::all_virtual_processlist_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj trace_id_default;
     trace_id_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("trace_id", //column_name
@@ -2857,6 +2876,7 @@ int ObInnerTableSchema::tenant_virtual_global_variable_schema(ObTableSchema &tab
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj variable_name_default;
     variable_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("variable_name", //column_name

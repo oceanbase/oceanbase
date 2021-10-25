@@ -2609,7 +2609,8 @@ def_table_schema(
     in_tenant_space = True,
 
   normal_columns = [
-      ('next_value', 'number:38:0', 'false')
+      ('next_value', 'number:38:0', 'false'),
+      ('cycle_count', 'number:38:0', 'false', '0')
   ],
   columns_with_tenant_id = ['sequence_id'],
 )

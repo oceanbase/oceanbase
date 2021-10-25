@@ -502,7 +502,7 @@ int ObMergeLogPlan::allocate_merge_operator_as_top(ObLogicalOperator*& top)
     LOG_WARN("failed to allocate MERGE operator", K(ret));
   } else if (OB_FAIL(set_autoinc_params(merge_stmt->get_autoinc_params()))) {
     LOG_WARN("failed to set auto-increment params", K(ret));
-  } else if (merge_stmt->has_sequence() && OB_FAIL(allocate_sequence_as_top(top))) {
+  } else if (lib::is_oracle_mode() && merge_stmt->has_sequence() && OB_FAIL(allocate_sequence_as_top(top))) {
     LOG_WARN("failed to allocate sequence as top", K(ret));
   } else if (OB_FAIL(append(merge_op->get_output_exprs(), merge_stmt->get_column_conv_functions()))) {
     LOG_WARN("failed to append exprs", K(ret));

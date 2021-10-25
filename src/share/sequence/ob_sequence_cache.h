@@ -17,7 +17,9 @@
 #include "lib/hash/ob_link_hashmap.h"
 #include "lib/number/ob_number_v2.h"
 #include "share/sequence/ob_sequence_dml_proxy.h"
+#include "share/sequence/ob_sequence_sync_proxy.h"
 #include "share/sequence/ob_sequence_option.h"
+#include "share/ob_alive_server_tracer.h"
 
 namespace oceanbase {
 namespace common {
@@ -32,7 +34,7 @@ class ObMultiVersionSchemaService;
 }  // namespace schema
 
 struct SequenceCacheNode {
-  SequenceCacheNode() : start_(), end_()
+  SequenceCacheNode() : start_(), end_(), round_()
   {}
 
   void reset()
@@ -48,6 +50,10 @@ struct SequenceCacheNode {
   {
     return end_.set(end);
   }
+  int set_round(const common::number::ObNumber& round)
+  {
+    return round_.set(round);
+  }
   const common::number::ObNumber& start() const
   {
     return start_.val();
@@ -56,10 +62,14 @@ struct SequenceCacheNode {
   {
     return end_.val();
   }
-
+  const common::number::ObNumber& round() const
+  {
+    return round_.val();
+  }
 private:
   ObSequenceValue start_;
   ObSequenceValue end_;
+  ObSequenceValue round_;
 };
 
 // a wrapper class, adaptor for ObLinkHashMap
@@ -96,6 +106,7 @@ public:
       : prefetching_(false),
         with_prefetch_node_(false),
         base_on_last_number_(false),
+        enough_cache_node_(false),
         last_refresh_ts_(0),
         last_number_()
   {}
@@ -105,9 +116,10 @@ public:
     if (OB_LIKELY(with_prefetch_node_)) {
       if (curr_node_.end() != prefetch_node_.start()) {
         // use prefetched node since can't merge curr node and prefetch node
-        ret = curr_node_.set_start(prefetch_node_.start());
+        curr_node_.set_start(prefetch_node_.start());
       }
       curr_node_.set_end(prefetch_node_.end());
+      curr_node_.set_round(prefetch_node_.round());
       // can prefect new node
       with_prefetch_node_ = false;
     }
@@ -134,6 +146,8 @@ public:
   // mark  prefetch_node filled
   bool with_prefetch_node_;
   bool base_on_last_number_;
+  // mark cache doesn't run out
+  bool enough_cache_node_;
   int64_t last_refresh_ts_;
   lib::ObMutex alloc_mutex_;
 
@@ -155,8 +169,12 @@ public:
   virtual ~ObSequenceCache() = default;
   static ObSequenceCache& get_instance();
 
-  int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy);
+  int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy,
+      obrpc::ObSrvRpcProxy* srv_proxy, share::ObAliveServerTracer* server_tracer);
   int nextval(const share::schema::ObSequenceSchema& schema, common::ObIAllocator& allocator, ObSequenceValue& nextval);
+  int lastval(const share::schema::ObSequenceSchema& schema, ObSequenceValue& lastval, bool& inited);
+  int setval(const share::schema::ObSequenceSchema& schema, const ObSequenceValue& new_next_val, const ObSequenceValue& new_round, 
+      ObSequenceValue& value, bool& valid);
   int remove(uint64_t sequence_id);
 
 private:
@@ -167,10 +185,12 @@ private:
   int find_sequence_cache(const schema::ObSequenceSchema& schema, ObSequenceCacheItem& cache);
   int move_next(const schema::ObSequenceSchema& schema, ObSequenceCacheItem& cache, common::ObIAllocator& allocator,
       ObSequenceValue& nextval);
-  int need_refill_cache(const schema::ObSequenceSchema& schema, ObSequenceCacheItem& cache,
-      common::ObIAllocator& allocator, bool& need_refill);
-  int refill_sequence_cache(
-      const schema::ObSequenceSchema& schema, common::ObIAllocator& allocator, ObSequenceCacheItem& cache);
+  int need_refill_cache(const schema::ObSequenceSchema& schema, ObSequenceCacheItem& cache, bool& need_refill);
+  int refill_sequence_cache(const schema::ObSequenceSchema& schema, ObSequenceCacheItem& cache);
+
+  int check_setval(const bool increment_pos, const SequenceCacheNode& node, 
+    const ObSequenceValue& new_next_val, const ObSequenceValue& new_round, bool& valid);
+
   /* variables */
   ObSequenceDMLProxy dml_proxy_;
   bool inited_;

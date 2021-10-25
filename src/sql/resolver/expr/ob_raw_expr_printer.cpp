@@ -1218,6 +1218,20 @@ int ObRawExprPrinter::print(ObSysFunRawExpr* expr)
         }
         break;
       }
+      case T_FUN_SYS_MYSQL_SEQ_SETVAL: {
+        ObSequenceSetvalRawExpr* seq_expr = static_cast<ObSequenceSetvalRawExpr*>(expr);
+        if (seq_expr->get_param_count() < 3 || seq_expr->get_param_count() < 5) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param count should be between 3 and 5", K(ret), K(seq_expr->get_param_count()));
+        } else if (!seq_expr->get_db_name().empty() && !seq_expr->get_seq_name().empty()) {
+          DATA_PRINTF("%.*s %.*s %s %d %s", LEN_AND_PTR(seq_expr->get_db_name()), LEN_AND_PTR(seq_expr->get_seq_name()), 
+              seq_expr->get_new_next_value().format(), seq_expr->get_used_value(), seq_expr->get_round().format());
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sequence setval should sepcify target sequence", K(ret));
+        }
+        break;
+      }
       case T_FUN_PL_SQLCODE_SQLERRM: {
         ObPLSQLCodeSQLErrmRawExpr* sql_expr = static_cast<ObPLSQLCodeSQLErrmRawExpr*>(expr);
         if (sql_expr->get_is_sqlcode()) {

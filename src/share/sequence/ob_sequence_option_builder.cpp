@@ -72,7 +72,24 @@ int ObSequenceOptionBuilder::build_alter_sequence_option(
     // cannot alter starting sequence number
     ret = OB_ERR_ALTER_START_SEQ_NUMBER_NOT_ALLOWED;
     LOG_WARN("cannot alter starting sequence number", K(ret));
-  } else if (OB_FAIL(check_sequence_option(opt_bitset, opt_new))) {
+  } else {
+    ObSequenceOption& option = opt_new;
+    if (option.get_increment_by() > static_cast<int64_t>(0)) {
+      if (!option.has_set_minvalue() && OB_FAIL(option.set_min_value(static_cast<int64_t>(1)))) {
+        LOG_WARN("fail set default min value", K(ret));
+      } else if (!option.has_set_maxvalue() && OB_FAIL(option.set_maxvalue())) {
+        LOG_WARN("fail set default max value", K(ret));
+      }
+    } else if (option.get_increment_by() < static_cast<int64_t>(0)) {
+      if (!option.has_set_maxvalue() && OB_FAIL(option.set_max_value(static_cast<int64_t>(-1)))) {
+        LOG_WARN("fail set default max value", K(ret));
+      } else if (!option.has_set_minvalue() && OB_FAIL(option.set_minvalue())) {
+        LOG_WARN("fail set default min value", K(ret));
+      }
+    }  
+  }
+  
+  if (OB_SUCC(ret) && OB_FAIL(check_sequence_option(opt_bitset, opt_new))) {
     LOG_WARN("sequence option not valid", K(opt_new), K(ret));
   }
   return ret;

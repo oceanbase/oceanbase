@@ -381,6 +381,10 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_INETATON : return "T_FUN_SYS_INETATON";
 	case T_FUN_SYS_CRC32 : return "T_FUN_SYS_CRC32";
 	case T_FUN_SYS_WEIGHT_STRING : return "T_FUN_SYS_WEIGHT_STRING";
+	case T_FUN_SYS_MYSQL_SEQ_LASTVAL : return "T_FUN_SYS_MYSQL_SEQ_LASTVAL";
+	case T_FUN_SYS_MYSQL_SEQ_NEXTVAL : return "T_FUN_SYS_MYSQL_SEQ_NEXTVAL";
+	case T_FUN_SYS_MYSQL_SEQ_SETVAL : return "T_FUN_SYS_SEQ_SETVAL";
+	case T_FUN_SYS_SEQ : return "T_FUN_SYS_SEQ";
 	case T_MYSQL_ONLY_SYS_MAX_OP : return "T_MYSQL_ONLY_SYS_MAX_OP";
 	case T_FUN_SYS_CONNECT_BY_PATH : return "T_FUN_SYS_CONNECT_BY_PATH";
 	case T_FUN_SYS_SYSTIMESTAMP : return "T_FUN_SYS_SYSTIMESTAMP";
@@ -700,6 +704,7 @@ const char* get_type_name(int type)
 	case T_INDEX_SCOPE : return "T_INDEX_SCOPE";
 	case T_DROP_TABLE : return "T_DROP_TABLE";
 	case T_TABLE_LIST : return "T_TABLE_LIST";
+	case T_SEQUENCE_LIST: return "T_SEQUENCE_LIST";
 	case T_DROP_VIEW : return "T_DROP_VIEW";
 	case T_VIEW_LIST : return "T_VIEW_LIST";
 	case T_PARTITION_OPTION : return "T_PARTITION_OPTION";

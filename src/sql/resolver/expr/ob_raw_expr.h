@@ -3190,6 +3190,54 @@ private:
   uint64_t sequence_id_;
 };
 
+class ObSequenceSetvalRawExpr : public ObSysFunRawExpr {
+public:
+  ObSequenceSetvalRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), db_name_(), seq_name_(), new_next_value_(), used_value_(true), round_(), sequence_id_(0)
+  {}
+  ObSequenceSetvalRawExpr() : ObSysFunRawExpr(), db_name_(), seq_name_(), new_next_value_(), used_value_(true), round_(), sequence_id_(0)
+  {}
+  virtual ~ObSequenceSetvalRawExpr() = default;
+  virtual int assign(const ObSequenceSetvalRawExpr& other);
+  virtual int deep_copy(ObRawExprFactory& expr_factory, const ObSequenceSetvalRawExpr& other, const uint64_t copy_types,
+      bool use_new_allocator = false);
+  int set_params(const common::ObString& db_name, const common::ObString& seq_name, const common::number::ObNumber& new_next_value, 
+    bool used_value, const common::number::ObNumber& round, uint64_t sequence_id);
+  const common::ObString& get_db_name()
+  {
+    return db_name_;
+  }
+  const common::ObString& get_seq_name()
+  {
+    return seq_name_;
+  }
+  const common::number::ObNumber& get_new_next_value()
+  {
+    return new_next_value_;
+  }
+  bool get_used_value() const
+  {
+    return used_value_;
+  }
+  const common::number::ObNumber& get_round() const
+  {
+    return round_;
+  }
+  uint64_t get_sequence_id() const
+  {
+    return sequence_id_;
+  }
+  virtual bool same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context = NULL) const override;
+  virtual int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const override;
+
+private:
+  common::ObString db_name_;
+  common::ObString seq_name_;
+  common::number::ObNumber new_next_value_;
+  bool used_value_;
+  common::number::ObNumber round_;
+  uint64_t sequence_id_;
+};
+
 class ObNormalDllUdfRawExpr : public ObSysFunRawExpr {
 public:
   ObNormalDllUdfRawExpr(common::ObIAllocator& alloc) : ObSysFunRawExpr(alloc), udf_meta_(), udf_attributes_()

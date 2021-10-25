@@ -32,13 +32,13 @@ class ObSequenceDDLProxy {
 public:
   ObSequenceDDLProxy(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy);
   virtual ~ObSequenceDDLProxy();
-  int create_sequence(share::schema::ObSequenceSchema& seq_schema, const common::ObBitSet<>& opt_bitset,
+  int create_sequence(share::schema::ObSequenceSchema& seq_schema, const bool allow_existence, const common::ObBitSet<>& opt_bitset,
       common::ObMySQLTransaction& trans, share::schema::ObSchemaGetterGuard& schema_guard,
       const common::ObString* ddl_stmt_str);
-  int alter_sequence(share::schema::ObSequenceSchema& seq_schema, const common::ObBitSet<>& opt_bitset,
+  int alter_sequence(share::schema::ObSequenceSchema& seq_schema, const bool allow_inexistence, const common::ObBitSet<>& opt_bitset,
       common::ObMySQLTransaction& trans, share::schema::ObSchemaGetterGuard& schema_guard,
       const common::ObString* ddl_stmt_str);
-  int drop_sequence(share::schema::ObSequenceSchema& seq_schema, common::ObMySQLTransaction& trans,
+  int drop_sequence(share::schema::ObSequenceSchema& seq_schema, const bool allow_inexistence, common::ObMySQLTransaction& trans,
       share::schema::ObSchemaGetterGuard& schema_guard, const common::ObString* ddl_stmt_str);
   int rename_sequence(share::schema::ObSequenceSchema& seq_schema, common::ObMySQLTransaction& trans,
       const common::ObString* ddl_stmt_str);

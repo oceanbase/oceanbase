@@ -109,6 +109,9 @@
 #include "ob_expr_chr.h"
 #include "ob_expr_prior.h"
 #include "ob_expr_seq_nextval.h"
+#include "ob_expr_func_seq_nextval.h"
+#include "ob_expr_func_seq_lastval.h"
+#include "ob_expr_func_seq_setval.h"
 #include "ob_expr_ifnull.h"
 #include "ob_expr_lengthb.h"
 #include "ob_expr_ascii.h"
@@ -719,7 +722,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
     ObExprWeightString::eval_weight_string,   /* 458 */
     ObExprConvertTZ::eval_convert_tz,         /* 459 */
-    ObExprCrc32::calc_crc32_expr              /* 460 */
+    ObExprCrc32::calc_crc32_expr,              /* 460 */
+    ObExprConvertTZ::eval_convert_tz,         /* 461 */
+    ObExprFuncSeqNextval::calc_sequence_nextval,    /* 462 */
+    ObExprFuncSeqLastval::calc_sequence_lastval,    /* 463 */
+    ObExprFuncSeqSetval::calc_sequence_setval       /* 464 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

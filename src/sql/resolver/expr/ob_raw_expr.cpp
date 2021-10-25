@@ -3067,6 +3067,105 @@ int ObSequenceRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64
   return ret;
 }
 
+int ObSequenceSetvalRawExpr::assign(const ObSequenceSetvalRawExpr& other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_FAIL(ObSysFunRawExpr::assign(other))) {
+      LOG_WARN("failed to assign sys raw expr");
+    } else {
+      new_next_value_.shadow_copy(other.new_next_value_);
+      round_.shadow_copy(other.round_);
+      db_name_ = other.db_name_;
+      seq_name_ = other.seq_name_;
+      used_value_ = other.used_value_;
+    }
+  }
+  return ret;
+}
+
+int ObSequenceSetvalRawExpr::deep_copy(
+    ObRawExprFactory& expr_factory, const ObSequenceSetvalRawExpr& other, const uint64_t copy_types, bool use_new_allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_FAIL(ObSysFunRawExpr::deep_copy(expr_factory, other, copy_types, use_new_allocator))) {
+      LOG_WARN("copy in Base class ObSysRawExpr failed", K(ret));
+    } else if (use_new_allocator) {
+      if (OB_ISNULL(inner_alloc_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.db_name_, db_name_))) {
+        LOG_WARN("fail to write string", K(other.db_name_), K(ret));
+      } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.seq_name_, seq_name_))) {
+        LOG_WARN("fail to write string", K(other.seq_name_), K(ret));
+      } else if (OB_FAIL(new_next_value_.deep_copy_v3(other.new_next_value_, *inner_alloc_))) {
+        LOG_WARN("fail to copy number", K(other.new_next_value_), K(ret));
+      } else if (OB_FAIL(round_.deep_copy_v3(other.round_, *inner_alloc_))) {
+        LOG_WARN("fail to copy number", K(other.round_), K(ret));
+      }
+    } else {
+      db_name_ = other.db_name_;
+      seq_name_ = other.seq_name_;
+      new_next_value_.shadow_copy(other.new_next_value_);
+      round_.shadow_copy(other.round_);
+    }
+
+    if(OB_SUCC(ret)) {
+      used_value_ = other.used_value_;
+    }
+  }
+  return ret;
+}
+
+int ObSequenceSetvalRawExpr::set_params(const common::ObString& db_name, const common::ObString& seq_name, const common::number::ObNumber& new_next_value, 
+    bool used_value, const common::number::ObNumber& round, uint64_t sequence_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(inner_alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+  } else if (OB_FAIL(ob_write_string(*inner_alloc_, db_name, db_name_))) {
+    LOG_WARN("fail to write string", K(db_name), K(ret));
+  } else if (OB_FAIL(ob_write_string(*inner_alloc_, seq_name, seq_name_))) {
+    LOG_WARN("fail to write string", K(seq_name), K(ret));
+  } else if (OB_FAIL(new_next_value_.deep_copy_v3(new_next_value, *inner_alloc_))) {
+    LOG_WARN("fail to copy number", K(new_next_value), K(ret));
+  } else if (OB_FAIL(round_.deep_copy_v3(round, *inner_alloc_))) {
+    LOG_WARN("fail to copy number", K(round), K(ret));
+  } else {
+    used_value_ = used_value;
+    sequence_id_ = sequence_id;
+  }
+  return ret;
+}
+
+bool ObSequenceSetvalRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* check_context) const
+{
+  UNUSED(expr);
+  UNUSED(check_context);
+  return false;
+}
+
+int ObSequenceSetvalRawExpr::get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(BUF_PRINTF("%.*s %.*s %s %d %s", db_name_.length(), db_name_.ptr(), seq_name_.length(), seq_name_.ptr(), new_next_value_.format(), used_value_, round_.format()))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (EXPLAIN_EXTENDED == type) {
+    if (OB_FAIL(BUF_PRINTF("("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+    }
+  }
+  return ret;
+}
+
 int ObNormalDllUdfRawExpr::set_udf_meta(const share::schema::ObUDF& udf)
 {
   int ret = OB_SUCCESS;

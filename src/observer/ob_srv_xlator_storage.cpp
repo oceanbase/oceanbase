@@ -96,6 +96,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(ObRpcGetPartitionStatP, gctx_);
   RPC_PROCESSOR(ObRpcSyncAutoincValueP, gctx_);
   RPC_PROCESSOR(ObRpcClearAutoincCacheP, gctx_);
+  RPC_PROCESSOR(ObRpcClearSequenceCacheP, gctx_);
   RPC_PROCESSOR(ObReportReplicaP, gctx_);
   RPC_PROCESSOR(ObReportSingleReplicaP, gctx_);
   RPC_PROCESSOR(ObRecycleReplicaP, gctx_);

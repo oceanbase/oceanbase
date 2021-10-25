@@ -19244,60 +19244,74 @@ int ObDDLService::drop_synonym(const obrpc::ObDropSynonymArg& arg)
 int ObDDLService::do_sequence_ddl(const obrpc::ObSequenceDDLArg& arg)
 {
   int ret = OB_SUCCESS;
-  const ObString* ddl_stmt_str = &arg.ddl_stmt_str_;
-  ObSequenceSchema seq_schema;
-  const ObBitSet<>& opt_bitset = arg.get_option_bitset();
-  ObSchemaGetterGuard schema_guard;
-  uint64_t database_id = OB_INVALID_ID;
-  const uint64_t tenant_id = arg.seq_schema_.get_tenant_id();
+  ObString empty_str = ObString::make_empty_string();
+  const ObString* ddl_stmt_str = &empty_str;
 
-  if (OB_FAIL(check_inner_stat())) {
+  if (OB_FAIL(check_inner_stat())) {  
     LOG_WARN("variable is not init");
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(seq_schema.assign(arg.seq_schema_))) {
-    LOG_WARN("fail assign sequence schema", K(ret));
-  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get latest schema version in inner table", K(ret), K(tenant_id));
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_database_id(schema_guard, tenant_id, arg.database_name_, database_id))) {
-      LOG_WARN("fail get database id", K(ret));
-    } else {
-      seq_schema.set_database_id(database_id);
-    }
+  } else if (arg.get_seq_items().size() < 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sequence arg num", K(arg.get_seq_items().size()), K(ret));
   }
 
   if (OB_SUCC(ret)) {
     ObSequenceDDLProxy ddl_operator(*schema_service_, *sql_proxy_);
     ObDDLSQLTransaction trans(schema_service_);
+    const common::ObSArray<ObSequenceItem>& sequence_items = arg.get_seq_items();
+    const uint64_t tenant_id = sequence_items.at(0).seq_schema_.get_tenant_id();
+    ObSequenceSchema seq_schema;
+    ObSchemaGetterGuard schema_guard;
+
     if (OB_FAIL(trans.start(sql_proxy_))) {
       LOG_WARN("start transaction failed", K(ret));
     } else {
-      switch (arg.get_stmt_type()) {
-        case sql::stmt::T_CREATE_SEQUENCE: {
-          if (OB_FAIL(ddl_operator.create_sequence(seq_schema, opt_bitset, trans, schema_guard, ddl_stmt_str))) {
-            LOG_WARN("fail create sequence", K(arg), K(ret));
-          }
-          break;
+      for (int64_t i = 0; OB_SUCC(ret) && i < sequence_items.size(); i++) {
+        seq_schema.reset();
+        schema_guard.reset();
+        const ObSequenceItem& item = sequence_items.at(i);
+        const ObBitSet<>& opt_bitset = item.get_option_bitset();
+        uint64_t database_id = OB_INVALID_ID;
+    
+        if (OB_FAIL(seq_schema.assign(item.seq_schema_))) {
+          LOG_WARN("fail assign sequence schema", K(ret));
+        } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+          LOG_WARN("fail to get latest schema version in inner table", K(ret), K(tenant_id));
+        } else if (OB_FAIL(get_database_id(schema_guard, tenant_id, item.database_name_, database_id))) {
+          LOG_WARN("fail get database id", K(ret));
+        } else {
+          seq_schema.set_database_id(database_id);
+        }       
+        if(i == sequence_items.size() - 1){
+          ddl_stmt_str = &arg.ddl_stmt_str_;
         }
-        case sql::stmt::T_ALTER_SEQUENCE: {
-          if (OB_FAIL(ddl_operator.alter_sequence(seq_schema, opt_bitset, trans, schema_guard, ddl_stmt_str))) {
-            LOG_WARN("fail alter sequence", K(arg), K(ret));
+
+        switch (arg.get_stmt_type()) {
+          case sql::stmt::T_CREATE_SEQUENCE: {
+            if (OB_FAIL(ddl_operator.create_sequence(seq_schema, arg.get_exist_flag(), opt_bitset, trans, schema_guard, ddl_stmt_str))) {
+              LOG_WARN("fail create sequence", K(arg), K(ret));
+            }
+            break;
           }
-          break;
-        }
-        case sql::stmt::T_DROP_SEQUENCE: {
-          if (OB_FAIL(ddl_operator.drop_sequence(seq_schema, trans, schema_guard, ddl_stmt_str))) {
-            LOG_WARN("fail drop sequence", K(arg), K(ret));
+          case sql::stmt::T_ALTER_SEQUENCE: {
+            if (OB_FAIL(ddl_operator.alter_sequence(seq_schema, arg.get_exist_flag(), opt_bitset, trans, schema_guard, ddl_stmt_str))) {
+              LOG_WARN("fail alter sequence", K(arg), K(ret));
+            }
+            break;
           }
-          break;
+          case sql::stmt::T_DROP_SEQUENCE: {
+            if (OB_FAIL(ddl_operator.drop_sequence(seq_schema, arg.get_exist_flag(), trans, schema_guard, ddl_stmt_str))) {
+              LOG_WARN("fail drop sequence", K(arg), K(ret));
+            }
+            break;
+          }
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected stmt type", K(arg), K(ret));
+            break;
         }
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected stmt type", K(arg), K(ret));
-          break;
       }
     }
     if (trans.is_started()) {
@@ -19306,14 +19320,14 @@ int ObDDLService::do_sequence_ddl(const obrpc::ObSequenceDDLArg& arg)
         LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
+    }           
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish schema failed", K(ret));
+      }
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(publish_schema(tenant_id))) {
-      LOG_WARN("publish schema failed", K(ret));
-    }
-  }
   LOG_INFO("finish do sequence ddl", K(arg), K(ret));
   return ret;
 }

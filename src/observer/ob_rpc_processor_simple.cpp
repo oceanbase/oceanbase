@@ -17,6 +17,7 @@
 #include "lib/io/ob_io_manager.h"
 #include "lib/allocator/page_arena.h"
 #include "share/ob_autoincrement_service.h"
+#include "share/sequence/ob_sequence_sync_proxy.h"
 #include "share/config/ob_config_manager.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/ob_server_blacklist.h"
@@ -815,6 +816,11 @@ int ObRpcSyncAutoincValueP::process()
 int ObRpcClearAutoincCacheP::process()
 {
   return ObAutoincrementService::get_instance().clear_autoinc_cache(arg_);
+}
+
+int ObRpcClearSequenceCacheP::process()
+{
+  return ObSequenceSyncProxy::get_instance().clear_sequence_cache(arg_);
 }
 
 int ObDumpMemtableP::process()

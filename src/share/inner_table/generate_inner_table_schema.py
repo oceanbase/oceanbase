@@ -110,7 +110,7 @@ def add_index_method_end(num_index):
 
 def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, default_value, column_id):
   global cpp_f
-  set_op = "";
+  set_op = ""
   if "NULL" == default_value or "null" == default_value:
     set_op = 'set_null()'
   elif column_type == 'ObIntType':
@@ -133,13 +133,24 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
     set_op = 'set_lob_value(ObLongTextType, "{0}", strlen("{0}"))'.format(default_value)
     if column_collation_type == "CS_TYPE_BINARY":
       set_op += '; {0}_default.set_collation_type(CS_TYPE_BINARY);'.format(column_name.lower())
+  elif column_type == 'ObNumberType':
+    set_op += 'set_number({0}_builder.number_)'.format(column_name)
   else:
     raise IOError("ERROR column format: column_name={0} column_type={1}\n".format(column_name, column_type))
 
+  line = """
+  if (OB_SUCC(ret)) {{
+  """
+  if column_type == 'ObNumberType':
+    line += """
+    int ret_{0} = 0;
+    common::number::ObNumberBuilder {0}_builder;
+    {0}_builder.build_v2("{1}", strlen("{1}"), ret_{0});
+    """.format(column_name, default_value)
+
   if column_id != 0:
     ## index
-    line = """
-  if (OB_SUCC(ret)) {{
+    line += """
     ObObj {12}_default;
     {12}_default.{13};
     ADD_COLUMN_SCHEMA_T("{0}", //column_name
@@ -160,8 +171,7 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
 """
     cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, column_name.lower(), set_op))
   else:
-    line = """
-  if (OB_SUCC(ret)) {{
+    line += """
     ObObj {11}_default;
     {11}_default.{12};
     ADD_COLUMN_SCHEMA_T("{0}", //column_name

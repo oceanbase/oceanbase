@@ -664,27 +664,54 @@ public:
   bool open_recyclebin_;
 };
 
-struct ObSequenceDDLArg : public ObDDLArg {
+struct ObAddSysVarArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObSequenceDDLArg() : ObDDLArg(), stmt_type_(common::OB_INVALID_ID), option_bitset_(), seq_schema_(), database_name_()
+  ObAddSysVarArg() : sysvar_(), if_not_exist_(false)
   {}
+  DECLARE_TO_STRING;
+  bool is_valid() const;
+  virtual bool is_allow_when_upgrade() const
+  {
+    return true;
+  }
+  share::schema::ObSysVarSchema sysvar_;
+  bool if_not_exist_;
+};
+
+struct ObModifySysVarArg : public ObDDLArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObModifySysVarArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), is_inner_(false)
+  {}
+  DECLARE_TO_STRING;
+  bool is_valid() const;
+  int assign(const ObModifySysVarArg& other);
+  virtual bool is_allow_when_upgrade() const
+  {
+    return true;
+  }
+  virtual bool is_allow_when_disable_ddl() const
+  {
+    return true;
+  }
+  uint64_t tenant_id_;
+  common::ObSArray<share::schema::ObSysVarSchema> sys_var_list_;
+  bool is_inner_;
+};
+
+struct ObSequenceItem {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSequenceItem() : option_bitset_(), seq_schema_(), database_name_()
+  {}
+
   bool is_valid() const
   {
     return !database_name_.empty();
-  }
-  virtual bool is_allow_when_upgrade() const
-  {
-    return sql::stmt::T_DROP_SEQUENCE == stmt_type_;
-  }
-  void set_stmt_type(int64_t type)
-  {
-    stmt_type_ = type;
-  }
-  int64_t get_stmt_type() const
-  {
-    return stmt_type_;
   }
   void set_tenant_id(const uint64_t tenant_id)
   {
@@ -722,51 +749,70 @@ public:
   {
     return option_bitset_;
   }
-  TO_STRING_KV(K_(stmt_type), K_(seq_schema), K_(database_name));
+  TO_STRING_KV(K_(seq_schema), K_(database_name));
 
-public:
-  int64_t stmt_type_;
   common::ObBitSet<> option_bitset_;
   share::schema::ObSequenceSchema seq_schema_;
   common::ObString database_name_;
 };
 
-struct ObAddSysVarArg : public ObDDLArg {
+struct ObSequenceDDLArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObAddSysVarArg() : sysvar_(), if_not_exist_(false)
+  ObSequenceDDLArg() : ObDDLArg(), exist_flag_(false), stmt_type_(common::OB_INVALID_ID), seq_items_()
   {}
-  DECLARE_TO_STRING;
-  bool is_valid() const;
+  bool is_valid() const
+  {
+    bool valid = true;
+    if (seq_items_.size() < 1) {
+      valid = false;
+    } else {
+      int i = 0;
+      while (i < seq_items_.size() && seq_items_.at(i).is_valid()) {
+        i++;
+      }
+      if (i < seq_items_.size()) {
+        valid = false;
+      }
+    }
+    return valid;
+  }
   virtual bool is_allow_when_upgrade() const
   {
-    return true;
+    return sql::stmt::T_DROP_SEQUENCE == stmt_type_;
   }
-  share::schema::ObSysVarSchema sysvar_;
-  bool if_not_exist_;
-};
-
-struct ObModifySysVarArg : public ObDDLArg {
-  OB_UNIS_VERSION(1);
-
+  void set_stmt_type(int64_t type)
+  {
+    stmt_type_ = type;
+  }
+  int64_t get_stmt_type() const
+  {
+    return stmt_type_;
+  }
+  common::ObSArray<ObSequenceItem>& get_seq_items()
+  {
+    return seq_items_;
+  }
+  const common::ObSArray<ObSequenceItem>& get_seq_items() const
+  {
+    return seq_items_;
+  }
+  bool get_exist_flag() const
+  {
+    return exist_flag_;    
+  }
+  void set_exist_flag(bool exist_flag) 
+  {
+    exist_flag_ = exist_flag;
+  }
+  TO_STRING_KV(K_(exist_flag), K_(stmt_type), K_(seq_items));
 public:
-  ObModifySysVarArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), is_inner_(false)
-  {}
-  DECLARE_TO_STRING;
-  bool is_valid() const;
-  int assign(const ObModifySysVarArg& other);
-  virtual bool is_allow_when_upgrade() const
-  {
-    return true;
-  }
-  virtual bool is_allow_when_disable_ddl() const
-  {
-    return true;
-  }
-  uint64_t tenant_id_;
-  common::ObSArray<share::schema::ObSysVarSchema> sys_var_list_;
-  bool is_inner_;
+  // for creaet sequence, this flag means is_not_exist whether is used
+  // for alter sequence or drop sequence, this flag means is_exist whether is used
+  bool exist_flag_;  
+  int64_t stmt_type_;
+  common::ObSArray<ObSequenceItem> seq_items_;
 };
 
 struct ObCreateDatabaseArg : public ObDDLArg {

@@ -2672,7 +2672,7 @@ bool ObLogicalOperator::is_fix_producer_expr(const ObRawExpr& expr)
 {
   bool ret = false;
   if (expr.has_flag(IS_AGG) || expr.has_flag(IS_WINDOW_FUNC) || expr.has_flag(IS_ROWNUM) || expr.has_flag(IS_SET_OP) ||
-      expr.has_flag(IS_COLUMN) || expr.has_flag(IS_SEQ_EXPR) || (T_PDML_PARTITION_ID == expr.get_expr_type()) ||
+      expr.has_flag(IS_COLUMN) || (expr.has_flag(IS_SEQ_EXPR) && lib::is_oracle_mode()) || (T_PDML_PARTITION_ID == expr.get_expr_type()) ||
       (expr.has_flag(IS_PARAM) && ObOptimizerUtil::is_param_expr_correspond_subquey(
                                       static_cast<const ObConstRawExpr&>(expr), get_plan()->get_onetime_exprs())) ||
       expr.has_flag(IS_SUB_QUERY) || expr.has_flag(IS_CONNECT_BY_ROOT) || expr.has_flag(IS_SYS_CONNECT_BY_PATH) ||
@@ -2951,7 +2951,9 @@ int ObLogicalOperator::expr_can_be_produced(
       }
     }
     if (expr->has_flag(IS_SEQ_EXPR) && LOG_SEQUENCE != get_type()) {
-      can_be_produced = false;
+      if (lib::is_oracle_mode()) {
+        can_be_produced = false;
+      }
     } else if ((T_OP_CONNECT_BY_ROOT == expr->get_expr_type() || T_FUN_SYS_CONNECT_BY_PATH == expr->get_expr_type() ||
                    (expr->is_pseudo_column_expr() &&
                        static_cast<const ObPseudoColumnRawExpr*>(expr)->is_hierarchical_query_type())) &&

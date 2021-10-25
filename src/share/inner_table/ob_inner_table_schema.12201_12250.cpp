@@ -776,6 +776,7 @@ int ObInnerTableSchema::all_virtual_backupset_history_mgr_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj encryption_mode_default;
     encryption_mode_default.set_varchar(ObString::make_string("None"));
     ADD_COLUMN_SCHEMA_T("encryption_mode", //column_name
@@ -795,6 +796,7 @@ int ObInnerTableSchema::all_virtual_backupset_history_mgr_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj passwd_default;
     passwd_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("passwd", //column_name
@@ -1389,6 +1391,7 @@ int ObInnerTableSchema::all_virtual_backup_backupset_task_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj encryption_mode_default;
     encryption_mode_default.set_varchar(ObString::make_string("None"));
     ADD_COLUMN_SCHEMA_T("encryption_mode", //column_name
@@ -1408,6 +1411,7 @@ int ObInnerTableSchema::all_virtual_backup_backupset_task_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj passwd_default;
     passwd_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("passwd", //column_name
@@ -1427,6 +1431,7 @@ int ObInnerTableSchema::all_virtual_backup_backupset_task_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj start_replay_log_ts_default;
     start_replay_log_ts_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("start_replay_log_ts", //column_name
@@ -1446,6 +1451,7 @@ int ObInnerTableSchema::all_virtual_backup_backupset_task_schema(ObTableSchema &
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj date_default;
     date_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("date", //column_name
@@ -1889,6 +1895,7 @@ int ObInnerTableSchema::all_virtual_global_transaction_schema(ObTableSchema &tab
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj format_id_default;
     format_id_default.set_int(1);
     ADD_COLUMN_SCHEMA_T("format_id", //column_name
@@ -2000,6 +2007,7 @@ int ObInnerTableSchema::all_virtual_global_transaction_schema(ObTableSchema &tab
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj is_readonly_default;
     is_readonly_default.set_tinyint(0);
     ADD_COLUMN_SCHEMA_T("is_readonly", //column_name

@@ -1,4 +1,4 @@
-/**
+    /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
@@ -751,6 +751,18 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
         case T_FUN_SYS_LNNVL: {
           if (OB_FAIL(process_lnnvl_node(node, expr))) {
             LOG_WARN("fail to process lnnvl node", K(ret), K(node));
+          }
+          break;
+        }
+        case T_FUN_SYS_SEQ: {
+          if (OB_FAIL(process_sequence_node(node, expr))) {
+            LOG_WARN("fail to process sequence node", K(ret), K(node));
+          }
+          break;
+        }
+        case T_FUN_SYS_MYSQL_SEQ_SETVAL: {
+          if (OB_FAIL(process_set_sequence_value_node(node, expr))) {
+            LOG_WARN("fail to process set sequence value node", K(ret), K(node));
           }
           break;
         }
@@ -3441,6 +3453,281 @@ int ObRawExprResolverImpl::process_lnnvl_node(const ParseNode* node, ObRawExpr*&
     OZ(func_expr->add_param_expr(param_expr));
     OX(func_expr->set_func_name(ObString::make_string(N_LNNVL)));
     OX(expr = func_expr);
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_set_sequence_value_node(const ParseNode* node, ObRawExpr*& expr) {
+  int ret = OB_SUCCESS;
+  ObSequenceSetvalRawExpr* func_expr = NULL;
+  ObString func_name;
+
+  if (OB_ISNULL(node) || OB_ISNULL(ctx_.session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(node), KP(ctx_.session_info_));
+  } else if (OB_UNLIKELY(node->num_child_ != 4 || OB_ISNULL(node->children_[0]) || 
+      OB_ISNULL(node->children_[1]) ||OB_ISNULL(node->children_[2]))) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("invalid children node of sequence setval node", K(ret), "node", SJ(ObParserResultPrintWrapper(*node)));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_MYSQL_SEQ_SETVAL, func_expr))) {
+    LOG_WARN("fail to create last_value expr", K(ret));
+  } else if (OB_ISNULL(func_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("func_expr is null. Please check the name of func", K(func_name));
+  } else {
+    ObString name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+
+    if (OB_FAIL(ob_write_string(ctx_.expr_factory_.get_allocator(), name, func_name))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Malloc function name failed", K(ret));
+    } else if (ObString::make_string(N_MYSQL_SEQ_SETVAL) != func_name){
+      LOG_WARN("func_name is invalid",K(func_name));
+    } else {
+      func_expr->set_func_name(func_name);
+      LOG_DEBUG("sequence setval node", K(name), K(func_name), K(func_expr));
+    }
+  }
+  
+  // resolve sequence info
+  ObString sequence_name;
+  ObString database_name;
+  uint64_t sequence_id = OB_INVALID_ID;
+  const ParseNode* sequence_node = node->children_[1];
+  const ObSequenceSchema* schema = NULL;
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo* session_info = const_cast<ObSQLSessionInfo*>(ctx_.session_info_);
+    if (OB_FAIL(ObStmtResolver::resolve_ref_factor(sequence_node, session_info, sequence_name, database_name))){
+      LOG_WARN("resolve relation factor failed", K(ret), K(sequence_node->str_value_));
+    } else {
+      if (database_name.empty()) {
+        database_name = ctx_.session_info_->get_database_name();
+      }
+
+      uint64_t tenant_id = ctx_.session_info_->get_effective_tenant_id();
+      uint64_t database_id = OB_INVALID_ID;
+      bool exist = false;
+      if (database_name.empty()) {
+        ret = OB_ERR_NO_DB_SELECTED;
+        LOG_WARN("No database selected", K(database_name), K(sequence_name), K(ret));
+      } else if (OB_FAIL(ctx_.schema_checker_->get_database_id(tenant_id, database_name, database_id))) {
+        LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(database_name));
+      } else if (OB_FAIL(
+        ctx_.schema_checker_->check_sequence_exist_with_name(tenant_id, database_id, sequence_name, exist, sequence_id))) {
+        LOG_WARN("failed to check sequence with name", K(ret), K(sequence_name), K(database_id));
+      } else if (!exist) {
+        ret = OB_OBJECT_NAME_NOT_EXIST;
+        LOG_WARN("sequence is not exist", K(database_name), K(database_id), K(sequence_name));
+      } else if (OB_FAIL(ctx_.schema_checker_->get_schema_guard()->get_sequence_schema(tenant_id, sequence_id, schema))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sequence schema");
+      } else {
+        LOG_DEBUG("sequence information", K(database_name), K(database_id), K(sequence_name));
+      }
+    }
+  }
+
+  // resolve param
+  ObRawExpr* value_expr = NULL;
+  ObRawExpr* used_expr = NULL;
+  ObRawExpr* round_expr = NULL;
+  if (OB_SUCC(ret)) {
+    const ParseNode* next_value_node = node->children_[2];
+    const ParseNode* optional_node = node->children_[3];
+    if (OB_FAIL(SMART_CALL(recursive_resolve(next_value_node, value_expr)))) {
+      LOG_WARN("resolve next_value parameter faield", K(ret));
+    } else if (OB_NOT_NULL(optional_node)) {
+      if (OB_UNLIKELY(optional_node->num_child_ < 1 || optional_node->num_child_ > 2)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid optional parameter number",K(optional_node->num_child_));
+      } else {
+        const ParseNode* used_val_node = optional_node->children_[0];
+        const ParseNode* round_node = NULL;
+        if (OB_FAIL(SMART_CALL(recursive_resolve(used_val_node, used_expr)))) {
+          LOG_WARN("resolve used parameter faield", K(ret));
+        } else if (optional_node->num_child_ == 2) {
+          round_node = optional_node->children_[1];
+          if (OB_FAIL(SMART_CALL(recursive_resolve(round_node, round_expr)))) {
+            LOG_WARN("resolve round parameter faield", K(ret));
+          } 
+        } 
+      }
+    }
+  }
+  
+  // build raw_expr
+  if (OB_SUCC(ret)) {
+    ObConstRawExpr* db_name_expr = NULL;
+    ObConstRawExpr* seq_name_expr = NULL;
+    
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, db_name_expr))) {
+      LOG_WARN("create const raw expr failed", K(ret));
+    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, seq_name_expr))) {
+      LOG_WARN("create const raw expr failed", K(ret));
+    } else {
+      LOG_DEBUG("resolve success", K(database_name), K(sequence_name), K(sequence_id));
+      
+      ObCollationType coll_type = ObCharset::get_system_collation();
+      ObObj db_name;
+      db_name.set_varchar(database_name);
+      db_name.set_collation_type(coll_type);
+      db_name.set_collation_level(CS_LEVEL_COERCIBLE);
+      db_name_expr->set_value(db_name);
+      ObObj seq_name;
+      seq_name.set_varchar(sequence_name);
+      seq_name.set_collation_type(coll_type);
+      seq_name.set_collation_level(CS_LEVEL_COERCIBLE);
+      seq_name_expr->set_value(seq_name);
+      if (OB_FAIL(func_expr->add_param_expr(db_name_expr))) {
+        LOG_WARN("set funcation param expr failed", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(seq_name_expr))) {
+        LOG_WARN("set funcation param expr failed", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(value_expr))) {
+        LOG_WARN("set funcation param expr failed", K(ret));
+      } else if (OB_NOT_NULL(used_expr) && OB_FAIL(func_expr->add_param_expr(used_expr))) {
+        LOG_WARN("set funcation param expr failed", K(ret));
+      } else if (OB_NOT_NULL(round_expr) && OB_FAIL(func_expr->add_param_expr(round_expr))) {
+        LOG_WARN("set funcation param expr failed", K(ret));
+      } else if (OB_FAIL(func_expr->formalize(ctx_.session_info_))) {
+        LOG_WARN("failed to extract info", K(ret));
+      } else {
+        expr = func_expr;
+        LOG_DEBUG("sequence setval expr", K(sequence_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_sequence_node(const ParseNode* node, ObRawExpr*& expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr* func_expr = NULL;
+  ObString func_name;
+  ObString sequence_name;
+  ObString database_name;
+  bool next_value = false;
+  uint64_t sequence_id = OB_INVALID_ID;
+
+  if (OB_ISNULL(node) || OB_ISNULL(ctx_.session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(node), KP(ctx_.session_info_));
+  } else if (OB_UNLIKELY(node->num_child_ != 2) || OB_ISNULL(node->children_[0]) || OB_ISNULL(node->children_[1])) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("invalid node children for sequence node", K(ret), "node", SJ(ObParserResultPrintWrapper(*node)));
+  } else if (!share::is_mysql_mode()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("This function is only used for mysql mode", K(ret));
+  } else if (OB_UNLIKELY(T_FIELD_LIST_SCOPE != ctx_.current_scope_ && T_UPDATE_SCOPE != ctx_.current_scope_ &&
+      T_INSERT_SCOPE != ctx_.current_scope_)) {
+    // sequence can only appears in following three scenes:
+    //  - select seq from ...
+    //  - insert into t1 values (seq...
+    //  - update t1 set c1 = seq xxxx
+    // can't appear in where, group by, limit or having clause.
+    ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
+  } else{
+    ObString name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+
+    if (OB_FAIL(ob_write_string(ctx_.expr_factory_.get_allocator(), name, func_name))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Malloc function name failed", K(ret));
+    } else if (ObString::make_string(N_MYSQL_SEQ_NEXTVAL) == func_name){
+      next_value = true;
+    } else if (ObString::make_string(N_MYSQL_SEQ_LASTVAL) == func_name) {
+      // next_value = false;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("func_name is invalid",K(func_name));
+    }
+    
+    if (OB_SUCC(ret)) {
+      if (next_value && OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_MYSQL_SEQ_NEXTVAL, func_expr))) {
+        LOG_WARN("fail to create next_value expr", K(ret));
+      } else if (!next_value && OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_MYSQL_SEQ_LASTVAL, func_expr))) {
+        LOG_WARN("fail to create last_value expr", K(ret));
+      } else if (OB_ISNULL(func_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("func_expr is null. Please check the name of func", K(func_name));
+      } else {
+        func_expr->set_func_name(func_name);
+        LOG_DEBUG("sequence node", K(name), K(func_name), K(next_value), K(func_expr));
+      }
+    }
+  } 
+  
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo* session_info = const_cast<ObSQLSessionInfo*>(ctx_.session_info_);
+    if (OB_FAIL(ObStmtResolver::resolve_ref_factor(node->children_[1], session_info, sequence_name, database_name))){
+      LOG_WARN("resolve relation factor failed", K(ret), K(node->children_[1]->str_value_));
+    } else {
+      if (database_name.empty()) {
+        database_name = ctx_.session_info_->get_database_name();
+      }
+      uint64_t tenant_id = ctx_.session_info_->get_effective_tenant_id();
+      uint64_t database_id = OB_INVALID_ID;
+      bool exist = false;
+      if (database_name.empty()) {
+        ret = OB_ERR_NO_DB_SELECTED;
+        LOG_WARN("No database selected", K(database_name), K(sequence_name), K(ret));
+      } else if (OB_FAIL(ctx_.schema_checker_->get_database_id(tenant_id, database_name, database_id))) {
+        LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(database_name));
+      } else if (OB_FAIL(
+        ctx_.schema_checker_->check_sequence_exist_with_name(tenant_id, database_id, sequence_name, exist, sequence_id))) {
+        LOG_WARN("failed to check sequence with name", K(ret), K(sequence_name), K(database_id));
+      } else if (!exist) {
+        ret = OB_OBJECT_NAME_NOT_EXIST;
+        LOG_WARN("sequence is not exist", K(database_name), K(database_id), K(sequence_name));
+      } else {
+        LOG_DEBUG("sequence information", K(database_name), K(database_id), K(sequence_name));
+      }
+    }
+  }
+
+  if(OB_SUCC(ret)) {
+    ObDMLStmt* stmt = static_cast<ObDMLStmt*>(ctx_.stmt_);
+    
+    if(next_value && OB_FAIL(stmt->add_nextval_sequence_id(sequence_id))) {
+      LOG_WARN("add sequence id failed", K(ret));
+    } else if(!next_value && OB_FAIL(stmt->add_currval_sequence_id(sequence_id))) {
+      LOG_WARN("add sequence id failed", K(ret));
+    }
+  }
+
+  // build sequence expr
+  if (OB_SUCC(ret)) {
+    ObConstRawExpr* db_name_expr = NULL;
+    ObConstRawExpr* seq_name_expr = NULL;
+    
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, db_name_expr))) {
+      LOG_WARN("create const raw expr failed", K(ret));
+    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, seq_name_expr))) {
+      LOG_WARN("create const raw expr failed", K(ret));
+    } else {
+      ObCollationType coll_type = ObCharset::get_system_collation();
+      ObObj db_name;
+      db_name.set_varchar(database_name);
+      db_name.set_collation_type(coll_type);
+      db_name.set_collation_level(CS_LEVEL_COERCIBLE);
+      db_name_expr->set_value(db_name);
+      ObObj seq_name;
+      seq_name.set_varchar(sequence_name);
+      seq_name.set_collation_type(coll_type);
+      seq_name.set_collation_level(CS_LEVEL_COERCIBLE);
+      seq_name_expr->set_value(seq_name);
+      
+      func_expr->add_flag(IS_SEQ_EXPR);
+      func_expr->add_flag(CNT_SEQ_EXPR);
+      if (OB_FAIL(func_expr->add_param_expr(db_name_expr))) {
+        LOG_WARN("set funcation param expr failed", K(ret));
+      } else if (OB_FAIL(func_expr->add_param_expr(seq_name_expr))) {
+        LOG_WARN("set funcation param expr failed", K(ret));
+      } else if (OB_FAIL(func_expr->formalize(ctx_.session_info_))) {
+        LOG_WARN("failed to extract info", K(ret));
+      } else {
+        expr = func_expr;
+        LOG_DEBUG("sequence expr", K(sequence_id));
+      }
+    }
   }
   return ret;
 }

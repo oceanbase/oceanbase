@@ -1,0 +1,608 @@
+use test;
+#-----------------------------------------------------------------------
+# Test case to verify sequence DDL operation
+#-----------------------------------------------------------------------
+#***********************************************************************
+# Test case to verify create sequence.
+#***********************************************************************
+create sequence s START WITH 20;
+create sequence s;
+ERROR HY000: name is already used by an existing object
+create sequence if not exists s;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	9999999999999999999999999999	1	20	20	0	0
+create sequence s2 increment by 10 START WITH 20 maxvalue 10000 minvalue -10000 cycle cache 100;
+create sequence s3 increment by -10 START WITH 20 maxvalue 10000 minvalue -10000 cycle cache 100;
+create sequence s4 increment by 10 START WITH 20 maxvalue 10 minvalue -10000 cycle cache 100;
+ERROR HY000: START WITH cannot be more than MAXVALUE
+create sequence s4 increment by 10 START WITH -10001 maxvalue 10000 minvalue -10000 cycle cache 100;
+ERROR HY000: START WITH cannot be less than MINVALUE
+create sequence s4 nomaxvalue nominvalue nocycle cache 100;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	9999999999999999999999999999	1	20	20	0	0
+s2	-10000	10000	10	20	100	0	1
+s3	-10000	10000	-10	20	100	0	1
+s4	1	9999999999999999999999999999	1	1	100	0	0
+#***********************************************************************
+# Test case to verify drop sequence.
+#***********************************************************************
+drop sequence s1,s2,s3;
+ERROR HY000: sequence does not exist
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	9999999999999999999999999999	1	20	20	0	0
+s2	-10000	10000	10	20	100	0	1
+s3	-10000	10000	-10	20	100	0	1
+s4	1	9999999999999999999999999999	1	1	100	0	0
+drop sequence if exists s1,s2,s3;
+drop sequence s4;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	9999999999999999999999999999	1	20	20	0	0
+#***********************************************************************
+# Test case to verify alter sequence.
+#***********************************************************************
+alter sequence s2 increment by 1;
+ERROR HY000: sequence does not exist
+alter sequence if exists s2 increment by 1;
+alter sequence s maxvalue 19;
+ERROR HY000: START WITH cannot be more than MAXVALUE
+alter sequence s minvalue 21;
+ERROR HY000: START WITH cannot be less than MINVALUE
+alter sequence s increment by 10 nominvalue nomaxvalue cache 1000 nocycle;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	9999999999999999999999999999	10	20	1000	0	0
+drop sequence s;
+#-----------------------------------------------------------------------
+# Test case to verify sequence expressions
+#-----------------------------------------------------------------------
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+#***********************************************************************
+# Test case to verify value of sequence and sequence cache.(increment>0)
+#***********************************************************************
+create sequence s cache 8 maxvalue 20 cycle;
+select lastval(s), nextval(s), lastval(s), nextval(s);
+lastval(s)	nextval(s)	lastval(s)	nextval(s)
+NULL	1	1	2
+select next value for s, previous value for s;
+next value for s	previous value for s
+3	3
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+5	9	0
+select nextval(s);
+nextval(s)
+4
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+5	17	0
+select nextval(s);
+nextval(s)
+5
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+5	17	0
+select nextval(s), nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+6	7	8
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+5	17	0
+select nextval(s);
+nextval(s)
+9
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+5	17	0
+select nextval(s), nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+10	11	12
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+5	1	1
+drop sequence s;
+#***********************************************************************
+# Test case to verify value of sequence and sequence cache.(increment<0)
+#***********************************************************************
+create sequence s cache 8 minvalue -20 cycle increment by -1;
+select lastval(s), nextval(s), lastval(s), nextval(s);
+lastval(s)	nextval(s)	lastval(s)	nextval(s)
+NULL	-1	-1	-2
+select next value for s, previous value for s;
+next value for s	previous value for s
+-3	-3
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+6	-9	0
+select nextval(s);
+nextval(s)
+-4
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+6	-17	0
+select nextval(s);
+nextval(s)
+-5
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+6	-17	0
+select nextval(s), nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+-6	-7	-8
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+6	-17	0
+select nextval(s);
+nextval(s)
+-9
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+6	-17	0
+select nextval(s), nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+-10	-11	-12
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+6	-1	1
+drop sequence s;
+create sequence s2 cache -10;
+ERROR HY000: the number of values to CACHE must be greater than 1
+#***********************************************************************
+# Test case to verify maxvalue and cycle.(increment>0)
+#***********************************************************************
+create sequence s cache 10 maxvalue=9999999999999999999999999999 start with 9999999999999999999999999998 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+9999999999999999999999999998	9999999999999999999999999999	1
+drop sequence s;
+create sequence s cache 10 maxvalue=99999999999999999999999999999 start with 99999999999999999999999999998 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+9999999999999999999999999999	1	2
+drop sequence s;
+create sequence s cache 10 maxvalue=10000000000000000000000000000 start with 9999999999999999999999999998 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+9999999999999999999999999998	9999999999999999999999999999	1
+drop sequence s;
+create sequence s cache 10 maxvalue=9999999999999999999999999998 start with 9999999999999999999999999999 increment by 1 cycle;
+ERROR HY000: START WITH cannot be more than MAXVALUE
+select nextval(s),nextval(s),nextval(s);
+ERROR HY000: object does not exist
+create sequence s cache 10 maxvalue=9999999999999999999999999999 start with 9999999999999999999999999999 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+9999999999999999999999999999	1	2
+drop sequence s;
+create sequence s cache 10 maxvalue=9999999999999999999999999999 start with 9999999999999999999999999999 increment by 1;
+select nextval(s);
+nextval(s)
+9999999999999999999999999999
+select nextval(s);
+ERROR HY000: sequence exceeds MAXVALUE and cannot be instantiated
+drop sequence s;
+create sequence s increment by 1 minvalue -10 maxvalue 10 start with 5 cache 10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-10	10	1	5	10	0	0
+alter sequence s nominvalue nomaxvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	9999999999999999999999999999	1	5	10	0	0
+alter sequence s maxvalue 20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	20	1	5	10	0	0
+alter sequence s maxvalue 10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	10	1	5	10	0	0
+alter sequence s increment by -1 nominvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-9999999999999999999999999999	10	-1	5	10	0	0
+alter sequence s nomaxvalue;
+ERROR HY000: START WITH cannot be more than MAXVALUE
+alter sequence s minvalue -20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-20	10	-1	5	10	0	0
+alter sequence s minvalue 1;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	1	10	-1	5	10	0	0
+select nextval(s),nextval(s),nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)	nextval(s)	nextval(s)
+5	4	3	2	1
+select nextval(s);
+ERROR HY000: sequence exceeds MINVALUE and cannot be instantiated
+alter sequence s cycle;
+select nextval(s);
+nextval(s)
+10
+drop sequence s;
+#***********************************************************************
+# Test case to verify minvalue and cycle.(increment<0)
+#***********************************************************************
+create sequence s cache 10 minvalue=-9999999999999999999999999999 start with -9999999999999999999999999998 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+-9999999999999999999999999998	-9999999999999999999999999999	-1
+drop sequence s;
+create sequence s cache 10 minvalue=-99999999999999999999999999999 start with -99999999999999999999999999998 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+-9999999999999999999999999999	-1	-2
+drop sequence s;
+create sequence s cache 10 minvalue=-10000000000000000000000000000 start with -9999999999999999999999999998 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+-9999999999999999999999999998	-9999999999999999999999999999	-1
+drop sequence s;
+create sequence s cache 10 minvalue=-9999999999999999999999999998 start with -9999999999999999999999999999 increment by -1 cycle;
+ERROR HY000: START WITH cannot be less than MINVALUE
+select nextval(s),nextval(s),nextval(s);
+ERROR HY000: object does not exist
+create sequence s cache 10 minvalue=-9999999999999999999999999999 start with -9999999999999999999999999999 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+-9999999999999999999999999999	-1	-2
+drop sequence s;
+create sequence s cache 10 minvalue=-9999999999999999999999999999 start with -9999999999999999999999999999 increment by -1;
+select nextval(s);
+nextval(s)
+-9999999999999999999999999999
+select nextval(s);
+ERROR HY000: sequence exceeds MINVALUE and cannot be instantiated
+drop sequence s;
+create sequence s increment by -1 minvalue -10 maxvalue 10 start with -5 cache 10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-10	10	-1	-5	10	0	0
+alter sequence s nominvalue nomaxvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-9999999999999999999999999999	-1	-1	-5	10	0	0
+alter sequence s minvalue -20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-20	-1	-1	-5	10	0	0
+alter sequence s minvalue -10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-10	-1	-1	-5	10	0	0
+alter sequence s increment by 1 nomaxvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-10	9999999999999999999999999999	1	-5	10	0	0
+alter sequence s nominvalue;
+ERROR HY000: START WITH cannot be less than MINVALUE
+alter sequence s maxvalue 20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-10	20	1	-5	10	0	0
+alter sequence s maxvalue -1;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
+s	-10	-1	1	-5	10	0	0
+select nextval(s),nextval(s),nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)	nextval(s)	nextval(s)
+-5	-4	-3	-2	-1
+select nextval(s);
+ERROR HY000: sequence exceeds MAXVALUE and cannot be instantiated
+alter sequence s cycle;
+select nextval(s);
+nextval(s)
+-10
+drop sequence s;
+#***********************************************************************
+# Test case to verify order and nocache.
+#***********************************************************************
+create sequence s nocache increment by 1 maxvalue=5 cycle;
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+select nextval(s);
+nextval(s)
+1
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+19	2	0
+select nextval(s);
+nextval(s)
+2
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+19	3	0
+drop sequence s;
+create sequence s cache 1 increment by 1 maxvalue=5 cycle;
+ERROR HY000: the number of values to CACHE must be greater than 1
+create sequence s cache 5 order increment by 1 maxvalue=5 cycle;
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+select nextval(s);
+nextval(s)
+1
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+20	2	0
+select nextval(s),nextval(s),nextval(s);
+nextval(s)	nextval(s)	nextval(s)
+2	3	4
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+20	5	0
+select nextval(s);
+nextval(s)
+5
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+20	1	1
+drop sequence s;
+#***********************************************************************
+# Test case to verify utlization of setval function.
+#***********************************************************************
+create sequence s cache 10 cycle maxvalue 100;
+select setval(s,5,0);
+setval(s,5,0)
+5
+select lastval(s),nextval(s),nextval(s);
+lastval(s)	nextval(s)	nextval(s)
+NULL	5	6
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+21	15	0
+select setval(s,9,0);
+setval(s,9,0)
+9
+select lastval(s),nextval(s);
+lastval(s)	nextval(s)
+6	15
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+21	25	0
+select setval(s,4,0,0);
+setval(s,4,0,0)
+NULL
+select lastval(s),nextval(s);
+lastval(s)	nextval(s)
+15	16
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+21	25	0
+select setval(s,16,0,0);
+setval(s,16,0,0)
+NULL
+select lastval(s),nextval(s);
+lastval(s)	nextval(s)
+16	17
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+21	25	0
+select setval(s,17,1,0);
+setval(s,17,1,0)
+17
+select lastval(s),nextval(s);
+lastval(s)	nextval(s)
+17	25
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+21	35	0
+select setval(s,4,0,1);
+setval(s,4,0,1)
+4
+select lastval(s),nextval(s);
+lastval(s)	nextval(s)
+25	4
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+21	14	1
+drop sequence s;
+create sequence s2 cache 10 cycle minvalue -100 increment by -1;
+select setval(s2,-5,0);
+setval(s2,-5,0)
+-5
+select lastval(s2),nextval(s2),nextval(s2);
+lastval(s2)	nextval(s2)	nextval(s2)
+NULL	-5	-6
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+22	-15	0
+select setval(s2,-9,0);
+setval(s2,-9,0)
+-9
+select lastval(s2),nextval(s2);
+lastval(s2)	nextval(s2)
+-6	-15
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+22	-25	0
+select setval(s2,-4,0,0);
+setval(s2,-4,0,0)
+NULL
+select lastval(s2),nextval(s2);
+lastval(s2)	nextval(s2)
+-15	-16
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+22	-25	0
+select setval(s2,-16,0,0);
+setval(s2,-16,0,0)
+NULL
+select lastval(s2),nextval(s2);
+lastval(s2)	nextval(s2)
+-16	-17
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+22	-25	0
+select setval(s2,-17,1,0);
+setval(s2,-17,1,0)
+-17
+select lastval(s2),nextval(s2);
+lastval(s2)	nextval(s2)
+-17	-25
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+22	-35	0
+select setval(s2,-4,0,1);
+setval(s2,-4,0,1)
+-4
+select lastval(s2),nextval(s2);
+lastval(s2)	nextval(s2)
+-25	-4
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+sequence_id	next_value	cycle_count
+22	-14	1
+drop sequence s2;
+create sequence s3 cache 10 cycle maxvalue 100;
+select setval(s3,101,0);
+ERROR 42000: Out of range
+select setval(s3,100,1);
+ERROR 42000: Out of range
+select setval(s3,100,-1);
+ERROR HY000: Invalid argument
+select setval(s3,101);
+ERROR 42000: Out of range
+select setval(s3,99), nextval(s3);
+setval(s3,99)	nextval(s3)
+99	100
+select setval(s3,10,0,1);
+setval(s3,10,0,1)
+10
+select setval(s3,100,0,1), nextval(s3);
+setval(s3,100,0,1)	nextval(s3)
+100	100
+select nextval(s3);
+nextval(s3)
+1
+select setval(s3,100,-1,1);
+ERROR HY000: Invalid argument
+select setval(s3,10,true,2);
+setval(s3,10,true,2)
+10
+select setval(s3,20,'true',2);
+ERROR HY000: Invalid argument
+select setval(s3,30,false,2);
+setval(s3,30,false,2)
+30
+select setval(s3,40,'false',2);
+ERROR HY000: Invalid argument
+select nextval(s3);
+nextval(s3)
+30
+select setval(s3,50,2,2);
+setval(s3,50,2,2)
+50
+drop sequence s3;
+create sequence s4 cache 10 nocycle;
+select setval(s4,10,0,0);
+setval(s4,10,0,0)
+10
+select setval(s4,10,0,1);
+ERROR HY000: Invalid argument
+select setval(s4,4);
+setval(s4,4)
+4
+select nextval(s4);
+nextval(s4)
+10
+drop sequence s4;
+#-----------------------------------------------------------------------
+# Test case to verify namespace
+#-----------------------------------------------------------------------
+use test;
+create sequence s;
+select lastval(s),nextval(s),lastval(s);
+lastval(s)	nextval(s)	lastval(s)
+NULL	1	1
+create sequence s;
+ERROR HY000: name is already used by an existing object
+create database if not exists test2;
+use test2;
+create sequence s;
+create sequence s2;
+select lastval(s),nextval(s),lastval(s);
+lastval(s)	nextval(s)	lastval(s)
+NULL	1	1
+drop sequence s;
+use test;
+select lastval(s),nextval(s),lastval(s);
+lastval(s)	nextval(s)	lastval(s)
+1	2	2
+select lastval(test2.s);
+ERROR HY000: object does not exist
+select nextval(test2.s);
+ERROR HY000: object does not exist
+select lastval(test2.s2),nextval(test2.s2);
+lastval(test2.s2)	nextval(test2.s2)
+NULL	1
+drop sequence test2.s2;
+drop sequence s;
+select nextval(s3);
+ERROR HY000: object does not exist
+select lastval(s3);
+ERROR HY000: object does not exist
+create sequence s3 maxvalue 20 cache 8 cycle;
+select nextval(s3);
+nextval(s3)
+1
+select setval(s3,13,1);
+setval(s3,13,1)
+13
+drop sequence s3;
+create sequence s3 maxvalue 20 cache 8 cycle;
+select setval(s3,3,1);
+setval(s3,3,1)
+3
+use test2;
+create sequence s3 nocycle;
+use test;
+select setval(s3,3,1,1);
+setval(s3,3,1,1)
+3
+select setval(test2.s3,3,1,1);
+ERROR HY000: Invalid argument
+drop sequence test2.s3;
+drop sequence s3;
+#-----------------------------------------------------------------------
+# Test case to verify dml statement
+#-----------------------------------------------------------------------
+create sequence s;
+create table test (id int, col int, col2 int);
+insert into test values(nextval(s),nextval(s),nextval(s));
+insert into test values(nextval(s),nextval(s),nextval(s));
+insert into test values(lastval(s),lastval(s),lastval(s));
+select * from test;
+id	col	col2
+1	2	3
+4	5	6
+6	6	6
+update test set id=nextval(s), col=lastval(s), col2=nextval(s) where id%2=0;
+select * from test;
+id	col	col2
+1	2	3
+7	7	8
+9	9	10
+select * from test where id>nextval(s);
+ERROR HY000: sequence number not allowed here
+select * from test where id<lastval(s);
+ERROR HY000: sequence number not allowed here
+select * from test where nextval(s) not in (select id from test);
+ERROR HY000: sequence number not allowed here
+select * from test where lastval(s) not in (select id from test);
+ERROR HY000: sequence number not allowed here
+select count(*) from test group by lastval(s);
+ERROR HY000: sequence number not allowed here
+select count(*) from test group by nextval(s);
+ERROR HY000: sequence number not allowed here
+delete from test where id!=nextval(s);
+ERROR HY000: sequence number not allowed here
+delete from test where id!=lastval(s);
+ERROR HY000: sequence number not allowed here
+set @var=lastval(s);
+ERROR HY000: sequence number not allowed here
+drop sequence s;
+drop table test;

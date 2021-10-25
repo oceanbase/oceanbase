@@ -5071,6 +5071,7 @@ int ObInnerTableSchema::all_virtual_backup_task_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj encryption_mode_default;
     encryption_mode_default.set_varchar(ObString::make_string("None"));
     ADD_COLUMN_SCHEMA_T("encryption_mode", //column_name
@@ -5090,6 +5091,7 @@ int ObInnerTableSchema::all_virtual_backup_task_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj passwd_default;
     passwd_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("passwd", //column_name
@@ -5109,6 +5111,7 @@ int ObInnerTableSchema::all_virtual_backup_task_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj start_replay_log_ts_default;
     start_replay_log_ts_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("start_replay_log_ts", //column_name
@@ -5128,6 +5131,7 @@ int ObInnerTableSchema::all_virtual_backup_task_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj date_default;
     date_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("date", //column_name
@@ -6420,6 +6424,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj constraint_catalog_default;
     constraint_catalog_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("CONSTRAINT_CATALOG", //column_name
@@ -6439,6 +6444,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj constraint_schema_default;
     constraint_schema_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("CONSTRAINT_SCHEMA", //column_name
@@ -6458,6 +6464,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj constraint_name_default;
     constraint_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("CONSTRAINT_NAME", //column_name
@@ -6477,6 +6484,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj unique_constraint_catalog_default;
     unique_constraint_catalog_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("UNIQUE_CONSTRAINT_CATALOG", //column_name
@@ -6496,6 +6504,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj unique_constraint_schema_default;
     unique_constraint_schema_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("UNIQUE_CONSTRAINT_SCHEMA", //column_name
@@ -6515,6 +6524,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj unique_constraint_name_default;
     unique_constraint_name_default.set_null();
     ADD_COLUMN_SCHEMA_T("UNIQUE_CONSTRAINT_NAME", //column_name
@@ -6534,6 +6544,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj match_option_default;
     match_option_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("MATCH_OPTION", //column_name
@@ -6553,6 +6564,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj update_rule_default;
     update_rule_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("UPDATE_RULE", //column_name
@@ -6572,6 +6584,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj delete_rule_default;
     delete_rule_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("DELETE_RULE", //column_name
@@ -6591,6 +6604,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_name_default;
     table_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("TABLE_NAME", //column_name
@@ -6610,6 +6624,7 @@ int ObInnerTableSchema::referential_constraints_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj referenced_table_name_default;
     referenced_table_name_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("REFERENCED_TABLE_NAME", //column_name
@@ -7182,6 +7197,7 @@ int ObInnerTableSchema::all_virtual_restore_pg_info_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj macro_block_count_default;
     macro_block_count_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("macro_block_count", //column_name
@@ -7201,6 +7217,7 @@ int ObInnerTableSchema::all_virtual_restore_pg_info_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj finish_macro_block_count_default;
     finish_macro_block_count_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("finish_macro_block_count", //column_name
@@ -7220,6 +7237,7 @@ int ObInnerTableSchema::all_virtual_restore_pg_info_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj partition_count_default;
     partition_count_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("partition_count", //column_name
@@ -7239,6 +7257,7 @@ int ObInnerTableSchema::all_virtual_restore_pg_info_schema(ObTableSchema &table_
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj finish_partition_count_default;
     finish_partition_count_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("finish_partition_count", //column_name
@@ -10202,6 +10221,7 @@ int ObInnerTableSchema::all_virtual_time_zone_schema(ObTableSchema &table_schema
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj tenant_id_default;
     tenant_id_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("tenant_id", //column_name
@@ -10221,6 +10241,7 @@ int ObInnerTableSchema::all_virtual_time_zone_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj time_zone_id_default;
     time_zone_id_default.set_null();
     ADD_COLUMN_SCHEMA_T("time_zone_id", //column_name
@@ -10240,6 +10261,7 @@ int ObInnerTableSchema::all_virtual_time_zone_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj use_leap_seconds_default;
     use_leap_seconds_default.set_varchar(ObString::make_string("N"));
     ADD_COLUMN_SCHEMA_T("use_leap_seconds", //column_name
@@ -10320,6 +10342,7 @@ int ObInnerTableSchema::all_virtual_time_zone_name_schema(ObTableSchema &table_s
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj tenant_id_default;
     tenant_id_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("tenant_id", //column_name
@@ -10339,6 +10362,7 @@ int ObInnerTableSchema::all_virtual_time_zone_name_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj name_default;
     name_default.set_null();
     ADD_COLUMN_SCHEMA_T("name", //column_name
@@ -10358,6 +10382,7 @@ int ObInnerTableSchema::all_virtual_time_zone_name_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj time_zone_id_default;
     time_zone_id_default.set_null();
     ADD_COLUMN_SCHEMA_T("time_zone_id", //column_name
@@ -10438,6 +10463,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_schema(ObTableSchema &t
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj tenant_id_default;
     tenant_id_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("tenant_id", //column_name
@@ -10457,6 +10483,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj time_zone_id_default;
     time_zone_id_default.set_null();
     ADD_COLUMN_SCHEMA_T("time_zone_id", //column_name
@@ -10476,6 +10503,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj transition_time_default;
     transition_time_default.set_null();
     ADD_COLUMN_SCHEMA_T("transition_time", //column_name
@@ -10495,6 +10523,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_schema(ObTableSchema &t
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj transition_type_id_default;
     transition_type_id_default.set_null();
     ADD_COLUMN_SCHEMA_T("transition_type_id", //column_name
@@ -10575,6 +10604,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_type_schema(ObTableSche
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj tenant_id_default;
     tenant_id_default.set_int(-1);
     ADD_COLUMN_SCHEMA_T("tenant_id", //column_name
@@ -10594,6 +10624,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_type_schema(ObTableSche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj time_zone_id_default;
     time_zone_id_default.set_null();
     ADD_COLUMN_SCHEMA_T("time_zone_id", //column_name
@@ -10613,6 +10644,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_type_schema(ObTableSche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj transition_type_id_default;
     transition_type_id_default.set_null();
     ADD_COLUMN_SCHEMA_T("transition_type_id", //column_name
@@ -10632,6 +10664,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_type_schema(ObTableSche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj offset_default;
     offset_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("offset", //column_name
@@ -10651,6 +10684,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_type_schema(ObTableSche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj is_dst_default;
     is_dst_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("is_dst", //column_name
@@ -10670,6 +10704,7 @@ int ObInnerTableSchema::all_virtual_time_zone_transition_type_schema(ObTableSche
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj abbreviation_default;
     abbreviation_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("abbreviation", //column_name
@@ -11071,6 +11106,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   table_schema.set_create_mem_version(1);
 
   if (OB_SUCC(ret)) {
+  
     ObObj file_id_default;
     file_id_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("FILE_ID", //column_name
@@ -11090,6 +11126,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj file_name_default;
     file_name_default.set_null();
     ADD_COLUMN_SCHEMA_T("FILE_NAME", //column_name
@@ -11109,6 +11146,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj file_type_default;
     file_type_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("FILE_TYPE", //column_name
@@ -11128,6 +11166,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj tablespace_name_default;
     tablespace_name_default.set_null();
     ADD_COLUMN_SCHEMA_T("TABLESPACE_NAME", //column_name
@@ -11147,6 +11186,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_catalog_default;
     table_catalog_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("TABLE_CATALOG", //column_name
@@ -11166,6 +11206,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_schema_default;
     table_schema_default.set_null();
     ADD_COLUMN_SCHEMA_T("TABLE_SCHEMA", //column_name
@@ -11185,6 +11226,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_name_default;
     table_name_default.set_null();
     ADD_COLUMN_SCHEMA_T("TABLE_NAME", //column_name
@@ -11204,6 +11246,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj logfile_group_name_default;
     logfile_group_name_default.set_null();
     ADD_COLUMN_SCHEMA_T("LOGFILE_GROUP_NAME", //column_name
@@ -11223,6 +11266,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj logfile_group_number_default;
     logfile_group_number_default.set_null();
     ADD_COLUMN_SCHEMA_T("LOGFILE_GROUP_NUMBER", //column_name
@@ -11242,6 +11286,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj engine_default;
     engine_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("ENGINE", //column_name
@@ -11261,6 +11306,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj fulltext_keys_default;
     fulltext_keys_default.set_null();
     ADD_COLUMN_SCHEMA_T("FULLTEXT_KEYS", //column_name
@@ -11280,6 +11326,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj deleted_rows_default;
     deleted_rows_default.set_null();
     ADD_COLUMN_SCHEMA_T("DELETED_ROWS", //column_name
@@ -11299,6 +11346,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj update_count_default;
     update_count_default.set_null();
     ADD_COLUMN_SCHEMA_T("UPDATE_COUNT", //column_name
@@ -11318,6 +11366,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj free_extents_default;
     free_extents_default.set_null();
     ADD_COLUMN_SCHEMA_T("FREE_EXTENTS", //column_name
@@ -11337,6 +11386,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj total_extents_default;
     total_extents_default.set_null();
     ADD_COLUMN_SCHEMA_T("TOTAL_EXTENTS", //column_name
@@ -11356,6 +11406,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj extent_size_default;
     extent_size_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("EXTENT_SIZE", //column_name
@@ -11375,6 +11426,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj initial_size_default;
     initial_size_default.set_null();
     ADD_COLUMN_SCHEMA_T("INITIAL_SIZE", //column_name
@@ -11394,6 +11446,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj maximum_size_default;
     maximum_size_default.set_null();
     ADD_COLUMN_SCHEMA_T("MAXIMUM_SIZE", //column_name
@@ -11413,6 +11466,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj autoextend_size_default;
     autoextend_size_default.set_null();
     ADD_COLUMN_SCHEMA_T("AUTOEXTEND_SIZE", //column_name
@@ -11480,6 +11534,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj recover_time_default;
     recover_time_default.set_null();
     ADD_COLUMN_SCHEMA_T("RECOVER_TIME", //column_name
@@ -11499,6 +11554,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj transaction_counter_default;
     transaction_counter_default.set_null();
     ADD_COLUMN_SCHEMA_T("TRANSACTION_COUNTER", //column_name
@@ -11518,6 +11574,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj version_default;
     version_default.set_null();
     ADD_COLUMN_SCHEMA_T("VERSION", //column_name
@@ -11537,6 +11594,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj row_format_default;
     row_format_default.set_null();
     ADD_COLUMN_SCHEMA_T("ROW_FORMAT", //column_name
@@ -11556,6 +11614,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj table_rows_default;
     table_rows_default.set_null();
     ADD_COLUMN_SCHEMA_T("TABLE_ROWS", //column_name
@@ -11575,6 +11634,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj avg_row_length_default;
     avg_row_length_default.set_null();
     ADD_COLUMN_SCHEMA_T("AVG_ROW_LENGTH", //column_name
@@ -11594,6 +11654,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj data_length_default;
     data_length_default.set_null();
     ADD_COLUMN_SCHEMA_T("DATA_LENGTH", //column_name
@@ -11613,6 +11674,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj max_data_length_default;
     max_data_length_default.set_null();
     ADD_COLUMN_SCHEMA_T("MAX_DATA_LENGTH", //column_name
@@ -11632,6 +11694,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj index_length_default;
     index_length_default.set_null();
     ADD_COLUMN_SCHEMA_T("INDEX_LENGTH", //column_name
@@ -11651,6 +11714,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj data_free_default;
     data_free_default.set_null();
     ADD_COLUMN_SCHEMA_T("DATA_FREE", //column_name
@@ -11718,6 +11782,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj checksum_default;
     checksum_default.set_null();
     ADD_COLUMN_SCHEMA_T("CHECKSUM", //column_name
@@ -11737,6 +11802,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj status_default;
     status_default.set_varchar(ObString::make_string(""));
     ADD_COLUMN_SCHEMA_T("STATUS", //column_name
@@ -11756,6 +11822,7 @@ int ObInnerTableSchema::all_virtual_files_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+  
     ObObj extra_default;
     extra_default.set_null();
     ADD_COLUMN_SCHEMA_T("EXTRA", //column_name

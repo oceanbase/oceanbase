@@ -49,7 +49,10 @@ int ObSequenceResolver<T>::resolve_sequence_options(T* stmt, ParseNode* node)
     if (OB_UNLIKELY(T_SEQUENCE_OPTION_LIST != node->type_ || 0 > node->num_child_ || OB_ISNULL(stmt))) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "invalid node", KP(stmt), K(ret));
-    } else {
+    } else if (stmt->get_arg().get_seq_items().size() != 1) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SQL_LOG(WARN, "invalid sequence args num", K(stmt->get_arg().get_seq_items().size()), K(ret));
+    } else { 
       ParseNode* option_node = NULL;
       int32_t num = node->num_child_;
       for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
@@ -61,7 +64,8 @@ int ObSequenceResolver<T>::resolve_sequence_options(T* stmt, ParseNode* node)
 
       // conflict check
       if (OB_SUCC(ret)) {
-        const ObBitSet<>& option_bitset = stmt->get_arg().get_option_bitset();
+        obrpc::ObSequenceItem& sequence_item = stmt->get_arg().get_seq_items().at(0);
+        const ObBitSet<>& option_bitset = sequence_item.get_option_bitset();
         if (option_bitset.has_member(share::ObSequenceArg::MAXVALUE) &&
             option_bitset.has_member(share::ObSequenceArg::NOMAXVALUE)) {
           // conflicting MAXVALUE/NOMAXVALUE specifications
@@ -102,8 +106,12 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
   if (OB_ISNULL(stmt) || OB_ISNULL(node)) {
     ret = common::OB_ERR_UNEXPECTED;
     SQL_LOG(ERROR, "null ptr", KP(stmt), KP(node), K(ret));
+  } else if (stmt->get_arg().get_seq_items().size() != 1) {
+    ret = common::OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "invalid sequence args num", K(stmt->get_arg().get_seq_items().size()), K(ret));
   } else if (option_node) {
-    ObBitSet<>& option_bitset = stmt->get_arg().get_option_bitset();
+    obrpc::ObSequenceItem& sequence_item = stmt->get_arg().get_seq_items().at(0);
+    ObBitSet<>& option_bitset = sequence_item.get_option_bitset();
     common::number::ObNumber num;
     share::ObSequenceValueAllocator allocator;
     switch (option_node->type_) {
@@ -120,11 +128,11 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
           if (OB_FAIL(get_normalized_number(*option_node->children_[0], allocator, num))) {
             SQL_LOG(WARN, "fail normalize number", K(ret));
           } else {
-            ret = stmt->option().set_increment_by(num);
+            ret = sequence_item.option().set_increment_by(num);
           }
         } else {
           int64_t value = option_node->children_[0]->value_;
-          stmt->option().set_increment_by(value);
+          sequence_item.option().set_increment_by(value);
         }
         break;
       }
@@ -146,11 +154,11 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
           if (OB_FAIL(get_normalized_number(*option_node->children_[0], allocator, num))) {
             SQL_LOG(WARN, "fail normalize number", K(ret));
           } else {
-            ret = stmt->option().set_start_with(num);
+            ret = sequence_item.option().set_start_with(num);
           }
         } else {
           int64_t value = option_node->children_[0]->value_;
-          stmt->option().set_start_with(value);
+          sequence_item.option().set_start_with(value);
         }
         break;
       }
@@ -168,11 +176,11 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
           if (OB_FAIL(get_normalized_number(*option_node->children_[0], allocator, num))) {
             SQL_LOG(WARN, "fail normalize number", K(ret));
           } else {
-            ret = stmt->option().set_max_value(num);
+            ret = sequence_item.option().set_max_value(num);
           }
         } else {
           int64_t value = option_node->children_[0]->value_;
-          stmt->option().set_max_value(value);
+          sequence_item.option().set_max_value(value);
         }
         break;
       }
@@ -190,11 +198,11 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
           if (OB_FAIL(get_normalized_number(*option_node->children_[0], allocator, num))) {
             SQL_LOG(WARN, "fail normalize number", K(ret));
           } else {
-            ret = stmt->option().set_min_value(num);
+            ret = sequence_item.option().set_min_value(num);
           }
         } else {
           int64_t value = option_node->children_[0]->value_;
-          stmt->option().set_min_value(value);
+          sequence_item.option().set_min_value(value);
         }
         break;
       }
@@ -206,7 +214,7 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
         } else if (OB_FAIL(option_bitset.add_member(share::ObSequenceArg::NOMAXVALUE))) {
           SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
         } else {
-          stmt->option().set_nomaxvalue();
+          sequence_item.option().set_nomaxvalue();
         }
         break;
       }
@@ -217,7 +225,7 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
         } else if (OB_FAIL(option_bitset.add_member(share::ObSequenceArg::NOMINVALUE))) {
           SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
         } else {
-          stmt->option().set_nominvalue();
+          sequence_item.option().set_nominvalue();
         }
         break;
       }
@@ -235,11 +243,11 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
           if (OB_FAIL(get_normalized_number(*option_node->children_[0], allocator, num))) {
             SQL_LOG(WARN, "fail normalize number", K(ret));
           } else {
-            ret = stmt->option().set_cache_size(num);
+            ret = sequence_item.option().set_cache_size(num);
           }
         } else {
           int64_t value = option_node->children_[0]->value_;
-          stmt->option().set_cache_size(value);
+          sequence_item.option().set_cache_size(value);
         }
         break;
       }
@@ -251,7 +259,7 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
         } else if (OB_FAIL(option_bitset.add_member(share::ObSequenceArg::NOCACHE))) {
           SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
         } else {
-          stmt->option().set_cache_size(share::ObSequenceOption::NO_CACHE);
+          sequence_item.option().set_cache_size(share::ObSequenceOption::NO_CACHE);
         }
         break;
       }
@@ -263,7 +271,7 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
         } else if (OB_FAIL(option_bitset.add_member(share::ObSequenceArg::CYCLE))) {
           SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
         } else {
-          stmt->option().set_cycle_flag(true);
+          sequence_item.option().set_cycle_flag(true);
         }
         break;
       }
@@ -275,7 +283,7 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
         } else if (OB_FAIL(option_bitset.add_member(share::ObSequenceArg::NOCYCLE))) {
           SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
         } else {
-          stmt->option().set_cycle_flag(false);
+          sequence_item.option().set_cycle_flag(false);
         }
         break;
       }
@@ -287,7 +295,7 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
         } else if (OB_FAIL(option_bitset.add_member(share::ObSequenceArg::ORDER))) {
           SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
         } else {
-          stmt->option().set_order_flag(true);
+          sequence_item.option().set_order_flag(true);
         }
         break;
       }
@@ -299,7 +307,7 @@ int ObSequenceResolver<T>::resolve_sequence_option(T* stmt, ParseNode* node)
         } else if (OB_FAIL(option_bitset.add_member(share::ObSequenceArg::NOORDER))) {
           SQL_LOG(WARN, "failed to add member to bitset!", K(ret));
         } else {
-          stmt->option().set_order_flag(false);
+          sequence_item.option().set_order_flag(false);
         }
         break;
       }

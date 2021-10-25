@@ -97,6 +97,8 @@ private:
   int process_fun_interval_node(const ParseNode* node, ObRawExpr*& expr);
   int process_isnull_node(const ParseNode* node, ObRawExpr*& expr);
   int process_lnnvl_node(const ParseNode* node, ObRawExpr*& expr);
+  int process_set_sequence_value_node(const ParseNode* node, ObRawExpr*& expr);
+  int process_sequence_node(const ParseNode* node, ObRawExpr*& expr);
   int process_fun_sys_node(const ParseNode* node, ObRawExpr*& expr);
   int process_dll_udf_node(const ParseNode* node, ObRawExpr*& expr);
   int process_agg_udf_node(const ParseNode* node, const share::schema::ObUDF& udf_info, ObAggFunRawExpr*& expr);

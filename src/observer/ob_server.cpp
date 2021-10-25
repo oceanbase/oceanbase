@@ -1434,7 +1434,8 @@ int ObServer::init_sequence()
 {
   int ret = OB_SUCCESS;
   ObSequenceCache& cache = ObSequenceCache::get_instance();
-  if (OB_FAIL(cache.init(schema_service_, sql_proxy_))) {
+  if (OB_FAIL(cache.init(schema_service_, sql_proxy_, 
+      &srv_rpc_proxy_, &server_tracer_))) {
     LOG_ERROR("init sequence engine failed", K(ret));
   } else {
     LOG_INFO("init sequence engine done");

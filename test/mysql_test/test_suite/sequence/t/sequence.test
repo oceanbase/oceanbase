@@ -1,0 +1,404 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+use test;
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify sequence DDL operation
+--echo #-----------------------------------------------------------------------
+
+--echo #***********************************************************************
+--echo # Test case to verify create sequence.
+--echo #***********************************************************************
+create sequence s START WITH 20;
+--error 5331
+create sequence s;
+create sequence if not exists s;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+create sequence s2 increment by 10 START WITH 20 maxvalue 10000 minvalue -10000 cycle cache 100;
+create sequence s3 increment by -10 START WITH 20 maxvalue 10000 minvalue -10000 cycle cache 100;
+--error 4324
+create sequence s4 increment by 10 START WITH 20 maxvalue 10 minvalue -10000 cycle cache 100;
+--error 4322
+create sequence s4 increment by 10 START WITH -10001 maxvalue 10000 minvalue -10000 cycle cache 100;
+create sequence s4 nomaxvalue nominvalue nocycle cache 100;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+
+--echo #***********************************************************************
+--echo # Test case to verify drop sequence.
+--echo #***********************************************************************
+--error 4298
+drop sequence s1,s2,s3;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+drop sequence if exists s1,s2,s3;
+drop sequence s4;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+
+--echo #***********************************************************************
+--echo # Test case to verify alter sequence.
+--echo #***********************************************************************
+--error 4298
+alter sequence s2 increment by 1;
+alter sequence if exists s2 increment by 1;
+--error 4324
+alter sequence s maxvalue 19;
+--error 4322
+alter sequence s minvalue 21;
+alter sequence s increment by 10 nominvalue nomaxvalue cache 1000 nocycle;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+
+drop sequence s;
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify sequence expressions
+--echo #-----------------------------------------------------------------------
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+--echo #***********************************************************************
+--echo # Test case to verify value of sequence and sequence cache.(increment>0)
+--echo #***********************************************************************
+create sequence s cache 8 maxvalue 20 cycle;
+select lastval(s), nextval(s), lastval(s), nextval(s);
+select next value for s, previous value for s;
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# prefetching  next_value=4
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# cache run out next_value=8
+select nextval(s), nextval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# take prefetching node as cache node next_value=9
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# prefetching  next_value=12
+select nextval(s), nextval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+drop sequence s;
+--echo #***********************************************************************
+--echo # Test case to verify value of sequence and sequence cache.(increment<0)
+--echo #***********************************************************************
+create sequence s cache 8 minvalue -20 cycle increment by -1;
+select lastval(s), nextval(s), lastval(s), nextval(s);
+select next value for s, previous value for s;
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# prefetching  next_value=-4
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# cache run out next_value=-8
+select nextval(s), nextval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# take prefetching node as cache node next_value=9
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+# prefetching  next_value=-12
+select nextval(s), nextval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+drop sequence s;
+
+--error 4326
+create sequence s2 cache -10;
+
+--echo #***********************************************************************
+--echo # Test case to verify maxvalue and cycle.(increment>0)
+--echo #***********************************************************************
+create sequence s cache 10 maxvalue=9999999999999999999999999999 start with 9999999999999999999999999998 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+create sequence s cache 10 maxvalue=99999999999999999999999999999 start with 99999999999999999999999999998 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+create sequence s cache 10 maxvalue=10000000000000000000000000000 start with 9999999999999999999999999998 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+--error 4324
+create sequence s cache 10 maxvalue=9999999999999999999999999998 start with 9999999999999999999999999999 increment by 1 cycle;
+--error 4298
+select nextval(s),nextval(s),nextval(s);
+
+create sequence s cache 10 maxvalue=9999999999999999999999999999 start with 9999999999999999999999999999 increment by 1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+create sequence s cache 10 maxvalue=9999999999999999999999999999 start with 9999999999999999999999999999 increment by 1;
+select nextval(s);
+--error 4332
+select nextval(s);
+drop sequence s;
+
+create sequence s increment by 1 minvalue -10 maxvalue 10 start with 5 cache 10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s nominvalue nomaxvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s maxvalue 20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s maxvalue 10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s increment by -1 nominvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+--error 4324
+alter sequence s nomaxvalue;
+alter sequence s minvalue -20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s minvalue 1;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+select nextval(s),nextval(s),nextval(s),nextval(s),nextval(s);
+--error 4332
+select nextval(s);
+alter sequence s cycle;
+select nextval(s);
+
+drop sequence s;
+--echo #***********************************************************************
+--echo # Test case to verify minvalue and cycle.(increment<0)
+--echo #***********************************************************************
+create sequence s cache 10 minvalue=-9999999999999999999999999999 start with -9999999999999999999999999998 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+create sequence s cache 10 minvalue=-99999999999999999999999999999 start with -99999999999999999999999999998 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+create sequence s cache 10 minvalue=-10000000000000000000000000000 start with -9999999999999999999999999998 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+--error 4322
+create sequence s cache 10 minvalue=-9999999999999999999999999998 start with -9999999999999999999999999999 increment by -1 cycle;
+--error 4298
+select nextval(s),nextval(s),nextval(s);
+
+create sequence s cache 10 minvalue=-9999999999999999999999999999 start with -9999999999999999999999999999 increment by -1 cycle;
+select nextval(s),nextval(s),nextval(s);
+drop sequence s;
+
+create sequence s cache 10 minvalue=-9999999999999999999999999999 start with -9999999999999999999999999999 increment by -1;
+select nextval(s);
+--error 4332
+select nextval(s);
+drop sequence s;
+
+create sequence s increment by -1 minvalue -10 maxvalue 10 start with -5 cache 10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s nominvalue nomaxvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s minvalue -20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s minvalue -10;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s increment by 1 nomaxvalue;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+--error 4322
+alter sequence s nominvalue;
+alter sequence s maxvalue 20;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+alter sequence s maxvalue -1;
+select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
+select nextval(s),nextval(s),nextval(s),nextval(s),nextval(s);
+--error 4332
+select nextval(s);
+alter sequence s cycle;
+select nextval(s);
+
+drop sequence s;
+--echo #***********************************************************************
+--echo # Test case to verify order and nocache.
+--echo #***********************************************************************
+create sequence s nocache increment by 1 maxvalue=5 cycle;
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+drop sequence s;
+
+--error 4326
+create sequence s cache 1 increment by 1 maxvalue=5 cycle;
+
+create sequence s cache 5 order increment by 1 maxvalue=5 cycle;
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select nextval(s),nextval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+
+drop sequence s;
+--echo #***********************************************************************
+--echo # Test case to verify utlization of setval function.
+--echo #***********************************************************************
+# setval only guarantees the next value of sequence isn't lower than its parameter next_value when increment is large than 0.
+# and when increment is lower than 0, it only guarantees the next value isn't larger than its parameter.
+create sequence s cache 10 cycle maxvalue 100;
+
+select setval(s,5,0);
+select lastval(s),nextval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s,9,0);
+select lastval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s,4,0,0);
+select lastval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s,16,0,0);
+select lastval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s,17,1,0);
+select lastval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s,4,0,1);
+select lastval(s),nextval(s);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+drop sequence s;
+
+create sequence s2 cache 10 cycle minvalue -100 increment by -1;
+select setval(s2,-5,0);
+select lastval(s2),nextval(s2),nextval(s2);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s2,-9,0);
+select lastval(s2),nextval(s2);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s2,-4,0,0);
+select lastval(s2),nextval(s2);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s2,-16,0,0);
+select lastval(s2),nextval(s2);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s2,-17,1,0);
+select lastval(s2),nextval(s2);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+select setval(s2,-4,0,1);
+select lastval(s2),nextval(s2);
+select sequence_id,next_value,cycle_count from oceanbase.__all_sequence_value;
+drop sequence s2;
+
+create sequence s3 cache 10 cycle maxvalue 100;
+--error 4175
+select setval(s3,101,0);
+--error 4175
+select setval(s3,100,1);
+--error 1210
+select setval(s3,100,-1);
+--error 4175
+select setval(s3,101);
+select setval(s3,99), nextval(s3);
+select setval(s3,10,0,1);
+select setval(s3,100,0,1), nextval(s3);
+select nextval(s3);
+--error 1210
+select setval(s3,100,-1,1);
+select setval(s3,10,true,2);
+--error 1210
+select setval(s3,20,'true',2);
+select setval(s3,30,false,2);
+--error 1210
+select setval(s3,40,'false',2);
+select nextval(s3);
+select setval(s3,50,2,2);
+drop sequence s3;
+
+create sequence s4 cache 10 nocycle;
+select setval(s4,10,0,0);
+--error 1210
+select setval(s4,10,0,1);
+select setval(s4,4);
+select nextval(s4);
+drop sequence s4;
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify namespace
+--echo #-----------------------------------------------------------------------
+use test;
+create sequence s;
+select lastval(s),nextval(s),lastval(s);
+--error 5331
+create sequence s;
+
+create database if not exists test2;
+use test2;
+create sequence s;
+create sequence s2;
+select lastval(s),nextval(s),lastval(s);
+drop sequence s;
+
+use test;
+select lastval(s),nextval(s),lastval(s);
+--error 4298
+select lastval(test2.s);
+--error 4298
+select nextval(test2.s);
+select lastval(test2.s2),nextval(test2.s2);
+drop sequence test2.s2;
+drop sequence s;
+
+--error 4298
+select nextval(s3);
+--error 4298
+select lastval(s3);
+
+create sequence s3 maxvalue 20 cache 8 cycle;
+select nextval(s3);
+select setval(s3,13,1);
+drop sequence s3;
+create sequence s3 maxvalue 20 cache 8 cycle;
+select setval(s3,3,1);
+use test2;
+create sequence s3 nocycle;
+use test;
+select setval(s3,3,1,1);
+--error 1210
+select setval(test2.s3,3,1,1);
+drop sequence test2.s3;
+drop sequence s3;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify dml statement
+--echo #-----------------------------------------------------------------------
+create sequence s;
+create table test (id int, col int, col2 int);
+insert into test values(nextval(s),nextval(s),nextval(s));
+insert into test values(nextval(s),nextval(s),nextval(s));
+insert into test values(lastval(s),lastval(s),lastval(s));
+select * from test;
+update test set id=nextval(s), col=lastval(s), col2=nextval(s) where id%2=0;
+select * from test;
+
+# the following usage of sequence couldn't be allowed
+--error 4315
+select * from test where id>nextval(s);
+--error 4315
+select * from test where id<lastval(s);
+--error 4315
+select * from test where nextval(s) not in (select id from test);
+--error 4315
+select * from test where lastval(s) not in (select id from test);
+--error 4315
+select count(*) from test group by lastval(s);
+--error 4315
+select count(*) from test group by nextval(s);
+--error 4315
+delete from test where id!=nextval(s);
+--error 4315
+delete from test where id!=lastval(s);
+--error 4315
+set @var=lastval(s);
+
+drop sequence s;
+drop table test;

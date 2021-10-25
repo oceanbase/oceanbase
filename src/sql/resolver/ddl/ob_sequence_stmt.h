@@ -39,26 +39,6 @@ public:
     UNUSED(fp);
     UNUSED(level);
   }
-  void set_sequence_id(const uint64_t& sequence_id)
-  {
-    arg_.set_sequence_id(sequence_id);
-  }
-  void set_sequence_name(const common::ObString& sequence_name)
-  {
-    arg_.set_sequence_name(sequence_name);
-  }
-  void set_database_name(const common::ObString& db_name)
-  {
-    arg_.set_database_name(db_name);
-  }
-  void set_tenant_id(uint64_t tenant_id)
-  {
-    arg_.set_tenant_id(tenant_id);
-  }
-  share::ObSequenceOption& option()
-  {
-    return arg_.option();
-  }
   virtual obrpc::ObDDLArg& get_ddl_arg()
   {
     return arg_;

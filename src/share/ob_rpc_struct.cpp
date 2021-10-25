@@ -3727,7 +3727,8 @@ DEF_TO_STRING(ObUpdateStatCacheArg)
 OB_SERIALIZE_MEMBER(ObUpdateStatCacheArg, tenant_id_, table_id_, partition_ids_, column_ids_);
 OB_SERIALIZE_MEMBER(ObSplitPartitionBatchArg, split_info_);
 OB_SERIALIZE_MEMBER(ObSplitPartitionBatchRes, ret_list_);
-OB_SERIALIZE_MEMBER((ObSequenceDDLArg, ObDDLArg), stmt_type_, option_bitset_, seq_schema_, database_name_);
+OB_SERIALIZE_MEMBER(ObSequenceItem, option_bitset_, seq_schema_, database_name_);
+OB_SERIALIZE_MEMBER((ObSequenceDDLArg, ObDDLArg), exist_flag_, stmt_type_, seq_items_);
 
 OB_SERIALIZE_MEMBER(ObBootstrapArg, server_list_, cluster_type_, initial_frozen_version_, initial_schema_version_,
     primary_cluster_id_, primary_rs_list_, freeze_schemas_, frozen_status_);
