@@ -268,6 +268,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_greatest.cpp
   engine/expr/ob_expr_hex.cpp
   engine/expr/ob_expr_hextoraw.cpp
+  engine/expr/ob_expr_weight_string.h
+  engine/expr/ob_expr_weight_string.cpp
   engine/expr/ob_expr_host_ip.cpp
   engine/expr/ob_expr_ifnull.cpp
   engine/expr/ob_expr_in.cpp

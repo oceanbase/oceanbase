@@ -10435,9 +10435,47 @@ static int ob_strnncollsp_utf8mb4(
   }
   return res;
 }
+static size_t ob_strxfrm_pad_nweights_unicode(uchar *str_ptr, uchar *str_ptr_end, size_t nweights)
+{
+  uchar *str_ptr_begin;
+  ob_charset_assert(str_ptr && str_ptr <= str_ptr_end);
+  for (str_ptr_begin= str_ptr; str_ptr < str_ptr_end && nweights; nweights--)
+  {
+    *str_ptr++= 0x00;
+    if (str_ptr < str_ptr_end)
+      *str_ptr++= 0x20;
+  }
+  return str_ptr - str_ptr_begin;
+}
+
+static size_t ob_strxfrm_pad_unicode(uchar *str_ptr, uchar *str_ptr_end)
+{
+  uchar *str_ptr_begin= str_ptr;
+  ob_charset_assert(str_ptr && str_ptr <= str_ptr_end);
+  for ( ; str_ptr < str_ptr_end ; )
+  {
+    *str_ptr++= 0x00;
+    if (str_ptr < str_ptr_end)
+      *str_ptr++= 0x20;
+  }
+  return str_ptr - str_ptr_begin;
+}
+
+void ob_strnxfrm_unicode_help(uchar **d_start,
+                              uchar **d_end,
+                              uint nweights,
+                              uint flags,
+                              uchar **dst0)
+{
+  if (*d_start < *d_end && nweights && (flags & OB_STRXFRM_PAD_WITH_SPACE))
+    *d_start += ob_strxfrm_pad_nweights_unicode(*d_start, *d_end, nweights);
+  ob_strxfrm_desc_and_reverse(*dst0, *d_start, flags, 0);
+  if ((flags & OB_STRXFRM_PAD_TO_MAXLEN) && *d_start < *d_end)
+    *d_start += ob_strxfrm_pad_unicode(*d_start, *d_end);
+}
 
 size_t ob_strnxfrm_unicode(const ObCharsetInfo* cs, unsigned char* dst, size_t dst_len, uint32_t nweights,
-    const unsigned char* src, size_t src_len, int* is_valid_unicode)
+    const unsigned char* src, size_t src_len, unsigned int flags ,int* is_valid_unicode)
 {
   ob_wc_t wchar = 0;
   int cur_len = 0;
@@ -10463,7 +10501,7 @@ size_t ob_strnxfrm_unicode(const ObCharsetInfo* cs, unsigned char* dst, size_t d
     }
     dst += cur_len;
   }
-  // ob_strnxfrm_unicode_help(&dst, &dst_end, nweights, &dst0);
+  ob_strnxfrm_unicode_help(&dst, &dst_end, nweights, flags , &dst_begin);
   return dst - dst_begin;
 }
 
@@ -10669,7 +10707,7 @@ static void ob_hash_sort_utf8mb4(const ObCharsetInfo* cs, const unsigned char* s
 //======================================================================
 
 size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo* cs, unsigned char* dst, size_t dstlen, uint32_t nweights,
-    const unsigned char* src, size_t srclen, int* is_valid_unicode)
+    const unsigned char* src, size_t srclen, unsigned int flags, int* is_valid_unicode)
 {
   ob_wc_t wc;
   unsigned char* dst0 = dst;
@@ -10693,8 +10731,44 @@ size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo* cs, unsigned char* dst,
     }
     dst += res;
   }
-
+  if (flags & OB_STRXFRM_PAD_WITH_SPACE)
+  {
+    for ( ; dst < de && nweights; nweights--)
+    {
+      *dst++= 0x00;
+      if (dst < de)
+      {
+        *dst++= 0x00;
+        if (dst < de)
+          *dst++= 0x20;
+      }
+    }
+  }
+  ob_strxfrm_desc_and_reverse(dst0, dst, flags, 0);
+  if (flags & OB_STRXFRM_PAD_TO_MAXLEN)
+  {
+    while (dst < de)
+    {
+      *dst++= 0x00;
+      if (dst < de)
+      {
+        *dst++= 0x00;
+        if (dst < de)
+          *dst++= 0x20;
+      }
+    }
+  }
   return dst - dst0;
+}
+
+size_t ob_strnxfrmlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)), size_t len)
+{
+  return (len * 2 + 2) / 4;
+}
+
+size_t ob_strnxfrmlen_unicode_full_bin(const ObCharsetInfo *cs, size_t len)
+{
+  return ((len + 3) / cs->mbmaxlen) * 3;
 }
 
 //======================================================================
@@ -10721,6 +10795,7 @@ static ObCollationHandler ob_collation_utf8mb4_general_ci_handler = {
     ob_strnncoll_utf8mb4,
     ob_strnncollsp_utf8mb4,
     ob_strnxfrm_unicode,
+    ob_strnxfrmlen_utf8mb4,
     ob_like_range_mb,
     ob_wildcmp_utf8mb4,
     ob_instr_mb,
@@ -10731,6 +10806,7 @@ static ObCollationHandler ob_collation_utf8mb4_bin_handler = {
     ob_strnncoll_mb_bin,
     ob_strnncollsp_mb_bin,
     ob_strnxfrm_unicode_full_bin,
+    ob_strnxfrmlen_unicode_full_bin,
     ob_like_range_mb,
     ob_wildcmp_mb_bin,
     ob_instr_mb,

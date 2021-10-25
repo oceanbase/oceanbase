@@ -40,6 +40,7 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 
 | 操作系统 | 版本 | 架构 | 编译 | 包部署 | 编译部署 | mysqltest |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| Alibaba Cloud Linux | 2.1903 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |

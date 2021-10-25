@@ -795,6 +795,7 @@ int ObMemtableCtx::do_trans_end(const bool commit, const int64_t trans_version, 
     if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
       TRANS_LOG(ERROR, "callback alloc and free count not match", K(*this));
     }
+    (void)partition_audit_info_cache_.stmt_end_update_audit_info(commit);
     // flush partition audit statistics cached in ctx to partition
     if (NULL != ATOMIC_LOAD(&ctx_) && OB_UNLIKELY(OB_SUCCESS != (tmp_ret = flush_audit_partition_cache_(commit)))) {
       TRANS_LOG(WARN, "flush audit partition cache error", K(tmp_ret), K(commit), K(*ctx_));

@@ -1748,7 +1748,7 @@ int ObPartitionStorage::fetch_conflict_rows(const ObStoreCtx& ctx, const ObDMLBa
 
 int ObPartitionStorage::multi_get_rows(const ObStoreCtx& store_ctx, const ObTableAccessParam& access_param,
     ObTableAccessContext& access_ctx, ObRelativeTable& relative_table, const GetRowkeyArray& rowkeys,
-    ObNewRowIterator*& duplicated_rows)
+    ObNewRowIterator*& duplicated_rows, int64_t data_table_rowkey_cnt)
 {
   int ret = OB_SUCCESS;
   const ObTablesHandle& tables_handle = relative_table.tables_handle_;
@@ -1795,7 +1795,7 @@ int ObPartitionStorage::multi_get_rows(const ObStoreCtx& store_ctx, const ObTabl
             STORAGE_LOG(ERROR, "no memory to alloc ObValueRowIterator", K(ret));
           } else {
             duplicated_rows = dup_iter;
-            if (OB_FAIL(dup_iter->init(true))) {
+            if (OB_FAIL(dup_iter->init(true, data_table_rowkey_cnt))) {
               STORAGE_LOG(WARN, "failed to initialize ObValueRowIterator", K(ret));
             }
           }
@@ -1825,7 +1825,9 @@ int ObPartitionStorage::multi_get_rows(const ObStoreCtx& store_ctx, const ObTabl
             row->row_val_.count_ = access_param.output_exprs_->count();
             LOG_DEBUG("get conflict row", K_(row->row_val));
           }
-          if (OB_FAIL(dup_iter->add_row(row->row_val_))) {
+          if (OB_FAIL(ret)) {
+
+          } else if (OB_FAIL(dup_iter->add_row(row->row_val_))) {
             STORAGE_LOG(WARN, "failed to store conflict row", K(*row));
           } else {
             LOG_DEBUG("get conflict row", K_(row->row_val));
@@ -1894,13 +1896,15 @@ int ObPartitionStorage::get_index_conflict_row(ObDMLRunningCtx& run_ctx, const O
       LOG_WARN("get conflict row failed", K(relative_table), K(index_rowkey), K(pk_out_descs));
     }
     if (OB_SUCC(ret) && OB_UNLIKELY(need_index_back) && OB_UNLIKELY(tmp_rowkey_iter != NULL)) {
+      int64_t data_table_rowkey_cnt = run_ctx.relative_tables_.data_table_.get_rowkey_column_num();
       OZ(convert_row_to_rowkey(*dup_rowkey_iter, rowkeys));
       OZ(multi_get_rows(run_ctx.store_ctx_,
           table_access_param,
           table_access_ctx,
           run_ctx.relative_tables_.data_table_,
           rowkeys,
-          duplicated_rows));
+          duplicated_rows,
+          data_table_rowkey_cnt));
     }
   }
   if (dup_rowkey_iter != NULL) {
@@ -1917,9 +1921,11 @@ int ObPartitionStorage::get_conflict_row(ObDMLRunningCtx& run_ctx, const ObTable
   int ret = OB_SUCCESS;
   ObExtStoreRowkey ext_rowkey(rowkey);
   GetRowkeyArray rowkeys;
+  int64_t data_table_rowkey_cnt = run_ctx.relative_tables_.data_table_.get_rowkey_column_num();
   OZ(rowkeys.push_back(ext_rowkey));
-  OZ(multi_get_rows(run_ctx.store_ctx_, access_param, access_ctx, relative_table, rowkeys, duplicated_rows));
-  LOG_DEBUG("get conflict row", K(ret), K(rowkey), K(relative_table), K(access_param));
+  OZ(multi_get_rows(run_ctx.store_ctx_, access_param, access_ctx,
+      relative_table, rowkeys, duplicated_rows, data_table_rowkey_cnt));
+  LOG_DEBUG("get conflict row", K(ret), K(rowkey), K(relative_table), K(access_param), K(data_table_rowkey_cnt));
   return ret;
 }
 

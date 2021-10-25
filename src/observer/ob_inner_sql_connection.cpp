@@ -73,7 +73,7 @@ public:
       MEMCPY(dup_sql->ptr(), sql_.ptr(), sql_.length());
       dup_sql->ptr()[sql_.length()] = '\0';
       res.get_session().store_query_string(*dup_sql);
-      ret = engine.stmt_query(sql_, ctx, res);
+      ret = engine.stmt_query(*dup_sql, ctx, res);
     }
     return ret;
   }

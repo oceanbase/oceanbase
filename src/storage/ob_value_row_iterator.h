@@ -29,7 +29,7 @@ class ObValueRowIterator : public common::ObNewRowIterator {
 public:
   ObValueRowIterator();
   virtual ~ObValueRowIterator();
-  virtual int init(bool unique);
+  virtual int init(bool unique, int64_t data_table_rowkey_cnt);
   virtual int get_next_row(common::ObNewRow*& row);
   virtual int get_next_rows(common::ObNewRow*& rows, int64_t& row_count);
   virtual int add_row(common::ObNewRow& row);
@@ -41,6 +41,7 @@ private:
   common::ObArenaAllocator allocator_;
   RowArray rows_;
   int64_t cur_idx_;
+  int64_t data_table_rowkey_cnt_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObValueRowIterator);

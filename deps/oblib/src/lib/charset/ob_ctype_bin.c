@@ -637,7 +637,7 @@ static int ob_strnncollsp_binary(const ObCharsetInfo* cs __attribute__((unused))
 }
 
 static size_t ob_strnxfrm_8bit_bin(const ObCharsetInfo* cs __attribute__((unused)), unsigned char* dst, size_t dstlen,
-    uint32_t nweights, const unsigned char* src, size_t srclen, int* is_valid_unicode)
+    uint32_t nweights, const unsigned char* src, size_t srclen, unsigned int flags, int* is_valid_unicode)
 {
   *is_valid_unicode = 1;
   srclen = (srclen < dstlen ? srclen : dstlen);
@@ -645,7 +645,8 @@ static size_t ob_strnxfrm_8bit_bin(const ObCharsetInfo* cs __attribute__((unused
   if (dst != src && srclen > 0) {
     memcpy(dst, src, srclen);
   }
-  return srclen;
+  return ob_strxfrm_pad_desc_and_reverse(cs, dst, dst + srclen, dst + dstlen,
+                                         nweights - srclen, flags, 0);
 }
 
 #define likeconv(s, A) (A)
@@ -826,6 +827,7 @@ static ObCollationHandler ob_collation_binary_handler = {
     ob_strnncoll_binary,
     ob_strnncollsp_binary,
     ob_strnxfrm_8bit_bin,
+    ob_strnxfrmlen_simple,
     ob_like_range_simple,
     ob_wildcmp_bin,
     ob_instr_bin,

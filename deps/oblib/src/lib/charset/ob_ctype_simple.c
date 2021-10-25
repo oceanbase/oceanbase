@@ -454,6 +454,65 @@ size_t ob_scan_8bit(const char* str, const char* end, int sq)
   }
 }
 
+void ob_strxfrm_desc_and_reverse(unsigned char *str, unsigned char *end,
+                            unsigned int flags, unsigned int level)
+{
+  if (flags & (OB_STRXFRM_DESC_LEVEL1 << level))
+  {
+    if (flags & (OB_STRXFRM_REVERSE_LEVEL1 << level))
+    {
+      for (end--; str <= end;)
+      {
+        unsigned char tmp= *str;
+        *str++= ~*end;
+        *end--= ~tmp;
+      }
+    }
+    else
+    {
+      for (; str < end; str++)
+        *str= ~*str;
+    }
+  }
+  else if (flags & (OB_STRXFRM_REVERSE_LEVEL1 << level))
+  {
+    for (end--; str < end;)
+    {
+      unsigned char tmp= *str;
+      *str++= *end;
+      *end--= tmp;
+    }
+  }
+}
+
+size_t ob_strxfrm_pad_desc_and_reverse(const ObCharsetInfo *cs,
+                                unsigned char *str, unsigned char *frm_end_ptr, unsigned char *end,
+                                unsigned int nweights, unsigned int flags, unsigned int level)
+{
+  if (nweights && frm_end_ptr < end && (flags & OB_STRXFRM_PAD_WITH_SPACE))
+  {
+    unsigned int fill_str_len= MY_MIN((unsigned int) (end - frm_end_ptr), nweights * cs->mbminlen);
+    cs->cset->fill(cs, (char*) frm_end_ptr, fill_str_len, cs->pad_char);
+    frm_end_ptr+= fill_str_len;
+  }
+  ob_strxfrm_desc_and_reverse(str, frm_end_ptr, flags, level);
+  if ((flags & OB_STRXFRM_PAD_TO_MAXLEN) && frm_end_ptr < end)
+  {
+    unsigned int fill_str_len= end - frm_end_ptr;
+    cs->cset->fill(cs, (char*) frm_end_ptr, fill_str_len, cs->pad_char);
+    frm_end_ptr= end;
+  }
+  return frm_end_ptr - str;
+}
+/*
+  Returns the number of bytes required for strnxfrm().
+*/
+
+size_t ob_strnxfrmlen_simple(const ObCharsetInfo *cs, size_t len)
+{
+  return len * (cs->strxfrm_multiply ? cs->strxfrm_multiply : 1);
+}
+
 //========================================================================
 
 int ob_like_range_simple(const ObCharsetInfo* cs, const char* str, size_t str_len, int escape, int w_one, int w_many,
