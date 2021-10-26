@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 {
   int ret = 0;
   OB_LOGGER.set_log_level("INFO");
-  OB_LOGGER.set_file_name("ob_admin.log", true, false);
+  OB_LOGGER.set_file_name("ob_admin.log", true, false, "ob_admin_rs.log");
   const char *log_level = getenv("OB_ADMIN_LOG_LEVEL");
   if (NULL != log_level) {
     OB_LOGGER.set_log_level(log_level);
