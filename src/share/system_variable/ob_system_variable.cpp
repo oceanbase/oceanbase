@@ -69,7 +69,7 @@ ObSpecialSysVarValues::ObSpecialSysVarValues()
                  ObSpecialSysVarValues::VERSION_MAX_LEN,
                  pos,
                  "%s",
-                 PACKAGE_VERSION))) {
+                 PACKAGE_VERSION_INFO))) {
     LOG_ERROR("fail to print version to buff", K(ret));
   }
 
