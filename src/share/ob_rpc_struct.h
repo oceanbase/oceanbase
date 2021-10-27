@@ -49,6 +49,7 @@
 #include "sql/executor/ob_task_id.h"
 #include "sql/parser/ob_item_type.h"                           // ObCacheType
 #include "share/partition_table/ob_partition_location_task.h"  // ObPartitionBroadcastTask
+#include "lib/number/ob_number_v2.h"
 
 namespace oceanbase {
 namespace rootserver {
@@ -662,6 +663,22 @@ public:
   bool force_drop_;
   common::ObString object_name_;  // Synchronize the name of the recycle bin in the main library
   bool open_recyclebin_;
+};
+
+struct ObSequenceSetValArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSequenceSetValArg()
+      : seq_id_(common::OB_INVALID_ID),
+        limited_value_(),
+        limited_round_()
+  {}
+  TO_STRING_KV(K_(seq_id), K_(limited_value), K_(limited_round));
+
+  uint64_t seq_id_;
+  common::number::ObNumber limited_value_;  
+  common::number::ObNumber limited_round_;
 };
 
 struct ObSequenceItem {

@@ -301,9 +301,16 @@ int ObSequenceCache::nextval(const ObSequenceSchema& schema, ObIAllocator& alloc
   }
 
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("sequence current node", K(item->curr_node_.start()), K(item->curr_node_.end()), K(item->curr_node_.round()));
-    LOG_DEBUG("sequence prefetching node", K(item->with_prefetch_node_), K(item->prefetch_node_.start()), 
-        K(item->prefetch_node_.end()), K(item->prefetch_node_.round()));
+    if (OB_FAIL(item->set_val_limited_node_.set_limited_value(item->curr_node_.start()))) {
+      LOG_WARN("update set_val_limited_node_ failed", K(ret));
+    } else if (OB_FAIL(item->set_val_limited_node_.set_round(item->curr_node_.round()))) {
+      LOG_WARN("update set_val_limited_node_ failed", K(ret));
+    } else {
+      item->set_val_limited_node_.set_valid(true);
+      LOG_DEBUG("sequence current node", K(item->curr_node_.start()), K(item->curr_node_.end()), K(item->curr_node_.round()));
+      LOG_DEBUG("sequence prefetching node", K(item->with_prefetch_node_), K(item->prefetch_node_.start()), 
+          K(item->prefetch_node_.end()), K(item->prefetch_node_.round()));
+    }
   } else {
     LOG_WARN("sequence nextval failed");
   }
@@ -350,7 +357,7 @@ int ObSequenceCache::setval(const share::schema::ObSequenceSchema& schema, const
     ObSequenceValue& value, bool& valid)
 {
   int ret = OB_SUCCESS;
-  valid = true;
+  valid = false;
 
   LOG_DEBUG("sequence set value", K(schema), K(new_next_val), K(new_round));
   CacheItemKey key(schema.get_sequence_id());
@@ -360,9 +367,10 @@ int ObSequenceCache::setval(const share::schema::ObSequenceSchema& schema, const
     LOG_WARN("fail get item", K(ret), K(key));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (item->enough_cache_node_ && OB_FAIL(check_setval(increment_pos, item->curr_node_, new_next_val, new_round, valid))) {
+    LOG_WARN("item is NULL", K(ret));
+  } else if (OB_FAIL(check_setval(increment_pos, item->set_val_limited_node_, new_next_val, new_round, valid))) {
     ret = OB_ERR_UNEXPECTED;
-    valid = false;
+    LOG_WARN("fail to check the validation of setval", K(ret));
   } 
   
   if (OB_SUCC(ret) && valid) {
@@ -385,16 +393,19 @@ int ObSequenceCache::setval(const share::schema::ObSequenceSchema& schema, const
   return ret;
 }
 
-int ObSequenceCache::check_setval(const bool increment_pos, const SequenceCacheNode& node, 
+int ObSequenceCache::check_setval(const bool increment_pos, const SequenceLimitedNode& node, 
     const ObSequenceValue& new_next_val, const ObSequenceValue& new_round, bool& valid) {
   int ret = OB_SUCCESS;
-  if (new_round.val() < node.round()) {
+  if (!node.is_valid()) {
+    // the limited value is invalid, need to select the inner table
+    valid = true;
+  } else if (new_round.val() < node.round()) {
     valid = false;
   } else if (new_round.val() > node.round()) {
     valid = true;
-  } else { // new_round.val() == node.round()
-    if ((increment_pos && new_next_val.val() < node.start()) ||
-        (!increment_pos && new_next_val.val() > node.start())) {
+  } else { /* new_round.val() == node.round() */
+    if ((increment_pos && new_next_val.val() < node.limited_value()) ||
+        (!increment_pos && new_next_val.val() > node.limited_value())) {
       valid = false;
     } else {
       valid = true;

@@ -214,6 +214,8 @@ int ObSequenceDMLProxy::set_next_batch(const uint64_t tenant_id, const uint64_t 
       LOG_WARN("fail to select sequence value table", K(ret), K(sequence_id), K(SEQ_VALUE_TNAME));
     }  
     
+    const ObNumber* limited_value = &new_next_value;
+    const ObNumber* limited_round = &new_round;
     if (ret == OB_ITER_END) { // inner table doesn't include this sequence's information, need to init
       if (OB_FAIL(insert_sequence_value_table(trans, tenant_id, sequence_id, new_next_value, new_round))) {
         // When reading data from the all_sequence_object table for the first time, you need to
@@ -235,11 +237,19 @@ int ObSequenceDMLProxy::set_next_batch(const uint64_t tenant_id, const uint64_t 
         if (OB_FAIL(update_sequence_value_table(trans, tenant_id, sequence_id, new_next_value, new_round))) {
           LOG_WARN("modify sequence value table failed", K(ret), K(SEQ_VALUE_TNAME));
         } 
+      } else {
+        limited_value = &new_next_value;
+        limited_round = &new_round;
       }
     }
 
     if (OB_SUCC(ret)) {
-      sync_proxy.clear_sequence_cache_all(sequence_id);
+      obrpc::ObSequenceSetValArg arg;
+      arg.limited_value_.shadow_copy(*limited_value);
+      arg.limited_round_.shadow_copy(*limited_round);
+      arg.seq_id_ = sequence_id;
+      
+      sync_proxy.clear_sequence_cache_all(arg);
     }
   }
 

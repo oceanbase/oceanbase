@@ -40,7 +40,7 @@ struct SequenceCacheNode {
   void reset()
   {}
 
-  TO_STRING_KV(K_(start), K_(end));
+  TO_STRING_KV(K_(start), K_(end), K_(round));
 
   int set_start(const common::number::ObNumber& start)
   {
@@ -70,6 +70,46 @@ private:
   ObSequenceValue start_;
   ObSequenceValue end_;
   ObSequenceValue round_;
+};
+
+
+struct SequenceLimitedNode {
+  SequenceLimitedNode() : limited_value_(), round_(), valid_(false)
+  {}
+
+  void reset()
+  {}
+
+  TO_STRING_KV(K_(limited_value), K_(round));
+
+  int set_limited_value(const common::number::ObNumber& limited_value)
+  {
+    return limited_value_.set(limited_value);
+  }
+  int set_round(const common::number::ObNumber& round)
+  {
+    return round_.set(round);
+  }
+  void set_valid(bool valid)
+  {
+    valid_ = valid;
+  }
+  const common::number::ObNumber& limited_value() const
+  {
+    return limited_value_.val();
+  }
+  const common::number::ObNumber& round() const
+  {
+    return round_.val();
+  }
+  bool is_valid() const
+  {
+    return valid_;
+  }
+private:
+  ObSequenceValue limited_value_;
+  ObSequenceValue round_;
+  bool valid_;
 };
 
 // a wrapper class, adaptor for ObLinkHashMap
@@ -141,6 +181,7 @@ public:
 public:
   SequenceCacheNode curr_node_;
   SequenceCacheNode prefetch_node_;
+  SequenceLimitedNode set_val_limited_node_;
   // avoid concurrent prefetch
   bool prefetching_;
   // mark  prefetch_node filled
@@ -188,7 +229,7 @@ private:
   int need_refill_cache(const schema::ObSequenceSchema& schema, ObSequenceCacheItem& cache, bool& need_refill);
   int refill_sequence_cache(const schema::ObSequenceSchema& schema, ObSequenceCacheItem& cache);
 
-  int check_setval(const bool increment_pos, const SequenceCacheNode& node, 
+  int check_setval(const bool increment_pos, const SequenceLimitedNode& node, 
     const ObSequenceValue& new_next_val, const ObSequenceValue& new_round, bool& valid);
 
   /* variables */

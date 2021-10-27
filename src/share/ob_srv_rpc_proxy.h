@@ -123,7 +123,7 @@ public:
   RPC_S(PR5 refresh_sync_value, OB_REFRESH_SYNC_VALUE, (ObAutoincSyncArg));
   RPC_S(PR5 sync_auto_increment, OB_SYNC_AUTO_INCREMENT, (ObAutoincSyncArg));
   RPC_S(PR5 clear_autoinc_cache, OB_CLEAR_AUTOINC_CACHE, (ObAutoincSyncArg));
-  RPC_S(PR5 clear_sequence_cache, OB_CLEAR_SEQUENCE_CACHE, (obrpc::UInt64));
+  RPC_S(PR5 clear_sequence_cache, OB_CLEAR_SEQUENCE_CACHE, (ObSequenceSetValArg));
   RPC_S(PR5 dump_memtable, OB_DUMP_MEMTABLE, (common::ObPartitionKey));
   RPC_S(PR5 force_set_as_single_replica, OB_FORCE_SET_AS_SINGLE_REPLICA, (common::ObPartitionKey));
   RPC_S(PR5 force_set_replica_num, OB_FORCE_SET_REPLICA_NUM, (ObSetReplicaNumArg));

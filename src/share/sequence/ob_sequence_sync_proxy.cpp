@@ -61,13 +61,12 @@ int ObSequenceSyncProxy::init(obrpc::ObSrvRpcProxy* srv_proxy,
   return ret;
 }
 
-int ObSequenceSyncProxy::clear_sequence_cache_all(const uint64_t seq_id)
+int ObSequenceSyncProxy::clear_sequence_cache_all(const obrpc::ObSequenceSetValArg& arg)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
-    LOG_INFO("begin to clear all sever's sequence cache", K(seq_id));
+    LOG_INFO("begin to clear all sever's sequence cache", K(arg.seq_id_));
     
-    obrpc::UInt64 arg(seq_id);
     common::ObArray<common::ObAddr> servers;
     if (OB_FAIL(server_tracer_->get_active_server_list(servers))) {
       LOG_WARN("get alive server failed", K(ret));
@@ -78,10 +77,10 @@ int ObSequenceSyncProxy::clear_sequence_cache_all(const uint64_t seq_id)
         if (OB_FAIL(srv_proxy_->to(server).timeout(SYNC_TIMEOUT_US).clear_sequence_cache(arg))) {
           if (is_timeout_err(ret) || is_server_down_error(ret)) {
             // ignore time out, go on
-            LOG_WARN("rpc call time out, ignore the error", "server", server, K(ret), K(seq_id));
+            LOG_WARN("rpc call time out, ignore the error", "server", server, K(ret), K(arg.seq_id_));
             ret = OB_SUCCESS;
           } else {
-            LOG_WARN("failed to send rpc call", K(ret), K(seq_id));
+            LOG_WARN("failed to send rpc call", K(ret), K(arg.seq_id_));
           }
         }
       }
@@ -90,13 +89,13 @@ int ObSequenceSyncProxy::clear_sequence_cache_all(const uint64_t seq_id)
   return ret;
 }
 
-int ObSequenceSyncProxy::clear_sequence_cache(const obrpc::UInt64& arg)
+int ObSequenceSyncProxy::clear_sequence_cache(const obrpc::ObSequenceSetValArg& arg)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("begin to clear local auto-increment cache", K(arg));
 
   CacheItemKey key;
-  key.key_ = arg;
+  key.key_ = arg.seq_id_;
 
   lib::ObMutexGuard guard(*cache_mutex_);
   ObSequenceCacheItem* item = nullptr;
@@ -107,6 +106,10 @@ int ObSequenceSyncProxy::clear_sequence_cache(const obrpc::UInt64& arg)
   } else {
     item->enough_cache_node_ = false;
     item->with_prefetch_node_ = false;
+    SequenceLimitedNode& node = item->set_val_limited_node_;
+    node.set_valid(true);
+    node.set_limited_value(arg.limited_value_);
+    node.set_round(arg.limited_round_);
   }
 
   if (OB_ENTRY_NOT_EXIST == ret) {

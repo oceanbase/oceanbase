@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_SEQUENCE_SYNC_PROXY_H_
 
 #include "share/ob_srv_rpc_proxy.h"
+#include "share/ob_rpc_struct.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "common/ob_timeout_ctx.h"
 #include "share/ob_alive_server_tracer.h"
@@ -32,8 +33,8 @@ public:
   static ObSequenceSyncProxy& get_instance();
   int init(obrpc::ObSrvRpcProxy* srv_proxy, share::ObAliveServerTracer* server_tracer,
       NodeMap* sequence_cache, lib::ObMutex* cache_mutex);
-  int clear_sequence_cache_all(const uint64_t seq_id);
-  int clear_sequence_cache(const obrpc::UInt64& arg);
+  int clear_sequence_cache_all(const obrpc::ObSequenceSetValArg& arg);
+  int clear_sequence_cache(const obrpc::ObSequenceSetValArg& arg);
 
 private:
   obrpc::ObSrvRpcProxy* srv_proxy_;
