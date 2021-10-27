@@ -3466,7 +3466,7 @@ int ObRawExprResolverImpl::process_set_sequence_value_node(const ParseNode* node
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(node), KP(ctx_.session_info_));
   } else if (OB_UNLIKELY(node->num_child_ != 4 || OB_ISNULL(node->children_[0]) || 
-      OB_ISNULL(node->children_[1]) ||OB_ISNULL(node->children_[2]))) {
+      OB_ISNULL(node->children_[1]) || OB_ISNULL(node->children_[2]))) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("invalid children node of sequence setval node", K(ret), "node", SJ(ObParserResultPrintWrapper(*node)));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_MYSQL_SEQ_SETVAL, func_expr))) {
@@ -3508,7 +3508,7 @@ int ObRawExprResolverImpl::process_set_sequence_value_node(const ParseNode* node
       bool exist = false;
       if (database_name.empty()) {
         ret = OB_ERR_NO_DB_SELECTED;
-        LOG_WARN("No database selected", K(database_name), K(sequence_name), K(ret));
+        LOG_WARN("No database selected", K(ret), K(database_name), K(sequence_name));
       } else if (OB_FAIL(ctx_.schema_checker_->get_database_id(tenant_id, database_name, database_id))) {
         LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(database_name));
       } else if (OB_FAIL(
@@ -3533,19 +3533,31 @@ int ObRawExprResolverImpl::process_set_sequence_value_node(const ParseNode* node
   if (OB_SUCC(ret)) {
     const ParseNode* next_value_node = node->children_[2];
     const ParseNode* optional_node = node->children_[3];
+    
     if (OB_FAIL(SMART_CALL(recursive_resolve(next_value_node, value_expr)))) {
       LOG_WARN("resolve next_value parameter faield", K(ret));
     } else if (OB_NOT_NULL(optional_node)) {
-      if (OB_UNLIKELY(optional_node->num_child_ < 1 || optional_node->num_child_ > 2)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid optional parameter number",K(optional_node->num_child_));
+      const ParseNode* used_val_node = NULL;
+      const ParseNode* round_node = NULL;
+      if (optional_node->type_ == T_LINK_NODE) {
+        if (optional_node->num_child_ < 1 || optional_node->num_child_ > 2) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid optional parameter number", K(ret), K(optional_node->num_child_));
+        } else {
+          used_val_node = optional_node->children_[0];
+          round_node = optional_node->children_[1];
+        }
+      } else if (optional_node->type_ == T_QUESTIONMARK) {
+        used_val_node = optional_node;
       } else {
-        const ParseNode* used_val_node = optional_node->children_[0];
-        const ParseNode* round_node = NULL;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid optional parameter", K(ret), K(optional_node->num_child_), K(optional_node->type_));
+      }
+
+      if (OB_SUCC(ret)) {
         if (OB_FAIL(SMART_CALL(recursive_resolve(used_val_node, used_expr)))) {
           LOG_WARN("resolve used parameter faield", K(ret));
-        } else if (optional_node->num_child_ == 2) {
-          round_node = optional_node->children_[1];
+        } else if (OB_NOT_NULL(round_node)) {
           if (OB_FAIL(SMART_CALL(recursive_resolve(round_node, round_expr)))) {
             LOG_WARN("resolve round parameter faield", K(ret));
           } 
@@ -3668,7 +3680,7 @@ int ObRawExprResolverImpl::process_sequence_node(const ParseNode* node, ObRawExp
       bool exist = false;
       if (database_name.empty()) {
         ret = OB_ERR_NO_DB_SELECTED;
-        LOG_WARN("No database selected", K(database_name), K(sequence_name), K(ret));
+        LOG_WARN("No database selected", K(ret), K(database_name), K(sequence_name));
       } else if (OB_FAIL(ctx_.schema_checker_->get_database_id(tenant_id, database_name, database_id))) {
         LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(database_name));
       } else if (OB_FAIL(
@@ -3683,12 +3695,12 @@ int ObRawExprResolverImpl::process_sequence_node(const ParseNode* node, ObRawExp
     }
   }
 
-  if(OB_SUCC(ret)) {
+  if (OB_SUCC(ret)) {
     ObDMLStmt* stmt = static_cast<ObDMLStmt*>(ctx_.stmt_);
     
-    if(next_value && OB_FAIL(stmt->add_nextval_sequence_id(sequence_id))) {
+    if (next_value && OB_FAIL(stmt->add_nextval_sequence_id(sequence_id))) {
       LOG_WARN("add sequence id failed", K(ret));
-    } else if(!next_value && OB_FAIL(stmt->add_currval_sequence_id(sequence_id))) {
+    } else if (!next_value && OB_FAIL(stmt->add_currval_sequence_id(sequence_id))) {
       LOG_WARN("add sequence id failed", K(ret));
     }
   }

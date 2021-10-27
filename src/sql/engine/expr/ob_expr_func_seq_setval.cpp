@@ -93,7 +93,7 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
       if (OB_UNLIKELY(round_num < static_cast<int64_t>(0))) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid value of round parameter", K(round_num));
-      } else if(!seq_schema->get_cycle_flag() && round_num != static_cast<int64_t>(0)) {
+      } else if (!seq_schema->get_cycle_flag() && round_num != static_cast<int64_t>(0)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid round value", K(seq_schema->get_cycle_flag()), K(round_num));
       } else {
@@ -128,11 +128,11 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
       ObSequenceValue value;
       bool valid = true;
       if (OB_FAIL(sequence_cache->setval(*seq_schema, new_next_val, round, value, valid))) {
-        LOG_WARN("failed to get sequence value from cache", K(tenant_id), K(ret));
+        LOG_WARN("failed to get sequence value from cache", K(ret), K(tenant_id));
       } else if (valid) {
         if (OB_FAIL(calc_result.from(value.val(), allocator))) {
           LOG_WARN("fail deep copy value", K(ret));
-        } else if(used) {
+        } else if (used) {
           res.set_number(old_val);
         } else {
           res.set_number(calc_result);
@@ -140,7 +140,7 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
       } else {
         res.set_null();
       }
-      LOG_DEBUG("trace sequence setval", K(calc_result), K(ret));
+      LOG_DEBUG("trace sequence setval", K(ret), K(calc_result));
       
     }
   }
@@ -290,7 +290,7 @@ int ObExprFuncSeqSetval::calc_sequence_setval(const ObExpr& expr, ObEvalCtx& ctx
     if (OB_UNLIKELY(round_num < static_cast<int64_t>(0))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid value of round parameter", K(round_num));
-    } else if(!seq_schema->get_cycle_flag() && round_num != static_cast<int64_t>(0)) {
+    } else if (!seq_schema->get_cycle_flag() && round_num != static_cast<int64_t>(0)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid round value", K(seq_schema->get_cycle_flag()), K(round_num));
     } else {
@@ -319,17 +319,17 @@ int ObExprFuncSeqSetval::calc_sequence_setval(const ObExpr& expr, ObEvalCtx& ctx
   }
 
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("setval parameters in calc_sequence_setval.", K(db_name), K(seq_name), K(new_next_val_num.format()), K(used), K(round_num.format()), K(ret));
+    LOG_DEBUG("setval parameters in calc_sequence_setval.", K(ret), K(db_name), K(seq_name), K(new_next_val_num.format()), K(used), K(round_num.format()));
     share::ObSequenceCache* sequence_cache = &share::ObSequenceCache::get_instance();
     common::number::ObNumber calc_result;
     ObSequenceValue value;
     bool valid = true;
     if (OB_FAIL(sequence_cache->setval(*seq_schema, new_next_val, round, value, valid))) {
-      LOG_WARN("failed to get sequence value from cache", K(tenant_id), K(ret));
+      LOG_WARN("failed to get sequence value from cache", K(ret), K(tenant_id));
     } else if (valid) {
       if (OB_FAIL(calc_result.from(value.val(), allocator))) {
         LOG_WARN("fail deep copy value", K(ret));
-      } else if(used) {
+      } else if (used) {
         res.set_number(old_val);
       } else {
         res.set_number(calc_result);
@@ -337,7 +337,7 @@ int ObExprFuncSeqSetval::calc_sequence_setval(const ObExpr& expr, ObEvalCtx& ctx
     } else {
       res.set_null();
     }
-    LOG_DEBUG("trace sequence setval", K(calc_result), K(ret));
+    LOG_DEBUG("trace sequence setval", K(ret), K(calc_result));
   }
   return ret;
 }

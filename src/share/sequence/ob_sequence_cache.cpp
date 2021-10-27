@@ -46,7 +46,7 @@ int ObSequenceCache::move_next(
   int ret = OB_SUCCESS;
   bool need_refill = false;
   if (OB_FAIL(need_refill_cache(schema, cache, need_refill))) {
-    LOG_WARN("fail check if need refill cache", K(schema), K(ret));
+    LOG_WARN("fail check if need refill cache", K(ret), K(schema));
   } else if (need_refill) {
     ret = OB_SIZE_OVERFLOW;
   } else {
@@ -65,13 +65,13 @@ int ObSequenceCache::move_next(
     
     if (OB_SUCC(ret)) {
       if (OB_FAIL(cache.set_last_number(nextval.val()))) {
-        LOG_WARN("fail to cache last_number", K(nextval), K(ret));
+        LOG_WARN("fail to cache last_number", K(ret), K(nextval));
       } else {
         cache.base_on_last_number_ = true;
       }
 
       if ((schema.get_increment_by() > static_cast<int64_t>(0) && cache.curr_node_.start() >= cache.curr_node_.end()) || 
-          (schema.get_increment_by() < static_cast<int64_t>(0) && cache.curr_node_.start() <= cache.curr_node_.end())){
+          (schema.get_increment_by() < static_cast<int64_t>(0) && cache.curr_node_.start() <= cache.curr_node_.end())) {
         cache.enough_cache_node_ = false;
       }
     }
@@ -113,8 +113,8 @@ int ObSequenceCache::need_refill_cache(
         cache.curr_node_.end().format(),
         "last_number",
         cache.last_number().format(),
-        K(refill),
-        K(ret));
+        K(ret),
+        K(refill));
   }
   return ret;
 }
@@ -131,7 +131,7 @@ int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema& schema, ObSeq
     need_refetch = false;
     if (OB_FAIL(dml_proxy_.next_batch(
             schema.get_tenant_id(), schema.get_sequence_id(), schema.get_sequence_option(), next_range))) {
-      LOG_WARN("fail get next sequence batch", K(schema), K(ret));
+      LOG_WARN("fail get next sequence batch", K(ret), K(schema));
     } else {
       if (schema.get_cycle_flag()) {
         if (schema.get_increment_by() > static_cast<int64_t>(0)) {
@@ -153,11 +153,11 @@ int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema& schema, ObSeq
 
       if (!need_refetch) {
         if (OB_FAIL(cache.curr_node_.set_start(next_range.start()))) {
-          LOG_WARN("fail set start", K(next_range), K(ret));
+          LOG_WARN("fail set start", K(ret), K(next_range));
         } else if (OB_FAIL(cache.curr_node_.set_end(next_range.end()))) {
-          LOG_WARN("fail set end", K(next_range), K(ret));
+          LOG_WARN("fail set end", K(ret), K(next_range));
         } else if (OB_FAIL(cache.curr_node_.set_round(next_range.round()))) {
-          LOG_WARN("fail set round", K(next_range), K(ret));
+          LOG_WARN("fail set round", K(ret), K(next_range));
         } else {
           LOG_INFO("update sequence curr_node cache success", K(cache));
         }
@@ -166,7 +166,7 @@ int ObSequenceCache::refill_sequence_cache(const ObSequenceSchema& schema, ObSeq
       }
     }
     if (times == 2) {
-      LOG_INFO("refetch next batch result", K(cache), K(ret));
+      LOG_INFO("refetch next batch result", K(ret), K(cache));
     }
   } while (OB_SUCC(ret) && need_refetch);
   return ret;
@@ -177,7 +177,7 @@ int ObSequenceCache::prefetch_sequence_cache(const ObSequenceSchema& schema, ObS
   int ret = OB_SUCCESS;
   if (OB_FAIL(dml_proxy_.prefetch_next_batch(
           schema.get_tenant_id(), schema.get_sequence_id(), schema.get_sequence_option(), cache.prefetch_node_))) {
-    LOG_WARN("fail get next sequence batch", K(schema), K(ret));
+    LOG_WARN("fail get next sequence batch", K(ret), K(schema));
   } else {
     cache.last_refresh_ts_ = ObTimeUtility::current_time();
     LOG_INFO("prefetch sequence", "id", schema.get_sequence_id(), K(cache));
@@ -193,9 +193,9 @@ int ObSequenceCache::get_item(CacheItemKey& key, ObSequenceCacheItem*& item)
     if (OB_ENTRY_NOT_EXIST == (ret = sequence_cache_.get(key, item))) {
       if (NULL == (item = op_alloc(ObSequenceCacheItem))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("failed to alloc cache node", K(key), K(ret));
+        LOG_ERROR("failed to alloc cache node", K(ret), K(key));
       } else if (OB_FAIL(sequence_cache_.insert_and_get(key, item))) {
-        LOG_WARN("fail set cache item", K(key), K(ret));
+        LOG_WARN("fail set cache item", K(ret), K(key));
       }
       if (OB_FAIL(ret) && nullptr != item) {
         op_free(item);
@@ -222,7 +222,7 @@ int ObSequenceCache::nextval(const ObSequenceSchema& schema, ObIAllocator& alloc
   CacheItemKey key(schema.get_sequence_id());
   ObSequenceCacheItem* item = nullptr;
   if (OB_FAIL(get_item(key, item))) {
-    LOG_WARN("fail get item", K(key), K(ret));
+    LOG_WARN("fail get item", K(ret), K(key));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -236,11 +236,11 @@ int ObSequenceCache::nextval(const ObSequenceSchema& schema, ObIAllocator& alloc
 
       // setp 2. cache resources used up, refill cache
       if (OB_SIZE_OVERFLOW == ret) {
-        LOG_INFO("no more avaliable value in current cache, try refill cache", K(*item), K(ret));
+        LOG_INFO("no more avaliable value in current cache, try refill cache", K(ret), K(*item));
         if (OB_FAIL(refill_sequence_cache(schema, *item))) {
-          LOG_WARN("fail refill sequence cache", K(*item), K(ret));
+          LOG_WARN("fail refill sequence cache", K(ret), K(*item));
         } else if (OB_FAIL(move_next(schema, *item, allocator, nextval))) {
-          LOG_WARN("fail move next", K(*item), K(ret));
+          LOG_WARN("fail move next", K(ret), K(*item));
         }
       }
 
@@ -279,7 +279,7 @@ int ObSequenceCache::nextval(const ObSequenceSchema& schema, ObIAllocator& alloc
       if (OB_FAIL(prefetch_sequence_cache(schema, mock_item))) {
         int prefetch_err = ret;
         ret = OB_SUCCESS;
-        LOG_WARN("fail refill sequence cache. ignore prefrech error", K(prefetch_err), K(ret));
+        LOG_WARN("fail refill sequence cache. ignore prefrech error", K(ret), K(prefetch_err));
       } else {
         LOG_INFO("dump item", K(mock_item), K(*item));
         if (item->with_prefetch_node_) {
@@ -322,7 +322,7 @@ int ObSequenceCache::lastval(const ObSequenceSchema& schema, ObSequenceValue& la
   CacheItemKey key(schema.get_sequence_id());
   ObSequenceCacheItem* item = nullptr;
   if (OB_FAIL(get_item(key, item))) {
-    LOG_WARN("fail get item", K(key), K(ret));
+    LOG_WARN("fail get item", K(ret), K(key));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
@@ -331,7 +331,7 @@ int ObSequenceCache::lastval(const ObSequenceSchema& schema, ObSequenceValue& la
     {
       LOG_DEBUG("lastval", K(schema));
 
-      if(OB_LIKELY(item->base_on_last_number_)){ // last_value is initialized
+      if (OB_LIKELY(item->base_on_last_number_)) { // last_value is initialized
         if (OB_FAIL(lastval.set(item->last_number()))) {
           LOG_WARN("get lastval fail", K(ret), K(item->curr_node_.start()));
         } else {
@@ -357,7 +357,7 @@ int ObSequenceCache::setval(const share::schema::ObSequenceSchema& schema, const
   ObSequenceCacheItem* item = nullptr;
   bool increment_pos = schema.get_increment_by() > static_cast<int64_t>(0) ? true : false;
   if (OB_FAIL(get_item(key, item))) {
-    LOG_WARN("fail get item", K(key), K(ret));
+    LOG_WARN("fail get item", K(ret), K(key));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (item->enough_cache_node_ && OB_FAIL(check_setval(increment_pos, item->curr_node_, new_next_val, new_round, valid))) {
@@ -390,7 +390,7 @@ int ObSequenceCache::check_setval(const bool increment_pos, const SequenceCacheN
   int ret = OB_SUCCESS;
   if (new_round.val() < node.round()) {
     valid = false;
-  } else if (new_round.val() > node.round()){
+  } else if (new_round.val() > node.round()) {
     valid = true;
   } else { // new_round.val() == node.round()
     if ((increment_pos && new_next_val.val() < node.start()) ||

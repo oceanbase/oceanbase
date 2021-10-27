@@ -55,7 +55,7 @@ int ObSequenceResolver<T>::resolve_sequence_options(T* stmt, ParseNode* node)
     } else { 
       ParseNode* option_node = NULL;
       int32_t num = node->num_child_;
-      for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
         option_node = node->children_[i];
         if (OB_FAIL(resolve_sequence_option(stmt, option_node))) {
           SQL_LOG(WARN, "resolve sequence option failed", K(ret));

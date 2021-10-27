@@ -39,7 +39,7 @@ int ObExprFuncSeqNextval::calc_result_type2(ObExprResType& type, ObExprResType& 
   int ret = OB_SUCCESS;
   if (!type1.is_varchar() || !type2.is_varchar()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("input param should be varchar type", K(type1), K(type2), K(ret));
+    LOG_WARN("input param should be varchar type", K(ret), K(type1), K(type2));
   } else {
     type.set_number();
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObNumberType].scale_);
@@ -53,7 +53,7 @@ int ObExprFuncSeqNextval::calc_result2(ObObj& result, const ObObj& obj1, const O
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr_ctx.my_session_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(expr_ctx.my_session_), K(ret));
+    LOG_WARN("Invalid argument", K(ret), K(expr_ctx.my_session_));
   } else {
     ObSQLSessionInfo& session = *expr_ctx.my_session_;
     common::number::ObNumber res_num;
@@ -90,18 +90,18 @@ int ObExprFuncSeqNextval::calc_result2(ObObj& result, const ObObj& obj1, const O
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("sequence is not exist", K(db_name), K(db_id), K(seq_name));
     } else if (OB_FAIL(schema_guard.get_sequence_schema(tenant_id, seq_id, seq_schema))) {
-      LOG_WARN("fail get sequence schema", K(seq_id), K(ret));
+      LOG_WARN("fail get sequence schema", K(ret), K(seq_id));
     } else if (OB_ISNULL(seq_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null unexpected", K(ret));
-    } else if (OB_FAIL(sequence_cache->nextval(*seq_schema, allocator, value))){
-      LOG_WARN("failed to get sequence value from cache", K(tenant_id), K(seq_id), K(ret));
+    } else if (OB_FAIL(sequence_cache->nextval(*seq_schema, allocator, value))) {
+      LOG_WARN("failed to get sequence value from cache", K(ret), K(tenant_id), K(seq_id));
     } else if (OB_FAIL(res_num.from(value.val(), allocator))) {
       LOG_WARN("fail deep copy value", K(ret));
     } else {
       result.set_number(res_num);
     }
-    LOG_DEBUG("trace sequence nextval", K(res_num), K(ret));
+    LOG_DEBUG("trace sequence nextval", K(ret), K(res_num));
   }
   
   return ret;
@@ -165,14 +165,14 @@ int ObExprFuncSeqNextval::calc_sequence_nextval(const ObExpr& expr, ObEvalCtx& c
   } else if (OB_ISNULL(seq_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ret));
-  } else if (OB_FAIL(sequence_cache->nextval(*seq_schema, allocator, value))){
-    LOG_WARN("failed to get sequence value from cache", K(tenant_id), K(seq_id), K(ret));
+  } else if (OB_FAIL(sequence_cache->nextval(*seq_schema, allocator, value))) {
+    LOG_WARN("failed to get sequence value from cache", K(ret), K(tenant_id), K(seq_id));
   } else if (OB_FAIL(res_num.from(value.val(), allocator))) {
     LOG_WARN("fail deep copy value", K(ret));
   } else {
     result.set_number(res_num);
   }
-  LOG_DEBUG("trace sequence nextval", K(res_num), K(ret));
+  LOG_DEBUG("trace sequence nextval", K(ret), K(res_num));
   
   return ret;
 }

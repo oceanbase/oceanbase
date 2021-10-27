@@ -19284,32 +19284,32 @@ int ObDDLService::do_sequence_ddl(const obrpc::ObSequenceDDLArg& arg)
         } else {
           seq_schema.set_database_id(database_id);
         }       
-        if(i == sequence_items.size() - 1){
+        if (i == sequence_items.size() - 1) {
           ddl_stmt_str = &arg.ddl_stmt_str_;
         }
 
         switch (arg.get_stmt_type()) {
           case sql::stmt::T_CREATE_SEQUENCE: {
-            if (OB_FAIL(ddl_operator.create_sequence(seq_schema, arg.get_exist_flag(), opt_bitset, trans, schema_guard, ddl_stmt_str))) {
-              LOG_WARN("fail create sequence", K(arg), K(ret));
+            if (OB_FAIL(ddl_operator.create_sequence(seq_schema, opt_bitset, trans, schema_guard, ddl_stmt_str))) {
+              LOG_WARN("fail create sequence", K(ret), K(arg));
             }
             break;
           }
           case sql::stmt::T_ALTER_SEQUENCE: {
-            if (OB_FAIL(ddl_operator.alter_sequence(seq_schema, arg.get_exist_flag(), opt_bitset, trans, schema_guard, ddl_stmt_str))) {
-              LOG_WARN("fail alter sequence", K(arg), K(ret));
+            if (OB_FAIL(ddl_operator.alter_sequence(seq_schema, opt_bitset, trans, schema_guard, ddl_stmt_str))) {
+              LOG_WARN("fail alter sequence", K(ret), K(arg));
             }
             break;
           }
           case sql::stmt::T_DROP_SEQUENCE: {
-            if (OB_FAIL(ddl_operator.drop_sequence(seq_schema, arg.get_exist_flag(), trans, schema_guard, ddl_stmt_str))) {
-              LOG_WARN("fail drop sequence", K(arg), K(ret));
+            if (OB_FAIL(ddl_operator.drop_sequence(seq_schema, trans, schema_guard, ddl_stmt_str))) {
+              LOG_WARN("fail drop sequence", K(ret), K(arg));
             }
             break;
           }
           default:
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected stmt type", K(arg), K(ret));
+            LOG_WARN("unexpected stmt type", K(ret), K(arg));
             break;
         }
       }

@@ -734,8 +734,7 @@ int ObInnerTableSchema::all_virtual_sequence_value_schema(ObTableSchema &table_s
   }
 
   if (OB_SUCC(ret)) {
-  
-    int ret_cycle_count = 0;
+  int ret_cycle_count = 0;
     common::number::ObNumberBuilder cycle_count_builder;
     cycle_count_builder.build_v2("0", strlen("0"), ret_cycle_count);
     

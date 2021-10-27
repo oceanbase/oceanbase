@@ -674,7 +674,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName& q_name, ObIArra
   } else {
     CK(OB_NOT_NULL(get_basic_stmt()));
     if (OB_FAIL(resolve_column_ref_expr(q_name, real_ref_expr))) {
-      if(share::is_oracle_mode() ){
+      if (share::is_oracle_mode()) {
         if (OB_ERR_BAD_FIELD_ERROR == ret) {
           if (OB_FAIL(resolve_sequence_object(q_name, real_ref_expr))) {
             LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve sequence object failed", K(ret), K(q_name));

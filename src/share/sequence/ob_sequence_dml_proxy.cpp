@@ -129,18 +129,18 @@ int ObSequenceDMLProxy::next_batch(const uint64_t tenant_id, const uint64_t sequ
   if (OB_SUCC(ret)) {
     if (OB_FAIL(select_sequence_value_table(sql_client_retry_weak, allocator, tenant_id, sequence_id,
         next_value, cycle_count))) {
-      LOG_WARN("fail to select sequence value table", K(sequence_id), K(SEQ_VALUE_TNAME), K(ret));
+      LOG_WARN("fail to select sequence value table", K(ret), K(sequence_id), K(SEQ_VALUE_TNAME));
     }  
 
     if (ret==OB_ITER_END && OB_FAIL(init_sequence_value_table(trans, sql_client_retry_weak, allocator, 
         tenant_id, sequence_id, option, next_value, cycle_count))) {
       // When reading data from the all_sequence_object table for the first time, you need to
       // insert a row of initial data in the all_sequence_object table
-      LOG_WARN("fail to init sequence value table", K(sequence_id), K(SEQ_VALUE_TNAME), K(ret));
+      LOG_WARN("fail to init sequence value table", K(ret), K(sequence_id), K(SEQ_VALUE_TNAME));
     }
   }
 
-  if(OB_SUCC(ret)) {
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(calc_current_cache_value(increment_by, cache_size, min_value, max_value, allocator, 
       next_value, cycle_count, cache_inclusive_start, cache_exclusive_end, cache_round))) {
       LOG_WARN("calculate current cache value failed", K(ret));
@@ -211,14 +211,14 @@ int ObSequenceDMLProxy::set_next_batch(const uint64_t tenant_id, const uint64_t 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(select_sequence_value_table(sql_client_retry_weak, allocator, tenant_id, sequence_id,
         next_value, cycle_count))) {
-      LOG_WARN("fail to select sequence value table", K(sequence_id), K(SEQ_VALUE_TNAME), K(ret));
+      LOG_WARN("fail to select sequence value table", K(ret), K(sequence_id), K(SEQ_VALUE_TNAME));
     }  
     
     if (ret == OB_ITER_END) { // inner table doesn't include this sequence's information, need to init
-      if(OB_FAIL(insert_sequence_value_table(trans, tenant_id, sequence_id, new_next_value, new_round))){
+      if (OB_FAIL(insert_sequence_value_table(trans, tenant_id, sequence_id, new_next_value, new_round))) {
         // When reading data from the all_sequence_object table for the first time, you need to
         // insert a row of initial data in the all_sequence_object table
-        LOG_WARN("fail to init sequence value table", K(sequence_id), K(ret));
+        LOG_WARN("fail to init sequence value table", K(ret), K(sequence_id));
       }
     } else if (OB_SUCC(ret)) { // inner table include this sequence
       bool need_update = false;
@@ -231,14 +231,14 @@ int ObSequenceDMLProxy::set_next_batch(const uint64_t tenant_id, const uint64_t 
         }
       } 
 
-      if(need_update) {
+      if (need_update) {
         if (OB_FAIL(update_sequence_value_table(trans, tenant_id, sequence_id, new_next_value, new_round))) {
           LOG_WARN("modify sequence value table failed", K(ret), K(SEQ_VALUE_TNAME));
         } 
       }
     }
 
-    if(OB_SUCC(ret)) {
+    if (OB_SUCC(ret)) {
       sync_proxy.clear_sequence_cache_all(sequence_id);
     }
   }
@@ -290,12 +290,12 @@ int ObSequenceDMLProxy::insert_sequence_value_table(common::ObMySQLTransaction& 
           LOG_INFO(
               "Concurrent call sequence nextval() over a newly created sequence", K(SEQ_VALUE_TNAME), K(sequence_id), K(next_value), K(cycle_count));
         } else {
-          LOG_WARN("fail to execute sql", K(sql), K(ret));
+          LOG_WARN("fail to execute sql", K(ret), K(sql));
         }
       } else {
         if (!is_single_row(affected_rows)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected value", K(affected_rows), K(sql), K(ret));
+          LOG_WARN("unexpected value", K(ret), K(affected_rows), K(sql));
         }
       }
     }
@@ -323,7 +323,7 @@ int ObSequenceDMLProxy::select_sequence_value_table(ObSQLClientRetryWeak& sql_cl
             extract_pure_id(sequence_id)))) {
       STORAGE_LOG(WARN, "fail format sql", K(ret));
     } else if (OB_FAIL(sql_client_retry_weak.read(res, tenant_id, sql.ptr()))) {
-      LOG_WARN("fail to execute sql", K(sql), K(ret));
+      LOG_WARN("fail to execute sql", K(ret), K(sql));
     } else if (NULL == (result = res.get_result())) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("can't find sequence", K(SEQ_VALUE_TNAME), K(tenant_id), K(sequence_id));
@@ -337,20 +337,20 @@ int ObSequenceDMLProxy::select_sequence_value_table(ObSQLClientRetryWeak& sql_cl
         LOG_WARN("fail get NEXT_VALUE", K(ret));
       } else if (OB_FAIL(next_value.from(tmp, allocator))) {
         // Must deep copy, because Res memory will be released after next()
-        LOG_WARN("fail deep copy next_val", K(tmp), K(ret));
+        LOG_WARN("fail deep copy next_val", K(ret), K(tmp));
       } 
       
-      if(OB_SUCC(ret)) {
+      if (OB_SUCC(ret)) {
         EXTRACT_NUMBER_FIELD_MYSQL(*result, CYCLE_COUNT, tmp);
         if (OB_FAIL(ret)) {
           LOG_WARN("fail get CYCLE_COUNT", K(ret));
         } else if (OB_FAIL(cycle_count.from(tmp, allocator))) {
           // Must deep copy, because Res memory will be released after next()
-          LOG_WARN("fail deep copy next_val", K(tmp), K(ret));
+          LOG_WARN("fail deep copy next_val", K(ret), K(tmp));
         } 
       }
 
-      if(OB_SUCC(ret)) {
+      if (OB_SUCC(ret)) {
         if (OB_ITER_END != (ret = result->next())) {
           // It is expected that only one row of data should meet the condition, if it is greater
           // than one row, it is an exception
@@ -384,11 +384,11 @@ int ObSequenceDMLProxy::update_sequence_value_table(common::ObMySQLTransaction& 
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can't write sys table now", K(ret), K(tenant_id));
   } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to execute sql", K(sql), K(ret));
+    LOG_WARN("fail to execute sql", K(ret), K(sql));
   } else {
     if (!is_single_row(affected_rows)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected value", K(affected_rows), K(sql), K(ret));
+      LOG_WARN("unexpected value", K(ret), K(affected_rows), K(sql));
     }
   }       
 
@@ -404,7 +404,7 @@ int ObSequenceDMLProxy::prefetch_next_batch(const uint64_t tenant_id, const uint
   if (OB_FAIL(set_pre_op_timeout(ctx))) {
     LOG_WARN("failed to set timeout", K(ret));
   } else if (OB_FAIL(next_batch(tenant_id, sequence_id, option, cache_range))) {
-    LOG_WARN("fail prefetch sequence batch", K(tenant_id), K(sequence_id), K(option), K(ret));
+    LOG_WARN("fail prefetch sequence batch", K(ret), K(tenant_id), K(sequence_id), K(option));
   }
   return ret;
 }

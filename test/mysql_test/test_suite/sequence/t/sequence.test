@@ -13,6 +13,7 @@ create sequence s START WITH 20;
 --error 5331
 create sequence s;
 create sequence if not exists s;
+create sequence if not exists s increment by 10;
 select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
 create sequence s2 increment by 10 START WITH 20 maxvalue 10000 minvalue -10000 cycle cache 100;
 create sequence s3 increment by -10 START WITH 20 maxvalue 10000 minvalue -10000 cycle cache 100;
@@ -295,7 +296,7 @@ create sequence s3 cache 10 cycle maxvalue 100;
 select setval(s3,101,0);
 --error 4175
 select setval(s3,100,1);
---error 1210
+--error 1064
 select setval(s3,100,-1);
 --error 4175
 select setval(s3,101);
@@ -303,13 +304,13 @@ select setval(s3,99), nextval(s3);
 select setval(s3,10,0,1);
 select setval(s3,100,0,1), nextval(s3);
 select nextval(s3);
---error 1210
+--error 1064
 select setval(s3,100,-1,1);
 select setval(s3,10,true,2);
---error 1210
+--error 1064
 select setval(s3,20,'true',2);
 select setval(s3,30,false,2);
---error 1210
+--error 1064
 select setval(s3,40,'false',2);
 select nextval(s3);
 select setval(s3,50,2,2);

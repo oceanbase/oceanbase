@@ -306,7 +306,7 @@ END_P SET_VAR DELIMITER
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option
-%type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num sequence_list
+%type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num sequence_list opt_setval_options setval_options setval_option
 %type <node> create_synonym_stmt drop_synonym_stmt opt_public opt_force synonym_name synonym_object opt_dlink
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
 %type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor
@@ -2490,15 +2490,10 @@ MOD '(' expr ',' expr ')'
   make_name_node($$, result->malloc_pool_, "mysql_seq_last_value");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_SEQ, 2, $$, $3);
 }
-| SETVAL '(' relation_factor ',' simple_num opt_comma opt_expr_as_list ')'
+| SETVAL '(' relation_factor ',' simple_num opt_setval_options ')'
 {
-  (void)($6);
   make_name_node($$, result->malloc_pool_, "mysql_seq_set_value");
-  ParseNode *optional_params = NULL;
-  if (NULL != $7) {
-    merge_nodes(optional_params, result, T_EXPR_LIST, $7);
-  }
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MYSQL_SEQ_SETVAL, 4, $$, $3, $5, optional_params);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_MYSQL_SEQ_SETVAL, 4, $$, $3, $5, $6);
 }
 | COUNT '(' opt_all expr ')'
 {
@@ -2635,6 +2630,41 @@ UTC_TIME
 | UTC_TIME '(' INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_UTC_TIME, 1, $3);
+}
+;
+
+opt_setval_options:
+',' setval_options
+{ $$ = $2; }
+| /*empty*/
+{ $$ = NULL; }
+;
+
+setval_options:
+setval_option
+{
+  $$ = $1;
+}
+| setval_options ',' setval_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+setval_option:
+'+' INTNUM %prec '+'
+{
+  $$ = $2;
+}
+|
+INTNUM
+{
+  $$ = $1;
+}
+|
+BOOL_VALUE
+{
+  $$ = $1;
 }
 ;
 
@@ -4358,24 +4388,6 @@ column_definition_ref data_type opt_column_attribute_list opt_position_column
   dup_expr_string($6, result, @6.first_column, @6.last_column);
   merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $9);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 6, $1, $2, attributes, $6, $8, $10);
-}
-| column_definition_ref data_type opt_generated_keyname AS opt_sequence_option_list opt_column_attribute_list
-{
-  (void)($3);
-  ParseNode *attributes = NULL;
-  ParseNode *sequence_option = NULL;
-  merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $6);
-  merge_nodes(sequence_option, result, T_SEQUENCE_OPTION_LIST, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 4, $1, $2, attributes, sequence_option);
-}
-| column_definition_ref opt_generated_keyname AS opt_sequence_option_list opt_column_attribute_list
-{
-  (void)($2);
-  ParseNode *attributes = NULL;
-  ParseNode *sequence_option = NULL;
-  merge_nodes(attributes, result, T_COLUMN_ATTRIBUTES, $5);
-  merge_nodes(sequence_option, result, T_SEQUENCE_OPTION_LIST, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DEFINITION, 4, $1, NULL, attributes, sequence_option);
 }
 ;
 
@@ -13906,6 +13918,7 @@ ACCOUNT
 |       HOST
 |       HOSTS
 |       HOUR
+|       INCREMENT
 |       ID
 |       IDC
 |       IDENTIFIED
@@ -13939,6 +13952,7 @@ ACCOUNT
 |       LANGUAGE
 |       LAST
 |       LAST_VALUE
+|       LASTVAL
 |       LEAD
 |       LEADER
 |       LEAK
@@ -14029,11 +14043,17 @@ ACCOUNT
 |       NDBCLUSTER
 |       NEW
 |       NEXT
+|       NEXTVAL
 |       NO
 |       NOARCHIVELOG
 |       NOAUDIT
+|       NOCACHE
+|       NOCYCLE
 |       NODEGROUP
 |       NONE
+|       NOMAXVALUE
+|       NOMINVALUE
+|       NOORDER
 |       NOPARALLEL
 |       NORMAL
 |       NOW
@@ -14087,6 +14107,7 @@ ACCOUNT
 |       PREPARE
 |       PRESERVE
 |       PREV
+|       PREVIOUS
 |       PRIMARY_CLUSTER_ID
 |       PRIMARY_ZONE
 |       PRIMARY_ROOTSERVICE_LIST
@@ -14177,6 +14198,7 @@ ACCOUNT
 |       SERVER_TYPE
 |       SESSION %prec LOWER_PARENS
 |       SESSION_USER
+|       SETVAL
 |       SET_MASTER_CLUSTER
 |       SET_SLAVE_CLUSTER
 |       SET_TP

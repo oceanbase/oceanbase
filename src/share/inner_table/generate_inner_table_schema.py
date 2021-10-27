@@ -142,16 +142,14 @@ def print_default_column(column_name, rowkey_id, index_id, part_key_pos, column_
   if (OB_SUCC(ret)) {{
   """
   if column_type == 'ObNumberType':
-    line += """
-    int ret_{0} = 0;
+    line += """int ret_{0} = 0;
     common::number::ObNumberBuilder {0}_builder;
     {0}_builder.build_v2("{1}", strlen("{1}"), ret_{0});
     """.format(column_name, default_value)
 
   if column_id != 0:
     ## index
-    line += """
-    ObObj {12}_default;
+    line += """ObObj {12}_default;
     {12}_default.{13};
     ADD_COLUMN_SCHEMA_T("{0}", //column_name
       column_id + {1}, //column_id

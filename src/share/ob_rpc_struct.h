@@ -664,44 +664,6 @@ public:
   bool open_recyclebin_;
 };
 
-struct ObAddSysVarArg : public ObDDLArg {
-  OB_UNIS_VERSION(1);
-
-public:
-  ObAddSysVarArg() : sysvar_(), if_not_exist_(false)
-  {}
-  DECLARE_TO_STRING;
-  bool is_valid() const;
-  virtual bool is_allow_when_upgrade() const
-  {
-    return true;
-  }
-  share::schema::ObSysVarSchema sysvar_;
-  bool if_not_exist_;
-};
-
-struct ObModifySysVarArg : public ObDDLArg {
-  OB_UNIS_VERSION(1);
-
-public:
-  ObModifySysVarArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), is_inner_(false)
-  {}
-  DECLARE_TO_STRING;
-  bool is_valid() const;
-  int assign(const ObModifySysVarArg& other);
-  virtual bool is_allow_when_upgrade() const
-  {
-    return true;
-  }
-  virtual bool is_allow_when_disable_ddl() const
-  {
-    return true;
-  }
-  uint64_t tenant_id_;
-  common::ObSArray<share::schema::ObSysVarSchema> sys_var_list_;
-  bool is_inner_;
-};
-
 struct ObSequenceItem {
   OB_UNIS_VERSION(1);
 
@@ -760,7 +722,7 @@ struct ObSequenceDDLArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
 public:
-  ObSequenceDDLArg() : ObDDLArg(), exist_flag_(false), stmt_type_(common::OB_INVALID_ID), seq_items_()
+  ObSequenceDDLArg() : ObDDLArg(), stmt_type_(common::OB_INVALID_ID), seq_items_()
   {}
   bool is_valid() const
   {
@@ -798,21 +760,48 @@ public:
   {
     return seq_items_;
   }
-  bool get_exist_flag() const
-  {
-    return exist_flag_;    
-  }
-  void set_exist_flag(bool exist_flag) 
-  {
-    exist_flag_ = exist_flag;
-  }
-  TO_STRING_KV(K_(exist_flag), K_(stmt_type), K_(seq_items));
+  TO_STRING_KV(K_(stmt_type), K_(seq_items));
 public:
-  // for creaet sequence, this flag means is_not_exist whether is used
-  // for alter sequence or drop sequence, this flag means is_exist whether is used
-  bool exist_flag_;  
   int64_t stmt_type_;
   common::ObSArray<ObSequenceItem> seq_items_;
+};
+
+struct ObAddSysVarArg : public ObDDLArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObAddSysVarArg() : sysvar_(), if_not_exist_(false)
+  {}
+  DECLARE_TO_STRING;
+  bool is_valid() const;
+  virtual bool is_allow_when_upgrade() const
+  {
+    return true;
+  }
+  share::schema::ObSysVarSchema sysvar_;
+  bool if_not_exist_;
+};
+
+struct ObModifySysVarArg : public ObDDLArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObModifySysVarArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), is_inner_(false)
+  {}
+  DECLARE_TO_STRING;
+  bool is_valid() const;
+  int assign(const ObModifySysVarArg& other);
+  virtual bool is_allow_when_upgrade() const
+  {
+    return true;
+  }
+  virtual bool is_allow_when_disable_ddl() const
+  {
+    return true;
+  }
+  uint64_t tenant_id_;
+  common::ObSArray<share::schema::ObSysVarSchema> sys_var_list_;
+  bool is_inner_;
 };
 
 struct ObCreateDatabaseArg : public ObDDLArg {

@@ -56,7 +56,7 @@ int ObSequenceOptionBuilder::build_create_sequence_option(
   }
 
   if (OB_FAIL(check_sequence_option(opt_bitset, option))) {
-    LOG_WARN("sequence option not valid", K(option), K(ret));
+    LOG_WARN("sequence option not valid", K(ret), K(option));
   }
   return ret;
 }
@@ -67,7 +67,7 @@ int ObSequenceOptionBuilder::build_alter_sequence_option(
   int ret = OB_SUCCESS;
   // If there is no setting in alter, the old value is used, that is, the option in schema (opt_old)
   if (OB_FAIL(opt_new.merge(opt_bitset, opt_old))) {
-    LOG_WARN("fail merge options", K(opt_new), K(opt_old), K(ret));
+    LOG_WARN("fail merge options", K(ret), K(opt_new), K(opt_old));
   } else if (opt_bitset.has_member(ObSequenceArg::START_WITH)) {
     // cannot alter starting sequence number
     ret = OB_ERR_ALTER_START_SEQ_NUMBER_NOT_ALLOWED;
@@ -90,7 +90,7 @@ int ObSequenceOptionBuilder::build_alter_sequence_option(
   }
   
   if (OB_SUCC(ret) && OB_FAIL(check_sequence_option(opt_bitset, opt_new))) {
-    LOG_WARN("sequence option not valid", K(opt_new), K(ret));
+    LOG_WARN("sequence option not valid", K(ret), K(opt_new));
   }
   return ret;
 }
@@ -123,7 +123,7 @@ int ObSequenceOptionBuilder::check_sequence_option(const common::ObBitSet<>& opt
   // value_range = option.get_max_value() - option.get_min_value()
   // cache_range = option.get_increment_by().abs() *  option.get_cache_size() - 1
   if (OB_FAIL(check_sequence_option_integer(opt_bitset, option))) {
-    LOG_WARN("fail check sequence options integer", K(option), K(ret));
+    LOG_WARN("fail check sequence options integer", K(ret), K(option));
   } else if (OB_FAIL(max.sub(option.get_min_value()).get_result(value_range))) {
     LOG_WARN("fail calc number", K(ret));
   } else if (OB_FAIL(cache.mul(option.get_increment_by().abs()).sub(static_cast<int64_t>(1)).get_result(cache_range))) {

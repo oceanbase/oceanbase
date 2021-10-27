@@ -9,6 +9,7 @@ create sequence s START WITH 20;
 create sequence s;
 ERROR HY000: name is already used by an existing object
 create sequence if not exists s;
+create sequence if not exists s increment by 10;
 select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
 sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
 s	1	9999999999999999999999999999	1	20	20	0	0
@@ -29,7 +30,7 @@ s4	1	9999999999999999999999999999	1	1	100	0	0
 # Test case to verify drop sequence.
 #***********************************************************************
 drop sequence s1,s2,s3;
-ERROR HY000: sequence does not exist
+ERROR HY000: object does not exist
 select sequence_name,min_value,max_value,increment_by,start_with,cache_size,order_flag,cycle_flag from oceanbase.__all_sequence_object;
 sequence_name	min_value	max_value	increment_by	start_with	cache_size	order_flag	cycle_flag
 s	1	9999999999999999999999999999	1	20	20	0	0
@@ -45,7 +46,7 @@ s	1	9999999999999999999999999999	1	20	20	0	0
 # Test case to verify alter sequence.
 #***********************************************************************
 alter sequence s2 increment by 1;
-ERROR HY000: sequence does not exist
+ERROR HY000: object does not exist
 alter sequence if exists s2 increment by 1;
 alter sequence s maxvalue 19;
 ERROR HY000: START WITH cannot be more than MAXVALUE
@@ -463,7 +464,7 @@ ERROR 42000: Out of range
 select setval(s3,100,1);
 ERROR 42000: Out of range
 select setval(s3,100,-1);
-ERROR HY000: Invalid argument
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '-1)' at line 1
 select setval(s3,101);
 ERROR 42000: Out of range
 select setval(s3,99), nextval(s3);
@@ -479,17 +480,17 @@ select nextval(s3);
 nextval(s3)
 1
 select setval(s3,100,-1,1);
-ERROR HY000: Invalid argument
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '-1,1)' at line 1
 select setval(s3,10,true,2);
 setval(s3,10,true,2)
 10
 select setval(s3,20,'true',2);
-ERROR HY000: Invalid argument
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''true',2)' at line 1
 select setval(s3,30,false,2);
 setval(s3,30,false,2)
 30
 select setval(s3,40,'false',2);
-ERROR HY000: Invalid argument
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''false',2)' at line 1
 select nextval(s3);
 nextval(s3)
 30

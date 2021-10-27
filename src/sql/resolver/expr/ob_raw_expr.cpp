@@ -3094,15 +3094,15 @@ int ObSequenceSetvalRawExpr::deep_copy(
     } else if (use_new_allocator) {
       if (OB_ISNULL(inner_alloc_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+        LOG_WARN("inner allocator or expr factory is NULL", K(ret), K(inner_alloc_));
       } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.db_name_, db_name_))) {
-        LOG_WARN("fail to write string", K(other.db_name_), K(ret));
+        LOG_WARN("fail to write string", K(ret), K(other.db_name_));
       } else if (OB_FAIL(ob_write_string(*inner_alloc_, other.seq_name_, seq_name_))) {
-        LOG_WARN("fail to write string", K(other.seq_name_), K(ret));
+        LOG_WARN("fail to write string", K(ret), K(other.seq_name_));
       } else if (OB_FAIL(new_next_value_.deep_copy_v3(other.new_next_value_, *inner_alloc_))) {
-        LOG_WARN("fail to copy number", K(other.new_next_value_), K(ret));
+        LOG_WARN("fail to copy number", K(ret), K(other.new_next_value_));
       } else if (OB_FAIL(round_.deep_copy_v3(other.round_, *inner_alloc_))) {
-        LOG_WARN("fail to copy number", K(other.round_), K(ret));
+        LOG_WARN("fail to copy number", K(ret), K(other.round_));
       }
     } else {
       db_name_ = other.db_name_;
@@ -3111,7 +3111,7 @@ int ObSequenceSetvalRawExpr::deep_copy(
       round_.shadow_copy(other.round_);
     }
 
-    if(OB_SUCC(ret)) {
+    if (OB_SUCC(ret)) {
       used_value_ = other.used_value_;
     }
   }
@@ -3124,15 +3124,15 @@ int ObSequenceSetvalRawExpr::set_params(const common::ObString& db_name, const c
   int ret = OB_SUCCESS;
   if (OB_ISNULL(inner_alloc_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inner allocator or expr factory is NULL", K(inner_alloc_), K(ret));
+    LOG_WARN("inner allocator or expr factory is NULL", K(ret), K(inner_alloc_));
   } else if (OB_FAIL(ob_write_string(*inner_alloc_, db_name, db_name_))) {
-    LOG_WARN("fail to write string", K(db_name), K(ret));
+    LOG_WARN("fail to write string", K(ret), K(db_name));
   } else if (OB_FAIL(ob_write_string(*inner_alloc_, seq_name, seq_name_))) {
-    LOG_WARN("fail to write string", K(seq_name), K(ret));
+    LOG_WARN("fail to write string", K(ret), K(seq_name));
   } else if (OB_FAIL(new_next_value_.deep_copy_v3(new_next_value, *inner_alloc_))) {
-    LOG_WARN("fail to copy number", K(new_next_value), K(ret));
+    LOG_WARN("fail to copy number", K(ret), K(new_next_value));
   } else if (OB_FAIL(round_.deep_copy_v3(round, *inner_alloc_))) {
-    LOG_WARN("fail to copy number", K(round), K(ret));
+    LOG_WARN("fail to copy number", K(ret), K(round));
   } else {
     used_value_ = used_value;
     sequence_id_ = sequence_id;

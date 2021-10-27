@@ -40,7 +40,7 @@ int ObDropSequenceResolver::resolve(const ParseNode& parse_tree)
   if (OB_UNLIKELY(T_DROP_SEQUENCE != parse_tree.type_) || OB_ISNULL(parse_tree.children_) ||
       OB_UNLIKELY(2 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid param", K(parse_tree.type_), K(parse_tree.num_child_), K(parse_tree.children_), K(ret));
+    LOG_WARN("invalid param", K(ret), K(parse_tree.type_), K(parse_tree.num_child_), K(parse_tree.children_));
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     SQL_RESV_LOG(WARN, "session_info is null.", K(ret));
@@ -56,12 +56,11 @@ int ObDropSequenceResolver::resolve(const ParseNode& parse_tree)
   }
 
   /* if_exist */
-  if (OB_SUCC(ret)) {
-    if (OB_LIKELY(NULL == parse_tree.children_[0])) {
-      mystmt->get_arg().set_exist_flag(false);
-    } else {
-      mystmt->get_arg().set_exist_flag(true);
-    }
+  bool allow_inexistence = false;
+  if (OB_UNLIKELY(NULL != parse_tree.children_[0])) {
+    allow_inexistence = true;
+  } else {/* NULL == parse_tree.children_[0]*/
+    // allow_inexistence = false;
   }
 
   /* sequence name */
@@ -69,12 +68,16 @@ int ObDropSequenceResolver::resolve(const ParseNode& parse_tree)
     int64_t sequence_num = 0;
     sequence_num = share::is_oracle_mode() ? 1 : parse_tree.children_[1]->num_child_;
     ParseNode* sequence_node = NULL;
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
 
-    for (int i = 0; OB_SUCC(ret) && i < sequence_num; i++) {
+    ObString sequence_name;
+    ObString db_name;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sequence_num; i++) {
       sequence_node = share::is_oracle_mode() ? parse_tree.children_[1] 
                                               : parse_tree.children_[1]->children_[i];
-      ObString sequence_name;
-      ObString db_name;
+      sequence_name.reset();
+      db_name.reset();
+
       if (OB_FAIL(resolve_ref_factor(sequence_node, session_info_, sequence_name, db_name))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid parse_tree", K(ret));
@@ -82,23 +85,44 @@ int ObDropSequenceResolver::resolve(const ParseNode& parse_tree)
         ret = OB_ERR_TOO_LONG_IDENT;
         LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, sequence_name.length(), sequence_name.ptr());
       } else {
-        obrpc::ObSequenceItem sequence_item;
-        sequence_item.set_sequence_name(sequence_name);
-        sequence_item.set_database_name(db_name);
-        sequence_item.set_tenant_id(session_info_->get_effective_tenant_id());
-        mystmt->get_arg().get_seq_items().push_back(sequence_item);
+        bool exists = true;
+        uint64_t sequence_id = OB_INVALID_ID;
+        uint64_t database_id = OB_INVALID_ID;
+        if (OB_ISNULL(schema_checker_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema_schecker is null", K(ret));
+        } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
+          LOG_WARN("fail to get database id", K(ret));
+        } else if (OB_FAIL(schema_checker_->check_sequence_exist_with_name(tenant_id, database_id, sequence_name, exists, sequence_id))) {
+          LOG_WARN("fail to check_sequence_exist_with_name", K(ret));
+        } else if (!exists) {
+          if (!allow_inexistence) {
+            ret = OB_OBJECT_NAME_NOT_EXIST;
+            LOG_WARN("sequence not exists", K(ret), K(sequence_name));
+          } else { /* allow_inexistence = true */
+            // don't add this sequence info to rpc arg
+            // if all sequences don't exist, the rpc_flag will be false by default
+          }
+        } else {
+          mystmt->set_rpc_flag(true);
+          obrpc::ObSequenceItem sequence_item;
+          sequence_item.set_sequence_name(sequence_name);
+          sequence_item.set_database_name(db_name);
+          sequence_item.set_tenant_id(tenant_id);
+          mystmt->get_arg().get_seq_items().push_back(sequence_item);
+        }
       }
+    }
 
-      if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-        CK(OB_NOT_NULL(schema_checker_));
-        OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-              session_info_->get_priv_user_id(),
-              db_name,
-              stmt::T_DROP_SEQUENCE,
-              session_info_->get_enable_role_array()),
+    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+      CK(OB_NOT_NULL(schema_checker_));
+      OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
+            session_info_->get_priv_user_id(),
+            db_name,
+            stmt::T_DROP_SEQUENCE,
+            session_info_->get_enable_role_array()),
             session_info_->get_effective_tenant_id(),
             session_info_->get_user_id());
-      }
     }
   }
 

@@ -22,30 +22,34 @@ using namespace common;
 using namespace share;
 namespace sql {
 
-#define DEF_SIMPLE_EXECUTOR_IMPL(name, func)                                         \
-  int name##Executor::execute(ObExecContext& ctx, name##Stmt& stmt)                  \
-  {                                                                                  \
-    int ret = OB_SUCCESS;                                                            \
-    ObTaskExecutorCtx* task_exec_ctx = NULL;                                         \
-    obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;                                \
-    const obrpc::ObSequenceDDLArg& sequence_arg = stmt.get_arg();                    \
-    ObString first_stmt;                                                             \
-    if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {                                  \
-      LOG_WARN("fail to get first stmt", K(ret));                                    \
-    } else {                                                                         \
-      const_cast<obrpc::ObSequenceDDLArg&>(sequence_arg).ddl_stmt_str_ = first_stmt; \
-    }                                                                                \
-    if (OB_FAIL(ret)) {                                                              \
-    } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {              \
-      ret = OB_NOT_INIT;                                                             \
-      LOG_WARN("get task executor context failed");                                  \
-    } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {      \
-      ret = OB_NOT_INIT;                                                             \
-      LOG_WARN("get common rpc proxy failed");                                       \
-    } else if (OB_FAIL(common_rpc_proxy->func(sequence_arg))) {                      \
-      LOG_WARN("rpc proxy failed", K(sequence_arg), K(ret));                         \
-    }                                                                                \
-    return ret;                                                                      \
+#define DEF_SIMPLE_EXECUTOR_IMPL(name, func)                                           \
+  int name##Executor::execute(ObExecContext& ctx, name##Stmt& stmt)                    \
+  {                                                                                    \
+    int ret = OB_SUCCESS;                                                              \
+    ObTaskExecutorCtx* task_exec_ctx = NULL;                                           \
+    obrpc::ObCommonRpcProxy* common_rpc_proxy = NULL;                                  \
+    const obrpc::ObSequenceDDLArg& sequence_arg = stmt.get_arg();                      \
+    ObString first_stmt;                                                               \
+    if (stmt.get_rpc_flag()) {                                                         \
+      if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {                                  \
+        LOG_WARN("fail to get first stmt", K(ret));                                    \
+      } else {                                                                         \
+        const_cast<obrpc::ObSequenceDDLArg&>(sequence_arg).ddl_stmt_str_ = first_stmt; \
+      }                                                                                \
+      if (OB_FAIL(ret)) {                                                              \
+      } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {              \
+        ret = OB_NOT_INIT;                                                             \
+        LOG_WARN("get task executor context failed");                                  \
+      } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {      \
+        ret = OB_NOT_INIT;                                                             \
+        LOG_WARN("get common rpc proxy failed");                                       \
+      } else if (OB_FAIL(common_rpc_proxy->func(sequence_arg))) {                      \
+        LOG_WARN("rpc proxy failed", K(sequence_arg), K(ret));                         \
+      }                                                                                \
+    } else {                                                                           \
+      /* do nothing */                                                                 \
+    }                                                                                  \
+    return ret;                                                                        \
   }
 
 DEF_SIMPLE_EXECUTOR_IMPL(ObCreateSequence, do_sequence_ddl);

@@ -32,8 +32,6 @@ namespace share {
 #endif
 
 const int64_t SYNC_TIMEOUT_US = 500 * 1000;  // us
-const int64_t PARTITION_LOCATION_SET_BUCKET_NUM = 3;
-const int64_t SEQ_VALUE_TID = OB_ALL_SEQUENCE_VALUE_TID;
 
 ObSequenceSyncProxy::ObSequenceSyncProxy()
     : srv_proxy_(NULL),
@@ -80,10 +78,10 @@ int ObSequenceSyncProxy::clear_sequence_cache_all(const uint64_t seq_id)
         if (OB_FAIL(srv_proxy_->to(server).timeout(SYNC_TIMEOUT_US).clear_sequence_cache(arg))) {
           if (is_timeout_err(ret) || is_server_down_error(ret)) {
             // ignore time out, go on
-            LOG_WARN("rpc call time out, ignore the error", "server", server, K(seq_id), K(ret));
+            LOG_WARN("rpc call time out, ignore the error", "server", server, K(ret), K(seq_id));
             ret = OB_SUCCESS;
           } else {
-            LOG_WARN("failed to send rpc call", K(seq_id), K(ret));
+            LOG_WARN("failed to send rpc call", K(ret), K(seq_id));
           }
         }
       }
@@ -103,7 +101,7 @@ int ObSequenceSyncProxy::clear_sequence_cache(const obrpc::UInt64& arg)
   lib::ObMutexGuard guard(*cache_mutex_);
   ObSequenceCacheItem* item = nullptr;
   if (OB_FAIL(sequence_cache_->get(key, item))) {
-    LOG_WARN("failed to erase sequence cache", K(arg), K(ret));
+    LOG_WARN("failed to erase sequence cache", K(ret), K(arg));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
