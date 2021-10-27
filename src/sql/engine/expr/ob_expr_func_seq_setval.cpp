@@ -27,7 +27,7 @@ using namespace share::schema;
 
 namespace sql {
 ObExprFuncSeqSetval::ObExprFuncSeqSetval(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_MYSQL_SEQ_SETVAL, N_MYSQL_SEQ_SETVAL, 4, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_MYSQL_SEQ_SETVAL, N_MYSQL_SEQ_SETVAL, MORE_THAN_TWO, NOT_ROW_DIMENSION)
 {}
 
 ObExprFuncSeqSetval::~ObExprFuncSeqSetval()
@@ -67,24 +67,41 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
     common::number::ObNumber round_num;
     bool used = true;
     ObNumStackAllocator<4> allocator;
+    common::ObIAllocator& res_allocator = *ctx.calc_buf_;
 
     if (OB_FAIL(ObExprFuncSeqSetval::acquire_sequence_schema(tenant_id, *ctx.exec_ctx_, db_name, seq_name, seq_schema))) {
       LOG_WARN("get schema failed", K(ret));
-    } else if (OB_FAIL(ObExprFuncSeqSetval::number_from_obj(param_store.at(0), new_next_val_num, allocator))) {
-      LOG_WARN("get next value param failed", K(ret));
-    } else if (param_store.count() > 2 && OB_FAIL(ObExprFuncSeqSetval::number_from_obj(param_store.at(2), round_num, allocator))) {
-      LOG_WARN("get round param failed", K(ret));
-    } else if (param_store.count() > 1) {
-      int num = param_store.at(1).get_int();
-      ObObjType type = param_store.at(1).get_type();
-      if (type != ObIntType && type != ObTinyIntType) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid type of is_used parameter", K(type));
-      } else if (num < 0) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid value of is_used parameter", K(num));
-      } else {
-        used = param_store.at(1).get_bool();
+    } else if (param_store.count() != 0) {
+      if (OB_FAIL(ObExprFuncSeqSetval::number_from_obj(param_store.at(0), new_next_val_num, allocator))) {
+        LOG_WARN("get next value param failed", K(ret));
+      } else if (param_store.count() > 2 && OB_FAIL(ObExprFuncSeqSetval::number_from_obj(param_store.at(2), round_num, allocator))) {
+        LOG_WARN("get round param failed", K(ret));
+      } else if (param_store.count() > 1) {
+        int num = param_store.at(1).get_int();
+        ObObjType type = param_store.at(1).get_type();
+        if (type != ObIntType && type != ObTinyIntType) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid type of is_used parameter", K(type));
+        } else if (num < 0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid value of is_used parameter", K(num));
+        } else {
+          used = param_store.at(1).get_bool();
+        }
+      }
+    } else {
+      if (OB_FAIL(ObExprFuncSeqSetval::number_from_obj(objs[2], new_next_val_num, allocator))) {
+        LOG_WARN("get next value param failed", K(ret));
+      } else if (param_num > 4 && OB_FAIL(ObExprFuncSeqSetval::number_from_obj(objs[4], round_num, allocator))) {
+        LOG_WARN("get round param failed", K(ret));
+      } else if (param_num > 3) {
+        int num = objs[3].get_tinyint();
+        if (num < 0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid value of is_used parameter", K(num));
+        } else {
+          used = (num==0);
+        }
       }
     }
 
@@ -130,7 +147,7 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
       if (OB_FAIL(sequence_cache->setval(*seq_schema, new_next_val, round, value, valid))) {
         LOG_WARN("failed to get sequence value from cache", K(ret), K(tenant_id));
       } else if (valid) {
-        if (OB_FAIL(calc_result.from(value.val(), allocator))) {
+        if (OB_FAIL(calc_result.from(value.val(), res_allocator))) {
           LOG_WARN("fail deep copy value", K(ret));
         } else if (used) {
           res.set_number(old_val);

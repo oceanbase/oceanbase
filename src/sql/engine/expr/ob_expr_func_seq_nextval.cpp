@@ -57,7 +57,8 @@ int ObExprFuncSeqNextval::calc_result2(ObObj& result, const ObObj& obj1, const O
   } else {
     ObSQLSessionInfo& session = *expr_ctx.my_session_;
     common::number::ObNumber res_num;
-    ObNumStackAllocator<2> allocator;
+    ObNumStackOnceAlloc cal_allocator;
+    common::ObIAllocator& res_allocator = *expr_ctx.calc_buf_;
     uint64_t tenant_id = session.get_effective_tenant_id();
     const ObString& db_name = obj1.get_string();
     const ObString& seq_name = obj2.get_string();
@@ -94,9 +95,9 @@ int ObExprFuncSeqNextval::calc_result2(ObObj& result, const ObObj& obj1, const O
     } else if (OB_ISNULL(seq_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null unexpected", K(ret));
-    } else if (OB_FAIL(sequence_cache->nextval(*seq_schema, allocator, value))) {
+    } else if (OB_FAIL(sequence_cache->nextval(*seq_schema, cal_allocator, value))) {
       LOG_WARN("failed to get sequence value from cache", K(ret), K(tenant_id), K(seq_id));
-    } else if (OB_FAIL(res_num.from(value.val(), allocator))) {
+    } else if (OB_FAIL(res_num.from(value.val(), res_allocator))) {
       LOG_WARN("fail deep copy value", K(ret));
     } else {
       result.set_number(res_num);

@@ -1,3 +1,8 @@
+connect  sys_connection, $OBMYSQL_MS0,root@sys,,oceanbase,$OBMYSQL_PORT;
+connection sys_connection;
+alter system set _enable_static_typing_engine = true;
+connect mysql_connection, $OBMYSQL_MS0,root@mysql,'',test,$OBMYSQL_PORT;
+connection mysql_connection;
 use test;
 #-----------------------------------------------------------------------
 # Test case to verify sequence DDL operation
@@ -506,7 +511,7 @@ select setval(s4,10,0,1);
 ERROR HY000: Invalid argument
 select setval(s4,4);
 setval(s4,4)
-4
+NULL
 select nextval(s4);
 nextval(s4)
 10

@@ -1,6 +1,11 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
+connect (sys_connection, $OBMYSQL_MS0,root@sys,,oceanbase,$OBMYSQL_PORT);
+connection sys_connection;
+alter system set _enable_static_typing_engine = false;
+connect(mysql_connection, $OBMYSQL_MS0,root@mysql,'',test,$OBMYSQL_PORT);
+connection mysql_connection;
 use test;
 --echo #-----------------------------------------------------------------------
 --echo # Test case to verify sequence DDL operation
@@ -403,3 +408,6 @@ set @var=lastval(s);
 
 drop sequence s;
 drop table test;
+
+connection sys_connection;
+alter system set _enable_static_typing_engine = true;
