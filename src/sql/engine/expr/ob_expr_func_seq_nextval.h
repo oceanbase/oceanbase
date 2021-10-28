@@ -22,8 +22,8 @@ class ObExprFuncSeqNextval : public ObFuncExprOperator {
 public:
   explicit ObExprFuncSeqNextval(common::ObIAllocator& alloc);
   virtual ~ObExprFuncSeqNextval();
-  int calc_result_type2(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprTypeCtx& type_ctx) const;
-  int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+  int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
+  int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
   int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_sequence_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& result);
 

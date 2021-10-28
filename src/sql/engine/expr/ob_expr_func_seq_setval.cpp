@@ -56,20 +56,19 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
   ObSQLSessionInfo* session = ctx.exec_ctx_->get_my_session();
   uint64_t tenant_id = session->get_effective_tenant_id();
 
-  if (OB_UNLIKELY(param_num < 3 || param_num > 5)) {
+  if (OB_UNLIKELY(param_num < 2 || param_num > 4)) {
     ret = OB_INVALID_ARGUMENT_NUM;
     LOG_WARN("invalid arg num", K(ret), K(param_num));
   } else {
     const ParamStore& param_store = ctx.exec_ctx_->get_physical_plan_ctx()->get_param_store();  
-    const ObString& db_name = objs[0].get_string();
-    const ObString& seq_name = objs[1].get_string();
+    int64_t seq_id = objs[0].get_int();
     common::number::ObNumber new_next_val_num;
     common::number::ObNumber round_num;
     bool used = true;
     ObNumStackAllocator<4> allocator;
     common::ObIAllocator& res_allocator = *ctx.calc_buf_;
 
-    if (OB_FAIL(ObExprFuncSeqSetval::acquire_sequence_schema(tenant_id, *ctx.exec_ctx_, db_name, seq_name, seq_schema))) {
+    if (OB_FAIL(ObExprFuncSeqSetval::acquire_sequence_schema(tenant_id, *ctx.exec_ctx_, seq_id, seq_schema))) {
       LOG_WARN("get schema failed", K(ret));
     } else if (param_store.count() != 0) {
       if (OB_FAIL(ObExprFuncSeqSetval::number_from_obj(param_store.at(0), new_next_val_num, allocator))) {
@@ -90,12 +89,12 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
         }
       }
     } else {
-      if (OB_FAIL(ObExprFuncSeqSetval::number_from_obj(objs[2], new_next_val_num, allocator))) {
+      if (OB_FAIL(ObExprFuncSeqSetval::number_from_obj(objs[1], new_next_val_num, allocator))) {
         LOG_WARN("get next value param failed", K(ret));
-      } else if (param_num > 4 && OB_FAIL(ObExprFuncSeqSetval::number_from_obj(objs[4], round_num, allocator))) {
+      } else if (param_num > 3 && OB_FAIL(ObExprFuncSeqSetval::number_from_obj(objs[3], round_num, allocator))) {
         LOG_WARN("get round param failed", K(ret));
-      } else if (param_num > 3) {
-        int num = objs[3].get_tinyint();
+      } else if (param_num > 2) {
+        int num = objs[2].get_tinyint();
         if (num < 0) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid value of is_used parameter", K(num));
@@ -139,7 +138,7 @@ int ObExprFuncSeqSetval::calc_resultN(ObObj& res, const ObObj* objs, int64_t par
     }
 
     if (OB_SUCC(ret)) {
-      LOG_DEBUG("setval parameters in calc_sequence_setval.", K(db_name), K(seq_name), K(new_next_val_num.format()), K(used), K(round_num.format()), K(ret));
+      LOG_DEBUG("setval parameters in calc_sequence_setval.", K(seq_id), K(new_next_val_num.format()), K(used), K(round_num.format()), K(ret));
       share::ObSequenceCache* sequence_cache = &share::ObSequenceCache::get_instance();
       common::number::ObNumber calc_result;
       ObSequenceValue value;
@@ -171,7 +170,7 @@ int ObExprFuncSeqSetval::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (OB_UNLIKELY(rt_expr.arg_cnt_ < 3 || rt_expr.arg_cnt_ > 5)) {
+  if (OB_UNLIKELY(rt_expr.arg_cnt_ < 2 || rt_expr.arg_cnt_ > 4)) {
     ret = OB_INVALID_ARGUMENT_NUM;
     LOG_WARN("invalid arg num", K(ret), K(rt_expr.arg_cnt_));
   } else {
@@ -207,16 +206,14 @@ int ObExprFuncSeqSetval::number_from_obj(const ObObj& obj, common::number::ObNum
   return ret;
 }
 
-int ObExprFuncSeqSetval::acquire_sequence_schema(const uint64_t tenant_id, ObExecContext& exec_ctx, const ObString& db_name, 
-    const ObString& seq_name, const share::schema::ObSequenceSchema*& seq_schema)
+int ObExprFuncSeqSetval::acquire_sequence_schema(const uint64_t tenant_id, ObExecContext& exec_ctx, int64_t seq_id, 
+    const share::schema::ObSequenceSchema*& seq_schema)
 {
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx* task_ctx = NULL;
   share::schema::ObMultiVersionSchemaService* schema_service = NULL;
   share::schema::ObSchemaGetterGuard schema_guard;
-  uint64_t seq_id = OB_INVALID_ID;
   uint64_t db_id = OB_INVALID_ID;
-  bool exist = false;
 
   if (OB_ISNULL(task_ctx = GET_TASK_EXECUTOR_CTX(exec_ctx))) {
     ret = OB_ERR_UNEXPECTED;
@@ -226,14 +223,6 @@ int ObExprFuncSeqSetval::acquire_sequence_schema(const uint64_t tenant_id, ObExe
     LOG_WARN("schema service is null", K(ret));
   } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_database_id(tenant_id, db_name, db_id))) {
-    LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(db_name));
-  } else if (OB_FAIL(
-    schema_guard.check_sequence_exist_with_name(tenant_id, db_id, seq_name, exist, seq_id))) {
-    LOG_WARN("failed to check sequence with name", K(ret), K(seq_name), K(db_id));
-  } else if (!exist) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sequence is not exist", K(db_name), K(db_id), K(seq_name));
   } else if (OB_FAIL(schema_guard.get_sequence_schema(tenant_id, seq_id, seq_schema))) {
     LOG_WARN("fail get sequence schema", K(seq_id), K(ret));
   } else if (OB_ISNULL(seq_schema)) {
@@ -252,14 +241,13 @@ int ObExprFuncSeqSetval::calc_sequence_setval(const ObExpr& expr, ObEvalCtx& ctx
   uint64_t tenant_id = session->get_effective_tenant_id();
 
   const ParamStore& param_store = ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();  
-  const ObString& db_name = expr.locate_param_datum(ctx, 0).get_string();
-  const ObString& seq_name = expr.locate_param_datum(ctx, 1).get_string();
+  int64_t seq_id= expr.locate_param_datum(ctx, 0).get_int();
   common::number::ObNumber new_next_val_num;
   common::number::ObNumber round_num;
   bool used = true;
   ObNumStackAllocator<4> allocator;
 
-  if (OB_FAIL(acquire_sequence_schema(tenant_id, ctx.exec_ctx_, db_name, seq_name, seq_schema))) {
+  if (OB_FAIL(acquire_sequence_schema(tenant_id, ctx.exec_ctx_, seq_id, seq_schema))) {
     LOG_WARN("get schema failed", K(ret));
   } else if (param_store.count() != 0) {
     if (OB_FAIL(number_from_obj(param_store.at(0), new_next_val_num, allocator))) {
@@ -280,19 +268,19 @@ int ObExprFuncSeqSetval::calc_sequence_setval(const ObExpr& expr, ObEvalCtx& ctx
       }
     }
   } else {
-    new_next_val_num = expr.locate_param_datum(ctx, 2).get_number();
-    if (ObString(new_next_val_num.format()) == ObString("")) {
-      new_next_val_num.from(expr.locate_param_datum(ctx, 2).get_int(), allocator);
+    new_next_val_num = expr.locate_param_datum(ctx, 1).get_number();
+    if (ObString(new_next_val_num.format()).empty()) {
+      new_next_val_num.from(expr.locate_param_datum(ctx, 1).get_int(), allocator);
     }
 
-    if (expr.arg_cnt_ > 4) {
-      round_num = expr.locate_param_datum(ctx, 4).get_number();
-      if (ObString(round_num.format()) == ObString("")) {
-        round_num.from(expr.locate_param_datum(ctx, 4).get_int(), allocator);
+    if (expr.arg_cnt_ > 3) {
+      round_num = expr.locate_param_datum(ctx, 3).get_number();
+      if (ObString(round_num.format()).empty()) {
+        round_num.from(expr.locate_param_datum(ctx, 3).get_int(), allocator);
       }
     } 
-    if (expr.arg_cnt_ > 3) {
-      int num = expr.locate_param_datum(ctx, 3).get_tinyint();
+    if (expr.arg_cnt_ > 2) {
+      int num = expr.locate_param_datum(ctx, 2).get_tinyint();
       if (num < 0) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid value of is_used parameter", K(num));
@@ -326,17 +314,17 @@ int ObExprFuncSeqSetval::calc_sequence_setval(const ObExpr& expr, ObEvalCtx& ctx
     
     if (new_next_val_num > seq_schema->get_max_value()) {
       ret = OB_ERROR_OUT_OF_RANGE;
-      LOG_WARN("new_next_value is larger than MAX_VALUE, please check next value and used params", K(seq_schema->get_max_value()));
+      LOG_WARN("new_next_value is larger than MAX_VALUE, please check next value and used params", K(ret), K(new_next_val_num), K(seq_schema->get_max_value()));
     } else if (new_next_val_num < seq_schema->get_min_value()) {
       ret = OB_ERROR_OUT_OF_RANGE;
-      LOG_WARN("new_next_value is lower than MIN_VALUE, please check next value and used params", K(seq_schema->get_min_value()));
+      LOG_WARN("new_next_value is lower than MIN_VALUE, please check next value and used params", K(ret), K(new_next_val_num), K(seq_schema->get_min_value()));
     } else {
       new_next_val.set(new_next_val_num);
     }
   }
 
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("setval parameters in calc_sequence_setval.", K(ret), K(db_name), K(seq_name), K(new_next_val_num.format()), K(used), K(round_num.format()));
+    LOG_DEBUG("setval parameters in calc_sequence_setval.", K(ret), K(seq_id), K(new_next_val_num.format()), K(used), K(round_num.format()));
     share::ObSequenceCache* sequence_cache = &share::ObSequenceCache::get_instance();
     common::number::ObNumber calc_result;
     ObSequenceValue value;

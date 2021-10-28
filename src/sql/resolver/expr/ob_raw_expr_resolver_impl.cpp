@@ -3521,12 +3521,17 @@ int ObRawExprResolverImpl::process_set_sequence_value_node(const ParseNode* node
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sequence schema");
       } else {
-        LOG_DEBUG("sequence information", K(database_name), K(database_id), K(sequence_name));
+        ObSchemaObjVersion sequence_version;
+        sequence_version.object_id_ = sequence_id;
+        sequence_version.object_type_ = DEPENDENCY_SEQUENCE;
+        sequence_version.version_ = schema->get_schema_version();
+        if (OB_FAIL(ctx_.stmt_->add_global_dependency_table(sequence_version))) {
+          LOG_WARN("add global dependency table failed", K(ret));
+        }
       }
     }
   }
 
-  // resolve param
   ObRawExpr* value_expr = NULL;
   ObRawExpr* used_expr = NULL;
   ObRawExpr* round_expr = NULL;
@@ -3566,32 +3571,21 @@ int ObRawExprResolverImpl::process_set_sequence_value_node(const ParseNode* node
     }
   }
   
+
   // build raw_expr
   if (OB_SUCC(ret)) {
-    ObConstRawExpr* db_name_expr = NULL;
-    ObConstRawExpr* seq_name_expr = NULL;
+    ObConstRawExpr* seq_id_expr = NULL;
     
-    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, db_name_expr))) {
-      LOG_WARN("create const raw expr failed", K(ret));
-    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, seq_name_expr))) {
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_UINT64, seq_id_expr))) {
       LOG_WARN("create const raw expr failed", K(ret));
     } else {
       LOG_DEBUG("resolve success", K(database_name), K(sequence_name), K(sequence_id));
       
       ObCollationType coll_type = ObCharset::get_system_collation();
-      ObObj db_name;
-      db_name.set_varchar(database_name);
-      db_name.set_collation_type(coll_type);
-      db_name.set_collation_level(CS_LEVEL_COERCIBLE);
-      db_name_expr->set_value(db_name);
-      ObObj seq_name;
-      seq_name.set_varchar(sequence_name);
-      seq_name.set_collation_type(coll_type);
-      seq_name.set_collation_level(CS_LEVEL_COERCIBLE);
-      seq_name_expr->set_value(seq_name);
-      if (OB_FAIL(func_expr->add_param_expr(db_name_expr))) {
-        LOG_WARN("set funcation param expr failed", K(ret));
-      } else if (OB_FAIL(func_expr->add_param_expr(seq_name_expr))) {
+      ObObj seq_id;
+      seq_id.set_uint64(sequence_id);
+      seq_id_expr->set_value(seq_id);
+      if (OB_FAIL(func_expr->add_param_expr(seq_id_expr))) {
         LOG_WARN("set funcation param expr failed", K(ret));
       } else if (OB_FAIL(func_expr->add_param_expr(value_expr))) {
         LOG_WARN("set funcation param expr failed", K(ret));
@@ -3606,6 +3600,7 @@ int ObRawExprResolverImpl::process_set_sequence_value_node(const ParseNode* node
         LOG_DEBUG("sequence setval expr", K(sequence_id));
       }
     }
+    
   }
   return ret;
 }
@@ -3677,6 +3672,7 @@ int ObRawExprResolverImpl::process_sequence_node(const ParseNode* node, ObRawExp
       }
       uint64_t tenant_id = ctx_.session_info_->get_effective_tenant_id();
       uint64_t database_id = OB_INVALID_ID;
+      const ObSequenceSchema* schema = NULL;
       bool exist = false;
       if (database_name.empty()) {
         ret = OB_ERR_NO_DB_SELECTED;
@@ -3689,8 +3685,17 @@ int ObRawExprResolverImpl::process_sequence_node(const ParseNode* node, ObRawExp
       } else if (!exist) {
         ret = OB_OBJECT_NAME_NOT_EXIST;
         LOG_WARN("sequence is not exist", K(database_name), K(database_id), K(sequence_name));
+      } else if (OB_FAIL(ctx_.schema_checker_->get_schema_guard()->get_sequence_schema(tenant_id, sequence_id, schema))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sequence schema");
       } else {
-        LOG_DEBUG("sequence information", K(database_name), K(database_id), K(sequence_name));
+        ObSchemaObjVersion sequence_version;
+        sequence_version.object_id_ = sequence_id;
+        sequence_version.object_type_ = DEPENDENCY_SEQUENCE;
+        sequence_version.version_ = schema->get_schema_version();
+        if (OB_FAIL(ctx_.stmt_->add_global_dependency_table(sequence_version))) {
+          LOG_WARN("add global dependency table failed", K(ret));
+        }
       }
     }
   }
@@ -3707,31 +3712,17 @@ int ObRawExprResolverImpl::process_sequence_node(const ParseNode* node, ObRawExp
 
   // build sequence expr
   if (OB_SUCC(ret)) {
-    ObConstRawExpr* db_name_expr = NULL;
-    ObConstRawExpr* seq_name_expr = NULL;
-    
-    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, db_name_expr))) {
-      LOG_WARN("create const raw expr failed", K(ret));
-    } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_VARCHAR, seq_name_expr))) {
+    ObConstRawExpr* seq_id_expr = NULL;
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_UINT64, seq_id_expr))) {
       LOG_WARN("create const raw expr failed", K(ret));
     } else {
-      ObCollationType coll_type = ObCharset::get_system_collation();
-      ObObj db_name;
-      db_name.set_varchar(database_name);
-      db_name.set_collation_type(coll_type);
-      db_name.set_collation_level(CS_LEVEL_COERCIBLE);
-      db_name_expr->set_value(db_name);
-      ObObj seq_name;
-      seq_name.set_varchar(sequence_name);
-      seq_name.set_collation_type(coll_type);
-      seq_name.set_collation_level(CS_LEVEL_COERCIBLE);
-      seq_name_expr->set_value(seq_name);
-      
+      ObObj seq_id;
+      seq_id.set_uint64(sequence_id);
+      seq_id_expr->set_value(seq_id);
+
       func_expr->add_flag(IS_SEQ_EXPR);
       func_expr->add_flag(CNT_SEQ_EXPR);
-      if (OB_FAIL(func_expr->add_param_expr(db_name_expr))) {
-        LOG_WARN("set funcation param expr failed", K(ret));
-      } else if (OB_FAIL(func_expr->add_param_expr(seq_name_expr))) {
+      if (OB_FAIL(func_expr->add_param_expr(seq_id_expr))) {
         LOG_WARN("set funcation param expr failed", K(ret));
       } else if (OB_FAIL(func_expr->formalize(ctx_.session_info_))) {
         LOG_WARN("failed to extract info", K(ret));

@@ -29,8 +29,7 @@ public:
 
 private:
   // disallow copy
-  static int acquire_sequence_schema(const uint64_t tenant_id, ObExecContext& exec_ctx, const ObString& db_name, 
-    const ObString& seq_name, const share::schema::ObSequenceSchema*& seq_schema);
+  static int acquire_sequence_schema(const uint64_t tenant_id, ObExecContext& exec_ctx, int64_t seq_id, const share::schema::ObSequenceSchema*& seq_schema);
   static int number_from_obj(const ObObj& obj, common::number::ObNumber& number, common::ObIAllocator& allocator);
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncSeqSetval);
 };
