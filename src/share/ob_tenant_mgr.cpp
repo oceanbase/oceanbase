@@ -1893,17 +1893,26 @@ int ObTenantManager::check_memory_used(const int64_t tenant_id,
   if (OB_FAIL(ObResourceMgr::get_instance().get_tenant_resource_mgr(tenant_id, resource_handle))) {
     COMMON_LOG(WARN, "fail to get resource mgr", K(ret), K(tenant_id));
   } else {
-    double total_memory_hold = get_tenant_memory_hold(tenant_id);
-    double memory_limit = get_tenant_memory_limit(tenant_id);
-    double kv_cache_mem = resource_handle.get_memory_mgr()->get_cache_hold();
-    double total_freeze_trigger = mem_memstore_limit + (memory_limit - mem_memstore_limit) * 0.5;
-
-    if (total_memory_hold - kv_cache_mem >= total_freeze_trigger
-         && mem_active_memstore_used >=  1.0/3.0 * total_freeze_trigger) {
-      use_too_much_memory = true;
-      COMMON_LOG(INFO, "too much memory is used, need to minor freeze", K(tenant_id),
-          K(mem_active_memstore_used), K(mem_minor_freeze_trigger),
-          K(total_memory_hold), K(kv_cache_mem), K(memory_limit));
+    double tenant_memory_hold = get_tenant_memory_hold(tenant_id);
+    double tenant_memory_limit = get_tenant_memory_limit(tenant_id);
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    int64_t trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
+    if (!tenant_config.is_valid()) {
+      COMMON_LOG(INFO, "failed to get tenant config");
+    } else {
+      if (tenant_memory_limit > tenant_memory_hold &&
+          (tenant_memory_limit - tenant_memory_hold < mem_memstore_limit / 100 * (100 - trigger_percentage) * 0.95)) {
+        use_too_much_memory = true;
+        COMMON_LOG(INFO,
+            "A minor freeze is needed by writing throttling",
+            K(tenant_memory_limit),
+            K(tenant_memory_hold),
+            K(mem_memstore_limit),
+            K(trigger_percentage),
+            K(mem_active_memstore_used),
+            K(mem_minor_freeze_trigger),
+            K(tenant_id));
+      }
     }
   }
   return ret;
