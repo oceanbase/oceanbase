@@ -1023,17 +1023,28 @@ int ObLogInsert::set_hash_dist_column_exprs(ObExchangeInfo& exch_info, uint64_t 
               K(info),
               K(ret));
         }
+        ObSEArray<ObRawExpr *, 4> except_exprs;
         for (int64_t k = 0; OB_SUCC(ret) && k < info.rowkey_cnt_; ++k) {
-          ObRawExpr* target_expr = info.column_exprs_.at(k);
-          for (int64_t i = 0; OB_SUCC(ret) && i < column_convert_exprs_->count(); i++) {
+          ObRawExpr *target_expr = info.column_exprs_.at(k);
+          for (int64_t j = 0; OB_SUCC(ret) && j < column_convert_exprs_->count(); j++) {
             if (OB_FAIL(ObRawExprUtils::replace_ref_column(
-                    target_expr, table_columns_->at(i), column_convert_exprs_->at(i)))) {
+                    target_expr, table_columns_->at(j), column_convert_exprs_->at(j), NULL, &except_exprs))) {
               LOG_WARN("fail to replace ref column", K(ret));
+            } else if (OB_FAIL(except_exprs.push_back(column_convert_exprs_->at(j)))) {
+              LOG_WARN("push expr into array failed", K(ret));
             }
           }
-          OZ(rowkey_exprs.push_back(target_expr));
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(rowkey_exprs.push_back(target_expr))) {
+            LOG_WARN("push target expr into rowkey array failed", K(ret));
+          }
         }
-        OZ(exch_info.append_hash_dist_expr(rowkey_exprs));
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(exch_info.append_hash_dist_expr(rowkey_exprs))) {
+          LOG_WARN("append rowkey array after exch info array failed", K(ret));
+        }
         found = true;
         break;
       }
