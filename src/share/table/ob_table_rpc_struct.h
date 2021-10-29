@@ -215,6 +215,31 @@ public:
   virtual bool has_more_result() const = 0;
 };
 
+class ObTableQueryAndMutateRequest final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableQueryAndMutateRequest()
+      :table_id_(common::OB_INVALID_ID),
+      partition_id_(common::OB_INVALID_ID),
+      binlog_row_image_type_(ObBinlogRowImageType::FULL)
+  {}
+  TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
+               K_(table_name),
+               K_(table_id),
+               K_(partition_id),
+               K_(entity_type),
+               K_(query_and_mutate));
+public:
+  ObString credential_;
+  ObString table_name_;
+  uint64_t table_id_;  // for optimize purpose
+  /// partition id. Set it to gain better performance. If unknown, set it to be OB_INVALID_ID
+  uint64_t partition_id_;  // for optimize purpose
+  ObTableEntityType entity_type_;  // for optimize purpose
+  ObTableQueryAndMutate query_and_mutate_;
+  ObBinlogRowImageType binlog_row_image_type_;
+};
 
 } // end namespace table
 } // end namespace oceanbase

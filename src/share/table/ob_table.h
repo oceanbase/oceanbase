@@ -131,7 +131,8 @@ private:
 enum class ObTableEntityType
 {
   ET_DYNAMIC = 0,
-  ET_KV = 1
+  ET_KV = 1,
+  ET_HKV = 2
 };
 
 // @note not thread-safe
@@ -517,6 +518,94 @@ private:
   common::ObIAllocator *alloc_;
 };
 
+class ObHTableConstants
+{
+public:
+  static constexpr int64_t LATEST_TIMESTAMP = -INT64_MAX;
+  static constexpr int64_t OLDEST_TIMESTAMP = INT64_MAX;
+  static constexpr int64_t INITIAL_MIN_STAMP = 0;
+  static constexpr int64_t INITIAL_MAX_STAMP = INT64_MAX;
+
+  static const char* const ROWKEY_CNAME;
+  static const char* const CQ_CNAME;
+  static const char* const VERSION_CNAME;
+  static const char* const VALUE_CNAME;
+  static const ObString ROWKEY_CNAME_STR;
+  static const ObString CQ_CNAME_STR;
+  static const ObString VERSION_CNAME_STR;
+  static const ObString VALUE_CNAME_STR;
+
+  // create table t1$cf1 (K varbinary(1024), Q varchar(256), T bigint, V varbinary(1024), primary key(K, Q, T));
+  static const int64_t COL_IDX_K = 0;
+  static const int64_t COL_IDX_Q = 1;
+  static const int64_t COL_IDX_T = 2;
+  static const int64_t COL_IDX_V = 3;
+private:
+  ObHTableConstants() = delete;
+};
+
+/// special filter for HTable
+class ObHTableFilter final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObHTableFilter();
+  ~ObHTableFilter() = default;
+  void reset();
+  void set_valid(bool valid) { is_valid_ = valid; }
+  bool is_valid() const { return is_valid_; }
+
+  /// Get the column with the specified qualifier.
+  int add_column(const ObString &qualifier);
+  /// Get versions of columns with the specified timestamp.
+  int set_timestamp(int64_t timestamp) { min_stamp_ = timestamp; max_stamp_ = timestamp + 1; return common::OB_SUCCESS; }
+  /// Get versions of columns only within the specified timestamp range, [minStamp, maxStamp).
+  int set_time_range(int64_t min_stamp, int64_t max_stamp);
+  /// Get up to the specified number of versions of each column.
+  int set_max_versions(int32_t versions);
+  /// Set the maximum number of values to return per row per Column Family
+  /// @param limit - the maximum number of values returned / row / CF
+  int set_max_results_per_column_family(int32_t limit);
+  /// Set offset for the row per Column Family.
+  /// @param offset - is the number of kvs that will be skipped.
+  int set_row_offset_per_column_family(int32_t offset);
+  /// Apply the specified server-side filter when performing the Query.
+  /// @param filter - a file string using the hbase filter language
+  /// @see the filter language at https://issues.apache.org/jira/browse/HBASE-4176
+  int set_filter(const ObString &filter);
+
+  const ObIArray<ObString> &get_columns() const { return select_column_qualifier_; }
+  bool with_latest_timestamp() const { return with_all_time() && 1 == max_versions_; }
+  bool with_timestamp() const { return min_stamp_ == max_stamp_ && min_stamp_ >= 0; }
+  bool with_all_time() const { return ObHTableConstants::INITIAL_MIN_STAMP == min_stamp_ && ObHTableConstants::INITIAL_MAX_STAMP == max_stamp_; }
+  int64_t get_min_stamp() const { return min_stamp_; }
+  int64_t get_max_stamp() const { return max_stamp_; }
+  int32_t get_max_versions() const { return max_versions_; }
+  int32_t get_max_results_per_column_family() const { return limit_per_row_per_cf_; }
+  int32_t get_row_offset_per_column_family() const { return offset_per_row_per_cf_; }
+  const ObString &get_filter() const { return filter_string_; }
+  void clear_columns() { select_column_qualifier_.reset(); }
+  uint64_t get_checksum() const;
+
+  TO_STRING_KV(K_(is_valid),
+               "column_qualifier", select_column_qualifier_,
+               K_(min_stamp),
+               K_(max_stamp),
+               K_(max_versions),
+               K_(limit_per_row_per_cf),
+               K_(offset_per_row_per_cf),
+               K_(filter_string));
+private:
+  bool is_valid_;
+  ObSEArray<ObString, 16> select_column_qualifier_;
+  int64_t min_stamp_;  // default -1
+  int64_t max_stamp_;  // default -1
+  int32_t max_versions_;  // default 1
+  int32_t limit_per_row_per_cf_;  // default -1 means unlimited
+  int32_t offset_per_row_per_cf_; // default 0
+  ObString filter_string_;
+};
+
 /// A table query
 /// 1. support multi range scan
 /// 2. support reverse scan
@@ -535,7 +624,8 @@ public:
       scan_order_(common::ObQueryFlag::Forward),
       index_name_(),
       batch_size_(-1),
-      max_result_size_(-1)
+      max_result_size_(-1),
+      htable_filter_()
   {}
   ~ObTableQuery() = default;
   void reset();
@@ -556,6 +646,8 @@ public:
   int set_offset(int32_t offset);
   /// Add filter, currently NOT supported.
   int set_filter(const ObString &filter);
+  /// Add filter only for htable.
+  ObHTableFilter& htable_filter() { return htable_filter_; }
   /// Set max row count of each batch.
   /// For htable, set the maximum number of cells to return for each call to next().
   int set_batch(int32_t batch_size);
@@ -570,6 +662,7 @@ public:
   int32_t get_offset() const { return offset_; }
   common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }
   const ObString &get_index_name() const { return index_name_; }
+  const ObHTableFilter& get_htable_filter() const { return htable_filter_; }
   int32_t get_batch() const { return batch_size_; }
   int64_t get_max_result_size() const { return max_result_size_; }
   int64_t get_range_count() const { return key_ranges_.count(); }
@@ -584,6 +677,7 @@ public:
                K_(offset),
                K_(scan_order),
                K_(index_name),
+               K_(htable_filter),
                K_(batch_size),
                K_(max_result_size));
 public:
@@ -601,6 +695,7 @@ private:
   ObString index_name_;
   int32_t batch_size_;
   int64_t max_result_size_;
+  ObHTableFilter htable_filter_;
 };
 
 /// result for ObTableQuery
@@ -615,6 +710,42 @@ public:
    */
   virtual int get_next_entity(const ObITableEntity *&entity) = 0;
 };
+
+/// query and mutate the selected rows.
+class ObTableQueryAndMutate final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableQueryAndMutate()
+      :return_affected_entity_(true)
+  {}
+  const ObTableQuery &get_query() const { return query_; }
+  ObTableQuery &get_query() { return query_; }
+  const ObTableBatchOperation &get_mutations() const { return mutations_; }
+  ObTableBatchOperation &get_mutations() { return mutations_; }
+  bool return_affected_entity() const { return return_affected_entity_; }
+
+  void set_deserialize_allocator(common::ObIAllocator *allocator);
+  void set_entity_factory(ObITableEntityFactory *entity_factory);
+  uint64_t get_checksum();
+
+  TO_STRING_KV(K_(query),
+               K_(mutations));
+private:
+  ObTableQuery query_;
+  ObTableBatchOperation mutations_;
+  bool return_affected_entity_;
+};
+
+inline void ObTableQueryAndMutate::set_deserialize_allocator(common::ObIAllocator *allocator)
+{
+  query_.set_deserialize_allocator(allocator);
+}
+
+inline void ObTableQueryAndMutate::set_entity_factory(ObITableEntityFactory *entity_factory)
+{
+  mutations_.set_entity_factory(entity_factory);
+}
 
 class ObTableQueryResult: public ObTableEntityIterator
 {
@@ -650,6 +781,20 @@ private:
   int64_t curr_idx_;
   ObTableEntity curr_entity_;
 };
+
+class ObTableQueryAndMutateResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  TO_STRING_KV(K_(affected_rows));
+public:
+  int64_t affected_rows_;
+  // If return_affected_entity_ in ObTableQueryAndMutate is set, then return the respond entity.
+  // In the case of delete and insert_or_update, return the old rows before modified.
+  // In the case of increment and append, return the new rows after modified.
+  ObTableQueryResult affected_entity_;
+};
+
 
 } // end namespace table
 } // end namespace oceanbase

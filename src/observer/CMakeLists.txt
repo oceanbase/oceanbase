@@ -255,7 +255,16 @@ ob_set_subtarget(ob_server table
   table/ob_table_rpc_processor.cpp		
   table/ob_table_service.cpp		
   table/ob_table_api_row_iterator.cpp
+  table/ob_table_query_and_mutate_processor.cpp
+  table/ob_htable_filter_operator.cpp
+  table/ob_htable_filter_parser.cpp
+  table/ob_htable_utils.cpp
+  table/ob_htable_filters.cpp
+  table/htable_filter_tab.cxx
+  table/htable_filter_lex.cxx
 )
+
+set_source_files_properties(table/htable_filter_lex.cxx PROPERTIES COMPILE_FLAGS -Wno-null-conversion)
 
 ob_server_add_pchs(observer
   ob_server_struct.h
