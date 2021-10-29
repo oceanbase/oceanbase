@@ -9204,6 +9204,8 @@ int ObDDLService::purge_database(const ObPurgeDatabaseArg& arg, int64_t& pz_coun
         // bypass
       } else if (schema->get_primary_zone().empty()) {
         // bypass
+      } else if (USER_INDEX == schema->get_table_type()) {
+        // bypass, hope some day, pz_value can be removed from oceanbase
       } else {
         ++pz_count;
       }
