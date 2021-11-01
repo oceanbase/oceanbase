@@ -170,7 +170,6 @@ private:
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
   int create_fd_item_from_select_list(ObFdItemSet* fd_item_set);
-  int child_has_exchange(const ObLogicalOperator* op, bool& find);
   virtual int compute_one_row_info() override;
 
 private:

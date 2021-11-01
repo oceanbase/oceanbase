@@ -6030,17 +6030,19 @@ int ObJoinOrder::create_and_add_nl_path(const sql::Path* left_path, const sql::P
     LOG_WARN("failed to alloc a join path", K(ret));
   } else {
     join_path = new (join_path) JoinPath(this, left_path, right_path, NESTED_LOOP_JOIN, join_type, need_mat);
-    join_path->set_interesting_order_info(left_path->get_interesting_order_info());
-    if (OB_FAIL(append(join_path->ordering_, left_path->ordering_))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else if (OB_FAIL(check_join_interesting_order(join_path))) {
-      LOG_WARN("failed to update join interesting order info", K(ret));
+    if (CONNECT_BY_JOIN != join_type) {
+      join_path->set_interesting_order_info(left_path->get_interesting_order_info());
+      if (OB_FAIL(append(join_path->ordering_, left_path->ordering_))) {
+        LOG_WARN("failed to append exprs", K(ret));
+      } else if (OB_FAIL(check_join_interesting_order(join_path))) {
+        LOG_WARN("failed to update join interesting order info", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(set_nl_filters(join_path, right_path, join_type, on_condition, where_condition))) {
       LOG_WARN("failed to remove filters", K(ret));
     } else if (CONNECT_BY_JOIN == join_type && OB_FAIL(push_down_order_siblings(join_path, right_path))) {
       LOG_WARN("push down order siblings by condition failed", K(ret));
-    }
-    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(join_path->estimate_cost())) {
       LOG_WARN("failed to calculate cost in create_nl_path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
@@ -6708,15 +6710,15 @@ int ObJoinOrder::compute_one_row_info_for_table_scan(ObIArray<AccessPath*>& acce
   AccessPath* access_path = NULL;
   is_at_most_one_row_ = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_at_most_one_row_ && i < access_paths.count(); i++) {
-    bool is_get = false;
+    bool is_one_row = false;
     if (OB_ISNULL(access_path = access_paths.at(i)) || OB_ISNULL(access_path->pre_query_range_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (access_path->is_inner_path_) {
       /*do nothing*/
-    } else if (OB_FAIL(access_path->pre_query_range_->is_get(is_get))) {
-      LOG_WARN("failed to check if query range is get", K(ret));
-    } else if (is_get && (1 == access_path->est_cost_info_.ranges_.count())) {
+    } else if (OB_FAIL(access_path->pre_query_range_->is_at_most_one_row(is_one_row))) {
+      LOG_WARN("failed to check if is at most one row", K(ret));
+    } else if (is_one_row && (1 == access_path->est_cost_info_.ranges_.count())) {
       is_at_most_one_row_ = true;
     } else { /*do nothing*/
     }

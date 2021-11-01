@@ -4393,9 +4393,9 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
       "view_base_item":-1
     },
      {
-      "table_id":-6,
-      "table_name":"VIEW4",
-      "alias_name":"VIEW4",
+      "table_id":-5,
+      "table_name":"VIEW3",
+      "alias_name":"VIEW3",
       "synonym_name":"",
       "synonym_db_name":"",
       "table_type":2,
@@ -4640,7 +4640,7 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
     },
      {
       "column_id":16,
-      "table_id":-6,
+      "table_id":-5,
       "column":"max(c2)",
       "auto_filled_timestamp":false,
       "default_value": {
@@ -4675,10 +4675,10 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
         "rel_id": [
           2
         ],
-        "table_id":-6,
+        "table_id":-5,
         "column_id":16,
         "database_name":"",
-        "table_name":"VIEW4",
+        "table_name":"VIEW3",
         "synonym_name":"",
         "synonym_db_name":"",
         "column_name":"max(c2)",
@@ -4958,7 +4958,7 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
       "is_join":false
     },
      {
-      "table_id":-6,
+      "table_id":-5,
       "is_join":false
     }
   ],
@@ -5071,10 +5071,10 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
           "rel_id": [
             2
           ],
-          "table_id":-6,
+          "table_id":-5,
           "column_id":16,
           "database_name":"",
-          "table_name":"VIEW4",
+          "table_name":"VIEW3",
           "synonym_name":"",
           "synonym_db_name":"",
           "column_name":"max(c2)",
@@ -5175,9 +5175,9 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
       "transpose_item":null,
       "table": [
          {
-          "table_id":-7,
-          "table_name":"VIEW5",
-          "alias_name":"VIEW5",
+          "table_id":-6,
+          "table_name":"VIEW4",
+          "alias_name":"VIEW4",
           "synonym_name":"",
           "synonym_db_name":"",
           "table_type":2,
@@ -5198,7 +5198,7 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
       "column": [
          {
           "column_id":16,
-          "table_id":-7,
+          "table_id":-6,
           "column":"c2",
           "auto_filled_timestamp":false,
           "default_value": {
@@ -5233,10 +5233,10 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
             "rel_id": [
               1
             ],
-            "table_id":-7,
+            "table_id":-6,
             "column_id":16,
             "database_name":"",
-            "table_name":"VIEW5",
+            "table_name":"VIEW4",
             "synonym_name":"",
             "synonym_db_name":"",
             "column_name":"c2",
@@ -5315,10 +5315,10 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
                 "rel_id": [
                   1
                 ],
-                "table_id":-7,
+                "table_id":-6,
                 "column_id":16,
                 "database_name":"",
-                "table_name":"VIEW5",
+                "table_name":"VIEW4",
                 "synonym_name":"",
                 "synonym_db_name":"",
                 "column_name":"c2",
@@ -5370,7 +5370,7 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
       "nocycle":false,
       "from": [
          {
-          "table_id":-7,
+          "table_id":-6,
           "is_join":false
         }
       ],
@@ -5447,10 +5447,10 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
               "rel_id": [
                 1
               ],
-              "table_id":-7,
+              "table_id":-6,
               "column_id":16,
               "database_name":"",
-              "table_name":"VIEW5",
+              "table_name":"VIEW4",
               "synonym_name":"",
               "synonym_db_name":"",
               "column_name":"c2",

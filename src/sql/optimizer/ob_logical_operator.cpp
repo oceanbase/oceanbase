@@ -6444,7 +6444,8 @@ int ObLogicalOperator::push_down_limit(AllocExchContext* ctx, ObRawExpr* limit_c
         LOG_WARN("get unexpected null", K(exchange_point), K(ret));
       } else if ((log_op_def::instance_of_log_table_scan(child->get_type())) &&
                  !is_virtual_table(static_cast<ObLogTableScan*>(child)->get_ref_table_id()) &&
-                 NULL == static_cast<ObLogTableScan*>(child)->get_limit_expr()) {
+                 NULL == static_cast<ObLogTableScan*>(child)->get_limit_expr() &&
+                 !is_fetch_with_ties) {
         // Do NOT allocate LIMIT operator, and push down limit onto table scan directly.
         ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(child);
         table_scan->set_limit_offset(new_limit_count_expr, NULL);
@@ -8615,3 +8616,21 @@ int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
   }
   return ret;
 }
+
+int ObLogicalOperator::child_has_exchange(const ObLogicalOperator *op, bool &find)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || find) {
+    /*do nothing*/
+  } else if (log_op_def::LOG_EXCHANGE == op->get_type()) {
+    find = true;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && !find && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(child_has_exchange(op->get_child(i), find)))) {
+        LOG_WARN("fail to find tsc recursive", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+

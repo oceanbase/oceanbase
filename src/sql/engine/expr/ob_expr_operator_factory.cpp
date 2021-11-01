@@ -827,8 +827,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprToBinaryDouble);
   REG_OP_ORCL(ObExprOracleNullif);
   REG_OP_ORCL(ObExprStmtId);
-
-  // for SPM
+  REG_OP_ORCL(ObExprEstimateNdv);
+  //for SPM
   REG_OP_ORCL(ObExprSpmLoadPlans);
   REG_OP_ORCL(ObExprSpmAlterBaseline);
   REG_OP_ORCL(ObExprSpmDropBaseline);

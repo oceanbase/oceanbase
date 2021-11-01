@@ -291,8 +291,12 @@ public:
     }
     return bret;
   }
+
   // XXX: This function may raise problem because of reverse index.
   int is_min_to_max_range(bool& is_min_to_max_range, const ObDataTypeCastParams& dtc_params);
+  int is_at_most_one_row(bool &is_one_row) const;
+  int check_is_at_most_one_row(ObKeyPart &key_part, const int64_t depth, const int64_t column_count,
+                               bool &bret) const;
   int is_get(bool& is_get) const;
   int is_get(int64_t column_count, bool& is_get) const;
   bool is_precise_get() const
@@ -442,16 +446,18 @@ private:
   bool has_scan_key(const ObKeyPart& keypart) const;
   bool is_min_range_value(const common::ObObj& obj) const;
   bool is_max_range_value(const common::ObObj& obj) const;
-  int normalize_range_graph(ObKeyPart*& keypart);
   int check_is_get(ObKeyPart& key_part, const int64_t depth, const int64_t column_count, bool& bret) const;
   void check_like_range_precise(
       const ObString& pattern_str, const char* min_str_buf, const size_t min_str_len, const char escape);
   int cast_like_obj_if_needed(const ObObj& string_obj, ObObj& buf_obj, const ObObj*& obj_ptr, ObKeyPart& out_key_part,
       const ObDataTypeCastParams& dtc_params);
-
+  int refine_large_range_graph(ObKeyPart *&key_part);
+  int compute_range_size(const ObIArray<ObKeyPart*> &key_parts, const ObIArray<uint64_t> &or_count,
+      ObIArray<ObKeyPart*> &next_key_parts, ObIArray<uint64_t> &next_or_count, uint64_t &range_size);
 private:
   static const int64_t COMMON_KEY_PART_NUM = 256;
   static const int64_t RANGE_BUCKET_SIZE = 1000;
+  static const int64_t MAX_RANGE_SIZE = 10000;
   typedef common::ObObjStore<ObKeyPart*, common::ObIAllocator&> KeyPartStore;
 
 private:
