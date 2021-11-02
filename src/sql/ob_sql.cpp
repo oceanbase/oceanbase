@@ -525,7 +525,7 @@ int ObSql::fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo& stmt_in
 }
 
 int ObSql::do_add_ps_cache(const ObString& sql, int64_t param_cnt, ObSchemaGetterGuard& schema_guard,
-    stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql)
+    stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql, bool is_sensitive_sql)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo& session = result.get_session();
@@ -548,6 +548,9 @@ int ObSql::do_add_ps_cache(const ObString& sql, int64_t param_cnt, ObSchemaGette
     } else if (OB_ISNULL(ps_stmt_item) || OB_ISNULL(ref_stmt_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stmt_item or stmt_info is NULL", K(ret), KP(ps_stmt_item), KP(ref_stmt_info));
+    }
+    if (NULL != ref_stmt_info) {
+      ref_stmt_info->set_is_sensitive_sql(is_sensitive_sql);
     }
     // add session info
     if (OB_SUCC(ret)) {
@@ -643,7 +646,8 @@ int ObSql::do_real_prepare(const ObString& sql, ObSqlCtx& context, ObResultSet& 
     LOG_INFO("generate new stmt", K(param_cnt), K(stmt_type), K(normalized_sql), K(sql));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(do_add_ps_cache(normalized_sql, param_cnt, *context.schema_guard_, stmt_type, result, is_inner_sql))) {
+    if (OB_FAIL(do_add_ps_cache(normalized_sql, param_cnt, *context.schema_guard_, stmt_type,
+                  result, is_inner_sql, context.is_sensitive_))) {
       LOG_WARN("add to ps plan cache failed", K(ret));
     }
   }
@@ -744,6 +748,8 @@ int ObSql::handle_ps_prepare(const ObString& stmt, ObSqlCtx& context, ObResultSe
         if (OB_FAIL(do_real_prepare(stmt, context, result, is_inner_sql))) {
           LOG_WARN("do_real_prepare failed", K(ret));
         }
+      } else if (OB_SUCC(ret) && NULL != stmt_info) {
+        context.is_sensitive_ = stmt_info->get_is_sensitive_sql();
       }
       if (OB_SUCC(ret)) {
         if (false == need_do_real_prepare) {
@@ -1395,6 +1401,23 @@ int ObSql::generate_stmt(ParseResult& parse_result, ObPlanCacheCtx* pc_ctx, ObSq
     NG_TRACE(resolve_begin);
 
     ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
+    ObItemType resolve_type = parse_result.result_tree_->children_[0]->type_;
+    switch (resolve_type) {
+      case T_CREATE_USER:
+      case T_SET_PASSWORD:
+      case T_GRANT:
+      case T_CREATE_ROLE:
+      case T_ALTER_ROLE:
+      case T_SET_ROLE_PASSWORD:
+      case T_SYSTEM_GRANT:
+      case T_GRANT_ROLE: {
+        context.is_sensitive_ = true;
+        break;
+      }
+      default: {
+        break;
+      }
+    }
     // set const param constraint after resolving
     context.all_plan_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_plan_const_param_constraints_);
     context.all_possible_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_possible_const_param_constraints_);

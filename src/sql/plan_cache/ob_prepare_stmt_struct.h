@@ -242,6 +242,14 @@ public:
   {
     return ps_stmt_checksum_;
   }
+  inline void set_is_sensitive_sql(const bool is_sensitive_sql)
+  {
+    is_sensitive_sql_ = is_sensitive_sql;
+  }
+  inline bool get_is_sensitive_sql() const
+  {
+    return is_sensitive_sql_;
+  }
 
   bool is_valid() const;
   bool check_erase_inc_ref_count();
@@ -354,6 +362,8 @@ private:
   common::ObIAllocator* allocator_;
   // Point to inner_allocator_ in ObPsPlancache, used to release the memory of the entire ObPsStmtItem
   common::ObIAllocator* external_allocator_;
+  // Whether it contains sensitive information. If so, it will not be recorded in sql audit.
+  bool is_sensitive_sql_;
 };
 
 struct TypeInfo {
