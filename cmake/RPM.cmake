@@ -68,11 +68,12 @@ set(OCEANBASE_DEVEL_BIN_FILES "")
 
 if (OB_BUILD_LIBOBLOG)
   # lib
+  # list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.a)
   list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so)
   list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1)
   list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1.0.0)
 
-  # include
+  # include lilboblog header
   list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/liboblog/src/liboblog.h)
 
   # bin
@@ -99,6 +100,13 @@ install(PROGRAMS
   DESTINATION /usr/bin
   COMPONENT devel
 )
+
+if (OB_BUILD_LIBOBLOG)
+  install(DIRECTORY
+    "deps/logmessage/include/"
+    DESTINATION /usr/include/oblogmsg
+    COMPONENT devel)
+endif()
 
 ## oceanbase-libs
 install(PROGRAMS
