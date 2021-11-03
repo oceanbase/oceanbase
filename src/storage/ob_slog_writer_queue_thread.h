@@ -15,7 +15,7 @@
 
 #include "common/ob_partition_key.h"
 #include "common/ob_member_list.h"
-#include "lib/queue/ob_fixed_queue.h"
+#include "lib/queue/ob_link_queue.h"
 #include "lib/thread/thread_mgr_interface.h"
 #include "share/ob_proposal_id.h"
 #include "clog/ob_log_define.h"
@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace storage {
 class ObPartitionService;
 
-class ObMsInfoTask {
+class ObMsInfoTask : public common::ObLink {
 public:
   ObMsInfoTask()
       : pkey_(),
@@ -141,6 +141,7 @@ class ObSlogWriterQueueThread : public lib::TGTaskHandler {
 public:
   static const int64_t QUEUE_THREAD_NUM = 4;
   static const int64_t MINI_MODE_QUEUE_THREAD_NUM = 2;
+  static const int64_t MAX_FREE_TASK_NUM = 1024;
   static const int64_t SLOG_FLUSH_TASK_TIMEOUT_THRESHOLD = clog::CLOG_LEADER_RECONFIRM_SYNC_TIMEOUT;
   ObSlogWriterQueueThread();
   virtual ~ObSlogWriterQueueThread();
@@ -157,13 +158,13 @@ public:
 
 private:
   int get_task(ObMsInfoTask*& task);
+  int alloc_task(ObMsInfoTask*& task);
   void free_task(ObMsInfoTask* task);
 
 private:
   bool inited_;
   ObPartitionService* partition_service_;
-  common::ObFixedQueue<ObMsInfoTask> free_queue_;
-  ObMsInfoTask* tasks_;
+  common::ObLinkQueue free_queue_;
   int tg_id_;
 
 private:
