@@ -528,7 +528,7 @@ public:
     UNUSED(leader);
     return common::OB_SUCCESS;
   }
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const
   {
     UNUSED(parent);
     UNUSED(cluster_id);

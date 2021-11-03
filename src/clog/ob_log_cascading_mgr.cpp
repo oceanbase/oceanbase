@@ -229,7 +229,10 @@ int ObLogCascadingMgr::set_parent_(const common::ObAddr& new_parent_addr, const 
   } else {
     state_mgr_->reset_need_rebuild();
     state_mgr_->reset_fetch_state();
-    prev_parent_ = parent_;
+    if (parent_.is_valid()) {
+      // update prev_parent by valid old parent
+      prev_parent_ = parent_;
+    }
     parent_ = new_parent;
     if (partition_reach_time_interval(60 * 1000 * 1000, update_parent_warn_time_)) {
       CLOG_LOG(INFO,

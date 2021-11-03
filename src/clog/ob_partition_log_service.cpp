@@ -1319,7 +1319,7 @@ int ObPartitionLogService::get_leader(common::ObAddr& leader) const
   return ret;
 }
 
-int ObPartitionLogService::get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const
+int ObPartitionLogService::get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -1330,22 +1330,34 @@ int ObPartitionLogService::get_clog_parent(common::ObAddr& parent, int64_t& clus
     parent = restore_mgr_.get_restore_leader();
     cluster_id = state_mgr_.get_self_cluster_id();
   } else {
+    const bool is_paxos_replica = ObReplicaTypeCheck::is_paxos_replica(mm_.get_replica_type());
     const share::ObCascadMember parent_member = cascading_mgr_.get_parent();
+    const share::ObCascadMember prev_parent_member = cascading_mgr_.get_prev_parent();
+    share::ObCascadMember cascad_leader;
+    (void)state_mgr_.get_cascad_leader(cascad_leader);
     if (parent_member.is_valid()) {
       parent = parent_member.get_server();
       cluster_id = parent_member.get_cluster_id();
-    } else {
+    } else if (!is_paxos_replica && prev_parent_member.is_valid()) {
+      // prev_parent is preferred choice for non-paxos replica
+      parent = prev_parent_member.get_server();
+      cluster_id = prev_parent_member.get_cluster_id();
+    } else if (cascad_leader.is_valid()) {
       // returns corresponding leader when parent is invalid
-      share::ObCascadMember cascad_leader;
-      (void)state_mgr_.get_cascad_leader(cascad_leader);
       parent = cascad_leader.get_server();
       cluster_id = cascad_leader.get_cluster_id();
+    } else if (prev_parent_member.is_valid()) {
+      // at last return prev_parent
+      parent = prev_parent_member.get_server();
+      cluster_id = prev_parent_member.get_cluster_id();
+    } else {
+      // it does not have valid parent
     }
   }
   if (!parent.is_valid()) {
     ret = OB_NEED_RETRY;
   }
-  CLOG_LOG(INFO, "get clog parent", K(ret), K_(partition_key), K(parent));
+  CLOG_LOG(INFO, "get clog parent", K(ret), K_(partition_key), K(parent), K(cluster_id));
   return ret;
 }
 
