@@ -1960,7 +1960,10 @@ int ObStorageOssAppendWriter::do_write(const char* buf, const int64_t size, cons
     } else {
       if (0 != aos_status_is_ok(aos_ret)) {  // != 0 means ok
         char* object_type = (char*)(apr_table_get(resp_headers, OSS_OBJECT_TYPE));
-        if (0 != strncmp(OSS_OBJECT_TYPE_APPENDABLE, object_type, strlen(OSS_OBJECT_TYPE_APPENDABLE))) {
+        if (OB_ISNULL(object_type)) {
+          ret = OB_OSS_ERROR;
+          OB_LOG(ERROR, "oss type is null", K(ret));
+        } else if (0 != strncmp(OSS_OBJECT_TYPE_APPENDABLE, object_type, strlen(OSS_OBJECT_TYPE_APPENDABLE))) {
           ret = OB_OSS_ERROR;
           OB_LOG(WARN, "oss object not match", K(ret), K(object_type));
         } else {
