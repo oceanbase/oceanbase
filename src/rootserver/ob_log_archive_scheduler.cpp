@@ -1379,6 +1379,12 @@ int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBac
     LOG_ERROR("not inited", K(ret));
   } else if (ObLogArchiveStatus::STOP == sys_info.status_.status_) {
     // do nothing for stop status
+  } else if (ObLogArchiveStatus::STOPPING == sys_info.status_.status_) {
+    // do nothing for stopping status
+    LOG_INFO("no need to prepare new tenant when sys tenant in STOPPING state",
+        K(sys_info),
+        K(non_frozen_piece),
+        K(tenant_ids));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
       const uint64_t tenant_id = tenant_ids.at(i);
@@ -2431,7 +2437,14 @@ int ObLogArchiveScheduler::do_stop_tenant_log_archive_backup_v2_(
   const uint64_t tenant_id = cur_key.tenant_id_;
   max_ts = -1;
 
-  if (!is_inited_) {
+  DEBUG_SYNC(BEFROE_DO_STOP_TENANT_ARCHIVE);
+
+#ifdef ERRSIM
+  ret = E(EventTable::EN_STOP_TENANT_LOG_ARCHIVE_BACKUP) OB_SUCCESS;
+#endif
+
+  if (OB_FAIL(ret)) {
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_ERROR("not inited", K(ret));
   } else if (OB_FAIL(check_can_do_work_())) {

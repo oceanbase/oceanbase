@@ -184,6 +184,7 @@ class ObString;
   ACT(BLOCK_FREEZE_INFO_UPDATE, )                                  \
   ACT(BEFROE_DO_ROOT_BACKUP, )                                     \
   ACT(BEFROE_DO_LOG_ARCHIVE_SCHEDULER, )                           \
+  ACT(BEFROE_DO_STOP_TENANT_ARCHIVE, )                             \
   ACT(WRTIE_EXTERN_LOG_ARCHIVE_BACKUP_INFO, )                      \
   ACT(FAILED_TO_PROCESS_TO_PRIMARY, )                              \
   ACT(BEFORE_REFRESH_CLUSTER_ID, )                                 \
