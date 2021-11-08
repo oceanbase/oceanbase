@@ -36,6 +36,7 @@ function version_ge() {
 }
 
 function get_os_release() {
+
   if [[ "${OS_ARCH}x" == "x86_64x" ]]; then
     case "$ID" in
       alinux)
@@ -81,6 +82,12 @@ function get_os_release() {
       centos)
         version_ge "8.0" && compat_centos7 && return
         version_ge "7.0" && OS_RELEASE=7 && return
+        ;;
+    esac
+  elif [[ "${OS_ARCH}x" == "unknownx" ]]; then
+    case "$ID" in
+      Deepin)
+        version_ge "18" && compat_centos7 && return
         ;;
     esac
   fi
