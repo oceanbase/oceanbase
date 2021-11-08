@@ -36,7 +36,6 @@ function version_ge() {
 }
 
 function get_os_release() {
-
   if [[ "${OS_ARCH}x" == "x86_64x" ]]; then
     case "$ID" in
       alinux)
