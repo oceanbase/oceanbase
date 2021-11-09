@@ -99,7 +99,6 @@ ob_set_subtarget(ob_sql engine
   engine/cmd/ob_resource_executor.cpp
   engine/cmd/ob_restore_executor.cpp
   engine/cmd/ob_sequence_executor.cpp
-  engine/cmd/ob_set_names_executor.cpp
   engine/cmd/ob_set_password_executor.cpp
   engine/cmd/ob_synonym_executor.cpp
   engine/cmd/ob_table_executor.cpp
@@ -835,7 +834,6 @@ ob_set_subtarget(ob_sql resolver
   resolver/cmd/ob_load_data_resolver.cpp
   resolver/cmd/ob_load_data_stmt.cpp
   resolver/cmd/ob_resource_resolver.cpp
-  resolver/cmd/ob_set_names_resolver.cpp
   resolver/cmd/ob_set_transaction_resolver.cpp
   resolver/cmd/ob_show_resolver.cpp
   resolver/cmd/ob_variable_set_resolver.cpp

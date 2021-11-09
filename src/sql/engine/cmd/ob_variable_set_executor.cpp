@@ -92,216 +92,19 @@ int ObVariableSetExecutor::execute(ObExecContext& ctx, ObVariableSetStmt& stmt)
     } else {
       expr_ctx.exec_ctx_->set_sql_proxy(sql_proxy);
     }
-    ObVariableSetStmt::VariableSetNode tmp_node;  // just for init node
+    ObVariableSetStmt::VariableNamesSetNode tmp_node;  // just for init node
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_variables_size(); ++i) {
-      ObVariableSetStmt::VariableSetNode& node = tmp_node;
-      if (OB_FAIL(stmt.get_variable_node(i, node))) {
+      ObVariableSetStmt::VariableNamesSetNode& var_name_set_node = tmp_node;
+      if (OB_FAIL(stmt.get_variable_node(i, var_name_set_node))) {
         LOG_WARN("fail to get variable node", K(i), K(ret));
-      } else {
-        ObNewRow tmp_row;
-        ObObj value_obj;
-        ObBasicSysVar* sys_var = NULL;
-        RowDesc row_desc;
-        ObExprGeneratorImpl expr_gen(0, 0, NULL, row_desc);
-        ObSqlExpression sql_expr(ctx.get_allocator(), 0);
-        if (true == node.is_set_default_) {
-          if (false == node.is_system_variable_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("when reach here, node.is_system_variable_ must be true", K(ret));
-          } else {
-          }
-        } else {
-          if (OB_ISNULL(node.value_expr_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("node.value_expr_ is NULL", K(ret));
-          } else {
-            if ((!node.is_system_variable_) || (!is_strict_mode(session->get_sql_mode()))) {
-              expr_ctx.cast_mode_ = CM_WARN_ON_FAIL;
-            } else {
-            }
-            if (OB_FAIL(expr_gen.generate(*node.value_expr_, sql_expr))) {
-              LOG_WARN("fail to fill sql expression", K(ret));
-            } else if (FALSE_IT(phy_plan.set_regexp_op_count(expr_gen.get_cur_regexp_op_count()))) {
-            } else if (FALSE_IT(phy_plan.set_like_op_count(expr_gen.get_cur_like_op_count()))) {
-            } else if (OB_FAIL(sql_expr.calc(expr_ctx, tmp_row, value_obj))) {
-              LOG_WARN("fail to calc value", K(ret), K(*node.value_expr_));
-            } else {
-            }
-          }
+      } else if (var_name_set_node.is_set_variable_) {
+        if (OB_FAIL(set_variable(ctx, session, expr_ctx, sql_proxy, stmt, phy_plan, plan_ctx,
+                                 var_name_set_node.var_set_node_, ret_ac))) {
+          LOG_WARN("set variable failed", K(ret));
         }
-        if (OB_FAIL(ret)) {
-        } else if (false == node.is_system_variable_) {
-          if (OB_FAIL(set_user_variable(value_obj, node.variable_name_, expr_ctx))) {
-            LOG_WARN("set user variable failed", K(ret));
-          }
-        } else {
-          ObSetVar set_var(node.variable_name_,
-              node.set_scope_,
-              node.is_set_default_,
-              stmt.get_actual_tenant_id(),
-              *expr_ctx.calc_buf_,
-              *sql_proxy);
-          ObObj out_obj;
-          const bool is_set_stmt = true;
-          if (OB_FAIL(session->get_sys_variable_by_name(node.variable_name_, sys_var))) {
-            if (OB_ERR_SYS_VARIABLE_UNKNOWN == ret) {
-              // session system variable not found, maybe latest data from proxy,
-              // so search in __all_sys_variable first.
-              const uint64_t tenant_id = session->get_effective_tenant_id();
-              const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-              ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy, exec_tenant_id, OB_ALL_SYS_VARIABLE_TID);
-              ObObj tmp_val;
-              ObSqlString sql;
-              SMART_VAR(ObMySQLProxy::MySQLResult, res)
-              {
-                sqlclient::ObMySQLResult* result = NULL;
-                if (OB_FAIL(sql.assign_fmt("select 1 from %s where tenant_id=%lu and name='%.*s';",
-                        OB_ALL_SYS_VARIABLE_TNAME,
-                        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                        node.variable_name_.length(),
-                        node.variable_name_.ptr()))) {
-                  LOG_WARN("assign sql string failed", K(ret));
-                } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-                  LOG_WARN("execute sql failed", K(sql), K(ret));
-                } else if (OB_ISNULL(result = res.get_result())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("fail to get sql result", K(ret));
-                } else if (OB_FAIL(result->next())) {
-                  if (OB_ITER_END == ret) {
-                    // not found in inner table, means it is not a system variable
-                    ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
-                    LOG_USER_ERROR(
-                        OB_ERR_SYS_VARIABLE_UNKNOWN, node.variable_name_.length(), node.variable_name_.ptr());
-                  } else {
-                    LOG_WARN("get result failed", K(ret));
-                  }
-                } else {
-                  // found in __all_sys_variable, means it's caused by version compatibility.
-                  // return OB_SYS_VARS_MAYBE_DIFF_VERSION, set OB_SUCCESS later.
-                  ret = OB_SYS_VARS_MAYBE_DIFF_VERSION;
-                  LOG_INFO("try to set sys var from new version, ignore it", K(ret), K(node.variable_name_));
-                }
-              }
-            } else {
-              LOG_WARN("fail to get system variable", K(ret), K(node.variable_name_));
-            }
-          } else if (OB_ISNULL(sys_var)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("sys_var is NULL", K(ret), K(node.variable_name_));
-          } else if (!share::is_mysql_mode() && sys_var->is_mysql_only()) {
-            // ignore set mysql only variables in oracle mode
-          } else if (!share::is_oracle_mode() && sys_var->is_oracle_only()) {
-            // ignore set oracle only variables in mysql mode
-          } else {
-            if (OB_FAIL(check_and_convert_sys_var(ctx, set_var, *sys_var, value_obj, out_obj, is_set_stmt))) {
-              LOG_WARN("fail to check", K(ret), K(node), K(*sys_var), K(value_obj));
-            } else if (FALSE_IT(value_obj = out_obj)) {
-            } else if (OB_FAIL(cast_value(ctx,
-                           node,
-                           stmt.get_actual_tenant_id(),
-                           *expr_ctx.calc_buf_,
-                           *sys_var,
-                           value_obj,
-                           out_obj))) {
-              LOG_WARN("fail to cast value", K(ret), K(node), K(*sys_var), K(value_obj));
-            } else if (FALSE_IT(value_obj = out_obj)) {
-            } else if (node.variable_name_ == OB_SV_AUTO_INCREMENT_INCREMENT ||
-                       node.variable_name_ == OB_SV_AUTO_INCREMENT_OFFSET) {
-              if (OB_FAIL(process_auto_increment_hook(session->get_sql_mode(), node.variable_name_, value_obj))) {
-                LOG_WARN("fail to process auto increment hook", K(ret));
-              } else {
-              }
-            } else if (node.variable_name_ == OB_SV_LAST_INSERT_ID) {
-              if (OB_FAIL(
-                      process_last_insert_id_hook(plan_ctx, session->get_sql_mode(), node.variable_name_, value_obj))) {
-                LOG_WARN("fail to process auto increment hook", K(ret));
-              } else {
-              }
-            } else if (ObSetVar::SET_SCOPE_GLOBAL == node.set_scope_ &&
-                       node.variable_name_ == OB_SV_STMT_PARALLEL_DEGREE) {
-              const static int64_t PARALLEL_DEGREE_VALID_VALUE = 1;
-              int64_t parallel_degree_set_val = -1;
-              if (OB_FAIL(value_obj.get_int(parallel_degree_set_val))) {
-                LOG_WARN("fail to get int64_t from value_obj", K(ret), K(value_obj));
-              } else if (PARALLEL_DEGREE_VALID_VALUE != parallel_degree_set_val) {
-                ret = OB_ERR_WRONG_VALUE_FOR_VAR;
-                char buf[32];
-                (void)databuff_printf(buf, 32, "%ld", parallel_degree_set_val);
-                ObString value(buf);
-                LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
-                    node.variable_name_.length(),
-                    node.variable_name_.ptr(),
-                    value.length(),
-                    value.ptr());
-              }
-            } else {
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (ObSetVar::SET_SCOPE_SESSION == node.set_scope_) {
-              // handle autocommit case, must call before update_sys_variable,
-              // because update_sys_variable will change value of ac.
-              if (node.variable_name_ == OB_SV_AUTOCOMMIT) {
-                if (OB_UNLIKELY(OB_SUCCESS != (ret_ac = process_session_autocommit_hook(ctx, value_obj)))) {
-                  LOG_WARN("fail to process session autocommit", K(ret), K(ret_ac));
-                  if (OB_ERR_WRONG_VALUE_FOR_VAR == ret_ac) {
-                    ret = ret_ac;
-                  }
-                } else {
-                }
-              } else {
-              }
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (set_var.var_name_ == OB_SV_READ_ONLY) {
-              if (session->get_in_transaction()) {
-                ret = OB_ERR_LOCK_OR_ACTIVE_TRANSACTION;
-
-                LOG_WARN("Can't execute the given command because "
-                         "you have active locked tables or an active transaction",
-                    K(ret));
-              } else {
-              }
-            } else {
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (set_var.var_name_ == OB_SV_COMPATIBILITY_MODE) {
-              if (!(OB_SYS_TENANT_ID == session->get_effective_tenant_id()) || !GCONF.in_upgrade_mode()) {
-                ret = OB_OP_NOT_ALLOW;
-                LOG_WARN("Compatibility mode can be changed only under upgrade mode and system tenant",
-                    K(ret),
-                    K(session->get_effective_tenant_id()));
-                LOG_USER_ERROR(
-                    OB_OP_NOT_ALLOW, "Compatibility mode be changed not under upgrade mode and system tenant");
-              } else if (ObSetVar::SET_SCOPE_SESSION != set_var.set_scope_) {
-                ret = OB_OP_NOT_ALLOW;
-                LOG_WARN("Compatibility mode can be changed only under session scope",
-                    K(ret),
-                    K(session->get_effective_tenant_id()));
-                LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Compatibility mode be changed not in session scope");
-              }
-            } else {
-            }
-
-            if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
-              if (OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
-                LOG_WARN("failed to update global variables", K(ret));
-              } else {
-              }
-            }
-            if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_SESSION) {
-              if (OB_FAIL(sys_var->session_update(ctx, set_var, value_obj))) {
-                LOG_WARN("fail to update", K(ret), K(*sys_var), K(set_var), K(value_obj));
-              }
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(sys_var->update(ctx, set_var, value_obj))) {
-                LOG_WARN("update sys var state failed", K(ret), K(set_var));
-              }
-            }
-          }
+      } else {
+        if (OB_FAIL(set_names_charset(ctx, var_name_set_node.names_set_node_))) {
+          LOG_WARN("set names or charset failed", K(ret));
         }
       }
       if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
@@ -311,6 +114,224 @@ int ObVariableSetExecutor::execute(ObExecContext& ctx, ObVariableSetStmt& stmt)
   }
   if (OB_SUCCESS != ret_ac) {
     ret = ret_ac;
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::set_variable(ObExecContext& ctx, ObSQLSessionInfo* session,
+                                        ObExprCtx &expr_ctx,
+                                        ObMySQLProxy* sql_proxy,
+                                        ObVariableSetStmt& stmt,
+                                        ObPhysicalPlan& phy_plan,
+                                        ObPhysicalPlanCtx* plan_ctx,
+                                        const ObVariableSetStmt::VariableSetNode& node,
+                                        int& ret_ac)
+{
+  int ret = OB_SUCCESS;
+  ObNewRow tmp_row;
+  ObObj value_obj;
+  ObBasicSysVar* sys_var = NULL;
+  RowDesc row_desc;
+  ObExprGeneratorImpl expr_gen(0, 0, NULL, row_desc);
+  ObSqlExpression sql_expr(ctx.get_allocator(), 0);
+  if (true == node.is_set_default_) {
+    if (false == node.is_system_variable_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("when reach here, node.is_system_variable_ must be true", K(ret));
+    } else {
+    }
+  } else {
+    if (OB_ISNULL(node.value_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("node.value_expr_ is NULL", K(ret));
+    } else {
+      if ((!node.is_system_variable_) || (!is_strict_mode(session->get_sql_mode()))) {
+        expr_ctx.cast_mode_ = CM_WARN_ON_FAIL;
+      } else {
+      }
+      if (OB_FAIL(expr_gen.generate(*node.value_expr_, sql_expr))) {
+        LOG_WARN("fail to fill sql expression", K(ret));
+      } else if (FALSE_IT(phy_plan.set_regexp_op_count(expr_gen.get_cur_regexp_op_count()))) {
+      } else if (FALSE_IT(phy_plan.set_like_op_count(expr_gen.get_cur_like_op_count()))) {
+      } else if (OB_FAIL(sql_expr.calc(expr_ctx, tmp_row, value_obj))) {
+        LOG_WARN("fail to calc value", K(ret), K(*node.value_expr_));
+      } else {
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (false == node.is_system_variable_) {
+    if (OB_FAIL(set_user_variable(value_obj, node.variable_name_, expr_ctx))) {
+      LOG_WARN("set user variable failed", K(ret));
+    }
+  } else {
+    ObSetVar set_var(node.variable_name_,
+        node.set_scope_,
+        node.is_set_default_,
+        stmt.get_actual_tenant_id(),
+        *expr_ctx.calc_buf_,
+        *sql_proxy);
+    ObObj out_obj;
+    const bool is_set_stmt = true;
+    if (OB_FAIL(session->get_sys_variable_by_name(node.variable_name_, sys_var))) {
+      if (OB_ERR_SYS_VARIABLE_UNKNOWN == ret) {
+        // session system variable not found, maybe latest data from proxy,
+        // so search in __all_sys_variable first.
+        const uint64_t tenant_id = session->get_effective_tenant_id();
+        const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+        ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy, exec_tenant_id, OB_ALL_SYS_VARIABLE_TID);
+        ObObj tmp_val;
+        ObSqlString sql;
+        SMART_VAR(ObMySQLProxy::MySQLResult, res)
+        {
+          sqlclient::ObMySQLResult* result = NULL;
+          if (OB_FAIL(sql.assign_fmt("select 1 from %s where tenant_id=%lu and name='%.*s';",
+                  OB_ALL_SYS_VARIABLE_TNAME,
+                  ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                  node.variable_name_.length(),
+                  node.variable_name_.ptr()))) {
+            LOG_WARN("assign sql string failed", K(ret));
+          } else if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+            LOG_WARN("execute sql failed", K(sql), K(ret));
+          } else if (OB_ISNULL(result = res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get sql result", K(ret));
+          } else if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              // not found in inner table, means it is not a system variable
+              ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
+              LOG_USER_ERROR(
+                  OB_ERR_SYS_VARIABLE_UNKNOWN, node.variable_name_.length(), node.variable_name_.ptr());
+            } else {
+              LOG_WARN("get result failed", K(ret));
+            }
+          } else {
+            // found in __all_sys_variable, means it's caused by version compatibility.
+            // return OB_SYS_VARS_MAYBE_DIFF_VERSION, set OB_SUCCESS later.
+            ret = OB_SYS_VARS_MAYBE_DIFF_VERSION;
+            LOG_INFO("try to set sys var from new version, ignore it", K(ret), K(node.variable_name_));
+          }
+        }
+      } else {
+        LOG_WARN("fail to get system variable", K(ret), K(node.variable_name_));
+      }
+    } else if (OB_ISNULL(sys_var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys_var is NULL", K(ret), K(node.variable_name_));
+    } else if (!share::is_mysql_mode() && sys_var->is_mysql_only()) {
+      // ignore set mysql only variables in oracle mode
+    } else if (!share::is_oracle_mode() && sys_var->is_oracle_only()) {
+      // ignore set oracle only variables in mysql mode
+    } else {
+      if (OB_FAIL(check_and_convert_sys_var(ctx, set_var, *sys_var, value_obj, out_obj, is_set_stmt))) {
+        LOG_WARN("fail to check", K(ret), K(node), K(*sys_var), K(value_obj));
+      } else if (FALSE_IT(value_obj = out_obj)) {
+      } else if (OB_FAIL(cast_value(ctx,
+                      node,
+                      stmt.get_actual_tenant_id(),
+                      *expr_ctx.calc_buf_,
+                      *sys_var,
+                      value_obj,
+                      out_obj))) {
+        LOG_WARN("fail to cast value", K(ret), K(node), K(*sys_var), K(value_obj));
+      } else if (FALSE_IT(value_obj = out_obj)) {
+      } else if (node.variable_name_ == OB_SV_AUTO_INCREMENT_INCREMENT ||
+                  node.variable_name_ == OB_SV_AUTO_INCREMENT_OFFSET) {
+        if (OB_FAIL(process_auto_increment_hook(session->get_sql_mode(), node.variable_name_, value_obj))) {
+          LOG_WARN("fail to process auto increment hook", K(ret));
+        } else {
+        }
+      } else if (node.variable_name_ == OB_SV_LAST_INSERT_ID) {
+        if (OB_FAIL(
+                process_last_insert_id_hook(plan_ctx, session->get_sql_mode(), node.variable_name_, value_obj))) {
+          LOG_WARN("fail to process auto increment hook", K(ret));
+        } else {
+        }
+      } else if (ObSetVar::SET_SCOPE_GLOBAL == node.set_scope_ &&
+                  node.variable_name_ == OB_SV_STMT_PARALLEL_DEGREE) {
+        const static int64_t PARALLEL_DEGREE_VALID_VALUE = 1;
+        int64_t parallel_degree_set_val = -1;
+        if (OB_FAIL(value_obj.get_int(parallel_degree_set_val))) {
+          LOG_WARN("fail to get int64_t from value_obj", K(ret), K(value_obj));
+        } else if (PARALLEL_DEGREE_VALID_VALUE != parallel_degree_set_val) {
+          ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+          char buf[32];
+          (void)databuff_printf(buf, 32, "%ld", parallel_degree_set_val);
+          ObString value(buf);
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
+              node.variable_name_.length(),
+              node.variable_name_.ptr(),
+              value.length(),
+              value.ptr());
+        }
+      } else {
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (ObSetVar::SET_SCOPE_SESSION == node.set_scope_) {
+        // handle autocommit case, must call before update_sys_variable,
+        // because update_sys_variable will change value of ac.
+        if (node.variable_name_ == OB_SV_AUTOCOMMIT) {
+          if (OB_UNLIKELY(OB_SUCCESS != (ret_ac = process_session_autocommit_hook(ctx, value_obj)))) {
+            LOG_WARN("fail to process session autocommit", K(ret), K(ret_ac));
+            if (OB_ERR_WRONG_VALUE_FOR_VAR == ret_ac) {
+              ret = ret_ac;
+            }
+          } else {
+          }
+        } else {
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (set_var.var_name_ == OB_SV_READ_ONLY) {
+        if (session->get_in_transaction()) {
+          ret = OB_ERR_LOCK_OR_ACTIVE_TRANSACTION;
+
+          LOG_WARN("Can't execute the given command because "
+                    "you have active locked tables or an active transaction",
+              K(ret));
+        } else {
+        }
+      } else {
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (set_var.var_name_ == OB_SV_COMPATIBILITY_MODE) {
+        if (!(OB_SYS_TENANT_ID == session->get_effective_tenant_id()) || !GCONF.in_upgrade_mode()) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("Compatibility mode can be changed only under upgrade mode and system tenant",
+              K(ret),
+              K(session->get_effective_tenant_id()));
+          LOG_USER_ERROR(
+              OB_OP_NOT_ALLOW, "Compatibility mode be changed not under upgrade mode and system tenant");
+        } else if (ObSetVar::SET_SCOPE_SESSION != set_var.set_scope_) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("Compatibility mode can be changed only under session scope",
+              K(ret),
+              K(session->get_effective_tenant_id()));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Compatibility mode be changed not in session scope");
+        }
+      } else {
+      }
+
+      if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
+        if (OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
+          LOG_WARN("failed to update global variables", K(ret));
+        } else {
+        }
+      }
+      if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_SESSION) {
+        if (OB_FAIL(sys_var->session_update(ctx, set_var, value_obj))) {
+          LOG_WARN("fail to update", K(ret), K(*sys_var), K(set_var), K(value_obj));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(sys_var->update(ctx, set_var, value_obj))) {
+          LOG_WARN("update sys var state failed", K(ret), K(set_var));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -865,6 +886,164 @@ int ObVariableSetExecutor::switch_to_session_variable(
   return ret;
 }
 
+int ObVariableSetExecutor::set_names_charset(ObExecContext& ctx,
+                                             const ObVariableSetStmt::NamesSetNode& names_set_node)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(ERROR, "session is NULL", K(ret), K(ctx));
+  } else {
+    ObString charset;
+    if (names_set_node.is_default_charset_) {
+      // Compatible with mysql, take the global character_set_client value
+      if (OB_FAIL(get_global_sys_var_character_set_client(ctx, charset))) {
+        SQL_ENG_LOG(WARN, "fail to get global character_set_client", K(ret));
+      }
+    } else {
+      charset = names_set_node.charset_;
+    }
+    if (OB_SUCC(ret)) {
+      ObString collation = names_set_node.collation_;
+      ObCollationType collation_type = CS_TYPE_INVALID;
+      ObCharsetType cs_type = ObCharset::charset_type(charset);
+      if (CHARSET_INVALID == cs_type) {
+        ret = OB_ERR_UNKNOWN_CHARSET;
+        LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+      } else {
+        charset = ObString::make_string(ObCharset::charset_name(cs_type));
+        if (!names_set_node.is_default_collation_) {
+          collation_type = ObCharset::collation_type(collation);
+          if (CS_TYPE_INVALID == collation_type) {
+            ret = OB_ERR_UNKNOWN_COLLATION;
+            LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
+          } else if (!ObCharset::is_valid_collation(cs_type, collation_type)) {
+            ret = OB_ERR_COLLATION_MISMATCH;
+            LOG_USER_ERROR(
+                OB_ERR_COLLATION_MISMATCH, collation.length(), collation.ptr(), charset.length(), charset.ptr());
+          } else {
+            collation = ObString::make_string(ObCharset::collation_name(collation_type));
+          }
+        } else {
+          // the use default collation of this charset
+          collation_type = ObCharset::get_default_collation(cs_type);
+          collation = ObString::make_string(ObCharset::collation_name(collation_type));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!ObCharset::is_valid_connection_collation(collation_type)) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_ENG_LOG(WARN,
+              "collation type not supported",
+              "charset type",
+              ObCharset::charset_name(cs_type),
+              "collation type",
+              ObCharset::collation_name(collation_type));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (names_set_node.is_set_names_) {
+          // SET NAMES
+          ObCollationType cs_coll_type = ObCharset::get_default_collation(ObCharset::charset_type(charset));
+          ObCollationType coll_type = ObCharset::collation_type(collation);
+          if (CS_TYPE_INVALID == cs_coll_type || CS_TYPE_INVALID == coll_type) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_ENG_LOG(ERROR, "cs coll type or coll type is invalid", K(ret), K(cs_coll_type), K(coll_type));
+          } else if (OB_FAIL(session->update_sys_variable(
+                         SYS_VAR_CHARACTER_SET_CLIENT, static_cast<int64_t>(cs_coll_type)))) {
+            SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+          } else if (OB_FAIL(session->update_sys_variable(
+                         SYS_VAR_CHARACTER_SET_RESULTS, static_cast<int64_t>(cs_coll_type)))) {
+            SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+          } else if (OB_FAIL(session->update_sys_variable(
+                         SYS_VAR_CHARACTER_SET_CONNECTION, static_cast<int64_t>(cs_coll_type)))) {
+            SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+          } else if (OB_FAIL(
+                         session->update_sys_variable(SYS_VAR_COLLATION_CONNECTION, static_cast<int64_t>(coll_type)))) {
+            SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));
+          }
+        } else {
+          // SET CHARACTER SET
+          ObObj database_charset;
+          ObObj database_collation;
+          ObCollationType cs_coll_type = ObCharset::get_default_collation(ObCharset::charset_type(charset));
+          if (OB_FAIL(session->get_sys_variable(SYS_VAR_CHARACTER_SET_DATABASE, database_charset))) {
+          } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_COLLATION_DATABASE, database_collation))) {
+          } else {
+            ObCollationType collation_connection = static_cast<ObCollationType>(database_collation.get_int());
+            ObCharsetType charset_connection = ObCharset::charset_type_by_coll(collation_connection);
+            if (!ObCharset::is_valid_connection_collation(collation_connection)) {
+              ret = OB_NOT_SUPPORTED;
+              SQL_ENG_LOG(WARN,
+                  "connection collation type not supported",
+                  "charset type",
+                  ObCharset::charset_name(charset_connection),
+                  "collation type",
+                  ObCharset::collation_name(collation_connection));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(
+                    session->update_sys_variable(SYS_VAR_CHARACTER_SET_CLIENT, static_cast<int64_t>(cs_coll_type)))) {
+              SQL_EXE_LOG(WARN, "failed to update sys var", K(ret));
+            } else if (OB_FAIL(session->update_sys_variable(
+                           SYS_VAR_CHARACTER_SET_RESULTS, static_cast<int64_t>(cs_coll_type)))) {
+              SQL_EXE_LOG(WARN, "failed to update sys var", K(ret));
+            } else if (OB_FAIL(session->update_sys_variable(SYS_VAR_CHARACTER_SET_CONNECTION, database_charset))) {
+              SQL_EXE_LOG(WARN, "failed to update sys var", K(ret));
+            } else if (OB_FAIL(session->update_sys_variable(SYS_VAR_COLLATION_CONNECTION, database_collation))) {
+              SQL_EXE_LOG(WARN, "failed to update sys var", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVariableSetExecutor::get_global_sys_var_character_set_client(
+    ObExecContext& ctx, ObString& character_set_client) const
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo* session = NULL;
+  ObIAllocator& allocator = ctx.get_allocator();
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVarSchema* var_schema = NULL;
+  ObObj value;
+  if (NULL == (session = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(ERROR, "session is NULL", K(ret), K(ctx));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(ERROR, "schema service is null");
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
+    SQL_ENG_LOG(WARN, "get schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(
+                 session->get_effective_tenant_id(), SYS_VAR_CHARACTER_SET_CLIENT, var_schema))) {
+    SQL_ENG_LOG(WARN, "get tenant system variable failed", K(ret));
+  } else if (OB_ISNULL(var_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "var_schema is null");
+  } else if (OB_FAIL(var_schema->get_value(&allocator, ObBasicSessionInfo::create_dtc_params(session), value))) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "get value from var_schema failed", K(ret), K(*var_schema));
+  } else if (ObIntType != value.get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(ERROR, "sys var character_set_client's type must be ObIntType", K(ret), K(value));
+  } else {
+    ObCollationType coll_type = static_cast<ObCollationType>(value.get_int());
+    if (!ObCharset::is_valid_collation(coll_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "invalid collation type", K(ret), K(coll_type));
+    } else {
+      const char* cs_name_ptr = ObCharset::charset_name(coll_type);
+      character_set_client = ObString(cs_name_ptr);
+    }
+  }
+  return ret;
+}
 #undef DEFINE_CAST_CTX
 
 }  // namespace sql

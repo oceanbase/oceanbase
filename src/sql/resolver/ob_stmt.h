@@ -594,6 +594,9 @@ public:
     return ret;
   }
 
+  template <>
+  int create_stmt<ObSelectStmt>(ObSelectStmt*& stmt);
+
   inline int free_stmt(ObSelectStmt* stmt)
   {
     int ret = common::OB_SUCCESS;

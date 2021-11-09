@@ -173,14 +173,14 @@ int ObSyncCmdDriver::process_schema_version_changes(const ObMySQLResultSet& resu
       if (result.get_stmt_type() == stmt::T_VARIABLE_SET) {
         const ObVariableSetStmt* set_stmt = static_cast<const ObVariableSetStmt*>(result.get_cmd());
         if (NULL != set_stmt) {
-          ObVariableSetStmt::VariableSetNode tmp_node;  // just for init node
+          ObVariableSetStmt::VariableNamesSetNode tmp_node;  // just for init node
           for (int64_t i = 0; OB_SUCC(ret) && i < set_stmt->get_variables_size(); ++i) {
-            ObVariableSetStmt::VariableSetNode& var_node = tmp_node;
+            ObVariableSetStmt::VariableNamesSetNode& var_node = tmp_node;
             ObString set_var_name(OB_SV_LAST_SCHEMA_VERSION);
             if (OB_FAIL(set_stmt->get_variable_node(i, var_node))) {
               LOG_WARN("fail to get_variable_node", K(i), K(ret));
-            } else {
-              if (ObCharset::case_insensitive_equal(var_node.variable_name_, set_var_name)) {
+            } else if (var_node.is_set_variable_) {
+              if (ObCharset::case_insensitive_equal(var_node.var_set_node_.variable_name_, set_var_name)) {
                 if (OB_FAIL(check_and_refresh_schema(tenant_id))) {
                   LOG_WARN("failed to check_and_refresh_schema", K(ret), K(tenant_id));
                 }

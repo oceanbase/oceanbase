@@ -16,7 +16,7 @@
 namespace oceanbase {
 using namespace common;
 namespace sql {
-int ObVariableSetStmt::get_variable_node(int64_t index, ObVariableSetStmt::VariableSetNode& var_node) const
+int ObVariableSetStmt::get_variable_node(int64_t index, ObVariableSetStmt::VariableNamesSetNode& var_node) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(index < 0 || index >= variable_nodes_.count())) {

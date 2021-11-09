@@ -984,7 +984,6 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet& result, bool& is_readonly)
     case stmt::T_SHOW_GRANTS:
     case stmt::T_SHOW_RECYCLEBIN:
     case stmt::T_USE_DATABASE:
-    case stmt::T_SET_NAMES:  // read only not restrict it
     case stmt::T_START_TRANS:
     case stmt::T_END_TRANS: {
       is_readonly = true;

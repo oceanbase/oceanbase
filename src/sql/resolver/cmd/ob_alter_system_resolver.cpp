@@ -3570,7 +3570,8 @@ int ObAlterSystemSetResolver::resolve(const ParseNode& parse_tree)
                   }
                 }
               }
-              if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+              if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(
+                                  ObVariableSetStmt::make_variable_name_node(var_node)))) {
                 LOG_WARN("Add set entry failed", K(ret));
               }
             }
