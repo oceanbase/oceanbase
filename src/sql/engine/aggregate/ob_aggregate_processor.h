@@ -543,7 +543,8 @@ public:
 
   const ObGroupRowItem* get(const ObGroupRowItem& item) const;
   int init(ObIAllocator* allocator, lib::ObMemAttr& mem_attr, ObEvalCtx* eval_ctx,
-      const common::ObIArray<ObCmpFunc>* cmp_funcs, int64_t initial_size = INITIAL_SIZE);
+      const common::ObIArray<ObCmpFunc>* cmp_funcs, ObSqlMemMgrProcessor *sql_mem_processor,
+      int64_t initial_size = INITIAL_SIZE);
 
 private:
   bool compare(const ObGroupRowItem& left, const ObGroupRowItem& right) const;
