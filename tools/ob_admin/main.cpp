@@ -18,6 +18,11 @@
 #include "ob_admin_executor.h"
 #include "clog_tool/ob_admin_clog_v2_executor.h"
 #include "usec_tool/ob_admin_usec_executor.h"
+#include "slog_tool/ob_admin_slog_executor.h"
+#include "dumpsst/ob_admin_dumpsst_executor.h"
+#include "dumpsst/ob_admin_cmp_micro_executor.h"
+#include "archive_tool/ob_admin_log_archive_executor.h"
+#include "backup_tool/ob_admin_dump_backup_data_executor.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::tools;
@@ -27,7 +32,11 @@ void print_usage()
   fprintf(stderr,
       "\nUSAGE:\n"
       "        ob_admin clog_tool\n"
-      "        ob_admin usec_tool\n");
+      "        ob_admin usec_tool\n"
+      "        ob_admin slog_tool\n"
+      "        ob_admin dumpsst\n"
+      "        ob_admin archive_tool\n"
+      "        ob_admin dump_backup\n");
 }
 
 int main(int argc, char *argv[])
@@ -51,6 +60,16 @@ int main(int argc, char *argv[])
       executor = new ObAdminClogV2Executor();
     } else if (0 == strcmp("usec_tool", argv[1])) {
       executor = new ObAdminUsecExecutor();
+    } else if (0 == strcmp("slog_tool", argv[1])) {
+      executor = new ObAdminSlogExecutor();
+    } else if (0 == strcmp("dumpsst", argv[1])) {
+      executor = new ObAdminDumpsstExecutor();
+    } else if (0 == strcmp("cmp_micro", argv[1])) {
+      executor = new ObAdminCmpMicroExecutor();
+    } else if (0 == strcmp("archive_tool", argv[1])) {
+      executor = new ObAdminLogArchiveExecutor();
+    } else if (0 == strcmp("dump_backup", argv[1])) {
+      executor = new ObAdminDumpBackupDataExecutor();
     } else {
       print_usage();
     }
