@@ -29,6 +29,8 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "storage/backup/ob_partition_backup_struct.h"
 #include "storage/backup/ob_partition_base_data_physical_restore_v2.h"
+#include "storage/ob_i_partition_component_factory.h"
+#include "share/backup/ob_backup_file_lock_mgr.h"
 
 namespace oceanbase {
 // TODO(): remove using
@@ -357,6 +359,7 @@ private:
   ObBackupCommonHeader* common_header_;
   const share::ObPhysicalBackupArg* backup_arg_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;
+  int32_t inner_error_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupFileAppender);
 };
 
@@ -467,6 +470,10 @@ public:
   bool is_opened() const
   {
     return is_opened_;
+  }
+  ObBackupDataType::BackupDataType get_backup_data_type() const
+  {
+    return backup_data_type_.type_;
   }
 
   TO_STRING_KV(K_(macro_block_count), K_(base_task_id), K_(retry_cnt), K_(task_turn), K_(index_merge_point), K_(result),
@@ -643,8 +650,36 @@ int ObBackupFileAppender::write(const T& backup_base, int64_t& write_size, bool&
       common_header_->data_length_ += write_size;
     }
   }
+
+  if (OB_FAIL(ret)) {
+    if (OB_SUCCESS == inner_error_) {
+      inner_error_ = ret;
+    }
+  }
   return ret;
 }
+
+class ObBackupMetaIndexReformer {
+public:
+  ObBackupMetaIndexReformer();
+  virtual ~ObBackupMetaIndexReformer();
+  int init(const ObBackupBaseDataPathInfo& path_info, share::ObIBackupLeaseService& backup_lease_service);
+  int upload_backup_meta_index(const common::ObIArray<ObBackupMetaIndex>& backup_meta_indexs);
+
+private:
+  int upload_backup_meta_index_(const common::ObIArray<ObBackupMetaIndex>& backup_meta_indexs);
+  int64_t get_buffer_size_(const common::ObIArray<ObBackupMetaIndex>& backup_meta_index);
+  int write_buf_(const common::ObIArray<ObBackupMetaIndex>& backup_meta_index, ObSelfBufferWriter& data_buffer);
+
+private:
+  bool is_inited_;
+  share::ObBackupFileSpinLock lock_;
+  share::ObIBackupLeaseService* backup_lease_service_;
+  ObBackupBaseDataPathInfo path_info_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupMetaIndexReformer);
+};
 
 }  // namespace storage
 }  // namespace oceanbase

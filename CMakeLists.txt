@@ -4,12 +4,13 @@ include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
 project("OceanBase CE"
-  VERSION 3.1.0
+  VERSION 3.1.1
   DESCRIPTION "OceanBase distributed database system"
   HOMEPAGE_URL "https://www.oceanbase.com/"
   LANGUAGES CXX C ASM)
 
 ob_define(WITH_OSS OFF)
+ob_define(ENABLE_FATAL_ERROR_HANG OFF)
 
 if(ENABLE_DEBUG_LOG)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_DEBUG_LOG")
@@ -19,6 +20,16 @@ endif()
 if(WITH_OSS)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_WITH_OSS")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_WITH_OSS")
+endif()
+
+if(OB_USE_ASAN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOB_USE_ASAN")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOB_USE_ASAN")
+endif()
+
+if (ENABLE_FATAL_ERROR_HANG)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DFATAL_ERROR_HANG")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFATAL_ERROR_HANG")
 endif()
 
 message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})

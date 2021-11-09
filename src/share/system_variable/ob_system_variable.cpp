@@ -69,7 +69,7 @@ ObSpecialSysVarValues::ObSpecialSysVarValues()
                  ObSpecialSysVarValues::VERSION_MAX_LEN,
                  pos,
                  "%s",
-                 PACKAGE_VERSION))) {
+                 PACKAGE_VERSION_INFO))) {
     LOG_ERROR("fail to print version to buff", K(ret));
   }
 
@@ -1809,7 +1809,16 @@ int ObSysVarOnCheckFuncs::check_and_convert_tx_isolation(ObExecContext& ctx, con
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Isolation level SERIALIZABLE not supported in system tenant");
     LOG_WARN("Isolation level SERIALIZABLE not supported in system tenant", K(ret), K(in_val));
   } else {
-    out_val = in_val;
+    if (OB_FAIL(ob_write_obj(ctx.get_allocator(), in_val, out_val))) {
+      LOG_WARN("deep copy out_val obj failed", K(ret));
+    }
+    ObString tmp_out_val = out_val.get_string();
+    if (OB_FAIL(ob_simple_low_to_up(ctx.get_allocator(),
+                                    in_val.get_string(),
+                                    tmp_out_val))) {
+      LOG_WARN("Isolation level change to upper string failed", K(ret));
+    }
+    out_val.set_varchar(tmp_out_val);
   }
   return ret;
 }

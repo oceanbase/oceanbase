@@ -119,6 +119,8 @@ public:
   ///         adjust to that number, i.e. there are such exact number
   ///         of threads are running if it has started, or would run
   ///         after call \c start() function.
+  int do_set_thread_count(int64_t n_threads);
+
   int set_thread_count(int64_t n_threads);
 
   int inc_thread_count(int64_t inc = 1);
@@ -205,16 +207,24 @@ CoKThreadTemp<Thread>::~CoKThreadTemp()
 }
 
 template <class Thread>
-int CoKThreadTemp<Thread>::inc_thread_count(int64_t inc)
+int CoKThreadTemp<Thread>::set_thread_count(int64_t n_threads)
 {
-  return set_thread_count(n_threads_ + inc);
+  common::SpinWLockGuard g(lock_);
+  return do_set_thread_count(n_threads);
 }
 
 template <class Thread>
-int CoKThreadTemp<Thread>::set_thread_count(int64_t n_threads)
+int CoKThreadTemp<Thread>::inc_thread_count(int64_t inc)
+{
+  common::SpinWLockGuard g(lock_);
+  int64_t n_threads = n_threads_ + inc;
+  return do_set_thread_count(n_threads);
+}
+
+template <class Thread>
+int CoKThreadTemp<Thread>::do_set_thread_count(int64_t n_threads)
 {
   int ret = common::OB_SUCCESS;
-  common::SpinWLockGuard g(lock_);
   if (!stop_) {
     if (n_threads < n_threads_) {
       for (auto i = n_threads; i < n_threads_; i++) {
@@ -234,11 +244,11 @@ int CoKThreadTemp<Thread>::set_thread_count(int64_t n_threads)
       if (new_threads == nullptr) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
       } else {
-        MEMSET(new_threads, 0, sizeof(Thread*) * n_threads);
-        MEMCPY(new_threads, threads_, sizeof(Thread*) * n_threads_);
+        MEMCPY(new_threads, threads_, sizeof(Thread *) * n_threads_);
         for (auto i = n_threads_; i < n_threads; i++) {
           Thread* thread = nullptr;
           if (OB_FAIL(create_thread(thread, [this, i] { this->run(i); }))) {
+            n_threads = i;
             break;
           } else {
             new_threads[i] = thread;

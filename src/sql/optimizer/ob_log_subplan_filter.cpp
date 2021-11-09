@@ -706,3 +706,12 @@ int ObLogSubPlanFilter::compute_one_row_info()
   }
   return ret;
 }
+
+int ObLogSubPlanFilter::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post(first_child))) {
+    LOG_WARN("failed to allocate startup expr post", K(ret));
+  }
+  return ret;
+}

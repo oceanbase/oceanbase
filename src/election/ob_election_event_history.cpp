@@ -19,12 +19,12 @@ using namespace common;
 namespace election {
 //  caution:
 //    the limit of name field is 32 bytes
-const char* const ObElectionEventHistory::EVENT_NAME_STR[EVENT_MAX] = {"invalid event",
-    "leader takevoer",
-    "leader takevoer",
-    "leader takevoer",
-    "leader takevoer",
-    "leader takevoer",
+const char *const ObElectionEventHistory::EVENT_NAME_STR[EVENT_MAX] = {"invalid event",
+    "leader takeover",
+    "leader takeover",
+    "leader takeover",
+    "leader takeover",
+    "leader takeover",
     "leader revoke",
     "leader revoke",
     "leader revoke"};

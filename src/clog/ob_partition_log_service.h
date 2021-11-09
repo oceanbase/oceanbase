@@ -249,7 +249,7 @@ public:
   virtual common::ObPartitionKey get_partition_key() const = 0;
   virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const = 0;
   virtual int get_leader(common::ObAddr& leader) const = 0;
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const = 0;
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const = 0;
   virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) = 0;
   virtual int change_restore_leader(const common::ObAddr& leader) = 0;
   virtual int check_and_set_restore_progress() = 0;
@@ -272,7 +272,8 @@ public:
       const common::ObProposalID& proposal_id, const ObPushLogMode push_mode, const ReceiveLogType type) = 0;
   virtual int receive_renew_ms_log(const ObLogEntry& log_entry, const ObAddr& server, const int64_t cluster_id,
       const ObProposalID& proposal_id, const ReceiveLogType type) = 0;
-  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed) = 0;
+  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_accum_checksum_valid,
+      const int64_t accum_checksum, const bool is_batch_committed) = 0;
   virtual int ack_log(const common::ObAddr& server, const uint64_t log_id, const common::ObProposalID& proposal_id) = 0;
   virtual int standby_ack_log(
       const ObAddr& server, const int64_t cluster_id, const uint64_t log_id, const ObProposalID& proposal_id) = 0;
@@ -318,6 +319,7 @@ public:
   virtual int leader_keepalive(const int64_t keepalive_interval) = 0;
   virtual int sync_log_archive_progress() = 0;
   virtual int get_log_archive_status(ObPGLogArchiveStatus& status) = 0;
+  virtual int check_log_exist(const uint64_t log_id, bool& exist) = 0;
   virtual int check_cascading_state() = 0;
   virtual int archive_checkpoint(const int64_t interval) = 0;
   virtual int set_next_index_log_id(const uint64_t log_id, const int64_t accum_checksum) = 0;
@@ -521,7 +523,7 @@ public:
   virtual common::ObPartitionKey get_partition_key() const override;
   virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const override;
   virtual int get_leader(common::ObAddr& addr) const override;
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const override;
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const;
   virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) override;
   virtual int change_restore_leader(const common::ObAddr& leader) override;
   virtual int check_and_set_restore_progress() override;
@@ -545,7 +547,8 @@ public:
       const common::ObProposalID& proposal_id, const ObPushLogMode push_mode, const ReceiveLogType type) override;
   virtual int receive_renew_ms_log(const ObLogEntry& log_entry, const ObAddr& server, const int64_t cluster_id,
       const ObProposalID& proposal_id, const ReceiveLogType type) override;
-  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed) override;
+  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_accum_checksum_valid,
+      const int64_t accum_checksum, const bool is_batch_committed) override;
   virtual int ack_log(
       const common::ObAddr& server, const uint64_t log_id, const common::ObProposalID& proposal_id) override;
   virtual int standby_ack_log(
@@ -595,6 +598,7 @@ public:
   virtual int leader_keepalive(const int64_t keepalive_interval) override;
   virtual int sync_log_archive_progress() override;
   virtual int get_log_archive_status(ObPGLogArchiveStatus& status) override;
+  virtual int check_log_exist(const uint64_t log_id, bool& exist);
   virtual int check_cascading_state() override;
   virtual int archive_checkpoint(const int64_t interval) override;
   virtual int set_next_index_log_id(const uint64_t log_id, const int64_t accum_checksum) override;

@@ -852,6 +852,7 @@ size_t ObCharset::sortkey(ObCollationType collation_type, const char* str, int64
         OB_MAX_WEIGHT,
         reinterpret_cast<const unsigned char*>(str),
         str_len,
+        0,
         &is_valid_unicode_tmp);
     is_valid_unicode = is_valid_unicode_tmp;
   }
@@ -2235,13 +2236,33 @@ int ObCharset::charset_convert(ObIAllocator& alloc, const ObString& in, const Ob
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid collation type", K(ret), K(src_cs_type), K(dst_cs_type));
   } else {
-    if (0 == in.length() || charset_type_by_coll(src_cs_type) == charset_type_by_coll(dst_cs_type)) {
+    if (0 == in.length()
+        || charset_type_by_coll(src_cs_type) == charset_type_by_coll(dst_cs_type)
+        || charset_type_by_coll(dst_cs_type) == CHARSET_BINARY) {
       if (!(convert_flag & COPY_STRING_ON_SAME_CHARSET)) {
         out = in;
       } else {
         if (OB_FAIL(ob_write_string(alloc, in, out))) {
           LOG_WARN("fail to write string", K(ret), K(in));
         }
+      }
+    } else if (charset_type_by_coll(src_cs_type) == CHARSET_BINARY) {
+      char *buf = nullptr;
+      int32_t align_offset = 0;
+      int32_t res_buf_len = 0;
+      int mbminlen = ObCharset::get_charset(dst_cs_type)->mbminlen;
+      if (mbminlen > 0 && in.length() % mbminlen != 0) {
+        align_offset = mbminlen - in.length() % mbminlen;
+      }
+      res_buf_len = in.length() + align_offset;
+      if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(res_buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        out.reset();
+        LOG_WARN("allocate memory failed", K(ret), K(in), K(align_offset));
+      } else {
+        MEMCPY(buf + align_offset, in.ptr(), in.length());
+        MEMSET(buf, 0, align_offset);
+        out.assign_ptr(buf, res_buf_len);
       }
     } else {
       const uint32_t res_buf_len = in.length() * 4;

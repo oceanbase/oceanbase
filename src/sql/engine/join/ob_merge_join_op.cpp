@@ -103,6 +103,8 @@ int ObMergeJoinOp::inner_open()
   } else if (OB_FAIL(left_fetcher_.init(*left_, ctx_.get_allocator(), &left_row_joined_)) ||
              OB_FAIL(right_fetcher_.init(*right_, ctx_.get_allocator(), NULL))) {
     LOG_WARN("init row fetcher failed", K(ret));
+  } else {
+    LOG_TRACE("merge join left unique", K(MY_SPEC.id_), K(MY_SPEC.is_left_unique_));
   }
   return ret;
 }

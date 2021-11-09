@@ -244,18 +244,17 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray& range_colu
         }
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(normalize_range_graph(root))) {
-        LOG_WARN("normalize range graph failed", K(ret));
+    if (OB_SUCC(ret) && NULL != root) {
+      if (OB_FAIL(refine_large_range_graph(root))) {
+        LOG_WARN("failed to refine large range graph", K(ret));
+      } else {
+        SQL_REWRITE_LOG(DEBUG, "root key part", K(*root));
+        int64_t max_pos = -1;
+        table_graph_.key_part_head_ = root;
+        table_graph_.is_standard_range_ = is_standard_graph(root);
+        OZ(is_strict_equal_graph(root, 0, max_pos, table_graph_.is_equal_range_));
+        OZ(check_graph_type());
       }
-    }
-    if (OB_SUCC(ret) && root != NULL) {
-      SQL_REWRITE_LOG(DEBUG, "root key part", K(*root));
-      int64_t max_pos = -1;
-      table_graph_.key_part_head_ = root;
-      table_graph_.is_standard_range_ = is_standard_graph(root);
-      OZ(is_strict_equal_graph(root, 0, max_pos, table_graph_.is_equal_range_));
-      OZ(check_graph_type());
     }
   }
   if (OB_SUCC(ret)) {
@@ -338,10 +337,10 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray& range_colu
   if (OB_SUCC(ret)) {
     if (OB_FAIL(and_range_graph(and_ranges, temp_result))) {
       LOG_WARN("And query range failed", K(ret));
-    } else if (OB_FAIL(normalize_range_graph(temp_result))) {
-      LOG_WARN("normalize range graph failed", K(ret));
     } else if (NULL == temp_result) {
       // no range left
+    } else if (OB_FAIL(refine_large_range_graph(temp_result))) {
+      LOG_WARN("failed to refine large range graph", K(ret));
     } else {
       int64_t max_pos = -1;
       table_graph_.key_part_head_ = temp_result;
@@ -369,7 +368,165 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray& range_colu
   return ret;
 }
 
-int ObQueryRange::is_get(bool& is_range_get) const
+// if the range size is large then RANGE_MAX_SIZE, remove some ranges according to pos_.offset_
+int ObQueryRange::refine_large_range_graph(ObKeyPart *&key_part)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObKeyPart*, 8> pre_key_parts;
+  ObSEArray<ObKeyPart*, 8> key_parts;
+  ObSEArray<uint64_t, 8> or_count;
+  ObSEArray<ObKeyPart*, 8> next_key_parts;
+  ObSEArray<uint64_t, 8> next_or_count;
+  uint64_t cur_range_size = 1;
+  bool need_refine = false;
+  if (OB_ISNULL(key_part)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("keypart is null", K(ret), K(key_part));
+  } else if (OB_FAIL(key_parts.push_back(key_part)) ||
+             OB_FAIL(next_key_parts.push_back(key_part))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(or_count.push_back(1))) {
+    LOG_WARN("failed to push back", K(ret));
+  }
+  while (OB_SUCC(ret) && !next_key_parts.empty() && !need_refine) {
+    if (OB_FAIL(compute_range_size(key_parts, or_count, next_key_parts, next_or_count,
+                                   cur_range_size))) {
+      LOG_WARN("failed to compute range size", K(ret));
+    } else if (cur_range_size > MAX_RANGE_SIZE) {
+      need_refine = true;
+    } else if (OB_FAIL(pre_key_parts.assign(key_parts))) {
+      LOG_WARN("failed to assign array", K(ret), K(key_parts));
+    } else if (OB_FAIL(key_parts.assign(next_key_parts))) {
+      LOG_WARN("failed to assign array", K(ret), K(next_key_parts));
+    } else if (OB_FAIL(or_count.assign(next_or_count))) {
+      LOG_WARN("failed to assign array", K(ret), K(next_or_count));
+    } else { /* do nothing */ }
+  }
+  if (OB_SUCC(ret) && need_refine) {
+    if (pre_key_parts.empty()) {
+      // first or_next_ list size is large than RANGE_MAX_SIZE, create a full key part
+      ObKeyPart *new_key = NULL;
+      if (OB_FAIL(alloc_full_key_part(new_key))) {
+        LOG_WARN("alloc full key part failed", K(ret));
+      } else if (OB_ISNULL(new_key)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("keypart is null");
+      } else if (OB_FAIL(remove_precise_range_expr(0))) {
+        LOG_WARN("remove precise range expr failed", K(ret));
+      } else {
+        new_key->id_ = key_part->id_;
+        key_part = new_key;
+        LOG_TRACE("refine lagre query range with full key", K(cur_range_size));
+      }
+    } else if (OB_ISNULL(pre_key_parts.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected input", K(ret), K(pre_key_parts));
+    } else if (OB_FAIL(remove_precise_range_expr(pre_key_parts.at(0)->pos_.offset_ + 1))) {
+      LOG_WARN("remove precise range expr failed", K(ret));
+    } else {
+      // remove key part after pre key parts
+      LOG_TRACE("refine lagre query range remove some key parts",  K(cur_range_size),
+                                                            K(pre_key_parts.at(0)->pos_.offset_));
+      ObKeyPart *cur = NULL;;
+      ObKeyPart *and_next = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < pre_key_parts.count(); ++i) {
+        cur = pre_key_parts.at(i);
+        while (NULL != cur) {
+          if (NULL == cur->and_next_) {
+            cur = cur->or_next_;
+          } else {
+            and_next = cur->and_next_;
+            while (NULL != cur && cur->and_next_ == and_next) {
+              cur->and_next_ = NULL;
+              cur = cur->or_next_;
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::compute_range_size(const ObIArray<ObKeyPart*> &key_parts,
+                                     const ObIArray<uint64_t> &or_count,
+                                     ObIArray<ObKeyPart*> &next_key_parts,
+                                     ObIArray<uint64_t> &next_or_count,
+                                     uint64_t &range_size)
+{
+  int ret = OB_SUCCESS;
+  next_key_parts.reuse();
+  next_or_count.reuse();
+  ObKeyPart *pre = NULL;
+  ObKeyPart *cur = NULL;
+  uint64_t count = 0;
+  if (OB_UNLIKELY(key_parts.empty()) || OB_UNLIKELY(key_parts.count() != or_count.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected input", K(ret), K(key_parts.count()), K(or_count.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < key_parts.count(); ++i) {
+    if (OB_ISNULL(pre = key_parts.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i), K(key_parts.at(i)));
+    } else {
+      range_size -= or_count.at(i);
+      cur = pre->or_next_;
+      count = 1;
+    }
+    while (OB_SUCC(ret) && NULL != pre) {
+      if (NULL != cur && cur->and_next_ == pre->and_next_) {
+        cur = cur->or_next_;
+        ++count;
+      } else if (NULL != pre->and_next_ &&
+                 OB_FAIL(next_key_parts.push_back(pre->and_next_))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (NULL != pre->and_next_ &&
+                 OB_FAIL(next_or_count.push_back(or_count.at(i) * count))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        range_size += or_count.at(i) * count;
+        pre = cur;
+        cur = NULL != cur ? cur->or_next_ : NULL;
+        count = 1;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::is_at_most_one_row(bool &is_one_row) const
+{
+  int ret = OB_SUCCESS;
+  is_one_row = true;
+  if (NULL == table_graph_.key_part_head_) {
+    is_one_row = false;
+  } else if (OB_FAIL(check_is_at_most_one_row(*table_graph_.key_part_head_, 0,
+                                              column_count_, is_one_row))) {
+    LOG_WARN("failed to check is get", K(ret));
+  }
+  return ret;
+}
+
+int ObQueryRange::check_is_at_most_one_row(ObKeyPart &key_part,
+                                           const int64_t depth,
+                                           const int64_t column_count,
+                                           bool &bret) const
+{
+  int ret = OB_SUCCESS;
+  if (key_part.pos_.offset_ != depth
+      || !key_part.is_equal_condition()
+      || NULL != key_part.or_next_) {
+    bret = false;
+  } else if (NULL != key_part.and_next_) {
+    ret = SMART_CALL(check_is_at_most_one_row(*key_part.and_next_,
+                                              depth + 1, column_count, bret));
+  } else if (depth < column_count - 1) {
+    bret = false;
+  }
+  return ret;
+}
+
+int ObQueryRange::is_get(bool &is_range_get) const
 {
   return is_get(column_count_, is_range_get);
 }
@@ -2995,7 +3152,9 @@ int ObQueryRange::definite_in_range_graph(
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status fail", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to do stack overflow check", K(ret));
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
@@ -3012,7 +3171,8 @@ int ObQueryRange::definite_in_range_graph(
     if (!root->is_equal_condition()) {
       has_scan_key = true;
     }
-    if (NULL != root->and_next_) {
+    if (NULL != root->and_next_ && (NULL == root->or_next_ ||
+                                    root->or_next_->and_next_ != root->and_next_)) {
       if (OB_FAIL(SMART_CALL(definite_in_range_graph(params, root->and_next_, has_scan_key, dtc_params)))) {
         LOG_WARN("definite and_next_ key part failed", K(ret));
       }
@@ -3428,7 +3588,9 @@ int ObQueryRange::and_first_search(ObSearchState& search_state, ObKeyPart* cur, 
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+  if (OB_UNLIKELY(THIS_WORKER.check_status())) {
+    LOG_WARN("check status fail", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to do stack overflow check", K(ret));
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
@@ -3880,6 +4042,8 @@ int ObQueryRange::get_tablet_ranges(
     ObQueryRangeArray& ranges, ObGetMethodArray& get_methods, const ObDataTypeCastParams& dtc_params)
 {
   int ret = OB_SUCCESS;
+  int64_t last_mem_usage = allocator_.total();
+  int64_t query_range_mem_usage = 0;
   ObSearchState search_state(allocator_);
 
   ranges.reset();
@@ -3940,7 +4104,10 @@ int ObQueryRange::get_tablet_ranges(
     }
   }
   if (OB_SUCC(ret)) {
-    SQL_REWRITE_LOG(DEBUG, "get range success", K(ranges));
+    query_range_mem_usage = allocator_.total() - last_mem_usage;
+    LOG_TRACE("[SQL MEM USAGE] query range memory usage", K(query_range_mem_usage),
+                                                          K(last_mem_usage));
+    LOG_TRACE("get range success", K(ranges));
     if (table_graph_.is_equal_range_) {
       search_state.range_set_.destroy();
     }
@@ -4839,8 +5006,10 @@ int ObQueryRange::is_strict_equal_graph(
   } else {
     // and direction
     if (NULL != node->and_next_) {
-      OZ(SMART_CALL(is_strict_equal_graph(node->and_next_, cur_pos + 1, max_pos, is_strict_equal)));
-    } else {  // check alignment
+      if (NULL == node->or_next_ || node->or_next_->and_next_ != node->and_next_) {
+        OZ(SMART_CALL(is_strict_equal_graph(node->and_next_, cur_pos + 1, max_pos, is_strict_equal)));
+      }
+    } else { // check alignment
       if (-1 == max_pos) {
         max_pos = cur_pos;
       } else if (cur_pos != max_pos) {
@@ -5007,23 +5176,6 @@ bool ObQueryRange::has_scan_key(const ObKeyPart& keypart) const
     }
   }
   return bret;
-}
-
-int ObQueryRange::normalize_range_graph(ObKeyPart*& keypart)
-{
-  int ret = OB_SUCCESS;
-  ObKeyPart* full_key = NULL;
-  if (keypart != NULL && keypart->pos_.offset_ > 0) {
-    if (OB_FAIL(alloc_full_key_part(full_key))) {
-      LOG_WARN("alloc full key part failed", K(ret));
-    } else if (OB_ISNULL(full_key)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("keypart is null");
-    } else {
-      full_key->id_ = keypart->id_;
-    }
-  }
-  return ret;
 }
 
 void ObQueryRange::check_like_range_precise(

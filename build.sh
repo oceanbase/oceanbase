@@ -116,7 +116,7 @@ function build
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug
         ;;
       xrpm)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_CCACHE=OFF -DOB_COMPRESS_DEBUG_SECTIONS=ON -DOB_STATIC_LINK_LGPL_DEPS=OFF -DOB_ENABLE_PCH=OFF -DOB_ENALBE_UNITY=OFF
+        do_build "$@" -DOB_BUILD_LIBOBLOG=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_CCACHE=OFF -DOB_COMPRESS_DEBUG_SECTIONS=ON -DOB_STATIC_LINK_LGPL_DEPS=OFF
         ;;
       *)
         BUILD_ARGS=(debug "${BUILD_ARGS[@]}")

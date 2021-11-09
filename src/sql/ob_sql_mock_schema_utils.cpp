@@ -192,7 +192,7 @@ int ObSQLMockSchemaUtils::mock_rowid_index(
     rowid_idx_schema.set_tablegroup_id(OB_INVALID_ID);
     rowid_idx_schema.set_table_type(USER_INDEX);
     rowid_idx_schema.set_index_type(INDEX_TYPE_UNIQUE_LOCAL);
-    rowid_idx_schema.set_index_using_type(USING_BTREE);
+    rowid_idx_schema.set_index_using_type(USING_HASH); //set as USING_HASH, can not offer ordering.
     rowid_idx_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
     rowid_idx_schema.set_def_type(TABLE_DEF_TYPE_USER);
     rowid_idx_schema.set_rowkey_column_num(base_table_schema->get_rowkey_column_num() + 1);

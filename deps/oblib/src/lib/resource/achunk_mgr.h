@@ -46,13 +46,22 @@ public:
         pushes_(0),
         pops_(0),
         with_mutex_(with_mutex)
-  {}
+  {
+#ifdef OB_USE_ASAN
+    max_chunk_cache_cnt_ = 0;
+#endif
+  }
   virtual ~AChunkList()
   {}
 
   void set_max_chunk_cache_cnt(const int cnt)
   {
+#ifdef OB_USE_ASAN
+    UNUSED(cnt);
+    max_chunk_cache_cnt_ = 0;
+#else
     max_chunk_cache_cnt_ = cnt;
+#endif
   }
 
   inline bool push(AChunk* chunk)

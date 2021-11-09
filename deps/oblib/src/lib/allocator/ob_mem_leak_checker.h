@@ -87,7 +87,7 @@ public:
   {
     return LABEL_CHECK == ct_;
   }
-  int get_static_id() const
+  int64_t get_static_id() const
   {
     return static_id_;
   }
@@ -118,7 +118,8 @@ public:
       char* end = (char*)memchr(cpy, '@', strlen(cpy));
       if (end != nullptr) {
         tmp_ct = CONTEXT_CHECK;
-        static_id_ = atoi(end + 1);
+        static_id_ = 0;
+        sscanf(end + 1, "0x%lx", &static_id_);
         *end = '\0';
         is_wildcard_ = 0 == STRCMP("*", cpy);
       } else {
@@ -278,7 +279,7 @@ private:
     char label_[lib::AOBJECT_LABEL_SIZE + 1];
   };
   CheckType ct_;
-  int static_id_;
+  int64_t static_id_;
   bool is_wildcard_;
   int len_;
   mod_alloc_info_t malloc_info_;

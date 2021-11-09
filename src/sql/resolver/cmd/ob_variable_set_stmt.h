@@ -41,6 +41,47 @@ public:
     ObRawExpr* value_expr_;
     bool is_set_default_;
   };
+  class NamesSetNode {
+  public:
+    NamesSetNode()
+        : is_set_names_(true),
+          is_default_charset_(true),
+          is_default_collation_(true),
+          charset_(),
+          collation_()
+    {}
+    virtual ~NamesSetNode()
+    {}
+    TO_STRING_KV(K_(is_set_names), K_(is_default_charset), K_(is_default_collation), K_(charset), K_(collation));
+
+    bool is_set_names_;  // SET NAMES or SET CHARSET?
+    bool is_default_charset_;
+    bool is_default_collation_;
+    common::ObString charset_;
+    common::ObString collation_;
+  };
+
+  class VariableNamesSetNode {
+  public:
+    VariableNamesSetNode()
+      : is_set_variable_(true),
+        var_set_node_(),
+        names_set_node_()
+    {}
+    VariableNamesSetNode(bool is_set_variable, const VariableSetNode &var_node,
+          const NamesSetNode &names_node)
+        : is_set_variable_(is_set_variable),
+          var_set_node_(var_node),
+          names_set_node_(names_node)
+    {}
+    virtual ~VariableNamesSetNode()
+    {}
+    TO_STRING_KV(K_(is_set_variable), K_(var_set_node), K_(names_set_node));
+
+    bool is_set_variable_; // set variables or set names
+    VariableSetNode var_set_node_;
+    NamesSetNode names_set_node_;
+  };
 
   ObVariableSetStmt()
       : ObDDLStmt(stmt::T_VARIABLE_SET),
@@ -51,6 +92,12 @@ public:
   virtual ~ObVariableSetStmt()
   {}
 
+  static inline VariableNamesSetNode make_variable_name_node(VariableSetNode& var_set_node) {
+    return VariableNamesSetNode(true, var_set_node, NamesSetNode());
+  }
+  static inline VariableNamesSetNode make_variable_name_node(NamesSetNode& names_set_node) {
+    return VariableNamesSetNode(false, VariableSetNode(), names_set_node);
+  }
   inline void set_actual_tenant_id(uint64_t actual_tenant_id)
   {
     actual_tenant_id_ = actual_tenant_id;
@@ -59,9 +106,9 @@ public:
   {
     return actual_tenant_id_;
   }
-  inline int add_variable_node(const VariableSetNode& node);
+  inline int add_variable_node(const VariableNamesSetNode& node);
   inline int64_t get_variables_size() const;
-  int get_variable_node(int64_t index, VariableSetNode& node) const;
+  int get_variable_node(int64_t index, VariableNamesSetNode& node) const;
   inline void set_has_global_variable(bool has_global_variable)
   {
     has_global_variable_ = has_global_variable;
@@ -86,7 +133,7 @@ public:
     return false;
   }
 
-  const common::ObIArray<VariableSetNode>& get_variable_nodes() const
+  const common::ObIArray<VariableNamesSetNode>& get_variable_nodes() const
   {
     return variable_nodes_;
   }
@@ -98,13 +145,13 @@ public:
 
 private:
   uint64_t actual_tenant_id_;
-  common::ObArray<VariableSetNode, common::ModulePageAllocator, true> variable_nodes_;
+  common::ObArray<VariableNamesSetNode, common::ModulePageAllocator, true> variable_nodes_;
   bool has_global_variable_;
   obrpc::ObModifySysVarArg modify_sysvar_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetStmt);
 };
 
-inline int ObVariableSetStmt::add_variable_node(const VariableSetNode& node)
+inline int ObVariableSetStmt::add_variable_node(const VariableNamesSetNode& node)
 {
   return variable_nodes_.push_back(node);
 }

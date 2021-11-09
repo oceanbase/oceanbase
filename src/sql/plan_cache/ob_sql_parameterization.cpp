@@ -538,7 +538,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx& ctx, const ObSQLSess
           }
 
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(mark_tree(ctx.tree_))) {
+            if (OB_FAIL(mark_tree(ctx.tree_ , *ctx.sql_info_))) {
               SQL_PC_LOG(WARN, "fail to mark function tree", K(ctx.tree_), K(ret));
             }
           }
@@ -593,12 +593,17 @@ int ObSqlParameterization::check_and_generate_param_info(
   if (sql_info.total_ != raw_params.count()) {
     ret = OB_NOT_SUPPORTED;
 #if !defined(NDEBUG)
-    SQL_PC_LOG(ERROR,
+    if ( sql_info.sql_traits_.has_weight_string_func_stmt_ ) {
+      // do nothing
+    }
+    else {
+      SQL_PC_LOG(ERROR,
         "const number of fast parse and normal parse is different",
         "fast_parse_const_num",
         raw_params.count(),
         "normal_parse_const_num",
         sql_info.total_);
+    }
 #endif
   }
   ObPCParam* pc_param = NULL;
@@ -1059,7 +1064,7 @@ int ObSqlParameterization::mark_args(ParseNode* arg_tree, const bool* mark_arr, 
 // After mark this node, it has following mechanism:
 //       If a node is marked as cannot be parameterized,
 //       CUREENT NODE AND ALL NODES OF IT'S SUBTREE cannot be parameterized.
-int ObSqlParameterization::mark_tree(ParseNode* tree)
+int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
 {
   int ret = OB_SUCCESS;
   if (NULL == tree) {
@@ -1085,6 +1090,14 @@ int ObSqlParameterization::mark_tree(ParseNode* tree)
         bool mark_arr[ARGS_NUMBER_THREE] = {0, 1, 1};
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_THREE))) {
           SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+        }
+      }else if (0 == func_name.case_compare("weight_string")
+          && (5 == node[1]->num_child_)) {
+        const int64_t ARGS_NUMBER_FIVE = 5;
+        bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1}; //0表示参数化, 1 表示不参数化
+        sql_info.sql_traits_.has_weight_string_func_stmt_ = true;
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_FIVE))) {
+          SQL_PC_LOG(WARN, "fail to mark weight_string arg", K(ret));
         }
       } else if ((0 == func_name.case_compare("str_to_date")        // STR_TO_DATE(str,format)
                      || 0 == func_name.case_compare("date_format")  // DATE_FORMAT(date,format)
@@ -1252,14 +1265,14 @@ int ObSqlParameterization::get_select_item_param_info(
           SQL_PC_LOG(
               WARN, "invalid null children", K(ret), K(stack_frames.at(frame_idx).cur_node_->children_), K(frame_idx));
         } else {
-          TraverseStackFrame& frame = stack_frames.at(frame_idx);
+          TraverseStackFrame frame = stack_frames.at(frame_idx);
           for (int64_t i = frame.next_child_idx_; OB_SUCC(ret) && i < frame.cur_node_->num_child_; i++) {
             if (OB_ISNULL(frame.cur_node_->children_[i])) {
-              frame.next_child_idx_ = i + 1;
+              stack_frames.at(frame_idx).next_child_idx_ = i + 1;
             } else if (OB_FAIL(stack_frames.push_back(TraverseStackFrame{frame.cur_node_->children_[i], 0}))) {
               LOG_WARN("failed to push back eleemnt", K(ret));
             } else {
-              frame.next_child_idx_ = i + 1;
+              stack_frames.at(frame_idx).next_child_idx_ = i + 1;
               LOG_DEBUG("after pushing frame", K(stack_frames));
               break;
             }

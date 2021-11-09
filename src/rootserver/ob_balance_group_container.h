@@ -31,7 +31,7 @@ namespace oceanbase {
 
 namespace share {
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObSchemaGetterGuard;
 class ObPartition;
 }  // namespace schema
@@ -53,19 +53,24 @@ public:
       const share::schema::ObPartitionSchema& other, share::schema::ObSchemaGetterGuard& schema_guard, bool& same);
   static int check_same_primary_zone(const common::ObIArray<const share::schema::ObPartitionSchema*>& partition_schemas,
       share::schema::ObSchemaGetterGuard& schema_guard, bool& same);
-  static int check_same_primary_zone(const common::ObIArray<const share::schema::ObTableSchema*>& partition_schemas,
+  static int check_same_primary_zone(
+      const common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& partition_schemas,
       share::schema::ObSchemaGetterGuard& schema_guard, bool& same);
   static bool is_same_partition_schema(
-      const share::schema::ObTableSchema& ref, const share::schema::ObTableSchema& other);
-  static bool is_same_schema_partition_key_info(const common::ObRowkeyInfo& left, const common::ObRowkeyInfo& right);
-  static bool is_one_level_and_partition_by_range(common::ObIArray<const share::schema::ObTableSchema*>& schemas);
+      const share::schema::ObSimpleTableSchemaV2& ref, const share::schema::ObSimpleTableSchemaV2& other);
+  /*
+  static bool is_same_schema_partition_key_info(const common::ObRowkeyInfo &left,
+                                                const common::ObRowkeyInfo &right);
+                                                */
+  static bool is_one_level_and_partition_by_range(
+      common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& schemas);
 };
 
 class ShardGroupValidator {
 public:
   static int check_table_schemas_compatible(ITenantStatFinder& stat_finder,
       share::schema::ObSchemaGetterGuard& schema_guard,
-      const common::ObIArray<const share::schema::ObTableSchema*>& tables, bool& compatible,
+      const common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& tables, bool& compatible,
       const bool check_primary_zone = false);
 };
 
@@ -118,7 +123,7 @@ public:
   int build() override;
 
 private:
-  int build_partition_table_container(const share::schema::ObTableSchema* table_schema);
+  int build_partition_table_container(const share::schema::ObSimpleTableSchemaV2* table_schema);
 };
 
 class NonPartitionTableContainerBuilder : public IBalanceGroupContainerBuilder {
@@ -178,29 +183,30 @@ private:
   typedef common::hash::ObHashMap<common::ObRowkey, SameRangeArray*> SameRangeMap;
   class TableSchemaPartitionCntCmp {
   public:
-    TableSchemaPartitionCntCmp(common::ObArray<const share::schema::ObTableSchema*>& shardgroup_schemas)
+    TableSchemaPartitionCntCmp(common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_schemas)
         : shardgroup_schemas_(shardgroup_schemas), ret_(common::OB_SUCCESS)
     {}
     int sort();
 
   public:
-    bool operator()(const share::schema::ObTableSchema* l, const share::schema::ObTableSchema* r);
+    bool operator()(const share::schema::ObSimpleTableSchemaV2* l, const share::schema::ObSimpleTableSchemaV2* r);
 
   private:
-    common::ObArray<const share::schema::ObTableSchema*>& shardgroup_schemas_;
+    common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_schemas_;
     int ret_;
   };
 
 private:
-  int build_shardgroup_container(common::ObArray<const share::schema::ObTableSchema*>& shardgroup_table_schemas);
+  int build_shardgroup_container(
+      common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_table_schemas);
   int build_one_level_range_shard_partition_container(
-      common::ObArray<const share::schema::ObTableSchema*>& shardgroup_table_schemas, const bool primary_zone_match,
-      const common::ObZone& integrated_primary_zone);
+      common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_table_schemas,
+      const bool primary_zone_match, const common::ObZone& integrated_primary_zone);
   int build_shardgroup_partition_container(
-      common::ObArray<const share::schema::ObTableSchema*>& shargroup_table_schemas, const bool primary_zone_match,
-      const common::ObZone& integrated_primary_zone);
+      common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shargroup_table_schemas,
+      const bool primary_zone_match, const common::ObZone& integrated_primary_zone);
   int set_same_range_array(SameRangeMap& same_range_map, const share::schema::ObPartition& partition,
-      const int64_t part_idx, const share::schema::ObTableSchema& table_schema);
+      const int64_t part_idx, const share::schema::ObSimpleTableSchemaV2& table_schema);
   int locate_same_range_array(
       SameRangeMap& same_range_map, const share::schema::ObPartition& partition, SameRangeArray*& same_range_array);
   int do_build_one_level_range_partition_container(SameRangeMap& same_range_map, const uint64_t base_index_group_id,

@@ -379,8 +379,7 @@ public:
   MOCK_METHOD0(clear, void());
   MOCK_METHOD1(get_merge_log_ts, int(int64_t& merge_log_ts));
   MOCK_METHOD2(check_ready_for_split, int(const ObPartitionArray& src_pkeys, bool& is_ready));
-  MOCK_METHOD2(
-      clear_trans_after_restore_log, int(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts));
+  MOCK_METHOD2(clear_trans_after_restore_log, int(const uint64_t last_restore_log_id, const int64_t last_restore_log_ts));
   MOCK_METHOD0(reset_for_replay, int());
   MOCK_METHOD2(inc_pending_batch_commit_count, int(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts));
   MOCK_METHOD2(inc_pending_elr_count, int(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts));

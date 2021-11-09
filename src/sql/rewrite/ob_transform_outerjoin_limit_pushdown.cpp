@@ -128,11 +128,14 @@ int ObTransformOuterJoinLimitPushDown::check_basic(ObDMLStmt* stmt, OjLimitPushD
     table_item = select_stmt->get_table_item(from_item);
     JoinedTable* joined_table = static_cast<JoinedTable*>(table_item);
     bool is_single_type = false;
+    bool has_generated_table = false;
     // only left outer allowed after right->left transformation
     // mixed join type, such as left & inner is NOT allowed
-    if (OB_FAIL(check_join_type(joined_table, LEFT_OUTER_JOIN, is_single_type))) {
+    if (OB_FAIL(check_join_type(joined_table, LEFT_OUTER_JOIN, is_single_type, has_generated_table))) {
       LOG_WARN("failed to check deep tree type", K(ret));
     } else if (!is_single_type) {
+      is_valid = false;
+    } else if (has_generated_table && select_stmt->get_condition_size() > 0) {
       is_valid = false;
     } else {
       helper.select_stmt_ = select_stmt;
@@ -238,7 +241,7 @@ int ObTransformOuterJoinLimitPushDown::check_offset_limit_expr(ObRawExpr* offset
 }
 
 int ObTransformOuterJoinLimitPushDown::check_join_type(
-    TableItem* table_item, ObJoinType joined_type, bool& is_single_type)
+    TableItem *table_item, ObJoinType joined_type, bool &is_single_type, bool &has_generated_table)
 {
   int ret = OB_SUCCESS;
   is_single_type = true;
@@ -246,13 +249,16 @@ int ObTransformOuterJoinLimitPushDown::check_join_type(
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table item", K(ret));
-  } else if (table_item->is_basic_table() || table_item->is_generated_table()) {
+  } else if (table_item->is_basic_table()) {
     // do nothing
-  } else if (table_item->is_joined_table() && static_cast<JoinedTable*>(table_item)->joined_type_ == joined_type) {
-    JoinedTable* joined_table = static_cast<JoinedTable*>(table_item);
+  } else if (table_item->is_generated_table()) {
+    has_generated_table = true;
+  } else if (table_item->is_joined_table() && static_cast<JoinedTable *>(table_item)->joined_type_ == joined_type) {
+    JoinedTable *joined_table = static_cast<JoinedTable *>(table_item);
     // only need to check left side recursively after right to left formalization
     bool is_left_single_type = false;
-    if (OB_FAIL(SMART_CALL(check_join_type(joined_table->left_table_, joined_type, is_left_single_type)))) {
+    if (OB_FAIL(SMART_CALL(
+            check_join_type(joined_table->left_table_, joined_type, is_left_single_type, has_generated_table)))) {
       LOG_WARN("failed to check left child deep tree type", K(ret));
     } else if (!is_left_single_type) {
       is_single_type = false;
@@ -506,7 +512,6 @@ int ObTransformOuterJoinLimitPushDown::pushdown_view_table(ObSelectStmt* stmt, T
     LOG_WARN("failed to formalize generated_view", K(ret));
   } else { /* do nothing */
   }
-
   return ret;
 }
 

@@ -115,15 +115,15 @@ public:
   {
     return version_iter_;
   }
-  bool read_by_sql_no(const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info, ObMvccRow* value,
-      const ObQueryFlag& query_flag);
+  int read_by_sql_no(const ObIMvccCtx& ctx, const transaction::ObTransSnapInfo& snapshot_info, ObMvccRow* value,
+      const ObQueryFlag& query_flag, bool& can_read_by_sql_no);
 
 private:
   int find_start_pos(const int64_t read_snapshot);
   int find_trans_node_below_version(const int64_t read_snapshot, const bool is_safe_read);
   int check_trans_node_readable(const int64_t read_snapshot);
   void print_conflict_trace_log();
-  int mark_trans_node_for_elr(const int64_t read_snapshot, const bool is_prewarm);
+  void mark_trans_node(const int64_t read_snapshot, const bool is_prewarm);
 
   void move_to_next_node();
 

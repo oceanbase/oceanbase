@@ -56,6 +56,9 @@ public:
   int64_t index_file_offset_;
   uint64_t cur_data_file_id_;
   int64_t data_file_offset_;
+  int64_t clog_split_task_num_;
+  int64_t send_task_num_;
+  int64_t cur_piece_id_;
 };
 
 class ObAllVirtualPGLogArchiveStat : public common::ObVirtualTableIterator {
@@ -91,6 +94,9 @@ class ObAllVirtualPGLogArchiveStat : public common::ObVirtualTableIterator {
     CUR_INDEX_FILE_OFFSET,
     CUR_DATA_FILE_ID,
     CUR_DATA_FILE_OFFSET,
+    CLOG_SPLIT_TASK_NUM,
+    SEND_TASK_NUM,
+    CUR_PIECE_ID,
   };
 
 public:

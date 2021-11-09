@@ -509,7 +509,8 @@ void ObjectSet::reset()
             if (!has_unfree) {
               int64_t pos = snprintf(buf,
                   buf_len,
-                  "label: %s, static_id: %d, static_info: %s, dynamic_info: %s",
+                  "context: %p, label: %s, static_id: 0x%lx, static_info: %s, dynamic_info: %s",
+                  mem_context_,
                   label,
                   mem_context_->get_static_id(),
                   common::to_cstring(mem_context_->get_static_info()),

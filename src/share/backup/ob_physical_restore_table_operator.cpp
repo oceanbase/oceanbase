@@ -20,6 +20,8 @@
 #include "share/ob_kv_parser.h"
 #include "share/ob_cluster_version.h"
 #include "rootserver/ob_rs_job_table_operator.h"
+#include "share/backup/ob_backup_path.h"
+#include <algorithm>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -178,7 +180,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
       LOG_WARN("fail to add pk column", K(ret), "name", #COLUMN_NAME);            \
     } else if (OB_FAIL(dml.add_column("value", (JOB_INFO).COLUMN_NAME##_))) {     \
       LOG_WARN("fail to add column", K(ret), "value", (JOB_INFO).COLUMN_NAME##_); \
-    } else if (dml.finish_row()) {                                                \
+    } else if (OB_FAIL(dml.finish_row())) {                                       \
       LOG_WARN("fail to finish row", K(ret));                                     \
     }                                                                             \
   }
@@ -191,7 +193,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
       LOG_WARN("fail to add pk column", K(ret), "name", #COLUMN_NAME);       \
     } else if (OB_FAIL(dml.add_column("value", COLUMN_VALUE))) {             \
       LOG_WARN("fail to add column", K(ret), "value", COLUMN_VALUE);         \
-    } else if (dml.finish_row()) {                                           \
+    } else if (OB_FAIL(dml.finish_row())) {                                  \
       LOG_WARN("fail to finish row", K(ret));                                \
     }                                                                        \
   }
@@ -200,6 +202,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
     DML_ADD_COLUMN(job_info, tenant_id);
     DML_ADD_COLUMN(job_info, restore_data_version);
     DML_ADD_COLUMN(job_info, restore_start_ts);
+    DML_ADD_COLUMN(job_info, restore_schema_version);
     DML_ADD_COLUMN(job_info, info);
     // pre_cluster_version
     if (OB_SUCC(ret)) {
@@ -215,7 +218,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
         LOG_WARN("fail to add pk column", K(ret), "name", "pre_cluster_version");
       } else if (OB_FAIL(dml.add_column("value", ObString(len, version)))) {
         LOG_WARN("fail to add column", K(ret), K(pre_cluster_version));
-      } else if (dml.finish_row()) {
+      } else if (OB_FAIL(dml.finish_row())) {
         LOG_WARN("fail to finish row", K(ret));
       }
     }
@@ -233,7 +236,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
         LOG_WARN("fail to add pk column", K(ret), "name", "post_cluster_version");
       } else if (OB_FAIL(dml.add_column("value", ObString(len, version)))) {
         LOG_WARN("fail to add column", K(ret), K(post_cluster_version));
-      } else if (dml.finish_row()) {
+      } else if (OB_FAIL(dml.finish_row())) {
         LOG_WARN("fail to finish row", K(ret));
       }
     }
@@ -249,7 +252,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
       LOG_WARN("fail to add pk column", K(ret), "name", "status");
     } else if (OB_FAIL(dml.add_column("value", status_str))) {
       LOG_WARN("fail to add column", K(ret), "value", status_str);
-    } else if (dml.finish_row()) {
+    } else if (OB_FAIL(dml.finish_row())) {
       LOG_WARN("fail to finish row", K(ret));
     }
 
@@ -281,6 +284,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
     DML_ADD_COLUMN(job_info, frozen_schema_version);
     DML_ADD_COLUMN_WITH_VALUE(job_info, passwd_array, job_info.passwd_array_);
     DML_ADD_COLUMN(job_info, compatible);
+    DML_ADD_COLUMN(job_info, backup_date);
     // source_cluster_version
     if (OB_SUCC(ret)) {
       uint64_t source_cluster_version = job_info.source_cluster_version_;
@@ -295,13 +299,75 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(share::ObDMLSqlSplicer& dml
         LOG_WARN("fail to add pk column", K(ret), "name", "source_cluster_version");
       } else if (OB_FAIL(dml.add_column("value", ObString(len, version)))) {
         LOG_WARN("fail to add column", K(ret), K(source_cluster_version));
-      } else if (dml.finish_row()) {
+      } else if (OB_FAIL(dml.finish_row())) {
         LOG_WARN("fail to finish row", K(ret));
       }
     }
+    // while_list/b_while_list
+    if (OB_SUCC(ret)) {
+      ObArenaAllocator allocator("PhyWhiteList");
+      const ObPhysicalRestoreWhiteList& white_list = job_info.white_list_;
+      ObString white_list_str;
+      ObString b_white_list_str;
+      if (OB_FAIL(white_list.get_format_str(allocator, white_list_str))) {
+        LOG_WARN("fail to get format str", KR(ret), K(white_list));
+      } else if (OB_FAIL(dml.add_pk_column("job_id", job_info.job_id_))) {
+        LOG_WARN("fail to add pk column", KR(ret), "job_id", job_info.job_id_);
+      } else if (OB_FAIL(dml.add_pk_column("name", "white_list"))) {
+        LOG_WARN("fail to add pk column", KR(ret), "name", "white_list");
+      } else if (OB_FAIL(dml.add_column("value", ObHexEscapeSqlStr(white_list_str)))) {
+        LOG_WARN("fail to add column", KR(ret), K(white_list), K(white_list_str));
+      } else if (OB_FAIL(dml.finish_row())) {
+        LOG_WARN("fail to finish row", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(white_list.get_hex_str(allocator, b_white_list_str))) {
+        LOG_WARN("fail to get format str", KR(ret), K(white_list));
+      } else if (OB_FAIL(dml.add_pk_column("job_id", job_info.job_id_))) {
+        LOG_WARN("fail to add pk column", KR(ret), "job_id", job_info.job_id_);
+      } else if (OB_FAIL(dml.add_pk_column("name", "b_white_list"))) {
+        LOG_WARN("fail to add pk column", KR(ret), "name", "b_white_list");
+      } else if (OB_FAIL(dml.add_column("value", b_white_list_str))) {
+        LOG_WARN("fail to add column", KR(ret), K(b_white_list_str));
+      } else if (OB_FAIL(dml.finish_row())) {
+        LOG_WARN("fail to finish row", KR(ret));
+      }
+    }
 
-#undef DML_ADD_COLUMN
-#undef DML_ADD_COLUMN_WITH_VALUE
+    if (OB_SUCC(ret)) {
+      ObArenaAllocator allocator;
+      ObString b_backup_set_list;
+      ObString b_backup_piece_list;
+      const ObPhysicalRestoreBackupDestList& dest_list = job_info.multi_restore_path_list_;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(dest_list.get_backup_set_list_hex_str(allocator, b_backup_set_list))) {
+        LOG_WARN("fail to get format str", KR(ret), K(dest_list));
+      } else if (OB_FAIL(dml.add_pk_column("job_id", job_info.job_id_))) {
+        LOG_WARN("fail to add pk column", KR(ret), "job_id", job_info.job_id_);
+      } else if (OB_FAIL(dml.add_pk_column("name", "b_backup_set_list"))) {
+        LOG_WARN("fail to add pk column", KR(ret), "name", "b_backup_set_list");
+      } else if (OB_FAIL(dml.add_column("value", b_backup_set_list))) {
+        LOG_WARN("fail to add column", KR(ret), K(b_backup_set_list));
+      } else if (OB_FAIL(dml.finish_row())) {
+        LOG_WARN("fail to finish row", KR(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(dest_list.get_backup_piece_list_hex_str(allocator, b_backup_piece_list))) {
+        LOG_WARN("fail to get format str", KR(ret), K(dest_list));
+      } else if (OB_FAIL(dml.add_pk_column("job_id", job_info.job_id_))) {
+        LOG_WARN("fail to add pk column", KR(ret), "job_id", job_info.job_id_);
+      } else if (OB_FAIL(dml.add_pk_column("name", "b_backup_piece_list"))) {
+        LOG_WARN("fail to add pk column", KR(ret), "name", "b_backup_piece_list");
+      } else if (OB_FAIL(dml.add_column("value", b_backup_piece_list))) {
+        LOG_WARN("fail to add column", KR(ret), K(b_backup_piece_list));
+      } else if (OB_FAIL(dml.finish_row())) {
+        LOG_WARN("fail to finish row", KR(ret));
+      }
+    }
+
+#undef ADD_COLUMN
+#undef ADD_COLUMN_WITH_VALUE
   }
   return ret;
 }
@@ -407,12 +473,13 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid job", K(ret), K(job));
   } else {
+    ObArenaAllocator allocator(ObModIds::RESTORE);
     char name[OB_INNER_TABLE_DEFAULT_KEY_LENTH] = {0};
-    char value[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = {0};  // for debug
+    char* value = NULL;
     int64_t len = OB_INNER_TABLE_DEFAULT_KEY_LENTH;
     int64_t real_len = 0;  // not used
     EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(result, "name", name, OB_INNER_TABLE_DEFAULT_KEY_LENTH, real_len);
-    EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(result, "value", value, OB_INNER_TABLE_DEFAULT_VALUE_LENTH, real_len);
+    EXTRACT_LONGTEXT_FIELD_MYSQL_WITH_ALLOCATOR_SKIP_RET(result, "value", value, allocator, real_len);
     LOG_DEBUG("retrieve restore option", K(ret), "name", name, "value", value);
 
 #define RETRIEVE_UINT_VALUE(COLUMN_NAME, OBJ)                                       \
@@ -445,6 +512,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_UINT_VALUE(backup_tenant_id, job);
     RETRIEVE_INT_VALUE(restore_data_version, job);
     RETRIEVE_INT_VALUE(restore_start_ts, job);
+    RETRIEVE_INT_VALUE(restore_schema_version, job);
     RETRIEVE_INT_VALUE(incarnation, job);
     RETRIEVE_INT_VALUE(full_backup_set_id, job);
     RETRIEVE_INT_VALUE(inc_backup_set_id, job);
@@ -470,6 +538,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(info, job);
     RETRIEVE_STR_VALUE(passwd_array, job);
     RETRIEVE_INT_VALUE(compatible, job);
+    RETRIEVE_INT_VALUE(backup_date, job);
     if (OB_SUCC(ret)) {
       if (0 == STRNCMP("status", name, len)) {
         ObString status_str;
@@ -529,6 +598,47 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
           LOG_WARN("fail to parser version", K(ret), K(version_str));
         } else {
           job.source_cluster_version_ = version;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (0 == STRNCMP("b_backup_set_list", name, len)) {
+        ObString str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", str);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(job.multi_restore_path_list_.backup_set_list_assign_with_hex_str(str))) {
+          LOG_WARN("fail to assign backup set list", KR(ret), K(str));
+        } else {
+          ObCompareSimpleBackupSetPath cmp;
+          ObSArray<ObSimpleBackupSetPath>& simple_list = job.multi_restore_path_list_.get_backup_set_path_list();
+          std::sort(simple_list.begin(), simple_list.end(), cmp);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (0 == STRNCMP("b_backup_piece_list", name, len)) {
+        ObString str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", str);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(job.multi_restore_path_list_.backup_piece_list_assign_with_hex_str(str))) {
+          LOG_WARN("fail to assign backup piece list", KR(ret), K(str));
+        } else {
+          ObCompareSimpleBackupPiecePath cmp;
+          ObSArray<ObSimpleBackupPiecePath>& simple_list = job.multi_restore_path_list_.get_backup_piece_path_list();
+          std::sort(simple_list.begin(), simple_list.end(), cmp);
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (0 == STRNCMP("b_white_list", name, len)) {
+        ObString str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", str);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(job.white_list_.assign_with_hex_str(str))) {
+          LOG_WARN("fail to assign white_list", KR(ret), K(str));
         }
       }
     }
@@ -825,10 +935,22 @@ int ObPhysicalRestoreTableOperator::record_job_in_history(int64_t job_id)
     int64_t affected_rows = 0;
     const char* status_str = ObPhysicalRestoreTableOperator::get_restore_status_str(job.status_);
     int64_t invalid_cnt = OB_INVALID_COUNT;
+    ObArenaAllocator allocator("PhyWhiteList");
+    const ObPhysicalRestoreWhiteList& white_list = job.white_list_;
+    ObString white_list_str;
+    const ObPhysicalRestoreBackupDestList& dest_list = job.multi_restore_path_list_;
+    ObString backup_set_list_str;
+    ObString backup_piece_list_str;
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(status_str)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid status", KR(ret), "status", job.status_);
+    } else if (OB_FAIL(white_list.get_format_str(allocator, white_list_str))) {
+      LOG_WARN("fail to get format str", KR(ret), K(white_list));
+    } else if (OB_FAIL(dest_list.get_backup_set_list_format_str(allocator, backup_set_list_str))) {
+      LOG_WARN("fail to get format str", KR(ret), K(dest_list));
+    } else if (OB_FAIL(dest_list.get_backup_piece_list_format_str(allocator, backup_piece_list_str))) {
+      LOG_WARN("fail to get format str", KR(ret), K(dest_list));
     } else if (OB_FAIL(dml.add_pk_column("job_id", job_id))) {
       LOG_WARN("failed to add pk column", KR(ret), K(job_id));
     } else if (OB_FAIL(dml.add_column("external_job_id", job.restore_job_id_)) ||
@@ -855,7 +977,10 @@ int ObPhysicalRestoreTableOperator::record_job_in_history(int64_t job_id)
                OB_FAIL(dml.add_column("backup_cluster_id", job.cluster_id_)) ||
                OB_FAIL(dml.add_column("backup_cluster_name", job.backup_cluster_name_)) ||
                OB_FAIL(dml.add_column("backup_tenant_id", job.backup_tenant_id_)) ||
-               OB_FAIL(dml.add_column("backup_tenant_name", job.backup_tenant_name_))) {
+               OB_FAIL(dml.add_column("backup_tenant_name", job.backup_tenant_name_)) ||
+               OB_FAIL(dml.add_column("white_list", ObHexEscapeSqlStr(white_list_str))) ||
+               OB_FAIL(dml.add_column("backup_set_list", ObHexEscapeSqlStr(backup_set_list_str))) ||
+               OB_FAIL(dml.add_column("backup_piece_list", ObHexEscapeSqlStr(backup_piece_list_str)))) {
       LOG_WARN("fail to add column", KR(ret), K(job));
     } else if (OB_FAIL(dml.splice_replace_sql(OB_ALL_RESTORE_HISTORY_TNAME, sql))) {
       LOG_WARN("splice_delete_sql failed", KR(ret), K(sql));
@@ -984,6 +1109,12 @@ int ObPhysicalRestoreTableOperator::init_restore_progress(const ObPhysicalRestor
   int64_t affected_rows = 0;
   const char* status_str = ObPhysicalRestoreTableOperator::get_restore_status_str(job.status_);
   int64_t invalid_cnt = OB_INVALID_COUNT;
+  ObArenaAllocator allocator("PhyWhiteList");
+  const ObPhysicalRestoreWhiteList& white_list = job.white_list_;
+  ObString white_list_str;
+  const ObPhysicalRestoreBackupDestList& dest_list = job.multi_restore_path_list_;
+  ObString backup_set_list_str;
+  ObString backup_piece_list_str;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical restore table operator not init", KR(ret));
@@ -992,6 +1123,12 @@ int ObPhysicalRestoreTableOperator::init_restore_progress(const ObPhysicalRestor
   } else if (OB_ISNULL(status_str)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid status", KR(ret), "status", job.status_);
+  } else if (OB_FAIL(white_list.get_format_str(allocator, white_list_str))) {
+    LOG_WARN("fail to get format str", KR(ret), K(white_list));
+  } else if (OB_FAIL(dest_list.get_backup_set_list_format_str(allocator, backup_set_list_str))) {
+    LOG_WARN("fail to get format str", KR(ret), K(dest_list));
+  } else if (OB_FAIL(dest_list.get_backup_piece_list_format_str(allocator, backup_piece_list_str))) {
+    LOG_WARN("fail to get format str", KR(ret), K(dest_list));
   } else if (OB_FAIL(dml.add_column("external_job_id", job.restore_job_id_)) ||
              OB_FAIL(dml.add_column("tenant_id", job.tenant_id_)) ||
              OB_FAIL(dml.add_column("tenant_name", job.tenant_name_)) ||
@@ -1012,7 +1149,10 @@ int ObPhysicalRestoreTableOperator::init_restore_progress(const ObPhysicalRestor
              || OB_FAIL(dml.add_column("info", "")) || OB_FAIL(dml.add_column("backup_cluster_id", job.cluster_id_)) ||
              OB_FAIL(dml.add_column("backup_cluster_name", job.backup_cluster_name_)) ||
              OB_FAIL(dml.add_column("backup_tenant_id", job.backup_tenant_id_)) ||
-             OB_FAIL(dml.add_column("backup_tenant_name", job.backup_tenant_name_))) {
+             OB_FAIL(dml.add_column("backup_tenant_name", job.backup_tenant_name_)) ||
+             OB_FAIL(dml.add_column("white_list", ObHexEscapeSqlStr(white_list_str))) ||
+             OB_FAIL(dml.add_column("backup_set_list", ObHexEscapeSqlStr(backup_set_list_str))) ||
+             OB_FAIL(dml.add_column("backup_piece_list", ObHexEscapeSqlStr(backup_piece_list_str)))) {
     LOG_WARN("fail to add column", KR(ret), K(job));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_RESTORE_PROGRESS_TNAME, sql))) {
     LOG_WARN("splice_insert_sql failed", KR(ret), K(job));

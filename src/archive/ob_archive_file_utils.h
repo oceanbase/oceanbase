@@ -63,15 +63,15 @@ public:
 
   // get the max data file id with listing method
   int get_max_data_file_when_index_not_exist(const ObString& prefix, const ObString& storage_info, uint64_t& file_id);
-
-  // get the max archived info from an index file
-  // archived info include max archived log id/submit_ts/checkpoint ts/epoch_id/acc_checksum
+  /*ret_code:
+   * 1.when content is not valid, return OB_SUCCESS;
+   * 2.archive_key_file not exist, return OB_ENTRY_NOT_EXIST;
+   * 3.got valid index info ,return OB_SUCCESS.
+   * */
+  int get_archived_info_from_archive_key(
+      const ObString& uri, const ObString& storage_info, ObArchiveKeyContent& key_content);
   int get_max_archived_info_in_single_index_file(
       const ObString& uri, const ObString& storage_info, MaxArchivedIndexInfo& info);
-
-  //
-  int get_first_log(const ObPGKey& pg_key, const uint64_t file_id, ObIArchiveLogFileStore* file_store, uint64_t& log_id,
-      clog::ObLogType& log_type);
 
   int extract_first_log_in_data_file(const ObPGKey& pg_key, const uint64_t file_id, ObIArchiveLogFileStore* file_store,
       ObArchiveBlockMeta& block_meta, clog::ObLogEntry& log_entry, ObLogArchiveInnerLog& inner_log);
@@ -80,11 +80,11 @@ public:
       const ObString& uri, const ObString& storage_info, ObArchiveBlockMeta& block_meta, clog::ObLogEntry& log_entry,
       ObLogArchiveInnerLog& inner_log);
 
-  int get_max_index_info_in_single_file(
+  int get_max_valid_index_info_in_single_index_file(
       const ObString& uri, const ObString& storage_info, ObArchiveIndexFileInfo& info, bool& exist);
 
   int get_max_safe_data_file_id(const ObString& uri, const ObString& storage_info, const uint64_t log_id,
-      const int64_t log_ts, const bool by_log_id, uint64_t& data_file_id);
+      const int64_t log_ts, const bool by_log_id, const int64_t retention_timestamp, uint64_t& data_file_id);
 
 private:
   int extract_file_id_(const ObString& file_name, uint64_t& file_id, bool& match);

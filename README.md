@@ -5,16 +5,22 @@ OceanBase Database is a native distributed relational database. It is developed 
 OceanBase Database has these features:
 
 - High availability
+    
     Single server failure recovers automatically. OceanBase Database supports cross-city disaster tolerance for multiple IDCs and zero data loss. OceanBase Database meets the financial industry Level 6 disaster recovery standard (RPO=0, RTO<=30 seconds).
 - Linear scalability
+    
     OceanBase Database scales transparently to applications and balances the system load automatically. Its cluster can contain more than 1500 nodes. The data volume can reach petabytes. The records in a single table can be more than a trillion rows.
 - Highly compatible with MySQL
+    
     OceanBase Database is compatible with MySQL protocol and syntax. You can access to OceanBase Database by using MySQL client.
 - High performance
+    
     OceanBase Database supports quasi memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
 - Low cost
-    OceanBase Database uses PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage cost and the computing cost.
+    
+    OceanBase Database uses PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage and computing cost.
 - Multi-tenancy
+    
     OceanBase Database supports native multi-tenancy architecture. One cluster supports multiple businesses. Data is isolated among tenants. This reduces the deployment, operation, and maintenance costs.
 
 OceanBase Database supports the entire core business of Alipay and the core systems of hundreds of financial institutions, such as banks and insurance companies.
@@ -40,6 +46,7 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 
 | OS | Ver. | Arch | Compilable | Package Deployable | Compiled Binary Deployable | Mysqltest Passed |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| Alibaba Cloud Linux | 2.1903 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |
@@ -48,6 +55,7 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 | OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| UOS | 20 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
 ## How to build
 
@@ -55,7 +63,7 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 
 Before building, you need to confirm that your device has installed the necessary software.
 
-#### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, etc.)
+#### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, UOS, etc.)
 
 ```sh
 yum install git wget rpm* cpio make glibc-devel glibc-headers binutils

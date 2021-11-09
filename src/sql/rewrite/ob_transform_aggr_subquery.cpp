@@ -697,7 +697,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt*& stmt, bool& t
     } else if (OB_UNLIKELY(!ObOptimizerUtil::find_item(view_stmt->get_subquery_exprs(), param.ja_query_ref_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the subquery is not found in view stmt", K(ret));
-    } else if (OB_FAIL(do_join_first_transform(*view_stmt, param, root_expr))) {
+    } else if (OB_FAIL(do_join_first_transform(*view_stmt, param, root_expr, 0 == i))) {
       LOG_WARN("failed to do join first transform", K(ret));
     } else {
       target_stmt = view_stmt;
@@ -855,26 +855,13 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt& stmt, bool& is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  int32_t bit_id = OB_INVALID_INDEX;
-  ObSqlBitSet<> output_rel_ids;
+  bool can_set_unique = false;
   if (stmt.is_set_stmt() || stmt.is_hierarchical_query() || !stmt.is_sel_del_upd()) {
     is_valid = false;
-  } else if (OB_FAIL(stmt.get_from_tables(output_rel_ids))) {
-    LOG_WARN("failed to get output rel ids", K(ret));
-  }
-  // check all output table is basic table
-  // TODO check whether a view stmt has unique keys
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt.get_table_items().count(); ++i) {
-    const TableItem* cur_table = stmt.get_table_item(i);
-    if (OB_ISNULL(cur_table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null table item", K(ret));
-    } else if (OB_UNLIKELY(OB_INVALID_INDEX == (bit_id = stmt.get_table_bit_index(cur_table->table_id_)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid table bit index", K(ret), K(cur_table->table_id_), K(bit_id));
-    } else if (output_rel_ids.has_member(bit_id) && !cur_table->is_basic_table()) {
-      is_valid = false;
-    }
+  } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(&stmt, can_set_unique))) {
+    LOG_WARN("failed to check can set stmt unque", K(ret));
+  } else if (!can_set_unique) {
+    is_valid = false;
   }
   return ret;
 }
@@ -1054,7 +1041,7 @@ int ObTransformAggrSubquery::choose_pullup_method_for_exists(
 }
 
 int ObTransformAggrSubquery::do_join_first_transform(
-    ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr)
+    ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr, const bool is_first_trans)
 {
   int ret = OB_SUCCESS;
   ObQueryRefRawExpr *query_ref_expr = NULL;
@@ -1066,7 +1053,7 @@ int ObTransformAggrSubquery::do_join_first_transform(
       || OB_ISNULL(subquery = trans_param.ja_query_ref_->get_ref_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(ctx_), K(root_expr), K(query_ref_expr), K(subquery));
-  } else if (OB_FAIL(get_unique_keys(select_stmt, select_stmt.get_group_exprs()))) {
+  } else if (OB_FAIL(get_unique_keys(select_stmt, select_stmt.get_group_exprs(), is_first_trans))) {
     LOG_WARN("failed to get unique exprs", K(ret));
   }
   if (OB_SUCC(ret) && trans_param.not_null_expr_ != NULL) {
@@ -1131,60 +1118,45 @@ int ObTransformAggrSubquery::do_join_first_transform(
       LOG_WARN("failed to append semi infos", K(ret));
     } else if (OB_FAIL(select_stmt.formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    } else if (OB_FAIL(rebuild_conditon(select_stmt))) {
+    } else if (OB_FAIL(rebuild_conditon(select_stmt, *subquery))) {
       LOG_WARN("failed to rebuild condition", K(ret));
     }
   }
   return ret;
 }
 
-int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys)
+int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys, const bool is_first_trans)
 {
   int ret = OB_SUCCESS;
-  ObSqlBitSet<> from_tables;
-  ObSEArray<ObRawExpr *, 2> tmp_pkeys;
-  int32_t bit_id = OB_INVALID_INDEX;
-  if (OB_FAIL(stmt.get_from_tables(from_tables))) {
-    LOG_WARN("failed to get from table set", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_items().count(); ++i) {
-    tmp_pkeys.reuse();
-    TableItem* cur_table = stmt.get_table_item(i);
-    if (OB_ISNULL(cur_table)) {
+  ObSqlBitSet<> empty_ignore_tables;
+  TableItem* cur_table = NULL;
+  if (is_first_trans) {
+    if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx_, &stmt, empty_ignore_tables, pkeys))) {
+      LOG_WARN("failed to generate unique key", K(ret));
+    }
+  } else if (OB_UNLIKELY(1 != stmt.get_table_items().count()) ||
+             OB_ISNULL(cur_table = stmt.get_table_item(0)) ||
+             OB_UNLIKELY(!cur_table->is_generated_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected table item", K(ret), K(stmt.get_table_items().count()), K(cur_table));
+  } else {
+    // already perform JA rewrite, get group by column from view directly
+    ObSelectStmt* view_stmt = NULL;
+    ObSEArray<ObRawExpr*, 4> select_list;
+    ObSEArray<ObRawExpr*, 4> column_list;
+    ObSEArray<ObRawExpr*, 4> group_keys;
+    if (OB_ISNULL(view_stmt = cur_table->ref_query_) || OB_UNLIKELY(0 == view_stmt->get_group_expr_size())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null table item", K(ret));
-    } else if (OB_UNLIKELY(OB_INVALID_INDEX == (bit_id = stmt.get_table_bit_index(cur_table->table_id_)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid table bit index", K(ret), K(cur_table->table_id_), K(bit_id));
-    } else if (!from_tables.has_member(bit_id)) {
-      // do nothing
-    } else if (cur_table->is_basic_table()) {
-      if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx_, &stmt, cur_table, tmp_pkeys))) {
-        LOG_WARN("failed to generate unique key", K(ret));
-      } else if (OB_FAIL(append(pkeys, tmp_pkeys))) {
-        LOG_WARN("failed to append pkeys", K(ret));
-      }
-    } else if (cur_table->is_generated_table()) {
-      ObSelectStmt* view_stmt = NULL;
-      ObSEArray<ObRawExpr*, 4> select_list;
-      ObSEArray<ObRawExpr*, 4> column_list;
-      ObSEArray<ObRawExpr*, 4> group_keys;
-      if (OB_ISNULL(view_stmt = cur_table->ref_query_) || OB_UNLIKELY(0 == view_stmt->get_group_expr_size())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("view is not a normal group by", K(ret), K(view_stmt));
-      } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
-                     *ctx_->expr_factory_, view_stmt->get_group_exprs(), group_keys, COPY_REF_DEFAULT))) {
-        LOG_WARN("failed to copy exprs", K(ret));
-      } else if (OB_FAIL(stmt.get_view_output(*cur_table, select_list, column_list))) {
-        LOG_WARN("failed to get view output", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_exprs(select_list, column_list, group_keys))) {
-        LOG_WARN("failed to replace group keys", K(ret));
-      } else if (OB_FAIL(append(pkeys, group_keys))) {
-        LOG_WARN("failed to append group keys", K(ret));
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table item", K(ret), K(*cur_table));
+      LOG_WARN("view is not a normal group by", K(ret), K(view_stmt));
+    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(
+                   *ctx_->expr_factory_, view_stmt->get_group_exprs(), group_keys, COPY_REF_DEFAULT))) {
+      LOG_WARN("failed to copy exprs", K(ret));
+    } else if (OB_FAIL(stmt.get_view_output(*cur_table, select_list, column_list))) {
+      LOG_WARN("failed to get view output", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::replace_exprs(select_list, column_list, group_keys))) {
+      LOG_WARN("failed to replace group keys", K(ret));
+    } else if (OB_FAIL(append(pkeys, group_keys))) {
+      LOG_WARN("failed to append group keys", K(ret));
     }
   }
   return ret;
@@ -1231,25 +1203,37 @@ int ObTransformAggrSubquery::transform_from_list(ObDMLStmt& stmt, ObSelectStmt& 
   return ret;
 }
 
-int ObTransformAggrSubquery::rebuild_conditon(ObSelectStmt& stmt)
+int ObTransformAggrSubquery::rebuild_conditon(ObSelectStmt& stmt, ObSelectStmt& subquery)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 8> where_conditions;
+  ObIArray<ObRawExpr*>* target_array = NULL;
   if (OB_FAIL(where_conditions.assign(stmt.get_condition_exprs()))) {
     LOG_WARN("failed to assign where conditions", K(ret));
   }
   stmt.get_condition_exprs().reuse();
   for (int64_t i = 0; OB_SUCC(ret) && i < where_conditions.count(); ++i) {
     ObRawExpr* cur_expr = NULL;
+    target_array = NULL;
     if (OB_ISNULL(cur_expr = where_conditions.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("condition expr is null", K(ret));
-    } else if (cur_expr->has_flag(CNT_AGG) || cur_expr->has_flag(CNT_SUB_QUERY)) {
-      if (OB_FAIL(stmt.get_having_exprs().push_back(cur_expr))) {
-        LOG_WARN("failed to push back cur expr", K(ret));
+    } else if (cur_expr->has_flag(CNT_AGG)) {
+      target_array = &stmt.get_having_exprs();
+    } else if (cur_expr->has_flag(CNT_SUB_QUERY)) {
+      if (ObOptimizerUtil::find_item(subquery.get_condition_exprs(), cur_expr)) {
+        target_array = &stmt.get_condition_exprs();
+      } else {
+        target_array = &stmt.get_having_exprs();
       }
-    } else if (OB_FAIL(stmt.get_condition_exprs().push_back(cur_expr))) {
-      LOG_WARN("failed to push back where condition", K(ret));
+    } else {
+      target_array = &stmt.get_condition_exprs();
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(target_array)) {
+      if (OB_FAIL(target_array->push_back(cur_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
     }
   }
   return ret;

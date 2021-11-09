@@ -824,6 +824,35 @@ int64_t ObRecoveryPointData::get_serialize_size() const
   return serialize_size;
 }
 
+int ObRecoveryPointData::get_recovery_point_meta_info(ObRecoveryPointMetaInfo& recovery_point_meta_info)
+{
+  int ret = OB_SUCCESS;
+  ObTablesHandle tables_handle;
+  ObIArray<ObITable::TableKey>& table_keys = recovery_point_meta_info.table_keys_;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRecoveryPointData is not inited", K(ret));
+  } else if (OB_FAIL(recovery_point_meta_info.pg_meta_.deep_copy(pg_meta_))) {
+    LOG_WARN("failed to copy pg meta ", K(ret), K(pg_meta_));
+  } else if (OB_FAIL(recovery_point_meta_info.partition_store_metas_.assign(partition_store_metas_))) {
+    LOG_WARN("failed to assign partition store metas", K(ret), K(partition_store_metas_));
+  } else if (OB_FAIL(get_all_tables(tables_handle))) {
+    LOG_WARN("failed to get all tables", K(ret), K(pg_meta_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables_handle.get_count(); ++i) {
+      ObITable* table = tables_handle.get_table(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table should not be NULL", K(ret), KP(table));
+      } else if (OB_FAIL(table_keys.push_back(table->get_key()))) {
+        LOG_WARN("failed to push table keys into array", K(ret), K(*table));
+      }
+    }
+  }
+  return ret;
+}
+
 int64_t ObRecoveryPointData::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -1618,8 +1647,8 @@ int ObRecoveryDataMgr::init(const ObPartitionKey& pg_key)
 }
 
 int ObRecoveryDataMgr::add_recovery_point_(const ObRecoveryPointType point_type, const int64_t snapshot_version,
-    const ObPartitionGroupMeta& pg_meta, const ObIArray<ObPGPartitionStoreMeta>& partition_store_metas,
-    const ObTablesHandle& tables_handle, ObRecoveryData& recovery_data)
+    const ObPartitionGroupMeta &pg_meta, const ObIArray<ObPGPartitionStoreMeta> &partition_store_metas,
+    const ObTablesHandle &tables_handle)
 {
   int ret = OB_SUCCESS;
   ObRecoveryPointData* new_data = NULL;
@@ -1629,19 +1658,24 @@ int ObRecoveryDataMgr::add_recovery_point_(const ObRecoveryPointType point_type,
   } else if (OB_UNLIKELY(snapshot_version <= 0) || OB_UNLIKELY(!pg_meta.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("pg meta is not valid", K(ret), K(snapshot_version), K(pg_meta));
-  } else if (OB_FAIL(recovery_data.create_recovery_point(
-                 snapshot_version, pg_meta, partition_store_metas, tables_handle, new_data))) {
-    LOG_WARN("failed to alllocate recovery point data", K(ret));
-  } else if (OB_FAIL(write_add_data_slog_(point_type, *new_data))) {
-    LOG_WARN("failed to write add recovery point data slog", K(ret));
-  } else if (OB_FAIL(recovery_data.insert_recovery_point(new_data))) {
-    LOG_WARN("failed to add recovery point data", K(ret));
-    ob_abort();
   } else {
-    LOG_INFO("succeed to add a new recovery point data", KPC(new_data));
-  }
-  if (OB_FAIL(ret) && NULL != new_data) {
-    recovery_data.free_recovery_point(new_data);
+    // There must be only restore point and backup point
+    ObRecoveryData &recovery_data =
+        (point_type == ObRecoveryPointType::RESTORE_POINT ? restore_point_data_ : backup_point_data_);
+    if (OB_FAIL(recovery_data.create_recovery_point(
+            snapshot_version, pg_meta, partition_store_metas, tables_handle, new_data))) {
+      LOG_WARN("failed to alllocate recovery point data", K(ret));
+    } else if (OB_FAIL(write_add_data_slog_(point_type, *new_data))) {
+      LOG_WARN("failed to write add recovery point data slog", K(ret));
+    } else if (OB_FAIL(recovery_data.insert_recovery_point(new_data))) {
+      LOG_WARN("failed to add recovery point data", K(ret));
+      ob_abort();
+    } else {
+      LOG_INFO("succeed to add a new recovery point data", KPC(new_data));
+    }
+    if (OB_FAIL(ret) && NULL != new_data) {
+      recovery_data.free_recovery_point(new_data);
+    }
   }
   return ret;
 }
@@ -1885,9 +1919,8 @@ int ObRecoveryDataMgr::add_restore_point(const int64_t snapshot_version, const O
                  snapshot_version,
                  pg_meta,
                  partition_store_metas,
-                 tables_handle,
-                 restore_point_data_))) {
-    LOG_WARN("failed to add restore point", K(ret), K(pg_meta));
+                 tables_handle))) {
+    LOG_WARN("faild to add restore point", K(ret), K(pg_meta));
   }
   return ret;
 }
@@ -2083,8 +2116,7 @@ int ObRecoveryDataMgr::add_backup_point(const int64_t snapshot_version, const Ob
                  snapshot_version,
                  pg_meta,
                  partition_store_metas,
-                 tables_handle,
-                 backup_point_data_))) {
+                 tables_handle))) {
     LOG_WARN("failed to add backup point", K(ret), K(pg_meta));
   }
   return ret;
@@ -2311,6 +2343,160 @@ int ObRecoveryDataMgr::get_all_backup_tables(const int64_t snapshot_version, ObT
   return ret;
 }
 
+int ObRecoveryDataMgr::get_all_recovery_point_key(ObIArray<ObRecoveryPointKey>& recovery_point_key_array)
+{
+  int ret = OB_SUCCESS;
+  ObRecoveryPointKey recovery_point_key;
+  ObRecoveryPointData* point = NULL;
+  ObRecoveryPointType type = ObRecoveryPointType::UNKNOWN_TYPE;
+  recovery_point_key_array.reuse();
+
+  TCRLockGuard lock_guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRecoveryDataMgr is not inited", K(ret));
+  } else if (restore_point_data_.get_recovery_point_cnt() <= 0 && backup_point_data_.get_recovery_point_cnt() <= 0) {
+    // LOG_INFO("get_all_points_info no data");
+    // do nothing
+  } else {
+    // restore point list
+    if (restore_point_data_.get_recovery_point_cnt() > 0) {
+      point = restore_point_data_.get_first();
+      type = ObRecoveryPointType::RESTORE_POINT;
+      while (OB_SUCC(ret) && point != NULL && point != restore_point_data_.get_header()) {
+        recovery_point_key.reset();
+        recovery_point_key.snapshot_version_ = point->get_snapshot_version();
+        recovery_point_key.type_ = type;
+        // LOG_INFO("get_all_points_info get restore point ", K(point_info));
+        if (OB_FAIL(recovery_point_key_array.push_back(recovery_point_key))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("faild to push back into array", K(ret));
+        }
+        point = point->get_next();
+      }
+    }
+    // backup point list
+    if (backup_point_data_.get_recovery_point_cnt() > 0) {
+      point = backup_point_data_.get_first();
+      type = ObRecoveryPointType::BACKUP;
+      while (OB_SUCC(ret) && point != NULL && point != backup_point_data_.get_header()) {
+        recovery_point_key.reset();
+        recovery_point_key.snapshot_version_ = point->get_snapshot_version();
+        recovery_point_key.type_ = type;
+        // LOG_INFO("get_all_points_info get backup point ", K(point_info));
+        if (OB_FAIL(recovery_point_key_array.push_back(recovery_point_key))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("faild to push back into array", K(ret));
+        }
+        point = point->get_next();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryDataMgr::check_recovery_point_exist(const ObRecoveryPointKey& recovery_point_key, bool& is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  TCRLockGuard lock_guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRecoveryDataMgr is not inited", K(ret));
+  } else if (OB_FAIL(check_recovery_point_exist_(recovery_point_key, is_exist))) {
+    LOG_WARN("failed to check recovery point exist", K(ret), K(recovery_point_key));
+  }
+
+  return ret;
+}
+
+int ObRecoveryDataMgr::check_recovery_point_exist_(const ObRecoveryPointKey& recovery_point_key, bool& is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (ObRecoveryPointType::RESTORE_POINT == recovery_point_key.type_) {
+    if (OB_FAIL(restore_point_data_.check_recovery_point_exist(recovery_point_key.snapshot_version_, is_exist))) {
+      LOG_WARN("failed to check recovery point exist", K(ret), K(recovery_point_key));
+    }
+  } else if (ObRecoveryPointType::BACKUP == recovery_point_key.type_) {
+    if (OB_FAIL(backup_point_data_.check_recovery_point_exist(recovery_point_key.snapshot_version_, is_exist))) {
+      LOG_WARN("failed to check backup point exist", K(ret), K(recovery_point_key));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("recovery point key is unexpected", K(ret), K(recovery_point_key));
+  }
+  return ret;
+}
+
+int ObRecoveryDataMgr::add_recovery_point(const ObRecoveryPointKey& recovery_point_key,
+    const ObRecoveryPointMetaInfo& recovery_point_meta_info, const ObTablesHandle& tables_handle)
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  TCWLockGuard lock_guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRecoveryDataMgr is not inited", K(ret));
+  } else if (!recovery_point_key.is_valid() || !recovery_point_meta_info.is_valid() ||
+             (recovery_point_meta_info.table_keys_.count()) != tables_handle.get_count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("add recovery point get invalid argument",
+        K(ret),
+        K(recovery_point_key),
+        K(recovery_point_meta_info),
+        K(tables_handle));
+  } else if (OB_FAIL(check_recovery_point_exist_(recovery_point_key, is_exist))) {
+    LOG_WARN("failed to check recovery point exist", K(ret), K(recovery_point_key));
+  } else if (is_exist) {
+    ret = OB_ENTRY_EXIST;
+    LOG_WARN("the snapshot exist, skip", K(ret), K(recovery_point_key));
+  } else if (OB_FAIL(add_recovery_point_(recovery_point_key.type_,
+                 recovery_point_key.snapshot_version_,
+                 recovery_point_meta_info.pg_meta_,
+                 recovery_point_meta_info.partition_store_metas_,
+                 tables_handle))) {
+    LOG_WARN("faild to add restore point", K(ret), K(recovery_point_meta_info));
+  }
+  return ret;
+}
+
+int ObRecoveryDataMgr::get_recovery_point_meta_info(
+    const ObRecoveryPointKey& recovery_point_key, ObRecoveryPointMetaInfo& recovery_point_meta_info)
+{
+  int ret = OB_SUCCESS;
+  recovery_point_meta_info.reset();
+  ObRecoveryPointData* point_data = NULL;
+  TCRLockGuard lock_guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRecoveryDataMgr is not inited", K(ret));
+  } else if (!recovery_point_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get recovery point meta info get invalid argument", K(ret), K(recovery_point_key));
+  } else if (ObRecoveryPointType::RESTORE_POINT == recovery_point_key.type_) {
+    if (OB_FAIL(restore_point_data_.get_recovery_point(recovery_point_key.snapshot_version_, point_data))) {
+      LOG_WARN("failed to get restore point data", K(ret), K(recovery_point_key));
+    }
+  } else if (ObRecoveryPointType::BACKUP == recovery_point_key.type_) {
+    if (OB_FAIL(backup_point_data_.get_recovery_point(recovery_point_key.snapshot_version_, point_data))) {
+      LOG_WARN("failed to get backup point data", K(ret), K(recovery_point_key));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("recovery point type is unexpected", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(point_data)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("point data should not be NULL", K(ret), KP(point_data));
+  } else if (OB_FAIL(point_data->get_recovery_point_meta_info(recovery_point_meta_info))) {
+    LOG_WARN("failed to get recovery point meta info", K(ret), K(recovery_point_key));
+  }
+  return ret;
+}
+
 int ObRecoveryPointInfo::init(const ObRecoveryPointType type, ObRecoveryPointData* point)
 {
   int ret = OB_SUCCESS;
@@ -2372,6 +2558,41 @@ int ObRecoveryPointIterator::get_next(ObRecoveryPointInfo*& point_info)
     points_info_.reuse();
     array_idx_ = 0;
     ret = OB_ITER_END;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRecoveryPointKey, snapshot_version_, type_);
+
+OB_SERIALIZE_MEMBER(ObRecoveryPointMetaInfo, pg_meta_, partition_store_metas_, table_keys_);
+
+ObRecoveryPointMetaInfo::ObRecoveryPointMetaInfo() : pg_meta_(), partition_store_metas_(), table_keys_()
+{}
+
+void ObRecoveryPointMetaInfo::reset()
+{
+  pg_meta_.reset();
+  partition_store_metas_.reset();
+  table_keys_.reset();
+}
+
+bool ObRecoveryPointMetaInfo::is_valid() const
+{
+  return pg_meta_.is_valid() && partition_store_metas_.count() >= 0 && table_keys_.count() >= 0;
+}
+
+int ObRecoveryPointMetaInfo::assign(const ObRecoveryPointMetaInfo& recovery_point_meta_info)
+{
+  int ret = OB_SUCCESS;
+  if (!recovery_point_meta_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("assign get invalid argument", K(ret), K(recovery_point_meta_info));
+  } else if (OB_FAIL(pg_meta_.deep_copy(recovery_point_meta_info.pg_meta_))) {
+    LOG_WARN("failed to copy partition group meta", K(ret), K(recovery_point_meta_info));
+  } else if (OB_FAIL(partition_store_metas_.assign(recovery_point_meta_info.partition_store_metas_))) {
+    LOG_WARN("failed to assgin partition store metas", K(ret), K(recovery_point_meta_info));
+  } else if (OB_FAIL(table_keys_.assign(recovery_point_meta_info.table_keys_))) {
+    LOG_WARN("failed to assign table keys", K(ret), K(recovery_point_meta_info));
   }
   return ret;
 }

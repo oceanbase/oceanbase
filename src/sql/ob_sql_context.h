@@ -391,6 +391,8 @@ public:
 
   bool can_reroute_sql_;
   share::ObFeedbackRerouteInfo reroute_info_;
+  bool is_sensitive_;     // Whether it contains sensitive information.
+                          // If so, it will not be recorded in sql audit.
   common::ObFixedArray<int64_t, common::ObIAllocator> multi_stmt_rowkey_pos_;
 };
 

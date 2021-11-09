@@ -2076,3 +2076,25 @@ int ObLogJoin::get_left_exch_repartition_table_id(uint64_t& table_id)
   }
   return ret;
 }
+
+int ObLogJoin::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  if (INNER_JOIN == join_type_) {
+    if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post())) {
+      LOG_WARN("failed to allocate startup expr post", K(ret));
+    }
+  } else if (LEFT_OUTER_JOIN == join_type_ || CONNECT_BY_JOIN == join_type_ || LEFT_SEMI_JOIN == join_type_ ||
+             LEFT_ANTI_JOIN == join_type_) {
+    if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post(first_child))) {
+      LOG_WARN("failed to allocate startup expr post", K(ret));
+    }
+  } else if (RIGHT_OUTER_JOIN == join_type_ || RIGHT_SEMI_JOIN == join_type_ || RIGHT_ANTI_JOIN == join_type_) {
+    if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post(second_child))) {
+      LOG_WARN("failed to allocate startup expr post", K(ret));
+    }
+  } else if (FULL_OUTER_JOIN == join_type_) {
+    // do nothing
+  }
+  return ret;
+}

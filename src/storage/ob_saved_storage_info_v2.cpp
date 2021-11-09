@@ -70,7 +70,7 @@ OB_DEF_DESERIALIZE(ObSavedStorageInfoV2)
   return ret;
 }
 
-int ObSavedStorageInfoV2::deep_copy(const ObSavedStorageInfoV2& save_storage_info)
+int ObSavedStorageInfoV2::deep_copy(const ObSavedStorageInfoV2 &save_storage_info)
 {
   int ret = OB_SUCCESS;
 
@@ -90,7 +90,7 @@ int ObSavedStorageInfoV2::deep_copy(const ObSavedStorageInfoV2& save_storage_inf
   return ret;
 }
 
-int ObSavedStorageInfoV2::convert(const ObSavedStorageInfo& save_storage_info)
+int ObSavedStorageInfoV2::convert(const ObSavedStorageInfo &save_storage_info)
 {
   int ret = OB_SUCCESS;
 
@@ -113,7 +113,7 @@ int ObSavedStorageInfoV2::convert(const ObSavedStorageInfo& save_storage_info)
   return ret;
 }
 
-int ObSavedStorageInfoV2::deep_copy(const ObSavedStorageInfo& save_storage_info)
+int ObSavedStorageInfoV2::deep_copy(const ObSavedStorageInfo &save_storage_info)
 {
   int ret = OB_SUCCESS;
 
@@ -132,7 +132,7 @@ void ObSavedStorageInfoV2::reset()
   pg_file_id_ = OB_INVALID_DATA_FILE_ID;
 }
 
-int ObSavedStorageInfoV2::set_data_info(const ObDataStorageInfo& data_storage_info)
+int ObSavedStorageInfoV2::set_data_info(const ObDataStorageInfo &data_storage_info)
 {
   int ret = OB_SUCCESS;
   if (!data_storage_info.is_valid()) {
@@ -145,8 +145,8 @@ int ObSavedStorageInfoV2::set_data_info(const ObDataStorageInfo& data_storage_in
   return ret;
 }
 
-int ObSavedStorageInfoV2::query_log_info_with_log_id(const ObPartitionKey& pkey, const int64_t log_id,
-    const int64_t timeout, int64_t& accum_checksum, int64_t& submit_timestamp, int64_t& epoch_id)
+int ObSavedStorageInfoV2::query_log_info_with_log_id(const ObPartitionKey &pkey, const int64_t log_id,
+    const int64_t timeout, int64_t &accum_checksum, int64_t &submit_timestamp, int64_t &epoch_id)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -168,7 +168,7 @@ int ObSavedStorageInfoV2::query_log_info_with_log_id(const ObPartitionKey& pkey,
 }
 
 int ObSavedStorageInfoV2::get_last_replay_log_info_(
-    const ObPartitionKey& pkey, const int64_t timeout, ObRecoverPoint& point)
+    const ObPartitionKey &pkey, const int64_t timeout, ObRecoverPoint &point)
 {
   int ret = OB_SUCCESS;
   int64_t submit_timestamp = 0;
@@ -193,8 +193,8 @@ int ObSavedStorageInfoV2::get_last_replay_log_info_(
   return ret;
 }
 
-int ObSavedStorageInfoV2::update_last_replay_log_info_(const ObPartitionKey& pkey, const bool replica_with_data,
-    const ObBaseStorageInfo& old_clog_info, const int64_t timeout, const bool log_info_usable)
+int ObSavedStorageInfoV2::update_last_replay_log_info_(const ObPartitionKey &pkey, const bool replica_with_data,
+    const ObBaseStorageInfo &old_clog_info, const int64_t timeout, const bool log_info_usable)
 {
   int ret = OB_SUCCESS;
 
@@ -240,14 +240,14 @@ int ObSavedStorageInfoV2::update_last_replay_log_info_(const ObPartitionKey& pke
   return ret;
 }
 
-int ObSavedStorageInfoV2::update_last_replay_log_info(const ObPartitionKey& pkey, const bool replica_with_data,
-    const ObBaseStorageInfo& old_clog_info, const int64_t timeout, const bool log_info_usable)
+int ObSavedStorageInfoV2::update_last_replay_log_info(const ObPartitionKey &pkey, const bool replica_with_data,
+    const ObBaseStorageInfo &old_clog_info, const int64_t timeout, const bool log_info_usable)
 {
   return update_last_replay_log_info_(pkey, replica_with_data, old_clog_info, timeout, log_info_usable);
 }
 
-int ObSavedStorageInfoV2::update_and_fetch_log_info(const ObPartitionKey& pkey, const bool replica_with_data,
-    const ObBaseStorageInfo& old_clog_info, const int64_t timeout, const bool log_info_usable)
+int ObSavedStorageInfoV2::update_and_fetch_log_info(const ObPartitionKey &pkey, const bool replica_with_data,
+    const ObBaseStorageInfo &old_clog_info, const int64_t timeout, const bool log_info_usable)
 {
   int ret = OB_SUCCESS;
 
@@ -258,16 +258,17 @@ int ObSavedStorageInfoV2::update_and_fetch_log_info(const ObPartitionKey& pkey, 
   return ret;
 }
 
-int ObSavedStorageInfoV2::clear_recover_points_for_physical_flashback(const int64_t, const ObRecoverPoint&)
+int ObSavedStorageInfoV2::clear_recover_points_for_physical_flashback(const int64_t, const ObRecoverPoint &)
 {
   return OB_NOT_IMPLEMENT;
 }
 
-OB_SERIALIZE_MEMBER(ObRecoverPoint, snapshot_version_, recover_log_id_, checksum_, epoch_id_, submit_timestamp_);
+OB_SERIALIZE_MEMBER(ObRecoverPoint, snapshot_version_, recover_log_id_, checksum_, epoch_id_, submit_timestamp_,
+    recover_next_timestamp_, recover_next_timestamp_);
 
 OB_SERIALIZE_MEMBER(ObRecoverVec, recover_vec_);
 
-int ObRecoverVec::add_recover_point_(const ObRecoverPoint& point)
+int ObRecoverVec::add_recover_point_(const ObRecoverPoint &point)
 {
   int ret = OB_SUCCESS;
 
@@ -281,14 +282,14 @@ int ObRecoverVec::add_recover_point_(const ObRecoverPoint& point)
   return ret;
 }
 
-int ObRecoverVec::add_recover_point(const ObRecoverPoint& point)
+int ObRecoverVec::add_recover_point(const ObRecoverPoint &point)
 {
   ObLockGuard<ObSpinLock> lock_guard(lock_);
 
   return add_recover_point_(point);
 }
 
-int ObRecoverVec::reboot_recover_point(const ObRecoverPoint& point)
+int ObRecoverVec::reboot_recover_point(const ObRecoverPoint &point)
 {
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> lock_guard(lock_);
@@ -300,7 +301,7 @@ int ObRecoverVec::reboot_recover_point(const ObRecoverPoint& point)
   return ret;
 }
 
-int ObRecoverVec::gc_recover_points(const int64_t gc_snapshot_version, const int64_t kept_backup_version, bool& changed)
+int ObRecoverVec::gc_recover_points(const int64_t gc_snapshot_version, const int64_t kept_backup_version, bool &changed)
 {
   int ret = OB_SUCCESS;
   changed = false;
@@ -332,7 +333,7 @@ int ObRecoverVec::gc_recover_points(const int64_t gc_snapshot_version, const int
   return ret;
 }
 
-int ObRecoverVec::clear_recover_points_for_physical_flashback(const int64_t version, const ObRecoverPoint& point)
+int ObRecoverVec::clear_recover_points_for_physical_flashback(const int64_t version, const ObRecoverPoint &point)
 {
   int ret = OB_SUCCESS;
   int size = 0;
@@ -363,7 +364,7 @@ bool ObRecoverVec::can_gc_recover_point_(const int64_t gc_snapshot_version, cons
          (kept_backup_version == 0 || recover_vec_[1].snapshot_version_ <= kept_backup_version);
 }
 
-int ObRecoverVec::get_lower_bound_point(const int64_t snapshot_version, ObRecoverPoint& point)
+int ObRecoverVec::get_lower_bound_point(const int64_t snapshot_version, ObRecoverPoint &point)
 {
   int ret = OB_SUCCESS;
   int64_t id = 0;
@@ -382,7 +383,7 @@ int ObRecoverVec::get_lower_bound_point(const int64_t snapshot_version, ObRecove
   return ret;
 }
 
-int ObRecoverVec::get_lower_bound_point_(const int64_t snapshot_version, int64_t& id)
+int ObRecoverVec::get_lower_bound_point_(const int64_t snapshot_version, int64_t &id)
 {
   int ret = OB_SUCCESS;
   ObRecoverPoint tmp_point(snapshot_version, 0, 0, 0, 0);
@@ -402,7 +403,7 @@ int ObRecoverVec::get_lower_bound_point_(const int64_t snapshot_version, int64_t
   return ret;
 }
 
-int ObRecoverVec::record_major_recover_point(const int64_t prev_version, const int64_t version, bool& changed)
+int ObRecoverVec::record_major_recover_point(const int64_t prev_version, const int64_t version, bool &changed)
 {
   int ret = OB_SUCCESS;
   int64_t id = 0;
@@ -436,7 +437,7 @@ int ObRecoverVec::record_major_recover_point(const int64_t prev_version, const i
   return ret;
 }
 
-int ObRecoverVec::assign_recover_points(const ObRecoverVec& vec)
+int ObRecoverVec::assign_recover_points(const ObRecoverVec &vec)
 {
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> lock_guard(lock_);

@@ -55,9 +55,32 @@ public:
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
 private:
-  int eliminate_join_self_foreign_key(ObDMLStmt* stmt, bool& trans_happened);
+  /**
+   * @brief
+   * check if a table can be eliminated
+   *  delete p1, p2 FROM t1  as p1, t1 as p2 where p1.a=p2.a;
+   * p2 can not be eliminateed since it is going to be updated/deleted
+   * @param stmt
+   * @param table_id
+   * @param is_valid
+   * @return int
+   */
+  int check_table_can_be_eliminated(const ObDMLStmt *stmt, uint64_t table_id, bool &is_valid);
 
-  int eliminate_join_in_from_base_table(ObDMLStmt* stmt, bool& trans_happened);
+  /**
+   * @brief eliminate_join_self_key
+   * cases that can be eliminated for self key join：
+   * basic_table or generate_table within STMT FROM ITEMS
+   * basic_table or generate_table within SEMI ITEMS
+   * inner join tables within SEMI ITEMS or STMT ITEMS
+   */
+  int eliminate_join_self_foreign_key(ObDMLStmt *stmt, bool &trans_happened);
+
+  /**
+   * @brief eliminate_SKJ_in_from_base_table
+   * eliminate self key loseless join existed in basic table or generate table within STMT FROM ITEMS
+   */
+  int eliminate_join_in_from_base_table(ObDMLStmt *stmt, bool &trans_happened);
 
   int eliminate_join_in_from_item(
       ObDMLStmt* stmt, const ObIArray<FromItem>& from_items, SemiInfo* semi_info, bool& trans_happened);

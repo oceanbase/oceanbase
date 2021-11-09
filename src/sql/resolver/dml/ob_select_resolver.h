@@ -229,6 +229,9 @@ public:
   }
   // function members
   TO_STRING_KV(K_(has_calc_found_rows), K_(has_top_limit), K_(in_set_query), K_(in_subquery));
+  void set_resolver(ObSelectResolver* resolver){
+    saved_left_resolver = resolver;
+  }
 
 protected:
   int resolve_set_query(const ParseNode& parse_node);
@@ -432,6 +435,8 @@ protected:
   bool in_subquery_;
   // query is subquery in exists
   bool in_exists_subquery_;
+  ObSelectResolver* saved_left_resolver = NULL;
+  // used to store left resolver and get alias name
   ObStandardGroupChecker standard_group_checker_;
   const TransposeItem* transpose_item_;
 

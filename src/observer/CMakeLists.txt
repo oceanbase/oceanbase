@@ -208,6 +208,9 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_tenant_all_tables.cpp
   virtual_table/ob_tenant_partition_stat.cpp
   virtual_table/ob_tenant_show_tables.cpp
+  virtual_table/ob_tenant_show_tables.h
+  virtual_table/ob_tenant_show_restore_preview.cpp
+  virtual_table/ob_tenant_show_restore_preview.h
   virtual_table/ob_tenant_virtual_charset.cpp
   virtual_table/ob_tenant_virtual_collation.cpp
   virtual_table/ob_tenant_virtual_concurrent_limit_sql.cpp
@@ -240,6 +243,8 @@ ob_set_subtarget(ob_server vt
   virtual_table/ob_all_virtual_reserved_table_mgr.cpp
   virtual_table/ob_all_virtual_dag_warning_history.cpp
   virtual_table/ob_all_virtual_backupset_history_mgr.cpp
+  virtual_table/ob_all_virtual_backup_clean_info.h
+  virtual_table/ob_all_virtual_backup_clean_info.cpp
 )
 
 ob_set_subtarget(ob_server table
@@ -250,7 +255,16 @@ ob_set_subtarget(ob_server table
   table/ob_table_rpc_processor.cpp		
   table/ob_table_service.cpp		
   table/ob_table_api_row_iterator.cpp
+  table/ob_table_query_and_mutate_processor.cpp
+  table/ob_htable_filter_operator.cpp
+  table/ob_htable_filter_parser.cpp
+  table/ob_htable_utils.cpp
+  table/ob_htable_filters.cpp
+  table/htable_filter_tab.cxx
+  table/htable_filter_lex.cxx
 )
+
+set_source_files_properties(table/htable_filter_lex.cxx PROPERTIES COMPILE_FLAGS -Wno-null-conversion)
 
 ob_server_add_pchs(observer
   ob_server_struct.h
@@ -315,13 +329,18 @@ if (OB_STATIC_LINK_LGPL_DEPS)
 endif()
 
 add_executable(observer)
+
+if (NOT OB_USE_ASAN) 
+  set(link_malloc_hook malloc_hook)
+endif()
+
 target_link_libraries(observer
   PRIVATE
   ob_main
   oceanbase_static
   -static-libgcc
   -static-libstdc++
-  malloc_hook
+  ${link_malloc_hook}
   ${LGPL_DEPS}
   )
 execute_process(

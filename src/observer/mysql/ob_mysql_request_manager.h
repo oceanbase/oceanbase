@@ -103,7 +103,7 @@ public:
     return request_id_;
   }
 
-  int record_request(const ObAuditRecordData& audit_record);
+  int record_request(const ObAuditRecordData& audit_record, bool is_sensitive = false);
 
   int64_t get_start_idx() const
   {

@@ -726,10 +726,13 @@ OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
         LOG_WARN("failed to deserialize kit store", K(ret));
       }
     } else {
+      ObPhyOpSeriCtx seri_ctx;
+      seri_ctx.exec_ctx_ = exec_ctx_;
       if (OB_ISNULL(op_root_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: op root is null", K(ret));
-      } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(buf, buf_len, pos, *op_root_, task_.is_fulltree()))) {
+      } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(buf, buf_len, pos, 
+        *op_root_, task_.is_fulltree(), &seri_ctx))) {
         LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
       }
     }
@@ -846,7 +849,9 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitTaskArgs)
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected status: op root is null", K(ret));
       } else {
-        len += ObPxTreeSerializer::get_tree_serialize_size(*op_root_, task_.is_fulltree());
+        ObPhyOpSeriCtx seri_ctx;
+        seri_ctx.exec_ctx_ = exec_ctx_;
+        len += ObPxTreeSerializer::get_tree_serialize_size(*op_root_, task_.is_fulltree(), &seri_ctx);
       }
     }
   }

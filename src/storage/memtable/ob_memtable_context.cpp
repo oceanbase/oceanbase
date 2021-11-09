@@ -260,17 +260,20 @@ int ObMemtableCtx::set_host_(ObMemtable* host, const bool for_replay)
     ret = OB_NOT_MASTER;
   } else if (host == get_active_mt()) {
     // do nothing
+  } else if (memtable_arr_wrap_.is_contain_this_memtable(host)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "memstore already exist", K(ret), K(*this), KP(host));
   } else if (memtable_arr_wrap_.is_reach_max_memtable_cnt()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "reach max memstore in storage", K(ret), K(*this), KP(host));
-  } else {
-    if (memtable_arr_wrap_.is_contain_this_memtable(host)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "memstore already exist", K(ret), K(*this), KP(host));
-    } else if (OB_FAIL(host->inc_active_trx_count())) {
-      TRANS_LOG(ERROR, "increase active_trx_count error", K(ret), K(*this), KP(host));
+  } else if (OB_FAIL(host->inc_active_trx_count())) {
+    TRANS_LOG(ERROR, "increase active_trx_count error", K(ret), K(*this), KP(host));
+  } else if (OB_FAIL(memtable_arr_wrap_.add_memtable(host))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = host->dec_active_trx_count())) {
+      TRANS_LOG(ERROR, "decrease active_trx_count error when add memtable fail", K(tmp_ret), K(ret), K(*this), KP(host));
     } else {
-      memtable_arr_wrap_.add_memtable(host);
+      TRANS_LOG(WARN, "decrease active_trx_count success when add memtable fail", K(ret), K(*this), KP(host));
     }
   }
   return ret;
@@ -792,6 +795,7 @@ int ObMemtableCtx::do_trans_end(const bool commit, const int64_t trans_version, 
     if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
       TRANS_LOG(ERROR, "callback alloc and free count not match", K(*this));
     }
+    (void)partition_audit_info_cache_.stmt_end_update_audit_info(commit);
     // flush partition audit statistics cached in ctx to partition
     if (NULL != ATOMIC_LOAD(&ctx_) && OB_UNLIKELY(OB_SUCCESS != (tmp_ret = flush_audit_partition_cache_(commit)))) {
       TRANS_LOG(WARN, "flush audit partition cache error", K(tmp_ret), K(commit), K(*ctx_));

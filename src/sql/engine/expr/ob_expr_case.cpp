@@ -49,7 +49,7 @@ int ObExprCase::calc_result_typeN(
   } else {  // param_num >=3 and param_num is odd
 
     /* in order to be compatible with mysql
-     * both in ob_expr_cae.cpp and ob_expr_arg_case.cpp
+     * both in ob_expr_case.cpp and ob_expr_arg_case.cpp
      * types_stack includes the condition exprs.
      * In expr_case, there is no arg param expr compared with expr_arg_case
      */

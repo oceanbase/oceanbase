@@ -657,7 +657,7 @@ private:
 
 class ObPhysicalRestoreTenantStmt : public ObSystemCmdStmt {
 public:
-  ObPhysicalRestoreTenantStmt() : ObSystemCmdStmt(stmt::T_PHYSICAL_RESTORE_TENANT), rpc_arg_()
+  ObPhysicalRestoreTenantStmt() : ObSystemCmdStmt(stmt::T_PHYSICAL_RESTORE_TENANT), rpc_arg_(), is_preview_(false)
   {}
   virtual ~ObPhysicalRestoreTenantStmt()
   {}
@@ -666,9 +666,18 @@ public:
   {
     return rpc_arg_;
   }
+  void set_is_preview(const bool is_preview)
+  {
+    is_preview_ = is_preview;
+  }
+  bool get_is_preview() const
+  {
+    return is_preview_;
+  }
 
 private:
   obrpc::ObPhysicalRestoreTenantArg rpc_arg_;
+  bool is_preview_;
 };
 
 class ObRunJobStmt : public ObSystemCmdStmt {
@@ -967,13 +976,161 @@ private:
   bool incremental_;
 };
 
+class ObBackupBackupsetStmt : public ObSystemCmdStmt {
+public:
+  ObBackupBackupsetStmt()
+      : ObSystemCmdStmt(stmt::T_BACKUP_BACKUPSET), tenant_id_(OB_INVALID_ID), backup_set_id_(-1), max_backup_times_(-1)
+  {}
+  virtual ~ObBackupBackupsetStmt()
+  {}
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  int64_t get_backup_set_id() const
+  {
+    return backup_set_id_;
+  }
+  int64_t get_max_backup_times() const
+  {
+    return max_backup_times_;
+  }
+  const ObString get_backup_backup_dest() const
+  {
+    return backup_backup_dest_;
+  }
+
+  int set_param(const uint64_t tenant_id, int64_t backup_set_id, const int64_t max_backup_times,
+      const common::ObString& backup_backup_dest)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_INVALID_ID == tenant_id || backup_set_id < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(backup_set_id), K(backup_backup_dest));
+    } else if (OB_FAIL(databuff_printf(backup_backup_dest_,
+                   sizeof(backup_backup_dest_),
+                   "%.*s",
+                   backup_backup_dest.length(),
+                   backup_backup_dest.ptr()))) {
+      COMMON_LOG(WARN, "failed to databuff printf", KR(ret));
+    } else {
+      tenant_id_ = tenant_id;
+      backup_set_id_ = backup_set_id;
+      max_backup_times_ = max_backup_times;
+    }
+    return ret;
+  }
+  TO_STRING_KV(
+      N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(backup_set_id), K_(max_backup_times), K_(backup_backup_dest));
+
+private:
+  uint64_t tenant_id_;
+  int64_t backup_set_id_;
+  int64_t max_backup_times_;
+  char backup_backup_dest_[share::OB_MAX_BACKUP_DEST_LENGTH];
+};
+
+class ObBackupArchiveLogStmt : public ObSystemCmdStmt {
+public:
+  ObBackupArchiveLogStmt() : ObSystemCmdStmt(stmt::T_BACKUP_ARCHIVELOG), enable_(true)
+  {}
+  virtual ~ObBackupArchiveLogStmt()
+  {}
+  bool is_enable() const
+  {
+    return enable_;
+  }
+  void set_is_enable(const bool enable)
+  {
+    enable_ = enable;
+  }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(enable));
+
+private:
+  bool enable_;
+};
+
+class ObBackupBackupPieceStmt : public ObSystemCmdStmt {
+public:
+  ObBackupBackupPieceStmt()
+      : ObSystemCmdStmt(stmt::T_BACKUP_BACKUPPIECE),
+        tenant_id_(OB_INVALID_ID),
+        piece_id_(-1),
+        max_backup_times_(-1),
+        backup_all_(false),
+        backup_backup_dest_(""),
+        with_active_piece_(false)
+  {}
+  virtual ~ObBackupBackupPieceStmt()
+  {}
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  int64_t get_piece_id() const
+  {
+    return piece_id_;
+  }
+  int64_t get_max_backup_times() const
+  {
+    return max_backup_times_;
+  }
+  bool is_backup_all() const
+  {
+    return backup_all_;
+  }
+  const ObString get_backup_backup_dest() const
+  {
+    return backup_backup_dest_;
+  }
+  bool with_active_piece() const
+  {
+    return with_active_piece_;
+  }
+
+  int set_param(const uint64_t tenant_id, const int64_t piece_id, const int64_t max_backup_times, const bool backup_all,
+      const bool with_active_piece, const common::ObString& backup_backup_dest)
+  {
+    int ret = common::OB_SUCCESS;
+    const int64_t MAX_BACKUP_TIMES = 2;
+    if (OB_INVALID_ID == tenant_id || piece_id < 0 || max_backup_times > MAX_BACKUP_TIMES) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(piece_id), K(max_backup_times));
+    } else if (OB_FAIL(databuff_printf(backup_backup_dest_,
+                   sizeof(backup_backup_dest_),
+                   "%.*s",
+                   backup_backup_dest.length(),
+                   backup_backup_dest.ptr()))) {
+      COMMON_LOG(WARN, "failed to databuff printf", KR(ret));
+    } else {
+      tenant_id_ = tenant_id;
+      piece_id_ = piece_id;
+      max_backup_times_ = max_backup_times;
+      backup_all_ = backup_all;
+      with_active_piece_ = with_active_piece;
+    }
+    return ret;
+  }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(piece_id), K_(max_backup_times), K_(backup_all),
+      K_(backup_backup_dest));
+
+private:
+  uint64_t tenant_id_;
+  int64_t piece_id_;
+  int64_t max_backup_times_;
+  bool backup_all_;
+  char backup_backup_dest_[share::OB_MAX_BACKUP_DEST_LENGTH];
+  bool with_active_piece_;
+};
+
 class ObBackupManageStmt : public ObSystemCmdStmt {
 public:
   ObBackupManageStmt()
       : ObSystemCmdStmt(stmt::T_BACKUP_MANAGE),
         tenant_id_(OB_INVALID_ID),
         type_(obrpc::ObBackupManageArg::MAX_TYPE),
-        value_(0)
+        value_(0),
+        copy_id_(0)
   {}
   virtual ~ObBackupManageStmt()
   {}
@@ -989,7 +1146,11 @@ public:
   {
     return tenant_id_;
   }
-  int set_param(const uint64_t tenant_id, const int64_t type, const int64_t value)
+  int64_t get_copy_id() const
+  {
+    return copy_id_;
+  }
+  int set_param(const uint64_t tenant_id, const int64_t type, const int64_t value, const int64_t copy_id)
   {
     int ret = common::OB_SUCCESS;
 
@@ -1000,16 +1161,18 @@ public:
       type_ = static_cast<obrpc::ObBackupManageArg::Type>(type);
       value_ = value;
       tenant_id_ = tenant_id;
+      copy_id_ = copy_id;
     }
 
     return ret;
   }
-  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(type), K_(value));
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(type), K_(value), K_(copy_id));
 
 private:
   uint64_t tenant_id_;
   obrpc::ObBackupManageArg::Type type_;
   int64_t value_;
+  int64_t copy_id_;
 };
 
 class ObBackupSetEncryptionStmt : public ObSystemCmdStmt {
@@ -1050,6 +1213,32 @@ public:
 private:
   char passwd_array_[OB_MAX_PASSWORD_ARRAY_LENGTH];
   int64_t pos_;
+};
+
+class ObAddRestoreSourceStmt : public ObSystemCmdStmt {
+public:
+  ObAddRestoreSourceStmt();
+  virtual ~ObAddRestoreSourceStmt()
+  {}
+  const ObString get_restore_source_array() const
+  {
+    return restore_source_array_;
+  }
+  int add_restore_source(const common::ObString& source);
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(restore_source_array));
+
+private:
+  static const int64_t MAX_RESTORE_SOURCE_LENGTH = 365 * 10 * share::OB_MAX_BACKUP_DEST_LENGTH;
+  char restore_source_array_[MAX_RESTORE_SOURCE_LENGTH];
+  int64_t pos_;
+};
+
+class ObClearRestoreSourceStmt : public ObSystemCmdStmt {
+public:
+  ObClearRestoreSourceStmt() : ObSystemCmdStmt(stmt::T_CLEAR_RESTORE_SOURCE)
+  {}
+  virtual ~ObClearRestoreSourceStmt()
+  {}
 };
 
 }  // end namespace sql

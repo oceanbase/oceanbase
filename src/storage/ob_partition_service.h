@@ -63,6 +63,7 @@
 #include "storage/ob_clog_cb_async_worker.h"
 #include "lib/container/ob_array_array.h"
 #include "storage/ob_partition_group_create_checker.h"
+#include "storage/ob_backup_archive_log.h"
 
 namespace oceanbase {
 namespace blocksstable {
@@ -124,6 +125,8 @@ struct ObPartMigrationRes {
   share::ObPhysicalBackupArg backup_arg_;
   share::ObPhysicalValidateArg validate_arg_;
   ObPartitionMigrationDataStatics data_statics_;
+  share::ObBackupBackupsetArg backup_backupset_arg_;
+  share::ObBackupArchiveLogArg backup_archivelog_arg_;
   int64_t quorum_;
   int32_t result_;
 
@@ -134,12 +137,13 @@ struct ObPartMigrationRes {
         data_src_(),
         backup_arg_(),
         validate_arg_(),
-        data_statics_(),
+        backup_backupset_arg_(),
+        backup_archivelog_arg_(),
         quorum_(-1),
         result_(OB_ERROR)
   {}
-  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(backup_arg), K_(validate_arg), K_(data_statics), K_(quorum),
-      K_(result));
+  TO_STRING_KV(K_(key), K_(src), K_(dst), K_(data_src), K_(backup_arg), K_(validate_arg), K_(backup_backupset_arg),
+      K_(backup_archivelog_arg), K_(quorum), K_(result));
 };
 
 class ObRestoreInfo {
@@ -177,9 +181,9 @@ enum ObChangeMemberOption : int8_t {
 };
 
 struct ObReplicaOpArg {
-  const static int64_t RESTORE_VERSION_0 = 0;  // old storage file format before 2.2.30
-  const static int64_t RESTORE_VERSION_1 = 1;  // new storage file format
-  common::ObPartitionKey key_;                 // TODO() change it to pg key
+  const static int64_t RESTORE_VERSION_0 = 0;  // old storage logical backup file format before 2.2.30, not supported
+  const static int64_t RESTORE_VERSION_1 = 1;  // new storage physical backup file format
+  common::ObPartitionKey key_;                 // TODO(muwei.ym) change it to pg key
   common::ObReplicaMember src_;
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_src_;
@@ -190,6 +194,8 @@ struct ObReplicaOpArg {
   share::ObPhysicalBackupArg backup_arg_;
   share::ObPhysicalRestoreArg phy_restore_arg_;
   share::ObPhysicalValidateArg validate_arg_;
+  share::ObBackupBackupsetArg backup_backupset_arg_;
+  share::ObBackupArchiveLogArg backup_archive_log_arg_;
   uint64_t index_id_;
   ObReplicaOpPriority priority_;
   int64_t cluster_id_;
@@ -209,6 +215,8 @@ struct ObReplicaOpArg {
         backup_arg_(),
         phy_restore_arg_(),
         validate_arg_(),
+        backup_backupset_arg_(),
+        backup_archive_log_arg_(),
         index_id_(OB_INVALID_ID),
         priority_(ObReplicaOpPriority::PRIO_INVALID),
         cluster_id_(OB_INVALID_CLUSTER_ID),
@@ -219,10 +227,13 @@ struct ObReplicaOpArg {
 
   bool is_valid() const
   {
-    return (is_replica_op_valid(type_) && key_.is_valid() && (VALIDATE_BACKUP_OP == type_ || dst_.is_valid()) &&
+    return (is_replica_op_valid(type_) && key_.is_valid() &&
+               (VALIDATE_BACKUP_OP == type_ || BACKUP_BACKUPSET_OP == type_ || BACKUP_ARCHIVELOG_OP == type_ ||
+                   dst_.is_valid()) &&
                ((REMOVE_REPLICA_OP == type_ || RESTORE_REPLICA_OP == type_ || BACKUP_REPLICA_OP == type_ ||
-                    RESTORE_STANDBY_OP == type_) ||
-                   VALIDATE_BACKUP_OP == type_ || (src_.is_valid() && data_src_.is_valid())) &&
+                    BACKUP_BACKUPSET_OP == type_ || RESTORE_STANDBY_OP == type_) ||
+                   VALIDATE_BACKUP_OP == type_ || BACKUP_ARCHIVELOG_OP == type_ ||
+                   (src_.is_valid() && data_src_.is_valid())) &&
                (COPY_LOCAL_INDEX_OP != type_ || OB_INVALID_ID != index_id_)) &&
            is_replica_op_priority_valid(priority_) &&
            (NORMAL_CHANGE_MEMBER_LIST == change_member_option_ || ADD_REPLICA_OP == type_ ||
@@ -237,8 +248,8 @@ struct ObReplicaOpArg {
   bool is_standby_restore() const;
   const char* get_replica_op_type_str() const;
   TO_STRING_KV(K_(key), K_(dst), K_(src), K_(data_src), K_(quorum), "type", get_replica_op_type_str(), K_(base_version),
-      K_(restore_arg), K_(validate_arg), K_(backup_arg), K_(phy_restore_arg), K_(index_id), K_(priority),
-      K_(cluster_id), K_(restore_version), K_(change_member_option), K_(switch_epoch));
+      K_(restore_arg), K_(validate_arg), K_(backup_arg), K_(phy_restore_arg), K_(backup_backupset_arg), K_(index_id),
+      K_(priority), K_(cluster_id), K_(restore_version), K_(switch_epoch));
 };
 
 struct ObMigrateSrcInfo {
@@ -338,12 +349,11 @@ public:
       const common::ObIArray<obrpc::ObCreatePartitionArg>& batch_arg, common::ObIArray<int>& batch_res);
   VIRTUAL_FOR_UNITTEST int create_new_partition(const common::ObPartitionKey& key, ObIPartitionGroup*& partition);
   VIRTUAL_FOR_UNITTEST int add_new_partition(ObIPartitionGroupGuard& partition_guard);
-  VIRTUAL_FOR_UNITTEST int log_new_partition(ObIPartitionGroup* partition, const int64_t publish_version);
   VIRTUAL_FOR_UNITTEST int remove_partition(const common::ObPartitionKey& key, const bool write_slog = true);
   VIRTUAL_FOR_UNITTEST int remove_partition_from_pg(
-      const bool for_replay, const ObPartitionKey &pg_key, const ObPartitionKey &pkey, const uint64_t log_id);
-  VIRTUAL_FOR_UNITTEST int online_partition(const common::ObPartitionKey &pkey, const int64_t publish_version,
-      const int64_t restore_snapshot_version, const int64_t last_restore_log_ts);
+      const bool for_replay, const ObPartitionKey& pg_key, const ObPartitionKey& pkey, const uint64_t log_id);
+  VIRTUAL_FOR_UNITTEST int online_partition(const common::ObPartitionKey& pkey, const int64_t publish_version,
+      const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   // before building the index, wait for all transactions with lower schema version to finish
   // max_commit_version is the max commit version of those transactions
   VIRTUAL_FOR_UNITTEST int check_schema_version_elapsed(const ObPartitionKey& partition, const int64_t schema_version,
@@ -534,7 +544,7 @@ public:
   }
 
   VIRTUAL_FOR_UNITTEST int replay(const ObPartitionKey& partition, const char* log, const int64_t size,
-      const uint64_t log_id, const int64_t log_ts);
+      const uint64_t log_id, const int64_t log_ts, int64_t& schema_version);
   VIRTUAL_FOR_UNITTEST int minor_freeze(const uint64_t tenant_id);
   VIRTUAL_FOR_UNITTEST int minor_freeze(
       const common::ObPartitionKey& pkey, const bool emergency = false, const bool force = false);
@@ -606,9 +616,13 @@ public:
   VIRTUAL_FOR_UNITTEST int restore_follower_replica(const obrpc::ObCopySSTableBatchArg& rpc_arg);
   VIRTUAL_FOR_UNITTEST int backup_replica_batch(const obrpc::ObBackupBatchArg& arg);
   VIRTUAL_FOR_UNITTEST int validate_backup_batch(const obrpc::ObValidateBatchArg& arg);
+  VIRTUAL_FOR_UNITTEST int backup_backupset_batch(const obrpc::ObBackupBackupsetBatchArg& arg);
+  VIRTUAL_FOR_UNITTEST int backup_archive_log(const obrpc::ObBackupArchiveLogBatchArg& arg);
 
   virtual int get_tenant_log_archive_status(
       const share::ObGetTenantLogArchiveStatusArg& arg, share::ObTenantLogArchiveStatusWrapper& result);
+  virtual int get_tenant_log_archive_status_v2(
+      const share::ObGetTenantLogArchiveStatusArg& arg, share::ObServerTenantLogArchiveStatusWrapper& result);
   virtual int get_archive_pg_map(archive::PGArchiveMap*& map);
   int push_replica_task(
       const ObReplicaOpType& type, const obrpc::ObMigrateReplicaArg& migrate_arg, ObIArray<ObReplicaOpArg>& task_list);
@@ -618,6 +632,7 @@ public:
       const common::ObReplicaMember& src,
       const common::ObReplicaMember& data_src, /* data source, if invalid, use leader instead */
       const int64_t quorum);
+  VIRTUAL_FOR_UNITTEST int standby_cut_data_batch(const obrpc::ObStandbyCutDataBatchTaskArg& arg);
 
   // interface for online/offline
   VIRTUAL_FOR_UNITTEST int add_replica(const obrpc::ObAddReplicaArg& rpc_arg, const share::ObTaskId& task_id);
@@ -690,8 +705,8 @@ public:
       const int64_t* total_task_count, common::ObIArray<common::ObStoreRange>* splitted_ranges,
       common::ObIArray<int64_t>* split_index) override;
 
-  virtual int get_multi_ranges_cost(
-      const common::ObPartitionKey& pkey, const common::ObIArray<common::ObStoreRange>& ranges, int64_t& total_size) override;
+  virtual int get_multi_ranges_cost(const common::ObPartitionKey& pkey,
+      const common::ObIArray<common::ObStoreRange>& ranges, int64_t& total_size) override;
   virtual int split_multi_ranges(const common::ObPartitionKey& pkey,
       const common::ObIArray<common::ObStoreRange>& ranges, const int64_t expected_task_count,
       common::ObIAllocator& allocator, common::ObArrayArray<common::ObStoreRange>& multi_range_split_array) override;
@@ -781,8 +796,8 @@ public:
 
   int set_restore_flag(const ObPartitionKey& pkey, const int16_t flag);
   int set_restore_snapshot_version_for_trans(const ObPartitionKey& pkey, const int64_t restore_snapshot_version);
-  int get_restore_replay_info(const ObPartitionKey &pkey, uint64_t &restore_last_replay_log_id,
-      int64_t &restore_last_replay_log_ts, int64_t &restore_snapshot_version);
+  int get_restore_replay_info(const ObPartitionKey& pkey, uint64_t& restore_last_replay_log_id,
+      int64_t& restore_last_replay_log_ts, int64_t& restore_snapshot_version);
   int wait_all_trans_clear(const ObPartitionKey& pkey);
   int check_all_trans_in_trans_table_state(const ObPartitionKey& pkey);
 
@@ -804,12 +819,11 @@ public:
   VIRTUAL_FOR_UNITTEST int check_has_need_offline_replica(
       const obrpc::ObTenantSchemaVersions& arg, obrpc::ObGetPartitionCountResult& result);
   int wait_schema_version(const int64_t tenant_id, int64_t schema_version, int64_t query_end_time);
-  int fast_migrate_wait_batch_change_member_list_done(
-      const ObAddr& leader_addr, obrpc::ObChangeMemberCtxs& change_member_info);
-  int fast_migrate_try_remove_member(const ObAddr& leader_addr, const ObPGKey& pg_key, const ObMember& old_member,
-      int64_t quorum, int64_t switch_epoch);
-  int fast_migrate_try_add_member(const ObAddr& leader_addr, const ObPGKey& pg_key, const ObMember& new_member,
-      int64_t quorum, int64_t switch_epoch);
+  // For example, z1, z2, z3, total 3 zones, the primary zone is z1,
+  // but we only allow z1 and z2 can do backup by "alter system set backup_zone='z1,z2'".
+  // However, sometimes, for example, z3 will be choosed as partition leader and it will do archive.
+  // In this case, we need let z3 refuse backup read/write io.
+  int enable_backup_white_list();
   // for log_archive
   int mark_log_archive_encount_fatal_error(
       const common::ObPartitionKey& pkey, const int64_t incarnation, const int64_t archive_round);
@@ -821,6 +835,7 @@ public:
   int mark_pg_creating(const ObPartitionKey& pkey);
   int mark_pg_created(const ObPartitionKey& pkey);
   int check_partition_exist(const common::ObPartitionKey& pkey, bool& exist) override;
+  int report_pg_backup_task(const ObIArray<ObPartMigrationRes>& report_res_list);
 
   obrpc::ObCommonRpcProxy& get_rs_rpc_proxy();
   int inc_pending_batch_commit_count(const ObPartitionKey& pkey, memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts);
@@ -837,6 +852,7 @@ public:
 
   // @brief: used for revoke all partition
   int try_revoke_all_leader(const election::ObElection::RevokeType& revoke_type);
+  int check_standby_cluster_schema_condition(const ObPartitionKey& pkey, const int64_t schema_version);
 
 private:
   class ObStoreCtxGuard {
@@ -902,7 +918,8 @@ private:
       ObStoreCtxGuard& ctx_guard, ObIPartitionGroupGuard& guard);
   int replay_add_store(const int64_t log_seq_num, const char* buf, const int64_t buf_len);
   int replay_remove_store(const int64_t log_seq_num, const char* buf, const int64_t buf_len);
-  int replay_add_partition_to_pg_clog(const ObCreatePartitionParam& arg, const uint64_t log_id, const int64_t log_ts);
+  int replay_add_partition_to_pg_clog(
+      const ObCreatePartitionParam& arg, const uint64_t log_id, const int64_t log_ts, int64_t& schema_version);
   int replace_restore_info_(const uint64_t cur_tenant_id, const share::ObReplicaRestoreStatus is_restore,
       const int64_t create_frozen_version, ObCreatePartitionParam& create_param);
   int prepare_all_partitions();
@@ -958,6 +975,10 @@ private:
       const ObArray<ObPartMigrationRes>& report_res_list, obrpc::ObBackupBatchRes& res);
   static int build_validate_backup_batch_res(
       const ObArray<ObPartMigrationRes>& report_res_list, obrpc::ObValidateBatchRes& res);
+  static int build_backup_backupset_batch_res(
+      const ObArray<ObPartMigrationRes>& report_res_list, obrpc::ObBackupBackupsetBatchRes& res);
+  static int build_backup_archivelog_batch_res(
+      const ObArray<ObPartMigrationRes>& report_res_list, obrpc::ObBackupArchiveLogBatchRes& res);
 
   int decode_log_type(const char* log, const int64_t size, int64_t& pos, ObStorageLogType& log_type);
 
@@ -996,11 +1017,12 @@ private:
       common::ObIArray<obrpc::ObCreatePartitionArg>& target_batch_arg, common::ObIArray<int>& batch_res);
   void free_partition_list(ObArray<ObIPartitionGroup*>& partition_list);
   void submit_pt_update_task_(const ObPartitionKey& pkey, const bool need_report_checksum = true);
-  int submit_pg_pt_update_task_(const ObPartitionKey &pkey);
+  int submit_pg_pt_update_task_(const ObPartitionKey& pkey);
   int try_inc_total_partition_cnt(const int64_t new_partition_cnt, const bool need_check);
   int physical_flashback();
   int clean_all_clog_files_();
-  int report_pg_backup_task(const ObIArray<ObPartMigrationRes>& report_res_list);
+  int report_pg_backup_backupset_task(const ObIArray<ObPartMigrationRes>& report_res_list);
+  int report_pg_backup_archivelog_task(const ObIArray<ObPartMigrationRes>& report_res_list);
   int get_create_pg_param(const obrpc::ObCreatePartitionArg& arg, const ObSavedStorageInfoV2& info,
       const int64_t data_version, const bool write_pg_slog, const ObPartitionSplitInfo& split_info,
       const int64_t split_state, blocksstable::ObStorageFileHandle* file_handle, ObBaseFileMgr* file_mgr,

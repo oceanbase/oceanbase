@@ -138,6 +138,15 @@ private:
   int record_job(const obrpc::ObRestoreTenantArg& arg);
   static int check_has_job_without_lock(
       common::ObISQLClient& sql_client, const common::ObString& tenant_name, bool& has_job);
+  static int fill_backup_path(const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job);
+  static int fill_multi_backup_path(const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job);
+  static int fill_compat_backup_path(const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job);
+  static int fill_clog_path_list(
+      const ObString& uri, const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job);
+  static int get_multi_path_file_info_list(const common::ObArray<share::ObSimpleBackupSetPath>& backup_set_list,
+      const common::ObArray<share::ObSimpleBackupPiecePath>& backup_piece_list,
+      common::ObArray<share::ObBackupSetFileInfo>& set_info_list,
+      common::ObArray<share::ObBackupPieceInfo>& piece_info_list);
 
 private:
   /* variables */

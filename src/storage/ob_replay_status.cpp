@@ -571,8 +571,7 @@ void ObReplayStatus::check_eagain_too_many_(const ObReplayStatus::CheckCanReplay
     }
     if ((eagain_count_ >= EAGAIN_COUNT_THRESHOLD) && (REACH_TIME_INTERVAL(1 * 1000 * 1000L))) {
       const int64_t cur_time = ObTimeUtil::current_time();
-      if ((!result.need_wait_schema_refresh_ && (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_NORMAL_THRESHOLD)) ||
-          (result.need_wait_schema_refresh_ && (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_BIG_THRESHOLD))) {
+      if (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_THRESHOLD) {
         REPLAY_LOG(ERROR,
             "retry submit on EAGAIN too many times",
             K(eagain_count_),

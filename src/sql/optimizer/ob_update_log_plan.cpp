@@ -304,7 +304,8 @@ int ObUpdateLogPlan::generate_plan()
                  GEN_LOCATION_CONSTRAINT,
                  REORDER_PROJECT_COLUMNS,
                  PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     SQL_OPT_LOG(WARN, "failed to do plan traverse", K(ret));
   } else if (OB_FAIL(plan_traverse_loop(GEN_SIGNATURE))) {
     SQL_OPT_LOG(WARN, "failed to get plan signature", K(ret));

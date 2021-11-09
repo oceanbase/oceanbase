@@ -35,6 +35,7 @@ public:
   // resolve opt_tenant_name
   static int resolve_tenant(
       const ParseNode* parse_tree, common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1>& tenant_name);
+  static int resolve_tenant_id(const ParseNode* parse_tree, uint64_t& tenant_id);
   // resolve partition_id_desc
   static int resolve_partition_id(
       const uint64_t tenant_id, const ParseNode* parse_tree, common::ObPartitionKey& partition_key);
@@ -50,6 +51,7 @@ public:
   // resolve opt_server_or_zone
   template <typename RPC_ARG>
   static int resolve_server_or_zone(const ParseNode* parse_tree, RPC_ARG& arg);
+  static int check_same_with_gconf(const common::ObString& str, bool& is_same);
 };
 
 #define DEF_SIMPLE_CMD_RESOLVER(name)                            \
@@ -144,8 +146,13 @@ DEF_SIMPLE_CMD_RESOLVER(ObAlterDiskgroupDropDiskResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObArchiveLogResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupDatabaseResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupManageResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObBackupBackupsetResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObBackupArchiveLogResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupSetEncryptionResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupSetDecryptionResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObBackupBackupPieceResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObAddRestoreSourceResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObClearRestoreSourceResolver);
 
 class ObPhysicalRestoreTenantResolver : public ObSystemCmdResolver {
 public:
@@ -157,6 +164,7 @@ public:
 
 private:
   int resolve_decryption_passwd(obrpc::ObPhysicalRestoreTenantArg& arg);
+  int resolve_restore_source_array(obrpc::ObPhysicalRestoreTenantArg& arg);
 };
 
 class ObAlterSystemSetResolver : public ObSystemCmdResolver {

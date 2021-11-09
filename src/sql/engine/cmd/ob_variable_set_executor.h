@@ -51,6 +51,12 @@ private:
 
   int update_global_variables(
       ObExecContext& ctx, ObDDLStmt& stmt, const share::ObSetVar& set_var, const common::ObObj& value_obj);
+  int set_variable(ObExecContext& ctx, ObSQLSessionInfo* session, ObExprCtx &expr_ctx,
+            ObMySQLProxy* sql_proxy, ObVariableSetStmt& stmt,
+            ObPhysicalPlan& phy_plan, ObPhysicalPlanCtx* plan_ctx,
+            const ObVariableSetStmt::VariableSetNode& node, int& ret_ac);
+  int set_names_charset(ObExecContext& ctx,const ObVariableSetStmt::NamesSetNode& names_set_node);
+  int get_global_sys_var_character_set_client(ObExecContext& ctx, common::ObString& character_set_client) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetExecutor);

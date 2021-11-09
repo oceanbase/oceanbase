@@ -1317,11 +1317,12 @@ int ObIndexBuilder::submit_build_global_index_task(const ObTableSchema& index_sc
       LOG_WARN("fail to get index schema", K(ret));
     } else if (OB_FAIL(
                    GCTX.root_service_->get_global_index_builder().submit_build_global_index_task(inner_index_schema))) {
-      LOG_WARN("fail to submit build global index task", K(ret));
+      if (OB_NOT_INIT == ret) {
+        ret = OB_EAGAIN;
+      }
     }
     if (OB_FAIL(ret)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "create global index failed, please drop and create another one");
+      FORWARD_USER_ERROR(ret, "create global index failed, please drop and create another one");
     }
   }
   return ret;

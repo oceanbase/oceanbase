@@ -40,7 +40,7 @@ int ObExprTime::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObE
   int16_t scale1 = MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL);
   int16_t scale = (SCALE_UNKNOWN_YET == scale1) ? MAX_SCALE_FOR_TEMPORAL : scale1;
   type.set_scale(scale);
-  UNUSED(type_ctx);
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return ret;
 }
 
@@ -103,7 +103,11 @@ static int ob_expr_convert_to_dt_or_time(
   int ret = OB_SUCCESS;
   if (with_date) {
     ObTime ot1;
-    if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot1, is_dayofmonth))) {
+    if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("session or exec ctx is null", K(ret), K(expr_ctx.my_session_));
+    } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot1,
+                    get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx()), is_dayofmonth))) {
       LOG_WARN("convert to obtime failed", K(ret));
     } else {
       ot = ot1;

@@ -65,11 +65,11 @@ int PartitionSchemaChecker::check_same_primary_zone(
 }
 
 int PartitionSchemaChecker::check_same_primary_zone(
-    const common::ObIArray<const share::schema::ObTableSchema*>& table_schemas,
+    const common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& table_schemas,
     share::schema::ObSchemaGetterGuard& schema_guard, bool& same)
 {
   int ret = OB_SUCCESS;
-  const share::schema::ObTableSchema* sample = nullptr;
+  const share::schema::ObSimpleTableSchemaV2* sample = nullptr;
   if (OB_UNLIKELY(table_schemas.count()) <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -79,7 +79,7 @@ int PartitionSchemaChecker::check_same_primary_zone(
   } else {
     same = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count() && same; ++i) {
-      const share::schema::ObTableSchema* ref = table_schemas.at(i);
+      const share::schema::ObSimpleTableSchemaV2* ref = table_schemas.at(i);
       if (nullptr == ref) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ref ptr is null", K(ret));
@@ -111,11 +111,12 @@ int PartitionSchemaChecker::check_same_primary_zone(
  * For the range partition, this function ignores the part_num check
  * FIXME:Support non-templated secondary partition
  */
-bool PartitionSchemaChecker::is_same_partition_schema(const ObTableSchema& ref, const ObTableSchema& other)
+bool PartitionSchemaChecker::is_same_partition_schema(
+    const ObSimpleTableSchemaV2& ref, const ObSimpleTableSchemaV2& other)
 {
   bool same = false;
   if (!rootserver::ObTenantUtils::is_balance_target_schema(other)) {
-    /* Ignore irregular tables in system tables */
+    // Ignore irregular tables in system tables
     same = true;
   } else if (ref.get_part_level() == other.get_part_level()) {
     switch (ref.get_part_level()) {
@@ -126,9 +127,11 @@ bool PartitionSchemaChecker::is_same_partition_schema(const ObTableSchema& ref, 
           same = (ref.get_part_option().get_part_num() == other.get_part_option().get_part_num());
         }
         // The partition column needs to be able to compare
+        /*
         if (same) {
-          same = (is_same_schema_partition_key_info(ref.get_partition_key_info(), other.get_partition_key_info()));
-        }
+          same = (is_same_schema_partition_key_info(ref.get_partition_key_info(),
+                                                    other.get_partition_key_info()));
+        }*/
         break;
       case PARTITION_LEVEL_TWO:
         same = (ref.get_part_option().get_part_func_type() == other.get_part_option().get_part_func_type()) &&
@@ -141,34 +144,39 @@ bool PartitionSchemaChecker::is_same_partition_schema(const ObTableSchema& ref, 
         if (same && (ref.is_hash_subpart() || ref.is_key_subpart())) {
           same = (ref.get_sub_part_option().get_part_num() == other.get_sub_part_option().get_part_num());
         }
+        /*
         if (same) {
-          same = (is_same_schema_partition_key_info(ref.get_partition_key_info(), other.get_partition_key_info()));
+          same = (is_same_schema_partition_key_info(ref.get_partition_key_info(),
+                                                    other.get_partition_key_info()));
         }
         // subpartition column needs to be able to compare
         if (same) {
-          same =
-              (is_same_schema_partition_key_info(ref.get_subpartition_key_info(), other.get_subpartition_key_info()));
+          same = (is_same_schema_partition_key_info(ref.get_subpartition_key_info(),
+                                                    other.get_subpartition_key_info()));
         }
+        */
 
         break;
       default:
-        same = true; /* LEVEL_ZERO */
+        same = true;  // LEVEL_ZERO
         break;
     }
   }
   return same;
 }
 
+/*
 bool PartitionSchemaChecker::is_same_schema_partition_key_info(
-    const common::ObRowkeyInfo& left, const common::ObRowkeyInfo& right)
+     const common::ObRowkeyInfo &left,
+     const common::ObRowkeyInfo &right)
 {
   bool bool_ret = true;
   if (left.get_size() != right.get_size()) {
     bool_ret = false;
   } else {
     for (int64_t i = 0; bool_ret && i < left.get_size(); ++i) {
-      const ObRowkeyColumn* left_c = left.get_column(i);
-      const ObRowkeyColumn* right_c = right.get_column(i);
+      const ObRowkeyColumn *left_c = left.get_column(i);
+      const ObRowkeyColumn *right_c = right.get_column(i);
       if (nullptr == left_c || nullptr == right_c) {
         bool_ret = false;
       } else if (left_c->get_meta_type() != right_c->get_meta_type()) {
@@ -178,20 +186,21 @@ bool PartitionSchemaChecker::is_same_schema_partition_key_info(
   }
   return bool_ret;
 }
+*/
 
 bool PartitionSchemaChecker::is_one_level_and_partition_by_range(
-    common::ObIArray<const share::schema::ObTableSchema*>& schemas)
+    common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& schemas)
 {
   bool bret = false;
   if (schemas.count() > 0 && NULL != schemas.at(0)) {
-    const share::schema::ObTableSchema& schema = *schemas.at(0);
+    const share::schema::ObSimpleTableSchemaV2& schema = *schemas.at(0);
     bret = PARTITION_LEVEL_ONE == schema.get_part_level() && schema.get_part_option().is_range_part();
   }
   return bret;
 }
 
 int ShardGroupValidator::check_table_schemas_compatible(ITenantStatFinder& stat_finder,
-    ObSchemaGetterGuard& schema_guard, const ObIArray<const ObTableSchema*>& tables, bool& compatible,
+    ObSchemaGetterGuard& schema_guard, const ObIArray<const ObSimpleTableSchemaV2*>& tables, bool& compatible,
     const bool check_primary_zone)
 {
   int ret = OB_SUCCESS;
@@ -221,14 +230,14 @@ int ShardGroupValidator::check_table_schemas_compatible(ITenantStatFinder& stat_
     }
     // 2. Ensure that the schema of each group of tablegroups is compatible,
     //    such as the compatibility of the partitioning method and the number of partitions
-    const ObTableSchema* first_table_schema = tables.at(0);
+    const ObSimpleTableSchemaV2* first_table_schema = tables.at(0);
     ARRAY_FOREACH_X(tables, idx, cnt, OB_SUCC(ret) && compatible)
     {
-      const ObTableSchema* table_schema = tables.at(idx);
+      const ObSimpleTableSchemaV2* table_schema = tables.at(idx);
       uint64_t tablegroup_id = table_schema->get_tablegroup_id();
       bool same = false;
       if (OB_INVALID_ID != tablegroup_id) {
-        ObArray<const ObTableSchema*> tg_tables;
+        ObArray<const ObSimpleTableSchemaV2*> tg_tables;
         if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(tenant_id, tablegroup_id, tg_tables))) {
           LOG_WARN("get_table_schema_by_tg_id fail", K(tenant_id), K(tablegroup_id), K(ret));
         } else {
@@ -452,7 +461,7 @@ int PartitionTableContainerBuilder::build()
     if (OB_FAIL(analyzer.analysis(tenant_id_))) {
       LOG_WARN("fail to analysis partition table", K(ret), K(tenant_id_));
     } else {
-      const ObTableSchema* table_schema = nullptr;
+      const ObSimpleTableSchemaV2* table_schema = nullptr;
       while (OB_SUCC(ret) && OB_SUCC(analyzer.next(table_schema))) {
         if (OB_UNLIKELY(nullptr == table_schema)) {
           ret = OB_ERR_UNEXPECTED;
@@ -469,7 +478,8 @@ int PartitionTableContainerBuilder::build()
   return ret;
 }
 
-int PartitionTableContainerBuilder::build_partition_table_container(const share::schema::ObTableSchema* table_schema)
+int PartitionTableContainerBuilder::build_partition_table_container(
+    const share::schema::ObSimpleTableSchemaV2* table_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -1023,7 +1033,7 @@ int ShardGroupContainerBuilder::TableSchemaPartitionCntCmp::sort()
 }
 
 bool ShardGroupContainerBuilder::TableSchemaPartitionCntCmp::operator()(
-    const share::schema::ObTableSchema* left, const share::schema::ObTableSchema* right)
+    const share::schema::ObSimpleTableSchemaV2* left, const share::schema::ObSimpleTableSchemaV2* right)
 {
   bool b_ret = false;
   int64_t l_part_cnt = 0;
@@ -1064,7 +1074,7 @@ int ShardGroupContainerBuilder::build()
     if (OB_FAIL(analyzer.analysis(tenant_id_))) {
       LOG_WARN("fail to analysis shardgroup", K(ret), K(tenant_id_));
     } else {
-      ObArray<const ObTableSchema*> shardgroup_table_schemas;
+      ObArray<const ObSimpleTableSchemaV2*> shardgroup_table_schemas;
       while (OB_SUCC(ret) && OB_SUCC(analyzer.next(shardgroup_table_schemas))) {
         if (shardgroup_table_schemas.count() < 1) {
           ret = OB_ERR_UNEXPECTED;
@@ -1082,12 +1092,12 @@ int ShardGroupContainerBuilder::build()
 }
 
 int ShardGroupContainerBuilder::build_shardgroup_container(
-    common::ObArray<const share::schema::ObTableSchema*>& shardgroup_schemas)
+    common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_schemas)
 {
   int ret = OB_SUCCESS;
   common::ObZone integrated_primary_zone;
   bool primary_zone_match = true;
-  const share::schema::ObTableSchema* sample_schema = nullptr;
+  const share::schema::ObSimpleTableSchemaV2* sample_schema = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1160,7 +1170,7 @@ int ShardGroupContainerBuilder::locate_same_range_array(
 
 int ShardGroupContainerBuilder::set_same_range_array(SameRangeMap& same_range_map,
     const share::schema::ObPartition& partition, const int64_t part_idx,
-    const share::schema::ObTableSchema& table_schema)
+    const share::schema::ObSimpleTableSchemaV2& table_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -1193,7 +1203,7 @@ int ShardGroupContainerBuilder::set_same_range_array(SameRangeMap& same_range_ma
 }
 
 int ShardGroupContainerBuilder::build_one_level_range_shard_partition_container(
-    common::ObArray<const share::schema::ObTableSchema*>& shardgroup_schemas, const bool primary_zone_match,
+    common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_schemas, const bool primary_zone_match,
     const common::ObZone& integrated_primary_zone)
 {
   int ret = OB_SUCCESS;
@@ -1218,7 +1228,7 @@ int ShardGroupContainerBuilder::build_one_level_range_shard_partition_container(
     // invalid shard group map
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < shardgroup_schemas.count(); ++i) {
-      const share::schema::ObTableSchema* table_schema = shardgroup_schemas.at(i);
+      const share::schema::ObSimpleTableSchemaV2* table_schema = shardgroup_schemas.at(i);
       if (OB_UNLIKELY(NULL == table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema ptr is null", K(ret));
@@ -1333,7 +1343,7 @@ int ShardGroupContainerBuilder::do_build_one_level_range_partition_container(Sam
  *       -     -     -     -    ..... pkn   p(k+1)n               2               p(k+1)n
  */
 int ShardGroupContainerBuilder::build_shardgroup_partition_container(
-    common::ObArray<const share::schema::ObTableSchema*>& shardgroup_schemas, const bool primary_zone_match,
+    common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_schemas, const bool primary_zone_match,
     const common::ObZone& integrated_primary_zone)
 {
   int ret = OB_SUCCESS;
@@ -1372,7 +1382,7 @@ int ShardGroupContainerBuilder::build_shardgroup_partition_container(
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < shardgroup_schemas.count(); ++i) {
-      const share::schema::ObTableSchema* table_schema = shardgroup_schemas.at(i);
+      const share::schema::ObSimpleTableSchemaV2* table_schema = shardgroup_schemas.at(i);
       int64_t this_part_num = 0;
       if (OB_UNLIKELY(NULL == table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1414,7 +1424,7 @@ int ShardGroupContainerBuilder::build_shardgroup_partition_container(
     int64_t start_balance_group_id = max_used_balance_group_id_ + 1;
     for (int64_t i = shardgroup_schemas.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
       const int64_t in_shard_index = shardgroup_schemas.count() - (i + 1);
-      const share::schema::ObTableSchema* table_schema = shardgroup_schemas.at(i);
+      const share::schema::ObSimpleTableSchemaV2* table_schema = shardgroup_schemas.at(i);
       int64_t all_tg_idx = OB_INVALID_INDEX_INT64;
       if (OB_UNLIKELY(NULL == table_schema)) {
         ret = OB_ERR_UNEXPECTED;

@@ -25,6 +25,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/ob_rpc_struct.h"
 #include "share/ob_upgrade_utils.h"
 
 namespace oceanbase {
@@ -55,7 +56,8 @@ public:
   virtual ~ObRestoreScheduler();
 
   int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy,
-      obrpc::ObCommonRpcProxy& rpc_proxy, obrpc::ObSrvRpcProxy& srv_rpc_proxy, ObFreezeInfoManager& freeze_info_manager,
+      common::ObOracleSqlProxy& oracle_sql_proxy, obrpc::ObCommonRpcProxy& rpc_proxy,
+      obrpc::ObSrvRpcProxy& srv_rpc_proxy, ObFreezeInfoManager& freeze_info_manager,
       share::ObPartitionTableOperator& pt_operator, ObRebalanceTaskMgr& task_mgr, ObServerManager& server_manager,
       ObZoneManager& zone_manager, ObUnitManager& unit_manager, ObDDLService& ddl_service,
       const common::ObAddr& self_addr);
@@ -92,7 +94,10 @@ private:
 
   /* restore tenant related */
   int fill_job_info(share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
+  int fill_restore_backup_info_param(
+      share::ObPhysicalRestoreJob& job, share::ObRestoreBackupInfoUtil::GetRestoreBackupInfoParam& param);
   int fill_backup_info(share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
+  int fill_pkeys_for_physical_restore_log(const share::ObPhysicalRestoreJob& job, obrpc::ObCreateTenantArg& arg);
   int fill_rs_info(share::ObPhysicalRestoreJob& job);
   int fill_create_tenant_arg(const share::ObPhysicalRestoreJob& job_info, obrpc::ObCreateTenantArg& arg);
   int fill_max_sys_table_id(
@@ -103,6 +108,7 @@ private:
 
   /* modify schema related */
   int force_drop_schema(const uint64_t tenant_id);
+  int filter_schema(const share::ObPhysicalRestoreJob& job_info);
   int convert_schema_options(const uint64_t tenant_id);
   int convert_database_options(const uint64_t tenant_id);
   int convert_tablegroup_options(const uint64_t tenant_id);
@@ -112,6 +118,21 @@ private:
   int convert_parameters(const share::ObPhysicalRestoreJob& job_info);
   int log_nop_operation(const share::ObPhysicalRestoreJob& job_info);
   /*------------------------*/
+
+  /* filter schema */
+  int gen_white_list(const share::ObPhysicalRestoreJob& job_info,
+      const common::ObIArray<obrpc::ObTableItem>& table_items, common::hash::ObHashSet<uint64_t>& table_white_list,
+      common::hash::ObHashSet<uint64_t>& tablegroup_white_list);
+  int filter_recyclebin_objects(const uint64_t tenant_id);
+  int filter_view_and_foreign_key(const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t>& table_white_list);
+  int filter_table(const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t>& table_white_list);
+  int filter_tablegroup(const uint64_t tenant_id, const common::hash::ObHashSet<uint64_t>& tablegroup_white_list);
+  int try_drop_table(
+      share::schema::ObSchemaGetterGuard& schema_guard, const share::schema::ObSimpleTableSchemaV2& table);
+  int try_drop_foreign_key(share::schema::ObSchemaGetterGuard& schema_guard,
+      const share::schema::ObSimpleTableSchemaV2& table, const common::hash::ObHashSet<uint64_t>& table_white_list);
+  int try_drop_tablegroup(const share::schema::ObSimpleTablegroupSchema& tablegroup);
+  /*---------------*/
 
   /* restore replica related */
   int schedule_restore_task(
@@ -164,15 +185,15 @@ private:
       share::PhysicalRestoreMod mod = share::PHYSICAL_RESTORE_MOD_RS);
   void record_rs_event(const share::ObPhysicalRestoreJob& job, const share::PhysicalRestoreStatus next_status);
   share::PhysicalRestoreStatus get_next_status(int return_ret, share::PhysicalRestoreStatus current_status);
+  int update_restore_schema_version(const share::ObPhysicalRestoreJob& job);
 
 private:
   int drop_tenant_force_if_necessary(const share::ObPhysicalRestoreJob& job_info);
-
-private:
   bool inited_;
   mutable ObRestoreIdling idling_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   common::ObMySQLProxy* sql_proxy_;
+  common::ObOracleSqlProxy* oracle_sql_proxy_;
   obrpc::ObCommonRpcProxy* rpc_proxy_;
   obrpc::ObSrvRpcProxy* srv_rpc_proxy_;
   ObFreezeInfoManager* freeze_info_mgr_;

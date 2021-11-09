@@ -167,4 +167,22 @@
 #define ERRSIM_DEF_WORK_AREA_POLICY(args...)
 #endif
 
+#define DEPRECATED_DEF_INT(args...)
+#define DEPRECATED_DEF_INT_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_DBL(args...)
+#define DEPRECATED_DEF_CAP(args...)
+#define DEPRECATED_DEF_CAP_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_TIME(args...)
+#define DEPRECATED_DEF_TIME_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_BOOL(args...)
+#define DEPRECATED_DEF_STR(args...)
+#define DEPRECATED_DEF_STR_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_IP(args...)
+#define DEPRECATED_DEF_MOMENT(args...)
+#define DEPRECATED_DEF_INT_LIST(args...)
+#define DEPRECATED_DEF_STR_LIST(args...)
+#define DEPRECATED_DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_LOG_LEVEL(args...)
+#define DEPRECATED_DEF_WORK_AREA_POLICY(args...)
+
 #endif

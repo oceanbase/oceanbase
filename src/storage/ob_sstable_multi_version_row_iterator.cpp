@@ -122,7 +122,7 @@ int ObSSTableMultiVersionRowGetter::inner_open(
     out_cols_cnt_ = out_cols->count();
     if (OB_FAIL(ObVersionStoreRangeConversionHelper::store_rowkey_to_multi_version_range(
             *rowkey_, access_ctx.trans_version_range_, *access_ctx.allocator_, multi_version_range_))) {
-      LOG_WARN("convert to multi version range failed", K(ret), K(*range_));
+      LOG_WARN("convert to multi version range failed", K(ret), K(*rowkey_));
     } else if (OB_FAIL(new_iterator<ObSSTableRowScanner>(*access_ctx.allocator_))) {
       LOG_WARN("failed to new iterator", K(ret));
     } else if (OB_FAIL(iter_->init(iter_param, access_ctx, table, &multi_version_range_))) {

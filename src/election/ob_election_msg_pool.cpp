@@ -194,8 +194,8 @@ void ObElectionVoteMsgPool::correct_recordT1_if_necessary(int64_t T1_timestamp)
   vote_recorder_.correct_recordT1_if_necessary(T1_timestamp);
 }
 
-// record messages, in [decentralized prepare/decentralizes voting/centralized prepare/centralized voting]
-// @param [in] msg messgae for recording
+// record messages, in [decentralized prepare/decentralized voting/centralized prepare/centralized voting]
+// @param [in] msg message for recording
 // @return error code
 int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
 {
@@ -214,7 +214,7 @@ int ObElectionVoteMsgPool::store(const ObElectionVoteMsg& msg)
         const ObElectionMsgDEPrepare& casted_msg = static_cast<const ObElectionMsgDEPrepare&>(msg);
         if (OB_UNLIKELY(!casted_msg.get_priority().is_candidate())) {
           ret = OB_ELECTION_WARN_NOT_CANDIDATE;
-          ELECT_ASYNC_LOG(ERROR, "deprepare msg sender is not candidiate", K_(partition), K(msg), K(ret));
+          ELECT_ASYNC_LOG(ERROR, "deprepare msg sender is not candidate", K_(partition), K(msg), K(ret));
         } else if (OB_UNLIKELY(OB_FAIL(deprepare_recorder_.record_msg(msg)))) {
           ELECT_ASYNC_LOG(WARN, "fail to store election msg", K_(partition), K(msg), K(ret));
         } else if (OB_UNLIKELY(casted_msg.get_T1_timestamp() > cached_devote_prepare_msg_.get_T1_timestamp())) {

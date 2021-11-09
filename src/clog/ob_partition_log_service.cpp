@@ -1240,12 +1240,11 @@ int ObPartitionLogService::check_and_set_restore_progress()
     if (OB_SUCCESS != (tmp_ret = partition_service_->check_all_trans_in_trans_table_state(partition_key_)) &&
         (OB_ENTRY_NOT_EXIST != tmp_ret) && (OB_PARTITION_NOT_EXIST != tmp_ret)) {
       CLOG_LOG(WARN, "failed to wait_all_trans_clear", K_(partition_key), KR(tmp_ret));
-    } else if (OB_SUCCESS != (tmp_ret = partition_service_->get_restore_replay_info(
-                                  partition_key_, last_restore_log_id, last_restore_log_ts, unused_version))) {
+    } else if (OB_SUCCESS != (tmp_ret = partition_service_->get_restore_replay_info(partition_key_,
+            last_restore_log_id, last_restore_log_ts, unused_version))) {
       CLOG_LOG(WARN, "failed to get_restore_replay_info", K(tmp_ret), K_(partition_key), K(last_restore_log_id));
     } else if (OB_INVALID_ID == last_restore_log_id || OB_INVALID_TIMESTAMP == last_restore_log_ts) {
-      CLOG_LOG(
-          WARN, "unexpected last_restore_log_info", K_(partition_key), K(last_restore_log_id), K(last_restore_log_ts));
+      CLOG_LOG(WARN, "unexpected last_restore_log_info", K_(partition_key), K(last_restore_log_id), K(last_restore_log_ts));
     } else if (last_slide_log_id <= last_restore_log_id) {
       CLOG_LOG(INFO,
           "need wait start_working log slide out",
@@ -1320,7 +1319,7 @@ int ObPartitionLogService::get_leader(common::ObAddr& leader) const
   return ret;
 }
 
-int ObPartitionLogService::get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const
+int ObPartitionLogService::get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -1331,22 +1330,34 @@ int ObPartitionLogService::get_clog_parent(common::ObAddr& parent, int64_t& clus
     parent = restore_mgr_.get_restore_leader();
     cluster_id = state_mgr_.get_self_cluster_id();
   } else {
+    const bool is_paxos_replica = ObReplicaTypeCheck::is_paxos_replica(mm_.get_replica_type());
     const share::ObCascadMember parent_member = cascading_mgr_.get_parent();
+    const share::ObCascadMember prev_parent_member = cascading_mgr_.get_prev_parent();
+    share::ObCascadMember cascad_leader;
+    (void)state_mgr_.get_cascad_leader(cascad_leader);
     if (parent_member.is_valid()) {
       parent = parent_member.get_server();
       cluster_id = parent_member.get_cluster_id();
-    } else {
+    } else if (!is_paxos_replica && prev_parent_member.is_valid()) {
+      // prev_parent is preferred choice for non-paxos replica
+      parent = prev_parent_member.get_server();
+      cluster_id = prev_parent_member.get_cluster_id();
+    } else if (cascad_leader.is_valid()) {
       // returns corresponding leader when parent is invalid
-      share::ObCascadMember cascad_leader;
-      (void)state_mgr_.get_cascad_leader(cascad_leader);
       parent = cascad_leader.get_server();
       cluster_id = cascad_leader.get_cluster_id();
+    } else if (prev_parent_member.is_valid()) {
+      // at last return prev_parent
+      parent = prev_parent_member.get_server();
+      cluster_id = prev_parent_member.get_cluster_id();
+    } else {
+      // it does not have valid parent
     }
   }
   if (!parent.is_valid()) {
     ret = OB_NEED_RETRY;
   }
-  CLOG_LOG(INFO, "get clog parent", K(ret), K_(partition_key), K(parent));
+  CLOG_LOG(INFO, "get clog parent", K(ret), K_(partition_key), K(parent), K(cluster_id));
   return ret;
 }
 
@@ -1748,7 +1759,8 @@ int ObPartitionLogService::receive_renew_ms_log(const ObLogEntry& log_entry, con
   return ret;
 }
 
-int ObPartitionLogService::receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed)
+int ObPartitionLogService::receive_archive_log(const ObLogEntry& log_entry, const bool is_accum_checksum_valid,
+    const int64_t accum_checksum, const bool is_batch_committed)
 {
   int ret = OB_SUCCESS;
   const ObAddr fake_server = self_;
@@ -1795,6 +1807,10 @@ int ObPartitionLogService::receive_archive_log(const ObLogEntry& log_entry, cons
         if (try_update_freeze_version_(log_entry) &&
             OB_FAIL(sw_.receive_log(log_entry, fake_server, self_cluster_id, fake_type))) {
           CLOG_LOG(WARN, "follower active receive log failed", K_(partition_key), K(ret), K(log_entry));
+        } else if (is_accum_checksum_valid
+                    && OB_FAIL(sw_.set_log_archive_accum_checksum(log_id, accum_checksum))) {
+          CLOG_LOG(WARN, "sw_ set_log_archive_accum_checksum failed", K(ret), K_(partition_key),
+              K(is_accum_checksum_valid), K(accum_checksum), K(log_entry));
         } else if (OB_FAIL(sw_.set_log_confirmed(log_id, is_batch_committed))) {
           if (OB_ERROR_OUT_OF_RANGE != ret) {
             CLOG_LOG(WARN, "sw_.set_log_confirmed failed", K_(partition_key), K(ret), K(log_entry));
@@ -1820,10 +1836,16 @@ int ObPartitionLogService::receive_archive_log(const ObLogEntry& log_entry, cons
         if (REACH_TIME_INTERVAL(1000 * 1000)) {
           CLOG_LOG(WARN, "log outof disk space", K_(partition_key), K(ret));
         }
-      } else if (state_mgr_.get_role() == FOLLOWER && sw_.check_can_receive_larger_log(log_id)) {
-        if (try_update_freeze_version_(log_entry) &&
-            OB_FAIL(mm_.receive_log(log_entry, fake_server, self_cluster_id, fake_type))) {
-          CLOG_LOG(WARN, "follower active receive log failed", K_(partition_key), K(ret), K(log_entry));
+      } else if (state_mgr_.get_role() == FOLLOWER
+                 && sw_.check_can_receive_larger_log(log_id)) {
+        if (try_update_freeze_version_(log_entry)
+            && OB_FAIL(mm_.receive_log(log_entry, fake_server, self_cluster_id, fake_type))) {
+          CLOG_LOG(WARN, "follower active receive log failed", K_(partition_key), K(ret),
+                   K(log_entry));
+        } else if (is_accum_checksum_valid
+                    && OB_FAIL(sw_.set_log_archive_accum_checksum(log_id, accum_checksum))) {
+          CLOG_LOG(WARN, "sw_ set_log_archive_accum_checksum failed", K(ret), K_(partition_key),
+              K(is_accum_checksum_valid), K(accum_checksum), K(log_entry));
         } else {
           int tmp_ret = OB_SUCCESS;
           if (OB_SUCCESS != (tmp_ret = sw_.set_log_confirmed(log_id, false))) {
@@ -2230,8 +2252,8 @@ int ObPartitionLogService::process_query_restore_end_id_req_(const common::ObAdd
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(partition_service_->get_restore_replay_info(partition_key_, local_restore_end_id,
-                                                                 unused_log_ts, unused_version))) {
+  } else if (OB_FAIL(
+                 partition_service_->get_restore_replay_info(partition_key_, local_restore_end_id, unused_log_ts, unused_version))) {
     CLOG_LOG(WARN, "failed to get_restore_replay_info", K(ret), K_(partition_key), K(local_restore_end_id));
   } else if (OB_INVALID_ID == local_restore_end_id) {
     CLOG_LOG(WARN, "local_restore_end_id is invalid, cannot response", K_(partition_key), K(local_restore_end_id));
@@ -2262,8 +2284,8 @@ int ObPartitionLogService::process_query_restore_end_id_resp(
     // self is not in restoring mlist state, ignore
   } else if (!mm_.get_curr_member_list().contains(server)) {
     CLOG_LOG(WARN, "server is not in member_list, ignore it", K_(partition_key), K(server), K(last_restore_log_id));
-  } else if (OB_FAIL(partition_service_->get_restore_replay_info(partition_key_, local_restore_end_id,
-                                                                 unused_log_ts, unused_version))) {
+  } else if (OB_FAIL(
+                 partition_service_->get_restore_replay_info(partition_key_, local_restore_end_id, unused_log_ts, unused_version))) {
     CLOG_LOG(WARN, "failed to get_restore_replay_info", K(ret), K_(partition_key), K(local_restore_end_id));
   } else if (last_restore_log_id != local_restore_end_id) {
     // last_restore_log_id is not match with local, unexpected error
@@ -3910,6 +3932,7 @@ int ObPartitionLogService::on_get_election_priority(election::ObElectionPriority
     bool is_data_disk_error = false;
     bool is_disk_space_enough = log_engine_->is_disk_space_enough();
     bool is_clog_disk_hang = log_engine_->is_clog_disk_hang();
+    const bool is_slog_disk_warning = SLOGGER.is_disk_warning();
     const ObReplicaProperty replica_property = mm_.get_replica_property();
     const uint64_t log_id = sw_.get_max_confirmed_log_id();
     if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error(is_data_disk_error))) {
@@ -3942,6 +3965,9 @@ int ObPartitionLogService::on_get_election_priority(election::ObElectionPriority
       }
       if (is_data_disk_error) {
         priority.set_system_data_disk_error();
+      }
+      if (is_slog_disk_warning) {
+        priority.set_system_slog_disk_warning();
       }
       if (is_tenant_out_of_mem) {
         priority.set_system_tenant_out_of_memory();
@@ -7336,6 +7362,24 @@ int ObPartitionLogService::get_log_archive_status(ObPGLogArchiveStatus& status)
   }
   return ret;
 }
+
+int ObPartitionLogService::check_log_exist(const uint64_t log_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObLogCursorExt log_cursor;
+  exist = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "is not inited", K(ret), K(partition_key_));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == log_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(log_id), K(partition_key_));
+  } else if (OB_FAIL(log_engine_->check_clog_exist(partition_key_, log_id, exist))) {
+    CLOG_LOG(WARN, "check clog exist fail", K(ret), K(log_id), K(partition_key_));
+  }
+  return ret;
+}
+
 int ObPartitionLogService::update_broadcast_info(
     const common::ObAddr& server, const common::ObReplicaType& replica_type, const uint64_t max_confirmed_log_id)
 {
@@ -8248,30 +8292,16 @@ int ObPartitionLogService::set_restore_flag_after_restore_log_()
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "invalid partition", K(ret), K_(partition_key));
   } else if (OB_FAIL(partition->clear_trans_after_restore_log(last_restore_log_id, last_restore_log_ts))) {
-    CLOG_LOG(ERROR,
-        "failed to clear_trans_after_restore_log",
-        K(ret),
-        K_(partition_key),
-        K(last_restore_log_id),
-        K(last_restore_log_ts));
+    CLOG_LOG(ERROR, "failed to clear_trans_after_restore_log", K(ret), K_(partition_key),
+        K(last_restore_log_id), K(last_restore_log_ts));
   } else {
     ObReplicaRestoreStatus flag = ObReplicaRestoreStatus::REPLICA_RESTORE_DUMP_MEMTABLE;
     if (OB_FAIL(partition_service_->set_restore_flag(partition_key_, flag))) {
-      CLOG_LOG(WARN,
-          "failed to set_restore_flag",
-          K_(partition_key),
-          K(flag),
-          K(last_restore_log_id),
-          K(last_restore_log_ts),
-          KR(ret));
+      CLOG_LOG(WARN, "failed to set_restore_flag", K_(partition_key), K(flag), K(last_restore_log_id),
+          K(last_restore_log_ts), KR(ret));
     } else {
-      CLOG_LOG(INFO,
-          "success to set_restore_flag",
-          K_(partition_key),
-          K(flag),
-          K(last_restore_log_id),
-          K(last_restore_log_ts),
-          KR(ret));
+      CLOG_LOG(INFO, "success to set_restore_flag", K_(partition_key), K(flag), K(last_restore_log_id),
+          K(last_restore_log_ts), KR(ret));
     }
   }
   return ret;

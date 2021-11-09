@@ -747,6 +747,7 @@ int ObPartTransCtx::start_task(const ObTransDesc& trans_desc, const int64_t snap
     pg_ = ob_partition;
     if (stmt_info_.main_stmt_change(sql_no) ||
         (cluster_version_before_2271_() && stmt_info_.main_stmt_change_compat(sql_no))) {
+      set_cur_stmt_type(trans_desc.get_cur_stmt_desc().get_stmt_type(), trans_desc.get_cur_stmt_desc().is_sfu());
       if (OB_FAIL(mt_ctx_.sub_trans_begin(snapshot_version_, expired_time, false, trx_lock_timeout))) {
         TRANS_LOG(ERROR,
             "sub transaction begin should never fail",
@@ -997,9 +998,8 @@ int ObPartTransCtx::end_task_(
   if (OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
 
-    if (is_changing_leader_
-        && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::STATEMENT_NOT_FINISH
-        && stmt_info_.is_task_match()) {
+    if (is_changing_leader_ && prepare_changing_leader_state_ == CHANGING_LEADER_STATE::STATEMENT_NOT_FINISH &&
+        stmt_info_.is_task_match()) {
       if (0 == submit_log_count_) {
         if (OB_SUCCESS != (tmp_ret = submit_log_incrementally_(true /*need state log*/))) {
           TRANS_LOG(WARN,
@@ -3096,12 +3096,14 @@ int ObPartTransCtx::leader_revoke(const bool first_check, bool& need_release, Ob
       if (!is_trans_state_sync_finished_) {
         TRANS_LOG(INFO, "transaction is killed", "context", *this);
       }
-    } else if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && 0 == submit_log_count_) {
-      // - When leader is revoking  and some non-2pc logs of txn has already been
+    } else if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && 0 == submit_log_count_ &&
+               FALSE_IT(mt_ctx_.clean_dirty_callbacks())) {
+      // - When leader is revoking and some non-2pc logs of txn has already been
       //   submitted to sliding window:
-      //   - If no on-the-fly log and state log is not synced successfully, remove all
-      //     marked_log_cnts
-      (void)mt_ctx_.clean_dirty_callbacks();
+      //   - Case 2.1: We only solve the case with no on-the-fly logs(because we have no idea
+      //     whether the on-the-fly log is paxos-choosen or not)
+      //   - If the state is not synced successfully(txn need abort), so we remove all
+      //     marked trans node
     } else if (OB_FAIL(mt_ctx_.commit_to_replay())) {
       TRANS_LOG(WARN, "commit to replay error", KR(ret), "context", *this);
     } else {
@@ -4124,21 +4126,35 @@ int ObPartTransCtx::replay_commit_log(const ObTransCommitLog& log, const int64_t
   return ret;
 }
 
+// For pg restored in 3.x, restore_snapshot_version and last_restore_log_ts is used to
+// rollback trans which is restored and superfluous
+//
+// For pg restored in 2.x, last_restore_log_id is used instead of last_restore_log_ts,
+// as last_restore_log_ts is not maintained in pg restored from 2.x
 bool ObPartTransCtx::need_rollback_when_restore_(const int64_t commit_version)
 {
+  bool bret = false;
   const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
+  const uint64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
   const int64_t last_restore_log_ts = partition_mgr_->get_last_restore_log_ts();
-  return restore_snapshot_version > 0 &&
-         (last_restore_log_ts == OB_INVALID_TIMESTAMP || min_log_ts_ <= last_restore_log_ts) &&
-         commit_version > restore_snapshot_version;
+  // restore_snapshot_version is invalid, all trans need not rollback
+  if (OB_INVALID_TIMESTAMP == restore_snapshot_version) {
+    bret = false;
+  } else if (OB_INVALID_TIMESTAMP != last_restore_log_ts) {
+    // last_restore_log_ts is valid, pg is restored in 3.x
+    bret = min_log_ts_ <= last_restore_log_ts && commit_version > restore_snapshot_version;
+  } else if (OB_INVALID_ID != last_restore_log_id) {
+    // last_restore_log_ts is invalid and last_restore_log_id is valid, pg is restored in 2.x
+    bret = min_log_id_ <= last_restore_log_id && commit_version > restore_snapshot_version;
+  } else {
+    // last_restore_log_ts and last_restore_log_id are invalid, pg is in restoring
+    bret = commit_version > restore_snapshot_version;
+  }
+  return bret;
 }
 
-// TODO: duotian
-bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int64_t log_ts)
+bool ObPartTransCtx::need_update_schema_version(const uint64_t log_id, const int64_t log_ts)
 {
-  UNUSED(log_id);
-  UNUSED(log_ts);
-  /*
   const int64_t restore_snapshot_version = partition_mgr_->get_restore_snapshot_version();
   const int64_t last_restore_log_id = partition_mgr_->get_last_restore_log_id();
   bool need_update = true;
@@ -4147,8 +4163,6 @@ bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int6
     need_update = false;
   }
   return need_update;
-  */
-  return true;
 }
 
 int ObPartTransCtx::trans_replay_commit_(const int64_t commit_version, const int64_t checksum)
@@ -7384,7 +7398,8 @@ int ObPartTransCtx::handle_2pc_prepare_request_raw_(int status)
           // The coordinator will retry on failure
           ret = OB_SUCCESS;
         } else if (OB_SUCCESS != get_status_() || OB_SUCCESS != status) {
-          if (OB_FAIL(alloc_local_trans_version_(OB_LOG_TRANS_REDO_WITH_PREPARE))) {
+          TRANS_LOG(WARN, "2pc prepare status not ok, write prepare-no", K(status), K(status_), K(*this));
+          if (OB_FAIL(alloc_local_trans_version_(OB_LOG_TRANS_PREPARE))) {
             if (OB_EAGAIN != ret) {
               TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this);
             } else {
@@ -7548,8 +7563,7 @@ int ObPartTransCtx::handle_2pc_prepare_redo_request_raw_(int status)
             } else if (OB_FAIL(post_2pc_response_(coordinator_, OB_TRANS_2PC_PREPARE_RESPONSE))) {
               TRANS_LOG(WARN, "submit 2pc response error", KR(ret), K(*this));
             } else {
-              TRANS_LOG(INFO, "submit response for prepare redo due to error status",
-                  KR(ret), K(*this));
+              TRANS_LOG(INFO, "submit response for prepare redo due to error status", KR(ret), K(*this));
             }
           } else {
             bool can_alloc_log = false;
@@ -11802,6 +11816,7 @@ void ObPartTransCtx::get_audit_info(int64_t& lock_for_read_elapse) const
 // which transactions should be kept and the log ts who is the last log ts during
 // restore phase. fake_terminate_log_ts is mocked as terminate_log_ts of
 // aborted dirty transaction. (See details in ObPartTransCtx::fake_kill_).
+// For pg restored from 2.x, last_restore_log_id is used instead of last_restore_log_ts
 
 // NB: We should also take dirty txn into account. Of course, Dirty txns are
 // more complicated. For example, the transaction status of dirty txn may be
@@ -11809,13 +11824,23 @@ void ObPartTransCtx::get_audit_info(int64_t& lock_for_read_elapse) const
 // not neccessary to the physical recovery. So we should mark the transaction
 // dead even the transaction is committed in transaction table without commit
 // log to explicitly suicide. (See details in ObPartTransCtx::fake_kill_).
-int ObPartTransCtx::clear_trans_after_restore(
-    const int64_t restore_version, const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
+int ObPartTransCtx::clear_trans_after_restore(const int64_t restore_version, const uint64_t last_restore_log_id,
+    const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
 {
   int ret = OB_SUCCESS;
+  bool need_clear = false;
   CtxLockGuard guard(lock_);
   const int64_t state = get_state_();
-
+  {
+    // For pg restored from 2.x, last_restore_log_ts is invalid and last_restore_log_id is valid
+    if (OB_INVALID_TIMESTAMP == last_restore_log_ts) {
+      if (cluster_version_ < CLUSTER_VERSION_3000 && OB_INVALID_ID != last_restore_log_id) {
+        need_clear = min_log_id_ <= last_restore_log_id;
+      }
+    } else {
+      need_clear = min_log_ts_ <= last_restore_log_ts;
+    }
+  }
   if (IS_NOT_INIT) {
     // skip the uninitialized transactions
     ret = OB_SUCCESS;
@@ -11823,15 +11848,17 @@ int ObPartTransCtx::clear_trans_after_restore(
         "transaction is not initted",
         K(*this),
         K(restore_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts),
         K(fake_terminate_log_ts));
-  } else if (min_log_ts_ > last_restore_log_ts) {
+  } else if (!need_clear) {
     // skip new transactions after restore completes
     ret = OB_SUCCESS;
     TRANS_LOG(INFO,
         "new transactions after restore completes",
         K(*this),
         K(restore_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts),
         K(fake_terminate_log_ts));
   } else {
@@ -11850,7 +11877,8 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case1.1",
             K(*this),
             K(restore_version),
-            K(last_restore_log_ts),
+            K(last_restore_log_id),
+            K(last_restore_log_id),
             K(fake_terminate_log_ts));
         ret = fake_kill_(fake_terminate_log_ts);
       } else {
@@ -11863,6 +11891,7 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case1.2",
             K(*this),
             K(restore_version),
+            K(last_restore_log_id),
             K(last_restore_log_ts),
             K(fake_terminate_log_ts));
         (void)set_exiting_();
@@ -11876,6 +11905,7 @@ int ObPartTransCtx::clear_trans_after_restore(
           "transaction in recover case2",
           K(*this),
           K(restore_version),
+          K(last_restore_log_id),
           K(last_restore_log_ts),
           K(fake_terminate_log_ts));
       (void)set_exiting_();
@@ -11889,6 +11919,7 @@ int ObPartTransCtx::clear_trans_after_restore(
             "transaction in recover case3.1",
             K(*this),
             K(restore_version),
+            K(last_restore_log_id),
             K(last_restore_log_ts),
             K(fake_terminate_log_ts));
         ret = kill_v2_(fake_terminate_log_ts);
@@ -11903,6 +11934,7 @@ int ObPartTransCtx::clear_trans_after_restore(
               "transaction in recover case3.2",
               K(*this),
               K(restore_version),
+              K(last_restore_log_id),
               K(last_restore_log_ts),
               K(fake_terminate_log_ts));
 
@@ -11912,6 +11944,7 @@ int ObPartTransCtx::clear_trans_after_restore(
                 "unexpected transaction status",
                 K(*this),
                 K(restore_version),
+                K(last_restore_log_id),
                 K(last_restore_log_ts),
                 K(fake_terminate_log_ts));
           }
@@ -11931,6 +11964,7 @@ int ObPartTransCtx::clear_trans_after_restore(
               "transaction in recover case3.3",
               K(*this),
               K(restore_version),
+              K(last_restore_log_id),
               K(last_restore_log_ts),
               K(fake_terminate_log_ts));
           ret = kill_v2_(fake_terminate_log_ts);
@@ -11942,6 +11976,7 @@ int ObPartTransCtx::clear_trans_after_restore(
           "unknown state",
           K(*this),
           K(restore_version),
+          K(last_restore_log_id),
           K(last_restore_log_ts),
           K(fake_terminate_log_ts),
           K(status));

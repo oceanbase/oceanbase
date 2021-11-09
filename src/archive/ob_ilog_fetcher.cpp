@@ -18,6 +18,7 @@
 #include "ob_archive_clog_split_engine.h"  // ObArCLogSplitEngine
 #include "ob_archive_allocator.h"
 #include "lib/thread/ob_thread_name.h"
+#include "share/backup/ob_backup_info_mgr.h"
 
 namespace oceanbase {
 namespace archive {
@@ -316,6 +317,9 @@ void ObArchiveIlogFetcher::run1()
       } else {
         usleep(1000 * 1000L);
       }
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
+        ARCHIVE_LOG(INFO, "ObArchiveIlogFetcher is running", K(start_flag_));
+      }
     }
   }
 }
@@ -377,6 +381,11 @@ void ObArchiveIlogFetcher::do_thread_task_()
   } else if (!task_exist) {
     // skip it
   } else if (OB_ENTRY_NOT_EXIST == ret || OB_LOG_ARCHIVE_LEADER_CHANGED == ret || OB_IN_STOP_STATE == ret) {
+    free_clog_split_task(fetch_task.clog_task_);
+    fetch_task.clog_task_ = NULL;
+  } else if (is_stale_leader_task_(fetch_task.pg_key_, fetch_task.epoch_)) {
+    ARCHIVE_LOG(INFO, "is stale leader task, skip it", KR(ret), K(fetch_task));
+    ret = OB_SUCCESS;
     free_clog_split_task(fetch_task.clog_task_);
     fetch_task.clog_task_ = NULL;
   } else {
@@ -616,11 +625,10 @@ int ObArchiveIlogFetcher::init_log_cursor_result_(
   int64_t alloc_size = arr_len * sizeof(ObLogCursorExt);
 
   do {
+    ret = OB_SUCCESS;
     if (OB_ISNULL(cursor_array = static_cast<ObLogCursorExt*>(ob_archive_malloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        ARCHIVE_LOG(WARN, "ob_archive_malloc fail", KR(ret), K(pg_key));
-      }
+      ARCHIVE_LOG(WARN, "ob_archive_malloc fail", KR(ret), K(pg_key));
       usleep(DEFAULT_ARCHIVE_WAIT_TIME_AFTER_EAGAIN);
     }
   } while (OB_ALLOCATE_MEMORY_FAILED == ret && start_flag_);
@@ -737,11 +745,10 @@ int ObArchiveIlogFetcher::build_archive_clog_task(
 
   if (count > DEFAULT_CLOG_CURSOR_NUM) {
     do {
+      ret = OB_SUCCESS;
       if (OB_FAIL(task.clog_pos_list_.reserve(count))) {
         if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            ARCHIVE_LOG(WARN, "clog_pos_list_ reserve fail, not enough memory", KR(ret), K(cursor_result));
-          }
+          ARCHIVE_LOG(WARN, "clog_pos_list_ reserve fail, not enough memory", KR(ret), K(cursor_result));
           usleep(DEFAULT_ARCHIVE_WAIT_TIME_AFTER_EAGAIN);
         } else {
           ARCHIVE_LOG(WARN, "clog_pos_list_ reserve fail", KR(ret), K(cursor_result));
@@ -792,7 +799,8 @@ int ObArchiveIlogFetcher::check_and_consume_clog_task_(PGFetchTask& fetch_task, 
 {
   int ret = OB_SUCCESS;
   const int64_t cur_ts = ObTimeUtility::current_time();
-  const int64_t archive_checkpoint_interval = GCONF.log_archive_checkpoint_interval;
+  const int64_t archive_checkpoint_interval =
+      share::ObBackupInfoMgr::get_instance().get_log_archive_checkpoint_interval();
   const int64_t max_delay_time = std::min(MAX_ILOG_FETCHER_CONSUME_DELAY, archive_checkpoint_interval);
 
   if (OB_UNLIKELY(OB_INVALID_TIMESTAMP != fetch_task.first_log_gen_tstamp_ && NULL == fetch_task.clog_task_)) {
@@ -820,6 +828,20 @@ int ObArchiveIlogFetcher::check_and_consume_clog_task_(PGFetchTask& fetch_task, 
   }
 
   return ret;
+}
+
+bool ObArchiveIlogFetcher::is_stale_leader_task_(const ObPGKey& pg_key, const int64_t epoch)
+{
+  int ret = OB_SUCCESS;
+  bool is_leader = false;
+
+  if (OB_FAIL(check_is_leader(pg_key, epoch, is_leader))) {
+    ARCHIVE_LOG(WARN, "check is leader fail", KR(ret), K(pg_key), K(epoch));
+    ret = OB_SUCCESS;
+    is_leader = false;
+  }
+
+  return !is_leader;
 }
 
 void ObArchiveIlogFetcher::mark_fatal_error_(

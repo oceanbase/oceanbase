@@ -324,8 +324,12 @@ int ObBackupLeaseInfoMgr::do_renew_lase_(const int64_t leader_epoch, const int64
             } else {
               const int64_t need_wait_ts = std::max(max_lease_takeover_time + takeover_time - now_ts,
                   max_lease_takeover_time + can_be_leader_ts - now_ts);
-              LOG_INFO(
-                  "not own lease now, need wait", K(takeover_time), K(can_be_leader_ts), K(now_ts), K(need_wait_ts));
+              LOG_INFO("not own lease now, need wait",
+                  K(takeover_time),
+                  K(can_be_leader_ts),
+                  K(now_ts),
+                  K(need_wait_ts),
+                  K(backup_scheduler_leader));
             }
           }
         }

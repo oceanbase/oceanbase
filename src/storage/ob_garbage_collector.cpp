@@ -1223,6 +1223,9 @@ int ObGarbageCollector::gc_check_log_archive_(
       STORAGE_LOG(INFO,
           "leader schema drop pg, wait to gc because offline log has not been archived in mandatory mode",
           K(pg_key));
+    } else if (GCONF.gc_wait_archive) {
+      // In optional mode, GC wait util archive offline log successfully if parameter gc_wait_archive is true
+      STORAGE_LOG(INFO, "leader schema drop pg, wait to gc because gc_wait_archive is true", K(pg_key));
     } else if (ObTimeUtility::current_time() - pg->get_gc_schema_drop_ts() <= delay_interval) {
       STORAGE_LOG(INFO,
           "leader schema drop pg, wait to gc because offline log has not been archived in optional mode",

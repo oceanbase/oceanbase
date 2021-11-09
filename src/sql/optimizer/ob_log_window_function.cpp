@@ -127,9 +127,7 @@ int ObLogWindowFunction::allocate_exchange_post(AllocExchContext* ctx)
         LOG_WARN("fail to check match parallel condition", K(ret));
       } else if (can_parallel) {
         is_parallel_ = true;
-        if (OB_FAIL(sharding_info_.copy_with_part_keys(child->get_sharding_info()))) {
-          LOG_WARN("failed to deep copy sharding info from child", K(ret));
-        }
+        sharding_info_.set_location_type(OB_TBL_LOCATION_DISTRIBUTED);
       } else {
         exch_info.dist_method_ = ObPQDistributeMethod::MAX_VALUE;
         sharding_info_.set_location_type(OB_TBL_LOCATION_LOCAL);

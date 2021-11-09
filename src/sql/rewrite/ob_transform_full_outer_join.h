@@ -43,6 +43,9 @@ private:
                             bool &has_subquery);
 
   int recursively_eliminate_full_join(ObDMLStmt* stmt, TableItem*& table_item, bool& trans_happened);
+  
+  int check_join_condition(ObDMLStmt *stmt, JoinedTable *table, bool &has_equal, bool &has_subquery,
+      bool &has_left_filter, bool &has_right_filter);
 
   int create_view_for_full_nl_join(ObDMLStmt* stmt, JoinedTable* joined_table, TableItem*& view_table);
 

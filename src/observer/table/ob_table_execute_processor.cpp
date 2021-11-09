@@ -64,13 +64,18 @@ int ObTableApiExecuteP::deserialize()
   arg_.table_operation_.set_entity(request_entity_);
   result_.set_entity(result_entity_);
   int ret = ParentType::deserialize();
+  if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+    // @note modify the timestamp to be negative
+    ret = ObTableRpcProcessorUtil::negate_htable_timestamp(request_entity_);
+  }
   return ret;
 }
 
 int ObTableApiExecuteP::check_arg()
 {
   int ret = OB_SUCCESS;
-  if (arg_.consistency_level_ != ObTableConsistencyLevel::STRONG) {
+  if (!(arg_.consistency_level_ == ObTableConsistencyLevel::STRONG ||
+      arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some options not supported yet", K(ret),
              "consistency_level", arg_.consistency_level_,
@@ -207,7 +212,13 @@ int ObTableApiExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
   if (!need_retry_in_queue_ && !did_async_end_trans()) {
-    ret = ObRpcProcessor::response(retcode);
+    if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+      // @note modify the value of timestamp to be positive
+      ret = ObTableRpcProcessorUtil::negate_htable_timestamp(result_entity_);
+    }
+    if (OB_SUCC(ret)) {
+      ret = ObRpcProcessor::response(retcode);
+    }
   }
   return ret;
 }
@@ -255,6 +266,7 @@ int ObTableApiExecuteP::process_get()
                       arg_.entity_type_,
                       arg_.binlog_row_image_type_);
   const bool is_readonly = true;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   ObRowkey rowkey = const_cast<ObITableEntity&>(arg_.table_operation_.entity()).get_rowkey();
   ObSEArray<int64_t, 1> part_ids;
   if (OB_FAIL(check_arg2())) {
@@ -264,7 +276,7 @@ int ObTableApiExecuteP::process_get()
     LOG_WARN("failed to get partition id", K(ret));
   } else if (OB_FAIL(part_ids.push_back(get_ctx_.param_partition_id()))) {
     LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, table_id, part_ids, get_timeout_ts()))) {
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, get_timeout_ts()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(table_service_->execute_get(get_ctx_, arg_.table_operation_, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {

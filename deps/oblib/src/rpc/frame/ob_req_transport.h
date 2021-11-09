@@ -238,6 +238,11 @@ public:
   {
     bucket_count_ = bucket_cnt;
   }
+  void enable_use_ssl()
+  {
+    enable_use_ssl_ = true;
+  }
+
   template <typename T>
   int create_request(Request<T>& req, const ObAddr& addr, int64_t size, int64_t timeout, const ObAddr& local_addr,
       const common::ObString& ssl_invited_nodes, const AsyncCB* cb = NULL) const;
@@ -269,6 +274,7 @@ private:
   easy_io_handler_pt* handler_;
   int32_t sgid_;
   int32_t bucket_count_;  // Control the number of buckets of batch_rpc_eio
+  bool enable_use_ssl_; // External client support enable ssl
 };                        // end of class ObReqTransport
 
 template <typename T>

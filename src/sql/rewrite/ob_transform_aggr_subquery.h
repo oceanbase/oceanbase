@@ -115,13 +115,13 @@ private:
 
   int get_trans_view(ObDMLStmt& stmt, ObSelectStmt*& view_stmt, ObRawExpr* root_expr, bool post_group_by);
 
-  int do_join_first_transform(ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr);
+  int do_join_first_transform(ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr, const bool is_first_trans);
 
-  int get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys);
+  int get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys, const bool is_first_trans);
 
   int transform_from_list(ObDMLStmt& stmt, ObSelectStmt& subquery, const int64_t pullup_flag);
 
-  int rebuild_conditon(ObSelectStmt& stmt);
+  int rebuild_conditon(ObSelectStmt& stmt, ObSelectStmt& subquery);
 
   int check_subquery_aggr_item(const ObSelectStmt& subquery, bool& is_valid);
 

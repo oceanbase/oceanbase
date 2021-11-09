@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace share {
 class ObPartitionInfo;
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObMultiVersionSchemaService;
 }  // namespace schema
 }  // namespace share

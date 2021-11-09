@@ -11,6 +11,7 @@
  */
 
 #include "ob_archive_io.h"
+#include "share/backup/ob_backup_struct.h"  //OB_BACKUP_INVALID_PIECE_ID and OB_BACKUP_SWITCH_BASE_PIECE_ID
 #include "lib/oblog/ob_log_module.h"
 #include "ob_archive_util.h"
 #include "ob_archive_path.h"
@@ -19,49 +20,66 @@
 #include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 using namespace oceanbase::lib;
 namespace oceanbase {
 namespace archive {
 ObArchiveIO::ObArchiveIO(const common::ObString& storage_info) : storage_info_(storage_info)
 {}
 
-int ObArchiveIO::get_index_file_range(
-    const ObPGKey& pg_key, const int64_t incarnation, const int64_t round, uint64_t& min_file_id, uint64_t& max_file_id)
+int ObArchiveIO::get_index_file_range(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+    const int64_t piece_id, const int64_t piece_create_date, uint64_t& min_file_id, uint64_t& max_file_id)
 {
   int ret = OB_SUCCESS;
   min_file_id = 0;
   max_file_id = 0;
 
-  if (OB_UNLIKELY(!pg_key.is_valid() || 0 >= incarnation || 0 >= round)) {
+  if (OB_UNLIKELY(
+          !pg_key.is_valid() || !is_valid_piece_info(piece_id, piece_create_date) || 0 >= incarnation || 0 >= round)) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(incarnation), K(round));
-  } else if (OB_FAIL(
-                 get_file_range_(pg_key, LOG_ARCHIVE_FILE_TYPE_INDEX, incarnation, round, min_file_id, max_file_id))) {
+    ARCHIVE_LOG(
+        WARN, "invalid argument", K(ret), K(pg_key), K(incarnation), K(round), K(piece_id), K(piece_create_date));
+  } else if (OB_FAIL(get_file_range_(pg_key,
+                 LOG_ARCHIVE_FILE_TYPE_INDEX,
+                 incarnation,
+                 round,
+                 piece_id,
+                 piece_create_date,
+                 min_file_id,
+                 max_file_id))) {
     ARCHIVE_LOG(WARN, "get_file_range_ fail", K(ret), K(pg_key), K(incarnation), K(round));
   }
 
   return ret;
 }
 
-// get data file range by list
-int ObArchiveIO::get_data_file_range(
-    const ObPGKey& pg_key, const int64_t incarnation, const int64_t round, uint64_t& min_file_id, uint64_t& max_file_id)
+int ObArchiveIO::get_data_file_range(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+    const int64_t piece_id, const int64_t piece_create_date, uint64_t& min_file_id, uint64_t& max_file_id)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!pg_key.is_valid() || 0 >= incarnation || 0 >= round)) {
+  if (OB_UNLIKELY(
+          !pg_key.is_valid() || !is_valid_piece_info(piece_id, piece_create_date) || 0 >= incarnation || 0 >= round)) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(incarnation), K(round));
-  } else if (OB_FAIL(
-                 get_file_range_(pg_key, LOG_ARCHIVE_FILE_TYPE_DATA, incarnation, round, min_file_id, max_file_id))) {
+    ARCHIVE_LOG(
+        WARN, "invalid argument", K(ret), K(pg_key), K(incarnation), K(round), K(piece_id), K(piece_create_date));
+  } else if (OB_FAIL(get_file_range_(pg_key,
+                 LOG_ARCHIVE_FILE_TYPE_DATA,
+                 incarnation,
+                 round,
+                 piece_id,
+                 piece_create_date,
+                 min_file_id,
+                 max_file_id))) {
     ARCHIVE_LOG(WARN, "get_file_range_ fail", K(ret), K(pg_key), K(incarnation), K(round));
   }
 
   return ret;
 }
 
-int ObArchiveIO::get_file_range_(const ObPGKey& pg_key, LogArchiveFileType file_type, const int64_t incarnation,
-    const int64_t round, uint64_t& min_file_id, uint64_t& max_file_id)
+int ObArchiveIO::get_file_range_(const ObPGKey& pg_key, const LogArchiveFileType file_type, const int64_t incarnation,
+    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, uint64_t& min_file_id,
+    uint64_t& max_file_id)
 {
   int ret = OB_SUCCESS;
   char path[MAX_PATH_LENGTH];
@@ -69,8 +87,16 @@ int ObArchiveIO::get_file_range_(const ObPGKey& pg_key, LogArchiveFileType file_
   min_file_id = 0;
   max_file_id = 0;
 
-  if (OB_FAIL(path_util.build_archive_file_prefix(pg_key, file_type, incarnation, round, MAX_PATH_LENGTH, path))) {
-    ARCHIVE_LOG(WARN, "build_archive_file_prefix fail", K(ret), K(pg_key), K(incarnation), K(round));
+  if (OB_FAIL(path_util.build_archive_file_prefix(
+          pg_key, file_type, incarnation, round, piece_id, piece_create_date, MAX_PATH_LENGTH, path))) {
+    ARCHIVE_LOG(WARN,
+        "build_archive_file_prefix fail",
+        K(ret),
+        K(pg_key),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
   } else {
     ObString uri(path);
     ObArchiveFileUtils utils;
@@ -82,8 +108,193 @@ int ObArchiveIO::get_file_range_(const ObPGKey& pg_key, LogArchiveFileType file_
   return ret;
 }
 
+int ObArchiveIO::check_and_make_dir_for_archive(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+    const int64_t piece_id, const int64_t piece_create_date)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 >= incarnation || 0 >= round || !is_valid_piece_info(piece_id, piece_create_date))) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(
+        WARN, "invalid arguments", K(ret), K(pg_key), K(incarnation), K(round), K(piece_id), K(piece_create_date));
+  } else if (OB_FAIL(check_and_make_single_dir_(
+                 pg_key, LOG_ARCHIVE_FILE_TYPE_DATA, incarnation, round, piece_id, piece_create_date))) {
+    ARCHIVE_LOG(WARN,
+        "failed to check_and_make_single_dir for archive pg key",
+        K(ret),
+        K(pg_key),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
+  } else if (OB_FAIL(check_and_make_single_dir_(
+                 pg_key, LOG_ARCHIVE_FILE_TYPE_INDEX, incarnation, round, piece_id, piece_create_date))) {
+    ARCHIVE_LOG(WARN,
+        "failed to check_and_make_single_dir for index",
+        K(ret),
+        K(pg_key),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
+  } else if (OB_FAIL(check_and_make_archive_key_dir_(pg_key, incarnation, round, piece_id, piece_create_date))) {
+    ARCHIVE_LOG(WARN,
+        "failed to make dir for archive_key",
+        K(ret),
+        K(pg_key),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
+  } else { /*do nothing*/
+  }
+
+  return ret;
+}
+
+int ObArchiveIO::check_and_make_single_dir_(const ObPGKey& pg_key, const LogArchiveFileType file_type,
+    const int64_t incarnation, const int64_t round, const int64_t piece_id, const int64_t piece_create_date)
+{
+  int ret = OB_SUCCESS;
+  char path[MAX_PATH_LENGTH];
+  ObArchivePathUtil path_util;
+
+  if (OB_FAIL(path_util.build_archive_file_prefix(
+          pg_key, file_type, incarnation, round, piece_id, piece_create_date, MAX_PATH_LENGTH, path))) {
+    ARCHIVE_LOG(WARN,
+        "build_archive_file_prefix fail",
+        K(ret),
+        K(pg_key),
+        K(incarnation),
+        K(round),
+        K(piece_id),
+        K(piece_create_date));
+  } else {
+    ObString uri(path);
+    ObStorageUtil util(false /*need retry*/);
+    if (OB_FAIL(util.mkdir(uri, storage_info_))) {
+      ARCHIVE_LOG(WARN, "mkdir fail", K(ret), K(pg_key), K(uri), K(storage_info_));
+    } else {
+      ARCHIVE_LOG(INFO, "success to mkdir", K(pg_key), K(uri));
+    }
+  }
+
+  return ret;
+}
+
+int ObArchiveIO::check_and_make_archive_key_dir_(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
+    const int64_t piece_id, const int64_t piece_create_date)
+{
+  int ret = OB_SUCCESS;
+  char path[MAX_PATH_LENGTH] = {'0'};
+  char unused_info[OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH] = {'0'};
+  ObArchivePathUtil path_util;
+
+  if (OB_FAIL(path_util.build_archive_key_prefix(incarnation,
+          round,
+          piece_id,
+          piece_create_date,
+          pg_key.get_tenant_id(),
+          OB_MAX_ARCHIVE_PATH_LENGTH,
+          path,
+          OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH,
+          unused_info))) {
+    ARCHIVE_LOG(WARN, "build_archive_key_prefix fail", KR(ret), K(pg_key), K(incarnation), K(round));
+  } else {
+    ObString uri(path);
+    ObStorageUtil util(false /*need retry*/);
+    if (OB_FAIL(util.mkdir(uri, storage_info_))) {
+      ARCHIVE_LOG(WARN, "mkdir fail", K(ret), K(pg_key), K(uri), K(storage_info_));
+    } else {
+      ARCHIVE_LOG(INFO,
+          "success to make archive key dir",
+          K(pg_key),
+          K(uri),
+          K(incarnation),
+          K(round),
+          K(piece_id),
+          K(piece_create_date));
+    }
+  }
+
+  return ret;
+}
+
+int ObArchiveIO::get_archived_info_from_archive_key(const ObPGKey& pg_key, const int64_t incarnation,
+    const int64_t round, const int64_t piece_id, const int64_t piece_create_date, ObArchiveKeyContent& key_content)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(0 >= incarnation) || OB_UNLIKELY(0 >= round) ||
+      OB_UNLIKELY(!is_valid_piece_info(piece_id, piece_create_date))) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(
+        WARN, "invalid arguments", K(ret), K(pg_key), K(incarnation), K(round), K(piece_id), K(piece_create_date));
+  } else {
+    char path[MAX_PATH_LENGTH] = {0};
+    char storage_info[OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH] = {0};
+    ObArchivePathUtil path_util;
+
+    if (OB_FAIL(path_util.build_archive_key_path(pg_key,
+            incarnation,
+            round,
+            piece_id,
+            piece_create_date,
+            MAX_PATH_LENGTH,
+            path,
+            OB_MAX_ARCHIVE_STORAGE_INFO_LENGTH,
+            storage_info))) {
+      ARCHIVE_LOG(WARN,
+          "build_archive_file_path fail",
+          K(ret),
+          K(pg_key),
+          K(incarnation),
+          K(round),
+          K(piece_id),
+          K(piece_create_date));
+    } else {
+      ObString uri(path);
+      ObArchiveFileUtils utils;
+      if (OB_FAIL(utils.get_archived_info_from_archive_key(uri, storage_info_, key_content))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ARCHIVE_LOG(INFO,
+              "archive_key file not exist",
+              K(ret),
+              K(pg_key),
+              K(incarnation),
+              K(round),
+              K(piece_id),
+              K(piece_create_date),
+              K(uri));
+        } else {
+          ARCHIVE_LOG(WARN,
+              "failed to get_archived_info_from_archive_key_file",
+              K(ret),
+              K(pg_key),
+              K(incarnation),
+              K(round),
+              K(piece_id),
+              K(piece_create_date),
+              K(uri));
+        }
+      } else {
+        ARCHIVE_LOG(INFO,
+            "after get_archived_info_from_archive_key_file",
+            K(ret),
+            K(pg_key),
+            K(incarnation),
+            K(round),
+            K(piece_id),
+            K(piece_create_date),
+            K(uri),
+            K(key_content));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObArchiveIO::get_max_archived_index_info(const ObPGKey& pg_key, const int64_t incarnation, const int64_t round,
-    const uint64_t min_index_file_id, const uint64_t max_index_file_id, MaxArchivedIndexInfo& info)
+    const int64_t piece_id, const int64_t piece_create_date, const uint64_t min_index_file_id,
+    const uint64_t max_index_file_id, MaxArchivedIndexInfo& info)
 {
   int ret = OB_SUCCESS;
   uint64_t index_file_id = max_index_file_id;
@@ -104,8 +315,15 @@ int ObArchiveIO::get_max_archived_index_info(const ObPGKey& pg_key, const int64_
   } else {
     do {
       char path[MAX_PATH_LENGTH];
-      if (OB_FAIL(path_util.build_archive_file_path(
-              pg_key, LOG_ARCHIVE_FILE_TYPE_INDEX, index_file_id, incarnation, round, MAX_PATH_LENGTH, path))) {
+      if (OB_FAIL(path_util.build_archive_file_path(pg_key,
+              LOG_ARCHIVE_FILE_TYPE_INDEX,
+              index_file_id,
+              incarnation,
+              round,
+              piece_id,
+              piece_create_date,
+              MAX_PATH_LENGTH,
+              path))) {
         ARCHIVE_LOG(WARN,
             "build_archive_file_path fail",
             K(ret),
@@ -135,12 +353,7 @@ int ObArchiveIO::get_max_archived_index_info(const ObPGKey& pg_key, const int64_
         }
       }
       index_file_id--;
-    } while (OB_SUCC(ret) && index_file_id >= min_index_file_id && (!info.is_index_info_collected_()));
-  }
-
-  if (OB_SUCC(ret)) {
-    ARCHIVE_LOG(
-        INFO, "after get_max_archive_index_info", K(pg_key), K(min_index_file_id), K(max_index_file_id), K(info));
+    } while (OB_SUCC(ret) && index_file_id >= min_index_file_id && (!info.is_index_record_collected()));
   }
 
   return ret;
@@ -195,20 +408,6 @@ int ObArchiveIO::push_log(const char* path, const int64_t data_len, char* data, 
     ret = E(EventTable::EN_LOG_ARCHIVE_PUSH_LOG_FAILED) OB_SUCCESS;
   }
 #endif
-  return ret;
-}
-
-int ObArchiveIO::check_and_make_dir(const ObPGKey& pg_key, ObString& uri)
-{
-  int ret = OB_SUCCESS;
-  ObStorageUtil util(false /*need retry*/);
-
-  if (OB_FAIL(util.mkdir(uri, storage_info_))) {
-    ARCHIVE_LOG(WARN, "mkdir fail", K(ret), K(pg_key), K(uri), K(storage_info_));
-  } else {
-    ARCHIVE_LOG(INFO, "mk dir succ", K(pg_key), K(uri));
-  }
-
   return ret;
 }
 

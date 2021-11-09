@@ -84,7 +84,7 @@ void ObPartitionStoreMeta::reset()
   create_timestamp_ = 0;
 }
 
-int ObPartitionStoreMeta::deep_copy(const ObPartitionStoreMeta& meta)
+int ObPartitionStoreMeta::deep_copy(const ObPartitionStoreMeta &meta)
 {
   int ret = OB_SUCCESS;
 
@@ -138,7 +138,7 @@ bool ObPGPartitionStoreMeta::is_valid() const
   return pkey_.is_valid() && multi_version_start_ > 0 && create_schema_version_ >= 0 && create_timestamp_ >= 0;
 }
 
-int ObPGPartitionStoreMeta::deep_copy(const ObPGPartitionStoreMeta& meta)
+int ObPGPartitionStoreMeta::deep_copy(const ObPGPartitionStoreMeta &meta)
 {
   int ret = OB_SUCCESS;
   if (is_valid()) {
@@ -156,7 +156,7 @@ int ObPGPartitionStoreMeta::deep_copy(const ObPGPartitionStoreMeta& meta)
   return ret;
 }
 
-int ObPGPartitionStoreMeta::copy_from_old_meta(const ObPartitionStoreMeta& meta)
+int ObPGPartitionStoreMeta::copy_from_old_meta(const ObPartitionStoreMeta &meta)
 {
   int ret = OB_SUCCESS;
   if (is_valid()) {
@@ -178,7 +178,7 @@ OB_SERIALIZE_MEMBER(ObPGPartitionStoreMeta, pkey_, report_status_, multi_version
 OB_SERIALIZE_MEMBER(ObPartitionGroupMeta, pg_key_, is_restore_, replica_type_, replica_property_, saved_split_state_,
     migrate_status_, migrate_timestamp_, storage_info_, split_info_, partitions_, report_status_,
     create_schema_version_, ddl_seq_num_, create_timestamp_, create_frozen_version_, last_restore_log_id_,
-    restore_snapshot_version_, last_restore_log_ts_);
+    restore_snapshot_version_, last_restore_log_ts_, restore_schema_version_);
 
 ObPartitionGroupMeta::ObPartitionGroupMeta()
 {
@@ -195,7 +195,11 @@ bool ObPartitionGroupMeta::is_valid() const
   return pg_key_.is_valid() && (is_restore_ >= 0) && ObReplicaTypeCheck::is_replica_type_valid(replica_type_) &&
          replica_property_.is_valid() && storage_info_.is_valid() && create_schema_version_ >= 0 && ddl_seq_num_ >= 0 &&
          create_frozen_version_ >= 0 && restore_snapshot_version_ >= OB_INVALID_TIMESTAMP &&
-         (is_restore_ != REPLICA_RESTORE_LOG || restore_snapshot_version_ > 0);
+         restore_schema_version_ >= OB_INVALID_TIMESTAMP &&
+         (is_restore_ != REPLICA_RESTORE_LOG || restore_snapshot_version_ > 0) &&
+         (is_inner_table(pg_key_.get_table_id()) ||
+             (!is_inner_table(pg_key_.get_table_id()) &&
+                 (is_restore_ != REPLICA_RESTORE_LOG || restore_schema_version_ > 0)));
 }
 
 void ObPartitionGroupMeta::reset()
@@ -217,9 +221,10 @@ void ObPartitionGroupMeta::reset()
   last_restore_log_id_ = OB_INVALID_ID;
   restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
   last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
+  restore_schema_version_ = OB_INVALID_TIMESTAMP;
 }
 
-int ObPartitionGroupMeta::deep_copy(const ObPartitionGroupMeta& meta)
+int ObPartitionGroupMeta::deep_copy(const ObPartitionGroupMeta &meta)
 {
   int ret = OB_SUCCESS;
 
@@ -250,12 +255,13 @@ int ObPartitionGroupMeta::deep_copy(const ObPartitionGroupMeta& meta)
     last_restore_log_id_ = meta.last_restore_log_id_;
     restore_snapshot_version_ = meta.restore_snapshot_version_;
     last_restore_log_ts_ = meta.last_restore_log_ts_;
+    restore_schema_version_ = meta.restore_schema_version_;
   }
 
   return ret;
 }
 
-int ObPartitionGroupMeta::copy_from_store_meta(const ObPartitionStoreMeta& meta)
+int ObPartitionGroupMeta::copy_from_store_meta(const ObPartitionStoreMeta &meta)
 {
   int ret = OB_SUCCESS;
   if (is_valid()) {
@@ -282,7 +288,7 @@ int ObPartitionGroupMeta::copy_from_store_meta(const ObPartitionStoreMeta& meta)
   return ret;
 }
 
-int ObPartitionGroupMeta::get_recover_info_for_flashback(const int64_t, ObRecoverPoint&)
+int ObPartitionGroupMeta::get_recover_info_for_flashback(const int64_t, ObRecoverPoint &)
 {
   return OB_NOT_SUPPORTED;
 }
@@ -357,7 +363,7 @@ void ObGetMergeTablesResult::reset()
   read_base_version_ = 0;
 }
 
-int ObGetMergeTablesResult::deep_copy(const ObGetMergeTablesResult& src)
+int ObGetMergeTablesResult::deep_copy(const ObGetMergeTablesResult &src)
 {
   int ret = OB_SUCCESS;
   if (!src.is_valid()) {
@@ -390,15 +396,13 @@ AddTableParam::AddTableParam()
       need_prewarm_(false),
       is_daily_merge_(false),
       complement_minor_sstable_(nullptr),
-      backup_snapshot_version_(0),
       schema_version_(0)
 {}
 
 bool AddTableParam::is_valid() const
 {
   return (!is_daily_merge_ || (OB_NOT_NULL(table_) || OB_NOT_NULL(complement_minor_sstable_))) &&
-         max_kept_major_version_number_ >= 0 && multi_version_start_ > ObVersionRange::MIN_VERSION &&
-         backup_snapshot_version_ >= 0;
+         max_kept_major_version_number_ >= 0 && multi_version_start_ > ObVersionRange::MIN_VERSION;
 }
 
 ObPartitionReadableInfo::ObPartitionReadableInfo()
@@ -435,7 +439,7 @@ void ObPartitionReadableInfo::reset()
   force_ = false;
 }
 
-int ObMigrateStatusHelper::trans_replica_op(const ObReplicaOpType& op_type, ObMigrateStatus& migrate_status)
+int ObMigrateStatusHelper::trans_replica_op(const ObReplicaOpType &op_type, ObMigrateStatus &migrate_status)
 {
   int ret = OB_SUCCESS;
   migrate_status = OB_MIGRATE_STATUS_MAX;
@@ -497,7 +501,7 @@ int ObMigrateStatusHelper::trans_replica_op(const ObReplicaOpType& op_type, ObMi
   return ret;
 }
 
-int ObMigrateStatusHelper::trans_fail_status(const ObMigrateStatus& cur_status, ObMigrateStatus& fail_status)
+int ObMigrateStatusHelper::trans_fail_status(const ObMigrateStatus &cur_status, ObMigrateStatus &fail_status)
 {
   int ret = OB_SUCCESS;
   fail_status = OB_MIGRATE_STATUS_MAX;
@@ -563,7 +567,7 @@ int ObMigrateStatusHelper::trans_fail_status(const ObMigrateStatus& cur_status, 
   return ret;
 }
 
-int ObMigrateStatusHelper::trans_reboot_status(const ObMigrateStatus& cur_status, ObMigrateStatus& reboot_status)
+int ObMigrateStatusHelper::trans_reboot_status(const ObMigrateStatus &cur_status, ObMigrateStatus &reboot_status)
 {
   int ret = OB_SUCCESS;
   reboot_status = OB_MIGRATE_STATUS_MAX;
@@ -646,6 +650,7 @@ ObCreatePGParam::ObCreatePGParam()
       last_restore_log_id_(OB_INVALID_ID),
       last_restore_log_ts_(OB_INVALID_TIMESTAMP),
       restore_snapshot_version_(OB_INVALID_TIMESTAMP),
+      restore_schema_version_(OB_INVALID_TIMESTAMP),
       migrate_status_(ObMigrateStatus::OB_MIGRATE_STATUS_NONE)
 {}
 
@@ -666,6 +671,7 @@ void ObCreatePGParam::reset()
   last_restore_log_id_ = OB_INVALID_ID;
   last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
   restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
+  restore_schema_version_ = OB_INVALID_TIMESTAMP;
   migrate_status_ = ObMigrateStatus::OB_MIGRATE_STATUS_NONE;
 }
 
@@ -674,10 +680,10 @@ bool ObCreatePGParam::is_valid() const
   return info_.is_valid() && ObReplicaTypeCheck::is_replica_type_valid(replica_type_) && replica_property_.is_valid() &&
          (is_restore_ >= 0) && create_timestamp_ >= 0 && nullptr != file_handle_ && nullptr != file_mgr_ &&
          create_frozen_version_ >= 0 && restore_snapshot_version_ >= OB_INVALID_TIMESTAMP &&
-         migrate_status_ < ObMigrateStatus::OB_MIGRATE_STATUS_MAX;
+         restore_schema_version_ >= OB_INVALID_TIMESTAMP && migrate_status_ < ObMigrateStatus::OB_MIGRATE_STATUS_MAX;
 }
 
-int ObCreatePGParam::assign(const ObCreatePGParam& param)
+int ObCreatePGParam::assign(const ObCreatePGParam &param)
 {
   int ret = OB_SUCCESS;
   if (!param.is_valid()) {
@@ -701,12 +707,13 @@ int ObCreatePGParam::assign(const ObCreatePGParam& param)
     last_restore_log_id_ = param.last_restore_log_id_;
     last_restore_log_ts_ = param.last_restore_log_ts_;
     restore_snapshot_version_ = param.restore_snapshot_version_;
+    restore_schema_version_ = param.restore_schema_version_;
     migrate_status_ = param.migrate_status_;
   }
   return ret;
 }
 
-int ObCreatePGParam::set_storage_info(const ObSavedStorageInfoV2& info)
+int ObCreatePGParam::set_storage_info(const ObSavedStorageInfoV2 &info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(info_.deep_copy(info))) {
@@ -715,7 +722,7 @@ int ObCreatePGParam::set_storage_info(const ObSavedStorageInfoV2& info)
   return ret;
 }
 
-int ObCreatePGParam::set_split_info(const ObPartitionSplitInfo& split_info)
+int ObCreatePGParam::set_split_info(const ObPartitionSplitInfo &split_info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(split_info_.assign(split_info))) {
@@ -738,7 +745,7 @@ void ObCreatePartitionMeta::reset()
   id_hash_array_ = NULL;
 }
 
-int ObCreatePartitionMeta::extract_from(const ObTableSchema& table_schema)
+int ObCreatePartitionMeta::extract_from(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!table_schema.is_valid())) {
@@ -761,9 +768,9 @@ int ObCreatePartitionMeta::extract_from(const ObTableSchema& table_schema)
   return ret;
 }
 
-const ObColumnSchemaV2* ObCreatePartitionMeta::get_column_schema(const uint64_t column_id) const
+const ObColumnSchemaV2 *ObCreatePartitionMeta::get_column_schema(const uint64_t column_id) const
 {
-  ObColumnSchemaV2* column = NULL;
+  ObColumnSchemaV2 *column = NULL;
   if (NULL != id_hash_array_) {
     if (OB_SUCCESS != id_hash_array_->get_refactored(ObColumnIdKey(column_id), column)) {
       column = NULL;
@@ -787,7 +794,7 @@ int ObCreatePartitionMeta::replace_tenant_id(const uint64_t new_tenant_id)
   return ret;
 }
 
-int ObCreatePartitionMeta::assign(const ObCreatePartitionMeta& other)
+int ObCreatePartitionMeta::assign(const ObCreatePartitionMeta &other)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(column_ids_.assign(other.get_store_column_ids()))) {
@@ -824,12 +831,12 @@ void ObCreatePartitionParam::reset()
   schemas_.reset();
 }
 
-int ObCreatePartitionParam::extract_from(const obrpc::ObCreatePartitionArg& arg)
+int ObCreatePartitionParam::extract_from(const obrpc::ObCreatePartitionArg &arg)
 {
   int ret = OB_SUCCESS;
   const int64_t table_cnt = arg.table_schemas_.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < table_cnt; ++i) {
-    const ObTableSchema& table_schema = arg.table_schemas_.at(i);
+    const ObTableSchema &table_schema = arg.table_schemas_.at(i);
     ObCreatePartitionMeta partition_schema;
     if (OB_FAIL(partition_schema.extract_from(table_schema))) {
       STORAGE_LOG(WARN, "failed to extract partition_schema", KR(ret), K(table_schema));
@@ -873,7 +880,7 @@ int ObCreatePartitionParam::replace_tenant_id(const uint64_t new_tenant_id)
   } else {
     const int64_t cnt = schemas_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
-      ObCreatePartitionMeta& partition_schema = schemas_.at(i);
+      ObCreatePartitionMeta &partition_schema = schemas_.at(i);
       if (OB_FAIL(partition_schema.replace_tenant_id(new_tenant_id))) {
         STORAGE_LOG(WARN, "failed to replace_tenant_id of partition_scheam", KR(ret), K(*this));
       }
@@ -902,8 +909,8 @@ bool ObRecoveryPointSchemaFilter::is_inited() const
   return is_inited_;
 }
 
-int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const bool is_restore_point, const int64_t tenant_recovery_point_schema_version,
-    const int64_t tenant_current_schema_version)
+int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const bool is_restore_point,
+    const int64_t tenant_recovery_point_schema_version, const int64_t tenant_current_schema_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -919,7 +926,7 @@ int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const bool is_res
         K(tenant_current_schema_version));
   } else {
     is_schema_version_same_ = (tenant_recovery_point_schema_version == tenant_current_schema_version);
-    ObMultiVersionSchemaService& schema_service = ObMultiVersionSchemaService::get_instance();
+    ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
     if (OB_FAIL(ObBackupUtils::retry_get_tenant_schema_guard(
             tenant_id, schema_service, tenant_recovery_point_schema_version, recovery_point_schema_guard_))) {
       STORAGE_LOG(WARN,
@@ -948,12 +955,12 @@ int ObRecoveryPointSchemaFilter::init(const int64_t tenant_id, const bool is_res
   return ret;
 }
 
-int ObRecoveryPointSchemaFilter::check_partition_exist(const ObPartitionKey pkey, bool& is_exist)
+int ObRecoveryPointSchemaFilter::check_partition_exist(const ObPartitionKey pkey, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   bool check_dropped_partition = false;
   is_exist = false;
-  ObSchemaGetterGuard* schema_guard = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
   bool is_exist_in_backup_schema = false;
   bool is_exist_in_delay_delete = false;
   bool is_exist_in_current_schema = false;
@@ -992,7 +999,7 @@ int ObRecoveryPointSchemaFilter::check_partition_exist(const ObPartitionKey pkey
 }
 
 int ObRecoveryPointSchemaFilter::check_partition_exist_(
-    const ObPartitionKey pkey, const bool check_dropped_partition, ObSchemaGetterGuard& schema_guard, bool& is_exist)
+    const ObPartitionKey pkey, const bool check_dropped_partition, ObSchemaGetterGuard &schema_guard, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -1008,11 +1015,11 @@ int ObRecoveryPointSchemaFilter::check_partition_exist_(
   return ret;
 }
 
-int ObRecoveryPointSchemaFilter::check_table_exist(const uint64_t table_id, bool& is_exist)
+int ObRecoveryPointSchemaFilter::check_table_exist(const uint64_t table_id, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   is_exist = false;
-  ObSchemaGetterGuard* schema_guard = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1035,11 +1042,11 @@ int ObRecoveryPointSchemaFilter::check_table_exist(const uint64_t table_id, bool
 }
 
 int ObRecoveryPointSchemaFilter::check_table_exist_(
-    const uint64_t table_id, ObSchemaGetterGuard& schema_guard, bool& is_exist)
+    const uint64_t table_id, ObSchemaGetterGuard &schema_guard, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   is_exist = false;
-  const ObTableSchema* table_schema = NULL;
+  const ObTableSchema *table_schema = NULL;
   bool need_skip = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1052,8 +1059,8 @@ int ObRecoveryPointSchemaFilter::check_table_exist_(
     // do nothing
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
     STORAGE_LOG(WARN, "failed to get table schema", K(ret), K(table_id));
-  } else if (OB_FAIL(
-                 ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(table_schema, need_skip, is_restore_point_))) {
+  } else if (OB_FAIL(ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(
+                 table_schema, need_skip, is_restore_point_))) {
     LOG_WARN("failed to check backup restore need skip table", K(ret), K(table_id));
   } else if (!need_skip) {
     // do nothing
@@ -1063,7 +1070,7 @@ int ObRecoveryPointSchemaFilter::check_table_exist_(
   return ret;
 }
 
-int ObRecoveryPointSchemaFilter::do_filter_tables(common::ObIArray<uint64_t>& table_ids)
+int ObRecoveryPointSchemaFilter::do_filter_tables(common::ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> backup_tables;
@@ -1105,7 +1112,7 @@ int ObRecoveryPointSchemaFilter::do_filter_tables(common::ObIArray<uint64_t>& ta
 }
 
 int ObRecoveryPointSchemaFilter::do_filter_pg_partitions(
-    const ObPartitionKey& pg_key, common::ObPartitionArray& partitions)
+    const ObPartitionKey &pg_key, common::ObPartitionArray &partitions)
 {
   int ret = OB_SUCCESS;
 
@@ -1117,7 +1124,7 @@ int ObRecoveryPointSchemaFilter::do_filter_pg_partitions(
     bool filtered = false;
     ObPartitionArray exist_partitions;
     for (int i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
-      const ObPartitionKey& pkey = partitions.at(i);
+      const ObPartitionKey &pkey = partitions.at(i);
       if (OB_FAIL(check_partition_exist(pkey, is_exist))) {
         STORAGE_LOG(WARN, "backup filter check partition failed", K(ret), K(pg_key), K(pkey));
       } else if (is_exist) {
@@ -1141,12 +1148,12 @@ int ObRecoveryPointSchemaFilter::do_filter_pg_partitions(
 }
 
 int ObRecoveryPointSchemaFilter::check_if_table_miss_by_schema(
-    const ObPartitionKey& pgkey, const hash::ObHashSet<uint64_t>& table_ids)
+    const ObPartitionKey &pgkey, const hash::ObHashSet<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
   ObArray<uint64_t> schema_tables;
-  ObSchemaGetterGuard* schema_guard = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
 
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
@@ -1163,8 +1170,8 @@ int ObRecoveryPointSchemaFilter::check_if_table_miss_by_schema(
   return ret;
 }
 
-int ObRecoveryPointSchemaFilter::check_if_table_miss_by_schema_(const ObPartitionKey& pgkey,
-    const common::hash::ObHashSet<uint64_t>& table_ids, share::schema::ObSchemaGetterGuard& schema_guard)
+int ObRecoveryPointSchemaFilter::check_if_table_miss_by_schema_(const ObPartitionKey &pgkey,
+    const common::hash::ObHashSet<uint64_t> &table_ids, share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -1190,8 +1197,8 @@ int ObRecoveryPointSchemaFilter::check_if_table_miss_by_schema_(const ObPartitio
   return ret;
 }
 
-int ObRecoveryPointSchemaFilter::get_table_ids_in_pg_(const ObPartitionKey& pgkey,
-    common::ObIArray<uint64_t>& table_ids, share::schema::ObSchemaGetterGuard& schema_guard)
+int ObRecoveryPointSchemaFilter::get_table_ids_in_pg_(const ObPartitionKey &pgkey,
+    common::ObIArray<uint64_t> &table_ids, share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   common::ObArray<uint64_t> data_table_ids;
@@ -1213,7 +1220,7 @@ int ObRecoveryPointSchemaFilter::get_table_ids_in_pg_(const ObPartitionKey& pgke
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < data_table_ids.count(); ++i) {
       const uint64_t data_table_id = data_table_ids.at(i);
-      const ObTableSchema* table_schema = NULL;
+      const ObTableSchema *table_schema = NULL;
 
       if (OB_FAIL(schema_guard.get_table_schema(data_table_id, table_schema))) {
         STORAGE_LOG(WARN, "failed to get table schema", K(ret), K(data_table_id));
@@ -1229,8 +1236,8 @@ int ObRecoveryPointSchemaFilter::get_table_ids_in_pg_(const ObPartitionKey& pgke
         STORAGE_LOG(WARN, "get local index status fail", K(ret), K(pgkey));
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < index_stats.count(); ++j) {
-          const ObTableSchema* index_table_schema = NULL;
-          const ObIndexTableStat& index_table_stat = index_stats.at(j);
+          const ObTableSchema *index_table_schema = NULL;
+          const ObIndexTableStat &index_table_stat = index_stats.at(j);
           if (INDEX_STATUS_AVAILABLE != index_table_stat.index_status_) {
             // filter unavailable index
           } else if (OB_FAIL(schema_guard.get_table_schema(index_table_stat.index_id_, index_table_schema))) {
@@ -1253,7 +1260,7 @@ int ObRecoveryPointSchemaFilter::get_table_ids_in_pg_(const ObPartitionKey& pgke
 
 /***********************ObBackupRestoreTableSchemaChecker***************************/
 int ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(
-    const share::schema::ObTableSchema* table_schema, bool& need_skip, const bool is_restore_point)
+    const share::schema::ObTableSchema *table_schema, bool &need_skip, const bool is_restore_point)
 {
   int ret = OB_SUCCESS;
   ObIndexStatus index_status;
@@ -1267,19 +1274,21 @@ int ObBackupRestoreTableSchemaChecker::check_backup_restore_need_skip_table(
   } else if (table_schema->is_dropped_schema()) {
     STORAGE_LOG(INFO, "table is dropped, skip it", K(table_id));
   } else if (FALSE_IT(index_status = table_schema->get_index_status())) {
-  } else if (table_schema->is_index_table()
-             && (is_restore_point ?
-                 !is_final_index_status(index_status, table_schema->is_dropped_schema()) :
-                 ObIndexStatus::INDEX_STATUS_AVAILABLE != index_status)) {
-    STORAGE_LOG(INFO, "restore table index is not expected status, skip it",
-                K(is_restore_point), K(index_status), K(*table_schema));
+  } else if (table_schema->is_index_table() &&
+             (is_restore_point ? !is_final_index_status(index_status, table_schema->is_dropped_schema())
+                               : ObIndexStatus::INDEX_STATUS_AVAILABLE != index_status)) {
+    STORAGE_LOG(INFO,
+        "restore table index is not expected status, skip it",
+        K(is_restore_point),
+        K(index_status),
+        K(*table_schema));
   } else {
     need_skip = false;
   }
   return ret;
 }
 
-ObRebuildListener::ObRebuildListener(transaction::ObPartitionTransCtxMgr& mgr) : ob_partition_ctx_mgr_(mgr)
+ObRebuildListener::ObRebuildListener(transaction::ObPartitionTransCtxMgr &mgr) : ob_partition_ctx_mgr_(mgr)
 {
   int tmp_ret = OB_SUCCESS;
   while (OB_SUCCESS != (tmp_ret = ob_partition_ctx_mgr_.lock_minor_merge_lock())) {
@@ -1308,12 +1317,12 @@ bool ObRebuildListener::on_partition_rebuild()
 }
 
 int ObRestoreFakeMemberListHelper::fake_restore_member_list(
-    const int64_t replica_cnt, common::ObMemberList& fake_member_list)
+    const int64_t replica_cnt, common::ObMemberList &fake_member_list)
 {
   int ret = OB_SUCCESS;
   fake_member_list.reset();
 
-  const char* fake_ip = "127.0.0.1";
+  const char *fake_ip = "127.0.0.1";
   int32_t fake_port = 10000;
 
   if (replica_cnt <= 0) {

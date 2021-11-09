@@ -478,6 +478,9 @@ void ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>::pop_back()
 {
   if (OB_UNLIKELY(count_ <= 0)) {
   } else {
+    if (!is_memcpy_safe()) {
+      data_[count_ - 1].~T();
+    }
     --count_;
   }
 }

@@ -188,6 +188,7 @@ public:
         is_dup_table_trans_(false),
         is_exiting_(false),
         is_readonly_(false),
+        cur_stmt_type_(ObStmtType::UNKNOWN),
         for_replay_(false),
         need_print_trace_log_(false),
         is_bounded_staleness_read_(false),
@@ -228,6 +229,11 @@ public:
   bool is_readonly() const
   {
     return is_readonly_;
+  }
+  void set_cur_stmt_type(const sql::stmt::StmtType stmt_type, const bool is_sfu);
+  bool is_stmt_readonly() const
+  {
+    return cur_stmt_type_ == ObStmtType::READ;
   }
   void set_bounded_staleness_read(const bool is_bounded_staleness_read)
   {
@@ -553,6 +559,7 @@ protected:
   bool is_dup_table_trans_;
   bool is_exiting_;
   bool is_readonly_;
+  int64_t cur_stmt_type_;
   bool for_replay_;
   bool need_print_trace_log_;
   bool is_bounded_staleness_read_;

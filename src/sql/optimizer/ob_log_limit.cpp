@@ -51,7 +51,7 @@ int ObLogLimit::allocate_exchange_post(AllocExchContext* ctx)
 {
   int ret = OB_SUCCESS;
   bool is_basic = false;
-  bool should_push_limit = (!is_calc_found_rows_ && (limit_percent_ == NULL));
+  bool should_push_limit = (!is_calc_found_rows_ && limit_count_ != NULL);
   ObLogicalOperator* exchange_point = NULL;
   ObExchangeInfo exch_info;
   if (OB_ISNULL(ctx)) {

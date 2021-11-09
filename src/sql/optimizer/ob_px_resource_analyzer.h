@@ -139,10 +139,12 @@ private:
   int walk_through_px_trees(common::ObIArray<PxInfo>& px_trees, int64_t& max_parallel_thread_group_count);
   int walk_through_dfo_tree(PxInfo& px_root, int64_t& max_parallel_thread_group_count);
   int create_dfo(DfoInfo*& dfo, int64_t dop);
+  void release();
 
 private:
   /* variables */
   common::ObArenaAllocator dfo_allocator_;
+  common::ObArray<DfoInfo*> dfos_;
   DISALLOW_COPY_AND_ASSIGN(ObPxResourceAnalyzer);
 };
 

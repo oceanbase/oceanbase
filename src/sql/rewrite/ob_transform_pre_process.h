@@ -188,6 +188,9 @@ private:
   static int transform_in_or_notin_expr_without_row(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session,
       const bool is_in_expr, ObRawExpr*& in_epxr, bool& trans_happened);
 
+  static int create_partial_expr(ObRawExprFactory &expr_factory, ObRawExpr *left_expr,
+      ObIArray<ObRawExpr *> &same_type_exprs, const bool is_in_expr, ObIArray<ObRawExpr *> &transed_in_exprs);
+
   /*
    * following functions are used to transform arg_case_expr to case_expr
    */

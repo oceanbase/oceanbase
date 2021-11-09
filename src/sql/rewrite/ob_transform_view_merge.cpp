@@ -346,7 +346,15 @@ int ObTransformViewMerge::check_can_be_unnested(
         LOG_WARN("NULL expr", K(ret));
       } else if (expr->has_flag(CNT_SUB_QUERY)) {
         can_be = false;
-      } else { /*do nothing*/
+      }
+    }
+    // stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
+    if (OB_SUCC(ret) && can_be) {
+      bool has_rand = false;
+      if (OB_FAIL(child_stmt->has_rand(has_rand))) {
+        LOG_WARN("failed to get rand flag", K(ret));
+      } else {
+        can_be = !has_rand;
       }
     }
   }

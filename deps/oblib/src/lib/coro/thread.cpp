@@ -229,6 +229,9 @@ void* Thread::__th_start(void* arg)
           }
         }
       }
+      if (mem_context != nullptr && *mem_context != nullptr) {
+        DESTROY_CONTEXT(*mem_context);
+      }
     }
   }
 

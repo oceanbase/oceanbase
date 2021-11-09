@@ -33,6 +33,19 @@ class ObArchiveLogFileStore;
 namespace storage {
 class ObMigrateCtx;
 
+struct ObBackupPieceTriple {
+  ObBackupPieceTriple() : round_id_(-1), piece_id_(-1), create_date_(-1)
+  {}
+  TO_STRING_KV(K_(round_id), K_(piece_id), K_(create_date));
+  bool is_valid() const
+  {
+    return round_id_ > 0 && piece_id_ >= 0 && create_date_ >= 0;
+  }
+  int64_t round_id_;
+  int64_t piece_id_;
+  int64_t create_date_;
+};
+
 struct ObBackupArchiveLogPGCtx {
 public:
   ObBackupArchiveLogPGCtx();
@@ -45,7 +58,7 @@ public:
 
   bool is_opened_;
   common::ObPGKey pg_key_;
-  int64_t log_archive_round_;
+  ObBackupPieceTriple piece_triple_;
   int64_t checkpoint_ts_;
   int64_t rs_checkpoint_ts_;
   char src_backup_dest_[share::OB_MAX_BACKUP_PATH_LENGTH];
@@ -110,54 +123,62 @@ public:
   virtual int process() override;
 
 private:
+  int do_task_with_retry();
+  int do_task();
   int check_nfs_mounted_if_nfs(const ObBackupArchiveLogPGCtx& pg_ctx, bool& mounted);
   int converge_task(
       const archive::LogArchiveFileType file_type, const ObBackupArchiveLogPGCtx& pg_ctx, FileRange& file_range);
   int catchup_archive_log(const archive::LogArchiveFileType file_type, const ObBackupArchiveLogPGCtx& pg_ctx,
       const FileRange& data_file_range);
   int get_file_range(const char* backup_dest, const common::ObString& storage_info,
-      const archive::LogArchiveFileType file_type, const int64_t log_archive_round, const common::ObPGKey& pg_key,
+      const archive::LogArchiveFileType file_type, const ObBackupPieceTriple& triple, const common::ObPGKey& pg_key,
       FileRange& file_range);
   int init_archive_file_store_(ObBackupArchiveLogPGCtx& task, const int64_t incarnation, const int64_t round,
       archive::ObArchiveLogFileStore& file_store);
   int get_file_path_info(const char* backup_dest, const char* storage_info, const common::ObPGKey& pg_key,
-      const archive::LogArchiveFileType file_type, const int64_t incarnation, const int64_t round,
+      const archive::LogArchiveFileType file_type, const int64_t incarnation, const ObBackupPieceTriple& triple,
       const int64_t file_id, FileInfo& file_info);
   int extract_last_log_in_data_file(ObBackupArchiveLogPGCtx& pg_ctx, const int64_t file_id);
-  int cal_data_file_range_delta(const common::ObPGKey& pkey, const int64_t log_archive_round,
+  int cal_data_file_range_delta(const common::ObPGKey& pkey, const ObBackupPieceTriple& piece_triple,
       const FileRange& src_file_range, const FileRange& dst_file_range, FileRange& delta_file_range);
-  int check_archive_log_interrupted(const int64_t log_archive_round, const FileRange& src_file_range,
+  int check_archive_log_interrupted(const ObBackupPieceTriple& piece_triple, const FileRange& src_file_range,
       const FileRange& dst_file_range, bool& interrupted);
   int check_file_exist(const FileInfo& file_info, bool& file_exist);
   int get_file_length(const FileInfo& file_info, int64_t& file_length);
   int check_and_mkdir(const archive::LogArchiveFileType file_type, const ObBackupArchiveLogPGCtx& pg_ctx);
-  int do_file_transfer(const archive::LogArchiveFileType file_type, const ObBackupArchiveLogPGCtx& pg_ctx,
-      const FileInfo& src_info, const FileInfo& dst_info, const bool dst_exist);
-  int do_single_file_transfer(const archive::LogArchiveFileType file_type, const ObBackupArchiveLogPGCtx& pg_ctx,
-      const FileInfo& src_info, const FileInfo& dst_info);
-  int do_part_file_transfer(const FileInfo& src_info, const FileInfo& dst_info);
-  int read_single_file(const FileInfo& file_info, clog::ObReadBuf& rbuf);
-  int write_single_file(const FileInfo& file_info, const clog::ObReadBuf& buf);
+  int do_file_transfer(const FileInfo& src_info, const FileInfo& dst_info);
   int read_part_file(const FileInfo& file_info, const int64_t offset, clog::ObReadBuf& rbuf);
-  int write_part_file(const FileInfo& file_info, const clog::ObReadBuf& buf);
-  int build_archive_file_prefix(const char* backup_dest, const common::ObPGKey& pg_key,
-      const archive::LogArchiveFileType file_type, const int64_t incarnation, const int64_t round, char* dest_path,
-      int64_t& pos);
-  int build_archive_file_path(const char* backup_dest, const common::ObPGKey& pg_key,
-      const archive::LogArchiveFileType file_type, const int64_t incarnation, const int64_t round,
+  int build_archive_file_prefix(const char* backup_dest, const char* storage_info, const common::ObPGKey& pg_key,
+      const archive::LogArchiveFileType file_type, const int64_t incarnation, const ObBackupPieceTriple& triple,
+      char* dest_path, int64_t& pos);
+  int build_archive_file_path(const char* backup_dest, const char* storage_info, const common::ObPGKey& pg_key,
+      const archive::LogArchiveFileType file_type, const int64_t incarnation, const ObBackupPieceTriple& triple,
       const int64_t file_id, char* dest_path);
   int build_file_prefix(const ObPGKey& pg_key, const char* base_path, const archive::LogArchiveFileType file_type,
       char* dest_path_buf, int64_t& pos);
   const char* get_file_prefix_with_type(const archive::LogArchiveFileType file_type);
 
 private:
-  int try_touch_archive_key(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation, const int64_t round);
-  int build_archive_key_prefix(
-      const ObBackupArchiveLogPGCtx& pg_ctx, const ObPGKey& pg_key, const int64_t incarnation, const int64_t round);
-  int touch_archive_key_file(
-      const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation, const int64_t round, const ObPGKey& pg_key);
-  int build_archive_key_path(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation, const int64_t round,
-      const ObPGKey& pkey, share::ObBackupPath& archive_key_path);
+  int try_touch_archive_key(
+      const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation, const ObBackupPieceTriple& triple);
+  int build_archive_key_prefix(const ObBackupArchiveLogPGCtx& pg_ctx, const ObPGKey& pg_key, const int64_t incarnation,
+      const ObBackupPieceTriple& triple);
+  int touch_archive_key_file(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation,
+      const ObBackupPieceTriple& triple, const ObPGKey& pg_key);
+  int copy_archive_key_file(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation,
+      const ObBackupPieceTriple& triple, const ObPGKey& pg_key);
+  int build_archive_key_path(const ObBackupArchiveLogPGCtx& pg_ctx, const int64_t incarnation,
+      const ObBackupPieceTriple& triple, const ObPGKey& pkey, const bool is_src, share::ObBackupPath& archive_key_path);
+  int get_archive_key_file_info(const ObBackupArchiveLogPGCtx& pg_ctx, const share::ObBackupPath& archive_key_path,
+      const bool is_src, FileInfo& file_info);
+
+private:
+  void* bb_malloc(const int64_t nbyte);
+  void bb_free(void* ptr);
+
+private:
+  static const int64_t MAX_RETRY_TIMES = 3;
+  static const int64_t MAX_RETRY_TIME_INTERVAL = 5 * 1000 * 1000L;  // 5s
 
 private:
   bool is_inited_;

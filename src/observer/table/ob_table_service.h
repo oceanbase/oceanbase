@@ -20,6 +20,11 @@
 #include "share/schema/ob_table_param.h"
 namespace oceanbase
 {
+namespace table
+{
+class ObHTableFilterOperator;
+class ObHColumnDescriptor;
+} // end namespace table
 namespace storage
 {
 class ObPartitionService;
@@ -151,10 +156,12 @@ struct ObTableServiceQueryCtx: public ObTableServiceGetCtx
 {
 public:
   ObNormalTableQueryResultIterator *normal_result_iterator_;
+  table::ObHTableFilterOperator *htable_result_iterator_;
 public:
   ObTableServiceQueryCtx(common::ObArenaAllocator &alloc)
       :ObTableServiceGetCtx(alloc),
-       normal_result_iterator_(NULL)
+       normal_result_iterator_(NULL),
+       htable_result_iterator_(NULL)
   {}
   void reset_query_ctx(storage::ObPartitionService *part_service)
   {
@@ -163,6 +170,8 @@ public:
   }
   ObNormalTableQueryResultIterator *get_normal_result_iterator(const ObTableQuery &query,
                                                                table::ObTableQueryResult &one_result);
+  table::ObHTableFilterOperator *get_htable_result_iterator(const ObTableQuery &query,
+                                                            table::ObTableQueryResult &one_result);
   void destroy_result_iterator(storage::ObPartitionService *part_service);
 };
 
@@ -215,7 +224,7 @@ private:
                                           common::ObIArray<uint64_t> &column_ids,
                                           common::ObIArray<sql::ObExprResType> *columns_type);
 
-  int insert_or_update_can_use_put(uint64_t table_id, const table::ObITableEntity &entity, bool &use_put);
+  int insert_or_update_can_use_put(table::ObTableEntityType entity_type, uint64_t table_id, const table::ObITableEntity &entity, bool &use_put);
   int add_one_result(ObTableBatchOperationResult &result,
                      table::ObTableOperationType::Type op_type,
                      int32_t error_code,
@@ -242,7 +251,7 @@ private:
       const ObTableBatchOperation &batch_operation,
       ObTableApiRowIterator *scan_result,
       ObTableBatchOperationResult &result);
-  int delete_can_use_put(uint64_t table_id, bool &use_put);
+  int delete_can_use_put(table::ObTableEntityType entity_type, uint64_t table_id, bool &use_put);
   static int cons_all_index_properties(share::schema::ObSchemaGetterGuard &schema_guard,
                                        const share::schema::ObTableSchema &table_schema,
                                        common::ObIArray<uint64_t> &column_ids,
@@ -282,7 +291,8 @@ private:
                              common::ObIArray<sql::ObExprResType> &rowkey_columns_type,
                              int64_t &schema_version,
                              uint64_t &index_id,
-                             int64_t &padding_num);
+                             int64_t &padding_num,
+                             table::ObHColumnDescriptor *hcolumn_desc);
   int fill_query_scan_ranges(ObTableServiceCtx &ctx,
                              const ObTableQuery &query,
                              int64_t padding_num,
@@ -295,6 +305,7 @@ private:
                             int32_t limit,
                             int32_t offset,
                             storage::ObTableScanParam &scan_param);
+  int check_htable_query_args(const ObTableQuery &query);
 private:
   int fill_new_entity(
       bool returning_rowkey,

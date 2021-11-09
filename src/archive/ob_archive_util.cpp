@@ -15,11 +15,13 @@
 #include "clog/ob_partition_log_service.h"
 #include "storage/ob_partition_service.h"
 #include "storage/ob_i_partition_group.h"
+#include "lib/restore/ob_storage.h"  // ObStorageGlobalIns
 
 namespace oceanbase {
 namespace archive {
 using namespace oceanbase::clog;
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 using namespace oceanbase::storage;
 void* ob_archive_malloc(const int64_t nbyte)
 {
@@ -82,9 +84,15 @@ bool is_valid_archive_compressor_type(const common::ObCompressorType compressor_
   return ((LZ4_COMPRESSOR == compressor_type) || (ZSTD_1_3_8_COMPRESSOR == compressor_type));
 }
 
-bool is_io_error(const int ret_code)
+bool is_valid_piece_info(const int64_t piece_id, const int64_t piece_create_date)
 {
-  return OB_IO_ERROR == ret_code || OB_OSS_ERROR == ret_code;
+  return (OB_BACKUP_NO_SWITCH_PIECE_ID == piece_id ||
+          (0 < piece_id && 0 < piece_create_date && OB_INVALID_TIMESTAMP != piece_create_date));
+}
+
+bool is_archive_prohibit()
+{
+  return common::ObStorageGlobalIns::get_instance().is_io_prohibited();
 }
 
 }  // namespace archive

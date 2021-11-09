@@ -9059,8 +9059,8 @@ OB_DEF_SERIALIZE_SIZE(ObMaxConcurrentParam)
 ObOutlineParamsWrapper::ObOutlineParamsWrapper() : allocator_(NULL), outline_params_()
 {}
 
-ObOutlineParamsWrapper::ObOutlineParamsWrapper(common::ObIAllocator* allocator)
-    : allocator_(allocator), outline_params_(OB_MALLOC_NORMAL_BLOCK_SIZE, ObWrapperAllocator(allocator))
+ObOutlineParamsWrapper::ObOutlineParamsWrapper(common::ObIAllocator *allocator)
+    : allocator_(allocator), outline_params_(OB_MALLOC_NORMAL_BLOCK_SIZE, ObWrapperAllocatorWithAttr(allocator))
 {}
 
 ObOutlineParamsWrapper::~ObOutlineParamsWrapper()

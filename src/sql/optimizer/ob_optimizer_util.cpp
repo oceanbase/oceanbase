@@ -5373,8 +5373,6 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(ObSelectStmt& parent_stmt, Ob
         K(child_select_list.count()),
         K(parent_select_list.count()),
         K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(parent_select_list, child_select_list, pushdown_filters))) {
-    LOG_WARN("failed to replace expr", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_filters.count(); ++i) {
     ObSEArray<ObRawExpr*, 4> view_column_exprs;
@@ -5382,6 +5380,10 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(ObSelectStmt& parent_stmt, Ob
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(parent_select_list, child_select_list, expr))) {
+      SQL_LOG(WARN, "failed to replace expr", K(ret));
+    } else if (OB_FAIL(expr->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret), K(*expr));
     } else if (expr->has_flag(CNT_WINDOW_FUNC) || expr->has_flag(CNT_AGG) || expr->has_flag(CNT_SUB_QUERY)) {
       ret = remain_filters.push_back(expr);
     } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, view_column_exprs))) {
@@ -5391,12 +5393,16 @@ int ObOptimizerUtil::check_pushdown_filter_for_set(ObSelectStmt& parent_stmt, Ob
     } else if (OB_FAIL(candi_filters.push_back(expr))) {
       LOG_WARN("failed to push back predicate", K(ret));
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(child_select_list, parent_select_list, expr))) {
+      SQL_LOG(WARN, "failed to replace expr", K(ret));
+    } else if (OB_FAIL(expr->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret), K(*expr));
+    } else {
+      pushdown_filters.at(i) = expr;
+    }
   }
-  if (OB_FAIL(ret)) {
-    // reset exprs for set
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(child_select_list, parent_select_list, pushdown_filters))) {
-    LOG_WARN("failed to replace expr", K(ret));
-  } else {
+  if (OB_SUCC(ret)) {
     LOG_TRACE("success to check_pushdown_filter_for_set", K(pushdown_filters), K(candi_filters), K(remain_filters));
   }
   return ret;

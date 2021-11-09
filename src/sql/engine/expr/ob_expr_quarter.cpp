@@ -39,9 +39,13 @@ int ObExprQuarter::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr
   int ret = OB_SUCCESS;
   int64_t quarter = 0;
   ObTime ot;
-  if (OB_UNLIKELY(obj.is_null())) {
+  if (OB_ISNULL(expr_ctx.my_session_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session ptr or exec ctx is null", K(ret), K(expr_ctx.my_session_));
+  } else if (OB_UNLIKELY(obj.is_null())) {
     result.set_null();
-  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot, false))) {
+  } else if (OB_FAIL(ob_obj_to_ob_time_with_date(obj, get_timezone_info(expr_ctx.my_session_), ot,
+                 get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx()), false))) {
     LOG_WARN("cast to ob time failed", K(ret), K(obj), K(expr_ctx.cast_mode_));
     if (CM_IS_WARN_ON_FAIL(expr_ctx.cast_mode_)) {
       ret = OB_SUCCESS;

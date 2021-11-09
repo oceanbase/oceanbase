@@ -411,6 +411,24 @@ int ObTime::set_tzd_abbr(const ObString& tzd_abbr)
   return ret;
 }
 
+DEF_TO_STRING(ObTime)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K(mode_),
+      "parts",
+      ObArrayWrap<int32_t>(parts_, TOTAL_PART_CNT),
+      "tz_name",
+      ObString(OB_MAX_TZ_NAME_LEN, tz_name_),
+      "tzd_abbr",
+      ObString(OB_MAX_TZ_ABBR_LEN, tzd_abbr_),
+      K_(time_zone_id),
+      K_(transition_type_id),
+      K_(is_tz_name_valid));
+  J_OBJ_END();
+  return pos;
+}
+
 ////////////////////////////////
 // int / double / string -> datetime / date / time / year.
 int ObTimeConverter::int_to_datetime(
@@ -5807,19 +5825,25 @@ int ObTimeConverter::otimestamp_add_nsecond(const ObOTimestampData ori_value, co
   return ret;
 }
 
-int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_date_value, int64_t& result_date_value, const ObObjType dest_type)
+int ObTimeConverter::calc_last_date_of_the_month(
+    const int64_t ori_datetime_value, int64_t &result_date_value, const ObObjType dest_type, const bool is_dayofmonth)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_DATETIME);
   ObTimeConvertCtx cvrt_ctx(NULL, false);  // utc time no timezone
-
-  if (OB_FAIL(datetime_to_ob_time(ori_date_value, NULL, ob_time))) {
-    LOG_WARN("failed to convert date to obtime parts", K(ret), K(ori_date_value));
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  if (!is_oracle_mode && ZERO_DATETIME == ori_datetime_value) {
+    ret = OB_INVALID_DATE_VALUE;
+    LOG_WARN("invalid datetime", K(ret), K(ori_datetime_value));
+  } else if (OB_FAIL(datetime_to_ob_time(ori_datetime_value, NULL, ob_time))) {
+    LOG_WARN("failed to convert date to obtime parts", K(ret), K(ori_datetime_value));
   } else {
     int is_leap = IS_LEAP_YEAR(ob_time.parts_[DT_YEAR]);
     ob_time.parts_[DT_MDAY] = DAYS_PER_MON[is_leap][ob_time.parts_[DT_MON]];
 
-    if (OB_FAIL(validate_basic_part_of_ob_time_oracle(ob_time))) {
+    if (is_oracle_mode && OB_FAIL(validate_basic_part_of_ob_time_oracle(ob_time))) {
+      LOG_WARN("failed to validate ob_time", K(ret), K(ob_time));
+    } else if (!is_oracle_mode && OB_FAIL(validate_datetime(ob_time, is_dayofmonth))) {
       LOG_WARN("failed to validate ob_time", K(ret), K(ob_time));
     } else {
       ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
@@ -5839,7 +5863,7 @@ int ObTimeConverter::calc_last_date_of_the_month(const int64_t ori_date_value, i
 
     }
   }
-  LOG_DEBUG("debug calc_last_mday", K(ob_time), K(ori_date_value), K(result_date_value));
+  LOG_DEBUG("debug calc_last_mday", K(ob_time), K(ori_datetime_value), K(result_date_value));
   return ret;
 }
 

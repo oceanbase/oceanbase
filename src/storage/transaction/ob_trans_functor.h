@@ -1822,10 +1822,11 @@ private:
 // use this interface to garbage collect unfinished transactions
 class ObClearTransAfterRestoreLog {
 public:
-  explicit ObClearTransAfterRestoreLog(
-      const int64_t restore_snapshot_version, const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
+  explicit ObClearTransAfterRestoreLog(const int64_t restore_snapshot_version, const uint64_t last_restore_log_id,
+      const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts)
       : ret_(OB_SUCCESS),
         restore_snapshot_version_(restore_snapshot_version),
+        last_restore_log_id_(last_restore_log_id),
         last_restore_log_ts_(last_restore_log_ts),
         fake_terminate_log_ts_(fake_terminate_log_ts)
   {}
@@ -1844,10 +1845,11 @@ public:
           "ctx is NULL",
           K(ret),
           K_(restore_snapshot_version),
+          K_(last_restore_log_id),
           K_(last_restore_log_ts),
           K_(fake_terminate_log_ts));
     } else if (OB_FAIL(ctx->clear_trans_after_restore(
-                   restore_snapshot_version_, last_restore_log_ts_, fake_terminate_log_ts_))) {
+                   restore_snapshot_version_, last_restore_log_id_, last_restore_log_ts_, fake_terminate_log_ts_))) {
       TRANS_LOG(WARN, "failed to clear trans after restore", K(ret), K(*ctx));
     }
 
@@ -1857,7 +1859,8 @@ public:
 private:
   int ret_;
   int64_t restore_snapshot_version_;
-  int64_t last_restore_log_ts_;       // the last log ts in restore phase
+  uint64_t last_restore_log_id_;   // the last log id in restore phase
+  int64_t last_restore_log_ts_;    // the last log ts in restore phase
   int64_t fake_terminate_log_ts_;  // fake terminate log ts for killing transaction
 };
 

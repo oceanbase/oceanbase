@@ -851,7 +851,12 @@ int ObMacroBlockWriter::check_order(const ObStoreRow& row)
         } else {
           // baseline data
           ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-          STORAGE_LOG(ERROR, "input rowkey is equal with last rowkey", K(cur_key), K(last_key), K(ret));
+          if (data_store_desc_->is_unique_index_) {
+            STORAGE_LOG(
+                WARN, "input rowkey is equal with last rowkey in unique index", K(cur_key), K(last_key), K(ret));
+          } else {
+            STORAGE_LOG(ERROR, "input rowkey is equal with last rowkey", K(cur_key), K(last_key), K(ret));
+          }
         }
       } else {
         // normal case

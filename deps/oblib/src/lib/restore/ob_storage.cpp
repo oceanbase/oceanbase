@@ -18,10 +18,10 @@
 namespace oceanbase {
 namespace common {
 
-const char* OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS"};
+const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS"};
 
 void print_access_storage_log(
-    const char* msg, const common::ObString& uri, const int64_t start_ts, const int64_t size, bool* is_slow)
+    const char *msg, const common::ObString &uri, const int64_t start_ts, const int64_t size, bool *is_slow)
 {
   if (NULL != is_slow) {
     *is_slow = false;
@@ -48,7 +48,7 @@ void print_access_storage_log(
   }
 }
 
-int get_storage_type_from_path(const common::ObString& uri, ObStorageType& type)
+int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
 {
   int ret = OB_SUCCESS;
   type = OB_STORAGE_MAX_TYPE;
@@ -66,9 +66,9 @@ int get_storage_type_from_path(const common::ObString& uri, ObStorageType& type)
   return ret;
 }
 
-const char* get_storage_type_str(const ObStorageType& type)
+const char *get_storage_type_str(const ObStorageType &type)
 {
-  const char* str = "UNKNOWN";
+  const char *str = "UNKNOWN";
   STATIC_ASSERT(
       static_cast<int64_t>(OB_STORAGE_MAX_TYPE) == ARRAYSIZEOF(OB_STORAGE_TYPES_STR), "ObStorageType count mismatch");
   if (type >= 0 && type < OB_STORAGE_MAX_TYPE) {
@@ -77,7 +77,12 @@ const char* get_storage_type_str(const ObStorageType& type)
   return str;
 }
 
-int get_storage_type_from_name(const char* type_str, ObStorageType& type)
+bool is_io_error(const int result)
+{
+  return OB_IO_ERROR == result || OB_OSS_ERROR == result;
+}
+
+int get_storage_type_from_name(const char *type_str, ObStorageType &type)
 {
   int ret = OB_SUCCESS;
   type = ObStorageType::OB_STORAGE_MAX_TYPE;
@@ -92,6 +97,32 @@ int get_storage_type_from_name(const char* type_str, ObStorageType& type)
   return ret;
 }
 
+/**
+ * ------------------------------ObStorageGlobalIns---------------------
+ */
+int ObStorageGlobalIns::init()
+{
+  int ret = OB_SUCCESS;
+
+  io_prohibited_ = false;
+
+  return ret;
+}
+
+void ObStorageGlobalIns::fin()
+{}
+
+void ObStorageGlobalIns::set_io_prohibited(bool prohibited)
+{
+  STORAGE_LOG(WARN, "set_io_prohibited", K_(io_prohibited), K(prohibited));
+  io_prohibited_ = prohibited;
+}
+
+bool ObStorageGlobalIns::is_io_prohibited() const
+{
+  return io_prohibited_;
+}
+
 ObStorageUtil::ObStorageUtil(const bool need_retry, const int64_t max_retry_duraion_us, const uint32_t retry_sleep_us)
     : file_util_(), max_retry_duraion_us_(max_retry_duraion_us), retry_sleep_us_(retry_sleep_us)
 {
@@ -100,17 +131,20 @@ ObStorageUtil::ObStorageUtil(const bool need_retry, const int64_t max_retry_dura
   }
 }
 
-int ObStorageUtil::is_exist(const common::ObString& uri, const common::ObString& storage_info, bool& exist)
+int ObStorageUtil::is_exist(const common::ObString &uri, const common::ObString &storage_info, bool &exist)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   exist = false;
 
 #ifdef ERRSIM
   ret = E(EventTable::EN_BACKUP_IO_IS_EXIST) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else if (OB_FAIL(util->is_exist(uri, storage_info, exist))) {
@@ -122,11 +156,11 @@ int ObStorageUtil::is_exist(const common::ObString& uri, const common::ObString&
 }
 
 int ObStorageUtil::get_file_length(
-    const common::ObString& uri, const common::ObString& storage_info, int64_t& file_length)
+    const common::ObString &uri, const common::ObString &storage_info, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   file_length = -1;
   int64_t retry_times = 0;
   bool need_retry = true;
@@ -135,6 +169,9 @@ int ObStorageUtil::get_file_length(
   ret = E(EventTable::EN_BACKUP_IO_GET_FILE_LENGTH) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else {
@@ -166,16 +203,19 @@ int ObStorageUtil::get_file_length(
   return ret;
 }
 
-int ObStorageUtil::del_file(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::del_file(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
 
 #ifdef ERRSIM
   ret = E(EventTable::EN_BACKUP_IO_BEFORE_DEL_FILE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else {
@@ -212,17 +252,20 @@ int ObStorageUtil::del_file(const common::ObString& uri, const common::ObString&
   return ret;
 }
 
-int ObStorageUtil::mkdir(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::mkdir(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
 
   STORAGE_LOG(DEBUG, "mkdir", K(uri));
 #ifdef ERRSIM
   ret = E(EventTable::EN_BACKUP_IO_BEFORE_MKDIR) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else if (OB_FAIL(util->mkdir(uri, storage_info))) {
@@ -237,7 +280,7 @@ int ObStorageUtil::mkdir(const common::ObString& uri, const common::ObString& st
   return ret;
 }
 
-int ObStorageUtil::mk_parent_dir(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::mk_parent_dir(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   char path[OB_MAX_URI_LENGTH];
@@ -246,6 +289,9 @@ int ObStorageUtil::mk_parent_dir(const common::ObString& uri, const common::ObSt
   if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invlaid args", K(ret), K(uri));
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(databuff_printf(path, sizeof(path), "%.*s", uri.length(), uri.ptr()))) {
     STORAGE_LOG(WARN, "failed to fill path", K(ret), K(path));
   } else if (path[strlen(path) - 1] == '/') {
@@ -272,25 +318,35 @@ int ObStorageUtil::mk_parent_dir(const common::ObString& uri, const common::ObSt
   return ret;
 }
 
-int ObStorageUtil::read_single_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, int64_t& read_size)
+int ObStorageUtil::read_single_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   int64_t retry_times = 0;
   bool need_retry = true;
 
-  while (OB_SUCC(ret) && need_retry) {
-    need_retry = false;
-    if (OB_FAIL(do_read_single_file(uri, storage_info, buf, buf_size, read_size))) {
-      const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-      STORAGE_LOG(
-          WARN, "failed to do_read_single_file", K(ret), K(cost_ts), K(retry_times), K_(max_retry_duraion_us), K(uri));
-      if (cost_ts < max_retry_duraion_us_) {
-        usleep(retry_sleep_us_);
-        ++retry_times;
-        need_retry = true;
-        ret = OB_SUCCESS;
+  if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else {
+    while (OB_SUCC(ret) && need_retry) {
+      need_retry = false;
+      if (OB_FAIL(do_read_single_file(uri, storage_info, buf, buf_size, read_size))) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        STORAGE_LOG(WARN,
+            "failed to do_read_single_file",
+            K(ret),
+            K(cost_ts),
+            K(retry_times),
+            K_(max_retry_duraion_us),
+            K(uri));
+        if (cost_ts < max_retry_duraion_us_) {
+          usleep(retry_sleep_us_);
+          ++retry_times;
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
@@ -298,8 +354,8 @@ int ObStorageUtil::read_single_file(const common::ObString& uri, const common::O
   return ret;
 }
 
-int ObStorageUtil::do_read_single_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, int64_t& read_size)
+int ObStorageUtil::do_read_single_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -328,12 +384,15 @@ int ObStorageUtil::do_read_single_file(const common::ObString& uri, const common
 
 // has '\0' in the end
 int ObStorageUtil::read_single_text_file(
-    const common::ObString& uri, const common::ObString& storage_info, char* buf, const int64_t buf_size)
+    const common::ObString &uri, const common::ObString &storage_info, char *buf, const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   int64_t read_size = -1;
 
-  if (OB_FAIL(ObStorageUtil::read_single_file(uri, storage_info, buf, buf_size, read_size))) {
+  if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else if (OB_FAIL(ObStorageUtil::read_single_file(uri, storage_info, buf, buf_size, read_size))) {
     STORAGE_LOG(WARN, "failed to read_single_object", K(ret), K(uri));
   } else if (read_size < 0 || read_size >= buf_size) {
     ret = OB_BUF_NOT_ENOUGH;
@@ -345,11 +404,11 @@ int ObStorageUtil::read_single_text_file(
   return ret;
 }
 
-int ObStorageUtil::update_file_modify_time(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::update_file_modify_time(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -357,6 +416,9 @@ int ObStorageUtil::update_file_modify_time(const common::ObString& uri, const co
   ret = E(EventTable::EN_BACKUP_IO_UPDATE_FILE_MODIFY_TIME) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else {
@@ -384,12 +446,12 @@ int ObStorageUtil::update_file_modify_time(const common::ObString& uri, const co
   return ret;
 }
 
-int ObStorageUtil::list_files(const common::ObString& uri, const common::ObString& storage_info,
-    common::ObIAllocator& allocator, common::ObIArray<common::ObString>& file_names)
+int ObStorageUtil::list_files(const common::ObString &uri, const common::ObString &storage_info,
+    common::ObIAllocator &allocator, common::ObIArray<common::ObString> &file_names)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -398,6 +460,9 @@ int ObStorageUtil::list_files(const common::ObString& uri, const common::ObStrin
 #endif
 
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else {
@@ -427,11 +492,11 @@ int ObStorageUtil::list_files(const common::ObString& uri, const common::ObStrin
 }
 
 int ObStorageUtil::write_single_file(
-    const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t size)
+    const common::ObString &uri, const common::ObString &storage_info, const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -439,6 +504,9 @@ int ObStorageUtil::write_single_file(
   ret = E(EventTable::EN_BACKUP_IO_BEFORE_WRITE_SINGLE_FILE) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else {
@@ -476,7 +544,7 @@ int ObStorageUtil::write_single_file(
   return ret;
 }
 
-int ObStorageUtil::get_util(const common::ObString& uri, ObIStorageUtil*& util)
+int ObStorageUtil::get_util(const common::ObString &uri, ObIStorageUtil *&util)
 {
   int ret = OB_SUCCESS;
   ObStorageType type = OB_STORAGE_MAX_TYPE;
@@ -500,8 +568,8 @@ int ObStorageUtil::get_util(const common::ObString& uri, ObIStorageUtil*& util)
   return ret;
 }
 
-int ObStorageUtil::read_part_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, const int64_t offset, int64_t& read_size)
+int ObStorageUtil::read_part_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, const int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
@@ -509,16 +577,22 @@ int ObStorageUtil::read_part_file(const common::ObString& uri, const common::ObS
   bool need_retry = true;
   read_size = 0;
 
-  while (OB_SUCC(ret) && need_retry) {
-    need_retry = false;
-    if (OB_FAIL(do_read_part_file(uri, storage_info, buf, buf_size, offset, read_size))) {
-      const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-      STORAGE_LOG(WARN, "failed to do_dump_file", K(ret), K(cost_ts), K(retry_times), K_(max_retry_duraion_us), K(uri));
-      if (cost_ts < max_retry_duraion_us_) {
-        usleep(retry_sleep_us_);
-        ++retry_times;
-        need_retry = true;
-        ret = OB_SUCCESS;
+  if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else {
+    while (OB_SUCC(ret) && need_retry) {
+      need_retry = false;
+      if (OB_FAIL(do_read_part_file(uri, storage_info, buf, buf_size, offset, read_size))) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        STORAGE_LOG(
+            WARN, "failed to do_dump_file", K(ret), K(cost_ts), K(retry_times), K_(max_retry_duraion_us), K(uri));
+        if (cost_ts < max_retry_duraion_us_) {
+          usleep(retry_sleep_us_);
+          ++retry_times;
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
@@ -526,8 +600,8 @@ int ObStorageUtil::read_part_file(const common::ObString& uri, const common::ObS
   return ret;
 }
 
-int ObStorageUtil::do_read_part_file(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, const int64_t offset, int64_t& read_size)
+int ObStorageUtil::do_read_part_file(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, const int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -549,29 +623,45 @@ int ObStorageUtil::do_read_part_file(const common::ObString& uri, const common::
   return ret;
 }
 
-int ObStorageUtil::del_dir(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::del_dir(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
+  int64_t retry_times = 0;
+  bool need_retry = true;
 
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
-  } else if (OB_FAIL(util->del_dir(uri, storage_info))) {
-    STORAGE_LOG(WARN, "failed to del_file", K(ret), K(uri), K(storage_info));
+  } else {
+    while (OB_SUCC(ret) && need_retry) {
+      need_retry = false;
+      if (OB_FAIL(util->del_dir(uri, storage_info))) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        STORAGE_LOG(WARN, "failed to del_dir", K(ret), K(cost_ts), K(retry_times), K_(max_retry_duraion_us), K(uri));
+        if (cost_ts < max_retry_duraion_us_) {
+          usleep(retry_sleep_us_);
+          ++retry_times;
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
+      }
+    }
   }
-
   print_access_storage_log("del_file", uri, start_ts);
   return ret;
 }
 
 int ObStorageUtil::get_pkeys_from_dir(
-    const common::ObString& uri, const common::ObString& storage_info, common::ObIArray<common::ObPartitionKey>& pkeys)
+    const common::ObString &uri, const common::ObString &storage_info, common::ObIArray<common::ObPartitionKey> &pkeys)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -580,6 +670,9 @@ int ObStorageUtil::get_pkeys_from_dir(
 #endif
 
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else {
@@ -602,11 +695,11 @@ int ObStorageUtil::get_pkeys_from_dir(
   return ret;
 }
 
-int ObStorageUtil::delete_tmp_files(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageUtil::delete_tmp_files(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
-  ObIStorageUtil* util = NULL;
+  ObIStorageUtil *util = NULL;
   int64_t retry_times = 0;
   bool need_retry = true;
 
@@ -618,6 +711,9 @@ int ObStorageUtil::delete_tmp_files(const common::ObString& uri, const common::O
   } else if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "delete tmp files get invalid argument", K(ret), K(uri));
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (OB_FAIL(get_util(uri, util))) {
     STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
   } else {
@@ -641,7 +737,127 @@ int ObStorageUtil::delete_tmp_files(const common::ObString& uri, const common::O
   return ret;
 }
 
-ObStorageReader::ObStorageReader() : file_length_(-1), reader_(NULL), file_reader_(), start_ts_(0)
+int ObStorageUtil::check_backup_dest_lifecycle(
+    const common::ObString &path, const common::ObString &storage_info, bool &is_set_lifecycle)
+{
+
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(path);
+  UNUSED(storage_info);
+  is_set_lifecycle = false;
+  // Forbidden check backup dest lifecycle, because oss has bug which make observer core
+  /*
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObIStorageUtil* util = NULL;
+  int64_t retry_times = 0;
+  bool need_retry = true;
+  is_set_lifecycle = false;
+
+  if (OB_FAIL(ret)) {
+  } else if (path.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "delete tmp files get invalid argument", K(ret), K(path));
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(path));
+  } else if (OB_FAIL(get_util(path, util))) {
+    STORAGE_LOG(WARN, "failed to get util", K(ret), K(path));
+  } else {
+    while (OB_SUCC(ret) && need_retry) {
+      need_retry = false;
+      if (OB_FAIL(util->check_backup_dest_lifecycle(path, storage_info, is_set_lifecycle))) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        STORAGE_LOG(
+            WARN, "failed to delete tmp files", K(ret), K(cost_ts), K(retry_times), K_(max_retry_duraion_us), K(path));
+        if (cost_ts < max_retry_duraion_us_) {
+          usleep(retry_sleep_us_);
+          ++retry_times;
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+
+  print_access_storage_log("check_bucket_lifecycle", path, start_ts, 0);
+  */
+  return ret;
+}
+
+int ObStorageUtil::is_empty_directory(
+    const common::ObString &uri, const common::ObString &storage_info, bool &is_empty_directory)
+{
+  int ret = OB_SUCCESS;
+  is_empty_directory = false;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObIStorageUtil *util = NULL;
+  int64_t retry_times = 0;
+  bool need_retry = true;
+
+  if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else if (OB_FAIL(get_util(uri, util))) {
+    STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
+  } else {
+    while (OB_SUCC(ret) && need_retry) {
+      need_retry = false;
+      if (OB_FAIL(util->is_empty_directory(uri, storage_info, is_empty_directory))) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        STORAGE_LOG(WARN, "failed to check is empty directory", K(ret), K(cost_ts), K(retry_times), K(uri));
+        if (cost_ts < max_retry_duraion_us_) {
+          usleep(retry_sleep_us_);
+          ++retry_times;
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  print_access_storage_log("is_empty_directory", uri, start_ts);
+  return ret;
+}
+
+int ObStorageUtil::list_directories(const common::ObString &uri, const common::ObString &storage_info,
+    common::ObIAllocator &allocator, common::ObIArray<common::ObString> &directory_names)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObIStorageUtil *util = NULL;
+  int64_t retry_times = 0;
+  bool need_retry = true;
+
+#ifdef ERRSIM
+  ret = E(EventTable::EN_BACKUP_IO_LIST_FILE) OB_SUCCESS;
+#endif
+
+  if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else if (OB_FAIL(get_util(uri, util))) {
+    STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
+  } else {
+    while (OB_SUCC(ret) && need_retry) {
+      need_retry = false;
+      if (OB_FAIL(util->list_directories(uri, storage_info, allocator, directory_names))) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        STORAGE_LOG(WARN, "failed to list_files", K(ret), K(cost_ts), K(retry_times), K_(max_retry_duraion_us), K(uri));
+        if (cost_ts < max_retry_duraion_us_) {
+          usleep(retry_sleep_us_);
+          ++retry_times;
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  print_access_storage_log("list_files", uri, start_ts, 0);
+  return ret;
+}
+
+ObStorageReader::ObStorageReader() : file_length_(-1), reader_(NULL), start_ts_(0)
 {
   uri_[0] = '\0';
 }
@@ -653,7 +869,7 @@ ObStorageReader::~ObStorageReader()
   }
 }
 
-int ObStorageReader::open(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageReader::open(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -664,6 +880,9 @@ int ObStorageReader::open(const common::ObString& uri, const common::ObString& s
   ret = E(EventTable::EN_BACKUP_IO_READER_OPEN) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (NULL != reader_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
@@ -701,7 +920,7 @@ int ObStorageReader::open(const common::ObString& uri, const common::ObString& s
   return ret;
 }
 
-int ObStorageReader::pread(char* buf, const int64_t buf_size, int64_t offset, int64_t& read_size)
+int ObStorageReader::pread(char *buf, const int64_t buf_size, int64_t offset, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
   read_size = 0;
@@ -712,6 +931,9 @@ int ObStorageReader::pread(char* buf, const int64_t buf_size, int64_t offset, in
 
   const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(offset), K(buf_size));
   } else if (OB_ISNULL(reader_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
@@ -764,7 +986,7 @@ ObStorageWriter::~ObStorageWriter()
   }
 }
 
-int ObStorageWriter::open(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageWriter::open(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -775,6 +997,9 @@ int ObStorageWriter::open(const common::ObString& uri, const common::ObString& s
   ret = E(EventTable::EN_BACKUP_IO_WRITE_OPEN) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (NULL != writer_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
@@ -809,7 +1034,7 @@ int ObStorageWriter::open(const common::ObString& uri, const common::ObString& s
   return ret;
 }
 
-int ObStorageWriter::write(const char* buf, const int64_t size)
+int ObStorageWriter::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
 
@@ -819,6 +1044,9 @@ int ObStorageWriter::write(const char* buf, const int64_t size)
 
   const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(size));
   } else if (OB_ISNULL(writer_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
@@ -874,7 +1102,7 @@ ObStorageAppender::~ObStorageAppender()
 }
 
 int ObStorageAppender::open(
-    const common::ObString& uri, const common::ObString& storage_info, const AppenderParam& param)
+    const common::ObString &uri, const common::ObString &storage_info, const AppenderParam &param)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -885,6 +1113,9 @@ int ObStorageAppender::open(
   ret = E(EventTable::EN_BACKUP_IO_APPENDER_OPEN) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (NULL != appender_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
@@ -924,7 +1155,7 @@ int ObStorageAppender::open(
   return ret;
 }
 
-int ObStorageAppender::open_deprecated(const common::ObString& uri, const common::ObString& storage_info)
+int ObStorageAppender::open_deprecated(const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -935,6 +1166,9 @@ int ObStorageAppender::open_deprecated(const common::ObString& uri, const common
   ret = E(EventTable::EN_BACKUP_IO_APPENDER_OPEN) OB_SUCCESS;
 #endif
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
   } else if (NULL != appender_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "cannot open twice", K(ret), K(uri));
@@ -971,7 +1205,7 @@ int ObStorageAppender::open_deprecated(const common::ObString& uri, const common
   return ret;
 }
 
-int ObStorageAppender::write(const char* buf, const int64_t size)
+int ObStorageAppender::write(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
 
@@ -981,6 +1215,9 @@ int ObStorageAppender::write(const char* buf, const int64_t size)
 
   const int64_t start_ts = ObTimeUtility::current_time();
   if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(size));
   } else if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
@@ -994,6 +1231,26 @@ int ObStorageAppender::write(const char* buf, const int64_t size)
   EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_COUNT);
   EVENT_ADD(ObStatEventIds::BACKUP_IO_WRITE_DELAY, ObTimeUtility::current_time() - start_ts);
 
+  return ret;
+}
+
+int ObStorageAppender::pwrite(const char *buf, const int64_t size, const int64_t offset)
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = E(EventTable::EN_BACKUP_IO_APPENDER_WRITE) OB_SUCCESS;
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(offset), K(size));
+  } else if (OB_ISNULL(appender_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not opened", K(ret));
+  } else if (OB_FAIL(appender_->pwrite(buf, size, offset))) {
+    STORAGE_LOG(WARN, "failed to write", K(ret));
+  }
   return ret;
 }
 
@@ -1036,14 +1293,17 @@ ObStorageMetaWrapper::ObStorageMetaWrapper() : file_meta_()
 ObStorageMetaWrapper::~ObStorageMetaWrapper()
 {}
 
-int ObStorageMetaWrapper::get(const common::ObString& uri, const common::ObString& storage_info, char* buf,
-    const int64_t buf_size, int64_t& read_size)
+int ObStorageMetaWrapper::get(const common::ObString &uri, const common::ObString &storage_info, char *buf,
+    const int64_t buf_size, int64_t &read_size)
 {
   int ret = OB_SUCCESS;
-  ObIStorageMetaWrapper* meta = NULL;
+  ObIStorageMetaWrapper *meta = NULL;
 
   const int64_t start_ts = ObTimeUtility::current_time();
-  if (OB_FAIL(get_meta(uri, meta))) {
+  if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else if (OB_FAIL(get_meta(uri, meta))) {
     STORAGE_LOG(WARN, "failed to get meta", K(ret), K(uri));
   } else if (OB_FAIL(meta->get(uri, storage_info, buf, buf_size, read_size))) {
     EVENT_INC(ObStatEventIds::BACKUP_IO_READ_FAIL_COUNT);
@@ -1059,13 +1319,16 @@ int ObStorageMetaWrapper::get(const common::ObString& uri, const common::ObStrin
 }
 
 int ObStorageMetaWrapper::set(
-    const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t size)
+    const common::ObString &uri, const common::ObString &storage_info, const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  ObIStorageMetaWrapper* meta = NULL;
+  ObIStorageMetaWrapper *meta = NULL;
 
   const int64_t start_ts = ObTimeUtility::current_time();
-  if (OB_FAIL(get_meta(uri, meta))) {
+  if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else if (OB_FAIL(get_meta(uri, meta))) {
     STORAGE_LOG(WARN, "failed to get meta", K(ret), K(uri));
   } else if (OB_FAIL(meta->set(uri, storage_info, buf, size))) {
     EVENT_INC(ObStatEventIds::BACKUP_IO_WRITE_FAIL_COUNT);
@@ -1080,7 +1343,7 @@ int ObStorageMetaWrapper::set(
   return ret;
 }
 
-int ObStorageMetaWrapper::get_meta(const common::ObString& uri, ObIStorageMetaWrapper*& meta)
+int ObStorageMetaWrapper::get_meta(const common::ObString &uri, ObIStorageMetaWrapper *&meta)
 {
   int ret = OB_SUCCESS;
   ObStorageType type = OB_STORAGE_MAX_TYPE;

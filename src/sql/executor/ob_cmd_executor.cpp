@@ -88,7 +88,6 @@
 #include "sql/engine/cmd/ob_dcl_executor.h"
 #include "sql/engine/cmd/ob_tcl_executor.h"
 #include "sql/engine/cmd/ob_tenant_executor.h"
-#include "sql/engine/cmd/ob_set_names_executor.h"
 #include "sql/engine/cmd/ob_alter_system_executor.h"
 #include "sql/engine/cmd/ob_set_password_executor.h"
 #include "sql/engine/cmd/ob_tablegroup_executor.h"
@@ -542,11 +541,6 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
       DEFINE_EXECUTE_CMD(ObCancelTaskStmt, ObCancelTaskExecutor);
       break;
     }
-    case stmt::T_SET_NAMES: {
-      DEFINE_EXECUTE_CMD(ObSetNamesStmt, ObSetNamesExecutor);
-      sql_text = ObString::make_empty_string();  // do not record
-      break;
-    }
     case stmt::T_LOAD_DATA: {
       DEFINE_EXECUTE_CMD(ObLoadDataStmt, ObLoadDataExecutor);
       break;
@@ -704,6 +698,14 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
       DEFINE_EXECUTE_CMD(ObDropDbLinkStmt, ObDropDbLinkExecutor);
       break;
     }
+    case stmt::T_BACKUP_BACKUPSET: {
+      DEFINE_EXECUTE_CMD(ObBackupBackupsetStmt, ObBackupBackupsetExecutor);
+      break;
+    }
+    case stmt::T_BACKUP_ARCHIVELOG: {
+      DEFINE_EXECUTE_CMD(ObBackupArchiveLogStmt, ObBackupArchiveLogExecutor);
+      break;
+    }
     case stmt::T_BACKUP_SET_ENCRYPTION: {
       DEFINE_EXECUTE_CMD(ObBackupSetEncryptionStmt, ObBackupSetEncryptionExecutor);
       break;
@@ -726,6 +728,18 @@ int ObCmdExecutor::execute(ObExecContext& ctx, ObICmd& cmd)
     }
     case stmt::T_DROP_RESTORE_POINT: {
       DEFINE_EXECUTE_CMD(ObDropRestorePointStmt, ObDropRestorePointExecutor);
+      break;
+    }
+    case stmt::T_BACKUP_BACKUPPIECE: {
+      DEFINE_EXECUTE_CMD(ObBackupBackupPieceStmt, ObBackupBackupPieceExecutor);
+      break;
+    }
+    case stmt::T_ADD_RESTORE_SOURCE: {
+      DEFINE_EXECUTE_CMD(ObAddRestoreSourceStmt, ObAddRestoreSourceExecutor);
+      break;
+    }
+    case stmt::T_CLEAR_RESTORE_SOURCE: {
+      DEFINE_EXECUTE_CMD(ObClearRestoreSourceStmt, ObClearRestoreSourceExecutor);
       break;
     }
     case stmt::T_CS_DISKMAINTAIN:

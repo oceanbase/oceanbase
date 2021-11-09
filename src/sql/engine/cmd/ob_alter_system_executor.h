@@ -119,8 +119,13 @@ DEF_SIMPLE_EXECUTOR(ObDropDisk);
 DEF_SIMPLE_EXECUTOR(ObArchiveLog);
 DEF_SIMPLE_EXECUTOR(ObBackupDatabase);
 DEF_SIMPLE_EXECUTOR(ObBackupManage);
+DEF_SIMPLE_EXECUTOR(ObBackupBackupset);
+DEF_SIMPLE_EXECUTOR(ObBackupArchiveLog);
+DEF_SIMPLE_EXECUTOR(ObBackupBackupPiece);
 DEF_SIMPLE_EXECUTOR(ObBackupSetEncryption);
 DEF_SIMPLE_EXECUTOR(ObBackupSetDecryption);
+DEF_SIMPLE_EXECUTOR(ObAddRestoreSource);
+DEF_SIMPLE_EXECUTOR(ObClearRestoreSource);
 
 class ObCancelTaskExecutor {
 public:

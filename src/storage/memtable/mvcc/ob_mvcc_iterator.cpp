@@ -43,6 +43,7 @@ int ObMvccValueIterator::init(const ObIMvccCtx& ctx, const ObTransSnapInfo& snap
 {
   int ret = OB_SUCCESS;
   skip_compact_ = skip_compact;
+  bool can_read_by_sql_no = false;
   reset();
   int64_t lock_for_read_start = ObClockGenerator::getClock();
   // snapshot version equal INT64_MAX is unexpected
@@ -62,30 +63,32 @@ int ObMvccValueIterator::init(const ObIMvccCtx& ctx, const ObTransSnapInfo& snap
     value_ = value;
     is_inited_ = true;
     version_iter_ = value->get_list_head();
-  } else if (read_by_sql_no(ctx, snapshot_info, const_cast<ObMvccRow*>(value), query_flag)) {
-    ctx_ = &ctx;
-    value_ = value;
-    is_inited_ = true;
+  } else if (OB_FAIL(read_by_sql_no(ctx, snapshot_info, const_cast<ObMvccRow*>(value), query_flag, can_read_by_sql_no))) {
+    //do nothing
   } else {
-    // read by snapshot
-    ctx_ = &ctx;
-    value_ = value;
-    // not need lock_for_read when row is not locked
-    if (value->row_lock_.is_locked() && OB_FAIL(value->lock_for_read(key, const_cast<ObIMvccCtx&>(ctx)))) {
-      TRANS_LOG(WARN, "wait row lock fail", K(ret), K(ctx), KP(value), K(*value));
-    } else if (OB_FAIL(find_start_pos(snapshot_info.get_snapshot_version()))) {
-      TRANS_LOG(WARN, "fail to find start pos for iterator", K(ret));
-    } else {
-      if (GCONF.enable_sql_audit) {
-        if (OB_SUCCESS != (ret = mark_trans_node_for_elr(snapshot_info.get_snapshot_version(), query_flag.is_prewarm()))) {
-          //do nothing
-        }
-      }
-      // set has_read_relocated_row flag true when reading relocated row
-      if (value->is_has_relocated()) {
-        const_cast<ObIMvccCtx*>(&ctx)->set_has_read_relocated_row();
-      }
+    if (can_read_by_sql_no) {
+      ctx_ = &ctx;
+      value_ = value;
       is_inited_ = true;
+    } else {
+      // read by snapshot
+      ctx_ = &ctx;
+      value_ = value;
+      // not need lock_for_read when row is not locked
+      if (value->row_lock_.is_locked() && OB_FAIL(value->lock_for_read(key, const_cast<ObIMvccCtx&>(ctx)))) {
+        TRANS_LOG(WARN, "wait row lock fail", K(ret), K(ctx), KP(value), K(*value));
+      } else if (OB_FAIL(find_start_pos(snapshot_info.get_snapshot_version()))) {
+        TRANS_LOG(WARN, "fail to find start pos for iterator", K(ret));
+      } else {
+        if (GCONF.enable_sql_audit) {
+          mark_trans_node(snapshot_info.get_snapshot_version(), query_flag.is_prewarm());
+        }
+        // set has_read_relocated_row flag true when reading relocated row
+        if (value->is_has_relocated()) {
+          const_cast<ObIMvccCtx*>(&ctx)->set_has_read_relocated_row();
+        }
+        is_inited_ = true;
+      }
     }
   }
   // stat lock for read time
@@ -93,29 +96,24 @@ int ObMvccValueIterator::init(const ObIMvccCtx& ctx, const ObTransSnapInfo& snap
   return ret;
 }
 
-int ObMvccValueIterator::mark_trans_node_for_elr(const int64_t read_snapshot, const bool is_prewarm)
+void ObMvccValueIterator::mark_trans_node(const int64_t read_snapshot, const bool is_prewarm)
 {
-  int ret = OB_SUCCESS;
   if (NULL != version_iter_) {
-    ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(ctx_));
-    transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
-    if (NULL != trans_ctx) {
-        if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
-          TRANS_LOG(WARN, "strong consistent read follower", K(*trans_ctx), K(ctx_));
-          ret = OB_NOT_MASTER;
-        }
-    }
     // do not set barrier info when transaction node is ELR node
     if (!is_prewarm && !version_iter_->is_elr()) {
       version_iter_->clear_safe_read_barrier();
+      ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(ctx_));
+      transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
       if (NULL != trans_ctx) {
+        if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
+          TRANS_LOG(WARN, "strong consistent read follower", K(trans_ctx->get_trans_id()), K(ctx_));
+        }
         version_iter_->set_safe_read_barrier(trans_ctx->is_bounded_staleness_read());
         version_iter_->set_inc_num(trans_ctx->get_trans_id().get_inc_num());
       }
       version_iter_->set_snapshot_version_barrier(read_snapshot);
     }
   }
-  return ret;
 }
 
 int ObMvccValueIterator::find_start_pos(const int64_t read_snapshot)
@@ -280,11 +278,10 @@ void ObMvccValueIterator::move_to_next_node()
 }
 
 // check if read self transaction when fetch cursor
-bool ObMvccValueIterator::read_by_sql_no(
-    const ObIMvccCtx& ctx, const ObTransSnapInfo& snapshot_info, ObMvccRow* value, const ObQueryFlag& query_flag)
+int ObMvccValueIterator::read_by_sql_no(
+    const ObIMvccCtx& ctx, const ObTransSnapInfo& snapshot_info, ObMvccRow* value, const ObQueryFlag& query_flag, bool& can_read_by_sql_no)
 {
   int ret = OB_SUCCESS;
-  bool can_read_by_sql_no = false;
   bool is_locked = false;
 
   ObMvccTransNode* iter = value->get_list_head();
@@ -335,12 +332,24 @@ bool ObMvccValueIterator::read_by_sql_no(
         }
       }
     }
+    if (NULL != version_iter_) {
+      ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(const_cast<ObIMvccCtx *>(&ctx));
+      if (curr_mt_ctx->is_for_replay()) {
+        transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
+        if (NULL != trans_ctx) {
+          if (!trans_ctx->is_bounded_staleness_read() && !trans_ctx->is_stmt_readonly()) {
+            TRANS_LOG(WARN, "strong consistent read follower", K(trans_ctx->get_trans_id()), K(ctx));
+            ret = OB_NOT_MASTER;
+          }
+        }
+      }
+    }
   }
 
   if (is_locked) {
     value->latch_.unlock();
   }
-  return can_read_by_sql_no;
+  return ret;
 }
 
 void ObMvccValueIterator::reset()

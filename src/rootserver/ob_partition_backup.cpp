@@ -30,6 +30,7 @@
 #include "observer/ob_server_struct.h"
 #include "share/backup/ob_backup_operator.h"
 #include "share/backup/ob_tenant_backup_task_updater.h"
+#include "rootserver/ob_root_backup.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::rootserver;
@@ -50,7 +51,9 @@ ObPartitionBackup::ObPartitionBackup()
       check_stop_provider_(NULL),
       pg_task_updater_(),
       start_task_id_(0),
-      end_task_id_(0)
+      end_task_id_(0),
+      task_start_snapshot_(0),
+      lock_()
 {}
 
 int ObPartitionBackup::init(common::ObServerConfig& cfg, share::schema::ObMultiVersionSchemaService& schema_service,
@@ -85,9 +88,11 @@ int ObPartitionBackup::partition_backup(int64_t& task_cnt, const uint64_t tenant
   int ret = OB_SUCCESS;
   ObArray<ObPGBackupTaskInfo> pg_tasks;
   ObArenaAllocator allocator(ObModIds::BACKUP);
-  ObArray<ObRegion> detected_region;
+  ObArray<ObBackupRegion> detected_region;
+  ObArray<ObBackupZone> detected_zone;
   ObPartitionBackupProvider provider;
   ObTenantBackupTaskInfo task_info;
+  int64_t prev_backup_date = 0;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -97,13 +102,14 @@ int ObPartitionBackup::partition_backup(int64_t& task_cnt, const uint64_t tenant
     LOG_WARN("partition backup get invalid argument", K(ret), K(tenant_id));
   } else if (OB_SYS_TENANT_ID == tenant_id) {
     // do nothing
-  } else if (OB_FAIL(get_backup_infos(tenant_id, task_info, pg_tasks))) {
+  } else if (OB_FAIL(get_backup_infos(tenant_id, task_info, pg_tasks, prev_backup_date))) {
     LOG_WARN("failed to get pg backup task", K(ret), K(tenant_id));
   } else if (pg_tasks.empty()) {
     // do nothing
-  } else if (OB_FAIL(get_detected_region(tenant_id, detected_region))) {
+  } else if (OB_FAIL(get_detected_region_and_zone(tenant_id, detected_region, detected_zone))) {
     LOG_WARN("failed to get detected region", K(ret), K(tenant_id));
-  } else if (OB_FAIL(provider.init(detected_region, task_info, allocator, *zone_mgr_, *server_mgr_))) {
+  } else if (OB_FAIL(provider.init(
+                 detected_region, detected_zone, task_info, prev_backup_date, allocator, *zone_mgr_, *server_mgr_))) {
     LOG_WARN("failed to init partition backup provider", K(ret), K(detected_region));
   } else if (OB_FAIL(prepare_backup_task(pg_tasks, provider, allocator))) {
     LOG_WARN("failed to prepare backup task", K(ret), K(pg_tasks));
@@ -115,20 +121,23 @@ int ObPartitionBackup::partition_backup(int64_t& task_cnt, const uint64_t tenant
 }
 
 int ObPartitionBackup::get_backup_infos(const uint64_t tenant_id, share::ObTenantBackupTaskInfo& task_info,
-    common::ObIArray<share::ObPGBackupTaskInfo>& pg_tasks)
+    common::ObIArray<share::ObPGBackupTaskInfo>& pg_tasks, int64_t& prev_backup_date)
 {
   int ret = OB_SUCCESS;
   task_info.reset();
   pg_tasks.reset();
+  prev_backup_date = 0;
   const int64_t start_ts = ObTimeUtil::current_time();
   ObTenantBackupTaskUpdater updater;
+  ObBackupTaskHistoryUpdater history_updater;
+  const bool for_update = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition backup do not init", K(ret));
   } else if (OB_FAIL(updater.init(*sql_proxy_))) {
     LOG_WARN("failed to init tenant backup task updater", K(ret), K(tenant_id));
-  } else if (OB_FAIL(updater.get_tenant_backup_task(tenant_id, task_info))) {
+  } else if (OB_FAIL(updater.get_tenant_backup_task(tenant_id, for_update, task_info))) {
     LOG_WARN("failed to get tenant backup task", K(ret), K(tenant_id));
   } else if (ObTenantBackupTaskInfo::DOING != task_info.status_ &&
              ObTenantBackupTaskInfo::CANCEL != task_info.status_) {
@@ -140,6 +149,19 @@ int ObPartitionBackup::get_backup_infos(const uint64_t tenant_id, share::ObTenan
     if (OB_FAIL(cancel_pending_pg_tasks(task_info, pg_tasks))) {
       LOG_WARN("failed to cancel pending pg tasks", K(ret), K(task_info));
     }
+  } else if (!task_info.backup_type_.is_full_backup()) {
+    ObTenantBackupTaskInfo prev_backup_info;
+    if (0 != task_info.copy_id_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("backup task info copy id is unexpected", K(ret), K(task_info));
+    } else if (OB_FAIL(history_updater.init(*sql_proxy_))) {
+      LOG_WARN("failed to init task history updater", K(ret), K(task_info));
+    } else if (OB_FAIL(history_updater.get_original_tenant_backup_task(
+                   task_info.tenant_id_, task_info.prev_inc_backup_set_id_, for_update, prev_backup_info))) {
+      LOG_WARN("failed to get tenant backup task", K(ret), K(task_info));
+    } else {
+      prev_backup_date = prev_backup_info.date_;
+    }
   }
 
   LOG_INFO("get pg backup task",
@@ -148,7 +170,8 @@ int ObPartitionBackup::get_backup_infos(const uint64_t tenant_id, share::ObTenan
       K(ret),
       K(tenant_id),
       K(pg_tasks.count()),
-      K(task_info));
+      K(task_info),
+      K(prev_backup_date));
   return ret;
 }
 
@@ -177,11 +200,16 @@ int ObPartitionBackup::check_pg_backup_task(const ObPGBackupTaskInfo& pg_task, b
   return ret;
 }
 
-int ObPartitionBackup::get_detected_region(const uint64_t tenant_id, common::ObIArray<ObRegion>& detected_region)
+int ObPartitionBackup::get_detected_region_and_zone(const uint64_t tenant_id,
+    common::ObIArray<share::ObBackupRegion>& detected_region, common::ObIArray<share::ObBackupZone>& backup_zone)
 {
   int ret = OB_SUCCESS;
   ObBackupInfoManager info_manager;
   ObArray<uint64_t> tenant_ids;
+  detected_region.reset();
+  backup_zone.reset();
+  char backup_zone_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = "";
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition backup do not init", K(ret));
@@ -191,6 +219,10 @@ int ObPartitionBackup::get_detected_region(const uint64_t tenant_id, common::ObI
     LOG_WARN("failed to init info manager", K(ret), K(tenant_ids));
   } else if (OB_FAIL(info_manager.get_detected_region(tenant_id, detected_region))) {
     LOG_WARN("failed to get detected region", K(ret), K(tenant_ids));
+  } else if (OB_FAIL(GCONF.backup_zone.copy(backup_zone_str, sizeof(backup_zone_str)))) {
+    LOG_WARN("failed to copy backup zone", K(ret));
+  } else if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone_str, MAX_ZONE_LENGTH, backup_zone))) {
+    LOG_WARN("failed to parase backup format input", K(ret), K(backup_zone_str));
   }
   return ret;
 }
@@ -263,7 +295,10 @@ int ObPartitionBackup::backup_pg(const uint64_t tenant_id, int64_t& task_cnt, Ob
           if (OB_FAIL(task_mgr_->add_task(task, task_cnt))) {
             LOG_WARN("fail to add task", K(ret));
           } else {
-          }  // no more to do
+            int64_t tmp_task_start_snapshot = ObTimeUtil::current_time();
+            SpinWLockGuard gurad(lock_);
+            task_start_snapshot_ = tmp_task_start_snapshot;
+          }
         }
       }
 
@@ -399,6 +434,20 @@ int ObPartitionBackup::cancel_pending_pg_tasks(
   return ret;
 }
 
+int ObPartitionBackup::get_task_start_snapshot(int64_t& task_start_snapshot)
+{
+  int ret = OB_SUCCESS;
+  task_start_snapshot = 0;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("partition backup do not init ", K(ret));
+  } else {
+    SpinRLockGuard gurad(lock_);
+    task_start_snapshot = task_start_snapshot_;
+  }
+  return ret;
+}
+
 ObBackupElement::ObBackupElement() : replica_(), region_()
 {}
 
@@ -465,21 +514,26 @@ ObPartitionBackupProvider::ObPartitionBackupProvider()
       addr_array_(),
       iter_index_(0),
       map_iter_(),
-      server_mgr_(NULL)
+      server_mgr_(NULL),
+      detected_zone_(),
+      prev_backup_date_(0)
 {}
 
-int ObPartitionBackupProvider::init(const common::ObIArray<common::ObRegion>& detected_region,
-    const ObTenantBackupTaskInfo& task_info, common::ObIAllocator& allocator, ObZoneManager& zone_mgr,
+int ObPartitionBackupProvider::init(const common::ObIArray<share::ObBackupRegion>& detected_region,
+    const common::ObIArray<share::ObBackupZone>& detected_zone, const ObTenantBackupTaskInfo& task_info,
+    const int64_t prev_backup_date, common::ObIAllocator& allocator, ObZoneManager& zone_mgr,
     ObServerManager& server_mgr)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition backup provider init twice", K(ret));
-  } else if (!task_info.is_valid()) {
+  } else if (!task_info.is_valid() || prev_backup_date < 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("backup provider init get invalid argument", K(ret), K(task_info));
+    LOG_WARN("backup provider init get invalid argument", K(ret), K(task_info), K(prev_backup_date));
   } else if (OB_FAIL(detected_region_.assign(detected_region))) {
+    LOG_WARN("failed to assign detected region", K(ret));
+  } else if (OB_FAIL(detected_zone_.assign(detected_zone))) {
     LOG_WARN("failed to assign detected region", K(ret));
   } else if (OB_FAIL(all_replica_elements_.create(MAX_BUCKET_NUM, common::ObModIds::BACKUP))) {
     LOG_WARN("failed to create all replica elements map", K(ret));
@@ -488,6 +542,7 @@ int ObPartitionBackupProvider::init(const common::ObIArray<common::ObRegion>& de
     allocator_ = &allocator;
     zone_mgr_ = &zone_mgr;
     server_mgr_ = &server_mgr;
+    prev_backup_date_ = prev_backup_date;
     is_inited_ = true;
   }
   return ret;
@@ -496,7 +551,6 @@ int ObPartitionBackupProvider::init(const common::ObIArray<common::ObRegion>& de
 int ObPartitionBackupProvider::add_backup_replica_info(const share::ObPartitionInfo& partition_info)
 {
   int ret = OB_SUCCESS;
-  ObRegion region;
   ObArray<ObBackupElement> backup_element_array;
   ObArray<ObBackupElement> tmp_backup_element_array;
 
@@ -514,6 +568,7 @@ int ObPartitionBackupProvider::add_backup_replica_info(const share::ObPartitionI
       bool is_exist = false;
       ObServerStatus server_status;
       const ObPartitionReplica& replica = replica_array.at(i);
+      ObRegion region;
       if (!replica.is_in_service() || !replica.in_member_list_ || replica.is_restore_) {
         LOG_INFO("this type replica can not backup, skip it", K(replica));
       } else if (OB_FAIL(server_mgr_->is_server_exist(replica.server_, is_exist))) {
@@ -535,56 +590,51 @@ int ObPartitionBackupProvider::add_backup_replica_info(const share::ObPartitionI
       }
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < detected_region_.count(); ++i) {
-      const ObRegion& region = detected_region_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < tmp_backup_element_array.count(); ++j) {
-        const ObBackupElement& element = tmp_backup_element_array.at(j);
-        if (element.region_ == region) {
-          bool can_become = false;
-          if (OB_FAIL(check_can_become_dest(element, can_become))) {
-            LOG_WARN("failed to check can become dest", K(ret), K(can_become));
-          } else if (!can_become) {
-            // do nothing
-          } else if (OB_FAIL(backup_element_array.push_back(element))) {
-            LOG_WARN("failed to push element into array", K(ret), K(element));
+    if (OB_SUCC(ret)) {
+      // backup_zone
+      if (!detected_zone_.empty()) {
+        if (OB_FAIL(add_backup_zone(tmp_backup_element_array, backup_element_array))) {
+          LOG_WARN("failed to add backup zone", K(ret), K(tmp_backup_element_array));
+        }
+      } else if (!detected_region_.empty()) {  // backup_region
+        if (OB_FAIL(add_backup_region(tmp_backup_element_array, backup_element_array))) {
+          LOG_WARN("failed to add backup region", K(ret), K(tmp_backup_element_array));
+        }
+      } else {
+        if (OB_SUCC(ret) && backup_element_array.empty()) {
+          // not find same region
+          for (int64_t i = 0; OB_SUCC(ret) && i < tmp_backup_element_array.count(); ++i) {
+            const ObBackupElement& element = tmp_backup_element_array.at(i);
+            bool can_become = false;
+            if (!element.replica_.is_strong_leader()) {
+              if (OB_FAIL(check_can_become_dest(element, can_become))) {
+                LOG_WARN("failed to check can become dest", K(ret), K(can_become));
+              } else if (!can_become) {
+                // do nothing
+                LOG_INFO("can not become backup src", K(element));
+              } else if (OB_FAIL(backup_element_array.push_back(element))) {
+                LOG_WARN("failed to push element into array", K(ret), K(element));
+              }
+            }
           }
         }
-      }
-      if (OB_SUCC(ret) && !backup_element_array.empty()) {
-        break;
-      }
-    }
 
-    if (OB_SUCC(ret) && backup_element_array.empty()) {
-      // not find same region
-      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_backup_element_array.count(); ++i) {
-        const ObBackupElement& element = tmp_backup_element_array.at(i);
-        bool can_become = false;
-        if (!element.replica_.is_strong_leader()) {
-          if (OB_FAIL(check_can_become_dest(element, can_become))) {
-            LOG_WARN("failed to check can become dest", K(ret), K(can_become));
-          } else if (!can_become) {
-            // do nothing
-          } else if (OB_FAIL(backup_element_array.push_back(element))) {
-            LOG_WARN("failed to push element into array", K(ret), K(element));
+        if (OB_SUCC(ret) && backup_element_array.empty()) {
+          // put leader in it
+          for (int64_t i = 0; OB_SUCC(ret) && i < tmp_backup_element_array.count(); ++i) {
+            const ObBackupElement& element = tmp_backup_element_array.at(i);
+            bool can_become = false;
+            if (!element.replica_.is_strong_leader()) {
+              // do nothing
+            } else if (OB_FAIL(check_can_become_dest(element, can_become))) {
+              LOG_WARN("failed to check can become dest", K(ret), K(can_become));
+            } else if (!can_become) {
+              // do nothing
+              LOG_INFO("can not become backup src", K(element));
+            } else if (OB_FAIL(backup_element_array.push_back(element))) {
+              LOG_WARN("failed to push element into array", K(ret), K(element));
+            }
           }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && backup_element_array.empty()) {
-      // put leader in it
-      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_backup_element_array.count(); ++i) {
-        const ObBackupElement& element = tmp_backup_element_array.at(i);
-        bool can_become = false;
-        if (!element.replica_.is_strong_leader()) {
-          // do nothing
-        } else if (OB_FAIL(check_can_become_dest(element, can_become))) {
-          LOG_WARN("failed to check can become dest", K(ret), K(can_become));
-        } else if (!can_become) {
-          // do nothing
-        } else if (OB_FAIL(backup_element_array.push_back(element))) {
-          LOG_WARN("failed to push element into array", K(ret), K(element));
         }
       }
     }
@@ -596,6 +646,7 @@ int ObPartitionBackupProvider::add_backup_replica_info(const share::ObPartitionI
           LOG_WARN("failed to check is in merge", K(ret));
         } else if (is_in_merge) {
           // do nothing
+          LOG_INFO("cluster is in merge");
         } else {
           bool has_suitable_replica = false;
           for (int64_t i = 0; i < tmp_backup_element_array.count(); ++i) {
@@ -735,6 +786,15 @@ int ObPartitionBackupProvider::generate_batch_backup_task(
 {
   int ret = OB_SUCCESS;
   ObPhysicalBackupArg physical_backup_arg;
+  int64_t max_task_num = MAX_TASK_NUM;
+
+#ifdef ERRSIM
+  int64_t tmp_max_task_num = GCONF._backup_pg_max_batch_count;
+  if (tmp_max_task_num > 0) {
+    max_task_num = tmp_max_task_num;
+  }
+#endif
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("partition backup provider do not init", K(ret));
@@ -744,7 +804,7 @@ int ObPartitionBackupProvider::generate_batch_backup_task(
     LOG_WARN("failed to build physical backup arg", K(ret));
   } else {
     const ObAddr& addr = addr_array_.at(iter_index_);
-    for (; OB_SUCC(ret) && backup_task.count() <= MAX_TASK_NUM && map_iter_ != all_replica_elements_.end();
+    for (; OB_SUCC(ret) && backup_task.count() <= max_task_num && map_iter_ != all_replica_elements_.end();
          ++map_iter_) {
       ObReplicaBackupElement* backup_element = map_iter_->second;
       const ObBackupElement* choose_element = backup_element->choose_element_;
@@ -806,6 +866,9 @@ int ObPartitionBackupProvider::build_physical_backup_arg(const int64_t backup_ta
     arg.backup_type_ = task_info_.backup_type_.type_;
     arg.prev_data_version_ = task_info_.prev_backup_data_version_;
     arg.backup_snapshot_version_ = task_info_.snapshot_version_;
+    arg.backup_date_ = task_info_.date_;
+    arg.prev_backup_date_ = prev_backup_date_;
+    arg.compatible_ = task_info_.compatible_;
     MEMCPY(arg.storage_info_, task_info_.backup_dest_.storage_info_, sizeof(task_info_.backup_dest_.storage_info_));
     MEMCPY(arg.uri_header_, task_info_.backup_dest_.root_path_, sizeof(task_info_.backup_dest_.root_path_));
   }
@@ -834,6 +897,92 @@ int ObPartitionBackupProvider::check_can_become_dest(const ObBackupElement& elem
       // can become
     } else {
       can_become = false;
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBackupProvider::add_backup_zone(
+    const ObIArray<ObBackupElement>& all_backup_element_array, ObIArray<ObBackupElement>& backup_element_array)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("partition backup provider do not init", K(ret));
+  } else {
+    int64_t element_priority = OB_INVALID_ID;
+    for (int64_t i = 0; OB_SUCC(ret) && i < detected_zone_.count(); ++i) {
+      const ObZone& zone = detected_zone_.at(i).zone_;
+      const int64_t priority = detected_zone_.at(i).priority_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < all_backup_element_array.count(); ++j) {
+        const ObBackupElement& element = all_backup_element_array.at(j);
+        if (element.replica_.zone_ == zone) {
+          bool can_become = false;
+          if (OB_FAIL(check_can_become_dest(element, can_become))) {
+            LOG_WARN("failed to check can become dest", K(ret), K(can_become));
+          } else if (!can_become) {
+            // do nothing
+          } else if (OB_INVALID_ID == element_priority || element_priority == priority) {
+            if (OB_FAIL(backup_element_array.push_back(element))) {
+              LOG_WARN("failed to push element into array", K(ret), K(element));
+            } else {
+              element_priority = priority;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && backup_element_array.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("backup has detected zone but observer do not has suitable one",
+          K(ret),
+          K(detected_zone_),
+          K(all_backup_element_array));
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBackupProvider::add_backup_region(
+    const ObIArray<ObBackupElement>& all_backup_element_array, ObIArray<ObBackupElement>& backup_element_array)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("partition backup provider do not init", K(ret));
+  } else {
+    int64_t element_priority = OB_INVALID_ID;
+    for (int64_t i = 0; OB_SUCC(ret) && i < detected_region_.count(); ++i) {
+      const ObRegion& region = detected_region_.at(i).region_;
+      const int64_t priority = detected_region_.at(i).priority_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < all_backup_element_array.count(); ++j) {
+        const ObBackupElement& element = all_backup_element_array.at(j);
+        if (element.region_ == region) {
+          bool can_become = false;
+          if (OB_FAIL(check_can_become_dest(element, can_become))) {
+            LOG_WARN("failed to check can become dest", K(ret), K(can_become));
+          } else if (!can_become) {
+            // do nothing
+          } else if (OB_INVALID_ID == element_priority || element_priority == priority) {
+            if (OB_FAIL(backup_element_array.push_back(element))) {
+              LOG_WARN("failed to push element into array", K(ret), K(element));
+            } else {
+              element_priority = priority;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && backup_element_array.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("backup has detected region but observer do not has suitable one",
+          K(ret),
+          K(detected_region_),
+          K(all_backup_element_array));
     }
   }
   return ret;

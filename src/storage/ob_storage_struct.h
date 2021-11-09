@@ -66,7 +66,8 @@ enum ObMigrateStatus {
   OB_MIGRATE_STATUS_HOLD = 12,
   OB_MIGRATE_STATUS_RESTORE_FOLLOWER = 13,
   OB_MIGRATE_STATUS_RESTORE_STANDBY = 14,
-  OB_MIGRATE_STATUS_LINK_MAJOR = 15,
+  OB_MIGRATE_STATUS_RECREATED = 15,
+  OB_MIGRATE_STATUS_LINK_MAJOR = 16,
   OB_MIGRATE_STATUS_MAX,
 };
 
@@ -85,6 +86,8 @@ enum ObReplicaOpType {
   VALIDATE_BACKUP_OP = 12,
   FAST_MIGRATE_REPLICA_OP = 13,
   LINK_SHARE_MAJOR_OP = 14,  // share major only for read-only replica in ofs-mode.
+  BACKUP_BACKUPSET_OP = 15,
+  BACKUP_ARCHIVELOG_OP = 16,
   UNKNOWN_REPLICA_OP,
 };
 
@@ -257,6 +260,7 @@ struct ObPartitionGroupMeta {
   uint64_t last_restore_log_id_;
   int64_t restore_snapshot_version_;
   int64_t last_restore_log_ts_;
+  int64_t restore_schema_version_;
 
   ObPartitionGroupMeta();
   virtual ~ObPartitionGroupMeta();
@@ -277,7 +281,7 @@ struct ObPartitionGroupMeta {
   TO_STRING_KV(K_(pg_key), K_(is_restore), K_(replica_type), K_(replica_property), K_(saved_split_state),
       K_(migrate_status), K_(migrate_timestamp), K_(storage_info), K_(report_status), K_(create_schema_version),
       K_(split_info), K_(partitions), K_(ddl_seq_num), K_(create_timestamp), K_(create_frozen_version),
-      K_(last_restore_log_id), K_(last_restore_log_ts), K_(restore_snapshot_version));
+      K_(last_restore_log_id), K_(last_restore_log_ts), K_(restore_snapshot_version), K_(restore_schema_version));
 
   OB_UNIS_VERSION_V(PARTITION_GROUP_META_VERSION);
 
@@ -336,9 +340,9 @@ OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus& status)
 struct AddTableParam {
   AddTableParam();
   bool is_valid() const;
-  TO_STRING_KV(KP_(table), K_(max_kept_major_version_number), K_(multi_version_start), K_(in_slog_trans),
-      K_(need_prewarm), K_(is_daily_merge), K_(backup_snapshot_version), KP_(complement_minor_sstable),
-      K_(schema_version));
+  TO_STRING_KV(KP_(table), K_(max_kept_major_version_number), K_(multi_version_start),
+      K_(in_slog_trans), K_(need_prewarm), K_(is_daily_merge),
+      KP_(complement_minor_sstable), K_(schema_version));
 
   storage::ObSSTable* table_;
   int64_t max_kept_major_version_number_;
@@ -347,7 +351,6 @@ struct AddTableParam {
   bool need_prewarm_;
   bool is_daily_merge_;
   storage::ObSSTable* complement_minor_sstable_;
-  int64_t backup_snapshot_version_;
   int64_t schema_version_;
 };
 
@@ -383,7 +386,7 @@ public:
   int set_split_info(const ObPartitionSplitInfo& split_info);
   TO_STRING_KV(K_(info), K_(is_restore), K_(replica_type), K_(replica_property), K_(data_version), K_(write_slog),
       K_(split_info), K_(split_state), K_(create_frozen_version), K_(last_restore_log_id), K_(last_restore_log_ts),
-      K_(restore_snapshot_version), K_(migrate_status));
+      K_(restore_snapshot_version), K_(restore_schema_version), K_(migrate_status));
 
   ObSavedStorageInfoV2 info_;
   int64_t is_restore_;  // ObReplicaRestoreStatus
@@ -400,6 +403,7 @@ public:
   uint64_t last_restore_log_id_;
   int64_t last_restore_log_ts_;
   int64_t restore_snapshot_version_;
+  int64_t restore_schema_version_;
   ObMigrateStatus migrate_status_;
   DISALLOW_COPY_AND_ASSIGN(ObCreatePGParam);
 };

@@ -311,6 +311,11 @@ print $fh_cpp '/**
 #endif
 using namespace oceanbase::common;
 
+// fix ob_error.cpp file requires at least 20g memory for release(-O2) compilation
+// it can be solved by introducing <iostream> header file temporarily
+// TODO: it is clang11 bug, the specific reason to be further located
+#include <iostream>
+
 static const char *ERROR_NAME[OB_MAX_ERROR_CODE];
 static const char *ERROR_CAUSE[OB_MAX_ERROR_CODE];
 static const char *ERROR_SOLUTION[OB_MAX_ERROR_CODE];

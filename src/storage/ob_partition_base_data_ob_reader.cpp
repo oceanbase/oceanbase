@@ -2581,5 +2581,44 @@ int ObTailoredRowIterator::get_next_row(const ObStoreRow*& store_row)
   return ret;
 }
 
+int ObRecoveryPointMetaInfoReader::init(ObPartitionServiceRpcProxy& srv_rpc_proxy,
+    ObInOutBandwidthThrottle& bandwidth_throttle, const ObAddr& addr, const ObFetchPGRecoveryPointMetaInfoArg& rpc_arg,
+    const int64_t cluster_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("can not init twice", K(ret));
+  } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
+    LOG_WARN("failed to init rpc_reader", K(ret));
+  } else {
+    LOG_INFO("init physical base meta reader", K(addr), K(rpc_arg));
+    if (OB_FAIL(srv_rpc_proxy.to(addr)
+                    .by(OB_DATA_TENANT_ID)
+                    .dst_cluster_id(cluster_id)
+                    .fetch_recovery_point_meta_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
+      LOG_WARN("failed to send fetch base data meta rpc", K(ret), K(addr), K(rpc_arg), K(cluster_id));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryPointMetaInfoReader::fetch_recovery_point_meta_info(ObRecoveryPointMetaInfo& recovery_point_meta_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(rpc_reader_.fetch_and_decode(recovery_point_meta_info))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("failed to fetch and decode sstable meta", K(ret));
+    }
+  } else if (!recovery_point_meta_info.is_valid()) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("invalid sstable_meta", K(ret), K(recovery_point_meta_info));
+  }
+  return ret;
+}
+
 }  // namespace storage
 }  // namespace oceanbase

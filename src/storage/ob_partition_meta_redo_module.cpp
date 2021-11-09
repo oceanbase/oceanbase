@@ -451,13 +451,22 @@ int ObPartitionMetaRedoModule::parse(const int64_t subcmd, const char* buf, cons
         ObPGKey pgkey;
         ObITable::TableKey table_key;
         blocksstable::ObMacroBlockMetaV2 meta;
+        common::ObObj *endkey = static_cast<common::ObObj *>(ob_malloc(sizeof(ObObj) * common::OB_MAX_COLUMN_NUMBER));
         MacroBlockId macro_block_id;
         ObPGMacroBlockMetaLogEntry entry(pgkey, table_key, 0, 0, macro_block_id, meta);
-        if (OB_FAIL(entry.deserialize(buf, len, pos))) {
+        if (OB_UNLIKELY(nullptr == endkey)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory fail", K(ret));
+        } else if (FALSE_IT(meta.endkey_ = endkey)) {
+        } else if (OB_FAIL(entry.deserialize(buf, len, pos))) {
           LOG_WARN("Fail to deserialize ObPGMacroBlockMetaLogEntry", K(ret));
         } else if (0 > fprintf(stream, "ObPGMacroBlockMetaLogEntry\n%s\n", to_cstring(entry))) {
           ret = OB_IO_ERROR;
           LOG_WARN("failed to print ObPGMacroBlockMetaLogEntry", K(ret), K(entry));
+        }
+
+        if (nullptr != endkey) {
+          ob_free(endkey);
         }
         break;
       }
@@ -773,13 +782,12 @@ int ObPartitionMetaRedoModule::inner_del_partition_for_replay(const ObPartitionK
     LOG_WARN("fail to inner del partition", K(ret));
   } else if (OB_INVALID_DATA_FILE_ID == file_id) {
     // replay slog before 3.1, need to remove pg from file mgr explicitly
-    const ObIPartitionGroup &pg = *guard.get_partition_group();
-    const ObStorageFile *file = pg.get_storage_file();
+    const ObIPartitionGroup& pg = *guard.get_partition_group();
+    const ObStorageFile* file = pg.get_storage_file();
     if (OB_ISNULL(file)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("partition group has null file", K(ret), K(pkey));
-    } else if (OB_FAIL(file_mgr_->remove_pg(
-        ObTenantFileKey(file->get_tenant_id(), file->get_file_id()), pkey))) {
+    } else if (OB_FAIL(file_mgr_->remove_pg(ObTenantFileKey(file->get_tenant_id(), file->get_file_id()), pkey))) {
       LOG_WARN("remove pg key from file fail", K(ret), K(pkey));
     }
   }
@@ -989,10 +997,9 @@ int ObPartitionMetaRedoModule::replay_create_partition_group(const ObRedoModuleR
         if (OB_FAIL(file_mgr_->alloc_file(
                 log_entry.meta_.pg_key_.get_tenant_id(), sys_table, file_handle, false /*write slog*/))) {
           LOG_WARN("fail to open pg file", K(ret));
-        } else if (OB_FAIL(file_mgr_->add_pg(
-            ObTenantFileKey(file_handle.get_storage_file()->get_tenant_id(),
-                            file_handle.get_storage_file()->get_file_id()),
-                            log_entry.meta_.pg_key_))) {
+        } else if (OB_FAIL(file_mgr_->add_pg(ObTenantFileKey(file_handle.get_storage_file()->get_tenant_id(),
+                                                 file_handle.get_storage_file()->get_file_id()),
+                       log_entry.meta_.pg_key_))) {
           LOG_WARN("fail to add pg to tenant file", K(ret), K(log_entry), "file", *file_handle.get_storage_file());
         }
       }
@@ -1601,6 +1608,7 @@ int ObPartitionMetaRedoModule::get_create_pg_param(const ObCreatePartitionGroupL
     param.last_restore_log_id_ = log_entry.meta_.last_restore_log_id_;
     param.last_restore_log_ts_ = log_entry.meta_.last_restore_log_ts_;
     param.restore_snapshot_version_ = log_entry.meta_.restore_snapshot_version_;
+    param.restore_schema_version_ = log_entry.meta_.restore_schema_version_;
   }
   return ret;
 }

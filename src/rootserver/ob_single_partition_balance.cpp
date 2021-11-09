@@ -247,7 +247,7 @@ int ObSinglePartBalance::prepare_replica_capacity(const uint64_t tenant_id,
     LOG_WARN("not init", KR(ret));
   } else {
     const share::schema::ObTenantSchema* tenant_schema = NULL;
-    common::ObArray<const share::schema::ObTableSchema*> table_schemas;
+    common::ObArray<const share::schema::ObSimpleTableSchemaV2*> table_schemas;
     common::ObArray<const share::schema::ObTablegroupSchema*> tablegroup_schemas;
     common::ObArray<uint64_t> non_partition_tg;
     ObSEArray<ObRawPrimaryZoneUtil::ZoneScore, MAX_ZONE_NUM> zone_score_array;
@@ -275,7 +275,7 @@ int ObSinglePartBalance::prepare_replica_capacity(const uint64_t tenant_id,
           LOG_WARN("fail to get table schemas in tenant", KR(ret));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
-            const share::schema::ObTableSchema* table_schema = table_schemas.at(i);
+            const share::schema::ObSimpleTableSchemaV2* table_schema = table_schemas.at(i);
             if (OB_ISNULL(table_schema)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("schema ptr is null", KR(ret));

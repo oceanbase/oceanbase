@@ -27,7 +27,7 @@ int ObExprVersion::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ct
 {
   UNUSED(type_ctx);
   type.set_varchar();
-  type.set_length(static_cast<common::ObLength>(strlen(PACKAGE_VERSION)));
+  type.set_length(static_cast<common::ObLength>(strlen(PACKAGE_VERSION_INFO)));
   type.set_default_collation_type();
   type.set_collation_level(CS_LEVEL_SYSCONST);
   return OB_SUCCESS;
@@ -36,7 +36,8 @@ int ObExprVersion::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ct
 int ObExprVersion::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
 {
   UNUSED(expr_ctx);
-  result.set_varchar(common::ObString(PACKAGE_VERSION));
+
+  result.set_varchar(common::ObString(PACKAGE_VERSION_INFO));
   result.set_collation(result_type_);
   return OB_SUCCESS;
 }
@@ -45,7 +46,7 @@ int ObExprVersion::eval_version(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& exp
 {
   UNUSED(expr);
   UNUSED(ctx);
-  expr_datum.set_string(common::ObString(PACKAGE_VERSION));
+  expr_datum.set_string(common::ObString(PACKAGE_VERSION_INFO));
   return OB_SUCCESS;
 }
 

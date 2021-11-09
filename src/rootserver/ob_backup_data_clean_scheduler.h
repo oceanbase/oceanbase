@@ -33,8 +33,8 @@ public:
 
 private:
   int prepare_backup_clean_infos(const common::ObIArray<uint64_t>& tenant_ids);
-  int get_backup_clean_info(
-      const uint64_t tenant_id, common::ObISQLClient& sql_proxy, share::ObBackupCleanInfo& clean_info);
+  int get_backup_clean_info(const uint64_t tenant_id, const bool for_update, common::ObISQLClient& sql_proxy,
+      share::ObBackupCleanInfo& clean_info);
   int insert_backup_clean_info(
       const uint64_t tenant_id, const share::ObBackupCleanInfo& clean_info, common::ObISQLClient& sql_proxy);
   int update_backup_clean_info(const share::ObBackupCleanInfo& src_clean_info,

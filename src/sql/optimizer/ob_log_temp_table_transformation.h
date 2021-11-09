@@ -38,6 +38,7 @@ public:
   virtual int est_cost() override;
 
   int get_temp_table_exprs(ObIArray<ObRawExpr*>& set_exprs) const;
+  int allocate_startup_expr_post() override;
 };
 
 }  // end of namespace sql

@@ -697,7 +697,7 @@ const int64_t MAX_ORACLE_SA_LABEL_TYPE_LENGTH = 15;
 // don't use share/inner_table/ob_inner_table_schema.h to avoid dependence.
 const int64_t OB_SCHEMA_CODE_VERSION = 1;
 const uint64_t OB_MAX_CORE_TABLE_ID = 100;
-const uint64_t OB_MIN_SYS_INDEX_TABLE_ID = 9997;
+const uint64_t OB_MIN_SYS_INDEX_TABLE_ID = 9996;
 const uint64_t OB_MAX_SYS_TABLE_ID = 10000;
 const uint64_t OB_MAX_MYSQL_VIRTUAL_TABLE_ID = 15000;
 const uint64_t OB_MIN_VIRTUAL_TABLE_ID = 15001;

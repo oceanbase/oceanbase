@@ -151,6 +151,9 @@ int ObAllVirtualPGBackupLogArchiveStatus::inner_get_next_row_(ObNewRow*& row)
         case MAX_LOG_TS:
           cur_row_.cells_[i].set_int(max_log_ts);
           break;
+        case CUR_PIECE_ID:
+          cur_row_.cells_[i].set_int(log_archive_status.cur_piece_id_);
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));

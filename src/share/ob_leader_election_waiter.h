@@ -29,7 +29,7 @@ class ObMySQLResult;
 }  // namespace common
 namespace share {
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObTablegroupSchema;
 }  // namespace schema
 class ObPartitionTableOperator;
@@ -58,7 +58,7 @@ public:
   int wait(const uint64_t table_id, const int64_t partition_id, const int64_t timeout, common::ObAddr& leader);
   // when observer finish sending create table rpc to rs,
   // invoke following function to wait the new table's leader elected
-  int wait(const share::schema::ObTableSchema& table_schema, const int64_t timeout);
+  int wait(const share::schema::ObSimpleTableSchemaV2& table_schema, const int64_t timeout);
   int wait(const share::schema::ObTablegroupSchema& tablegroup_schema, const int64_t timeout);
   int wait(
       const common::ObArray<uint64_t>& table_ids, const common::ObArray<int64_t>& part_nums, const int64_t timeout);

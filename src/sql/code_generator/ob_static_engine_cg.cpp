@@ -1243,8 +1243,8 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues& op, ObExprValuesSpec& spec,
   if (!op.get_value_exprs().empty()) {
     if (OB_FAIL(spec.values_.prepare_allocate(op.get_value_exprs().count()))) {
       LOG_WARN("init fixed array failed", K(ret), K(op.get_value_exprs().count()));
-    } else if (OB_FAIL(spec.str_values_array_.prepare_allocate(op.get_str_values_array().count()))) {
-      LOG_WARN("init fixed array failed", K(ret), K(op.get_str_values_array().count()));
+    } else if (OB_FAIL(spec.str_values_array_.prepare_allocate(op.get_output_exprs().count()))) {
+      LOG_WARN("init fixed array failed", K(ret), K(op.get_output_exprs().count()));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < op.get_value_exprs().count(); i++) {
         ObRawExpr* raw_expr = op.get_value_exprs().at(i);
@@ -1263,13 +1263,17 @@ int ObStaticEngineCG::generate_spec(ObLogExprValues& op, ObExprValuesSpec& spec,
           spec.values_.at(i) = expr;
         }
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_str_values_array().count(); i++) {
-        const ObStrValues& str_values = op.get_str_values_array().at(i);
+      // Add str_values to spec: str_values_ is worked for enum/set type for type conversion.
+      // According to code in ob_expr_values_op.cpp, it should be in the same order as output_exprs.
+      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_output_exprs().count(); i++) {
+        ObRawExpr *output_raw_expr = op.get_output_exprs().at(i);
+        const common::ObIArray<common::ObString> &str_values =
+          output_raw_expr->get_enum_set_values();
         if (OB_FAIL(spec.str_values_array_.at(i).assign(str_values))) {
           LOG_WARN("fail to assign", K(ret), K(i), K(str_values));
         }
       }
-      LOG_DEBUG("finish assign str_values_array", K(ret), K(op.get_str_values_array()), K(spec.str_values_array_));
+      LOG_DEBUG("finish assign str_values_array", K(ret), K(spec.str_values_array_));
     }
   }
   if (OB_SUCC(ret)) {

@@ -72,14 +72,14 @@ public:
   {
     reset();
   }
-  int next_entry(clog::ObLogEntry& entry);
+  int next_entry(clog::ObLogEntry& entry, bool& is_accum_checksum_valid, int64_t& accum_checksum);
   int64_t get_cur_block_start_offset() const
   {
     return cur_block_start_offset_;
   }
   const ObArchiveBlockMeta& get_last_block_meta() const
   {
-    return last_block_meta_;
+    return cur_block_meta_;
   }
   int64_t get_io_cost() const
   {
@@ -93,6 +93,7 @@ public:
   {
     return limit_bandwidth_cost_;
   }
+  static const int64_t MAX_READ_BUF_SIZE = MAX_ARCHIVE_BLOCK_SIZE;
   TO_STRING_KV(K(is_inited_), K(need_limit_bandwidth_), KP(file_store_), K(pg_key_), K(real_tenant_id_), K(file_id_),
       K(cur_offset_), K(cur_block_start_offset_), K(cur_block_end_offset_), KP(buf_cur_), KP(buf_end_), KP(block_end_),
       K(rbuf_), K(dd_buf_), K(origin_buf_), K(timeout_), K(io_cost_), K(io_count_), K(limit_bandwidth_cost_),
@@ -111,17 +112,17 @@ private:
   int consume_origin_buf_(clog::ObLogEntry& entry);
   int get_log_entry_(char* buf, const int64_t buf_size, int64_t& pos, clog::ObLogEntry& entry);
   int try_construct_log_buf_();
-  int extract_block_meta_(ObArchiveBlockMeta& meta);
-  int decompress_buf_(ObArchiveBlockMeta& block_meta);
+  int extract_block_meta_();
+  int decompress_buf_();
   int decompress_(const char* src_buf, const int64_t src_size, common::ObCompressorType compress_type, char* dst_buf,
       const int64_t dst_buf_size, int64_t& dst_data_size);
   void fill_log_package_(char* buf, const int64_t buf_len);
-  int fill_origin_buf_(ObArchiveBlockMeta& block_meta);
+  int fill_origin_buf_();
 
 private:
   static const int64_t MAGIC_NUM_LEN = 2;
   const int64_t MAX_IDLE_TIME = 10 * 1000LL * 1000LL;  // 10s
-  const int64_t MAX_READ_BUF_SIZE = MAX_ARCHIVE_BLOCK_SIZE;
+  const int64_t PRINT_WARN_TIME = 60 * 1000 * 1000L;
   bool is_inited_;
   bool need_limit_bandwidth_;
   ObIArchiveLogFileStore* file_store_;
@@ -165,8 +166,7 @@ private:
   // sleep time due to bandwidth limit in iteration
   int64_t limit_bandwidth_cost_;
   bool has_load_entire_file_;
-  ObArchiveBlockMeta last_block_meta_;
-
+  ObArchiveBlockMeta cur_block_meta_;  // the block meta of current consumed block
 private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveEntryIterator);
 };

@@ -14,7 +14,8 @@
 #define OB_LOG_FILE_STORE_H_
 
 #include <sys/stat.h>
-#include "ob_log_disk_manager.h"
+#include "lib/atomic/ob_atomic.h"
+#include "share/redolog/ob_log_disk_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
 namespace oceanbase {
@@ -159,6 +160,8 @@ public:
   virtual void try_recycle_file() = 0;
   virtual int update_free_quota() = 0;
   virtual bool free_quota_warn() const = 0;
+  virtual bool is_disk_warning() const = 0;
+  virtual void set_disk_warning(bool disk_warning) = 0;
   virtual ObRedoLogType get_redo_log_type() const
   {
     return log_type_;
@@ -182,7 +185,7 @@ protected:
   static const int64_t CLOG_AIO_TIMEOUT_SECOND = 300;
   static const int64_t AIO_RETRY_INTERVAL_US = 100 * 1000;  // 100ms
   static const int64_t MAX_DISK_COUNT = ObLogDiskManager::MAX_DISK_COUNT;
-  static const int MAX_IO_RETRY = 3;
+  static const int64_t MAX_IO_RETRY = LLONG_MAX;
 
   ObRedoLogType log_type_;
 };
@@ -259,6 +262,16 @@ public:
     return disk_mgr_->free_quota_warn();
   }
 
+  virtual bool is_disk_warning() const
+  {
+    return ATOMIC_LOAD(&is_disk_warning_);
+  }
+
+  virtual void set_disk_warning(bool disk_warning)
+  {
+    ATOMIC_STORE(&is_disk_warning_, disk_warning);
+  }
+
 private:
   int inner_open(const int64_t file_id, const int8_t flag, ObLogFileDescriptor& log_fd);
   int inner_close(ObLogFileDescriptor& log_fd);
@@ -284,6 +297,9 @@ private:
   struct iocb io_reqs_[MAX_DISK_COUNT];
   struct iocb* io_req_ptrs_[MAX_DISK_COUNT];
   ObLogFileIOInfo pending_wr_[MAX_DISK_COUNT];
+
+  // io hang state
+  bool is_disk_warning_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogFileStore);
 };

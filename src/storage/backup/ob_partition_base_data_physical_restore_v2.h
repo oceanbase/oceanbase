@@ -57,8 +57,12 @@ public:
 private:
   int init_major_macro_index(const common::ObPartitionKey& backup_pg_key, const ObBackupBaseDataPathInfo& path_info,
       const ObReplicaRestoreStatus& restore_status);
+  int init_major_macro_index(const common::ObPartitionKey& backup_pg_key, const ObSimpleBackupSetPath& simple_path,
+      const ObReplicaRestoreStatus& restore_status);
   int init_minor_macro_index(const int64_t backup_task_id, const common::ObPartitionKey& backup_pg_key,
       const ObBackupBaseDataPathInfo& path_info, const ObReplicaRestoreStatus& restore_status);
+  int init_minor_macro_index(const int64_t backup_task_id, const common::ObPartitionKey& backup_pg_key,
+      const ObSimpleBackupSetPath& simple_path, const ObReplicaRestoreStatus& restore_status);
   int add_sstable_index(
       const ObITable::TableKey& table_key, const common::ObIArray<ObBackupTableMacroIndex>& index_list);
   int init_one_file(const ObString& path, const ObString& storage_info);
@@ -168,6 +172,7 @@ private:
   int64_t macro_idx_;
   int64_t read_size_;
   uint64_t table_id_;
+  ObSimpleBackupSetPath simple_path_;
   ObBackupBaseDataPathInfo backup_path_info_;
   const ObPhyRestoreMacroIndexStoreV2* macro_indexs_;
   common::ObInOutBandwidthThrottle* bandwidth_throttle_;

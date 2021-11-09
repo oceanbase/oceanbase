@@ -304,10 +304,6 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt& stmt, const ObSQL
   } else if (table_schema->get_foreign_key_infos().count() > 0) {
     LOG_TRACE("dml has foreign key, disable pdml", K(ret));
     is_use_pdml = false;
-  } else if (stmt::T_DELETE == stmt.get_stmt_type()) {
-    // https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/5345309
-    // if no trigger, no foreign key, delete can do pdml, even if with local unique index
-    is_use_pdml = true;
   } else if (!session.use_static_typing_engine() && stmt.get_check_constraint_exprs_size() > 0) {
     LOG_TRACE("dml has constraint, old engine, disable pdml", K(ret));
     is_use_pdml = false;

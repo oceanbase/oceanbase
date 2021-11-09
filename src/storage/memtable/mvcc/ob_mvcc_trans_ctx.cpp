@@ -1462,7 +1462,8 @@ int ObMvccRowCallback::clean_dirty_cb()
 {
   int ret = OB_SUCCESS;
 
-  if (marked_for_logging_) {
+  if (marked_for_logging_ || need_fill_redo_) {
+    // dirty callbacks
     unlink_trans_node();
     dec_pending_cb_count();
     marked_for_logging_ = false;

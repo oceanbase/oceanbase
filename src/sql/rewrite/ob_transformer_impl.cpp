@@ -219,7 +219,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(
     APPLY_RULE_IF_NEEDED(OR_EXPANSION, ObTransformOrExpansion);
     APPLY_RULE_IF_NEEDED(WIN_MAGIC, ObTransformWinMagic);
     APPLY_RULE_IF_NEEDED(WIN_GROUPBY, ObTransformWinGroupBy);
-    APPLY_RULE_IF_NEEDED(JOIN_AGGREGATION, ObTransformAggrSubquery);
+    APPLY_RULE_IF_NEEDED(AGGR_SUBQUERY, ObTransformAggrSubquery);
     APPLY_RULE_IF_NEEDED(GROUPBY_PLACEMENT, ObTransformGroupByPlacement);
     APPLY_RULE_IF_NEEDED(AGGR, ObTransformAggregate);
     // project pruning should be done after window function transformation rules

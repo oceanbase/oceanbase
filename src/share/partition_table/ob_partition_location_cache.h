@@ -629,6 +629,7 @@ public:
   ObLocationAsyncUpdateQueueSet(ObIPartitionLocationCache* loc_cache_);
   virtual ~ObLocationAsyncUpdateQueueSet();
   int init(common::ObServerConfig& config);
+  int set_thread_count(const int64_t thread_cnt);
   int add_task(const ObLocationAsyncUpdateTask& task);
   void stop();
   void wait();

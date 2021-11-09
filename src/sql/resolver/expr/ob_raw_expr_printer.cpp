@@ -2230,8 +2230,16 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr* expr)
         }
         case T_DATETIME: {
           // oracle mode treate date as datetime
-          const char* type_str = lib::is_oracle_mode() ? "date" : "datetime";
-          DATA_PRINTF(type_str);
+          if (lib::is_oracle_mode()) {
+            DATA_PRINTF("date");
+          } else {
+            int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+            if (scale >= 0) {
+              DATA_PRINTF("datetime(%d)", scale);
+            } else {
+              DATA_PRINTF("datetime");
+            }
+          }
           break;
         }
         case T_DATE: {
@@ -2239,7 +2247,12 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr* expr)
           break;
         }
         case T_TIME: {
-          DATA_PRINTF("time");
+          int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+          if (scale >= 0) {
+            DATA_PRINTF("time(%d)", scale);
+          } else {
+            DATA_PRINTF("time");
+          }
           break;
         }
         case T_NUMBER: {
@@ -2281,15 +2294,30 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr* expr)
           break;
         }
         case T_TIMESTAMP_TZ: {
-          DATA_PRINTF("timestamp with time zone");
+          int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+          if (scale >= 0) {
+            DATA_PRINTF("timestamp(%d) with time zone", scale);
+          } else {
+            DATA_PRINTF("timestamp with time zone");
+          }
           break;
         }
         case T_TIMESTAMP_LTZ: {
-          DATA_PRINTF("timestamp with local time zone");
+          int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+          if (scale >= 0) {
+            DATA_PRINTF("timestamp(%d) with local time zone", scale);
+          } else {
+            DATA_PRINTF("timestamp with local time zone");
+          }
           break;
         }
         case T_TIMESTAMP_NANO: {
-          DATA_PRINTF("timestamp");
+          int16_t scale = parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX];
+          if (scale >= 0) {
+            DATA_PRINTF("timestamp(%d)", scale);
+          } else {
+            DATA_PRINTF("timestamp");
+          }
           break;
         }
         case T_RAW: {

@@ -154,12 +154,13 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id, const ObTableSchem
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
             // get auto_increment from auto_increment service, not from table option
             if (OB_FAIL(schema_printer.print_table_definition(show_table_id,
-                    table_def_buf,
-                    OB_MAX_VARCHAR_LENGTH,
-                    pos,
-                    TZ_INFO(session_),
-                    default_length_semantics,
-                    false))) {
+                                                              table_def_buf,
+                                                              OB_MAX_VARCHAR_LENGTH,
+                                                              pos,
+                                                              TZ_INFO(session_),
+                                                              default_length_semantics,
+                                                              false,
+                                                              session_->get_sql_mode()))) {
               SERVER_LOG(WARN, "Generate table definition failed");
             }
           }

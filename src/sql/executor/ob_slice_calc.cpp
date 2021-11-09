@@ -178,6 +178,7 @@ int ObRepartSliceIdxCalc::get_partition_id(ObEvalCtx& eval_ctx, int64_t& partiti
 {
   int ret = OB_SUCCESS;
   ObDatum* partition_id_datum = NULL;
+  CalcTypeGuard calc_type_guard(eval_ctx.exec_ctx_);
   if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST == repart_type_) {
     eval_ctx.exec_ctx_.set_partition_id_calc_type(CALC_IGNORE_SUB_PART);
   } else if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB == repart_type_) {
@@ -229,7 +230,6 @@ int ObRepartSliceIdxCalc::get_previous_row_partition_id(ObObj& partition_id)
 int ObSlaveMapRepartIdxCalcBase::init()
 {
   int ret = OB_SUCCESS;
-
   if (OB_FAIL(ObRepartSliceIdxCalc::init())) {
     LOG_WARN("fail init base", K(ret));
   }
@@ -445,7 +445,6 @@ int ObRepartSliceIdxCalc::build_repart_ch_map(ObPxPartChMap& affinity_map)
   if (OB_FAIL(affinity_map.create(max(1, part_ch_array.count()), ObModIds::OB_SQL_PX))) {
     LOG_WARN("fail create hashmap", "count", part_ch_array.count(), K(ret));
   }
-
 
   int64_t partition_id = common::OB_INVALID_INDEX_INT64;
   ARRAY_FOREACH_X(part_ch_array, idx, cnt, OB_SUCC(ret))

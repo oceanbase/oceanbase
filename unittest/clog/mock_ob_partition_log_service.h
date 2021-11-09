@@ -148,9 +148,12 @@ public:
     UNUSED(leader_takeover_ts);
     return OB_SUCCESS;
   }
-  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_batch_committed)
+  virtual int receive_archive_log(const ObLogEntry& log_entry, const bool is_accum_checksum_valid,
+      const int64_t accum_checksum, const bool is_batch_committed)
   {
     UNUSED(log_entry);
+    UNUSED(is_accum_checksum_valid);
+    UNUSED(accum_checksum);
     UNUSED(is_batch_committed);
     return OB_SUCCESS;
   }
@@ -249,6 +252,12 @@ public:
   virtual int get_log_archive_status(ObPGLogArchiveStatus& status)
   {
     UNUSED(status);
+    return OB_SUCCESS;
+  }
+  virtual int check_log_exist(const uint64_t log_id, bool& exist)
+  {
+    UNUSED(log_id);
+    UNUSED(exist);
     return OB_SUCCESS;
   }
   virtual int process_sync_log_archive_progress_msg(
@@ -519,7 +528,7 @@ public:
     UNUSED(leader);
     return common::OB_SUCCESS;
   }
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const
   {
     UNUSED(parent);
     UNUSED(cluster_id);

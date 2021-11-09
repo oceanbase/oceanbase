@@ -130,8 +130,7 @@ int ObExprMakeSet::calc_make_set_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatu
     if (expr.arg_cnt_ <= 64) {
       input_bits &= ((ulonglong)1 << (expr.arg_cnt_ - 1)) - 1;
     }
-    ObIAllocator& calc_alloc = ctx.get_reset_tmp_alloc();
-    ObSEArray<ObString, 32, ObIAllocator> words(OB_MALLOC_MIDDLE_BLOCK_SIZE, calc_alloc);
+    ObSEArray<ObString, 32> words;
     for (int64_t pos = 1, temp_input_bits = input_bits; OB_SUCC(ret) && temp_input_bits > 0;
          temp_input_bits >>= 1, ++pos) {
       const ObDatum& dat = expr.locate_param_datum(ctx, pos);

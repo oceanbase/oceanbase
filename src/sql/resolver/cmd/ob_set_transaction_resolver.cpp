@@ -91,17 +91,18 @@ int ObSetTransactionResolver::resolve(const ParseNode& parse_tree)
         }
       }
     }
+
     if (OB_SUCC(ret) && set_isolation_level) {
       if (OB_FAIL(build_isolation_expr(isolation_var_node.value_expr_, isolation_level))) {
         LOG_WARN("fail to build isolation expr", K(ret));
-      } else if (OB_FAIL(stmt->add_variable_node(isolation_var_node))) {
+      } else if (OB_FAIL(stmt->add_variable_node(ObVariableSetStmt::make_variable_name_node(isolation_var_node)))) {
         LOG_WARN("fail to add variable node", K(ret));
       }
     }
     if (OB_SUCC(ret) && set_access_mode) {
       if (OB_FAIL(build_access_expr(access_var_node.value_expr_, is_read_only))) {
         LOG_WARN("fail to build access expr", K(ret));
-      } else if (OB_FAIL(stmt->add_variable_node(access_var_node))) {
+      } else if (OB_FAIL(stmt->add_variable_node(ObVariableSetStmt::make_variable_name_node(access_var_node)))) {
         LOG_WARN("fail to add variable node", K(ret));
       } else {
         LOG_DEBUG("add variable node", K(is_read_only));

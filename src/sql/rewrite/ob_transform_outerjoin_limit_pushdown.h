@@ -84,7 +84,7 @@ private:
 
   int check_limit(ObSelectStmt* select_stmt, bool& is_valid);
 
-  int check_join_type(TableItem* table_item, ObJoinType joined_type, bool& is_type_deep);
+  int check_join_type(TableItem *table_item, ObJoinType joined_type, bool &is_type_deep, bool &has_generated_table);
 
   int find_target_table(ObSelectStmt* select_stmt, ObSqlBitSet<> table_ids, TableItem*& target_table);
 

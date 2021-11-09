@@ -1015,9 +1015,10 @@ public:
   int append_id_to_view_name(char* buf, int64_t buf_len, int64_t& pos, bool is_temp = false);
   int32_t get_table_bit_index(uint64_t table_id) const;
   int set_table_bit_index(uint64_t table_id);
-  ColumnItem* get_column_item(uint64_t table_id, const common::ObString& col_name);
-  int add_column_item(ColumnItem& column_item);
-  int add_column_item(ObIArray<ColumnItem>& column_items);
+  ColumnItem *get_column_item(uint64_t table_id, const common::ObString &col_name);
+  ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id);
+  int add_column_item(ColumnItem &column_item);
+  int add_column_item(ObIArray<ColumnItem> &column_items);
   int remove_column_item(uint64_t table_id, uint64_t column_id);
   int remove_column_item(uint64_t table_id);
   int remove_column_item(const ObRawExpr* column_expr);

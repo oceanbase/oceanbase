@@ -92,6 +92,7 @@ void ObPGLogArchiveStatus::reset()
   last_archived_log_submit_ts_ = OB_INVALID_TIMESTAMP;
   clog_epoch_id_ = OB_INVALID_TIMESTAMP;
   accum_checksum_ = 0;
+  cur_piece_id_ = share::OB_BACKUP_INVALID_PIECE_ID;
 }
 
 bool ObPGLogArchiveStatus::is_valid_for_clog_info()
@@ -101,7 +102,8 @@ bool ObPGLogArchiveStatus::is_valid_for_clog_info()
           OB_INVALID_TIMESTAMP != round_snapshot_version_ && OB_INVALID_TIMESTAMP != round_log_submit_ts_ &&
           0 <= round_clog_epoch_id_ && OB_INVALID_ID != last_archived_log_id_ &&
           OB_INVALID_TIMESTAMP != last_archived_log_submit_ts_ &&
-          OB_INVALID_TIMESTAMP != last_archived_checkpoint_ts_ && clog_epoch_id_ >= 0);
+          OB_INVALID_TIMESTAMP != last_archived_checkpoint_ts_ && clog_epoch_id_ >= 0 && 0 <= cur_piece_id_ &&
+          (share::OB_BACKUP_INVALID_PIECE_ID != cur_piece_id_));
 }
 
 bool ObPGLogArchiveStatus::is_round_start_info_valid()
@@ -143,7 +145,8 @@ bool ObPGLogArchiveStatus::operator<(const ObPGLogArchiveStatus& other)
 
 OB_SERIALIZE_MEMBER(ObPGLogArchiveStatus, status_, round_start_ts_, round_start_log_id_, round_snapshot_version_,
     round_log_submit_ts_, round_clog_epoch_id_, round_accum_checksum_, archive_incarnation_, log_archive_round_,
-    last_archived_log_id_, last_archived_checkpoint_ts_, last_archived_log_submit_ts_, clog_epoch_id_, accum_checksum_);
+    last_archived_log_id_, last_archived_checkpoint_ts_, last_archived_log_submit_ts_, clog_epoch_id_, accum_checksum_,
+    cur_piece_id_);
 
 }  // namespace clog
 }  // namespace oceanbase

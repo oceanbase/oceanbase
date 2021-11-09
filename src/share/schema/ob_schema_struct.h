@@ -5650,7 +5650,7 @@ private:
 
 // used for outline manager
 class ObOutlineParamsWrapper {
-  typedef common::ObArray<ObMaxConcurrentParam*, common::ObWrapperAllocator> OutlineParamsArray;
+  typedef common::ObArray<ObMaxConcurrentParam *, common::ObWrapperAllocatorWithAttr> OutlineParamsArray;
   OB_UNIS_VERSION(1);
 
 public:

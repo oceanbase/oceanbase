@@ -8,6 +8,7 @@ target_compile_definitions(ob_base INTERFACE
   PACKAGE_NAME="${PROJECT_NAME}"
   PACKAGE_VERSION="${PROJECT_VERSION}"
   PACKAGE_STRING="${PROJECT_NAME} ${PROJECT_VERSION}"
+  PACKAGE_VERSION_INFO="${PROJECT_VERSION}-${PROJECT_NAME}"
   RELEASEID="${OB_RELEASEID}"
   )
 target_compile_options(ob_base INTERFACE
@@ -53,6 +54,7 @@ add_subdirectory(archive)
 add_subdirectory(election)
 add_subdirectory(storage)
 add_subdirectory(observer)
+add_subdirectory(liboblog)
 
 if (OB_ENABLE_SERVER_PCH)
   target_precompile_headers(ob_base INTERFACE ${ob_server_pchs})

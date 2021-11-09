@@ -344,10 +344,7 @@ int ObExprInetAton::ob_inet_aton(T& result, const ObString& text, bool& is_ip_fo
 {
   int ret = OB_SUCCESS;
   is_ip_format_invalid = false;
-  if (OB_UNLIKELY(OB_ISNULL(text.ptr()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ip format invalid, text is null", K(ret));
-  }else if (0 == text.length()) {
+  if (text.empty()) {
     is_ip_format_invalid = true;
     LOG_WARN("ip length is zero");
   } else {
@@ -471,7 +468,7 @@ inline int ObExprInet6Ntoa::calc_result_type1(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null",K(ret));
   } else {
-    type.set_collation_type(session->get_nls_collation());
+    type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
   }
   return ret;
 }

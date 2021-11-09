@@ -35,25 +35,25 @@ namespace lib {
 
 #define CURRENT_CONTEXT lib::Flow::current_ctx()
 #define ROOT_CONTEXT lib::MemoryContext::root()
-#define CREATE_CONTEXT(args...) CREATE_CONTEXT_(CONCAT(static_id, __COUNTER__), args)
+#define CREATE_CONTEXT(args...) CREATE_CONTEXT_(CONCAT(static_info, __COUNTER__), args)
 #define DESTROY_CONTEXT(context) lib::__MemoryContext__::destory_context(context)
 #define WITH_CONTEXT(context) WITH_CONTEXT_P(true, context)
 #define WITH_CONTEXT_P(condition, context) CONTEXT_P(condition, lib::ContextSource::WITH, context)
 #define CREATE_WITH_TEMP_CONTEXT(...) CREATE_WITH_TEMP_CONTEXT_P(true, __VA_ARGS__)
 #define CREATE_WITH_TEMP_CONTEXT_P(condition, args...) \
-  CREATE_WITH_TEMP_CONTEXT_P_(CONCAT(static_id, __COUNTER__), condition, args)
+  CREATE_WITH_TEMP_CONTEXT_P_(CONCAT(static_info, __COUNTER__), condition, args)
 // The following are auxiliary macros
-#define CREATE_CONTEXT_(static_id, context, args...)                                                         \
-  create_context(context, lib::DynamicInfo(), args, ({                                                       \
-    const static int static_id = lib::StaticInfos::get_instance().add(__FILENAME__, __LINE__, __FUNCTION__); \
-    static_id;                                                                                               \
+#define CREATE_CONTEXT_(static_info, context, args...)                        \
+  create_context(context, lib::DynamicInfo(), args, ({                        \
+    static lib::StaticInfo static_info{__FILENAME__, __LINE__, __FUNCTION__}; \
+    &static_info;                                                             \
   }))
 #define CONTEXT_P(condition, context_source, ...)                                                \
   for (lib::_S<context_source> _s{condition, __VA_ARGS__}; OB_SUCC(ret) && _s.i_-- > 0; _s.i_--) \
     if (OB_SUCC(_s.get_ret()))
-#define CREATE_WITH_TEMP_CONTEXT_P_(static_id, condition, ...)                                             \
-  const static int static_id = lib::StaticInfos::get_instance().add(__FILENAME__, __LINE__, __FUNCTION__); \
-  CONTEXT_P(condition, lib::ContextSource::CREATE, lib::DynamicInfo(), __VA_ARGS__, static_id)
+#define CREATE_WITH_TEMP_CONTEXT_P_(static_info, condition, ...)            \
+  static lib::StaticInfo static_info{__FILENAME__, __LINE__, __FUNCTION__}; \
+  CONTEXT_P(condition, lib::ContextSource::CREATE, lib::DynamicInfo(), __VA_ARGS__, &static_info)
 
 using std::nullptr_t;
 using lib::ObMemAttr;
@@ -233,39 +233,6 @@ struct StaticInfo {
   TO_STRING_KV(K(filename_), K(line_), K(function_));
 };
 
-class StaticInfos {
-public:
-  StaticInfos() : cnt_(0)
-  {}
-  static StaticInfos& get_instance()
-  {
-    static StaticInfos one;
-    return one;
-  }
-  int get_cnt() const
-  {
-    return cnt_;
-  }
-  int add(const char* filename, const int line, const char* function)
-  {
-    int pos = ATOMIC_FAA(&cnt_, 1);
-    abort_unless(pos < MAX_NUM && nullptr == infos_[pos].filename_);
-    infos_[pos] = {filename, line, function};
-    const int static_id = pos;
-    OB_LOG(INFO, "add info", K(static_id), "info", infos_[static_id]);
-    return static_id;
-  }
-  const StaticInfo& get(const int static_id) const
-  {
-    return infos_[static_id];
-  }
-
-private:
-  static const int MAX_NUM = 128;
-  StaticInfo infos_[MAX_NUM];
-  int cnt_;
-};
-
 struct DynamicInfo {
   DynamicInfo()
       : tid_(GETTID()), cid_(CO_IS_ENABLED() ? CO_ID() : 0lu), create_time_(common::ObTimeUtility::fast_current_time())
@@ -315,30 +282,36 @@ public:
   }
 
 public:
-  __MemoryContext__(const bool need_free, const DynamicInfo &di, __MemoryContext__ *parent,
-                ContextParam &param, const int static_id)
-    : magic_code_(-1),
-      seq_id_(-1),
-      need_free_(need_free),
-      tree_node_(parent != nullptr ? &parent->tree_node_ : nullptr,
-                 param.properties_ & ADD_CHILD_THREAD_SAFE),
-      di_(di),
-      param_(param),
-      properties_(param.properties_),
-      static_id_(static_id),
-      p_alloc_(nullptr),
-      p_arena_alloc_(nullptr),
-      p_safe_arena_alloc_(nullptr),
-      parallel_alloc_(nullptr),
-      freeable_alloc_(nullptr),
-      default_allocator_(nullptr)
+  __MemoryContext__(const bool need_free, const DynamicInfo &di, __MemoryContext__ *parent, ContextParam &param,
+      const StaticInfo *static_info)
+      : magic_code_(-1),
+        seq_id_(-1),
+        need_free_(need_free),
+        tree_node_(parent != nullptr ? &parent->tree_node_ : nullptr, param.properties_ & ADD_CHILD_THREAD_SAFE),
+        di_(di),
+        param_(param),
+        properties_(param.properties_),
+        static_id_(reinterpret_cast<int64_t>(static_info)),
+        p_alloc_(nullptr),
+        p_arena_alloc_(nullptr),
+        p_safe_arena_alloc_(nullptr),
+        parallel_alloc_(nullptr),
+        freeable_alloc_(nullptr),
+        default_allocator_(nullptr)
+  {}
+  int64_t get_static_id() const
   {
+    return static_id_;
   }
-  int get_static_id() const { return static_id_; }
-  const DynamicInfo &get_dynamic_info() const { return di_; }
-  const StaticInfo &get_static_info() const { return StaticInfos::get_instance().get(static_id_); }
-  void *allocf(const int64_t size,
-               const ObMemAttr &attr=default_memattr)
+  const DynamicInfo &get_dynamic_info() const
+  {
+    return di_;
+  }
+  const StaticInfo &get_static_info() const
+  {
+    return *reinterpret_cast<StaticInfo *>(static_id_);
+  }
+  void *allocf(const int64_t size, const ObMemAttr &attr = default_memattr)
   {
     return freeable_alloc_->alloc(size, attr);
   }
@@ -407,12 +380,13 @@ public:
     return *default_allocator_;
   }
   static __MemoryContext__ &root();
-  bool check_magic_code() const { return MAGIC_CODE == magic_code_; }
-  TO_STRING_KV(KP(this),
-               "static_id", static_id_,
-               "static_info", StaticInfos::get_instance().get(static_id_),
-               "dynamic info", di_,
-               K(properties_), K(attr_));
+  bool check_magic_code() const
+  {
+    return MAGIC_CODE == magic_code_;
+  }
+  TO_STRING_KV(KP(this), "static_id", static_id_, "static_info", *reinterpret_cast<StaticInfo *>(static_id_),
+      "dynamic info", di_, K(properties_), K(attr_));
+
 private:
   static __MemoryContext__ *node2context(TreeNode *node)
   {
@@ -590,7 +564,7 @@ public:
   DynamicInfo di_;
   ContextParam param_;
   int64_t properties_;
-  int static_id_;
+  int64_t static_id_;
   common::ObMemAttr attr_;
 
   // Delayed member

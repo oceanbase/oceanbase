@@ -14,11 +14,13 @@
 #define OCEANBASE_COMMON_OB_OBJECT_TYPE_H_
 #include "lib/utility/ob_print_utils.h"
 #include "lib/charset/ob_charset.h"
-#include "lib/container/ob_iarray.h"
+
 namespace oceanbase {
 namespace common {
 class ObObjMeta;
 class ObAccuracy;
+template <class T>
+class ObIArray;
 
 // we can append new type only, do NOT delete nor change order,
 // modify ObObjTypeClass and ob_obj_type_class when append new object type.

@@ -207,7 +207,8 @@ const char *ObIDag::ObIDagUpLimitTypeStr[ObIDag::DAG_ULT_MAX] = {
     "DAG_ULT_BACKUP",
 };
 
-const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {"DAG_UT",
+const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {
+    "DAG_UT",
     "DAG_MINOR_MERGE",
     "DAG_MAJOR_MERGE",
     "DAG_CREATE_INDEX",
@@ -224,7 +225,10 @@ const char* ObIDag::ObIDagTypeStr[ObIDag::DAG_TYPE_MAX] = {"DAG_UT",
     "DAG_TYPE_BACKUP",
     "DAG_SERVER_PREPROCESS",
     "DAG_FAST_RECOVERY"
-    "DAG_TYPE_VALIDATE"};
+    "DAG_TYPE_VALIDATE"
+    "DAG_TYPE_BACKUP_BACKUPSET"
+    "DAG_TYPE_BACKUP_ARCHIVELOG",
+};
 
 const char *ObIDag::ObIDagModuleStr[share::ObIDag::DAG_TYPE_MAX] = {
     "EMPTY",
@@ -1501,6 +1505,12 @@ int ObDagScheduler::sys_task_start(ObIDag* dag)
         break;
       case ObIDag::DAG_TYPE_VALIDATE:
         sys_task_status.task_type_ = BACKUP_VALIDATION_TASK;
+        break;
+      case ObIDag::DAG_TYPE_BACKUP_BACKUPSET:
+        sys_task_status.task_type_ = BACKUP_BACKUPSET_TASK;
+        break;
+      case ObIDag::DAG_TYPE_BACKUP_ARCHIVELOG:
+        sys_task_status.task_type_ = BACKUP_ARCHIVELOG_TASK;
         break;
       default:
         COMMON_LOG(ERROR, "sys task type error", K(ret), K(dag->get_type()));

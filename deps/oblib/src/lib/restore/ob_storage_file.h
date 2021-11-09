@@ -34,6 +34,12 @@ public:
   virtual int get_pkeys_from_dir(const common::ObString& uri, const common::ObString& storage_info,
       common::ObIArray<common::ObPartitionKey>& pkeys);
   virtual int delete_tmp_files(const common::ObString& dir_path, const common::ObString& storage_info);
+  virtual int is_empty_directory(
+      const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);
+  virtual int check_backup_dest_lifecycle(
+      const common::ObString& dir_path, const common::ObString& storage_info, bool& is_set_lifecycle);
+  virtual int list_directories(const common::ObString& uri, const common::ObString& storage_info,
+      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directories_names);
 
 private:
   int get_partition_ids_from_dir(const char* dir_path, common::ObIArray<int64_t>& partition_ids);
@@ -75,6 +81,7 @@ public:
   virtual int open(const common::ObString& uri, const common::ObString& storage_info) = 0;
   virtual int open(const int flags);
   virtual int write(const char* buf, const int64_t size);
+  virtual int pwrite(const char* buf, const int64_t size, const int64_t offset);
   virtual int close();
   virtual int64_t get_length() const
   {

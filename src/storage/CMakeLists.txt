@@ -147,6 +147,11 @@ ob_set_subtarget(ob_storage common
   ob_partition_base_data_backup.cpp
   ob_partition_base_data_physical_restore.cpp
   ob_partition_base_data_validate.cpp
+  ob_partition_base_data_validate.h
+  ob_partition_base_data_backup_backupset.h
+  ob_partition_base_data_backup_backupset.cpp
+  ob_backup_archive_log.h
+  ob_backup_archive_log.cpp
   ob_partition_checkpoint.cpp
   ob_partition_component_factory.cpp
   ob_partition_freeze_record.cpp

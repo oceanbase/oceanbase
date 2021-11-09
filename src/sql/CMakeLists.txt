@@ -99,7 +99,6 @@ ob_set_subtarget(ob_sql engine
   engine/cmd/ob_resource_executor.cpp
   engine/cmd/ob_restore_executor.cpp
   engine/cmd/ob_sequence_executor.cpp
-  engine/cmd/ob_set_names_executor.cpp
   engine/cmd/ob_set_password_executor.cpp
   engine/cmd/ob_synonym_executor.cpp
   engine/cmd/ob_table_executor.cpp
@@ -222,6 +221,7 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_conv.cpp
   engine/expr/ob_expr_convert.cpp
   engine/expr/ob_expr_cosh.cpp
+  engine/expr/ob_expr_crc32.cpp
   engine/expr/ob_expr_timezone.cpp
   engine/expr/ob_expr_tz_offset.cpp
   engine/expr/ob_expr_from_tz.cpp
@@ -267,6 +267,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_greatest.cpp
   engine/expr/ob_expr_hex.cpp
   engine/expr/ob_expr_hextoraw.cpp
+  engine/expr/ob_expr_weight_string.h
+  engine/expr/ob_expr_weight_string.cpp
   engine/expr/ob_expr_host_ip.cpp
   engine/expr/ob_expr_ifnull.cpp
   engine/expr/ob_expr_in.cpp
@@ -353,6 +355,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_pi.cpp
   engine/expr/ob_expr_pi.h
   engine/expr/ob_expr_radians.cpp
+  engine/expr/ob_expr_degrees.cpp
+  engine/expr/ob_expr_degrees.h
   engine/expr/ob_expr_res_type_map.cpp
   engine/expr/ob_expr_result_type_util.cpp
   engine/expr/ob_expr_reverse.cpp
@@ -830,7 +834,6 @@ ob_set_subtarget(ob_sql resolver
   resolver/cmd/ob_load_data_resolver.cpp
   resolver/cmd/ob_load_data_stmt.cpp
   resolver/cmd/ob_resource_resolver.cpp
-  resolver/cmd/ob_set_names_resolver.cpp
   resolver/cmd/ob_set_transaction_resolver.cpp
   resolver/cmd/ob_show_resolver.cpp
   resolver/cmd/ob_variable_set_resolver.cpp

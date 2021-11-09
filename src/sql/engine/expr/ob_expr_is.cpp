@@ -349,7 +349,7 @@ int ObExprIsNot::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObEx
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("second param of is expr is not null, true or false", K(ret), K(param2->get_value()));
+    LOG_WARN("second param of is expr is not null, true, false or infinite or nan", K(ret), K(param2->get_value()));
   }
   return ret;
 }

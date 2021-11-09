@@ -83,10 +83,13 @@
 #include "rootserver/ob_backup_cancel_scheduler.h"
 #include "rootserver/ob_backup_data_clean_scheduler.h"
 #include "rootserver/backup/ob_cancel_validate_scheduler.h"
+#include "rootserver/backup/ob_backup_backupset_scheduler.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "observer/ob_service.h"
 #include "rootserver/backup/ob_cancel_delete_backup_scheduler.h"
+#include "rootserver/backup/ob_cancel_backup_backup_scheduler.h"
+#include "share/backup/ob_backup_backuppiece_operator.h"
 
 namespace oceanbase {
 
@@ -786,6 +789,9 @@ ObRootService::ObRootService()
       backup_auto_delete_(),
       reload_unit_replica_counter_task_(*this),
       single_part_balance_(),
+      restore_point_service_(),
+      backup_archive_log_(),
+      backup_backupset_(),
       backup_lease_service_()
 {}
 
@@ -918,6 +924,26 @@ int ObRootService::fake_init(ObServerConfig& config, ObConfigManager& config_mgr
     if (OB_FAIL(backup_auto_delete_.init(
             *config_, sql_proxy_, *schema_service_, backup_data_clean_, backup_lease_service_))) {
       LOG_WARN("fail to init backup auto delete", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(backup_archive_log_.init(
+            server_manager_, rpc_proxy_, sql_proxy_, backup_lease_service_, *schema_service_))) {
+      LOG_WARN("failed to init backup archive log scheduler", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(backup_backupset_.init(sql_proxy_,
+            zone_manager_,
+            server_manager_,
+            root_balancer_,
+            rebalance_task_mgr_,
+            rpc_proxy_,
+            *schema_service_,
+            backup_lease_service_))) {
+      LOG_WARN("failed to init backup backupset", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1130,6 +1156,7 @@ int ObRootService::init(ObServerConfig& config, ObConfigManager& config_mgr, ObS
   if (OB_SUCC(ret)) {
     if (OB_FAIL(restore_scheduler_.init(*schema_service_,
             sql_proxy_,
+            oracle_sql_proxy_,
             common_proxy_,
             rpc_proxy_,
             freeze_info_manager_,
@@ -1338,7 +1365,7 @@ int ObRootService::init(ObServerConfig& config, ObConfigManager& config_mgr, ObS
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(log_archive_scheduler_.init(
-            server_manager_, schema_service_, rpc_proxy_, sql_proxy_, backup_lease_service_))) {
+            server_manager_, zone_manager_, schema_service_, rpc_proxy_, sql_proxy_, backup_lease_service_))) {
       LOG_WARN("failed to init log_archive_scheduler_", K(ret));
     } else if (OB_FAIL(backup_lease_service_.register_scheduler(log_archive_scheduler_))) {
       LOG_WARN("failed to register log archive scheduler", K(ret));
@@ -1382,6 +1409,30 @@ int ObRootService::init(ObServerConfig& config, ObConfigManager& config_mgr, ObS
       LOG_WARN("fail to init backup data clean", K(ret));
     } else if (OB_FAIL(backup_lease_service_.register_scheduler(backup_data_clean_))) {
       LOG_WARN("failed to register root_validate_", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(backup_archive_log_.init(
+            server_manager_, rpc_proxy_, sql_proxy_, backup_lease_service_, *schema_service_))) {
+      LOG_WARN("failed to init backup archive log scheduler", K(ret));
+    } else if (OB_FAIL(backup_lease_service_.register_scheduler(backup_archive_log_))) {
+      LOG_WARN("failed to register backup_archive_log_", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(backup_backupset_.init(sql_proxy,
+            zone_manager_,
+            server_manager_,
+            root_balancer_,
+            rebalance_task_mgr_,
+            rpc_proxy_,
+            *schema_service_,
+            backup_lease_service_))) {
+      LOG_WARN("failed to init backup backupset", K(ret));
+    } else if (OB_FAIL(backup_lease_service_.register_scheduler(backup_backupset_))) {
+      LOG_WARN("failed to register backup_backupset_", K(ret));
     }
   }
 
@@ -1550,6 +1601,18 @@ void ObRootService::destroy()
     LOG_INFO("backup auto delete destroy failed", K(ret));
   } else {
     LOG_INFO("backup auoto delete destroy");
+  }
+
+  if (OB_FAIL(backup_archive_log_.destroy())) {
+    LOG_WARN("backup archive log scheduler destroy failed", K(ret));
+  } else {
+    LOG_INFO("backup archive log scheduler destory");
+  }
+
+  if (OB_FAIL(backup_backupset_.destroy())) {
+    LOG_INFO("backup backupset destroy failed", K(ret));
+  } else {
+    LOG_INFO("backup backupset destroy");
   }
 
   FLOG_INFO("start destroy backup_lease_service_");
@@ -1814,6 +1877,18 @@ int ObRootService::stop()
       LOG_INFO("rs_gts_task_mgr stop");
       rs_gts_monitor_.stop();
       LOG_INFO("rs_gts_monitor stop");
+      root_backup_.stop();
+      LOG_INFO("root_backup stop");
+      root_validate_.stop();
+      LOG_INFO("root_validate stop");
+      backup_data_clean_.stop();
+      LOG_INFO("backup_data_clean stop");
+      backup_auto_delete_.stop();
+      LOG_INFO("backup auto delete stop");
+      backup_archive_log_.stop();
+      LOG_INFO("backup archive log stop");
+      backup_backupset_.stop();
+      LOG_INFO("backup backupset stop");
     }
   }
 
@@ -1866,6 +1941,18 @@ void ObRootService::wait()
   LOG_INFO("rs gts task mgr exit success");
   rs_gts_monitor_.wait();
   LOG_INFO("rs gts monitor exit success");
+  root_backup_.wait();
+  LOG_INFO("root backup exit success");
+  root_validate_.wait();
+  LOG_INFO("root validate exit success");
+  backup_data_clean_.wait();
+  LOG_INFO("backup data clean exit success");
+  backup_auto_delete_.wait();
+  LOG_INFO("backup auto delete exit success");
+  backup_archive_log_.wait();
+  LOG_INFO("backup archive log exit success");
+  backup_backupset_.wait();
+  LOG_INFO("backup backupset exit success");
 
   rebalance_task_mgr_.reuse();
   ObUpdateRsListTask::clear_lock();
@@ -2270,6 +2357,10 @@ int ObRootService::schedule_inspector_task()
   int ret = OB_SUCCESS;
   int64_t inspect_interval = ObInspector::INSPECT_INTERVAL;
 #ifdef DEBUG
+  inspect_interval = ObServerConfig::get_instance().schema_drop_gc_delay_time;
+#endif
+
+#ifdef ERRSIM
   inspect_interval = ObServerConfig::get_instance().schema_drop_gc_delay_time;
 #endif
 
@@ -3898,7 +3989,6 @@ int ObRootService::physical_restore_partitions(const obrpc::ObRestorePartitionsA
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  const ObCreateTableMode create_mode = OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
   const uint64_t schema_id = arg.schema_id_;
   const uint64_t tenant_id = extract_tenant_id(schema_id);
   int64_t last_schema_version = OB_INVALID_VERSION;
@@ -5157,6 +5247,47 @@ int ObRootService::refresh_config()
     }
   }
   ROOTSERVICE_EVENT_ADD("root_service", "refresh_config", K(ret));
+  return ret;
+}
+
+int ObRootService::wait_refresh_config()
+{
+  int ret = OB_SUCCESS;
+  int64_t lastest_config_version = 0;
+  const int64_t retry_time_limit = 3;
+  int64_t retry_time = 0;
+  const int64_t sleep_us = 1000 * 1000LL;  // 1s
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(zone_manager_.get_config_version(lastest_config_version))) {
+    LOG_WARN("get_config_version failed", K(ret));
+  } else {
+    while (OB_SUCC(ret)) {
+      const int64_t current_version = config_mgr_->get_current_version();
+      ++retry_time;
+      if (current_version >= lastest_config_version) {
+        break;
+      } else if (retry_time > retry_time_limit) {
+        ret = OB_CONFIG_NOT_SYNC;
+        LOG_ERROR("failed to wait refresh config, config version is too old",
+            K(ret),
+            K(retry_time),
+            K(retry_time_limit),
+            K(lastest_config_version),
+            K(current_version));
+      } else {
+        LOG_INFO("config version too old, retry after 1s",
+            K(retry_time),
+            K(retry_time_limit),
+            K(lastest_config_version),
+            K(current_version));
+        usleep(sleep_us);
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -7176,6 +7307,7 @@ int ObRootService::stop_zone(const obrpc::ObAdminZoneArg& arg)
   return ret;
 }
 
+
 int ObRootService::alter_zone(const obrpc::ObAdminZoneArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -7406,52 +7538,14 @@ int ObRootService::generate_stop_server_log_in_sync_dest_server_array(
   return ret;
 }
 
-int ObRootService::generate_log_in_sync_dest_server_buff(common::ObIAllocator& allocator,
-    const common::ObIArray<common::ObAddr>& dest_server_array, common::ObString& dest_server_buff)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(dest_server_array.count() <= 0)) {
-    ret = OB_SERVER_NOT_ALIVE;  // dest_server_array is empty, although it can be processed, but still throw error
-    LOG_WARN("all server not alive", K(ret));
-  } else {
-    char* buf = NULL;
-    const int64_t buf_len = dest_server_array.count() * (MAX_IP_ADDR_LENGTH + 2) + 1;
-    if (OB_UNLIKELY(nullptr == (buf = static_cast<char*>(allocator.alloc(buf_len))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc buf", K(ret), K(buf));
-    } else {
-      int64_t pos = 0;
-      bool first = true;
-      MEMSET(static_cast<void*>(buf), 0, buf_len);
-      for (int64_t index = 0; OB_SUCC(ret) && index < dest_server_array.count(); ++index) {
-        const common::ObAddr& server = dest_server_array.at(index);
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", first ? "" : ","))) {
-          LOG_WARN("fail to do databuff printf", K(ret));
-        } else {
-          first = false;
-          pos += server.to_string(buf + pos, buf_len - pos);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        dest_server_buff.assign_ptr(buf, pos);
-      }
-    }
-  }
-  return ret;
-}
-
 int ObRootService::check_is_log_sync(bool& is_log_sync, const common::ObIArray<ObAddr>& stop_server)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator alloc;
   is_log_sync = true;
   common::ObZone zone; /*empty zone*/
   common::ObArray<common::ObAddr> alive_server_array;
   common::ObArray<common::ObAddr> dest_server_array;
-  common::ObString dest_server_buff;
+  ObSqlString sql;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -7464,10 +7558,9 @@ int ObRootService::check_is_log_sync(bool& is_log_sync, const common::ObIArray<O
         K(alive_server_array),
         K(stop_server),
         K(dest_server_array));
-  } else if (OB_FAIL(generate_log_in_sync_dest_server_buff(alloc, dest_server_array, dest_server_buff))) {
-    LOG_WARN("fail to generate log in sync dest server buff", K(ret), K(dest_server_array), K(dest_server_buff));
+  } else if (OB_FAIL(generate_log_in_sync_sql(dest_server_array, sql))) {
+    LOG_WARN("fail to generate log in sync dest server buff", K(ret), K(dest_server_array), K(sql));
   } else {
-    ObSqlString sql;
     HEAP_VAR(ObMySQLProxy::MySQLResult, res)
     {
       sqlclient::ObMySQLResult* result = NULL;
@@ -7476,12 +7569,6 @@ int ObRootService::check_is_log_sync(bool& is_log_sync, const common::ObIArray<O
       // pay attention partition_idx actually is partition_id
       if (OB_FAIL(schema_service_->get_schema_guard(schema_guard))) {
         LOG_WARN("fail to get schema guard", K(ret));
-      } else if (OB_FAIL(sql.assign_fmt("SELECT table_id, partition_idx FROM %s WHERE is_in_sync = 0 and "
-                                        "is_offline = 0 and replica_type != 16 "
-                                        "and concat(svr_ip, \":\", svr_port) in (%s)",
-                     OB_ALL_VIRTUAL_CLOG_STAT_TNAME,
-                     dest_server_buff.ptr()))) {
-        LOG_WARN("assign_fmt failed", K(ret));
       } else if (OB_FAIL(sql_proxy_.read(res, sql.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -7703,6 +7790,48 @@ int ObRootService::admin_switch_replica_role(const obrpc::ObAdminSwitchReplicaRo
   ROOTSERVICE_EVENT_ADD("root_service", "admin_switch_replica_role", K(ret), K(arg));
   return ret;
 }
+
+int ObRootService::generate_log_in_sync_sql(
+    const common::ObIArray<common::ObAddr> &dest_server_array, common::ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  sql.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(dest_server_array.count() <= 0)) {
+    ret = OB_SERVER_NOT_ALIVE;  // all server not alive
+    LOG_WARN("all server not alive", KR(ret));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT table_id, partition_idx FROM %s WHERE is_in_sync = 0 and "
+                                    "is_offline = 0 and replica_type != 16 "
+                                    "and (svr_ip, svr_port) in (",
+                 OB_ALL_VIRTUAL_CLOG_STAT_TNAME))) {
+    LOG_WARN("assign_fmt failed", KR(ret), K(sql));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dest_server_array.count(); ++i) {
+      const common::ObAddr &addr = dest_server_array.at(i);
+      char ip_str[MAX_IP_PORT_LENGTH] = "";
+      if (0 != i) {
+        if (OB_FAIL(sql.append(","))) {
+          LOG_WARN("failed to append fmt sql", KR(ret), K(i), K(sql));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!addr.ip_to_string(ip_str, MAX_IP_PORT_LENGTH)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to ip to string", KR(ret), K(ip_str), K(addr));
+      } else if (OB_FAIL(sql.append_fmt("(\"%s\", %d)", ip_str, addr.get_port()))) {
+        LOG_WARN("failed to append fmt sql", KR(ret), K(i), K(ip_str), K(addr), K(sql));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(sql.append(")"))) {
+    LOG_WARN("failed to append fmt sql", KR(ret), K(sql));
+  }
+  return ret;
+}
+
 
 int ObRootService::admin_switch_rs_role(const obrpc::ObAdminSwitchRSRoleArg& arg)
 {
@@ -8340,7 +8469,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   int ret = OB_SUCCESS;
   int64_t gc_snapshot_ts = OB_INVALID_TIMESTAMP;
   int64_t current_timestamp = ObTimeUtility::current_time();
-  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L;  // prevent to recovery to a certain time in the future
+  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L;  // 防止恢复到未来的某个时间
   int64_t job_id = OB_INVALID_ID;
   ObSchemaGetterGuard schema_guard;
   if (!inited_) {
@@ -8362,11 +8491,13 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   } else if (OB_FAIL(freeze_info_manager_.get_latest_snapshot_gc_ts(gc_snapshot_ts))) {
     LOG_WARN("fail to get latest snapshot gc ts", K(ret));
   } else if (gc_snapshot_ts < arg.restore_timestamp_) {
-    ret = OB_EAGAIN;
+    ret = OB_OP_NOT_ALLOW;
     LOG_WARN("local gc_snapshot_ts is old", K(ret), K(gc_snapshot_ts), K(arg));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "need retry later, local gc snapshot ts is too old");
   } else if (arg.restore_timestamp_ + RESTORE_TIMESTAMP_DETA >= current_timestamp) {
-    ret = OB_EAGAIN;
+    ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore_timestamp is too new", K(ret), K(current_timestamp), K(arg));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "need retry later, restore timestamp is too new");
   } else if (OB_FAIL(
                  ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get sys tenant's schema guard", KR(ret));
@@ -9564,7 +9695,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
-    } else if (0 == MEMCMP(item->name_.ptr(), _RECYCLEBIN_OBJECT_PURGE_FREQUENCY, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), _RECYCLEBIN_OBJECT_PURGE_FREQUENCY)) {
       int64_t purge_interval = ObConfigTimeParser::get(item->value_.ptr(), valid);
       if (!valid) {
         ret = OB_INVALID_ARGUMENT;
@@ -9574,7 +9705,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
         LOG_WARN("it is not allow that purge_interval is zero when daily merge is off", "item", *item, K(ret));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "_recyclebin_object_purge_frequency is zero when daily merge is off");
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), CLOG_DISK_USAGE_LIMIT_PERCENTAGE, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), CLOG_DISK_USAGE_LIMIT_PERCENTAGE)) {
       int64_t clog_disk_usage_limit_percent = ObConfigIntParser::get(item->value_.ptr(), valid);
       const int64_t clog_disk_utilization_threshold = ObServerConfig::get_instance().clog_disk_utilization_threshold;
       if (!valid) {
@@ -9591,7 +9722,7 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
             "clog_disk_usage_limit_percentage, it should be greater than clog_disk_utilization_threshold");
       } else {
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), CLOG_DISK_UTILIZATION_THRESHOLD, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), CLOG_DISK_UTILIZATION_THRESHOLD)) {
       int64_t clog_disk_utilization_threshold = ObConfigIntParser::get(item->value_.ptr(), valid);
       const int64_t clog_disk_usage_limit_percent = ObServerConfig::get_instance().clog_disk_usage_limit_percentage;
       if (!valid) {
@@ -9625,8 +9756,8 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
-    } else if (0 == MEMCMP(item->name_.ptr(), ENABLE_REBALANCE, strlen(item->name_.ptr())) ||
-               0 == MEMCMP(item->name_.ptr(), ENABLE_REREPLICATION, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), ENABLE_REBALANCE) ||
+               0 == STRCMP(item->name_.ptr(), ENABLE_REREPLICATION)) {
       ObString value(item->value_.ptr());
       ObString false_str("FALSE");
       ObString zero_str("0");
@@ -9638,28 +9769,28 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
       } else if (OB_FAIL(rebalance_task_mgr_.clear_task(tenant_ids, type))) {
         LOG_WARN("fail to clear balance task", K(ret));
       } else {
-        if (0 == MEMCMP(item->name_.ptr(), ENABLE_REREPLICATION, strlen(item->name_.ptr()))) {
+        if (0 == STRCMP(item->name_.ptr(), ENABLE_REREPLICATION)) {
           root_balancer_.reset_task_count();
           LOG_INFO("clear balance task after modify balance config", K(ret), K(arg));
         }
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), MERGER_CHECK_INTERVAL, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), MERGER_CHECK_INTERVAL)) {
       daily_merge_scheduler_.wakeup();
-    } else if (0 == MEMCMP(item->name_.ptr(), ENABLE_AUTO_LEADER_SWITCH, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), ENABLE_AUTO_LEADER_SWITCH)) {
       ObString value(item->value_.ptr());
       ObString false_str("FALSE");
       ObString zero_str("0");
       if (0 != value.case_compare(false_str) && 0 != value.case_compare(zero_str)) {
         leader_coordinator_.wakeup();
       }
-    } else if (0 == MEMCMP(item->name_.ptr(), OBCONFIG_URL, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), OBCONFIG_URL)) {
       int tmp_ret = OB_SUCCESS;
       bool force_update = true;
       if (OB_SUCCESS != (tmp_ret = submit_update_rslist_task(force_update))) {
         LOG_WARN("fail to submit update rs list task", KR(ret), K(tmp_ret));
       }
       LOG_INFO("obconfig_url parameters updated, force submit update rslist task", KR(tmp_ret), KPC(item));
-    } else if (0 == MEMCMP(item->name_.ptr(), _SCHEMA_HISTORY_RECYCLE_INTERVAL, strlen(item->name_.ptr()))) {
+    } else if (0 == STRCMP(item->name_.ptr(), _SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
       schema_history_recycler_.wakeup();
       LOG_INFO("_schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
     }
@@ -10448,7 +10579,9 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg& arg)
     LOG_WARN("not init", K(ret));
   } else {
     LOG_INFO("handle_archive_log", K(arg));
-    if (OB_FAIL(log_archive_scheduler_.handle_enable_log_archive(arg.enable_))) {
+    if (OB_FAIL(wait_refresh_config())) {
+      LOG_WARN("Failed to wait refresh schema", K(ret));
+    } else if (OB_FAIL(log_archive_scheduler_.handle_enable_log_archive(arg.enable_))) {
       LOG_WARN("failed to handle_enable_log_archive", K(ret), K(arg));
     }
   }
@@ -10464,6 +10597,8 @@ int ObRootService::handle_backup_database(const obrpc::ObBackupDatabaseArg& in_a
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(wait_refresh_config())) {
+    LOG_WARN("failed to wait_refresh_schema", K(ret));
   } else if (arg.tenant_id_ != OB_SYS_TENANT_ID) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support cluster backup now", K(ret), K(arg));
@@ -10558,6 +10693,322 @@ int ObRootService::handle_cancel_validate(const obrpc::ObBackupManageArg& arg)
   return ret;
 }
 
+int ObRootService::handle_backup_archive_log(const obrpc::ObBackupArchiveLogArg& arg)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObBackupInfoManager manager;
+  ObLogArchiveBackupInfoMgr archive_mgr;
+  ObBackupDest backup_dest;
+  char backup_backup_dest_buf[OB_MAX_BACKUP_DEST_LENGTH];
+  ObArray<ObBackupBackupPieceJobInfo> job_list;
+  bool has_piece_mode = true;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(wait_refresh_config())) {
+    LOG_WARN("failed to wait_refresh_schema", K(ret));
+  } else if (OB_FAIL(GCONF.backup_backup_dest.copy(backup_backup_dest_buf, sizeof(backup_backup_dest_buf)))) {
+    LOG_WARN("failed to set backup dest buf", K(ret));
+  } else if (0 == strlen(backup_backup_dest_buf)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("handle backup archive log with empty backup dest is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "handle backup archive log with empty backup dest is");
+  } else if (OB_FAIL(backup_dest.set(backup_backup_dest_buf))) {
+    LOG_WARN("failed to set backup dest", KR(ret), K(backup_backup_dest_buf));
+  } else if (OB_FAIL(trans.start(&sql_proxy_))) {
+    LOG_WARN("failed to start trans", KR(ret));
+  } else {
+    if (OB_FAIL(
+            archive_mgr.check_has_piece_mode_archive_in_dest(trans, backup_dest, OB_SYS_TENANT_ID, has_piece_mode))) {
+      LOG_WARN("failed to check has piece mode archive in dest", KR(ret), K(backup_dest));
+    } else if (has_piece_mode) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cannot start backup backup in round mode", KR(ret), K(backup_backup_dest_buf));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup archive log in piece data directory");
+    } else if (OB_FAIL(ObBackupBackupPieceJobOperator::get_one_job(trans, job_list))) {
+      LOG_WARN("failed to get backup backuppiece job", KR(ret));
+    } else if (OB_UNLIKELY(!job_list.empty())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("can not start backup archivelog if backup backuppiece job exist", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup archive log if backup backuppiece job exist");
+    } else if (OB_FAIL(manager.init(OB_SYS_TENANT_ID, sql_proxy_))) {
+      LOG_WARN("failed to init backup info manager", KR(ret));
+    } else if (OB_FAIL(manager.update_enable_auto_backup_archivelog(OB_SYS_TENANT_ID, arg.enable_, trans))) {
+      LOG_WARN("failed to update enable auto backup archivelog", KR(ret));
+    }
+  }
+  if (trans.is_started()) {
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", "commit", OB_SUCC(ret), K(tmp_ret));
+      ret = (OB_SUCC(ret)) ? tmp_ret : ret;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(backup_archive_log_.handle_enable_auto_backup(arg.enable_))) {
+      LOG_WARN("failed to handle enable auto backup", KR(ret), K(arg));
+    } else {
+      backup_archive_log_.wakeup();
+      LOG_INFO("handle backup archivelog", K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::handle_backup_archive_log_batch_res(const obrpc::ObBackupArchiveLogBatchRes& arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive backup archive log batch res", K(arg));
+  ObArray<ObPGKey> pg_list;
+  ObArray<ObPGKey> failed_list;
+  bool interrupted = false;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const int64_t archive_round = arg.archive_round_;
+  const int64_t checkpoint_ts = arg.checkpoint_ts_;
+  const int64_t piece_id = arg.piece_id_;
+  const int64_t job_id = arg.job_id_;
+  const common::ObAddr& server = arg.server_;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is not valid", K(ret), K(arg));
+  } else if (OB_FAIL(backup_archive_log_.set_server_free(server))) {
+    LOG_WARN("failed to set server free", KR(ret), K(server));
+  } else if (FALSE_IT(interrupted = arg.is_interrupted())) {
+  } else if (interrupted && OB_FAIL(backup_archive_log_.set_round_interrupted(archive_round))) {
+    LOG_WARN("failed to set current round interrupted", KR(ret), K(archive_round));
+  } else if (interrupted) {
+    ret = OB_LOG_ARCHIVE_INTERRUPTED;
+    LOG_INFO("backup archive log interrupted", KR(ret), K(tenant_id), K(archive_round));
+  } else if (OB_FAIL(arg.get_failed_pg_list(failed_list))) {
+    LOG_WARN("failed to get failed pg list", KR(ret), K(piece_id));
+  } else if (OB_FAIL(backup_archive_log_.redo_failed_pg_tasks(tenant_id, piece_id, job_id, failed_list))) {
+    LOG_WARN("failed to redo failed pg tasks", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.get_finished_pg_list(pg_list))) {
+    LOG_WARN("failed to get finished pg list", KR(ret), K(piece_id));
+  } else if (pg_list.empty()) {
+    LOG_INFO("no finished pg list", K(arg));
+  } else {
+    if (0 == piece_id) {
+      if (OB_FAIL(backup_archive_log_.set_pg_finish(archive_round, checkpoint_ts, tenant_id, pg_list))) {
+        LOG_WARN("failed to set pg finish move", KR(ret), K(archive_round), K(tenant_id));
+      } else {
+        LOG_INFO("set pg finish", K(archive_round), K(checkpoint_ts), K(tenant_id));
+      }
+    } else {
+      if (OB_FAIL(backup_archive_log_.mark_piece_pg_task_finished(tenant_id, piece_id, job_id, pg_list))) {
+        LOG_WARN("failed to set pg finish", KR(ret), K(tenant_id), K(job_id), K(piece_id));
+      } else {
+        LOG_INFO("mark piece pg task finished", K(tenant_id), K(piece_id), K(pg_list));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    backup_archive_log_.wakeup();
+    LOG_INFO("handle backup archive log batch res", K(arg));
+  }
+  return ret;
+}
+
+int ObRootService::handle_backup_backupset(const obrpc::ObBackupBackupsetArg& arg)
+{
+  int ret = OB_SUCCESS;
+  ObBackupBackupsetScheduler scheduler;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const int64_t backup_set_id = arg.backup_set_id_;
+  const char* backup_dest = arg.backup_backup_dest_;
+  const int64_t max_backup_times = arg.max_backup_times_;
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("handle backup backupset get invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(wait_refresh_config())) {
+    LOG_WARN("failed to wait_refresh_schema", K(ret));
+  } else {
+    if (OB_SUCC(ret) && OB_SYS_TENANT_ID != tenant_id) {
+      if (0 == STRNCMP(arg.backup_backup_dest_, "", OB_MAX_BACKUP_DEST_LENGTH)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant level backup backup and backup_backup_dest is not empty is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant level backup backup and backup_backup_dest is not empty");
+      } else {
+        char tmp_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+        char tmp_backup_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+        if (OB_FAIL(GCONF.backup_dest.copy(tmp_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+          LOG_WARN("failed to copy backup dest", KR(ret));
+        } else if (OB_FAIL(GCONF.backup_backup_dest.copy(tmp_backup_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+          LOG_WARN("failed to copy backup dest", KR(ret));
+        } else if (0 == STRNCMP(tmp_backup_dest_str, arg.backup_backup_dest_, OB_MAX_BACKUP_DEST_LENGTH) ||
+                   0 == STRNCMP(tmp_backup_backup_dest_str, arg.backup_backup_dest_, OB_MAX_BACKUP_DEST_LENGTH)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant level backup backup use same backup backup dest as gconf not supported", KR(ret));
+          LOG_USER_ERROR(
+              OB_NOT_SUPPORTED, "tenant level backup backup use same backup backup dest as gconf not supported");
+        } else {
+          share::ObBackupDest dest;
+          bool is_empty_dir = false;
+          ObStorageUtil util(false /*need_retry*/);
+          if (OB_FAIL(dest.set(arg.backup_backup_dest_))) {
+            LOG_WARN("failed to set backup backup dest", KR(ret));
+          } else if (OB_FAIL(util.is_empty_directory(dest.root_path_, dest.storage_info_, is_empty_dir))) {
+            LOG_WARN("failed to check is empty directory", K(ret), K(dest));
+          } else if (!is_empty_dir) {
+            ret = OB_INVALID_BACKUP_DEST;
+            LOG_ERROR("cannot use backup backup dest with non empty directory", K(ret));
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (0 == STRNCMP(arg.backup_backup_dest_, "", OB_MAX_BACKUP_DEST_LENGTH)) {
+      if (OB_FAIL(GCONF.backup_backup_dest.copy(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+        LOG_WARN("failed to copy backup dest", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(databuff_printf(backup_dest_str, sizeof(backup_dest_str), "%s", backup_dest))) {
+        LOG_WARN("failed to databuff printf", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(scheduler.init(
+                   tenant_id, backup_set_id, max_backup_times, backup_dest_str, sql_proxy_, backup_backupset_))) {
+      LOG_WARN("failed to init backup backupset scheduler", KR(ret), K(arg));
+    } else if (OB_FAIL(scheduler.start_schedule_backup_backupset())) {
+      LOG_WARN("failed to start schedule backup backupset", KR(ret));
+    } else {
+      LOG_INFO("handle backup backupset", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::handle_backup_backuppiece(const obrpc::ObBackupBackupPieceArg& arg)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObBackupBackupPieceJobInfo job_info;
+  const uint64_t tenant_id = arg.tenant_id_;
+  const int64_t piece_id = arg.piece_id_;
+  const int64_t max_backup_times = arg.max_backup_times_;
+  const bool with_active_piece = arg.with_active_piece_;
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+  ObBackupInfoManager manager;
+  ObLogArchiveBackupInfoMgr archive_mgr;
+  bool has_round_mode = false;
+  bool is_enable_auto = false;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("handle backup backup piece get invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(wait_refresh_config())) {
+    LOG_WARN("failed to wait_refresh_schema", K(ret));
+  } else if (OB_FAIL(trans.start(&sql_proxy_))) {
+    LOG_WARN("failed to start transaction", KR(ret));
+  } else {
+    if (OB_FAIL(manager.init(OB_SYS_TENANT_ID, sql_proxy_))) {
+      LOG_WARN("failed to init backup info manager", KR(ret));
+    } else if (OB_FAIL(manager.get_enable_auto_backup_archivelog(OB_SYS_TENANT_ID, trans, is_enable_auto))) {
+      LOG_WARN("failed to get enable auto backup archivelog", KR(ret), K(tenant_id));
+    } else if (is_enable_auto) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("do not support backup backuppiece in auto mode", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backuppiece in auto mode");
+    } else {
+      job_info.tenant_id_ = tenant_id;
+      job_info.incarnation_ = OB_START_INCARNATION;
+      job_info.piece_id_ = piece_id;
+      job_info.max_backup_times_ = max_backup_times;
+      job_info.status_ = ObBackupBackupPieceJobInfo::SCHEDULE;
+      job_info.comment_ = "";
+      job_info.type_ =
+          with_active_piece ? ObBackupBackupPieceJobInfo::WITH_ACTIVE_PIECE : ObBackupBackupPieceJobInfo::ONLY_FROZEN;
+      if (OB_SUCC(ret) && OB_SYS_TENANT_ID != tenant_id) {
+        if (0 == STRNCMP(arg.backup_backup_dest_, "", OB_MAX_BACKUP_DEST_LENGTH)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant level backup backup and backup_backup_dest is not empty is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant level backup backup and backup_backup_dest is not empty");
+        } else {
+          char tmp_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+          char tmp_backup_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+          if (OB_FAIL(GCONF.backup_dest.copy(tmp_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+            LOG_WARN("failed to copy backup dest", KR(ret));
+          } else if (OB_FAIL(GCONF.backup_backup_dest.copy(tmp_backup_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+            LOG_WARN("failed to copy backup dest", KR(ret));
+          } else if (0 == STRNCMP(tmp_backup_dest_str, arg.backup_backup_dest_, OB_MAX_BACKUP_DEST_LENGTH) ||
+                     0 == STRNCMP(tmp_backup_backup_dest_str, arg.backup_backup_dest_, OB_MAX_BACKUP_DEST_LENGTH)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("tenant level backup backup use same backup backup dest as gconf not supported", KR(ret));
+            LOG_USER_ERROR(
+                OB_NOT_SUPPORTED, "tenant level backup backup use same backup backup dest as gconf not supported");
+          } else {
+            share::ObBackupDest dest;
+            bool is_empty_dir = false;
+            ObStorageUtil util(false /*need_retry*/);
+            if (OB_FAIL(dest.set(arg.backup_backup_dest_))) {
+              LOG_WARN("failed to set backup backup dest", KR(ret));
+            } else if (OB_FAIL(util.is_empty_directory(dest.root_path_, dest.storage_info_, is_empty_dir))) {
+              LOG_WARN("failed to check is empty directory", K(ret), K(dest));
+            } else if (!is_empty_dir) {
+              ret = OB_INVALID_BACKUP_DEST;
+              LOG_ERROR("cannot use backup backup dest with non empty directory", K(ret));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (0 == STRNCMP(arg.backup_backup_dest_, "", OB_MAX_BACKUP_DEST_LENGTH)) {
+          if (OB_FAIL(GCONF.backup_backup_dest.copy(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+            LOG_WARN("failed to copy backup dest", KR(ret));
+          } else if (OB_FAIL(job_info.backup_dest_.set(backup_dest_str))) {
+            LOG_WARN("failed to set backup dest", KR(ret));
+          }
+        } else {
+          if (OB_FAIL(job_info.backup_dest_.set(arg.backup_backup_dest_))) {
+            LOG_WARN("failed to set backup dest", KR(ret));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(archive_mgr.check_has_round_mode_archive_in_dest(
+                     trans, job_info.backup_dest_, OB_SYS_TENANT_ID, has_round_mode))) {
+        LOG_WARN("failed to check has round mode archive in dest", KR(ret), K(backup_dest_str));
+      } else if (has_round_mode) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("cannot start backup backup in piece mode", KR(ret), K(backup_dest_str));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup piece in round mode directory");
+      } else if (OB_FAIL(manager.get_job_id(job_info.job_id_))) {
+        LOG_WARN("failed to get job id", KR(ret));
+      } else if (OB_FAIL(ObBackupBackupPieceJobOperator::insert_job_item(job_info, trans))) {
+        LOG_WARN("failed to insert job item", KR(ret), K(job_info));
+      } else {
+        backup_archive_log_.wakeup();
+      }
+    }
+  }
+  if (trans.is_started()) {
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("trans end failed", "commit", OB_SUCC(ret), K(tmp_ret));
+      ret = (OB_SUCC(ret)) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
 int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -10584,12 +11035,14 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg& arg)
         ret = OB_NOT_SUPPORTED;
         break;
       };
-      // case ObBackupManageArg::DELETE_EXPIRED_BACKUP: {
-      //   ret = OB_NOT_SUPPORTED;
-      //  break;
-      //};
-      case ObBackupManageArg::DELETE_BACKUP: {
-        if (OB_FAIL(handle_backup_delete_backup_set(arg))) {
+        //    case ObBackupManageArg::DELETE_EXPIRED_BACKUP: {
+        //      ret = OB_NOT_SUPPORTED;
+        //      break;
+        //    };
+      case ObBackupManageArg::DELETE_BACKUP:
+      case ObBackupManageArg::DELETE_BACKUPPIECE:
+      case ObBackupManageArg::DELETE_BACKUPROUND: {
+        if (OB_FAIL(handle_backup_delete_backup_data(arg))) {
           LOG_WARN("failed to handle backup delete backup set", K(ret), K(arg));
         }
         break;
@@ -10618,12 +11071,24 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg& arg)
         }
         break;
       };
+      case ObBackupManageArg::CANCEL_BACKUP_BACKUPSET: {
+        if (OB_FAIL(handle_cancel_backup_backup(arg))) {
+          LOG_WARN("failed to handle cancel backup backup", K(ret), K(arg));
+        }
+        break;
+      }
+      case ObBackupManageArg::CANCEL_BACKUP_BACKUPPIECE: {
+        if (OB_FAIL(handle_cancel_backup_backup(arg))) {
+          LOG_WARN("failed to handle cancel backup backup", K(ret), K(arg));
+        }
+        break;
+      }
       case ObBackupManageArg::CANCEL_DELETE_BACKUP: {
         if (OB_FAIL(handle_cancel_delete_backup(arg))) {
           LOG_WARN("failed to handle cancel delete backup", K(ret), K(arg));
         }
         break;
-      }
+      };
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid backup manage arg", K(ret), K(arg));
@@ -10768,13 +11233,14 @@ int ObRootService::handle_backup_database_cancel(const obrpc::ObBackupManageArg&
 {
   int ret = OB_SUCCESS;
   ObBackupCancelScheduler backup_cancel_scheduler;
+  const uint64_t tenant_id = arg.tenant_id_;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (ObBackupManageArg::CANCEL_BACKUP != arg.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("handle backup database cancel get invalid argument", K(ret), K(arg));
-  } else if (OB_FAIL(backup_cancel_scheduler.init(arg.tenant_id_, sql_proxy_, &root_backup_))) {
+  } else if (OB_FAIL(backup_cancel_scheduler.init(tenant_id, sql_proxy_, &root_backup_))) {
     LOG_WARN("failed to init backup cancel scheduler", K(ret), K(arg));
   } else if (OB_FAIL(backup_cancel_scheduler.start_schedule_backup_cancel())) {
     LOG_WARN("failed to start schedule backup cancel", K(ret), K(arg));
@@ -10840,6 +11306,73 @@ int ObRootService::refresh_unit_replica_counter()
   return ret;
 }
 
+int ObRootService::handle_backup_delete_obsolete_backup(const obrpc::ObBackupManageArg& arg)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDataCleanScheduler data_clean_scheduler;
+  const int64_t now_ts = ObTimeUtil::current_time();
+  ObBackupManageArg new_arg = arg;
+  ObBackupDestOpt backup_dest_option;
+  const bool is_backup_backup = false;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObBackupManageArg::DELETE_OBSOLETE_BACKUP != arg.type_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backup delete arg type is not expried backup arg", K(ret), K(arg));
+  } else if (OB_FAIL(backup_dest_option.init(is_backup_backup))) {
+    LOG_WARN("failed to init backup dest option", K(ret));
+  } else if (backup_dest_option.recovery_window_ <= 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup recovery window is unepxected", K(ret), K(backup_dest_option));
+    const int64_t ERROR_MSG_LENGTH = 1024;
+    char error_msg[ERROR_MSG_LENGTH] = "";
+    int64_t pos = 0;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg,
+                           ERROR_MSG_LENGTH,
+                           pos,
+                           "can not execute delete obsolete, because recovery window unexpected."
+                           " recovery window : %ld .",
+                           backup_dest_option.recovery_window_))) {
+      LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
+    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, error_msg);
+    }
+  } else {
+    new_arg.value_ = now_ts - backup_dest_option.recovery_window_;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(data_clean_scheduler.init(new_arg, *schema_service_, sql_proxy_, &backup_data_clean_))) {
+    LOG_WARN("failed ot init backup data clean scheduler", K(ret), K(arg));
+  } else if (OB_FAIL(data_clean_scheduler.start_schedule_backup_data_clean())) {
+    LOG_WARN("failed to start schedule backup data clean", K(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObRootService::handle_backup_delete_backup_data(const obrpc::ObBackupManageArg& arg)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDataCleanScheduler data_clean_scheduler;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObBackupManageArg::DELETE_BACKUP != arg.type_ && ObBackupManageArg::DELETE_BACKUPPIECE != arg.type_ &&
+             ObBackupManageArg::DELETE_BACKUPROUND != arg.type_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backup delete arg type is not delete backup set arg", K(ret), K(arg));
+  } else if (OB_FAIL(data_clean_scheduler.init(arg, *schema_service_, sql_proxy_, &backup_data_clean_))) {
+    LOG_WARN("failed ot init backup data clean scheduler", K(ret), K(arg));
+  } else if (OB_FAIL(data_clean_scheduler.start_schedule_backup_data_clean())) {
+    LOG_WARN("failed to start schedule backup data clean", K(ret), K(arg));
+  }
+  return ret;
+}
+
 int ObRootService::handle_cancel_delete_backup(const obrpc::ObBackupManageArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -10859,6 +11392,28 @@ int ObRootService::handle_cancel_delete_backup(const obrpc::ObBackupManageArg& a
   return ret;
 }
 
+int ObRootService::handle_cancel_backup_backup(const obrpc::ObBackupManageArg& arg)
+{
+  int ret = OB_SUCCESS;
+  ObCancelBackupBackupScheduler cancel_scheduler;
+  ObCancelBackupBackupType cancel_type =
+      arg.type_ == ObBackupManageArg::CANCEL_BACKUP_BACKUPSET ? CANCEL_BACKUP_BACKUPSET : CANCEL_BACKUP_BACKUPPIECE;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObBackupManageArg::CANCEL_BACKUP_BACKUPSET != arg.type_ &&
+             ObBackupManageArg::CANCEL_BACKUP_BACKUPPIECE != arg.type_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(arg));
+  } else if (OB_FAIL(cancel_scheduler.init(
+                 arg.tenant_id_, sql_proxy_, cancel_type, &backup_backupset_, &backup_archive_log_))) {
+    LOG_WARN("failed to init cancel backup backup scheduler", K(ret));
+  } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_backup_backup())) {
+    LOG_WARN("failed to start schedule cancel backup backup", K(ret));
+  }
+  return ret;
+}
+
 int ObRootService::update_freeze_schema_versions(
     const int64_t frozen_version, obrpc::ObTenantSchemaVersions& tenant_schema_versions)
 {
@@ -10874,29 +11429,6 @@ int ObRootService::update_freeze_schema_versions(
   } else if (OB_FAIL(freeze_info_proxy.update_frozen_schema_v2(
                  sql_proxy_, frozen_version, tenant_schema_versions.tenant_schema_versions_))) {
     LOG_WARN("fail to update frozen schema version", KR(ret));
-  }
-  return ret;
-}
-
-int ObRootService::handle_backup_delete_obsolete_backup(const obrpc::ObBackupManageArg& arg)
-{
-  int ret = OB_SUCCESS;
-  ObBackupDataCleanScheduler data_clean_scheduler;
-  const int64_t now_ts = ObTimeUtil::current_time();
-  const int64_t backup_recovery_window = config_->backup_recovery_window;
-  ObBackupManageArg new_arg = arg;
-
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (ObBackupManageArg::DELETE_OBSOLETE_BACKUP != arg.type_ || backup_recovery_window <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("backup delete arg type is not expried backup arg", K(ret), K(arg), K(backup_recovery_window));
-  } else if (FALSE_IT(new_arg.value_ = now_ts - backup_recovery_window)) {
-  } else if (OB_FAIL(data_clean_scheduler.init(new_arg, *schema_service_, sql_proxy_, &backup_data_clean_))) {
-    LOG_WARN("failed ot init backup data clean scheduler", K(ret), K(arg));
-  } else if (OB_FAIL(data_clean_scheduler.start_schedule_backup_data_clean())) {
-    LOG_WARN("failed to start schedule backup data clean", K(ret), K(arg));
   }
   return ret;
 }

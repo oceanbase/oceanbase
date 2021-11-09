@@ -6042,10 +6042,10 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), startup_filter([0]), 
       conds(nil), nl_params_(nil)
-  1 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), startup_filter([0]), 
+  1 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
   2 - output([t1.c1], [t1.c2]), filter(nil)
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 Outline Data:
@@ -6130,10 +6130,10 @@ Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t2.c1], [t2.c2], [t2.c3]), filter(nil), startup_filter([0]), 
       conds(nil), nl_params_(nil)
-  1 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), startup_filter([0]), 
+  1 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
   2 - output([t1.c1], [t1.c2]), filter(nil)
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 Outline Data:

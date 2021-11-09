@@ -483,7 +483,7 @@ int ObIndexPrepareTask::add_monitor_info(ObBuildIndexDag* dag)
         }
         // local sort task and merge task
         for (int64_t i = concurrent_cnt; OB_SUCC(ret) && i < total_task_cnt; ++i) {
-          ObCreateIndexScanTaskStat task_stat;
+          ObCreateIndexSortTaskStat task_stat;
           task_stat.task_id_ = i;
           task_stat.type_ = ObILongOpsTaskStat::TaskType::SORT;
           if (OB_FAIL(LONG_OPS_MONITOR_INSTANCE.update_task_stat(key, task_stat))) {
@@ -825,6 +825,7 @@ int ObIndexMergeTask::add_build_index_sstable(const ObBuildIndexParam& param,
                  pg->get_partition_key(),
                  pg->get_storage_file_handle()))) {
     STORAGE_LOG(WARN, "Fail to init data store desc, ", K(ret));
+  } else if (FALSE_IT(data_desc_.is_unique_index_ = param.index_schema_->is_unique_index())) {
   } else if (OB_FAIL(writer_.open(data_desc_, macro_start_seq))) {
     STORAGE_LOG(WARN, "Fail to open macro block writer, ", K(ret));
   } else {

@@ -91,13 +91,6 @@ int ObCreateTablegroupResolver::resolve(const ParseNode& parse_tree)
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (GCONF.enable_pg) {
-      create_tablegroup_stmt->set_binding(true);
-    } else {
-    }
-  }
-
   if (OB_FAIL(ret)) {
     // nothing todo
   } else if (OB_ISNULL(node->children_[TABLEGROUP_OPTION])) {

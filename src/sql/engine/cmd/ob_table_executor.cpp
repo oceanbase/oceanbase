@@ -1742,6 +1742,8 @@ int ObAlterTableExecutor::check_fk_constraint_data_validity(ObExecContext& ctx,
   const ObString& origin_database_name = alter_table_schema.get_origin_database_name();
   const ObString& origin_table_name = alter_table_schema.get_origin_table_name();
   const ObTableSchema* orig_table_schema = NULL;
+  THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
+  const int64_t start_time = ObTimeUtility::current_time();
 
   if (OB_ISNULL(gctx.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1777,6 +1779,9 @@ int ObAlterTableExecutor::check_fk_constraint_data_validity(ObExecContext& ctx,
       LOG_WARN("fail to check data validity by inner sql", K(ret));
     }
   }
+  
+  const int64_t end_time = ObTimeUtility::current_time();
+  LOG_DEBUG("elapsed time for check_fk_constraint_data_validity:", K(start_time), K(end_time), K(end_time-start_time));
   return ret;
 }
 

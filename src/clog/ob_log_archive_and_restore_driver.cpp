@@ -170,7 +170,9 @@ void ObLogArchiveAndRestoreDriver::state_driver_loop()
           if (!is_restore && update_flag_for_archive_checkpoint && is_backup_info_valid && need_archive_checkpoint) {
             const bool enable_log_archive = common::ObServerConfig::get_instance().enable_log_archive;
             if (enable_log_archive) {
-              const int64_t archive_checkpoint_interval = GCONF.log_archive_checkpoint_interval;
+              int64_t archive_checkpoint_interval =
+                  ObBackupInfoMgr::get_instance().get_log_archive_checkpoint_interval() / 2;
+
               if (OB_SUCCESS != (tmp_ret = pls->archive_checkpoint(archive_checkpoint_interval))) {
                 if (OB_ENTRY_NOT_EXIST == tmp_ret || OB_LOG_ARCHIVE_NOT_RUNNING == tmp_ret || OB_EAGAIN == ret) {
                   if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {

@@ -373,7 +373,7 @@ private:
   static const int64_t OB_ELECTION_HASH_TIME_US = 10000;      // 10ms
   static const int64_t OB_ELECTION_HASH_TABLE_NUM_NEW = 580;  // mod 580
   /**************************************************************************************************/
-  static const int64_t OB_ELECTION_MAX_CENTRIALIZED_TIME = 100000;                       // 100ms
+  static const int64_t OB_ELECTION_MAX_CENTRALIZED_TIME = 100000;                       // 100ms
   static const int64_t OB_ELECTION_LEADER_EXPIRED_PRINT_INTERVAL_US = 10 * 1000 * 1000;  // 10S
   // RWLock performs better on ARM platform, but worse on x86 platform
 #if defined(__x86_64__)

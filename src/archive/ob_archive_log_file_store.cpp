@@ -19,47 +19,48 @@
 #include "ob_archive_entry_iterator.h"  // ObArchiveEntryIterator
 namespace oceanbase {
 using namespace clog;
-using namespace share;
 using namespace common;
 using namespace share;
 
 namespace archive {
-ObArchiveLogFileStore::ObArchiveLogFileStore() : inited_(false), storage_info_(), restore_info_()
+ObArchiveLogFileStore::ObArchiveLogFileStore() : inited_(false), storage_info_()
 {}
 
 ObArchiveLogFileStore::~ObArchiveLogFileStore()
 {}
 
-int ObArchiveLogFileStore::init_by_restore_info(const ObPhysicalRestoreInfo& restore_info)
+int ObArchiveLogFileStore::init(const share::ObBackupPiecePath& base_path)
 {
   int ret = OB_SUCCESS;
   ObBackupDest dest;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     ARCHIVE_LOG(WARN, "ObArchiveLogFileStore has been initialized", K(ret));
-  } else if (OB_UNLIKELY(!restore_info.is_valid())) {
+  } else if (OB_UNLIKELY(base_path.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid arguments", KR(ret), K(restore_info));
-  } else if (OB_FAIL(dest.set(restore_info.backup_dest_))) {
-    ARCHIVE_LOG(WARN, "set backup_dest fail", K(ret), K(restore_info));
-  } else if (OB_FAIL(init(dest.root_path_,
-                 dest.storage_info_,
-                 restore_info.cluster_name_,
-                 restore_info.cluster_id_,
-                 restore_info.tenant_id_,
-                 restore_info.incarnation_,
-                 restore_info.log_archive_round_))) {
-    ARCHIVE_LOG(WARN, "init fail", K(ret), K(restore_info));
+    ARCHIVE_LOG(WARN, "invalid base path", K(ret), K(base_path));
+  } else if (OB_FAIL(dest.set(base_path.ptr()))) {
+    ARCHIVE_LOG(WARN, "set backup_dest fail", K(ret), K(base_path));
+  } else if (OB_FAIL(storage_info_.assign(dest.storage_info_))) {
+    ARCHIVE_LOG(WARN, "failed to assign storage_info_", K(ret), K(base_path));
+  } else if (OB_FAIL(base_path_.assign(dest.root_path_))) {
+    ARCHIVE_LOG(WARN, "failed to assign base_path_", K(ret), K(base_path));
+  } else {
+    inited_ = true;
+    ARCHIVE_LOG(INFO, "init archive log file store succ", K(base_path), K(dest));
   }
   return ret;
 }
 
 int ObArchiveLogFileStore::init(const char* root_path, const char* storage_info, const char* cluster_name,
-    const int64_t cluster_id, const uint64_t tenant_id, const int64_t incarnation, const int64_t archive_round)
+    const int64_t cluster_id, const uint64_t tenant_id, const int64_t incarnation, const int64_t archive_round,
+    const int64_t piece_id, const int64_t piece_create_date)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest dest;
   ObArchivePathUtil util;
+  char base_path[MAX_PATH_LENGTH] = {0};
+  ObBackupDest backup_dest;
 
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
@@ -78,14 +79,19 @@ int ObArchiveLogFileStore::init(const char* root_path, const char* storage_info,
         K(tenant_id),
         K(incarnation),
         K(archive_round));
-  } else if (OB_FAIL(util.build_base_path(root_path,
+
+  } else if (OB_FAIL(backup_dest.set(root_path, storage_info))) {
+    ARCHIVE_LOG(WARN, "failed to set backup dest", K(ret), K(root_path), K(storage_info));
+  } else if (OB_FAIL(util.build_base_path(backup_dest,
                  cluster_name,
                  cluster_id,
                  tenant_id,
                  incarnation,
                  archive_round,
+                 piece_id,
+                 piece_create_date,
                  MAX_PATH_LENGTH,
-                 base_path_))) {
+                 base_path))) {
     ARCHIVE_LOG(WARN,
         "build_base_path fail",
         K(ret),
@@ -94,11 +100,14 @@ int ObArchiveLogFileStore::init(const char* root_path, const char* storage_info,
         K(cluster_id),
         K(tenant_id),
         K(incarnation),
-        K(archive_round),
-        K(base_path_));
+        K(archive_round));
+  } else if (OB_FAIL(storage_info_.assign(storage_info))) {
+    ARCHIVE_LOG(WARN, "failed to assign storage_info_", K(ret));
+  } else if (OB_FAIL(base_path_.assign(base_path))) {
+    ARCHIVE_LOG(WARN, "failed to assign base_path_", K(ret), K(base_path));
   } else {
-    MEMCPY(storage_info_, storage_info, OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
     inited_ = true;
+    ARCHIVE_LOG(INFO, "init archive log file store succ", K(root_path), K(storage_info));
   }
 
   return ret;
@@ -109,12 +118,14 @@ int ObArchiveLogFileStore::init(const char* root_path, const char* storage_info,
 //    data file recorded in the index file and containing valid data.
 //    example: the log id is 100, and five index info exist, they are ([1,30] - 1), ([31, 60] - 2),
 //    ([61, 90] - 3), (invalid - 4), (invalid - 5), then file id 4 is returned
-int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const uint64_t log_id, uint64_t& file_id)
+int ObArchiveLogFileStore::locate_file_by_log_id(
+    const ObPGKey& pg_key, const uint64_t log_id, uint64_t& file_id, bool& archive_file_exist) const
 {
   int ret = OB_SUCCESS;
-  ObString storage_info(storage_info_);
-  // The max valid index info not bigger than log id
+  ObString storage_info(storage_info_.ptr());
   ObArchiveIndexFileInfo max_valid_index_info;
+  archive_file_exist = true;
+  bool index_file_exist = false;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -122,7 +133,7 @@ int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const ui
   } else if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(OB_INVALID_ID == log_id)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(log_id));
-  } else if (OB_FAIL(search_log_in_index_files_(pg_key, log_id, file_id, max_valid_index_info))) {
+  } else if (OB_FAIL(search_log_in_index_files_(pg_key, log_id, file_id, max_valid_index_info, index_file_exist))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ARCHIVE_LOG(WARN, "log id not found in index files", K(ret), K(pg_key), K(log_id));
     } else {
@@ -134,7 +145,7 @@ int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const ui
 
   if (OB_ENTRY_NOT_EXIST == ret) {
     // 1. valid index info not exist
-    if (!max_valid_index_info.is_valid()) {
+    if (!max_valid_index_info.is_effective()) {
       int tmp_ret = OB_SUCCESS;
       bool exist_file_unrecord = false;
       uint64_t max_file_id = 0;
@@ -147,6 +158,8 @@ int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const ui
         file_id = max_file_id;
         ret = OB_SUCCESS;
         ARCHIVE_LOG(INFO, "no valid index info, return max data file id", KR(ret), K(pg_key), K(log_id), K(file_id));
+      } else {
+        archive_file_exist = false;
       }
     }
     // 2. min log id in index info > the log id
@@ -181,13 +194,13 @@ int ObArchiveLogFileStore::locate_file_by_log_id(const ObPGKey& pg_key, const ui
 // locate file only with index files, for example locate log id 10 in index file M and data file N,
 // then return M-1 and N-1
 //
-int ObArchiveLogFileStore::locate_file_by_log_id_for_clear(
-    const ObPGKey& pg_key, const uint64_t log_id, uint64_t& index_file_id, uint64_t& data_file_id)
+int ObArchiveLogFileStore::locate_file_by_log_id_for_clear(const ObPGKey& pg_key, const uint64_t log_id,
+    const int64_t retention_timestamp, uint64_t& index_file_id, uint64_t& data_file_id)
 {
   int ret = OB_SUCCESS;
   uint64_t min_index_file_id = 0;
   uint64_t max_index_file_id = 0;
-  ObString storage_info(storage_info_);
+  ObString storage_info(storage_info_.ptr());
   int64_t unused_log_ts = OB_INVALID_TIMESTAMP;
   bool by_log_id = true;
   uint64_t target_index_file_id = 0;
@@ -197,21 +210,23 @@ int ObArchiveLogFileStore::locate_file_by_log_id_for_clear(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     ARCHIVE_LOG(WARN, "ObArchiveLogFileStore not init", K(ret));
-  } else if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(OB_INVALID_ID == log_id)) {
+  } else if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(OB_INVALID_ID == log_id) ||
+             OB_UNLIKELY(0 >= retention_timestamp)) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(log_id));
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(log_id), K(retention_timestamp));
   } else if (OB_FAIL(get_index_file_id_range(pg_key, min_index_file_id, max_index_file_id))) {
     ARCHIVE_LOG(WARN, "get_index_file_id_range fail", K(ret), K(pg_key));
   } else if (OB_FAIL(get_target_index_file_for_clear_(pg_key,
                  log_id,
                  unused_log_ts,
                  by_log_id,
+                 retention_timestamp,
                  min_index_file_id,
                  max_index_file_id,
                  target_index_file_id))) {
     ARCHIVE_LOG(WARN, "get_target_index_file_for_clear_ fail", KR(ret), K(pg_key), K(log_id));
   } else if (OB_FAIL(get_safe_data_file_for_clear_(
-                 pg_key, log_id, unused_log_ts, by_log_id, target_index_file_id, data_file_id))) {
+                 pg_key, log_id, unused_log_ts, by_log_id, retention_timestamp, target_index_file_id, data_file_id))) {
     ARCHIVE_LOG(WARN, "get_safe_data_file_for_clear_ fail", KR(ret), K(pg_key), K(log_id));
   } else {
     index_file_id = target_index_file_id - 1;
@@ -227,13 +242,12 @@ int ObArchiveLogFileStore::locate_file_by_log_id_for_clear(
   return ret;
 }
 
-int ObArchiveLogFileStore::locate_file_by_log_ts_for_clear(
-    const ObPGKey& pg_key, const int64_t log_ts, uint64_t& index_file_id, uint64_t& data_file_id)
+int ObArchiveLogFileStore::locate_file_by_log_ts_for_clear(const ObPGKey& pg_key, const int64_t log_ts,
+    const int64_t retention_timestamp, uint64_t& index_file_id, uint64_t& data_file_id)
 {
   int ret = OB_SUCCESS;
   uint64_t min_index_file_id = 0;
   uint64_t max_index_file_id = 0;
-  ObString storage_info(storage_info_);
   uint64_t unused_log_id = OB_INVALID_ID;
   bool by_log_id = false;
   uint64_t target_index_file_id = 0;
@@ -243,21 +257,23 @@ int ObArchiveLogFileStore::locate_file_by_log_ts_for_clear(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     ARCHIVE_LOG(WARN, "ObArchiveLogFileStore not init", K(ret));
-  } else if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(OB_INVALID_TIMESTAMP == log_ts)) {
+  } else if (OB_UNLIKELY(!pg_key.is_valid()) || OB_UNLIKELY(OB_INVALID_TIMESTAMP == log_ts) ||
+             OB_UNLIKELY(0 >= retention_timestamp)) {
     ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(log_ts));
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key), K(log_ts), K(retention_timestamp));
   } else if (OB_FAIL(get_index_file_id_range(pg_key, min_index_file_id, max_index_file_id))) {
     ARCHIVE_LOG(WARN, "get_index_file_id_range fail", K(ret), K(pg_key));
   } else if (OB_FAIL(get_target_index_file_for_clear_(pg_key,
                  unused_log_id,
                  log_ts,
                  by_log_id,
+                 retention_timestamp,
                  min_index_file_id,
                  max_index_file_id,
                  target_index_file_id))) {
     ARCHIVE_LOG(WARN, "get_target_index_file_for_clear_ fail", KR(ret), K(pg_key), K(log_ts));
   } else if (OB_FAIL(get_safe_data_file_for_clear_(
-                 pg_key, unused_log_id, log_ts, by_log_id, target_index_file_id, data_file_id))) {
+                 pg_key, unused_log_id, log_ts, by_log_id, retention_timestamp, target_index_file_id, data_file_id))) {
     ARCHIVE_LOG(WARN, "get_safe_data_file_for_clear_ fail", KR(ret), K(pg_key), K(log_ts));
   } else {
     index_file_id = target_index_file_id - 1;
@@ -271,7 +287,8 @@ int ObArchiveLogFileStore::locate_file_by_log_ts_for_clear(
   return ret;
 }
 
-int ObArchiveLogFileStore::get_index_file_id_range(const ObPGKey& pg_key, uint64_t& min_file_id, uint64_t& max_file_id)
+int ObArchiveLogFileStore::get_index_file_id_range(
+    const ObPGKey& pg_key, uint64_t& min_file_id, uint64_t& max_file_id) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -301,9 +318,8 @@ int ObArchiveLogFileStore::read_data_direct(const ObArchiveReadParam& param, ObR
 {
   int ret = OB_SUCCESS;
   int64_t read_size = 0;
-  char path[MAX_PATH_LENGTH];
+  char path[MAX_PATH_LENGTH] = {0};
   ObArchivePathUtil path_util;
-  ObString storage_info;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -312,11 +328,11 @@ int ObArchiveLogFileStore::read_data_direct(const ObArchiveReadParam& param, ObR
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(param));
   } else if (OB_FAIL(path_util.build_file_path(
-                 param.pg_key_, base_path_, LOG_ARCHIVE_FILE_TYPE_DATA, param.file_id_, MAX_PATH_LENGTH, path))) {
+                 param.pg_key_, base_path_.ptr(), LOG_ARCHIVE_FILE_TYPE_DATA, param.file_id_, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_path fail", K(ret), K(param));
   } else {
     ObString uri(path);
-    ObString storage_info(storage_info_);
+    ObString storage_info(storage_info_.ptr());
     ObArchiveFileUtils utils;
     if (OB_FAIL(utils.range_read(uri, storage_info, rbuf.buf_, param.read_len_, param.offset_, read_size))) {
       ARCHIVE_LOG(WARN, "range_read fail", K(ret), K(uri), K(storage_info), K(param), K(read_size));
@@ -330,12 +346,11 @@ int ObArchiveLogFileStore::read_data_direct(const ObArchiveReadParam& param, ObR
 }
 
 // get pg max archived log id and checkpoint ts
-int ObArchiveLogFileStore::get_pg_max_archived_info(
-    const ObPGKey& pg_key, uint64_t& max_log_id, int64_t& max_checkpoint_ts)
+int ObArchiveLogFileStore::get_pg_max_archived_info(const ObPGKey& pg_key, const uint64_t real_tenant_id,
+    uint64_t& max_log_id, int64_t& max_checkpoint_ts, int64_t& max_log_ts)
 {
   int ret = OB_SUCCESS;
-  ObArchiveIndexFileInfo info;
-  bool info_exist = false;
+  MaxArchivedIndexInfo info;
   uint64_t target_data_file_id = 0;
   bool target_data_file_exist = false;
   bool log_exist = false;
@@ -344,9 +359,33 @@ int ObArchiveLogFileStore::get_pg_max_archived_info(
   if (OB_UNLIKELY(!pg_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key));
-  } else if (OB_FAIL(get_max_archived_index_info_(pg_key, info, info_exist))) {
-    ARCHIVE_LOG(WARN, "get_max_archived_index_info_ fail", K(ret), K(pg_key));
-  } else if (!info_exist) {
+  } else if (OB_FAIL(get_max_archived_info_from_index_files_(pg_key, info))) {
+    ARCHIVE_LOG(WARN, "get_max_archived_info_from_index_files_ fail", K(ret), K(pg_key));
+  }
+  // index info exist
+  else if (info.data_file_collect_) {
+    // log info exist in index files
+    if (info.is_index_record_collected()) {
+      max_log_id = info.max_record_log_id_;
+      max_log_ts = info.max_record_log_submit_ts_;
+      max_checkpoint_ts = info.max_record_checkpoint_ts_;
+      log_exist = true;
+    }
+
+    // check if exist data file unrecorded
+    target_data_file_id = info.max_record_data_file_id_ + 1;
+    if (OB_FAIL(check_file_exist_(pg_key, target_data_file_id, LOG_ARCHIVE_FILE_TYPE_DATA)) &&
+        OB_ENTRY_NOT_EXIST != ret) {
+      ARCHIVE_LOG(WARN, "check_file_exist_ fail", K(ret), K(pg_key), K(target_data_file_id));
+    } else if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      target_data_file_exist = false;
+    } else {
+      target_data_file_exist = true;
+    }
+  }
+  // not index info extract from index files
+  else {
     uint64_t min_data_file_id = 0;
     uint64_t max_data_file_id = 0;
     if (OB_FAIL(get_data_file_id_range(pg_key, min_data_file_id, max_data_file_id)) && OB_ENTRY_NOT_EXIST != ret) {
@@ -359,20 +398,6 @@ int ObArchiveLogFileStore::get_pg_max_archived_info(
       target_data_file_id = max_data_file_id;
       target_data_file_exist = true;
     }
-  } else {
-    log_exist = true;
-    max_log_id = info.max_log_id_;
-    max_checkpoint_ts = info.max_checkpoint_ts_;
-    target_data_file_id = info.data_file_id_ + 1;
-    if (OB_FAIL(check_file_exist_(pg_key, target_data_file_id, LOG_ARCHIVE_FILE_TYPE_DATA)) &&
-        OB_ENTRY_NOT_EXIST != ret) {
-      ARCHIVE_LOG(WARN, "check_file_exist_ fail", K(ret), K(pg_key), K(target_data_file_id));
-    } else if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      target_data_file_exist = false;
-    } else {
-      target_data_file_exist = true;
-    }
   }
 
   // 2. get max archived info in unrecorded data file
@@ -380,8 +405,10 @@ int ObArchiveLogFileStore::get_pg_max_archived_info(
     int tmp_ret = OB_SUCCESS;
     uint64_t tmp_log_id = OB_INVALID_ID;
     int64_t tmp_checkpoint_ts = OB_INVALID_TIMESTAMP;
-    if (OB_SUCCESS != (tmp_ret = get_max_archived_info_from_data_file_(
-                           pg_key, target_data_file_id, tmp_log_id, tmp_checkpoint_ts)) &&
+    int64_t tmp_max_log_ts = OB_INVALID_TIMESTAMP;
+    if (OB_SUCCESS !=
+            (tmp_ret = get_max_archived_info_from_data_file_(
+                 pg_key, real_tenant_id, target_data_file_id, tmp_log_id, tmp_checkpoint_ts, tmp_max_log_ts)) &&
         OB_ENTRY_NOT_EXIST != tmp_ret) {
       ARCHIVE_LOG(WARN, "get_max_archived_info_from_data_file_ fail", K(pg_key), K(target_data_file_id));
       ret = tmp_ret;
@@ -390,31 +417,36 @@ int ObArchiveLogFileStore::get_pg_max_archived_info(
     } else {
       max_log_id = tmp_log_id;
       max_checkpoint_ts = tmp_checkpoint_ts;
+      max_log_ts = tmp_max_log_ts;
       log_exist = true;
     }
   }
 
   if (OB_SUCC(ret) && !log_exist) {
-    ret = OB_ENTRY_NOT_EXIST;
+    // get_max_archived_info from archive_pg_key
+    if (OB_FAIL(get_max_archived_info_from_archive_key_(pg_key, max_log_id, max_checkpoint_ts, max_log_ts))) {
+      ARCHIVE_LOG(WARN, "failed to get_max_archived_info_from_archive_key", K(pg_key));
+    }
   }
 
   return ret;
 }
 
 int ObArchiveLogFileStore::get_file_id_range_(
-    const ObPGKey& pg_key, const LogArchiveFileType file_type, uint64_t& min_file_id, uint64_t& max_file_id)
+    const ObPGKey& pg_key, const LogArchiveFileType file_type, uint64_t& min_file_id, uint64_t& max_file_id) const
 {
   int ret = OB_SUCCESS;
   char path[MAX_PATH_LENGTH] = {'0'};
-  ObString storage_info(storage_info_);
   ObArchivePathUtil path_util;
+  ObBackupDest backup_dest;
 
   if (OB_UNLIKELY(!pg_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key));
-  } else if (OB_FAIL(path_util.build_file_prefix(pg_key, base_path_, file_type, MAX_PATH_LENGTH, path))) {
+  } else if (OB_FAIL(path_util.build_file_prefix(pg_key, base_path_.ptr(), file_type, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_prefix fail", K(ret), K(pg_key));
   } else {
+    ObString storage_info(storage_info_.ptr());
     ObString uri(path);
     ObArchiveFileUtils utils;
     if (OB_FAIL(utils.get_file_range(uri, storage_info, min_file_id, max_file_id))) {
@@ -425,14 +457,41 @@ int ObArchiveLogFileStore::get_file_id_range_(
   return ret;
 }
 
-int ObArchiveLogFileStore::get_max_data_file_unrecord_(
-    const ObPGKey& pg_key, ObString& storage_info, uint64_t& file_id, bool& file_exist)
+int ObArchiveLogFileStore::get_archive_key_content(const ObPGKey& pg_key, ObArchiveKeyContent& archive_key_content)
 {
   int ret = OB_SUCCESS;
   char path[MAX_PATH_LENGTH] = {'0'};
   ObArchivePathUtil path_util;
 
-  if (OB_FAIL(path_util.build_file_prefix(pg_key, base_path_, LOG_ARCHIVE_FILE_TYPE_DATA, MAX_PATH_LENGTH, path))) {
+  if (OB_UNLIKELY(!pg_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(pg_key));
+  } else if (OB_FAIL(path_util.build_archive_key_path(pg_key, base_path_.ptr(), MAX_PATH_LENGTH, path))) {
+    ARCHIVE_LOG(WARN, " failed to build_archive_key_path", K(ret), K(pg_key));
+  } else {
+    ObString storage_info(storage_info_.ptr());
+    ObString uri(path);
+    ObArchiveFileUtils utils;
+    if (OB_FAIL(utils.get_archived_info_from_archive_key(uri, storage_info, archive_key_content))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ARCHIVE_LOG(INFO, "archive_key file not exist", K(ret), K(pg_key), K(uri));
+      } else {
+        ARCHIVE_LOG(WARN, "failed to get_archived_info_from_archive_key", K(uri), K(ret), K(pg_key));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObArchiveLogFileStore::get_max_data_file_unrecord_(
+    const ObPGKey& pg_key, ObString& storage_info, uint64_t& file_id, bool& file_exist) const
+{
+  int ret = OB_SUCCESS;
+  char path[MAX_PATH_LENGTH] = {'0'};
+  ObArchivePathUtil path_util;
+
+  if (OB_FAIL(
+          path_util.build_file_prefix(pg_key, base_path_.ptr(), LOG_ARCHIVE_FILE_TYPE_DATA, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_prefix fail", K(ret), K(pg_key));
   } else {
     ObString uri(path);
@@ -452,13 +511,14 @@ int ObArchiveLogFileStore::get_max_data_file_unrecord_(
   return ret;
 }
 
-int ObArchiveLogFileStore::search_log_in_index_files_(
-    const ObPGKey& pg_key, const uint64_t log_id, uint64_t& data_file_id, ObArchiveIndexFileInfo& max_valid_index_info)
+int ObArchiveLogFileStore::search_log_in_index_files_(const ObPGKey& pg_key, const uint64_t log_id,
+    uint64_t& data_file_id, ObArchiveIndexFileInfo& max_valid_index_info, bool& index_file_exist) const
 {
   int ret = OB_SUCCESS;
   bool log_exist = false;
   uint64_t min_file_id = 0;
   uint64_t max_file_id = 0;
+  index_file_exist = false;
 
   if (OB_FAIL(get_index_file_id_range(pg_key, min_file_id, max_file_id))) {
     ARCHIVE_LOG(WARN, "get_index_file_id_range fail", K(ret), K(pg_key));
@@ -466,6 +526,7 @@ int ObArchiveLogFileStore::search_log_in_index_files_(
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "invalid index file id", K(ret), K(pg_key), K(min_file_id), K(max_file_id));
   } else {
+    index_file_exist = true;
     uint64_t index_file_id = min_file_id;
     for (; OB_SUCC(ret) && !log_exist && index_file_id <= max_file_id; index_file_id++) {
       if (OB_FAIL(search_log_in_single_index_file_(
@@ -484,18 +545,19 @@ int ObArchiveLogFileStore::search_log_in_index_files_(
 }
 
 int ObArchiveLogFileStore::search_log_in_single_index_file_(const ObPGKey& pg_key, const uint64_t log_id,
-    const uint64_t index_file_id, uint64_t& data_file_id, bool& log_exist, ObArchiveIndexFileInfo& max_valid_index_info)
+    const uint64_t index_file_id, uint64_t& data_file_id, bool& log_exist,
+    ObArchiveIndexFileInfo& max_valid_index_info) const
 {
   int ret = OB_SUCCESS;
   char path[MAX_PATH_LENGTH];
   ObArchivePathUtil path_util;
 
   if (OB_FAIL(path_util.build_file_path(
-          pg_key, base_path_, LOG_ARCHIVE_FILE_TYPE_INDEX, index_file_id, MAX_PATH_LENGTH, path))) {
+          pg_key, base_path_.ptr(), LOG_ARCHIVE_FILE_TYPE_INDEX, index_file_id, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_path fail", K(ret), K(pg_key), K(index_file_id));
   } else {
     ObString uri(path);
-    ObString storage_info(storage_info_);
+    ObString storage_info(storage_info_.ptr());
     ObArchiveFileUtils utils;
     if (OB_FAIL(utils.search_log_in_single_index_file(
             uri, storage_info, log_id, data_file_id, log_exist, max_valid_index_info))) {
@@ -507,18 +569,18 @@ int ObArchiveLogFileStore::search_log_in_single_index_file_(const ObPGKey& pg_ke
 }
 
 int ObArchiveLogFileStore::check_file_exist_(
-    const ObPGKey& pg_key, const uint64_t file_id, const LogArchiveFileType file_type)
+    const ObPGKey& pg_key, const uint64_t file_id, const LogArchiveFileType file_type) const
 {
   int ret = OB_SUCCESS;
   char path[MAX_PATH_LENGTH];
   ObArchivePathUtil path_util;
   bool file_exist = false;
 
-  if (OB_FAIL(path_util.build_file_path(pg_key, base_path_, file_type, file_id, MAX_PATH_LENGTH, path))) {
+  if (OB_FAIL(path_util.build_file_path(pg_key, base_path_.ptr(), file_type, file_id, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_path fail", K(ret), K(pg_key), K(file_id));
   } else {
     ObString uri(path);
-    ObString storage_info(storage_info_);
+    ObString storage_info(storage_info_.ptr());
     ObArchiveFileUtils utils;
     if (OB_FAIL(utils.check_file_exist(uri, storage_info, file_exist))) {
       ARCHIVE_LOG(WARN, "check file is_exist fail", KR(ret), K(pg_key), K(file_id));
@@ -531,8 +593,8 @@ int ObArchiveLogFileStore::check_file_exist_(
 }
 
 int ObArchiveLogFileStore::get_target_index_file_for_clear_(const ObPGKey& pg_key, const uint64_t log_id,
-    const int64_t log_ts, const bool by_log_id, const uint64_t min_index_file_id, const uint64_t max_index_file_id,
-    uint64_t& target_index_file_id)
+    const int64_t log_ts, const bool by_log_id, const int64_t retention_timestamp, const uint64_t min_index_file_id,
+    const uint64_t max_index_file_id, uint64_t& target_index_file_id)
 {
   int ret = OB_SUCCESS;
   uint64_t file_id = min_index_file_id;
@@ -542,13 +604,14 @@ int ObArchiveLogFileStore::get_target_index_file_for_clear_(const ObPGKey& pg_ke
 
   for (; file_id <= max_index_file_id && OB_SUCC(ret) && !done; file_id++) {
     bool exist = false;
-    if (OB_FAIL(get_max_archive_info_in_single_index_file_(pg_key, file_id, info, exist))) {
+    if (OB_FAIL(get_max_valid_index_info_in_single_index_file_(pg_key, file_id, info, exist))) {
       ARCHIVE_LOG(WARN, "get_max_archive_info fail", K(ret), K(pg_key), K(file_id));
     } else if (!exist) {
       ARCHIVE_LOG(INFO, "no index info exist", K(pg_key), K(file_id));
     } else {
       target_index_file_id = file_id;
-      done = by_log_id ? info.max_log_id_ >= log_id : info.max_log_submit_ts_ >= log_ts;
+      done = (by_log_id ? info.max_log_id_ >= log_id : info.max_log_submit_ts_ >= log_ts) ||
+             info.max_log_submit_ts_ >= retention_timestamp;
     }
   }
 
@@ -571,20 +634,22 @@ int ObArchiveLogFileStore::get_target_index_file_for_clear_(const ObPGKey& pg_ke
 }
 
 int ObArchiveLogFileStore::get_safe_data_file_for_clear_(const ObPGKey& pg_key, const uint64_t log_id,
-    const int64_t log_ts, const bool by_log_id, const uint64_t index_file_id, uint64_t& data_file_id)
+    const int64_t log_ts, const bool by_log_id, const int64_t retention_timestamp, const uint64_t index_file_id,
+    uint64_t& data_file_id)
 {
   int ret = OB_SUCCESS;
   ObArchivePathUtil path_util;
   char path[MAX_PATH_LENGTH] = {0};
 
   if (OB_FAIL(path_util.build_file_path(
-          pg_key, base_path_, LOG_ARCHIVE_FILE_TYPE_INDEX, index_file_id, MAX_PATH_LENGTH, path))) {
+          pg_key, base_path_.ptr(), LOG_ARCHIVE_FILE_TYPE_INDEX, index_file_id, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_path fail", K(ret), K(pg_key), K(index_file_id));
   } else {
     ObString uri(path);
-    ObString storage_info(storage_info_);
+    ObString storage_info(storage_info_.ptr());
     ObArchiveFileUtils utils;
-    if (OB_FAIL(utils.get_max_safe_data_file_id(uri, storage_info, log_id, log_ts, by_log_id, data_file_id))) {
+    if (OB_FAIL(utils.get_max_safe_data_file_id(
+            uri, storage_info, log_id, log_ts, by_log_id, retention_timestamp, data_file_id))) {
       ARCHIVE_LOG(
           WARN, "get_max_safe_data_file_id fail", K(ret), K(uri), K(storage_info), K(log_id), K(log_ts), K(by_log_id));
     }
@@ -593,50 +658,49 @@ int ObArchiveLogFileStore::get_safe_data_file_for_clear_(const ObPGKey& pg_key, 
   return ret;
 }
 
-int ObArchiveLogFileStore::get_max_archive_info_in_single_index_file_(
+int ObArchiveLogFileStore::get_max_valid_index_info_in_single_index_file_(
     const ObPGKey& pg_key, const uint64_t file_id, ObArchiveIndexFileInfo& info, bool& exist)
 {
   int ret = OB_SUCCESS;
   ObArchivePathUtil path_util;
   char path[MAX_PATH_LENGTH] = {0};
-  ObString storage_info(storage_info_);
+  ObString storage_info(storage_info_.ptr());
   ObArchiveFileUtils utils;
 
-  if (OB_FAIL(
-          path_util.build_file_path(pg_key, base_path_, LOG_ARCHIVE_FILE_TYPE_INDEX, file_id, MAX_PATH_LENGTH, path))) {
+  if (OB_FAIL(path_util.build_file_path(
+          pg_key, base_path_.ptr(), LOG_ARCHIVE_FILE_TYPE_INDEX, file_id, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_path fail", K(ret), K(pg_key), K(file_id));
   } else {
     ObString uri(path);
-    if (OB_FAIL(utils.get_max_index_info_in_single_file(uri, storage_info, info, exist))) {
-      ARCHIVE_LOG(WARN, "get_max_index_info_in_single_file fail", K(ret), K(pg_key));
+    if (OB_FAIL(utils.get_max_valid_index_info_in_single_index_file(uri, storage_info, info, exist))) {
+      ARCHIVE_LOG(WARN, "get_max_valid_index_info_in_single_index_file fail", K(ret), K(pg_key));
     }
   }
 
   return ret;
 }
 
-int ObArchiveLogFileStore::get_max_archived_index_info_(
-    const ObPGKey& pg_key, ObArchiveIndexFileInfo& info, bool& exist)
+int ObArchiveLogFileStore::get_max_archived_info_from_index_files_(const ObPGKey& pg_key, MaxArchivedIndexInfo& info)
 {
   int ret = OB_SUCCESS;
   uint64_t min_file_id = 0;
   uint64_t max_file_id = 0;
-  exist = false;
 
   if (OB_FAIL(get_index_file_id_range(pg_key, min_file_id, max_file_id)) && OB_ENTRY_NOT_EXIST != ret) {
     ARCHIVE_LOG(WARN, "get_index_file_id_range fail", K(ret), K(pg_key));
   } else if (OB_ENTRY_NOT_EXIST == ret) {
-    exist = false;
+    ARCHIVE_LOG(WARN, "not index file exist", KR(ret), K(pg_key));
     ret = OB_SUCCESS;
   } else {
     uint64_t file_id = max_file_id;
-    for (; file_id >= min_file_id && OB_SUCC(ret) && !exist; file_id--) {
-      if (OB_FAIL(get_max_archive_info_in_single_index_file_(pg_key, file_id, info, exist))) {
-        ARCHIVE_LOG(WARN, "get_max_archive_info fail", K(ret), K(file_id));
-      } else if (!exist) {
-        ARCHIVE_LOG(INFO, "no index info exist", K(pg_key), K(file_id));
+    for (; file_id >= min_file_id && OB_SUCC(ret) && !info.is_index_record_collected(); file_id--) {
+      if (OB_FAIL(get_max_archived_info_from_single_index_file_(pg_key, file_id, info)) && OB_ENTRY_NOT_EXIST != ret) {
+        ARCHIVE_LOG(WARN, "get_max_archive_info fail", KR(ret), K(file_id));
+      } else if (OB_ENTRY_NOT_EXIST == ret) {
+        ARCHIVE_LOG(WARN, "index file not exist", KR(ret), K(pg_key), K(file_id));
+        ret = OB_SUCCESS;
       } else {
-        ARCHIVE_LOG(INFO, "get_max_archived_index_info_ succ", K(pg_key), K(file_id), K(info));
+        ARCHIVE_LOG(INFO, "get_max_archived_info_from_single_index_file_ succ", K(pg_key), K(file_id), K(info));
       }
     }
   }
@@ -644,15 +708,50 @@ int ObArchiveLogFileStore::get_max_archived_index_info_(
   return ret;
 }
 
-int ObArchiveLogFileStore::get_max_archived_info_from_data_file_(
-    const ObPGKey& pg_key, const uint64_t file_id, uint64_t& max_log_id, int64_t& max_checkpoint_ts)
+int ObArchiveLogFileStore::get_max_archived_info_from_single_index_file_(
+    const ObPGKey& pg_key, const uint64_t file_id, MaxArchivedIndexInfo& info)
+{
+  int ret = OB_SUCCESS;
+  ObArchivePathUtil path_util;
+  char path[MAX_PATH_LENGTH] = {0};
+  ObArchiveFileUtils utils;
+  ObString storage_info(storage_info_.ptr());
+
+  if (OB_FAIL(path_util.build_file_path(
+          pg_key, base_path_.ptr(), LOG_ARCHIVE_FILE_TYPE_INDEX, file_id, MAX_PATH_LENGTH, path))) {
+    ARCHIVE_LOG(WARN, "build_file_path fail", K(ret), K(pg_key), K(file_id));
+  } else {
+    ObString uri(path);
+    if (OB_FAIL(utils.get_max_archived_info_in_single_index_file(uri, storage_info, info))) {
+      ARCHIVE_LOG(WARN, "get_max_archived_info_in_single_index_file fail", K(ret), K(pg_key));
+    }
+  }
+
+  return ret;
+}
+
+int ObArchiveLogFileStore::get_max_archived_info_from_data_file_(const ObPGKey& pg_key, const uint64_t real_tenant_id,
+    const uint64_t file_id, uint64_t& max_log_id, int64_t& max_checkpoint_ts, int64_t& max_log_ts)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_SUCC(direct_extract_last_log_(pg_key, file_id, max_log_id, max_checkpoint_ts))) {
-    ARCHIVE_LOG(INFO, "direct_extract_last_log_ succ", K(pg_key), K(file_id), K(max_log_id), K(max_checkpoint_ts));
-  } else if (OB_SUCC(iterate_max_archived_info_(pg_key, file_id, max_log_id, max_checkpoint_ts))) {
-    ARCHIVE_LOG(INFO, "iterate_max_archived_info_ succ", K(pg_key), K(file_id), K(max_log_id), K(max_checkpoint_ts));
+  if (OB_SUCC(direct_extract_last_log_(pg_key, real_tenant_id, file_id, max_log_id, max_checkpoint_ts, max_log_ts))) {
+    ARCHIVE_LOG(INFO,
+        "direct_extract_last_log_ succ",
+        K(pg_key),
+        K(file_id),
+        K(max_log_id),
+        K(max_checkpoint_ts),
+        K(max_log_ts));
+  } else if (OB_SUCC(iterate_max_archived_info_(
+                 pg_key, real_tenant_id, file_id, max_log_id, max_checkpoint_ts, max_log_ts))) {
+    ARCHIVE_LOG(INFO,
+        "iterate_max_archived_info_ succ",
+        K(pg_key),
+        K(file_id),
+        K(max_log_id),
+        K(max_checkpoint_ts),
+        K(max_log_ts));
   } else {
     ARCHIVE_LOG(WARN, "get_max_archived_info_from_data_file_ fail", K(pg_key), K(file_id));
   }
@@ -660,8 +759,30 @@ int ObArchiveLogFileStore::get_max_archived_info_from_data_file_(
   return ret;
 }
 
-int ObArchiveLogFileStore::direct_extract_last_log_(
-    const ObPGKey& pg_key, const uint64_t file_id, uint64_t& max_log_id, int64_t& max_checkpoint_ts)
+int ObArchiveLogFileStore::get_max_archived_info_from_archive_key_(
+    const ObPGKey& pg_key, uint64_t& max_log_id, int64_t& max_checkpoint_ts, int64_t& max_log_ts)
+{
+  int ret = OB_SUCCESS;
+  ObArchiveKeyContent archive_key_content;
+  if (OB_FAIL(get_archive_key_content(pg_key, archive_key_content)) && OB_ENTRY_NOT_EXIST != ret) {
+    ARCHIVE_LOG(WARN, "failed to get_archive_key_content", K(pg_key), K(ret));
+  } else if (OB_ENTRY_NOT_EXIST == ret) {
+    // do nothing
+  } else if (!archive_key_content.check_integrity()) {
+    // override with OB_ENTRY_NOT_EXIST
+    ret = OB_ENTRY_NOT_EXIST;
+  } else if (archive_key_content.is_first_piece_) {
+    ret = OB_ENTRY_NOT_EXIST;
+  } else {
+    max_log_id = archive_key_content.index_info_.max_log_id_;
+    max_checkpoint_ts = archive_key_content.index_info_.max_checkpoint_ts_;
+    max_log_ts = archive_key_content.index_info_.max_log_submit_ts_;
+  }
+  return ret;
+}
+
+int ObArchiveLogFileStore::direct_extract_last_log_(const ObPGKey& pg_key, const uint64_t real_tenant_id,
+    const uint64_t file_id, uint64_t& max_log_id, int64_t& max_checkpoint_ts, int64_t& max_log_ts)
 {
   int ret = OB_SUCCESS;
   ObArchiveBlockMeta block_meta;
@@ -669,13 +790,14 @@ int ObArchiveLogFileStore::direct_extract_last_log_(
   ObLogArchiveInnerLog unused_inner_log;
   ObArchivePathUtil path_util;
   char path[MAX_PATH_LENGTH] = {0};
+  UNUSED(real_tenant_id);
 
-  if (OB_FAIL(
-          path_util.build_file_path(pg_key, base_path_, LOG_ARCHIVE_FILE_TYPE_DATA, file_id, MAX_PATH_LENGTH, path))) {
+  if (OB_FAIL(path_util.build_file_path(
+          pg_key, base_path_.ptr(), LOG_ARCHIVE_FILE_TYPE_DATA, file_id, MAX_PATH_LENGTH, path))) {
     ARCHIVE_LOG(WARN, "build_file_path fail", K(ret), K(pg_key), K(file_id));
   } else {
     ObString uri(path);
-    ObString storage_info(storage_info_);
+    ObString storage_info(storage_info_.ptr());
     ObArchiveFileUtils utils;
     if (OB_FAIL(utils.extract_last_log_in_data_file(
             pg_key, file_id, this, uri, storage_info, block_meta, unused_log_entry, unused_inner_log))) {
@@ -683,26 +805,30 @@ int ObArchiveLogFileStore::direct_extract_last_log_(
     } else {
       max_log_id = block_meta.max_log_id_;
       max_checkpoint_ts = block_meta.max_checkpoint_ts_;
+      max_log_ts = block_meta.max_log_submit_ts_;
     }
   }
 
   return ret;
 }
 
-int ObArchiveLogFileStore::iterate_max_archived_info_(
-    const ObPGKey& pg_key, const uint64_t file_id, uint64_t& max_log_id, int64_t& max_checkpoint_ts)
+int ObArchiveLogFileStore::iterate_max_archived_info_(const ObPGKey& pg_key, const uint64_t real_tenant_id,
+    const uint64_t file_id, uint64_t& max_log_id, int64_t& max_checkpoint_ts, int64_t& max_log_ts)
 {
   int ret = OB_SUCCESS;
   const int64_t TIMEOUT = 60 * 1000 * 1000L;
   const bool need_limit_bandwidth = false;
   bool exist_log = false;
   ObArchiveEntryIterator iter;
+  bool unused_flag = false;
+  int64_t unused_accum_checksum = 0;
+  UNUSED(real_tenant_id);
 
   if (OB_FAIL(iter.init(this, pg_key, file_id, 0, TIMEOUT, need_limit_bandwidth))) {
     ARCHIVE_LOG(WARN, "ObArchiveEntryIterator init fail", K(pg_key), K(file_id));
   } else {
     clog::ObLogEntry log_entry;
-    while (OB_SUCC(ret) && OB_SUCCESS == (ret = iter.next_entry(log_entry))) {
+    while (OB_SUCC(ret) && OB_SUCCESS == (ret = iter.next_entry(log_entry, unused_flag, unused_accum_checksum))) {
       exist_log = true;
     }
   }
@@ -714,6 +840,7 @@ int ObArchiveLogFileStore::iterate_max_archived_info_(
     const ObArchiveBlockMeta& block_meta = iter.get_last_block_meta();
     max_log_id = block_meta.max_log_id_;
     max_checkpoint_ts = block_meta.max_checkpoint_ts_;
+    max_log_ts = block_meta.max_log_submit_ts_;
     ret = OB_SUCCESS;
   } else {
     ret = OB_ENTRY_NOT_EXIST;

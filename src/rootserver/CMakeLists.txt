@@ -101,6 +101,16 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_cancel_validate_scheduler.cpp
   backup/ob_backup_lease_service.cpp
   backup/ob_cancel_delete_backup_scheduler.cpp
+  backup/ob_backup_backupset.h
+  backup/ob_backup_backupset.cpp
+  backup/ob_backup_backupset_scheduler.h
+  backup/ob_backup_backupset_scheduler.cpp
+  backup/ob_backup_archive_log_scheduler.h
+  backup/ob_backup_archive_log_scheduler.cpp
+  backup/ob_cancel_delete_backup_scheduler.h
+  backup/ob_cancel_delete_backup_scheduler.cpp
+  backup/ob_cancel_backup_backup_scheduler.h
+  backup/ob_cancel_backup_backup_scheduler.cpp
 )
 
 ob_set_subtarget(ob_rootserver task

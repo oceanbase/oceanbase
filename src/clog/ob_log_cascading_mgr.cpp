@@ -229,7 +229,10 @@ int ObLogCascadingMgr::set_parent_(const common::ObAddr& new_parent_addr, const 
   } else {
     state_mgr_->reset_need_rebuild();
     state_mgr_->reset_fetch_state();
-    prev_parent_ = parent_;
+    if (parent_.is_valid()) {
+      // update prev_parent by valid old parent
+      prev_parent_ = parent_;
+    }
     parent_ = new_parent;
     if (partition_reach_time_interval(60 * 1000 * 1000, update_parent_warn_time_)) {
       CLOG_LOG(INFO,
@@ -1646,12 +1649,6 @@ int ObLogCascadingMgr::check_parent_state(const int64_t now, const common::ObReg
                   K(next_ilog_id),
                   K(sw_start_id),
                   K_(partition_key));
-            }
-            last_check_log_ts_ = next_replay_log_ts;
-            last_check_parent_time_ = now;
-          } else if (state_mgr_->is_need_rebuild()) {
-            if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-              CLOG_LOG(INFO, "wait rebuild", K_(partition_key));
             }
             last_check_log_ts_ = next_replay_log_ts;
             last_check_parent_time_ = now;

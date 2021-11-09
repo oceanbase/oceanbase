@@ -222,9 +222,18 @@ int ObArchiveMgr::get_log_archive_status(common::ObPartitionKey& pg_key, ObPGLog
 
   int64_t archive_incarnation = -1;
   int64_t archive_round = -1;
+  int64_t piece_id = OB_BACKUP_INVALID_PIECE_ID;
+  int64_t piece_create_date = OB_INVALID_TIMESTAMP;
   bool has_encount_error = false;
+  bool unused_is_oss = false;
   ObArchiveRoundMgr::LogArchiveStatus log_archive_status;
-  archive_round_mgr_.get_archive_round_info(archive_incarnation, archive_round, log_archive_status, has_encount_error);
+  archive_round_mgr_.get_archive_round_info(archive_incarnation,
+      archive_round,
+      piece_id,
+      piece_create_date,
+      unused_is_oss,
+      log_archive_status,
+      has_encount_error);
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -404,24 +413,26 @@ void ObArchiveMgr::destroy_components_()
   archive_sender_.destroy();
 }
 
-int ObArchiveMgr::start_archive_(share::ObLogArchiveBackupInfo& info)
+int ObArchiveMgr::start_archive_(
+    const share::ObLogArchiveBackupInfo& backup_info, const int64_t rs_piece_id, const int64_t rs_piece_create_date)
 {
   int ret = OB_SUCCESS;
   int64_t start_archive_ts = ObTimeUtility::current_time();
-  const int64_t incarnation = info.status_.incarnation_;
-  const int64_t archive_round = info.status_.round_;
+  const int64_t incarnation = backup_info.status_.incarnation_;
+  const int64_t archive_round = backup_info.status_.round_;
 
   if (OB_UNLIKELY(!inited_)) {
     ARCHIVE_LOG(ERROR, "ObArchiveMgr not init");
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(check_and_set_start_archive_ts_(incarnation, archive_round, start_archive_ts))) {
+  } else if (OB_FAIL(
+                 check_and_set_start_archive_ts_(incarnation, archive_round, backup_info.is_oss(), start_archive_ts))) {
     ARCHIVE_LOG(WARN, "check_and_set_start_archive_ts_ fail", KR(ret), K(start_archive_ts), K(archive_round));
   } else if (OB_FAIL(pg_mgr_.set_server_start_archive_ts(server_start_archive_tstamp_))) {
     ARCHIVE_LOG(WARN, "set_start_archive_ts fail", KR(ret), K(server_start_archive_tstamp_));
   } else if (OB_FAIL(handle_start_archive_(incarnation, archive_round))) {
     ARCHIVE_LOG(WARN, "handle_start_archive_ fail", KR(ret));
-  } else if (OB_FAIL(set_log_archive_info_(info))) {
-    ARCHIVE_LOG(INFO, "set_log_archive_info_ fail", KR(ret));
+  } else if (OB_FAIL(set_log_archive_info_(backup_info, rs_piece_id, rs_piece_create_date))) {
+    ARCHIVE_LOG(WARN, "set_log_archive_info_ fail", KR(ret), K(backup_info), K(rs_piece_id), K(rs_piece_create_date));
   } else {
     ARCHIVE_LOG(INFO, "start archive succ");
   }
@@ -536,7 +547,8 @@ int ObArchiveMgr::start_components_()
   return ret;
 }
 
-int ObArchiveMgr::set_log_archive_info_(ObLogArchiveBackupInfo& info)
+int ObArchiveMgr::set_log_archive_info_(
+    const ObLogArchiveBackupInfo& backup_info, const int64_t rs_piece_id, const int64_t rs_piece_create_date)
 {
   int ret = OB_SUCCESS;
   ObBackupDest dest;
@@ -545,8 +557,8 @@ int ObArchiveMgr::set_log_archive_info_(ObLogArchiveBackupInfo& info)
 
   ilog_fetch_task_mgr_.reset();
 
-  if (OB_FAIL(dest.set(info.backup_dest_))) {
-    ARCHIVE_LOG(WARN, "ObBackupDest set fail", KR(ret), K(info));
+  if (OB_FAIL(dest.set(backup_info.backup_dest_))) {
+    ARCHIVE_LOG(WARN, "ObBackupDest set fail", KR(ret), K(backup_info));
   } else if (OB_UNLIKELY(OB_MAX_BACKUP_PATH_LENGTH < (root_path_len = sizeof(dest.root_path_) / sizeof(char))) ||
              OB_UNLIKELY(
                  OB_MAX_BACKUP_STORAGE_INFO_LENGTH < (storage_info_len = sizeof(dest.storage_info_) / sizeof(char)))) {
@@ -558,9 +570,13 @@ int ObArchiveMgr::set_log_archive_info_(ObLogArchiveBackupInfo& info)
         dest.storage_info_,
         storage_info_len);
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(
-                 info.status_.incarnation_, info.status_.round_, info.status_.compatible_))) {
-    ARCHIVE_LOG(WARN, "set archive start fail", KR(ret), K(info));
+  } else if (OB_FAIL(archive_round_mgr_.set_archive_start(backup_info.status_.incarnation_,
+                 backup_info.status_.round_,
+                 rs_piece_id,
+                 rs_piece_create_date,
+                 dest.is_oss_storage(),
+                 backup_info.status_.compatible_))) {
+    ARCHIVE_LOG(WARN, "set archive start fail", KR(ret), K(backup_info));
   } else {
     strncpy(archive_round_mgr_.root_path_, dest.root_path_, OB_MAX_BACKUP_PATH_LENGTH);
     strncpy(archive_round_mgr_.storage_info_, dest.storage_info_, OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
@@ -578,8 +594,17 @@ void ObArchiveMgr::run1()
   if (OB_UNLIKELY(!inited_)) {
     ARCHIVE_LOG(ERROR, "ObArchiveMgr not init");
   } else {
+    bool is_ob_ready = false;
     while (!has_set_stop()) {
-      do_thread_task_();
+      if (!is_ob_ready) {
+        is_ob_ready = check_ob_ready_();
+      }
+      if (is_ob_ready) {
+        do_thread_task_();
+      }
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
+        ARCHIVE_LOG(INFO, "ObArchiveMgr is runing", "ob_ready", check_ob_ready_());
+      }
       usleep(THREAD_INTERVAL);
     }
   }
@@ -616,28 +641,54 @@ bool ObArchiveMgr::need_check_switch_archive_()
 void ObArchiveMgr::do_check_switch_archive_()
 {
   int ret = OB_SUCCESS;
-  ObLogArchiveBackupInfo info;
+  ObLogArchiveBackupInfo backup_info;
   bool need_stop = false;
   bool need_start = false;
   bool need_force_stop = false;
-
+  bool need_switch_piece = false;
+  ObNonFrozenBackupPieceInfo non_frozen_piece_info;
+  int64_t cur_piece_id = OB_BACKUP_INVALID_PIECE_ID;
+  int64_t cur_piece_create_date = OB_INVALID_TIMESTAMP;
+  int64_t has_encount_fatal_error = false;
   if (OB_UNLIKELY(!inited_)) {
     ARCHIVE_LOG(ERROR, "ObArchiveMgr not init");
-  } else if (OB_FAIL(ObBackupInfoMgr::get_instance().get_log_archive_backup_info(info))) {
-    if (REACH_TIME_INTERVAL(30 * 1000 * 1000L)) {
-      ARCHIVE_LOG(WARN, "get_log_archive_backup_info fail", KR(ret));
+  } else if (OB_FAIL(ObBackupInfoMgr::get_instance().get_log_archive_backup_info_and_piece(
+                 backup_info, non_frozen_piece_info))) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      ARCHIVE_LOG(WARN, "get_log_archive_backup_info_and_piece fail", KR(ret));
     }
-  } else if (OB_UNLIKELY(!info.is_valid())) {
+  } else if (OB_UNLIKELY(!backup_info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "ObLogArchiveBackupInfo is not valid", KR(ret), K(info));
-  } else if (OB_LIKELY(!check_if_need_switch_log_archive_(info, need_stop, need_start, need_force_stop))) {
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
-      ARCHIVE_LOG(DEBUG, "check_log_archive_status_, not need start, stop or force_stop", K(info));
-    }
+    ARCHIVE_LOG(
+        ERROR, "ObLogArchiveBackupInfo or piece_info is not valid", KR(ret), K(backup_info), K(non_frozen_piece_info));
+    has_encount_fatal_error = true;
+  } else if (OB_FAIL(check_if_need_switch_log_archive_(backup_info,
+                 non_frozen_piece_info,
+                 need_stop,
+                 need_start,
+                 need_force_stop,
+                 need_switch_piece,
+                 cur_piece_id,
+                 cur_piece_create_date))) {
+    ARCHIVE_LOG(WARN, "failed to check_if_need_switch_log_archive_", K(ret), K(backup_info), K(non_frozen_piece_info));
+    has_encount_fatal_error = true;
   } else if (need_start) {
     // start a new archive round
-    if (OB_FAIL(start_archive_(info))) {
-      ARCHIVE_LOG(WARN, "start_archive_ fail", KR(ret));
+    if (OB_UNLIKELY(!non_frozen_piece_info.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      has_encount_fatal_error = true;
+      ARCHIVE_LOG(ERROR, "non_piece_info is not valid", K(non_frozen_piece_info), KR(ret));
+    } else if (OB_FAIL(non_frozen_piece_info.get_backup_piece_info(cur_piece_id, cur_piece_create_date))) {
+      ARCHIVE_LOG(ERROR, "failed to get_backup_piece_info", K(backup_info), K(non_frozen_piece_info), KR(ret));
+      has_encount_fatal_error = true;
+    } else if (OB_FAIL(start_archive_(backup_info, cur_piece_id, cur_piece_create_date))) {
+      ARCHIVE_LOG(WARN,
+          "start_archive_ fail",
+          KR(ret),
+          K(non_frozen_piece_info),
+          K(backup_info),
+          K(cur_piece_id),
+          K(cur_piece_create_date));
     }
   } else if (need_stop) {
     // stop current archive round
@@ -646,8 +697,38 @@ void ObArchiveMgr::do_check_switch_archive_()
     }
   } else if (need_force_stop) {
     // force stop archive
-    archive_round_mgr_.set_archive_force_stop(info.status_.incarnation_, info.status_.round_);
+    archive_round_mgr_.set_archive_force_stop(backup_info.status_.incarnation_, backup_info.status_.round_);
     ARCHIVE_LOG(INFO, "force set log_archive_status STOPPED");
+  } else if (need_switch_piece) {
+#ifdef ERRSIM
+    ret = E(EventTable::EN_LOG_ARCHIVE_BLOCK_SWITCH_PIECE) OB_SUCCESS;
+#endif
+    if (OB_FAIL(ret)) {
+      // errsim
+      if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+        ARCHIVE_LOG(WARN, "ERRSIM: block switch piece", K(backup_info), K(non_frozen_piece_info), KR(ret));
+      }
+    } else if (OB_FAIL(archive_round_mgr_.update_cur_piece_info(backup_info.status_.incarnation_,
+                   backup_info.status_.round_,
+                   cur_piece_id,
+                   cur_piece_create_date))) {
+      ARCHIVE_LOG(ERROR, "failed to switch_piece_info", K(backup_info), K(non_frozen_piece_info), KR(ret));
+      has_encount_fatal_error = true;
+    } else {
+      ARCHIVE_LOG(INFO, "succ to switch_piece", K(backup_info), K(non_frozen_piece_info));
+    }
+  } else {
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
+      ARCHIVE_LOG(INFO,
+          "check_log_archive_status_, not need start, stop or force_stop",
+          K(backup_info),
+          K(non_frozen_piece_info));
+    }
+  }
+
+  if (has_encount_fatal_error) {
+    ObPartitionKey unused_pkey;
+    mark_encounter_fatal_err(unused_pkey, backup_info.status_.incarnation_, backup_info.status_.round_);
   }
 }
 
@@ -719,7 +800,16 @@ void ObArchiveMgr::print_archive_status_()
   int64_t send_task_num = archive_sender_.get_total_task_num();
   int64_t pre_send_task_capacity = archive_sender_.get_pre_archive_task_capacity();
   int64_t pg_archive_task_count = pg_mgr_.get_pg_count();
-  archive_round_mgr_.get_archive_round_info(archive_incarnation, archive_round, log_archive_status, has_encount_error);
+  int64_t piece_id = OB_BACKUP_INVALID_PIECE_ID;
+  int64_t piece_create_date = OB_INVALID_TIMESTAMP;
+  bool unused_is_oss = false;
+  archive_round_mgr_.get_archive_round_info(archive_incarnation,
+      archive_round,
+      piece_id,
+      piece_create_date,
+      unused_is_oss,
+      log_archive_status,
+      has_encount_error);
 
   ARCHIVE_LOG(INFO,
       "print_archive_status",
@@ -729,6 +819,8 @@ void ObArchiveMgr::print_archive_status_()
       K(pg_archive_task_count),
       K(archive_incarnation),
       K(archive_round),
+      K(piece_id),
+      K(piece_create_date),
       K(log_archive_status),
       K(has_encount_error));
 }
@@ -753,15 +845,17 @@ void ObArchiveMgr::print_archive_status_()
 //
 // additional:
 //   ob stopping status transfer to stop automatic, no matter what rs status is
-bool ObArchiveMgr::check_if_need_switch_log_archive_(
-    ObLogArchiveBackupInfo& info, bool& need_stop, bool& need_start, bool& need_force_stop)
+int ObArchiveMgr::check_if_need_switch_log_archive_(const ObLogArchiveBackupInfo& backup_info,
+    const ObNonFrozenBackupPieceInfo& non_frozen_piece_info, bool& need_stop, bool& need_start, bool& need_force_stop,
+    bool& need_switch_piece, int64_t& rs_piece_id, int64_t& rs_piece_create_date)
 {
-  bool bret = false;
+  int ret = OB_SUCCESS;
   const int64_t incarnation = archive_round_mgr_.get_current_archive_incarnation();
   const int64_t round = archive_round_mgr_.get_current_archive_round();
-  const int64_t rs_incarnation = info.status_.incarnation_;
-  const int64_t rs_round = info.status_.round_;
-  ObLogArchiveStatus::STATUS status = info.status_.status_;
+  const int64_t cur_piece_id = archive_round_mgr_.get_cur_piece_id();
+  const int64_t rs_incarnation = backup_info.status_.incarnation_;
+  const int64_t rs_round = backup_info.status_.round_;
+  ObLogArchiveStatus::STATUS status = backup_info.status_.status_;
   const bool is_in_backup =
       (ObLogArchiveStatus::STATUS::BEGINNING == status || ObLogArchiveStatus::STATUS::DOING == status) &&
       GCONF.enable_log_archive;
@@ -773,29 +867,46 @@ bool ObArchiveMgr::check_if_need_switch_log_archive_(
   need_stop = false;
   need_start = false;
   need_force_stop = false;
+  need_switch_piece = false;
 
   if (is_in_archive_stopping_status()) {
-    bret = false;
-  } else if (!in_archive && is_in_backup && diff_ir) {
+  } else if (!in_archive && is_in_backup && diff_ir && !is_archive_prohibit()) {
+    // only zone which does not prohibit IO can start archive
     // inital incarnation/round = -1, incarnation/round retain the values when archive stop
     need_start = true;
-    bret = true;
-    ARCHIVE_LOG(INFO, "need_start", K(incarnation), K(round), K(info), K(in_archive), K(is_in_backup));
+    ARCHIVE_LOG(INFO, "need_start", K(incarnation), K(round), K(backup_info), K(in_archive), K(is_in_backup));
   } else if ((!is_in_backup && in_archive) || (is_in_backup && in_archive && diff_ir)) {
     need_stop = true;
-    bret = true;
-    ARCHIVE_LOG(INFO, "need_stop", K(incarnation), K(round), K(info), K(in_archive), K(diff_ir), K(is_in_backup));
+    ARCHIVE_LOG(
+        INFO, "need_stop", K(incarnation), K(round), K(backup_info), K(in_archive), K(diff_ir), K(is_in_backup));
   } else if (is_in_stop_status && !in_archive && diff_ir) {
     need_force_stop = true;
-    bret = true;
-    ARCHIVE_LOG(
-        INFO, "need_force_stop", K(incarnation), K(round), K(info), K(in_archive), K(is_in_stop_status), K(diff_ir));
+    ARCHIVE_LOG(INFO, "need_force_stop", K(backup_info), K(rs_piece_id), K(is_in_stop_status), K(diff_ir));
+  } else if (ObLogArchiveStatus::STATUS::DOING == status && is_in_archive_doing_status() && !diff_ir &&
+             0 != cur_piece_id) {
+    if (OB_UNLIKELY(!non_frozen_piece_info.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(ERROR, "non_piece_info is not valid", K(non_frozen_piece_info), KR(ret));
+    } else if (OB_FAIL(non_frozen_piece_info.get_backup_piece_info(rs_piece_id, rs_piece_create_date))) {
+      ARCHIVE_LOG(ERROR, "failed to get_backup_piece_info", K(backup_info), K(non_frozen_piece_info), KR(ret));
+    } else if (rs_piece_id == cur_piece_id) {
+      // do nothing
+    } else if (rs_piece_id == cur_piece_id + 1) {
+      need_switch_piece = true;
+      ARCHIVE_LOG(INFO, "need switch piece", K(backup_info), K(rs_piece_id), K(cur_piece_id));
+    } else {
+      ARCHIVE_LOG(ERROR, "invalid rs_piece_id", K(backup_info), K(rs_piece_id), K(cur_piece_id));
+      ObPartitionKey unused_pkey;
+      mark_encounter_fatal_err(unused_pkey, incarnation, round);
+    }
+  } else { /*do nothing*/
   }
 
-  return bret;
+  return ret;
 }
 
-int ObArchiveMgr::check_and_set_start_archive_ts_(const int64_t incarnation, const int64_t round, int64_t& start_ts)
+int ObArchiveMgr::check_and_set_start_archive_ts_(
+    const int64_t incarnation, const int64_t round, const bool is_oss, int64_t& start_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -803,7 +914,7 @@ int ObArchiveMgr::check_and_set_start_archive_ts_(const int64_t incarnation, con
     ARCHIVE_LOG(WARN, "check_server_start_archive_ts_record_exist_ fail", KR(ret), K(round));
   } else if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
-    if (OB_FAIL(archive_sender_.save_server_start_archive_ts(incarnation, round, start_ts))) {
+    if (OB_FAIL(archive_sender_.save_server_start_archive_ts(incarnation, round, is_oss, start_ts))) {
       ARCHIVE_LOG(WARN, "save_server_start_archive_ts fail", KR(ret), K(incarnation), K(round), K(start_ts));
     }
   }
@@ -814,6 +925,12 @@ int ObArchiveMgr::check_and_set_start_archive_ts_(const int64_t incarnation, con
   }
 
   return ret;
+}
+
+// 0 is not valid server_id && scan_disk_finished
+bool ObArchiveMgr::check_ob_ready_()
+{
+  return 0 < GCTX.server_id_ && NULL != partition_service_ && partition_service_->is_scan_disk_finished();
 }
 
 }  // namespace archive

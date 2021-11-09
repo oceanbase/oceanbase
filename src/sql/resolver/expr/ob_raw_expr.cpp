@@ -265,7 +265,12 @@ void ObRawExpr::reset()
 int ObRawExpr::get_name(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(orig_expr_) && EXPLAIN_DBLINK_STMT == type) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("fail to check stack overflow", K(ret), K(is_stack_overflow));
+  } else if (is_stack_overflow) {
+    LOG_DEBUG("too deep recursive", K(ret), K(is_stack_overflow)); 
+  } else if (OB_NOT_NULL(orig_expr_) && EXPLAIN_DBLINK_STMT == type) {
     if (OB_FAIL(orig_expr_->get_name(buf, buf_len, pos, type))) {
       LOG_WARN("fail to get name for orig expr", K(ret));
     }
@@ -2666,6 +2671,14 @@ bool ObSysFunRawExpr::same_as(const ObRawExpr& expr, ObExprEqualCheckContext* ch
             !this->get_param_expr(i)->same_as(*s_expr->get_param_expr(i), check_context)) {
           bool_ret = false;
         }
+      }
+      if (0 == get_param_count()
+          && (T_FUN_SYS_CUR_TIMESTAMP == get_expr_type()
+              || T_FUN_SYS_SYSDATE == get_expr_type()
+              || T_FUN_SYS_CUR_TIME == get_expr_type()
+              || T_FUN_SYS_UTC_TIMESTAMP == get_expr_type()
+              || T_FUN_SYS_UTC_TIME == get_expr_type())) {
+        bool_ret = result_type_.get_scale() == s_expr->get_result_type().get_scale();
       }
     }
   }

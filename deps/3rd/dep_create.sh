@@ -14,7 +14,8 @@ fi
 
 source /etc/os-release || exit 1
 
-PNAME=${PRETTY_NAME:-${NAME} ${VERSION}}
+PNAME=${PRETTY_NAME:-"${NAME} ${VERSION}"}
+PNAME="${PNAME} (${OS_ARCH})"
 
 function compat_centos8() {
   echo "[NOTICE] '$PNAME' is compatible with CentOS 8, use el8 dependencies list"
@@ -35,36 +36,54 @@ function version_ge() {
 }
 
 function get_os_release() {
-  case "$ID" in
-    alios)
-      version_ge "8.0" && compat_centos8 && return
-      version_ge "7.2" && compat_centos7 && return
-      ;;
-    anolis)
-      version_ge "8.0" && compat_centos8 && return
-      version_ge "7.0" && compat_centos7 && return
-      ;;
-    ubuntu)
-      version_ge "16.04" && compat_centos7 && return
-      ;;
-    centos)
-      version_ge "8.0" && OS_RELEASE=8 && return
-      version_ge "7.0" && OS_RELEASE=7 && return
-      ;;
-    debian)
-      version_ge "9" && compat_centos7 && return
-      ;;
-    fedora)
-      version_ge "33" && compat_centos7 && return
-      ;;
-    opensuse-leap)
-      version_ge "15" && compat_centos7 && return
-      ;;
-    #suse
-    sles)
-      version_ge "15" && compat_centos7 && return
-      ;;
-  esac
+  if [[ "${OS_ARCH}x" == "x86_64x" ]]; then
+    case "$ID" in
+      alinux)
+        version_ge "2.1903" && compat_centos7 && return
+        ;;
+      alios)
+        version_ge "8.0" && compat_centos8 && return
+        version_ge "7.2" && compat_centos7 && return
+        ;;
+      anolis)
+        version_ge "8.0" && compat_centos8 && return
+        version_ge "7.0" && compat_centos7 && return
+        ;;
+      ubuntu)
+        version_ge "16.04" && compat_centos7 && return
+        ;;
+      centos)
+        version_ge "8.0" && OS_RELEASE=8 && return
+        version_ge "7.0" && OS_RELEASE=7 && return
+        ;;
+      debian)
+        version_ge "9" && compat_centos7 && return
+        ;;
+      fedora)
+        version_ge "33" && compat_centos7 && return
+        ;;
+      opensuse-leap)
+        version_ge "15" && compat_centos7 && return
+        ;;
+      #suse
+      sles)
+        version_ge "15" && compat_centos7 && return
+        ;;
+      uos)
+        version_ge "20" && compat_centos7 && return
+        ;;
+    esac
+  elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
+    case "$ID" in
+      alios)
+        version_ge "7.0" && compat_centos7 && return
+        ;;
+      centos)
+        version_ge "8.0" && compat_centos7 && return
+        version_ge "7.0" && OS_RELEASE=7 && return
+        ;;
+    esac
+  fi
   not_supported && return 1 
 }
 

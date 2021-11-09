@@ -247,8 +247,7 @@ int ObExprConcatWs::calc_concat_ws_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDa
   } else if (sep->is_null()) {
     res.set_null();
   } else {
-    ObIAllocator& calc_alloc = ctx.get_reset_tmp_alloc();
-    ObSEArray<ObString, 32, ObIAllocator> words(OB_MALLOC_MIDDLE_BLOCK_SIZE, calc_alloc);
+    ObSEArray<ObString, 32> words;
     for (int64_t i = 1; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       const ObDatum& dat = expr.locate_param_datum(ctx, i);
       if (!dat.is_null() && OB_FAIL(words.push_back(dat.get_string()))) {

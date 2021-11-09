@@ -25,17 +25,17 @@ public:
   {}
   virtual ~ObAdminExecutor()
   {}
-  virtual int execute(int argc, char* argv[]) = 0;
+  virtual int execute(int argc, char *argv[]) = 0;
 
 protected:
-  int parse_options(int argc, char* argv[]);
+  int parse_options(int argc, char *argv[]);
 
 protected:
   common::ObString DB_host_;
   int32_t DB_port_;
   uint64_t tenant_id_;
-  const char* config_file_;
-  const char* wallet_file_;
+  const char *config_file_;
+  const char *wallet_file_;
 };
 }  // namespace tools
 }  // namespace oceanbase

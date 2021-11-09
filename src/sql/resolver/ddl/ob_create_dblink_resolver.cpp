@@ -61,7 +61,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
     } else if (FALSE_IT(dblink_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_)))) {
-      ;
+      // do nothing
     } else if (OB_FAIL(create_dblink_stmt->set_dblink_name(dblink_name))) {
       LOG_WARN("set dblink name failed", K(ret));
     }
@@ -83,7 +83,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(tenant_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_)))) {
-      ;
+      // do nothing
     } else if (OB_FAIL(create_dblink_stmt->set_tenant_name(tenant_name))) {
       LOG_WARN("set tenant name failed", K(ret));
     }
@@ -95,7 +95,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(user_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_)))) {
-      ;
+      // do nothing
     } else if (OB_FAIL(create_dblink_stmt->set_user_name(user_name))) {
       LOG_WARN("set user name failed", K(ret));
     }
@@ -107,7 +107,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(password.assign_ptr(pwd_node->str_value_, static_cast<int32_t>(pwd_node->str_len_)))) {
-      ;
+      // do nothing
     } else if (OB_FAIL(create_dblink_stmt->set_password(password))) {
       LOG_WARN("set password failed", K(ret));
     }
@@ -121,7 +121,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode& parse_tree)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {
-      ;
+      // do nothing
     } else if (OB_FAIL(host.parse_from_string(host_str))) {
       LOG_WARN("parse ip port failed", K(ret), K(host_str));
     } else {

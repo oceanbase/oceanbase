@@ -96,6 +96,7 @@ ObPGStorage::ObPGStorage()
       pg_partition_(NULL),
       schema_service_(NULL),
       partition_list_(),
+      part_list_contains_part_info_(false),
       lock_(ObLatchIds::PARTITION_GROUP_LOCK),
       meta_(nullptr),
       log_seq_num_(0),
@@ -180,6 +181,8 @@ void ObPGStorage::clear()
     RemovePGPartitionFunctor functor(*(pg_->get_pg_partition_map()));
     partition_list_.remove_all(functor);
   }
+  partition_list_.reset();
+  part_list_contains_part_info_ = false;
   pg_ = NULL;
   pg_partition_ = NULL;
   schema_service_ = NULL;
@@ -193,7 +196,11 @@ void ObPGStorage::clear()
   bucket_lock_.destroy();
 }
 
-int ObPGStorage::alloc_meta_(ObPartitionGroupMeta*& meta)
+#define PG_PARTITION_GUARD(g, k) \
+  ObPGPartitionGuard g;          \
+  get_pg_partition(k, g);
+
+int ObPGStorage::alloc_meta_(ObPartitionGroupMeta *&meta)
 {
   int ret = OB_SUCCESS;
   void* buf = nullptr;
@@ -271,7 +278,7 @@ int ObPGStorage::serialize_impl(
       ObPGPartition* pg_partition = nullptr;
       const ObPartitionKey& pkey = meta_->partitions_.at(i);
 
-      ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+      PG_PARTITION_GUARD(guard, pkey)
       if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pg partition info is null, unexpected error", K(ret), K(pkey));
@@ -661,19 +668,18 @@ int ObPGStorage::deserialize_before_2270_(
   return ret;
 }
 
-int ObPGStorage::get_pg_partition(const common::ObPartitionKey& pkey, ObPGPartitionGuard& guard)
+int ObPGStorage::get_pg_partition(const common::ObPartitionKey &pkey, ObPGPartitionGuard &guard) const
 {
   int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!pkey.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(pkey));
-  } else if (OB_FAIL(guard.set_pg_partition(pkey, *(pg_->get_pg_partition_map())))) {
-    STORAGE_LOG(WARN, "get pg partition error", K(ret), K(pkey));
+  if (ATOMIC_LOAD(&part_list_contains_part_info_)) {
+    ret = guard.set_pg_partition(pkey, partition_list_);
   } else {
-    // do nothing
+    if (OB_FAIL(guard.set_pg_partition(pkey, *pg_->get_pg_partition_map()))) {
+      if (ATOMIC_LOAD(&part_list_contains_part_info_)) {
+        ret = guard.set_pg_partition(pkey, partition_list_);
+      }
+    }
   }
-
   return ret;
 }
 
@@ -685,7 +691,7 @@ int ObPGStorage::check_pg_partition_exist(const ObPartitionKey& pkey, bool& exis
   if (!pkey.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(pkey));
-  } else if (OB_FAIL(pg_partition_guard.set_pg_partition(pkey, *(pg_->get_pg_partition_map())))) {
+  } else if (OB_FAIL(get_pg_partition(pkey, pg_partition_guard))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       exist = false;
@@ -780,8 +786,8 @@ int ObPGStorage::get_all_pg_partition_keys_(ObPartitionArray& pkeys, const bool 
   return ret;
 }
 
-int ObPGStorage::check_can_replay_add_partition_to_pg_log(
-    const common::ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts, bool& can_replay)
+int ObPGStorage::check_can_replay_add_partition_to_pg_log(const common::ObPartitionKey& pkey, const uint64_t log_id,
+    const int64_t log_ts, const int64_t schema_version, bool& can_replay)
 {
   int ret = OB_SUCCESS;
 
@@ -795,17 +801,51 @@ int ObPGStorage::check_can_replay_add_partition_to_pg_log(
     STORAGE_LOG(INFO, "partition group is garbaging, no need to replay", K(pkey), K(log_id));
     can_replay = false;
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, pkey)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       can_replay = true;
       const int64_t publish_version = get_publish_version();
       if (log_ts <= publish_version) {
-        TRANS_LOG(INFO, "no need to replay current log", K(pkey), K(log_id), K(log_ts), K(publish_version));
+        STORAGE_LOG(INFO, "no need to replay current log", K(pkey), K(log_id), K(log_ts), K(publish_version));
         can_replay = false;
       }
     } else {
       can_replay = false;
+    }
+
+    if (OB_SUCC(ret) && (!is_inner_table(pkey.get_table_id())) && can_replay) {
+      // check can replay in physical restore
+      // only user tables need be checked
+      TCRLockGuard guard(lock_);
+      const int64_t restore_snapshot_version = meta_->restore_snapshot_version_;
+      const int64_t restore_schema_version = meta_->restore_schema_version_;
+      const uint64_t last_restore_log_id = meta_->last_restore_log_id_;
+      if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
+        // pg in physical restore or after physical restore
+        if (OB_INVALID_TIMESTAMP == restore_schema_version) {
+          // just replay
+          STORAGE_LOG(WARN,
+              "invalid restore_schema_version, may during upgrade",
+              K(ret),
+              K(pkey),
+              K(log_id),
+              K(log_ts),
+              K(meta_));
+        } else if (OB_INVALID_ID == last_restore_log_id || log_id <= last_restore_log_id) {
+          can_replay = (schema_version <= restore_schema_version);
+          if (!can_replay) {
+            STORAGE_LOG(INFO,
+                "add_partition_to_pg is skipped because of restore_schema_version",
+                K(pkey),
+                K(log_id),
+                K(log_ts),
+                K(meta_));
+          }
+        } else {
+          can_replay = true;
+        }
+      }
     }
   }
 
@@ -827,8 +867,8 @@ int ObPGStorage::check_can_replay_remove_partition_from_pg_log(
     STORAGE_LOG(INFO, "partition group is garbaging, no need to replay", K(pkey), K(log_id));
     can_replay = false;
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, pkey)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       can_replay = false;
     } else {
@@ -967,7 +1007,9 @@ int ObPGStorage::init_pg_meta_(const ObCreatePGParam& param, ObPartitionGroupMet
     pg_meta.create_timestamp_ = param.create_timestamp_;
     pg_meta.create_frozen_version_ = param.create_frozen_version_;
     pg_meta.last_restore_log_id_ = param.last_restore_log_id_;
+    pg_meta.last_restore_log_ts_ = param.last_restore_log_ts_;
     pg_meta.restore_snapshot_version_ = param.restore_snapshot_version_;
+    pg_meta.restore_schema_version_ = param.restore_schema_version_;
     pg_meta.migrate_status_ = param.migrate_status_;
     if (OB_FAIL(pg_meta.storage_info_.deep_copy(param.info_))) {
       LOG_WARN("failed to deep copy storage info", K(ret), K(param.info_));
@@ -1039,6 +1081,9 @@ int ObPGStorage::replay_partition_schema_version_change_log(const int64_t schema
     STORAGE_LOG(INFO, "split source partition, no need to replay schema change log", K_(pkey));
   } else if (!pg_memtable_mgr_.has_memtable()) {
     STORAGE_LOG(INFO, "current pg has no memstores, maybe data replica, need skip", K(schema_version), K_(pkey));
+  } else if (OB_FAIL(
+                 ObPartitionService::get_instance().check_standby_cluster_schema_condition(pkey_, schema_version))) {
+    STORAGE_LOG(WARN, "failed to check_standby_cluster_schema_condition", K(schema_version), K_(pkey));
   } else if (OB_FAIL(guard.refresh_and_protect_pg_memtable(*this, tables_handle))) {
     STORAGE_LOG(WARN, "fail to protect table", K(ret), K(pkey_), K(schema_version));
   } else if (OB_FAIL(tables_handle.get_last_memtable(mem_store))) {
@@ -1352,9 +1397,9 @@ int ObPGStorage::get_create_schema_version(const ObPartitionKey& pkey, int64_t& 
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_PARTITION_NOT_EXIST;
       LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -1717,8 +1762,8 @@ int ObPGStorage::check_pg_partition_offline(const ObPartitionKey& pkey, bool& of
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(pkey));
     // offline pg
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, pkey)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkey_), K(pkey));
@@ -1972,10 +2017,10 @@ int ObPGStorage::retire_warmup_store(const bool is_disk_full)
     LOG_WARN("pg is removed", K(ret), K(*meta_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < meta_->partitions_.count(); ++i) {
-      const ObPartitionKey& pkey = meta_->partitions_.at(i);
-      ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-      ObPGPartition* partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
+      const ObPartitionKey &pkey = meta_->partitions_.at(i);
+      PG_PARTITION_GUARD(pg_partition_guard, pkey)
+      ObPGPartition *partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
       if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
         ret = OB_PARTITION_NOT_EXIST;
         LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -2082,10 +2127,10 @@ int ObPGStorage::enable_write_log(const bool is_replay_old)
         STORAGE_LOG(WARN, "get all pg partition keys error", K(ret), K(pkey_), K(pkeys));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-          const ObPartitionKey& pkey = pkeys.at(i);
-          ObPGPartition* pg_partition = nullptr;
-          ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
-          ObPartitionStorage* storage = nullptr;
+          const ObPartitionKey &pkey = pkeys.at(i);
+          ObPGPartition *pg_partition = nullptr;
+          PG_PARTITION_GUARD(guard, pkey)
+          ObPartitionStorage *storage = nullptr;
           if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey), K(pkey));
@@ -2140,7 +2185,7 @@ int ObPGStorage::check_can_migrate(bool& can_migrate)
   } else {
     can_migrate = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); i++) {
-      ObPGPartitionGuard guard(pkeys.at(i), *(pg_->get_pg_partition_map()));
+      PG_PARTITION_GUARD(guard, pkeys.at(i))
       if (NULL == (pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkeys.at(i)));
@@ -2170,8 +2215,8 @@ int ObPGStorage::do_warm_up_request(const ObIWarmUpRequest* request)
     STORAGE_LOG(WARN, "fail to get pg partition keys", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      ObPGPartition* pg_partition = NULL;
-      ObPGPartitionGuard guard(pkeys.at(i), *(pg_->get_pg_partition_map()));
+      ObPGPartition *pg_partition = NULL;
+      PG_PARTITION_GUARD(guard, pkeys.at(i))
       if (NULL == (pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -2276,9 +2321,9 @@ int ObPGStorage::set_pg_replica_type(const ObReplicaType& replica_type, const bo
 
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; i < pkeys.count(); ++i) {
-        ObPGPartition* pg_partition = nullptr;
-        ObPGPartitionGuard guard(pkeys.at(i), *(pg_->get_pg_partition_map()));
-        ObPartitionStorage* storage = nullptr;
+        ObPGPartition *pg_partition = nullptr;
+        PG_PARTITION_GUARD(guard, pkeys.at(i))
+        ObPartitionStorage *storage = nullptr;
         if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
           tmp_ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("pg partition info is null, unexpected error", K(tmp_ret), K_(pkey));
@@ -2432,8 +2477,8 @@ int ObPGStorage::append_local_sort_data(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param is invalid", K(ret), K(pkey), K(param));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, pkey)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkey), K(pkey_));
@@ -2457,8 +2502,8 @@ int ObPGStorage::append_sstable(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param is invalid", K(ret), K(param));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, pkey)
     ObTableHandle sstable_handle;
     ObSSTable* sstable = nullptr;
     const int64_t max_kept_major_version_number = 1;
@@ -2510,8 +2555,8 @@ int ObPGStorage::append_sstable(
 int ObPGStorage::check_single_replica_major_sstable_exist(const ObPartitionKey& pkey, const uint64_t index_table_id)
 {
   int ret = OB_SUCCESS;
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   bool has_major = false;
 
   if (NULL == (pg_partition = guard.get_pg_partition())) {
@@ -2535,8 +2580,8 @@ int ObPGStorage::get_table_stat(const common::ObPartitionKey& pkey, ObTableStat&
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(pkey), K_(pkey));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, pkey)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       ret = OB_ENTRY_NOT_EXIST;
       STORAGE_LOG(WARN, "pg partition info not exist", K(ret), K_(pkey));
@@ -2828,8 +2873,8 @@ int ObPGStorage::get_all_table_ids(const ObPartitionKey& pkey, ObIArray<uint64_t
 {
   int ret = OB_SUCCESS;
   index_tables.reset();
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (NULL == (pg_partition = guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkey));
@@ -2846,8 +2891,8 @@ int ObPGStorage::get_all_table_ids(const ObPartitionKey& pkey, ObIArray<uint64_t
 int ObPGStorage::get_reference_tables(const ObPartitionKey& pkey, const int64_t index_id, ObTablesHandle& handle)
 {
   int ret = OB_SUCCESS;
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (NULL == (pg_partition = guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -2896,7 +2941,8 @@ int ObPGStorage::set_pg_storage_info(const ObSavedStorageInfoV2& info)
   } else if (meta_->storage_info_.get_data_info().get_publish_version() > info.get_data_info().get_publish_version() &&
              ObReplicaRestoreStatus::REPLICA_RESTORE_DATA != meta_->is_restore_ &&
              ObReplicaRestoreStatus::REPLICA_RESTORE_CUT_DATA != meta_->is_restore_ &&
-             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY != meta_->is_restore_) {
+             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY != meta_->is_restore_ &&
+             ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY_CUT != meta_->is_restore_) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "new storage info's publish version should not smaller than local", K(ret), K(*meta_), K(info));
   } else if (OB_FAIL(alloc_meta_(next_meta_ptr))) {
@@ -2926,9 +2972,9 @@ int ObPGStorage::fill_pg_partition_replica(const ObPartitionKey& pkey, ObReportS
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(INFO, "invalid argument", K(ret), K(pkey));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* pg_partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *pg_partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("pg_partition is null", K(ret), K(pkey));
@@ -2964,9 +3010,9 @@ int ObPGStorage::fill_replica(share::ObPartitionReplica& replica)
   }
   // for compatibility
   if (OB_SUCC(ret) && !pkey_.is_pg()) {
-    ObPGPartitionGuard pg_partition_guard(pkey_, *(pg_->get_pg_partition_map()));
-    ObPGPartition* pg_partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey_)
+    ObPGPartition *pg_partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     ObReportStatus report_status;
     if (OB_ISNULL(pg_partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2997,8 +3043,8 @@ int ObPGStorage::replay_schema_log(const char* buf, const int64_t size, const in
   if (OB_FAIL(pkey.deserialize(buf, size, pos))) {
     STORAGE_LOG(WARN, "fail to deserialize pkey", K(pkey_));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, pkey)
 
     if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3040,8 +3086,8 @@ int ObPGStorage::table_scan(ObTableScanParam& param, ObNewRowIterator*& result)
     ret = OB_REPLICA_NOT_READABLE;
     STORAGE_LOG(WARN, "replica is not readable", K(ret), "this", *this);
   } else if (is_pg || NULL == pg_partition_) {
-    const common::ObPartitionKey& pkey = (is_pg ? param.pkey_ : pkey_);
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    const common::ObPartitionKey &pkey = (is_pg ? param.pkey_ : pkey_);
+    PG_PARTITION_GUARD(guard, pkey)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -3089,8 +3135,8 @@ int ObPGStorage::table_scan(ObTableScanParam& param, ObNewIterIterator*& result)
     ret = OB_REPLICA_NOT_READABLE;
     STORAGE_LOG(WARN, "replica is not readable", K(ret), "this", *this);
   } else if (is_pg || NULL == pg_partition_) {
-    const common::ObPartitionKey& pkey = (is_pg ? param.pkey_ : pkey_);
-    ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+    const common::ObPartitionKey &pkey = (is_pg ? param.pkey_ : pkey_);
+    PG_PARTITION_GUARD(guard, pkey)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -3136,7 +3182,7 @@ int ObPGStorage::join_mv_scan(ObTableScanParam& left_param, ObTableScanParam& ri
   const common::ObPartitionKey& lpkey = (pkey_.is_pg() ? left_param.pkey_ : pkey_);
   const common::ObPartitionKey& rpkey = (rp.is_pg() ? right_param.pkey_ : rp.get_partition_key());
 
-  ObPGPartitionGuard lguard(lpkey, *(pg_->get_pg_partition_map()));
+  PG_PARTITION_GUARD(lguard, lpkey)
   ObPGPartitionGuard rguard;
 
   if (!ObReplicaTypeCheck::is_readable_replica(get_replica_type_())) {
@@ -3179,9 +3225,9 @@ int ObPGStorage::delete_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_pa
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3202,9 +3248,9 @@ int ObPGStorage::delete_row(
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3224,9 +3270,9 @@ int ObPGStorage::put_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3246,9 +3292,9 @@ int ObPGStorage::insert_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_pa
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3268,9 +3314,9 @@ int ObPGStorage::insert_row(
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3292,9 +3338,9 @@ int ObPGStorage::insert_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_par
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3318,9 +3364,9 @@ int ObPGStorage::fetch_conflict_rows(const ObStoreCtx& ctx, const ObDMLBaseParam
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3344,9 +3390,9 @@ int ObPGStorage::revert_insert_iter(const common::ObPartitionKey& pkey, ObNewRow
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(pkey), KP(iter));
   } else {
-    const common::ObPartitionKey& key = (pkey_.is_pg() ? pkey : pkey_);
-    ObPGPartition* pg_partition = NULL;
-    ObPGPartitionGuard guard(key, *(pg_->get_pg_partition_map()));
+    const common::ObPartitionKey &key = (pkey_.is_pg() ? pkey : pkey_);
+    ObPGPartition *pg_partition = NULL;
+    PG_PARTITION_GUARD(guard, key)
     if (NULL == (pg_partition = guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkey), K_(pkey));
@@ -3363,9 +3409,9 @@ int ObPGStorage::update_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_pa
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3387,9 +3433,9 @@ int ObPGStorage::update_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_par
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3409,9 +3455,9 @@ int ObPGStorage::lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_para
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3431,9 +3477,9 @@ int ObPGStorage::lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_para
 {
   int ret = OB_SUCCESS;
 
-  const ObPartitionKey& pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const ObPartitionKey &pkey = (pkey_.is_pg() ? ctx.cur_pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (!ObReplicaTypeCheck::is_writable_replica(get_replica_type_())) {
     ret = OB_ERR_READ_ONLY;
     STORAGE_LOG(ERROR, "replica is not writable", K(ret), "this", *this);
@@ -3521,10 +3567,10 @@ int ObPGStorage::check_can_release_pg_memtable_(ObTablesHandle& memtable_merged,
         bool part_can_release = false;
         schema_version = std::max(schema_version, memtable->get_max_schema_version());
         for (int64_t i = 0; OB_SUCC(ret) && (pg_all_merged || pg_can_release) && i < partitions.count(); ++i) {
-          ObPGPartition* pg_partition = nullptr;
-          ObPartitionStorage* storage = nullptr;
-          const ObPartitionKey& pkey = partitions.at(i);
-          ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+          ObPGPartition *pg_partition = nullptr;
+          ObPartitionStorage *storage = nullptr;
+          const ObPartitionKey &pkey = partitions.at(i);
+          PG_PARTITION_GUARD(guard, pkey)
           if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "pg partition is null", K(ret), K(pkey));
@@ -3714,8 +3760,9 @@ int ObPGStorage::check_for_restore_(ObIPartitionReport& report)
         }
       } else if (REPLICA_RESTORE_DUMP_MEMTABLE == status) {
         // minor merge finish, change restore state REPLICA_RESTORE_WAIT_ALL_DUMPED
-        if (OB_FAIL(set_restore_flag(
-                REPLICA_RESTORE_WAIT_ALL_DUMPED, OB_INVALID_TIMESTAMP /*not update restore_snapshot_version */))) {
+        if (OB_FAIL(set_restore_flag(REPLICA_RESTORE_WAIT_ALL_DUMPED,
+                OB_INVALID_TIMESTAMP /*not update restore_snapshot_version */,
+                OB_INVALID_TIMESTAMP /*not update restore_schema_version */))) {
           LOG_WARN("failed to set restore flag REPLICA_RESTORE_WAIT_ALL_DUMPED", K(ret), K_(pkey));
         } else if (OB_FAIL(report.submit_pt_update_task(pkey_))) {
           LOG_WARN("Failed to submit pg pt update task", K(ret), K_(pkey));
@@ -3733,13 +3780,15 @@ int ObPGStorage::check_restore_flag(const int16_t old_flag, const int16_t new_fl
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(new_flag < REPLICA_NOT_RESTORE || new_flag > REPLICA_RESTORE_MEMBER_LIST)) {
+  if (OB_UNLIKELY(new_flag < REPLICA_NOT_RESTORE || new_flag > REPLICA_RESTORE_STANDBY_CUT)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "invalid restore flag", K(ret), K(old_flag), K(new_flag));
   } else {
     switch (old_flag) {
       case REPLICA_NOT_RESTORE:
-        ret = OB_STATE_NOT_MATCH;
+        if (REPLICA_RESTORE_STANDBY_CUT != new_flag) {
+          ret = OB_STATE_NOT_MATCH;
+        }
         break;
       case REPLICA_LOGICAL_RESTORE_DATA:
         if (REPLICA_NOT_RESTORE != new_flag) {
@@ -3786,6 +3835,12 @@ int ObPGStorage::check_restore_flag(const int16_t old_flag, const int16_t new_fl
           ret = OB_STATE_NOT_MATCH;
         }
         break;
+      case REPLICA_RESTORE_STANDBY_CUT:
+        if (REPLICA_NOT_RESTORE != new_flag) {
+          ret = OB_STATE_NOT_MATCH;
+        }
+        break;
+
       default:
         ret = OB_ERR_UNEXPECTED;
         break;
@@ -4091,8 +4146,8 @@ int ObPGStorage::try_update_report_status(
         for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
           bool is_part_finish = false;
           bool part_need_report = false;
-          const ObPartitionKey& pkey = pkeys.at(i);
-          ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+          const ObPartitionKey &pkey = pkeys.at(i);
+          PG_PARTITION_GUARD(guard, pkey)
           if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "pg partition is null", K(ret), K(pkey));
@@ -4192,9 +4247,9 @@ int ObPGStorage::get_pg_partition_store_meta(const ObPartitionKey& pkey, ObPGPar
     STORAGE_LOG(WARN, "get partition store meta get invalid argument", K(ret), K(pkey));
   } else {
     TCRLockGuard lock_guard(lock_);
-    ObPGPartition* pg_partition = NULL;
-    ObPartitionStorage* partition_storage = NULL;
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    ObPartitionStorage *partition_storage = NULL;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
     if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -4233,10 +4288,10 @@ int ObPGStorage::update_report_status_(
     int64_t data_version = INT64_MAX;
     int64_t snapshot_version = INT64_MAX;
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      ObPGPartition* pg_partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
-      const ObPartitionKey& pkey = pkeys.at(i);
-      ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+      ObPGPartition *pg_partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
+      const ObPartitionKey &pkey = pkeys.at(i);
+      PG_PARTITION_GUARD(guard, pkey)
       if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition is null", K(ret), K(pkey));
@@ -4308,9 +4363,9 @@ int ObPGStorage::get_migrate_table_ids(const ObPartitionKey& pkey, ObIArray<uint
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get partition store meta get invalid argument", K(ret), K(pkey));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPartitionStorage* partition_storage = NULL;
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    ObPartitionStorage *partition_storage = NULL;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
     if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -4338,9 +4393,9 @@ int ObPGStorage::get_partition_tables(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get partition store meta get invalid argument", K(ret), K(pkey), K(table_id));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPartitionStorage* partition_storage = NULL;
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    ObPartitionStorage *partition_storage = NULL;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
     if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -4369,9 +4424,9 @@ int ObPGStorage::get_partition_gc_tables(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get partition store meta get invalid argument", K(ret), K(pkey), K(table_id));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPartitionStorage* partition_storage = NULL;
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    ObPartitionStorage *partition_storage = NULL;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
     if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -4521,9 +4576,9 @@ int ObPGStorage::replay_pg_partition_store(ObPGPartitionStoreMeta& meta)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid args", K(ret), K(meta));
     } else {
-      ObPGPartitionGuard pg_partition_guard(meta.pkey_, *(pg_->get_pg_partition_map()));
-      ObPGPartition* pg_partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
+      PG_PARTITION_GUARD(pg_partition_guard, meta.pkey_)
+      ObPGPartition *pg_partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
       meta.replica_type_ = meta_->replica_type_;
       if (OB_ISNULL(pg_partition = pg_partition_guard.get_pg_partition())) {
         FLOG_INFO("pg partition not exist when replay_pg_partition_store", K(meta));
@@ -4565,9 +4620,9 @@ int ObPGStorage::replay_pg_partition_meta(ObPGPartitionStoreMeta& meta)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid args", K(ret), K(meta));
     } else {
-      ObPGPartitionGuard pg_partition_guard(meta.pkey_, *(pg_->get_pg_partition_map()));
-      ObPGPartition* pg_partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
+      PG_PARTITION_GUARD(pg_partition_guard, meta.pkey_)
+      ObPGPartition *pg_partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
       meta.replica_type_ = meta_->replica_type_;
       if (OB_ISNULL(pg_partition = pg_partition_guard.get_pg_partition())) {
         FLOG_INFO("pg partition not exist when replay pg partition meta", K(ret), K(meta));
@@ -4597,9 +4652,9 @@ int ObPGStorage::update_multi_version_start(const ObPartitionKey& pkey, const in
   } else {
     ObBucketWLockAllGuard bucket_guard(bucket_lock_);
     TCWLockGuard guard(lock_);
-    ObPGPartition* pg_partition = NULL;
-    ObPartitionStorage* partition_storage = NULL;
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    ObPartitionStorage *partition_storage = NULL;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
     if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
       STORAGE_LOG(INFO, "pg partition not exist, no need update multi version start", K(ret), K(pkey_), K(pkey));
     } else if (OB_UNLIKELY(is_removed_)) {
@@ -4626,9 +4681,9 @@ int ObPGStorage::get_last_all_major_sstable(ObTablesHandle& handle)
     STORAGE_LOG(WARN, "failed to get all pg partition keys", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      ObPGPartition* pg_partition = NULL;
-      const ObPartitionKey& pkey = pkeys.at(i);
-      ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+      ObPGPartition *pg_partition = NULL;
+      const ObPartitionKey &pkey = pkeys.at(i);
+      PG_PARTITION_GUARD(guard, pkey)
       if (NULL == (pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition is null, unexpected error", K(ret), K(pkey));
@@ -4647,7 +4702,8 @@ OB_INLINE int64_t ObPGStorage::get_bucket_idx_(const ObPartitionKey& pkey) const
   return pkey.hash() % BUCKET_LOCK_BUCKET_CNT;
 }
 
-int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t restore_snapshot_version)
+int ObPGStorage::set_restore_flag(
+    const int16_t restore_flag, const int64_t restore_snapshot_version, const int64_t restore_schema_version)
 {
   int ret = OB_SUCCESS;
   ObPartitionGroupMeta* next_meta_ptr = nullptr;
@@ -4661,11 +4717,18 @@ int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t rest
     } else if (is_removed_) {
       ret = OB_PG_IS_REMOVED;
       LOG_WARN("pg is removed", K(ret), K(pkey_));
-    } else if (meta_->restore_snapshot_version_ != OB_INVALID_TIMESTAMP &&
-               restore_snapshot_version != OB_INVALID_TIMESTAMP &&
-               meta_->restore_snapshot_version_ != restore_snapshot_version) {
+    } else if ((meta_->restore_snapshot_version_ != OB_INVALID_TIMESTAMP &&
+                   restore_snapshot_version != OB_INVALID_TIMESTAMP &&
+                   meta_->restore_snapshot_version_ != restore_snapshot_version) ||
+               (meta_->restore_schema_version_ != OB_INVALID_TIMESTAMP &&
+                   restore_schema_version != OB_INVALID_TIMESTAMP &&
+                   meta_->restore_schema_version_ != restore_schema_version)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid restore_snapshot_version", K(ret), K(restore_snapshot_version), K(*meta_));
+      LOG_WARN("invalid restore_snapshot_version",
+          K(ret),
+          K(restore_snapshot_version),
+          K(restore_schema_version),
+          K(*meta_));
     } else if (restore_flag == meta_->is_restore_) {
       LOG_INFO("set same restore, ignore", K(ret), K(pkey_), K(restore_flag), K(*meta_));
     } else if (OB_FAIL(check_restore_flag(meta_->is_restore_, restore_flag))) {
@@ -4676,6 +4739,12 @@ int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t rest
       ObPartitionGroupMeta& next_meta = *next_meta_ptr;
       if (REPLICA_RESTORE_LOG == restore_flag) {
         if (!is_sys_table(pkey_.get_table_id())) {
+          ObRole role;
+          if (OB_FAIL(pg_->get_role(role))) {
+            LOG_WARN("failed to get role", K(ret));
+          } else if (ObRole::FOLLOWER == role) {
+            DEBUG_SYNC(FOLLOWER_BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG);
+          }
           DEBUG_SYNC(BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG);
         }
       }
@@ -4688,19 +4757,24 @@ int ObPGStorage::set_restore_flag(const int16_t restore_flag, const int64_t rest
         if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
           next_meta.restore_snapshot_version_ = restore_snapshot_version;
         }
+        if (OB_INVALID_TIMESTAMP != restore_snapshot_version) {
+          next_meta.restore_schema_version_ = restore_schema_version;
+        }
+
         if (OB_FAIL(write_update_pg_meta_trans(next_meta, OB_LOG_SET_RESTORE_FLAG))) {
           LOG_WARN("failed to write_update_pg_meta_trans", K(ret), K(*meta_), K(next_meta));
         } else {
           {
             switch_meta_(next_meta_ptr);
           }
-          // TODO(haofan): this func cannot rollback, should not return ret.
+          // TODO(): this func cannot rollback, should not return ret.
           if (OB_FAIL(pls_->set_archive_restore_state(restore_flag))) {
             LOG_WARN("set_archive_restore_state failed", K(ret), K_(pkey));
           }
           FLOG_INFO("set is_restore",
               K(restore_flag),
               K(restore_snapshot_version),
+              K(restore_schema_version),
               K_(pkey),
               "tenant_id",
               pkey_.get_tenant_id(),
@@ -4781,7 +4855,7 @@ int ObPGStorage::set_last_restore_log_info(const uint64_t last_restore_log_id, c
 }
 
 int ObPGStorage::get_restore_replay_info(
-    uint64_t &last_restore_log_id, int64_t &last_restore_log_ts, int64_t &restore_snapshot_version)
+    uint64_t& last_restore_log_id, int64_t& last_restore_log_ts, int64_t& restore_snapshot_version)
 {
   int ret = OB_SUCCESS;
 
@@ -4846,7 +4920,7 @@ int ObPGStorage::physical_flashback(const int64_t flashback_scn)
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); i++) {
         bool need_remove = false;
-        ObPGPartitionGuard pg_partition_guard(partitions.at(i), *(pg_->get_pg_partition_map()));
+        PG_PARTITION_GUARD(pg_partition_guard, partitions.at(i))
         if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
           // may pg has create but partition do not create
           // do nothing
@@ -4952,9 +5026,9 @@ int ObPGStorage::get_max_major_sstable_snapshot(int64_t& sstable_ts)
     STORAGE_LOG(WARN, "pg storage has not been inited", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_->partitions_.count(); ++i) {
-    const ObPartitionKey& pkey = meta_->partitions_.at(i);
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPartitionStorage* storage = nullptr;
+    const ObPartitionKey &pkey = meta_->partitions_.at(i);
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get pg partition", K(ret), K(pkey));
@@ -4984,9 +5058,9 @@ int ObPGStorage::get_min_max_major_version(int64_t& min_version, int64_t& max_ve
     STORAGE_LOG(WARN, "pg storage has not been inited", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_->partitions_.count(); ++i) {
-    const ObPartitionKey& pkey = meta_->partitions_.at(i);
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPartitionStorage* storage = nullptr;
+    const ObPartitionKey &pkey = meta_->partitions_.at(i);
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get pg partition", K(ret), K(pkey));
@@ -5012,9 +5086,9 @@ int ObPGStorage::set_partition_removed_(const ObPartitionKey& pkey)
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not init", K(ret));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_PARTITION_NOT_EXIST;
       LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -5046,9 +5120,9 @@ int ObPGStorage::create_index_table_store(
     ret = OB_ERR_SYS;
     LOG_ERROR("tenant id not match", K(ret), K(pkey), K(pkey_));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_PARTITION_NOT_EXIST;
       LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -5082,9 +5156,9 @@ int ObPGStorage::add_sstable(const ObPartitionKey& pkey, storage::ObSSTable* tab
     ret = OB_ERR_SYS;
     LOG_ERROR("tenant id not match", K(ret), K(pkey), K(pkey_));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     const bool is_in_dest_split = is_dest_split(static_cast<ObPartitionSplitStateEnum>(meta_->saved_split_state_));
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_PARTITION_NOT_EXIST;
@@ -5117,9 +5191,9 @@ int ObPGStorage::add_sstable_for_merge(const ObPartitionKey& pkey, storage::ObSS
       ret = OB_ERR_SYS;
       LOG_ERROR("tenant id not match", K(ret), K(pkey), K(pkey_));
     } else {
-      ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-      ObPGPartition* partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
+      PG_PARTITION_GUARD(pg_partition_guard, pkey)
+      ObPGPartition *partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
       if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
         ret = OB_PARTITION_NOT_EXIST;
         LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -5153,10 +5227,10 @@ int ObPGStorage::halt_prewarm()
     LOG_WARN("pg is removed", K(ret), K(*meta_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < meta_->partitions_.count(); ++i) {
-      const ObPartitionKey& pkey = meta_->partitions_.at(i);
-      ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-      ObPGPartition* partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
+      const ObPartitionKey &pkey = meta_->partitions_.at(i);
+      PG_PARTITION_GUARD(pg_partition_guard, pkey)
+      ObPGPartition *partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
       if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
         ret = OB_PARTITION_NOT_EXIST;
         LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -5198,7 +5272,7 @@ int ObPGStorage::remove_uncontinues_inc_tables(const ObPartitionKey& pkey, const
     const int64_t bucket_idx = pkey.hash() % BUCKET_LOCK_BUCKET_CNT;
     ObBucketWLockGuard bucket_guard(bucket_lock_, bucket_idx);
 
-    ObPGPartitionGuard pg_guard(pkey, *(pg_->get_pg_partition_map()));
+    PG_PARTITION_GUARD(pg_guard, pkey)
     if (is_removed_) {
       ret = OB_PG_IS_REMOVED;
       LOG_WARN("pg is removed", K(ret), K_(pkey));
@@ -5234,9 +5308,9 @@ int ObPGStorage::replay_modify_table_store(const ObModifyTableStoreLogEntry& log
     ret = OB_PG_IS_REMOVED;
     LOG_WARN("pg is removed", K(ret), K(*meta_));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       FLOG_INFO("pg partition not exist when replay modify table store", K(ret), K(pkey), K(*meta_));
       ret = OB_SUCCESS;
@@ -5260,9 +5334,9 @@ int ObPGStorage::set_reference_tables(const ObPartitionKey& pkey, const int64_t 
   } else if (OB_UNLIKELY(is_removed_)) {
     LOG_INFO("pg is removed", K(ret), K(*meta_));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_PARTITION_NOT_EXIST;
       LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -5284,8 +5358,8 @@ int ObPGStorage::get_partition_store_info(const ObPartitionKey& pkey, ObPartitio
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get pg partition", K(ret), K(pkey));
@@ -5318,9 +5392,9 @@ int ObPGStorage::replay_drop_index(const ObPartitionKey& pkey, const uint64_t ta
     ret = OB_PG_IS_REMOVED;
     LOG_WARN("pg is removed", K(ret), K(*meta_));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       FLOG_INFO("pg partition not exist when replay drop index", K(pkey), K(*meta_));
       ret = OB_SUCCESS;
@@ -5364,10 +5438,10 @@ int ObPGStorage::try_drop_unneed_index(const int64_t latest_schema_version /*OB_
     ObSEArray<TableStoreStat, OB_MAX_INDEX_PER_TABLE> index_tables;
     const bool write_slog = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      const ObPartitionKey& pkey = pkeys.at(i);
-      ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-      ObPGPartition* partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
+      const ObPartitionKey &pkey = pkeys.at(i);
+      PG_PARTITION_GUARD(pg_partition_guard, pkey)
+      ObPGPartition *partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
       if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
         ret = OB_PARTITION_NOT_EXIST;
         LOG_WARN("pg partition not exist", K(ret), K(pkey));
@@ -5532,7 +5606,7 @@ int ObPGStorage::check_table_store_empty(bool& is_empty)
     STORAGE_LOG(WARN, "failed to get all pg partition keys", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); i++) {
-      ObPGPartitionGuard pg_partition_guard(partitions.at(i), *(pg_->get_pg_partition_map()));
+      PG_PARTITION_GUARD(pg_partition_guard, partitions.at(i))
       if (OB_ISNULL(pg_partition = pg_partition_guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get pg partition", K(ret), K(pkey_));
@@ -5565,8 +5639,8 @@ int ObPGStorage::update_dest_split_state_after_merge_(int64_t& split_state)
     LOG_WARN("failed to get all pg partition keys", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      const ObPartitionKey& pkey = pkeys.at(i);
-      ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+      const ObPartitionKey &pkey = pkeys.at(i);
+      PG_PARTITION_GUARD(pg_partition_guard, pkey)
       if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
         ret = OB_PARTITION_NOT_EXIST;
         LOG_WARN("pg partition not exist", K(ret), K(pkey));
@@ -5584,6 +5658,33 @@ int ObPGStorage::update_dest_split_state_after_merge_(int64_t& split_state)
         split_state = ObPartitionSplitStateEnum::FOLLOWER_INIT;
       }
     }
+  }
+  return ret;
+}
+
+// remove pg's partition from global pg_partition_map
+//  and bookkeepingg on pg_storage
+int ObPGStorage::post_del_pg()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "Partition object not initialized", K(ret), K(is_inited_));
+  } else {
+    STORAGE_LOG(INFO, "start to localize pg partitions", KP(this), K(pkey_), K(&partition_list_));
+    LocalizePGPartitionFunctor functor(*pg_->get_pg_partition_map());
+    if (OB_FAIL(partition_list_.set_partition_info(functor))) {
+      STORAGE_LOG(ERROR, "localize pg partition fail", K(ret), K(pkey_));
+    } else {
+      ATOMIC_STORE(&part_list_contains_part_info_, true);  // commit
+      RemovePGPartitionFunctor functor(*pg_->get_pg_partition_map());
+      if (OB_FAIL(partition_list_.for_each(functor))) {
+        STORAGE_LOG(ERROR, "clean pg partition global map fail", K(ret), K(pkey_));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    STORAGE_LOG(INFO, "post del pg succeed: localize pg_partition done.", K(pkey_));
   }
   return ret;
 }
@@ -5652,9 +5753,9 @@ int ObPGStorage::update_split_table_store(
     ret = OB_PG_IS_REMOVED;
     LOG_WARN("pg is removed", K(ret), K_(pkey));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_PARTITION_NOT_EXIST;
       LOG_WARN("pg partition not exist", K(ret), K(pkey), K(*meta_));
@@ -5688,9 +5789,9 @@ int ObPGStorage::get_min_sstable_version_(int64_t& min_sstable_snapshot_version)
     LOG_WARN("failed to get all pg partition keys", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-    const ObPartitionKey& pkey = pkeys.at(i);
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPartitionStorage* storage = nullptr;
+    const ObPartitionKey &pkey = pkeys.at(i);
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get pg partition", K(ret), K(pkey));
@@ -5744,9 +5845,9 @@ int ObPGStorage::get_table_store_cnt(int64_t& table_store_cnt) const
   }
   TCRLockGuard lock_guard(lock_);
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_->partitions_.count(); ++i) {
-    const ObPartitionKey& pkey = meta_->partitions_.at(i);
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPartitionStorage* storage = nullptr;
+    const ObPartitionKey &pkey = meta_->partitions_.at(i);
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get pg partition", K(ret), K(pkey));
@@ -5769,8 +5870,8 @@ int ObPGStorage::get_partition_access_stat(const ObPartitionKey& pkey, ObPartiti
     ret = OB_NOT_INIT;
     LOG_WARN("pg storage is not inited", K(ret));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get pg partition", K(ret), K(pkey));
@@ -5788,9 +5889,9 @@ int ObPGStorage::get_partition_access_stat(const ObPartitionKey& pkey, ObPartiti
 int ObPGStorage::feedback_scan_access_stat(const ObTableScanParam& param)
 {
   int ret = OB_SUCCESS;
-  const common::ObPartitionKey& pkey = (pkey_.is_pg() ? param.pkey_ : pkey_);
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  const common::ObPartitionKey &pkey = (pkey_.is_pg() ? param.pkey_ : pkey_);
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -6359,7 +6460,7 @@ int ObPGStorage::check_complete(bool& is_complete)
     STORAGE_LOG(WARN, "get all pg partition keys failed", K(ret), K_(pkey));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); i++) {
-      ObPGPartitionGuard guard(pkeys.at(i), *(pg_->get_pg_partition_map()));
+      PG_PARTITION_GUARD(guard, pkeys.at(i))
       if (NULL == (pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkeys.at(i)));
@@ -6568,9 +6669,9 @@ int ObPGStorage::update_upper_trans_version_(const ObPartitionKey& pkey, ObTrans
     const int64_t last_replay_log_ts, ObTablesHandle& updated_tables)
 {
   int ret = OB_SUCCESS;
-  ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-  ObPGPartition* pg_partition = nullptr;
-  ObPartitionStorage* storage = nullptr;
+  PG_PARTITION_GUARD(pg_partition_guard, pkey)
+  ObPGPartition *pg_partition = nullptr;
+  ObPartitionStorage *storage = nullptr;
   ObTablesHandle handle;
   if (OB_ISNULL(pg_partition = pg_partition_guard.get_pg_partition())) {
     LOG_INFO("pg partition may be deleted", K(ret), K(pkey));
@@ -6678,9 +6779,9 @@ int ObPGStorage::restore_mem_trans_table()
   } else if (OB_FAIL(trans_table_pkey.generate_trans_table_pkey(pkey_))) {
     LOG_WARN("failed to generate trans_table_pkey", K(ret), K_(pkey));
   } else {
-    ObPGPartitionGuard pg_partition_guard(trans_table_pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, trans_table_pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       if (0 != get_partition_cnt()) {
         ret = OB_PARTITION_NOT_EXIST;
@@ -6758,8 +6859,8 @@ int ObPGStorage::restore_mem_trans_table(ObSSTable& trans_sstable)
       iter_param.rowkey_cnt_ = 1;
       iter_param.out_cols_ = &columns;
 
-      ObPGPartitionGuard guard(trans_table_pkey, *(pg_->get_pg_partition_map()));
-      ObPGPartition* partition = nullptr;
+      PG_PARTITION_GUARD(guard, trans_table_pkey)
+      ObPGPartition *partition = nullptr;
       if (OB_ISNULL(partition = guard.get_pg_partition())) {
         ret = OB_INVALID_ARGUMENT;
       } else if (OB_FAIL(trans_sstable.scan(iter_param, access_context, whole_range, row_iter))) {
@@ -6846,9 +6947,9 @@ int ObPGStorage::remove_old_table_(const ObPartitionKey& pkey, const int64_t fro
     ret = OB_PG_IS_REMOVED;
     LOG_WARN("pg is removed", K(ret), K(pkey));
   } else {
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* pg_partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
+    ObPGPartition *pg_partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(pg_partition = pg_partition_guard.get_pg_partition())) {
       LOG_INFO("pg partition may be deleted", K(ret), K(pkey));
     } else if (OB_ISNULL(storage = static_cast<ObPartitionStorage*>(pg_partition->get_storage()))) {
@@ -6914,7 +7015,7 @@ int ObPGStorage::get_min_schema_version(int64_t& min_schema_version)
     STORAGE_LOG(WARN, "get all pg partition keys failed", K(ret), K_(pkey));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); i++) {
-      ObPGPartitionGuard guard(pkeys.at(i), *(pg_->get_pg_partition_map()));
+      PG_PARTITION_GUARD(guard, pkeys.at(i))
       if (NULL == (pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkeys.at(i)));
@@ -6995,9 +7096,9 @@ int ObPGStorage::get_trans_table_end_log_ts_and_timestamp_(int64_t& end_log_ts, 
   } else if (OB_FAIL(trans_table_pkey.generate_trans_table_pkey(pkey_))) {
     LOG_WARN("failed to generate trans_table_pkey", K(ret), K_(pkey));
   } else {
-    ObPGPartitionGuard pg_partition_guard(trans_table_pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, trans_table_pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (OB_ISNULL(partition = pg_partition_guard.get_pg_partition())) {
       if (0 != get_partition_cnt()) {
         ret = OB_PARTITION_NOT_EXIST;
@@ -7053,7 +7154,7 @@ int ObPGStorage::clear_all_complement_minor_sstable_()
   } else {
     ObPGPartition* pg_partition = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      ObPGPartitionGuard guard(pkeys.at(i), *(pg_->get_pg_partition_map()));
+      PG_PARTITION_GUARD(guard, pkeys.at(i))
       if (NULL == (pg_partition = guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K(pkeys.at(i)));
@@ -7107,7 +7208,7 @@ int ObPGStorage::check_can_physical_flashback(const int64_t flashback_scn)
       need_skip_check = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); i++) {
         bool need_remove = false;
-        ObPGPartitionGuard pg_partition_guard(partitions.at(i), *(pg_->get_pg_partition_map()));
+        PG_PARTITION_GUARD(pg_partition_guard, partitions.at(i))
         int64_t publish_version = 0;
         if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
           // may pg has create but partition do not create
@@ -7172,8 +7273,8 @@ int ObPGStorage::check_can_physical_flashback(const int64_t flashback_scn)
 int ObPGStorage::get_latest_table_count(const ObPartitionKey& pkey, const int64_t index_id, int64_t& table_count)
 {
   int ret = OB_SUCCESS;
-  ObPGPartition* pg_partition = NULL;
-  ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
+  ObPGPartition *pg_partition = NULL;
+  PG_PARTITION_GUARD(guard, pkey)
   if (NULL == (pg_partition = guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -7289,8 +7390,8 @@ int ObPGStorage::get_trans_table_status(ObTransTableStatus& status)
   if (OB_FAIL(trans_table_pkey.generate_trans_table_pkey(pkey_))) {
     LOG_WARN("failed to generate trans_table_pkey", K(ret), K_(pkey));
   } else {
-    ObPGPartitionGuard guard(trans_table_pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
+    PG_PARTITION_GUARD(guard, trans_table_pkey)
+    ObPGPartition *partition = nullptr;
     if (OB_ISNULL(partition = guard.get_pg_partition())) {
       ret = OB_INVALID_ARGUMENT;
     } else if (OB_FAIL(static_cast<ObPartitionStorage*>(partition->get_storage())
@@ -7383,12 +7484,13 @@ int ObPGStorage::prepare_partition_store_map_(
     const ObPartitionMigrateCtx& ctx, ObPartitionStore::TableStoreMap*& store_map)
 {
   int ret = OB_SUCCESS;
-  ObPGPartitionGuard part_guard(ctx.copy_info_.meta_.pkey_, *(pg_->get_pg_partition_map()));
-  ObPGPartition* partition = nullptr;
-  ObPartitionStorage* storage = nullptr;
+  PG_PARTITION_GUARD(part_guard, ctx.copy_info_.meta_.pkey_)
+  ObPGPartition *partition = nullptr;
+  ObPartitionStorage *storage = nullptr;
   const int64_t max_kept_major_version_number = GCONF.max_kept_major_version_number;
   store_map = nullptr;
   if (ctx.handle_.empty()) {
+    LOG_INFO("handle is empty, skip prepare_partition_store_map_");
   } else if (OB_ISNULL(partition = part_guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get pg partition failed", K(ret), K(ctx));
@@ -7413,7 +7515,7 @@ int ObPGStorage::remove_unneed_table_store_within_trans(
   for (int64_t i = 0; OB_SUCC(ret) && i < part_ctx_array.count(); ++i) {
     const ObPartitionMigrateCtx &ctx = part_ctx_array.at(i);
     if (OB_NOT_NULL(store_map = store_maps[i])) {
-      ObPGPartitionGuard part_guard(ctx.copy_info_.meta_.pkey_, *(pg_->get_pg_partition_map()));
+      PG_PARTITION_GUARD(part_guard, ctx.copy_info_.meta_.pkey_)
       if (OB_ISNULL(partition = part_guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get pg partition failed", K(ret), K(ctx));
@@ -7439,9 +7541,9 @@ int ObPGStorage::do_replace_store_map_(
     const ObPartitionMigrateCtx& ctx = part_ctx_array.at(i);
     ObPartitionStore::TableStoreMap* store_map = store_maps[i];
     if (store_map != nullptr) {
-      ObPGPartitionGuard part_guard(ctx.copy_info_.meta_.pkey_, *(pg_->get_pg_partition_map()));
-      ObPGPartition* partition = nullptr;
-      ObPartitionStorage* storage = nullptr;
+      PG_PARTITION_GUARD(part_guard, ctx.copy_info_.meta_.pkey_)
+      ObPGPartition *partition = nullptr;
+      ObPartitionStorage *storage = nullptr;
       if (OB_ISNULL(partition = part_guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get pg partition failed", K(ret), K(ctx));
@@ -7500,9 +7602,9 @@ int ObPGStorage::add_trans_sstable(const int64_t old_trans_table_seq, ObSSTable*
     LOG_WARN("failed to generate trans_table_pkey", K(ret), K_(pkey));
   } else {
     ObBucketWLockGuard bucket_guard(bucket_lock_, get_bucket_idx_(trans_table_pkey));
-    ObPGPartitionGuard pg_partition_guard(trans_table_pkey, *(pg_->get_pg_partition_map()));
-    ObPGPartition* partition = nullptr;
-    ObPartitionStorage* storage = nullptr;
+    PG_PARTITION_GUARD(pg_partition_guard, trans_table_pkey)
+    ObPGPartition *partition = nullptr;
+    ObPartitionStorage *storage = nullptr;
     if (is_paused_) {
       ret = OB_EAGAIN;
       LOG_WARN("pg is paused, can not add trans table now", K(ret), K_(pkey), K(trans_table_pkey));
@@ -7873,9 +7975,9 @@ int ObPGStorage::get_partition_migrate_tables(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get partition store meta get invalid argument", K(ret), K(pkey), K(table_id));
   } else {
-    ObPGPartition* pg_partition = NULL;
-    ObPartitionStorage* partition_storage = NULL;
-    ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+    ObPGPartition *pg_partition = NULL;
+    ObPartitionStorage *partition_storage = NULL;
+    PG_PARTITION_GUARD(pg_partition_guard, pkey)
     if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -8148,7 +8250,7 @@ int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const
   const int64_t publish_version = meta_->storage_info_.get_data_info().get_publish_version();
   if (is_inner_table(pkey_.get_table_id())) {
     tenant_id = OB_SYS_TENANT_ID;
-    real_schema_version = minor_schema_version;
+    real_schema_version = OB_INVALID_VERSION;
     is_sys_table = true;
   } else {
     tenant_id = pkey_.get_tenant_id();
@@ -8184,10 +8286,10 @@ int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && is_tmp_ready && i < pg_meta.partitions_.count(); ++i) {
       meta.reset();
-      const ObPartitionKey& pkey = pg_meta.partitions_.at(i);
-      ObPGPartition* pg_partition = NULL;
-      ObPartitionStorage* partition_storage = NULL;
-      ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+      const ObPartitionKey &pkey = pg_meta.partitions_.at(i);
+      ObPGPartition *pg_partition = NULL;
+      ObPartitionStorage *partition_storage = NULL;
+      PG_PARTITION_GUARD(pg_partition_guard, pkey)
       if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
@@ -8224,7 +8326,12 @@ int ObPGStorage::get_restore_point_tables_(const int64_t snapshot_version, const
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(schema_filter.check_if_table_miss_by_schema(pg_meta.pg_key_, table_id_set))) {
-          STORAGE_LOG(WARN, "failed to check if table miss by schema", K(ret), K(pg_meta));
+          STORAGE_LOG(WARN,
+              "failed to check if table miss by schema",
+              K(ret),
+              K(pg_meta),
+              K(real_schema_version),
+              K(minor_schema_version));
         }
       }
 
@@ -8250,10 +8357,10 @@ int ObPGStorage::get_restore_point_max_schema_version_(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
       tables_handle.reset();
-      const ObPartitionKey& pkey = partitions.at(i);
-      ObPGPartition* pg_partition = NULL;
-      ObPartitionStorage* partition_storage = NULL;
-      ObPGPartitionGuard pg_partition_guard(pkey, *(pg_->get_pg_partition_map()));
+      const ObPartitionKey &pkey = partitions.at(i);
+      ObPGPartition *pg_partition = NULL;
+      ObPartitionStorage *partition_storage = NULL;
+      PG_PARTITION_GUARD(pg_partition_guard, pkey)
       if (pkey.is_trans_table()) {
         // do nothing
       } else if (NULL == (pg_partition = pg_partition_guard.get_pg_partition())) {

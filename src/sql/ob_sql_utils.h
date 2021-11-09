@@ -332,6 +332,7 @@ public:
 
   static int print_identifier(char* buf, const int64_t buf_len, int64_t& pos,
       common::ObCollationType connection_collation, const common::ObString& identifier_name);
+  static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
 private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString& name,
@@ -493,6 +494,7 @@ struct ObSqlTraits {
   bool is_modify_tenant_stmt_;
   bool is_cause_implicit_commit_;
   bool is_commit_stmt_;
+  bool has_weight_string_func_stmt_; // sql中是否包含weight_string函数
   ObItemType stmt_type_;
 
   ObSqlTraits();
@@ -503,10 +505,11 @@ struct ObSqlTraits {
     is_modify_tenant_stmt_ = false;
     is_cause_implicit_commit_ = false;
     is_commit_stmt_ = false;
+    has_weight_string_func_stmt_ = false;
     stmt_type_ = T_INVALID;
   }
   TO_STRING_KV(
-      K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_), K(stmt_type_));
+      K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_),K(has_weight_string_func_stmt_), K(stmt_type_));
 };
 
 template <typename ValueType>

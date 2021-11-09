@@ -162,6 +162,7 @@ void ObPartitionTransCtxMgr::reset()
   clog_aggregation_buffer_amount_ = 0;
   last_refresh_tenant_config_ts_ = 0;
   restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
+  last_restore_log_id_ = OB_INVALID_ID;
   last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
   aggre_log_container_.reset();
   is_dup_table_ = false;
@@ -946,13 +947,15 @@ int ObPartitionTransCtxMgr::replay_start_working_log(const int64_t timestamp, co
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartitionTransCtxMgr not inited");
     ret = OB_NOT_INIT;
-  } else if (OB_INVALID_TIMESTAMP != restore_snapshot_version_ && OB_INVALID_TIMESTAMP != last_restore_log_ts_) {
-    ObClearTransAfterRestoreLog fn(restore_snapshot_version_, last_restore_log_ts_, timestamp);
+  } else if (OB_INVALID_TIMESTAMP != restore_snapshot_version_ && OB_INVALID_ID != last_restore_log_id_) {
+    // last_restore_log_ts_ may be invalid timestamp within pg restored from 2.x
+    ObClearTransAfterRestoreLog fn(restore_snapshot_version_, last_restore_log_id_, last_restore_log_ts_, timestamp);
     if (OB_FAIL(ctx_map_mgr_.foreach_ctx(fn))) {
       ret = fn.get_ret();
       TRANS_LOG(WARN, "for each transaction context error", K(ret), "manager", *this);
     } else {
       TRANS_LOG(INFO, "success to clear_trans_after_restore", K(ret), "manager", *this);
+      last_restore_log_id_ = OB_INVALID_ID;
       last_restore_log_ts_ = OB_INVALID_TIMESTAMP;
       restore_snapshot_version_ = OB_INVALID_TIMESTAMP;
     }
@@ -960,6 +963,7 @@ int ObPartitionTransCtxMgr::replay_start_working_log(const int64_t timestamp, co
     TRANS_LOG(INFO,
         "skip restore when replay start working",
         K(restore_snapshot_version_),
+        K(last_restore_log_id_),
         K(last_restore_log_ts_),
         K(timestamp));
   }
@@ -1129,7 +1133,8 @@ void ObPartitionTransCtxMgr::reset_elr_statistic()
   ATOMIC_STORE(&end_trans_by_self_count_, 0);
 }
 
-int ObPartitionTransCtxMgr::set_last_restore_log_ts(const int64_t last_restore_log_ts)
+int ObPartitionTransCtxMgr::set_last_restore_log_info(
+    const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
   if (ATOMIC_BCAS(&last_restore_log_ts_, OB_INVALID_TIMESTAMP, last_restore_log_ts)) {
@@ -1137,6 +1142,12 @@ int ObPartitionTransCtxMgr::set_last_restore_log_ts(const int64_t last_restore_l
   } else if (last_restore_log_ts != ATOMIC_LOAD(&last_restore_log_ts_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid last_restore_log_ts", KR(ret), K(last_restore_log_ts), "manager", *this);
+  }
+  if (ATOMIC_BCAS(&last_restore_log_id_, OB_INVALID_ID, last_restore_log_id)) {
+    TRANS_LOG(INFO, "set_last_restore_log_id", K(last_restore_log_id), "manager", *this);
+  } else if (last_restore_log_id != ATOMIC_LOAD(&last_restore_log_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid last_restore_log_id", KR(ret), K(last_restore_log_id), "manager", *this);
   }
 
   return ret;
@@ -1156,7 +1167,7 @@ int ObPartitionTransCtxMgr::set_restore_snapshot_version(const int64_t restore_s
 }
 
 int ObPartitionTransCtxMgr::update_restore_replay_info(
-    const int64_t restore_snapshot_version, const int64_t last_restore_log_ts)
+    const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(set_restore_snapshot_version(restore_snapshot_version))) {
@@ -1164,14 +1175,16 @@ int ObPartitionTransCtxMgr::update_restore_replay_info(
         "faile to set_restore_snapshot_version",
         KR(ret),
         K(restore_snapshot_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts),
         "manager",
         *this);
-  } else if (OB_FAIL(set_last_restore_log_ts(last_restore_log_ts))) {
+  } else if (OB_FAIL(set_last_restore_log_info(last_restore_log_id, last_restore_log_ts))) {
     TRANS_LOG(WARN,
-        "faile to set_last_restore_log_ts",
+        "faile to set_last_restore_log_info",
         KR(ret),
         K(restore_snapshot_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts),
         "manager",
         *this);
@@ -1180,6 +1193,7 @@ int ObPartitionTransCtxMgr::update_restore_replay_info(
         "success to update_restore_replay_info",
         KR(ret),
         K(restore_snapshot_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts),
         "manager",
         *this);
@@ -4176,7 +4190,7 @@ int ObPartTransCtxMgr::check_ctx_create_timestamp_elapsed(const ObPartitionKey& 
   return ret;
 }
 
-//iterate_trans_stat_without_partition achieves complete transaction information at the server level without partition
+// iterate_trans_stat_without_partition achieves complete transaction information at the server level without partition
 int ObPartTransCtxMgr::iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter)
 {
   int ret = OB_SUCCESS;
@@ -4191,9 +4205,9 @@ int ObPartTransCtxMgr::iterate_trans_stat_without_partition(ObTransStatIterator&
     TRANS_LOG(WARN, "get partition transaction context manager error");
     ret = OB_PARTITION_NOT_EXIST;
   } else {
-    //Traverse 64 map memory
-    for (int i=0; i<CONTEXT_MAP_COUNT; i++) {
-      CtxMap *tmp_ctx = ctx_map_ + i;
+    // Traverse 64 map memory
+    for (int i = 0; i < CONTEXT_MAP_COUNT; i++) {
+      CtxMap* tmp_ctx = ctx_map_ + i;
       if (OB_NOT_NULL(tmp_ctx)) {
         IterateTransStatForKeyFunctor fn(trans_stat_iter);
         if (OB_SUCCESS != (ret = tmp_ctx->for_each(fn))) {
@@ -5133,25 +5147,28 @@ int ObPartTransCtxMgr::has_terminated_trx_in_given_log_ts_range(
   return ret;
 }
 
-int ObPartTransCtxMgr::set_last_restore_log_ts(const common::ObPartitionKey &pkey, const int64_t last_restore_log_ts)
+int ObPartTransCtxMgr::set_last_restore_log_info(
+    const common::ObPartitionKey& pkey, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = NULL;
 
-  ObTimeGuard tg("ObPartTransCtxMgr set_last_restore_log_ts", 30000);
+  ObTimeGuard tg("ObPartTransCtxMgr set_last_restore_log_info", 30000);
   DRWLock::RDLockGuard guard(rwlock_);
   tg.click();
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtxMgr not inited");
     ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(!pkey.is_valid())) {
+  } else if (OB_UNLIKELY(!pkey.is_valid()) || OB_UNLIKELY(OB_INVALID_ID == last_restore_log_id) ||
+             OB_UNLIKELY(OB_INVALID_TIMESTAMP == last_restore_log_ts)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(pkey));
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else if (OB_ISNULL(ctx_mgr = get_partition_trans_ctx_mgr(pkey))) {
     TRANS_LOG(WARN, "get partition transaction context manager error", K(pkey));
     ret = OB_PARTITION_NOT_EXIST;
-  } else if (OB_FAIL(ctx_mgr->set_last_restore_log_ts(last_restore_log_ts))) {
-    TRANS_LOG(WARN, "failed to set_last_restore_log_ts", KR(ret), K(pkey), K(last_restore_log_ts));
+  } else if (OB_FAIL(ctx_mgr->set_last_restore_log_info(last_restore_log_id, last_restore_log_ts))) {
+    TRANS_LOG(
+        WARN, "failed to set_last_restore_log_info", KR(ret), K(pkey), K(last_restore_log_id), K(last_restore_log_ts));
   } else { /*do nothing*/
   }
   tg.click();
@@ -5186,8 +5203,8 @@ int ObPartTransCtxMgr::set_restore_snapshot_version(
   return ret;
 }
 
-int ObPartTransCtxMgr::update_restore_replay_info(
-    const common::ObPartitionKey &pkey, const int64_t restore_snapshot_version, const int64_t last_restore_log_ts)
+int ObPartTransCtxMgr::update_restore_replay_info(const common::ObPartitionKey& pkey,
+    const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
 {
   int ret = OB_SUCCESS;
   ObPartitionTransCtxMgr* ctx_mgr = NULL;
@@ -5206,14 +5223,17 @@ int ObPartTransCtxMgr::update_restore_replay_info(
         "get partition transaction context manager error",
         K(pkey),
         K(restore_snapshot_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts));
     ret = OB_PARTITION_NOT_EXIST;
-  } else if (OB_FAIL(ctx_mgr->update_restore_replay_info(restore_snapshot_version, last_restore_log_ts))) {
+  } else if (OB_FAIL(ctx_mgr->update_restore_replay_info(
+                 restore_snapshot_version, last_restore_log_id, last_restore_log_ts))) {
     TRANS_LOG(WARN,
         "failed to update_restore_replay_info",
         KR(ret),
         K(pkey),
         K(restore_snapshot_version),
+        K(last_restore_log_id),
         K(last_restore_log_ts));
   } else { /*do nothing*/
   }

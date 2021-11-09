@@ -19,7 +19,7 @@
 #include "sql/optimizer/ob_table_location.h"  // ObTableLocation
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
-
+#include "ob_htable_utils.h"
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;
@@ -40,13 +40,27 @@ int ObTableBatchExecuteP::deserialize()
   arg_.batch_operation_.set_entity_factory(&default_entity_factory_);
   result_.set_entity_factory(&default_entity_factory_);
   int ret = ParentType::deserialize();
+  if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+    // for HKV, modify the value of timestamp to be negative
+    const int64_t N = arg_.batch_operation_.count();
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+    {
+      ObITableEntity *entity = nullptr;
+      if (OB_FAIL(const_cast<ObTableOperation&>(arg_.batch_operation_.at(i)).get_entity(entity))) {
+        LOG_WARN("failed to get entity", K(ret), K(i));
+      } else if (OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(*entity))) {
+        LOG_WARN("failed to negate timestamp value", K(ret));
+      }
+    } // end for
+  }
   return ret;
 }
 
 int ObTableBatchExecuteP::check_arg()
 {
   int ret = OB_SUCCESS;
-  if (arg_.consistency_level_ != ObTableConsistencyLevel::STRONG) {
+  if (!(arg_.consistency_level_ == ObTableConsistencyLevel::STRONG ||
+      arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some options not supported yet", K(ret),
              "consistency_level", arg_.consistency_level_);
@@ -102,7 +116,22 @@ int ObTableBatchExecuteP::response(const int retcode)
 {
   int ret = OB_SUCCESS;
   if (!need_retry_in_queue_ && !did_async_end_trans()) {
-    ret = ObRpcProcessor::response(retcode);
+    // For HKV table, modify the value of timetamp to be positive
+    if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+      const int64_t N = result_.count();
+      for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+      {
+        ObITableEntity *entity = nullptr;
+        if (OB_FAIL(result_.at(i).get_entity(entity))) {
+          LOG_WARN("failed to get entity", K(ret), K(i));
+        } else if (OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(*entity))) {
+          LOG_WARN("failed to negate timestamp value", K(ret));
+        }
+      } // end for
+    }
+    if (OB_SUCC(ret)) {
+      ret = ObRpcProcessor::response(retcode);
+    }
   }
   return ret;
 }
@@ -140,16 +169,26 @@ int ObTableBatchExecuteP::try_process()
           ret = multi_insert();
           break;
         case ObTableOperationType::DEL:
-          stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_DELETE;
-          ret = multi_delete();
+          if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
+            stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_DELETE;
+            ret = htable_delete();
+          } else {
+            stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_DELETE;
+            ret = multi_delete();
+          }
           break;
         case ObTableOperationType::UPDATE:
           stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_UPDATE;
           ret = multi_update();
           break;
         case ObTableOperationType::INSERT_OR_UPDATE:
-          stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_INSERT_OR_UPDATE;
-          ret = multi_insert_or_update();
+          if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
+            stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_PUT;
+            ret = htable_put();
+          } else {
+            stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_INSERT_OR_UPDATE;
+            ret = multi_insert_or_update();
+          }
           break;
         case ObTableOperationType::REPLACE:
           stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_REPLACE;
@@ -169,9 +208,15 @@ int ObTableBatchExecuteP::try_process()
           break;
       }
     } else {
-      // complex batch hybrid operation
-      stat_event_type_ = ObTableProccessType::TABLE_API_BATCH_HYBRID;
-      ret = batch_execute(false);
+      if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
+        // HTable mutate_row(RowMutations)
+        stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_HYBRID;
+        ret = htable_mutate_row();
+      } else {
+        // complex batch hybrid operation
+        stat_event_type_ = ObTableProccessType::TABLE_API_BATCH_HYBRID;
+        ret = batch_execute(false);
+      }
     }
   }
 
@@ -277,6 +322,54 @@ int ObTableBatchExecuteP::multi_insert_or_update()
   return ret;
 }
 
+int ObTableBatchExecuteP::htable_put()
+{
+  int ret = OB_SUCCESS;
+  const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  const bool is_readonly = false;
+  uint64_t table_id = OB_INVALID_ID;
+  ObSEArray<int64_t, 1> part_ids;
+
+  if (OB_FAIL(check_arg2())) {
+  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+    LOG_WARN("failed to get table id", K(ret));
+  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
+    LOG_WARN("failed to get part id", K(ret));
+  } else if (1 != part_ids.count()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("should have one partition", K(ret), K(part_ids));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_INSERT, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("failed to start transaction", K(ret));
+  } else {
+    int64_t affected_rows = 0;
+    ObHTablePutExecutor put_executor(allocator_,
+                                     table_id,
+                                     part_ids.at(0),
+                                     get_timeout_ts(),
+                                     this,
+                                     table_service_,
+                                     part_service_);
+    ret = put_executor.htable_put(batch_operation, affected_rows);
+    if (OB_SUCC(ret)) {
+      ObTableOperationResult single_op_result;
+      single_op_result.set_entity(result_entity_);
+      single_op_result.set_type(ObTableOperationType::INSERT_OR_UPDATE);
+      single_op_result.set_errno(ret);
+      single_op_result.set_affected_rows(affected_rows);
+      result_.reset();
+      if (OB_FAIL(result_.push_back(single_op_result))) {
+        LOG_WARN("failed to add result", K(ret));
+      }
+    }
+  }
+  int tmp_ret = ret;
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
+    LOG_WARN("failed to end trans");
+  }
+  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  return ret;
+}
+
 int ObTableBatchExecuteP::multi_get()
 {
   int ret = OB_SUCCESS;
@@ -288,6 +381,7 @@ int ObTableBatchExecuteP::multi_get()
                                 arg_.binlog_row_image_type_);
   ObSEArray<int64_t, 1> part_ids;
   const bool is_readonly = true;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   if (OB_FAIL(check_arg2())) {
   } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
@@ -297,7 +391,7 @@ int ObTableBatchExecuteP::multi_get()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("should have one partition", K(ret), K(part_ids));
   } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, table_id, part_ids, get_timeout_ts()))) {
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, get_timeout_ts()))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(table_service_->multi_get(table_service_ctx_, arg_.batch_operation_, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -338,6 +432,54 @@ int ObTableBatchExecuteP::multi_delete()
   } else if (OB_FAIL(table_service_->multi_delete(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("failed to multi_delete", K(ret), K(table_id));
+    }
+  }
+  int tmp_ret = ret;
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
+    LOG_WARN("failed to end trans");
+  }
+  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  return ret;
+}
+
+int ObTableBatchExecuteP::htable_delete()
+{
+  int ret = OB_SUCCESS;
+  const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  const bool is_readonly = false;
+  uint64_t table_id = OB_INVALID_ID;
+  ObSEArray<int64_t, 1> part_ids;
+
+  if (OB_FAIL(check_arg2())) {
+  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+    LOG_WARN("failed to get table id", K(ret));
+  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
+    LOG_WARN("failed to get part id", K(ret));
+  } else if (1 != part_ids.count()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("should have one partition", K(ret), K(part_ids));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("failed to start transaction", K(ret));
+  } else {
+    int64_t affected_rows = 0;
+    ObHTableDeleteExecutor delete_executor(allocator_,
+                                           table_id,
+                                           part_ids.at(0),
+                                           get_timeout_ts(),
+                                           this,
+                                           table_service_,
+                                           part_service_);
+    ret = delete_executor.htable_delete(batch_operation, affected_rows);
+    if (OB_SUCC(ret)) {
+      ObTableOperationResult single_op_result;
+      single_op_result.set_entity(result_entity_);
+      single_op_result.set_type(ObTableOperationType::DEL);
+      single_op_result.set_errno(ret);
+      single_op_result.set_affected_rows(affected_rows);
+      result_.reset();
+      if (OB_FAIL(result_.push_back(single_op_result))) {
+        LOG_WARN("failed to add result", K(ret));
+      }
     }
   }
   int tmp_ret = ret;
@@ -465,6 +607,7 @@ int ObTableBatchExecuteP::batch_execute(bool is_readonly)
                                 arg_.returning_affected_entity_,
                                 arg_.returning_rowkey_);
   ObSEArray<int64_t, 1> part_ids;
+  const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
   } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
@@ -474,12 +617,83 @@ int ObTableBatchExecuteP::batch_execute(bool is_readonly)
     LOG_WARN("should have one partition", K(ret), K(part_ids));
   } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
   } else if (OB_FAIL(start_trans(is_readonly, (is_readonly ? sql::stmt::T_SELECT : sql::stmt::T_UPDATE),
-                                 table_id, part_ids, get_timeout_ts()))) {
+                                 consistency_level, table_id, part_ids, get_timeout_ts()))) {
     LOG_WARN("failed to start transaction", K(ret));
   } else if (OB_FAIL(table_service_->batch_execute(table_service_ctx_, batch_operation, result_))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("failed to execute batch", K(ret), K(table_id));
     }
+  }
+  int tmp_ret = ret;
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
+    LOG_WARN("failed to end trans");
+  }
+  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  return ret;
+}
+
+int ObTableBatchExecuteP::htable_mutate_row()
+{
+  int ret = OB_SUCCESS;
+  const ObTableBatchOperation &batch_operation = arg_.batch_operation_;
+  const bool is_readonly = false;
+  uint64_t table_id = OB_INVALID_ID;
+  ObSEArray<int64_t, 1> part_ids;
+  int64_t now_ms = -ObHTableUtils::current_time_millis();
+  if (OB_FAIL(check_arg2())) {
+  } else if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
+    LOG_WARN("failed to get table id", K(ret));
+  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
+    LOG_WARN("failed to get part id", K(ret));
+  } else if (1 != part_ids.count()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("should have one partition", K(ret), K(part_ids));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_DELETE, table_id, part_ids, get_timeout_ts()))) {
+    LOG_WARN("failed to start transaction", K(ret));
+  } else {
+    int64_t N = batch_operation.count();
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+    {
+      // execute each mutation one by one
+      const ObTableOperation &table_operation = batch_operation.at(i);
+      ObTableBatchOperation batch_ops;
+      if (OB_FAIL(batch_ops.add(table_operation))) {
+        LOG_WARN("failed to add", K(ret));
+        break;
+      }
+      switch(table_operation.type()) {
+        case ObTableOperationType::INSERT_OR_UPDATE:
+          {
+            int64_t affected_rows = 0;
+            ObHTablePutExecutor put_executor(allocator_,
+                                             table_id,
+                                             part_ids.at(0),
+                                             get_timeout_ts(),
+                                             this,
+                                             table_service_,
+                                             part_service_);
+            ret = put_executor.htable_put(batch_ops, affected_rows, now_ms);
+          }
+          break;
+        case ObTableOperationType::DEL:
+          {
+            int64_t affected_rows = 0;
+            ObHTableDeleteExecutor delete_executor(allocator_,
+                                                   table_id,
+                                                   part_ids.at(0),
+                                                   get_timeout_ts(),
+                                                   this,
+                                                   table_service_,
+                                                   part_service_);
+            ret = delete_executor.htable_delete(batch_ops, affected_rows);
+          }
+          break;
+        default:
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported mutation type", K(ret), K(table_operation));
+          break;
+      }  // end switch
+    }    // end for
   }
   int tmp_ret = ret;
   if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
