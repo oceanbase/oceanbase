@@ -245,7 +245,7 @@ int ObRebuildReplicaTaskProducer::build_local_replica_info()
         // skip
       } else if (OB_FAIL(partition->get_pg_storage().get_pg_meta(pg_meta))) {
         STORAGE_LOG(WARN, "failed to get pg meta", K(ret), K(partition->get_partition_key()));
-      } else if (OB_FAIL(partition->get_log_service()->get_clog_parent(parent_addr, parent_cluster_id))) {
+      } else if (OB_FAIL(partition->get_log_service()->get_clog_parent_for_migration(parent_addr, parent_cluster_id))) {
         STORAGE_LOG(WARN, "get parent addr failed", K(ret));
       } else {
         // now only consider memstore pecent 0 is D replica, and read-only replica in ofs mode.

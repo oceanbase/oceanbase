@@ -265,7 +265,12 @@ void ObRawExpr::reset()
 int ObRawExpr::get_name(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(orig_expr_) && EXPLAIN_DBLINK_STMT == type) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("fail to check stack overflow", K(ret), K(is_stack_overflow));
+  } else if (is_stack_overflow) {
+    LOG_DEBUG("too deep recursive", K(ret), K(is_stack_overflow)); 
+  } else if (OB_NOT_NULL(orig_expr_) && EXPLAIN_DBLINK_STMT == type) {
     if (OB_FAIL(orig_expr_->get_name(buf, buf_len, pos, type))) {
       LOG_WARN("fail to get name for orig expr", K(ret));
     }

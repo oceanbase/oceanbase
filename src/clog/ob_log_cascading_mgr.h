@@ -98,6 +98,10 @@ public:
   {
     return parent_;
   }
+  share::ObCascadMember get_prev_parent() const
+  {
+    return prev_parent_;
+  }
   common::ObAddr get_parent_addr() const
   {
     return parent_.get_server();

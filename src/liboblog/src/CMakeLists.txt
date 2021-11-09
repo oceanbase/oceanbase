@@ -152,7 +152,6 @@ disable_pch(oblog_objects_miner)
 target_link_libraries(oblog_objects_miner PUBLIC oblog_miner)
 add_library(oblog_static
   STATIC
-  EXCLUDE_FROM_ALL
   ${CMAKE_BINARY_DIR}/src/observer/ob_version.cpp)
 target_link_libraries(oblog_static
   PUBLIC oblog_objects_miner oblib
@@ -162,3 +161,4 @@ target_link_libraries(oblog_static
   PRIVATE -static-libgcc -static-libstdc++
   ${LGPL_DEPS}
   )
+set_target_properties(oblog_static PROPERTIES OUTPUT_NAME "oblog")

@@ -627,12 +627,13 @@ int ObLogDelUpd::check_multi_table_dml_for_px(AllocExchContext& ctx, ObShardingI
     ObShardingInfo& sharding_info, const ObPhyTableLocationInfo* phy_table_locaion_info, bool& is_needed)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(phy_table_locaion_info)) {
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(phy_table_locaion_info) || OB_ISNULL(child = get_child(first_child))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy_table_locaion_info is null", K(ret));
+    LOG_WARN("phy_table_locaion_info is null", K(ret), K(phy_table_locaion_info), K(child));
   } else if (phy_table_locaion_info->get_partition_cnt() > 1) {
     LOG_TRACE("multi partition for px dml");
-    if (ctx.exchange_allocated_) {
+    if (ctx.exchange_allocated_ || NULL == child->get_sharding_info().get_phy_table_location_info()) {
       is_needed = true;
     } else {
       is_needed = false;

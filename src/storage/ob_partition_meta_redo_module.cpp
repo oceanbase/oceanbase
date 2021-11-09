@@ -451,13 +451,22 @@ int ObPartitionMetaRedoModule::parse(const int64_t subcmd, const char* buf, cons
         ObPGKey pgkey;
         ObITable::TableKey table_key;
         blocksstable::ObMacroBlockMetaV2 meta;
+        common::ObObj *endkey = static_cast<common::ObObj *>(ob_malloc(sizeof(ObObj) * common::OB_MAX_COLUMN_NUMBER));
         MacroBlockId macro_block_id;
         ObPGMacroBlockMetaLogEntry entry(pgkey, table_key, 0, 0, macro_block_id, meta);
-        if (OB_FAIL(entry.deserialize(buf, len, pos))) {
+        if (OB_UNLIKELY(nullptr == endkey)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc memory fail", K(ret));
+        } else if (FALSE_IT(meta.endkey_ = endkey)) {
+        } else if (OB_FAIL(entry.deserialize(buf, len, pos))) {
           LOG_WARN("Fail to deserialize ObPGMacroBlockMetaLogEntry", K(ret));
         } else if (0 > fprintf(stream, "ObPGMacroBlockMetaLogEntry\n%s\n", to_cstring(entry))) {
           ret = OB_IO_ERROR;
           LOG_WARN("failed to print ObPGMacroBlockMetaLogEntry", K(ret), K(entry));
+        }
+
+        if (nullptr != endkey) {
+          ob_free(endkey);
         }
         break;
       }

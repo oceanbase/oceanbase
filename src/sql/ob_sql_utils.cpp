@@ -3848,7 +3848,9 @@ int ObSQLUtils::handle_audit_record(
         } else {
           ObAuditRecordData audit_record = session.get_final_audit_record(exec_mode);
           audit_record.sched_info_ = exec_ctx.get_sched_info();
-          if (OB_FAIL(req_manager->record_request(audit_record))) {
+          bool is_sensitive = (NULL != exec_ctx.get_sql_ctx()) ?
+                              exec_ctx.get_sql_ctx()->is_sensitive_ : true;
+          if (OB_FAIL(req_manager->record_request(audit_record, is_sensitive))) {
             if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
               LOG_DEBUG("cannot allocate mem for record", K(ret));
               ret = OB_SUCCESS;

@@ -1,4 +1,4 @@
-# What is OceanBase database
+# What is OceanBase Database
 
 OceanBase Database is a native distributed relational database. It is developed entirely by Alibaba and Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
@@ -18,7 +18,7 @@ OceanBase Database has these features:
     OceanBase Database supports quasi memory level data change and exclusive encoding compression. Together with the linear scalability, OceanBase Database provides high performance.
 - Low cost
     
-    OceanBase Database uses PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage cost and the computing cost.
+    OceanBase Database uses PC servers and cheap SSDs. Its high storage compression ratio and high performance also reduce the storage and computing cost.
 - Multi-tenancy
     
     OceanBase Database supports native multi-tenancy architecture. One cluster supports multiple businesses. Data is isolated among tenants. This reduces the deployment, operation, and maintenance costs.
@@ -46,6 +46,7 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 
 | OS | Ver. | Arch | Compilable | Package Deployable | Compiled Binary Deployable | Mysqltest Passed |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| Alibaba Cloud Linux | 2.1903 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |

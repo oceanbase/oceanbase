@@ -137,9 +137,22 @@ int ObExprCast::get_cast_string_len(ObExprResType& type1, ObExprResType& type2, 
       case ObHexStringType:
       case ObRawType:
       case ObNVarchar2Type:
-      case ObNCharType: {
+      case ObNCharType:
+      case ObEnumType:
+      case ObSetType:
+      case ObEnumInnerType:
+      case ObSetInnerType:
+      case ObURowIDType:
+      case ObLobType: {
         res_len = type1.get_length();
         length_semantics = type1.get_length_semantics();
+        break;
+      }
+      case ObBitType: {
+        if (scale > 0) {
+          res_len = scale;
+        }
+        res_len = (res_len + 7) / 8;
         break;
       }
       default: {

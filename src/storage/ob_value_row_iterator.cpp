@@ -22,13 +22,14 @@ ObValueRowIterator::ObValueRowIterator()
       unique_(false),
       allocator_(ObModIds::OB_VALUE_ROW_ITER),
       rows_(),
-      cur_idx_(0)
+      cur_idx_(0),
+      data_table_rowkey_cnt_(0)
 {}
 
 ObValueRowIterator::~ObValueRowIterator()
 {}
 
-int ObValueRowIterator::init(bool unique)
+int ObValueRowIterator::init(bool unique, int64_t data_table_rowkey_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -38,6 +39,7 @@ int ObValueRowIterator::init(bool unique)
     is_inited_ = true;
     unique_ = unique;
     cur_idx_ = 0;
+    data_table_rowkey_cnt_ = data_table_rowkey_cnt;
   }
   return ret;
 }
@@ -52,6 +54,9 @@ int ObValueRowIterator::add_row(common::ObNewRow& row)
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObValueRowIterator is not initialized", K(ret));
+  } else if (data_table_rowkey_cnt_ > row.count_) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid row", K(ret), K(row), K(data_table_rowkey_cnt_));
   } else {
     bool exist = false;
     // check whether exists
@@ -60,11 +65,17 @@ int ObValueRowIterator::add_row(common::ObNewRow& row)
       // on multiple unique index is small, so there is usually only one row in the value row iterator
       // so using list traversal to deduplicate unique index is more efficiently
       // and also saves the CPU overhead that constructs the hash map
-      ObStoreRowkey rowkey(row.cells_, row.count_);
+      ObStoreRowkey rowkey(row.cells_, data_table_rowkey_cnt_);
       for (int64_t i = 0; OB_SUCC(ret) && !exist && i < rows_.count(); ++i) {
-        ObStoreRowkey tmp_rowkey(rows_.at(i).cells_, rows_.at(i).count_);
-        if (OB_UNLIKELY(tmp_rowkey == rowkey)) {
-          exist = true;
+        if (data_table_rowkey_cnt_ > rows_.at(i).count_) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid row", K(ret), K(row), K(data_table_rowkey_cnt_));
+        } else {
+          ObStoreRowkey tmp_rowkey(rows_.at(i).cells_, data_table_rowkey_cnt_);
+          STORAGE_LOG(DEBUG, "print rowkey info", K(rowkey), K(tmp_rowkey), K(data_table_rowkey_cnt_));
+          if (OB_UNLIKELY(tmp_rowkey == rowkey)) {
+            exist = true;
+          }
         }
       }
     }

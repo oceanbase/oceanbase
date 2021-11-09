@@ -106,15 +106,14 @@ enum TRANSFORM_TYPE {
   OR_EXPANSION = 1 << 13,
   WIN_MAGIC = 1 << 14,
   JOIN_ELIMINATION = 1 << 15,
-  JOIN_AGGREGATION = 1 << 16,
-  GROUPBY_PLACEMENT = 1 << 17,
-  SUBQUERY_COALESCE = 1 << 18,
-  WIN_GROUPBY = 1 << 19,
-  PREDICATE_MOVE_AROUND = 1 << 20,
-  NL_FULL_OUTER_JOIN = 1 << 21,
-  SEMI_TO_INNER = 1 << 22,
-  OUTERJOIN_LIMIT_PUSHDOWN = 1 << 23,
-  TRANSFORM_TYPE_COUNT_PLUS_ONE = 1 << 24
+  GROUPBY_PLACEMENT = 1 << 16,
+  SUBQUERY_COALESCE = 1 << 17,
+  WIN_GROUPBY = 1 << 18,
+  PREDICATE_MOVE_AROUND = 1 << 19,
+  NL_FULL_OUTER_JOIN = 1 << 20,
+  SEMI_TO_INNER = 1 << 21,
+  OUTERJOIN_LIMIT_PUSHDOWN = 1 << 22,
+  TRANSFORM_TYPE_COUNT_PLUS_ONE = 1 << 23
 };
 
 struct ObParentDMLStmt {
@@ -134,8 +133,8 @@ public:
   static const uint64_t ALL_TRANSFORM_RULES = TRANSFORM_TYPE_COUNT_PLUS_ONE - 1;
   static const uint64_t ALL_HEURISTICS_RULES = SIMPLIFY | ANYALL | AGGR | ELIMINATE_OJ | VIEW_MERGE | WHERE_SQ_PULL_UP |
                                                QUERY_PUSH_DOWN | SET_OP | PROJECTION_PRUNING | JOIN_ELIMINATION |
-                                               JOIN_AGGREGATION | WIN_GROUPBY | PREDICATE_MOVE_AROUND |
-                                               NL_FULL_OUTER_JOIN | OUTERJOIN_LIMIT_PUSHDOWN;
+                                               WIN_GROUPBY | PREDICATE_MOVE_AROUND | NL_FULL_OUTER_JOIN |
+                                               OUTERJOIN_LIMIT_PUSHDOWN;
   ObTransformRule(ObTransformerCtx* ctx, TransMethod transform_method)
       : ctx_(ctx),
         transform_method_(transform_method),

@@ -124,9 +124,9 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
 |ID|OPERATOR         |NAME              |EST. ROWS|COST|
 --------------------------------------------------------
 |0 |NESTED-LOOP JOIN |                  |1        |126 |
-|1 | SUBPLAN SCAN    |VIEW4             |1        |37  |
+|1 | SUBPLAN SCAN    |VIEW3             |1        |37  |
 |2 |  SCALAR GROUP BY|                  |1        |37  |
-|3 |   SUBPLAN SCAN  |VIEW5             |1        |37  |
+|3 |   SUBPLAN SCAN  |VIEW4             |1        |37  |
 |4 |    TABLE SCAN   |t9(idx_t9,Reverse)|1        |37  |
 |5 | TABLE SCAN      |t9(idx_t9)        |1        |89  |
 ========================================================
@@ -134,13 +134,13 @@ SQL: select * from t9 where c2 = (select max(c2) from t9);
 Outputs & filters: 
 -------------------------------------
   0 - output([t9.c1], [t9.c2], [t9.c3], [t9.c4]), filter(nil), 
-      conds(nil), nl_params_([VIEW4.max(c2)])
-  1 - output([VIEW4.max(c2)]), filter(nil), 
-      access([VIEW4.max(c2)])
-  2 - output([T_FUN_MAX(VIEW5.c2)]), filter(nil), 
-      group(nil), agg_func([T_FUN_MAX(VIEW5.c2)])
-  3 - output([VIEW5.c2]), filter(nil), 
-      access([VIEW5.c2])
+      conds(nil), nl_params_([VIEW3.max(c2)])
+  1 - output([VIEW3.max(c2)]), filter(nil), 
+      access([VIEW3.max(c2)])
+  2 - output([T_FUN_MAX(VIEW4.c2)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW4.c2)])
+  3 - output([VIEW4.c2]), filter(nil), 
+      access([VIEW4.c2])
   4 - output([t9.c2]), filter([(T_OP_IS_NOT, t9.c2, NULL, 0)]), 
       access([t9.c2]), partitions(p0), 
       limit(1), offset(nil)

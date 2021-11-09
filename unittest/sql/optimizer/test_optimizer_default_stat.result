@@ -8017,9 +8017,9 @@ SQL: SELECT (select max(t1.c1) from t1) as field from t1 group by field;
 ------------------------------------------------------------------
 |0 |HASH GROUP BY                   |           |1        |809753|
 |1 | NESTED-LOOP JOIN CARTESIAN     |           |500000   |645625|
-|2 |  SUBPLAN SCAN                  |VIEW4      |1        |38    |
+|2 |  SUBPLAN SCAN                  |VIEW3      |1        |38    |
 |3 |   SCALAR GROUP BY              |           |1        |38    |
-|4 |    SUBPLAN SCAN                |VIEW5      |1        |37    |
+|4 |    SUBPLAN SCAN                |VIEW4      |1        |37    |
 |5 |     LIMIT                      |           |1        |37    |
 |6 |      PX COORDINATOR MERGE SORT |           |1        |37    |
 |7 |       EXCHANGE OUT DISTR       |:EX10000   |1        |37    |
@@ -8035,16 +8035,16 @@ SQL: SELECT (select max(t1.c1) from t1) as field from t1 group by field;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([VIEW4.max(t1.c1)]), filter(nil), 
-      group([VIEW4.max(t1.c1)]), agg_func(nil)
-  1 - output([VIEW4.max(t1.c1)]), filter(nil), 
+  0 - output([VIEW3.max(t1.c1)]), filter(nil), 
+      group([VIEW3.max(t1.c1)]), agg_func(nil)
+  1 - output([VIEW3.max(t1.c1)]), filter(nil), 
       conds(nil), nl_params_(nil), batch_join=false
-  2 - output([VIEW4.max(t1.c1)]), filter(nil), 
-      access([VIEW4.max(t1.c1)])
-  3 - output([T_FUN_MAX(VIEW5.c1)]), filter(nil), 
-      group(nil), agg_func([T_FUN_MAX(VIEW5.c1)])
-  4 - output([VIEW5.c1]), filter(nil), 
-      access([VIEW5.c1])
+  2 - output([VIEW3.max(t1.c1)]), filter(nil), 
+      access([VIEW3.max(t1.c1)])
+  3 - output([T_FUN_MAX(VIEW4.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW4.c1)])
+  4 - output([VIEW4.c1]), filter(nil), 
+      access([VIEW4.c1])
   5 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   6 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC])
   7 - output([t1.c1]), filter(nil), dop=1

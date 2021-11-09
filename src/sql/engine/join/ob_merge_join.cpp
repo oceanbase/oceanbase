@@ -146,6 +146,7 @@ int ObMergeJoin::inner_open(ObExecContext& exec_ctx) const
     join_ctx->set_tenant_id(session->get_effective_tenant_id());
     join_ctx->right_cache_row_buf_.projector_ = const_cast<int32_t*>(right_op_->get_projector());
     join_ctx->right_cache_row_buf_.projector_size_ = right_op_->get_projector_size();
+    LOG_TRACE("merge join left unique", K(id_), K(is_left_unique_));
   }
   return ret;
 }

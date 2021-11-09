@@ -430,6 +430,8 @@ END_P SET_VAR DELIMITER
 %type <node> opt_force_purge
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric get_format_unit
 %type <node> opt_copy_id opt_backup_dest opt_preview opt_backup_backup_dest opt_tenant_info opt_with_active_piece
+%type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
+
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -2496,6 +2498,56 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
+| WEIGHT_STRING '(' expr opt_ws_as_char opt_ws_levels ')'
+{
+  ParseNode *zeroNode1 = NULL;
+  malloc_terminal_node(zeroNode1, result->malloc_pool_, T_INT);
+  zeroNode1->value_ = 0;
+  zeroNode1->is_hidden_const_ = 1;
+
+  if($4->value_ > 0){
+    $5->value_ |= OB_STRXFRM_PAD_WITH_SPACE;
+  }
+
+  ParseNode *falseNode = NULL;
+  malloc_terminal_node(falseNode, result->malloc_pool_, T_INT);
+  falseNode->value_ = 0;
+  falseNode->is_hidden_const_ = 1;
+
+  ParseNode *params = NULL; 
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST , 5, $3 , zeroNode1 , $4, $5 ,falseNode);
+  make_name_node($$, result->malloc_pool_, "weight_string");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
+| WEIGHT_STRING '(' expr AS BINARY ws_nweights ')'
+{
+  ParseNode *zeroNode1 = NULL;
+  malloc_terminal_node(zeroNode1, result->malloc_pool_, T_INT);
+  zeroNode1->value_ = 0;
+  zeroNode1->is_hidden_const_ = 1;
+
+  ParseNode *padNode = NULL;
+  malloc_terminal_node(padNode, result->malloc_pool_, T_INT);
+  padNode->value_ = OB_STRXFRM_PAD_WITH_SPACE;
+  padNode->is_hidden_const_ = 1;
+
+  ParseNode *trueNode = NULL;
+  malloc_terminal_node(trueNode, result->malloc_pool_, T_INT);
+  trueNode->value_ = 1;
+  trueNode->is_hidden_const_ = 1;
+
+  ParseNode *params = NULL; 
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST , 5, $3 , zeroNode1 , $6, padNode ,trueNode);
+  make_name_node($$, result->malloc_pool_, "weight_string");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
+| WEIGHT_STRING '(' expr ',' INTNUM ',' INTNUM ',' INTNUM ',' INTNUM ')'
+{
+  ParseNode *params = NULL; 
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST , 5, $3 , $5 , $7, $9 ,$11);
+  make_name_node($$, result->malloc_pool_, "weight_string");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
 ;
 
 sys_interval_func:
@@ -2745,6 +2797,160 @@ opt_separator:
   malloc_non_terminal_node($$, result->malloc_pool_, T_SEPARATOR_CLAUSE, 1, $2);
 }
 ;
+opt_ws_as_char:
+/* EMPTY */
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 0;
+  $$->param_num_ = 1;
+}
+| AS CHARACTER ws_nweights
+{
+  $$ = $3;
+}
+;
+
+opt_ws_levels:
+/* EMPTY */
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->is_hidden_const_ = 1;
+  $$->value_ = 0;
+  $$->param_num_ = 1;
+}
+| LEVEL ws_level_list_or_range
+{
+  (void)($1);
+  $$ = $2;
+}
+;
+
+ws_level_list_or_range:
+ws_level_list
+{
+  $$ = $1;
+}
+| ws_level_range
+{
+  $$ = $1;
+}
+;
+
+ws_level_list:
+ws_level_list_item
+{
+  $$ = $1;
+}
+| ws_level_list ',' ws_level_list_item
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = $3->value_ | $1->value_;
+  $$->param_num_ = 1;
+}
+;
+
+ws_level_list_item:
+ws_level_number ws_level_flags
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = (1 | $2->value_) << $1->value_ ;
+  $$->param_num_ = 1;
+}
+;
+
+ws_level_range:
+ws_level_number '-' ws_level_number
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  uint32_t res = 0;
+  uint32_t start = $1->value_ ;
+  uint32_t end = $3->value_ ;
+  if (end < start) {
+    end = start;
+  }
+  for ( ; start <= end; start++) {
+    res |= (1 << start);
+  }
+  $$->value_ = res;
+  $$->param_num_ = 1;
+}
+;
+
+ws_level_number:
+INTNUM
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  if ($1->value_ < 1) {
+    $$->value_ = 1;
+  } else if ($1->value_ > OB_STRXFRM_NLEVELS) {
+    $$->value_ = OB_STRXFRM_NLEVELS;
+  } else{
+    $$->value_ = $1->value_;
+  }
+  $$->value_ =  $$->value_ - 1;
+  $$->param_num_ = 1;
+}
+;
+
+ws_level_flags:
+/* empty */ 
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_  = 0; 
+  $$->param_num_ = 1;
+}
+| ws_level_flag_desc 
+{ 
+  $$= $1; 
+}
+| ws_level_flag_desc ws_level_flag_reverse 
+{ 
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = $1->value_ | $2->value_; 
+  $$->param_num_ = 1;
+}
+| ws_level_flag_reverse 
+{
+  $$ = $1 ; 
+}
+;
+
+ws_nweights:
+'(' INTNUM ')'
+{ 
+  if ($2->value_ < 1) {
+    yyerror(&@1, result, "Incorrect arguments to WEIGHT_STRING()\n");
+    YYABORT_PARSE_SQL_ERROR;
+  }
+  $$ = $2; 
+}
+;
+
+ws_level_flag_desc:
+ASC 
+{ 
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+  $$->param_num_ = 1;
+}
+| DESC 
+{ 
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1 << OB_STRXFRM_DESC_SHIFT; 
+  $$->param_num_ = 1;
+}
+;
+
+ws_level_flag_reverse:
+REVERSE
+{ 
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1 << OB_STRXFRM_REVERSE_SHIFT; 
+  $$->param_num_ = 1;
+} 
+;
+
 
 /*****************************************************************************
  *

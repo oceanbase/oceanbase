@@ -45,6 +45,15 @@ enum ObTableProccessType
   TABLE_API_BATCH_RETRIVE,
   TABLE_API_BATCH_HYBRID,
 
+  // hbase mutate
+  TABLE_API_HBASE_DELETE,
+  TABLE_API_HBASE_PUT,
+  TABLE_API_HBASE_CHECK_AND_DELETE,
+  TABLE_API_HBASE_CHECK_AND_PUT,
+  TABLE_API_HBASE_INCREMENT,
+  TABLE_API_HBASE_APPEND,
+  TABLE_API_HBASE_HYBRID,
+
   // query
   TABLE_API_TABLE_QUERY,
   TABLE_API_HBASE_QUERY,
@@ -171,12 +180,62 @@ public:
       EVENT_ADD(TABLEAPI_BATCH_HYBRID_INSERT_OR_UPDATE_ROW, rows); // @todo row count for each type
       SET_AUDIT_SQL_STRING(batch_hybrid);
       break;
+    // hbase mutate
+    case ObTableProccessType::TABLE_API_HBASE_DELETE:
+      EVENT_INC(HBASEAPI_DELETE_COUNT);
+      EVENT_ADD(HBASEAPI_DELETE_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_DELETE_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_delete);
+      break;
+    case ObTableProccessType::TABLE_API_HBASE_PUT:
+      EVENT_INC(HBASEAPI_PUT_COUNT);
+      EVENT_ADD(HBASEAPI_PUT_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_PUT_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_put);
+      break;
+    case ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE:
+      EVENT_INC(HBASEAPI_CHECK_DELETE_COUNT);
+      EVENT_ADD(HBASEAPI_CHECK_DELETE_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_CHECK_DELETE_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_check_and_delete);
+      break;
+    case ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT:
+      EVENT_INC(HBASEAPI_CHECK_PUT_COUNT);
+      EVENT_ADD(HBASEAPI_CHECK_PUT_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_CHECK_PUT_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_check_and_put);
+      break;
+    case ObTableProccessType::TABLE_API_HBASE_INCREMENT:
+      EVENT_INC(HBASEAPI_INCREMENT_COUNT);
+      EVENT_ADD(HBASEAPI_INCREMENT_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_INCREMENT_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_increment);
+      break;
+    case ObTableProccessType::TABLE_API_HBASE_APPEND:
+      EVENT_INC(HBASEAPI_APPEND_COUNT);
+      EVENT_ADD(HBASEAPI_APPEND_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_APPEND_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_append);
+      break;
+    case ObTableProccessType::TABLE_API_HBASE_HYBRID:
+      EVENT_INC(HBASEAPI_HYBRID_COUNT);
+      EVENT_ADD(HBASEAPI_HYBRID_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_HYBRID_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_hybrid);
+      break;
     // table query
     case ObTableProccessType::TABLE_API_TABLE_QUERY:
       EVENT_INC(TABLEAPI_QUERY_COUNT);
       EVENT_ADD(TABLEAPI_QUERY_TIME, elapsed_us);
       EVENT_ADD(TABLEAPI_QUERY_ROW, rows);
       SET_AUDIT_SQL_STRING(table_query);
+      break;
+    // hbase query
+    case ObTableProccessType::TABLE_API_HBASE_QUERY:
+      EVENT_INC(HBASEAPI_SCAN_COUNT);
+      EVENT_ADD(HBASEAPI_SCAN_TIME, elapsed_us);
+      EVENT_ADD(HBASEAPI_SCAN_ROW, rows);
+      SET_AUDIT_SQL_STRING(hbase_scan);
       break;
 
     default:

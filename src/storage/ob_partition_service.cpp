@@ -13386,7 +13386,7 @@ int ObPartitionService::get_primary_cluster_migrate_src(const common::ObPartitio
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log service should not be NULL", K(ret), K(pkey));
     } else if (FALSE_IT(is_restore = partition->get_pg_storage().is_restore())) {
-    } else if (OB_FAIL(log_service->get_clog_parent(src_info.src_addr_, src_info.cluster_id_))) {
+    } else if (OB_FAIL(log_service->get_clog_parent_for_migration(src_info.src_addr_, src_info.cluster_id_))) {
       if (OB_NEED_RETRY == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -13463,7 +13463,7 @@ int ObPartitionService::get_standby_cluster_migrate_src(const common::ObPartitio
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log service should not be NULL", K(ret), K(pkey));
     } else if (ObRole::STANDBY_LEADER == role) {
-      if (OB_FAIL(log_service->get_clog_parent(src_info.src_addr_, src_info.cluster_id_))) {
+      if (OB_FAIL(log_service->get_clog_parent_for_migration(src_info.src_addr_, src_info.cluster_id_))) {
         if (OB_NEED_RETRY == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -13472,7 +13472,7 @@ int ObPartitionService::get_standby_cluster_migrate_src(const common::ObPartitio
       } else if (OB_FAIL(add_migrate_src(src_info, src_set, src_array))) {
         LOG_WARN("failed to add migrate src", K(ret), K(role), K(src_info), K(pkey));
       } else {
-        LOG_INFO("get_clog_parent", K(src_info));
+        LOG_INFO("get_clog_parent_for_migration", K(src_info));
         src_info.reset();
       }
     }

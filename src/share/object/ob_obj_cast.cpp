@@ -4151,7 +4151,7 @@ static int string_set(const ObExpectType& expect_type, ObObjCastParams& params, 
           LOG_WARN("unexpect val_cnt", K(in), K(out), K(expect_type), K(ret));
         } else if (val_cnt >= 64) {  // do nothing
         } else if (val_cnt < 64 && value > ((1ULL << val_cnt) - 1)) {
-          value = value & ((1ULL << val_cnt) - 1);
+          value = 0;
           ret = OB_ERR_DATA_TRUNCATED;
           LOG_WARN("input value out of range", K(in), K(val_cnt), K(ret));
         }
@@ -4584,8 +4584,6 @@ static int bit_string(
   int ret = OB_SUCCESS;
   uint64_t value = in.get_bit();
   ObLength res_length = -1;
-  char *res_buf;
-  int32_t bytes_length = 0;
   if (OB_UNLIKELY((ObBitTC != in.get_type_class() ||
                    (ObStringTC != ob_obj_type_class(expect_type) && ObTextTC != ob_obj_type_class(expect_type))))) {
     ret = OB_ERR_UNEXPECTED;
@@ -4600,9 +4598,8 @@ static int bit_string(
             params.dest_collation_,
             params))) {
       LOG_WARN("fail to convert string collation", K(ret));
-    } else {
-      res_buf = tmp_str.ptr();
-      bytes_length = tmp_str.length();
+    } else if (OB_FAIL(copy_string(params, expect_type, tmp_str.ptr(), tmp_str.length(), out))) {
+      LOG_WARN("fail to copy string", KP(tmp_str.ptr()), K(tmp_str.length()), K(value), K(out), K(expect_type));
     }
   } else {
     // using bit as char array to do cast.
@@ -4613,18 +4610,13 @@ static int bit_string(
     MEMSET(tmp_buf, 0, BUF_LEN);
     if (OB_FAIL(bit_to_char_array(value, scale, tmp_buf, BUF_LEN, pos))) {
       LOG_WARN("fail to store val", KP(tmp_buf), K(BUF_LEN), K(value), K(pos));
-    } else {
-      res_buf = tmp_buf;
-      bytes_length = pos;
+    } else if (OB_FAIL(copy_string(params, expect_type, tmp_buf, pos, out))) {
+      LOG_WARN("fail to copy string", KP(tmp_buf), K(pos), K(value), K(out), K(expect_type));
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(copy_string(params, expect_type, res_buf, bytes_length, out))) {
-      LOG_WARN("fail to copy string", KP(res_buf), K(bytes_length), K(value), K(out), K(expect_type));
-    } else {
-      res_length = static_cast<ObLength>(out.get_string_len());
-      SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_STRING, res_length);
-    }
+    res_length = static_cast<ObLength>(out.get_string_len());
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_STRING, res_length);
   }
   return ret;
 }

@@ -866,6 +866,7 @@
 
 #define N_TO_SINGLE_BYTE "to_single_byte"
 #define N_TO_MULTI_BYTE "to_multi_byte"
+#define N_WEIGHT_STRING "weight_string"
 
 #define N_TO_NCHAR "to_nchar"
 #define N_LNNVL "lnnvl"

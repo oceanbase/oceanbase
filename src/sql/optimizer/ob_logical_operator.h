@@ -1987,7 +1987,8 @@ public:
       ObRawExpr*& part_expr, ObRawExpr*& subpart_expr);
 
   int check_fulfill_cut_ratio_condition(int64_t dop, double ndv, bool& is_fulfill);
-
+  // check child operator contain exchange
+  int child_has_exchange(const ObLogicalOperator *op, bool &find);
 public:
   /* child operators */
   ObSEArray<ObLogicalOperator*, 16, common::ModulePageAllocator, true> child_;

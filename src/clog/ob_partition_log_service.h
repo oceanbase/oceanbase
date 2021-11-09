@@ -249,7 +249,7 @@ public:
   virtual common::ObPartitionKey get_partition_key() const = 0;
   virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const = 0;
   virtual int get_leader(common::ObAddr& leader) const = 0;
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const = 0;
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const = 0;
   virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) = 0;
   virtual int change_restore_leader(const common::ObAddr& leader) = 0;
   virtual int check_and_set_restore_progress() = 0;
@@ -523,7 +523,7 @@ public:
   virtual common::ObPartitionKey get_partition_key() const override;
   virtual int get_saved_base_storage_info(common::ObBaseStorageInfo& base_storage_info) const override;
   virtual int get_leader(common::ObAddr& addr) const override;
-  virtual int get_clog_parent(common::ObAddr& parent, int64_t& cluster_id) const override;
+  virtual int get_clog_parent_for_migration(common::ObAddr &parent, int64_t &cluster_id) const;
   virtual int change_leader(const common::ObAddr& leader, common::ObTsWindows& changing_leader_windows) override;
   virtual int change_restore_leader(const common::ObAddr& leader) override;
   virtual int check_and_set_restore_progress() override;

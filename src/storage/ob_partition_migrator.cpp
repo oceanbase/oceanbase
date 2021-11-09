@@ -13261,7 +13261,7 @@ int ObMigrateGetLeaderUtil::get_clog_parent(clog::ObIPartitionLogService &log_se
   ObAddr parent_src;
   int64_t cluster_id = -1;
 
-  if (OB_FAIL(log_service.get_clog_parent(parent_src, cluster_id))) {
+  if (OB_FAIL(log_service.get_clog_parent_for_migration(parent_src, cluster_id))) {
     STORAGE_LOG(WARN, "get parent addr failed", K(ret));
   } else {
     parent_info.src_addr_ = parent_src;

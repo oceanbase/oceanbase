@@ -5744,6 +5744,8 @@ int ObLogPlan::extract_onetime_exprs(
   } else if (is_onetime_expr) {
     if (OB_FAIL(extract_subquery_ids(expr, idxs))) {
       LOG_WARN("fail to extract param from raw expr", K(ret));
+    } else if (0 <= ObOptimizerUtil::find_exec_param(onetime_exprs, expr)) {
+      /* expr has added */
     } else {
       int64_t param_num = ObOptimizerUtil::find_exec_param(get_onetime_exprs(), expr);
       if (param_num >= 0) {
@@ -6050,8 +6052,6 @@ int ObLogPlan::generate_subplan_filter_info(const ObIArray<ObRawExpr*>& subquery
   } else {
     ObSEArray<SubPlanInfo*, 4> subplan_infos;
     ObSEArray<SubPlanInfo*, 4> temp_subplan_infos;
-    ObBitSet<> temp_onetime_idxs;
-    ObSEArray<std::pair<int64_t, ObRawExpr*>, 4> temp_onetime_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
       ObRawExpr* temp_expr = NULL;
       temp_subplan_infos.reuse();
@@ -6095,20 +6095,12 @@ int ObLogPlan::generate_subplan_filter_info(const ObIArray<ObRawExpr*>& subquery
     }
     if (OB_SUCC(ret) && !subquery_ops.empty()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
-        temp_onetime_exprs.reuse();
-        temp_onetime_idxs.reuse();
         if (OB_ISNULL(subquery_exprs.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(extract_onetime_exprs(subquery_exprs.at(i), temp_onetime_exprs, temp_onetime_idxs))) {
+        } else if (OB_FAIL(extract_onetime_exprs(subquery_exprs.at(i), onetime_exprs, onetime_idxs))) {
           LOG_WARN("failed to extract onetime exprs", K(ret));
-        } else if (OB_FAIL(append(onetime_exprs, temp_onetime_exprs))) {
-          LOG_WARN("failed to append onetime exprs", K(ret));
-        } else if (OB_FAIL(onetime_idxs.add_members(temp_onetime_idxs))) {
-          LOG_WARN("failed to add member", K(ret));
-        } else {
-          LOG_TRACE("succeed to get onetime exprs", K(*subquery_exprs.at(i)), K(temp_onetime_idxs));
-        }
+        } else { /*do nothing*/ }
       }
     }
     if (OB_SUCC(ret)) {

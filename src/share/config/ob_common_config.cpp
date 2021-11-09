@@ -168,7 +168,7 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("ob tc malloc memory for buf fail", K(ret));
     } else {
-      MEMSET(copy_buf, '\0', config_str_length + 1);
+      MEMSET(copy_buf, '\0', data_len + 1);
       MEMCPY(copy_buf, buf + pos, data_len);
       if (OB_FAIL(add_extra_config(copy_buf))) {
         LOG_ERROR("Read server config failed", K(ret));

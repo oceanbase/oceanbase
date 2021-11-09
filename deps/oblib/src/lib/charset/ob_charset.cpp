@@ -852,6 +852,7 @@ size_t ObCharset::sortkey(ObCollationType collation_type, const char* str, int64
         OB_MAX_WEIGHT,
         reinterpret_cast<const unsigned char*>(str),
         str_len,
+        0,
         &is_valid_unicode_tmp);
     is_valid_unicode = is_valid_unicode_tmp;
   }

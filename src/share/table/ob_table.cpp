@@ -904,6 +904,7 @@ void ObTableQuery::reset()
   index_name_.reset();
   batch_size_ = -1;
   max_result_size_ = -1;
+  htable_filter_.reset();
 }
 
 bool ObTableQuery::is_valid() const
@@ -1021,6 +1022,10 @@ uint64_t ObTableQuery::get_checksum() const
   checksum = ob_crc64(checksum, index_name_.ptr(), index_name_.length());
   checksum = ob_crc64(checksum, &batch_size_, sizeof(batch_size_));
   checksum = ob_crc64(checksum, &max_result_size_, sizeof(max_result_size_));
+  if (htable_filter_.is_valid()) {
+    const uint64_t htable_filter_checksum = htable_filter_.get_checksum();
+    checksum = ob_crc64(checksum, &htable_filter_checksum, sizeof(htable_filter_checksum));
+  }
   return checksum;
 }
 
@@ -1033,7 +1038,8 @@ OB_UNIS_DEF_SERIALIZE(ObTableQuery,
                       scan_order_,
                       index_name_,
                       batch_size_,
-                      max_result_size_);
+                      max_result_size_,
+                      htable_filter_);
 
 OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            key_ranges_,
@@ -1044,7 +1050,8 @@ OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            scan_order_,
                            index_name_,
                            batch_size_,
-                           max_result_size_);
+                           max_result_size_,
+                           htable_filter_);
 
 OB_DEF_DESERIALIZE(ObTableQuery,)
 {
@@ -1085,7 +1092,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
                 scan_order_,
                 index_name_,
                 batch_size_,
-                max_result_size_
+                max_result_size_,
+                htable_filter_
                 );
   }
   return ret;
@@ -1094,6 +1102,144 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
 ////////////////////////////////////////////////////////////////
 ObTableEntityIterator::~ObTableEntityIterator()
 {}
+
+////////////////////////////////////////////////////////////////
+const char* const ObHTableConstants::ROWKEY_CNAME = "K";
+const char* const ObHTableConstants::CQ_CNAME = "Q";
+const char* const ObHTableConstants::VERSION_CNAME = "T";
+const char* const ObHTableConstants::VALUE_CNAME = "V";
+
+const ObString ObHTableConstants::ROWKEY_CNAME_STR = ObString::make_string(ROWKEY_CNAME);
+const ObString ObHTableConstants::CQ_CNAME_STR = ObString::make_string(CQ_CNAME);
+const ObString ObHTableConstants::VERSION_CNAME_STR = ObString::make_string(VERSION_CNAME);
+const ObString ObHTableConstants::VALUE_CNAME_STR = ObString::make_string(VALUE_CNAME);
+
+ObHTableFilter::ObHTableFilter()
+    :is_valid_(false),
+     select_column_qualifier_(),
+     min_stamp_(ObHTableConstants::INITIAL_MIN_STAMP),
+     max_stamp_(ObHTableConstants::INITIAL_MAX_STAMP),
+     max_versions_(1),
+     limit_per_row_per_cf_(-1),
+     offset_per_row_per_cf_(0),
+     filter_string_()
+{}
+
+void ObHTableFilter::reset()
+{
+  is_valid_ = false;
+  select_column_qualifier_.reset();
+  min_stamp_ = ObHTableConstants::INITIAL_MIN_STAMP;
+  max_stamp_ = ObHTableConstants::INITIAL_MAX_STAMP;
+  max_versions_ = 1;
+  limit_per_row_per_cf_ = -1;
+  offset_per_row_per_cf_ = 0;
+  filter_string_.reset();
+
+}
+
+int ObHTableFilter::add_column(const ObString &qualifier)
+{
+  int ret = OB_SUCCESS;
+  const int64_t N = select_column_qualifier_.count();
+  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+  {
+    if (0 == select_column_qualifier_.at(i).case_compare(qualifier)) {
+      ret = OB_ERR_COLUMN_DUPLICATE;
+      LOG_WARN("column already exists", K(ret), K(qualifier));
+      break;
+    }
+  } // end for
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(select_column_qualifier_.push_back(qualifier))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHTableFilter::set_time_range(int64_t min_stamp, int64_t max_stamp)
+{
+  int ret = OB_SUCCESS;
+  if (min_stamp >= max_stamp || min_stamp_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid time range", K(ret), K(min_stamp), K(max_stamp));
+  } else {
+    min_stamp_ = min_stamp;
+    max_stamp_ = max_stamp;
+  }
+  return ret;
+}
+
+int ObHTableFilter::set_max_versions(int32_t versions)
+{
+  int ret = OB_SUCCESS;
+  if (versions <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid max versions", K(ret), K(versions));
+  } else {
+    max_versions_ = versions;
+  }
+  return ret;
+}
+
+int ObHTableFilter::set_max_results_per_column_family(int32_t limit)
+{
+  int ret = OB_SUCCESS;
+  if (limit < -1 || 0 == limit) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("limit cannot be negative or zero", K(ret), K(limit));
+  } else {
+    limit_per_row_per_cf_ = limit;
+  }
+  return ret;
+}
+
+int ObHTableFilter::set_row_offset_per_column_family(int32_t offset)
+{
+  int ret = OB_SUCCESS;
+  if (offset < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("offset cannot be negative", K(ret), K(offset));
+  } else {
+    offset_per_row_per_cf_ = offset;
+  }
+  return ret;
+}
+
+int ObHTableFilter::set_filter(const ObString &filter)
+{
+  filter_string_ = filter;
+  return OB_SUCCESS;
+}
+
+uint64_t ObHTableFilter::get_checksum() const
+{
+  uint64_t checksum = 0;
+  for (int64_t i = 0; i < select_column_qualifier_.count(); ++i) {
+    const ObString &cur_qualifier = select_column_qualifier_.at(i);
+    checksum = ob_crc64(checksum, cur_qualifier.ptr(), cur_qualifier.length());
+  }
+  checksum = ob_crc64(checksum, &min_stamp_, sizeof(min_stamp_));
+  checksum = ob_crc64(checksum, &max_stamp_, sizeof(max_stamp_));
+  checksum = ob_crc64(checksum, &max_versions_, sizeof(max_versions_));
+  checksum = ob_crc64(checksum, &limit_per_row_per_cf_, sizeof(limit_per_row_per_cf_));
+  checksum = ob_crc64(checksum, &offset_per_row_per_cf_, sizeof(offset_per_row_per_cf_));
+  checksum = ob_crc64(checksum, filter_string_.ptr(), filter_string_.length());
+  return checksum;
+}
+
+// If valid_ is true, serialize the members. Otherwise, nothing/dummy is serialized.
+OB_SERIALIZE_MEMBER_IF(ObHTableFilter,
+                       (true == is_valid_),
+                       is_valid_,
+                       select_column_qualifier_,
+                       min_stamp_,
+                       max_stamp_,
+                       max_versions_,
+                       limit_per_row_per_cf_,
+                       offset_per_row_per_cf_,
+                       filter_string_);
 
 ////////////////////////////////////////////////////////////////
 ObTableQueryResult::ObTableQueryResult()
@@ -1379,3 +1525,24 @@ OB_DEF_DESERIALIZE(ObTableQueryResult)
   }
   return ret;
 }
+
+////////////////////////////////////////////////////////////////
+uint64_t ObTableQueryAndMutate::get_checksum()
+{
+  uint64_t checksum = 0;
+  const uint64_t query_checksum = query_.get_checksum();
+  const uint64_t mutation_checksum = mutations_.get_checksum();
+  checksum = ob_crc64(checksum, &query_checksum, sizeof(query_checksum));
+  checksum = ob_crc64(checksum, &mutation_checksum, sizeof(mutation_checksum));
+  checksum = ob_crc64(checksum, &return_affected_entity_, sizeof(return_affected_entity_));
+  return checksum;
+}
+
+OB_SERIALIZE_MEMBER(ObTableQueryAndMutate,
+                    query_,
+                    mutations_);
+
+OB_SERIALIZE_MEMBER(ObTableQueryAndMutateResult,
+                    affected_rows_,
+                    affected_entity_);
+

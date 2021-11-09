@@ -2,7 +2,6 @@ ob_set_subtarget(oblib_common common
   cell/ob_cell_reader.cpp
   cell/ob_cell_writer.cpp
   data_buffer.cpp
-  lease/ob_lease_common.cpp
   log/ob_direct_log_reader.cpp
   log/ob_log_cursor.cpp
   log/ob_log_data_writer.cpp

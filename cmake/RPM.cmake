@@ -9,8 +9,10 @@ set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 set(CPACK_RPM_PACKAGE_RELEASE ${OB_RELEASEID})
 set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
 # RPM package informations.
-set(CPACK_RPM_RELOCATION_PATHS /usr /home/admin/oceanbase)
 set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
+# set relocation path install prefix for each component
+set(CPACK_RPM_DEVEL_PACKAGE_PREFIX /usr)
+set(CPACK_RPM_UTILS_PACKAGE_PREFIX /usr)
 list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin/oceanbase")
 set(CPACK_PACKAGE_NAME "oceanbase-ce")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase CE is a distributed relational database")
@@ -66,11 +68,12 @@ set(OCEANBASE_DEVEL_BIN_FILES "")
 
 if (OB_BUILD_LIBOBLOG)
   # lib
+  # list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.a)
   list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so)
   list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1)
   list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/liboblog/src/liboblog.so.1.0.0)
 
-  # include
+  # include lilboblog header
   list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/liboblog/src/liboblog.h)
 
   # bin
@@ -97,6 +100,13 @@ install(PROGRAMS
   DESTINATION /usr/bin
   COMPONENT devel
 )
+
+if (OB_BUILD_LIBOBLOG)
+  install(DIRECTORY
+    "deps/logmessage/include/"
+    DESTINATION /usr/include/oblogmsg
+    COMPONENT devel)
+endif()
 
 ## oceanbase-libs
 install(PROGRAMS

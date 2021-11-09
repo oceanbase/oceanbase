@@ -26,10 +26,16 @@ target_include_directories(
   ${DEP_DIR}/include
 )
 
+set(EASY_ARCH_COMPILE_OPTIONS "")
+if(${ARCHITECTURE} STREQUAL "aarch64")
+  set(EASY_ARCH_COMPILE_OPTIONS -Wno-tautological-constant-out-of-range-compare)
+endif()
+
+
 if (OB_USE_CLANG)
-  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-unused-function -fmax-type-align=8)
+  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-unused-function -fmax-type-align=8 ${EASY_ARCH_COMPILE_OPTIONS})
 else()
-  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-unused-function)
+  set(EASY_CC_WNO -fno-strict-aliasing -Wno-unused-variable -Wno-implicit-function-declaration -Wno-unused-but-set-variable -Wno-unused-function ${EASY_ARCH_COMPILE_OPTIONS})
 endif()
 
 
