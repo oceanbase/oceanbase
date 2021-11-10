@@ -2613,7 +2613,7 @@ int ObSchemaPrinter::print_index_table_definition(
   return ret;
 }
 
-int ObSchemaPrinter::print_view_definiton(
+int ObSchemaPrinter::print_view_definition(
     const uint64_t tenant_id,
     const uint64_t table_id,
     char *buf,
