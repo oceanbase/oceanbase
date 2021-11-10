@@ -11336,6 +11336,9 @@ int ObPartTransCtx::cleanout_transnode(ObMvccTransNode& tnode, ObMvccRow& value,
 
 void ObPartTransCtx::set_exiting_()
 {
+  if (is_dirty_) {
+    partition_log_info_arr_.reset();
+  }
   return ObTransCtx::set_exiting_(is_dirty_);
 }
 
