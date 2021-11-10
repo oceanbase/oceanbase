@@ -988,7 +988,7 @@ int ObPartitionStorage::need_reshape_table_row(const ObNewRow& row, RowReshape* 
         if (cell.is_fixed_len_char_type()) {
           space_pattern = ObCharsetUtils::get_const_str(cell.get_collation_type(), ' ');
         }
-        if (cell.is_fixed_len_char_type() && cell.get_string_len() > 0 &&
+        if (cell.is_fixed_len_char_type() && cell.get_string_len() >= space_pattern.length() &&
             0 == MEMCMP(cell.get_string_ptr() + cell.get_string_len() - space_pattern.length(),
                      space_pattern.ptr(),
                      space_pattern.length())) {
@@ -1021,7 +1021,7 @@ int ObPartitionStorage::need_reshape_table_row(
       if (cell.is_fixed_len_char_type()) {
         space_pattern = ObCharsetUtils::get_const_str(cell.get_collation_type(), ' ');
       }
-      if (cell.is_fixed_len_char_type() && cell.get_string_len() > 0 &&
+      if (cell.is_fixed_len_char_type() && cell.get_string_len() >= space_pattern.length() &&
           0 == MEMCMP(cell.get_string_ptr() + cell.get_string_len() - space_pattern.length(),
                    space_pattern.ptr(),
                    space_pattern.length())) {
@@ -1094,7 +1094,7 @@ int ObPartitionStorage::reshape_row(const ObNewRow& row, const int64_t column_cn
         const char* str = cell.get_string_ptr();
         int32_t len = cell.get_string_len();
         ObString space_pattern = ObCharsetUtils::get_const_str(cell.get_collation_type(), ' ');
-        for (; len > 0; len -= space_pattern.length()) {
+        for (; len >= space_pattern.length(); len -= space_pattern.length()) {
           if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
             break;
           }
@@ -5518,6 +5518,7 @@ int ObPartitionStorage::local_sort_index_by_range(
     ObObj* cells_buf = NULL;
     ObStoreRow default_row;
     ObStoreRow tmp_row;
+    ObStoreRow new_row;
 
     if (NULL == (cells_buf = reinterpret_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * org_col_ids.count() * 2)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -5530,6 +5531,7 @@ int ObPartitionStorage::local_sort_index_by_range(
       tmp_row.flag_ = ObActionFlag::OP_ROW_EXIST;
       tmp_row.row_val_.cells_ = cells_buf + org_col_ids.count();
       tmp_row.row_val_.count_ = org_col_ids.count();
+      new_row.flag_ = ObActionFlag::OP_ROW_EXIST;
     }
 
     // extend col_ids for generated column
@@ -5789,6 +5791,29 @@ int ObPartitionStorage::local_sort_index_by_range(
       if (OB_SUCC(ret)) {
         sql_mode = THIS_WORKER.get_compatibility_mode();
       }
+      ObTableSchemaParam schema_param(allocator);
+      ObRelativeTable relative_table;
+      ObSQLMode ob_sql_mode = common::ob_compatibility_mode_to_sql_mode(static_cast<ObCompatibilityMode>(sql_mode));
+      ObFixedArray<uint64_t, ObIAllocator> column_ids(allocator, org_col_ids.count());
+      RowReshape *row_reshape_ins = nullptr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < org_col_ids.count(); i++) {
+        const ObColDesc &col_desc = org_col_ids.at(i);
+        if (OB_FAIL(column_ids.push_back(col_desc.col_id_))) {
+          LOG_WARN("failed to push back column id", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schema_param.convert(table_schema, column_ids))) {
+        LOG_WARN("failed to convert schema param", K(ret));
+      } else if (OB_UNLIKELY(false == relative_table.set_schema_param(&schema_param))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to set schema param", K(ret));
+      } else if (OB_FAIL(malloc_rows_reshape_if_need(
+                     allocator, org_col_ids, 1, relative_table, ob_sql_mode, row_reshape_ins))) {
+        STORAGE_LOG(WARN, "failed to malloc for row reshape", K(ret));
+      } else {
+        // do nothing
+      }
       while (OB_SUCC(ret)) {
         t1 = ObTimeUtility::current_time();
         calc_buf.reuse();
@@ -5881,11 +5906,11 @@ int ObPartitionStorage::local_sort_index_by_range(
                 }
                 if (OB_SUCC(ret)) {
                   ObSEArray<ObString, 8> words;
-                  ObObj orig_obj = tmp_row.row_val_.cells_[pos];
-                  ObString orig_string = orig_obj.get_string();
-                  if (-1 == pos) {
+                  ObString orig_string;
+                  if (OB_UNLIKELY(pos < 0 || tmp_row.row_val_.count_ <= pos)) {
                     ret = OB_ERR_UNEXPECTED;
                     STORAGE_LOG(WARN, "domain index has no domain column", K(domain_column_id), K(org_col_ids), K(ret));
+                  } else if (OB_FALSE_IT(orig_string = tmp_row.row_val_.cells_[pos].get_string())) {
                   } else if (OB_FAIL(split_on(orig_string, ',', words))) {
                     STORAGE_LOG(WARN, "failed to split string", K(orig_string), K(ret));
                   } else {
@@ -5909,7 +5934,11 @@ int ObPartitionStorage::local_sort_index_by_range(
                   }
                 }
               }
+            } else if (OB_FAIL(reshape_table_rows(
+                           &tmp_row.row_val_, row_reshape_ins, org_col_ids.count(), &new_row, 1, ob_sql_mode))) {
+              STORAGE_LOG(WARN, "failed to reshape rows", K(ret));
             } else {
+              tmp_row = new_row;
               t3 = ObTimeUtility::current_time();
               if (OB_FAIL(local_sort->add_item(tmp_row))) {
                 STORAGE_LOG(WARN, "Fail to add item to sort, ", K(ret));
@@ -5933,6 +5962,7 @@ int ObPartitionStorage::local_sort_index_by_range(
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
       }
+      free_row_reshape(allocator, row_reshape_ins, 1);
       STORAGE_LOG(INFO,
           "print prepare build index cost time",
           K(get_next_row_time),
