@@ -28,13 +28,12 @@ The compiled product for `ob_error` is stored in `RELEASE_BUILD_DIR/tools/ob_err
 
 ### RPM packages
 
+`ob_error` is provided in `oceanbase-ce-utils-3.1.1-4.el7.x86_64.rpm`. If you only need `ob_error`, use the `rpm2cpio` command to get `ob_error`.
+
 ```bash
-build.sh rpm --init && cd build_rpm && make -j16 rpm
-rpm2cpio oceanbase-ce-3.1.0-1.alios7.x86_64.rpm | cpio -idmv ./home/admin/oceanbase/bin/ob_error
+rpm2cpio oceanbase-ce-utils-3.1.1-4.el7.x86_64.rpm | cpio -idmv ./home/admin/oceanbase/bin/ob_error
 cp home/admin/oceanbase/bin/ob_error /usr/local/bin
 ```
-
-`ob_error` is provided in `oceanbase-ce-3.1.0-1.alios7.x86_64.rpm`. If you only need `ob_error`, use the `rpm2cpio` command to get `ob_error`.
 
 ## How to use
 
