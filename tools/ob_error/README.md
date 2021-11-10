@@ -1,6 +1,6 @@
 # What is ob_error
 
-ob_error is an error tool for OceanBase Database. ob_error returns information, cause, and possible solutions for the error code you enter. With the help of ob_error, it is not necessary to look up the documents.
+ob_error is an error tool for OceanBase Database. ob_error returns information, cause, and possible solutions for the error code you enter. With the help of ob_error, it is not necessary to look up the documents for basic error information.
 
 ## How to build
 
@@ -13,7 +13,7 @@ make ob_error
 cp tools/ob_error/src/ob_error /usr/local/bin
 ```
 
-The compile product for `ob_error` is stored in `DEBUG_BUILD_DIR/tools/ob_error/src/ob_error` by default.
+The compiled product for `ob_error` is stored in `DEBUG_BUILD_DIR/tools/ob_error/src/ob_error` by default.
 
 ### Release mode
 
@@ -24,18 +24,17 @@ make ob_error
 cp tools/ob_error/src/ob_error /usr/local/bin
 ```
 
-The compile product for `ob_error` is stored in `RELEASE_BUILD_DIR/tools/ob_error/src/ob_error` by default.
+The compiled product for `ob_error` is stored in `RELEASE_BUILD_DIR/tools/ob_error/src/ob_error` by default.
 
-### RPM packages (coming soon)
+### RPM packages
 
 ```bash
-bash build.sh rpm --init && cd build_rpm && make -j16 rpm
+build.sh rpm --init && cd build_rpm && make -j16 rpm
 rpm2cpio oceanbase-ce-3.1.0-1.alios7.x86_64.rpm | cpio -idmv ./home/admin/oceanbase/bin/ob_error
 cp home/admin/oceanbase/bin/ob_error /usr/local/bin
 ```
 
-`ob_error` is provided together with `oceanbase-ce-3.1.0-1.alios7.x86_64.rpm`.
-However, if you only need `ob_error`, use the `rpm2cpio` command to build `ob_error`.
+`ob_error` is provided in `oceanbase-ce-3.1.0-1.alios7.x86_64.rpm`. If you only need `ob_error`, use the `rpm2cpio` command to get `ob_error`.
 
 ## How to use
 
@@ -95,7 +94,7 @@ Oracle:
         OB_ERR_TIMEOUT_ON_RESOURCE(-5848)
 ```
 
-Furthermore, there is an exceptional case. If you use the `-a` option, you will get OceanBase error info and Oracle mode info error(if any). For example:
+Furthermore, there is an exceptional case. If you use the `-a` option, you will get OceanBase error info and Oracle mode error info (if any). For example:
 
 ```bash
 $ob_error ora 600 -a 5727
