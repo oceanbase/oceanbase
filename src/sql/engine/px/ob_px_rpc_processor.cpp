@@ -84,6 +84,11 @@ int ObInitSqcP::process()
     ObPxSqcHandler::release_handler(sqc_handler);
     arg_.sqc_handler_ = nullptr;
   }
+
+  // https://work.aone.alibaba-inc.com/issue/37723456
+  if (OB_SUCCESS != ret && is_schema_error(ret)) {
+    ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+  }
   // 非rpc框架的错误内容设置到response消息中
   // rpc框架的错误码在process中返回OB_SUCCESS
   result_.rc_ = ret;
@@ -248,6 +253,12 @@ int ObInitFastSqcP::process()
       LOG_WARN("fail to startup normal sqc", K(ret));
     }
   }
+
+  // https://work.aone.alibaba-inc.com/issue/37723456
+  if (OB_SUCCESS != ret && is_schema_error(ret)) {
+    ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+  }
+
   if (OB_NOT_NULL(sqc_handler)) {
     sqc_handler->set_end_ret(ret);
     if (sqc_handler->has_flag(OB_SQC_HANDLER_QC_SQC_LINKED)) {
