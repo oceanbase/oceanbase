@@ -1,6 +1,7 @@
 # Build documentation with MkDocs
 
 OceanBase documentation is built with [MkDocs](https://www.mkdocs.org/). You can check [`mkdocs.yml`](mkdocs.yml) for more information.
+Please install MkDocs according to [the installation documents of MkDocs](https://www.mkdocs.org/user-guide/installation/)
 
 ## Requirements
 
@@ -8,13 +9,17 @@ Before installing dependencies, please make sure you have installed a recent ver
 
 Then you can run the following command in your terminal at current directory:
 
-    $ pip install -r requirements.txt
-
+```
+$ pip install -r requirements.txt
+$ pip install mkdocs-material
+```
 ## Build the documentation
 
 You can build the documentation by running the following command:
 
-    $ mkdocs build
+```
+$ mkdocs build
+```
 
 This will create a new directory to store the output files, which is `site/` by default.
 
@@ -22,8 +27,9 @@ This will create a new directory to store the output files, which is `site/` by 
 
 You can start a server locally by running the following command:
 
-    $ mkdocs serve
-
+```
+$ mkdocs serve
+```
 Open up http://127.0.0.1:8000/ in your browser, and you'll see the default home page.
 
 ## Modify pages
