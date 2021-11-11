@@ -729,6 +729,10 @@ struct ObPlanStat {
   // check whether plan has stable performance
   bool enable_plan_expiration_;
   int64_t first_exec_row_count_;
+  int64_t first_elapsed_time_;
+  int64_t sample_times_;
+  int64_t sample_exec_row_count_;
+  int64_t sample_exec_usec_;
 
   uint64_t sessid_;
   char plan_tmp_tbl_name_str_[STMT_MAX_LEN];

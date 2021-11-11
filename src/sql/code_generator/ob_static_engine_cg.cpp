@@ -4856,6 +4856,7 @@ int ObStaticEngineCG::set_optimization_info(ObLogTableScan& op, ObTableScanSpec&
     spec.optimization_method_ = op.get_table_opt_info()->optimization_method_;
     spec.available_index_count_ = op.get_table_opt_info()->available_index_id_.count();
     OZ(spec.set_available_index_name(op.get_table_opt_info()->available_index_name_, phy_plan_->get_allocator()));
+    OZ(spec.set_unstable_index_name(op.get_table_opt_info()->unstable_index_name_, phy_plan_->get_allocator()));
     OZ(spec.set_pruned_index_name(op.get_table_opt_info()->pruned_index_name_, phy_plan_->get_allocator()));
   }
   return ret;

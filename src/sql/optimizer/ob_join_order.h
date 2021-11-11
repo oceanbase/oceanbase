@@ -120,7 +120,8 @@ struct BaseTableOptInfo {
         heuristic_rule_(HeuristicRule::MAX_RULE),
         available_index_id_(),
         available_index_name_(),
-        pruned_index_name_()
+        pruned_index_name_(),
+        unstable_index_name_()
   {}
 
   // this following variables are tracked to remember how base table access path are generated
@@ -129,6 +130,7 @@ struct BaseTableOptInfo {
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> available_index_id_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> available_index_name_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> pruned_index_name_;
+  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> unstable_index_name_;
 };
 
 class Path {
@@ -611,6 +613,7 @@ public:
   static const int8_t NEED_BNL = 0x1 << 3;
   // used for heuristic index selection
   static const int64_t TABLE_HEURISTIC_UNIQUE_KEY_RANGE_THRESHOLD = 10000;
+  static const int64_t PRUNING_ROW_COUNT_THRESHOLD = 1000;
 
   ObJoinOrder(common::ObIAllocator* allocator, ObLogPlan* plan, PathType type)
       : allocator_(allocator),
@@ -643,10 +646,13 @@ public:
   {}
   virtual ~ObJoinOrder();
 
-  int prunning_index(const uint64_t table_id, const uint64_t base_table_id, const ObDMLStmt* stmt,
+  int skyline_prunning_index(const uint64_t table_id, const uint64_t base_table_id, const ObDMLStmt* stmt,
       const bool do_prunning, const ObIndexInfoCache& index_info_cache,
       const common::ObIArray<uint64_t>& valid_index_ids, common::ObIArray<uint64_t>& skyline_index_ids,
       ObIArray<ObRawExpr*>& restrict_infos);
+
+  int pruning_unstable_access_path(BaseTableOptInfo *table_opt_info, ObIArray<AccessPath *> &access_paths);
+  int try_pruning_base_table_access_path(ObIArray<AccessPath *> &access_paths, ObIArray<uint64_t> &unstable_index_id);
 
   int cal_dimension_info(const uint64_t table_id, const uint64_t data_table_id, const uint64_t index_table_id,
       const ObDMLStmt* stmt, ObIndexSkylineDim& index_dim, const ObIndexInfoCache& index_info_cache,
@@ -657,8 +663,8 @@ public:
   int fill_index_info_cache(const uint64_t table_id, const uint64_t base_table_id,
       const common::ObIArray<uint64_t>& valid_index_ids, ObIndexInfoCache& index_info_cache, PathHelper& helper);
 
-  int compute_pruned_index(const uint64_t table_id, const uint64_t base_table_id,
-      common::ObIArray<uint64_t>& available_index, PathHelper& helper);
+  int fill_opt_info_index_name(const uint64_t base_table_id, ObIArray<uint64_t>& available_index_id,
+      ObIArray<uint64_t>& unstable_index_id, BaseTableOptInfo* table_opt_info);
 
   int extract_used_column_ids(const uint64_t table_id, const uint64_t ref_table_id, ObEstSelInfo& est_sel_info,
       ObIArray<uint64_t>& column_ids, const bool eliminate_rowid_col = false);

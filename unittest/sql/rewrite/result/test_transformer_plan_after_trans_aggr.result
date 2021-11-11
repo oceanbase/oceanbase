@@ -2041,15 +2041,13 @@ Outputs & filters:
 
 ***************   Case 85   ***************
 SQL: select max(c3) from t9 where c2 = 1 and c1 = 1; 
-=========================================
-|ID|OPERATOR       |NAME |EST. ROWS|COST|
------------------------------------------
-|0 |SCALAR GROUP BY|     |1        |151 |
-|1 | SUBPLAN SCAN  |VIEW1|1        |150 |
-|2 |  LIMIT        |     |1        |150 |
-|3 |   TOP-N SORT  |     |1        |150 |
-|4 |    TABLE SCAN |t9   |1        |149 |
-=========================================
+======================================================
+|ID|OPERATOR       |NAME              |EST. ROWS|COST|
+------------------------------------------------------
+|0 |SCALAR GROUP BY|                  |1        |678 |
+|1 | SUBPLAN SCAN  |VIEW1             |1        |678 |
+|2 |  TABLE SCAN   |t9(idx_t9,Reverse)|1        |677 |
+======================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -2057,10 +2055,9 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_MAX(VIEW1.c3)])
   1 - output([VIEW1.c3]), filter(nil), 
       access([VIEW1.c3])
-  2 - output([t9.c3]), filter(nil), limit(1), offset(nil)
-  3 - output([t9.c3]), filter(nil), sort_keys([t9.c3, DESC]), topn(1)
-  4 - output([t9.c3]), filter([t9.c2 = ?], [t9.c1 = ?], [(T_OP_IS_NOT, t9.c3, NULL, 0)]), 
-      access([t9.c2], [t9.c1], [t9.c3]), partitions(p0)
+  2 - output([t9.c3]), filter([t9.c1 = ?], [(T_OP_IS_NOT, t9.c3, NULL, 0)]), 
+      access([t9.c1], [t9.c3]), partitions(p0), 
+      limit(1), offset(nil)
 
 ***************   Case 86   ***************
 SQL: select max(c3) from t9 where c2 != 1; 

@@ -7526,6 +7526,9 @@ int ObCodeGeneratorImpl::set_optimization_info(ObLogTableScan& log_ts, ObTableSc
       if (OB_FAIL(phy_ts->set_available_index_name(
               log_ts.get_table_opt_info()->available_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failed to set available index name", K(ret));
+      } else if (OB_FAIL(phy_ts->set_unstable_index_name(
+                     log_ts.get_table_opt_info()->unstable_index_name_, phy_plan_->get_allocator()))) {
+        LOG_WARN("failedd to set unstable index name", K(ret));
       } else if (OB_FAIL(phy_ts->set_pruned_index_name(
                      log_ts.get_table_opt_info()->pruned_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failedd to set prunned index name", K(ret));
