@@ -44,4 +44,4 @@ Note the following rules when editing documents:
 
 ## Contribute
 
-See [How to contribute](../CONTRIBUTING.md).
+See [How to contribute](wiki/how_to_contribute)
