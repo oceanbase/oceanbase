@@ -221,11 +221,14 @@ void* Thread::__th_start(void* arg)
           th->pid_ = getpid();
           th->tid_ = static_cast<pid_t>(syscall(__NR_gettid));
           try {
+            in_try_stmt = true;
             th->runnable_();
+            in_try_stmt = false;
           } catch (OB_BASE_EXCEPTION& except) {
             // we don't catch other exception because we don't know how to handle it
             _LOG_ERROR("Exception caught!!! errno = %d, exception info = %s", except.get_errno(), except.what());
             ret = OB_ERR_UNEXPECTED;
+            in_try_stmt = false;
           }
         }
       }

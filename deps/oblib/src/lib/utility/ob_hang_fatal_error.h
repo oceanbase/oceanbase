@@ -14,11 +14,13 @@
 #define SRC_LIB_UTILITY_OB_HANG_FATAL_ERROR_H_
 
 #include <exception>
+#include "lib/coro/co_var.h"
 namespace oceanbase
 {
 namespace common
 {
 extern void right_to_die_or_duty_to_live();
+extern RLOCAL(bool, in_try_stmt);
 
 struct OB_BASE_EXCEPTION : public std::exception
 {

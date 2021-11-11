@@ -84,9 +84,12 @@ inline int call_with_new_stack(SContext& sctx)
       std::function<int()> f = [&]() {                                     \
         int ret = OB_SUCCESS;                                              \
         try {                                                              \
+          in_try_stmt = true;                                              \
           ret = func;                                                      \
+          in_try_stmt = false;                                             \
         } catch (OB_BASE_EXCEPTION & except) {                             \
           ret = except.get_errno();                                        \
+          in_try_stmt = false;                                             \
         }                                                                  \
         return ret;                                                        \
       };                                                                   \

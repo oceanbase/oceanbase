@@ -23,6 +23,7 @@ void right_to_die_or_duty_to_live_c()
 
 namespace oceanbase {
 namespace common {
+RLOCAL(bool, in_try_stmt);
 
 // To die or to live, it's a problem.
 void right_to_die_or_duty_to_live()
@@ -35,7 +36,13 @@ void right_to_die_or_duty_to_live()
     sleep(120);
   }
 #else
-  throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
+  if (in_try_stmt) {
+    throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
+  } else {
+    while (true) {
+      sleep(5);
+    }
+  }
 #endif
 }
 
