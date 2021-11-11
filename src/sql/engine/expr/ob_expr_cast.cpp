@@ -505,6 +505,10 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
     }
     LOG_DEBUG("get accuracy from result_type", K(src_type), K(dest_type), K(accuracy), K(result_type_));
     ObCastMode cast_mode = CM_EXPLICIT_CAST;
+    if (share::is_mysql_mode() && ob_is_string_type(src_type) &&
+        ((ob_is_int_tc(dest_type)) || ob_is_uint_tc(dest_type))) {
+      cast_mode |= CM_STRING_INTEGER_TRUNC;
+    }
     if (ObDateTimeTC == dest_tc || ObDateTC == dest_tc || ObTimeTC == dest_tc) {
       cast_mode |= CM_NULL_ON_WARN;
     } else if (ob_is_int_uint(src_tc, dest_tc)) {
