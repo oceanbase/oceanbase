@@ -11,7 +11,6 @@ Then you can run the following command in your terminal at current directory:
 
 ```
 $ pip install -r requirements.txt
-$ pip install mkdocs-material
 ```
 ## Build the documentation
 
