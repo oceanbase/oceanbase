@@ -421,6 +421,7 @@ DEFINE_ERROR(OB_OBCONFIG_CLUSTER_NOT_EXIST, -4368, -1, "HY000", "cluster not exi
 DEFINE_ORACLE_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED, -4374, -1, "HY000", "value larger than specified precision allowed for this column", 1438, "value larger than specified precision allowed for this column");
 DEFINE_ERROR(OB_DISK_ERROR, -4375, -1, "HY000", "observer has disk error");
 DEFINE_ORACLE_ERROR(OB_UNIMPLEMENTED_FEATURE, -4376, -1, "HY000", "unimplemented feature", 3001, "unimplemented feature");
+DEFINE_ERROR(OB_CLUSTER_NAME_HASH_CONFLICT, -4378, -1, "HY000", "cluster name conflict");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000
