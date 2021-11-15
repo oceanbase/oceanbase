@@ -540,6 +540,7 @@ int ObRSBuildIndexTask::process()
     if (OB_FAIL(report_index_status(index_status))) {
       LOG_WARN("fail to report index status", K(ret));
       need_retry_ = true;
+      need_release_snapshot = false;
     }
   }
   if (need_release_snapshot) {

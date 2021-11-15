@@ -235,12 +235,8 @@ int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo& my_ses
       LOG_WARN("fail to get index table schema", KR(ret), K(refreshed_schema_version), K(index_table_id));
     } else if (OB_ISNULL(index_schema)) {
       // maybe ddl(drop index,drop table,truncate table) in another session has dropped this index.
-      if (!is_update_global_indexes) {
-        ret = OB_ERR_ADD_INDEX;
-        LOG_USER_ERROR(OB_ERR_ADD_INDEX);
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-      }
+      ret = OB_ERR_ADD_INDEX;
+      LOG_USER_ERROR(OB_ERR_ADD_INDEX);
       LOG_WARN("index table schema is null",
           KR(ret),
           K(index_table_id),
