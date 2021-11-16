@@ -204,6 +204,7 @@ int ObPGPartition::get_refreshed_schema_info(int64_t& schema_version, int64_t& r
     uint64_t& schema_version_change_log_id, int64_t& schema_version_change_log_ts)
 {
   // Ensure to get the schema version first, and then get ts
+  ObSpinLockGuard guard(lock_);
   ATOMIC_STORE(&schema_version, build_index_schema_version_);
   refreshed_schema_ts = build_index_schema_version_refreshed_ts_;
   schema_version_change_log_id = schema_version_change_log_id_;
@@ -216,6 +217,7 @@ int ObPGPartition::update_build_index_schema_info(
     const int64_t schema_version, const int64_t schema_refreshed_ts, const uint64_t log_id, const int64_t log_ts)
 {
   int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
   if (schema_version < 0 || schema_refreshed_ts < 0 || log_id <= 0 || log_ts <= 0) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(schema_version), K(schema_refreshed_ts), K(log_id), K(log_ts));
