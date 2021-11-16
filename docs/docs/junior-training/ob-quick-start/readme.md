@@ -9,10 +9,10 @@
 + [第 1 章：OceanBase 数据库概述](chapter01/1.md)
 + [第 2 章：如何部署 OceanBase 社区版](chapter02/2.0.md)
 + [第 3 章：如何使用 OceanBase 社区版](chapter03/3.0.md)
-+ [第 4 章：如何迁移 MySQL 数据](chapter04/4.0.md)
-+ [第 5 章：如何运维 OB 社区版](chapter05/5.0.md)
-+ [第 6 章：如何测试 OB 社区版性能](chapter06/6.0.md)
-+ [第 7 章：如何诊断和调优 OB 社区版性能](chapter07/7.0.md)
++ [第 4 章：如何迁移 MySQL 数据到 OceanBase](chapter04/4.0.md)
++ [第 5 章：如何运维 OceanBase 社区版](chapter05/5.0.md)
++ [第 6 章：如何测试 OceanBase 社区版性能](chapter06/6.0.md)
++ [第 7 章：如何诊断和调优 OceanBase 社区版性能](chapter07/7.0.md)
 + [第 8 课：OceanBase 社区版生态工具介绍](chapter08/8.0.md)
 
 ## 如何联系我们
