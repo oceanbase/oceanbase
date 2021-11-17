@@ -421,7 +421,6 @@ public:
   }
   int get_sstable(ObSSTable*& sstable);
   int get_sstable(const ObSSTable*& sstable) const;
-  int get_old_sstable(ObOldSSTable*& sstable);
   int get_memtable(memtable::ObMemtable*& memtable);
   int get_memtable(const memtable::ObMemtable*& memtable) const;
   int set_table(ObITable* table);

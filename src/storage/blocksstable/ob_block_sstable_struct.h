@@ -1837,6 +1837,21 @@ public:
   virtual int get_next_macro_id(MacroBlockId& block_id) = 0;
 };
 
+struct ObMajorMacroBlockKey
+{
+  ObMajorMacroBlockKey() { reset(); }
+  bool is_valid() const { return table_id_ > 0 && partition_id_ >= 0 && data_version_ > 0 && data_seq_ >= 0; }
+  uint64_t hash() const;
+  void reset();
+  bool operator ==(const ObMajorMacroBlockKey &key) const;
+  TO_STRING_KV(K_(table_id), K_(partition_id), K_(data_version), K_(data_seq));
+
+  uint64_t table_id_;
+  int64_t partition_id_;
+  int64_t data_version_;
+  int64_t data_seq_;
+};
+
 }  // end namespace blocksstable
 }  // end namespace oceanbase
 #endif

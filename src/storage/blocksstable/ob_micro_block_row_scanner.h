@@ -96,8 +96,6 @@ protected:
   storage::ObTableAccessContext* context_;
   const common::ObStoreRange* range_;
   const storage::ObSSTable* sstable_;
-  ObMacroBlockMetaHandle meta_handle_;
-  // for scan
   ObColumnMap column_map_;
   ObIMicroBlockReader* reader_;
   ObMicroBlockReader flat_reader_;

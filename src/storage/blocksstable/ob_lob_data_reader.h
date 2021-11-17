@@ -18,7 +18,6 @@
 #include "ob_lob_struct.h"
 #include "ob_macro_block_reader.h"
 #include "ob_lob_micro_block_index_reader.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "ob_store_file.h"
 #include "storage/ob_pg_mgr.h"
 

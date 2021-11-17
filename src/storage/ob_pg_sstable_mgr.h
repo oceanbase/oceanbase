@@ -46,7 +46,6 @@ public:
   int deserialize(const char* buf, const int64_t buf_len, int64_t& pos);
   int replay_add_sstable(ObSSTable& replay_sstable);
   int replay_remove_sstable(const ObITable::TableKey& table_key);
-  int replay_add_old_sstable(ObOldSSTable& replay_old_sstable);
   OB_INLINE void set_pg_key(ObPGKey pg_key)
   {
     pg_key_ = pg_key;

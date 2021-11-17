@@ -24,7 +24,6 @@ namespace storage {
 class ObCreateSSTableParamWithTable;
 class ObCreateSSTableParamWithPartition;
 class ObPartitionComponentFactory;
-class ObOldSSTable;
 
 class ObTableMgrGCTask : public common::ObTimerTask {
 public:
@@ -153,15 +152,11 @@ public:
   void destroy();
   void stop();
 
-  int acquire_old_table(const ObITable::TableKey& table_key, ObTableHandle& handle);
   int create_memtable(ObITable::TableKey& table_key, ObTableHandle& handle);
   int release_table(ObITable* table);
   int clear_unneed_tables();
-  int load_sstable(const char* buf, int64_t buf_len, int64_t& pos);
-  int replay_add_old_sstable(ObSSTable* sstable);
-  int replay_del_old_sstable(const ObITable::TableKey& table_key);
-  virtual int replay(const blocksstable::ObRedoModuleReplayParam& param) override;
-  virtual int parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream) override;
+  virtual int replay(const blocksstable::ObRedoModuleReplayParam& param) { UNUSED(param); return OB_NOT_SUPPORTED; }
+  virtual int parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream) override { UNUSEDx(subcmd, buf, len, stream); return OB_NOT_SUPPORTED; }
   int check_sstables();
   int check_tenant_sstable_exist(const uint64_t tenant_id, bool& is_exist);
   int free_all_sstables();
@@ -181,10 +176,6 @@ private:
   //  int write_create_sstable_log(ObSSTable &sstable);
   int write_delete_sstable_log(const ObITable::TableKey& table_key);
   int write_complete_sstable_log(ObSSTable& sstable, const bool use_inc_macro_block_slog);
-  int replay_create_sstable(const char* buf, const int64_t buf_len);
-  int replay_complete_sstable(const char* buf, const int64_t buf_len);
-  int replay_delete_sstable(const char* buf, const int64_t buf_len);
-  int replay_delete_sstable(const ObITable::TableKey& table_key);
   int schedule_release_task();
   int check_can_complete_sstables(ObTablesHandle& handle);
   int remove_completed_sstables(common::ObIArray<ObITable*>& write_slog_tables);

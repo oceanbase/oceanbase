@@ -98,15 +98,6 @@ bool ObCreateSSTableLogEntry::is_valid() const
 
 OB_SERIALIZE_MEMBER(ObCreateSSTableLogEntry, sstable_);
 
-ObCompleteSSTableLogEntry::ObCompleteSSTableLogEntry(ObOldSSTable& sstable) : sstable_(sstable)
-{}
-
-bool ObCompleteSSTableLogEntry::is_valid() const
-{
-  return sstable_.is_valid();
-}
-OB_SERIALIZE_MEMBER(ObCompleteSSTableLogEntry, sstable_);
-
 ObDeleteSSTableLogEntry::ObDeleteSSTableLogEntry() : table_key_()
 {}
 

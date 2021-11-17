@@ -14,7 +14,6 @@
 #include "lib/oblog/ob_log_module.h"
 #include "ob_table_mgr.h"
 #include "ob_sstable.h"
-#include "ob_old_sstable.h"
 #include "memtable/ob_memtable.h"
 #include "blocksstable/slog/ob_storage_log_struct.h"
 #include "storage/ob_partition_log.h"
@@ -245,34 +244,6 @@ int ObTableMgr::create_memtable(ObITable::TableKey& table_key, ObTableHandle& ha
     handle.reset();
     free_table(table);
     table = NULL;
-  }
-
-  return ret;
-}
-
-int ObTableMgr::acquire_old_table(const ObITable::TableKey& table_key, ObTableHandle& handle)
-{
-  int ret = OB_SUCCESS;
-  int hash_ret = OB_SUCCESS;
-  CompletedTableGetFunctor get_functor(handle);
-
-  ObBucketHashRLockGuard bucket_guard(sstable_bucket_lock_, table_key.hash());
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (!table_key.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid args", K(ret), K(table_key));
-  } else if (OB_SUCCESS != (hash_ret = completed_table_map_.get(table_key, get_functor))) {
-    if (OB_HASH_NOT_EXIST != hash_ret) {
-      ret = hash_ret;
-      LOG_WARN("failed to inner get table", K(ret), K(table_key));
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  } else if (OB_ISNULL(handle.get_table())) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("node or item must not null", K(ret), K(table_key), K(handle));
   }
 
   return ret;
@@ -635,22 +606,6 @@ int ObTableMgr::get_completed_sstables(ObTablesHandle& handle)
   return ret;
 }
 
-int ObTableMgr::load_sstable(const char* buf, int64_t buf_len, int64_t& pos)
-{
-  int ret = OB_SUCCESS;
-  ObOldSSTable tmp_sstable;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("not inited", K(ret));
-  } else if (OB_FAIL(tmp_sstable.deserialize(buf, buf_len, pos))) {
-    LOG_ERROR("failed to deserialize sstable", K(ret));
-  } else if (OB_FAIL(add_replay_sstable_to_map(false /*is_replay*/, tmp_sstable))) {
-    LOG_WARN("failed to add_replay_sstable_to_map", K(ret), K(tmp_sstable));
-  }
-  return ret;
-}
-
 int ObTableMgr::complete_sstables(ObTablesHandle& handle, const bool use_inc_macro_block_slog)
 {
   int ret = OB_SUCCESS;
@@ -833,288 +788,6 @@ int ObTableMgr::write_complete_sstable_log(ObSSTable& sstable, const bool use_in
   return OB_NOT_SUPPORTED;
 }
 
-int ObTableMgr::replay(const ObRedoModuleReplayParam& param)
-{
-  int ret = OB_SUCCESS;
-  const int64_t subcmd = param.subcmd_;
-  const char* buf = param.buf_;
-  const int64_t len = param.buf_len_;
-  ObRedoLogMainType main_type = OB_REDO_LOG_MAX;
-  int32_t sub_type = 0;
-  ObIRedoModule::parse_subcmd(param.subcmd_, main_type, sub_type);
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(param));
-  } else if (OB_REDO_LOG_TABLE_MGR != main_type) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "wrong redo log type.", K(ret), K(main_type), K(sub_type));
-  } else {
-    switch (sub_type) {
-      case REDO_LOG_CREATE_SSTABLE: {
-        if (OB_FAIL(replay_create_sstable(buf, len))) {
-          LOG_WARN("failed to replay create sstable", K(ret), K(param));
-        }
-        break;
-      }
-      case REDO_LOG_COMPELTE_SSTABLE: {
-        if (OB_FAIL(replay_complete_sstable(buf, len))) {
-          LOG_WARN("failed to replay complete sstable", K(ret), K(param));
-        }
-        break;
-      }
-      case REDO_LOG_DELETE_SSTABLE: {
-        if (OB_FAIL(replay_delete_sstable(buf, len))) {
-          LOG_WARN("failed to replay delete sstable", K(ret), K(param));
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_SYS;
-        LOG_ERROR("unknown subtype", K(ret), K(sub_type), K(param));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTableMgr::replay_create_sstable(const char* buf, const int64_t buf_len)
-{
-  UNUSEDx(buf, buf_len);
-  int ret = OB_NOT_SUPPORTED;
-  STORAGE_LOG(ERROR, "create sstable slog is not supported now", K(ret));
-  return ret;
-}
-
-int ObTableMgr::replay_complete_sstable(const char* buf, const int64_t buf_len)
-{
-  int ret = OB_SUCCESS;
-  ObOldSSTable tmp_sstable;
-  int64_t pos = 0;
-  ObCompleteSSTableLogEntry log_entry(tmp_sstable);
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "partition service is not initialized", K(ret));
-  } else if (OB_ISNULL(buf) || buf_len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to decode log entry", K(ret));
-  } else if (OB_FAIL(add_replay_sstable_to_map(true /*is_replay*/, tmp_sstable))) {
-    LOG_WARN("failed to replay sstable", K(ret), K(tmp_sstable));
-  } else {
-    LOG_INFO("succeed to replay complete sstable", "table_key", tmp_sstable.get_key());
-  }
-  return ret;
-}
-
-int ObTableMgr::add_replay_sstable_to_map(const bool is_replay, ObOldSSTable& tmp_sstable)
-{
-  int ret = OB_SUCCESS;
-  const ObITable::TableKey& table_key = tmp_sstable.get_key();
-  ObOldSSTable* sstable = NULL;
-  ObTableMgr::CompletedTableNode* completed_table_node = NULL;
-  ObTableMgr::AllTableNode* all_table_node = NULL;
-  uint64_t tenant_id = OB_INVALID_ID;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "partition service is not initialized", K(ret));
-  } else if (!tmp_sstable.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tmp_sstable));
-  } else if (OB_INVALID_ID == (tenant_id = tmp_sstable.get_key().get_tenant_id())) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("invalid tenant_id", K(ret), K(table_key));
-  } else if (OB_FAIL(alloc_table(sstable))) {
-    LOG_ERROR("failed to new sstable", K(ret));
-  } else if (OB_FAIL(sstable->set_sstable(tmp_sstable))) {
-    LOG_WARN("failed to set_sstable", K(ret));
-  } else if (!sstable->is_valid()) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("sstable not valid", K(ret), K(*sstable));
-  } else if (OB_ISNULL(completed_table_node = completed_table_map_.alloc_node(*sstable))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("failed to new completed_table_node", K(ret));
-  } else if (OB_ISNULL(all_table_node = all_table_map_.alloc_node(*sstable))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("failed to new all_table_node", K(ret));
-  } else {
-    ret = completed_table_map_.exist(table_key);
-    if (OB_HASH_NOT_EXIST != ret && OB_HASH_EXIST != ret) {
-      LOG_ERROR("failed to check table", K(ret), K(table_key));
-    } else if (OB_HASH_NOT_EXIST == ret) {
-      if (OB_FAIL(all_table_map_.put(*all_table_node))) {
-        LOG_ERROR("put all table node fail", K(ret));
-      } else if (FALSE_IT(all_table_node = nullptr)) {
-      } else if (FALSE_IT(sstable = nullptr)) {
-      } else if (OB_FAIL(completed_table_map_.put(*completed_table_node))) {
-        LOG_ERROR("put completed table node fail", K(ret));
-      } else {
-        completed_table_node = nullptr;
-      }
-    } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000 || !is_replay) {
-      LOG_ERROR("meet duplicate sstable when upgrade, need check", K(ret), K(*sstable), K(is_replay));
-    } else {
-      FLOG_INFO("meet duplicate sstable when replay", K(table_key));
-      ObITable* del_table = nullptr;
-      AllTableEraseChecker checker;
-
-      if (OB_FAIL(completed_table_map_.erase(table_key, del_table))) {
-        LOG_WARN("failed to erase table_map", K(ret), K(table_key));
-      } else if (OB_FAIL(all_table_map_.erase(reinterpret_cast<uint64_t>(del_table), del_table, &checker))) {
-        LOG_WARN("failed to erase table", K(ret), K(table_key));
-      } else if (OB_FAIL(all_table_map_.put(*all_table_node))) {
-        LOG_ERROR("put all table node fail", K(ret));
-      } else if (FALSE_IT(all_table_node = nullptr)) {
-      } else if (FALSE_IT(sstable = nullptr)) {
-      } else if (OB_FAIL(completed_table_map_.put(*completed_table_node))) {
-        LOG_ERROR("put completed table node fail", K(ret));
-      } else {
-        completed_table_node = nullptr;
-      }
-    }
-  }
-
-  if (NULL != sstable) {
-    free_table(sstable);
-    sstable = NULL;
-  }
-  if (NULL != all_table_node) {
-    all_table_map_.free_node(all_table_node);
-  }
-  if (NULL != completed_table_node) {
-    completed_table_map_.free_node(completed_table_node);
-  }
-  return ret;
-}
-
-int ObTableMgr::replay_delete_sstable(const char* buf, const int64_t buf_len)
-{
-  int ret = OB_SUCCESS;
-  ObDeleteSSTableLogEntry log_entry;
-  int64_t pos = 0;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "partition service is not initialized", K(ret));
-  } else if (OB_ISNULL(buf) || buf_len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len));
-  } else if (OB_FAIL(log_entry.deserialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to decode log entry", K(ret));
-  } else if (OB_FAIL(replay_delete_sstable(log_entry.table_key_))) {
-    LOG_WARN("failed to replay_delete_sstable", K(ret), K(log_entry));
-  } else {
-    STORAGE_LOG(INFO, "succeed to replay delete sstable", K(log_entry));
-  }
-
-  return ret;
-}
-
-int ObTableMgr::replay_delete_sstable(const ObITable::TableKey& table_key)
-{
-  int ret = OB_SUCCESS;
-  ObITable* del_table = NULL;
-  AllTableEraseChecker checker;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "partition service is not initialized", K(ret));
-  } else if (OB_FAIL(completed_table_map_.erase(table_key, del_table))) {
-    STORAGE_LOG(WARN, "failed to erase table_map", K(ret), K(table_key));
-  } else if (OB_FAIL(all_table_map_.erase(reinterpret_cast<uint64_t>(del_table), del_table, &checker)) &&
-             OB_HASH_NOT_EXIST != ret) {
-    LOG_WARN("failed to erase table", K(ret), K(table_key));
-  } else if (OB_HASH_NOT_EXIST == ret) {
-    FLOG_INFO("table not exist when replay delete sstable", K(ret), K(table_key));
-    ret = OB_SUCCESS;
-  } else {
-    STORAGE_LOG(INFO, "succeed to replay delete sstable", K(table_key));
-    free_table(del_table);
-    del_table = NULL;
-  }
-  return ret;
-}
-
-int ObTableMgr::parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  ObRedoLogMainType main_type = OB_REDO_LOG_TABLE_MGR;
-  int32_t sub_type = 0;
-
-  ObIRedoModule::parse_subcmd(subcmd, main_type, sub_type);  // this func has no ret
-  if (NULL == buf || len <= 0 || NULL == stream) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "argument is invalid", K(ret), K(buf), K(len), K(stream));
-  } else if (OB_REDO_LOG_TABLE_MGR != main_type) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "wrong redo log type.", K(ret), K(main_type), K(sub_type));
-  } else {
-    switch (sub_type) {
-      case REDO_LOG_CREATE_SSTABLE: {
-        ObSSTable sstable;
-        ObCreateSSTableLogEntry entry(sstable);
-        if (OB_FAIL(entry.deserialize(buf, len, pos))) {
-          STORAGE_LOG(WARN, "Fail to deserialize create sstable log entry, ", K(ret));
-        } else if (0 > fprintf(stream, "create sstable.\n%s\n", to_cstring(entry))) {
-          ret = OB_IO_ERROR;
-          STORAGE_LOG(WARN, "failed to create sstable log", K(ret), K(entry));
-        }
-        break;
-      }
-      case REDO_LOG_COMPELTE_SSTABLE: {
-        ObOldSSTable sstable;
-        ObCompleteSSTableLogEntry entry(sstable);
-        if (OB_FAIL(entry.deserialize(buf, len, pos))) {
-          STORAGE_LOG(WARN, "Fail to deserialize complete sstable log entry, ", K(ret));
-        } else if (0 > fprintf(stream, "complete sstable.\n%s\n", to_cstring(entry))) {
-          ret = OB_IO_ERROR;
-          STORAGE_LOG(WARN, "failed to set complete sstable log", K(ret), K(entry));
-        }
-        break;
-      }
-      case REDO_LOG_DELETE_SSTABLE: {
-        PrintSLogEntry(ObDeleteSSTableLogEntry);
-        break;
-      }
-      default: {
-        ret = OB_ERR_SYS;
-        LOG_ERROR("unknown subtype", K(ret), K(sub_type));
-      }
-    }
-  }
-
-  return OB_SUCCESS;
-}
-
-int ObTableMgr::replay_add_old_sstable(ObSSTable* sstable)
-{
-  UNUSED(sstable);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObTableMgr::replay_del_old_sstable(const ObITable::TableKey& table_key)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("partition service is not initialized", K(ret));
-  } else if (OB_FAIL(replay_delete_sstable(table_key))) {
-    LOG_WARN("failed to replay_delete_sstable", K(ret), K(table_key));
-  } else {
-    LOG_INFO("succeed to replay_del_old_sstable", K(table_key));
-  }
-  return ret;
-}
-
 int ObTableMgr::schedule_release_task()
 {
   int ret = OB_SUCCESS;
@@ -1288,10 +961,7 @@ int ObTableMgr::alloc_table(T*& table, const int64_t tenant_id)
   table = NULL;
 
   ObMemAttr memattr(tenant_id);
-  if (typeid(T) == typeid(ObOldSSTable)) {
-    memattr.label_ = ObModIds::OB_SSTABLE;
-    memattr.ctx_id_ = ObCtxIds::STORAGE_SHORT_TERM_META_CTX_ID;
-  } else if (typeid(T) == typeid(ObSSTable)) {
+  if (typeid(T) == typeid(ObSSTable)) {
     // TODO(): will be removed when create sstable is disabled
     memattr.label_ = ObModIds::OB_SSTABLE;
     memattr.ctx_id_ = ObCtxIds::STORAGE_SHORT_TERM_META_CTX_ID;
@@ -1315,13 +985,8 @@ void ObTableMgr::free_table(ObITable* table)
 {
   if (NULL != table) {
     LOG_INFO("free table", K(*table));
-    if (table->is_sstable()) {
-      ObOldSSTable* sstable = static_cast<ObOldSSTable*>(table);
-      OB_DELETE_ALIGN32(ObOldSSTable, unused, sstable);
-    } else {
-      ObMemtable* memtable = static_cast<ObMemtable*>(table);
-      OB_DELETE_ALIGN32(ObMemtable, unused, memtable);
-    }
+    ObMemtable* memtable = static_cast<ObMemtable*>(table);
+    OB_DELETE_ALIGN32(ObMemtable, unused, memtable);
     table = NULL;
   }
 }

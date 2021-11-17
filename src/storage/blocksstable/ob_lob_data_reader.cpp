@@ -86,7 +86,6 @@ int ObLobMacroBlockReader::open(const MacroBlockId& block_id, const bool is_sys_
     const ObFullMacroBlockMeta& full_meta, const common::ObPartitionKey& pkey, ObStorageFileHandle& file_handle)
 {
   int ret = OB_SUCCESS;
-  ObMacroBlockMetaHandle meta_handle;
   ObStorageFile* file = NULL;
   UNUSED(pkey);
   if (OB_UNLIKELY(!is_inited_)) {

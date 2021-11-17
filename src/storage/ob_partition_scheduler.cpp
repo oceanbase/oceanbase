@@ -25,7 +25,6 @@
 #include "share/ob_task_define.h"
 #include "share/ob_index_status_table_operator.h"
 #include "storage/blocksstable/ob_store_file.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/ob_sstable_row_whole_scanner.h"
 #include "storage/ob_partition_storage.h"
 #include "storage/transaction/ob_ts_mgr.h"

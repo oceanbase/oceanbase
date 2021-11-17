@@ -133,7 +133,6 @@ int ObPartitionMetaBackupReader::read_sstable_meta(ObITable::TableKey& table_key
   ObTableHandle tmp_handle;
   ObSSTable* sstable = NULL;
   blocksstable::ObSSTablePair pair;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (OB_FAIL(ObPartitionService::get_instance().acquire_sstable(table_key, tmp_handle))) {
@@ -437,7 +436,6 @@ int ObPartitionMetaBackupReader::build_backup_sstable_info(const ObSSTable* ssta
   int ret = OB_SUCCESS;
   sstable_info.reset();
   blocksstable::ObSSTablePair pair;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (OB_ISNULL(sstable)) {
@@ -527,7 +525,6 @@ ObMacroBlockBackupSyncReader::ObMacroBlockBackupSyncReader()
       is_data_ready_(false),
       macro_arg_(),
       backup_index_tid_(0),
-      meta_handle_(),
       full_meta_(),
       macro_handle_(),
       data_(),
@@ -552,7 +549,6 @@ void ObMacroBlockBackupSyncReader::reset()
   is_data_ready_ = false;
   macro_arg_.reset();
   backup_index_tid_ = 0;
-  meta_handle_.reset();
   full_meta_.reset();
   macro_handle_.reset();
   data_.assign(NULL, 0, 0);
@@ -3377,7 +3373,6 @@ int ObBackupCopyPhysicalTask::fetch_backup_macro_block_arg(const share::ObPhysic
   int ret = OB_SUCCESS;
   ObTableHandle tmp_handle;
   ObSSTable* sstable = NULL;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (!table_key.is_valid() || macro_idx < 0) {
