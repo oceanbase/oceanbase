@@ -692,6 +692,7 @@ private:
       const ObStoreCtx& ctx, const ObTableScanParam& scan_param, const common::ObNewRow& row, RowReshape*& row_reshape);
   int check_useless_index_mini_merge(const storage::ObSSTableMergeCtx &ctx);
   int dump_error_info(ObSSTable& main_sstable, ObSSTable& index_sstable);
+  void check_leader_changed_for_sql_recheck_(ObDMLRunningCtx &run_ctx, int &ret);
   // disallow copy;
   DISALLOW_COPY_AND_ASSIGN(ObPartitionStorage);
 

@@ -2922,14 +2922,27 @@ int ObPartitionStorage::process_old_row(ObDMLRunningCtx& run_ctx, const bool dat
                          relative_tables.index_tables_[i], store_ctx, idx_col_descs, idx_row->row_val_, exists))) {
             STORAGE_LOG(WARN, "failed to check rowkey existing", K(*idx_row), K(ret));
           } else if (!exists) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(ERROR,
-                "DEBUG ATTENTION!!!! update or delete a non exist index row",
-                K(ret),
-                KPC(idx_row),
-                K(relative_tables.data_table_.tables_handle_),
-                K(relative_tables.index_tables_[i]),
-                K(relative_tables.index_tables_[i].tables_handle_));
+            if (run_ctx.store_ctx_.mem_ctx_ != NULL) {
+              ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(run_ctx.store_ctx_.mem_ctx_);
+              transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
+              if (NULL != trans_ctx) {
+                if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
+                  TRANS_LOG(WARN, "strong consistent read follower when sql check",
+                            K(trans_ctx->get_trans_id()));
+                  ret = OB_NOT_MASTER;
+                }
+              }
+            }
+            if (OB_NOT_MASTER != ret) {
+              ret = OB_ERR_UNEXPECTED;
+              STORAGE_LOG(ERROR,
+                  "DEBUG ATTENTION!!!! update or delete a non exist index row",
+                  K(ret),
+                  KPC(idx_row),
+                  K(relative_tables.data_table_.tables_handle_),
+                  K(relative_tables.index_tables_[i]),
+                  K(relative_tables.index_tables_[i].tables_handle_));
+            }
           } else {
             // STORAGE_LOG(INFO, "build index row", K(*idx_row), K(null_idx_val), K(type));
             if (ND_ROWKEY_CHANGE == type && !null_idx_val) {
