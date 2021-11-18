@@ -34,7 +34,7 @@ OceanBase 数据库支持支付宝的全部核心业务，以及银行、保险�
 
 ## 许可证
 
-OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0/index.html) 许可证。您可以免费复制及使用源代码。当您修改或分发源代码时，请遵守木兰协议。
+OceanBase 数据库使用 [MulanPubL - 2.0](http://license.coscl.org.cn/MulanPubL-2.0) 许可证。您可以免费复制及使用源代码。当您修改或分发源代码时，请遵守木兰协议。
 
 ## 兼容性列表
 
