@@ -60,13 +60,13 @@ OceanBase Database is under [MulanPubL - 2.0](http://license.coscl.org.cn/MulanP
 
 ## Developer Manual
 
-1. [How to build](wiki/how_to_build)
-2. [How to setup IDE](wiki/how_to_setup_ide)
-3. [How to contribute](wiki/how_to_contribute)
-4. [How to modify document](wiki/how_to_modify_docs)
-5. [How to debug OceanBase](wiki/how_to_debug)
-6. [How to run test](wiki/how_to_test)
-7. [How to fix one_bug](wiki/how_to_fix_bug)
+1. [How to build](https://github.com/oceanbase/oceanbase/wiki/how_to_build)
+2. [How to setup IDE](https://github.com/oceanbase/oceanbase/wiki/how_to_setup_ide)
+3. [How to contribute](https://github.com/oceanbase/oceanbase/wiki/how_to_contribute)
+4. [How to modify document](https://github.com/oceanbase/oceanbase/wiki/how_to_modify_docs)
+5. [How to debug OceanBase](https://github.com/oceanbase/oceanbase/wiki/how_to_debug)
+6. [How to run test](https://github.com/oceanbase/oceanbase/wiki/how_to_test)
+7. [How to fix one_bug](https://github.com/oceanbase/oceanbase/wiki/how_to_fix_bug)
 
 
 

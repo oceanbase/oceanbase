@@ -54,13 +54,13 @@ OceanBase 数据库使用 [MulanPubL - 2.0](http://license.coscl.org.cn/MulanPub
 
 ## OceanBase开发者手册
 
-1. [如何编译OceanBase源码](wiki/how_to_build)
-2. [如何设置IDE开发环境](wiki/how_to_setup_ide)
-3. [如何成为OceanBase Contributor](wiki/how_to_contribute)
-4. [如何修改OceanBase文档](wiki/how_to_modify_docs)
-5. [如何debug OceanBase](wiki/how_to_debug)
-6. [如何运行测试](wiki/how_to_test)
-7. [如何修bug](wiki/fix_bug)
+1. [如何编译OceanBase源码](https://github.com/oceanbase/oceanbase/wiki/how_to_build)
+2. [如何设置IDE开发环境](https://github.com/oceanbase/oceanbase/wiki/how_to_setup_ide)
+3. [如何成为OceanBase Contributor](https://github.com/oceanbase/oceanbase/wiki/how_to_contribute)
+4. [如何修改OceanBase文档](https://github.com/oceanbase/oceanbase/wiki/how_to_modify_docs)
+5. [如何debug OceanBase](https://github.com/oceanbase/oceanbase/wiki/how_to_debug)
+6. [如何运行测试](https://github.com/oceanbase/oceanbase/wiki/how_to_test)
+7. [如何修bug](https://github.com/oceanbase/oceanbase/wiki/how_to_fix_bug)
 
 
 
