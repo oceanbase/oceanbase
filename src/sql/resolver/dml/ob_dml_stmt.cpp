@@ -635,6 +635,9 @@ int ObDMLStmt::deep_copy_stmt_struct(
   } else if (OB_FAIL(ObRawExprUtils::copy_expr(
                  expr_factory, other.limit_percent_expr_, limit_percent_expr_, COPY_REF_DEFAULT))) {
     LOG_WARN("deep copy limit percent expr failed", K(ret));
+  } else if (OB_FAIL(
+                 ObRawExprUtils::copy_exprs(expr_factory, other.user_var_exprs_, user_var_exprs_, COPY_REF_DEFAULT))) {
+    LOG_WARN("deep copy user var exprs failed", K(ret));
   } else if (OB_FAIL(from_items_.assign(other.from_items_))) {
     LOG_WARN("assign from items failed", K(ret));
   } else if (OB_FAIL(stmt_hint_.assign(other.stmt_hint_))) {

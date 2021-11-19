@@ -2151,14 +2151,26 @@ int ObRawExprUtils::copy_expr(ObRawExprFactory& expr_factory, const ObRawExpr* o
         break;
       }
       case ObRawExpr::EXPR_CONST: {
-        ObConstRawExpr* dest_const = NULL;
-        const ObConstRawExpr* origin_const = static_cast<const ObConstRawExpr*>(origin);
-        if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_const)) || OB_ISNULL(dest_const)) {
-          LOG_WARN("failed to allocate raw expr", K(dest_const), K(ret));
-        } else if (OB_FAIL(dest_const->deep_copy(expr_factory, *origin_const, COPY_REF_DEFAULT, use_new_allocator))) {
-          LOG_WARN("failed to deep copy const expr", K(ret));
+        if (T_USER_VARIABLE_IDENTIFIER == origin->get_expr_type()) {
+          ObUserVarIdentRawExpr* dest_expr = NULL;
+          const ObUserVarIdentRawExpr* origin_expr = static_cast<const ObUserVarIdentRawExpr*>(origin);
+          if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_expr)) || OB_ISNULL(dest_expr)) {
+            LOG_WARN("failed to allocate raw expr", K(dest_expr), K(ret));
+          } else if (OB_FAIL(dest_expr->deep_copy(expr_factory, *origin_expr, COPY_REF_DEFAULT, use_new_allocator))) {
+            LOG_WARN("failed to deep copy const expr", K(ret));
+          } else {
+            dest = dest_expr;
+          }
         } else {
-          dest = dest_const;
+          ObConstRawExpr *dest_const = NULL;
+          const ObConstRawExpr *origin_const = static_cast<const ObConstRawExpr *>(origin);
+          if (OB_FAIL(expr_factory.create_raw_expr(origin->get_expr_type(), dest_const)) || OB_ISNULL(dest_const)) {
+            LOG_WARN("failed to allocate raw expr", K(dest_const), K(ret));
+          } else if (OB_FAIL(dest_const->deep_copy(expr_factory, *origin_const, COPY_REF_DEFAULT, use_new_allocator))) {
+            LOG_WARN("failed to deep copy const expr", K(ret));
+          } else {
+            dest = dest_const;
+          }
         }
         break;
       }
