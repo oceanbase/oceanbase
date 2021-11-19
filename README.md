@@ -37,6 +37,7 @@ Refer to the [Get Started guide](docs/docs/docs-en/quick-start-en.md) to try out
 ## Supported clients
 
 - [OBClient](https://github.com/oceanbase/obclient)
+- [MySQLClient](https://dev.mysql.com/downloads/)
 
 ## Licencing
 
