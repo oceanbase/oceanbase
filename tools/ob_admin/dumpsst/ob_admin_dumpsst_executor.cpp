@@ -15,9 +15,7 @@
 #include "storage/blocksstable/ob_store_file.h"
 #include "storage/ob_partition_service.h"
 #include "storage/ob_table_mgr.h"
-#include "storage/ob_table_mgr_meta_block_reader.h"
 #include "storage/ob_sstable.h"
-#include "storage/blocksstable/ob_macro_meta_block_reader.h"
 #include "storage/ob_tenant_config_mgr.h"
 #include "storage/ob_tenant_config_meta_block_reader.h"
 #include "storage/blocksstable/ob_micro_block_scanner.h"
@@ -358,66 +356,58 @@ int ObAdminDumpsstExecutor::open_store_file()
 
 void ObAdminDumpsstExecutor::print_macro_meta()
 {
- // int ret = OB_SUCCESS;
+  // int ret = OB_SUCCESS;
   const ObMacroBlockMeta *meta = NULL;
-  ObMacroBlockMetaHandle meta_handle;
   MacroBlockId macro_id(dump_macro_context_.macro_id_);
-  /*if (OB_FAIL(ObMacroBlockMetaMgr::get_instance().get_meta(macro_id, meta_handle))) {
-    STORAGE_LOG(ERROR, "failed to get meta", K(ret));
-  } else if (OB_ISNULL(meta = meta_handle.get_meta())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "meta is null", K(ret));
-  } else {*/
-    PrintHelper::print_dump_title("Macro Meta");
-    PrintHelper::print_dump_line("macro_block_id", dump_macro_context_.macro_id_);
-    PrintHelper::print_dump_line("attr", meta->attr_);
-    PrintHelper::print_dump_line("data_version", meta->data_version_);
-    PrintHelper::print_dump_line("column_number", meta->column_number_);
-    PrintHelper::print_dump_line("rowkey_column_number", meta->rowkey_column_number_);
-    PrintHelper::print_dump_line("column_index_scale", meta->column_index_scale_);
-    PrintHelper::print_dump_line("row_store_type", meta->row_store_type_);
-    PrintHelper::print_dump_line("row_count", meta->row_count_);
-    PrintHelper::print_dump_line("occupy_size", meta->occupy_size_);
-    PrintHelper::print_dump_line("data_checksum", meta->data_checksum_);
-    PrintHelper::print_dump_line("micro_block_count", meta->micro_block_count_);
-    PrintHelper::print_dump_line("micro_block_data_offset", meta->micro_block_data_offset_);
-    PrintHelper::print_dump_line("micro_block_index_offset", meta->micro_block_index_offset_);
-    PrintHelper::print_dump_line("micro_block_endkey_offset", meta->micro_block_endkey_offset_);
-    PrintHelper::print_dump_line("compressor", meta->compressor_);
-    PrintHelper::print_dump_line("table_id", meta->table_id_);
-    PrintHelper::print_dump_line("data_seq", meta->data_seq_);
-    PrintHelper::print_dump_line("schema_version", meta->schema_version_);
-    PrintHelper::print_dump_line("snapshot_version", meta->snapshot_version_);
-    PrintHelper::print_dump_line("schema_rowkey_col_cnt", meta->schema_rowkey_col_cnt_);
-    PrintHelper::print_dump_line("row_count_delta", meta->row_count_delta_);
-    PrintHelper::print_dump_line("macro_block_deletion_flag", meta->macro_block_deletion_flag_);
-    PrintHelper::print_dump_list_start("column_id_array");
-    for (int64_t i = 0; i < meta->column_number_; ++i) {
-      PrintHelper::print_dump_list_value(meta->column_id_array_[i], i == meta->rowkey_column_number_ - 1);
-    }
-    PrintHelper::print_dump_list_end();
-    PrintHelper::print_dump_list_start("column_type_array");
-    for (int64_t i = 0; i < meta->column_number_; ++i) {
-      PrintHelper::print_dump_list_value(to_cstring(meta->column_type_array_[i]), i == meta->rowkey_column_number_ - 1);
-    }
-    PrintHelper::print_dump_list_end();
-    PrintHelper::print_dump_list_start("column_checksum");
-    for (int64_t i = 0; i < meta->column_number_; ++i) {
-      PrintHelper::print_dump_list_value(meta->column_checksum_[i], i== meta->rowkey_column_number_ - 1);
-    }
-    PrintHelper::print_dump_list_end();
-    PrintHelper::print_dump_list_start("end_key");
-    for (int64_t i = 0; i < meta->rowkey_column_number_; ++i) {
-      PrintHelper::print_cell(meta->endkey_[i], in_csv_);
-    }
-    PrintHelper::print_dump_list_end();
-    PrintHelper::print_dump_list_start("column_order");
-    for (int64_t i = 0; i < meta->column_number_; ++i) {
-      PrintHelper::print_dump_list_value(meta->column_order_array_[i], i == meta->column_number_ - 1);
-    }
-    PrintHelper::print_dump_list_end();
-    PrintHelper::print_end_line();
-  //}
+  PrintHelper::print_dump_title("Macro Meta");
+  PrintHelper::print_dump_line("macro_block_id", dump_macro_context_.macro_id_);
+  PrintHelper::print_dump_line("attr", meta->attr_);
+  PrintHelper::print_dump_line("data_version", meta->data_version_);
+  PrintHelper::print_dump_line("column_number", meta->column_number_);
+  PrintHelper::print_dump_line("rowkey_column_number", meta->rowkey_column_number_);
+  PrintHelper::print_dump_line("column_index_scale", meta->column_index_scale_);
+  PrintHelper::print_dump_line("row_store_type", meta->row_store_type_);
+  PrintHelper::print_dump_line("row_count", meta->row_count_);
+  PrintHelper::print_dump_line("occupy_size", meta->occupy_size_);
+  PrintHelper::print_dump_line("data_checksum", meta->data_checksum_);
+  PrintHelper::print_dump_line("micro_block_count", meta->micro_block_count_);
+  PrintHelper::print_dump_line("micro_block_data_offset", meta->micro_block_data_offset_);
+  PrintHelper::print_dump_line("micro_block_index_offset", meta->micro_block_index_offset_);
+  PrintHelper::print_dump_line("micro_block_endkey_offset", meta->micro_block_endkey_offset_);
+  PrintHelper::print_dump_line("compressor", meta->compressor_);
+  PrintHelper::print_dump_line("table_id", meta->table_id_);
+  PrintHelper::print_dump_line("data_seq", meta->data_seq_);
+  PrintHelper::print_dump_line("schema_version", meta->schema_version_);
+  PrintHelper::print_dump_line("snapshot_version", meta->snapshot_version_);
+  PrintHelper::print_dump_line("schema_rowkey_col_cnt", meta->schema_rowkey_col_cnt_);
+  PrintHelper::print_dump_line("row_count_delta", meta->row_count_delta_);
+  PrintHelper::print_dump_line("macro_block_deletion_flag", meta->macro_block_deletion_flag_);
+  PrintHelper::print_dump_list_start("column_id_array");
+  for (int64_t i = 0; i < meta->column_number_; ++i) {
+    PrintHelper::print_dump_list_value(meta->column_id_array_[i], i == meta->rowkey_column_number_ - 1);
+  }
+  PrintHelper::print_dump_list_end();
+  PrintHelper::print_dump_list_start("column_type_array");
+  for (int64_t i = 0; i < meta->column_number_; ++i) {
+    PrintHelper::print_dump_list_value(to_cstring(meta->column_type_array_[i]), i == meta->rowkey_column_number_ - 1);
+  }
+  PrintHelper::print_dump_list_end();
+  PrintHelper::print_dump_list_start("column_checksum");
+  for (int64_t i = 0; i < meta->column_number_; ++i) {
+    PrintHelper::print_dump_list_value(meta->column_checksum_[i], i== meta->rowkey_column_number_ - 1);
+  }
+  PrintHelper::print_dump_list_end();
+  PrintHelper::print_dump_list_start("end_key");
+  for (int64_t i = 0; i < meta->rowkey_column_number_; ++i) {
+    PrintHelper::print_cell(meta->endkey_[i], in_csv_);
+  }
+  PrintHelper::print_dump_list_end();
+  PrintHelper::print_dump_list_start("column_order");
+  for (int64_t i = 0; i < meta->column_number_; ++i) {
+    PrintHelper::print_dump_list_value(meta->column_order_array_[i], i == meta->column_number_ - 1);
+  }
+  PrintHelper::print_dump_list_end();
+  PrintHelper::print_end_line();
 }
 
 void ObAdminDumpsstExecutor::dump_sstable()
@@ -456,12 +446,9 @@ void ObAdminDumpsstExecutor::dump_sstable()
 void ObAdminDumpsstExecutor::dump_sstable_meta()
 {
   int ret = OB_SUCCESS;
-  ObTableHandle handle;
   ObSSTable *sstable = NULL;
-  if (OB_FAIL(ObPartitionService::get_instance().acquire_sstable(table_key_, handle))) {
+  if (OB_FAIL(replay_slog_to_get_sstable(sstable))) {
     STORAGE_LOG(ERROR, "fail to acquire table", K(ret), K(table_key_));
-  } else if (OB_FAIL(handle.get_sstable(sstable))) {
-    STORAGE_LOG(ERROR, "fail to get sstable", K(ret));
   } else if (OB_ISNULL(sstable)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "error unexpected, sstable must not be NULL", K(ret));

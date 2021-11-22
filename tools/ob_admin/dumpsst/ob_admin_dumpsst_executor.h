@@ -16,7 +16,6 @@
 #include "lib/container/ob_array.h"
 #include "share/config/ob_config_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_store_file.h"
 #include "storage/ob_i_table.h"
 #include "observer/ob_server_struct.h"
