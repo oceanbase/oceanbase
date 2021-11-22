@@ -823,7 +823,7 @@ int ObPartitionLogService::change_member_(
     CLOG_LOG(WARN, "invalid argument", K(member), K(quorum), K(ret));
   } else {
     // ========== step 1 ===========
-    // 1) check it can do chagne member
+    // 1) check it can do change member
     // 2) get current membership_ts and member_list
     // 3) get current proposal_id
     //
@@ -1888,7 +1888,7 @@ int ObPartitionLogService::process_archive_checkpoint(const uint64_t next_log_id
         "process_archive_checkpoint in unexpected state",
         K_(partition_key),
         K(ret),
-        "is_archive_resotring",
+        "is_archive_resorting",
         restore_mgr_.is_archive_restoring(),
         "role",
         restore_mgr_.get_role(),
@@ -2109,7 +2109,7 @@ int ObPartitionLogService::fake_ack_log(const ObAddr& server, const uint64_t log
   } else if (!state_mgr_.can_receive_log_ack(proposal_id) || self_ == server) {
     ret = OB_STATE_NOT_MATCH;
   } else if (LEADER != state_mgr_.get_role() || !is_in_curr_member_list) {
-    // self is not leader or sender is not paxos memeber, ignore
+    // self is not leader or sender is not paxos member, ignore
   } else if (log_id != sw_.get_start_id()) {
     // log_id not match with current start_id, skip
   } else {
@@ -2159,7 +2159,7 @@ int ObPartitionLogService::ack_renew_ms_log(
     }
     ret = OB_STATE_NOT_MATCH;
   } else if (!is_in_curr_member_list) {
-    // if not paxos memeber, record ts and skip majority count
+    // if not paxos member, record ts and skip majority count
   } else {
     // only leader need to count majority, other parent skip
     bool majority = false;
@@ -6162,7 +6162,7 @@ int ObPartitionLogService::notify_log_missing(
     if (!restore_mgr_.is_standby_restore_state()) {
       CLOG_LOG(INFO, "self is not in restore state, ignore msg", K_(partition_key), K(src_server));
     } else if (FOLLOWER != state_mgr_.get_role()) {
-      CLOG_LOG(WARN, "self is not follower, igore msg", K_(partition_key), K(src_server));
+      CLOG_LOG(WARN, "self is not follower, ignore msg", K_(partition_key), K(src_server));
     } else if (ObReplicaTypeCheck::is_paxos_replica_V2(replica_type) && !is_in_member_list) {
       CLOG_LOG(INFO,
           "self is paxos replica, but not in standby_leader's member_list, cannot exec restore",
@@ -6784,7 +6784,7 @@ int ObPartitionLogService::pre_change_member(const int64_t quorum, const bool is
       if (!is_standby_op) {
         proposal_id = state_mgr_.get_proposal_id();
       } else {
-        // standby non-private talbe's member change, use ms_proposal_id
+        // standby non-private table's member change, use ms_proposal_id
         proposal_id = mm_.get_ms_proposal_id();
       }
       if (OB_SUCCESS != (ret = member_list.deep_copy(mm_.get_curr_member_list()))) {
@@ -6999,7 +6999,7 @@ int ObPartitionLogService::leader_keepalive(const int64_t keepalive_interval)
       if (!ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id())) {
         if (GCTX.is_primary_cluster() || GCTX.is_in_flashback_state() || GCTX.is_in_cleanup_state()) {
           // non-private leader only in flashback/cleanup state can advance next_log_ts
-          // it cannot do this in swithing state, which may lead conflict with new primary cluster
+          // it cannot do this in swiching state, which may lead conflict with new primary cluster
           is_cluster_status_allow_update = true;
         } else {
           is_cluster_status_allow_update = false;
