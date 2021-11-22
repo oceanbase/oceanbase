@@ -5,7 +5,7 @@ unalias -a
 
 PWD="$(cd $(dirname $0); pwd)"
 
-OS_ARCH="$(uname -p)" || exit 1
+OS_ARCH="$(uname -m)" || exit 1
 OS_RELEASE="0"
 
 if [[ ! -f /etc/os-release ]]; then
