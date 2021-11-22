@@ -65,6 +65,9 @@ function get_os_release() {
       opensuse-leap)
         version_ge "15" && compat_centos7 && return
         ;;
+      arch)
+        compat_centos7 && return
+        ;;
       #suse
       sles)
         version_ge "15" && compat_centos7 && return
@@ -133,7 +136,12 @@ do
     fi
   fi
   echo -e "unpack package <${pkg}>... \c"
-  rpm2cpio "${PWD}/pkg/${pkg}" | cpio -di -u --quiet
+
+  if [ "$ID" = "arch" ]; then
+    rpmextract.sh "${PWD}/pkg/${pkg}"
+  else
+    rpm2cpio "${PWD}/pkg/${pkg}" | cpio -di -u --quiet
+  fi
 
   if [[ $? -eq 0 ]]; then
     echo "SUCCESS"
