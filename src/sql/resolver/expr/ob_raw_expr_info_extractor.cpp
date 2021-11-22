@@ -377,7 +377,8 @@ int ObRawExprInfoExtractor::visit_subquery_node(ObOpRawExpr& expr)
         if (OB_UNLIKELY(left_ref->is_set())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("left expr is set");
-        } else if (left_ref->get_output_column() > 1) {
+        } else if (left_ref->get_output_column() > 1 &&
+                   IS_COMMON_COMPARISON_OP(expr.get_expr_type())) {
           // left subquery result only can be scalar or vector; if is scalar, needs not to do operator transform,
           // normal compare exprs also can deal with subquery.
           expr.set_expr_type(get_subquery_comparison_type(expr.get_expr_type()));
@@ -386,7 +387,8 @@ int ObRawExprInfoExtractor::visit_subquery_node(ObOpRawExpr& expr)
       if (OB_SUCCESS == ret && right_expr->has_flag(IS_SUB_QUERY)) {
         // operators also needs to add ALL/ANY flag
         ObQueryRefRawExpr* right_ref = static_cast<ObQueryRefRawExpr*>(right_expr);
-        if (right_ref->get_output_column() > 1 || right_ref->is_set()) {
+        if ((right_ref->get_output_column() > 1 || right_ref->is_set()) &&
+            IS_COMMON_COMPARISON_OP(expr.get_expr_type())) {
           // The result of the subquery is a vector or a set, then the comparison operator must be
           // converted to the corresponding subquery expr operator
           expr.set_expr_type(get_subquery_comparison_type(expr.get_expr_type()));
