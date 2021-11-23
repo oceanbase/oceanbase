@@ -8,3 +8,4 @@ mkdocs-git-revision-date-localized-plugin
 weasyprint
 mkdocs-with-pdf
 qrcode
+mkdocs-material
