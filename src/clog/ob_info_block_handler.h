@@ -171,7 +171,7 @@ private:
     int ret_code_;
   };
 
-  // adapt hashmap forech, used to traverse infoblock.
+  // adapt hashmap foreach, used to traverse infoblock.
   // 1. record partition which need to be minor freeze.
   class CheckPartitionNeedFreezeFunctor {
   public:
