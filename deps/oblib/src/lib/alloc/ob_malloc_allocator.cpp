@@ -298,6 +298,7 @@ int ObMallocAllocator::create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t 
               ObTenantCtxAllocator* next_allocator = *cur;
               *cur = allocator;
               ((*cur)->get_next()) = next_allocator;
+              LOG_INFO("tenant ctx allocator was created", K(tenant_id), K(ctx_id), K(lbt()));
             } else {
               allocator->~ObTenantCtxAllocator();
               allocer->free(buf);
