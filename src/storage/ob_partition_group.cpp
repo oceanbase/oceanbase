@@ -3942,12 +3942,11 @@ int ObPartitionGroup::freeze(const bool emergency, const bool force, int64_t& fr
   ObPartitionGroupLockGuard guard(lock_, 0, PGLOCKSTORAGE);
 
   if (with_data_()) {
-    // F replica, need freeze;
+    // https://open.oceanbase.com/docs/community/oceanbase-database/V3.1.1/replica-overview
+    // FULL（F）/ READONLY（R）replica have sstable and memtable, need to be frozen
     ret = freeze_log_and_data_v2_(emergency, force, freeze_snapshot);
-    // F/R replica are with data because they have sstable. The freeze operation will be skipped at
-    // lower layer because they do not have memtable.
   } else {
-    // L replica or empty PG
+    // LOGONLY（L）replica or empty PG
     ret = freeze_log_(force);
   }
 
