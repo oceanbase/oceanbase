@@ -582,7 +582,7 @@ int ObElection::process_devote_success_(const ObElectionMsgDESuccess& msg)
           (void)update_info_from_eg_();
         }
         ret = OB_ELECTION_WARN_PROTOCOL_ERROR;
-        FORCE_ELECT_LOG(WARN, "leader available but recevive devote_success message", K(ret), K(*this), K(msg));
+        FORCE_ELECT_LOG(WARN, "leader available but receive devote_success message", K(ret), K(*this), K(msg));
       }
     } else if (NULL != election_group_) {
       // current leader is invalid, need move out from election group
@@ -633,7 +633,7 @@ int ObElection::local_handle_devote_success_(const ObElectionMsgDESuccess& msg)
     ret = OB_INVALID_ARGUMENT;
     ELECT_ASYNC_LOG_(WARN, "invalid argument", K(ret), K_(partition), K(msg));
   } else if (OB_FAIL(process_devote_success_(msg))) {
-    ELECT_ASYNC_LOG_(WARN, "process_devote_success_ faield", K(ret), K_(partition), K(msg));
+    ELECT_ASYNC_LOG_(WARN, "process_devote_success_ failed", K(ret), K_(partition), K(msg));
   } else {
   }
 
@@ -663,7 +663,7 @@ int ObElection::handle_devote_success(const ObElectionMsgDESuccess& msg, ObElect
     ret = OB_INVALID_ARGUMENT;
     ELECT_ASYNC_LOG_(WARN, "invalid argument", K(ret), K_(partition), K(msg));
   } else if (OB_FAIL(process_devote_success_(msg))) {
-    ELECT_ASYNC_LOG_(WARN, "process_devote_success_ faield", K(ret), K_(partition), K(msg));
+    ELECT_ASYNC_LOG_(WARN, "process_devote_success_ failed", K(ret), K_(partition), K(msg));
   } else {
   }
 
@@ -987,7 +987,7 @@ int ObElection::process_vote_success_(const ObElectionMsgSuccess& msg)
   int ret = OB_SUCCESS;
 
   if (msg.get_last_leader_epoch() != OB_INVALID_TIMESTAMP &&
-      (max_leader_epoch_ever_seen_ == OB_INVALID_TIMESTAMP ||  // avoid OB_INVALID_TIMESTAMP definded too large
+      (max_leader_epoch_ever_seen_ == OB_INVALID_TIMESTAMP ||  // avoid OB_INVALID_TIMESTAMP defined too large
           msg.get_last_leader_epoch() > max_leader_epoch_ever_seen_)) {
     max_leader_epoch_ever_seen_ = msg.get_last_leader_epoch();
   }
@@ -1215,7 +1215,7 @@ int ObElection::handle_query_leader(const ObElectionQueryLeader& msg, ObElection
     ELECT_ASYNC_LOG_(WARN, "election is not running", K(ret), K_(partition), K(msg));
   } else if (!msg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    ELECT_ASYNC_LOG_(WARN, "invalid argumenet", K(ret), K_(partition), K(msg));
+    ELECT_ASYNC_LOG_(WARN, "invalid argument", K(ret), K_(partition), K(msg));
   } else {
     const int64_t cur_ts = get_current_ts();
     const ObAddr& sender = msg.get_sender();
@@ -1253,7 +1253,7 @@ int ObElection::handle_query_leader_response(const ObElectionQueryLeaderResponse
     ELECT_ASYNC_LOG_(WARN, "election is not running", K(ret), K_(partition), K(msg));
   } else if (!msg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    ELECT_ASYNC_LOG_(WARN, "invalid argumenet", K(ret), K_(partition), K(msg));
+    ELECT_ASYNC_LOG_(WARN, "invalid argument", K(ret), K_(partition), K(msg));
   } else if (NULL != election_group_) {
     ret = OB_STATE_NOT_MATCH;
     ELECT_ASYNC_LOG_(WARN, "already in election_group, ignore msg", K(ret), "election", *this, K(msg));
@@ -1810,7 +1810,7 @@ int ObElection::update_info_from_eg_()
   const int64_t cur_ts = get_current_ts();
   if (OB_FAIL(election_group_->get_leader_lease_info(
           partition_, eg_part_array_idx_, cur_ts, eg_lease_end, eg_takeover_t1_ts))) {
-    FORCE_ELECT_LOG(WARN, "get_leader_lease_info failed", K(ret), K_(partition), "eleciton", *this);
+    FORCE_ELECT_LOG(WARN, "get_leader_lease_info failed", K(ret), K_(partition), "election", *this);
   } else if (eg_lease_end < 0) {
     ret = OB_ERR_UNEXPECTED;
     FORCE_ELECT_LOG(ERROR, "eg_lease_end is invalid", K(ret), K(eg_lease_end), "election", *this);
@@ -2292,7 +2292,7 @@ int ObElection::move_into_election_group_unlock_(const ObElectionGroupId& eg_id)
     }
   } else if (!current_leader_.is_valid() || current_leader_ != eg_id.get_server() ||
              !is_real_leader_(current_leader_)) {
-    // allow follower moive in only if leader is valid and match group's leader
+    // allow follower motive in only if leader is valid and match group's leader
     ret = OB_STATE_NOT_MATCH;
     if (REACH_TIME_INTERVAL(100 * 1000)) {
       FORCE_ELECT_LOG(WARN, "current_leader_ not match with eg_id", K(ret), K(eg_id), "election", *this);
@@ -2502,7 +2502,7 @@ bool ObElection::can_elect_new_leader_() const
       bool_ret = false;
     } else if (common::PRIMARY_CLUSTER == cluster_type ||
                ObMultiClusterUtil::is_cluster_private_table(partition_.get_table_id())) {
-      // main datebase or private table allow elect
+      // main database or private table allow elect
       bool_ret = true;
     } else if (share::OBSERVER_INVALID_STATUS == server_status) {
       // server status unknown, non-private table not allow to elect
@@ -2538,7 +2538,7 @@ void ObElection::run_gt1_task(const int64_t real_T1_timestamp)
     election_time_offset_ = new_election_time_offset_;
     temp_election_time_offset_ = election_time_offset_;
     takeover_t1_timestamp_ = 0;
-    ELECT_ASYNC_LOG(INFO, "be dead, parameters conversion is compeleted", "election", *this);
+    ELECT_ASYNC_LOG(INFO, "be dead, parameters conversion is completed", "election", *this);
   } else {
   }
   /*********************************************************************************************/
@@ -3281,7 +3281,7 @@ int ObElection::check_centralized_majority_()
     } else if (is_candidate_(self_) && is_real_leader_(self_) && cur_leader == current_leader_) {
       bool change_leader = false;
       if (cur_leader != new_leader) {  // change leader
-        // need new leader's message and its prioeity
+        // need new leader's message and its priority
         if (!new_leader_priority.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           FORCE_ELECT_LOG(WARN, "change leader but new leader priority is invalid", K(ret), K(new_leader_priority));
