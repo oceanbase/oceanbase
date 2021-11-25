@@ -719,7 +719,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
     ObExprWeightString::eval_weight_string,   /* 458 */
     ObExprConvertTZ::eval_convert_tz,         /* 459 */
-    ObExprCrc32::calc_crc32_expr              /* 460 */
+    ObExprCrc32::calc_crc32_expr,             /* 460 */
+    ObExprUuidToBin::eval_uuid_to_bin,        /* 461 */
+    ObExprBinToUuid::eval_bin_to_uuid,        /* 462 */
+    ObExprIsUuid::eval_is_uuid                /* 463 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

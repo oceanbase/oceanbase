@@ -610,6 +610,9 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTruncate);
   REG_OP(ObExprDllUdf);
   REG_OP(ObExprExp);
+  REG_OP(ObExprUuidToBin);
+  REG_OP(ObExprBinToUuid);
+  REG_OP(ObExprIsUuid);
   /* subquery comparison experator */
   REG_OP(ObExprSubQueryRef);
   REG_OP(ObExprSubQueryEqual);

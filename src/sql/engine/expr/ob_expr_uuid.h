@@ -114,6 +114,65 @@ inline int ObExprSysGuid::calc_result_type0(ObExprResType& type, common::ObExprT
   return common::OB_SUCCESS;
 }
 
+class ObExprUuidToBin : public ObFuncExprOperator {
+public:
+  explicit ObExprUuidToBin(common::ObIAllocator& alloc);
+  explicit ObExprUuidToBin(
+      common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension);
+  virtual ~ObExprUuidToBin();
+  virtual int calc_result_typeN(
+      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+  static int eval_uuid_to_bin(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+
+protected:
+  static int hexchar_to_int(char c);
+  static int uuid_to_bin(ObString& str);
+  static const common::ObLength LENGTH_UUID_NO_DASH = 32;
+  static const common::ObLength LENGTH_UUID = 36;
+  static const common::ObLength LENGTH_UUID_WITH_BRACES = 38;
+  static const common::ObLength LENGTH_BIN_UUID = 16;
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprUuidToBin);
+};
+
+class ObExprBinToUuid : public ObExprUuidToBin {
+public:
+  explicit ObExprBinToUuid(common::ObIAllocator& alloc);
+  explicit ObExprBinToUuid(
+      common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension);
+  virtual ~ObExprBinToUuid();
+  virtual int calc_result_typeN(
+      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+  static int eval_bin_to_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+
+protected:
+  static int hexchar_to_int(char c);
+  static constexpr char hexValues[] = "0123456789abcdef";
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObExprBinToUuid);
+};
+
+
+class ObExprIsUuid : public ObExprUuidToBin {
+public:
+  explicit ObExprIsUuid(common::ObIAllocator& alloc);
+  explicit ObExprIsUuid(
+      common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension);
+  virtual ~ObExprIsUuid();
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const;
+  static int eval_is_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+
+private:
+  static const common::ObLength LENGTH_SYS_GUID = 16;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprIsUuid);
+};
+
+
 }  // namespace sql
 }  // namespace oceanbase
 

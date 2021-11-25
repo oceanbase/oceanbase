@@ -438,6 +438,9 @@ typedef enum ObItemType {
   T_FUN_SYS_INETATON = 728,
   T_FUN_SYS_WEIGHT_STRING = 729,
   T_FUN_SYS_CRC32 = 730,
+  T_FUN_SYS_UUID_TO_BIN = 731,
+  T_FUN_SYS_BIN_TO_UUID = 732,
+  T_FUN_SYS_IS_UUID = 733,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 

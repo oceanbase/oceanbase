@@ -811,6 +811,9 @@
 #define N_CHR "chr"
 #define N_EXP "exp"
 #define N_CALC_UROWID "calc_urowid"
+#define N_IS_UUID "is_uuid"
+#define N_UUID_TO_BIN "uuid_to_bin"
+#define N_BIN_TO_UUID "bin_to_uuid"
 // for dll udf
 #define N_NORMAL_UDF "dll_normal_user_defined_function"
 #define N_AGG_UDF "dll_agg_user_defined_function"

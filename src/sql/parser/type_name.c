@@ -409,6 +409,9 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_UTL_RAW_CONCAT : return "T_FUN_SYS_UTL_RAW_CONCAT";
 	case T_FUN_SYS_TO_CLOB : return "T_FUN_SYS_TO_CLOB";
 	case T_FUN_SYS_CHR : return "T_FUN_SYS_CHR";
+	case T_FUN_SYS_UUID_TO_BIN : return "T_FUN_SYS_UUID_TO_BIN";
+	case T_FUN_SYS_BIN_TO_UUID : return "T_FUN_SYS_BIN_TO_UUID";
+	case T_FUN_SYS_IS_UUID : return "T_FUN_SYS_IS_UUID";
 	case T_FUN_PL_INTEGER_CHECKER : return "T_FUN_PL_INTEGER_CHECKER";
 	case T_FUN_PL_GET_CURSOR_ATTR : return "T_FUN_PL_GET_CURSOR_ATTR";
 	case T_FUN_PL_ASSOCIATIVE_INDEX : return "T_FUN_PL_ASSOCIATIVE_INDEX";

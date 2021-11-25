@@ -335,5 +335,326 @@ int ObExprSysGuid::eval_sys_guid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& ex
   return ret;
 }
 
+ObExprUuidToBin::ObExprUuidToBin(ObIAllocator& alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_UUID_TO_BIN, N_UUID_TO_BIN, ONE_OR_TWO, NOT_ROW_DIMENSION)
+{}
+
+ObExprUuidToBin::ObExprUuidToBin(
+    ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
+    : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+{}
+
+ObExprUuidToBin::~ObExprUuidToBin()
+{}
+
+int ObExprUuidToBin::hexchar_to_int(char c) {
+  if (c <= '9' && c >= '0') {
+    return c - '0';
+  }
+  c |= 32;
+  if (c <= 'f' && c >= 'a') {
+    return c - 'a' + 10;
+  }
+  return -1;
+}
+
+int ObExprUuidToBin::uuid_to_bin(ObString& str) {
+  int ret = OB_SUCCESS;
+
+  char uuid[ObExprUuidToBin::LENGTH_UUID_NO_DASH];
+  char* pos = str.ptr();
+  if (str.length() == ObExprUuidToBin::LENGTH_UUID_NO_DASH) {
+    memcpy(uuid, pos, ObExprUuidToBin::LENGTH_UUID_NO_DASH);
+  } else if (str.length() == ObExprUuidToBin::LENGTH_UUID) {
+    if ('-' != *(pos + 8) || '-' != *(pos + 13) || '-' != *(pos + 18) || '-' != *(pos + 23)) {
+      ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+    } else {
+      memcpy(uuid, pos, 8);
+      memcpy(uuid + 8, pos + 9, 4);
+      memcpy(uuid + 12, pos + 14, 4);
+      memcpy(uuid + 16, pos + 19, 4);
+      memcpy(uuid + 20, pos + 24, 12);
+    }
+  } else if (str.length() == ObExprUuidToBin::LENGTH_UUID_WITH_BRACES) {
+    if ('{' != *pos || '-' != *(pos + 9) || '-' != *(pos + 14) || '-' != *(pos + 19) || '-' != *(pos + 24) || '}' != *(pos + 37)) {
+      ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+    } else {
+      memcpy(uuid, pos + 1, 8);
+      memcpy(uuid + 8, pos + 10, 4);
+      memcpy(uuid + 12, pos + 15, 4);
+      memcpy(uuid + 16, pos + 20, 4);
+      memcpy(uuid + 20, pos + 25, 12);
+    }
+  } else {
+    ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+  }
+
+  if (OB_SUCC(ret)) {
+    int j = 0;
+    char bin[ObExprUuidToBin::LENGTH_BIN_UUID];
+    for (int i = 0; i < ObExprUuidToBin::LENGTH_UUID_NO_DASH; i += 2) {
+      int high = hexchar_to_int(uuid[i]);
+      int low = hexchar_to_int(uuid[i + 1]);
+
+      if (high < 0 || low < 0) {
+        ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+        break;
+      }
+      bin[j++] = (high << 4) + low;
+    }
+    memcpy(pos, bin, ObExprUuidToBin::LENGTH_BIN_UUID);
+  }
+  return ret;
+}
+
+int ObExprUuidToBin::calc_result_typeN(ObExprResType &type,
+                                  ObExprResType *types_array,
+                                  int64_t param_num,
+                                  ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(1 != param_num && 2 != param_num)) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid argument count of funtion uuid_to_bin", K(ret));
+  } else {
+    types_array[0].set_calc_type(ObCharType);
+    if (2 == param_num) {
+      types_array[1].set_calc_type(ObTinyIntType);
+    }
+
+    type.set_hex_string();
+    type.set_result_flag(OB_MYSQL_BINARY_FLAG);
+    type.set_length(ObExprUuidToBin::LENGTH_BIN_UUID);
+  }
+  return ret;
+}
+
+
+int ObExprUuidToBin::eval_uuid_to_bin(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.eval_param_value(ctx))) {
+    LOG_WARN("evaluate parameters failed", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (expr.locate_param_datum(ctx, 0).is_null()) {
+    expr_datum.set_null();
+  } else {
+    bool swap_flag = false;
+    if (2 == expr.arg_cnt_) {
+      if (!expr.locate_param_datum(ctx, 1).is_null() && expr.locate_param_datum(ctx, 1).get_int() != 0) {
+        swap_flag = true;
+      }
+    }
+
+    ObString str = expr.locate_param_datum(ctx, 0).get_string();
+    ret = uuid_to_bin(str);
+    if (OB_FAIL(ret)) {
+       ObString data_type("string");
+       ObString func_name("uuid_to_bin");
+       LOG_USER_ERROR(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
+                data_type.length(), data_type.ptr(),
+                str.length(), str.ptr(),
+                func_name.length(), func_name.ptr());
+    } else {
+      const char* bin = str.ptr();
+      char* buf = expr.get_str_res_mem(ctx, ObExprUuidToBin::LENGTH_BIN_UUID);
+      if (swap_flag) {
+        memcpy(buf, bin + 6, 2);
+        memcpy(buf + 2, bin + 4, 2);
+        memcpy(buf + 4, bin, 4);
+        memcpy(buf + 8, bin + 8, 8);
+      } else {
+        memcpy(buf, bin, ObExprUuidToBin::LENGTH_BIN_UUID);
+      }
+      expr_datum.set_string(buf, ObExprUuidToBin::LENGTH_BIN_UUID);
+    }
+  }
+
+  return ret;
+}
+
+int ObExprUuidToBin::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid arg cnt of expr", K(ret), K(rt_expr));
+  } else {
+    rt_expr.eval_func_ = eval_uuid_to_bin;
+  }
+  return ret;
+}
+
+ObExprBinToUuid::ObExprBinToUuid(ObIAllocator& alloc) : ObExprUuidToBin(alloc, T_FUN_SYS_BIN_TO_UUID, N_BIN_TO_UUID, ONE_OR_TWO, NOT_ROW_DIMENSION)
+{}
+
+ObExprBinToUuid::ObExprBinToUuid(
+    ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
+    : ObExprUuidToBin(alloc, type, name, param_num, dimension)
+{}
+
+ObExprBinToUuid::~ObExprBinToUuid()
+{}
+
+int ObExprBinToUuid::calc_result_typeN(ObExprResType &type,
+                                  ObExprResType *types_array,
+                                  int64_t param_num,
+                                  ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(1 != param_num && 2 != param_num)) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid argument count of funtion bin_to_uuid", K(ret));
+  } else {
+    types_array[0].set_hex_string();
+    types_array[0].set_result_flag(OB_MYSQL_BINARY_FLAG);
+    if (2 == param_num) {
+      types_array[1].set_calc_type(ObTinyIntType);
+    }
+
+    type.set_varchar();
+    type.set_collation_level(common::CS_LEVEL_IMPLICIT);
+    type.set_collation_type(common::ObCharset::get_default_collation(common::ObCharset::get_default_charset()));
+    type.set_length(ObExprBinToUuid::LENGTH_UUID);
+  }
+  return ret;
+}
+
+
+int ObExprBinToUuid::eval_bin_to_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.eval_param_value(ctx))) {
+    LOG_WARN("evaluate parameters failed", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (expr.locate_param_datum(ctx, 0).is_null()) {
+    expr_datum.set_null();
+  } else {
+    bool swap_flag = false;
+    if (2 == expr.arg_cnt_) {
+      if (!expr.locate_param_datum(ctx, 1).is_null() && expr.locate_param_datum(ctx, 1).get_int() != 0) {
+        swap_flag = true;
+      }
+    }
+
+    ObString bin = expr.locate_param_datum(ctx, 0).get_string();
+    if (bin.length() != ObExprBinToUuid::LENGTH_BIN_UUID) {
+      ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+    } else {
+      int j = 0;
+      char uuid[ObExprBinToUuid::LENGTH_UUID];
+      for (int i = 0; i < ObExprBinToUuid::LENGTH_BIN_UUID; i++) {
+        uuid[j++] = hexValues[(bin[i] >> 4) & 0xf];
+        uuid[j++] = hexValues[bin[i] & 0xf];
+        if(j == 8 || j == 13 || j == 18 || j == 23) {
+          uuid[j++] = '-';
+        }
+      }
+      char* buf = expr.get_str_res_mem(ctx, ObExprBinToUuid::LENGTH_UUID);
+      if (swap_flag) {
+        memcpy(buf, uuid + 9, 4);
+        memcpy(buf + 4, uuid + 14, 4);
+        memcpy(buf + 8, uuid + 8, 1);
+        memcpy(buf + 9, uuid + 4, 4);
+        memcpy(buf + 13, uuid + 13, 1);
+        memcpy(buf + 14, uuid, 4);
+        memcpy(buf + 18, uuid + 18, 14);
+      } else {
+        memcpy(buf, uuid, ObExprBinToUuid::LENGTH_UUID);
+      }
+      expr_datum.set_string(buf, ObExprBinToUuid::LENGTH_UUID);
+    }
+
+    if (OB_FAIL(ret)) {
+       ObString data_type("string");
+       ObString func_name("bin_to_uuid");
+       LOG_USER_ERROR(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
+                data_type.length(), data_type.ptr(),
+                bin.length(), bin.ptr(),
+                func_name.length(), func_name.ptr());
+    }
+  }
+
+  return ret;
+}
+
+int ObExprBinToUuid::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_ && 2 != rt_expr.arg_cnt_)) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid arg cnt of expr", K(ret), K(rt_expr));
+  } else {
+    rt_expr.eval_func_ = eval_bin_to_uuid;
+  }
+  return ret;
+}
+
+
+ObExprIsUuid::ObExprIsUuid(ObIAllocator& alloc) : ObExprUuidToBin(alloc, T_FUN_SYS_IS_UUID, N_IS_UUID, 1, NOT_ROW_DIMENSION)
+{}
+
+ObExprIsUuid::ObExprIsUuid(
+    ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
+    : ObExprUuidToBin(alloc, type, name, param_num, dimension)
+{}
+
+ObExprIsUuid::~ObExprIsUuid()
+{}
+
+int ObExprIsUuid::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const {
+  UNUSED(type_ctx);
+  int ret = OB_SUCCESS;
+  type1.set_calc_type(ObCharType);
+  type.set_tinyint();
+  return ret;
+}
+
+int ObExprIsUuid::eval_is_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.eval_param_value(ctx))) {
+    LOG_WARN("evaluate parameters failed", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (expr.locate_param_datum(ctx, 0).is_null()) {
+    expr_datum.set_null();
+  } else {
+    ObString str = expr.locate_param_datum(ctx, 0).get_string();
+    ret = uuid_to_bin(str);
+    if (OB_FAIL(ret)) {
+      ret = OB_SUCCESS;
+      expr_datum.set_int(0);
+    } else {
+      expr_datum.set_int(1);
+    }
+  }
+  return ret;
+}
+
+int ObExprIsUuid::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  if (OB_UNLIKELY(1 != rt_expr.arg_cnt_)) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid arg cnt of expr", K(ret), K(rt_expr));
+  } else {
+    rt_expr.eval_func_ = eval_is_uuid;
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
