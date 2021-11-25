@@ -1,4 +1,4 @@
-ob_set_subtarget(ob_clog common
+ob_set_subtargets(ob_clog common
   ob_batch_buffer.cpp
   ob_batch_packet.cpp
   ob_batch_submit_ctx.cpp
