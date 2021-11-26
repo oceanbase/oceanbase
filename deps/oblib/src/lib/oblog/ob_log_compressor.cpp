@@ -231,8 +231,11 @@ void ObLogCompressor::log_compress()
             unlink(file_name->ptr());
           }
         }
+        if (!compression_file_name.empty()){
+          ob_free(compression_file_name.ptr());
+        }
       }
-      if (file_name && file_name->ptr()) {
+      if (file_name && !file_name->empty()) {
         ob_free(file_name->ptr());
       }
     }
