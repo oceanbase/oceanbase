@@ -197,7 +197,7 @@ int ObDatumHexUtils::hex(
     }
     if (OB_SUCC(ret)) {
       const int32_t alloc_length = in_str.length() * 2;
-      if (alloc == NULL || OB_ISNULL(buf = reinterpret_cast<char*>(alloc->alloc(alloc_length)))) {
+      if (OB_ISNULL(alloc) || OB_ISNULL(buf = reinterpret_cast<char*>(alloc->alloc(alloc_length)))) {
         res_datum.set_null();
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret), K(alloc_length));
