@@ -77,7 +77,9 @@ int RowDesc::add_column(ObRawExpr* raw_expr)
     }
   }
   if (OB_SUCC(ret) && !raw_expr->has_flag(IS_COLUMNLIZED)) {
-    raw_expr->add_flag(IS_COLUMNLIZED);
+    if(OB_FAIL(raw_expr->add_flag(IS_COLUMNLIZED))) {
+      SQL_CG_LOG(WARN, "failed to add flag IS_COLUMNLIZED", K(ret));
+    }
   }
   return ret;
 }
@@ -104,7 +106,9 @@ int RowDesc::replace_column(ObRawExpr* old_expr, ObRawExpr* new_expr)
     exprs_.at(idx) = new_expr;
   }
   if (OB_SUCC(ret) && !new_expr->has_flag(IS_COLUMNLIZED)) {
-    new_expr->add_flag(IS_COLUMNLIZED);
+    if(OB_FAIL(new_expr->add_flag(IS_COLUMNLIZED))) {
+      SQL_CG_LOG(WARN, "failed to add flag IS_COLUMNLIZED", K(ret));
+    }
   }
   return ret;
 }
