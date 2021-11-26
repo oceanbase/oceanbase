@@ -232,6 +232,9 @@ void ObLogCompressor::log_compress()
           }
         }
       }
+      if (file_name && file_name->ptr()) {
+        ob_free(file_name->ptr());
+      }
     }
   }
   if (src_buf) {
