@@ -699,10 +699,7 @@ int ObInnerSQLConnection::process_schema_version(sql::ObResultSet& result_set)
       LOG_WARN("cmd is null", K(ret), K(result_set));
     } else {
       sql::ObDDLStmt* ddl_stmt = static_cast<sql::ObDDLStmt*>(cmd);
-      if (OB_ISNULL(ddl_stmt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("type error", K(ret), K(cmd));
-      } else if (OB_FAIL(ddl_stmt->get_ddl_arg().primary_schema_versions_.assign(primary_schema_versions_))) {
+      if (OB_FAIL(ddl_stmt->get_ddl_arg().primary_schema_versions_.assign(primary_schema_versions_))) {
         LOG_WARN("failed to assign ddl_stmt", K(ret), K(primary_schema_versions_), K(ddl_stmt));
       }
     }
