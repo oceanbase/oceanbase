@@ -187,6 +187,7 @@
 #include "ob_expr_degrees.h"
 #include "ob_expr_weight_string.h"
 #include "ob_expr_any_value.h"
+#include "ob_expr_benchmark.h"
 
 namespace oceanbase {
 using namespace common;
@@ -709,7 +710,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 446 */
     NULL,                                     /* 447 */
     NULL,                                     /* 448 */
-    NULL,                                     /* 449 */
+    ObExprBenchmark::eval_benchmark,          /* 449 */
     ObExprExportSet::eval_export_set,         /* 450 */
     ObExprInet6Aton::calc_inet6_aton,         /* 451 */
     ObExprIsIpv4::calc_is_ipv4,               /* 452 */

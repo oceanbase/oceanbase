@@ -881,4 +881,6 @@
 #define N_MULTI_VALUES_DESC "multi_values_desc"
 #define N_MULTI_VALUE_VECTORS "multi_value_vectors"
 #define N_MULTI_INSERT_COL_CONV_FUNCS "multi_insert_col_conv_funcs"
+#define N_BENCHMARK "benchmark"
+
 #endif  // OCEANBASE_LIB_OB_NAME_DEF_H_

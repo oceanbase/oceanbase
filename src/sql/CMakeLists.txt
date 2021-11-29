@@ -464,6 +464,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_calc_urowid.cpp
   engine/expr/ob_expr_cardinality.cpp
   engine/expr/ob_expr_coll_pred.cpp
+  engine/expr/ob_expr_benchmark.cpp
+  engine/expr/ob_expr_benchmark.h
   engine/join/ob_basic_nested_loop_join.cpp
   engine/join/ob_block_based_nested_loop_join.cpp
   engine/join/ob_hash_join.cpp
