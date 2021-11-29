@@ -127,14 +127,6 @@ int ObExprUserCanAccessObj::build_real_obj_type_for_sym(
           bool exists = false;
           uint64_t sequence_id = OB_INVALID_ID;
           OZ(schema_guard->check_sequence_exist_with_name(tenant_id, db_id, obj_name, exists, sequence_id));
-          if (OB_SUCC(ret)) {
-            if (exists) {
-              obj_type = static_cast<uint64_t>(share::schema::ObObjectType::SEQUENCE);
-              obj_id = sequence_id;
-            } else {
-              ret = OB_TABLE_NOT_EXIST;
-            }
-          }
         }
       }
     }
