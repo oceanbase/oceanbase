@@ -1,0 +1,20 @@
+--disable_warnings
+drop database if exists foreign_key_db;
+--enable_warnings
+create database foreign_key_db;
+use foreign_key_db;
+
+CREATE TABLE ABS_TABLE1(a1 char(10) not null primary key);
+insert into ABS_TABLE1 values('-10');
+create table abs_table(a char(10) not null references ABS_TABLE1(a1));
+insert into abs_table values('-10');
+--error 1452
+insert into abs_table values('10');
+--error 1451
+update ABS_TABLE1 set a1 = '5' where a1 = '-10';
+--error 1217
+drop table ABS_TABLE1;
+drop table abs_table;
+drop table ABS_TABLE1;
+
+drop database foreign_key_db;

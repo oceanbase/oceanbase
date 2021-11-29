@@ -4365,6 +4365,14 @@ NOT NULLX
   (void)($1);
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_PRIMARY_KEY);
 }
+| REFERENCES relation_factor '(' column_name_list ')' opt_match_option opt_reference_option_list
+{
+  ParseNode *parent_col_list= NULL;
+  ParseNode *reference_option_list = NULL;
+  merge_nodes(parent_col_list, result, T_COLUMN_LIST, $4);
+  merge_nodes(reference_option_list, result, T_REFERENCE_OPTION_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FOREIGN_KEY, 4, $2, parent_col_list, reference_option_list, $6);  
+}
 | UNIQUE %prec LOWER_KEY
 {
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_UNIQUE_KEY);
@@ -5023,10 +5031,17 @@ not NULLX
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_UNIQUE_KEY);
 }
 | opt_primary KEY
-
 {
   (void)($1);
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_PRIMARY_KEY);
+}
+| REFERENCES relation_factor '(' column_name_list ')' opt_match_option opt_reference_option_list
+{
+  ParseNode *parent_col_list= NULL;
+  ParseNode *reference_option_list = NULL;
+  merge_nodes(parent_col_list, result, T_COLUMN_LIST, $4);
+  merge_nodes(reference_option_list, result, T_REFERENCE_OPTION_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FOREIGN_KEY, 4, $2, parent_col_list, reference_option_list, $6);  
 }
 | UNIQUE %prec LOWER_KEY
 {

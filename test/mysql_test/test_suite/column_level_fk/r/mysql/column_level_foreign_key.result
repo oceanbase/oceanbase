@@ -1,0 +1,16 @@
+drop database if exists foreign_key_db;
+create database foreign_key_db;
+use foreign_key_db;
+CREATE TABLE ABS_TABLE1(a1 char(10) not null primary key);
+insert into ABS_TABLE1 values('-10');
+create table abs_table(a char(10) not null references ABS_TABLE1(a1));
+insert into abs_table values('-10');
+insert into abs_table values('10');
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails
+update ABS_TABLE1 set a1 = '5' where a1 = '-10';
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+drop table ABS_TABLE1;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+drop table abs_table;
+drop table ABS_TABLE1;
+drop database foreign_key_db;

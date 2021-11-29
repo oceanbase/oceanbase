@@ -5645,32 +5645,61 @@ int ObDDLResolver::resolve_foreign_key_node(
     SQL_RESV_LOG(WARN, "node is null", K(ret));
   } else if (!is_oracle_mode()) {
     // mysql mode
-    if (T_FOREIGN_KEY != node->type_ || 7 != node->num_child_ || OB_ISNULL(node->children_)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(node->type_), K(node->num_child_), K(node->children_));
-    } else {
-      ParseNode* child_columns = node->children_[0];
-      ParseNode* parent_table = node->children_[1];
-      ParseNode* parent_columns = node->children_[2];
-      ParseNode* reference_options = node->children_[3];
-      ParseNode* constraint_name = node->children_[4];
-      ParseNode* foreign_key_name = node->children_[5];
-      UNUSED(foreign_key_name);
-      ParseNode* match_options = node->children_[6];
-      if (OB_FAIL(resolve_table_relation_node(parent_table, arg.parent_table_, arg.parent_database_))) {
-        LOG_WARN("failed to resolve foreign key parent table", K(ret));
-      } else if (OB_FAIL(resolve_foreign_key_columns(child_columns, arg.child_columns_))) {
-        LOG_WARN("failed to resolve foreign key child columns", K(ret));
-      } else if (OB_FAIL(resolve_foreign_key_columns(parent_columns, arg.parent_columns_))) {
-        LOG_WARN("failed to resolve foreign key parent columns", K(ret));
-      } else if (OB_FAIL(resolve_foreign_key_options(reference_options, arg.update_action_, arg.delete_action_))) {
-        LOG_WARN("failed to resolve foreign key options", K(ret));
-      } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_))) {
-        LOG_WARN("failed to resolve foreign key name", K(ret));
-      } else if (OB_FAIL(check_foreign_key_reference(arg, is_alter_table, NULL))) {
-        LOG_WARN("failed to check reference columns", K(ret));
-      } else if (OB_FAIL(resolve_match_options(match_options))) {
-        LOG_WARN("failed to resolve match options", K(ret));
+    if (NULL == column) {  // table level foreign key in mysql mode
+      if (T_FOREIGN_KEY != node->type_ || 7 != node->num_child_ || OB_ISNULL(node->children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(node->type_), K(node->num_child_), K(node->children_));
+      } else {
+        ParseNode* child_columns = node->children_[0];
+        ParseNode* parent_table = node->children_[1];
+        ParseNode* parent_columns = node->children_[2];
+        ParseNode* reference_options = node->children_[3];
+        ParseNode* constraint_name = node->children_[4];
+        ParseNode* foreign_key_name = node->children_[5];
+        UNUSED(foreign_key_name);
+        ParseNode* match_options = node->children_[6];
+        if (OB_FAIL(resolve_table_relation_node(parent_table, arg.parent_table_, arg.parent_database_))) {
+          LOG_WARN("failed to resolve foreign key parent table", K(ret));
+        } else if (OB_FAIL(resolve_foreign_key_columns(child_columns, arg.child_columns_))) {
+          LOG_WARN("failed to resolve foreign key child columns", K(ret));
+        } else if (OB_FAIL(resolve_foreign_key_columns(parent_columns, arg.parent_columns_))) {
+          LOG_WARN("failed to resolve foreign key parent columns", K(ret));
+        } else if (OB_FAIL(resolve_foreign_key_options(reference_options, arg.update_action_, arg.delete_action_))) {
+          LOG_WARN("failed to resolve foreign key options", K(ret));
+        } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_))) {
+          LOG_WARN("failed to resolve foreign key name", K(ret));
+        } else if (OB_FAIL(check_foreign_key_reference(arg, is_alter_table, NULL))) {
+          LOG_WARN("failed to check reference columns", K(ret));
+        } else if (OB_FAIL(resolve_match_options(match_options))) {
+          LOG_WARN("failed to resolve match options", K(ret));
+        }
+      }
+    } else {  // column level foreign key in mysql mode
+      if (T_FOREIGN_KEY != node->type_ || 4 != node->num_child_ || OB_ISNULL(node->children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(node->type_), K(node->num_child_), K(node->children_));
+      } else {
+        ParseNode* parent_table = node->children_[0];
+        ParseNode* parent_columns = node->children_[1];
+        ParseNode* reference_options = node->children_[2];
+        ParseNode* match_options = node->children_[3];
+        ParseNode* constraint_name = nullptr;
+        if (OB_FAIL(resolve_table_relation_node(parent_table, arg.parent_table_, arg.parent_database_))) {
+          LOG_WARN("failed to resolve foreign key parent table", K(ret));
+        } else if (OB_FAIL(arg.child_columns_.push_back(
+                         ObString(column->get_column_name_str().length(), column->get_column_name_str().ptr())))) {
+          LOG_WARN("failed to push back column name", K(ret));
+        } else if (OB_FAIL(resolve_foreign_key_columns(parent_columns, arg.parent_columns_))) {
+          LOG_WARN("failed to resolve foreign key parent columns", K(ret));
+        } else if (OB_FAIL(resolve_foreign_key_options(reference_options, arg.update_action_, arg.delete_action_))) {
+          LOG_WARN("failed to resolve foreign key options", K(ret));
+        } else if (OB_FAIL(resolve_foreign_key_name(constraint_name, arg.foreign_key_name_))) { //create cons name automatically
+          LOG_WARN("failed to resolve foreign key name", K(ret));
+        } else if (OB_FAIL(check_foreign_key_reference(arg, is_alter_table, column))) {
+          LOG_WARN("failed to check reference columns", K(ret));
+        } else if (OB_FAIL(resolve_match_options(match_options))) {
+          LOG_WARN("failed to resolve match options", K(ret));
+        }        
       }
     }
   } else {
