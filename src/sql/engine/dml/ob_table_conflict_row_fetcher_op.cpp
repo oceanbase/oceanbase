@@ -163,12 +163,15 @@ int ObTableConflictRowFetcherOp::inner_open()
 {
   int ret = OB_SUCCESS;
   ObDMLBaseParam dml_param;
-  dml_param.output_exprs_ = &MY_SPEC.access_exprs_;
-  dml_param.op_ = this;
-  dml_param.op_filters_ = NULL;
-  dml_param.row2exprs_projector_ = &row2exprs_projector_;
   OZ(ObTableModify::init_dml_param_se(ctx_, MY_SPEC.index_tid_, MY_SPEC.only_data_table_, NULL, dml_param));
   OZ(fetch_conflict_rows(dml_param));
+  OZ(gen_cols_.init(MY_SPEC.access_exprs_.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.access_exprs_.count(); i++) {
+    ObExpr *expr = MY_SPEC.access_exprs_.at(i);
+    if (expr->eval_func_ != nullptr) {
+      OZ(gen_cols_.push_back(expr));
+    }
+  } // for end
   LOG_DEBUG("open conflict row fetcher");
   return ret;
 }
@@ -218,22 +221,34 @@ int ObTableConflictRowFetcherOp::inner_get_next_row()
           LOG_WARN("invalid argument", K(ret), KP(dup_row));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.access_exprs_.count(); i++) {
-            const ObObj& cell = dup_row->cells_[i];
-            ObDatum& datum = MY_SPEC.access_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
-            ObExpr* expr = MY_SPEC.access_exprs_.at(i);
-            if (cell.is_null()) {
+            const ObObj &cell = dup_row->cells_[i];
+            ObDatum &datum = MY_SPEC.access_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
+            ObExpr *expr = MY_SPEC.access_exprs_.at(i);
+            if (OB_UNLIKELY(expr->eval_func_ != nullptr)) {
+              //generated column, do nothing
+            } else if (OB_UNLIKELY(cell.is_null())) {
               datum.set_null();
-            } else if (cell.get_type() != expr->datum_meta_.type_) {
+              expr->get_eval_info(eval_ctx_).evaluated_ = true;
+            } else if (OB_UNLIKELY(cell.get_type() != expr->datum_meta_.type_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("type mismatch", K(ret), K(i), K(cell.get_type()), K(*expr));
             } else if (OB_FAIL(datum.from_obj(cell, expr->obj_datum_map_))) {
               LOG_WARN("convert obj to datum failed", K(ret));
             } else {
-              MY_SPEC.access_exprs_.at(i)->get_eval_info(eval_ctx_).evaluated_ = true;
+              expr->get_eval_info(eval_ctx_).evaluated_ = true;
             }
-          }  // for end
+          } // for end
+          //calc generated column expr
+          for (int64_t i = 0; OB_SUCC(ret) && i < gen_cols_.count(); ++i) {
+            ObExpr *expr = gen_cols_.at(i);
+            ObDatum *datum = nullptr;
+            expr->get_eval_info(eval_ctx_).clear_evaluated_flag();
+            if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+              LOG_WARN("eval generated column failed", K(ret));
+            }
+          }
           if (OB_SUCC(ret)) {
-            LOG_DEBUG("fetch dup row", "row", ROWEXPR2STR(eval_ctx_, MY_SPEC.access_exprs_), K(*dup_row));
+            LOG_DEBUG("fetch dup row", "row", ROWEXPR2STR(eval_ctx_, MY_SPEC.access_exprs_), KPC(dup_row));
           }
         }
       }

@@ -68,7 +68,7 @@ void ObSSTableMultiVersionRowIterator::reuse()
 }
 
 template <typename T>
-int ObSSTableMultiVersionRowIterator::new_iterator(ObArenaAllocator& allocator)
+int ObSSTableMultiVersionRowIterator::new_iterator(ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (NULL == iter_) {

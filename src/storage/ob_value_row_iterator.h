@@ -20,6 +20,7 @@
 #include "common/row/ob_row_iterator.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "storage/ob_i_store.h"
+#include "storage/ob_dml_param.h"
 namespace oceanbase {
 namespace storage {
 class ObValueRowIterator : public common::ObNewRowIterator {
@@ -47,6 +48,50 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObValueRowIterator);
 };
 
+class ObSingleMerge;
+class ObSingleRowGetter {
+  typedef common::ObFixedArray<int32_t, common::ObIAllocator> Projector;
+
+public:
+  ObSingleRowGetter(common::ObIAllocator &allocator, ObPartitionStore &store);
+  ~ObSingleRowGetter();
+
+  int init_dml_access_ctx(const ObStoreCtx &store_ctx, const ObDMLBaseParam &dml_param);
+  int init_dml_access_param(
+      ObRelativeTable &data_table, const ObDMLBaseParam &dml_param, const common::ObIArray<uint64_t> &out_col_ids);
+  ObTableAccessParam &get_access_param()
+  {
+    return access_param_;
+  }
+  ObTableAccessContext &get_access_ctx()
+  {
+    return access_ctx_;
+  }
+  void set_relative_table(ObRelativeTable *relative_table)
+  {
+    relative_table_ = relative_table;
+  }
+  int open(const ObStoreRowkey &rowkey, bool use_fuse_row_cache = false);
+  int get_next_row(common::ObNewRow *&row);
+
+private:
+  int create_table_param();
+
+private:
+  ObPartitionStore &store_;
+  ObSingleMerge *single_merge_;
+  const ObStoreCtx *store_ctx_;
+  Projector output_projector_;
+  ObTableAccessParam access_param_;
+  ObTableAccessContext access_ctx_;
+  ObGetTableParam get_table_param_;
+  ObRelativeTable *relative_table_;
+  share::schema::ObTableParam *table_param_;
+  union {
+    ObExtStoreRowkey ext_rowkey_;
+  };
+  common::ObIAllocator &allocator_;
+};
 }  // end namespace storage
 }  // end namespace oceanbase
 

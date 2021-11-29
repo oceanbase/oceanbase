@@ -147,6 +147,8 @@ public:
   {
     return updated_column_infos_;
   }
+  const common::ObIArray<ColumnContent> &get_updated_column_infos() const
+  { return updated_column_infos_; }
 
   const common::ObIArray<uint64_t>* get_updated_column_ids() const
   {

@@ -60,10 +60,10 @@ class ObMemtableIterRowReader {
 public:
   ObMemtableIterRowReader();
   ~ObMemtableIterRowReader();
-  int init(common::ObArenaAllocator* allocator, const share::schema::ColumnMap* cols_map, ObNopBitMap* bitmap,
-      const storage::ObColDescArray& columns);
-  int get_memtable_row(storage::ObStoreRow& row);
-  int set_buf(const char* buf, int64_t buf_size);
+  int init(common::ObIAllocator *allocator, const share::schema::ColumnMap *cols_map, ObNopBitMap *bitmap,
+      const storage::ObColDescArray &columns);
+  int get_memtable_row(storage::ObStoreRow &row);
+  int set_buf(const char *buf, int64_t buf_size);
   void reset();
   void destory();
   bool is_iter_end();

@@ -275,6 +275,10 @@ DEF_BOOL(_enable_static_typing_engine, OB_CLUSTER_PARAMETER, "True",
     "specifies whether static typing sql execution engine is activated",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// https://yuque.antfin-inc.com/ob/product_functionality_review/zlp56c
+DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "True",
+    "specifies whether allow to do some defensive checks when the query is executed",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// tenant config
 DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, "5s", common::ObConfigStaleTimeChecker,
     "[5s,)",
