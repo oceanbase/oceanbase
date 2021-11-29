@@ -271,6 +271,7 @@
 #include "sql/engine/expr/ob_expr_degrees.h"
 #include "sql/engine/expr/ob_expr_weight_string.h"
 #include "sql/engine/expr/ob_expr_any_value.h"
+#include "sql/engine/expr/ob_expr_validate_password_strength.h"
 #include "sql/engine/expr/ob_expr_benchmark.h"
 
 using namespace oceanbase::common;
@@ -683,6 +684,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTimeFormat);
   REG_OP(ObExprTimestamp);
   REG_OP(ObExprDegrees);
+  REG_OP(ObExprValidatePasswordStrength);
   REG_OP(ObExprWeightString);
   REG_OP(ObExprBenchmark);
   REG_OP(ObExprDay);

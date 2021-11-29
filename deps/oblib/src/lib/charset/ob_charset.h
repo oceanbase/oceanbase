@@ -277,7 +277,7 @@ public:
     return result;
   }
   template <typename foreach_char_func>
-  static int foreach_char(common::ObString& str, common::ObCollationType collation_type, foreach_char_func& func)
+  static int foreach_char(const common::ObString &str, common::ObCollationType collation_type, foreach_char_func &func)
   {
     int ret = common::OB_SUCCESS;
     int32_t wchar = 0;
