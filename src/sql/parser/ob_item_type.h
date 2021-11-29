@@ -440,6 +440,7 @@ typedef enum ObItemType {
   T_FUN_SYS_INETATON = 728,
   T_FUN_SYS_WEIGHT_STRING = 729,
   T_FUN_SYS_CRC32 = 730,
+  T_FUN_SYS_DAY = 731,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 

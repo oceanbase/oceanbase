@@ -685,6 +685,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprDegrees);
   REG_OP(ObExprWeightString);
   REG_OP(ObExprBenchmark);
+  REG_OP(ObExprDay);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);

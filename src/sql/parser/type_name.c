@@ -383,6 +383,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_INETATON : return "T_FUN_SYS_INETATON";
 	case T_FUN_SYS_WEIGHT_STRING : return "T_FUN_SYS_WEIGHT_STRING";
 	case T_FUN_SYS_CRC32 : return "T_FUN_SYS_CRC32";
+	case T_FUN_SYS_DAY : return "T_FUN_SYS_DAY";
 	case T_MYSQL_ONLY_SYS_MAX_OP : return "T_MYSQL_ONLY_SYS_MAX_OP";
 	case T_FUN_SYS_CONNECT_BY_PATH : return "T_FUN_SYS_CONNECT_BY_PATH";
 	case T_FUN_SYS_SYSTIMESTAMP : return "T_FUN_SYS_SYSTIMESTAMP";

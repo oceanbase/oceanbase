@@ -523,6 +523,7 @@
 #define N_TO_TIMESTAMP_TZ "to_timestamp_tz"
 #define N_TO_DAYS "to_days"
 #define N_DAY_OF_MONTH "dayofmonth"
+#define N_DAY "day"
 #define N_DAY_OF_WEEK "dayofweek"
 #define N_DAY_OF_YEAR "dayofyear"
 #define N_HOUR "hour"
