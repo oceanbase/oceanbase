@@ -371,6 +371,7 @@ const char* get_type_name(int type)
 	case T_FUN_SYS_QUARTER : return "T_FUN_SYS_QUARTER";
 	case T_FUN_SYS_BIT_LENGTH : return "T_FUN_SYS_BIT_LENGTH";
 	case T_FUN_SYS_PI : return "T_FUN_SYS_PI";
+	case T_FUN_SYS_ANY_VALUE : return "T_FUN_SYS_ANY_VALUE";
 	case T_FUN_SYS_DEGREES : return "T_FUN_SYS_DEGREES";
 	case T_FUN_SYS_EXPORT_SET : return "T_FUN_SYS_EXPORT_SET";
 	case T_FUN_SYS_INET6NTOA : return "T_FUN_SYS_INET6NTOA";

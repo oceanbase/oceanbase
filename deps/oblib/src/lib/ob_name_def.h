@@ -335,6 +335,7 @@
 #define N_INDEX_FILTER_EXPRS "index_filter_exprs"
 #define N_OPERATOR_MONITOR_INFO "op_info"
 #define N_PLAN_MONITOR_INFO "plan_info"
+#define N_ANY_VAL "any_value"
 // common comparison operator
 #define N_LESS_THAN "<"
 #define N_GREATER_THAN ">"

@@ -186,6 +186,7 @@
 #include "ob_expr_convert_tz.h"
 #include "ob_expr_degrees.h"
 #include "ob_expr_weight_string.h"
+#include "ob_expr_any_value.h"
 
 namespace oceanbase {
 using namespace common;
@@ -671,7 +672,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprPeriodAdd::calc_periodadd,          /* 409 */
     NULL,                                     /* 410 */
     NULL,                                     /* 411 */
-    NULL,                                     /* 412 */
+    ObExprAnyValue::eval_any_value,           /* 412 */
     NULL,                                     /* 413 */
     ObExprDegrees::calc_degrees_expr,         /* 414 */
     NULL,                                     /* 415 */

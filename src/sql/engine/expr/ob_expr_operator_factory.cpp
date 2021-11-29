@@ -270,6 +270,7 @@
 #include "sql/engine/expr/ob_expr_convert_tz.h"
 #include "sql/engine/expr/ob_expr_degrees.h"
 #include "sql/engine/expr/ob_expr_weight_string.h"
+#include "sql/engine/expr/ob_expr_any_value.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -610,6 +611,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTruncate);
   REG_OP(ObExprDllUdf);
   REG_OP(ObExprExp);
+  REG_OP(ObExprAnyValue);
   /* subquery comparison experator */
   REG_OP(ObExprSubQueryRef);
   REG_OP(ObExprSubQueryEqual);
