@@ -74757,7 +74757,10 @@ YY_RULE_SETUP
   COPY_STR_NODE_TO_TMP_LITERAL(yylval->node);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
@@ -74770,7 +74773,7 @@ YY_RULE_SETUP
 case 288:
 /* rule 288 can match eol */
 YY_RULE_SETUP
-#line 587 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 590 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   /*TODO fast parameterize*/
   /*
@@ -74810,7 +74813,7 @@ YY_RULE_SETUP
 }
 	YY_BREAK
 case YY_STATE_EOF(sq):
-#line 625 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 628 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   yyerror(yylloc, yyextra, "unterminated quoted string\n");
   return PARSER_SYNTAX_ERROR;
@@ -74818,7 +74821,7 @@ case YY_STATE_EOF(sq):
 	YY_BREAK
 case 289:
 YY_RULE_SETUP
-#line 630 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 633 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(dq);
   ParseResult *p = (ParseResult *)yyextra;
@@ -74839,7 +74842,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 290:
 YY_RULE_SETUP
-#line 648 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 651 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(INITIAL);
   ParseResult *p = (ParseResult *)yyextra;
@@ -74860,7 +74863,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 291:
 YY_RULE_SETUP
-#line 666 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 669 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   check_value(yylval);
   ((ParseResult *)yyextra)->tmp_literal_[yylval->node->str_len_++] = '\"';
@@ -74871,7 +74874,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 292:
 YY_RULE_SETUP
-#line 674 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 677 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   check_value(yylval);
   memmove(((ParseResult *)yyextra)->tmp_literal_ + yylval->node->str_len_, yytext, yyleng);
@@ -74884,7 +74887,7 @@ YY_RULE_SETUP
 case 293:
 /* rule 293 can match eol */
 YY_RULE_SETUP
-#line 683 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 686 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   check_value(yylval);
   ++yylineno;
@@ -74898,13 +74901,17 @@ YY_RULE_SETUP
 case 294:
 /* rule 294 can match eol */
 YY_RULE_SETUP
-#line 693 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 696 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  //check sql_mode
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
@@ -74917,7 +74924,7 @@ YY_RULE_SETUP
 case 295:
 /* rule 295 can match eol */
 YY_RULE_SETUP
-#line 709 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 716 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   /* see 'sqnewline' */
   check_value(yylval);
@@ -74946,7 +74953,7 @@ YY_RULE_SETUP
 }
 	YY_BREAK
 case YY_STATE_EOF(dq):
-#line 736 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 743 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   yyerror(yylloc, yyextra, "unterminated doublequoted string\n");
   return PARSER_SYNTAX_ERROR;
@@ -74954,7 +74961,7 @@ case YY_STATE_EOF(dq):
 	YY_BREAK
 case 296:
 YY_RULE_SETUP
-#line 741 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 748 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(bt); /*fast parameterize don't handle connent in ``*/
   if (IS_FAST_PARAMETERIZE) {
@@ -74976,7 +74983,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 297:
 YY_RULE_SETUP
-#line 760 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 767 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (IS_FAST_PARAMETERIZE) {
     COPY_WRITE();
@@ -74989,7 +74996,7 @@ YY_RULE_SETUP
 case 298:
 /* rule 298 can match eol */
 YY_RULE_SETUP
-#line 768 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 775 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (IS_FAST_PARAMETERIZE) {
     COPY_WRITE();
@@ -75002,7 +75009,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 299:
 YY_RULE_SETUP
-#line 778 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 785 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(INITIAL);
   if (IS_FAST_PARAMETERIZE) {
@@ -75030,7 +75037,7 @@ YY_RULE_SETUP
 }
 	YY_BREAK
 case YY_STATE_EOF(bt):
-#line 804 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 811 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   yyerror(yylloc, yyextra, "unterminated backtick string\n");
   return PARSER_SYNTAX_ERROR;
@@ -75038,7 +75045,7 @@ case YY_STATE_EOF(bt):
 	YY_BREAK
 case 300:
 YY_RULE_SETUP
-#line 809 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 816 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   char *src = yytext + 2;
   size_t len = yyleng - 2;
@@ -75075,7 +75082,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 301:
 YY_RULE_SETUP
-#line 843 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 850 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   char* src = yytext + 2;
   size_t len = yyleng - 2;
@@ -75115,7 +75122,7 @@ YY_RULE_SETUP
 case 302:
 /* rule 302 can match eol */
 YY_RULE_SETUP
-#line 879 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 886 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
@@ -75133,7 +75140,7 @@ YY_RULE_SETUP
 case 303:
 /* rule 303 can match eol */
 YY_RULE_SETUP
-#line 893 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 900 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   malloc_time_node_s(p->malloc_pool_, T_TIME);
@@ -75151,7 +75158,7 @@ YY_RULE_SETUP
 case 304:
 /* rule 304 can match eol */
 YY_RULE_SETUP
-#line 907 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 914 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
@@ -75169,7 +75176,7 @@ YY_RULE_SETUP
 case 305:
 /* rule 305 can match eol */
 YY_RULE_SETUP
-#line 920 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 927 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   malloc_time_node_d(p->malloc_pool_, T_DATE);
@@ -75187,7 +75194,7 @@ YY_RULE_SETUP
 case 306:
 /* rule 306 can match eol */
 YY_RULE_SETUP
-#line 934 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 941 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
@@ -75205,7 +75212,7 @@ YY_RULE_SETUP
 case 307:
 /* rule 307 can match eol */
 YY_RULE_SETUP
-#line 948 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 955 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
@@ -75223,7 +75230,7 @@ YY_RULE_SETUP
 case 308:
 /* rule 308 can match eol */
 YY_RULE_SETUP
-#line 962 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 969 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (!(IS_FAST_PARAMETERIZE)) {
     int64_t out_len = 0;
@@ -75248,7 +75255,7 @@ YY_RULE_SETUP
 case 309:
 /* rule 309 can match eol */
 YY_RULE_SETUP
-#line 983 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 990 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -75259,7 +75266,7 @@ YY_RULE_SETUP
 case 310:
 /* rule 310 can match eol */
 YY_RULE_SETUP
-#line 990 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 997 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -75270,7 +75277,7 @@ YY_RULE_SETUP
 case 311:
 /* rule 311 can match eol */
 YY_RULE_SETUP
-#line 996 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1003 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -75281,7 +75288,7 @@ YY_RULE_SETUP
 case 312:
 /* rule 312 can match eol */
 YY_RULE_SETUP
-#line 1002 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1009 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -75292,7 +75299,7 @@ YY_RULE_SETUP
 case 313:
 /* rule 313 can match eol */
 YY_RULE_SETUP
-#line 1008 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1015 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -75303,7 +75310,7 @@ YY_RULE_SETUP
 case 314:
 /* rule 314 can match eol */
 YY_RULE_SETUP
-#line 1014 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1021 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -75314,7 +75321,7 @@ YY_RULE_SETUP
 case 315:
 /* rule 315 can match eol */
 YY_RULE_SETUP
-#line 1020 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1027 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   ParseResult *p = (ParseResult *)yyextra;
@@ -75324,7 +75331,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 316:
 YY_RULE_SETUP
-#line 1026 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1033 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(INITIAL);
   return HINT_END;
@@ -75333,7 +75340,7 @@ YY_RULE_SETUP
 case 317:
 /* rule 317 can match eol */
 YY_RULE_SETUP
-#line 1030 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1037 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   if (IS_FAST_PARAMETERIZE && !p->is_ignore_token_) {
@@ -75343,112 +75350,112 @@ YY_RULE_SETUP
 	YY_BREAK
 case 318:
 YY_RULE_SETUP
-#line 1036 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1043 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return INDEX_HINT; }
 	YY_BREAK
 case 319:
 YY_RULE_SETUP
-#line 1037 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1044 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_NL; }
 	YY_BREAK
 case 320:
 YY_RULE_SETUP
-#line 1038 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1045 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_NL; }
 	YY_BREAK
 case 321:
 YY_RULE_SETUP
-#line 1039 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1046 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_BNL; }
 	YY_BREAK
 case 322:
 YY_RULE_SETUP
-#line 1040 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1047 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_BNL; }
 	YY_BREAK
 case 323:
 YY_RULE_SETUP
-#line 1041 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1048 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_NL_MATERIALIZATION; }
 	YY_BREAK
 case 324:
 YY_RULE_SETUP
-#line 1042 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1049 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_NL_MATERIALIZATION; }
 	YY_BREAK
 case 325:
 YY_RULE_SETUP
-#line 1043 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1050 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return FROZEN_VERSION; }
 	YY_BREAK
 case 326:
 YY_RULE_SETUP
-#line 1044 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1051 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return TOPK; }
 	YY_BREAK
 case 327:
 YY_RULE_SETUP
-#line 1045 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1052 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return QUERY_TIMEOUT; }
 	YY_BREAK
 case 328:
 YY_RULE_SETUP
-#line 1046 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1053 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return READ_CONSISTENCY; }
 	YY_BREAK
 case 329:
 YY_RULE_SETUP
-#line 1047 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1054 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return WEAK; }
 	YY_BREAK
 case 330:
 YY_RULE_SETUP
-#line 1048 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1055 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return STRONG; }
 	YY_BREAK
 case 331:
 YY_RULE_SETUP
-#line 1049 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1056 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return FROZEN; }
 	YY_BREAK
 case 332:
 YY_RULE_SETUP
-#line 1050 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1057 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NONE; }
 	YY_BREAK
 case 333:
 YY_RULE_SETUP
-#line 1051 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1058 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return DEFAULT; }
 	YY_BREAK
 case 334:
 YY_RULE_SETUP
-#line 1052 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1059 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return MAX_CONCURRENT; }
 	YY_BREAK
 case 335:
 YY_RULE_SETUP
-#line 1053 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1060 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return PARALLEL; }
 	YY_BREAK
 case 336:
 YY_RULE_SETUP
-#line 1054 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1061 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_PARALLEL; }
 	YY_BREAK
 case 337:
 YY_RULE_SETUP
-#line 1055 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1062 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return AUTO; }
 	YY_BREAK
 case 338:
 YY_RULE_SETUP
-#line 1056 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1063 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return FORCE; }
 	YY_BREAK
 case 339:
 YY_RULE_SETUP
-#line 1057 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1064 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   if (!p->is_ignore_token_) {
@@ -75464,237 +75471,237 @@ YY_RULE_SETUP
 	YY_BREAK
 case 340:
 YY_RULE_SETUP
-#line 1069 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1076 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return HOTSPOT; }
 	YY_BREAK
 case 341:
 YY_RULE_SETUP
-#line 1070 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1077 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return LOG_LEVEL; }
 	YY_BREAK
 case 342:
 YY_RULE_SETUP
-#line 1071 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1078 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return LEADING_HINT; }
 	YY_BREAK
 case 343:
 YY_RULE_SETUP
-#line 1072 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1079 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return ORDERED; }
 	YY_BREAK
 case 344:
 YY_RULE_SETUP
-#line 1073 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1080 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_REWRITE; }
 	YY_BREAK
 case 345:
 YY_RULE_SETUP
-#line 1074 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1081 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return FULL_HINT; }
 	YY_BREAK
 case 346:
 YY_RULE_SETUP
-#line 1075 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1082 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_MERGE; }
 	YY_BREAK
 case 347:
 YY_RULE_SETUP
-#line 1076 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1083 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_MERGE; }
 	YY_BREAK
 case 348:
 YY_RULE_SETUP
-#line 1077 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1084 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_HASH; }
 	YY_BREAK
 case 349:
 YY_RULE_SETUP
-#line 1078 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1085 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_HASH; }
 	YY_BREAK
 case 350:
 YY_RULE_SETUP
-#line 1079 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1086 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_PLAN_CACHE; }
 	YY_BREAK
 case 351:
 YY_RULE_SETUP
-#line 1080 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1087 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_JIT; }
 	YY_BREAK
 case 352:
 YY_RULE_SETUP
-#line 1081 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1088 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_JIT; }
 	YY_BREAK
 case 353:
 YY_RULE_SETUP
-#line 1082 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1089 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_HASH_AGGREGATION; }
 	YY_BREAK
 case 354:
 YY_RULE_SETUP
-#line 1083 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1090 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_HASH_AGGREGATION; }
 	YY_BREAK
 case 355:
 YY_RULE_SETUP
-#line 1084 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1091 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_LATE_MATERIALIZATION; }
 	YY_BREAK
 case 356:
 YY_RULE_SETUP
-#line 1085 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1092 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_LATE_MATERIALIZATION; }
 	YY_BREAK
 case 357:
 YY_RULE_SETUP
-#line 1086 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1093 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return TRACE_LOG; }
 	YY_BREAK
 case 358:
 YY_RULE_SETUP
-#line 1087 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1094 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_PX; }
 	YY_BREAK
 case 359:
 YY_RULE_SETUP
-#line 1088 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1095 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return LOAD_BATCH_SIZE; }
 	YY_BREAK
 case 360:
 YY_RULE_SETUP
-#line 1089 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1096 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return TRACING; }
 	YY_BREAK
 case 361:
 YY_RULE_SETUP
-#line 1090 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1097 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return FORCE_REFRESH_LOCATION_CACHE; }
 	YY_BREAK
 case 362:
 YY_RULE_SETUP
-#line 1091 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1098 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return STAT; }
 	YY_BREAK
 case 363:
 YY_RULE_SETUP
-#line 1092 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1099 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_USE_PX; }
 	YY_BREAK
 case 364:
 YY_RULE_SETUP
-#line 1093 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1100 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return PX_JOIN_FILTER; }
 	YY_BREAK
 case 365:
 YY_RULE_SETUP
-#line 1094 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1101 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_PX_JOIN_FILTER; }
 	YY_BREAK
 case 366:
 YY_RULE_SETUP
-#line 1095 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1102 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return QB_NAME; }
 	YY_BREAK
 case 367:
 YY_RULE_SETUP
-#line 1096 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1103 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return TRANS_PARAM; }
 	YY_BREAK
 case 368:
 YY_RULE_SETUP
-#line 1097 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1104 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return PQ_DISTRIBUTE; }
 	YY_BREAK
 case 369:
 YY_RULE_SETUP
-#line 1098 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1105 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return PQ_MAP; }
 	YY_BREAK
 case 370:
 YY_RULE_SETUP
-#line 1099 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1106 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return RANDOM_LOCAL; }
 	YY_BREAK
 case 371:
 YY_RULE_SETUP
-#line 1100 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1107 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return BROADCAST; }
 	YY_BREAK
 case 372:
 YY_RULE_SETUP
-#line 1101 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1108 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return PARTITION; }
 	YY_BREAK
 case 373:
 YY_RULE_SETUP
-#line 1102 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1109 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return HASH; }
 	YY_BREAK
 case 374:
 YY_RULE_SETUP
-#line 1103 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1110 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NEG_SIGN; }
 	YY_BREAK
 case 375:
 YY_RULE_SETUP
-#line 1104 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1111 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return MERGE_HINT; }
 	YY_BREAK
 case 376:
 YY_RULE_SETUP
-#line 1105 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1112 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_MERGE_HINT; }
 	YY_BREAK
 case 377:
 YY_RULE_SETUP
-#line 1106 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1113 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_EXPAND; }
 	YY_BREAK
 case 378:
 YY_RULE_SETUP
-#line 1107 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1114 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return USE_CONCAT; }
 	YY_BREAK
 case 379:
 YY_RULE_SETUP
-#line 1108 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1115 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return UNNEST; }
 	YY_BREAK
 case 380:
 YY_RULE_SETUP
-#line 1109 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1116 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_UNNEST; }
 	YY_BREAK
 case 381:
 YY_RULE_SETUP
-#line 1110 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1117 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return PLACE_GROUP_BY; }
 	YY_BREAK
 case 382:
 YY_RULE_SETUP
-#line 1111 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1118 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_PLACE_GROUP_BY; }
 	YY_BREAK
 case 383:
 YY_RULE_SETUP
-#line 1112 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1119 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return NO_PRED_DEDUCE; }
 	YY_BREAK
 case 384:
 YY_RULE_SETUP
-#line 1113 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1120 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return ENABLE_PARALLEL_DML; }
 	YY_BREAK
 case 385:
 YY_RULE_SETUP
-#line 1114 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1121 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { return DISABLE_PARALLEL_DML; }
 	YY_BREAK
 case 386:
 YY_RULE_SETUP
-#line 1115 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1122 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);
@@ -75720,7 +75727,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 387:
 YY_RULE_SETUP
-#line 1138 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1145 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   if (!p->is_ignore_token_) {
@@ -75735,7 +75742,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 388:
 YY_RULE_SETUP
-#line 1150 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1157 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   // if is a mysql comment without version. For example, /*!any sql str*/
   // mysql_comment without version, processed as common sql str;
@@ -75746,7 +75753,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 389:
 YY_RULE_SETUP
-#line 1158 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1165 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
 BEGIN(in_c_comment);
 #ifdef SQL_PARSER_COMPILATION
@@ -75764,7 +75771,7 @@ BEGIN(in_c_comment);
 	YY_BREAK
 case 390:
 YY_RULE_SETUP
-#line 1173 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1180 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ((ParseResult *)yyextra)->has_encount_comment_ = true;
   BEGIN(INITIAL);
@@ -75784,7 +75791,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 391:
 YY_RULE_SETUP
-#line 1190 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1197 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   //for mysql compatible comment:
   // only "*/" should be matched, duplicated '*' (e.g., "***/") will report a error.
@@ -75805,7 +75812,7 @@ YY_RULE_SETUP
 }
 	YY_BREAK
 case YY_STATE_EOF(in_c_comment):
-#line 1209 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1216 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   yyerror(yylloc, yyextra, "unterminated log_level string\n");
   return PARSER_SYNTAX_ERROR;
@@ -75814,17 +75821,17 @@ case YY_STATE_EOF(in_c_comment):
 case 392:
 /* rule 392 can match eol */
 YY_RULE_SETUP
-#line 1213 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1220 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 { yylineno++; }
 	YY_BREAK
 case 393:
 YY_RULE_SETUP
-#line 1214 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1221 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {}
 	YY_BREAK
 case 394:
 YY_RULE_SETUP
-#line 1216 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1223 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (IS_FAST_PARAMETERIZE) {
     COPY_WRITE();
@@ -75846,7 +75853,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 395:
 YY_RULE_SETUP
-#line 1235 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1242 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   BEGIN(hint);
   if (IS_FAST_PARAMETERIZE) {
@@ -75857,7 +75864,7 @@ YY_RULE_SETUP
 }
 	YY_BREAK
 case YY_STATE_EOF(log_level):
-#line 1244 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1251 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   yyerror(yylloc, yyextra, "unterminated log_level string\n");
   return PARSER_SYNTAX_ERROR;
@@ -75865,11 +75872,11 @@ case YY_STATE_EOF(log_level):
 	YY_BREAK
 case 396:
 YY_RULE_SETUP
-#line 1249 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1256 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {}
 	YY_BREAK
 case YY_STATE_EOF(hint):
-#line 1251 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1258 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   yyerror(yylloc, yyextra, "unterminated hint string\n");
   return PARSER_SYNTAX_ERROR;
@@ -75877,20 +75884,20 @@ case YY_STATE_EOF(hint):
 	YY_BREAK
 case 397:
 YY_RULE_SETUP
-#line 1255 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1262 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {}
 	YY_BREAK
 case 398:
 /* rule 398 can match eol */
 YY_RULE_SETUP
-#line 1257 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1264 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ((ParseResult *)yyextra)->has_encount_comment_ = true;
 /* ignore */ }
 	YY_BREAK
 case 399:
 YY_RULE_SETUP
-#line 1261 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1268 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (IS_FAST_PARAMETERIZE) {
     ParseResult *p = (ParseResult *)yyextra;
@@ -75913,7 +75920,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 400:
 YY_RULE_SETUP
-#line 1281 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1288 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (IS_FAST_PARAMETERIZE) {
     ParseResult *p = (ParseResult *)yyextra;
@@ -75930,7 +75937,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 401:
 YY_RULE_SETUP
-#line 1295 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1302 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   int ret = CNNOP; /*fast parameterize don't care CNNOP or OR_OP*/
   if (!(IS_FAST_PARAMETERIZE)) {
@@ -75948,62 +75955,62 @@ YY_RULE_SETUP
 	YY_BREAK
 case 402:
 YY_RULE_SETUP
-#line 1310 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1317 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return AND_OP;}
 	YY_BREAK
 case 403:
 YY_RULE_SETUP
-#line 1311 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1318 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return COMP_EQ;}
 	YY_BREAK
 case 404:
 YY_RULE_SETUP
-#line 1312 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1319 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return SET_VAR;}
 	YY_BREAK
 case 405:
 YY_RULE_SETUP
-#line 1313 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1320 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return COMP_NSEQ;}
 	YY_BREAK
 case 406:
 YY_RULE_SETUP
-#line 1314 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1321 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return COMP_GE;}
 	YY_BREAK
 case 407:
 YY_RULE_SETUP
-#line 1315 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1322 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return COMP_GT;}
 	YY_BREAK
 case 408:
 YY_RULE_SETUP
-#line 1316 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1323 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return COMP_LE;}
 	YY_BREAK
 case 409:
 YY_RULE_SETUP
-#line 1317 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1324 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return COMP_LT;}
 	YY_BREAK
 case 410:
 YY_RULE_SETUP
-#line 1318 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1325 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return COMP_NE;}
 	YY_BREAK
 case 411:
 YY_RULE_SETUP
-#line 1319 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1326 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return SHIFT_LEFT;}
 	YY_BREAK
 case 412:
 YY_RULE_SETUP
-#line 1320 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1327 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return SHIFT_RIGHT;}
 	YY_BREAK
 case 413:
 YY_RULE_SETUP
-#line 1322 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1329 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   //use for outline now, means any value
   ParseResult *p = (ParseResult *)yyextra;
@@ -76025,7 +76032,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 414:
 YY_RULE_SETUP
-#line 1341 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1348 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   check_value(yylval);
@@ -76042,7 +76049,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 415:
 YY_RULE_SETUP
-#line 1355 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1362 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (!(IS_FAST_PARAMETERIZE)) {
     /* ParseNode *node = new_node(((ParseResult *)yyextra)->malloc_pool_, T_SYSTEM_VARIABLE, 0); */
@@ -76065,7 +76072,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 416:
 YY_RULE_SETUP
-#line 1375 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1382 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   /* ParseNode *node = new_node(p->malloc_pool_, T_TEMP_VARIABLE, 0); */
   if (!(IS_FAST_PARAMETERIZE)) {
@@ -76092,7 +76099,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 417:
 YY_RULE_SETUP
-#line 1399 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1406 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   const NonReservedKeyword *word = NULL;
   if (IS_FAST_PARAMETERIZE) {
@@ -76135,7 +76142,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 418:
 YY_RULE_SETUP
-#line 1439 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1446 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   // comment with version: /*!50600 any sql str*/
   // comment without version: /*!any sql str*/
@@ -76148,7 +76155,7 @@ YY_RULE_SETUP
 case 419:
 /* rule 419 can match eol */
 YY_RULE_SETUP
-#line 1448 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1455 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   yylineno ++;
   if (IS_FAST_PARAMETERIZE) {
@@ -76158,7 +76165,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 420:
 YY_RULE_SETUP
-#line 1455 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1462 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   if (IS_FAST_PARAMETERIZE) {
     COPY_WRITE();
@@ -76167,16 +76174,16 @@ YY_RULE_SETUP
 	YY_BREAK
 case 421:
 YY_RULE_SETUP
-#line 1460 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1467 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 
 	YY_BREAK
 case YY_STATE_EOF(INITIAL):
-#line 1462 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1469 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {return END_P;}
 	YY_BREAK
 case 422:
 YY_RULE_SETUP
-#line 1463 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1470 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 {
   ParseResult *p = (ParseResult *)yyextra;
   if (p->input_sql_len_ == yylloc->first_column) {
@@ -76189,10 +76196,10 @@ YY_RULE_SETUP
 	YY_BREAK
 case 423:
 YY_RULE_SETUP
-#line 1472 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1479 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 YY_FATAL_ERROR( "flex scanner jammed" );
 	YY_BREAK
-#line 76196 "../../../src/sql/parser/sql_parser_mysql_mode_lex.c"
+#line 76203 "../../../src/sql/parser/sql_parser_mysql_mode_lex.c"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -77302,7 +77309,7 @@ static int yy_flex_strlen (yyconst char * s , yyscan_t yyscanner)
 
 #define YYTABLES_NAME "yytables"
 
-#line 1472 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1479 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 
 
 

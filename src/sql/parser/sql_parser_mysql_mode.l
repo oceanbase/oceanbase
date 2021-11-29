@@ -574,7 +574,10 @@ FALSE {
   COPY_STR_NODE_TO_TMP_LITERAL(yylval->node);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
@@ -695,7 +698,11 @@ FALSE {
   check_value(yylval);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  //check sql_mode
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
