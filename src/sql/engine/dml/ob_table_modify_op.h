@@ -375,10 +375,15 @@ protected:
 
   int mark_lock_row_flag(int64_t flag);
 
-  int check_row_null(const ObExprPtrIArray& row, const common::ObIArray<ColumnContent>& column_infos) const;
-  int set_autoinc_param_pkey(const common::ObPartitionKey& pkey) const;
-  int get_part_location(const ObPhyTableLocation& table_location, const share::ObPartitionReplicaLocation*& out);
-  int get_part_location(common::ObIArray<DMLPartInfo>& part_keys);
+  int check_row_null(const ObExprPtrIArray &row,
+                     const common::ObIArray<ColumnContent> &column_infos,
+                     const common::ObIArray<ColumnContent> &update_col_infos) const;
+  int check_row_null(const ObExprPtrIArray &row,
+                     const common::ObIArray<ColumnContent> &column_infos) const;
+  int set_autoinc_param_pkey(const common::ObPartitionKey &pkey) const;
+  int get_part_location(const ObPhyTableLocation &table_location,
+                        const share::ObPartitionReplicaLocation *&out);
+  int get_part_location(common::ObIArray<DMLPartInfo> &part_keys);
 
   int get_gi_task();
   // filtered if filter return false value. (move from ObPhyOperator).

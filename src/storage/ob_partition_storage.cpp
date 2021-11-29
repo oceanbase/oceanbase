@@ -647,6 +647,8 @@ int ObPartitionStorage::delete_row(ObDMLRunningCtx& run_ctx, RowReshape*& row_re
 
   if (OB_FAIL(reshape_delete_row(run_ctx, row_reshape, tbl_row, tbl_row))) {
     LOG_WARN("failed to reshape row", K(ret), K(tbl_row));
+  } else if (GCONF.enable_defensive_check() && OB_FAIL(check_old_row_legitimacy(run_ctx, row))) {
+    LOG_WARN("check old row legitimacy failed", K(row));
   } else if (!dml_param.is_total_quantity_log_) {
     if (OB_FAIL(write_row(run_ctx.relative_tables_.data_table_, ctx, rowkey_size, *run_ctx.col_descs_, tbl_row))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
@@ -698,6 +700,9 @@ int ObPartitionStorage::delete_row(ObDMLRunningCtx& run_ctx, RowReshape*& row_re
                      null_idx_val,
                      &run_ctx.idx_col_descs_))) {
         STORAGE_LOG(WARN, "failed to generate index row", K(ret));
+      } else if (GCONF.enable_defensive_check() &&
+                 OB_FAIL(check_delete_index_legitimacy(run_ctx, relative_table, run_ctx.idx_row_->row_val_))) {
+        LOG_WARN("check delete index legitimacy failed", K(ret));
       } else if (OB_FAIL(write_index_row(relative_table, ctx, run_ctx.idx_col_descs_, *run_ctx.idx_row_))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
           STORAGE_LOG(WARN,
@@ -1746,167 +1751,107 @@ int ObPartitionStorage::fetch_conflict_rows(const ObStoreCtx& ctx, const ObDMLBa
   return ret;
 }
 
-int ObPartitionStorage::multi_get_rows(const ObStoreCtx& store_ctx, const ObTableAccessParam& access_param,
-    ObTableAccessContext& access_ctx, ObRelativeTable& relative_table, const GetRowkeyArray& rowkeys,
-    ObNewRowIterator*& duplicated_rows, int64_t data_table_rowkey_cnt)
+int ObPartitionStorage::single_get_row(ObSingleRowGetter &row_getter,
+                                       const ObStoreRowkey &rowkey,
+                                       ObNewRowIterator *&duplicated_rows,
+                                       int64_t data_table_rowkey_cnt)
 {
   int ret = OB_SUCCESS;
-  const ObTablesHandle& tables_handle = relative_table.tables_handle_;
-  ObMultipleGetMerge* get_merge = NULL;
-  void* buf = NULL;
-
-  // look up the row
-  if (OB_UNLIKELY(!is_inited_) || OB_ISNULL(access_ctx.allocator_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "partition storage is not initialized", K(ret), KP(access_ctx.allocator_));
-  } else if (NULL == (buf = access_ctx.allocator_->alloc(sizeof(ObMultipleGetMerge)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "Fail to allocate memory for multi get merge ", K(ret));
-  } else {
-    {
-      ObStorageWriterGuard guard(store_, store_ctx, false);
-      if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
-        STORAGE_LOG(WARN, "fail to protect table", K(ret), K(pkey_));
-      }
-    }
-    get_merge = new (buf) ObMultipleGetMerge();
-
-    ObGetTableParam get_table_param;
-    ObStoreRow* row = NULL;
-    get_table_param.tables_handle_ = &tables_handle;
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(get_merge->init(access_param, access_ctx, get_table_param))) {
-      STORAGE_LOG(WARN, "Fail to init ObSingleMerge, ", K(ret));
-    } else if (OB_FAIL(get_merge->open(rowkeys))) {
-      STORAGE_LOG(WARN, "Fail to open iter, ", K(ret));
-    }
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(get_merge->get_next_row(row))) {
-        if (OB_ITER_END != ret) {
-          STORAGE_LOG(WARN, "failed to get next row", K(ret));
-        }
-      } else if (ObActionFlag::OP_ROW_EXIST == row->flag_) {
-        // store the conflict rowkey
-        if (NULL == duplicated_rows) {
-          ObValueRowIterator* dup_iter = NULL;
-          if (NULL == (dup_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            STORAGE_LOG(ERROR, "no memory to alloc ObValueRowIterator", K(ret));
-          } else {
-            duplicated_rows = dup_iter;
-            if (OB_FAIL(dup_iter->init(true, data_table_rowkey_cnt))) {
-              STORAGE_LOG(WARN, "failed to initialize ObValueRowIterator", K(ret));
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          ObValueRowIterator* dup_iter = static_cast<ObValueRowIterator*>(duplicated_rows);
-          if (OB_NOT_NULL(access_param.output_exprs_)) {
-            // static engine need project datum to obj row
-            if (OB_ISNULL(access_param.op_)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid argument", K(ret), KP(access_param.op_));
-            } else {
-              access_param.op_->clear_evaluated_flag();
-            }
-            for (int64_t i = 0; OB_SUCC(ret) && i < access_param.output_exprs_->count(); i++) {
-              ObDatum* datum = NULL;
-              const sql::ObExpr* e = access_param.output_exprs_->at(i);
-              if (OB_ISNULL(e)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("expr is NULL", K(ret));
-              } else if (OB_FAIL(e->eval(access_param.op_->get_eval_ctx(), datum))) {
-                LOG_WARN("evaluate expression failed", K(ret));
-              } else if (OB_FAIL(datum->to_obj(row->row_val_.cells_[i], e->obj_meta_, e->obj_datum_map_))) {
-                LOG_WARN("convert datum to obj failed", K(ret));
-              }
-            }
-            row->row_val_.count_ = access_param.output_exprs_->count();
-            LOG_DEBUG("get conflict row", K_(row->row_val));
-          }
-          if (OB_FAIL(ret)) {
-
-          } else if (OB_FAIL(dup_iter->add_row(row->row_val_))) {
-            STORAGE_LOG(WARN, "failed to store conflict row", K(*row));
-          } else {
-            LOG_DEBUG("get conflict row", K_(row->row_val));
-          }
-        }
-      }
-    }
-    if (OB_ITER_END == ret) {
+  ObNewRow *row = nullptr;
+  if (OB_FAIL(row_getter.open(rowkey))) {
+    LOG_WARN("init single row getter failed", K(ret));
+  } else if (OB_FAIL(row_getter.get_next_row(row))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get next row from single row getter failed", K(ret));
+    } else {
       ret = OB_SUCCESS;
     }
+  } else if (NULL == duplicated_rows) {
+    ObValueRowIterator *dup_iter = NULL;
+    if (OB_ISNULL(dup_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "no memory to alloc ObValueRowIterator", K(ret));
+    } else {
+      duplicated_rows = dup_iter;
+      if (OB_FAIL(dup_iter->init(true, data_table_rowkey_cnt))) {
+        STORAGE_LOG(WARN, "failed to initialize ObValueRowIterator", K(ret));
+      }
+    }
   }
-  // revert iterator
-  if (NULL != get_merge) {
-    get_merge->~ObMultipleGetMerge();
-    get_merge = NULL;
-  }
-  if (OB_FAIL(ret) && duplicated_rows != NULL) {
-    ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
-    duplicated_rows = NULL;
+  if (OB_SUCC(ret) && row != nullptr) {
+    ObValueRowIterator *dup_iter = static_cast<ObValueRowIterator *>(duplicated_rows);
+    if (OB_FAIL(dup_iter->add_row(*row))) {
+      STORAGE_LOG(WARN, "failed to store conflict row", K(*row));
+    } else {
+      LOG_DEBUG("get conflict row", KPC(row));
+    }
   }
   return ret;
 }
 
-int ObPartitionStorage::get_index_conflict_row(ObDMLRunningCtx& run_ctx, const ObTableAccessParam& table_access_param,
-    ObTableAccessContext& table_access_ctx, ObRelativeTable& relative_table, bool need_index_back, const ObNewRow& row,
-    ObNewRowIterator*& duplicated_rows)
+int ObPartitionStorage::get_index_conflict_row(ObDMLRunningCtx &run_ctx, const ObIArray<uint64_t> &out_col_ids,
+    ObRelativeTable &relative_table, bool need_index_back, const ObNewRow &row, ObNewRowIterator *&duplicated_rows)
 {
   int ret = OB_SUCCESS;
-  ObStoreRow* idx_row = run_ctx.idx_row_;
-  ObNewRowIterator* dup_rowkey_iter = nullptr;
-  const ColumnMap* col_map = run_ctx.col_map_;
+  ObStoreRow *idx_row = run_ctx.idx_row_;
+  ObNewRowIterator *dup_rowkey_iter = nullptr;
   bool null_idx_val = false;
-  ObColDescArray uk_out_descs;
-  ObColDescArray pk_out_descs;
-  ObSEArray<int32_t, 8> uk_out_idxs;
-  ObStoreRowkey index_rowkey;
-  ObNewRowIterator*& tmp_rowkey_iter = need_index_back ? dup_rowkey_iter : duplicated_rows;
-  if (OB_FAIL(run_ctx.relative_tables_.data_table_.get_rowkey_column_ids(pk_out_descs))) {
+  ObSEArray<uint64_t, 16> pk_out_ids;
+  ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
+  ObIAllocator *allocator =
+      run_ctx.dml_param_.dml_allocator_ != nullptr ? run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
+  ObSingleRowGetter index_row_getter(*allocator, store_);
+  if (OB_FAIL(run_ctx.relative_tables_.data_table_.get_rowkey_column_ids(pk_out_ids))) {
     LOG_WARN("get rowkey column ids failed", K(ret));
   } else if (OB_FAIL(relative_table.build_index_row(
-                 row, *col_map, false, idx_row->row_val_, null_idx_val, &uk_out_descs))) {
+                 row, *run_ctx.col_map_, false, idx_row->row_val_, null_idx_val, nullptr))) {
     STORAGE_LOG(WARN, "failed to generate index row", K(ret));
-  } else if (OB_FAIL(get_column_index(pk_out_descs, uk_out_descs, uk_out_idxs))) {
-    STORAGE_LOG(WARN,
-        "failed to get output column index",
-        K(ret),
-        K(*run_ctx.relative_tables_.data_table_.get_schema_param()),
-        K(*relative_table.get_schema_param()));
+  } else if (OB_FAIL(index_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, run_ctx.dml_param_))) {
+    LOG_WARN("init dml access ctx failed", K(ret));
+  } else if (OB_FAIL(index_row_getter.init_dml_access_param(relative_table, run_ctx.dml_param_, pk_out_ids))) {
+    LOG_WARN("init basic index param failed", K(ret));
   } else {
-    GetRowkeyArray rowkeys;
-    ObTableAccessParam index_access_param;
+    ObTableAccessContext &index_access_ctx = index_row_getter.get_access_ctx();
+    int64_t dt_rowkey_cnt = run_ctx.relative_tables_.data_table_.get_rowkey_column_num();
     if (relative_table.is_storage_index_table()) {
-      table_access_ctx.query_flag_.index_invalid_ = !relative_table.can_read_index();
+      index_access_ctx.query_flag_.index_invalid_ = !relative_table.can_read_index();
     } else {
-      table_access_ctx.query_flag_.index_invalid_ = false;
+      index_access_ctx.query_flag_.index_invalid_ = false;
     }
+    ObStoreRowkey index_rowkey;
     index_rowkey.assign(idx_row->row_val_.cells_, relative_table.get_rowkey_column_num());
-    if (OB_FAIL(index_access_param.init_basic_param(relative_table.get_table_id(),
-            relative_table.get_schema_version(),
-            relative_table.get_rowkey_column_num(),
-            uk_out_descs,
-            &uk_out_idxs))) {
-      LOG_WARN("init basic param failed", K(ret));
-    } else if (OB_FAIL(get_conflict_row(
-                   run_ctx, index_access_param, table_access_ctx, relative_table, index_rowkey, tmp_rowkey_iter))) {
-      LOG_WARN("get conflict row failed", K(relative_table), K(index_rowkey), K(pk_out_descs));
-    }
-    if (OB_SUCC(ret) && OB_UNLIKELY(need_index_back) && OB_UNLIKELY(tmp_rowkey_iter != NULL)) {
-      int64_t data_table_rowkey_cnt = run_ctx.relative_tables_.data_table_.get_rowkey_column_num();
-      OZ(convert_row_to_rowkey(*dup_rowkey_iter, rowkeys));
-      OZ(multi_get_rows(run_ctx.store_ctx_,
-          table_access_param,
-          table_access_ctx,
-          run_ctx.relative_tables_.data_table_,
-          rowkeys,
-          duplicated_rows,
-          data_table_rowkey_cnt));
+    if (OB_LIKELY(!need_index_back)) {
+      if (OB_FAIL(single_get_row(index_row_getter, index_rowkey, duplicated_rows, dt_rowkey_cnt))) {
+        LOG_WARN("single get index row failed", K(ret));
+      }
+    } else {
+      ObStoreRowkey table_rowkey;
+      ObSingleRowGetter data_row_getter(*allocator, store_);
+      if (OB_FAIL(index_row_getter.open(index_rowkey))) {
+        LOG_WARN("get index row failed", K(ret), K(index_rowkey));
+      } else if (OB_FAIL(convert_row_to_rowkey(index_row_getter, table_rowkey))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("convert row to rowkey failed", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(data_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, run_ctx.dml_param_))) {
+        LOG_WARN("init dml access ctx failed", K(ret));
+      } else if (OB_FAIL(data_row_getter.init_dml_access_param(
+                     run_ctx.relative_tables_.data_table_, run_ctx.dml_param_, out_col_ids))) {
+        LOG_WARN("init data table access param failed", K(ret));
+      } else if (OB_FAIL(single_get_row(data_row_getter, table_rowkey, duplicated_rows, dt_rowkey_cnt))) {
+        LOG_WARN("single get index row failed", K(ret), K(index_rowkey));
+      }
     }
   }
+  LOG_DEBUG("get index conflict row",
+      K(ret),
+      K(need_index_back),
+      K(out_col_ids),
+      K(relative_table),
+      K(row),
+      KPC(duplicated_rows));
   if (dup_rowkey_iter != NULL) {
     ObQueryIteratorFactory::free_insert_dup_iter(dup_rowkey_iter);
     dup_rowkey_iter = NULL;
@@ -1914,98 +1859,378 @@ int ObPartitionStorage::get_index_conflict_row(ObDMLRunningCtx& run_ctx, const O
   return ret;
 }
 
-int ObPartitionStorage::get_conflict_row(ObDMLRunningCtx& run_ctx, const ObTableAccessParam& access_param,
-    ObTableAccessContext& access_ctx, ObRelativeTable& relative_table, const ObStoreRowkey& rowkey,
-    ObNewRowIterator*& duplicated_rows)
+int ObPartitionStorage::get_conflict_row(ObDMLRunningCtx &run_ctx, const ObIArray<uint64_t> &out_col_ids,
+    ObRelativeTable &relative_table, const ObStoreRowkey &rowkey, ObNewRowIterator *&duplicated_rows)
 {
   int ret = OB_SUCCESS;
-  ObExtStoreRowkey ext_rowkey(rowkey);
-  GetRowkeyArray rowkeys;
+  ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
+  ObIAllocator *allocator =
+      run_ctx.dml_param_.dml_allocator_ != nullptr ? run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
   int64_t data_table_rowkey_cnt = run_ctx.relative_tables_.data_table_.get_rowkey_column_num();
-  OZ(rowkeys.push_back(ext_rowkey));
-  OZ(multi_get_rows(run_ctx.store_ctx_, access_param, access_ctx,
-      relative_table, rowkeys, duplicated_rows, data_table_rowkey_cnt));
-  LOG_DEBUG("get conflict row", K(ret), K(rowkey), K(relative_table), K(access_param), K(data_table_rowkey_cnt));
-  return ret;
-}
-
-int ObPartitionStorage::convert_row_to_rowkey(ObNewRowIterator& rowkey_iter, GetRowkeyArray& rowkeys)
-{
-  int ret = OB_SUCCESS;
-  ObNewRow* rows = NULL;
-  int64_t row_count = 0;
-  do {
-    if (OB_FAIL(rowkey_iter.get_next_rows(rows, row_count))) {
-      if (OB_ITER_END != ret) {
-        STORAGE_LOG(WARN, "get next row from row iterator failed", K(ret));
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
-      ObExtStoreRowkey ext_rowkey(ObStoreRowkey(rows[i].cells_, rows[i].count_));
-      LOG_DEBUG("convert row to rowkey", K(ext_rowkey), K(i), K(row_count));
-      if (OB_FAIL(rowkeys.push_back(ext_rowkey))) {
-        LOG_WARN("store rowkey failed", K(ret), K(ext_rowkey), K(i), K(row_count));
-      }
-    }
-  } while (OB_SUCC(ret));
-  if (OB_ITER_END == ret) {
-    ret = OB_SUCCESS;
+  ObSingleRowGetter single_row_getter(*allocator, store_);
+  if (OB_FAIL(single_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, run_ctx.dml_param_))) {
+    LOG_WARN("init dml access ctx failed", K(ret));
+  } else if (OB_FAIL(single_row_getter.init_dml_access_param(relative_table, run_ctx.dml_param_, out_col_ids))) {
+    LOG_WARN("init dml access param failed", K(ret));
+  } else if (OB_FAIL(single_get_row(single_row_getter, rowkey, duplicated_rows, data_table_rowkey_cnt))) {
+    LOG_WARN("single get row failed", K(ret));
   }
   return ret;
 }
 
-// primary key of index is short, so get primary key of main table by iteration
-// if memtable supports output of any column(not including complete primary key is ok)
-// then not necessary to provide index array for merge
-int ObPartitionStorage::get_column_index(
-    const ObColDescIArray& tbl_col_desc, const ObColDescIArray& idx_col_desc, common::ObIArray<int32_t>& col_idx_array)
+int ObPartitionStorage::convert_row_to_rowkey(ObSingleRowGetter &index_row_getter, ObStoreRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  if (&tbl_col_desc == &idx_col_desc) {
-    for (int32_t i = 0; OB_SUCC(ret) && i < tbl_col_desc.count(); ++i) {
-      if (OB_FAIL(col_idx_array.push_back(i))) {
-        STORAGE_LOG(WARN, "failed to choose output column idx", K(i), K(ret));
-      }
+  ObNewRow *row = nullptr;
+  if (OB_FAIL(index_row_getter.get_next_row(row))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get next row from index row getter failed", K(ret));
     }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tbl_col_desc.count(); ++i) {
-      uint64_t id = tbl_col_desc.at(i).col_id_;
-      bool found = false;
-      for (int32_t j = 0; OB_SUCC(ret) && j < idx_col_desc.count(); ++j) {
-        if (id == idx_col_desc.at(j).col_id_) {
-          found = true;
-          if (OB_FAIL(col_idx_array.push_back(static_cast<int16_t>(j)))) {
-            STORAGE_LOG(WARN, "failed to choose output column idx", K(id), K(ret));
-          }
-          break;
+    rowkey.assign(row->cells_, row->count_);
+  }
+  return ret;
+}
+
+int ObPartitionStorage::check_old_row_legitimacy(ObDMLRunningCtx &run_ctx, const ObNewRow &old_row)
+{
+  int ret = OB_SUCCESS;
+
+  ObRelativeTable &data_table = run_ctx.relative_tables_.data_table_;
+  ObStoreRowkey rowkey;
+  rowkey.assign(old_row.cells_, data_table.get_rowkey_column_num());
+  if (OB_UNLIKELY(rowkey.get_obj_cnt() > old_row.count_) || OB_ISNULL(run_ctx.column_ids_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old row is invalid", K(ret), K(old_row), K(rowkey.get_obj_cnt()), KP(run_ctx.column_ids_));
+  } else if (data_table.is_index_table() && !data_table.can_read_index()) {
+    // index can not be read during building index, so does not check old index row
+  } else {
+    // the vertical partition is no longer maintained,
+    // and the defense check skips the vertical partition function
+    ObDMLBaseParam &dml_param = const_cast<ObDMLBaseParam &>(run_ctx.dml_param_);
+    ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
+    ObIAllocator *allocator =
+        run_ctx.dml_param_.dml_allocator_ != nullptr ? run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
+    ObSingleRowGetter old_row_getter(*allocator, store_);
+    ObNewRow *storage_old_row = nullptr;
+    const ObIArray<uint64_t> &column_ids = *run_ctx.column_ids_;
+    if (OB_FAIL(old_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, dml_param))) {
+      LOG_WARN("init dml access ctx failed", K(ret));
+    } else if (OB_FAIL(old_row_getter.init_dml_access_param(data_table, dml_param, column_ids))) {
+      LOG_WARN("init dml access param failed", K(ret));
+    } else if (OB_FAIL(old_row_getter.open(rowkey, true))) {
+      LOG_WARN("open old row getter failed", K(ret), K(rowkey));
+    } else if (OB_FAIL(old_row_getter.get_next_row(storage_old_row))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        LOG_WARN("old row in storage is not exists", K(ret));
+      } else {
+        LOG_WARN("get next row from old_row_iter failed", K(ret), KPC(run_ctx.column_ids_), K(old_row));
+      }
+    } else if (storage_old_row->get_count() != old_row.get_count()) {
+      ret = OB_ERR_DEFENSIVE_CHECK;
+      LOG_WARN("storage old row is not matched with sql old row", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < old_row.get_count(); ++i) {
+      const ObObj &storage_val = storage_old_row->get_cell(i);
+      const ObObj &sql_val = old_row.get_cell(i);
+      int cmp = 0;
+      if (OB_UNLIKELY(OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_ids.at(i))) {
+        // skip check logical rowid,
+      } else if (OB_UNLIKELY(ObLongTextType == storage_val.get_type() && sql_val.is_lob_locator())) {
+        // skip check lob column type,
+      } else if (OB_UNLIKELY(storage_val.is_nop_value())) {
+        bool is_nop = false;
+        if (OB_FAIL(data_table.is_nop_default_value(column_ids.at(i), is_nop))) {
+          LOG_WARN("check column whether has nop default value failed", K(ret), K(column_ids.at(i)));
+        } else if (!is_nop) {
+          ret = OB_ERR_DEFENSIVE_CHECK;
+          LOG_WARN("storage old row is not matched with sql old row",
+              K(ret),
+              K(i),
+              K(column_ids.at(i)),
+              K(storage_val),
+              K(sql_val));
         }
+      } else if (OB_FAIL(storage_val.compare(sql_val, cmp)) || 0 != cmp) {
+        LOG_WARN("storage_val is not equal with sql_val, maybe catch a bug",
+            K(ret),
+            K(storage_val),
+            K(sql_val),
+            K(cmp),
+            K(column_ids.at(i)));
+        ret = OB_ERR_DEFENSIVE_CHECK;
       }
-      if (!found) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "failed to choose output column idx", K(id), K(ret));
+    }
+    if (OB_ERR_DEFENSIVE_CHECK == ret) {
+      ObString func_name = ObString::make_string("check_old_row_legitimacy");
+      LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+      LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+          K(ret),
+          "column_id",
+          column_ids,
+          KPC(storage_old_row),
+          "sql_old_row",
+          old_row,
+          "dml_param",
+          run_ctx.dml_param_,
+          "dml_type",
+          run_ctx.dml_type_);
+    }
+  }
+  return ret;
+}
+
+int ObPartitionStorage::check_delete_index_legitimacy(
+    ObDMLRunningCtx &run_ctx, ObRelativeTable &index_table, const ObNewRow &old_row)
+{
+  int ret = OB_SUCCESS;
+
+  ObStoreRowkey rowkey(old_row.cells_, index_table.get_rowkey_column_num());
+  if (OB_UNLIKELY(rowkey.get_obj_cnt() > old_row.count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old row is invalid", K(ret), K(old_row), K(rowkey.get_obj_cnt()));
+  } else if (index_table.is_index_table() && !index_table.can_read_index()) {
+    // index can not be read during building index, so does not check old index row
+  } else {
+    // the vertical partition is no longer maintained,
+    // and the defense check skips the vertical partition function
+    ObDMLBaseParam &dml_param = const_cast<ObDMLBaseParam &>(run_ctx.dml_param_);
+    ObArenaAllocator scan_allocator(ObModIds::OB_TABLE_SCAN_ITER);
+    ObIAllocator *allocator = run_ctx.dml_param_.dml_allocator_ != nullptr ?
+        run_ctx.dml_param_.dml_allocator_ : &scan_allocator;
+    ObFixedArray<uint64_t, ObIAllocator> column_ids;
+    ObSingleRowGetter old_row_getter(*allocator, store_);
+    ObNewRow *storage_old_row = nullptr;
+    column_ids.set_allocator(allocator);
+    column_ids.set_capacity(index_table.get_rowkey_column_num());
+    if (OB_FAIL(old_row_getter.init_dml_access_ctx(run_ctx.store_ctx_, dml_param))) {
+      LOG_WARN("init dml access ctx failed", K(ret));
+    } else if (OB_FAIL(index_table.get_rowkey_column_ids(column_ids))) {
+      LOG_WARN("get rowkey column ids failed", K(ret));
+    } else if (OB_FAIL(old_row_getter.init_dml_access_param(index_table, dml_param, column_ids))) {
+      LOG_WARN("init dml access param failed", K(ret));
+    } else if (OB_FAIL(old_row_getter.open(rowkey, true))) {
+      LOG_WARN("open old row getter failed", K(ret), K(rowkey));
+    } else if (OB_FAIL(old_row_getter.get_next_row(storage_old_row))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        LOG_WARN("old row in storage is not exists", K(ret));
+      } else {
+        LOG_WARN("get next row from old_row_iter failed", K(ret), KPC(run_ctx.column_ids_), K(old_row));
+      }
+    }
+    if (OB_ERR_DEFENSIVE_CHECK == ret) {
+      ObString func_name = ObString::make_string("check_delete_index_legitimacy");
+      LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+      LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+          K(ret),
+          "column_id",
+          column_ids,
+          KPC(storage_old_row),
+          "sql_old_row",
+          old_row,
+          "dml_param",
+          run_ctx.dml_param_,
+          "dml_type",
+          run_ctx.dml_type_);
+    }
+  }
+  return ret;
+}
+
+int ObPartitionStorage::check_new_row_legitimacy(ObDMLRunningCtx &run_ctx, const ObNewRow &new_row)
+{
+  int ret = OB_SUCCESS;
+  ObRelativeTable &data_table = run_ctx.relative_tables_.data_table_;
+  if (OB_ISNULL(run_ctx.column_ids_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column ids is nullptr", K(ret));
+  } else if (OB_FAIL(check_new_row_nullable_value(*run_ctx.column_ids_, data_table, new_row))) {
+    LOG_WARN(
+        "check new row nullable value failed", K(ret), "dml_param", run_ctx.dml_param_, "dml_type", run_ctx.dml_type_);
+  } else if (OB_FAIL(check_new_row_shadow_pk(*run_ctx.column_ids_, data_table, new_row))) {
+    LOG_WARN(
+        "check new row nullable value failed", K(ret), "dml_param", run_ctx.dml_param_, "dml_type", run_ctx.dml_type_);
+  }
+  return ret;
+}
+
+int ObPartitionStorage::check_new_row_nullable_value(
+    const ObIArray<uint64_t> &column_ids, ObRelativeTable &data_table, const ObNewRow &new_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(column_ids.count() > new_row.get_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new row is invalid", K(ret), K(new_row.get_count()), K(column_ids.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+    uint64_t column_id = column_ids.at(i);
+    bool is_nullable = false;
+    if (OB_UNLIKELY(is_shadow_column(column_id))) {
+      // the shadow pk is generated internally,
+      // and the nullable attribute check for it is skipped
+    } else if (OB_FAIL(data_table.is_column_nullable_for_write(column_id, is_nullable))) {
+      LOG_WARN("check is_column_nullable_for_write failed", K(ret), K(column_id));
+    } else if (new_row.get_cell(i).is_null() && !is_nullable) {
+      bool is_hidden = false;
+      bool is_gen_col = false;
+      bool is_nullable_for_read = false;
+      if (OB_FAIL(data_table.is_column_nullable_for_read(column_id, is_nullable_for_read))) {
+        LOG_WARN("check is nullable for read failed", K(ret));
+      } else if (is_nullable_for_read) {
+        LOG_TRACE("Catch a defensive nullable error, but this column is not null novalidate",
+            K(column_id),
+            K(column_ids),
+            K(new_row),
+            K(data_table));
+      } else if (OB_FAIL(data_table.is_hidden_column(column_id, is_hidden))) {
+        LOG_WARN("get is hidden column failed", K(ret), K(column_id));
+      } else if (OB_FAIL(data_table.is_gen_column(column_id, is_gen_col))) {
+        LOG_WARN("get is gen column failed", K(ret), K(column_id));
+      } else if (is_hidden && !is_gen_col) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("Catch a defensive nullable error, "
+                 "maybe cause by add column not null default null ONLINE",
+            K(ret),
+            K(column_id),
+            K(column_ids),
+            K(new_row),
+            K(data_table));
+      } else {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        ObString func_name = ObString::make_string("check_new_row_nullable_value");
+        LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+        LOG_ERROR(
+            "Fatal Error!!! Catch a defensive error!", K(ret), K(column_id), K(column_ids), K(new_row), K(data_table));
       }
     }
   }
   return ret;
 }
 
-int ObPartitionStorage::init_dml_access_ctx(ObDMLRunningCtx& run_ctx, ObArenaAllocator& allocator,
-    ObBlockCacheWorkingSet& block_cache_ws, ObTableAccessContext& table_access_ctx)
+int ObPartitionStorage::check_new_row_nullable_value(
+    const ObIArray<ObColDesc> &col_descs, ObRelativeTable &relative_table, const ObNewRow &new_row)
 {
   int ret = OB_SUCCESS;
-  common::ObQueryFlag query_flag;
-  common::ObVersionRange trans_version_range;
-  query_flag.read_latest_ = ObQueryFlag::OBSF_MASK_READ_LATEST;
-  // TODO  trans_version_range will be passed as a parameter
-  trans_version_range.snapshot_version_ = run_ctx.store_ctx_.mem_ctx_->get_read_snapshot();
-  trans_version_range.base_version_ = 0;
-  trans_version_range.multi_version_start_ = 0;
+  if (OB_UNLIKELY(col_descs.count() > new_row.get_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new row is invalid", K(ret), K(new_row.get_count()), K(col_descs.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
+    uint64_t column_id = col_descs.at(i).col_id_;
+    bool is_nullable = false;
+    if (OB_UNLIKELY(is_shadow_column(column_id))) {
+      // the shadow pk is generated internally,
+      // and the nullable attribute check for it is skipped
+    } else if (OB_FAIL(relative_table.is_column_nullable_for_write(column_id, is_nullable))) {
+      LOG_WARN("check is_column_nullable_for_write failed", K(ret), K(column_id));
+    } else if (new_row.get_cell(i).is_null() && !is_nullable) {
+      bool is_hidden = false;
+      bool is_gen_col = false;
+      bool is_nullable_for_read = false;
+      if (OB_FAIL(relative_table.is_column_nullable_for_read(column_id, is_nullable_for_read))) {
+        LOG_WARN("check is nullable for read failed", K(ret));
+      } else if (is_nullable_for_read) {
+        // this column is not null novalidate, maybe the null column come from the old data
+        // so output trace log and ignore it
+        LOG_TRACE("Catch a defensive nullable error, but this column is not null novalidate",
+            K(column_id),
+            K(col_descs),
+            K(new_row),
+            K(relative_table));
+      } else if (OB_FAIL(relative_table.is_hidden_column(column_id, is_hidden))) {
+        LOG_WARN("get is hidden column failed", K(ret), K(column_id));
+      } else if (OB_FAIL(relative_table.is_gen_column(column_id, is_gen_col))) {
+        LOG_WARN("get is gen column failed", K(ret), K(column_id));
+      } else if (is_hidden && !is_gen_col) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("Catch a defensive nullable error, "
+                 "maybe cause by add column not null default null ONLINE",
+            K(ret),
+            K(column_id),
+            K(col_descs),
+            K(new_row),
+            K(relative_table));
+      } else {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        ObString func_name = ObString::make_string("check_new_row_nullable_value");
+        LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+        LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+            K(ret),
+            K(column_id),
+            K(col_descs),
+            K(new_row),
+            K(relative_table));
+      }
+    }
+  }
+  return ret;
+}
 
-  if (OB_FAIL(table_access_ctx.init(
-          query_flag, run_ctx.store_ctx_, allocator, allocator, block_cache_ws, trans_version_range))) {
-    LOG_WARN("failed to init table access ctx", K(ret));
-  } else {
-    table_access_ctx.expr_ctx_ = const_cast<ObExprCtx*>(&run_ctx.dml_param_.expr_ctx_);
+int ObPartitionStorage::check_new_row_shadow_pk(
+    const ObIArray<uint64_t> &column_ids, ObRelativeTable &data_table, const ObNewRow &new_row)
+{
+  int ret = OB_SUCCESS;
+  if (data_table.get_shadow_rowkey_column_num() > 0) {
+    // check shadow pk
+    int64_t rowkey_cnt = data_table.get_rowkey_column_num();
+    int64_t spk_cnt = data_table.get_shadow_rowkey_column_num();
+    int64_t index_col_cnt = rowkey_cnt - spk_cnt;
+    bool need_spk = false;
+    if (OB_UNLIKELY(index_col_cnt <= 0) || OB_UNLIKELY(column_ids.count() < rowkey_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN(
+          "index column count is invalid", K(ret), K(index_col_cnt), K(rowkey_cnt), K(spk_cnt), K(column_ids.count()));
+    } else if (lib::is_mysql_mode()) {
+      // mysql兼容：只要unique index key中有null列，则需要填充shadow列
+      bool rowkey_has_null = false;
+      for (int64_t i = 0; !rowkey_has_null && i < index_col_cnt; i++) {
+        rowkey_has_null = new_row.get_cell(i).is_null();
+      }
+      need_spk = rowkey_has_null;
+    } else {
+      // oracle兼容：只有unique index key全为null列时，才需要填充shadow列
+      bool is_rowkey_all_null = true;
+      for (int64_t i = 0; is_rowkey_all_null && i < index_col_cnt; i++) {
+        is_rowkey_all_null = new_row.get_cell(i).is_null();
+      }
+      need_spk = is_rowkey_all_null;
+    }
+    for (int64_t i = index_col_cnt; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+      uint64_t spk_column_id = column_ids.at(i);
+      uint64_t real_pk_id = spk_column_id - OB_MIN_SHADOW_COLUMN_ID;
+      const ObObj &spk_value = new_row.get_cell(i);
+      int64_t pk_idx = OB_INVALID_INDEX;
+      int cmp = 0;
+      if (OB_LIKELY(!need_spk)) {
+        if (!spk_value.is_null()) {
+          ret = OB_ERR_DEFENSIVE_CHECK;
+          ObString func_name = ObString::make_string("check_new_row_shadow_pk");
+          LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+          LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+              K(ret),
+              "column_id",
+              column_ids,
+              K(new_row),
+              K(data_table),
+              K(spk_value),
+              K(i),
+              K(spk_column_id),
+              K(real_pk_id));
+        }
+      } else if (OB_UNLIKELY(!has_exist_in_array(column_ids, real_pk_id, &pk_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("real pk column not exists in column_ids", K(ret), K(column_ids), K(real_pk_id));
+      } else if (OB_FAIL(new_row.get_cell(pk_idx).compare(spk_value, cmp)) || 0 != cmp) {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        ObString func_name = ObString::make_string("check_new_row_shadow_pk");
+        LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+        LOG_ERROR("Fatal Error!!! Catch a defensive error!",
+            K(ret), "column_id", column_ids, K(new_row), K(data_table), K(spk_value),
+            "pk_value", new_row.get_cell(pk_idx), K(pk_idx), K(i), K(spk_column_id), K(real_pk_id));
+      }
+    }
   }
   return ret;
 }
@@ -2018,38 +2243,15 @@ int ObPartitionStorage::get_conflict_rows(ObDMLRunningCtx& run_ctx, const ObInse
     common::ObNewRowIterator*& duplicated_rows)
 {
   int ret = OB_SUCCESS;
-  ObRelativeTables& relative_tables = run_ctx.relative_tables_;
-  ObRelativeTable& data_table = relative_tables.data_table_;
-  ObColDescArray tbl_out_descs;
-  ObArenaAllocator allocator(ObModIds::OB_TABLE_SCAN_ITER);
-  share::schema::ObTableParam table_param(allocator);
-  ObTableAccessParam table_access_param;
-  ObTableAccessContext table_access_ctx;
-  ObBlockCacheWorkingSet block_cache_ws;
+  ObRelativeTables &relative_tables = run_ctx.relative_tables_;
+  ObRelativeTable &data_table = relative_tables.data_table_;
+  ObStoreRowkey rowkey;
+  rowkey.assign(row.cells_, data_table.get_rowkey_column_num());
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "partition storage is not initialized", K(ret));
-  }
-  CK(data_table.is_valid());
-  OZ(block_cache_ws.init(extract_tenant_id(data_table.get_table_id())));
-  OZ(ObDMLRunningCtx::prepare_column_desc(out_col_ids, data_table, tbl_out_descs));
-  OZ(data_table.build_table_param(out_col_ids, table_param));
-  OZ(table_access_param.init(data_table.get_table_id(),
-      data_table.get_schema_version(),
-      data_table.get_rowkey_column_num(),
-      tbl_out_descs,
-      false,
-      &table_param,
-      false));
-  OZ(init_dml_access_ctx(run_ctx, allocator, block_cache_ws, table_access_ctx));
-  if (OB_SUCC(ret)) {
-    ObStoreRowkey rowkey(row.cells_, data_table.get_rowkey_column_num());
-    table_access_param.virtual_column_exprs_ = &(run_ctx.dml_param_.virtual_columns_);
-    table_access_param.output_exprs_ = run_ctx.dml_param_.output_exprs_;
-    table_access_param.op_ = run_ctx.dml_param_.op_;
-    table_access_param.op_filters_ = run_ctx.dml_param_.op_filters_;
-    table_access_param.row2exprs_projector_ = run_ctx.dml_param_.row2exprs_projector_;
-    OZ(get_conflict_row(run_ctx, table_access_param, table_access_ctx, data_table, rowkey, duplicated_rows));
+  } else if (OB_FAIL(get_conflict_row(run_ctx, out_col_ids, data_table, rowkey, duplicated_rows))) {
+    LOG_WARN("get conflict row failed", K(ret), K(rowkey));
   }
   // check conflict row(s) of index table
   if (OB_SUCC(ret) && !run_ctx.dml_param_.only_data_table_) {
@@ -2059,13 +2261,8 @@ int ObPartitionStorage::get_conflict_rows(ObDMLRunningCtx& run_ctx, const ObInse
          OB_SUCC(ret) && (INSERT_RETURN_ALL_DUP == flag || NULL == duplicated_rows) && i < relative_tables.idx_cnt_;
          ++i) {
       if (relative_tables.index_tables_[i].is_unique_index()) {
-        OZ(get_index_conflict_row(run_ctx,
-            table_access_param,
-            table_access_ctx,
-            relative_tables.index_tables_[i],
-            need_index_back,
-            row,
-            duplicated_rows));
+        OZ(get_index_conflict_row(
+            run_ctx, out_col_ids, relative_tables.index_tables_[i], need_index_back, row, duplicated_rows));
       }
     }
   }
@@ -2173,22 +2370,19 @@ int ObPartitionStorage::insert_table_rows(
         STORAGE_LOG(WARN, "rowkey already exists", K(relative_table.get_table_id()), K(ctx), K(ret));
       }
 
-      if (OB_UNLIKELY(relative_table.is_storage_index_table())) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < rows_info.row_count_; i++) {
-          ObStoreRow& row = rows_info.rows_[i];
-          if (OB_FAIL(write_index_row(relative_table, ctx, col_descs, row))) {
-            if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-              STORAGE_LOG(WARN, "failed to set row", K(row), K(ret));
-            }
-          }
-        }
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < rows_info.row_count_; i++) {
-          ObStoreRow& row = rows_info.rows_[i];
+      for (int64_t i = 0; OB_SUCC(ret) && i < rows_info.row_count_; i++) {
+        ObStoreRow &row = rows_info.rows_[i];
+        if (GCONF.enable_defensive_check() && OB_FAIL(check_new_row_legitimacy(run_ctx, row.row_val_))) {
+          LOG_WARN("check new row legitimacy failed", K(ret), K(row.row_val_));
+        } else if (OB_LIKELY(!relative_table.is_storage_index_table())) {
           if (OB_FAIL(write_row(relative_table, ctx, relative_table.get_rowkey_column_num(), col_descs, row))) {
             if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
               STORAGE_LOG(WARN, "failed to set row", K(row), K(ret));
             }
+          }
+        } else if (OB_FAIL(write_index_row(relative_table, ctx, col_descs, row))) {
+          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+            STORAGE_LOG(WARN, "failed to set row", K(row), K(ret));
           }
         }
       }
@@ -2278,6 +2472,8 @@ int ObPartitionStorage::direct_insert_row_and_index(ObDMLRunningCtx& run_ctx, co
         KP(col_map),
         KP(idx_row),
         K(ret));
+  } else if (GCONF.enable_defensive_check() && OB_FAIL(check_new_row_legitimacy(run_ctx, tbl_row.row_val_))) {
+    LOG_WARN("check new row legitimacy failed", K(ret), K(tbl_row.row_val_));
   } else {
     const ObColDescIArray& col_descs = *run_ctx.col_descs_;
     if (OB_FAIL(write_row(relative_tables.data_table_,
@@ -2759,7 +2955,7 @@ int ObPartitionStorage::get_change_type(
             }
           } else {
             bool is_nullable = false;
-            if (OB_FAIL(table.is_column_nullable(cid, is_nullable))) {
+            if (OB_FAIL(table.is_column_nullable_for_write(cid, is_nullable))) {
               LOG_WARN("check nullable fail", K(ret), K(cid), K(table));
             } else if (is_nullable) {
               innullable = false;
@@ -2853,6 +3049,8 @@ int ObPartitionStorage::process_old_row(ObDMLRunningCtx& run_ctx, const bool dat
         KP(idx_row),
         K(is_delete_total_quantity_log),
         K(ret));
+  } else if (GCONF.enable_defensive_check() && OB_FAIL(check_old_row_legitimacy(run_ctx, tbl_row.row_val_))) {
+    LOG_WARN("check old row legitimacy failed", K(tbl_row.row_val_));
   } else {
     const ObColDescIArray& col_descs = *run_ctx.col_descs_;
     uint64_t table_id = relative_tables.data_table_.get_table_id();
@@ -2916,33 +3114,22 @@ int ObPartitionStorage::process_old_row(ObDMLRunningCtx& run_ctx, const bool dat
           if (OB_FAIL(relative_tables.index_tables_[i].build_index_row(
                   tbl_row.row_val_, *col_map, true, idx_row->row_val_, null_idx_val, &idx_col_descs))) {
             STORAGE_LOG(WARN, "failed to generate index row", K(ret));
-          } else if (relative_tables.index_tables_[i].can_read_index() &&
+          } else if (GCONF.enable_defensive_check() && relative_tables.index_tables_[i].can_read_index() &&
                      relative_tables.index_tables_[i].is_storage_index_table() &&
                      OB_FAIL(rowkey_exists(
                          relative_tables.index_tables_[i], store_ctx, idx_col_descs, idx_row->row_val_, exists))) {
             STORAGE_LOG(WARN, "failed to check rowkey existing", K(*idx_row), K(ret));
           } else if (!exists) {
-            if (run_ctx.store_ctx_.mem_ctx_ != NULL) {
-              ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(run_ctx.store_ctx_.mem_ctx_);
-              transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
-              if (NULL != trans_ctx) {
-                if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
-                  TRANS_LOG(WARN, "strong consistent read follower when sql check",
-                            K(trans_ctx->get_trans_id()));
-                  ret = OB_NOT_MASTER;
-                }
-              }
-            }
-            if (OB_NOT_MASTER != ret) {
-              ret = OB_ERR_UNEXPECTED;
-              STORAGE_LOG(ERROR,
-                  "DEBUG ATTENTION!!!! update or delete a non exist index row",
-                  K(ret),
-                  KPC(idx_row),
-                  K(relative_tables.data_table_.tables_handle_),
-                  K(relative_tables.index_tables_[i]),
-                  K(relative_tables.index_tables_[i].tables_handle_));
-            }
+            ret = OB_ERR_DEFENSIVE_CHECK;
+            ObString func_name = ObString::make_string("process_old_row");
+            LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+            STORAGE_LOG(ERROR,
+                "Unexpected old row, update or delete a non exist index row",
+                K(ret),
+                KPC(idx_row),
+                K(relative_tables.data_table_.tables_handle_),
+                K(relative_tables.index_tables_[i]),
+                K(relative_tables.index_tables_[i].tables_handle_));
           } else {
             // STORAGE_LOG(INFO, "build index row", K(*idx_row), K(null_idx_val), K(type));
             if (ND_ROWKEY_CHANGE == type && !null_idx_val) {
@@ -3120,6 +3307,8 @@ int ObPartitionStorage::process_new_row(ObDMLRunningCtx& run_ctx, const ObIArray
         K(new_tbl_row),
         K(rowkey_change),
         K(ret));
+  } else if (GCONF.enable_defensive_check() && OB_FAIL(check_new_row_legitimacy(run_ctx, new_tbl_row.row_val_))) {
+    LOG_WARN("check new row legitimacy failed", K(ret), K(new_tbl_row.row_val_));
   } else {
     // write full column clog needs to construct update_idx and pass to memtable
     if (OB_FAIL(process_row_of_data_table(run_ctx, update_idx, old_tbl_row, new_tbl_row, rowkey_change))) {
@@ -6406,6 +6595,7 @@ int ObPartitionStorage::ObDMLRunningCtx::init(const ObIArray<uint64_t>* column_i
     store_ctx_.mem_ctx_->set_table_version(dml_param_.schema_version_);
     store_ctx_.mem_ctx_->set_abs_expired_time(dml_param_.timeout_);
     store_ctx_.mem_ctx_->set_abs_lock_wait_timeout(dml_param_.timeout_);
+    column_ids_ = column_ids;
     is_inited_ = true;
   }
 
@@ -6731,6 +6921,9 @@ int ObPartitionStorage::lock_row(ObRelativeTable& relative_table, const storage:
   if (OB_SUCC(ret)) {
     if (OB_FAIL(reshape_row(row, col_descs.count(), row_reshape_ins, lock_row, need_reshape_row, sql_mode))) {
       LOG_WARN("failed to reshape row", K(ret), K(row), K(need_reshape_row), K(sql_mode));
+    } else if (GCONF.enable_defensive_check() &&
+               OB_FAIL(check_new_row_nullable_value(col_descs, relative_table, lock_row.row_val_))) {
+      LOG_WARN("check lock row nullable failed", K(ret));
     } else {
       memtable::ObMemtable* write_memtable = NULL;
       const uint64_t table_id = relative_table.get_table_id();

@@ -130,6 +130,11 @@ typedef uint64_t ObSQLMode;
     is_true = (SMO_HIGH_NOT_PRECEDENCE & mode); \
   }
 
+#define IS_NO_BACKSLASH_ESCAPES(mode, is_true)   \
+  {                                              \
+    is_true = (SMO_NO_BACKSLASH_ESCAPES & mode); \
+  }
+
 #ifdef __cplusplus
 }
 #endif

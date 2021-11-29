@@ -135,6 +135,11 @@ public:
   }
   bool enable_static_engine_for_query() const;
 
+  bool enable_defensive_check() const
+  {
+    return _enable_defensive_check && lib::is_diagnose_info_enabled();
+  }
+
   bool is_major_version_upgrade() const
   {
     return false;

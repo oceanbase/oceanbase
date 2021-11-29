@@ -2200,6 +2200,13 @@ MOD '(' expr ',' expr ')'
   make_name_node($$, result->malloc_pool_, "date");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
 }
+| DAY '(' expr ')'
+{
+  ParseNode *params = NULL;
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 1, $3);
+  make_name_node($$, result->malloc_pool_, "day");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
 | YEAR '(' expr ')'
 {
   ParseNode *params = NULL;

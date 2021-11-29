@@ -74,7 +74,7 @@ int ObTableDeleteReturningOp::get_next_row()
       }
     }
     if (OB_SUCC(ret)) {
-      real_delete_row.cells_ = delete_row_ceils_;
+      real_delete_row.count_ = MY_SPEC.column_ids_.count();
       real_delete_row.count_ = child_row_count_;
       if (OB_FAIL(partition_service_->delete_row(my_session->get_trans_desc(),
               dml_param_,

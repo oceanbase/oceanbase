@@ -263,9 +263,9 @@ int ObTableUpdate::get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
           }
         }
         if (OB_SUCC(ret) && !from_multi_table_dml()) {
-          ObNewRow& old_row = update_ctx->old_row_;
-          ObNewRow& new_row = update_ctx->new_row_;
-          OZ(check_row_null(ctx, new_row, column_infos_), new_row);
+          ObNewRow &old_row = update_ctx->old_row_;
+          ObNewRow &new_row = update_ctx->new_row_;
+          OZ(check_row_null(ctx, new_row, column_infos_, updated_column_infos_), new_row);
         }
       }
       if (OB_SUCC(ret)) {

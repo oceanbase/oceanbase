@@ -250,7 +250,7 @@ public:
     array_ = nullptr;
     capacity_ = 0;
   }
-  int reserve(common::ObArenaAllocator& allocator, const int64_t count)
+  int reserve(common::ObIAllocator &allocator, const int64_t count)
   {
     int ret = common::OB_SUCCESS;
     if (capacity_ < count) {

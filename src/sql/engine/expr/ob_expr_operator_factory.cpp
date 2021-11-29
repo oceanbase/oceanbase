@@ -270,6 +270,8 @@
 #include "sql/engine/expr/ob_expr_convert_tz.h"
 #include "sql/engine/expr/ob_expr_degrees.h"
 #include "sql/engine/expr/ob_expr_weight_string.h"
+#include "sql/engine/expr/ob_expr_any_value.h"
+#include "sql/engine/expr/ob_expr_benchmark.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -610,6 +612,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTruncate);
   REG_OP(ObExprDllUdf);
   REG_OP(ObExprExp);
+  REG_OP(ObExprAnyValue);
   REG_OP(ObExprUuidToBin);
   REG_OP(ObExprBinToUuid);
   REG_OP(ObExprIsUuid);
@@ -684,6 +687,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTimestamp);
   REG_OP(ObExprDegrees);
   REG_OP(ObExprWeightString);
+  REG_OP(ObExprBenchmark);
+  REG_OP(ObExprDay);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);

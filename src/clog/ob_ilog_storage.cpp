@@ -701,7 +701,7 @@ void ObIlogStorage::ObIlogStorageTimerTask::purge_stale_ilog_index_()
   } else if (OB_FAIL(ilog_storage_->purge_stale_ilog_index()) && OB_NEED_WAIT != ret) {
     CSR_LOG(WARN, "ilog_storage_timer purge_stale_ilog_index failed", K(ret));
   } else {
-    CSR_LOG(INFO, "ilog_storage_timer pruge_stale_ilog_index_ success", K(ret));
+    CSR_LOG(INFO, "ilog_storage_timer purge_stale_ilog_index_ success", K(ret));
   }
 }
 

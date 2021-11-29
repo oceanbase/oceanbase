@@ -170,11 +170,12 @@ int ObMultiPartUpdate::shuffle_update_row(ObExecContext& ctx, bool& got_row) con
   }
   while (OB_SUCC(ret) && OB_SUCC(inner_get_next_row(ctx, full_row))) {
     for (int64_t k = 0; OB_SUCC(ret) && k < table_dml_infos_.count(); ++k) {
-      const ObTableDMLInfo& table_dml_info = table_dml_infos_.at(k);
-      ObTableDMLCtx& table_dml_ctx = update_ctx->table_dml_ctxs_.at(k);
-      const ObArrayWrap<ObGlobalIndexDMLInfo>& global_index_dml_infos = table_dml_info.index_infos_;
-      ObArrayWrap<ObGlobalIndexDMLCtx>& global_index_dml_ctxs = table_dml_ctx.index_ctxs_;
-      const ObTableModify* sub_update = global_index_dml_infos.at(0).dml_subplans_.at(UPDATE_OP).subplan_root_;
+      const ObTableDMLInfo &table_dml_info = table_dml_infos_.at(k);
+      ObTableDMLCtx &table_dml_ctx = update_ctx->table_dml_ctxs_.at(k);
+      const ObArrayWrap<ObGlobalIndexDMLInfo> &global_index_dml_infos = table_dml_info.index_infos_;
+      ObArrayWrap<ObGlobalIndexDMLCtx> &global_index_dml_ctxs = table_dml_ctx.index_ctxs_;
+      const ObTableUpdate *sub_update =
+          static_cast<const ObTableUpdate *>(global_index_dml_infos.at(0).dml_subplans_.at(UPDATE_OP).subplan_root_);
       bool is_updated = false;
       bool is_filtered = false;
       common::ObNewRow old_row;
@@ -220,9 +221,7 @@ int ObMultiPartUpdate::shuffle_update_row(ObExecContext& ctx, bool& got_row) con
           continue;
         }
       }
-      if (OB_SUCC(ret)) {
-        OZ(check_row_null(ctx, new_row, sub_update->get_column_infos()), new_row);
-      }
+      OZ(check_row_null(ctx, new_row, sub_update->get_column_infos(), sub_update->get_updated_column_infos()), new_row);
       OZ(check_updated_value(*update_ctx, table_dml_info.assign_columns_, old_row, new_row, is_updated));
       if (OB_SUCC(ret) && OB_INVALID_INDEX != stmt_id_idx_) {
         OZ(merge_implicit_cursor(

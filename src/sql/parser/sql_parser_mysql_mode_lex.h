@@ -72267,7 +72267,7 @@ extern int obsql_mysql_yylex \
 #undef YY_DECL
 #endif
 
-#line 1472 "../../../src/sql/parser/sql_parser_mysql_mode.l"
+#line 1479 "../../../src/sql/parser/sql_parser_mysql_mode.l"
 
 
 #line 72274 "../../../src/sql/parser/sql_parser_mysql_mode_lex.h"

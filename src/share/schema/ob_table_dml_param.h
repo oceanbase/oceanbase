@@ -25,13 +25,16 @@ class ObTableSchemaParam {
   OB_UNIS_VERSION_V(1);
 
 public:
-  typedef common::ObFixedArray<common::ObRowkeyInfo*, common::ObIAllocator> RowKeys;
-  typedef common::ObFixedArray<ObColumnParam*, common::ObIAllocator> Columns;
+  typedef common::ObFixedArray<common::ObRowkeyInfo *, common::ObIAllocator> RowKeys;
+  typedef common::ObFixedArray<ObColumnParam *, common::ObIAllocator> Columns;
+  typedef common::ObFixedArray<int32_t, common::ObIAllocator> Projector;
+  typedef common::ObFixedArray<ObColDesc, common::ObIAllocator> ObColDescArray;
 
   explicit ObTableSchemaParam(common::ObIAllocator& allocator);
   virtual ~ObTableSchemaParam();
   void reset();
-  int convert(const ObTableSchema* schema, const common::ObIArray<uint64_t>& col_ids);
+  int convert(const ObTableSchema *schema, const common::ObIArray<uint64_t> &col_ids);
+  int prepare_full_column_param(const ObTableSchema &table_schema);
   OB_INLINE bool is_valid() const
   {
     return common::OB_INVALID_ID != table_id_;
@@ -80,6 +83,18 @@ public:
   {
     return columns_.count();
   }
+  OB_INLINE const Columns &get_columns() const
+  {
+    return columns_;
+  }
+  OB_INLINE const ColumnMap &get_col_map() const
+  {
+    return col_map_;
+  }
+  OB_INLINE const ObColDescArray &get_col_descs() const
+  {
+    return col_descs_;
+  }
   OB_INLINE bool is_index_table() const
   {
     return ObTableSchema::is_index_table(table_type_);
@@ -107,13 +122,31 @@ public:
   int is_rowkey_column(const uint64_t column_id, bool& is_rowkey) const;
   int is_column_nullable(const uint64_t column_id, bool& is_nullable) const;
 
-  const ObColumnParam* get_column(const uint64_t column_id) const;
-  const ObColumnParam* get_column_by_idx(const int64_t idx) const;
-  const ObColumnParam* get_rowkey_column_by_idx(const int64_t idx) const;
-  int get_rowkey_column_ids(common::ObIArray<ObColDesc>& column_ids) const;
-  int get_index_name(common::ObString& index_name) const;
-  const common::ObString& get_pk_name() const;
+  const ObColumnParam *get_column(const uint64_t column_id) const;
+  const ObColumnParam *get_column_by_idx(const int64_t idx) const;
+  const ObColumnParam *get_rowkey_column_by_idx(const int64_t idx) const;
+  int get_rowkey_column_ids(common::ObIArray<ObColDesc> &column_ids) const;
+  int get_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
+  int get_index_name(common::ObString &index_name) const;
+  const common::ObString &get_pk_name() const;
   bool is_depend_column(uint64_t column_id) const;
+  OB_INLINE const Projector &get_projector() const
+  {
+    return projector_;
+  }
+  OB_INLINE const ObColDescArray &get_full_col_descs() const
+  {
+    return full_col_descs_;
+  }
+  OB_INLINE const ColumnMap &get_full_col_map() const
+  {
+    return full_col_map_;
+  }
+  OB_INLINE const Projector &get_full_projector() const
+  {
+    return full_projector_;
+  }
+
   DECLARE_TO_STRING;
 
 private:
@@ -132,9 +165,18 @@ private:
   uint64_t fulltext_col_id_;
   common::ObString index_name_;
   Columns columns_;
+  // generated storage param from columns_ids_ in ObTableModify, for performance improvement
+  ObColDescArray col_descs_;
   ColumnMap col_map_;
+  // generated storage column projector from full column map, for performance improvement
+  Projector projector_;  // all column projector without virtual column
   bool is_dropped_schema_;
   common::ObString pk_name_;  // use for printing error msg in oracle mode
+
+  // full column info, the purpose is that read operations in DML can use fuse row cache
+  ObColDescArray full_col_descs_;  // all column descs without virtual column
+  ColumnMap full_col_map_;         // all column map without virtual column
+  Projector full_projector_;       // all column projector without virtual column
 };
 
 class ObTableDMLParam {
