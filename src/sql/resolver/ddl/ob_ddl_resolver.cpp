@@ -3136,15 +3136,13 @@ int ObDDLResolver::resolve_part_func(ObResolverParams& params, const ParseNode* 
   }
   if (OB_SUCC(ret)) {
     // check duplicate of PARTITION_FUNC_TYPE_RANGE_COLUMNS
-    if (OB_SUCC(ret)) {
-      if (partition_func_type == PARTITION_FUNC_TYPE_RANGE_COLUMNS) {
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < partition_keys.count(); ++idx) {
-          const ObString& key_name = partition_keys.at(idx);
-          for (int64_t b_idx = 0; OB_SUCC(ret) && b_idx < idx; ++b_idx) {
-            if (ObCharset::case_insensitive_equal(key_name, partition_keys.at(b_idx))) {
-              ret = OB_ERR_SAME_NAME_PARTITION_FIELD;
-              LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION_FIELD, key_name.length(), key_name.ptr());
-            }
+    if (partition_func_type == PARTITION_FUNC_TYPE_RANGE_COLUMNS) {
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < partition_keys.count(); ++idx) {
+        const ObString& key_name = partition_keys.at(idx);
+        for (int64_t b_idx = 0; OB_SUCC(ret) && b_idx < idx; ++b_idx) {
+          if (ObCharset::case_insensitive_equal(key_name, partition_keys.at(b_idx))) {
+            ret = OB_ERR_SAME_NAME_PARTITION_FIELD;
+            LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION_FIELD, key_name.length(), key_name.ptr());
           }
         }
       }
