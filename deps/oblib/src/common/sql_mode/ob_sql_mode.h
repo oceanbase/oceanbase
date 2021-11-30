@@ -135,6 +135,11 @@ typedef uint64_t ObSQLMode;
     is_true = (SMO_NO_BACKSLASH_ESCAPES & mode); \
   }
 
+#define IS_ANSI_QUOTES(mode, is_true)   \
+  {                                     \
+    is_true = (SMO_ANSI_QUOTES & mode); \
+  }
+
 #ifdef __cplusplus
 }
 #endif
