@@ -560,12 +560,14 @@ int ObTableAccessParam::init(const uint64_t table_id, const int64_t schema_versi
     iter_param_.full_out_cols_ = nullptr != full_out_cols_ && full_out_cols_->count() > 0 ? full_out_cols_ : nullptr;
 
     if (NULL != table_param) {
-      iter_param_.cols_id_map_ = &table_param->get_column_map();
       iter_param_.full_cols_id_map_ = &table_param->get_full_column_map();
-      iter_param_.out_cols_project_ = &table_param->get_output_projector();
+      iter_param_.full_out_cols_ = &table_param->get_full_col_descs();
       iter_param_.full_projector_ = &table_param->get_full_projector();
       iter_param_.out_cols_param_ = &table_param->get_columns();
       iter_param_.full_out_cols_param_ = &table_param->get_full_columns();
+      iter_param_.cols_id_map_ = &table_param->get_column_map();
+      iter_param_.out_cols_project_ = &table_param->get_output_projector();
+      iter_param_.projector_ = &table_param->get_projector();
       out_cols_param_ = &table_param->get_columns();
       enable_fast_skip_ = false;
       if (is_mv_right_table) {
@@ -577,25 +579,46 @@ int ObTableAccessParam::init(const uint64_t table_id, const int64_t schema_versi
   return ret;
 }
 
-int ObTableAccessParam::init_basic_param(const uint64_t table_id, const int64_t schema_version,
-    const int64_t rowkey_column_num, const ObIArray<share::schema::ObColDesc>& column_ids,
-    const ObIArray<int32_t>* out_cols_index)
+int ObTableAccessParam::init_dml_access_param(const uint64_t table_id, const int64_t schema_version,
+    const int64_t rowkey_column_num, share::schema::ObTableParam &table_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(out_col_desc_param_.init(nullptr))) {
-    LOG_WARN("init out cols fail", K(ret));
-  } else if (OB_FAIL(out_col_desc_param_.assign(column_ids))) {
-    LOG_WARN("assign out cols fail", K(ret), K(column_ids));
-  } else {
-    enable_fast_skip_ = false;
-    iter_param_.reset();
-    iter_param_.table_id_ = table_id;
-    iter_param_.schema_version_ = schema_version;
-    iter_param_.rowkey_cnt_ = rowkey_column_num;
-    iter_param_.out_cols_project_ = out_cols_index;
-    iter_param_.out_cols_ = &out_col_desc_param_.get_col_descs();
-    iter_param_.full_out_cols_ = nullptr;
-  }
+  iter_param_.table_id_ = table_id;
+  iter_param_.schema_version_ = schema_version;
+  iter_param_.rowkey_cnt_ = rowkey_column_num;
+  iter_param_.full_cols_id_map_ = &table_param.get_full_column_map();
+  iter_param_.full_out_cols_ = &table_param.get_full_col_descs();
+  iter_param_.full_projector_ = &table_param.get_full_projector();
+  iter_param_.cols_id_map_ = &table_param.get_column_map();
+  iter_param_.out_cols_param_ = &table_param.get_columns();
+  iter_param_.out_cols_ = &table_param.get_col_descs();
+  iter_param_.out_cols_project_ = &table_param.get_output_projector();
+  iter_param_.projector_ = &table_param.get_projector();
+  out_cols_param_ = &table_param.get_columns();
+  full_out_cols_ = &table_param.get_full_col_descs();
+  OZ(out_col_desc_param_.init(&table_param.get_col_descs()));
+  return ret;
+}
+
+int ObTableAccessParam::init_dml_access_param(const uint64_t table_id, const int64_t schema_version,
+    const int64_t rowkey_column_num, const share::schema::ObTableSchemaParam &schema_param,
+    const ObIArray<int32_t> *out_cols_project)
+{
+  int ret = OB_SUCCESS;
+  iter_param_.table_id_ = table_id;
+  iter_param_.schema_version_ = schema_version;
+  iter_param_.rowkey_cnt_ = rowkey_column_num;
+  iter_param_.full_cols_id_map_ = &schema_param.get_full_col_map();
+  iter_param_.full_out_cols_ = &schema_param.get_full_col_descs();
+  iter_param_.full_projector_ = &schema_param.get_full_projector();
+  iter_param_.cols_id_map_ = &schema_param.get_col_map();
+  iter_param_.out_cols_param_ = &schema_param.get_columns();
+  iter_param_.out_cols_ = &schema_param.get_col_descs();
+  iter_param_.out_cols_project_ = out_cols_project;
+  iter_param_.projector_ = &schema_param.get_projector();
+  out_cols_param_ = &schema_param.get_columns();
+  full_out_cols_ = &schema_param.get_full_col_descs();
+  OZ(out_col_desc_param_.init(&schema_param.get_col_descs()));
   return ret;
 }
 
@@ -1027,9 +1050,9 @@ int ObTableAccessContext::init(ObTableScanParam& scan_param, const ObStoreCtx& c
   return ret;
 }
 
-int ObTableAccessContext::init(const common::ObQueryFlag& query_flag, const ObStoreCtx& ctx,
-    ObArenaAllocator& allocator, ObArenaAllocator& stmt_allocator, blocksstable::ObBlockCacheWorkingSet& block_cache_ws,
-    const ObVersionRange& trans_version_range)
+int ObTableAccessContext::init(const common::ObQueryFlag &query_flag, const ObStoreCtx &ctx, ObIAllocator &allocator,
+    ObIAllocator &stmt_allocator, blocksstable::ObBlockCacheWorkingSet &block_cache_ws,
+    const ObVersionRange &trans_version_range)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -1048,8 +1071,8 @@ int ObTableAccessContext::init(const common::ObQueryFlag& query_flag, const ObSt
   }
   return ret;
 }
-int ObTableAccessContext::init(const common::ObQueryFlag& query_flag, const ObStoreCtx& ctx,
-    common::ObArenaAllocator& allocator, const common::ObVersionRange& trans_version_range)
+int ObTableAccessContext::init(const common::ObQueryFlag &query_flag, const ObStoreCtx &ctx,
+    common::ObIAllocator &allocator, const common::ObVersionRange &trans_version_range)
 {
   int ret = OB_SUCCESS;
 

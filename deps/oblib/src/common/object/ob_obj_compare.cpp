@@ -2956,13 +2956,13 @@ int ObObjCmpFuncs::compare(const ObObj& obj1, const ObObj& obj2, ObCollationType
   obj_cmp_func cmp_func = NULL;
   cmp = CR_EQ;
   if (OB_UNLIKELY(false == can_cmp_without_cast(obj1.get_meta(), obj2.get_meta(), CO_CMP, cmp_func))) {
-    LOG_ERROR("obj1 and obj2 can't compare", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
     ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("obj1 and obj2 can't compare", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
   } else {
     ObCompareCtx cmp_ctx(ObMaxType, cs_type, true, INVALID_TZ_OFF, lib::is_oracle_mode() ? NULL_LAST : NULL_FIRST);
     if (OB_UNLIKELY(CR_OB_ERROR == (cmp = cmp_func(obj1, obj2, cmp_ctx)))) {
-      LOG_ERROR("failed to compare obj1 and obj2", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to compare obj1 and obj2", K(obj1), K(obj2), K(obj1.get_meta()), K(obj2.get_meta()));
     }
   }
   return ret;

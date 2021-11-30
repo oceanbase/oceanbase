@@ -41,7 +41,7 @@ public:
     }
     is_inited_ = false;
   }
-  int init(const bool is_multi, const bool is_ordered, common::ObArenaAllocator& allocator)
+  int init(const bool is_multi, const bool is_ordered, common::ObIAllocator &allocator)
   {
     int ret = common::OB_SUCCESS;
     void* buf = NULL;

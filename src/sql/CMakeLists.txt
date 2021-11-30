@@ -164,6 +164,10 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr.cpp
   engine/expr/ob_expr_frame_info.cpp
   engine/expr/ob_expr_user_can_access_obj.cpp
+  engine/expr/ob_expr_any_value.h
+  engine/expr/ob_expr_any_value.cpp
+  engine/expr/ob_expr_uuid_short.h
+  engine/expr/ob_expr_uuid_short.cpp
   engine/pdml/ob_batch_row_cache.cpp
   engine/pdml/ob_pdml_data_driver.cpp
   engine/pdml/ob_px_multi_part_modify.cpp
@@ -462,6 +466,10 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_calc_urowid.cpp
   engine/expr/ob_expr_cardinality.cpp
   engine/expr/ob_expr_coll_pred.cpp
+  engine/expr/ob_expr_validate_password_strength.cpp
+  engine/expr/ob_expr_validate_password_strength.h
+  engine/expr/ob_expr_benchmark.cpp
+  engine/expr/ob_expr_benchmark.h
   engine/join/ob_basic_nested_loop_join.cpp
   engine/join/ob_block_based_nested_loop_join.cpp
   engine/join/ob_hash_join.cpp
@@ -950,6 +958,8 @@ ob_set_subtarget(ob_sql resolver
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp
   resolver/dml/ob_multi_table_insert_resolver.cpp
+  resolver/dml/ob_any_value_checker.h
+  resolver/dml/ob_any_value_checker.cpp
   resolver/expr/ob_expr_relation_analyzer.cpp
   resolver/expr/ob_raw_expr.cpp
   resolver/expr/ob_expr.cpp
@@ -1128,4 +1138,9 @@ ob_server_add_pchs(sql
 
 ob_server_add_target(ob_sql)
 
+execute_process(
+  COMMAND bash gen_parser.sh
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/sql/parser
+  OUTPUT_FILE _gen_parser.output
+  ERROR_FILE _gen_parser.error)
 add_subdirectory(parser)

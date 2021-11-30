@@ -376,6 +376,9 @@ void ObColumnParam::reset()
   orig_default_value_.reset();
   cur_default_value_.reset();
   is_nullable_ = false;
+  is_gen_col_ = false;
+  is_virtual_gen_col_ = false;
+  is_hidden_ = false;
 }
 
 int ObColumnParam::deep_copy_obj(const ObObj& src, ObObj& dest)
@@ -408,8 +411,17 @@ OB_DEF_SERIALIZE(ObColumnParam)
 {
   int ret = OB_SUCCESS;
 
-  LST_DO_CODE(
-      OB_UNIS_ENCODE, column_id_, meta_type_, accuracy_, orig_default_value_, cur_default_value_, order_, is_nullable_);
+  LST_DO_CODE(OB_UNIS_ENCODE,
+      column_id_,
+      meta_type_,
+      accuracy_,
+      orig_default_value_,
+      cur_default_value_,
+      order_,
+      is_nullable_,
+      is_gen_col_,
+      is_virtual_gen_col_,
+      is_hidden_);
   return ret;
 }
 
@@ -431,6 +443,9 @@ OB_DEF_DESERIALIZE(ObColumnParam)
       is_nullable_ = false;
     }
   }
+  OB_UNIS_DECODE(is_gen_col_);
+  OB_UNIS_DECODE(is_virtual_gen_col_);
+  OB_UNIS_DECODE(is_hidden_);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(deep_copy_obj(orig_default_value, orig_default_value_))) {
@@ -454,7 +469,10 @@ OB_DEF_SERIALIZE_SIZE(ObColumnParam)
       orig_default_value_,
       cur_default_value_,
       order_,
-      is_nullable_);
+      is_nullable_,
+      is_gen_col_,
+      is_virtual_gen_col_,
+      is_hidden_);
   return len;
 }
 
@@ -467,6 +485,9 @@ int ObColumnParam::assign(const ObColumnParam& other)
     order_ = other.order_;
     accuracy_ = other.accuracy_;
     is_nullable_ = other.is_nullable_;
+    is_gen_col_ = other.is_gen_col_;
+    is_virtual_gen_col_ = other.is_virtual_gen_col_;
+    is_hidden_ = other.is_hidden_;
     if (OB_FAIL(deep_copy_obj(other.cur_default_value_, cur_default_value_))) {
       LOG_WARN("Fail to deep copy cur_default_value, ", K(ret), K(cur_default_value_));
     } else if (OB_FAIL(deep_copy_obj(other.orig_default_value_, orig_default_value_))) {
@@ -1659,64 +1680,7 @@ int ObTableParam::convert_join_mv_rparam(
   return ret;
 }
 
-int ObTableParam::convert_schema_param(
-    const share::schema::ObTableSchemaParam& schema_param, const common::ObIArray<uint64_t>& output_column_ids)
-{
-  int ret = OB_SUCCESS;
-  if (!schema_param.is_valid() || 0 == output_column_ids.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_param), K(output_column_ids));
-  } else if (schema_param.get_rowkey_column_num() != output_column_ids.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("output column ids should be row key columns", K(ret), K(schema_param), K(output_column_ids));
-  } else {
-    const int64_t COMMON_COLUMN_NUM = 16;
-    const ObColumnParam* src_col = NULL;
-    ObSEArray<ObColumnParam*, COMMON_COLUMN_NUM> tmp_cols;
-    ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_projector;
-    ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_output_projector;
-
-    table_id_ = schema_param.get_table_id();
-    schema_version_ = schema_param.get_schema_version();
-    main_table_rowkey_cnt_ = schema_param.get_rowkey_column_num();
-    for (int32_t i = 0; OB_SUCC(ret) && i < schema_param.get_rowkey_column_num(); ++i) {
-      ObColumnParam* dst_col = nullptr;
-      if (NULL == (src_col = schema_param.get_rowkey_column_by_idx(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("The column param is NULL", K(ret), K(i));
-      } else if (src_col->get_column_id() != output_column_ids.at(i)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("row key column id not match", K(ret), K(i), K(*src_col), K(output_column_ids));
-      } else if (OB_FAIL(alloc_column(allocator_, dst_col))) {
-        LOG_WARN("alloc column failed", K(ret), K(i));
-      } else if (OB_FAIL(dst_col->assign(*src_col))) {
-        LOG_WARN("assign column failed", K(ret), K(i));
-      } else if (OB_FAIL(tmp_cols.push_back(dst_col))) {
-        LOG_WARN("push back column failed", K(ret), K(i));
-      } else if (OB_FAIL(tmp_projector.push_back(i))) {
-        LOG_WARN("push back projector failed", K(ret), K(i));
-      } else if (OB_FAIL(tmp_output_projector.push_back(i))) {
-        LOG_WARN("push back output projector failed", K(ret), K(i));
-      }
-    }
-
-    // assign
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(cols_.assign(tmp_cols))) {
-        LOG_WARN("assign failed", K(ret));
-      } else if (OB_FAIL(projector_.assign(tmp_projector))) {
-        LOG_WARN("assign failed", K(ret));
-      } else if (OB_FAIL(output_projector_.assign(tmp_output_projector))) {
-        LOG_WARN("assign failed", K(ret));
-      } else if (OB_FAIL(create_column_map(cols_, col_map_))) {
-        LOG_WARN("failed to create column map", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTableParam::alloc_column(ObIAllocator& allocator, ObColumnParam*& col_ptr)
+int ObTableParam::alloc_column(ObIAllocator &allocator, ObColumnParam *&col_ptr)
 {
   int ret = OB_SUCCESS;
   void* tmp_ptr = nullptr;
@@ -1751,6 +1715,9 @@ int ObTableParam::convert_column_schema_to_param(const ObColumnSchemaV2& column_
   column_param.set_column_order(column_schema.get_order_in_rowkey());
   column_param.set_accuracy(column_schema.get_accuracy());
   column_param.set_nullable(column_schema.is_nullable());
+  column_param.set_gen_col_flag(column_schema.is_generated_column(), column_schema.is_virtual_generated_column());
+  column_param.set_is_hidden(column_schema.is_hidden());
+  LOG_DEBUG("convert_column_schema_to_param", K(column_schema), K(column_param), K(lbt()));
   if (column_schema.is_generated_column() || OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_schema.get_column_id()) {
     ObObj nop_obj;
     nop_obj.set_nop_value();

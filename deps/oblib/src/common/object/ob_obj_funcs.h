@@ -952,7 +952,7 @@ inline int obj_print_plain_str<ObHexStringType>(
       ret = obj_print_sql<ObHexStringType>(obj, buffer, length, pos, params);                            \
     } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {                                     \
     } else if (src_type == dst_type || src_type == CHARSET_INVALID) {                                    \
-      ObHexEscapeSqlStr sql_str(obj.get_string());                                                       \
+      ObHexEscapeSqlStr sql_str(obj.get_string(), params.skip_escape_);                                  \
       pos += sql_str.to_string(buffer + pos, length - pos);                                              \
       ret = databuff_printf(buffer, length, pos, "'");                                                   \
     } else {                                                                                             \
@@ -965,7 +965,7 @@ inline int obj_print_plain_str<ObHexStringType>(
               length - pos,                                                                              \
               result_len))) {                                                                            \
       } else {                                                                                           \
-        ObHexEscapeSqlStr sql_str(ObString(result_len, buffer + pos));                                   \
+        ObHexEscapeSqlStr sql_str(ObString(result_len, buffer + pos), params.skip_escape_);              \
         int64_t temp_pos = pos + result_len;                                                             \
         int64_t data_len = sql_str.to_string(buffer + temp_pos, length - temp_pos);                      \
         if (OB_UNLIKELY(temp_pos + data_len >= length)) {                                                \
@@ -2125,7 +2125,7 @@ inline uint64_t obj_crc64_v3<ObIntervalDSType>(const ObObj& obj, const uint64_t 
     int ret = OB_SUCCESS;                                                                               \
     if (OB_FAIL(databuff_printf(buffer, length, pos, "n'"))) {                                          \
     } else if (src_type == dst_type) {                                                                  \
-      ObHexEscapeSqlStr sql_str(obj.get_string());                                                      \
+      ObHexEscapeSqlStr sql_str(obj.get_string(), params.skip_escape_);                                 \
       pos += sql_str.to_string(buffer + pos, length - pos);                                             \
       ret = databuff_printf(buffer, length, pos, "'");                                                  \
     } else {                                                                                            \
@@ -2138,7 +2138,7 @@ inline uint64_t obj_crc64_v3<ObIntervalDSType>(const ObObj& obj, const uint64_t 
               length - pos,                                                                             \
               result_len))) {                                                                           \
       } else {                                                                                          \
-        ObHexEscapeSqlStr sql_str(ObString(result_len, buffer + pos));                                  \
+        ObHexEscapeSqlStr sql_str(ObString(result_len, buffer + pos), params.skip_escape_);             \
         int64_t temp_pos = pos + result_len;                                                            \
         int64_t data_len = sql_str.to_string(buffer + temp_pos, length - temp_pos);                     \
         if (OB_UNLIKELY(temp_pos + data_len >= length)) {                                               \

@@ -773,7 +773,11 @@ public:
   {
     return stmt_type_;
   }
-  const char* get_sql_id() const
+  inline bool is_delete_stmt() const
+  {
+    return sql::stmt::T_DELETE == stmt_type_;
+  }
+  const char *get_sql_id() const
   {
     return sql_id_.ptr();
   }

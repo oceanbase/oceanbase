@@ -186,6 +186,10 @@
 #include "ob_expr_convert_tz.h"
 #include "ob_expr_degrees.h"
 #include "ob_expr_weight_string.h"
+#include "ob_expr_any_value.h"
+#include "ob_expr_validate_password_strength.h"
+#include "ob_expr_benchmark.h"
+#include "ob_expr_uuid_short.h"
 
 namespace oceanbase {
 using namespace common;
@@ -671,7 +675,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprPeriodAdd::calc_periodadd,          /* 409 */
     NULL,                                     /* 410 */
     NULL,                                     /* 411 */
-    NULL,                                     /* 412 */
+    ObExprAnyValue::eval_any_value,           /* 412 */
     NULL,                                     /* 413 */
     ObExprDegrees::calc_degrees_expr,         /* 414 */
     NULL,                                     /* 415 */
@@ -702,13 +706,13 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 440 */
     ObExprTimestamp::calc_timestamp1,         /* 441 */
     ObExprTimestamp::calc_timestamp2,         /* 442 */
-    NULL,                                     /* 443 */
+    ObExprValidatePasswordStrength::eval_password_strength, /* 443 */
     NULL,                                     /* 444 */
     NULL,                                     /* 445 */
     NULL,                                     /* 446 */
     NULL,                                     /* 447 */
-    NULL,                                     /* 448 */
-    NULL,                                     /* 449 */
+    ObExprUuidShort::eval_uuid_short,         /* 448 */
+    ObExprBenchmark::eval_benchmark,          /* 449 */
     ObExprExportSet::eval_export_set,         /* 450 */
     ObExprInet6Aton::calc_inet6_aton,         /* 451 */
     ObExprIsIpv4::calc_is_ipv4,               /* 452 */

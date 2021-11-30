@@ -18,7 +18,6 @@
 
 namespace oceanbase {
 namespace storage {
-
 class ObSingleMerge : public ObMultipleMerge {
 public:
   ObSingleMerge();
@@ -50,7 +49,6 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSingleMerge);
 };
-
 } /* namespace storage */
 } /* namespace oceanbase */
 

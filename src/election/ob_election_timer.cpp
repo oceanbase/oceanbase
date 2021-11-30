@@ -587,7 +587,7 @@ int ObElectionTimer::register_change_leader_once(const int64_t run_time_expect, 
     }
   }
   if (OB_SUCC(ret)) {
-    // cencel registered gt4 task when register change leader task, avoid state resetted in gt4
+    // cancel registered gt4 task when register change leader task, avoid state resetted in gt4
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = unregister_gt_(gt4_))) {
       ELECT_ASYNC_LIMIT_LOG(

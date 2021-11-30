@@ -1049,7 +1049,9 @@ struct ObObjPrintParams {
     struct {
       uint32_t need_cast_expr_ : 1;
       uint32_t is_show_create_view_ : 1;
-      uint32_t reserved_ : 30;
+      uint32_t use_memcpy_ : 1;
+      uint32_t skip_escape_ : 1;
+      uint32_t reserved_ : 28;
     };
   };
 };
@@ -4125,7 +4127,9 @@ public:
 
 class ObHexEscapeSqlStr {
 public:
-  ObHexEscapeSqlStr(const common::ObString& str) : str_(str)
+  ObHexEscapeSqlStr(const common::ObString &str) : str_(str), skip_escape_(false)
+  {}
+  ObHexEscapeSqlStr(const common::ObString &str, const bool skip_escape) : str_(str), skip_escape_(skip_escape)
   {}
   ObString str() const
   {
@@ -4136,6 +4140,7 @@ public:
 
 private:
   ObString str_;
+  bool skip_escape_;
 };
 
 }  // namespace common

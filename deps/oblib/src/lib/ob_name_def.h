@@ -335,6 +335,8 @@
 #define N_INDEX_FILTER_EXPRS "index_filter_exprs"
 #define N_OPERATOR_MONITOR_INFO "op_info"
 #define N_PLAN_MONITOR_INFO "plan_info"
+#define N_ANY_VAL "any_value"
+#define N_VALIDATE_PASSWORD_STRENGTH "validate_password_strength"
 // common comparison operator
 #define N_LESS_THAN "<"
 #define N_GREATER_THAN ">"
@@ -522,6 +524,7 @@
 #define N_TO_TIMESTAMP_TZ "to_timestamp_tz"
 #define N_TO_DAYS "to_days"
 #define N_DAY_OF_MONTH "dayofmonth"
+#define N_DAY "day"
 #define N_DAY_OF_WEEK "dayofweek"
 #define N_DAY_OF_YEAR "dayofyear"
 #define N_HOUR "hour"
@@ -775,6 +778,7 @@
 #define N_YEAR "year"
 #define N_TIME "time"
 #define N_UUID "uuid"
+#define N_UUID_SHORT "uuid_short"
 #define N_SYS_GUID "sys_guid"
 #define N_SET_TO_STR "set_to_str"
 #define N_ENUM_TO_STR "enum_to_str"
@@ -880,4 +884,6 @@
 #define N_MULTI_VALUES_DESC "multi_values_desc"
 #define N_MULTI_VALUE_VECTORS "multi_value_vectors"
 #define N_MULTI_INSERT_COL_CONV_FUNCS "multi_insert_col_conv_funcs"
+#define N_BENCHMARK "benchmark"
+
 #endif  // OCEANBASE_LIB_OB_NAME_DEF_H_
