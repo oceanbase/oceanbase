@@ -403,7 +403,8 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpI
       iter_end_(false),
       saved_session_(NULL),
       fk_self_ref_row_res_infos_()
-{}
+{
+}
 
 int ObTableModifyOp::inner_open()
 {

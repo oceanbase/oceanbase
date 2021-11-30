@@ -42,7 +42,7 @@ extern "C" {
 #define SMO_MYSQL40 (1ULL << 17)                /*not support*/
 #define SMO_ANSI (1ULL << 18)
 #define SMO_NO_AUTO_VALUE_ON_ZERO (1ULL << 19)      /* support */
-#define SMO_NO_BACKSLASH_ESCAPES (1ULL << 20)       /* not support now */
+#define SMO_NO_BACKSLASH_ESCAPES (1ULL << 20)       /* support */
 #define SMO_STRICT_TRANS_TABLES (1ULL << 21)        /* support */
 #define SMO_STRICT_ALL_TABLES (1ULL << 22)          /* support */
 #define SMO_NO_ZERO_IN_DATE (1ULL << 23)            /* deprecated as of MySQL 5.6.17 */
