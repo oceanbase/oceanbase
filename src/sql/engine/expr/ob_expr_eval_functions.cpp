@@ -187,6 +187,7 @@
 #include "ob_expr_degrees.h"
 #include "ob_expr_weight_string.h"
 #include "ob_expr_any_value.h"
+#include "ob_expr_validate_password_strength.h"
 #include "ob_expr_benchmark.h"
 
 namespace oceanbase {
@@ -704,7 +705,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 440 */
     ObExprTimestamp::calc_timestamp1,         /* 441 */
     ObExprTimestamp::calc_timestamp2,         /* 442 */
-    NULL,                                     /* 443 */
+    ObExprValidatePasswordStrength::eval_password_strength, /* 443 */
     NULL,                                     /* 444 */
     NULL,                                     /* 445 */
     NULL,                                     /* 446 */

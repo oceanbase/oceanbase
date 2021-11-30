@@ -835,7 +835,7 @@ int ObLogCascadingMgr::process_fetch_reg_server_req(const common::ObAddr& server
         assigned_parent_cluster_id = self_cluster_id;
       }
     } else {
-      // 1. self is follwer, if own children list is not full, it will become its parent directly.
+      // 1. self is follower, if own children list is not full, it will become its parent directly.
       if (is_request_leader) {
         // If the requester thinks I am the leader, I will not respond
         ret = OB_NOT_MASTER;

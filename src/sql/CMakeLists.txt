@@ -464,6 +464,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_calc_urowid.cpp
   engine/expr/ob_expr_cardinality.cpp
   engine/expr/ob_expr_coll_pred.cpp
+  engine/expr/ob_expr_validate_password_strength.cpp
+  engine/expr/ob_expr_validate_password_strength.h
   engine/expr/ob_expr_benchmark.cpp
   engine/expr/ob_expr_benchmark.h
   engine/join/ob_basic_nested_loop_join.cpp
@@ -1134,4 +1136,9 @@ ob_server_add_pchs(sql
 
 ob_server_add_target(ob_sql)
 
+execute_process(
+  COMMAND bash gen_parser.sh
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/sql/parser
+  OUTPUT_FILE _gen_parser.output
+  ERROR_FILE _gen_parser.error)
 add_subdirectory(parser)

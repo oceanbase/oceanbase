@@ -59,6 +59,13 @@ src/election/election_admin
 src/sql/parser/*.output
 src/sql/parser/expr_parser.output
 src/sql/parser/sql_parser.output
+src/sql/parser/sql_parser_mysql_mode_lex.c
+src/sql/parser/sql_parser_mysql_mode_lex.h
+src/sql/parser/sql_parser_mysql_mode_tab.c
+src/sql/parser/sql_parser_mysql_mode_tab.h
+src/sql/parser/type_name.c
+src/sql/parser/_gen_parser.output
+src/sql/parser/_gen_parser.error
 tags
 unittest/clog/deploy/log_tool
 unittest/clog/deploy/ob_server_main

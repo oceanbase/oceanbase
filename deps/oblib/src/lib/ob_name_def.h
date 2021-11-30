@@ -336,6 +336,7 @@
 #define N_OPERATOR_MONITOR_INFO "op_info"
 #define N_PLAN_MONITOR_INFO "plan_info"
 #define N_ANY_VAL "any_value"
+#define N_VALIDATE_PASSWORD_STRENGTH "validate_password_strength"
 // common comparison operator
 #define N_LESS_THAN "<"
 #define N_GREATER_THAN ">"
