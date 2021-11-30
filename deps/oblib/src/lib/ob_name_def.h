@@ -778,6 +778,7 @@
 #define N_YEAR "year"
 #define N_TIME "time"
 #define N_UUID "uuid"
+#define N_UUID_SHORT "uuid_short"
 #define N_SYS_GUID "sys_guid"
 #define N_SET_TO_STR "set_to_str"
 #define N_ENUM_TO_STR "enum_to_str"

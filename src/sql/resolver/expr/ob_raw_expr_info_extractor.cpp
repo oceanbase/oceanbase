@@ -155,7 +155,8 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr& expr)
     CONST_ACTION(param_expr);
   }
   if (is_const_expr &&
-      (T_FUN_SYS_RAND == expr.get_expr_type() || T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type() ||
+      (T_FUN_SYS_RAND == expr.get_expr_type() || T_FUN_SYS_UUID == expr.get_expr_type() ||
+          T_FUN_SYS_UUID_SHORT == expr.get_expr_type() || T_FUN_SYS_SEQ_NEXTVAL == expr.get_expr_type() ||
           T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type() || T_FUN_SYS_ROWNUM == expr.get_expr_type() ||
           T_FUN_SYS_ROWKEY_TO_ROWID == expr.get_expr_type() || T_OP_CONNECT_BY_ROOT == expr.get_expr_type() ||
           T_FUN_SYS_CONNECT_BY_PATH == expr.get_expr_type() || T_FUN_SYS_GUID == expr.get_expr_type() ||
@@ -502,7 +503,8 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
       if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
         LOG_WARN("failed to add flag IS_RAND_FUNC", K(ret));
       }
-    } else if (T_FUN_SYS_GUID == expr.get_expr_type() || T_FUN_SYS_UUID == expr.get_expr_type()) {
+    } else if (T_FUN_SYS_GUID == expr.get_expr_type() || T_FUN_SYS_UUID == expr.get_expr_type() ||
+               T_FUN_SYS_UUID_SHORT == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
         LOG_WARN("failed to add flag IS_RAND_FUNC", K(ret));
       }

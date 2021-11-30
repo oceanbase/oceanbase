@@ -273,6 +273,7 @@
 #include "sql/engine/expr/ob_expr_any_value.h"
 #include "sql/engine/expr/ob_expr_validate_password_strength.h"
 #include "sql/engine/expr/ob_expr_benchmark.h"
+#include "sql/engine/expr/ob_expr_uuid_short.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -614,6 +615,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprDllUdf);
   REG_OP(ObExprExp);
   REG_OP(ObExprAnyValue);
+  REG_OP(ObExprUuidShort);
   /* subquery comparison experator */
   REG_OP(ObExprSubQueryRef);
   REG_OP(ObExprSubQueryEqual);

@@ -166,6 +166,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_user_can_access_obj.cpp
   engine/expr/ob_expr_any_value.h
   engine/expr/ob_expr_any_value.cpp
+  engine/expr/ob_expr_uuid_short.h
+  engine/expr/ob_expr_uuid_short.cpp
   engine/pdml/ob_batch_row_cache.cpp
   engine/pdml/ob_pdml_data_driver.cpp
   engine/pdml/ob_px_multi_part_modify.cpp
