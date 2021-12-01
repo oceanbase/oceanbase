@@ -470,6 +470,8 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_validate_password_strength.h
   engine/expr/ob_expr_benchmark.cpp
   engine/expr/ob_expr_benchmark.h
+  engine/expr/ob_expr_to_base64.cpp
+  engine/expr/ob_expr_from_base64.cpp
   engine/join/ob_basic_nested_loop_join.cpp
   engine/join/ob_block_based_nested_loop_join.cpp
   engine/join/ob_hash_join.cpp

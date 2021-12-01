@@ -190,6 +190,8 @@
 #include "ob_expr_validate_password_strength.h"
 #include "ob_expr_benchmark.h"
 #include "ob_expr_uuid_short.h"
+#include "ob_expr_to_base64.h"
+#include "ob_expr_from_base64.h"
 
 namespace oceanbase {
 using namespace common;
@@ -723,7 +725,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
     ObExprWeightString::eval_weight_string,   /* 458 */
     ObExprConvertTZ::eval_convert_tz,         /* 459 */
-    ObExprCrc32::calc_crc32_expr              /* 460 */
+    ObExprCrc32::calc_crc32_expr,             /* 460 */
+    ObExprToBase64::eval_to_base64,           /* 461 */
+    ObExprFromBase64::eval_from_base64        /* 462 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));
