@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 from my_error import MyError
 import mysql.connector
 from mysql.connector import errorcode

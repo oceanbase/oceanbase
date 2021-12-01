@@ -597,6 +597,10 @@ def check_duplicate_index_name_in_mysql(query_cur, cur):
   if (len(results) != 0) :
     raise MyError("Duplicate index name exist in mysql tenant")
 
+# 31 关闭rebalance
+def disable_rebalance(cur):
+  set_parameter(cur, 'enable_rebalance', 'False')
+
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
   try:
@@ -631,6 +635,7 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params):
       check_sys_table_leader(query_cur)
       check_and_modify_px_query(query_cur, cur)
       check_duplicate_index_name_in_mysql(query_cur, cur)
+      disable_rebalance(cur)
     except Exception, e:
       logging.exception('run error')
       raise e

@@ -789,24 +789,18 @@ int ObServerBalancer::check_can_execute_rebalance(const common::ObZone& zone, bo
       for (int64_t i = 0; can_execute_rebalance && OB_SUCC(ret) && i < server_list.count(); ++i) {
         const common::ObAddr& server = server_list.at(i);
         share::ObServerStatus server_status;
-        ObArray<ObUnitManager::ObUnitLoad>* unit_loads = nullptr;
         sum_load.reset();
-        if (OB_FAIL(unit_mgr_->get_loads_by_server(server, unit_loads))) {
+        if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
+          LOG_WARN("fail to get server status", K(ret));
+        } else if (OB_FAIL(unit_mgr_->get_sum_load_by_server(server_status, sum_load))) {
           if (OB_ENTRY_NOT_EXIST != ret) {
             LOG_WARN("fail to get loads by server", K(ret));
           } else {
             ret = OB_SUCCESS;  // unit_loads not exist, no load no this server
           }
-        } else if (OB_UNLIKELY(nullptr == unit_loads)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unit loads ptr is null", K(ret));
-        } else if (OB_FAIL(unit_mgr_->calc_sum_load(unit_loads, sum_load))) {
-          LOG_WARN("fail to calc sum load", K(ret));
         }
         if (OB_FAIL(ret)) {
           // failed
-        } else if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
-          LOG_WARN("fail to get server status", K(ret));
         } else if (server_status.is_temporary_offline() || server_status.is_stopped() ||
                    ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS == server_status.admin_status_) {
           can_execute_rebalance = false;

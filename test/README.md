@@ -60,9 +60,9 @@ obd test mysqltest <deploy name> --test-dir ./mysql_test/test_suite/alter/t --re
 #### 参数与选项解释
 参数 `deploy name` 为部署配置名称，可以理解为配置文件名称。
 
-选项 `--test-dir` 为 test文件 所在目录，默认为 ./t
+选项 `--test-dir` 为 test文件 所在目录，默认为 ./mysql_test/t
 
-选项 `--result-dir` 为 result文件 所在目录，默认为 ./r
+选项 `--result-dir` 为 result文件 所在目录，默认为 ./mysql_test/r
 
 选项 `--test-set` 为要执行case的集合，多个case之间使用英文逗号`,`间隔
 

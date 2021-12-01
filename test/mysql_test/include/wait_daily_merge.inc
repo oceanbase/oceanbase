@@ -41,5 +41,5 @@ sleep 2;
 
 disconnect obsys_ydm;
 connection default;
---enable_query_log
---enable_result_log
+#--enable_query_log
+#--enable_result_log

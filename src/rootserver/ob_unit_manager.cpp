@@ -4027,19 +4027,34 @@ int ObUnitManager::get_unit_ids(ObIArray<uint64_t>& unit_ids) const
 int ObUnitManager::calc_sum_load(const ObArray<ObUnitLoad>* unit_loads, ObUnitConfig& sum_load)
 {
   int ret = OB_SUCCESS;
+  bool has_sys_unit = false;
   sum_load.reset();
   if (NULL == unit_loads) {
     // all be zero
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_loads->count(); ++i) {
-      if (!unit_loads->at(i).is_valid()) {
+      const ObUnitLoad& unit_load = unit_loads->at(i);
+      if (!unit_load.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid unit_load", "unit_load", unit_loads->at(i), K(ret));
+        LOG_WARN("invalid unit_load", "unit_load", unit_load, K(ret));
       } else {
-        sum_load += *unit_loads->at(i).unit_config_;
+        sum_load += *unit_load.unit_config_;
+
+        // suppose that one observer has at most one sys unit
+        if (!has_sys_unit && OB_SYS_UNIT_CONFIG_ID == unit_load.unit_config_->unit_config_id_) {
+          has_sys_unit = true;
+        }
       }
     }
   }
+
+  if (GCONF._report_invisible_sys_unit_resource && !has_sys_unit) {
+    sum_load.max_cpu_ += GCONF.server_cpu_quota_max;
+    sum_load.min_cpu_ += GCONF.server_cpu_quota_min;
+    sum_load.max_memory_ += GCONF.get_max_sys_tenant_memory();
+    sum_load.min_memory_ += GCONF.get_min_sys_tenant_memory();
+  }
+
   return ret;
 }
 
@@ -4699,15 +4714,10 @@ int ObUnitManager::choose_server_for_unit(
       } else if (!server_status.can_migrate_in()) {
         LOG_WARN("server can not migrate in", "status", server_status);
         continue;
-      } else if (OB_FAIL(get_loads_by_server(server_status.server_, unit_loads))) {
+      } else if (OB_FAIL(get_sum_load_by_server(server_status, sum_load))) {
         // the server is empty yet
         // all assigned resources are zero
         ret = OB_SUCCESS;
-      } else if (NULL == unit_loads) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unit_loads is null", KP(unit_loads), K(ret));
-      } else if (OB_FAIL(calc_sum_load(unit_loads, sum_load))) {
-        LOG_WARN("calc_sum_load failed", KP(unit_loads), K(ret));
       }
       if (OB_SUCC(ret)) {
         // Unit resource information is persisted on the observer side,
@@ -4718,7 +4728,7 @@ int ObUnitManager::choose_server_for_unit(
         // the heartbeat. When performing allocation, rs reports the maximum value of resource information from its own
         // resource view and observer side as a reference for unit resource allocation
         const ObServerResourceInfo& report_resource = server_status.resource_info_;
-        LOG_INFO("server load", K(i), "server", server_status, "load", sum_load, "unit_load", unit_loads);
+        LOG_INFO("server load", K(i), "server", server_status, "load", sum_load);
         server_resource.addr_ = server_status.server_;
         server_resource.assigned_[RES_CPU] = sum_load.min_cpu_ > report_resource.report_cpu_assigned_
                                                  ? sum_load.min_cpu_
@@ -4779,17 +4789,12 @@ int ObUnitManager::have_enough_resource(const ObServerStatus& server_status, con
   } else if (!server_status.is_valid() || hard_limit <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(server_status), K(hard_limit), K(ret));
-  } else if (OB_FAIL(get_loads_by_server(server_status.server_, unit_loads))) {
+  } else if (OB_FAIL(get_sum_load_by_server(server_status, sum_load))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("get_loads_by_server failed", "server", server_status.server_, K(ret));
+      LOG_WARN("get_sum_load_by_server failed", "server", server_status.server_, K(ret));
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (NULL == unit_loads) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_loads is null", KP(unit_loads), K(ret));
-  } else if (OB_FAIL(calc_sum_load(unit_loads, sum_load))) {
-    LOG_WARN("calc_sum_load failed", KP(unit_loads), K(ret));
   }
   if (OB_SUCC(ret)) {
     const ObServerResourceInfo& report_resource = server_status.resource_info_;
@@ -4933,7 +4938,7 @@ int ObUnitManager::build_initial_servers_resources(const ObIArray<ObServerStatus
   for (int64_t i = 0; OB_SUCC(ret) && i < statuses.count(); ++i) {
     sum_load.reset();
     const ObServerStatus& server_status = statuses.at(i);
-    if (OB_FAIL(get_loads_by_server(server_status.server_, unit_loads))) {
+    if (OB_FAIL(get_sum_load_by_server(server_status, sum_load))) {
       // the server is empty yet
       // all assigned resources are zero
       if (ret == OB_ENTRY_NOT_EXIST) {
@@ -4941,11 +4946,6 @@ int ObUnitManager::build_initial_servers_resources(const ObIArray<ObServerStatus
       } else {
         LOG_WARN("fail to get loads by server", K(ret));
       }
-    } else if (NULL == unit_loads) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unit_loads is null", KP(unit_loads), K(ret));
-    } else if (OB_FAIL(calc_sum_load(unit_loads, sum_load))) {
-      LOG_WARN("calc_sum_load failed", KP(unit_loads), K(ret));
     }
     if (OB_SUCC(ret)) {
       ObUnitPlacementStrategy::ObServerResource server_resource;
@@ -9930,6 +9930,25 @@ int ObUnitManager::get_loads_by_server(const ObAddr& addr, ObArray<ObUnitManager
     LOG_WARN("invalid argument", K(addr), K(ret));
   } else {
     GET_ITEM_FROM_MAP(server_loads_, addr, loads);
+  }
+  return ret;
+}
+
+int ObUnitManager::get_sum_load_by_server(const ObServerStatus& status, share::ObUnitConfig& sum_load) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObUnitManager::ObUnitLoad>* unit_loads = nullptr;
+  if (OB_FAIL(get_loads_by_server(status.server_, unit_loads))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("get_loads_by_server failed", "server", status.server_, K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      LOG_DEBUG("server is empty, no unit on it", "server", status.server_);
+    }
+  } 
+
+  if (OB_FAIL(ObUnitManager::calc_sum_load(unit_loads, sum_load))) {
+    LOG_WARN("Failed to calc the sum of unit loads", K(status.server_), K(ret));
   }
   return ret;
 }

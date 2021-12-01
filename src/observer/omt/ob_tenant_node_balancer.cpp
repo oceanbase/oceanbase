@@ -203,11 +203,24 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource& server_r
   if (OB_FAIL(storage::ObTenantConfigMgr::get_instance().get_tenant_units(tenant_units))) {
     LOG_WARN("failed to get tenant units");
   } else {
+    bool has_sys_unit = false;
     for (int64_t i = 0; i < tenant_units.count(); i++) {
-      server_resource.max_cpu_ += tenant_units.at(i).config_.max_cpu_;
-      server_resource.min_cpu_ += tenant_units.at(i).config_.min_cpu_;
-      server_resource.max_memory_ += tenant_units.at(i).config_.max_memory_;
-      server_resource.min_memory_ += tenant_units.at(i).config_.min_memory_;
+      const ObUnitInfoGetter::ObTenantConfig& tenant_unit = tenant_units.at(i);
+      server_resource.max_cpu_ += tenant_unit.config_.max_cpu_;
+      server_resource.min_cpu_ += tenant_unit.config_.min_cpu_;
+      server_resource.max_memory_ += tenant_unit.config_.max_memory_;
+      server_resource.min_memory_ += tenant_unit.config_.min_memory_;
+
+      if (!has_sys_unit && OB_SYS_UNIT_CONFIG_ID == tenant_unit.config_.unit_config_id_) {
+        has_sys_unit = true;
+      }
+    }
+
+    if (GCONF._report_invisible_sys_unit_resource && !has_sys_unit) {
+      server_resource.max_cpu_ += GCONF.server_cpu_quota_max;
+      server_resource.min_cpu_ += GCONF.server_cpu_quota_min;
+      server_resource.max_memory_ += GCONF.get_max_sys_tenant_memory();
+      server_resource.min_memory_ += GCONF.get_min_sys_tenant_memory();
     }
   }
   return ret;

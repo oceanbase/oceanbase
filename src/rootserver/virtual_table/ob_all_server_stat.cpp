@@ -217,9 +217,9 @@ int ObAllServerStat::calc_server_usage(ServerStat& server_stat)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ObUnitManager::calc_sum_load(
-                 &server_stat.server_load_.unit_loads_, server_stat.server_load_.sum_load_))) {
-    LOG_WARN("calc_sum_load failed", "server_load", server_stat.server_load_, K(ret));
+//  } else if (OB_FAIL(ObUnitManager::calc_sum_load(
+//                &server_stat.server_load_.unit_loads_, server_stat.server_load_.sum_load_))) {
+//    LOG_WARN("calc_sum_load failed", "server_load", server_stat.server_load_, K(ret));
   } else if (OB_FAIL(unit_mgr_->get_hard_limit(hard_limit))) {
     LOG_WARN("get_hard_limit failed", K(ret));
   } else {

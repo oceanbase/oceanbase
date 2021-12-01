@@ -313,9 +313,9 @@ public:
   // get all server loads
   int get_server_loads(
       const common::ObZone& zone, common::ObArray<ObServerLoad>& server_loads, double* weights, int64_t weights_count);
-  static int calc_sum_load(const common::ObArray<ObUnitLoad>* unit_loads, share::ObUnitConfig& sum_load);
   // get hard limit
   int get_hard_limit(double& hard_limit) const;
+  static int calc_sum_load(const common::ObArray<ObUnitLoad>* unit_loads, share::ObUnitConfig& sum_load); // TODO make private
   int try_cancel_migrate_unit(const share::ObUnit& unit);
   int distrubte_for_unit_intersect(const uint64_t tenant_id, const common::ObIArray<share::ObResourcePoolName>& pools);
 
@@ -714,6 +714,7 @@ protected:
   int get_units_by_pool(const uint64_t pood_id, common::ObArray<share::ObUnit*>*& units) const;
   int get_unit_by_id(const uint64_t unit_id, share::ObUnit*& unit) const;
   int get_loads_by_server(const common::ObAddr& server, common::ObArray<ObUnitLoad>*& loads) const;
+  int get_sum_load_by_server(const share::ObServerStatus& status, share::ObUnitConfig& sum_load) const;
   int get_pools_by_tenant(const uint64_t tenant_id, common::ObArray<share::ObResourcePool*>*& pools) const;
   int get_pools_by_config(const uint64_t tenant_id, common::ObArray<share::ObResourcePool*>*& pools) const;
   int get_migrate_units_by_server(const common::ObAddr& server, common::ObArray<uint64_t>*& migrate_units) const;
