@@ -1910,7 +1910,7 @@ int ObOpRawExpr::get_subquery_comparison_name(
 void ObOpRawExpr::set_expr_type(ObItemType type)
 {
   type_ = type;
-  if ((T_OP_IN == type_ || T_OP_NOT_IN == type_) && GCONF.enable_static_engine_for_query()) {
+  if ((T_OP_IN == type_ || T_OP_NOT_IN == type_)) {
     set_deduce_type_adding_implicit_cast(false);
   }
 }
