@@ -189,6 +189,9 @@
 #include "ob_expr_any_value.h"
 #include "ob_expr_validate_password_strength.h"
 #include "ob_expr_benchmark.h"
+#include "ob_expr_uuid_short.h"
+#include "ob_expr_to_base64.h"
+#include "ob_expr_from_base64.h"
 
 namespace oceanbase {
 using namespace common;
@@ -710,7 +713,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 445 */
     NULL,                                     /* 446 */
     NULL,                                     /* 447 */
-    NULL,                                     /* 448 */
+    ObExprUuidShort::eval_uuid_short,         /* 448 */
     ObExprBenchmark::eval_benchmark,          /* 449 */
     ObExprExportSet::eval_export_set,         /* 450 */
     ObExprInet6Aton::calc_inet6_aton,         /* 451 */
@@ -723,9 +726,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprWeightString::eval_weight_string,   /* 458 */
     ObExprConvertTZ::eval_convert_tz,         /* 459 */
     ObExprCrc32::calc_crc32_expr,             /* 460 */
-    ObExprUuidToBin::eval_uuid_to_bin,        /* 461 */
-    ObExprBinToUuid::eval_bin_to_uuid,        /* 462 */
-    ObExprIsUuid::eval_is_uuid                /* 463 */
+    ObExprToBase64::eval_to_base64,           /* 461 */
+    ObExprFromBase64::eval_from_base64,       /* 462 */
+    ObExprUuidToBin::eval_uuid_to_bin,        /* 463 */
+    ObExprBinToUuid::eval_bin_to_uuid,        /* 464 */
+    ObExprIsUuid::eval_is_uuid                /* 465 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

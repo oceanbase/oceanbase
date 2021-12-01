@@ -2275,11 +2275,25 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode* node, ObRawExpr*& 
       escape_node.str_value_ = "\\";
       escape_node.text_len_ = 0;
       escape_node.raw_text_ = NULL;
+
+      /*
+      bugfix:https://work.aone.alibaba-inc.com/issue/36691548
+      in NO_BACKSLASH_ESCAPES mode, 'like BINARY xxx' stmt should also set the escapes as null, instead of '\'
+      */
+      bool no_escapes = false;
+      if (node->children_[1]->type_ == T_FUN_SYS && node->children_[1]->num_child_ == 2 &&
+          node->children_[1]->children_[0]->str_len_ == 4 &&
+          (0 == strcmp(node->children_[1]->children_[0]->str_value_, "cast")) &&
+          node->children_[1]->children_[1]->num_child_ == 2  // T_EXPR_LIST node
+          && node->children_[1]->children_[1]->children_[1]->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_VARCHAR &&
+          node->children_[1]->children_[1]->children_[1]->int16_values_[OB_NODE_CAST_COLL_IDX] == BINARY_COLLATION) {
+        IS_NO_BACKSLASH_ESCAPES(ctx_.session_info_->get_sql_mode(), no_escapes);
+      }
       if (OB_FAIL(process_datatype_or_questionmark(escape_node, escape_expr))) {
         LOG_WARN("fail to resolver defalut excape node", K(ret));
       } else if (OB_FAIL(t_expr->add_param_expr(escape_expr))) {
         LOG_WARN("fail to set param expr");
-      } else if (lib::is_oracle_mode()) {
+      } else if (lib::is_oracle_mode() || no_escapes) {
         // Oracle mode, if not specify escape, then no escape, but the implementation of like must contain escape
         // so we rewrite like without escape
         // c1 like '%x\x%' --> c1 like replace('%x\x%', '\','\\') escape '\' -> c1 like '%x\\x%' escape '\'

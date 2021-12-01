@@ -405,7 +405,8 @@ protected:
           rowkey_dist_ctx_(NULL),
           iter_end_(false),
           saved_session_(NULL)
-    {}
+    {
+    }
     virtual ~ObTableModifyCtx()
     {
       destroy();
@@ -439,7 +440,14 @@ protected:
     }
     const ObObjPrintParams get_obj_print_params()
     {
-      return CREATE_OBJ_PRINT_PARAM(exec_ctx_.get_my_session());
+      ObObjPrintParams print_params = CREATE_OBJ_PRINT_PARAM(exec_ctx_.get_my_session());
+      print_params.need_cast_expr_ = true;
+      // bugfix:https://work.aone.alibaba-inc.com/issue/36658497
+      // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
+      // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
+      GET_SQL_MODE_BIT(
+          IS_NO_BACKSLASH_ESCAPES, exec_ctx_.get_my_session()->get_sql_mode(), print_params.skip_escape_);
+      return print_params;
     }
     int check_stack();
 
