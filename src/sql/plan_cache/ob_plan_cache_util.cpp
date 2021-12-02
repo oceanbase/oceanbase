@@ -251,7 +251,7 @@ int ObPhyLocationGetter::reselect_duplicate_table_best_replica(const ObIArray<Ob
   return ret;
 }
 
-//need_check_on_same_server: out, 是否需要检查分区在同一sesrver, 如果这里检查过了就置为false
+//need_check_on_same_server: out, 是否需要检查分区在同一server, 如果这里检查过了就置为false
 int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                            const ObPlanCacheCtx &pc_ctx,
                                            ObIArray<ObCandiTableLoc> &candi_table_locs,
