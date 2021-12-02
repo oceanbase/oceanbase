@@ -68,8 +68,8 @@ bool ObRecycleSchemaValue::is_valid() const
 int64_t ObSchemaHistoryRecyclerIdling::get_idle_interval_us()
 {
   int64_t idle_time = DEFAULT_SCHEMA_HISTORY_RECYCLE_INTERVAL;
-  if (0 != GCONF._schema_history_recycle_interval && !GCONF.in_upgrade_mode()) {
-    idle_time = GCONF._schema_history_recycle_interval;
+  if (0 != GCONF.schema_history_recycle_interval && !GCONF.in_upgrade_mode()) {
+    idle_time = GCONF.schema_history_recycle_interval;
   }
   return idle_time;
 }
@@ -159,7 +159,7 @@ int ObSchemaHistoryRecycler::check_inner_stat()
   } else if (stop_) {
     ret = OB_CANCELED;
     LOG_WARN("schema history recycler stopped", KR(ret));
-  } else if (0 == GCONF._schema_history_recycle_interval || GCONF.in_upgrade_mode() || !GCTX.is_schema_splited()) {
+  } else if (0 == GCONF.schema_history_recycle_interval || GCONF.in_upgrade_mode() || !GCTX.is_schema_splited()) {
     ret = OB_CANCELED;
     LOG_WARN("schema history recycler should stopped", KR(ret));
   }

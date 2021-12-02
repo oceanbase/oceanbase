@@ -9790,9 +9790,9 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
         LOG_WARN("fail to submit update rs list task", KR(ret), K(tmp_ret));
       }
       LOG_INFO("obconfig_url parameters updated, force submit update rslist task", KR(tmp_ret), KPC(item));
-    } else if (0 == STRCMP(item->name_.ptr(), _SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
+    } else if (0 == STRCMP(item->name_.ptr(), SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
       schema_history_recycler_.wakeup();
-      LOG_INFO("_schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
+      LOG_INFO("schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
     }
   }
   return ret;
