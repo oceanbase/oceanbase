@@ -356,7 +356,9 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
 {
   if (OB_TIMEOUT == ret_) {
     int64_t cur_timestamp = ::oceanbase::common::ObTimeUtility::current_time();
-    if (timeout_ts_ - cur_timestamp > 0) {
+    // 由于存在时间精度不一致导致的时间差, 这里需要满足大于100ms才认为不是超时.
+    // 一个容错的处理.
+    if (timeout_ts_ - cur_timestamp > 100 * 1000) {
       LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
                 "change error code to OB_CONNECT_ERROR",
           K(ret_),
