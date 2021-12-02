@@ -1924,6 +1924,7 @@ int ObPartitionStorage::check_old_row_legitimacy(ObDMLRunningCtx &run_ctx, const
       if (OB_ITER_END == ret) {
         ret = OB_ERR_DEFENSIVE_CHECK;
         LOG_WARN("old row in storage is not exists", K(ret));
+        check_leader_changed_for_sql_recheck_(run_ctx, ret);
       } else {
         LOG_WARN("get next row from old_row_iter failed", K(ret), KPC(run_ctx.column_ids_), K(old_row));
       }
@@ -1961,6 +1962,8 @@ int ObPartitionStorage::check_old_row_legitimacy(ObDMLRunningCtx &run_ctx, const
             K(column_ids.at(i)));
         ret = OB_ERR_DEFENSIVE_CHECK;
       }
+
+      check_leader_changed_for_sql_recheck_(run_ctx, ret);
     }
     if (OB_ERR_DEFENSIVE_CHECK == ret) {
       ObString func_name = ObString::make_string("check_old_row_legitimacy");
@@ -3121,15 +3124,18 @@ int ObPartitionStorage::process_old_row(ObDMLRunningCtx& run_ctx, const bool dat
             STORAGE_LOG(WARN, "failed to check rowkey existing", K(*idx_row), K(ret));
           } else if (!exists) {
             ret = OB_ERR_DEFENSIVE_CHECK;
-            ObString func_name = ObString::make_string("process_old_row");
-            LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-            STORAGE_LOG(ERROR,
-                "Unexpected old row, update or delete a non exist index row",
-                K(ret),
-                KPC(idx_row),
-                K(relative_tables.data_table_.tables_handle_),
-                K(relative_tables.index_tables_[i]),
-                K(relative_tables.index_tables_[i].tables_handle_));
+            check_leader_changed_for_sql_recheck_(run_ctx, ret);
+            if (OB_FAIL(ret)) {
+              ObString func_name = ObString::make_string("process_old_row");
+              LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+              STORAGE_LOG(ERROR,
+                  "Unexpected old row, update or delete a non exist index row",
+                  K(ret),
+                  KPC(idx_row),
+                  K(relative_tables.data_table_.tables_handle_),
+                  K(relative_tables.index_tables_[i]),
+                  K(relative_tables.index_tables_[i].tables_handle_));
+            }
           } else {
             // STORAGE_LOG(INFO, "build index row", K(*idx_row), K(null_idx_val), K(type));
             if (ND_ROWKEY_CHANGE == type && !null_idx_val) {
@@ -7863,6 +7869,22 @@ void ObPartitionStorage::handle_error_index_table(
           "index_id",
           index_table.get_key().table_id_,
           K(index_stats.at(j)));
+    }
+  }
+}
+
+void ObPartitionStorage::check_leader_changed_for_sql_recheck_(ObDMLRunningCtx &run_ctx, int &ret)
+{
+  if (OB_ERR_DEFENSIVE_CHECK == ret) {
+    if (run_ctx.store_ctx_.mem_ctx_ != NULL) {
+      ObMemtableCtx *curr_mt_ctx = static_cast<ObMemtableCtx *>(run_ctx.store_ctx_.mem_ctx_);
+      transaction::ObTransCtx *trans_ctx = curr_mt_ctx->get_trans_ctx();
+      if (NULL != trans_ctx) {
+        if (!trans_ctx->is_bounded_staleness_read() && curr_mt_ctx->is_for_replay()) {
+          TRANS_LOG(WARN, "strong consistent read follower when sql check", K(trans_ctx->get_trans_id()));
+          ret = OB_NOT_MASTER;
+        }
+      }
     }
   }
 }
