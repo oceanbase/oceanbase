@@ -418,16 +418,15 @@ int ObVersionStoreRangeConversionHelper::store_rowkey_to_multi_version_range(
     COMMON_LOG(WARN, "version_range is not valid", K(ret), K(version_range));
   } else if (OB_FAIL(build_multi_version_store_rowkey(src_rowkey.get_store_rowkey(),
                  //-version_range.snapshot_version_,
-                 -INT64_MAX,
+                 true,  // min_value
                  allocator,
                  multi_version_range.get_range().get_start_key()))) {
     COMMON_LOG(WARN, "build multi version store rowkey failed", K(ret), K(src_rowkey), K(version_range));
   } else if (OB_FAIL(build_multi_version_store_rowkey(src_rowkey.get_store_rowkey(),
-                                                ObVersionRange::MAX_VERSION,
-                                                allocator,
-                                                multi_version_range.get_range().get_end_key()))) {
-    COMMON_LOG(WARN, "build multi version store rowkey failed",
-                  K(ret), K(src_rowkey), K(version_range));
+                 false,  // min_value
+                 allocator,
+                 multi_version_range.get_range().get_end_key()))) {
+    COMMON_LOG(WARN, "build multi version store rowkey failed", K(ret), K(src_rowkey), K(version_range));
   } else if (OB_FAIL(multi_version_range.to_collation_free_range_on_demand_and_cutoff_range(allocator))) {
     COMMON_LOG(WARN, "fail to get colllation free rowkey and range cutoff", K(ret));
   } else {
@@ -455,15 +454,15 @@ int ObVersionStoreRangeConversionHelper::range_to_multi_version_range(
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "version_range is not valid", K(ret), K(version_range));
   } else if (OB_FAIL(build_multi_version_store_rowkey(src_range.get_range().get_start_key(),
-      include_start ? -INT64_MAX : ObVersionRange::MAX_VERSION,
-      allocator, multi_version_range.get_range().get_start_key()))) {
-    COMMON_LOG(WARN, "build multi version store rowkey failed",
-              K(ret), K(src_range), K(version_range));
+                 include_start,
+                 allocator,
+                 multi_version_range.get_range().get_start_key()))) {
+    COMMON_LOG(WARN, "build multi version store rowkey failed", K(ret), K(src_range), K(version_range));
   } else if (OB_FAIL(build_multi_version_store_rowkey(src_range.get_range().get_end_key(),
-      include_end ? ObVersionRange::MAX_VERSION : - ObVersionRange::MAX_VERSION,
-      allocator, multi_version_range.get_range().get_end_key()))) {
-    COMMON_LOG(WARN, "build multi version store rowkey failed",
-               K(ret), K(src_range), K(version_range));
+                 !include_end,
+                 allocator,
+                 multi_version_range.get_range().get_end_key()))) {
+    COMMON_LOG(WARN, "build multi version store rowkey failed", K(ret), K(src_range), K(version_range));
   } else if (OB_FAIL(multi_version_range.to_collation_free_range_on_demand_and_cutoff_range(allocator))) {
     COMMON_LOG(WARN, "fail to get collation free rowkey", K(ret));
   } else {
@@ -482,8 +481,8 @@ int ObVersionStoreRangeConversionHelper::range_to_multi_version_range(
   return ret;
 }
 
-int ObVersionStoreRangeConversionHelper::build_multi_version_store_rowkey(const ObStoreRowkey& store_rowkey,
-    const int64_t trans_version, ObIAllocator& allocator, ObStoreRowkey& multi_version_store_rowkey)
+int ObVersionStoreRangeConversionHelper::build_multi_version_store_rowkey(const ObStoreRowkey &store_rowkey,
+    const bool min_value, ObIAllocator &allocator, ObStoreRowkey &multi_version_store_rowkey)
 {
   int ret = OB_SUCCESS;
 
@@ -509,7 +508,11 @@ int ObVersionStoreRangeConversionHelper::build_multi_version_store_rowkey(const 
         cells[i] = store_rowkey.get_obj_ptr()[i];
       }
       // FIXME: hard coding
-      cells[i].set_int(trans_version);
+      if (min_value) {
+        cells[i].set_min_value();
+      } else {
+        cells[i].set_max_value();
+      }
       multi_version_store_rowkey.assign(cells, cell_cnt);
     }
   }

@@ -2609,16 +2609,168 @@ TEST_F(TestMultiVersionSSTableSingleScan, test_memleak)
   scanner->~ObStoreRowIterator();
 }
 
+TEST_F(TestMultiVersionSSTableSingleScan, test_reverse)
+{
+  const int64_t rowkey_cnt = 4;
+  const char *micro_data[5];
+  micro_data[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "0        var1  -9       0     7        NOP     EXIST   C\n"
+                  "0        var1  -7       0     6        5       EXIST   C\n"
+                  "0        var1  9223372036854775807       9223372036854775807 NOP      NOP     EXIST   LM\n";
+
+  micro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "1        var1  -8       0     NOP      2       EXIST   C\n"
+                  "1        var1  -2       0     2        NOP     EXIST   L\n"
+                  "2        var1  -9       0     7        NOP     EXIST   C\n"
+                  "2        var1  -7       0     6        5       EXIST   C\n"
+                  "2        var1  9223372036854775807       9223372036854775807     NOP      NOP     EXIST   LM\n";
+
+  micro_data[2] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "3        var1  -6       0     6        1       EXIST   C\n"
+                  "3        var1  9223372036854775807       9223372036854775807     NOP      NOP     EXIST   LM\n";
+
+  micro_data[3] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "4        var1  -3       0     5        2       EXIST   C\n"
+                  "4        var1  -2       0     5        1       EXIST   C\n"
+                  "4        var1  -1       0     NOP      NOP     EXIST   LM\n"
+                  "5        var1  -2       0     5        1       EXIST   C\n"
+                  "5        var1  -1       0     4        3       EXIST   L\n";
+
+  micro_data[4] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "6        var1  -3       0     5        2       EXIST   C\n"
+                  "6        var1  -2       0     5        1       EXIST   C\n"
+                  "6        var1  -1       0     4        3       EXIST   L\n";
+
+  prepare_data_start(micro_data, rowkey_cnt, 10, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(micro_data, 2, 10, nullptr, nullptr, true);
+  prepare_one_macro(&micro_data[2], 1, 10, nullptr, nullptr, true);
+  prepare_one_macro(&micro_data[3], 2, 10, nullptr, nullptr, true);
+  // prepare_one_macro(&micro_data[2], 1, 10, nullptr, nullptr, true);
+  prepare_data_end();
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObExtStoreRange range;
+
+  const char *result1 = "bigint   var   bigint   bigint  flag    multi_version_row_flag\n"
+                        "6        var1  5        2        EXIST   N\n"
+                        "5        var1  5        1        EXIST   N\n"
+                        "4        var1  5        2        EXIST   N\n"
+                        "3        var1  6        1        EXIST N\n";
+  const char *rowkey1 = "bigint   var   bigint flag    multi_version_row_flag\n"
+                        "2        var1  9223372036854775807 EXIST   N\n";
+
+  ObMockIterator rowkey_iter;
+  ObExtStoreRowkey ext_rowkey;
+  const ObStoreRow *row = NULL;
+  rowkey_iter.reset();
+  OK(rowkey_iter.from(rowkey1));
+  OK(rowkey_iter.get_row(0, row));
+  ASSERT_TRUE(NULL != row);
+  range.get_range().set_whole_range();
+  range.get_range().start_key_.assign(row->row_val_.cells_, rowkey_cnt - 2);
+  range.get_range().set_left_open();
+  OK(range.to_collation_free_range_on_demand_and_cutoff_range(stmt_allocator_));
+
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.snapshot_version_ = 100;
+  prepare_query_param(trans_version_range, false, false, true);
+
+  res_iter.reset();
+  OK(sstable_.scan(param_, context_, range, scanner));
+  OK(res_iter.from(result1));
+  ASSERT_TRUE(res_iter.equals(*scanner));
+
+  scanner->~ObStoreRowIterator();
+}
+
+TEST_F(TestMultiVersionSSTableSingleScan, test_reverse2)
+{
+  const int64_t rowkey_cnt = 4;
+  const char *micro_data[5];
+  micro_data[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "0        var1  -9       0     7        NOP     EXIST   C\n"
+                  "0        var1  -7       0     6        5       EXIST   C\n"
+                  "0        var1  9223372036854775807       9223372036854775807 NOP      NOP     EXIST   LM\n";
+
+  micro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "1        var1  -8       0     NOP      2       EXIST   C\n"
+                  "1        var1  -2       0     2        NOP     EXIST   L\n"
+                  "2        var1  9223372036854775807       9223372036854775807     NOP      NOP     EXIST   LM\n";
+
+  micro_data[2] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "3        var1  -6       0     6        1       EXIST   C\n"
+                  "3        var1  9223372036854775807       9223372036854775807     NOP      NOP     EXIST   LM\n";
+
+  micro_data[3] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "4        var1  -3       0     5        2       EXIST   C\n"
+                  "4        var1  -2       0     5        1       EXIST   C\n"
+                  "4        var1  -1       0     NOP      NOP     EXIST   LM\n"
+                  "5        var1  -2       0     5        1       EXIST   C\n"
+                  "5        var1  -1       0     4        3       EXIST   L\n";
+
+  micro_data[4] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "6        var1  -3       0     5        2       EXIST   C\n"
+                  "6        var1  -2       0     5        1       EXIST   C\n"
+                  "6        var1  -1       0     4        3       EXIST   L\n";
+
+  prepare_data_start(micro_data, rowkey_cnt, 10, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(micro_data, 2, 10, nullptr, nullptr, true);
+  prepare_one_macro(&micro_data[2], 1, 10, nullptr, nullptr, true);
+  prepare_one_macro(&micro_data[3], 2, 10, nullptr, nullptr, true);
+  // prepare_one_macro(&micro_data[2], 1, 10, nullptr, nullptr, true);
+  prepare_data_end();
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObExtStoreRange range;
+
+  const char *result1 = "bigint   var   bigint   bigint  flag    multi_version_row_flag\n"
+                        "6        var1  5        2        EXIST   N\n"
+                        "5        var1  5        1        EXIST   N\n"
+                        "4        var1  5        2        EXIST   N\n"
+                        "3        var1  6        1        EXIST N\n";
+  const char *rowkey1 = "bigint   var   bigint flag    multi_version_row_flag\n"
+                        "1        var1  9223372036854775807 EXIST   N\n";
+
+  ObMockIterator rowkey_iter;
+  ObExtStoreRowkey ext_rowkey;
+  const ObStoreRow *row = NULL;
+  rowkey_iter.reset();
+  OK(rowkey_iter.from(rowkey1));
+  OK(rowkey_iter.get_row(0, row));
+  ASSERT_TRUE(NULL != row);
+  range.get_range().set_whole_range();
+  range.get_range().start_key_.assign(row->row_val_.cells_, rowkey_cnt - 2);
+  range.get_range().set_left_open();
+  OK(range.to_collation_free_range_on_demand_and_cutoff_range(stmt_allocator_));
+
+  ObVersionRange trans_version_range;
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  trans_version_range.snapshot_version_ = 100;
+  prepare_query_param(trans_version_range, false, false, true);
+
+  res_iter.reset();
+  OK(sstable_.scan(param_, context_, range, scanner));
+  OK(res_iter.from(result1));
+  ASSERT_TRUE(res_iter.equals(*scanner));
+
+  scanner->~ObStoreRowIterator();
+}
+
 }  // namespace unittest
 }  // namespace oceanbase
 
 int main(int argc, char** argv)
 {
-  GCONF._enable_sparse_row = true;
+  // GCONF._enable_sparse_row = true;
   system("rm -rf test_multi_version_sstable_single_scan.log");
   OB_LOGGER.set_file_name("test_multi_version_sstable_single_scan.log");
   STORAGE_LOG(INFO, "begin unittest: test_multi_version_sstable_single_scan");
-  oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
+  oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
