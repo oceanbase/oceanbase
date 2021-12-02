@@ -56,9 +56,9 @@ ObBackupAutoDeleteExpiredData::ObBackupAutoDeleteExpiredData()
 ObBackupAutoDeleteExpiredData::~ObBackupAutoDeleteExpiredData()
 {}
 
-int ObBackupAutoDeleteExpiredData::init(common::ObServerConfig& cfg, ObMySQLProxy& sql_proxy,
-    share::schema::ObMultiVersionSchemaService& schema_service, ObBackupDataClean& backup_data_clean,
-    share::ObIBackupLeaseService& backup_lease_service)
+int ObBackupAutoDeleteExpiredData::init(common::ObServerConfig &cfg, ObMySQLProxy &sql_proxy,
+    share::schema::ObMultiVersionSchemaService &schema_service, ObBackupDataClean &backup_data_clean,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   const int backup_auto_delete_thread_cnt = 1;
@@ -156,7 +156,7 @@ void ObBackupAutoDeleteExpiredData::run3()
 }
 
 int ObBackupAutoDeleteExpiredData::check_can_auto_handle_backup(
-    const bool is_auto, const int64_t backup_recovery_window, bool& can_auto_delete)
+    const bool is_auto, const int64_t backup_recovery_window, bool &can_auto_delete)
 {
   int ret = OB_SUCCESS;
   can_auto_delete = true;
@@ -172,7 +172,7 @@ int ObBackupAutoDeleteExpiredData::check_can_auto_handle_backup(
 }
 
 int ObBackupAutoDeleteExpiredData::get_last_succeed_delete_obsolete_snapshot(
-    int64_t& last_succ_delete_obsolete_snapshot)
+    int64_t &last_succ_delete_obsolete_snapshot)
 {
   int ret = OB_SUCCESS;
   ObBackupInfoManager backup_info_manager;
@@ -221,6 +221,10 @@ int ObBackupAutoDeleteExpiredData::schedule_auto_delete_expired_data(const int64
   int64_t last_succ_delete_obsolete_snapshot = 0;
   const int64_t now_ts = ObTimeUtil::current_time();
   ObBackupDataCleanScheduler backup_data_clean_scheduler;
+  const int64_t MAX_INTERVAL = 24L * 60L * 60L * 1000L * 1000L;  // 24h
+  const int64_t AUTO_CLEAN_INTERVAL =
+      (backup_recovery_window / 2) < MAX_INTERVAL ? (backup_recovery_window / 2) : MAX_INTERVAL;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup auto delete expired data do not init", K(ret));
@@ -229,7 +233,7 @@ int ObBackupAutoDeleteExpiredData::schedule_auto_delete_expired_data(const int64
     LOG_WARN("schedule auto delete expired data get invalid argument", K(ret), K(backup_recovery_window));
   } else if (OB_FAIL(get_last_succeed_delete_obsolete_snapshot(last_succ_delete_obsolete_snapshot))) {
     LOG_WARN("failed to get last succ delete obsolete snapshot", K(ret), K(last_succ_delete_obsolete_snapshot));
-  } else if (now_ts - last_succ_delete_obsolete_snapshot < backup_recovery_window / 2) {
+  } else if (now_ts - last_succ_delete_obsolete_snapshot < AUTO_CLEAN_INTERVAL) {
     switch_delete_obsolete_action();
     if (delete_obsolete_action_ != ObBackupDeleteObsoleteAction::NONE) {
       wakeup();

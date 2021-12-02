@@ -3110,16 +3110,8 @@ int ObBackupPhysicalPGCtx::check_table_exist(
   if (OB_UNLIKELY(!macro_index_store.is_inited() || !table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(macro_index_store), K(table_key));
-  } else if (OB_FAIL(macro_index_store.get_macro_index_array(table_key, macro_index_array))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      is_exist = false;
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_ISNULL(macro_index_array)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("macro index array should not be NULL", K(ret), K(table_key));
-  } else {
-    is_exist = true;
+  } else if (OB_FAIL(macro_index_store.check_table_exist(table_key, is_exist))) {
+    STORAGE_LOG(WARN, "failed to check table exist", K(ret), K(table_key));
   }
   return ret;
 }
@@ -3340,6 +3332,7 @@ int ObBackupCopyPhysicalTask::process()
           }
         }
       }
+      STORAGE_LOG(INFO, "reuse backup macro count", K(block_info), K(copy_count), K(reuse_count));
     }
   }
   if (OB_FAIL(ret)) {
