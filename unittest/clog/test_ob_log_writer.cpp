@@ -1,29 +1,14 @@
-// Copyright 2014 Alibaba Inc. All Rights Reserved.
-// Author:
-//     qiaoli.xql@alibaba-inc.com
-// Owner:
-//     lujun.wlj@alibaba-inc.com
-//
-// This file tests ObLogWriter.
-//
-// Testing method
-//1. Write 60 data blocks, each log saves the same 1K data buffer, each block 1000 logs,
-//   log ID is (1-1000)*i
-//2. Write a confirm block after every 10,000 logs, which contains the confirm log of
-//   the first 10,000 logs
-//3. The file is written by ObLogWriter, and the log is read iteratively by ObLogIterator
-//
-//Testing scenarios
-//1. Write start file id is 1
-//2. After writing 10 data blocks, submit a sync_flush_task task and submit a confirm block
-//3. After the last confirm log data block, switch_file_task is called once
-//4. Write the first 60 data blocks, at least 64M, ObLogWriter will actively cut the file once
-//5. Test ObLogFileLocator:
-//  1)Create the first file when the directory is empty
-//  2)Find the end of the file when there is a file
-//  3)The file with the largest ID happens to be the first newly created file
-//6. Use ObLogReader to read the log in turn for the correctness of comparison
-//
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #include "clog/ob_log_writer.h"
 #include "clog/ob_log_file_trailer.h"
