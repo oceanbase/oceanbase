@@ -11602,6 +11602,9 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     common::ObMemberList member_list;
     const uint64_t fetch_tenant_id =
         is_inner_table(index_table_id) ? OB_SYS_TENANT_ID : extract_tenant_id(index_table_id);
+    const bool need_fail_list = false;
+    const int64_t cluster_id = OB_INVALID_ID;  // local cluster
+    const bool filter_flag_replica = false;
     if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(fetch_tenant_id, schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(fetch_tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_table_id, index_schema))) {
@@ -11623,7 +11626,12 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     } else if (OB_ISNULL(GCTX.pt_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "error unexpected, pt operator must not be NULL", K(ret));
-    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(), pkey.get_partition_id(), partition_info))) {
+    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(),
+                   pkey.get_partition_id(),
+                   partition_info,
+                   need_fail_list,
+                   cluster_id,
+                   filter_flag_replica))) {
       STORAGE_LOG(WARN, "fail to get partition info", K(ret), K(pkey));
     } else if (OB_FAIL(partition_info.filter(filter))) {
       STORAGE_LOG(WARN, "fail to filter partition", K(ret));

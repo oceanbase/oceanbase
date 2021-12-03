@@ -41,9 +41,10 @@ int ObRemotePartitionTableOperator::init(
 }
 
 int ObRemotePartitionTableOperator::get(const uint64_t table_id, const int64_t partition_id,
-    ObPartitionInfo& partition_info, const bool need_fetch_faillist, const int64_t cluster_id)
+    ObPartitionInfo& partition_info, const bool need_fetch_faillist, const int64_t cluster_id,
+    const bool filter_flag_replica)
 {
-  UNUSEDx(table_id, partition_id, partition_info, need_fetch_faillist, cluster_id);
+  UNUSEDx(table_id, partition_id, partition_info, need_fetch_faillist, cluster_id, filter_flag_replica);
   return OB_NOT_SUPPORTED;
 }
 
@@ -61,11 +62,12 @@ int ObRemotePartitionTableOperator::batch_execute(const common::ObIArray<ObParti
 }
 
 int ObRemotePartitionTableOperator::prefetch_by_table_id(const uint64_t tenant_id, const uint64_t table_id,
-    const int64_t partition_id, common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist)
+    const int64_t partition_id, common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist,
+    const bool filter_flag_replica)
 {
 
   UNUSEDx(tenant_id, table_id, partition_id);
-  UNUSEDx(partition_infos, need_fetch_faillist);
+  UNUSEDx(partition_infos, need_fetch_faillist, filter_flag_replica);
   return OB_NOT_SUPPORTED;
 }
 
