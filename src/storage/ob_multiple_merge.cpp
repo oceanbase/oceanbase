@@ -502,6 +502,10 @@ void ObMultipleMerge::reset()
   for (int64_t i = 0; i < iters_.count(); ++i) {
     if (NULL != (iter = iters_.at(i))) {
       iter->~ObStoreRowIterator();
+      if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+        access_ctx_->stmt_allocator_->free(iter);
+      }
+      iter = NULL;
     }
   }
   padding_allocator_.reset();
@@ -539,15 +543,32 @@ void ObMultipleMerge::reuse()
   read_memtable_only_ = false;
 }
 
-void ObMultipleMerge::reuse_iter_array()
+void ObMultipleMerge::reset_iter_array()
 {
   ObStoreRowIterator* iter = NULL;
   for (int64_t i = 0; i < iters_.count(); ++i) {
     if (NULL != (iter = iters_.at(i))) {
       iter->~ObStoreRowIterator();
+      if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
+        access_ctx_->stmt_allocator_->free(iter);
+      }
+      iter = NULL;
     }
   }
   iters_.reuse();
+}
+
+void ObMultipleMerge::reuse_iter_array()
+{
+  ObStoreRowIterator *iter = NULL;
+  for (int64_t i = 0; i < iters_.count(); ++i) {
+    if (NULL != (iter = iters_.at(i))) {
+      iter->reset(); 
+      // ! 细心地同学会发现，在reuse接口中使用reset，是有点怪异的，并且肯定没有最大化提高效率。
+      // ! 那么为什么不能直接使用reuse呢？还是要从allocator与stmt_allocator中考虑，可以继续挖掘。
+      // 注意allocator中内存释放的时机。
+    }
+  }
 }
 
 int ObMultipleMerge::open()
@@ -944,7 +965,7 @@ int ObMultipleMerge::refresh_table_on_demand()
   } else if (need_refresh) {
     if (OB_FAIL(save_curr_rowkey())) {
       STORAGE_LOG(WARN, "fail to save current rowkey", K(ret));
-    } else if (FALSE_IT(reuse_iter_array())) {
+    } else if (FALSE_IT(reset_iter_array())) {
     } else if (OB_FAIL(prepare_read_tables())) {
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
     } else if (OB_FAIL(reset_tables())) {

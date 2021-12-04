@@ -1105,14 +1105,14 @@ int ObSSTable::get(const storage::ObTableIterParam& param, storage::ObTableAcces
     ObISSTableRowIterator* row_getter = NULL;
     if (is_multi_version_minor_sstable() && (context.is_multi_version_read(get_upper_trans_version()) ||
                                                 contain_uncommitted_row() || !meta_.has_compact_row_)) {
-      if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableMultiVersionRowGetter)))) {
+      if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableMultiVersionRowGetter)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
       } else {
         row_getter = new (buf) ObSSTableMultiVersionRowGetter();
       }
     } else {
-      if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableRowGetter)))) {
+      if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableRowGetter)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
       } else {
@@ -1163,14 +1163,14 @@ int ObSSTable::multi_get(const ObTableIterParam& param, ObTableAccessContext& co
       ObISSTableRowIterator* row_getter = NULL;
       if (is_multi_version_minor_sstable() && (context.is_multi_version_read(get_upper_trans_version()) ||
                                                   contain_uncommitted_row() || !meta_.has_compact_row_)) {
-        if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableMultiVersionRowMultiGetter)))) {
+        if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableMultiVersionRowMultiGetter)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
         } else {
           row_getter = new (buf) ObSSTableMultiVersionRowMultiGetter();
         }
       } else {
-        if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableRowMultiGetter)))) {
+        if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableRowMultiGetter)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
         } else {
@@ -1269,21 +1269,21 @@ int ObSSTable::scan(const ObTableIterParam& param, ObTableAccessContext& context
     void* buf = NULL;
     ObISSTableRowIterator* row_scanner = NULL;
     if (context.query_flag_.is_whole_macro_scan()) {
-      if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableRowWholeScanner)))) {
+      if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableRowWholeScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
       } else {
         row_scanner = new (buf) ObSSTableRowWholeScanner();
       }
     } else if (is_multi_version_minor_sstable()) {
-      if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableMultiVersionRowScanner)))) {
+      if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableMultiVersionRowScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
       } else {
         row_scanner = new (buf) ObSSTableMultiVersionRowScanner();
       }
     } else {
-      if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableRowScanner)))) {
+      if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableRowScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
       } else {
@@ -1435,14 +1435,14 @@ int ObSSTable::multi_scan(const ObTableIterParam& param, ObTableAccessContext& c
     void* buf = NULL;
     ObISSTableRowIterator* row_scanner = NULL;
     if (is_multi_version_minor_sstable()) {
-      if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableMultiVersionRowMultiScanner)))) {
+      if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableMultiVersionRowMultiScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
       } else {
         row_scanner = new (buf) ObSSTableMultiVersionRowMultiScanner();
       }
     } else {
-      if (NULL == (buf = context.allocator_->alloc(sizeof(ObSSTableRowMultiScanner)))) {
+      if (NULL == (buf = context.stmt_allocator_->alloc(sizeof(ObSSTableRowMultiScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
       } else {
@@ -2930,7 +2930,7 @@ int ObSSTable::build_exist_iterator(const ObTableIterParam& iter_param, ObTableA
   } else {
     void* buf = NULL;
     ObSSTableRowExister* exister = NULL;
-    if (NULL == (buf = access_context.allocator_->alloc(sizeof(ObSSTableRowExister)))) {
+    if (NULL == (buf = access_context.stmt_allocator_->alloc(sizeof(ObSSTableRowExister)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Fail to allocate memory, ", K(ret));
     } else {

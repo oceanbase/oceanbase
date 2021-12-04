@@ -833,6 +833,8 @@ public:
   }
   virtual void reuse()
   {}
+  virtual void reset()
+  {}
   virtual bool is_base_sstable_iter() const
   {
     return false;

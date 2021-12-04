@@ -80,6 +80,7 @@ protected:
   const ObTableIterParam* get_actual_iter_param(const ObITable* table) const;
   int project_row(const ObStoreRow& unprojected_row, const common::ObIArray<int32_t>* projector,
       const int64_t range_idx_delta, ObStoreRow& projected_row);
+  void reset_iter_array();
   void reuse_iter_array();
   virtual int skip_to_range(const int64_t range_idx);
 

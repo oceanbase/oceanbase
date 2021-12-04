@@ -82,7 +82,7 @@ void ObMultipleGetMerge::reset_with_fuse_row_cache()
     handles_ = nullptr;
   }
   prefetch_cnt_ = 0;
-  reuse_iter_array();
+  reset_iter_array();
 }
 
 void ObMultipleGetMerge::reset()
