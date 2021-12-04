@@ -2245,7 +2245,7 @@ int ObStaticEngineCG::convert_global_index_delete_info(ObLogDelUpd& op, const Ta
       if (OB_SUCC(ret)) {
         int64_t index_col_cnt = index_exprs.count();
         dml_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
-        if (OB_FAIL(OB_FAIL(dml_subplan.access_exprs_.init(index_col_cnt)))) {
+        if (OB_SUCC(dml_subplan.access_exprs_.init(index_col_cnt))) {
           LOG_WARN("fail to allocate array", K(ret));
         }
       }
