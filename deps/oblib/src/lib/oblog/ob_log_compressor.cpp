@@ -104,7 +104,7 @@ void ObLogCompressor::destroy()
 }
 
 ObString ObLogCompressor::get_compression_file_name(
-    const ObString &file_name, const char *buf, const ObString::obstr_size_t buf_size)
+    const ObString &file_name,char *buf, const ObString::obstr_size_t buf_size)
 {
   ObString compression_file_name;
   ObString suffix_str = ".zst";
@@ -198,7 +198,7 @@ void ObLogCompressor::log_compress()
 
       if (has_stoped_ || NULL == file_name || file_name->empty() || 0 != access(file_name->ptr(), F_OK)) {
       } else {
-        const ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
+        ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
         char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
         if (NULL == buf){
            LOG_STDERR("Failed to ob_malloc.\n");

@@ -134,7 +134,16 @@ inline void ob_log_unlink(const char *file_cstr)
 {
   unlink(file_cstr);
   ObString file_name(file_cstr);
-  unlink(ObLogCompressor::get_compression_file_name(file_name).ptr());
+  ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
+  char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
+  if (!buf) {
+    LOG_STDERR("Failed to ob_malloc.\n");
+  } else {
+    unlink(ObLogCompressor::get_compression_file_name(file_name,buf,buf_size).ptr());
+  }
+  if (buf) {
+    ob_free(buf);
+  }
 }
 
 time_t get_file_time(const ObString &file_name)
@@ -935,12 +944,21 @@ void ObLogger::update_compression_file(std::deque<std::string> &file_list)
       for (auto iter = file_list.begin(); iter != file_list.end(); iter++) {
         ObString file_name(iter->c_str());
         if (isdigit(file_name[file_name.length() - 1])) {
-          ObString compression_file_name = ObLogCompressor::get_compression_file_name(file_name).ptr();
-          if (0 != access(file_name.ptr(), F_OK) && 0 == access(compression_file_name.ptr(), F_OK)) {
-            iter->clear();
-            iter->assign(compression_file_name.ptr());
+          ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
+          char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
+          if (!buf) {
+            LOG_STDERR("Failed to ob_malloc.\n");
           } else {
-            log_compressor_->append_log(file_name);
+            ObString compression_file_name = ObLogCompressor::get_compression_file_name(file_name,buf,buf_size).ptr();
+            if (0 != access(file_name.ptr(), F_OK) && 0 == access(compression_file_name.ptr(), F_OK)) {
+              iter->clear();
+              iter->assign(compression_file_name.ptr());
+            } else {
+              log_compressor_->append_log(file_name);
+            }
+          }
+          if (buf) {
+            ob_free(src_buf);
           }
         }
       }
