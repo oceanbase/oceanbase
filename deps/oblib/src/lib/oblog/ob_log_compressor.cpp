@@ -103,7 +103,8 @@ void ObLogCompressor::destroy()
   }
 }
 
-ObString ObLogCompressor::get_compression_file_name(const ObString &file_name)
+ObString ObLogCompressor::get_compression_file_name(
+    const ObString &file_name, const char *buf, const ObString::obstr_size_t buf_size)
 {
   ObString compression_file_name;
   ObString suffix_str = ".zst";
@@ -111,20 +112,18 @@ ObString ObLogCompressor::get_compression_file_name(const ObString &file_name)
   if (size && 0 == file_name[size - 1]) {
     size -= 1;
   }
-  if (size > 0 && size + 1 + suffix_str.length() <= DEFAULT_FILE_NAME_SIZE) {
+  if (size > 0 && size + 1 + suffix_str.length() <= DEFAULT_FILE_NAME_SIZE && NULL != buf &&
+      buf_size >= size + 1 + suffix_str.length() && buf_size <= DEFAULT_FILE_NAME_SIZE) {
     const char *idx = NULL;
     if (size > 4 && NULL != (idx = file_name.reverse_find('.')) && idx != file_name.ptr() &&
         0 == file_name.after(--idx).compare(suffix_str)) {
     } else {
-      char *buf = (char *)ob_malloc(size + 1 + suffix_str.length(), ObModIds::OB_LOG_COMPRESSOR);
-      if (buf) {
-        compression_file_name.assign_buffer(buf, DEFAULT_FILE_NAME_SIZE);
+        compression_file_name.assign_buffer(buf, buf_size);
         if (size != compression_file_name.write(file_name.ptr(), size)) {
-          ob_free(buf);
+          compression_file_name.reset();
         } else {
           compression_file_name.write(".zst\0", 5);
         }
-      }
     }
   }
   return compression_file_name;
@@ -199,7 +198,13 @@ void ObLogCompressor::log_compress()
 
       if (has_stoped_ || NULL == file_name || file_name->empty() || 0 != access(file_name->ptr(), F_OK)) {
       } else {
-        ObString compression_file_name = get_compression_file_name(*file_name);
+        const ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
+        char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
+        if (NULL == buf){
+           LOG_STDERR("Failed to ob_malloc.\n");
+           continue;
+        }
+        ObString compression_file_name = get_compression_file_name(*file_name, buf, buf_size);
         FILE *input_file = NULL;
         FILE *output_file = NULL;
         if (compression_file_name.empty()) {
@@ -230,6 +235,9 @@ void ObLogCompressor::log_compress()
           } else {
             unlink(file_name->ptr());
           }
+        }
+        if (buf) {
+          ob_free(buf);
         }
       }
     }
