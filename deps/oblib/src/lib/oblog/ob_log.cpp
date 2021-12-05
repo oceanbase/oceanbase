@@ -134,7 +134,7 @@ inline void ob_log_unlink(const char *file_cstr)
 {
   unlink(file_cstr);
   ObString file_name(file_cstr);
-  ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
+  ObString::obstr_size_t  buf_size = file_name.length() + 1 + sizeof(ObString);
   char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
   if (!buf) {
     LOG_STDERR("Failed to ob_malloc.\n");
@@ -944,7 +944,7 @@ void ObLogger::update_compression_file(std::deque<std::string> &file_list)
       for (auto iter = file_list.begin(); iter != file_list.end(); iter++) {
         ObString file_name(iter->c_str());
         if (isdigit(file_name[file_name.length() - 1])) {
-          ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
+          ObString::obstr_size_t  buf_size = file_name.length() + 1 + sizeof(ObString);
           char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
           if (!buf) {
             LOG_STDERR("Failed to ob_malloc.\n");
@@ -958,7 +958,7 @@ void ObLogger::update_compression_file(std::deque<std::string> &file_list)
             }
           }
           if (buf) {
-            ob_free(src_buf);
+            ob_free(buf);
           }
         }
       }
