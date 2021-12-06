@@ -24,6 +24,7 @@ namespace common {
 class ObCompressor;
 class ObString;
 class ObMalloc;
+static const ObString DEFAULT_FILE_SUFFIX = ".zst";
 
 class ObLogCompressor final : public lib::ThreadPool {
 public:
