@@ -720,6 +720,7 @@ int ObRSBuildIndexTask::wait_build_index_end(bool& is_end)
   const ObTableSchema* index_schema = NULL;
   const ObTableSchema* table_schema = NULL;
   ObIndexBuildStatus all_status;
+  const bool filter_flag_replica = false;
   ObTablePartitionIterator iter;
   ObReplicaFilterHolder filter;
   int64_t table_id = OB_INVALID_ID;
@@ -758,7 +759,7 @@ int ObRSBuildIndexTask::wait_build_index_end(bool& is_end)
   }
 
   if (OB_FAIL(ret) || is_end) {
-  } else if (OB_FAIL(iter.init(table_id, schema_guard, ddl_service_->get_pt_operator()))) {
+  } else if (OB_FAIL(iter.init(table_id, schema_guard, ddl_service_->get_pt_operator(), filter_flag_replica))) {
     LOG_WARN("fail to init partition table iterator",
         K(ret),
         "table_id",

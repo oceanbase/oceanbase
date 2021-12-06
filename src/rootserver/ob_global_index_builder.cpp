@@ -1487,6 +1487,9 @@ int ObGlobalIndexBuilder::drive_this_copy_multi_replica(const share::schema::ObT
   } else {
     bool all_copy_finish = true;
     int64_t major_sstable_exist_reply_ts = 0;
+    const bool need_fail_list = false;
+    const int64_t cluster_id = OB_INVALID_ID;  // local cluster
+    const bool filter_flag_replica = false;
     common::ObArray<PartitionSSTableBuildStat> partition_sstable_stat_array;
     {
       SpinWLockGuard item_guard(task->lock_);
@@ -1515,7 +1518,12 @@ int ObGlobalIndexBuilder::drive_this_copy_multi_replica(const share::schema::ObT
         if (!pkey.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("pkey invalid", K(ret), K(pkey));
-        } else if (OB_FAIL(pt_operator_->get(pkey.get_table_id(), pkey.get_partition_id(), info))) {
+        } else if (OB_FAIL(pt_operator_->get(pkey.get_table_id(),
+                       pkey.get_partition_id(),
+                       info,
+                       need_fail_list,
+                       cluster_id,
+                       filter_flag_replica))) {
           LOG_WARN("fail to get partition info", K(ret), K(pkey));
         } else if (OB_FAIL(filter.set_replica_status(REPLICA_STATUS_NORMAL))) {
           LOG_WARN("fail to set replica status", K(ret));

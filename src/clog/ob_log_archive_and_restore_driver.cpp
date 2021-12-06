@@ -221,7 +221,7 @@ void ObLogArchiveAndRestoreDriver::state_driver_loop()
     }
 
     const int64_t round_cost_time = ObTimeUtility::current_time() - start_ts;
-    int32_t sleep_ts = ARCHVIE_AND_RESTORE_STATE_DRIVER_INTERVAL - static_cast<const int32_t>(round_cost_time);
+    int32_t sleep_ts = ARCHIVE_AND_RESTORE_STATE_DRIVER_INTERVAL - static_cast<const int32_t>(round_cost_time);
     if (sleep_ts < 0) {
       sleep_ts = 0;
     }

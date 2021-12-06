@@ -813,8 +813,12 @@ int ObPartGroupBackupTask::check_before_backup()
   ObExternBackupInfoMgr extern_backup_info_mgr;
   ObClusterBackupDest cluster_backup_dest;
   ObBackupDest backup_dest;
-  ObFakeBackupLeaseService fake_backup_lease_service;
-  ObExternBackupInfo last_backup_info;
+  ObBackupPath path;
+  ObStorageUtil util(false /*need retry*/);
+  bool is_exist = false;
+
+  // For nfs 4.2 may has bug, which makes open wrong file handle
+  // There just check file exist
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
@@ -828,17 +832,13 @@ int ObPartGroupBackupTask::check_before_backup()
       STORAGE_LOG(WARN, "failed to set backup dest", K(ret), K(backup_arg));
     } else if (OB_FAIL(cluster_backup_dest.set(backup_dest, backup_arg.incarnation_))) {
       STORAGE_LOG(WARN, "failed to set cluster backup dest", K(ret), K(backup_dest));
-    } else if (OB_FAIL(extern_backup_info_mgr.init(tenant_id, cluster_backup_dest, fake_backup_lease_service))) {
-      STORAGE_LOG(WARN, "failed to init extern backup info", K(ret), K(cluster_backup_dest));
-    } else if (OB_FAIL(extern_backup_info_mgr.get_last_info(last_backup_info))) {
-      STORAGE_LOG(WARN, "failed to get last info", K(ret), K(cluster_backup_dest));
-    } else if (!last_backup_info.is_valid() || ObExternBackupInfo::DOING != last_backup_info.status_ ||
-               last_backup_info.backup_data_version_ != backup_arg.backup_data_version_ ||
-               last_backup_info.backup_schema_version_ != backup_arg.backup_schema_version_ ||
-               last_backup_info.backup_type_ != backup_arg.backup_type_ ||
-               last_backup_info.inc_backup_set_id_ != backup_arg.backup_set_id_) {
+    } else if (OB_FAIL(ObBackupPathUtil::get_tenant_data_backup_info_path(cluster_backup_dest, tenant_id, path))) {
+      LOG_WARN("failed to get tenant data backup info path", K(ret), K(backup_dest));
+    } else if (OB_FAIL(util.is_exist(path.get_ptr(), backup_arg.storage_info_, is_exist))) {
+      LOG_WARN("failed to check extern backup file info exist", K(ret), K(path), K(backup_dest));
+    } else if (!is_exist) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("last backup info is unexpected", K(ret), K(last_backup_info), K(backup_arg));
+      LOG_WARN("extern backup info is not exist", K(ret), K(backup_arg), K(path));
     }
   }
   return ret;

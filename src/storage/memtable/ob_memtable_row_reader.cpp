@@ -765,8 +765,8 @@ void ObMemtableIterRowReader::reset()
   }
 }
 
-int ObMemtableIterRowReader::init(common::ObArenaAllocator* allocator, const share::schema::ColumnMap* cols_map,
-    ObNopBitMap* bitmap, const storage::ObColDescArray& columns)
+int ObMemtableIterRowReader::init(common::ObIAllocator *allocator, const share::schema::ColumnMap *cols_map,
+    ObNopBitMap *bitmap, const storage::ObColDescArray &columns)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {

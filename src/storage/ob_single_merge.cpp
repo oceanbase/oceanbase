@@ -23,7 +23,9 @@ ObSingleMerge::ObSingleMerge() : rowkey_(NULL), fuse_row_cache_fetcher_()
 {}
 
 ObSingleMerge::~ObSingleMerge()
-{}
+{
+  reset();
+}
 
 int ObSingleMerge::open(const ObExtStoreRowkey& rowkey)
 {
@@ -151,7 +153,10 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
     bool final_result = false;
     bool is_fuse_row_empty = false;
     int64_t sstable_end_log_ts = 0;
-    ObStoreRow& fuse_row = full_row_;
+    ObStoreRow &fuse_row = full_row_;
+    int64_t column_cnt = access_param_->iter_param_.projector_ != nullptr
+                             ? access_param_->iter_param_.projector_->count()
+                             : access_param_->iter_param_.out_cols_->count();
     nop_pos_.reset();
     fuse_row.row_val_.count_ = 0;
     fuse_row.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
@@ -221,8 +226,7 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
         cache_row.flag_ = handle_.value_->get_flag();
         // cache_row.snapshot_version_ = handle_.value_->get_snapshot_version();
         if (is_fuse_row_empty) {
-          row.row_val_.count_ =
-              ObActionFlag::OP_ROW_EXIST == cache_row.flag_ ? access_param_->iter_param_.projector_->count() : 0;
+          row.row_val_.count_ = ObActionFlag::OP_ROW_EXIST == cache_row.flag_ ? column_cnt : 0;
           row.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
           row.from_base_ = false;
           row.snapshot_version_ = 0L;
@@ -258,20 +262,19 @@ int ObSingleMerge::inner_get_next_row(ObStoreRow& row)
     if (OB_SUCC(ret)) {
       STORAGE_LOG(DEBUG, "row before project", K(fuse_row));
       if (!is_fuse_row_empty) {
-        row.row_val_.count_ =
-            ObActionFlag::OP_ROW_EXIST == fuse_row.flag_ ? access_param_->iter_param_.projector_->count() : 0;
+        row.row_val_.count_ = ObActionFlag::OP_ROW_EXIST == fuse_row.flag_ ? column_cnt : 0;
       }
       if (enable_fuse_row_cache) {
         if (!is_fuse_row_empty) {
           if (ObActionFlag::OP_ROW_EXIST == fuse_row.flag_) {
             if (OB_FAIL(project_row(fuse_row, access_param_->iter_param_.projector_, 0 /*range idx delta*/, row))) {
-              STORAGE_LOG(WARN, "fail to project row", K(ret), K(fuse_row), K(*access_param_->iter_param_.projector_));
+              STORAGE_LOG(WARN, "fail to project row", K(ret), K(fuse_row), KPC(access_param_->iter_param_.projector_));
             } else {
               STORAGE_LOG(DEBUG,
                   "after project row",
                   K(fuse_row),
                   K(row),
-                  K(*access_param_->iter_param_.projector_),
+                  KPC(access_param_->iter_param_.projector_),
                   K(access_param_->iter_param_.table_id_));
             }
           } else {

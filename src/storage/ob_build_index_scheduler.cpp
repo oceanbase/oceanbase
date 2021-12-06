@@ -850,6 +850,7 @@ int ObBuildIndexScheduleTask::copy_build_index_data(const bool is_leader)
         } else {
           ret = OB_SUCCESS;
         }
+        ++retry_cnt_;
       } else {
         is_copy_request_sent_ = true;
         last_active_timestamp_ = ObTimeUtility::current_time();

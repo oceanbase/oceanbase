@@ -275,6 +275,10 @@ DEF_BOOL(_enable_static_typing_engine, OB_CLUSTER_PARAMETER, "True",
     "specifies whether static typing sql execution engine is activated",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// https://yuque.antfin-inc.com/ob/product_functionality_review/zlp56c
+DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "True",
+    "specifies whether allow to do some defensive checks when the query is executed",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// tenant config
 DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, "5s", common::ObConfigStaleTimeChecker,
     "[5s,)",
@@ -1421,7 +1425,7 @@ DEF_BOOL(_enable_plan_cache_mem_diagnosis, OB_CLUSTER_PARAMETER, "False",
 DEF_INT(_clog_aggregation_buffer_amount, OB_TENANT_PARAMETER, "0", "[0, 128]", "the amount of clog aggregation buffer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,]",
+DEF_TIME(schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,]",
     "the time interval between the schedules of schema history recyle task. "
     "Range: [0s, +∞)",
     ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

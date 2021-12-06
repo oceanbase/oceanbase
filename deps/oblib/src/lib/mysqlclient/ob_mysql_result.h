@@ -490,8 +490,8 @@
       if (skip_column_error) {                                                         \
         SQL_LOG(INFO, "column not found, ignore", "column_name", #column_name);        \
         /*overwrite ret*/                                                              \
-        if (OB_FAIL((class_obj).set_##column_name(str_value))) {                       \
-          SQL_LOG(WARN, "fail to set value", KR(ret), K(str_value));                   \
+        if (OB_FAIL((class_obj).set_##column_name(default_value))) {                   \
+          SQL_LOG(WARN, "fail to set value", KR(ret), K(default_value));               \
         }                                                                              \
       } else {                                                                         \
         SQL_LOG(WARN, "column not found", "column_name", #column_name, K(ret));        \

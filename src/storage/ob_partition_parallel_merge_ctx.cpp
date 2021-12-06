@@ -13,7 +13,6 @@
 #include "storage/ob_partition_parallel_merge_ctx.h"
 #include "storage/ob_partition_merge_task.h"
 #include "storage/memtable/ob_memtable.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "share/config/ob_server_config.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "ob_partition_range_spliter.h"

@@ -325,7 +325,6 @@ TEST_F(TestMarkDeletion, write)
   ret = writer.build_micro_block(false);
   ret = writer.close();
 
-  ObMacroBlockMetaHandle meta_handle;
   const ObMacroBlockMeta* meta = NULL;
   ObFullMacroBlockMeta full_meta;
 

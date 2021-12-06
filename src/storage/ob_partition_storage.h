@@ -174,10 +174,12 @@ struct ObPartitionPrefixAccessStat {
   AccessStat rowkey_prefix_[MAX_ROWKEY_PREFIX_NUM + 1];
 };
 
+class ObSingleRowGetter;
 class ObPartitionStorage : public ObIPartitionStorage {
   template <typename T>
   friend class oceanbase::storageperf::ObMultiBlockBench;
   friend class ObPGStorage;
+  friend class ObSingleRowGetter;
 
 public:
   ObPartitionStorage();
@@ -488,6 +490,7 @@ private:
           relative_tables_(allocator),
           col_map_(nullptr),
           col_descs_(nullptr),
+          column_ids_(nullptr),
           idx_col_descs_(),
           tbl_row_(),
           idx_row_(NULL),
@@ -515,8 +518,9 @@ private:
     common::ObIAllocator& allocator_;
     const ObRowDml dml_type_;
     ObRelativeTables relative_tables_;
-    const share::schema::ColumnMap* col_map_;
-    const ObColDescIArray* col_descs_;
+    const share::schema::ColumnMap *col_map_;
+    const ObColDescIArray *col_descs_;
+    const common::ObIArray<uint64_t> *column_ids_;
     ObColDescArray idx_col_descs_;
     ObStoreRow tbl_row_;
     ObStoreRow* idx_row_;  // not a must, allocate dynamically
@@ -540,28 +544,24 @@ private:
       const share::schema::ColumnMap* col_map, const common::ObIArray<uint64_t>& column_ids, const ObRowDml dml_type,
       const common::ObIArray<uint64_t>& upd_column_ids, const ChangeType change_type, const bool is_total_quantity_log);
   int insert_table_row(
-      ObDMLRunningCtx& run_ctx, ObRelativeTable& relative_table, const ObColDescIArray& col_descs, ObStoreRow& row);
-  int insert_table_rows(ObDMLRunningCtx& run_ctx, ObRelativeTable& relative_table, const ObColDescIArray& col_descs,
-      ObRowsInfo& rows_info);
-  int insert_index_rows(ObDMLRunningCtx& run_ctx, ObStoreRow* rows, int64_t row_count);
-  int direct_insert_row_and_index(ObDMLRunningCtx& run_ctx, const ObStoreRow& tbl_row);
-  int get_column_index(const ObColDescIArray& tbl_col_desc, const ObColDescIArray& idx_col_desc,
-      common::ObIArray<int32_t>& col_idx_array);
-  int convert_row_to_rowkey(common::ObNewRowIterator& iter, GetRowkeyArray& rowkeys);
-  int get_conflict_row(ObDMLRunningCtx& run_ctx, const ObTableAccessParam& access_param,
-      ObTableAccessContext& access_ctx, ObRelativeTable& relative_table, const common::ObStoreRowkey& rowkey,
-      common::ObNewRowIterator*& duplicated_rows);
-  int get_index_conflict_row(ObDMLRunningCtx& run_ctx, const ObTableAccessParam& table_access_param,
-      ObTableAccessContext& table_access_ctx, ObRelativeTable& relative_table, bool need_index_back,
-      const common::ObNewRow& row, common::ObNewRowIterator*& duplicated_rows);
-  int multi_get_rows(const ObStoreCtx& store_ctx, const ObTableAccessParam& access_param,
-      ObTableAccessContext& access_ctx, ObRelativeTable& relative_table, const GetRowkeyArray& rowkeys,
-      common::ObNewRowIterator*& duplicated_rows, int64_t data_table_rowkey_cnt);
-  int get_conflict_rows(ObDMLRunningCtx& run_ctx, const ObInsertFlag flag,
-      const common::ObIArray<uint64_t>& dup_col_ids, const common::ObNewRow& row,
-      common::ObNewRowIterator*& duplicated_rows);
-  int init_dml_access_ctx(ObDMLRunningCtx& run_ctx, common::ObArenaAllocator& allocator,
-      blocksstable::ObBlockCacheWorkingSet& block_cache_ws, ObTableAccessContext& table_access_ctx);
+      ObDMLRunningCtx &run_ctx, ObRelativeTable &relative_table, const ObColDescIArray &col_descs, ObStoreRow &row);
+  int insert_table_rows(ObDMLRunningCtx &run_ctx, ObRelativeTable &relative_table, const ObColDescIArray &col_descs,
+      ObRowsInfo &rows_info);
+  int insert_index_rows(ObDMLRunningCtx &run_ctx, ObStoreRow *rows, int64_t row_count);
+  int direct_insert_row_and_index(ObDMLRunningCtx &run_ctx, const ObStoreRow &tbl_row);
+  int convert_row_to_rowkey(ObSingleRowGetter &index_row_getter, ObStoreRowkey &rowkey);
+  int get_conflict_row(ObDMLRunningCtx &run_ctx, const common::ObIArray<uint64_t> &out_col_ids,
+      ObRelativeTable &relative_table, const ObStoreRowkey &rowkey, common::ObNewRowIterator *&duplicated_rows);
+  int get_index_conflict_row(ObDMLRunningCtx &run_ctx, const common::ObIArray<uint64_t> &out_col_ids,
+      ObRelativeTable &relative_table, bool need_index_back, const common::ObNewRow &row,
+      common::ObNewRowIterator *&duplicated_rows);
+  int single_get_row(ObSingleRowGetter &row_getter,
+                     const ObStoreRowkey &rowkey,
+                     common::ObNewRowIterator *&duplicated_rows,
+                     int64_t data_table_rowkey_cnt);
+  int get_conflict_rows(ObDMLRunningCtx &run_ctx, const ObInsertFlag flag,
+      const common::ObIArray<uint64_t> &dup_col_ids, const common::ObNewRow &row,
+      common::ObNewRowIterator *&duplicated_rows);
   int get_change_type(
       const common::ObIArray<uint64_t>& update_ids, const ObRelativeTable& table, ChangeType& change_type);
   int check_rowkey_change(const common::ObIArray<uint64_t>& update_ids, const ObRelativeTables& relative_tables,
@@ -691,7 +691,21 @@ private:
   int lock_rows_(
       const ObStoreCtx& ctx, const ObTableScanParam& scan_param, const common::ObNewRow& row, RowReshape*& row_reshape);
   int check_useless_index_mini_merge(const storage::ObSSTableMergeCtx &ctx);
-  int dump_error_info(ObSSTable& main_sstable, ObSSTable& index_sstable);
+  void check_leader_changed_for_sql_recheck_(ObDMLRunningCtx &run_ctx, int &ret);
+
+  int dump_error_info(ObSSTable &main_sstable, ObSSTable &index_sstable);
+  //////////////////
+  /// do write row strict check
+  int check_old_row_legitimacy(ObDMLRunningCtx &run_ctx, const common::ObNewRow &row);
+  int check_delete_index_legitimacy(
+      ObDMLRunningCtx &run_ctx, ObRelativeTable &index_table, const common::ObNewRow &row);
+  int check_new_row_legitimacy(ObDMLRunningCtx &run_ctx, const common::ObNewRow &row);
+  int check_new_row_nullable_value(
+      const common::ObIArray<uint64_t> &column_ids, ObRelativeTable &data_table, const common::ObNewRow &new_row);
+  int check_new_row_nullable_value(const common::ObIArray<share::schema::ObColDesc> &col_descs,
+      ObRelativeTable &relative_table, const common::ObNewRow &new_row);
+  int check_new_row_shadow_pk(
+      const common::ObIArray<uint64_t> &column_ids, ObRelativeTable &data_table, const common::ObNewRow &new_row);
   // disallow copy;
   DISALLOW_COPY_AND_ASSIGN(ObPartitionStorage);
 

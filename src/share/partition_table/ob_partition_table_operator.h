@@ -45,11 +45,12 @@ public:
   int set_callback_for_obs(obrpc::ObCommonRpcProxy& rpc_proxy, ObRsMgr& rs_mgr, common::ObServerConfig& config);
 
   virtual int get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info,
-      const bool need_fetch_faillist = false, const int64_t cluster_id = common::OB_INVALID_ID) override;
+      const bool need_fetch_faillist = false, const int64_t cluster_id = common::OB_INVALID_ID,
+      const bool filter_flag_replica = true) override;
 
   virtual int prefetch_by_table_id(const uint64_t tenant_id, const uint64_t start_table_id,
       const int64_t set_partition_id, common::ObIArray<ObPartitionInfo>& partition_infos,
-      const bool need_fetch_faillist = false) override;
+      const bool need_fetch_faillist = false, const bool filter_flag_replica = true) override;
 
   virtual int prefetch(const uint64_t tenant_id, const uint64_t start_table_id, const int64_t set_partition_id,
       common::ObIArray<ObPartitionInfo>& partition_infos, bool ignore_row_checksum,

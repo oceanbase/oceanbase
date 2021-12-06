@@ -405,7 +405,8 @@ protected:
           rowkey_dist_ctx_(NULL),
           iter_end_(false),
           saved_session_(NULL)
-    {}
+    {
+    }
     virtual ~ObTableModifyCtx()
     {
       destroy();
@@ -439,7 +440,14 @@ protected:
     }
     const ObObjPrintParams get_obj_print_params()
     {
-      return CREATE_OBJ_PRINT_PARAM(exec_ctx_.get_my_session());
+      ObObjPrintParams print_params = CREATE_OBJ_PRINT_PARAM(exec_ctx_.get_my_session());
+      print_params.need_cast_expr_ = true;
+      // bugfix:https://work.aone.alibaba-inc.com/issue/36658497
+      // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
+      // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
+      GET_SQL_MODE_BIT(
+          IS_NO_BACKSLASH_ESCAPES, exec_ctx_.get_my_session()->get_sql_mode(), print_params.skip_escape_);
+      return print_params;
     }
     int check_stack();
 
@@ -760,11 +768,14 @@ protected:
   int validate_row(common::ObExprCtx& expr_ctx, common::ObCastCtx& column_conv_ctx, common::ObNewRow& calc_row,
       bool check_normal_column, bool check_virtual_column) const;
   int check_row_null(
-      ObExecContext& ctx, const common::ObNewRow& calc_row, const common::ObIArray<ColumnContent>& column_infos) const;
-  int set_autoinc_param_pkey(ObExecContext& ctx, const common::ObPartitionKey& pkey) const;
-  int get_part_location(ObExecContext& ctx, const ObPhyTableLocation& table_location,
-      const share::ObPartitionReplicaLocation*& out) const;
-  int get_part_location(ObExecContext& ctx, common::ObIArray<DMLPartInfo>& part_keys) const;
+      ObExecContext &ctx, const common::ObNewRow &calc_row, const common::ObIArray<ColumnContent> &column_infos) const;
+  int check_row_null(ObExecContext &ctx, const common::ObNewRow &calc_row,
+      const common::ObIArray<ColumnContent> &column_infos,
+      const common::ObIArray<ColumnContent> &update_col_infos) const;
+  int set_autoinc_param_pkey(ObExecContext &ctx, const common::ObPartitionKey &pkey) const;
+  int get_part_location(ObExecContext &ctx, const ObPhyTableLocation &table_location,
+      const share::ObPartitionReplicaLocation *&out) const;
+  int get_part_location(ObExecContext &ctx, common::ObIArray<DMLPartInfo> &part_keys) const;
   // for checking the rowkey whether null, the head of the row must be rowkey
   int check_rowkey_is_null(const ObNewRow& row, int64_t rowkey_cnt, bool& is_null) const;
   int get_gi_task(ObExecContext& ctx) const;

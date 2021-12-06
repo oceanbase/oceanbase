@@ -154,7 +154,6 @@ private:
   bool is_data_ready_;
   obrpc::ObFetchMacroBlockArg macro_arg_;
   uint64_t backup_index_tid_;
-  blocksstable::ObMacroBlockMetaHandle meta_handle_;
   blocksstable::ObFullMacroBlockMeta full_meta_;
   ObMacroBlockHandle macro_handle_;
   blocksstable::ObBufferReader data_;

@@ -46,7 +46,7 @@
 //  ----------------------------------------------------------------
 //
 //  ObLogBlockMetaV2::MetaContent includes:
-//  1. maigc_, data_checksum_, meta_checksum_:checks block integrity
+//  1. magic_, data_checksum_, meta_checksum_:checks block integrity
 //  2. type_:uses ObBlockType;
 //  3. timestamp_:block generation time for debugging
 //  4. total_len_, padding_len_:block adds padding for 512 aligned
@@ -154,7 +154,7 @@ private:
   int64_t timestamp_;      // block meta generation time, used for debug
   int64_t data_checksum_;  // data checksum
 
-  // memta checksum calculation requirements:
+  // meta checksum calculation requirements:
   // 1. Located in the last line of the member variable declaration
   // 2. no virtual function in class
   // 3. The member variable before this declaration is 64-bit aligned

@@ -133,7 +133,6 @@ int ObPartitionMetaBackupReader::read_sstable_meta(ObITable::TableKey& table_key
   ObTableHandle tmp_handle;
   ObSSTable* sstable = NULL;
   blocksstable::ObSSTablePair pair;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (OB_FAIL(ObPartitionService::get_instance().acquire_sstable(table_key, tmp_handle))) {
@@ -437,7 +436,6 @@ int ObPartitionMetaBackupReader::build_backup_sstable_info(const ObSSTable* ssta
   int ret = OB_SUCCESS;
   sstable_info.reset();
   blocksstable::ObSSTablePair pair;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (OB_ISNULL(sstable)) {
@@ -527,7 +525,6 @@ ObMacroBlockBackupSyncReader::ObMacroBlockBackupSyncReader()
       is_data_ready_(false),
       macro_arg_(),
       backup_index_tid_(0),
-      meta_handle_(),
       full_meta_(),
       macro_handle_(),
       data_(),
@@ -552,7 +549,6 @@ void ObMacroBlockBackupSyncReader::reset()
   is_data_ready_ = false;
   macro_arg_.reset();
   backup_index_tid_ = 0;
-  meta_handle_.reset();
   full_meta_.reset();
   macro_handle_.reset();
   data_.assign(NULL, 0, 0);
@@ -3114,16 +3110,8 @@ int ObBackupPhysicalPGCtx::check_table_exist(
   if (OB_UNLIKELY(!macro_index_store.is_inited() || !table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(macro_index_store), K(table_key));
-  } else if (OB_FAIL(macro_index_store.get_macro_index_array(table_key, macro_index_array))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      is_exist = false;
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_ISNULL(macro_index_array)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("macro index array should not be NULL", K(ret), K(table_key));
-  } else {
-    is_exist = true;
+  } else if (OB_FAIL(macro_index_store.check_table_exist(table_key, is_exist))) {
+    STORAGE_LOG(WARN, "failed to check table exist", K(ret), K(table_key));
   }
   return ret;
 }
@@ -3344,6 +3332,7 @@ int ObBackupCopyPhysicalTask::process()
           }
         }
       }
+      STORAGE_LOG(INFO, "reuse backup macro count", K(block_info), K(copy_count), K(reuse_count));
     }
   }
   if (OB_FAIL(ret)) {
@@ -3377,7 +3366,6 @@ int ObBackupCopyPhysicalTask::fetch_backup_macro_block_arg(const share::ObPhysic
   int ret = OB_SUCCESS;
   ObTableHandle tmp_handle;
   ObSSTable* sstable = NULL;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (!table_key.is_valid() || macro_idx < 0) {

@@ -17,7 +17,6 @@
 #include "lib/ec/ob_erasure_code_isa.h"
 #include "share/ob_force_print_log.h"
 #include "observer/ob_server_struct.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "ob_store_file.h"
 
 using namespace oceanbase;
@@ -2859,7 +2858,6 @@ int ObRaidFileSystem::rebuild_macro_block(const ObDiskID& disk_id, const int64_t
   ObIOInfo info;
   common::ObSEArray<int64_t, OB_MAX_DISK_NUMBER> input_index;
   common::ObSEArray<int64_t, OB_MAX_DISK_NUMBER> recover_index;
-  ObMacroBlockMetaHandle meta_handle;
   bool is_free = false;
 
   SpinRLockGuard lock_guard(lock_);

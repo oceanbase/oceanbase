@@ -20,7 +20,6 @@
 #include "common/ob_store_range.h"
 #include "ob_block_sstable_struct.h"
 #include "ob_row_reader.h"
-#include "ob_macro_block_meta_mgr.h"
 
 namespace oceanbase {
 namespace storage {

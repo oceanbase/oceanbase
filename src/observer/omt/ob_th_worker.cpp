@@ -491,7 +491,7 @@ int ObThWorker::check_large_query_quota()
   // process is done.
   int ret = OB_SUCCESS;
   if (OB_ISNULL(tenant_)) {
-    // Back ground thread may also check large query quota, whereas we
+    // Background thread may also check large query quota, whereas we
     // always return success
   } else if (tenant_->id() >= OB_SERVER_TENANT_ID && tenant_->id() <= OB_MAX_RESERVED_TENANT_ID) {
     // do nothing, these tenants don't support large query schedule.

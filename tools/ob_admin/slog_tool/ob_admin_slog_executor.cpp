@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX COMMON
 #include "ob_admin_slog_executor.h"
 #include "storage/blocksstable/slog/ob_base_storage_logger.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/ob_partition_service.h"
 #include "storage/ob_table_mgr.h"
 #include "storage/ob_tenant_config_mgr.h"
@@ -49,9 +48,6 @@ int ObAdminSlogExecutor::execute(int argc, char *argv[])
     if (NULL != log_dir_ && log_file_id_ > 0) {
       if (OB_FAIL(SLOGGER.register_redo_module(OB_REDO_LOG_PARTITION, &partition_module))) {
         LOG_WARN("fail to register partition module", K(ret));
-      } else if (OB_FAIL(SLOGGER.register_redo_module(OB_REDO_LOG_MACROBLOCK,
-                                                      &ObMacroBlockMetaMgr::get_instance()))) {
-        LOG_WARN("fail to register macro module", K(ret));
       } else if (OB_FAIL(SLOGGER.register_redo_module(OB_REDO_LOG_TABLE_MGR,
                                                       &ObTableMgr::get_instance()))) {
         LOG_WARN("fail to register table module", K(ret));

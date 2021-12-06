@@ -270,6 +270,13 @@
 #include "sql/engine/expr/ob_expr_convert_tz.h"
 #include "sql/engine/expr/ob_expr_degrees.h"
 #include "sql/engine/expr/ob_expr_weight_string.h"
+#include "sql/engine/expr/ob_expr_any_value.h"
+#include "sql/engine/expr/ob_expr_validate_password_strength.h"
+#include "sql/engine/expr/ob_expr_benchmark.h"
+#include "sql/engine/expr/ob_expr_uuid_short.h"
+#include "sql/engine/expr/ob_expr_convert_tz.h"
+#include "sql/engine/expr/ob_expr_to_base64.h"
+#include "sql/engine/expr/ob_expr_from_base64.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -610,6 +617,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTruncate);
   REG_OP(ObExprDllUdf);
   REG_OP(ObExprExp);
+  REG_OP(ObExprAnyValue);
+  REG_OP(ObExprUuidShort);
   /* subquery comparison experator */
   REG_OP(ObExprSubQueryRef);
   REG_OP(ObExprSubQueryEqual);
@@ -680,7 +689,12 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTimeFormat);
   REG_OP(ObExprTimestamp);
   REG_OP(ObExprDegrees);
+  REG_OP(ObExprValidatePasswordStrength);
   REG_OP(ObExprWeightString);
+  REG_OP(ObExprBenchmark);
+  REG_OP(ObExprDay);
+  REG_OP(ObExprToBase64);
+  REG_OP(ObExprFromBase64);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);

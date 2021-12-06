@@ -53,7 +53,8 @@ int ObPersistentPartitionTable::init(ObISQLClient& sql_proxy, ObServerConfig* co
 }
 
 int ObPersistentPartitionTable::get(const uint64_t table_id, const int64_t partition_id,
-    ObPartitionInfo& partition_info, const bool need_fetch_faillist, const int64_t cluster_id)
+    ObPartitionInfo& partition_info, const bool need_fetch_faillist, const int64_t cluster_id,
+    const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
@@ -65,19 +66,16 @@ int ObPersistentPartitionTable::get(const uint64_t table_id, const int64_t parti
   } else if (NULL == partition_info.get_allocator()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("partition info's allocator must set", K(ret), K(partition_info.get_allocator()));
-  } else {
-    const bool filter_flag_replica = true;
-    if (OB_FAIL(get_partition_info(
-            table_id, partition_id, filter_flag_replica, partition_info, need_fetch_faillist, cluster_id))) {
-      LOG_WARN(
-          "get_partition_info failed", K(cluster_id), KT(table_id), K(partition_id), K(filter_flag_replica), K(ret));
-    }
+  } else if (OB_FAIL(get_partition_info(
+                 table_id, partition_id, filter_flag_replica, partition_info, need_fetch_faillist, cluster_id))) {
+    LOG_WARN("get_partition_info failed", K(cluster_id), KT(table_id), K(partition_id), K(filter_flag_replica), K(ret));
   }
   return ret;
 }
 
 int ObPersistentPartitionTable::prefetch_by_table_id(const uint64_t tenant_id, const uint64_t start_table_id,
-    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist)
+    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist,
+    const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
@@ -92,7 +90,6 @@ int ObPersistentPartitionTable::prefetch_by_table_id(const uint64_t tenant_id, c
   } else {
     ObPartitionTableProxyFactory factory(*sql_proxy_, merge_error_cb_, config_);
     ObPartitionTableProxy* proxy = NULL;
-    const bool filter_flag_replica = true;
     int64_t fetch_count = GCONF.partition_table_scan_batch_count;
     if (OB_FAIL(factory.get_proxy(start_table_id, proxy))) {
       LOG_WARN("get partition table proxy failed", K(ret), K(start_table_id));

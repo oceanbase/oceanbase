@@ -36,6 +36,12 @@ int ObExprDayOfMonth::calc_dayofmonth(const ObExpr& expr, ObEvalCtx& ctx, ObDatu
   return ObExprTimeBase::calc(expr, ctx, expr_datum, DT_MDAY, true, true);
 }
 
+ObExprDay::ObExprDay(ObIAllocator &alloc)
+    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY, N_DAY){};
+
+ObExprDay::~ObExprDay()
+{}
+
 ObExprDayOfWeek::ObExprDayOfWeek(ObIAllocator& alloc)
     : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_OF_WEEK, N_DAY_OF_WEEK){};
 

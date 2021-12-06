@@ -236,7 +236,7 @@ int ObStaticEngineCG::postorder_generate_op(
     cur_op_exprs_.reset();
     cur_op_self_produced_exprs_.reset();
     if (OB_FAIL(cur_op_exprs_.assign(tmp_cur_op_exprs))) {
-      LOG_WARN("assign exprs failed", K(ret)); 
+      LOG_WARN("assign exprs failed", K(ret));
     } else if (OB_FAIL(cur_op_self_produced_exprs_.assign(tmp_cur_op_self_produced_exprs))) {
       LOG_WARN("assign exprs failed", K(ret));
     }
@@ -2363,6 +2363,7 @@ int ObStaticEngineCG::convert_global_index_update_info(ObLogUpdate& op, const Ta
     ObGlobalIndexDMLInfo& phy_dml_info = table_dml_info.index_infos_.at(i);
     const IndexDMLInfo& index_dml_info = table_columns.index_dml_infos_.at(i);
     const ObTableSchema* table_schema = NULL;
+    ObTableUpdateSpec* update_spec = NULL;
     phy_dml_info.table_id_ = index_dml_info.loc_table_id_;
     phy_dml_info.index_tid_ = index_dml_info.index_tid_;
     phy_dml_info.part_cnt_ = index_dml_info.part_cnt_;
@@ -2405,8 +2406,10 @@ int ObStaticEngineCG::convert_global_index_update_info(ObLogUpdate& op, const Ta
     // update across partition: delete from the old partition and insert into the new partition.
     // generate update subplan first, then delete and insert subplan can reuse old_row and new_row.
     OZ(convert_update_subplan(op, index_dml_info, subplans.at(ObMultiPartUpdate::UPDATE_OP)));
-    ObTableUpdateSpec* update_spec =
-        static_cast<ObTableUpdateSpec*>(subplans.at(ObMultiPartUpdate::UPDATE_OP).subplan_root_);
+    if (OB_SUCC(ret)) {
+      update_spec = static_cast<ObTableUpdateSpec*>(
+          subplans.at(ObMultiPartUpdate::UPDATE_OP).subplan_root_);
+    }
     CK(OB_NOT_NULL(update_spec));
 
     if (OB_SUCC(ret)) {

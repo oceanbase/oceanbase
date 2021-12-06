@@ -23,6 +23,264 @@ char ObBase64Encoder::BASE64_CHARS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                                        "abcdefghijklmnopqrstuvwxyz"
                                        "0123456789+/";
 
+int ObBase64Encoder::FROM_BASE64_TABLE[] = {
+    /*00*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -2,
+    -2,
+    -2,
+    -2,
+    -2,
+    -1,
+    -1,
+    /*10*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*20*/ -2,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    62,
+    -1,
+    -1,
+    -1,
+    63, /*  !"#$%&'()*+,-./ */
+    /*30*/ 52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1, /* 0123456789:;<=>? */
+    /*40*/ -1,
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14, /* @ABCDEFGHIJKLMNO */
+    /*50*/ 15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1, /* PQRSTUVWXYZ[\]^_ */
+    /*60*/ -1,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40, /* `abcdefghijklmno */
+    /*70*/ 41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1, /* pqrstuvwxyz{|}~  */
+    /*80*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*90*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*A0*/ -2,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*B0*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*C0*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*D0*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*E0*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    /*F0*/ -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1,
+    -1};
+
 template <int N>
 struct InitBase64Values {
   typedef InitBase64Values<N + 1> next_v_;
@@ -47,8 +305,8 @@ struct InitBase64Values<sizeof(ObBase64Encoder::BASE64_CHARS) - 1> {
 
 static int init_ret = InitBase64Values<0>::init();
 
-int ObBase64Encoder::encode(
-    const uint8_t* input, const int64_t input_len, char* output, const int64_t output_len, int64_t& pos)
+int ObBase64Encoder::encode(const uint8_t *input, const int64_t input_len, char *output, const int64_t output_len,
+    int64_t &pos, const int16_t wrap)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(input) || OB_ISNULL(output) || OB_UNLIKELY(input_len < 0 || output_len < 0) || pos < 0) {
@@ -76,6 +334,11 @@ int ObBase64Encoder::encode(
 
       for (int j = 0; OB_SUCC(ret) && j < 4; j++) {
         output[pos++] = BASE64_CHARS[output_idxes[j]];
+      }
+      if (wrap > 0) {
+        if (((i + 1) % (wrap / 4) == 0) && ((i + 1) * 3 != input_len)) {
+          output[pos++] = '\n';
+        }
       }
       iter_input++;
     }  // for end
@@ -115,8 +378,8 @@ int ObBase64Encoder::encode(
   return ret;
 }
 
-int ObBase64Encoder::decode(
-    const char* input, const int64_t input_len, uint8_t* output, const int64_t output_len, int64_t& pos)
+int ObBase64Encoder::decode(const char *input, const int64_t input_len, uint8_t *output, const int64_t output_len,
+    int64_t &pos, bool skip_spaces)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(input) || OB_ISNULL(output) || OB_UNLIKELY(input_len < 0 || output_len < 0 || pos < 0)) {
@@ -138,11 +401,18 @@ int ObBase64Encoder::decode(
       ret = OB_BUF_NOT_ENOUGH;
       _OB_LOG(WARN, "buffer not enough, pos=%ld, output_len=%ld, input_len=%ld", pos, output_len, input_len);
     }
-    const char* iter_input = input;
+    const char *iter_input = input;
+    int64_t skipped_spaces = 0;
     for (; OB_SUCC(ret) && '=' != *iter_input && iter_input < input + input_len; iter_input++) {
       if (OB_UNLIKELY(!is_base64_char(*iter_input))) {
-        ret = OB_INVALID_ROWID;
-        _OB_LOG(WARN, "invalid base64 char, cur_idx=%ld, char=%c", iter_input - input, *iter_input);
+        if (skip_spaces) {
+          if (my_base64_decoder_skip_spaces(*iter_input)) {
+            ++skipped_spaces;
+          }
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          _OB_LOG(WARN, "invalid base64 char, cur_idx=%ld, char=%c", iter_input - input, *iter_input);
+        }
       } else {
         uint8_array_4[i++] = (uint8_t)(*iter_input);
         if (4 == i) {
@@ -161,15 +431,27 @@ int ObBase64Encoder::decode(
       }
     }  // for end
     int64_t cur_idx = iter_input - input;
-    for (const char* iter = iter_input; iter < input + input_len; iter++) {
-      // all the rest chars must be '='
-      if (OB_UNLIKELY('=' != *iter)) {
-        ret = OB_INVALID_ROWID;
+    for (const char *iter = iter_input; iter < input + input_len; iter++) {
+      if (skip_spaces) {
+        if (my_base64_decoder_skip_spaces(*iter)) {
+          ++skipped_spaces;
+        }
+      } else {
+        // all the rest chars must be '='
+        if (OB_UNLIKELY('=' != *iter)) {
+          ret = OB_INVALID_ARGUMENT;
+        }
       }
     }  // end for
-    if (OB_UNLIKELY(cur_idx + 3 <= input_len)) {
+    if (skip_spaces) {
+      int64_t valid_len = input_len - skipped_spaces;
+      if (valid_len % 4 != 0 || valid_len < 4 || cur_idx + 3 <= valid_len) {
+        ret = OB_INVALID_ARGUMENT;
+      }
+    }
+    if (OB_UNLIKELY((cur_idx + 3 <= input_len) && !skip_spaces)) {
       // only last char or last two chars can be '='
-      ret = OB_INVALID_ROWID;
+      ret = OB_INVALID_ARGUMENT;
     } else if (i > 0) {
       for (int k = 0; k < i; k++) {
         uint8_array_4[k] = BASE64_VALUES[uint8_array_4[k]];
@@ -179,7 +461,11 @@ int ObBase64Encoder::decode(
 
       if (OB_UNLIKELY(pos + i - 1 >= output_len)) {
         ret = OB_BUF_NOT_ENOUGH;
-        _OB_LOG(WARN, "buffer not enought, pos=%ld, output_len = %ld, i = %ld", pos, output_len, i);
+        if (skip_spaces && (pos + i - 1 >= output_len)) {
+          ret = OB_INVALID_ARGUMENT;
+        } else {
+          _OB_LOG(WARN, "buffer not enough, pos=%ld, output_len = %ld, i = %ld", pos, output_len, i);
+        }
       } else {
         for (int k = 0; k < i - 1; k++) {
           output[pos++] = (uint8_t)(uint8_array_3[k]);

@@ -1,4 +1,4 @@
-# What is OceanBase database
+# What is OceanBase Database
 
 OceanBase Database is a native distributed relational database. It is developed entirely by Alibaba and Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
@@ -37,10 +37,11 @@ Refer to the [Get Started guide](docs/docs/docs-en/quick-start-en.md) to try out
 ## Supported clients
 
 - [OBClient](https://github.com/oceanbase/obclient)
+- [MySQLClient](https://dev.mysql.com/downloads/)
 
 ## Licencing
 
-OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0/index.html) license. You can freely copy and use the source code. When you modify or distribute the source code, please obey the MulanPubL - 2.0 license.
+OceanBase Database is under [MulanPubL - 2.0](http://license.coscl.org.cn/MulanPubL-2.0) license. You can freely copy and use the source code. When you modify or distribute the source code, please obey the MulanPubL - 2.0 license.
 
 ## OS compatibility list
 
@@ -57,54 +58,18 @@ OceanBase Database is under [MulanPubL - 2.0](https://license.coscl.org.cn/Mulan
 | Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 | UOS | 20 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
-## How to build
+## Developer Manual
 
-### Preparation
+1. [How to build](https://github.com/oceanbase/oceanbase/wiki/how_to_build)
+2. [How to setup IDE](https://github.com/oceanbase/oceanbase/wiki/how_to_setup_ide)
+3. [How to contribute](https://github.com/oceanbase/oceanbase/wiki/how_to_contribute)
+4. [How to modify document](https://github.com/oceanbase/oceanbase/wiki/how_to_modify_docs)
+5. [How to debug OceanBase](https://github.com/oceanbase/oceanbase/wiki/how_to_debug)
+6. [How to run test](https://github.com/oceanbase/oceanbase/wiki/how_to_test)
+7. [How to fix one_bug](https://github.com/oceanbase/oceanbase/wiki/how_to_fix_bug)
 
-Before building, you need to confirm that your device has installed the necessary software.
 
-#### Fedora based (, including CentOS, Fedora, OpenAnolis, RedHat, UOS, etc.)
 
-```sh
-yum install git wget rpm* cpio make glibc-devel glibc-headers binutils
-```
-
-#### Debian based (, including Debian, Ubuntu, etc.)
-
-```sh
-apt-get install git wget rpm rpm2cpio cpio make build-essential binutils
-```
-
-#### SUSE based (, including SUSE, openSUSE, etc.)
-
-```sh
-zypper install git wget rpm cpio make glibc-devel binutils
-```
-
-### debug mode
-
-```bash
-bash build.sh debug --init --make
-```
-
-### release mode
-
-```bash
-bash build.sh release --init --make
-```
-
-### RPM packages
-
-```bash
-bash build.sh rpm --init && cd build_rpm && make -j16 rpm
-```
-
-## Contributing
-
-Contributions are warmly welcomed and greatly appreciated. Here are a few ways you can contribute:
-
-- Raise us an [issue](https://github.com/oceanbase/oceanbase/issues).
-- Submit Pull Requests. For details, see [How to contribute](CONTRIBUTING.md).
 
 ## Support
 
@@ -113,3 +78,7 @@ In case you have any problems when using OceanBase Database, welcome reach out f
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
 - [Official Website](https://open.oceanbase.com/)
 - Knowledge base [Coming soon]
+
+## Roadmap
+
+Please refer to [Roadmap](https://github.com/oceanbase/oceanbase/wiki/roadmap) for details. 

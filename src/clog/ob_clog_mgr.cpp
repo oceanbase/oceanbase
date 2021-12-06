@@ -578,7 +578,7 @@ int ObCLogMgr::req_start_log_id_by_ts_with_breakpoint(const obrpc::ObLogReqStart
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(log_ext_executor_v2_.req_start_log_id_by_ts_with_breakpoint(req_msg, result))) {
-    CLOG_LOG(WARN, "log executorv2 req_start_log_id_by_ts_with_breakpoint failed", K(ret));
+    CLOG_LOG(WARN, "log executor req_start_log_id_by_ts_with_breakpoint failed", K(ret));
   } else {
     // success
   }

@@ -3111,7 +3111,10 @@ int ObTransformPreProcess::transform_in_or_notin_expr_without_row(ObRawExprFacto
       ObObjType obj_type = right_expr->get_param_expr(i)->get_result_type().get_type();
       ObCollationType coll_type = right_expr->get_param_expr(i)->get_result_type().get_collation_type();
       ObCollationLevel coll_level = right_expr->get_param_expr(i)->get_result_type().get_collation_level();
-      if (OB_FAIL(add_var_to_array_no_dup(distinct_types, DistinctObjMeta(obj_type, coll_type, coll_level)))) {
+      if (OB_UNLIKELY(obj_type == ObMaxType)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected obj type", K(ret), K(obj_type), K(*in_expr));
+      } else if (OB_FAIL(add_var_to_array_no_dup(distinct_types, DistinctObjMeta(obj_type, coll_type, coll_level)))) {
         LOG_WARN("failed to push back", K(ret));
       } else {
         LOG_DEBUG("add param expr type", K(i), K(obj_type));
@@ -3169,7 +3172,9 @@ int ObTransformPreProcess::transform_in_or_notin_expr_with_row(ObRawExprFactory&
   int ret = OB_SUCCESS;
   ObRawExpr* left_expr = in_expr->get_param_expr(0);
   ObRawExpr* right_expr = in_expr->get_param_expr(1);
-  int row_dim = left_expr->get_param_count();
+  int row_dim = T_REF_QUERY != left_expr->get_expr_type()
+                    ? left_expr->get_param_count()
+                    : static_cast<ObQueryRefRawExpr *>(left_expr)->get_output_column();
   ObSEArray<ObSEArray<DistinctObjMeta, 4>, 4> distinct_row_types;
   ObSEArray<ObSEArray<DistinctObjMeta, 4>, 4> all_row_types;
 
@@ -3191,7 +3196,10 @@ int ObTransformPreProcess::transform_in_or_notin_expr_with_row(ObRawExprFactory&
           const ObObjType obj_type = param_expr->get_result_type().get_type();
           const ObCollationType coll_type = param_expr->get_result_type().get_collation_type();
           const ObCollationLevel coll_level = param_expr->get_result_type().get_collation_level();
-          if (OB_FAIL(tmp_row_type.push_back(DistinctObjMeta(obj_type, coll_type, coll_level)))) {
+          if (OB_UNLIKELY(obj_type == ObMaxType)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected obj type", K(ret), K(obj_type), K(*in_expr));
+          } else if (OB_FAIL(tmp_row_type.push_back(DistinctObjMeta(obj_type, coll_type, coll_level)))) {
             LOG_WARN("failed to push back element", K(ret));
           } else { /* do nothing */
           }
@@ -3492,8 +3500,11 @@ int ObTransformPreProcess::check_and_transform_in_or_notin(
   } else if (OB_ISNULL(in_expr->get_param_expr(0)) || OB_ISNULL(in_expr->get_param_expr(1))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null params", K(ret), K(in_expr->get_param_expr(0)), K(in_expr->get_param_expr(1)));
-  } else if (T_OP_ROW == in_expr->get_param_expr(0)->get_expr_type()) {
+  } else if (T_OP_ROW == in_expr->get_param_expr(0)->get_expr_type() ||
+             (T_REF_QUERY == in_expr->get_param_expr(0)->get_expr_type() &&
+                 static_cast<ObQueryRefRawExpr *>(in_expr->get_param_expr(0))->get_output_column() > 1)) {
     // (x, y) in ((x0, y0), (x1, y1), ...)
+    // (select x, y from ...) in ((x0, y0), (x1, y1), ...))
     LOG_DEBUG("Before Transform", K(*in_expr));
     ret = transform_in_or_notin_expr_with_row(
         expr_factory, session, T_OP_IN == in_expr->get_expr_type(), in_expr, trans_happened);
@@ -3508,7 +3519,7 @@ int ObTransformPreProcess::check_and_transform_in_or_notin(
     if (OB_ISNULL(op_raw_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid null op_raw_expr", K(ret));
-    } else if (OB_FAIL(in_expr->formalize(&session))) {
+    } else if (OB_FAIL(op_raw_expr->formalize(&session))) {
       LOG_WARN("formalize expr failed", K(ret));
     } else {
       LOG_DEBUG("After Transform", K(*op_raw_expr));

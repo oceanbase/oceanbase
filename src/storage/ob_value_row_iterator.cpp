@@ -10,12 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
 #include "ob_value_row_iterator.h"
+#include "ob_partition_storage.h"
+#include "ob_single_merge.h"
 
 namespace oceanbase {
 using namespace oceanbase::common;
 namespace storage {
-
 ObValueRowIterator::ObValueRowIterator()
     : ObNewRowIterator(),
       is_inited_(false),
@@ -130,5 +132,159 @@ void ObValueRowIterator::reset()
   cur_idx_ = 0;
 }
 
+ObSingleRowGetter::ObSingleRowGetter(ObIAllocator &allocator, ObPartitionStore &store)
+    : store_(store),
+      single_merge_(nullptr),
+      store_ctx_(nullptr),
+      output_projector_(allocator),
+      relative_table_(nullptr),
+      table_param_(nullptr),
+      allocator_(allocator)
+{}
+
+ObSingleRowGetter::~ObSingleRowGetter()
+{
+  if (single_merge_ != nullptr) {
+    single_merge_->~ObSingleMerge();
+    allocator_.free(single_merge_);
+    single_merge_ = nullptr;
+  }
+  if (table_param_ != nullptr) {
+    table_param_->~ObTableParam();
+    allocator_.free(table_param_);
+    table_param_ = nullptr;
+  }
+}
+
+int ObSingleRowGetter::init_dml_access_ctx(const ObStoreCtx &store_ctx, const ObDMLBaseParam &dml_param)
+{
+  int ret = OB_SUCCESS;
+  common::ObVersionRange trans_version_range;
+  // TODO (muwei) trans_version_range值后续由上层传入
+  trans_version_range.snapshot_version_ = store_ctx.mem_ctx_->get_read_snapshot();
+  trans_version_range.base_version_ = 0;
+  trans_version_range.multi_version_start_ = 0;
+  store_ctx_ = &store_ctx;
+
+  if (OB_FAIL(access_ctx_.init(dml_param.query_flag_, store_ctx, allocator_, trans_version_range))) {
+    LOG_WARN("failed to init table access ctx", K(ret));
+  } else {
+    access_ctx_.expr_ctx_ = const_cast<ObExprCtx *>(&dml_param.expr_ctx_);
+  }
+  return ret;
+}
+
+int ObSingleRowGetter::init_dml_access_param(
+    ObRelativeTable &relative_table, const ObDMLBaseParam &dml_param, const ObIArray<uint64_t> &out_col_ids)
+{
+  int ret = OB_SUCCESS;
+  relative_table_ = &relative_table;
+  get_table_param_.tables_handle_ = &(relative_table.tables_handle_);
+  if (!dml_param.virtual_columns_.empty() && !relative_table.is_index_table()) {
+    //The index table does not contain virtual columns, no need to set virtual_columns
+    access_param_.virtual_column_exprs_ = &(dml_param.virtual_columns_);
+  }
+  if (OB_UNLIKELY(!relative_table.use_schema_param())) {
+    const share::schema::ObTableSchema *schema = relative_table.get_schema();
+    if (OB_FAIL(create_table_param())) {
+      LOG_WARN("create table param failed", K(ret));
+    } else if (OB_FAIL(table_param_->convert(*schema, *schema, out_col_ids, false))) {
+      LOG_WARN("build table param from schema fail", K(ret), KPC(schema));
+    } else if (OB_FAIL(access_param_.init_dml_access_param(relative_table.get_table_id(),
+                   relative_table.get_schema_version(),
+                   relative_table.get_rowkey_column_num(),
+                   *table_param_))) {
+      LOG_WARN("init dml access param failed", K(ret));
+    }
+  } else {
+    const share::schema::ObTableSchemaParam *schema_param = relative_table.get_schema_param();
+    output_projector_.set_capacity(out_col_ids.count());
+    for (int32_t i = 0; OB_SUCC(ret) && i < out_col_ids.count(); ++i) {
+      int idx = OB_INVALID_INDEX;
+      if (OB_FAIL(schema_param->get_col_map().get(out_col_ids.at(i), idx))) {
+        LOG_WARN("get column index from column map failed", K(ret), K(out_col_ids.at(i)));
+      } else if (OB_FAIL(output_projector_.push_back(idx))) {
+        LOG_WARN("store output projector failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(access_param_.init_dml_access_param(relative_table.get_table_id(),
+              relative_table.get_schema_version(),
+              relative_table.get_rowkey_column_num(),
+              *schema_param,
+              &output_projector_))) {
+        LOG_WARN("init dml access param failed", K(ret));
+      }
+    }
+  }
+  LOG_DEBUG("init dml access param", K(ret), K(out_col_ids), K(relative_table), K(dml_param), K_(access_param));
+  return ret;
+}
+
+int ObSingleRowGetter::create_table_param()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (table_param_ != nullptr) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init table param twice", K(ret));
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(share::schema::ObTableParam)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate table param failed", K(ret), K(sizeof(share::schema::ObTableParam)));
+  } else {
+    table_param_ = new (buf) share::schema::ObTableParam(allocator_);
+  }
+  return ret;
+}
+
+int ObSingleRowGetter::open(const ObStoreRowkey &rowkey, bool use_fuse_row_cache)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+
+  new (&ext_rowkey_) ObExtStoreRowkey(rowkey);
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSingleMerge)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Fail to allocate memory for multi get merge ", K(ret));
+  } else {
+    {
+      ObStorageWriterGuard guard(store_, *store_ctx_, false);
+      if (OB_FAIL(guard.refresh_and_protect_table(*relative_table_))) {
+        STORAGE_LOG(WARN, "fail to protect table", K(ret));
+      }
+    }
+    single_merge_ = new (buf) ObSingleMerge();
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(single_merge_->init(access_param_, access_ctx_, get_table_param_))) {
+      STORAGE_LOG(WARN, "Fail to init ObSingleMerge, ", K(ret));
+    } else if (OB_FAIL(single_merge_->open(ext_rowkey_))) {
+      STORAGE_LOG(WARN, "Fail to open iter, ", K(ret));
+    }
+    if (use_fuse_row_cache) {
+      access_ctx_.use_fuse_row_cache_ = true;
+      access_ctx_.fuse_row_cache_hit_rate_ = 100L;
+    }
+  }
+  return ret;
+}
+
+int ObSingleRowGetter::get_next_row(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  row = nullptr;
+  while (OB_SUCC(ret)) {
+    ObStoreRow *store_row = NULL;
+    if (OB_FAIL(single_merge_->get_next_row(store_row))) {
+      if (OB_ITER_END != ret) {
+        STORAGE_LOG(WARN, "failed to get next row", K(ret));
+      }
+    } else if (ObActionFlag::OP_ROW_EXIST == store_row->flag_) {
+      row = &store_row->row_val_;
+      break;
+    }
+  }
+  return ret;
+}
 }  // end namespace storage
 }  // end namespace oceanbase

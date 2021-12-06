@@ -143,6 +143,7 @@ private:
   int64_t gc_start_ts_;
 
   // build index schema version
+  common::ObSpinLock lock_;
   int64_t build_index_schema_version_;
   int64_t build_index_schema_version_refreshed_ts_;
   uint64_t schema_version_change_log_id_;

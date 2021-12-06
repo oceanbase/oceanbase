@@ -5351,8 +5351,7 @@ int ObTransformUtils::create_simple_view(
   }
   // 4. let the view_stmt process some subqueries
   if (OB_SUCC(ret) && push_subquery) {
-    // TODO, subqueries in order by, assignment can also be processed by view
-    if (OB_FAIL(ObTransformUtils::get_post_join_exprs(stmt, post_join_exprs))) {
+    if (OB_FAIL(ObTransformUtils::get_post_join_exprs(stmt, post_join_exprs, true))) {
       LOG_WARN("failed to get additional push down exprs", K(ret));
     }
   }

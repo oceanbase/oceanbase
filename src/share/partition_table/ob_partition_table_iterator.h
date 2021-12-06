@@ -91,7 +91,8 @@ public:
           pt_operator_(NULL),
           prefetch_iter_end_(false),
           prefetch_partitions_(),
-          need_fetch_faillist_(false)
+          need_fetch_faillist_(false),
+          filter_flag_replica_(true)
     {}
     ~ObPrefetchInfo()
     {}
@@ -101,6 +102,7 @@ public:
       prefetch_iter_end_ = false;
       prefetch_partitions_.reuse();
       need_fetch_faillist_ = false;
+      filter_flag_replica_ = true;
     }
     int init(uint64_t table_id, ObPartitionTableOperator& pt_operator);
     bool need_prefetch() const
@@ -118,6 +120,10 @@ public:
     {
       need_fetch_faillist_ = need_fetch_faillist;
     }
+    void set_filter_flag_replica(const bool filter_flag_replica)
+    {
+      filter_flag_replica_ = filter_flag_replica;
+    }
 
   private:
     int64_t prefetch_idx_;
@@ -127,13 +133,15 @@ public:
     common::ObArray<ObPartitionInfo> prefetch_partitions_;
     // false by defaulta,only set to true for load balance
     bool need_fetch_faillist_;
+    bool filter_flag_replica_;
   };
   ObTablePartitionIterator();
   virtual ~ObTablePartitionIterator();
 
   // can be inited twice
   int init(
-      const uint64_t table_id, share::schema::ObSchemaGetterGuard& schema_guard, ObPartitionTableOperator& pt_operator);
+      const uint64_t table_id, share::schema::ObSchemaGetterGuard& schema_guard, ObPartitionTableOperator& pt_operator,
+      const bool filter_flag_replica = true);
   bool is_inited()
   {
     return inited_;

@@ -451,10 +451,7 @@ int ObDistributedTaskSpliter::init_table_locations(ObPhyOperator* root_op)
       if (PHY_MV_TABLE_SCAN == scan_op->get_type()) {
         const ObMVTableScan* mv_scan_op = static_cast<const ObMVTableScan*>(scan_op);
         table_loc = NULL;
-        if (OB_ISNULL(mv_scan_op)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("mv scan op is NULL", K(ret), K(scan_op), K(mv_scan_op));
-        } else if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(*exec_ctx_,
+        if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(*exec_ctx_,
                        mv_scan_op->get_right_table_location_key(),
                        mv_scan_op->get_right_table_location_key(),
                        table_loc))) {

@@ -14,7 +14,6 @@
 #include <storage/ob_i_table.h>
 #define private public
 #include "storage/blocksstable/ob_bloom_filter_cache.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 
 namespace oceanbase {
 using namespace common;
@@ -61,7 +60,6 @@ TEST(ObBloomFilterCache, test_normal)
   const int64_t max_cache_size = 1024 * 1024 * 512;
   const int64_t block_size = common::OB_MALLOC_BIG_BLOCK_SIZE;
   ObKVGlobalCache::get_instance().init(bucket_num, max_cache_size, block_size);
-  ObMacroBlockMetaMgr::get_instance().init(10000);
   ObMacroBlockMetaV2 macro_meta;
 
   // test ObMacroBlockMeta bf_flag_
@@ -118,7 +116,6 @@ TEST(ObBloomFilterCache, test_normal)
 
   bf_cache.destroy();
   ObKVGlobalCache::get_instance().destroy();
-  ObMacroBlockMetaMgr::get_instance().destroy();
 }
 
 TEST(ObEmptyReadCell, test_invalid)

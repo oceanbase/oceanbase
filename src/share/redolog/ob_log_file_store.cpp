@@ -1030,8 +1030,8 @@ int ObLogFileStore::process_io_getevents(int64_t& submitted, io_context_t ctx, s
           wr_info->ret_ = OB_EAGAIN;
           partial_write = true;
           COMMON_LOG(WARN, "re-submit", K(wr_info->ret_), K(i), K(event_res), K(*wr_info));
-        } else {  // fail write, check if can retry
-          wr_info->complete_ = (-EAGAIN != event_res);
+        } else {  // fail write, must retry
+          wr_info->complete_ = false;
           wr_info->ret_ = (-EAGAIN == event_res)   ? OB_EAGAIN
                           : (-ENOSPC == event_res) ? OB_CS_OUTOF_DISK_SPACE
                                                    : OB_IO_ERROR;

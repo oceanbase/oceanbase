@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "lib/string/ob_string.h"                // ObString
-#include <LogMsgBuf.h>                       // LogMsgInit, LogMsgDestroy
+#include <LogMsgBuf.h>                           // LogMsgInit, LogMsgDestroy
 #include <MetaInfo.h>                            // ITableMeta
 #include "ob_log_storager.h"
 #include "ob_log_row_data_index.h"               // ObLogRowDataIndex
@@ -26,6 +26,8 @@ namespace oceanbase
 {
 namespace liboblog
 {
+
+static __thread LogMsgBuf *lmb = NULL;
 
 ObLogStorager::ObLogStorager() :
     inited_(false),
@@ -81,8 +83,6 @@ void ObLogStorager::destroy()
   if (inited_) {
     const int64_t thread_num = StoragerThread::get_thread_num();
     StoragerThread::destroy();
-
-    LogMsgDestroy();
 
     inited_ = false;
     round_value_ = 0;
@@ -149,11 +149,10 @@ int ObLogStorager::push(ObLogEntryTask &task, const int64_t timeout)
 int ObLogStorager::thread_begin()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = 0;
 
   // First call, initialization required
-  if (0 != (tmp_ret = LogMsgLocalInit())) {
-    LOG_ERROR("LogMsgLocalInit fail", K(tmp_ret));
+  if (OB_ISNULL(lmb = new LogMsgBuf())) {
+    LOG_ERROR("LogMsgLocalInit fail");
     ret = OB_ERR_UNEXPECTED;
   } else {
     LOG_INFO("ObLogStorager LogMsgLocalInit succ");
@@ -165,7 +164,7 @@ int ObLogStorager::thread_begin()
 void ObLogStorager::thread_end()
 {
   // LogMsgLocalDestroy return void
-  LogMsgLocalDestroy();
+  delete lmb;
   LOG_INFO("ObLogStorager LogMsgLocalDestroy succ");
 }
 
@@ -297,7 +296,7 @@ int ObLogStorager::to_string_binlog_record_(ObLogEntryTask &log_entry_task,
       const int record_type = binlog_record->recordType();
       const char *buf = NULL;  // Pointer to the first address of the BinlogRecord serialized byte stream
       size_t buf_len = 0;      // Length of BinlogRecord serialised byte stream
-      buf = binlog_record->toString(&buf_len);
+      buf = binlog_record->toString(&buf_len, lmb);
       StoreBuf &store_buf = store_buf_array_[thread_index];
       void *ptr = NULL;
       char *alloc_buf = NULL;

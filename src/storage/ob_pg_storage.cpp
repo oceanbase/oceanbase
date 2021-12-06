@@ -2118,8 +2118,6 @@ int ObPGStorage::enable_write_log(const bool is_replay_old)
     } else if (!meta_->is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid meta", K(ret), K(*meta_), K_(pkey));
-    } else if (is_replay_old && OB_FAIL(transform_and_add_old_sstable())) {
-      LOG_WARN("fail to transform and add old sstable", K(ret));
     } else {
       ObPGReportStatus pg_report_status;
       ObPartitionArray pkeys;
@@ -6524,76 +6522,12 @@ int ObPGStorage::alloc_file_for_old_replay()
   return ret;
 }
 
-int ObPGStorage::transform_and_add_old_sstable()
-{
-  int ret = OB_SUCCESS;
-  ObPartitionArray pkeys;
-  if (OB_FAIL(get_all_pg_partition_keys_(pkeys))) {
-    STORAGE_LOG(WARN, "get all pg partition keys error", K(ret), K(pkey_), K(pkeys));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
-      const ObPartitionKey& pkey = pkeys.at(i);
-      ObPGPartition* pg_partition = nullptr;
-      ObPGPartitionGuard guard(pkey, *(pg_->get_pg_partition_map()));
-      ObPartitionStorage* storage = nullptr;
-      if (OB_ISNULL(pg_partition = guard.get_pg_partition())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "pg partition info is null, unexpected error", K(ret), K_(pkey));
-      } else if (OB_ISNULL(storage = static_cast<ObPartitionStorage*>(pg_partition->get_storage()))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "partition storage is null", K(ret), K(pkey));
-      } else if (OB_FAIL(transform_and_add_old_sstable_for_partition(storage->get_partition_store()))) {
-        LOG_WARN("fail to set replay sstables", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObPGStorage::check_can_free(bool& can_free)
 {
   int ret = OB_SUCCESS;
   can_free = false;
   if (OB_FAIL(sstable_mgr_.check_all_sstable_unused(can_free))) {
     LOG_WARN("fail to check can free", K(ret));
-  }
-  return ret;
-}
-
-int ObPGStorage::transform_and_add_old_sstable_for_partition(ObPartitionStore& store)
-{
-  int ret = OB_SUCCESS;
-  ObArray<uint64_t> index_ids;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPGStorage has not been inited", K(ret));
-  } else if (OB_FAIL(store.get_all_table_ids(index_ids))) {
-    LOG_WARN("fail to get all table ids", K(ret));
-  } else {
-    ObArray<ObITable::TableKey> replay_tables;
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
-      const uint64_t table_id = index_ids.at(i);
-      replay_tables.reuse();
-      if (OB_FAIL(store.get_replay_tables(table_id, replay_tables))) {
-        LOG_WARN("fail to get replay tables", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < replay_tables.count(); ++i) {
-          ObOldSSTable* sstable = nullptr;
-          ObTableHandle table_handle;
-          ObITable::TableKey& table_key = replay_tables.at(i);
-          if (OB_UNLIKELY(table_key.is_new_table_from_3x())) {
-            ret = OB_ERR_SYS;
-            LOG_ERROR("Unexpected new table type from 22x upgrade cluster", K(ret), K(table_key), K(replay_tables));
-          } else if (OB_FAIL(ObTableMgr::get_instance().acquire_old_table(table_key, table_handle))) {
-            LOG_WARN("fail to acquire table", K(ret), K(table_key));
-          } else if (OB_FAIL(table_handle.get_old_sstable(sstable))) {
-            LOG_WARN("fail to get sstable", K(ret));
-          } else if (OB_FAIL(sstable_mgr_.replay_add_old_sstable(*sstable))) {
-            LOG_WARN("fail to replay add sstable log", K(ret), K(*sstable));
-          }
-        }
-      }
-    }
   }
   return ret;
 }

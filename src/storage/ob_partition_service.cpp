@@ -3784,6 +3784,18 @@ int ObPartitionService::delete_rows(const transaction::ObTransDesc& trans_desc, 
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
+    //@NOTICE:(yuchen.wyc)为了规避外键自引用带来的防御检查不过的问题:
+    //由于目前delete语句的TableScan操作使用的快照点是语句级，无法看到本语句的最新修改，
+    //因此，对于外键自引用的级联删除时，同一行可能会被自己和外键级联操作多次删除，
+    //这个问题目前没有出现语义上的问题，但会导致delete的防御检查报错,详见：
+    // https://aone.alibaba-inc.com/issue/36022956
+    // DML的防御检查读使用的默认快照点是可以读到本语最新修改，因此对于该场景会出现两次读到的数据不一致的问题
+    //正确的做法是从外键的删除操作上规避掉多次删除同一行的情况，这要求delete的TableScan能够看到自己的最新修改
+    //由于担心这个修改的影响较大，3.2暂时从防御检查上规避掉这个问题，
+    // 4.0上delete改为读本语句的最新修改来避免同一行的多次删除
+    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
+      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
+    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_rows(
         ctx_guard.get_store_ctx(), dml_param, column_ids, row_iter, affected_rows);
@@ -3805,6 +3817,18 @@ int ObPartitionService::delete_row(const ObTransDesc& trans_desc, const ObDMLBas
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
+    //@NOTICE:(yuchen.wyc)为了规避外键自引用带来的防御检查不过的问题:
+    //由于目前delete语句的TableScan操作使用的快照点是语句级，无法看到本语句的最新修改，
+    //因此，对于外键自引用的级联删除时，同一行可能会被自己和外键级联操作多次删除，
+    //这个问题目前没有出现语义上的问题，但会导致delete的防御检查报错,详见：
+    // https://aone.alibaba-inc.com/issue/36022956
+    // DML的防御检查读使用的默认快照点是可以读到本语最新修改，因此对于该场景会出现两次读到的数据不一致的问题
+    //正确的做法是从外键的删除操作上规避掉多次删除同一行的情况，这要求delete的TableScan能够看到自己的最新修改
+    //由于担心这个修改的影响较大，3.2暂时从防御检查上规避掉这个问题，
+    // 4.0上delete改为读本语句的最新修改来避免同一行的多次删除
+    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
+      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
+    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_row(ctx_guard.get_store_ctx(), dml_param, column_ids, row);
     AUDIT_PARTITION_V2(ctx_guard.get_store_ctx().mem_ctx_, PART_AUDIT_DELETE_ROW, 1);
@@ -11578,6 +11602,9 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     common::ObMemberList member_list;
     const uint64_t fetch_tenant_id =
         is_inner_table(index_table_id) ? OB_SYS_TENANT_ID : extract_tenant_id(index_table_id);
+    const bool need_fail_list = false;
+    const int64_t cluster_id = OB_INVALID_ID;  // local cluster
+    const bool filter_flag_replica = false;
     if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(fetch_tenant_id, schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(fetch_tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_table_id, index_schema))) {
@@ -11599,7 +11626,12 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     } else if (OB_ISNULL(GCTX.pt_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "error unexpected, pt operator must not be NULL", K(ret));
-    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(), pkey.get_partition_id(), partition_info))) {
+    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(),
+                   pkey.get_partition_id(),
+                   partition_info,
+                   need_fail_list,
+                   cluster_id,
+                   filter_flag_replica))) {
       STORAGE_LOG(WARN, "fail to get partition info", K(ret), K(pkey));
     } else if (OB_FAIL(partition_info.filter(filter))) {
       STORAGE_LOG(WARN, "fail to filter partition", K(ret));
