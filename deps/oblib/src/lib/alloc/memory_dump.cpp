@@ -410,7 +410,7 @@ void ObMemoryDump::handle(void* task)
     w_stat_->tcr_cnt_ = 0;
     int64_t item_used = 0;
     int64_t log_pos = 0;
-    ret = databuff_printf(log_buf_,
+    IGNORE_RETURN databuff_printf(log_buf_,
         LOG_BUF_LEN,
         log_pos,
         "\ntenant_cnt: %d, max_chunk_cnt: %d\n"
@@ -434,6 +434,7 @@ void ObMemoryDump::handle(void* task)
         int64_t print_pos = 0;
         const int64_t orig_item_used = item_used;
         int chunk_cnt = 0;
+        ret = OB_SUCCESS;
         ta->get_chunks(chunks_, MAX_CHUNK_CNT, chunk_cnt);
         auto& w_stat = w_stat_;
         auto& lmap = lmap_;
@@ -497,7 +498,7 @@ void ObMemoryDump::handle(void* task)
           std::swap(*ta->get_r_mod_set(), *ta->get_w_mod_set());
         }
         if (OB_SUCC(ret) && (chunk_cnt != 0 || segv_cnt != 0)) {
-          ret = databuff_printf(log_buf_,
+          IGNORE_RETURN databuff_printf(log_buf_,
               LOG_BUF_LEN,
               log_pos,
               "%-15lu%-15d%-15d%-15ld%-15d\n",
@@ -510,7 +511,8 @@ void ObMemoryDump::handle(void* task)
       }  // iter ctx end
     }    // iter tenant end
     if (OB_SUCC(ret)) {
-      ret = databuff_printf(log_buf_, LOG_BUF_LEN, log_pos, "cost_time: %ld", ObTimeUtility::current_time() - start_ts);
+      IGNORE_RETURN databuff_printf(
+          log_buf_, LOG_BUF_LEN, log_pos, "cost_time: %ld", ObTimeUtility::current_time() - start_ts);
     }
     if (log_pos > 0) {
       _OB_LOG(INFO, "statistics: %.*s", static_cast<int32_t>(log_pos), log_buf_);
