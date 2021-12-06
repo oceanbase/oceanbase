@@ -198,7 +198,7 @@ void ObLogCompressor::log_compress()
 
       if (has_stoped_ || NULL == file_name || file_name->empty() || 0 != access(file_name->ptr(), F_OK)) {
       } else {
-        ObString::obstr_size_t  buf_size = file_name->length() + 1 + DEFAULT_FILE_SUFFIX.length();
+        ObString::obstr_size_t  buf_size = file_name->length() + 1 + DEFAULT_COMPRESSION_FILE_SUFFIX.length();
         char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
         if (NULL == buf){
            LOG_STDERR("Failed to ob_malloc.\n");
