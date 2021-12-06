@@ -68,7 +68,7 @@ DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,100]",
 DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "65536", "[1024,]",
     "the size of the task queue for each tenant. Range: [1024,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0", common::ObConfigMemoryLimitChecker, "0, [8G,)",
+DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0", common::ObConfigMemoryLimitChecker, "[0M,)",
     "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. "
     "Range: 0, [8G,)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
