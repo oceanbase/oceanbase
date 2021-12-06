@@ -29,7 +29,7 @@ class ObLogCompressor final : public lib::ThreadPool {
 public:
   ObLogCompressor();
   virtual ~ObLogCompressor();
-  static ObString get_compression_file_name(const ObString &file_name,char *buf, const ObString::obstr_size_t buf_size);
+  static ObString get_compression_file_name(const ObString &file_name, char *buf, const ObString::obstr_size_t buf_size);
   int init();
   void destroy();
   int append_log(const ObString &file_name);

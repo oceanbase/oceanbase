@@ -55,7 +55,7 @@ TEST(ObLogCompressor, normal)
 
   // get compression result
   sleep(2);
-  const ObString::obstr_size_t  compression_file_name_size = file_name->length() + 1 + sizeof(ObString);
+  const ObString::obstr_size_t  compression_file_name_size = file_name->length() + 1 + DEFAULT_FILE_SUFFIX.length();
   char *compression_file_name_buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
   ObString compression_file_name = log_compressor.get_compression_file_name(file_name,compression_file_name_buf,compression_file_name_size);
   ASSERT_EQ(0, access(compression_file_name.ptr(), F_OK));

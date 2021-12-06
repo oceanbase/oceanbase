@@ -44,6 +44,7 @@ static const int32_t DEFAULT_COMPRESSION_BUFFER_SIZE =
     DEFAULT_COMPRESSION_BLOCK_SIZE + DEFAULT_COMPRESSION_BLOCK_SIZE / 128 + 512 + 19;
 static const int32_t DEFAULT_FILE_NAME_SIZE = ObPLogFileStruct::MAX_LOG_FILE_NAME_SIZE;
 static const int32_t DEFAULT_LOG_QUEUE_DEPTH = 100000;
+static const ObString DEFAULT_FILE_SUFFIX = ".zst";
 
 ObLogCompressor::ObLogCompressor() : is_inited_(false), has_stoped_(true), compressor_(NULL)
 {}
@@ -198,7 +199,7 @@ void ObLogCompressor::log_compress()
 
       if (has_stoped_ || NULL == file_name || file_name->empty() || 0 != access(file_name->ptr(), F_OK)) {
       } else {
-        ObString::obstr_size_t  buf_size = file_name->length() + 1 + sizeof(ObString);
+        ObString::obstr_size_t  buf_size = file_name->length() + 1 + DEFAULT_FILE_SUFFIX.length();
         char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
         if (NULL == buf){
            LOG_STDERR("Failed to ob_malloc.\n");
