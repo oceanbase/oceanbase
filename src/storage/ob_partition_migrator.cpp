@@ -9287,8 +9287,8 @@ int ObMigrateTaskGeneratorTask::build_backup_backupset_ctx_v2(ObBackupBackupsetP
     if (compatible >= ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V3) {
       if (OB_FAIL(get_backup_backup_minor_task_id(path_info, pg_key, minor_task_id))) {
         LOG_WARN("failed to get backup backup minor task id", KR(ret), K(path_info), K(pg_key));
-      } else if (OB_FAIL(OB_FAIL(ObBackupPathUtil::get_tenant_pg_minor_data_path(
-                     path_info, table_id, partition_id, minor_task_id, minor_pg_path)))) {
+      } else if (OB_FAIL(ObBackupPathUtil::get_tenant_pg_minor_data_path(
+                     path_info, table_id, partition_id, minor_task_id, minor_pg_path))) {
         LOG_WARN("failed to get tenant pg minor data path", KR(ret), K(path_info), K(pg_key));
         // TODO()Backup backup Fix it
         //} else if (OB_FAIL(util.list_files(minor_pg_path.get_obstr(),

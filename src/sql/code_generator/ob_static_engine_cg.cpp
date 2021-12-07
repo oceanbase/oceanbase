@@ -2245,7 +2245,7 @@ int ObStaticEngineCG::convert_global_index_delete_info(ObLogDelUpd& op, const Ta
       if (OB_SUCC(ret)) {
         int64_t index_col_cnt = index_exprs.count();
         dml_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
-        if (OB_FAIL(OB_FAIL(dml_subplan.access_exprs_.init(index_col_cnt)))) {
+        if (OB_FAIL(dml_subplan.access_exprs_.init(index_col_cnt))) {
           LOG_WARN("fail to allocate array", K(ret));
         }
       }
@@ -2440,7 +2440,7 @@ int ObStaticEngineCG::convert_update_subplan(
     int64_t access_cnt =
         index_dml_info.column_exprs_.count() + index_dml_info.assignments_.count() + 1 /*lock_row_flag_expr*/;
     dml_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
-    if (OB_FAIL(OB_FAIL(dml_subplan.access_exprs_.init(access_cnt)))) {
+    if (OB_FAIL(dml_subplan.access_exprs_.init(access_cnt))) {
       LOG_WARN("fail to allocate array", K(ret));
     }
   }
@@ -2941,7 +2941,7 @@ int ObStaticEngineCG::convert_multi_table_insert_up_info(ObLogInsert& op, ObMult
       SeDMLSubPlan& insert_subplan = subplans.at(ObMultiPartUpdateOp::INSERT_OP);
       int64_t access_cnt = index_dml_info.column_exprs_.count();
       insert_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
-      if (OB_FAIL(OB_FAIL(insert_subplan.access_exprs_.init(access_cnt)))) {
+      if (OB_FAIL(insert_subplan.access_exprs_.init(access_cnt))) {
         LOG_WARN("fail to allocate array", K(ret));
       }
       OZ(generate_exprs_replace_spk(index_dml_info.column_exprs_, insert_subplan.access_exprs_));
