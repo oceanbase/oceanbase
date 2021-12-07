@@ -2440,7 +2440,7 @@ int ObStaticEngineCG::convert_update_subplan(
     int64_t access_cnt =
         index_dml_info.column_exprs_.count() + index_dml_info.assignments_.count() + 1 /*lock_row_flag_expr*/;
     dml_subplan.access_exprs_.set_allocator(&phy_plan_->get_allocator());
-    if (OB_FAIL(OB_FAIL(dml_subplan.access_exprs_.init(access_cnt)))) {
+    if (OB_FAIL(dml_subplan.access_exprs_.init(access_cnt))) {
       LOG_WARN("fail to allocate array", K(ret));
     }
   }
