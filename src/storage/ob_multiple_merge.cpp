@@ -549,6 +549,7 @@ void ObMultipleMerge::reset_iter_array()
   for (int64_t i = 0; i < iters_.count(); ++i) {
     if (NULL != (iter = iters_.at(i))) {
       iter->~ObStoreRowIterator();
+      // ! 在这里不仅析构了, 还free了内存, 说明这里是真的执行结束了. 而之前由析构改为reset的, 其实是让他不析构, 什么都不执行吧
       if (OB_NOT_NULL(access_ctx_->stmt_allocator_)) {
         access_ctx_->stmt_allocator_->free(iter);
       }
@@ -558,12 +559,19 @@ void ObMultipleMerge::reset_iter_array()
   iters_.reuse();
 }
 
+/**
+ * 这个修改是将 iter->~ObStoreRowIterator(); 删掉了, 那么就不会出现那么多的 析构了, 然后调用了reset重置状态
+ * 但其实重置状态是不需要直接调用 reset的, 它可能比较消耗资源吧
+ */
 void ObMultipleMerge::reuse_iter_array()
 {
   ObStoreRowIterator *iter = NULL;
   for (int64_t i = 0; i < iters_.count(); ++i) {
     if (NULL != (iter = iters_.at(i))) {
-      iter->reset(); 
+      // 但是这个 reset做了什么工作吗? 怎么感觉它根本没有做工作? 在ObStoreRowIterator中添加了一个virtual reset函数, 但是其他地方并没有实现
+      // ! 试了一下把它删除掉, 结果observer运行出错了, 会一直在init中. 所以它还是做了一些工作的; ObStoreRowIterator应该只是父类
+      // iter->reset();
+      iter->reset_reuse();
       // ! 细心地同学会发现，在reuse接口中使用reset，是有点怪异的，并且肯定没有最大化提高效率。
       // ! 那么为什么不能直接使用reuse呢？还是要从allocator与stmt_allocator中考虑，可以继续挖掘。
       // 注意allocator中内存释放的时机。

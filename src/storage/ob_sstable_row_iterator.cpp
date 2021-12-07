@@ -640,6 +640,63 @@ void ObSSTableRowIterator::reset()
   prefetch_micro_depth_ = DEFAULT_PREFETCH_MICRO_DEPTH;
 }
 
+void ObSSTableRowIterator::reset_reuse()
+{
+  ObISSTableRowIterator::reset();
+  read_handles_.reset();
+  micro_handles_.reset();
+  // micro_handles_.reuse();
+  sstable_micro_infos_.reset();
+
+  if (NULL != micro_exister_) {
+    micro_exister_->~ObMicroBlockRowExister();
+    micro_exister_ = NULL;
+  }
+  if (NULL != micro_getter_) {
+    micro_getter_->~ObMicroBlockRowGetter();
+    micro_getter_ = NULL;
+  }
+  // 按理来说, 我不析构应该也没问题, 最多是内存泄漏罢了?
+  if (NULL != micro_scanner_) {
+    micro_scanner_->~ObIMicroBlockRowScanner();
+    micro_scanner_ = NULL;
+  }
+  if (NULL != micro_lock_checker_) {
+    micro_lock_checker_->~ObMicroBlockRowLockChecker();
+    micro_lock_checker_ = NULL;
+  }
+
+  macro_block_iter_.reset();
+  iter_param_ = NULL;
+  access_ctx_ = NULL;
+  sstable_ = NULL;
+  query_range_ = NULL;
+  scan_step_ = 0;
+  is_opened_ = false;
+  is_base_ = false;
+  block_cache_ = NULL;
+  table_type_ = ObITable::MAJOR_SSTABLE;
+  sstable_snapshot_version_ = 0;
+  prefetch_handle_end_ = false;
+  prefetch_block_end_ = false;
+  cur_prefetch_handle_pos_ = 0;
+  cur_fetch_handle_pos_ = 0;
+  cur_read_handle_pos_ = 0;
+  cur_prefetch_micro_pos_ = 0;
+  cur_read_micro_pos_ = 0;
+  cur_micro_idx_ = -1;
+  cur_range_idx_ = -1;
+  io_micro_infos_.reset();
+  micro_info_iter_.reset();
+  block_index_handle_mgr_.reset();
+  block_handle_mgr_.reset();
+  table_store_stat_.reset();
+  skip_ctx_.reset();
+  storage_file_ = nullptr;
+  prefetch_handle_depth_ = DEFAULT_PREFETCH_HANDLE_DEPTH;
+  prefetch_micro_depth_ = DEFAULT_PREFETCH_MICRO_DEPTH;
+}
+
 void ObSSTableRowIterator::reuse()
 {
   ObISSTableRowIterator::reuse();
@@ -1572,14 +1629,15 @@ int ObSSTableRowIterator::open_cur_micro_block(ObSSTableReadHandle& read_handle,
   if (NULL == micro_scanner_) {
     // alloc scanner
     if (!sstable_->is_multi_version_minor_sstable()) {
-      if (NULL == (buf = access_ctx_->allocator_->alloc(sizeof(ObMicroBlockRowScanner)))) {
+        // ! 替换分配器
+      if (NULL == (buf = access_ctx_->stmt_allocator_->alloc(sizeof(ObMicroBlockRowScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory for micro block scanner, ", K(ret));
       } else {
         micro_scanner_ = new (buf) ObMicroBlockRowScanner();
       }
     } else {
-      if (NULL == (buf = access_ctx_->allocator_->alloc(sizeof(ObMultiVersionMicroBlockRowScanner)))) {
+      if (NULL == (buf = access_ctx_->stmt_allocator_->alloc(sizeof(ObMultiVersionMicroBlockRowScanner)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "Fail to allocate memory for micro block scanner, ", K(ret));
       } else {

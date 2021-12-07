@@ -176,6 +176,7 @@ public:
   virtual int get_next_row(const ObStoreRow*& store_row);
   virtual void reset();
   virtual void reuse();
+  // virtual void reset_reuse();
   OB_INLINE bool has_lob_column() const
   {
     return OB_NOT_NULL(lob_reader_);
@@ -320,6 +321,7 @@ public:
   ObSSTableRowIterator();
   virtual ~ObSSTableRowIterator();
   virtual void reset() override;
+  virtual void reset_reuse() override;
   virtual void reuse() override;
   virtual int get_skip_range_ctx(
       ObSSTableReadHandle& read_handle, const int64_t cur_micro_idx, ObSSTableSkipRangeCtx*& skip_ctx);
