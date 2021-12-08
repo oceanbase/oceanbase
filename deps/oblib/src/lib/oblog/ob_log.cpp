@@ -143,7 +143,7 @@ inline void ob_log_unlink(const char *file_cstr)
     int ret = OB_SUCCESS;
     ObString compression_file_name;
     compression_file_name.assign_buffer(buf, buf_size);
-    if (size != compression_file_name.write(file_name.ptr(), size))) {
+    if (size != compression_file_name.write(file_name.ptr(), size)) {
       LOG_WARN("Failed to write file_name");
     } else if (OB_SUCCESS != (ret = ObLogCompressor::get_compression_file_name(compression_file_name))){
       LOG_WARN("Failed to get_compression_file_name",K(ret));
