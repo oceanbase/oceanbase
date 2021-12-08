@@ -24,13 +24,13 @@ namespace common {
 class ObCompressor;
 class ObString;
 class ObMalloc;
-static const ObString DEFAULT_COMPRESSION_FILE_SUFFIX = ".zst";
+static const int16_t DEFAULT_COMPRESSION_SUFFIX_SIZE = 4;
 
 class ObLogCompressor final : public lib::ThreadPool {
 public:
   ObLogCompressor();
   virtual ~ObLogCompressor();
-  static ObString get_compression_file_name(const ObString &file_name, char *buf, const ObString::obstr_size_t buf_size);
+  static int get_compression_file_name(const ObString &file_name);
   int init();
   void destroy();
   int append_log(const ObString &file_name);

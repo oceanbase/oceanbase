@@ -53,11 +53,20 @@ TEST(ObLogCompressor, normal)
   ret = log_compressor.append_log(file_name);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // get compression result
+  // get compression file name
   sleep(2);
-  const ObString::obstr_size_t  compression_file_name_size = file_name->length() + 1 + DEFAULT_COMPRESSION_FILE_SUFFIX.length();
+  int32_t compression_file_name_size = file_name->length() + 1 + DEFAULT_COMPRESSION_SUFFIX_SIZE;
   char *compression_file_name_buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
-  ObString compression_file_name = log_compressor.get_compression_file_name(file_name,compression_file_name_buf,compression_file_name_size);
+  ASSERT_EQ(true, NULL != compression_file_name_buf);
+  ObString compression_file_name;
+  compression_file_name.assign_buffer(compression_file_name_buf, compression_file_name_size);
+  int32_t file_name_size = file_name.length();
+  int32_t write_size = compression_file_name.write(file_name.ptr(), file_name_size);
+  ASSERT_EQ(write_size, file_name_size);
+  ret = log_compressor.get_compression_file_name(compression_file_name);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // get compression result
   ASSERT_EQ(0, access(compression_file_name.ptr(), F_OK));
   FILE *output_file = fopen(compression_file_name.ptr(), "r");
   ASSERT_EQ(true, NULL != output_file);
@@ -89,7 +98,7 @@ TEST(ObLogCompressor, normal)
   ASSERT_NE(0, access(file_name.ptr(), F_OK));
   ASSERT_EQ(0, access(compression_file_name.ptr(), F_OK));
   unlink(compression_file_name.ptr());
-  free(compression_file_name_buf);
+  ob_free(compression_file_name_buf);
 
   // destroy and init
   log_compressor.destroy();

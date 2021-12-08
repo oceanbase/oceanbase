@@ -132,14 +132,24 @@ int process_thread_log_id_level_map(const char* str, const int32_t str_length)
 
 inline void ob_log_unlink(const char *file_cstr)
 {
+  char *buf = NULL;
   unlink(file_cstr);
   ObString file_name(file_cstr);
-  ObString::obstr_size_t  buf_size = file_name.length() + 1 + DEFAULT_COMPRESSION_FILE_SUFFIX.length();
-  char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
-  if (!buf) {
+  int size = file_name.length();
+  int32_t buf_size = size + 1 + DEFAULT_COMPRESSION_SUFFIX_SIZE;
+  if (NULL == (buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR))) {
     LOG_STDERR("Failed to ob_malloc.\n");
   } else {
-    unlink(ObLogCompressor::get_compression_file_name(file_name,buf,buf_size).ptr());
+    int ret = OB_SUCCESS;
+    ObString compression_file_name;
+    compression_file_name.assign_buffer(buf, buf_size);
+    if (size != compression_file_name.write(file_name.ptr(), size))) {
+      LOG_WARN("Failed to write file_name");
+    } else if (OB_SUCCESS != (ret = ObLogCompressor::get_compression_file_name(compression_file_name))){
+      LOG_WARN("Failed to get_compression_file_name",K(ret));
+    }else {
+      unlink(compression_file_name.ptr());
+    }
   }
   if (buf) {
     ob_free(buf);
@@ -938,19 +948,25 @@ void ObLogger::remove_outdated_file(std::deque<std::string> &file_list)
 }
 
 void ObLogger::update_compression_file(std::deque<std::string> &file_list)
-{
+{  
+  int ret = OB_SUCCESS;
   if (enable_file_compress_ && NULL != log_compressor_) {
     if (OB_LIKELY(0 == pthread_mutex_lock(&file_index_mutex_))) {
       for (auto iter = file_list.begin(); iter != file_list.end(); iter++) {
         ObString file_name(iter->c_str());
         if (isdigit(file_name[file_name.length() - 1])) {
-          ObString::obstr_size_t buf_size = file_name.length() + 1 + DEFAULT_COMPRESSION_FILE_SUFFIX.length();
+          int32_t buf_size = file_name.length() + 1 + DEFAULT_COMPRESSION_SUFFIX_SIZE;
           char *buf = (char *)ob_malloc(buf_size, ObModIds::OB_LOG_COMPRESSOR);
           if (!buf) {
             LOG_STDERR("Failed to ob_malloc.\n");
           } else {
-            ObString compression_file_name = ObLogCompressor::get_compression_file_name(file_name,buf,buf_size).ptr();
-            if (0 != access(file_name.ptr(), F_OK) && 0 == access(compression_file_name.ptr(), F_OK)) {
+            ObString compression_file_name;
+            compression_file_name.assign_buffer(buf, buf_size);
+            if (file_name.length() != compression_file_name.write(file_name.ptr(), file_name.length())) {
+              LOG_WARN("Failed to write file_name");
+            } else if (OB_SUCCESS != (ret = ObLogCompressor::get_compression_file_name(compression_file_name))) {
+              LOG_WARN("Failed to get_compression_file_name",K(ret));
+            } else if (0 != access(file_name.ptr(), F_OK) && 0 == access(compression_file_name.ptr(), F_OK)) {
               iter->clear();
               iter->assign(compression_file_name.ptr());
             } else {
