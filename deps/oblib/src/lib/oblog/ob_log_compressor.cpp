@@ -119,10 +119,10 @@ int ObLogCompressor::get_compression_file_name(ObString &file_name)
   if (size > 0 && size + 1 + suffix_str.length() <= DEFAULT_FILE_NAME_SIZE) {
     const char *idx = NULL;
     if (size > 4 && NULL != (idx = file_name.reverse_find('.')) && idx != file_name.ptr() &&
-        0 == file_name.after(--idx).compare(DEFAULT_COMPRESSION_FILE_SUFFIX)) {
+        0 == file_name.after(--idx).compare(suffix_str)) {
           ret = OB_INVALID_ARGUMENT;
     } else {
-      compression_file_name.write(".zst\0", 5);
+      file_name.write(".zst\0", 5);
     }
   }else{
     ret = OB_INVALID_ARGUMENT;
@@ -206,8 +206,8 @@ void ObLogCompressor::log_compress()
           LOG_STDERR("Failed to ob_malloc.\n");
         }else {
           compression_file_name.assign_buffer(buf, buf_size);
-          int size = file_name.length();
-          if (size != compression_file_name.write(file_name.ptr(), size)) {
+          int size = file_name->length();
+          if (size != compression_file_name.write(file_name->ptr(), size)) {
             compression_file_name.reset();
           } else if(OB_SUCCESS != (ret = ObLogCompressor::get_compression_file_name(compression_file_name))){
             compression_file_name.reset();
