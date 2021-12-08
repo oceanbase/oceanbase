@@ -62,7 +62,7 @@ public:
            common::OB_SCHEMA_EAGAIN == ret_code || common::OB_GTS_NOT_READY == ret_code ||
            common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code || common::OB_PARTITION_NOT_EXIST == ret_code ||
            common::OB_PG_IS_REMOVED == ret_code || common::OB_TENANT_NOT_EXIST == ret_code ||
-           common::OB_REPLICA_NOT_READABLE == ret_code;
+           common::OB_REPLICA_NOT_READABLE == ret_code || common::OB_REBALANCE_TASK_CANT_EXEC == ret_code;
   }
 
 protected:
