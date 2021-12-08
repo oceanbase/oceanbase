@@ -211,7 +211,7 @@ void ObLogCompressor::log_compress()
             compression_file_name.reset();
           } else if(OB_SUCCESS != (ret = ObLogCompressor::get_compression_file_name(compression_file_name))){
             compression_file_name.reset();
-            LOG_WARN("Failed to get_compression_file_name",K(ret));
+            LOG_STDERR("Failed to get_compression_file_name",K(ret));
           }
         }
         FILE *input_file = NULL;
