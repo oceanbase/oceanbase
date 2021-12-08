@@ -2919,6 +2919,7 @@ int ObLoadDataSPImpl::wait_shuffle_task_return(ToolBox& box)
       ret = OB_ERR_UNEXPECTED;
     } else {
       handle->result.reset();
+      handle->err_records.reuse();
     }
   }
 
@@ -2930,7 +2931,7 @@ int ObLoadDataSPImpl::handle_returned_shuffle_task(ToolBox& box, ObShuffleTaskHa
   UNUSED(box);
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(handle.result.task_id_ >= box.file_buf_row_num.count())) {
+  if (OB_UNLIKELY(handle.result.task_id_ >= box.file_buf_row_num.count() || handle.result.task_id_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid array index", K(ret), K(handle.result.task_id_), K(box.file_buf_row_num.count()));
   } else if (!box.file_appender.is_opened() && OB_FAIL(create_log_file(box))) {
