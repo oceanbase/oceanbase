@@ -77,7 +77,9 @@ int RowDesc::add_column(ObRawExpr* raw_expr)
     }
   }
   if (OB_SUCC(ret) && !raw_expr->has_flag(IS_COLUMNLIZED)) {
-    raw_expr->add_flag(IS_COLUMNLIZED);
+    if (OB_FAIL(raw_expr->add_flag(IS_COLUMNLIZED))) {
+      LOG_WARN("failed to add flag IS_COLUMNLIZED", K(ret));
+    }
   }
   return ret;
 }
