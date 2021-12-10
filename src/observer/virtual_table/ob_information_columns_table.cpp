@@ -590,7 +590,22 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
             if (column_schema->is_autoincrement()) {
               extra = ObString::make_string("auto_increment");
             } else if (column_schema->is_on_update_current_timestamp()) {
-              extra = ObString::make_string("on update current_timestamp");
+              int16_t scale = column_schema->get_data_scale();
+              if (0 == scale) {
+                extra = ObString::make_string("on update current_timestamp");
+              } else {
+                char* buf = NULL;
+                int64_t buf_len = 32;
+                int64_t pos = 0;
+                if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator_->alloc(buf_len))))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  SERVER_LOG(WARN, "fail to allocate memory", K(ret));
+                } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "on update current_timestamp(%d)", scale))) {
+                  SHARE_SCHEMA_LOG(WARN, "fail to print on update current_tiemstamp", K(ret));
+                } else {
+                  extra = ObString(static_cast<int32_t>(pos), buf);
+                }
+              }
             }
             cells[cell_idx].set_varchar(extra);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
