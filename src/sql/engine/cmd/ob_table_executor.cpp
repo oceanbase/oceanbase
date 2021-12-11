@@ -588,9 +588,6 @@ int ObAlterTableExecutor::alter_table_rpc_v1(obrpc::ObAlterTableArg& alter_table
           } else if (obrpc::ObIndexArg::ADD_INDEX != index_arg->index_action_type_) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("index action type should be add index", K(ret), K(i));
-          } else if (OB_ISNULL(create_index_arg = static_cast<obrpc::ObCreateIndexArg*>(index_arg))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create index arg is null", K(ret), K(i));
           } else if (!is_sync_ddl_user) {
             create_index_arg->index_schema_.set_table_id(res.index_table_id_);
             create_index_arg->index_schema_.set_schema_version(res.schema_version_);
