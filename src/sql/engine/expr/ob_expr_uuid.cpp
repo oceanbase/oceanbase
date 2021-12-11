@@ -16,6 +16,7 @@
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <net/if.h>
+#include <fcntl.h>
 #include "sql/engine/expr/ob_expr_uuid.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -149,7 +150,16 @@ int ObUUIDTime::time_now(uint64_t& now)
 void ObUUIDTime::reset_clock_seq()
 {
   uint8_t b[2] = {0, 0};
-  srandom(static_cast<unsigned int>(time(NULL)));
+  int fd;
+  unsigned long seed;
+
+  fd = open("/dev/urandom", 0);
+  if (fd < 0 || read(fd, &seed, sizeof(seed)) < 0) {
+    seed = time(NULL);
+  }
+  if (fd >= 0) close(fd);
+
+  srandom(static_cast<unsigned int>(seed));
   b[0] = static_cast<uint8_t>(random());
   b[1] = static_cast<uint8_t>(random());
   uint16_t seq = static_cast<uint16_t>(uint16_t(b[0] << 8) | uint16_t(b[1]));
