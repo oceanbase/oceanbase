@@ -162,7 +162,7 @@ void ObTenantMutilAllocator::free_batch_submit_ctx(ObBatchSubmitCtx* ptr)
   }
 }
 
-ObBatchSubmitDiskTask* ObTenantMutilAllocator::alloc_batch_submit_dtask()
+ObBatchSubmitDiskTask* ObTenantMutilAllocator::alloc_batch_submit_task()
 {
   ObBatchSubmitDiskTask* ret_ptr = NULL;
   void* ptr = batch_submit_dtask_alloc_.alloc();

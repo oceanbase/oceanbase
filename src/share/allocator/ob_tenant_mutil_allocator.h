@@ -56,7 +56,7 @@ public:
   virtual void free_trace_profile(common::ObTraceProfile* ptr) = 0;
   virtual clog::ObBatchSubmitCtx* alloc_batch_submit_ctx() = 0;
   virtual void free_batch_submit_ctx(clog::ObBatchSubmitCtx* ptr) = 0;
-  virtual clog::ObBatchSubmitDiskTask* alloc_batch_submit_dtask() = 0;
+  virtual clog::ObBatchSubmitDiskTask* alloc_batch_submit_task() = 0;
   virtual void free_batch_submit_dtask(clog::ObBatchSubmitDiskTask* ptr) = 0;
   virtual clog::ObIPartitionLogService* alloc_partition_log_service() = 0;
   virtual void free_partition_log_service(clog::ObIPartitionLogService* ptr) = 0;
@@ -183,7 +183,7 @@ public:
   void free_trace_profile(common::ObTraceProfile* ptr);
   clog::ObBatchSubmitCtx* alloc_batch_submit_ctx();
   void free_batch_submit_ctx(clog::ObBatchSubmitCtx* ptr);
-  clog::ObBatchSubmitDiskTask* alloc_batch_submit_dtask();
+  clog::ObBatchSubmitDiskTask* alloc_batch_submit_task();
   void free_batch_submit_dtask(clog::ObBatchSubmitDiskTask* ptr);
   clog::ObIPartitionLogService* alloc_partition_log_service();
   void free_partition_log_service(clog::ObIPartitionLogService* ptr);

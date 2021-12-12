@@ -186,7 +186,7 @@ ObBatchSubmitDiskTask* ObBatchSubmitDiskTaskFactory::alloc(common::ObILogAllocat
   ObBatchSubmitDiskTask* ret_val = NULL;
   if (NULL != alloc_mgr) {
     ATOMIC_INC(&alloc_cnt_);
-    ret_val = alloc_mgr->alloc_batch_submit_dtask();
+    ret_val = alloc_mgr->alloc_batch_submit_task();
   }
   return ret_val;
 }
@@ -194,7 +194,7 @@ ObBatchSubmitDiskTask* ObBatchSubmitDiskTaskFactory::alloc(common::ObILogAllocat
 void ObBatchSubmitDiskTaskFactory::free(ObBatchSubmitDiskTask* task)
 {
   ATOMIC_INC(&free_cnt_);
-  ob_slice_free_batch_submit_dtask(task);
+  ob_slice_free_batch_submit_task(task);
 }
 
 void ObBatchSubmitDiskTaskFactory::statistics()
