@@ -194,7 +194,7 @@ ObBatchSubmitDiskTask* ObBatchSubmitDiskTaskFactory::alloc(common::ObILogAllocat
 void ObBatchSubmitDiskTaskFactory::free(ObBatchSubmitDiskTask* task)
 {
   ATOMIC_INC(&free_cnt_);
-  ob_slice_free_batch_submit_task(task);
+  ob_slice_free_batch_submit_dtask(task);
 }
 
 void ObBatchSubmitDiskTaskFactory::statistics()
