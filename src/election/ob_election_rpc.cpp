@@ -159,9 +159,9 @@ int ObElectionRpc::post_election_msg(
     ELECT_ASYNC_LOG(WARN, "serialize msg_type error", K(ret), "msg_type", msg.get_msg_type());
   } else if (OB_SUCCESS !=
              (ret = partition.serialize(msgbuf.get_data(), msgbuf.get_capacity(), msgbuf.get_position()))) {
-    ELECT_ASYNC_LOG(WARN, "seralize partition error", K(ret), K(partition));
+    ELECT_ASYNC_LOG(WARN, "serialize partition error", K(ret), K(partition));
   } else if (OB_SUCCESS != (ret = msg.serialize(msgbuf.get_data(), msgbuf.get_capacity(), msgbuf.get_position()))) {
-    ELECT_ASYNC_LOG(WARN, "seralize msg error", K(ret), K(msg));
+    ELECT_ASYNC_LOG(WARN, "serialize msg error", K(ret), K(msg));
 
   } else {
     if (OB_SUCCESS != (ret = rpc_proxy_->to(server)
@@ -195,7 +195,7 @@ int ObElectionRpc::post_election_group_msg(const ObAddr& server, const int64_t c
             msgbuf.get_data(), msgbuf.get_capacity(), msgbuf.get_position(), msg.get_msg_type()))) {
       ELECT_ASYNC_LOG(WARN, "serialize msg_type error", K(ret), "msg_type", msg.get_msg_type());
     } else if (OB_FAIL(eg_id.serialize(msgbuf.get_data(), msgbuf.get_capacity(), msgbuf.get_position()))) {
-      ELECT_ASYNC_LOG(WARN, "seralize eg_id error", K(ret), K(eg_id));
+      ELECT_ASYNC_LOG(WARN, "serialize eg_id error", K(ret), K(eg_id));
     } else if (OB_FAIL(serialization::encode_i64(
                    msgbuf.get_data(), msgbuf.get_capacity(), msgbuf.get_position(), part_array_buf.get_eg_version()))) {
       ELECT_ASYNC_LOG(WARN, "serialize eg_version error", K(ret));
@@ -214,7 +214,7 @@ int ObElectionRpc::post_election_group_msg(const ObAddr& server, const int64_t c
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(msg.serialize(msgbuf.get_data(), msgbuf.get_capacity(), msgbuf.get_position()))) {
-      ELECT_ASYNC_LOG(WARN, "seralize msg error", K(ret), K(msg));
+      ELECT_ASYNC_LOG(WARN, "serialize msg error", K(ret), K(msg));
     } else {
       if (OB_FAIL(rpc_proxy_->to(server)
                       .dst_cluster_id(cluster_id)
