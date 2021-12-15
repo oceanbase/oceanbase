@@ -565,6 +565,8 @@ int ObGlobalIndexBuilder::check_and_get_index_schema(share::schema::ObSchemaGett
   } else if (OB_UNLIKELY(NULL == index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index schema ptr is null", K(ret), K(index_table_id));
+  } else if (index_schema->is_dropped_schema()) {
+    // table delay delete, do not build index
   } else {
   }  // no more to do
   return ret;

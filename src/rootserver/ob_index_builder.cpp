@@ -618,7 +618,7 @@ int ObRSBuildIndexTask::wait_trans_end(bool& is_end)
     LOG_WARN("fail to get schema guard", K(ret), K(fetch_tenant_id), K_(index_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(index_id_));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
     // index table has been dropped
     ret = OB_SUCCESS;
     is_end = true;
@@ -732,7 +732,7 @@ int ObRSBuildIndexTask::wait_build_index_end(bool& is_end)
     LOG_WARN("fail to get schema guard", K(ret), K(fetch_tenant_id), K_(index_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(index_id_));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
     ret = OB_SUCCESS;
     is_end = true;
   } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), table_schema))) {

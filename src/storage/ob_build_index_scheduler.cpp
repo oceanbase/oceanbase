@@ -467,7 +467,7 @@ int ObTenantDDLCheckSchemaTask::process_schedule_build_index_task()
         // do nothing
       } else if (OB_FAIL(schema_guard.get_table_schema(table_ids.at(i), index_schema))) {
         STORAGE_LOG(WARN, "fail to get table schema", K(ret));
-      } else if (OB_ISNULL(index_schema)) {
+      } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
         ret = OB_SUCCESS;
         STORAGE_LOG(INFO, "table has been deleted, do not need to create index", K(ret), "table_id", table_ids.at(i));
       } else if (OB_FAIL(find_build_index_partitions(index_schema, schema_guard, partition_keys))) {
@@ -998,7 +998,7 @@ int ObBuildIndexScheduleTask::send_copy_replica_rpc()
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(schema_version_));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret), K(pkey_), K(index_id_));
-    } else if (OB_ISNULL(index_schema)) {
+    } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
       ret = OB_SUCCESS;
     } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), data_table_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret));
@@ -1414,7 +1414,7 @@ int ObBuildIndexScheduleTask::process()
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(pkey_), K(index_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret), K(pkey_), K(index_id_));
-    } else if (OB_ISNULL(index_schema)) {
+    } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
       if (UNIQUE_INDEX_CHECKING != state_) {
         STORAGE_LOG(INFO, "index schema has been deleted, skip build it", K(pkey_), K(index_id_));
         is_end = true;
