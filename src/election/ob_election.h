@@ -384,6 +384,10 @@ private:
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
   mutable common::RWLock lock_;
+#elif defined(__sw_64__)
+  typedef common::SpinRLockGuard RLockGuard;
+  typedef common::SpinWLockGuard WLockGuard;
+  mutable common::SpinRWLock lock_;
 #endif
 private:
   bool is_inited_;

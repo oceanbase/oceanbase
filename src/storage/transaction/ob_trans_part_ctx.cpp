@@ -4734,7 +4734,7 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
     need_print_trace_log_ = true;
   } else if (OB_UNLIKELY(!is_trans_valid_for_replay_(OB_LOG_START_MEMBERSHIP_STORAGE, timestamp))) {
-    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log), K(timestamp));
+    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(timestamp));
     ret = OB_TRANS_INVALID_STATE;
     need_print_trace_log_ = true;
   } else if (0 == submit_log_count_) {

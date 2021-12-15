@@ -2030,7 +2030,7 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
         ret = E(EventTable::EN_REPLAY_ADD_PARTITION_TO_PG_CLOG_AFTER_CREATE_SSTABLE) OB_SUCCESS;
 #endif
         if (OB_FAIL(ret)) {
-          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret), K(log));
+          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret));
         } else if (sstables_handle.get_count() > 0) {
           if (OB_FAIL(pg->create_pg_partition(arg.partition_key_,
                   data_info.get_publish_version(),

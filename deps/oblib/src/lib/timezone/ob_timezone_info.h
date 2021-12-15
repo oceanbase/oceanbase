@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LIB_TIMEZONE_INFO_
 #define OCEANBASE_LIB_TIMEZONE_INFO_
 
+#include <cmath>
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_array.h"

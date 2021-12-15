@@ -594,9 +594,6 @@ public:
     return ret;
   }
 
-  template <>
-  int create_stmt<ObSelectStmt>(ObSelectStmt*& stmt);
-
   inline int free_stmt(ObSelectStmt* stmt)
   {
     int ret = common::OB_SUCCESS;
@@ -630,6 +627,9 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStmtFactory);
 };
+
+template <>
+int ObStmtFactory::create_stmt<ObSelectStmt>(ObSelectStmt*& stmt);
 }  // namespace sql
 }  // namespace oceanbase
 

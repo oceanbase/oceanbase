@@ -1160,7 +1160,7 @@ int ObPGStorage::replay(const ObStoreCtx& ctx, const char* data, const int64_t d
           mem_store = static_cast<ObMemtable*>(memtable);
         }
       } else {
-        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta), K(log));
+        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta));
         ret = OB_ERR_UNEXPECTED;
       }
     }
