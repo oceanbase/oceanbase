@@ -772,6 +772,23 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
     }
   }
 
+  if (OB_SUCC(ret) && get_insert_up() && is_needed) {
+    // multi insert on duplicate key At present, the static engine has a correctness problem,
+    // and the old engine is no problem. Currently, it will fall back to the old engine for execution.
+    // create table t1(c1 int primary key, c2 int auto_increment) partition by key(c1) partitions 2;
+    // create table t2(c1 int, c2 int) partition by key(c1) partitions 3;
+    // insert into t2 values('1',1000),('1',-100), (1, -300),('1',-200);
+    // insert into t1 select t2.c1, t2.c2 from t2 on duplicate key update t1.c2 = t1.c2 + t2.c2;
+    ObSQLSessionInfo *session = NULL;
+    if (OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("session is null", K(ret));
+    } else if (session->use_static_typing_engine()) {
+      ret = STATIC_ENG_NOT_IMPLEMENT;
+      LOG_WARN("multi part insert up have some bug, must use old sql engine", K(ret), K(is_needed));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check whether need multi-table dml for insert operator",
         K(is_match),
