@@ -47,6 +47,15 @@ install(PROGRAMS
 
 install(FILES
   tools/timezone/timezone_V1.log
+  tools/upgrade/upgrade_pre.py
+  tools/upgrade/upgrade_post.py
+  tools/upgrade/upgrade_post_checker.py
+  tools/upgrade/upgrade_checker.py
+  tools/upgrade/upgrade_cluster_health_checker.py
+  tools/upgrade/upgrade_rolling_pre.py
+  tools/upgrade/upgrade_rolling_post.py
+  tools/upgrade/priv_checker.py
+  tools/upgrade/oceanbase_upgrade_dep.yml
   DESTINATION etc
   COMPONENT server)
 

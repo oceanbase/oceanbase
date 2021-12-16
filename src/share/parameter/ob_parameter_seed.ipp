@@ -275,7 +275,6 @@ DEF_BOOL(_enable_static_typing_engine, OB_CLUSTER_PARAMETER, "True",
     "specifies whether static typing sql execution engine is activated",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-// https://yuque.antfin-inc.com/ob/product_functionality_review/zlp56c
 DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "True",
     "specifies whether allow to do some defensive checks when the query is executed",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -519,7 +518,7 @@ DEF_TIME(get_leader_candidate_rpc_timeout, OB_CLUSTER_PARAMETER, "9s", "[2s, 180
     "the time during a get leader candidate rpc request "
     "is permitted to execute before it is terminated. Range: [2s, 180s]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.1", "the min observer version",
+DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.2", "the min observer version",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True",
     "specifies whether DDL operation is turned on. "
