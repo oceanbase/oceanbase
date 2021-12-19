@@ -39,11 +39,17 @@ public:
   virtual ~ObBuildIndexBaseTask();
   static int report_index_status(const uint64_t index_table_id, const int64_t partition_id,
       const share::schema::ObIndexStatus index_status, const int build_index_ret, const ObRole role);
+  static int generate_schedule_index_task(const common::ObPartitionKey &pkey, const uint64_t index_id,
+      const int64_t schema_version, const bool is_unique_index);
 
 protected:
-  int check_partition_need_build_index(const common::ObPartitionKey& pkey,
-      const share::schema::ObTableSchema& index_schema, const share::schema::ObTableSchema& data_table_schema,
-      storage::ObIPartitionGroupGuard& guard, bool& need_build);
+  int check_partition_need_build_index(const common::ObPartitionKey &pkey,
+      const share::schema::ObTableSchema &index_schema, const share::schema::ObTableSchema &data_table_schema,
+      storage::ObIPartitionGroupGuard &guard, bool &need_build);
+  int find_build_index_partitions(const share::schema::ObTableSchema *index_schema,
+      share::schema::ObSchemaGetterGuard &guard, common::ObIArray<common::ObPartitionKey> &partition_keys);
+  static int create_index_partition_table_store(
+      const common::ObPartitionKey &pkey, const uint64_t index_id, const int64_t schema_version);
 
 private:
   int check_partition_exist_in_current_server(const share::schema::ObTableSchema& index_schema,
@@ -72,16 +78,10 @@ public:
   }
   virtual ObIDDLTask* deep_copy(char* buf, const int64_t size) const override;
   TO_STRING_KV(K_(tenant_id), K_(base_version), K_(refreshed_version));
-  static int generate_schedule_index_task(const common::ObPartitionKey& pkey, const uint64_t index_id,
-      const int64_t schema_version, const bool is_unique_index);
 
 private:
-  int find_build_index_partitions(const share::schema::ObTableSchema* index_schema,
-      share::schema::ObSchemaGetterGuard& guard, common::ObIArray<common::ObPartitionKey>& partition_keys);
-  int get_candidate_tables(common::ObIArray<uint64_t>& table_ids);
-  static int create_index_partition_table_store(
-      const common::ObPartitionKey& pkey, const uint64_t index_id, const int64_t schema_version);
-  int get_candidate_tenants(common::ObIArray<uint64_t>& tenant_ids);
+  int get_candidate_tables(common::ObIArray<uint64_t> &table_ids);
+  int get_candidate_tenants(common::ObIArray<uint64_t> &tenant_ids);
   int process_schedule_build_index_task();
   int process_tenant_memory_task();
 
@@ -198,6 +198,70 @@ private:
   share::ObDDLTaskExecutor task_executor_;
   common::ObSpinLock lock_;
   ObCheckTenantSchemaTask check_tenant_schema_task_;
+  bool is_stop_;
+};
+
+class ObRetryGhostIndexTask : public ObBuildIndexBaseTask {
+public:
+  ObRetryGhostIndexTask();
+  virtual ~ObRetryGhostIndexTask();
+  int init(const uint64_t index_id);
+  virtual int64_t hash() const;
+  virtual int process();
+  virtual int64_t get_deep_copy_size() const
+  {
+    return sizeof(*this);
+  }
+  virtual ObRetryGhostIndexTask *deep_copy(char *buf, const int64_t size) const;
+  bool operator==(const ObIDDLTask &other) const;
+  TO_STRING_KV(K_(index_id));
+  int64_t get_tenant_id() const
+  {
+    return extract_tenant_id(index_id_);
+  }
+
+private:
+  int retry_local_index(
+      const share::schema::ObTableSchema *index_schema, share::schema::ObSchemaGetterGuard &schema_guard);
+
+private:
+  uint64_t index_id_;
+  int64_t last_log_timestamp_;
+};
+
+class ObScanGhostIndexTask : public ObTimerTask {
+public:
+  ObScanGhostIndexTask() = default;
+  virtual ~ObScanGhostIndexTask() = default;
+  void runTimerTask();
+};
+
+class ObRetryGhostIndexScheduler {
+public:
+  static const int64_t DEFAULT_THREAD_CNT = 1;
+
+public:
+  int init();
+  static ObRetryGhostIndexScheduler &get_instance();
+  int push_task(ObRetryGhostIndexTask &task);
+  void destroy();
+
+private:
+  ObRetryGhostIndexScheduler();
+  virtual ~ObRetryGhostIndexScheduler();
+  void stop();
+  void wait();
+
+private:
+#ifdef ERRSIM
+  static const int64_t DEFAULT_RETRY_GHOST_INDEX_INTERVAL_US = 1000L * 1000L * 10L;  // 10s
+#else
+  static const int64_t DEFAULT_RETRY_GHOST_INDEX_INTERVAL_US = 1000L * 1000L * 60L * 30L;  // 30min
+#endif
+  static const int64_t DEFAULT_BUCKET_NUM = 10000;
+  ObScanGhostIndexTask scan_ghost_index_task_;
+  bool is_inited_;
+  share::ObDDLTaskExecutor task_executor_;
   bool is_stop_;
 };
 

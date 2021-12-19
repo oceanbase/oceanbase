@@ -964,6 +964,7 @@ public:
   int drop_tablegroup(const obrpc::ObDropTablegroupArg& arg);
   int drop_index(const obrpc::ObDropIndexArg& arg);
   int rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObAlterTableRes& res);
+  int submit_build_index_task(const share::schema::ObTableSchema *index_schema);
   // the interface only for switchover: execute skip check enable_ddl
   int force_drop_index(const obrpc::ObDropIndexArg& arg);
   int flashback_index(const obrpc::ObFlashBackIndexArg& arg);

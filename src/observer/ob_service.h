@@ -304,6 +304,7 @@ public:
   int submit_async_refresh_schema_task(const uint64_t tenant_id, const int64_t schema_version);
   int renew_in_zone_hb(const share::ObInZoneHbRequest& arg, share::ObInZoneHbResponse& result);
   int pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg& arg);
+  int submit_retry_ghost_index_task(const uint64_t index_id);
 
 private:
   int register_self();
