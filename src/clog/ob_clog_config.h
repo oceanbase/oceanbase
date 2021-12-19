@@ -69,7 +69,7 @@ const uint64_t CLOG_SWITCH_LEADER_ALLOW_THRESHOLD = 5000;
 
 // ==== loop interval ====
 // state change check interval
-const int32_t CLOG_STATE_DRIVER_INTERVAL = 50 * 1000;
+const int32_t CLOG_STATE_DRIVER_INTERVAL = 200 * 1000;
 const int32_t CLOG_LOG_DELAY_STATICS_INTERVAL = 3 * 1000 * 1000;
 const int32_t CLOG_CHECK_REPLICA_STATE_INTERVAL = 2 * 1000 * 1000;
 const int64_t CLOG_CHECK_PARENT_INTERVAL = 3 * 1000 * 1000;
