@@ -3378,11 +3378,7 @@ void ObGlobalIndexBuilder::run3()
       {
         int64_t task_cnt = 0;
         int tmp_ret = get_task_count_in_lock(task_cnt);
-        if (task_cnt <= 0 || OB_SUCCESS != tmp_ret) {
-          idling_.idle(10 * 1000000);
-        } else {
-          idling_.idle(1 * 1000000);
-        }
+        idling_.idle(1 * 100000);
       };
       ObClusterType cluster_type = ObClusterInfoGetter::get_cluster_type_v2();
       if (PRIMARY_CLUSTER != cluster_type) {
