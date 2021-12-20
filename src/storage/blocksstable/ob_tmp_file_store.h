@@ -54,7 +54,7 @@ public:
   int init(common::ObIAllocator& allocator);
   void destroy();
   int alloc_all_pages();
-  int alloc(const int32_t page_nums, int32_t& start_page_id);
+  int alloc(const int32_t page_nums, int32_t &start_page_id, int32_t &alloced_page_nums);
   void free(const int32_t start_page_id, const int32_t page_nums);
   OB_INLINE int64_t get_max_cont_page_nums() const
   {

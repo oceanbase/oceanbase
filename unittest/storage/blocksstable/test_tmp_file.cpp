@@ -1203,8 +1203,9 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
 {
   int ret = OB_SUCCESS;
   int64_t dir = -1;
-  int64_t fd = -1;
-  const int64_t macro_block_size = OB_FILE_SYSTEM.get_macro_block_size();
+  int64_t fd_1 = -1;
+  int64_t fd_2 = -1;
+  const int64_t macro_block_size = 64 * 1024;
   ObTmpFileIOInfo io_info1;
   ObTmpFileIOInfo io_info2;
   ObTmpFileIOHandle handle1;
@@ -1218,18 +1219,18 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
   }
   char* read_buf = new char[macro_block_size + 256];
 
-  ret = ObTmpFileManager::get_instance().open(fd, dir);
+  ret = ObTmpFileManager::get_instance().open(fd_1, dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  io_info1.fd_ = fd;
+  io_info1.fd_ = fd_1;
   io_info1.tenant_id_ = 1;
   io_info1.io_desc_.category_ = USER_IO;
   io_info1.io_desc_.wait_event_no_ = 2;
   io_info1.buf_ = write_buf;
   io_info1.size_ = macro_block_size + 256;
 
-  ret = ObTmpFileManager::get_instance().open(fd, dir);
+  ret = ObTmpFileManager::get_instance().open(fd_2, dir);
   ASSERT_EQ(OB_SUCCESS, ret);
-  io_info2.fd_ = fd;
+  io_info2.fd_ = fd_2;
   io_info2.tenant_id_ = 1;
   io_info2.io_desc_.category_ = USER_IO;
   io_info2.io_desc_.wait_event_no_ = 2;
@@ -1265,7 +1266,13 @@ TEST_F(TestTmpFile, test_single_dir_two_file)
   cmp = memcmp(handle2.get_buffer(), write_buf, macro_block_size + 256);
   ASSERT_EQ(0, cmp);
 
-  ObTmpFileManager::get_instance().remove(fd);
+  ObTmpTenantFileStore *store = NULL;
+  OB_TMP_FILE_STORE.get_store(1, store);
+  store->print_block_usage();
+  ObTmpFileManager::get_instance().remove(fd_1);
+  ObTmpFileManager::get_instance().remove(fd_2);
+  OB_TMP_FILE_STORE.get_store(1, store);
+  store->print_block_usage();
 }
 
 /*TEST_F(TestTmpFile, test_iter_end)
@@ -1572,6 +1579,63 @@ TEST_F(TestTmpFile, test_sql_workload)
   ObMallocAllocator::get_instance()->print_tenant_ctx_memory_usage(500);
 
   ObTmpFileManager::get_instance().remove(fd);
+}
+
+TEST_F(TestTmpFile, test_page_buddy)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObTmpFilePageBuddy page_buddy_1;
+
+  ret = page_buddy_1.init(allocator);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  int32_t page_nums = 64;
+  int32_t alloced_page_nums = 64;
+  int32_t start_page_id = -1;
+  ret = page_buddy_1.alloc(page_nums, start_page_id, alloced_page_nums);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  int32_t start_page_id_2 = -1;
+  ret = page_buddy_1.alloc(page_nums, start_page_id_2, alloced_page_nums);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  page_buddy_1.free(start_page_id + 63, page_nums - 63);
+  page_buddy_1.free(start_page_id_2 + 1, page_nums - 1);
+  page_nums = 63;
+  page_buddy_1.free(start_page_id, page_nums);
+  page_nums = 1;
+  page_buddy_1.free(start_page_id_2, page_nums);
+  STORAGE_LOG(INFO, "page buddy", K(page_buddy_1));
+  ASSERT_EQ(true, page_buddy_1.is_empty());
+
+  ObTmpFilePageBuddy page_buddy_2;
+  ret = page_buddy_2.init(allocator);
+  start_page_id = 0;
+  ret = page_buddy_2.alloc_all_pages();
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  int32_t free_nums = 511 - 129;
+  page_buddy_2.free(start_page_id + 129, free_nums);
+  free_nums = 127;
+  page_buddy_2.free(start_page_id + 2, free_nums);
+  free_nums = 2;
+  page_buddy_2.free(start_page_id, free_nums);
+  STORAGE_LOG(INFO, "page buddy", K(page_buddy_2));
+  ASSERT_EQ(true, page_buddy_2.is_empty());
+
+  for (int32_t i = 1; i < 129; i++) {
+    ObTmpFilePageBuddy page_buddy_3;
+    int32_t page_num_2 = i;
+    ret = page_buddy_3.init(allocator);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = page_buddy_3.alloc(page_num_2, start_page_id, alloced_page_nums);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    page_buddy_3.free(start_page_id, alloced_page_nums);
+    STORAGE_LOG(INFO, "page buddy", K(page_buddy_3));
+    ASSERT_EQ(true, page_buddy_3.is_empty());
+    STORAGE_LOG(INFO, "page buddy", K(page_buddy_3));
+  }
 }
 
 }  // end namespace unittest
