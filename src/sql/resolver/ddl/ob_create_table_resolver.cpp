@@ -460,6 +460,9 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
         } else if (is_create_as_sel && is_mysql_mode) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
+        } else if (is_mysql_mode) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table");
         } else {
           is_temporary_table = true;
           is_oracle_temp_table_ = (is_mysql_mode == false);
