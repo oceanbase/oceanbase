@@ -101,7 +101,7 @@ class Global:
 class Options(object):
     host = '127.0.0.1'
     port = 2881
-    user = root
+    user = 'root'
     password = ""
     database = "oceanbase"
     supermode = False
