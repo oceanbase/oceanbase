@@ -2962,6 +2962,7 @@ int ObBackupDataClean::get_sys_tenant_prepare_clog_round_and_piece(const share::
           const ObSimplePieceInfo &simple_piece_info = log_archive_round.piece_infos_.at(j);
           if (simple_piece_info.max_ts_ > clog_gc_snapshot ||
               ObBackupPieceStatus::BACKUP_PIECE_FROZEN != simple_piece_info.status_ ||
+              ObBackupFileStatus::BACKUP_FILE_COPYING == simple_piece_info.file_status_ ||
               simple_piece_info.copies_num_ < backup_copies) {
             is_delete_inorder = false;
           } else if (ObBackupFileStatus::BACKUP_FILE_DELETED == simple_piece_info.file_status_) {
