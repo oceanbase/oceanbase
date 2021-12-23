@@ -28,6 +28,12 @@ enum StorageOpenMode {
 };
 class ObIStorageUtil {
 public:
+  enum {
+    NONE = 0,
+    DELETE = 1,
+    TAGGING = 2,
+    MAX
+  };
   virtual int is_exist(const common::ObString& uri, const common::ObString& storage_info, bool& exist) = 0;
   virtual int get_file_length(
       const common::ObString& uri, const common::ObString& storage_info, int64_t& file_length) = 0;

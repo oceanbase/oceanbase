@@ -96,6 +96,7 @@ public:
       char*& remote_md5, int64_t& file_length);
   int get_oss_file_length(const common::ObString& name, int64_t& file_length);
   void print_oss_info(aos_status_s* aos_ret);
+  int64_t get_delete_mode() {return delete_mode_;}
 
 protected:
   aos_pool_t* aos_pool_;
@@ -104,6 +105,7 @@ protected:
 private:
   int parse_oss_arg(const common::ObString& uri);
   static int set_oss_field(const char* info, char* field, const int64_t length);
+  int set_delete_mode(const char *parameter);
 
 private:
   bool is_inited_;
@@ -111,6 +113,7 @@ private:
   char oss_endpoint_[MAX_OSS_ENDPOINT_LENGTH];
   char oss_id_[MAX_OSS_ID_LENGTH];
   char oss_key_[MAX_OSS_KEY_LENGTH];
+  int64_t delete_mode_;
   int init_oss_endpoint();
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssBase);
 };
@@ -209,6 +212,14 @@ public:
 
 private:
   int strtotime(const char* date_time, int64_t& time);
+  int tagging_object(
+      const common::ObString &uri,
+      const common::ObString &bucket_str,
+      const common::ObString &object_str);
+  int delete_object(
+      const common::ObString &uri,
+      const common::ObString &bucket_str,
+      const common::ObString &object_str);
 };
 
 class ObStorageOssAppendWriter : public ObStorageOssBase, public ObIStorageWriter {

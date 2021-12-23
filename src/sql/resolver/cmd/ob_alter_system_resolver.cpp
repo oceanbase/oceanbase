@@ -1514,6 +1514,14 @@ int check_backup_dest(const ObString& backup_dest)
     LOG_WARN("failed to print backup dest buf", K(ret), K(backup_dest));
   } else if (OB_FAIL(dest.set(backup_dest_buf))) {
     LOG_WARN("failed to set dest", K(ret), K(backup_dest_buf));
+  } else if (dest.is_nfs_storage() && 0 != strlen(dest.storage_info_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup device is nfs, storage_info should be empty", K(ret), K_(dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup device is nfs, additional parameters are");
+  } else if (dest.is_nfs_storage() && strlen(dest.root_path_) != strlen(backup_dest_buf)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup device is nfs, backup dest should not set '?'", K(ret), K_(dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup device is nfs, setting '?' is"); 
   } else if (OB_FAIL(cluster_dest.set(dest, OB_START_INCARNATION))) {
     LOG_WARN("Failed to set cluster dest", K(ret), K(dest));
   } else if (OB_FAIL(backup_info_mgr.get_last_extern_log_archive_backup_info(
@@ -1698,6 +1706,14 @@ int check_backup_backup_dest(const ObString& backup_backup_dest)
     LOG_WARN("failed to set dest", K(ret), K(backup_dest_buf));
   } else if (OB_FAIL(dst_dest.set(backup_backup_dest_buf))) {
     LOG_WARN("failed to set dest", K(ret), K(backup_backup_dest_buf));
+  } else if (dst_dest.is_nfs_storage() && 0 != strlen(dst_dest.storage_info_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup backup device is nfs, storage_info should be empty", K(ret), K_(dst_dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup device is nfs, additional parameters are"); 
+  } else if (dst_dest.is_nfs_storage() && strlen(dst_dest.root_path_) != strlen(backup_backup_dest_buf)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup backup device is nfs, backup backup dest should not set '?'", K(ret), K_(dst_dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup device is nfs, setting '?' is"); 
   } else if (dst_dest.is_cos_storage()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("backup backup do not support cos storage", KR(ret));
