@@ -435,9 +435,8 @@ public:
   }
   int upload_backup_set_file_info();
   // TODO(muwei.ym) need clean or touch backup set file
-  int mark_backup_set_file_deleting(const common::ObIArray<ObBackupSetIdPair>& backup_set_id_pairs);
-  int mark_backup_set_file_deleted(
-      const common::ObIArray<share::ObBackupSetIdPair>& backup_set_id_pairs, bool& is_all_deleted);
+  int mark_backup_set_file_deleting(const common::ObIArray<ObBackupSetIdPair> &backup_set_id_pairs);
+  int mark_backup_set_file_deleted(const common::ObIArray<share::ObBackupSetIdPair> &backup_set_id_pairs);
   bool is_all_extern_backup_set_file_infos_deleted() const
   {
     return backup_set_file_infos_.is_all_extern_backup_set_file_infos_deleted();

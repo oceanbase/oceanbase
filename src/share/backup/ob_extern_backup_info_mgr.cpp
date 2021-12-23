@@ -3013,10 +3013,9 @@ int ObExternBackupSetFileInfoMgr::mark_backup_set_file_deleting(
 }
 
 int ObExternBackupSetFileInfoMgr::mark_backup_set_file_deleted(
-    const common::ObIArray<share::ObBackupSetIdPair>& backup_set_id_pairs, bool& is_all_deleted)
+    const common::ObIArray<share::ObBackupSetIdPair> &backup_set_id_pairs)
 {
   int ret = OB_SUCCESS;
-  is_all_deleted = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3032,8 +3031,6 @@ int ObExternBackupSetFileInfoMgr::mark_backup_set_file_deleted(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(upload_backup_set_file_info())) {
         LOG_WARN("failed to upload backup set file info", K(ret));
-      } else {
-        is_all_deleted = backup_set_file_infos_.is_all_extern_backup_set_file_infos_deleted();
       }
     }
   }

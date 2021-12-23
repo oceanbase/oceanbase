@@ -3798,13 +3798,12 @@ int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleting(const ObCluster
 
 int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleted(const ObClusterBackupDest &current_backup_dest,
     const uint64_t tenant_id, const common::ObIArray<share::ObBackupPieceInfoKey> &piece_keys,
-    const bool is_backup_backup, bool &is_all_deleted, share::ObIBackupLeaseService &backup_lease_service)
+    const bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObExternalBackupPieceInfo external_info;
   ObBackupPath path;
   ObBackupFileSpinLock lock;
-  is_all_deleted = false;
 
   if (OB_FAIL(get_external_backup_piece_path_(current_backup_dest, tenant_id, is_backup_backup, path))) {
     LOG_WARN("failed to get cluster clog backup piece path", K(ret), K(current_backup_dest));
@@ -3820,8 +3819,6 @@ int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleted(const ObClusterB
   } else if (OB_FAIL(inner_write_extern_log_archive_backup_piece_info_(
                  path, current_backup_dest.get_storage_info(), external_info, backup_lease_service))) {
     LOG_WARN("failed to write_extern_log_archive_backup_info", K(ret), K(external_info));
-  } else {
-    is_all_deleted = external_info.is_all_piece_info_deleted();
   }
 
   return ret;
