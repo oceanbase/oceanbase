@@ -567,7 +567,6 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"sysdate", SYSDATE},
     {"system", SYSTEM},
     {"system_user", SYSTEM_USER},
-    {"synonym", SYNONYM},
     {"swaps", SWAPS},
     {"switch", SWITCH},
     {"switches", SWITCHES},

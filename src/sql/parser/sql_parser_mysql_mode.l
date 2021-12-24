@@ -314,7 +314,6 @@ STARTING                      { REPUT_TOKEN_NEG_SIGN(STARTING); }
 STORED                        { REPUT_TOKEN_NEG_SIGN(STORED); }
 STRAIGHT_JOIN                 { REPUT_TOKEN_NEG_SIGN(STRAIGHT_JOIN); }
 SUBJECT                       { REPUT_TOKEN_NEG_SIGN(SUBJECT); }
-SYNONYM                       { REPUT_TOKEN_NEG_SIGN(SYNONYM); }
 SYSDATE                       { REPUT_TOKEN_NEG_SIGN(SYSDATE); }
 TERMINATED                    { REPUT_TOKEN_NEG_SIGN(TERMINATED); }
 TEXT                          { REPUT_TOKEN_NEG_SIGN(TEXT); }
