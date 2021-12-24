@@ -57,6 +57,7 @@ public:
   static int set_tenant_limit(uint64_t tenant_id, int64_t bytes);
   static int64_t get_tenant_limit(uint64_t tenant_id);
   static int64_t get_tenant_hold(uint64_t tenant_id);
+  static int64_t get_tenant_remain(uint64_t tenant_id);
   static int64_t get_tenant_rpc_hold(uint64_t tenant_id);
   int64_t get_tenant_ctx_hold(const uint64_t tenant_id, const uint64_t ctx_id) const;
   void get_tenant_mod_usage(uint64_t tenant_id, int mod_id, common::ObModItem& item) const;

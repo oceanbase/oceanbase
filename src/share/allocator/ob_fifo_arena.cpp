@@ -281,12 +281,13 @@ void ObFifoArena::destroy_page(Page* page)
   }
 }
 
-bool ObFifoArena::need_do_writing_throttle() const
+bool ObFifoArena::need_do_writing_throttle()
 {
   int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
   int64_t trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100;
+  int64_t trigger_mem_remain = lastest_memstore_threshold_ * (100 - trigger_percentage) / 100;
   int64_t cur_mem_hold = ATOMIC_LOAD(&hold_);
-  bool need_do_writing_throttle = cur_mem_hold > trigger_mem_limit;
+  bool need_do_writing_throttle = (cur_mem_hold > trigger_mem_limit) || (get_tenant_memory_remain_() < trigger_mem_remain);
   return need_do_writing_throttle;
 }
 
@@ -295,7 +296,10 @@ void ObFifoArena::speed_limit(int64_t cur_mem_hold, int64_t alloc_size)
   int ret = OB_SUCCESS;
   int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
   int64_t trigger_mem_limit = 0;
+  int64_t trigger_mem_remain = 0;
+  bool is_memstore_overused = false;
   if (trigger_percentage < 100) {
+    const int64_t tenant_memory_remain = get_tenant_memory_remain_();
     if (OB_UNLIKELY(
             cur_mem_hold < 0 || alloc_size <= 0 || lastest_memstore_threshold_ <= 0 || trigger_percentage <= 0)) {
       COMMON_LOG(ERROR,
@@ -304,13 +308,15 @@ void ObFifoArena::speed_limit(int64_t cur_mem_hold, int64_t alloc_size)
           K(alloc_size),
           K(lastest_memstore_threshold_),
           K(trigger_percentage));
-    } else if (cur_mem_hold > (trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100)) {
+    } else if ((is_memstore_overused = (cur_mem_hold > (trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100)))
+                || (tenant_memory_remain < (trigger_mem_remain = lastest_memstore_threshold_ - trigger_mem_limit))) {
       int64_t alloc_duration = get_writing_throttling_maximum_duration_();
       if (OB_FAIL(throttle_info_.check_and_calc_decay_factor(
               lastest_memstore_threshold_, trigger_percentage, alloc_duration))) {
         COMMON_LOG(WARN, "failed to check_and_calc_decay_factor", K(cur_mem_hold), K(alloc_size), K(throttle_info_));
       } else {
-        int64_t throttling_interval = get_throttling_interval(cur_mem_hold, alloc_size, trigger_mem_limit);
+        const int64_t mem_overused = MAX(cur_mem_hold - trigger_mem_limit, trigger_mem_remain - tenant_memory_remain);
+        int64_t throttling_interval = get_throttling_interval(mem_overused, alloc_size, is_memstore_overused);
         int64_t cur_ts = ObTimeUtility::current_time();
         int64_t new_base_ts = ATOMIC_AAF(&last_base_ts_, throttling_interval);
         int64_t sleep_interval = new_base_ts - cur_ts;
@@ -339,7 +345,11 @@ void ObFifoArena::speed_limit(int64_t cur_mem_hold, int64_t alloc_size)
               "last_base_ts",
               ATOMIC_LOAD(&last_base_ts_),
               K(cur_mem_hold),
-              K(throttle_info_));
+              K(trigger_mem_limit),
+              K(trigger_mem_remain), 
+              K(tenant_memory_remain),
+              K(throttle_info_),
+              K(mem_overused));
         }
       }
     } else { /*do nothing*/
@@ -347,18 +357,24 @@ void ObFifoArena::speed_limit(int64_t cur_mem_hold, int64_t alloc_size)
   }
 }
 
-int64_t ObFifoArena::get_throttling_interval(int64_t cur_mem_hold, int64_t alloc_size, int64_t trigger_mem_limit)
+int64_t ObFifoArena::get_throttling_interval(const int64_t mem_overused,
+                                             const int64_t alloc_size,
+                                             const bool is_memstore_overused)
 {
   constexpr int64_t MIN_INTERVAL_PER_ALLOC = 20;
   int64_t chunk_cnt = ((alloc_size + MEM_SLICE_SIZE - 1) / (MEM_SLICE_SIZE));
-  int64_t chunk_seq = ((cur_mem_hold - trigger_mem_limit) + MEM_SLICE_SIZE - 1) / (MEM_SLICE_SIZE);
+  int64_t chunk_seq = (mem_overused + alloc_size + MEM_SLICE_SIZE - 1)/ (MEM_SLICE_SIZE);
   int64_t ret_interval = 0;
-  double cur_chunk_seq = 1.0;
+  double cur_chunk_seq  = 1.0;
   for (int64_t i = 0; i < chunk_cnt && cur_chunk_seq > 0.0; ++i) {
     cur_chunk_seq = static_cast<double>(chunk_seq - i);
     ret_interval += static_cast<int64_t>(throttle_info_.decay_factor_ * cur_chunk_seq * cur_chunk_seq * cur_chunk_seq);
   }
-  return alloc_size * ret_interval / MEM_SLICE_SIZE + MIN_INTERVAL_PER_ALLOC;
+  ret_interval = ret_interval + MIN_INTERVAL;
+  const int64_t calc_sleep_interval = alloc_size * ret_interval / MEM_SLICE_SIZE;
+  const int64_t actual_sleep_interval = is_memstore_overused ? calc_sleep_interval 
+      : MAX(TENANT_MEMORY_EXHAUSTION_FACTOR * calc_sleep_interval, MIN_SLEEP_INTERVAL_WITH_TENANT_MEMORY_EXHAUSTION);
+  return actual_sleep_interval;
 }
 
 void ObFifoArena::set_memstore_threshold(int64_t memstore_threshold)
@@ -393,6 +409,18 @@ int64_t ObFifoArena::get_writing_throttling_maximum_duration_() const
     }
   }
   return duration;
+}
+
+int64_t ObFifoArena::get_tenant_memory_remain_()
+{
+  const uint64_t tenant_id = attr_.tenant_id_;
+  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t old_time = ATOMIC_LOAD(&last_query_time_); 
+  if (OB_UNLIKELY((QUERY_MEM_INTERVAL + old_time) < cur_time) 
+    && old_time == ATOMIC_CAS(&last_query_time_, old_time, cur_time)) {
+    ATOMIC_STORE(&remain_, lib::get_tenant_memory_remain(tenant_id));
+  }
+  return ATOMIC_LOAD(&remain_);
 }
 
 };  // namespace common

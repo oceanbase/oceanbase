@@ -1895,13 +1895,14 @@ int ObTenantManager::check_memory_used(const int64_t tenant_id,
   } else {
     double tenant_memory_hold = get_tenant_memory_hold(tenant_id);
     double tenant_memory_limit = get_tenant_memory_limit(tenant_id);
+    double tenant_memory_remain = get_tenant_memory_remain(tenant_id);
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     int64_t trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
     if (!tenant_config.is_valid()) {
       COMMON_LOG(INFO, "failed to get tenant config");
     } else {
       if (tenant_memory_limit > tenant_memory_hold &&
-          (tenant_memory_limit - tenant_memory_hold < mem_memstore_limit / 100 * (100 - trigger_percentage) * 0.95)) {
+          (tenant_memory_remain < mem_memstore_limit / 100 * (100 - trigger_percentage) / 0.95)) {
         use_too_much_memory = true;
         COMMON_LOG(INFO,
             "A minor freeze is needed by writing throttling",
