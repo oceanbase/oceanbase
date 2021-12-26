@@ -8680,6 +8680,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
   params.warning_ = 1;
   if (ob_is_string_tc(expect_type)) {
     zero_obj.set_string(expect_type, "");
+  } else if (ob_is_text_tc(expect_type)) {
+    zero_obj.set_lob_value(expect_type, static_cast<const char *>(NULL), 0);
   } else if (ob_is_int_tc(expect_type)) {
     int64_t value = 0;
     SET_RES_INT(zero_obj);

@@ -21,6 +21,7 @@
 #include "lib/charset/ob_charset.h"
 #include "share/ob_errno.h"
 
+
 namespace oceanbase {
 namespace common {
 

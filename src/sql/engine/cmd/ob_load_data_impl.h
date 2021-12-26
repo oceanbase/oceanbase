@@ -994,13 +994,15 @@ public:
   bool is_terminate(char& cur_char, ObKMPStateMachine& term_state_machine, char*& cur_pos);
   bool is_enclosed_field_start(char* cur_pos, char& cur_char);
   void remove_enclosed_char(char*& cur_field_end_pos);
-  int collect_insert_row_strings();
+  int collect_insert_row_strings(common::ObIAllocator &allocator,
+                                 bool is_no_backslash_escapes = false);
   int handle_one_file_buf(
       ObExecContext& ctx, ObPhysicalPlanCtx& plan_ctx, char* parsing_begin_pos, const int64_t data_len, bool is_eof);
   int handle_one_file_buf_fast(
       ObExecContext& ctx, ObPhysicalPlanCtx& plan_ctx, char* parsing_begin_pos, const int64_t data_len, bool is_eof);
   int handle_one_line(ObExecContext& ctx, ObPhysicalPlanCtx& plan_ctx);
-  int handle_one_line_local(ObPhysicalPlanCtx& plan_ctx);
+  int handle_one_line_local(ObPhysicalPlanCtx &plan_ctx, ObExecContext &ctx);
+  int transform_single_bs_to_double_bs(ObString &target, ObString &source, ObIAllocator &allocator);
   void handle_one_field(char* field_end_pos);
   void deal_with_irregular_line();
   void deal_with_empty_field(common::ObString& field_str, int64_t index);

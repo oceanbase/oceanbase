@@ -253,6 +253,10 @@ private:
   int insert_tenant_backup_set_file_failed(ObMySQLTransaction& trans, const share::ObTenantBackupTaskInfo& task_info);
   int do_tenant_update_task_his_and_backup_set_file(
       const share::ObTenantBackupTaskInfo& task_info, const ObBackupSetFileInfo& backup_set_file_info);
+  int check_server_disk_stat(const ObBaseBackupInfoStruct &info, common::ObISQLClient &sys_tenant_trans);
+
+private:
+  bool is_force_cancel_() const;
 
 private:
   bool is_inited_;

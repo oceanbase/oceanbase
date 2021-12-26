@@ -51,6 +51,7 @@
 #include "storage/ob_partition_scheduler.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "storage/ob_build_index_scheduler.h"
 #include "rootserver/ob_bootstrap.h"
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
@@ -3673,6 +3674,22 @@ int ObService::pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg&
 {
   int ret = OB_SUCCESS;
   UNUSED(arg);
+  return ret;
+}
+
+int ObService::submit_retry_ghost_index_task(const uint64_t index_id)
+{
+  int ret = OB_SUCCESS;
+  ObRetryGhostIndexScheduler &scheduler = ObRetryGhostIndexScheduler::get_instance();
+  ObRetryGhostIndexTask task;
+  if (OB_INVALID_ID == index_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index id", K(ret), K(index_id));
+  } else if (OB_FAIL(task.init(index_id))) {
+    LOG_WARN("fail to init ObRetryGhostIndexTask", K(ret), K(index_id));
+  } else if (OB_FAIL(scheduler.push_task(task))) {
+    LOG_WARN("fail to push ObRetryGhostIndexTask to scheduler", K(ret), K(task));
+  }
   return ret;
 }
 

@@ -3203,15 +3203,19 @@ int ObSSTable::add_macro_ref()
 
 int64_t ObSSTable::dec_ref()
 {
-  int64_t ref_cnt = ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
-
-  if (0 == ref_cnt) {
+  // If current ref_cnt is 1, it should be pushed into gc queue firstly. Then, decrease reference
+  // counts. The reason is that gc by iter may be faster than gc by queue.
+  if (1 == get_ref()) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ObPGSSTableGarbageCollector::get_instance().push_sstable_into_gc_queue(key_))) {
       LOG_WARN("fail to push sstable into gc queue", K(ret), K(key_));
     }
   }
 
+  int64_t ref_cnt = ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+  if (OB_UNLIKELY(ref_cnt < 0)) {
+    LOG_ERROR("Unexpected ref cnt of sstable", K(ref_cnt), K(key_));
+  }
   return ref_cnt;
 }
 

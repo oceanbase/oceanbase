@@ -4918,7 +4918,25 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObA
   return ret;
 }
 
-int ObRootService::flashback_index(const ObFlashBackIndexArg& arg)
+int ObRootService::submit_build_index_task(const share::schema::ObTableSchema *index_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_schema) || !index_schema->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_schema));
+  } else if (index_schema->is_global_index_table() &&
+             OB_FAIL(global_index_builder_.submit_build_global_index_task(index_schema))) {
+    LOG_WARN("fail to submit build global index task", K(ret), K(*index_schema));
+  } else if (index_schema->is_index_local_storage()) {
+    ObIndexBuilder index_builder(ddl_service_);
+    if (OB_FAIL(index_builder.submit_build_local_index_task(*index_schema))) {
+      LOG_WARN("fail to submit build local index task", K(ret), K(*index_schema));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::flashback_index(const ObFlashBackIndexArg &arg)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {

@@ -397,6 +397,8 @@ int ObPartitionService::init(const blocksstable::ObStorageEnv& env, const ObAddr
     LOG_WARN("failed to init ObTableMgr", K(ret));
   } else if (OB_FAIL(ObBuildIndexScheduler::get_instance().init())) {
     STORAGE_LOG(WARN, "fail to init ObBuildIndexScheduler", K(ret));
+  } else if (OB_FAIL(ObRetryGhostIndexScheduler::get_instance().init())) {
+    LOG_WARN("fail to init ObRetryGhostIndexScheduler", K(ret));
   } else if (OB_FAIL(ObFreezeInfoMgrWrapper::init(sql_proxy, remote_sql_proxy))) {
     STORAGE_LOG(WARN, "fail to init ObFreezeInfoSnapshotMgr", K(ret));
   } else if (OB_FAIL(garbage_collector_.init(this, txs_, schema_service, GCTX.srv_rpc_proxy_, &sql_proxy, self_addr))) {

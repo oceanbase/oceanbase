@@ -83,7 +83,8 @@ static const int64_t WAIT_INTERVAL_US = 1 * 1000 * 1000;  // 1s
  * target: insert_values_per_line_
  * according to: valid_insert_column_info_store_
  */
-int ObLoadDataImpl::collect_insert_row_strings()
+int ObLoadDataImpl::collect_insert_row_strings(ObIAllocator &allocator,
+                                               bool is_no_backslash_escapes/* default=false*/)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < insert_column_number_; ++i) {
@@ -98,12 +99,44 @@ int ObLoadDataImpl::collect_insert_row_strings()
       }
     } else {
       if (OB_LIKELY(value_info.array_ref_idx_ < file_column_number_)) {
-        target = parsed_field_strs_.at(value_info.array_ref_idx_);
+        if (is_no_backslash_escapes) {
+          if (OB_FAIL(transform_single_bs_to_double_bs(target,
+                                                       parsed_field_strs_.at(value_info.array_ref_idx_),
+                                                       allocator))) {
+            LOG_WARN("transfrom backslash fail", K(ret));
+          }
+        } else {
+          target = parsed_field_strs_.at(value_info.array_ref_idx_);
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid array index", K(ret), K(value_info.array_ref_idx_), K(parsed_field_strs_.count()));
       }
     }
+  }
+  return ret;
+}
+
+int ObLoadDataImpl::transform_single_bs_to_double_bs(ObString &target, ObString &source, ObIAllocator &allocator) {
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t strlen = source.length();  
+  if (strlen <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get_unexpected str");
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(2*strlen*sizeof(char))))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to allocate memory for escaped str");
+  } else {
+    int64_t pos = 0;
+    for (int64_t i = 0; i < source.length(); ++i) {
+      if (source[i] == '\\') {
+        buf[pos++] = '\\';
+      }
+      buf[pos++] = source[i];
+    }
+    buf[pos++] = 0;
+    target = ObString(pos, buf);
   }
   return ret;
 }
@@ -1132,11 +1165,12 @@ void ObLoadDataImpl::deal_with_irregular_line()
   }
 }
 
-int ObLoadDataImpl::handle_one_line_local(ObPhysicalPlanCtx& plan_ctx)
+int ObLoadDataImpl::handle_one_line_local(ObPhysicalPlanCtx& plan_ctx,
+                                          ObExecContext& ctx)
 {
   int ret = OB_SUCCESS;
   // LOAD_STOP_ON_DUP mode, single thread loading
-  if (OB_FAIL(collect_insert_row_strings())) {
+  if (OB_FAIL(collect_insert_row_strings(ctx.get_allocator()))) {
     LOG_WARN("cat strings into insert values failed", K(ret));
   } else if (OB_FAIL(do_local_sync_insert(plan_ctx))) {
     LOG_WARN("do local sync insert failed", K(ret));
@@ -1211,8 +1245,15 @@ int ObLoadDataImpl::handle_one_line(ObExecContext& ctx, ObPhysicalPlanCtx& plan_
       }
     }
   }
+  bool is_nbe = false;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    //do nothing;
+  } else {
+    IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), is_nbe);
+  }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(collect_insert_row_strings())) {
+    if (OB_FAIL(collect_insert_row_strings(ctx.get_allocator(), is_nbe))) {
       LOG_WARN("cat field strs into values failed", K(ret));
     } else if (OB_FAIL(buffer->store_row(insert_values_per_line_, parsed_line_count_))) {
       LOG_WARN("assign temp row failed", K(ret));
@@ -1650,7 +1691,7 @@ int ObLoadDataImpl::init_table_location_via_fake_insert_stmt(
       LOG_WARN("generate fake field failed", K(ret));
     } else if (OB_FAIL(generate_set_expr_strs(ctx.get_my_session()))) {
       LOG_WARN("assemble set expr strings failed", K(ret));
-    } else if (OB_FAIL(collect_insert_row_strings())) {
+    } else if (OB_FAIL(collect_insert_row_strings(ctx.get_allocator()))) {
       LOG_WARN("cat strings into insert values failed", K(ret));
     } else if (OB_FAIL(ObLoadDataBase::construct_insert_sql(insert_sql,
                    back_quoted_db_table_name_,
