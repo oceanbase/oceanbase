@@ -659,67 +659,101 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct& op, ObMergeDistinctSpec& spec
   return ret;
 }
 
-int ObStaticEngineCG::generate_spec(ObLogDistinct& op, ObHashDistinctSpec& spec, const bool in_root_job)
+int ObStaticEngineCG::generate_spec(
+  ObLogDistinct &op, ObHashDistinctSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
   spec.is_block_mode_ = op.get_block_mode();
-  if (OB_FAIL(spec.cmp_funcs_.init(op.get_distinct_exprs().count()))) {
+  int64_t init_count = op.get_distinct_exprs().count();
+  if (1 != op.get_num_of_child()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child count of hash distinct", K(ret), K(op.get_num_of_child()));
+  } else if (OB_FAIL(spec.cmp_funcs_.init(init_count))) {
+    LOG_WARN("failed to init cmp functions", K(ret));
+  } else if (OB_FAIL(spec.hash_funcs_.init(init_count))) {
+    LOG_WARN("failed to init hash functions", K(ret));
+  } else if (OB_FAIL(spec.sort_collations_.init(init_count))) {
     LOG_WARN("failed to init sort functions", K(ret));
-  } else if (OB_FAIL(spec.hash_funcs_.init(op.get_distinct_exprs().count()))) {
-    LOG_WARN("failed to init sort functions", K(ret));
-  } else if (OB_FAIL(spec.sort_collations_.init(op.get_distinct_exprs().count()))) {
-    LOG_WARN("failed to init sort functions", K(ret));
-  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count()))) {
+  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count() 
+                                               + op.get_child(0)->get_output_exprs().count()))) {
     LOG_WARN("failed to init distinct exprs", K(ret));
   } else {
-    ObExpr* expr = nullptr;
-    int64_t dist_cnt = 0;
-    ARRAY_FOREACH(op.get_distinct_exprs(), i)
-    {
-      const ObRawExpr* raw_expr = op.get_distinct_exprs().at(i);
-      if (OB_ISNULL(raw_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("null pointer", K(ret));
-      } else if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
-        continue;
-      } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
-        LOG_WARN("failed to generate rt expr", K(ret));
-      } else if (OB_FAIL(spec.distinct_exprs_.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_ISNULL(expr->basic_funcs_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected status: basic funcs is not init", K(ret));
-      } else {
-        ObOrderDirection order_direction = default_asc_direction();
-        bool is_ascending = is_ascending_direction(order_direction);
-        ObSortFieldCollation field_collation(dist_cnt,
+    ObArray<ObRawExpr *> additional_exprs;
+    ObExpr *expr = nullptr;
+    ARRAY_FOREACH(op.get_child(0)->get_output_exprs(), i) {
+      ObRawExpr* raw_expr = op.get_child(0)->get_output_exprs().at(i);
+      bool is_distinct_expr = has_exist_in_array(op.get_distinct_exprs(), raw_expr);
+      if (!is_distinct_expr) {
+        OZ (additional_exprs.push_back(raw_expr));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int64_t dist_cnt = 0;
+      ARRAY_FOREACH(op.get_distinct_exprs(), i) {
+        ObRawExpr* raw_expr = op.get_distinct_exprs().at(i);
+        if (OB_ISNULL(raw_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("null pointer", K(ret));
+        } else if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
+            // distinct const value, 这里需要注意：distinct 1被跳过了，
+            // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
+            continue;
+        } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+          LOG_WARN("failed to generate rt expr", K(ret));
+        } else if (OB_FAIL(spec.distinct_exprs_.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_ISNULL(expr->basic_funcs_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected status: basic funcs is not init", K(ret));
+        } else {
+          ObOrderDirection order_direction = default_asc_direction();
+          bool is_ascending = is_ascending_direction(order_direction);
+          ObSortFieldCollation field_collation(dist_cnt,
             expr->datum_meta_.cs_type_,
             is_ascending,
             (is_null_first(order_direction) ^ is_ascending) ? NULL_LAST : NULL_FIRST);
-        ObCmpFunc cmp_func;
-        cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
-            expr->datum_meta_.type_,
-            NULL_LAST,  // NULL_FIRST and NULL_LAST both OK.
-            expr->datum_meta_.cs_type_,
-            lib::is_oracle_mode());
-        ObHashFunc hash_func;
-        hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_;
-        if (OB_ISNULL(cmp_func.cmp_func_) || OB_ISNULL(hash_func.hash_func_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cmp_func or hash func is null, check datatype is valid",
-              K(cmp_func.cmp_func_),
-              K(hash_func.hash_func_),
-              K(ret));
-        } else if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
-          LOG_WARN("failed to push back sort collation", K(ret));
-        } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
-          LOG_WARN("failed to push back sort function", K(ret));
-        } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
-          LOG_WARN("failed to push back hash funcs", K(ret));
-        } else {
-          ++dist_cnt;
+          ObCmpFunc cmp_func;
+          cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
+                                expr->datum_meta_.type_,
+                                expr->datum_meta_.type_,
+                                NULL_LAST,//这里null last还是first无所谓
+                                expr->datum_meta_.cs_type_,
+                                lib::is_oracle_mode());
+          ObHashFunc hash_func;
+          hash_func.hash_func_ = expr->basic_funcs_->murmur_hash_;
+          if (OB_ISNULL(cmp_func.cmp_func_) || OB_ISNULL(hash_func.hash_func_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("cmp_func or hash func is null, check datatype is valid",
+                    K(cmp_func.cmp_func_), K(hash_func.hash_func_), K(ret));
+          } else if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
+            LOG_WARN("failed to push back sort collation", K(ret));
+          } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
+            LOG_WARN("failed to push back sort function", K(ret));
+          } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
+            LOG_WARN("failed to push back hash funcs", K(ret));
+          } else {
+            ++dist_cnt;
+          }
         }
+      }
+    }
+    // complete distinct exprs
+    if (OB_SUCC(ret) && 0 != additional_exprs.count()) {
+      ARRAY_FOREACH(additional_exprs, i) {
+        const ObRawExpr* raw_expr = additional_exprs.at(i);
+        if (OB_ISNULL(raw_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("null pointer", K(ret));
+        } else if (raw_expr->has_flag(IS_CONST) || raw_expr->has_flag(IS_CONST_EXPR)) {
+            // distinct const value, 这里需要注意：distinct 1被跳过了，
+            // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
+            continue;
+        } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
+          LOG_WARN("failed to generate rt expr", K(ret));
+        } else if (OB_FAIL(spec.distinct_exprs_.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } 
       }
     }
   }
