@@ -275,7 +275,7 @@ DEF_BOOL(_enable_static_typing_engine, OB_CLUSTER_PARAMETER, "True",
     "specifies whether static typing sql execution engine is activated",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "True",
+DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "False",
     "specifies whether allow to do some defensive checks when the query is executed",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// tenant config
