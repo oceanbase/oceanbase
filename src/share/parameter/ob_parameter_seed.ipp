@@ -1189,6 +1189,9 @@ ERRSIM_DEF_BOOL(allow_major_sstable_merge, OB_CLUSTER_PARAMETER, "True", "allow_
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(trigger_reuse_table_in_table_mgr, OB_CLUSTER_PARAMETER, "False", "trigger_reuse_table_in_table_mgr",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_BOOL(fake_backup_date_for_incremental_backup, OB_CLUSTER_PARAMETER, "False",
+    "incremental backup use fake backup date",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_CAP(slog_size, OB_CLUSTER_PARAMETER, "256M", "[0M,256M]", "size of the slog file. Range: [0, 256M]",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(fake_replay_start_point, OB_CLUSTER_PARAMETER, "False", "fake_replay_start_point",

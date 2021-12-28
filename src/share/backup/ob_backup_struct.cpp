@@ -1398,7 +1398,6 @@ int ObBackupDest::set(const char* backup_dest)
   } else if (OB_FAIL(get_storage_type_from_path(bakup_dest_str, type))) {
     LOG_WARN("failed to get storage type", K(ret));
   } else {
-    // oss://backup_dir/?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222
     // file:///root_backup_dir"
     while (backup_dest[pos] != '\0') {
       if (backup_dest[pos] == '?') {
@@ -3454,8 +3453,7 @@ void ObPhysicalRestoreInfo::reset()
 
 bool ObPhysicalRestoreInfo::is_valid() const
 {
-  return (strlen(backup_dest_) > 0 || multi_restore_path_list_.get_backup_set_path_list().count() > 0) &&
-         !(strlen(backup_dest_) > 0 && multi_restore_path_list_.get_backup_set_path_list().count() > 0) &&
+  return !(0 == strlen(backup_dest_) && 0 == multi_restore_path_list_.get_backup_set_path_list().count()) &&
          strlen(cluster_name_) > 0 && cluster_id_ > 0 && OB_START_INCARNATION == incarnation_ && tenant_id_ > 0 &&
          full_backup_set_id_ > 0 && inc_backup_set_id_ > 0 && log_archive_round_ > 0 && restore_snapshot_version_ > 0 &&
          restore_start_ts_ > 0 && compatible_ > 0 && cluster_version_ > 0 && backup_date_ >= 0;

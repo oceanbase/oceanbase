@@ -716,6 +716,13 @@ int ObExternBackupInfoMgr::get_extern_backup_info(const ObBaseBackupInfoStruct& 
           extern_backup_info.prev_backup_data_version_ =
               info.backup_type_.is_full_backup() ? 0 : last_succeed_info_.backup_data_version_;
           extern_backup_info.backup_type_ = info.backup_type_.type_;
+#ifdef ERRSIM
+          const bool use_fake_date = ObServerConfig::get_instance().fake_backup_date_for_incremental_backup;
+          static const int64_t FAKE_DATE_DELTA = 1;
+          if (!info.backup_type_.is_full_backup() && use_fake_date) {
+            extern_backup_info.date_ += FAKE_DATE_DELTA;
+          }
+#endif
         }
       }
     }
