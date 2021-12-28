@@ -9762,6 +9762,49 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
   return ret;
 }
 
+	
+int ObRootService::wakeup_auto_delete(const obrpc::ObAdminSetConfigItem *item)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestOpt new_opt;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (NULL == item) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("item is null", K(ret)); 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(false/* is_backup_backup */))) {
+      LOG_WARN("failed init backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(true/* is_backup_backup */))) {
+      LOG_WARN("failed init backup backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_AUTO_DELETE_EXPIRED_BACKUP)) {
+    ObString value(item->value_.ptr());
+    ObString false_str("FALSE");
+    if (0 != value.case_compare(false_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("auto_delete_expired_backup parameters updated, wakeup backup_auto_delete", KPC(item));
+    } 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_RECORVERTY_WINDOW)) {
+    ObString value(item->value_.ptr());
+    ObString zero_str("0");
+    if (0 != value.case_compare(zero_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_recovery_window parameters updated, wakeup backup_auto_delete", KPC(item));
+    }  
+  }
+  return ret;
+}
+
 int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -9811,6 +9854,8 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
     } else if (0 == STRCMP(item->name_.ptr(), SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
       schema_history_recycler_.wakeup();
       LOG_INFO("schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
+    } else if (OB_FAIL(wakeup_auto_delete(item))) {
+      LOG_WARN("failed to wakeup auto delete", K(ret), KPC(item));
     }
   }
   return ret;

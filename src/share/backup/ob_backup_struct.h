@@ -165,6 +165,7 @@ const char* const OB_STR_FULL_BACKUP = "full";
 const char* const OB_STR_INC_BACKUP = "inc";
 const char* const OB_STR_AUTO_DELETE_EXPIRED_BACKUP = "auto_delete_expired_backup";
 const char* const OB_STR_AUTO_UPDATE_RESERVED_BACKUP_TIMESTAMP = "_auto_update_reserved_backup_timestamp";
+const char *const OB_STR_BACKUP_RECORVERTY_WINDOW = "backup_recovery_window";
 const char* const OB_STR_BACKUP_INNER_TABLE_VERSION = "inner_table_version";
 
 const char* const OB_BACKUP_ENCRYPTION_MODE_SESSION_STR = "__ob_backup_encryption_mode__";

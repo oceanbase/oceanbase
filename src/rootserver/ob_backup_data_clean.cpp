@@ -974,7 +974,7 @@ int ObBackupDataClean::mark_sys_tenant_backup_meta_data_deleting()
       } else if (sys_clean_info.is_backup_set_clean() &&
                  !sys_clean_tenant.has_clean_backup_set(sys_clean_info.backup_set_id_, sys_clean_info.copy_id_)) {
         ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-        LOG_WARN("can not clean backup set", K(ret), K(sys_clean_info), K(sys_clean_tenant));
+        LOG_WARN("can not clean backup set, because backup set is not existt", K(ret), K(sys_clean_info), K(sys_clean_tenant));
       }
 
       if (OB_SUCC(ret)) {
@@ -1361,7 +1361,11 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
       if (ObTenantBackupTaskInfo::FINISH != task_info.status_) {
         if (task_info.backup_set_id_ == clean_info.backup_set_id_) {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean", K(ret), K(clean_info), K(cluster_max_backup_set_id), K(task_info));
+          LOG_WARN("backup set do not allow clean, because status of backup set is not finish",
+              K(ret),
+              K(clean_info),
+              K(cluster_max_backup_set_id),
+              K(task_info));
         }
       } else if (task_info.backup_set_id_ == clean_info.backup_set_id_) {
         delete_backup_info = task_info;
@@ -1399,7 +1403,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
                    (delete_backup_info.backup_dest_ == backup_dest_ ||
                        delete_backup_info.backup_dest_ == backup_backup_dest_)) {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean",
+          LOG_WARN("backup set do not allow clean, because of need to keep the last succeed backup set",
               K(ret),
               K(clean_info),
               K(cluster_max_backup_set_id),
@@ -1409,7 +1413,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
           LOG_WARN("failed to get backup set file copies num", K(ret), K(delete_backup_info));
         } else if (copies_num < backup_dest_option.backup_copies_) {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean",
+          LOG_WARN("backup set do not allow clean, because current finish copies_num is less than backup_copies in backup_dest_option",
               K(ret),
               K(clean_info),
               K(cluster_max_backup_set_id),
@@ -1432,7 +1436,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
           clean_tenant.clog_gc_snapshot_ = INT64_MAX;
         } else {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean",
+          LOG_WARN("backup set do not allow clean, because of need to keep last succeed backup set",
               K(ret),
               K(clean_info),
               K(cluster_max_backup_set_id),
@@ -1901,9 +1905,12 @@ int ObBackupDataClean::add_delete_backup_piece(const share::ObBackupCleanInfo &c
                  OB_FAIL(get_backup_piece_file_copies_num(backup_piece_info, copies_num))) {
         LOG_WARN("failed to get backup piece file copies num", K(ret), K(backup_piece_info));
       } else if (copies_num < backup_dest_option.backup_copies_) {
-        // TODO(muwei.ym) change error code
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to delete backup piece", K(ret), K(backup_piece_info));
+        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+        LOG_WARN("piece is not allowed to be deleted, because current finish copies_num is less than backup_copies in backup_dest_option",
+            K(ret),
+            K(copies_num),
+            K_(backup_dest_option.backup_copies),
+            K(backup_piece_info));
       } else {
         int64_t start_replay_log_ts = 0;
         for (int64_t i = 0; i < task_infos.count() && !found_backup_set; ++i) {
@@ -1919,17 +1926,19 @@ int ObBackupDataClean::add_delete_backup_piece(const share::ObBackupCleanInfo &c
           if (start_replay_log_ts >= backup_piece_info.max_ts_) {
             LOG_INFO("found suitable backup set, can delete backup piece", K(backup_piece_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup piece", K(ret), K(backup_piece_info), K(start_replay_log_ts));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("piece is not allowed to be deleted, because it is found that the dependent start_replay_log_ts "
+                "of backup set is less than the max_ts of piece",
+                K(ret),
+                K(backup_piece_info),
+                K(start_replay_log_ts));
           }
         } else {
           if (clean_tenant.simple_clean_tenant_.is_deleted_) {
             LOG_INFO("tenant is deleted, can delete backup piece directly", K(backup_piece_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup piece", K(ret), K(backup_piece_info));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("piece is not allowed to be deleted, because no valid backup_set is found", K(ret), K(backup_piece_info));
           }
         }
       }
@@ -1992,9 +2001,12 @@ int ObBackupDataClean::add_delete_backup_round(const share::ObBackupCleanInfo &c
                  OB_FAIL(get_backup_round_copies_num(log_archive_info, copies_num))) {
         LOG_WARN("failed to get backup round copies num", K(ret), K(log_archive_info));
       } else if (copies_num < backup_dest_option.backup_copies_) {
-        // TODO(muwei.ym) change error code
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to delete backup piece", K(ret), K(log_archive_info));
+        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+        LOG_WARN("round is not allowed to be deleted, because current finish copies_num is less than backup_copies in backup_dest_option",
+            K(ret),
+            K(copies_num),
+            K_(backup_dest_option.backup_copies),
+            K(log_archive_info));
       } else {
         int64_t start_replay_log_ts = 0;
         for (int64_t i = 0; i < task_infos.count() && !found_backup_set; ++i) {
@@ -2010,17 +2022,19 @@ int ObBackupDataClean::add_delete_backup_round(const share::ObBackupCleanInfo &c
           if (start_replay_log_ts >= log_archive_info.status_.checkpoint_ts_) {
             LOG_INFO("found suitable backup set, can delete backup round", K(log_archive_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup piece", K(ret), K(log_archive_info), K(start_replay_log_ts));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("round is not allowed to be deleted, because it is found that the dependent start_replay_log_ts "
+                "of backup set is less than the max_ts of round",
+                K(ret),
+                K(log_archive_info),
+                K(start_replay_log_ts));
           }
         } else {
           if (clean_tenant.simple_clean_tenant_.is_deleted_) {
             LOG_INFO("tenant is deleted, can delete backup round directly", K(log_archive_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup round", K(ret), K(log_archive_info));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("round is not allowed to be deleted, because no valid backup_set is found", K(ret), K(log_archive_info));
           }
         }
       }
@@ -6111,7 +6125,8 @@ bool ObBackupDataClean::is_result_need_retry(const int32_t result)
   const int64_t MAX_RETRY_COUNT = 64;
   if (OB_NOT_INIT != result && OB_INVALID_ARGUMENT != result && OB_ERR_SYS != result && OB_INIT_TWICE != result &&
       OB_ERR_UNEXPECTED != result && OB_TENANT_HAS_BEEN_DROPPED != result && OB_NOT_SUPPORTED != result &&
-      OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED != result && OB_SUCCESS != result && OB_CANCELED != result &&
+      OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED != result && OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED != result && 
+      OB_SUCCESS != result && OB_CANCELED != result &&
       retry_count_ < MAX_RETRY_COUNT) {
     // do nothing
     // TODO() Need to consider the limit of the number of retry
