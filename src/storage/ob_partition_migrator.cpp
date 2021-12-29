@@ -5433,7 +5433,7 @@ int ObMigrateDag::init_for_restore_(ObMigrateCtx &ctx)
     STORAGE_LOG(WARN, "failed to get backup pgkey", K(ret), K(ctx.replica_op_arg_.phy_restore_arg_));
   } else if (FALSE_IT(group_task = reinterpret_cast<ObPartGroupMigrationTask *>(ctx.group_task_))) {
   } else if (OB_ISNULL(ctx.macro_indexs_)) {
-    if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible) {
+    if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible || OB_BACKUP_COMPATIBLE_VERSION_V4 == compatible) {
       const ObBackupMetaType meta_type = ObBackupMetaType::PARTITION_GROUP_META_INFO;
       ObPhyRestoreMacroIndexStoreV2 *phy_restore_macro_index_v2 = NULL;
       if (OB_ISNULL(phy_restore_macro_index_v2 = MIGRATOR.get_cp_fty()->get_phy_restore_macro_index_v2())) {
@@ -6178,7 +6178,7 @@ int ObMigratePrepareTask::prepare_restore_reader()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_ERROR("not inited", K(ret));
-  } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible) {
+  } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible || OB_BACKUP_COMPATIBLE_VERSION_V4 == compatible) {
     ObPartitionGroupMetaRestoreReaderV2 *restore_meta_reader_v2 = NULL;
     ObPhyRestoreMacroIndexStoreV2 *macro_index = NULL;
 
@@ -7108,7 +7108,7 @@ int ObMigratePrepareTask::choose_restore_migrate_src(
     } else {
       if (OB_BACKUP_COMPATIBLE_VERSION_V1 == compatible || OB_BACKUP_COMPATIBLE_VERSION_V2 == compatible) {
         ctx_->fetch_pg_info_compat_version_ = ObFetchPGInfoArg::FETCH_PG_INFO_ARG_COMPAT_VERSION_V1;
-      } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible) {
+      } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible || OB_BACKUP_COMPATIBLE_VERSION_V4 == compatible) {
         ctx_->fetch_pg_info_compat_version_ = ObFetchPGInfoArg::FETCH_PG_INFO_ARG_COMPAT_VERSION_V2;
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -10371,7 +10371,7 @@ int ObITableTaskGeneratorTask::get_base_meta_reader(
       if (OB_FAIL(get_base_meta_restore_reader_v1(arg.table_key_, reader))) {
         STORAGE_LOG(WARN, "fail to get_base_meta_restore_reader_v1", K(ret));
       }
-    } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible) {
+    } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible || OB_BACKUP_COMPATIBLE_VERSION_V4 == compatible) {
       if (OB_FAIL(get_base_meta_restore_reader_v2(arg.table_key_, reader))) {
         STORAGE_LOG(WARN, "fail to get_base_meta_restore_reader_v2", K(ret));
       }
@@ -11064,7 +11064,7 @@ int ObMigratePrepareTask::get_partition_table_info_reader(
       if (OB_FAIL(inner_get_partition_table_info_restore_reader_v1(src_info, reader))) {
         LOG_WARN("failed to get partition table info restore reader", K(ret));
       }
-    } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible) {
+    } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible || OB_BACKUP_COMPATIBLE_VERSION_V4 == compatible) {
       if (OB_FAIL(inner_get_partition_table_info_restore_reader_v2(src_info, reader))) {
         LOG_WARN("failed to get partition table info restore reader", K(ret));
       }

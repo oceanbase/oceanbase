@@ -694,7 +694,7 @@ int ObExternBackupInfoMgr::get_extern_backup_info(const ObBaseBackupInfoStruct& 
         extern_backup_info.frozen_snapshot_version_ = frozen_status.frozen_timestamp_;
         extern_backup_info.frozen_schema_version_ = schema_versions.at(0).schema_version_;
         extern_backup_info.status_ = ObExternBackupInfo::DOING;
-        extern_backup_info.compatible_ = OB_BACKUP_COMPATIBLE_VERSION_V3;
+        extern_backup_info.compatible_ = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
         extern_backup_info.cluster_version_ = ObClusterVersion::get_instance().get_cluster_version();
         extern_backup_info.encryption_mode_ = info.encryption_mode_;
         extern_backup_info.passwd_ = info.passwd_;
@@ -2421,7 +2421,7 @@ int ObExternTenantBackupDiagnoseMgr::upload_tenant_backup_diagnose_info(const Ob
                  full_backup_set_id_,
                  inc_backup_set_id_,
                  backup_date_,
-                 OB_BACKUP_COMPATIBLE_VERSION_V3))) {
+                 OB_BACKUP_CURRENT_COMPAITBLE_VERSION))) {
     LOG_WARN("failed to set path info", K(ret), K(backup_dest_), K(tenant_id_));
   } else if (OB_FAIL(ObBackupPathUtil::get_tenant_backup_diagnose_path(path_info, path))) {
     LOG_WARN("failed to get tenant data backup info path", K(ret), K(backup_dest_));
@@ -3143,7 +3143,7 @@ int ObExternSingleBackupSetInfoMgr::init(const uint64_t tenant_id, const int64_t
   int ret = OB_SUCCESS;
   ObBackupPath path;
   ObBackupBaseDataPathInfo path_info;
-  const int64_t compatible = OB_BACKUP_COMPATIBLE_VERSION_V3;
+  const int64_t compatible = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
