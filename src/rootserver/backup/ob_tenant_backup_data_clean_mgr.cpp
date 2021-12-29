@@ -1366,7 +1366,8 @@ int ObTenantBackupClogDataCleanTask::do_clean()
       "cost",
       ObTimeUtil::current_time() - start_ts,
       K(ret),
-      K(clean_tenant_.simple_clean_tenant_));
+      K(clean_tenant_.simple_clean_tenant_),
+      K(start_replay_log_ts));
 
   return ret;
 }
@@ -1873,7 +1874,21 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_tasks(
       } else if (start_replay_log_ts < log_archive_round.checkpoint_ts_) {
         delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_ARCHIVE_LOG;
       } else {
-        delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+        const hash::ObHashSet<ObSimpleArchiveRound> &sys_tenant_deleted_backup_round =
+            data_clean_->get_sys_tenant_deleted_backup_round();
+        ObSimpleArchiveRound simple_archive_round;
+        simple_archive_round.copy_id_ = log_archive_round.copy_id_;
+        simple_archive_round.incarnation_ = clean_element.incarnation_;
+        simple_archive_round.round_id_ = log_archive_round.log_archive_round_;
+        int hash_ret = sys_tenant_deleted_backup_round.exist_refactored(simple_archive_round);
+        if (OB_HASH_EXIST == hash_ret) {
+          delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+        } else if (OB_HASH_NOT_EXIST == hash_ret) {
+          delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_ARCHIVE_LOG;
+        } else {
+          ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
+          LOG_WARN("failed to check archive round exist", K(ret), K(hash_ret), K(simple_archive_round));
+        }
       }
     } else if ((ObLogArchiveStatus::DOING == log_archive_round.log_archive_status_ ||
                    ObLogArchiveStatus::INTERRUPTED == log_archive_round.log_archive_status_) &&
@@ -1883,22 +1898,34 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_tasks(
     } else {
       delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
     }
-  } else if (ObBackupPieceStatus::BACKUP_PIECE_FROZEN == backup_piece_info.status_) {
-    if (ObBackupFileStatus::BACKUP_FILE_DELETED == backup_piece_info.file_status_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup file status is unexpected", K(ret), K(backup_piece_info));
-    } else if (ObBackupFileStatus::BACKUP_FILE_COPYING == backup_piece_info.file_status_) {
-      delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
-    } else if (backup_piece_info.max_ts_ > start_replay_log_ts || backup_piece_info.copies_num_ < backup_copies) {
+  } else {
+    const hash::ObHashSet<ObSimplePieceKey> &sys_tenant_deleted_backup_piece =
+        data_clean_->get_sys_tenant_deleted_backup_piece();
+    ObSimplePieceKey simple_piece_key;
+    simple_piece_key.backup_piece_id_ = backup_piece_info.backup_piece_id_;
+    simple_piece_key.copy_id_ = log_archive_round.copy_id_;
+    simple_piece_key.incarnation_ = clean_element.incarnation_;
+    simple_piece_key.round_id_ = backup_piece_info.round_id_;
+    int hash_ret = sys_tenant_deleted_backup_piece.exist_refactored(simple_piece_key);
+    if (OB_HASH_EXIST == hash_ret) {
+      delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+    } else if (OB_HASH_NOT_EXIST == hash_ret) {
       delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
     } else {
-      delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+      ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
+      LOG_WARN("failed to check backup piece exist", K(ret), K(hash_ret), K(simple_piece_key));
     }
-  } else {
-    delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
   }
 
   if (OB_SUCC(ret)) {
+    LOG_INFO("start handle backup piece",
+        K(delete_clog_mode),
+        "backup dest option",
+        clean_element.backup_dest_option_,
+        K(start_replay_log_ts),
+        K(backup_piece_info),
+        K(log_archive_round));
+
     if ((ObBackupDeleteClogMode::DELETE_BACKUP_PIECE == delete_clog_mode.mode_ &&
             clean_element.backup_dest_option_.auto_touch_reserved_backup_) ||
         (ObBackupDeleteClogMode::NONE == delete_clog_mode.mode_ &&
@@ -1979,12 +2006,12 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_delete_task(
                  is_backup_backup,
                  *data_clean_))) {
     LOG_WARN("failed to init clog data clean mgr", K(ret), K(cluster_backup_dest), K(log_archive_round), K(pg_key));
-  } else if (clean_element.backup_dest_option_.auto_delete_obsolete_backup_) {
-    if (OB_FAIL(partition_clog_data_clean_mgr.clean_clog_backup_data())) {
-      LOG_WARN("failed to clean clog backup data", K(ret), K(pg_key), K(cluster_backup_dest));
+  } else if (clean_element.backup_dest_option_.auto_touch_reserved_backup_) {
+    if (OB_FAIL(partition_clog_data_clean_mgr.touch_clog_backup_data())) {
+      LOG_WARN("failed to touch clog backup data", K(ret), K(pg_key), K(cluster_backup_dest));
     }
   } else {
-    if (OB_FAIL(partition_clog_data_clean_mgr.touch_clog_backup_data())) {
+    if (OB_FAIL(partition_clog_data_clean_mgr.clean_clog_backup_data())) {
       LOG_WARN("failed to clean clog backup data", K(ret), K(pg_key), K(cluster_backup_dest));
     }
   }

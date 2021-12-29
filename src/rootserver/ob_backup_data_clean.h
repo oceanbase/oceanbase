@@ -90,6 +90,14 @@ public:
   {
     return backup_backup_dest_;
   }
+  const hash::ObHashSet<ObSimplePieceKey> &get_sys_tenant_deleted_backup_piece()
+  {
+    return sys_tenant_deleted_backup_piece_;
+  }
+  const hash::ObHashSet<ObSimpleArchiveRound> &get_sys_tenant_deleted_backup_round()
+  {
+    return sys_tenant_deleted_backup_round_;
+  }
 
 private:
   int get_need_clean_tenants(common::ObIArray<ObBackupDataCleanTenant> &clean_tenants);
