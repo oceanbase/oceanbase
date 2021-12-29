@@ -1051,50 +1051,52 @@ int64_t ObMigrateRecoveryPointCtx::to_string(char *buf, const int64_t buf_len) c
 }
 
 int ObMigrateFinishPhysicalTask::check_sstable_meta(
-    const blocksstable::ObSSTableBaseMeta &src_meta, const blocksstable::ObSSTableBaseMeta &write_meta)
+    const blocksstable::ObSSTableBaseMeta &src_meta, const blocksstable::ObSSTableBaseMeta &write_meta, const bool is_check_in_advance)
 {
   int ret = OB_SUCCESS;
+  const int32_t ERROR_CODE = is_check_in_advance ? OB_ENTRY_EXIST : OB_INVALID_DATA;
+
   if (src_meta.index_id_ != write_meta.index_id_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "index_id_ not match", K(ret));
   } else if (src_meta.row_count_ != write_meta.row_count_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "row_count_ not match", K(ret));
   } else if (src_meta.occupy_size_ != write_meta.occupy_size_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "occupy_size_ not match", K(ret));
   } else if (src_meta.data_checksum_ != write_meta.data_checksum_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "data checksum not match", K(ret));
   } else if (src_meta.row_checksum_ != write_meta.row_checksum_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "row_checksum_ not match", K(ret));
   } else if (src_meta.data_version_ != write_meta.data_version_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "data_version_ not match", K(ret));
   } else if (src_meta.rowkey_column_count_ != write_meta.rowkey_column_count_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "rowkey_column_count_ not match", K(ret));
   } else if (src_meta.table_type_ != write_meta.table_type_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "table_type_ not match", K(ret));
   } else if (src_meta.index_type_ != write_meta.index_type_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "index_type_ not match", K(ret));
   } else if (src_meta.macro_block_count_ != write_meta.macro_block_count_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "macro_block_count_ not match", K(ret));
   } else if (src_meta.lob_macro_block_count_ != write_meta.lob_macro_block_count_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "lob_macro_block_count_ not match", K(ret));
   } else if (src_meta.column_cnt_ != write_meta.column_cnt_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "column_cnt_ not match", K(ret));
   } else if (src_meta.total_sstable_count_ != write_meta.total_sstable_count_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "total_sstable_count_ not match", K(ret));
   } else if (src_meta.max_logic_block_index_ != write_meta.max_logic_block_index_) {
-    ret = OB_INVALID_DATA;
+    ret = ERROR_CODE;
     STORAGE_LOG(WARN, "max_logic_block_index_ not match", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < src_meta.column_cnt_; ++i) {
@@ -1103,13 +1105,37 @@ int ObMigrateFinishPhysicalTask::check_sstable_meta(
       if (src_col.column_id_ != write_col.column_id_ ||
           src_col.column_default_checksum_ != write_col.column_default_checksum_ ||
           src_col.column_checksum_ != write_col.column_checksum_) {
-        ret = OB_INVALID_DATA;
+        ret = ERROR_CODE;
         STORAGE_LOG(WARN, "column_metas_ not match", K(ret), K(i), K(src_meta), K(write_meta));
       }
     }
   }
   return ret;
 }
+
+int ObMigrateFinishPhysicalTask::check_sstable_meta(
+    const bool is_check_in_advance, ObTableHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObSSTable *sstable = nullptr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("migrate finish physical task do not init", K(ret));
+  } else if (!handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check sstable meta get invalid argument", K(ret), K(handle));
+  } else if (OB_FAIL(handle.get_sstable(sstable))) {
+    LOG_WARN("fail to get sstable", K(ret));
+  } else if (OB_ISNULL(sstable)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("sstable should not be null", K(ret));
+  } else if (OB_FAIL(check_sstable_meta(sstable_ctx_.meta_, sstable->get_meta(), is_check_in_advance))) {
+    LOG_WARN("failed to check sstable meta",
+        K(ret), K(sstable_ctx_.meta_), "new_meta", sstable->get_meta());
+  }
+  return ret;
+}
+
 
 int ObMigratePrepareTask::create_new_partition(const ObAddr &src_server, ObReplicaOpArg &replica_op_arg,
     ObIPartitionGroupGuard &partition_guard, ObStorageFileHandle &file_handle)
@@ -8136,11 +8162,18 @@ int ObMigratePrepareTask::check_can_reuse_sstable(
           LOG_WARN("failed to convert sstable info to table key", K(ret), K(table_info));
         } else if (OB_FAIL(check_and_reuse_sstable(pkey, table_key, is_reuse, part_ctx))) {
           LOG_WARN("failed to check can reuse sstable", K(ret), "table_key", table_key);
-        } else if (!is_reuse) {
-          // do nothing
-        } else if (OB_FAIL(table_info.minor_sstables_.remove(i))) {
-          LOG_WARN("failed to remove reused table", K(ret), "table_key", table_key);
+        } else if (is_reuse) {
+          FLOG_INFO("minor sstable do not reuse", "src table info",
+              table_info.minor_sstables_.at(i), "convert table key", table_key);
         }
+        //Because trans sstable can not reuse, so minor sstables cannot be reuse too.
+        //else if (OB_FAIL(check_and_reuse_sstable(pkey, table_key, is_reuse, part_ctx))) {
+        //  LOG_WARN("failed to check can reuse sstable", K(ret), "table_key", table_key);
+        //} else if (!is_reuse) {
+        //  //do nothing
+        //} else if (OB_FAIL(table_info.minor_sstables_.remove(i))) {
+        //  LOG_WARN("failed to remove reused table", K(ret), "table_key", table_key);
+        //}
       }
     }
   }
@@ -12262,27 +12295,37 @@ int ObMigrateFinishPhysicalTask::process()
   if (OB_SUCC(ret)) {
     param.table_key_ = &dest_table_key;
     param.meta_ = &sstable_ctx_.meta_;
+    bool is_check_in_advance = false;
+    int tmp_ret = OB_SUCCESS;
     if (OB_ISNULL(partition = ctx->partition_guard_.get_partition_group())) {
       ret = OB_ERR_SYS;
       LOG_ERROR("partition must not null", K(ret));
+    } else if (OB_SUCCESS != (tmp_ret = acquire_sstable(dest_table_key, handle))) {
+      LOG_WARN("failed to acquire sstbale", K(ret), K(dest_table_key));
+      is_check_in_advance = false;
+    } else {
+      is_check_in_advance = true;
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(partition->create_sstable(param, handle))) {
-      LOG_WARN("fail to create sstable", K(ret));
-      if (OB_ENTRY_EXIST == ret) {
-        // cover ret
-        if (!dest_table_key.is_trans_sstable() && OB_FAIL(acquire_sstable(dest_table_key, handle))) {
-          LOG_WARN("failed to acquire sstables", K(ret), K(dest_table_key));
-        }
-      }
+      LOG_WARN("fail to create sstable", K(ret), K(param));
+    } else if (OB_FAIL(check_sstable_meta(is_check_in_advance, handle))) {
+      LOG_WARN("failed to check sstable meta",
+          K(ret), K(sstable_ctx_.meta_), K(handle));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(handle.get_sstable(sstable))) {
+      LOG_WARN("fail to get sstable", K(ret));
+    } else if (OB_ISNULL(sstable)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("sstable should not be null", K(ret));
     }
     tg.click("create_sstable");
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(handle.get_sstable(sstable))) {
-        LOG_WARN("fail to get sstable", K(ret));
-      } else if (OB_ISNULL(sstable)) {
-        ret = OB_ERR_SYS;
-        LOG_WARN("sstable should not be null", K(ret));
-      } else if (ObIPartitionMigrateCtx::RECOVERY_POINT_CTX == part_migrate_ctx_->get_type()) {
+      if (ObIPartitionMigrateCtx::RECOVERY_POINT_CTX == part_migrate_ctx_->get_type()) {
         if (OB_FAIL(part_migrate_ctx_->add_sstable(*sstable))) {
           LOG_WARN("failed to add sstable", K(ret));
         }
@@ -12317,6 +12360,8 @@ int ObMigrateFinishPhysicalTask::acquire_sstable(const ObITable::TableKey &dest_
   int ret = OB_SUCCESS;
   handle.reset();
   ObSSTable *sstable = NULL;
+  const bool is_check_in_advance = true;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish physical task do not init", K(ret));
@@ -12325,10 +12370,6 @@ int ObMigrateFinishPhysicalTask::acquire_sstable(const ObITable::TableKey &dest_
     LOG_WARN("acquire sstable get invalid argument", K(ret), K(dest_table_key));
   } else if (OB_FAIL(ObPartitionService::get_instance().acquire_sstable(dest_table_key, handle))) {
     LOG_WARN("failed to acquire sstable", K(ret), K(dest_table_key));
-  } else if (OB_FAIL(handle.get_sstable(sstable))) {
-    LOG_WARN("failed to get sstable", K(ret), K(handle));
-  } else if (OB_FAIL(check_sstable_meta(sstable_ctx_.meta_, sstable->get_meta()))) {
-    LOG_WARN("failed to check sstable meta", K(ret), K(sstable_ctx_.meta_), "new_meta", sstable->get_meta());
   }
   return ret;
 }

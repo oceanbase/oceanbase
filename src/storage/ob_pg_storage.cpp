@@ -5998,6 +5998,8 @@ int ObPGStorage::create_sstables(const common::ObIArray<ObPGCreateSSTableParam>&
           need_create_sstable = false;
           if (OB_FAIL(tables_handle.add_table(table_handle))) {
             LOG_WARN("fail to add table", K(ret));
+          } else {
+            FLOG_INFO("local has sstable, no need create it again", K(table_key));
           }
         }
       }
