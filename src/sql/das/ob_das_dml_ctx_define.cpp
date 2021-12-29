@@ -129,7 +129,7 @@ int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
         }
       } else if (OB_ISNULL(spatial_rows)) {
         if (OB_FAIL(create_spatial_index_store())) {
-          LOG_WARN("create spatila index rows store failed", K(ret));
+          LOG_WARN("create spatial index rows store failed", K(ret));
         } else {
           spatial_rows = get_spatial_index_rows();
         }
