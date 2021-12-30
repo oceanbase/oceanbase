@@ -8163,7 +8163,8 @@ int ObMigratePrepareTask::check_can_reuse_sstable(
         } else if (OB_FAIL(check_and_reuse_sstable(pkey, table_key, is_reuse, part_ctx))) {
           LOG_WARN("failed to check can reuse sstable", K(ret), "table_key", table_key);
         } else if (is_reuse) {
-          FLOG_INFO("minor sstable do not reuse", "src table info",
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("minor sstable is reuse, unexpected !", K(ret), "src table info",
               table_info.minor_sstables_.at(i), "convert table key", table_key);
         }
         //Because trans sstable can not reuse, so minor sstables cannot be reuse too.
@@ -8242,6 +8243,8 @@ int ObMigratePrepareTask::check_and_reuse_sstable(
   } else if (!table_key.is_table_log_ts_comparable()) {
     // old minor sstable always need to migrate to fill log ts
     LOG_INFO("old minor sstable can not reuse, skip it", K(table_key));
+  } else if (table_key.is_minor_sstable()) {
+    LOG_INFO("minor sstable do not reuse", K(table_key));
   } else {
     if (OB_FAIL(ObPartitionService::get_instance().acquire_sstable(table_key, table_handle))) {
       if (OB_ENTRY_NOT_EXIST != ret && OB_PARTITION_NOT_EXIST != ret) {
