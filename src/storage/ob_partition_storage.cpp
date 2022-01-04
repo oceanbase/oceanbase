@@ -5723,25 +5723,6 @@ int ObPartitionStorage::local_sort_index_by_range(
                  *table_schema, *index_schema, col_ids, org_col_ids, projector, unique_key_cnt))) {
     STORAGE_LOG(WARN, "Fail to get column ids, ", K(ret));
   } else {
-    ObObj* cells_buf = NULL;
-    ObStoreRow default_row;
-    ObStoreRow tmp_row;
-    ObStoreRow new_row;
-
-    if (NULL == (cells_buf = reinterpret_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * org_col_ids.count() * 2)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(ERROR, "failed to alloc cells buf", K(ret), K(org_col_ids.count()));
-    } else {
-      cells_buf = new (cells_buf) ObObj[org_col_ids.count() * 2];
-      default_row.flag_ = ObActionFlag::OP_ROW_EXIST;
-      default_row.row_val_.cells_ = cells_buf;
-      default_row.row_val_.count_ = org_col_ids.count();
-      tmp_row.flag_ = ObActionFlag::OP_ROW_EXIST;
-      tmp_row.row_val_.cells_ = cells_buf + org_col_ids.count();
-      tmp_row.row_val_.count_ = org_col_ids.count();
-      new_row.flag_ = ObActionFlag::OP_ROW_EXIST;
-    }
-
     // extend col_ids for generated column
     ObArray<ObColDesc> extended_col_ids;
     ObArray<ObColDesc> org_extended_col_ids;
@@ -5750,9 +5731,7 @@ int ObPartitionStorage::local_sort_index_by_range(
     ObExprCtx expr_ctx;
     if (OB_SUCC(ret)) {
       ObArray<ObColDesc> index_table_columns;
-      if (OB_FAIL(index_schema->get_orig_default_row(org_col_ids, default_row.row_val_))) {
-        STORAGE_LOG(WARN, "Fail to get default row from table schema, ", K(ret));
-      } else if (OB_FAIL(append(extended_col_ids, col_ids))) {
+      if (OB_FAIL(append(extended_col_ids, col_ids))) {
         STORAGE_LOG(ERROR, "failed to clone col_ids", K(ret), K(col_ids), K(extended_col_ids));
       } else if (OB_FAIL(append(org_extended_col_ids, org_col_ids))) {
         STORAGE_LOG(WARN, "fail to append col array", K(ret));
@@ -5831,7 +5810,7 @@ int ObPartitionStorage::local_sort_index_by_range(
                         expr))) {
                   STORAGE_LOG(WARN,
                       "failed to make sql expression",
-                      K(default_row.row_val_.cells_[i].get_string()),
+                      K(column_schema->get_orig_default_value().get_string()),
                       K(*data_table_schema),
                       K(*column_schema),
                       K(extended_col_ids),
@@ -5853,7 +5832,44 @@ int ObPartitionStorage::local_sort_index_by_range(
         }
       }
     }
-    STORAGE_LOG(INFO, "output projector", K(extended_col_ids), K(output_projector));
+    LOG_INFO("output projector", K(extended_col_ids), K(org_extended_col_ids), K(output_projector));
+
+    int64_t buf_cells_cnt = org_extended_col_ids.count() + org_col_ids.count();
+    ObObj *cells_buf = NULL;
+    ObStoreRow default_row;
+    ObStoreRow tmp_row;
+    ObStoreRow new_row;
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(cells_buf = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * buf_cells_cnt)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to alloc cells buf", K(ret), K(org_extended_col_ids.count()), K(org_col_ids.count()));
+    } else {
+      cells_buf = new (cells_buf) ObObj[buf_cells_cnt];
+      default_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+      default_row.row_val_.cells_ = cells_buf;
+      default_row.row_val_.count_ = org_extended_col_ids.count();
+      tmp_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+      tmp_row.row_val_.cells_ = cells_buf + org_extended_col_ids.count();
+      tmp_row.row_val_.count_ = org_col_ids.count();
+      new_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+    }
+
+    // fill default row
+    for (int64_t i = 0; OB_SUCC(ret) && i < org_extended_col_ids.count(); i++) {
+      const uint64_t col_id = org_extended_col_ids.at(i).col_id_;
+      const ObColumnSchemaV2 *col = index_schema->get_column_schema(col_id);
+      if (NULL == col) {
+        // generated column's depend column, get column schema from data table
+        col = table_schema->get_column_schema(col_id);
+      }
+      if (OB_ISNULL(col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(ret), K(col_id));
+      } else {
+        default_row.row_val_.cells_[i] = col->get_orig_default_value();
+      }
+    }
 
     ObArray<ObColumnParam*> col_params;
     for (int64_t i = 0; OB_SUCC(ret) && i < extended_col_ids.count(); i++) {
@@ -6046,7 +6062,8 @@ int ObPartitionStorage::local_sort_index_by_range(
           for (int64_t k = 0; OB_SUCC(ret) && k < row->row_val_.count_; ++k) {
             if (row->row_val_.cells_[k].is_nop_value()) {
               if (k >= org_col_ids.count()) {
-                // do nothing
+                // e.g. columns that some generated columns in org_col_ids depend on
+                result_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];
               } else if (nullptr == dependent_exprs.at(k)) {
                 result_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];
               }
