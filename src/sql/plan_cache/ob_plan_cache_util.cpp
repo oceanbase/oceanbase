@@ -295,7 +295,7 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
           candi_table_loc.set_duplicate_type(table_location.get_duplicate_type());
           candi_table_loc.set_table_location_key(
               table_location.get_table_id(), table_location.get_ref_table_id());
-          LOG_DEBUG("plan cache utitl", K(candi_table_loc));
+          LOG_DEBUG("plan cache util", K(candi_table_loc));
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(table_location_ptrs.push_back(&table_location))) {
