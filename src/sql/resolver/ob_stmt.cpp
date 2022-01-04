@@ -338,8 +338,31 @@ ObQueryCtx* ObStmtFactory::get_query_ctx()
   return query_ctx_;
 }
 
-template <>
-int ObStmtFactory::create_stmt<ObSelectStmt>(ObSelectStmt*& stmt)
+int ObStmtFactory::free_stmt(ObSelectStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ObObjNode<ObStmt*> *del_node = NULL;
+  DLIST_FOREACH_NORET(node, stmt_store_.get_obj_list()) {
+    if (node != NULL && node->get_obj() == stmt) {
+      del_node = node;
+      break;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(stmt_store_.get_obj_list().remove(del_node))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("node is not found", K(ret));
+    } else if (OB_FAIL(free_list_.store_obj(stmt))) {
+      LOG_WARN("failed to store stmt", K(ret));
+    } else {
+      stmt->~ObSelectStmt();
+    }
+  }
+  return ret;
+}
+
+template<>
+int ObStmtFactory::create_stmt<ObSelectStmt>(ObSelectStmt *&stmt)
 {
   int ret = common::OB_SUCCESS;
   void* ptr = NULL;
@@ -347,7 +370,6 @@ int ObStmtFactory::create_stmt<ObSelectStmt>(ObSelectStmt*& stmt)
     ptr = allocator_.alloc(sizeof(ObSelectStmt));
   } else {
     stmt = free_list_.get_obj_list().remove_first()->get_obj();
-    stmt->~ObSelectStmt();
     ptr = stmt;
   }
   stmt = NULL;
