@@ -907,7 +907,7 @@ int ObPartitionStorage::malloc_rows_reshape_if_need(ObIAllocator& work_allocator
 
   for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
     const share::schema::ObColDesc& col_desc = col_descs.at(i);
-    if (col_desc.col_type_.is_char() || col_desc.col_type_.is_binary()) {
+    if (col_desc.col_type_.is_fixed_len_char_type() || col_desc.col_type_.is_binary()) {
       char_binary_exists = true;
       if (col_desc.col_type_.is_binary()) {
         char_only = false;
@@ -6001,7 +6001,15 @@ int ObPartitionStorage::local_sort_index_by_range(
       }
       ObTableSchemaParam schema_param(allocator);
       ObRelativeTable relative_table;
-      ObSQLMode ob_sql_mode = common::ob_compatibility_mode_to_sql_mode(static_cast<ObCompatibilityMode>(sql_mode));
+      ObSQLMode sql_mode_for_ddl_reshape = SMO_TRADITIONAL;
+      // Hack to prevent row reshaping from converting empty string to null.
+      //
+      // Supposing we have a row of type varchar with some spaces and an index on this column,
+      // and then we convert this column to char. In this case, the DDL routine will first rebuild
+      // the data table and then rebuilding the index table. The row may be reshaped as follows.
+      //
+      // - without hack: '  '(varchar) => ''(char) => null(char)
+      // - with hack: '  '(varchar) => ''(char) => ''(char)
       ObFixedArray<uint64_t, ObIAllocator> column_ids(allocator, org_col_ids.count());
       RowReshape *row_reshape_ins = nullptr;
       for (int64_t i = 0; OB_SUCC(ret) && i < org_col_ids.count(); i++) {
@@ -6017,7 +6025,7 @@ int ObPartitionStorage::local_sort_index_by_range(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to set schema param", K(ret));
       } else if (OB_FAIL(malloc_rows_reshape_if_need(
-                     allocator, org_col_ids, 1, relative_table, ob_sql_mode, row_reshape_ins))) {
+                     allocator, org_col_ids, 1, relative_table, sql_mode_for_ddl_reshape, row_reshape_ins))) {
         STORAGE_LOG(WARN, "failed to malloc for row reshape", K(ret));
       } else {
         // do nothing
@@ -6142,8 +6150,12 @@ int ObPartitionStorage::local_sort_index_by_range(
                   }
                 }
               }
-            } else if (OB_FAIL(reshape_table_rows(
-                           &tmp_row.row_val_, row_reshape_ins, org_col_ids.count(), &new_row, 1, ob_sql_mode))) {
+            } else if (OB_FAIL(reshape_table_rows(&tmp_row.row_val_,
+                           row_reshape_ins,
+                           org_col_ids.count(),
+                           &new_row,
+                           1,
+                           sql_mode_for_ddl_reshape))) {
               STORAGE_LOG(WARN, "failed to reshape rows", K(ret));
             } else {
               tmp_row = new_row;
@@ -7337,8 +7349,38 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
         STORAGE_LOG(WARN, "Fail to open macro block writer, ", K(ret));
       } else {
         ObStoreRow row;
-        ObNewRow* row_val = NULL;
+        ObNewRow *row_val = NULL;
+        ObArenaAllocator allocator(lib::ObLabel("PartStorageTmp"));
+        ObColDescArray col_descs;
+        ObTableSchemaParam schema_param(allocator);
+        ObRelativeTable relative_table;
+        ObSQLMode sql_mode_for_ddl_reshape = SMO_TRADITIONAL;  // see local_sort_index_by_range
+        ObFixedArray<uint64_t, ObIAllocator> column_ids(allocator, data_desc.row_column_count_);
+        RowReshape *row_reshape_ins = nullptr;
         row.flag_ = ObActionFlag::OP_ROW_EXIST;
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_desc.row_column_count_; i++) {
+          ObColDesc col_desc;
+          col_desc.col_id_ = data_desc.column_ids_[i];
+          col_desc.col_order_ = data_desc.column_orders_[i];
+          col_desc.col_type_ = data_desc.column_types_[i];
+          if (OB_FAIL(col_descs.push_back(col_desc))) {
+            LOG_WARN("failed to push back col desc", K(ret));
+          } else if (OB_FAIL(column_ids.push_back(col_desc.col_id_))) {
+            LOG_WARN("failed to push back column id", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(schema_param.convert(index_schema, column_ids))) {
+          LOG_WARN("failed to convert schema param", K(ret));
+        } else if (OB_UNLIKELY(false == relative_table.set_schema_param(&schema_param))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to set schema param", K(ret));
+        } else if (OB_FAIL(malloc_rows_reshape_if_need(
+                       allocator, col_descs, 1, relative_table, sql_mode_for_ddl_reshape, row_reshape_ins))) {
+          STORAGE_LOG(WARN, "failed to malloc for row reshape", K(ret));
+        } else {
+          // do nothing
+        }
         while (OB_SUCC(ret)) {
           if (OB_FAIL(THIS_WORKER.check_status())) {
             STORAGE_LOG(WARN, "failed to check status", K(ret));
@@ -7350,8 +7392,10 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
               break;
             }
           } else {
-            row.row_val_.assign(row_val->cells_, row_val->count_);
-            if (OB_FAIL(writer.append_row(row))) {
+            if (OB_FAIL(reshape_table_rows(
+                    row_val, row_reshape_ins, col_descs.count(), &row, 1, sql_mode_for_ddl_reshape))) {
+              STORAGE_LOG(WARN, "failed to reshape rows", K(ret));
+            } else if (OB_FAIL(writer.append_row(row))) {
               if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && index_schema->is_unique_index()) {
                 LOG_USER_ERROR(
                     OB_ERR_PRIMARY_KEY_DUPLICATE, "", static_cast<int>(sizeof("UNIQUE IDX") - 1), "UNIQUE IDX");
@@ -7363,7 +7407,7 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
             }
           }
         }
-
+        free_row_reshape(allocator, row_reshape_ins, 1);
         if (OB_SUCC(ret)) {
           if (OB_FAIL(writer.close())) {
             STORAGE_LOG(WARN, "fail to close writer", K(ret));
