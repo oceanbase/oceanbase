@@ -483,7 +483,7 @@ int ObLogFileStore::read(void* buf, int64_t count, int64_t offset, int64_t& read
             event_sz += rd_size;
           } else if (event_res == 0) {  // read nothing from file
             ret = OB_READ_NOTHING;
-          } else if (event_res > 0 && event_res < rd_size && (0 == event_res % DIO_ALIGN_SIZE)) {  // partial complete
+          } else if (event_res > 0 && event_res < rd_size) {  // partial complete
             event_sz += event_res;
             COMMON_LOG(INFO, "re-submit read", K(i), K(event_res), K(rd_size), K(event_sz), K(count));
           } else {
@@ -1021,8 +1021,7 @@ int ObLogFileStore::process_io_getevents(int64_t& submitted, io_context_t ctx, s
         } else if (event_res == wr_info->size_) {  // full complete
           wr_info->complete_ = true;
           wr_info->ret_ = OB_SUCCESS;
-        } else if (event_res > 0 && event_res < wr_info->size_ &&
-                   (0 == event_res % DIO_ALIGN_SIZE)) {  // partial complete
+        } else if (event_res > 0 && event_res < wr_info->size_) {  // partial complete
           wr_info->buf_ = wr_info->buf_ + event_res;
           wr_info->size_ -= event_res;
           wr_info->offset_ += event_res;
