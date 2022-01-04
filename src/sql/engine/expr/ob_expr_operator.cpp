@@ -1841,7 +1841,7 @@ int ObRelationalExprOperator::calc_result2(
   int ret = OB_SUCCESS;
   // TODO:: raw
   //  bool need_cast = (share::is_oracle_mode() && obj1.get_collation_type() != obj2.get_collation_type());
-  bool need_cast = false;
+  bool need_cast = (share::is_oracle_mode() && obj1.get_type() != obj2.get_type());
   EXPR_DEFINE_CMP_CTX(result_type_.get_calc_meta(), is_null_safe, expr_ctx);
   /*
    * FIX ME,please. It seems that we must check obj1 and obj2 are null or not here
@@ -3014,15 +3014,20 @@ int ObVectorExprOperator::calc_result_type2_(
 {
   int ret = OB_SUCCESS;
   ObExprResType cmp_type;
-  if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+  if (OB_ISNULL(type_ctx.get_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+    LOG_WARN("calc cmp type2 failed", K(ret));
+  } else {
     type.set_int();  // not tinyint, compatiable with MySQL
     type.set_calc_collation(cmp_type);
     type.set_calc_type(cmp_type.get_calc_type());
     ObExprOperator::calc_result_flag2(type, type1, type2);
 
-    if (GCONF.enable_static_engine_for_query()) {
-      obj_cmp_func func_ptr = NULL;
-      bool need_no_cast = ObRelationalExprOperator::can_cmp_without_cast(type1, type2, CO_EQ, func_ptr);
+    if (type_ctx.get_session()->use_static_typing_engine()) {
+      bool need_no_cast = ObRelationalExprOperator::can_cmp_without_cast(type1, type2,
+                                                            CO_EQ, *type_ctx.get_session());
       type1.set_calc_type(need_no_cast ? type1.get_type() : cmp_type.get_calc_type());
       type2.set_calc_type(need_no_cast ? type2.get_type() : cmp_type.get_calc_type());
       if (ob_is_string_type(cmp_type.get_calc_type())) {

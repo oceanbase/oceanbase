@@ -38,6 +38,7 @@
 #include "observer/ob_service.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_index_builder.h"
+#include "rootserver/ob_root_service.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::common;
@@ -220,51 +221,8 @@ int ObBuildIndexBaseTask::check_partition_split_finish(const ObPartitionKey& pke
   return ret;
 }
 
-ObTenantDDLCheckSchemaTask::ObTenantDDLCheckSchemaTask()
-    : ObBuildIndexBaseTask(DDL_TASK_CHECK_SCHEMA), base_version_(-1), refreshed_version_(-1), tenant_id_(OB_INVALID_ID)
-{}
-
-ObTenantDDLCheckSchemaTask::~ObTenantDDLCheckSchemaTask()
-{}
-
-int ObTenantDDLCheckSchemaTask::init(
-    const uint64_t tenant_id, const int64_t base_version, const int64_t refreshed_version)
-{
-  int ret = OB_SUCCESS;
-  if (base_version < 0 || refreshed_version < 0 || OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(base_version), K(refreshed_version), K(tenant_id));
-  } else {
-    base_version_ = base_version;
-    refreshed_version_ = refreshed_version;
-    task_id_.init(GCTX.self_addr_);
-    tenant_id_ = tenant_id;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-bool ObTenantDDLCheckSchemaTask::operator==(const ObIDDLTask& other) const
-{
-  bool is_equal = false;
-  if (get_type() == other.get_type()) {
-    const ObTenantDDLCheckSchemaTask& task = static_cast<const ObTenantDDLCheckSchemaTask&>(other);
-    is_equal = base_version_ == task.base_version_ && refreshed_version_ == task.refreshed_version_;
-  }
-  return is_equal;
-}
-
-int64_t ObTenantDDLCheckSchemaTask::hash() const
-{
-  uint64_t hash_val = 0;
-  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
-  hash_val = murmurhash(&base_version_, sizeof(base_version_), hash_val);
-  hash_val = murmurhash(&refreshed_version_, sizeof(refreshed_version_), hash_val);
-  return hash_val;
-}
-
-int ObTenantDDLCheckSchemaTask::find_build_index_partitions(
-    const ObTableSchema* index_schema, ObSchemaGetterGuard& guard, common::ObIArray<ObPartitionKey>& partition_keys)
+int ObBuildIndexBaseTask::find_build_index_partitions(
+    const ObTableSchema *index_schema, ObSchemaGetterGuard &guard, common::ObIArray<ObPartitionKey> &partition_keys)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema* table_schema = NULL;
@@ -336,8 +294,8 @@ int ObTenantDDLCheckSchemaTask::find_build_index_partitions(
   return ret;
 }
 
-int ObTenantDDLCheckSchemaTask::create_index_partition_table_store(
-    const common::ObPartitionKey& pkey, const uint64_t index_id, const int64_t schema_version)
+int ObBuildIndexBaseTask::create_index_partition_table_store(
+    const common::ObPartitionKey &pkey, const uint64_t index_id, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   ObIPartitionGroupGuard part_guard;
@@ -368,7 +326,7 @@ int ObTenantDDLCheckSchemaTask::create_index_partition_table_store(
   return ret;
 }
 
-int ObTenantDDLCheckSchemaTask::generate_schedule_index_task(const common::ObPartitionKey& pkey,
+int ObBuildIndexBaseTask::generate_schedule_index_task(const common::ObPartitionKey &pkey,
     const uint64_t index_id, const int64_t schema_version, const bool is_unique_index)
 {
   int ret = OB_SUCCESS;
@@ -397,7 +355,50 @@ int ObTenantDDLCheckSchemaTask::generate_schedule_index_task(const common::ObPar
   return ret;
 }
 
-int ObTenantDDLCheckSchemaTask::get_candidate_tables(ObIArray<uint64_t>& table_ids)
+ObTenantDDLCheckSchemaTask::ObTenantDDLCheckSchemaTask()
+    : ObBuildIndexBaseTask(DDL_TASK_CHECK_SCHEMA), base_version_(-1), refreshed_version_(-1), tenant_id_(OB_INVALID_ID)
+{}
+
+ObTenantDDLCheckSchemaTask::~ObTenantDDLCheckSchemaTask()
+{}
+
+int ObTenantDDLCheckSchemaTask::init(
+    const uint64_t tenant_id, const int64_t base_version, const int64_t refreshed_version)
+{
+  int ret = OB_SUCCESS;
+  if (base_version < 0 || refreshed_version < 0 || OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(base_version), K(refreshed_version), K(tenant_id));
+  } else {
+    base_version_ = base_version;
+    refreshed_version_ = refreshed_version;
+    task_id_.init(GCTX.self_addr_);
+    tenant_id_ = tenant_id;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+bool ObTenantDDLCheckSchemaTask::operator==(const ObIDDLTask &other) const
+{
+  bool is_equal = false;
+  if (get_type() == other.get_type()) {
+    const ObTenantDDLCheckSchemaTask &task = static_cast<const ObTenantDDLCheckSchemaTask &>(other);
+    is_equal = base_version_ == task.base_version_ && refreshed_version_ == task.refreshed_version_;
+  }
+  return is_equal;
+}
+
+int64_t ObTenantDDLCheckSchemaTask::hash() const
+{
+  uint64_t hash_val = 0;
+  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
+  hash_val = murmurhash(&base_version_, sizeof(base_version_), hash_val);
+  hash_val = murmurhash(&refreshed_version_, sizeof(refreshed_version_), hash_val);
+  return hash_val;
+}
+
+int ObTenantDDLCheckSchemaTask::get_candidate_tables(ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -467,7 +468,7 @@ int ObTenantDDLCheckSchemaTask::process_schedule_build_index_task()
         // do nothing
       } else if (OB_FAIL(schema_guard.get_table_schema(table_ids.at(i), index_schema))) {
         STORAGE_LOG(WARN, "fail to get table schema", K(ret));
-      } else if (OB_ISNULL(index_schema)) {
+      } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
         ret = OB_SUCCESS;
         STORAGE_LOG(INFO, "table has been deleted, do not need to create index", K(ret), "table_id", table_ids.at(i));
       } else if (OB_FAIL(find_build_index_partitions(index_schema, schema_guard, partition_keys))) {
@@ -850,6 +851,7 @@ int ObBuildIndexScheduleTask::copy_build_index_data(const bool is_leader)
         } else {
           ret = OB_SUCCESS;
         }
+        ++retry_cnt_;
       } else {
         is_copy_request_sent_ = true;
         last_active_timestamp_ = ObTimeUtility::current_time();
@@ -997,7 +999,7 @@ int ObBuildIndexScheduleTask::send_copy_replica_rpc()
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(schema_version_));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret), K(pkey_), K(index_id_));
-    } else if (OB_ISNULL(index_schema)) {
+    } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
       ret = OB_SUCCESS;
     } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), data_table_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret));
@@ -1413,7 +1415,7 @@ int ObBuildIndexScheduleTask::process()
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(pkey_), K(index_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
       STORAGE_LOG(WARN, "fail to get table schema", K(ret), K(pkey_), K(index_id_));
-    } else if (OB_ISNULL(index_schema)) {
+    } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
       if (UNIQUE_INDEX_CHECKING != state_) {
         STORAGE_LOG(INFO, "index schema has been deleted, skip build it", K(pkey_), K(index_id_));
         is_end = true;
@@ -1728,4 +1730,228 @@ void ObBuildIndexScheduler::destroy()
 {
   task_executor_.destroy();
   is_inited_ = false;
+}
+
+ObRetryGhostIndexTask::ObRetryGhostIndexTask()
+    : ObBuildIndexBaseTask(DDL_TASK_RETRY_GHOST_INDEX), index_id_(OB_INVALID_ID), last_log_timestamp_(0)
+{}
+
+ObRetryGhostIndexTask::~ObRetryGhostIndexTask()
+{}
+
+int ObRetryGhostIndexTask::init(const uint64_t index_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObRetryGhostIndexTask has already been inited", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == index_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(index_id));
+  } else {
+    index_id_ = index_id;
+    task_id_.init(GCONF.self_addr_);
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int64_t ObRetryGhostIndexTask::hash() const
+{
+  return index_id_;
+}
+
+bool ObRetryGhostIndexTask::operator==(const ObIDDLTask &other) const
+{
+  bool is_equal = false;
+  if (get_type() == other.get_type()) {
+    const ObRetryGhostIndexTask &other_task = static_cast<const ObRetryGhostIndexTask &>(other);
+    is_equal = index_id_ == other_task.index_id_;
+  }
+  return is_equal;
+}
+
+ObRetryGhostIndexTask *ObRetryGhostIndexTask::deep_copy(char *buf, const int64_t size) const
+{
+  int ret = OB_SUCCESS;
+  ObRetryGhostIndexTask *task = NULL;
+  if (OB_ISNULL(buf) || size < sizeof(*this)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(size));
+  } else {
+    task = new (buf) ObRetryGhostIndexTask();
+    *task = *this;
+  }
+  return task;
+}
+
+int ObRetryGhostIndexTask::process()
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *index_schema = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  ObAddr rs_addr;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
+          extract_tenant_id(index_id_), schema_guard))) {
+    STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(index_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
+    STORAGE_LOG(WARN, "fail to get table schema", K(ret), K(index_id_));
+  } else if (OB_ISNULL(index_schema)) {
+    STORAGE_LOG(INFO, "index schema is deleted, skip it");
+  } else if (index_schema->is_index_local_storage() && OB_FAIL(retry_local_index(index_schema, schema_guard))) {
+    STORAGE_LOG(WARN, "fail to retry ghost local index", K(ret), K(*index_schema));
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+    STORAGE_LOG(WARN, "fail to get rootservice address", K(ret));
+  } else if (rs_addr != GCTX.self_addr_) {
+    STORAGE_LOG(INFO, "rs is not on this observer, skip");
+  } else if (NULL == GCTX.root_service_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "root service is null", K(ret));
+  } else if (OB_FAIL(GCTX.root_service_->submit_build_index_task(index_schema))) {
+    STORAGE_LOG(WARN, "fail to submit build index task", K(ret));
+  }
+  return ret;
+}
+
+int ObRetryGhostIndexTask::retry_local_index(const ObTableSchema *index_schema, ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *data_table_schema = nullptr;
+  ObArray<ObPartitionKey> partition_keys;
+  if (OB_FAIL(find_build_index_partitions(index_schema, schema_guard, partition_keys))) {
+    if (OB_EAGAIN != ret) {
+      STORAGE_LOG(WARN, "fail to check need build index", K(ret));
+    }
+  } else if (partition_keys.count() > 0) {
+    if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), data_table_schema))) {
+      STORAGE_LOG(WARN, "fail to get data table schema", K(ret));
+    } else if (OB_ISNULL(data_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      STORAGE_LOG(WARN, "schema error, data table not exist while index table exist", K(ret));
+    } else {
+      const int64_t schema_version =
+          std::max(index_schema->get_schema_version(), data_table_schema->get_schema_version());
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_keys.count(); ++i) {
+        if (OB_FAIL(generate_schedule_index_task(
+                partition_keys.at(i), index_schema->get_table_id(), schema_version, index_schema->is_unique_index()))) {
+          STORAGE_LOG(WARN, "fail to generate schedule build index task", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+ObRetryGhostIndexScheduler::ObRetryGhostIndexScheduler()
+    : scan_ghost_index_task_(), is_inited_(false), task_executor_(), is_stop_(false)
+{}
+
+ObRetryGhostIndexScheduler::~ObRetryGhostIndexScheduler()
+{}
+
+int ObRetryGhostIndexScheduler::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObRetryGhostIndexScheduler has been inited twice", K(ret));
+  } else if (OB_FAIL(TG_START(lib::TGDefIDs::DDLRetryGhostIndex))) {
+    LOG_WARN("fail to init timer for DDLRetryGhostIndex", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::DDLRetryGhostIndex,
+                 scan_ghost_index_task_,
+                 DEFAULT_RETRY_GHOST_INDEX_INTERVAL_US,
+                 true /*repeat*/))) {
+    LOG_WARN("fail to schedule scan_ghost_index_task", K(ret));
+  } else if (OB_FAIL(task_executor_.init(DEFAULT_BUCKET_NUM, lib::TGDefIDs::DDLTaskExecutor3))) {
+    LOG_WARN("fail to init task executor", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObRetryGhostIndexScheduler::push_task(ObRetryGhostIndexTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObRetryGhostIndexScheduler has not been inited", K(ret));
+  } else if (is_stop_) {
+    // do nothing
+  } else if (OB_FAIL(task_executor_.push_task(task))) {
+    if (OB_LIKELY(OB_ENTRY_EXIST == ret)) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to push back task", K(ret));
+    }
+  }
+  return ret;
+}
+
+ObRetryGhostIndexScheduler &ObRetryGhostIndexScheduler::get_instance()
+{
+  static ObRetryGhostIndexScheduler instance;
+  return instance;
+}
+
+void ObRetryGhostIndexScheduler::stop()
+{
+  is_stop_ = true;
+  task_executor_.stop();
+}
+
+void ObRetryGhostIndexScheduler::wait()
+{
+  task_executor_.wait();
+}
+
+void ObRetryGhostIndexScheduler::destroy()
+{
+  is_inited_ = false;
+  stop();
+  wait();
+  task_executor_.destroy();
+}
+
+void ObScanGhostIndexTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObArray<uint64_t> tenant_ids;
+  ObRetryGhostIndexScheduler &scheduler = ObRetryGhostIndexScheduler::get_instance();
+  if (GCTX.is_standby_cluster()) {
+    // this retry task should not run on standby server
+  } else if (OB_FAIL(
+          ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("fail to get tenant ids", K(ret));
+  } else {
+    ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+      const uint64_t tenant_id = tenant_ids.at(i);
+      if (OB_MAX_RESERVED_TENANT_ID >= tenant_id) {
+        // do nothing for reserved tenant
+      } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
+                     tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_table_schemas_in_tenant(tenant_id, table_schemas))) {
+        LOG_WARN("fail to get table schemas in tenant", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_schemas.count(); ++j) {
+          const ObSimpleTableSchemaV2 *simple_schema = table_schemas.at(j);
+          if (simple_schema->is_index_table() && simple_schema->is_unavailable_index()) {
+            ObRetryGhostIndexTask task;
+            if (OB_FAIL(task.init(simple_schema->get_table_id()))) {
+              LOG_WARN("fail to init ObRetryGhostIndexTask", K(ret), K(*simple_schema));
+            } else if (OB_FAIL(scheduler.push_task(task))) {
+              LOG_WARN("fail to push ObRetryGhostIndexTask to scheduler", K(ret), K(task));
+            } else {
+              LOG_INFO("find unavailable index table", "index_table_id", simple_schema->get_table_id());
+            }
+          }
+        }
+      }
+    }
+  }
 }

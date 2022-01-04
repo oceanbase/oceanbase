@@ -2748,7 +2748,7 @@ int ObDMLResolver::resolve_is_expr(ObRawExpr*& expr)
         if (OB_FAIL(flag_expr->formalize(session_info_))) {
           LOG_WARN("formalize expr failed", K(ret));
         }
-      } else if (column_item->is_auto_increment()) {
+      } else if (column_item->is_auto_increment() && T_NULL == is_expr->get_param_expr(1)->get_expr_type()) {
         if (OB_FAIL(resolve_autoincrement_column_is_null(expr))) {
           LOG_WARN("fail to process autoincrement column is null", K(ret));
         } else {

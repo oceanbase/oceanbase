@@ -689,6 +689,17 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt*& stmt, bool& t
     if (OB_FAIL(get_trans_param(*target_stmt, param, root_expr, post_group_by))) {
       LOG_WARN("failed to find trans params", K(ret));
     } else if (NULL == root_expr) {
+      // should remove alias_ref from target_stmt if it has alias_ref
+      ObSelectStmt *sel_stmt = NULL;
+      if (OB_ISNULL(target_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null stmt", K(ret));
+      } else if (target_stmt->is_select_stmt()) {
+        if (OB_FALSE_IT(sel_stmt = static_cast<ObSelectStmt *>(target_stmt))) {
+        } else if (OB_FAIL(revert_vec_assign_exprs(sel_stmt, stmt))) {
+          LOG_WARN("failed to replace alias exprs", K(ret));
+        }
+      }
       break;
     } else if (OB_FAIL(fill_query_refs(target_stmt, root_expr, param))) {
       LOG_WARN("failed to fill query refs", K(ret));
@@ -702,6 +713,11 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt*& stmt, bool& t
     } else {
       target_stmt = view_stmt;
       trans_happened = true;
+    }
+  }
+  if (OB_SUCC(ret) && trans_happened && stmt->is_update_stmt()) {
+    if (OB_FAIL(static_cast<ObUpdateStmt *>(stmt)->check_assign())) {
+      LOG_WARN("failed to check assign", K(ret));
     }
   }
   return ret;
@@ -1125,7 +1141,55 @@ int ObTransformAggrSubquery::do_join_first_transform(
   return ret;
 }
 
-int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys, const bool is_first_trans)
+int ObTransformAggrSubquery::revert_vec_assign_exprs(ObSelectStmt *&child_stmt, ObDMLStmt *&upper_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> alias_exprs;
+  ObSEArray<ObRawExpr *, 8> col_exprs;
+  TableItem *tab_item = NULL;
+  if (OB_ISNULL(child_stmt) || OB_ISNULL(upper_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (upper_stmt->get_table_size() == 0) {
+  } else if (OB_ISNULL(tab_item = upper_stmt->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null table item", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmt->get_select_items().count(); ++i) {
+      ObRawExpr *sel_expr = NULL;
+      ObRawExpr *expr = NULL;
+      if (OB_ISNULL(sel_expr = child_stmt->get_select_item(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null select expr", K(ret));
+      } else if (!sel_expr->is_alias_ref_expr()) {
+      } else if (OB_FAIL(alias_exprs.push_back(sel_expr))) {
+        LOG_WARN("failed to push back alias exprs", K(ret));
+      } else if (OB_ISNULL(expr = upper_stmt->get_column_expr_by_id(tab_item->table_id_, i + OB_APP_MIN_COLUMN_ID))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null column expr", K(ret));
+      } else if (OB_FAIL(col_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back alias ref", K(ret));
+      }
+    }
+    // we can not call remove_select_items if col_exprs or alias_exprs is empty
+    // since it unavoidablely adjusts column ids
+    if (OB_FAIL(ret) || col_exprs.empty() || alias_exprs.empty()) {
+    } else if (OB_FAIL(upper_stmt->replace_inner_stmt_expr(col_exprs, alias_exprs))) {
+      LOG_WARN("failed to replace inner stmt expr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::remove_select_items(
+                   ctx_, tab_item->table_id_, *child_stmt, *upper_stmt, alias_exprs))) {
+      LOG_WARN("failed to remove select items", K(ret));
+    } else if (OB_FAIL(upper_stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    }
+  }
+  return ret;
+}
+
+/**
+ * 获取from list中所有基表的primary key
+ */
+int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &pkeys, const bool is_first_trans)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> empty_ignore_tables;
@@ -1482,17 +1546,32 @@ int ObTransformAggrSubquery::fill_query_refs(ObDMLStmt* stmt, ObRawExpr* expr, T
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params are invalid", K(ret), K(stmt), K(expr));
   } else if (expr->has_flag(CNT_ALIAS)) {
-    if (OB_UNLIKELY(!stmt->is_update_stmt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("stmt is expected to be update", K(ret));
-    } else if (OB_FAIL(static_cast<ObUpdateStmt*>(stmt)->get_vector_assign_values(
-                   param.ja_query_ref_, param.query_refs_))) {
-      LOG_WARN("failed to get vector assign values", K(ret));
+    if (stmt->is_update_stmt()) {
+      if (OB_FAIL(static_cast<ObUpdateStmt *>(stmt)->get_vector_assign_values(param.ja_query_ref_,
+                                                                              param.query_refs_))) {
+        LOG_WARN("failed to get vector assign values", K(ret));
+      }
+    } else if (stmt->is_select_stmt()) {
+      // select stmt can also contain alias ref exprs
+      ObSEArray<ObRawExpr *, 8> sel_exprs;
+      if (OB_FAIL(static_cast<ObSelectStmt *>(stmt)->get_select_exprs(sel_exprs))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < sel_exprs.count(); ++i) {
+          ObRawExpr *sel_expr = NULL;
+          if (OB_ISNULL(sel_expr = sel_exprs.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null expr", K(ret));
+          } else if (sel_expr->has_flag(CNT_ALIAS)) {
+            if (OB_FAIL(param.query_refs_.push_back(sel_expr))) {
+              LOG_WARN("failed to push back alias ref expr", K(ret));
+            }
+          }
+        }
+      }
     }
-  } else {
-    if (OB_FAIL(param.query_refs_.push_back(param.ja_query_ref_))) {
-      LOG_WARN("failed to push back query refs", K(ret));
-    }
+  } else if (OB_FAIL(param.query_refs_.push_back(param.ja_query_ref_))) {
+    LOG_WARN("failed to push back query refs", K(ret));
   }
   return ret;
 }

@@ -929,6 +929,7 @@ int ObPartitionMetaRedoModule::replay_add_partition_slog(const ObRedoModuleRepla
   LOG_INFO("replay base storage log::add_partition", K(param), K(log_entry), K(sub_type), K(ret));
 
   if (OB_FAIL(ret) && NULL != ptt && REDO_LOG_ADD_PARTITION_TO_PG != sub_type) {
+    int origin_ret = ret;
     // remove from pg_mgr
     if (is_ptt_in_mgr) {
       ObIPartitionGroupGuard partition_guard;
@@ -945,6 +946,7 @@ int ObPartitionMetaRedoModule::replay_add_partition_slog(const ObRedoModuleRepla
       cp_fty_->free(ptt);
     }
     ptt = NULL;
+    ret = origin_ret;
   }
   return ret;
 }

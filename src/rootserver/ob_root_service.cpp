@@ -4918,7 +4918,25 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObA
   return ret;
 }
 
-int ObRootService::flashback_index(const ObFlashBackIndexArg& arg)
+int ObRootService::submit_build_index_task(const share::schema::ObTableSchema *index_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_schema) || !index_schema->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(index_schema));
+  } else if (index_schema->is_global_index_table() &&
+             OB_FAIL(global_index_builder_.submit_build_global_index_task(index_schema))) {
+    LOG_WARN("fail to submit build global index task", K(ret), K(*index_schema));
+  } else if (index_schema->is_index_local_storage()) {
+    ObIndexBuilder index_builder(ddl_service_);
+    if (OB_FAIL(index_builder.submit_build_local_index_task(*index_schema))) {
+      LOG_WARN("fail to submit build local index task", K(ret), K(*index_schema));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::flashback_index(const ObFlashBackIndexArg &arg)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -9744,6 +9762,49 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
   return ret;
 }
 
+	
+int ObRootService::wakeup_auto_delete(const obrpc::ObAdminSetConfigItem *item)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestOpt new_opt;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (NULL == item) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("item is null", K(ret)); 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(false/* is_backup_backup */))) {
+      LOG_WARN("failed init backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(true/* is_backup_backup */))) {
+      LOG_WARN("failed init backup backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_AUTO_DELETE_EXPIRED_BACKUP)) {
+    ObString value(item->value_.ptr());
+    ObString false_str("FALSE");
+    if (0 != value.case_compare(false_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("auto_delete_expired_backup parameters updated, wakeup backup_auto_delete", KPC(item));
+    } 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_RECORVERTY_WINDOW)) {
+    ObString value(item->value_.ptr());
+    ObString zero_str("0");
+    if (0 != value.case_compare(zero_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_recovery_window parameters updated, wakeup backup_auto_delete", KPC(item));
+    }  
+  }
+  return ret;
+}
+
 int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -9790,9 +9851,11 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
         LOG_WARN("fail to submit update rs list task", KR(ret), K(tmp_ret));
       }
       LOG_INFO("obconfig_url parameters updated, force submit update rslist task", KR(tmp_ret), KPC(item));
-    } else if (0 == STRCMP(item->name_.ptr(), _SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
+    } else if (0 == STRCMP(item->name_.ptr(), SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
       schema_history_recycler_.wakeup();
-      LOG_INFO("_schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
+      LOG_INFO("schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
+    } else if (OB_FAIL(wakeup_auto_delete(item))) {
+      LOG_WARN("failed to wakeup auto delete", K(ret), KPC(item));
     }
   }
   return ret;

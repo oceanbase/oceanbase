@@ -974,7 +974,7 @@ int ObBackupDataClean::mark_sys_tenant_backup_meta_data_deleting()
       } else if (sys_clean_info.is_backup_set_clean() &&
                  !sys_clean_tenant.has_clean_backup_set(sys_clean_info.backup_set_id_, sys_clean_info.copy_id_)) {
         ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-        LOG_WARN("can not clean backup set", K(ret), K(sys_clean_info), K(sys_clean_tenant));
+        LOG_WARN("can not clean backup set, because backup set is not existt", K(ret), K(sys_clean_info), K(sys_clean_tenant));
       }
 
       if (OB_SUCC(ret)) {
@@ -1361,7 +1361,11 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
       if (ObTenantBackupTaskInfo::FINISH != task_info.status_) {
         if (task_info.backup_set_id_ == clean_info.backup_set_id_) {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean", K(ret), K(clean_info), K(cluster_max_backup_set_id), K(task_info));
+          LOG_WARN("backup set do not allow clean, because status of backup set is not finish",
+              K(ret),
+              K(clean_info),
+              K(cluster_max_backup_set_id),
+              K(task_info));
         }
       } else if (task_info.backup_set_id_ == clean_info.backup_set_id_) {
         delete_backup_info = task_info;
@@ -1399,7 +1403,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
                    (delete_backup_info.backup_dest_ == backup_dest_ ||
                        delete_backup_info.backup_dest_ == backup_backup_dest_)) {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean",
+          LOG_WARN("backup set do not allow clean, because of need to keep the last succeed backup set",
               K(ret),
               K(clean_info),
               K(cluster_max_backup_set_id),
@@ -1409,7 +1413,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
           LOG_WARN("failed to get backup set file copies num", K(ret), K(delete_backup_info));
         } else if (copies_num < backup_dest_option.backup_copies_) {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean",
+          LOG_WARN("backup set do not allow clean, because current finish copies_num is less than backup_copies in backup_dest_option",
               K(ret),
               K(clean_info),
               K(cluster_max_backup_set_id),
@@ -1432,7 +1436,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
           clean_tenant.clog_gc_snapshot_ = INT64_MAX;
         } else {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
-          LOG_WARN("backup set do not allow clean",
+          LOG_WARN("backup set do not allow clean, because of need to keep last succeed backup set",
               K(ret),
               K(clean_info),
               K(cluster_max_backup_set_id),
@@ -1901,9 +1905,12 @@ int ObBackupDataClean::add_delete_backup_piece(const share::ObBackupCleanInfo &c
                  OB_FAIL(get_backup_piece_file_copies_num(backup_piece_info, copies_num))) {
         LOG_WARN("failed to get backup piece file copies num", K(ret), K(backup_piece_info));
       } else if (copies_num < backup_dest_option.backup_copies_) {
-        // TODO(muwei.ym) change error code
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to delete backup piece", K(ret), K(backup_piece_info));
+        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+        LOG_WARN("piece is not allowed to be deleted, because current finish copies_num is less than backup_copies in backup_dest_option",
+            K(ret),
+            K(copies_num),
+            K_(backup_dest_option.backup_copies),
+            K(backup_piece_info));
       } else {
         int64_t start_replay_log_ts = 0;
         for (int64_t i = 0; i < task_infos.count() && !found_backup_set; ++i) {
@@ -1919,17 +1926,19 @@ int ObBackupDataClean::add_delete_backup_piece(const share::ObBackupCleanInfo &c
           if (start_replay_log_ts >= backup_piece_info.max_ts_) {
             LOG_INFO("found suitable backup set, can delete backup piece", K(backup_piece_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup piece", K(ret), K(backup_piece_info), K(start_replay_log_ts));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("piece is not allowed to be deleted, because it is found that the dependent start_replay_log_ts "
+                "of backup set is less than the max_ts of piece",
+                K(ret),
+                K(backup_piece_info),
+                K(start_replay_log_ts));
           }
         } else {
           if (clean_tenant.simple_clean_tenant_.is_deleted_) {
             LOG_INFO("tenant is deleted, can delete backup piece directly", K(backup_piece_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup piece", K(ret), K(backup_piece_info));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("piece is not allowed to be deleted, because no valid backup_set is found", K(ret), K(backup_piece_info));
           }
         }
       }
@@ -1992,9 +2001,12 @@ int ObBackupDataClean::add_delete_backup_round(const share::ObBackupCleanInfo &c
                  OB_FAIL(get_backup_round_copies_num(log_archive_info, copies_num))) {
         LOG_WARN("failed to get backup round copies num", K(ret), K(log_archive_info));
       } else if (copies_num < backup_dest_option.backup_copies_) {
-        // TODO(muwei.ym) change error code
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to delete backup piece", K(ret), K(log_archive_info));
+        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+        LOG_WARN("round is not allowed to be deleted, because current finish copies_num is less than backup_copies in backup_dest_option",
+            K(ret),
+            K(copies_num),
+            K_(backup_dest_option.backup_copies),
+            K(log_archive_info));
       } else {
         int64_t start_replay_log_ts = 0;
         for (int64_t i = 0; i < task_infos.count() && !found_backup_set; ++i) {
@@ -2010,17 +2022,19 @@ int ObBackupDataClean::add_delete_backup_round(const share::ObBackupCleanInfo &c
           if (start_replay_log_ts >= log_archive_info.status_.checkpoint_ts_) {
             LOG_INFO("found suitable backup set, can delete backup round", K(log_archive_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup piece", K(ret), K(log_archive_info), K(start_replay_log_ts));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("round is not allowed to be deleted, because it is found that the dependent start_replay_log_ts "
+                "of backup set is less than the max_ts of round",
+                K(ret),
+                K(log_archive_info),
+                K(start_replay_log_ts));
           }
         } else {
           if (clean_tenant.simple_clean_tenant_.is_deleted_) {
             LOG_INFO("tenant is deleted, can delete backup round directly", K(log_archive_info));
           } else {
-            // TODO(muwei.ym) change error code
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to delete backup round", K(ret), K(log_archive_info));
+            ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+            LOG_WARN("round is not allowed to be deleted, because no valid backup_set is found", K(ret), K(log_archive_info));
           }
         }
       }
@@ -2625,6 +2639,106 @@ int ObBackupDataClean::mark_backup_set_info_inner_table_deleting(const share::Ob
   return ret;
 }
 
+int ObBackupDataClean::get_source_backup_set_file_info(const uint64_t tenant_id, const int64_t incarnation,
+    const ObBackupSetId &backup_set_id, ObBackupSetFileInfo &backup_set_file_info, bool &is_need_modify)
+{
+  int ret = OB_SUCCESS;
+  int64_t src_copy_id = 0;  // src backup dest copy_id=0
+  bool for_update = false;
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+  is_need_modify = false;
+  backup_set_file_info.reset();
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data clean do not init", K(ret));
+  } else if (OB_FAIL(ObBackupSetFilesOperator::get_tenant_backup_set_file_info(tenant_id,
+                 backup_set_id.backup_set_id_,
+                 incarnation,
+                 src_copy_id,
+                 for_update,
+                 *sql_proxy_,
+                 backup_set_file_info))) {
+    LOG_WARN("failed to get tenant backup set file info", K(ret), K(backup_set_id));
+  } else if (OB_FAIL(GCONF.backup_dest.copy(backup_dest_str, sizeof(backup_dest_str)))) {
+    LOG_WARN("failed to get configure backup dest", K(ret));
+  } else if (0 != strcmp(backup_dest_str, backup_set_file_info.backup_dest_.ptr())) {
+    LOG_INFO("the source backup destination of the backup backup are not equal to the configured backup destination");
+  } else {
+    is_need_modify = true;
+  }
+
+  return ret;
+}
+
+int ObBackupDataClean::get_source_backup_dest_from_piece_file(const common::ObIArray<ObBackupPieceInfoKey> &piece_keys,
+    ObClusterBackupDest &cluster_backup_dest, bool &is_need_modify)
+{
+  int ret = OB_SUCCESS;
+  bool for_update = false;
+  int64_t src_copy_id = 0;
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+  is_need_modify = false;
+  cluster_backup_dest.reset();
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data clean do not init", K(ret));
+  } else if (piece_keys.empty()) {
+    // do nothing
+  } else {
+    ObBackupPieceInfo piece_info;
+    ObBackupDest backup_dest;
+    ObLogArchiveBackupInfoMgr log_archive_info_mgr;
+    const share::ObBackupPieceInfoKey &piece_key = piece_keys.at(0);
+    if (OB_FAIL(log_archive_info_mgr.get_backup_piece(
+            *sql_proxy_, for_update, piece_key.tenant_id_, piece_key.backup_piece_id_, src_copy_id, piece_info))) {
+      LOG_WARN("failed to get piece file info", K(ret), K(piece_key));
+    } else if (OB_FAIL(GCONF.backup_dest.copy(backup_dest_str, sizeof(backup_dest_str)))) {
+      LOG_WARN("failed to get backup dest", K(ret));
+    } else if (0 != strcmp(backup_dest_str, piece_info.backup_dest_.ptr())) {
+      LOG_INFO("backup_dest of backup_set is not current backup dest");
+    } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
+      LOG_WARN("failed to set backup dest", K(ret));
+    } else if (OB_FAIL(cluster_backup_dest.set(backup_dest, piece_key.incarnation_))) {
+      LOG_WARN("failed to set cluster backup dest", K(ret));
+    } else {
+      is_need_modify = true;
+    }
+  }
+
+  return ret;
+}
+
+// mark the status of the external file at the source destination of the backup backup as deleting
+int ObBackupDataClean::mark_extern_source_backup_set_info_of_backup_backup(const uint64_t tenant_id,
+    const int64_t incarnation, const ObBackupSetFileInfo &backup_set_file_info,
+    const ObArray<ObBackupSetIdPair> &backup_set_id_pairs, const bool is_deleting)
+{
+  int ret = OB_SUCCESS;
+  ObClusterBackupDest src_cluster_backup_dest;
+  ObBackupDest src_backup_dest;
+  ObExternBackupSetFileInfoMgr src_extern_backup_set_file_info_mgr;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data clean do not init", K(ret));
+  } else if (OB_FAIL(src_backup_dest.set(backup_set_file_info.backup_dest_.ptr()))) {
+    LOG_WARN("failed to set backup dest", K(ret));
+  } else if (OB_FAIL(src_cluster_backup_dest.set(src_backup_dest, incarnation))) {
+    LOG_WARN("failed to set cluster backup dest", K(ret), K(src_backup_dest));
+  } else if (OB_FAIL(src_extern_backup_set_file_info_mgr.init(
+                 tenant_id, src_cluster_backup_dest, true /* is_backup_backup */, *backup_lease_service_))) {
+    LOG_WARN("failed to init extern backup set file info", K(ret), K(src_cluster_backup_dest));
+  } else {
+    if (is_deleting &&
+        OB_FAIL(src_extern_backup_set_file_info_mgr.mark_backup_set_file_deleting(backup_set_id_pairs))) {
+      LOG_WARN("failed to mark backup set file deleting", K(ret));
+    } else if (!is_deleting &&
+               OB_FAIL(src_extern_backup_set_file_info_mgr.mark_backup_set_file_deleted(backup_set_id_pairs))) {
+      LOG_WARN("failed to mark backup set file deleted", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObBackupDataClean::mark_extern_backup_set_info_deleting(const share::ObBackupCleanInfo &clean_info,
     const ObBackupDataCleanElement &clean_element, const common::ObIArray<ObBackupSetId> &backup_set_ids)
 {
@@ -2637,11 +2751,16 @@ int ObBackupDataClean::mark_extern_backup_set_info_deleting(const share::ObBacku
   ObExternBackupSetFileInfoMgr extern_backup_set_file_info_mgr;
   ObClusterBackupDest cluster_backup_dest;
   ObBackupSetIdPair backup_set_id_pair;
+  const bool is_backup_backup = clean_info.copy_id_ > 0 || clean_info.is_delete_obsolete_backup_backup();
+  bool src_backup_dest_unknown = true;
+  bool is_need_modify = false;  // the status of the external file at the source destination of the backup backup
+  ObBackupSetFileInfo backup_set_file_info;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data clean do not init", K(ret));
   } else if (backup_set_ids.empty()) {
+    // do nothing
   } else if (OB_FAIL(cluster_backup_dest.set(backup_dest, incarnation))) {
     LOG_WARN("failed to set cluster backup dest", K(ret), K(backup_dest));
   } else {
@@ -2658,6 +2777,15 @@ int ObBackupDataClean::mark_extern_backup_set_info_deleting(const share::ObBacku
           LOG_WARN("failed to push backup set id into array", K(ret), K(backup_set_id_pair));
         }
       }
+
+      if (src_backup_dest_unknown && OB_SUCC(ret) && is_backup_backup) {
+        if (OB_FAIL(get_source_backup_set_file_info(
+                tenant_id, incarnation, backup_set_id, backup_set_file_info, is_need_modify))) {
+          LOG_WARN("failed to get source backup set file info", K(ret), K(backup_set_id));
+        } else {
+          src_backup_dest_unknown = false;
+        }
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -2668,14 +2796,19 @@ int ObBackupDataClean::mark_extern_backup_set_info_deleting(const share::ObBacku
       }
     }
 
-    if (OB_SUCC(ret)) {
-      const bool is_backup_backup = clean_info.copy_id_ > 0 || clean_info.is_delete_obsolete_backup_backup();
-      if (OB_FAIL(extern_backup_set_file_info_mgr.init(
-              tenant_id, cluster_backup_dest, is_backup_backup, *backup_lease_service_))) {
-        LOG_WARN("failed to init extern backup set file info", K(ret), K(clean_info));
-      } else if (OB_FAIL(extern_backup_set_file_info_mgr.mark_backup_set_file_deleting(backup_set_id_pairs))) {
-        LOG_WARN("failed to mark backup set file deleting", K(ret), K(clean_info));
+    if (OB_SUCC(ret) && is_backup_backup && is_need_modify) {
+      if (OB_FAIL(mark_extern_source_backup_set_info_of_backup_backup(
+              tenant_id, incarnation, backup_set_file_info, backup_set_id_pairs, true /* is_deleting*/))) {
+        LOG_WARN("failed to mark source backup set file info deleting", K(ret), K(clean_info));
       }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(extern_backup_set_file_info_mgr.init(
+                   tenant_id, cluster_backup_dest, is_backup_backup, *backup_lease_service_))) {
+      LOG_WARN("failed to init extern backup set file info", K(ret), K(clean_info));
+    } else if (OB_FAIL(extern_backup_set_file_info_mgr.mark_backup_set_file_deleting(backup_set_id_pairs))) {
+      LOG_WARN("failed to mark backup set file deleting", K(ret), K(clean_info));
     }
   }
   return ret;
@@ -2809,6 +2942,9 @@ int ObBackupDataClean::mark_extern_log_archive_info_deleting(const share::ObBack
   const int64_t incarnation = clean_element.incarnation_;
   const ObBackupDest &backup_dest = clean_element.backup_dest_;
   ObClusterBackupDest cluster_backup_dest;
+  const bool is_backup_backup = clean_info.copy_id_ > 0 || clean_info.is_delete_obsolete_backup_backup();
+  ObClusterBackupDest src_cluster_backup_dest;
+  bool is_need_modify = false;  // the status of the external file at the source destination of the backup backup
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2823,15 +2959,26 @@ int ObBackupDataClean::mark_extern_log_archive_info_deleting(const share::ObBack
       }
     }
 
-    if (OB_SUCC(ret)) {
-      const bool is_backup_backup = clean_info.copy_id_ > 0 || clean_info.is_delete_obsolete_backup_backup();
-      if (OB_FAIL(log_info_mgr.mark_extern_log_archive_backup_info_deleted(
-              cluster_backup_dest, tenant_id, round_ids, *backup_lease_service_))) {
-        LOG_WARN("failed to mark extern log archive backup info deleted", K(ret), K(cluster_backup_dest));
-      } else if (OB_FAIL(log_info_mgr.mark_extern_backup_piece_deleting(
-                     cluster_backup_dest, tenant_id, backup_piece_keys, is_backup_backup, *backup_lease_service_))) {
-        LOG_WARN("failed to mark extern backup piece deleting", K(ret), K(cluster_backup_dest));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(log_info_mgr.mark_extern_log_archive_backup_info_deleted(
+                   cluster_backup_dest, tenant_id, round_ids, *backup_lease_service_))) {
+      LOG_WARN("failed to mark extern log archive backup info deleted", K(ret), K(cluster_backup_dest));
+    } else if (is_backup_backup) {
+      if (OB_FAIL(get_source_backup_dest_from_piece_file(backup_piece_keys, src_cluster_backup_dest, is_need_modify))) {
+        LOG_WARN("failed to get source backup piece file info", K(ret));
+      } else if (is_need_modify && OB_FAIL(log_info_mgr.mark_extern_backup_piece_deleting(src_cluster_backup_dest,
+                                       tenant_id,
+                                       backup_piece_keys,
+                                       is_backup_backup,
+                                       *backup_lease_service_))) {
+        LOG_WARN("failed to mark source extern backup piece deleting", K(ret));
       }
+    }
+
+    if (OB_SUCC(ret) &&
+        OB_FAIL(log_info_mgr.mark_extern_backup_piece_deleting(
+            cluster_backup_dest, tenant_id, backup_piece_keys, is_backup_backup, *backup_lease_service_))) {
+      LOG_WARN("failed to mark extern backup piece deleting", K(ret), K(cluster_backup_dest));
     }
   }
   return ret;
@@ -2962,6 +3109,7 @@ int ObBackupDataClean::get_sys_tenant_prepare_clog_round_and_piece(const share::
           const ObSimplePieceInfo &simple_piece_info = log_archive_round.piece_infos_.at(j);
           if (simple_piece_info.max_ts_ > clog_gc_snapshot ||
               ObBackupPieceStatus::BACKUP_PIECE_FROZEN != simple_piece_info.status_ ||
+              ObBackupFileStatus::BACKUP_FILE_COPYING == simple_piece_info.file_status_ ||
               simple_piece_info.copies_num_ < backup_copies) {
             is_delete_inorder = false;
           } else if (ObBackupFileStatus::BACKUP_FILE_DELETED == simple_piece_info.file_status_) {
@@ -3388,29 +3536,18 @@ int ObBackupDataClean::mark_extern_backup_set_file_info_deleted(const share::ObB
   ObClusterBackupDest current_backup_dest;
   const bool is_backup_backup = clean_info.copy_id_ > 0 || clean_info.is_delete_obsolete_backup_backup();
   ObArray<ObBackupSetIdPair> backup_set_id_pairs;
-  ObClusterBackupDest conf_backup_dest;
-  ObClusterBackupDest conf_backup_backup_dest;
-  const bool is_update_timestamp = clean_element.backup_dest_option_.auto_touch_reserved_backup_;
-  bool can_delete_file = false;
   ObBackupPath path;
-  bool is_all_deleted = false;
   ObBackupSetIdPair backup_set_id_pair;
+  bool src_backup_dest_unknown = true;
+  bool is_need_modify = false;  // the status of the external file at the source destination of the backup backup
+  ObBackupSetFileInfo backup_set_file_info;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data clean do not init", K(ret));
   } else if (OB_FAIL(current_backup_dest.set(clean_element.backup_dest_, clean_element.incarnation_))) {
     LOG_WARN("failed to set backup dest", K(ret), K(clean_element));
-  } else if (backup_dest_.is_valid() && OB_FAIL(conf_backup_dest.set(backup_dest_, clean_element.incarnation_))) {
-    LOG_WARN("failed to set backup dest", K(ret), K(clean_element));
-  } else if (is_backup_backup) {
-    if (backup_backup_dest_.is_valid() &&
-        OB_FAIL(conf_backup_backup_dest.set(backup_backup_dest_, clean_element.incarnation_))) {
-      LOG_WARN("failed to set backup dest", K(ret), K(clean_element));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_ids.count(); ++i) {
       const ObBackupSetId &backup_set_id = backup_set_ids.at(i);
       backup_set_id_pair.reset();
@@ -3424,6 +3561,28 @@ int ObBackupDataClean::mark_extern_backup_set_file_info_deleted(const share::ObB
           LOG_WARN("failed to push backup set id pair into array", K(ret), K(backup_set_id_pair));
         }
       }
+
+      if (src_backup_dest_unknown && OB_SUCC(ret) && is_backup_backup) {
+        if (OB_FAIL(get_source_backup_set_file_info(clean_info.tenant_id_,
+                clean_element.incarnation_,
+                backup_set_id,
+                backup_set_file_info,
+                is_need_modify))) {
+          LOG_WARN("failed to get source backup set file info", K(ret), K(backup_set_id));
+        } else {
+          src_backup_dest_unknown = false;
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && is_backup_backup && is_need_modify) {
+    if (OB_FAIL(mark_extern_source_backup_set_info_of_backup_backup(clean_info.tenant_id_,
+            clean_element.incarnation_,
+            backup_set_file_info,
+            backup_set_id_pairs,
+            false /* is_deleting*/))) {
+      LOG_WARN("failed to mark source backup set file info deleted", K(ret), K(clean_info));
     }
   }
 
@@ -3431,34 +3590,8 @@ int ObBackupDataClean::mark_extern_backup_set_file_info_deleted(const share::ObB
   } else if (OB_FAIL(extern_backup_set_file_info_mgr.init(
                  clean_info.tenant_id_, current_backup_dest, is_backup_backup, *backup_lease_service_))) {
     LOG_WARN("failed to init extern backup info mgr", K(ret), K(current_backup_dest), K(clean_info));
-  } else if (OB_FAIL(
-                 extern_backup_set_file_info_mgr.mark_backup_set_file_deleted(backup_set_id_pairs, is_all_deleted))) {
+  } else if (OB_FAIL(extern_backup_set_file_info_mgr.mark_backup_set_file_deleted(backup_set_id_pairs))) {
     LOG_WARN("failed to delete marked backup info", K(ret), K(clean_element));
-  } else if (!is_all_deleted) {
-    can_delete_file = false;
-  } else if (!conf_backup_dest.is_valid()) {
-    can_delete_file = true;
-  } else if (OB_FAIL(
-                 extern_backup_set_file_info_mgr.get_backup_path(conf_backup_dest, false /*is_backup_backup*/, path))) {
-    LOG_WARN("failed to get backup path", K(ret), K(conf_backup_dest));
-  } else if (OB_FAIL(check_can_delete_extern_info_file(
-                 clean_info.tenant_id_, current_backup_dest, is_backup_backup, path, can_delete_file))) {
-    LOG_WARN("failed to check can delete extern info file", K(ret), K(clean_info));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (!can_delete_file) {
-    if (!is_update_timestamp) {
-      // do nothing
-    } else if (OB_FAIL(extern_backup_set_file_info_mgr.update_backup_set_file_timestamp())) {
-      LOG_WARN("failed to update backup set file timestamp", K(ret));
-    }
-  } else {
-    if (is_update_timestamp) {
-      // do nothing
-    } else if (OB_FAIL(extern_backup_set_file_info_mgr.delete_backup_set_file())) {
-      LOG_WARN("failed to delete backup set file info", K(ret));
-    }
   }
   return ret;
 }
@@ -3469,64 +3602,33 @@ int ObBackupDataClean::mark_extern_backup_piece_file_info_deleted(const share::O
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr log_archive_info_mgr;
   ObClusterBackupDest current_backup_dest;
+  ObClusterBackupDest src_cluster_backup_dest;
   const bool is_backup_backup = clean_info.copy_id_ > 0 || clean_info.is_delete_obsolete_backup_backup();
-  ObClusterBackupDest conf_backup_dest;
-  ObClusterBackupDest conf_backup_backup_dest;
-  const bool is_update_timestamp = clean_element.backup_dest_option_.auto_touch_reserved_backup_;
-  bool is_all_deleted = false;
-  bool can_delete_file = false;
-  ObBackupPath path;
+  bool is_need_modify = false;  // the status of the external file at the source destination of the backup backup
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data clean do not init", K(ret));
   } else if (OB_FAIL(current_backup_dest.set(clean_element.backup_dest_, clean_element.incarnation_))) {
     LOG_WARN("failed to set backup dest", K(ret), K(clean_element));
-  } else if (backup_dest_.is_valid() && OB_FAIL(conf_backup_dest.set(backup_dest_, clean_element.incarnation_))) {
-    LOG_WARN("failed to set backup dest", K(ret), K(backup_backup_dest_));
   } else if (is_backup_backup) {
-    if (OB_FAIL(backup_backup_dest_.is_valid() &&
-                conf_backup_backup_dest.set(backup_backup_dest_, clean_element.incarnation_))) {
-      LOG_WARN("failed to set backup dest", K(ret), K(backup_backup_dest_));
+    if (OB_FAIL(get_source_backup_dest_from_piece_file(backup_piece_keys, src_cluster_backup_dest, is_need_modify))) {
+      LOG_WARN("failed to get source backup piece file info", K(ret));
+    } else if (is_need_modify && OB_FAIL(log_archive_info_mgr.mark_extern_backup_piece_deleted(src_cluster_backup_dest,
+                                     clean_info.tenant_id_,
+                                     backup_piece_keys,
+                                     is_backup_backup,
+                                     *backup_lease_service_))) {
+      LOG_WARN("failed to mark source extern backup piece deleted", K(ret), K(clean_info), K(src_cluster_backup_dest));
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(log_archive_info_mgr.mark_extern_backup_piece_deleted(current_backup_dest,
-                 clean_info.tenant_id_,
-                 backup_piece_keys,
-                 is_backup_backup,
-                 is_all_deleted,
-                 *backup_lease_service_))) {
+  if (OB_SUCC(ret) &&
+      OB_FAIL(log_archive_info_mgr.mark_extern_backup_piece_deleted(
+          current_backup_dest, clean_info.tenant_id_, backup_piece_keys, is_backup_backup, *backup_lease_service_))) {
     LOG_WARN("failed to mark extern backup piece deleted", K(ret), K(clean_info), K(current_backup_dest));
-  } else if (!is_all_deleted) {
-    can_delete_file = false;
-  } else if (!conf_backup_dest.is_valid()) {
-    can_delete_file = true;
-  } else if (OB_FAIL(log_archive_info_mgr.get_external_backup_piece_path(
-                 conf_backup_dest, clean_info.tenant_id_, false /*is_backup_backup*/, path))) {
-    LOG_WARN("failed to get external backup piece path", K(ret), K(conf_backup_dest));
-  } else if (OB_FAIL(check_can_delete_extern_info_file(
-                 clean_info.tenant_id_, current_backup_dest, is_backup_backup, path, can_delete_file))) {
-    LOG_WARN("failed to check can delete extern info file", K(ret), K(clean_info));
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (!can_delete_file) {
-    if (!is_update_timestamp) {
-      // do nothing
-    } else if (OB_FAIL(log_archive_info_mgr.update_extern_backup_piece_file_timestamp(
-                   current_backup_dest, clean_info.tenant_id_, is_backup_backup))) {
-      LOG_WARN("failed to update piece file timestamp", K(ret));
-    }
-  } else {
-    if (is_update_timestamp) {
-      // do nothing
-    } else if (OB_FAIL(log_archive_info_mgr.delete_extern_backup_piece_file(
-                   current_backup_dest, clean_info.tenant_id_, is_backup_backup, *backup_lease_service_))) {
-      LOG_WARN("failed to delete extern backup piece file", K(ret));
-    }
-  }
   return ret;
 }
 
@@ -6023,7 +6125,8 @@ bool ObBackupDataClean::is_result_need_retry(const int32_t result)
   const int64_t MAX_RETRY_COUNT = 64;
   if (OB_NOT_INIT != result && OB_INVALID_ARGUMENT != result && OB_ERR_SYS != result && OB_INIT_TWICE != result &&
       OB_ERR_UNEXPECTED != result && OB_TENANT_HAS_BEEN_DROPPED != result && OB_NOT_SUPPORTED != result &&
-      OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED != result && OB_SUCCESS != result && OB_CANCELED != result &&
+      OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED != result && OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED != result && 
+      OB_SUCCESS != result && OB_CANCELED != result &&
       retry_count_ < MAX_RETRY_COUNT) {
     // do nothing
     // TODO() Need to consider the limit of the number of retry

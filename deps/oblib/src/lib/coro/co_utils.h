@@ -86,6 +86,11 @@ OB_INLINE uint64_t co_rdtscp(void)
   asm volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
   return virtual_timer_value;
 }
+#elif defined(__sw_64__)
+OB_INLINE uint64_t co_rdtscp(void)
+{
+  return co_current_time() * 1000;
+}
 #else
 #error arch unsupported
 #endif

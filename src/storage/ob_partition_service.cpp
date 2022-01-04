@@ -397,6 +397,8 @@ int ObPartitionService::init(const blocksstable::ObStorageEnv& env, const ObAddr
     LOG_WARN("failed to init ObTableMgr", K(ret));
   } else if (OB_FAIL(ObBuildIndexScheduler::get_instance().init())) {
     STORAGE_LOG(WARN, "fail to init ObBuildIndexScheduler", K(ret));
+  } else if (OB_FAIL(ObRetryGhostIndexScheduler::get_instance().init())) {
+    LOG_WARN("fail to init ObRetryGhostIndexScheduler", K(ret));
   } else if (OB_FAIL(ObFreezeInfoMgrWrapper::init(sql_proxy, remote_sql_proxy))) {
     STORAGE_LOG(WARN, "fail to init ObFreezeInfoSnapshotMgr", K(ret));
   } else if (OB_FAIL(garbage_collector_.init(this, txs_, schema_service, GCTX.srv_rpc_proxy_, &sql_proxy, self_addr))) {
@@ -2030,7 +2032,7 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
         ret = E(EventTable::EN_REPLAY_ADD_PARTITION_TO_PG_CLOG_AFTER_CREATE_SSTABLE) OB_SUCCESS;
 #endif
         if (OB_FAIL(ret)) {
-          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret), K(log));
+          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret));
         } else if (sstables_handle.get_count() > 0) {
           if (OB_FAIL(pg->create_pg_partition(arg.partition_key_,
                   data_info.get_publish_version(),
@@ -11602,6 +11604,9 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     common::ObMemberList member_list;
     const uint64_t fetch_tenant_id =
         is_inner_table(index_table_id) ? OB_SYS_TENANT_ID : extract_tenant_id(index_table_id);
+    const bool need_fail_list = false;
+    const int64_t cluster_id = OB_INVALID_ID;  // local cluster
+    const bool filter_flag_replica = false;
     if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(fetch_tenant_id, schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(fetch_tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_table_id, index_schema))) {
@@ -11623,7 +11628,12 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     } else if (OB_ISNULL(GCTX.pt_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "error unexpected, pt operator must not be NULL", K(ret));
-    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(), pkey.get_partition_id(), partition_info))) {
+    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(),
+                   pkey.get_partition_id(),
+                   partition_info,
+                   need_fail_list,
+                   cluster_id,
+                   filter_flag_replica))) {
       STORAGE_LOG(WARN, "fail to get partition info", K(ret), K(pkey));
     } else if (OB_FAIL(partition_info.filter(filter))) {
       STORAGE_LOG(WARN, "fail to filter partition", K(ret));

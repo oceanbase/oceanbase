@@ -1150,20 +1150,34 @@ int ObChunkDatumStore::load_next_chunk_blocks(ChunkIterator& it)
       tmp_read_size = read_size;
       chunk_size = read_size + read_off;
     }
-
     if (0 == read_size) {
       // ret end
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS !=
-          (tmp_ret = read_file(it.chunk_mem_ + read_off, tmp_read_size, it.cur_iter_pos_, it.aio_read_handle_))) {
+      if (OB_SUCCESS != (tmp_ret = read_file(it.chunk_mem_ + read_off,
+                             tmp_read_size,
+                             it.cur_iter_pos_,
+                             it.aio_read_handle_,
+                             it.file_size_,
+                             it.cur_iter_pos_))) {
         LOG_WARN("read blk info from file failed", K(tmp_ret), K_(it.cur_iter_pos));
       }
       if (OB_ITER_END != tmp_ret) {
-        LOG_WARN("unexpected status", K(ret), K(tmp_ret));
+        if (OB_UNLIKELY(OB_SUCCESS == tmp_ret)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected read succ", K(read_size), K(tmp_read_size), K(it), K(read_off));
+        } else {
+          ret = tmp_ret;
+          LOG_WARN("unexpected status", K(ret));
+        }
       } else {
         ret = OB_ITER_END;
       }
-    } else if (OB_FAIL(read_file(it.chunk_mem_ + read_off, read_size, it.cur_iter_pos_, it.aio_read_handle_))) {
+    } else if (OB_FAIL(read_file(it.chunk_mem_ + read_off,
+                   read_size,
+                   it.cur_iter_pos_,
+                   it.aio_read_handle_,
+                   it.file_size_,
+                   it.cur_iter_pos_))) {
       LOG_WARN("read blk info from file failed", K(ret), K_(it.cur_iter_pos));
     } else {
       int64_t cur_pos = 0;
@@ -1377,8 +1391,12 @@ int ObChunkDatumStore::load_next_block(ChunkIterator& it)
           if (OB_ITER_END != ret) {
             LOG_WARN("failed to aio read", K(ret));
           }
-        } else if (!enable_aio &&
-                   OB_FAIL(read_file(it.cur_iter_blk_, read_size, it.cur_iter_pos_, it.aio_read_handle_))) {
+        } else if (!enable_aio && OB_FAIL(read_file(it.cur_iter_blk_,
+                                      read_size,
+                                      it.cur_iter_pos_,
+                                      it.aio_read_handle_,
+                                      it.file_size_,
+                                      it.cur_iter_pos_))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("read blk info from file failed", K(ret), K_(it.cur_iter_pos));
           }
@@ -1420,7 +1438,9 @@ int ObChunkDatumStore::load_next_block(ChunkIterator& it)
           } else if (OB_FAIL(read_file(static_cast<void*>(it.cur_iter_blk_->payload_ + read_size - sizeof(Block)),
                          ac_size - read_size,
                          it.cur_iter_pos_ + read_size,
-                         it.aio_read_handle_))) {
+                         it.aio_read_handle_,
+                         it.file_size_,
+                         it.cur_iter_pos_))) {
             if (OB_ITER_END != ret) {
               LOG_WARN("read blk info from file failed", K(ret), K_(it.cur_iter_pos));
             }
@@ -1900,8 +1920,8 @@ int ObChunkDatumStore::write_file(void* buf, int64_t size)
   return ret;
 }
 
-int ObChunkDatumStore::read_file(
-    void* buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle& handle)
+int ObChunkDatumStore::read_file(void *buf, const int64_t size, const int64_t offset,
+    blocksstable::ObTmpFileIOHandle &handle, const int64_t file_size, const int64_t cur_pos)
 {
   int ret = OB_SUCCESS;
   int64_t timeout_ms = 0;
@@ -1918,10 +1938,13 @@ int ObChunkDatumStore::read_file(
       LOG_WARN("failed to wait write", K(ret));
     }
   }
-
-  if (OB_SUCC(ret) && size > 0) {
-    this->set_io(size, static_cast<char*>(buf));
-    io_.io_desc_.category_ = common::USER_IO;
+  if (OB_FAIL(ret)) {
+  } else if (0 >= size) {
+    CK(cur_pos >= file_size);
+    OX(ret = OB_ITER_END);
+  } else {
+    this->set_io(size, static_cast<char *>(buf));
+    io_.io_desc_.category_ = common::ObIOCategory::USER_IO;
     io_.io_desc_.wait_event_no_ = ObWaitEventIds::ROW_STORE_DISK_READ;
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.pread(io_, offset, timeout_ms, handle))) {
       if (OB_ITER_END != ret) {

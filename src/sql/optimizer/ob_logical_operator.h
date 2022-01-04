@@ -1571,7 +1571,7 @@ public:
     return type_ != log_op_def::LOG_EXCHANGE && type_ != log_op_def::LOG_GRANULE_ITERATOR &&
            type_ != log_op_def::LOG_MONITORING_DUMP && type_ != log_op_def::LOG_SORT &&
            type_ != log_op_def::LOG_SUBPLAN_FILTER && type_ != log_op_def::LOG_MATERIAL &&
-           type_ != log_op_def::LOG_JOIN_FILTER;
+           type_ != log_op_def::LOG_JOIN_FILTER && type_ != log_op_def::LOG_LINK;
   }
 
   /*

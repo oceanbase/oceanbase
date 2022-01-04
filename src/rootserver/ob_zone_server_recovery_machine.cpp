@@ -1866,8 +1866,8 @@ int ObServerRecoveryInstance::switch_state(ObRecoveryTask* task, const ZoneServe
   } else if (OB_UNLIKELY(nullptr == task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
-  } else if (OB_FAIL(OB_FAIL(persis_info_proxy.update_server_recovery_status(
-                 task->zone_, task->server_, task->svr_seq_, task->rescue_server_, task->progress_, new_progress)))) {
+  } else if (OB_FAIL(persis_info_proxy.update_server_recovery_status(
+                 task->zone_, task->server_, task->svr_seq_, task->rescue_server_, task->progress_, new_progress))) {
     LOG_WARN("fail to switch server recovery status", K(ret), "server", task->server_);
   } else {
     ZoneServerRecoveryProgress cur_progress = task->progress_;

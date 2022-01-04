@@ -3597,6 +3597,17 @@ int ObTableSchema::check_column_can_be_altered(const ObColumnSchemaV2* src_schem
             "dst",
             dst_schema->get_data_type(),
             K(ret));
+      } else if ((src_schema->get_meta_type().is_varying_len_char_type()
+                  || src_schema->get_meta_type().is_text())
+               && dst_schema->get_meta_type().is_fixed_len_char_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change to fixed length char type");
+        LOG_WARN("can't not change to fixed length char type",
+            "src",
+            src_schema->get_data_type(),
+            "dst",
+            dst_schema->get_data_type(),
+            K(ret));
       } else {
         tmp_column = get_column_schema(dst_schema->get_column_name());
         if ((NULL != tmp_column) && (tmp_column != src_schema)) {

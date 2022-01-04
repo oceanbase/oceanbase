@@ -460,6 +460,9 @@ int ObCreateTableResolver::resolve(const ParseNode& parse_tree)
         } else if (is_create_as_sel && is_mysql_mode) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
+        } else if (is_mysql_mode) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table");
         } else {
           is_temporary_table = true;
           is_oracle_temp_table_ = (is_mysql_mode == false);
@@ -1583,7 +1586,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
           } else if (is_oracle_mode() && create_table_column_count > 0) {
             if (column.is_string_type()) {
               if (column.get_meta_type().is_lob()) {
-                if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
+                if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                   LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                 }
               } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {
@@ -1626,7 +1629,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
             } else {
               if (column.is_string_type()) {
                 if (column.get_meta_type().is_lob()) {
-                  if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
+                  if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                     LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                   }
                 } else if (OB_FAIL(check_string_column_length(column, share::is_oracle_mode()))) {

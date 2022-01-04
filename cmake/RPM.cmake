@@ -17,10 +17,10 @@ list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin/oceanbase
 set(CPACK_PACKAGE_NAME "oceanbase-ce")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase CE is a distributed relational database")
 set(CPACK_PACKAGE_VENDOR "Ant Group CO., Ltd.")
-set(CPACK_PACKAGE_VERSION 3.1.1)
+set(CPACK_PACKAGE_VERSION 3.1.2)
 set(CPACK_PACKAGE_VERSION_MAJOR 3)
 set(CPACK_PACKAGE_VERSION_MINOR 1)
-set(CPACK_PACKAGE_VERSION_PATCH 1)
+set(CPACK_PACKAGE_VERSION_PATCH 2)
 set(CPACK_RPM_PACKAGE_GROUP "Applications/Databases")
 set(CPACK_RPM_PACKAGE_URL "https://open.oceanbase.com")
 set(CPACK_RPM_PACKAGE_DESCRIPTION "OceanBase CE is a distributed relational database")
@@ -47,24 +47,37 @@ install(PROGRAMS
 
 install(FILES
   tools/timezone/timezone_V1.log
+  tools/upgrade/upgrade_pre.py
+  tools/upgrade/upgrade_post.py
+  tools/upgrade/upgrade_post_checker.py
+  tools/upgrade/upgrade_checker.py
+  tools/upgrade/upgrade_cluster_health_checker.py
+  tools/upgrade/upgrade_rolling_pre.py
+  tools/upgrade/upgrade_rolling_post.py
+  tools/upgrade/priv_checker.py
+  tools/upgrade/oceanbase_upgrade_dep.yml
   DESTINATION etc
   COMPONENT server)
 
 ## oceanbase-devel
 # liboblog.so and libob_sql_proxy_parser_static.a
-set(OCEANBASE_DEVEL_LIB_FILES
-  ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
-)
-set(OCEANBASE_DEVEL_INCLUDE_FILES
-  deps/oblib/src/lib/ob_errno.h
-  deps/oblib/src/common/sql_mode/ob_sql_mode.h
-  src/sql/parser/ob_item_type.h
-  src/sql/parser/ob_sql_parser.h
-  src/sql/parser/parse_malloc.h
-  src/sql/parser/parser_proxy_func.h
-  src/sql/parser/parse_node.h
-)
+set(OCEANBASE_DEVEL_LIB_FILES "")
+set(OCEANBASE_DEVEL_INCLUDE_FILES deps/oblib/src/lib/ob_errno.h)
 set(OCEANBASE_DEVEL_BIN_FILES "")
+
+message(STATUS "OB_BUILD_LIBOB_SQL_PROXY_PARSER ${OB_BUILD_LIBOB_SQL_PROXY_PARSER}")
+if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
+  # lib
+  list(APPEND OCEANBASE_DEVEL_LIB_FILES ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a)
+
+  # headers
+  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES deps/oblib/src/common/sql_mode/ob_sql_mode.h)
+  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/sql/parser/ob_item_type.h)
+  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/sql/parser/ob_sql_parser.h)
+  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/sql/parser/parse_malloc.h)
+  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/sql/parser/parser_proxy_func.h)
+  list(APPEND OCEANBASE_DEVEL_INCLUDE_FILES src/sql/parser/parse_node.h)
+endif()
 
 if (OB_BUILD_LIBOBLOG)
   # lib
@@ -123,12 +136,14 @@ install(PROGRAMS
 set(CPACK_RPM_UTILS_DEFAULT_USER "root")
 set(CPACK_RPM_UTILS_DEFAULT_GROUP "root")
 
-install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-  ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-  DESTINATION /usr/bin
-  COMPONENT utils
-)
+if (OB_BUILD_TOOLS)
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+    ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
+    DESTINATION /usr/bin
+    COMPONENT utils
+  )
+endif()
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/utils_post.script "/sbin/ldconfig /home/admin/oceanbase/lib")
 set(CPACK_RPM_UTILS_POST_INSTALL_SCRIPT_FILE  ${CMAKE_CURRENT_BINARY_DIR}/utils_post.script)
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/utils_postun.script "/sbin/ldconfig")

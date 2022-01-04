@@ -53,7 +53,7 @@ void ObInMemoryPartitionTable::reuse()
 }
 
 int ObInMemoryPartitionTable::get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info,
-    const bool need_fetch_faillist, const int64_t cluster_id)
+    const bool need_fetch_faillist, const int64_t cluster_id, const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
   lib::ObMutexGuard guard(mutex_);
@@ -68,7 +68,6 @@ int ObInMemoryPartitionTable::get(const uint64_t table_id, const int64_t partiti
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KT(table_id), K(partition_id));
   } else {
-    const bool filter_flag_replica = true;
     if (OB_FAIL(inner_get(table_id, partition_id, filter_flag_replica, partition_info))) {
       LOG_WARN("inner_get failed", KT(table_id), K(partition_id), K(filter_flag_replica), K(ret));
     }
@@ -84,7 +83,8 @@ int ObInMemoryPartitionTable::get(const uint64_t table_id, const int64_t partiti
 }
 
 int ObInMemoryPartitionTable::prefetch_by_table_id(const uint64_t tenant_id, const uint64_t start_table_id,
-    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist)
+    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist,
+    const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
   lib::ObMutexGuard guard(mutex_);
@@ -96,7 +96,6 @@ int ObInMemoryPartitionTable::prefetch_by_table_id(const uint64_t tenant_id, con
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(tenant_id), K(ret), K(start_table_id), K(start_partition_id));
   } else {
-    const bool filter_flag_replica = true;
     const uint64_t table_id = combine_id(OB_SYS_TENANT_ID, OB_ALL_CORE_TABLE_TID);
     const int64_t partition_id = ALL_CORE_TABLE_PARTITION_ID;
     ObPartitionInfo partition_info;

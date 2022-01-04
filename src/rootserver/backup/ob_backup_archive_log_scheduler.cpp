@@ -1383,7 +1383,7 @@ int ObBackupArchiveLogScheduler::get_all_tenant_ids(
         LOG_WARN("failed to get same round log archive history infos", KR(ret));
       } else if (OB_FAIL(
                      mgr.get_all_same_round_in_progress_backup_info(*sql_proxy_, log_archive_round, his_info_list))) {
-        LOG_WARN("failed to get_all_same_round_in_progress_backup_info", KR(ret), K(round));
+        LOG_WARN("failed to get_all_same_round_in_progress_backup_info", KR(ret));
       } else if (OB_FAIL(append(info_list, cur_info_list))) {
         LOG_WARN("failed to add array", KR(ret));
       } else if (OB_FAIL(append(info_list, his_info_list))) {

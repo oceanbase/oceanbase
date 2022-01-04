@@ -70,14 +70,8 @@ int ObExprPower::calc(ObObj& result, const ObObj& obj1, const ObObj& obj2, ObExp
   } else if (obj1.is_double() && obj2.is_double()) {
     // same as oracle behavior: if at least one of the arguments is
     // binary_double, result type is double
-    double double_base = obj1.get_double();
-    double double_exponent = obj2.get_double();
-    double result_double = std::pow(double_base, double_exponent);
-    if (isinf(result_double) || isnan(result_double)) {
-      ret = OB_OPERATE_OVERFLOW;
-    } else {
-      result.set_double(result_double);
-    }
+    // keep same with static typing engine.
+    ret = ObExprPow::safe_set_double(result, std::pow(obj1.get_double(), obj2.get_double()));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("obj type should be number or double", K(obj1), K(obj2), K(ret));

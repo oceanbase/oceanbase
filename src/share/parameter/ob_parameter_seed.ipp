@@ -68,7 +68,7 @@ DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,100]",
 DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "65536", "[1024,]",
     "the size of the task queue for each tenant. Range: [1024,+∞)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0", common::ObConfigMemoryLimitChecker, "0, [8G,)",
+DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0", common::ObConfigMemoryLimitChecker, "[0M,)",
     "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. "
     "Range: 0, [8G,)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -275,8 +275,7 @@ DEF_BOOL(_enable_static_typing_engine, OB_CLUSTER_PARAMETER, "True",
     "specifies whether static typing sql execution engine is activated",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-// https://yuque.antfin-inc.com/ob/product_functionality_review/zlp56c
-DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "True",
+DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "False",
     "specifies whether allow to do some defensive checks when the query is executed",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// tenant config
@@ -519,7 +518,7 @@ DEF_TIME(get_leader_candidate_rpc_timeout, OB_CLUSTER_PARAMETER, "9s", "[2s, 180
     "the time during a get leader candidate rpc request "
     "is permitted to execute before it is terminated. Range: [2s, 180s]",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.1", "the min observer version",
+DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "3.1.2", "the min observer version",
     ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True",
     "specifies whether DDL operation is turned on. "
@@ -1190,6 +1189,9 @@ ERRSIM_DEF_BOOL(allow_major_sstable_merge, OB_CLUSTER_PARAMETER, "True", "allow_
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(trigger_reuse_table_in_table_mgr, OB_CLUSTER_PARAMETER, "False", "trigger_reuse_table_in_table_mgr",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_BOOL(fake_backup_date_for_incremental_backup, OB_CLUSTER_PARAMETER, "False",
+    "incremental backup use fake backup date",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_CAP(slog_size, OB_CLUSTER_PARAMETER, "256M", "[0M,256M]", "size of the slog file. Range: [0, 256M]",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(fake_replay_start_point, OB_CLUSTER_PARAMETER, "False", "fake_replay_start_point",
@@ -1425,7 +1427,7 @@ DEF_BOOL(_enable_plan_cache_mem_diagnosis, OB_CLUSTER_PARAMETER, "False",
 DEF_INT(_clog_aggregation_buffer_amount, OB_TENANT_PARAMETER, "0", "[0, 128]", "the amount of clog aggregation buffer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,]",
+DEF_TIME(schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,]",
     "the time interval between the schedules of schema history recyle task. "
     "Range: [0s, +∞)",
     ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -73,6 +73,7 @@ inline int call_with_new_stack(SContext& sctx)
   return ret;
 }
 
+#ifndef OB_USE_ASAN
 #define SMART_CALL(func)                                                   \
   ({                                                                       \
     int ret = OB_SUCCESS;                                                  \
@@ -100,7 +101,14 @@ inline int call_with_new_stack(SContext& sctx)
     }                                                                      \
     ret;                                                                   \
   })
-
+#else
+#define SMART_CALL(func)  \
+  ({                      \
+    int ret = OB_SUCCESS; \
+    ret = func;           \
+    ret;                  \
+  })
+#endif
 }  // end of namespace common
 }  // end of namespace oceanbase
 

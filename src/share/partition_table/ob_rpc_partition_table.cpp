@@ -50,10 +50,10 @@ int ObRpcPartitionTable::init(ObCommonRpcProxy& rpc_proxy, ObRsMgr& rs_mgr, ObSe
 }
 
 int ObRpcPartitionTable::get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info,
-    const bool need_fetch_faillist, const int64_t cluster_id)
+    const bool need_fetch_faillist, const int64_t cluster_id, const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
-  UNUSED(need_fetch_faillist);
+  UNUSEDx(need_fetch_faillist, filter_flag_replica);
   ObAddr rs_addr;
   partition_info.set_table_id(table_id);
   partition_info.set_partition_id(partition_id);
@@ -347,10 +347,11 @@ int ObRpcPartitionTable::fetch_root_partition_from_obs_v1(
 }
 
 int ObRpcPartitionTable::prefetch_by_table_id(const uint64_t tenant_id, const uint64_t start_table_id,
-    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist)
+    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist,
+    const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
-  UNUSED(need_fetch_faillist);
+  UNUSEDx(need_fetch_faillist, filter_flag_replica);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

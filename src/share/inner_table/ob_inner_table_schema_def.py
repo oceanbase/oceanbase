@@ -27478,6 +27478,7 @@ def_table_schema(
     rowkey_columns  = [],
     normal_columns  = [],
     gm_columns      = [],
+    in_tenant_space = True,
     view_definition = """SELECT
           CAST(NULL AS CHARACTER(64)) AS TRIGGER_CATALOG,
           CAST(NULL AS CHARACTER(64)) AS TRIGGER_SCHEMA,

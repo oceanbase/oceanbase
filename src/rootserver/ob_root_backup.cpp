@@ -671,6 +671,8 @@ int ObRootBackup::do_sys_tenant_backup(
   } else {
     if (OB_FAIL(add_backup_info_lock(info, updater, info_manager))) {
       LOG_WARN("failed to add backup info lock", K(ret), K(info));
+    } else if (OB_FAIL(check_server_disk_stat(info, updater.get_trans()))) {
+      LOG_WARN("failed to check server disk stat", K(ret), K(info));
     } else if (OB_FAIL(check_tenants_backup_task_failed(info, info_manager, updater.get_trans()))) {
       LOG_WARN("failed to check tenants backup task failed", K(ret), K(info));
     } else if (OB_FAIL(do_with_all_finished_info(info, updater, info_manager))) {
@@ -1176,7 +1178,7 @@ int ObRootBackup::do_extern_backup_set_infos(const ObBaseBackupInfoStruct &info,
                  inc_backup_set_id,
                  backup_dest,
                  extern_backup_info.date_,
-                 OB_BACKUP_COMPATIBLE_VERSION_V3,
+                 OB_BACKUP_CURRENT_COMPAITBLE_VERSION,
                  *backup_lease_service_))) {
     LOG_WARN("failed to init extern backup set info mgr", K(ret), K(tenant_id), K(full_backup_set_id));
   } else {
@@ -1231,7 +1233,7 @@ int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoS
                  inc_backup_set_id,
                  backup_dest,
                  extern_backup_info.date_,
-                 OB_BACKUP_COMPATIBLE_VERSION_V3,
+                 OB_BACKUP_CURRENT_COMPAITBLE_VERSION,
                  *backup_lease_service_))) {
     LOG_WARN("failed to init extern backup set info mgr", K(ret), K(tenant_id), K(full_backup_set_id));
   } else if (OB_FAIL(extern_tenant_locality_info.tenant_name_.assign(tenant_info->get_tenant_name()))) {
@@ -2895,7 +2897,7 @@ int ObRootBackup::calculate_tenant_start_replay_log_ts(const share::ObTenantBack
   const bool need_check_all_meta_files = true;
   const bool need_check_compeleted = true;
   ObArray<ObBackupMetaIndex> backup_meta_indexs;
-  ObBackupCompatibleVersion compatible = OB_BACKUP_COMPATIBLE_VERSION_V3;
+  ObBackupCompatibleVersion compatible = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
   start_replay_log_ts = 0;
 
   if (!tenant_task_info.is_valid() || ObTenantBackupTaskInfo::FINISH != tenant_task_info.status_) {
@@ -3121,6 +3123,80 @@ int ObRootBackup::do_tenant_update_task_his_and_backup_set_file(
     }
   }
   return ret;
+}
+
+int ObRootBackup::check_server_disk_stat(const ObBaseBackupInfoStruct &info, common::ObISQLClient &sys_tenant_trans)
+{
+  int ret = OB_SUCCESS;
+  ObTenantBackupTaskInfo sys_task_info;
+  ObTenantBackupTaskInfo sys_dest_task_info;
+  const ObZone zone;
+  ObArray<share::ObServerStatus> server_status_array;
+  const int64_t NO_LIMIT_PERCENT = 100;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("root backup do not init", K(ret));
+  } else if (!info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check server disk stat get invalid argument", K(ret), K(info));
+  } else if (OB_FAIL(get_tenant_backup_task(
+                 info.tenant_id_, info.backup_set_id_, info.incarnation_, sys_tenant_trans, sys_task_info))) {
+    LOG_WARN("failed to get tenant backup task", K(ret), K(info));
+  } else if (!sys_task_info.is_result_succeed()) {
+    // do nothing
+  } else if (OB_FAIL(server_mgr_->get_server_statuses(zone, server_status_array))) {
+    LOG_WARN("failed to get server statuses", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_status_array.count(); ++i) {
+      const ObServerStatus &status = server_status_array.at(i);
+      if (!status.is_active() || !status.in_service()) {
+        // do nothing
+      } else if (0 == status.resource_info_.disk_total_) {
+      } else {
+        const int64_t data_disk_usage_limit_percentage = GCONF.data_disk_usage_limit_percentage;
+        int64_t used_percent = (100 * status.resource_info_.disk_in_use_) / status.resource_info_.disk_total_;
+
+#ifdef ERRSIM
+        if (OB_SUCC(ret)) {
+          ret = E(EventTable::EN_BACKUP_SERVER_DISK_IS_FULL) OB_SUCCESS;
+          if (OB_FAIL(ret)) {
+            STORAGE_LOG(ERROR, "fake EN_BACKUP_SERVER_DISK_IS_FULL", K(ret));
+            used_percent = 100;
+            ret = OB_SUCCESS;
+          }
+        }
+#endif
+
+        if (data_disk_usage_limit_percentage != NO_LIMIT_PERCENT && used_percent >= data_disk_usage_limit_percentage) {
+          FLOG_INFO("server disk is almost full", K(ret), K(used_percent), K(status));
+          sys_dest_task_info = sys_task_info;
+          sys_dest_task_info.result_ = OB_CS_OUTOF_DISK_SPACE;
+          if (OB_FAIL(update_tenant_backup_task(sys_tenant_trans, sys_task_info, sys_dest_task_info))) {
+            LOG_WARN("failed to update tenant backup task", K(ret), K(sys_task_info), K(sys_dest_task_info));
+          } else {
+            ROOTSERVICE_EVENT_ADD("backup",
+                "backup server disk is almost full",
+                "server",
+                status.server_,
+                "disk_in_use",
+                status.resource_info_.disk_in_use_,
+                "disk_total",
+                status.resource_info_.disk_total_,
+                "result",
+                OB_CS_OUTOF_DISK_SPACE);
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObRootBackup::is_force_cancel_() const
+{
+  return GCONF.backup_dest.get_value_string().empty();
 }
 
 ObTenantBackup::ObTenantBackup()

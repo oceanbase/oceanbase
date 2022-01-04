@@ -4411,7 +4411,7 @@ int ObNumber::add_v3(const ObNumber& other, ObNumber& value, ObIAllocator& alloc
 
       if (OB_SUCC(ret)) {
         MEMSET(sum_digits, 0, sizeof(uint32_t) * OB_CALC_BUFFER_SIZE);
-        MEMCPY(sum_digits + 1, augend_digits, augend_desc.len_ * sizeof(uint32_t));
+        MEMCPY(sum_digits + 1, augend_digits, min(augend_desc.len_, OB_MAX_DECIMAL_DIGIT) * sizeof(uint32_t));
 
         // inverse traversal
         const int64_t cur_augend_exp = augend_exp - (augend_desc.len_ - 1);

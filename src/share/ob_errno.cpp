@@ -14008,6 +14008,14 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = 600;
     ORACLE_STR_ERROR[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous";
     ORACLE_STR_USER_ERROR[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous";
+    ERROR_NAME[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED";
+    MYSQL_ERRNO[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = -1;
+    SQLSTATE[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "HY000";
+    STR_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "deleting backup piece is not allowed";
+    STR_USER_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "deleting backup piece is not allowed";
+    ORACLE_ERRNO[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = 600;
+    ORACLE_STR_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "ORA-00600: internal error code, arguments: -9069, deleting backup piece is not allowed";
+    ORACLE_STR_USER_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "ORA-00600: internal error code, arguments: -9069, deleting backup piece is not allowed";
     ERROR_NAME[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "OB_NO_SUCH_FILE_OR_DIRECTORY";
     ERROR_CAUSE[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "Internal Error";
     ERROR_SOLUTION[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "Contact OceanBase Support";

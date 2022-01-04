@@ -45,9 +45,13 @@ int get_backup_copy_id_range_by_copy_level(
 enum ObBackupCompatibleVersion          // used for data backup
 { OB_BACKUP_COMPATIBLE_VERSION_V1 = 1,  // since 2.2.60
   OB_BACKUP_COMPATIBLE_VERSION_V2 = 2,  // since 2.2.77
-  OB_BACKUP_COMPATIBLE_VERSION_V3 = 3,  // since 3.1 TODO(muwei): use v3 in 3.1
+  OB_BACKUP_COMPATIBLE_VERSION_V3 = 3,  // since 3.1 before BP6
+  OB_BACKUP_COMPATIBLE_VERSION_V4 = 4,  // since 3.1 after BP6
   OB_BACKUP_COMPATIBLE_VERSION_MAX,
 };
+
+const static ObBackupCompatibleVersion OB_BACKUP_CURRENT_COMPAITBLE_VERSION =
+    ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V4;
 
 bool has_independ_inc_backup_set(const int64_t version);
 // for log archive and data backup, exclude backup lease service inner table
@@ -165,6 +169,7 @@ const char* const OB_STR_FULL_BACKUP = "full";
 const char* const OB_STR_INC_BACKUP = "inc";
 const char* const OB_STR_AUTO_DELETE_EXPIRED_BACKUP = "auto_delete_expired_backup";
 const char* const OB_STR_AUTO_UPDATE_RESERVED_BACKUP_TIMESTAMP = "_auto_update_reserved_backup_timestamp";
+const char *const OB_STR_BACKUP_RECORVERTY_WINDOW = "backup_recovery_window";
 const char* const OB_STR_BACKUP_INNER_TABLE_VERSION = "inner_table_version";
 
 const char* const OB_BACKUP_ENCRYPTION_MODE_SESSION_STR = "__ob_backup_encryption_mode__";

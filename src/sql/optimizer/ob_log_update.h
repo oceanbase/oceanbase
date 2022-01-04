@@ -51,7 +51,10 @@ public:
     return update_set_;
   }
 
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
+  virtual int inner_replace_generated_agg_expr(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs) override;
+
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet &raw_exprs) const override;
 
 private:
   virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;

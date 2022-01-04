@@ -1,6 +1,14 @@
-// Copyright 2021 OceanBase Inc. All Rights Reserved
-// Author:
-//     yanfeng <yangyi.yyy@alibaba-inc.com>
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
 
 #define USING_LOG_PREFIX SHARE
 
@@ -20,31 +28,31 @@ namespace oceanbase {
 namespace share {
 
 bool ObCmpSetPathCopyIdSmaller::operator()(
-    const share::ObSimpleBackupSetPath& lhs, const share::ObSimpleBackupSetPath& rhs)
+    const share::ObSimpleBackupSetPath &lhs, const share::ObSimpleBackupSetPath &rhs)
 {
   return lhs.copy_id_ < rhs.copy_id_;
 }
 
 bool ObCmpPiecePathCopyIdSmaller::operator()(
-    const share::ObSimpleBackupPiecePath& lhs, const share::ObSimpleBackupPiecePath& rhs)
+    const share::ObSimpleBackupPiecePath &lhs, const share::ObSimpleBackupPiecePath &rhs)
 {
   return lhs.copy_id_ < rhs.copy_id_;
 }
 
 bool ObCmpBackupPieceInfoBackupPieceId::operator()(
-    const share::ObBackupPieceInfo& lhs, const share::ObBackupPieceInfo& rhs)
+    const share::ObBackupPieceInfo &lhs, const share::ObBackupPieceInfo &rhs)
 {
   return lhs.key_.backup_piece_id_ < rhs.key_.backup_piece_id_;
 }
 
 bool ObCmpBackupSetInfoBackupSetId::operator()(
-    const share::ObBackupSetFileInfo& lhs, const share::ObBackupSetFileInfo& rhs)
+    const share::ObBackupSetFileInfo &lhs, const share::ObBackupSetFileInfo &rhs)
 {
   return lhs.backup_set_id_ < rhs.backup_set_id_;
 }
 
 int ObMultiBackupDestUtil::parse_multi_uri(
-    const common::ObString& multi_uri, common::ObArenaAllocator& allocator, common::ObArray<common::ObString>& uri_list)
+    const common::ObString &multi_uri, common::ObArenaAllocator &allocator, common::ObArray<common::ObString> &uri_list)
 {
   int ret = OB_SUCCESS;
   uri_list.reset();
@@ -53,14 +61,14 @@ int ObMultiBackupDestUtil::parse_multi_uri(
   if (multi_uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", KR(ret), K(multi_uri));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(multi_uri.length() + 1)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(multi_uri.length() + 1)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", KR(ret));
   } else {
     MEMCPY(buf, multi_uri.ptr(), multi_uri.length());
     buf[multi_uri.length()] = '\0';
     tok = buf;
-    for (char* str = tok; OB_SUCC(ret); str = NULL) {
+    for (char *str = tok; OB_SUCC(ret); str = NULL) {
       tok = ::strtok_r(str, ",", &ptr);
       if (OB_ISNULL(tok)) {
         break;
@@ -73,7 +81,7 @@ int ObMultiBackupDestUtil::parse_multi_uri(
 }
 
 int ObMultiBackupDestUtil::check_all_path_is_same_type(
-    const common::ObArray<common::ObString>& path_list, bool& is_same, ObMultiBackupPathType& type)
+    const common::ObArray<common::ObString> &path_list, bool &is_same, ObMultiBackupPathType &type)
 {
   int ret = OB_SUCCESS;
   is_same = true;
@@ -81,9 +89,12 @@ int ObMultiBackupDestUtil::check_all_path_is_same_type(
   ObMultiBackupPathType tmp_type = BACKUP_PATH_MAX;
   for (int64_t i = 0; OB_SUCC(ret) && i < path_list.count(); ++i) {
     ObBackupDest backup_dest;
-    const ObString& path = path_list.at(i);
-    if (OB_FAIL(backup_dest.set(path.ptr()))) {
-      LOG_WARN("failed to set backup path", KR(ret));
+    char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+    const ObString &path = path_list.at(i);
+    if (OB_FAIL(databuff_printf(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH, "%.*s", path.length(), path.ptr()))) {
+      LOG_WARN("failed to databuff printf", KR(ret), K(path));
+    } else if (OB_FAIL(backup_dest.set(backup_dest_str))) {
+      LOG_WARN("failed to set backup path", KR(ret), K(backup_dest_str));
     } else if (OB_FAIL(get_path_type(backup_dest.root_path_, backup_dest.storage_info_, type))) {
       LOG_WARN("failed to get path type", KR(ret), K(path));
     } else {
@@ -100,9 +111,9 @@ int ObMultiBackupDestUtil::check_all_path_is_same_type(
   return ret;
 }
 
-int ObMultiBackupDestUtil::get_backup_tenant_id(const common::ObArray<common::ObString>& url_list,
-    const ObMultiBackupPathType& type, const common::ObString& cluster_name, const int64_t cluster_id,
-    const common::ObString& tenant_name, const int64_t restore_timestamp, uint64_t& tenant_id)
+int ObMultiBackupDestUtil::get_backup_tenant_id(const common::ObArray<common::ObString> &url_list,
+    const ObMultiBackupPathType &type, const common::ObString &cluster_name, const int64_t cluster_id,
+    const common::ObString &tenant_name, const int64_t restore_timestamp, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   tenant_id = OB_INVALID_ID;
@@ -114,7 +125,7 @@ int ObMultiBackupDestUtil::get_backup_tenant_id(const common::ObArray<common::Ob
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("do not support multi cluster level backup dest for now", KR(ret), K(url_list));
     } else {
-      const common::ObString& url = url_list.at(0);
+      const common::ObString &url = url_list.at(0);
       if (OB_FAIL(inner_get_backup_tenant_id_from_tenant_name_info(
               cluster_name, cluster_id, url, tenant_name, restore_timestamp, tenant_id))) {
         LOG_WARN("failed to inner get backup tenant id", KR(ret), K(url), K(tenant_name), K(restore_timestamp));
@@ -128,10 +139,10 @@ int ObMultiBackupDestUtil::get_backup_tenant_id(const common::ObArray<common::Ob
   return ret;
 }
 
-int ObMultiBackupDestUtil::get_multi_backup_path_list(const bool is_preview, const char* cluster_name,
+int ObMultiBackupDestUtil::get_multi_backup_path_list(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
-    const common::ObArray<common::ObString>& list, common::ObArray<ObSimpleBackupSetPath>& set_list,
-    common::ObArray<ObSimpleBackupPiecePath>& piece_list)
+    const common::ObArray<common::ObString> &list, common::ObArray<ObSimpleBackupSetPath> &set_list,
+    common::ObArray<ObSimpleBackupPiecePath> &piece_list)
 {
   int ret = OB_SUCCESS;
   set_list.reset();
@@ -142,9 +153,10 @@ int ObMultiBackupDestUtil::get_multi_backup_path_list(const bool is_preview, con
     LOG_WARN("get invalid argument", KR(ret), K(tenant_id), K(restore_timestamp));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < list.count(); ++i) {
-      const ObString& backup_dest_str = list.at(i);
+      const ObString &backup_dest_str = list.at(i);
       int64_t snapshot_version = 0;
       int64_t start_replay_log_ts = 0;
+      bool is_compat_path = false;
       if (OB_FAIL(get_backup_set_list(is_preview,
               cluster_name,
               cluster_id,
@@ -153,18 +165,40 @@ int ObMultiBackupDestUtil::get_multi_backup_path_list(const bool is_preview, con
               backup_dest_str,
               set_list,
               snapshot_version,
-              start_replay_log_ts))) {
+              start_replay_log_ts,
+              is_compat_path))) {
         LOG_WARN("failed to get backup set", KR(ret), K(tenant_id), K(restore_timestamp), K(list));
-      } else if (OB_FAIL(get_backup_piece_list(is_preview,
-                     cluster_name,
-                     cluster_id,
-                     tenant_id,
-                     snapshot_version,
-                     start_replay_log_ts,
-                     restore_timestamp,
-                     backup_dest_str,
-                     piece_list))) {
-        LOG_WARN("failed to get backup piece list", KR(ret), K(tenant_id), K(restore_timestamp), K(list));
+      } else {
+        if (is_compat_path) {
+          if (OB_FAIL(get_compat_backup_piece_list(cluster_name,
+                  cluster_id,
+                  tenant_id,
+                  snapshot_version,
+                  restore_timestamp,
+                  backup_dest_str,
+                  piece_list))) {
+            LOG_WARN("failed to get compat backup piece list",
+                KR(ret),
+                K(cluster_name),
+                K(cluster_id),
+                K(tenant_id),
+                K(snapshot_version),
+                K(restore_timestamp),
+                K(backup_dest_str));
+          }
+        } else {
+          if (OB_FAIL(get_backup_piece_list(is_preview,
+                  cluster_name,
+                  cluster_id,
+                  tenant_id,
+                  snapshot_version,
+                  start_replay_log_ts,
+                  restore_timestamp,
+                  backup_dest_str,
+                  piece_list))) {
+            LOG_WARN("failed to get backup piece list", KR(ret), K(tenant_id), K(restore_timestamp), K(list));
+          }
+        }
       }
     }
   }
@@ -172,7 +206,7 @@ int ObMultiBackupDestUtil::get_multi_backup_path_list(const bool is_preview, con
 }
 
 int ObMultiBackupDestUtil::filter_duplicate_path_list(
-    common::ObArray<ObSimpleBackupSetPath>& set_list, common::ObArray<ObSimpleBackupPiecePath>& piece_list)
+    common::ObArray<ObSimpleBackupSetPath> &set_list, common::ObArray<ObSimpleBackupPiecePath> &piece_list)
 {
   int ret = OB_SUCCESS;
   ObArray<ObSimpleBackupSetPath> tmp_set_list;
@@ -183,10 +217,10 @@ int ObMultiBackupDestUtil::filter_duplicate_path_list(
   std::sort(piece_list.begin(), piece_list.end(), piece_cmp);
 
   for (int64_t i = 0; OB_SUCC(ret) && i < set_list.count(); ++i) {
-    const ObSimpleBackupSetPath& path_i = set_list.at(i);
+    const ObSimpleBackupSetPath &path_i = set_list.at(i);
     bool exist = false;
     for (int64_t j = 0; OB_SUCC(ret) && j < tmp_set_list.count(); ++j) {
-      const ObSimpleBackupSetPath& path_j = set_list.at(j);
+      const ObSimpleBackupSetPath &path_j = set_list.at(j);
       if (path_i.backup_set_id_ == path_j.backup_set_id_) {
         exist = true;
         LOG_INFO("exist same path", K(path_i), K(path_j));
@@ -208,10 +242,10 @@ int ObMultiBackupDestUtil::filter_duplicate_path_list(
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < piece_list.count(); ++i) {
-    const ObSimpleBackupPiecePath& path_i = piece_list.at(i);
+    const ObSimpleBackupPiecePath &path_i = piece_list.at(i);
     bool exist = false;
     for (int64_t j = 0; OB_SUCC(ret) && j < tmp_piece_list.count(); ++j) {
-      const ObSimpleBackupPiecePath& path_j = piece_list.at(j);
+      const ObSimpleBackupPiecePath &path_j = piece_list.at(j);
       if (path_i.backup_piece_id_ == path_j.backup_piece_id_) {
         exist = true;
         LOG_INFO("exist same path", K(path_i), K(path_j));
@@ -236,8 +270,8 @@ int ObMultiBackupDestUtil::filter_duplicate_path_list(
 }
 
 int ObMultiBackupDestUtil::check_multi_path_is_complete(const int64_t restore_timestamp,
-    common::ObArray<share::ObBackupSetFileInfo>& set_info_list,
-    common::ObArray<share::ObBackupPieceInfo>& piece_info_list, bool& is_complete)
+    common::ObArray<share::ObBackupSetFileInfo> &set_info_list,
+    common::ObArray<share::ObBackupPieceInfo> &piece_info_list, bool &is_complete)
 {
   int ret = OB_SUCCESS;
   is_complete = false;
@@ -256,8 +290,8 @@ int ObMultiBackupDestUtil::check_multi_path_is_complete(const int64_t restore_ti
 
   // check has duplicate backup set
   for (int64_t i = 0; OB_SUCC(ret) && i < set_info_list.count() - 1; ++i) {
-    const ObBackupSetFileInfo& prev = set_info_list.at(i);
-    const ObBackupSetFileInfo& next = set_info_list.at(i + 1);
+    const ObBackupSetFileInfo &prev = set_info_list.at(i);
+    const ObBackupSetFileInfo &next = set_info_list.at(i + 1);
     if (prev.backup_set_id_ == next.backup_set_id_) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("has duplicate backup set id", KR(ret), K(set_info_list));
@@ -266,7 +300,7 @@ int ObMultiBackupDestUtil::check_multi_path_is_complete(const int64_t restore_ti
   }
 
   for (int64_t i = set_info_list.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    const ObBackupSetFileInfo& info = set_info_list.at(i);
+    const ObBackupSetFileInfo &info = set_info_list.at(i);
     if (OB_SUCCESS != info.result_) {
       continue;
     } else if (ObBackupType::FULL_BACKUP == info.backup_type_.type_) {
@@ -276,7 +310,7 @@ int ObMultiBackupDestUtil::check_multi_path_is_complete(const int64_t restore_ti
       bool prev_inc_exist = false;
       const int64_t prev_inc_backup_set_id = info.prev_inc_backup_set_id_;
       for (int64_t j = i - 1; OB_SUCC(ret) && j >= 0; --j) {
-        const ObBackupSetFileInfo& prev_info = set_info_list.at(j);
+        const ObBackupSetFileInfo &prev_info = set_info_list.at(j);
         if (prev_info.backup_set_id_ == prev_inc_backup_set_id) {
           prev_inc_exist = true;
           break;
@@ -297,8 +331,8 @@ int ObMultiBackupDestUtil::check_multi_path_is_complete(const int64_t restore_ti
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < piece_info_list.count() - 1; ++i) {
-    const ObBackupPieceInfo& prev = piece_info_list.at(i);
-    const ObBackupPieceInfo& next = piece_info_list.at(i + 1);
+    const ObBackupPieceInfo &prev = piece_info_list.at(i);
+    const ObBackupPieceInfo &next = piece_info_list.at(i + 1);
     if (prev.key_.round_id_ != next.key_.round_id_) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("backup piece do not belong to same round", KR(ret), K(prev), K(next));
@@ -319,9 +353,9 @@ int ObMultiBackupDestUtil::check_multi_path_is_complete(const int64_t restore_ti
   }
 
   if (OB_SUCC(ret)) {
-    const ObBackupPieceInfo& smallest_piece = piece_info_list.at(0);
-    const ObBackupPieceInfo& largest_piece = piece_info_list.at(piece_info_list.count() - 1);
-    const ObBackupSetFileInfo& largest_set = set_info_list.at(set_info_list.count() - 1);
+    const ObBackupPieceInfo &smallest_piece = piece_info_list.at(0);
+    const ObBackupPieceInfo &largest_piece = piece_info_list.at(piece_info_list.count() - 1);
+    const ObBackupSetFileInfo &largest_set = set_info_list.at(set_info_list.count() - 1);
 
     if (restore_timestamp < largest_set.snapshot_version_) {
       ret = OB_INVALID_ARGUMENT;
@@ -349,7 +383,51 @@ int ObMultiBackupDestUtil::check_multi_path_is_complete(const int64_t restore_ti
   return ret;
 }
 
-int ObMultiBackupDestUtil::get_backup_set_info_path(const common::ObString& user_path, ObBackupPath& backup_set_path)
+int ObMultiBackupDestUtil::check_is_compat_backup_path(const char *cluster_name, const int64_t cluster_id,
+    const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const int64_t restore_timestamp,
+    int64_t &snapshot_version, bool &is_compat_path)
+{
+  int ret = OB_SUCCESS;
+  is_compat_path = false;
+  ObExternBackupInfoMgr mgr;
+  ObClusterBackupDest cluster_backup_dest;
+  ObFakeBackupLeaseService lease_service;
+  ObArray<ObExternBackupInfo> backup_info_list;
+  if (OB_INVALID_ID == tenant_id || restore_timestamp < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", KR(ret), K(tenant_id), K(restore_timestamp));
+  } else if (OB_FAIL(get_cluster_backup_dest(backup_dest, cluster_name, cluster_id, cluster_backup_dest))) {
+    LOG_WARN("failed to get cluster backup dest", KR(ret), K(backup_dest), K(cluster_name), K(cluster_id));
+  } else if (OB_FAIL(mgr.init(tenant_id, cluster_backup_dest, lease_service))) {
+    LOG_WARN("failed to init extern backup info mgr", KR(ret), K(tenant_id), K(cluster_backup_dest));
+  } else if (OB_FAIL(mgr.get_extern_backup_infos(backup_info_list))) {
+    LOG_WARN("failed to get extern backup infos", KR(ret));
+  } else {
+    bool exist = false;
+    for (int64_t i = backup_info_list.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      const ObExternBackupInfo &info = backup_info_list.at(i);
+      if (ObExternBackupInfo::SUCCESS != info.status_) {
+        // do nothing
+      } else if (info.backup_snapshot_version_ <= restore_timestamp) {
+        if (ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V1 == info.compatible_) {
+          is_compat_path = true;
+          snapshot_version = info.backup_snapshot_version_;
+        } else {
+          is_compat_path = false;
+        }
+        exist = true;
+        break;
+      }
+    }
+    if (OB_SUCC(ret) && !exist) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("do not exist backup set", KR(ret), K(tenant_id), K(restore_timestamp));
+    }
+  }
+  return ret;
+}
+
+int ObMultiBackupDestUtil::get_backup_set_info_path(const common::ObString &user_path, ObBackupPath &backup_set_path)
 {
   int ret = OB_SUCCESS;
   backup_set_path.reset();
@@ -365,7 +443,7 @@ int ObMultiBackupDestUtil::get_backup_set_info_path(const common::ObString& user
 }
 
 int ObMultiBackupDestUtil::get_backup_piece_info_path(
-    const common::ObString& user_path, ObBackupPath& backup_piece_path)
+    const common::ObString &user_path, ObBackupPath &backup_piece_path)
 {
   int ret = OB_SUCCESS;
   backup_piece_path.reset();
@@ -381,7 +459,7 @@ int ObMultiBackupDestUtil::get_backup_piece_info_path(
 }
 
 int ObMultiBackupDestUtil::get_path_type(
-    const common::ObString& user_path, const common::ObString& storage_info, ObMultiBackupPathType& type)
+    const common::ObString &user_path, const common::ObString &storage_info, ObMultiBackupPathType &type)
 {
   int ret = OB_SUCCESS;
   type = BACKUP_PATH_CLUSTER_LEVEL;
@@ -404,13 +482,13 @@ int ObMultiBackupDestUtil::get_path_type(
 }
 
 int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_set_or_piece(
-    const common::ObArray<common::ObString>& path_list, const int64_t restore_timestamp, uint64_t& tenant_id)
+    const common::ObArray<common::ObString> &path_list, const int64_t restore_timestamp, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_tenant_id = OB_INVALID_ID;
   ObStorageUtil util(false /*need retry*/);
   for (int64_t i = 0; OB_SUCC(ret) && i < path_list.count(); ++i) {
-    const ObString& path = path_list.at(i);
+    const ObString &path = path_list.at(i);
     bool is_set_path = false;
     bool is_piece_path = false;
     common::ObArenaAllocator allocator("MultiBackupDest");
@@ -423,7 +501,7 @@ int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_set_or_piece(
       LOG_WARN("failed to list files", KR(ret), K(path));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < file_names.count(); ++j) {
-        const ObString& file_name = file_names.at(j);
+        const ObString &file_name = file_names.at(j);
         if (file_name.prefix_match(OB_STR_TENANT_CLOG_SINGLE_BACKUP_PIECE_INFO)) {
           is_piece_path = true;
         } else if (file_name.prefix_match(OB_STR_SINGLE_BACKUP_SET_INFO)) {
@@ -467,7 +545,7 @@ int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_set_or_piece(
 }
 
 int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_set_info(
-    const common::ObString& url, const int64_t restore_timestamp, uint64_t& tenant_id)
+    const common::ObString &url, const int64_t restore_timestamp, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   tenant_id = OB_INVALID_ID;
@@ -493,7 +571,7 @@ int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_set_info(
 }
 
 int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_piece_info(
-    const common::ObString& url, const int64_t restore_timestamp, uint64_t& tenant_id)
+    const common::ObString &url, const int64_t restore_timestamp, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   UNUSED(restore_timestamp);
@@ -518,17 +596,20 @@ int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_piece_info(
   return ret;
 }
 
-int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_tenant_name_info(const common::ObString& cluster_name,
-    const int64_t cluster_id, const common::ObString& url, const common::ObString& tenant_name,
-    const int64_t restore_timestamp, uint64_t& tenant_id)
+int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_tenant_name_info(const common::ObString &cluster_name,
+    const int64_t cluster_id, const common::ObString &url, const common::ObString &tenant_name,
+    const int64_t restore_timestamp, uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   tenant_id = OB_INVALID_ID;
   ObClusterBackupDest cluster_backup_dest;
   ObTenantNameSimpleMgr mgr;
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
   if (OB_FAIL(mgr.init())) {
     LOG_WARN("failed to init tenant name simple mgr", KR(ret));
-  } else if (OB_FAIL(cluster_backup_dest.set(url.ptr(), cluster_name.ptr(), cluster_id, OB_START_INCARNATION))) {
+  } else if (OB_FAIL(databuff_printf(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH, "%.*s", url.length(), url.ptr()))) {
+    LOG_WARN("failed to databuff printf", KR(ret), K(url));
+  } else if (OB_FAIL(cluster_backup_dest.set(backup_dest_str, cluster_name.ptr(), cluster_id, OB_START_INCARNATION))) {
     LOG_WARN("failed to set cluster backup dest", KR(ret), K(url), K(cluster_name));
   } else if (OB_FAIL(mgr.read_backup_file(cluster_backup_dest))) {
     LOG_WARN("failed to read backup file", KR(ret), K(cluster_backup_dest));
@@ -538,8 +619,8 @@ int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_tenant_name_info(cons
   return ret;
 }
 
-int ObMultiBackupDestUtil::get_cluster_backup_dest(const ObBackupDest& backup_dest, const char* cluster_name,
-    const int64_t cluster_id, ObClusterBackupDest& cluster_backup_dest)
+int ObMultiBackupDestUtil::get_cluster_backup_dest(const ObBackupDest &backup_dest, const char *cluster_name,
+    const int64_t cluster_id, ObClusterBackupDest &cluster_backup_dest)
 {
   int ret = OB_SUCCESS;
   cluster_backup_dest.reset();
@@ -552,10 +633,10 @@ int ObMultiBackupDestUtil::get_cluster_backup_dest(const ObBackupDest& backup_de
   return ret;
 }
 
-int ObMultiBackupDestUtil::get_backup_set_list(const bool is_preview, const char* cluster_name,
+int ObMultiBackupDestUtil::get_backup_set_list(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
-    const common::ObString& backup_dest_str, common::ObArray<ObSimpleBackupSetPath>& list, int64_t& snapshot_version,
-    int64_t& start_replay_log_ts)
+    const common::ObString &backup_dest_str, common::ObArray<ObSimpleBackupSetPath> &list, int64_t &snapshot_version,
+    int64_t &start_replay_log_ts, bool &is_compat_path)
 {
   int ret = OB_SUCCESS;
   snapshot_version = 0;
@@ -582,7 +663,8 @@ int ObMultiBackupDestUtil::get_backup_set_list(const bool is_preview, const char
                  backup_dest,
                  tmp_list,
                  snapshot_version,
-                 start_replay_log_ts))) {
+                 start_replay_log_ts,
+                 is_compat_path))) {
     LOG_WARN("failed to inner get backup set list", KR(ret), K(tenant_id), K(backup_dest));
   } else if (OB_FAIL(append(list, tmp_list))) {
     LOG_WARN("failed to add array", KR(ret), K(tmp_list));
@@ -590,14 +672,15 @@ int ObMultiBackupDestUtil::get_backup_set_list(const bool is_preview, const char
   return ret;
 }
 
-int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const char* cluster_name,
+int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
-    const ObBackupDest& backup_dest, common::ObArray<ObSimpleBackupSetPath>& path_list, int64_t& snapshot_version,
-    int64_t& start_replay_log_ts)
+    const ObBackupDest &backup_dest, common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version,
+    int64_t &start_replay_log_ts, bool &is_compat_path)
 {
   int ret = OB_SUCCESS;
   path_list.reset();
   start_replay_log_ts = -1;
+  is_compat_path = false;
   ObMultiBackupPathType type;
   const ObString path(backup_dest.root_path_);
   const ObString storage_info(backup_dest.storage_info_);
@@ -609,15 +692,20 @@ int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const c
     LOG_WARN("failed to get path type", KR(ret), K(path), K(storage_info));
   } else {
     if (BACKUP_PATH_CLUSTER_LEVEL == type) {
-      if (OB_FAIL(do_get_backup_set_list_from_cluster_level(is_preview,
-              cluster_name,
-              cluster_id,
-              tenant_id,
-              restore_timestamp,
-              backup_dest,
-              path_list,
-              snapshot_version,
-              start_replay_log_ts))) {
+      if (OB_FAIL(check_is_compat_backup_path(
+              cluster_name, cluster_id, backup_dest, tenant_id, restore_timestamp, snapshot_version, is_compat_path))) {
+        LOG_WARN("failed to check is compat backup path", KR(ret), K(tenant_id), K(restore_timestamp));
+      } else if (is_compat_path) {
+        LOG_INFO("is compat backup path", K(tenant_id), K(restore_timestamp));
+      } else if (OB_FAIL(do_get_backup_set_list_from_cluster_level(is_preview,
+                     cluster_name,
+                     cluster_id,
+                     tenant_id,
+                     restore_timestamp,
+                     backup_dest,
+                     path_list,
+                     snapshot_version,
+                     start_replay_log_ts))) {
         LOG_WARN("failed to do get cluster level backup set list",
             KR(ret),
             K(is_preview),
@@ -657,10 +745,10 @@ int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const c
   return ret;
 }
 
-int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool is_preview, const char* cluster_name,
+int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
-    const ObBackupDest& backup_dest, common::ObArray<ObSimpleBackupSetPath>& path_list, int64_t& snapshot_version,
-    int64_t& start_replay_log_ts)
+    const ObBackupDest &backup_dest, common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version,
+    int64_t &start_replay_log_ts)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest cluster_backup_dest;
@@ -692,6 +780,7 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
   } else if (OB_FAIL(do_inner_get_backup_set_list(cluster_name,
                  cluster_id,
                  restore_timestamp,
+                 backup_dest,
                  file_infos,
                  path_list,
                  snapshot_version,
@@ -720,9 +809,9 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
         LOG_WARN("no backup file infos exist", K(path));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < path_list.count(); ++i) {
-          const ObSimpleBackupSetPath& simple_path = path_list.at(i);
+          const ObSimpleBackupSetPath &simple_path = path_list.at(i);
           for (int64_t j = 0; OB_SUCC(ret) && j < tmp_file_infos.count(); ++j) {
-            const ObBackupSetFileInfo& tmp_file_info = tmp_file_infos.at(j);
+            const ObBackupSetFileInfo &tmp_file_info = tmp_file_infos.at(j);
             if (OB_SUCCESS != tmp_file_info.result_) {
               // do nothing
             } else if (!ObBackupFileStatus::can_show_in_preview(tmp_file_info.file_status_)) {
@@ -740,7 +829,7 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
                                                      : tmp_file_info.prev_full_backup_set_id_;
               ObClusterBackupDest cluster_backup_dest;
               ObBackupDest tmp_backup_dest;
-              char tmp_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+              char tmp_simple_path_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
               if (OB_FAIL(cluster_backup_dest.set(
                       tmp_file_info.backup_dest_.ptr(), cluster_name, cluster_id, OB_START_INCARNATION))) {
                 LOG_WARN("failed to set cluster backup dest");
@@ -756,9 +845,9 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
                 LOG_WARN("failed to get tenant data inc backup set path", KR(ret), K(base_data_path_info));
               } else if (OB_FAIL(tmp_backup_dest.set(backup_path.get_ptr(), cluster_backup_dest.get_storage_info()))) {
                 LOG_WARN("failed to set backup dest", KR(ret), K(backup_path), K(cluster_backup_dest));
-              } else if (OB_FAIL(tmp_backup_dest.get_backup_dest_str(tmp_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+              } else if (OB_FAIL(tmp_backup_dest.get_backup_dest_str(tmp_simple_path_str, OB_MAX_BACKUP_DEST_LENGTH))) {
                 LOG_WARN("failed to get backup dest str", KR(ret));
-              } else if (OB_FAIL(new_simple_path.backup_dest_.assign(tmp_backup_dest_str))) {
+              } else if (OB_FAIL(new_simple_path.backup_dest_.assign(tmp_simple_path_str))) {
                 LOG_WARN("failed to assign str", KR(ret), K(tmp_file_info));
               } else if (OB_FAIL(tmp_path_list.push_back(new_simple_path))) {
                 LOG_WARN("failed to push back info", KR(ret), K(new_simple_path));
@@ -778,9 +867,9 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
   return ret;
 }
 
-int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char* cluster_name, const int64_t cluster_id,
-    const int64_t restore_timestamp, const ObArray<ObBackupSetFileInfo>& file_infos,
-    common::ObArray<ObSimpleBackupSetPath>& path_list, int64_t& snapshot_version, int64_t& start_replay_log_ts)
+int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char *cluster_name, const int64_t cluster_id,
+    const int64_t restore_timestamp, const ObBackupDest &backup_dest, const ObArray<ObBackupSetFileInfo> &file_infos,
+    common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts)
 {
   int ret = OB_SUCCESS;
   snapshot_version = -1;
@@ -791,7 +880,7 @@ int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char* cluster_name
     LOG_WARN("get invalid argument", KR(ret), K(restore_timestamp));
   }
   for (int64_t i = file_infos.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    const ObBackupSetFileInfo& info = file_infos.at(i);
+    const ObBackupSetFileInfo &info = file_infos.at(i);
     if (OB_SUCCESS != info.result_) {
       // do nothing
     } else if (info.snapshot_version_ <= restore_timestamp) {
@@ -808,7 +897,7 @@ int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char* cluster_name
   }
 
   for (int64_t i = idx; OB_SUCC(ret) && i >= 0; --i) {
-    const ObBackupSetFileInfo& info = file_infos.at(i);
+    const ObBackupSetFileInfo &info = file_infos.at(i);
     if (OB_SUCCESS != info.result_) {
       // do nothing
     } else if (!ObBackupFileStatus::can_show_in_preview(info.file_status_)) {
@@ -824,8 +913,11 @@ int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char* cluster_name
           info.backup_type_.is_full_backup() ? info.backup_set_id_ : info.prev_full_backup_set_id_;
       ObClusterBackupDest cluster_backup_dest;
       ObBackupDest tmp_backup_dest;
-      char tmp_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
-      if (OB_FAIL(cluster_backup_dest.set(info.backup_dest_.ptr(), cluster_name, cluster_id, OB_START_INCARNATION))) {
+      char tmp_simple_path_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+      char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+      if (OB_FAIL(backup_dest.get_backup_dest_str(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+        LOG_WARN("failed to get backup dest str", K(ret));
+      } else if (OB_FAIL(cluster_backup_dest.set(backup_dest_str, cluster_name, cluster_id, OB_START_INCARNATION))) {
         LOG_WARN("failed to set cluster backup dest");
       } else if (OB_FAIL(base_data_path_info.set(cluster_backup_dest,
                      info.tenant_id_,
@@ -838,9 +930,9 @@ int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char* cluster_name
         LOG_WARN("failed to get tenant data inc backup set path", KR(ret), K(base_data_path_info));
       } else if (OB_FAIL(tmp_backup_dest.set(backup_path.get_ptr(), cluster_backup_dest.get_storage_info()))) {
         LOG_WARN("failed to set backup dest", KR(ret), K(backup_path), K(cluster_backup_dest));
-      } else if (OB_FAIL(tmp_backup_dest.get_backup_dest_str(tmp_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+      } else if (OB_FAIL(tmp_backup_dest.get_backup_dest_str(tmp_simple_path_str, OB_MAX_BACKUP_DEST_LENGTH))) {
         LOG_WARN("failed to get backup dest str", KR(ret));
-      } else if (OB_FAIL(simple_path.backup_dest_.assign(tmp_backup_dest_str))) {
+      } else if (OB_FAIL(simple_path.backup_dest_.assign(tmp_simple_path_str))) {
         LOG_WARN("failed to assign str", KR(ret), K(info));
       } else if (OB_FAIL(path_list.push_back(simple_path))) {
         LOG_WARN("failed to push back info", KR(ret), K(simple_path));
@@ -852,10 +944,69 @@ int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char* cluster_name
   return ret;
 }
 
-int ObMultiBackupDestUtil::get_backup_piece_list(const bool is_preview, const char* cluster_name,
+int ObMultiBackupDestUtil::get_compat_backup_piece_list(const char *cluster_name, const int64_t cluster_id,
+    const uint64_t tenant_id, const int64_t snapshot_version, const int64_t restore_timestamp,
+    const common::ObString &backup_dest_str, common::ObArray<ObSimpleBackupPiecePath> &path_list)
+{
+  int ret = OB_SUCCESS;
+  path_list.reset();
+  ObLogArchiveBackupInfoMgr mgr;
+  ObExternLogArchiveBackupInfo extern_infos;
+  ObTenantLogArchiveStatus log_archive_status;
+  ObClusterBackupDest cluster_backup_dest;
+  ObBackupPath backup_path;
+  ObBackupDest tmp_backup_dest;
+  char backup_dest_buf[OB_MAX_BACKUP_DEST_LENGTH] = "";
+  char tmp_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+  ObBackupDest backup_dest;
+  ObSimpleBackupPiecePath simple_path;
+  if (OB_FAIL(databuff_printf(
+          backup_dest_buf, OB_MAX_BACKUP_DEST_LENGTH, "%.*s", backup_dest_str.length(), backup_dest_str.ptr()))) {
+    LOG_WARN("failed to databuff printf", KR(ret));
+  } else if (OB_FAIL(backup_dest.set(backup_dest_buf))) {
+    LOG_WARN("failed to set backup path", KR(ret), K(backup_dest));
+  } else if (OB_FAIL(get_cluster_backup_dest(backup_dest, cluster_name, cluster_id, cluster_backup_dest))) {
+    LOG_WARN("failed to get cluster backup dest", KR(ret), K(backup_dest), K(cluster_name), K(cluster_id));
+  } else if (OB_FAIL(mgr.read_extern_log_archive_backup_info(cluster_backup_dest, tenant_id, extern_infos))) {
+    LOG_WARN("failed to read extern log archive backup info", KR(ret), K(cluster_backup_dest), K(tenant_id));
+  } else if (OB_FAIL(extern_infos.get_log_archive_status(restore_timestamp, log_archive_status))) {
+    LOG_WARN("failed to get log archive status", KR(ret), K(restore_timestamp));
+  } else if (snapshot_version < log_archive_status.start_ts_) {
+    ret = OB_ISOLATED_BACKUP_SET;
+    LOG_WARN(
+        "log archive status is not continue with backup info", KR(ret), K(snapshot_version), K(log_archive_status));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_clog_backup_piece_dir_path(cluster_backup_dest,
+                 tenant_id,
+                 log_archive_status.round_,
+                 0 /*backup_piece_id*/,
+                 0 /*create_date*/,
+                 backup_path))) {
+    LOG_WARN("failed to get tenant clog backup piece dir path",
+        KR(ret),
+        K(cluster_backup_dest),
+        K(tenant_id),
+        K(log_archive_status));
+  } else if (OB_FAIL(tmp_backup_dest.set(backup_path.get_ptr(), cluster_backup_dest.get_storage_info()))) {
+    LOG_WARN("failed to set backup dest", KR(ret), K(backup_path), K(cluster_backup_dest));
+  } else if (OB_FAIL(tmp_backup_dest.get_backup_dest_str(tmp_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+    LOG_WARN("failed to get backup dest str", KR(ret));
+  } else if (OB_FAIL(simple_path.backup_dest_.assign(tmp_backup_dest_str))) {
+    LOG_WARN("failed to assign str", KR(ret), K(tmp_backup_dest_str));
+  } else {
+    simple_path.backup_piece_id_ = 0;
+    simple_path.copy_id_ = 0;
+    simple_path.file_status_ = ObBackupFileStatus::BACKUP_FILE_AVAILABLE;
+    if (OB_FAIL(path_list.push_back(simple_path))) {
+      LOG_WARN("failed to push back info", KR(ret), K(simple_path));
+    }
+  }
+  return ret;
+}
+
+int ObMultiBackupDestUtil::get_backup_piece_list(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t snapshot_version,
-    const int64_t start_replay_log_ts, const int64_t restore_timestamp, const common::ObString& backup_dest_str,
-    common::ObArray<ObSimpleBackupPiecePath>& list)
+    const int64_t start_replay_log_ts, const int64_t restore_timestamp, const common::ObString &backup_dest_str,
+    common::ObArray<ObSimpleBackupPiecePath> &list)
 {
   int ret = OB_SUCCESS;
   ObBackupDest backup_dest;
@@ -884,10 +1035,10 @@ int ObMultiBackupDestUtil::get_backup_piece_list(const bool is_preview, const ch
   return ret;
 }
 
-int ObMultiBackupDestUtil::do_get_backup_piece_list(const bool is_preview, const char* cluster_name,
+int ObMultiBackupDestUtil::do_get_backup_piece_list(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t snapshot_version,
-    const int64_t start_replay_log_ts, const int64_t restore_timestamp, const ObBackupDest& backup_dest,
-    common::ObArray<ObSimpleBackupPiecePath>& path_list)
+    const int64_t start_replay_log_ts, const int64_t restore_timestamp, const ObBackupDest &backup_dest,
+    common::ObArray<ObSimpleBackupPiecePath> &path_list)
 {
   int ret = OB_SUCCESS;
   path_list.reset();
@@ -957,10 +1108,10 @@ int ObMultiBackupDestUtil::do_get_backup_piece_list(const bool is_preview, const
   return ret;
 }
 
-int ObMultiBackupDestUtil::do_get_backup_piece_list_from_cluster_level(const bool is_preview, const char* cluster_name,
+int ObMultiBackupDestUtil::do_get_backup_piece_list_from_cluster_level(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t snapshot_version,
-    const int64_t start_replay_log_ts, const int64_t restore_timestamp, const ObBackupDest& backup_dest,
-    common::ObArray<ObSimpleBackupPiecePath>& path_list)
+    const int64_t start_replay_log_ts, const int64_t restore_timestamp, const ObBackupDest &backup_dest,
+    common::ObArray<ObSimpleBackupPiecePath> &path_list)
 {
   int ret = OB_SUCCESS;
   ObString path(backup_dest.root_path_);
@@ -1008,6 +1159,7 @@ int ObMultiBackupDestUtil::do_get_backup_piece_list_from_cluster_level(const boo
                    snapshot_version,
                    start_replay_log_ts,
                    restore_timestamp,
+                   backup_dest,
                    piece_array,
                    path_list))) {
       LOG_WARN("failed to do inner get backup piece list", KR(ret), K(restore_timestamp));
@@ -1035,9 +1187,9 @@ int ObMultiBackupDestUtil::do_get_backup_piece_list_from_cluster_level(const boo
           LOG_WARN("no piece info exist");
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < path_list.count(); ++i) {
-            const ObSimpleBackupPiecePath& simple_path = path_list.at(i);
+            const ObSimpleBackupPiecePath &simple_path = path_list.at(i);
             for (int64_t j = 0; OB_SUCC(ret) && j < tmp_piece_array.count(); ++j) {
-              const ObBackupPieceInfo& tmp_piece = tmp_piece_array.at(j);
+              const ObBackupPieceInfo &tmp_piece = tmp_piece_array.at(j);
               if (!ObBackupFileStatus::can_show_in_preview(tmp_piece.file_status_)) {
                 LOG_INFO("backup piece info cannot list in preview", K(tmp_piece));
               } else if (simple_path.backup_piece_id_ == tmp_piece.key_.backup_piece_id_ &&
@@ -1050,7 +1202,8 @@ int ObMultiBackupDestUtil::do_get_backup_piece_list_from_cluster_level(const boo
                 ObBackupPath backup_path;
                 ObClusterBackupDest cluster_backup_dest;
                 ObBackupDest tmp_backup_dest;
-                char tmp_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+                char tmp_simple_path_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+                char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
                 if (OB_FAIL(cluster_backup_dest.set(
                         tmp_piece.backup_dest_.ptr(), cluster_name, cluster_id, OB_START_INCARNATION))) {
                   LOG_WARN("failed to set cluster backup dest", KR(ret));
@@ -1065,9 +1218,9 @@ int ObMultiBackupDestUtil::do_get_backup_piece_list_from_cluster_level(const boo
                                tmp_backup_dest.set(backup_path.get_ptr(), cluster_backup_dest.get_storage_info()))) {
                   LOG_WARN("failed to set backup dest", KR(ret), K(backup_path), K(cluster_backup_dest));
                 } else if (OB_FAIL(
-                               tmp_backup_dest.get_backup_dest_str(tmp_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+                               tmp_backup_dest.get_backup_dest_str(tmp_simple_path_str, OB_MAX_BACKUP_DEST_LENGTH))) {
                   LOG_WARN("failed to get backup dest str", KR(ret));
-                } else if (OB_FAIL(new_simple_path.backup_dest_.assign(tmp_backup_dest_str))) {
+                } else if (OB_FAIL(new_simple_path.backup_dest_.assign(tmp_simple_path_str))) {
                   LOG_WARN("failed to assign str", KR(ret), K(tmp_piece));
                 } else if (OB_FAIL(tmp_path_list.push_back(new_simple_path))) {
                   LOG_WARN("failed to push back new simple path", KR(ret), K(new_simple_path));
@@ -1089,9 +1242,10 @@ int ObMultiBackupDestUtil::do_get_backup_piece_list_from_cluster_level(const boo
   return ret;
 }
 
-int ObMultiBackupDestUtil::do_inner_get_backup_piece_list(const char* cluster_name, const int64_t cluster_id,
+int ObMultiBackupDestUtil::do_inner_get_backup_piece_list(const char *cluster_name, const int64_t cluster_id,
     const int64_t snapshot_version, const int64_t start_replay_log_ts, const int64_t restore_timestamp,
-    const common::ObArray<ObBackupPieceInfo>& piece_array, common::ObArray<ObSimpleBackupPiecePath>& path_list)
+    const ObBackupDest &backup_dest, const common::ObArray<ObBackupPieceInfo> &piece_array,
+    common::ObArray<ObSimpleBackupPiecePath> &path_list)
 {
   int ret = OB_SUCCESS;
   int64_t idx = -1;
@@ -1103,7 +1257,7 @@ int ObMultiBackupDestUtil::do_inner_get_backup_piece_list(const char* cluster_na
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < piece_array.count(); ++i) {
-    const ObBackupPieceInfo& piece = piece_array.at(i);
+    const ObBackupPieceInfo &piece = piece_array.at(i);
     if (round_id != piece.key_.round_id_) {
       round_id = piece.key_.round_id_;
       start_ts = piece.start_ts_;  // the start_ts of first piece in one round
@@ -1120,7 +1274,7 @@ int ObMultiBackupDestUtil::do_inner_get_backup_piece_list(const char* cluster_na
   }
 
   for (int64_t i = idx; OB_SUCC(ret) && i >= 0; --i) {
-    const ObBackupPieceInfo& piece = piece_array.at(i);
+    const ObBackupPieceInfo &piece = piece_array.at(i);
     if (round_id != piece.key_.round_id_ || piece.max_ts_ < start_replay_log_ts) {
       break;
     } else if (!ObBackupFileStatus::can_show_in_preview(piece.file_status_)) {
@@ -1134,8 +1288,11 @@ int ObMultiBackupDestUtil::do_inner_get_backup_piece_list(const char* cluster_na
       ObBackupPath backup_path;
       ObClusterBackupDest cluster_backup_dest;
       ObBackupDest tmp_backup_dest;
-      char tmp_backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
-      if (OB_FAIL(cluster_backup_dest.set(piece.backup_dest_.ptr(), cluster_name, cluster_id, OB_START_INCARNATION))) {
+      char tmp_simple_path_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+      char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
+      if (OB_FAIL(backup_dest.get_backup_dest_str(backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+        LOG_WARN("failed to get backup dest str", K(ret));
+      } else if (OB_FAIL(cluster_backup_dest.set(backup_dest_str, cluster_name, cluster_id, OB_START_INCARNATION))) {
         LOG_WARN("failed to set cluster backup dest", KR(ret));
       } else if (OB_FAIL(ObBackupPathUtil::get_tenant_clog_backup_piece_dir_path(cluster_backup_dest,
                      piece.key_.tenant_id_,
@@ -1146,9 +1303,9 @@ int ObMultiBackupDestUtil::do_inner_get_backup_piece_list(const char* cluster_na
         LOG_WARN("failed to get cluster clog prefix path", KR(ret));
       } else if (OB_FAIL(tmp_backup_dest.set(backup_path.get_ptr(), cluster_backup_dest.get_storage_info()))) {
         LOG_WARN("failed to set backup dest", KR(ret), K(backup_path), K(cluster_backup_dest));
-      } else if (OB_FAIL(tmp_backup_dest.get_backup_dest_str(tmp_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
+      } else if (OB_FAIL(tmp_backup_dest.get_backup_dest_str(tmp_simple_path_str, OB_MAX_BACKUP_DEST_LENGTH))) {
         LOG_WARN("failed to get backup dest str", KR(ret));
-      } else if (OB_FAIL(simple_path.backup_dest_.assign(tmp_backup_dest_str))) {
+      } else if (OB_FAIL(simple_path.backup_dest_.assign(tmp_simple_path_str))) {
         LOG_WARN("failed to assign str", KR(ret), K(piece));
       } else if (OB_FAIL(path_list.push_back(simple_path))) {
         LOG_WARN("failed to push back info", KR(ret), K(simple_path));
@@ -1158,8 +1315,8 @@ int ObMultiBackupDestUtil::do_inner_get_backup_piece_list(const char* cluster_na
   return ret;
 }
 
-int ObMultiBackupDestUtil::may_need_replace_active_piece_info(const ObClusterBackupDest& dest,
-    const common::ObString& storage_info, common::ObArray<ObBackupPieceInfo>& piece_array)
+int ObMultiBackupDestUtil::may_need_replace_active_piece_info(const ObClusterBackupDest &dest,
+    const common::ObString &storage_info, common::ObArray<ObBackupPieceInfo> &piece_array)
 {
   int ret = OB_SUCCESS;
   ObBackupPieceInfo last_piece;
@@ -1201,9 +1358,9 @@ int ObMultiBackupDestUtil::may_need_replace_active_piece_info(const ObClusterBac
   return ret;
 }
 
-int ObMultiBackupDestUtil::check_backup_path_is_backup_backup(const char* cluster_name, const int64_t cluster_id,
-    const common::ObString& root_path, const common::ObString& storage_info, const uint64_t tenant_id,
-    bool& is_backup_backup)
+int ObMultiBackupDestUtil::check_backup_path_is_backup_backup(const char *cluster_name, const int64_t cluster_id,
+    const common::ObString &root_path, const common::ObString &storage_info, const uint64_t tenant_id,
+    bool &is_backup_backup)
 {
   int ret = OB_SUCCESS;
   is_backup_backup = false;

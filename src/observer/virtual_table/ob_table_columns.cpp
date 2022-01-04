@@ -373,7 +373,22 @@ int ObTableColumns::fill_row_cells(const ObTableSchema& table_schema, const ObCo
         if (column_schema.is_autoincrement()) {
           extra_val = ObString::make_string("auto_increment");
         } else if (column_schema.is_on_update_current_timestamp()) {
-          extra_val = ObString::make_string(N_UPDATE_CURRENT_TIMESTAMP);
+          int16_t scale = column_schema.get_data_scale();
+          if (0 == scale) {
+            extra_val = ObString::make_string(N_UPDATE_CURRENT_TIMESTAMP);
+          } else {
+            char* buf = NULL;
+            int64_t buf_len = 32;
+            int64_t pos = 0;
+            if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator_->alloc(buf_len))))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              SERVER_LOG(WARN, "fail to allocate memory", K(ret));
+            } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s(%d)", N_UPDATE_CURRENT_TIMESTAMP, scale))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to print on update current_tiemstamp", K(ret));
+            } else {
+              extra_val = ObString(static_cast<int32_t>(pos), buf);
+            }
+          }
         } else if (column_schema.is_virtual_generated_column()) {
           extra_val = ObString::make_string("VIRTUAL GENERATED");
         } else if (column_schema.is_stored_generated_column()) {

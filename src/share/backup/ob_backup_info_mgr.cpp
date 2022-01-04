@@ -349,7 +349,9 @@ int ObBackupInfoMgr::get_log_archive_backup_info(ObLogArchiveBackupInfo &info)
   int ret = OB_SUCCESS;
   ObNonFrozenBackupPieceInfo backup_piece;
   if (OB_FAIL(get_log_archive_backup_info_and_piece(info, backup_piece))) {
-    LOG_WARN("failed to get_log_archive_backup_info_and_piece", K(ret));
+    if (OB_EAGAIN != ret || REACH_TIME_INTERVAL(OB_DEFAULT_BACKUP_LOG_INTERVAL)) {
+      LOG_WARN("failed to get_log_archive_backup_info_and_piece", K(ret));
+    }
   }
   return ret;
 }

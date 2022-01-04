@@ -501,7 +501,7 @@ int ObTransService::half_stmt_commit(const ObTransDesc& trans_desc, const ObPart
   } else {
     part_ctx = static_cast<ObPartTransCtx*>(ctx);
     if (OB_FAIL(part_ctx->half_stmt_commit())) {
-      TRANS_LOG(WARN, "half stmt commit error", K(ret), K(trans_desc), K(partition), K(*part_ctx));
+      TRANS_LOG(WARN, "half stmt commit error", K(ret), K(trans_desc), K(partition));
     }
     (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
   }
@@ -1409,7 +1409,7 @@ int ObTransService::start_stmt(const ObStmtParam& stmt_param, ObTransDesc& trans
         if (OB_TRANS_XA_BRANCH_FAIL == ret) {
           TRANS_LOG(INFO, "xa trans has terminated", K(ret), K(trans_desc));
         } else {
-          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret), K(*sche_ctx));
+          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret));
         }
       } else if (OB_SUCCESS != (ret = sche_ctx->xa_try_global_lock(xid))) {
         // ret = OB_TRANS_STMT_NEED_RETRY;
@@ -4188,10 +4188,10 @@ int ObTransService::can_replay_redo_(
           need_replay_redo = true;
         } else {
           need_replay_redo = false;
-          TRANS_LOG(INFO, "no need to replay this big row redo log", K(meta), K(*part_ctx));
+          TRANS_LOG(INFO, "no need to replay this big row redo log", K(meta));
         }
       } else {
-        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta), K(*part_ctx));
+        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta));
         ret = OB_ERR_UNEXPECTED;
       }
     }
@@ -4934,7 +4934,7 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
     } else {
       part_ctx = static_cast<ObPartTransCtx*>(ctx);
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = part_ctx->get_memtable_ctx()->sub_trans_end(false)))) {
-        TRANS_LOG(WARN, "sub trans abort error", K(tmp_ret), K(partition), K(log_id), K(*part_ctx));
+        TRANS_LOG(WARN, "sub trans abort error", K(tmp_ret), K(partition), K(log_id));
       }
       (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
     }
@@ -8267,8 +8267,7 @@ int ObTransService::handle_elr_callback_(const int64_t task_type, const ObPartit
           K(partition),
           K(trans_id),
           K(prev_or_next_trans_id),
-          K(state),
-          K(*part_ctx));
+          K(state));
     }
     (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
   }
@@ -8813,7 +8812,7 @@ int ObTransService::xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStm
     TRANS_LOG(WARN, "invalid argument", K(ret), K(trans_desc));
   } else if (OB_ISNULL(sche_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "xa trans sche ctx is null", K(ret), K(*sche_ctx), K(trans_desc));
+    TRANS_LOG(WARN, "xa trans sche ctx is null", K(ret), K(trans_desc));
   } else if (OB_FAIL(trans_desc.set_cur_stmt_expired_time(expired_time))) {
     TRANS_LOG(WARN, "set statement expired time error", KR(ret), K(trans_desc), K(expired_time));
   } else if (sche_ctx->is_xa_tightly_coupled()) {
@@ -8823,7 +8822,7 @@ int ObTransService::xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStm
         if (OB_TRANS_XA_BRANCH_FAIL == ret) {
           TRANS_LOG(INFO, "xa trans has terminated", K(ret), K(trans_desc));
         } else {
-          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret), K(*sche_ctx));
+          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret));
         }
       } else {
         int64_t retry_times = 0;

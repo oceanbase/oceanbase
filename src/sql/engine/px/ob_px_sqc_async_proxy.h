@@ -57,7 +57,6 @@ public:
     is_timeout_ = false;
     is_invalid_ = false;
     is_visited_ = false;
-    need_retry_ = false;
   }
   void set_visited(bool value)
   {
@@ -83,14 +82,6 @@ public:
   {
     return is_processed_;
   }
-  void set_retry(bool value)
-  {
-    need_retry_ = value;
-  }
-  bool need_retry() const
-  {
-    return need_retry_;
-  }
   const obrpc::ObRpcResultCode get_ret_code() const
   {
     return rcode_;
@@ -113,8 +104,7 @@ private:
   bool is_timeout_;
   bool is_invalid_;
   bool is_visited_;
-  bool need_retry_;
-  ObThreadCond& cond_;
+  ObThreadCond &cond_;
   ObCurTraceId::TraceId trace_id_;
 };
 
@@ -160,7 +150,6 @@ private:
   void destroy();
   // asynchronously request a single sqc rpc task
   int launch_one_rpc_request(int64_t idx, ObSqcAsyncCB* cb);
-  bool check_for_retry(ObSqcAsyncCB& callback);
   void fail_process();
 
 private:

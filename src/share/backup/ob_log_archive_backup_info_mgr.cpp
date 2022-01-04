@@ -58,11 +58,11 @@ int64_t ObExternLogArchiveBackupInfo::get_write_buf_size() const
   return size;
 }
 
-int ObExternLogArchiveBackupInfo::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternLogArchiveBackupInfo::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -90,7 +90,7 @@ int ObExternLogArchiveBackupInfo::write_buf(char* buf, const int64_t buf_len, in
   return ret;
 }
 
-int ObExternLogArchiveBackupInfo::read_buf(const char* buf, const int64_t buf_len)
+int ObExternLogArchiveBackupInfo::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -99,7 +99,7 @@ int ObExternLogArchiveBackupInfo::read_buf(const char* buf, const int64_t buf_le
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -115,7 +115,7 @@ int ObExternLogArchiveBackupInfo::read_buf(const char* buf, const int64_t buf_le
   return ret;
 }
 
-int ObExternLogArchiveBackupInfo::update(const ObTenantLogArchiveStatus& status)
+int ObExternLogArchiveBackupInfo::update(const ObTenantLogArchiveStatus &status)
 {
   int ret = OB_SUCCESS;
 
@@ -129,7 +129,7 @@ int ObExternLogArchiveBackupInfo::update(const ObTenantLogArchiveStatus& status)
       FLOG_INFO("add first new status", K(status));
     }
   } else {
-    ObTenantLogArchiveStatus& last = status_array_.at(status_array_.count() - 1);
+    ObTenantLogArchiveStatus &last = status_array_.at(status_array_.count() - 1);
 
     if (last.incarnation_ != status.incarnation_) {
       ret = OB_NOT_SUPPORTED;
@@ -166,7 +166,7 @@ int ObExternLogArchiveBackupInfo::update(const ObTenantLogArchiveStatus& status)
   return ret;
 }
 
-int ObExternLogArchiveBackupInfo::get_last(ObTenantLogArchiveStatus& status)
+int ObExternLogArchiveBackupInfo::get_last(ObTenantLogArchiveStatus &status)
 {
   int ret = OB_SUCCESS;
   status.reset();
@@ -180,14 +180,14 @@ int ObExternLogArchiveBackupInfo::get_last(ObTenantLogArchiveStatus& status)
 }
 
 int ObExternLogArchiveBackupInfo::get_log_archive_status(
-    const int64_t restore_timestamp, ObTenantLogArchiveStatus& status)
+    const int64_t restore_timestamp, ObTenantLogArchiveStatus &status)
 {
   int ret = OB_LOG_ARCHIVE_BACKUP_INFO_NOT_EXIST;
 
   status.reset();
 
   for (int64_t i = 0; i < status_array_.count(); ++i) {
-    const ObTenantLogArchiveStatus& cur_status = status_array_.at(i);
+    const ObTenantLogArchiveStatus &cur_status = status_array_.at(i);
     if (cur_status.start_ts_ <= restore_timestamp && restore_timestamp <= cur_status.checkpoint_ts_) {
       status = status_array_.at(i);
       ret = OB_SUCCESS;
@@ -201,7 +201,7 @@ int ObExternLogArchiveBackupInfo::get_log_archive_status(
   return ret;
 }
 
-int ObExternLogArchiveBackupInfo::get_log_archive_status(ObIArray<ObTenantLogArchiveStatus>& status_array)
+int ObExternLogArchiveBackupInfo::get_log_archive_status(ObIArray<ObTenantLogArchiveStatus> &status_array)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(status_array.assign(status_array_))) {
@@ -210,13 +210,13 @@ int ObExternLogArchiveBackupInfo::get_log_archive_status(ObIArray<ObTenantLogArc
   return ret;
 }
 
-int ObExternLogArchiveBackupInfo::mark_log_archive_deleted(const ObIArray<int64_t>& round_ids)
+int ObExternLogArchiveBackupInfo::mark_log_archive_deleted(const ObIArray<int64_t> &round_ids)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < round_ids.count(); ++i) {
     const int64_t round_id = round_ids.at(i);
     for (int64_t j = 0; OB_SUCC(ret) && j < status_array_.count(); ++j) {
-      ObTenantLogArchiveStatus& tenant_archive_status = status_array_.at(j);
+      ObTenantLogArchiveStatus &tenant_archive_status = status_array_.at(j);
       if (tenant_archive_status.round_ != round_id) {
         // do nothing
       } else {
@@ -228,13 +228,13 @@ int ObExternLogArchiveBackupInfo::mark_log_archive_deleted(const ObIArray<int64_
   return ret;
 }
 
-int ObExternLogArchiveBackupInfo::delete_marked_log_archive_info(const common::ObIArray<int64_t>& round_ids)
+int ObExternLogArchiveBackupInfo::delete_marked_log_archive_info(const common::ObIArray<int64_t> &round_ids)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < round_ids.count(); ++i) {
     const int64_t round_id = round_ids.at(i);
     for (int64_t j = status_array_.count() - 1; OB_SUCC(ret) && j >= 0; --j) {
-      ObTenantLogArchiveStatus& tenant_archive_status = status_array_.at(j);
+      ObTenantLogArchiveStatus &tenant_archive_status = status_array_.at(j);
       if (tenant_archive_status.is_mark_deleted_ && round_id == tenant_archive_status.round_) {
         if (OB_FAIL(status_array_.remove(j))) {
           LOG_WARN("failed to remove tenant archive status", K(ret), K(tenant_archive_status));
@@ -276,11 +276,11 @@ int64_t ObExternalBackupPieceInfo::get_write_buf_size() const
   return size;
 }
 
-int ObExternalBackupPieceInfo::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternalBackupPieceInfo::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -308,7 +308,7 @@ int ObExternalBackupPieceInfo::write_buf(char* buf, const int64_t buf_len, int64
   return ret;
 }
 
-int ObExternalBackupPieceInfo::read_buf(const char* buf, const int64_t buf_len)
+int ObExternalBackupPieceInfo::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -317,7 +317,7 @@ int ObExternalBackupPieceInfo::read_buf(const char* buf, const int64_t buf_len)
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -333,7 +333,7 @@ int ObExternalBackupPieceInfo::read_buf(const char* buf, const int64_t buf_len)
   return ret;
 }
 
-int ObExternalBackupPieceInfo::update(const share::ObBackupPieceInfo& piece)  // update or insert
+int ObExternalBackupPieceInfo::update(const share::ObBackupPieceInfo &piece)  // update or insert
 {
   int ret = OB_SUCCESS;
   common::ObSArray<share::ObBackupPieceInfo> tmp_array;
@@ -344,7 +344,7 @@ int ObExternalBackupPieceInfo::update(const share::ObBackupPieceInfo& piece)  //
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < piece_array_.count(); ++i) {
-    share::ObBackupPieceInfo& cur_piece = piece_array_.at(i);
+    share::ObBackupPieceInfo &cur_piece = piece_array_.at(i);
     if (piece.key_ == cur_piece.key_) {
       is_added = true;
       FLOG_INFO("update exist piece for external piece info", K(cur_piece), K(piece));
@@ -393,7 +393,7 @@ int ObExternalBackupPieceInfo::update(const share::ObBackupPieceInfo& piece)  //
   return ret;
 }
 
-int ObExternalBackupPieceInfo::get_piece_array(common::ObIArray<share::ObBackupPieceInfo>& piece_array)
+int ObExternalBackupPieceInfo::get_piece_array(common::ObIArray<share::ObBackupPieceInfo> &piece_array)
 {
   int ret = OB_SUCCESS;
   piece_array.reset();
@@ -405,15 +405,15 @@ int ObExternalBackupPieceInfo::get_piece_array(common::ObIArray<share::ObBackupP
 }
 
 int ObExternalBackupPieceInfo::mark_deleting(
-    const common::ObIArray<ObBackupPieceInfoKey>& piece_keys)  // update or insert
+    const common::ObIArray<ObBackupPieceInfoKey> &piece_keys)  // update or insert
 {
   int ret = OB_SUCCESS;
   const ObBackupFileStatus::STATUS dest_file_status = ObBackupFileStatus::BACKUP_FILE_DELETING;
   for (int64_t i = 0; OB_SUCC(ret) && i < piece_keys.count(); ++i) {
-    const ObBackupPieceInfoKey& piece_key = piece_keys.at(i);
+    const ObBackupPieceInfoKey &piece_key = piece_keys.at(i);
     for (int64_t j = 0; OB_SUCC(ret) && j < piece_array_.count(); ++j) {
-      ObBackupPieceInfo& cur_piece = piece_array_.at(j);
-      const ObBackupPieceInfoKey& cur_piece_key = cur_piece.key_;
+      ObBackupPieceInfo &cur_piece = piece_array_.at(j);
+      const ObBackupPieceInfoKey &cur_piece_key = cur_piece.key_;
       if (cur_piece_key == piece_key) {
         if (ObBackupFileStatus::BACKUP_FILE_DELETING == cur_piece.file_status_ ||
             ObBackupFileStatus::BACKUP_FILE_DELETED == cur_piece.file_status_) {
@@ -428,15 +428,15 @@ int ObExternalBackupPieceInfo::mark_deleting(
   return ret;
 }
 
-int ObExternalBackupPieceInfo::mark_deleted(const common::ObIArray<share::ObBackupPieceInfoKey>& piece_keys)
+int ObExternalBackupPieceInfo::mark_deleted(const common::ObIArray<share::ObBackupPieceInfoKey> &piece_keys)
 {
   int ret = OB_SUCCESS;
   const ObBackupFileStatus::STATUS dest_file_status = ObBackupFileStatus::BACKUP_FILE_DELETED;
   for (int64_t i = 0; OB_SUCC(ret) && i < piece_keys.count(); ++i) {
-    const ObBackupPieceInfoKey& piece_key = piece_keys.at(i);
+    const ObBackupPieceInfoKey &piece_key = piece_keys.at(i);
     for (int64_t j = 0; OB_SUCC(ret) && j < piece_array_.count(); ++j) {
-      ObBackupPieceInfo& cur_piece = piece_array_.at(j);
-      const ObBackupPieceInfoKey& cur_piece_key = cur_piece.key_;
+      ObBackupPieceInfo &cur_piece = piece_array_.at(j);
+      const ObBackupPieceInfoKey &cur_piece_key = cur_piece.key_;
       if (cur_piece_key == piece_key) {
         if (ObBackupFileStatus::BACKUP_FILE_DELETED == cur_piece.file_status_) {
           // do nothing
@@ -454,15 +454,15 @@ int ObExternalBackupPieceInfo::mark_deleted(const common::ObIArray<share::ObBack
 
 bool ObExternalBackupPieceInfo::is_all_piece_info_deleted() const
 {
-  bool ret = true;
-  for (int64_t i = 0; OB_SUCC(ret) && i < piece_array_.count(); ++i) {
-    const ObBackupPieceInfo& cur_piece = piece_array_.at(i);
+  bool bool_ret = true;
+  for (int64_t i = 0; i < piece_array_.count(); ++i) {
+    const ObBackupPieceInfo &cur_piece = piece_array_.at(i);
     if (ObBackupFileStatus::BACKUP_FILE_DELETED != cur_piece.file_status_) {
-      ret = false;
+      bool_ret = false;
       break;
     }
   }
-  return ret;
+  return bool_ret;
 }
 
 ObLogArchiveBackupInfoMgr::ObLogArchiveBackupInfoMgr() : is_backup_backup_(false)
@@ -471,8 +471,8 @@ ObLogArchiveBackupInfoMgr::ObLogArchiveBackupInfoMgr() : is_backup_backup_(false
 ObLogArchiveBackupInfoMgr::~ObLogArchiveBackupInfoMgr()
 {}
 
-int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info(common::ObISQLClient& sql_client, const bool for_update,
-    const uint64_t tenant_id, const ObBackupInnerTableVersion& version, ObLogArchiveBackupInfo& info)
+int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info(common::ObISQLClient &sql_client, const bool for_update,
+    const uint64_t tenant_id, const ObBackupInnerTableVersion &version, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   info.reset();
@@ -497,7 +497,7 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info(common::ObISQLClient&
 
 // only used to read
 int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_compatible(
-    common::ObISQLClient& sql_client, const uint64_t tenant_id, ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const uint64_t tenant_id, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   const bool for_update = false;
@@ -525,7 +525,7 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_compatible(
 }
 
 // create sys log archive status if not exist
-int ObLogArchiveBackupInfoMgr::check_sys_log_archive_status(common::ObISQLClient& sql_client)
+int ObLogArchiveBackupInfoMgr::check_sys_log_archive_status(common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfo info;
@@ -566,7 +566,7 @@ int ObLogArchiveBackupInfoMgr::check_sys_log_archive_status(common::ObISQLClient
 }
 
 int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_v1_(
-    common::ObISQLClient& sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   info.reset();
@@ -588,14 +588,14 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_v1_(
 }
 
 int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_v2_(
-    common::ObISQLClient& sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
-    const char* dest_name = is_backup_backup_ ? OB_STR_BACKUP_BACKUP_DEST : OB_STR_BACKUP_DEST;
+    sqlclient::ObMySQLResult *result = NULL;
+    const char *dest_name = is_backup_backup_ ? OB_STR_BACKUP_BACKUP_DEST : OB_STR_BACKUP_DEST;
 
     if (OB_FAIL(sql.assign_fmt("select  %s, %s, %s, %s, time_to_usec(%s) %s, time_to_usec(%s) %s, status",
             dest_name,
@@ -636,14 +636,14 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_v2_(
 }
 
 int ObLogArchiveBackupInfoMgr::get_log_archive_backup_backup_info(
-    common::ObISQLClient& sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const uint64_t real_tenant_id = OB_SYS_TENANT_ID;
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
 
     if (OB_FAIL(sql.assign_fmt(
             "select %s, %s, %s, %s, time_to_usec(%s) %s, time_to_usec(%s) %s, status from %s where tenant_id = %ld",
@@ -696,7 +696,7 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_backup_backup_info(
 }
 
 int ObLogArchiveBackupInfoMgr::get_log_archive_checkpoint(
-    common::ObISQLClient& sql_client, const uint64_t tenant_id, int64_t& checkpoint_ts)
+    common::ObISQLClient &sql_client, const uint64_t tenant_id, int64_t &checkpoint_ts)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfo info;
@@ -722,13 +722,13 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_checkpoint(
 }
 
 int ObLogArchiveBackupInfoMgr::get_create_tenant_timestamp(
-    common::ObISQLClient& sql_client, const uint64_t tenant_id, int64_t& create_ts)
+    common::ObISQLClient &sql_client, const uint64_t tenant_id, int64_t &create_ts)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
     create_ts = 0;
 
     if (!sql_client.is_active() || tenant_id == OB_INVALID_ID) {
@@ -763,13 +763,13 @@ int ObLogArchiveBackupInfoMgr::get_create_tenant_timestamp(
 }
 
 int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_with_lock_(
-    common::ObISQLClient& sql_client, const uint64_t tenant_id, ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const uint64_t tenant_id, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
     char name_str[OB_INNER_TABLE_DEFAULT_KEY_LENTH] = {0};
     char value_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = {0};
     int real_length = 0;
@@ -836,7 +836,7 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_backup_info_with_lock_(
 }
 
 int ObLogArchiveBackupInfoMgr::parse_log_archive_status_result_(
-    sqlclient::ObMySQLResult& result, ObLogArchiveBackupInfo& info)
+    sqlclient::ObMySQLResult &result, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
 
@@ -865,12 +865,12 @@ int ObLogArchiveBackupInfoMgr::parse_log_archive_status_result_(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::parse_log_archive_status_(sqlclient::ObMySQLResult& result, ObLogArchiveBackupInfo& info)
+int ObLogArchiveBackupInfoMgr::parse_log_archive_status_(sqlclient::ObMySQLResult &result, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   int real_length = 0;
   char value_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = {0};
-  ObTenantLogArchiveStatus& status = info.status_;
+  ObTenantLogArchiveStatus &status = info.status_;
   UNUSED(real_length);  // only used for EXTRACT_STRBUF_FIELD_MYSQL
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, status.tenant_id_, uint64_t);
@@ -927,13 +927,13 @@ int ObLogArchiveBackupInfoMgr::parse_log_archive_status_(sqlclient::ObMySQLResul
 }
 
 int ObLogArchiveBackupInfoMgr::get_log_archive_status_(
-    common::ObISQLClient& sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const bool for_update, const uint64_t tenant_id, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
 
     if (OB_FAIL(
             sql.assign_fmt("select a.value %s, b.%s,b.%s,b.%s, time_to_usec(b.%s) %s, time_to_usec(b.%s) %s, b.status",
@@ -980,7 +980,7 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_status_(
 }
 
 int ObLogArchiveBackupInfoMgr::get_last_extern_log_archive_backup_info(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id, ObTenantLogArchiveStatus& last_status)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id, ObTenantLogArchiveStatus &last_status)
 {
   int ret = OB_SUCCESS;
   ObExternLogArchiveBackupInfo extern_info;
@@ -1011,7 +1011,7 @@ int ObLogArchiveBackupInfoMgr::get_last_extern_log_archive_backup_info(
 }
 
 int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info_v1_(
-    common::ObISQLClient& sql_client, const ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
 
@@ -1029,7 +1029,7 @@ int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info_v1_(
 }
 
 int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info(
-    common::ObISQLClient& sql_client, const ObBackupInnerTableVersion& version, const ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const ObBackupInnerTableVersion &version, const ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
 
@@ -1050,13 +1050,13 @@ int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info(
 }
 
 int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info_v2_(
-    common::ObISQLClient& sql_client, const ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = -1;
   ObDMLSqlSplicer dml_splicer;
-  const char* status_str = ObLogArchiveStatus::get_str(info.status_.status_);
+  const char *status_str = ObLogArchiveStatus::get_str(info.status_.status_);
 
   if (!info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1096,9 +1096,9 @@ int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info_v2_(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::update_log_archive_status_history(common::ObISQLClient& sql_proxy,
-    const ObLogArchiveBackupInfo& info, const int64_t inner_table_version,
-    share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::update_log_archive_status_history(common::ObISQLClient &sql_proxy,
+    const ObLogArchiveBackupInfo &info, const int64_t inner_table_version,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1151,7 +1151,7 @@ int ObLogArchiveBackupInfoMgr::update_log_archive_status_history(common::ObISQLC
 }
 
 int ObLogArchiveBackupInfoMgr::delete_tenant_log_archive_status_v2(
-    common::ObISQLClient& sql_proxy, const uint64_t tenant_id)
+    common::ObISQLClient &sql_proxy, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1178,7 +1178,7 @@ int ObLogArchiveBackupInfoMgr::delete_tenant_log_archive_status_v2(
 }
 
 int ObLogArchiveBackupInfoMgr::delete_tenant_log_archive_status_v1(
-    common::ObISQLClient& sql_proxy, const uint64_t tenant_id)
+    common::ObISQLClient &sql_proxy, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1202,7 +1202,7 @@ int ObLogArchiveBackupInfoMgr::delete_tenant_log_archive_status_v1(
 }
 
 int ObLogArchiveBackupInfoMgr::get_all_active_log_archive_tenants(
-    common::ObISQLClient& sql_proxy, common::ObIArray<uint64_t>& tenant_ids)
+    common::ObISQLClient &sql_proxy, common::ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1210,7 +1210,7 @@ int ObLogArchiveBackupInfoMgr::get_all_active_log_archive_tenants(
 
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
     if (OB_FAIL(sql.assign_fmt("select tenant_id from %s", OB_ALL_BACKUP_LOG_ARCHIVE_STATUS_V2_TNAME))) {
       LOG_WARN("failed to assign sql", K(ret));
     } else if (OB_FAIL(sql_proxy.read(res, sql.ptr()))) {
@@ -1240,13 +1240,13 @@ int ObLogArchiveBackupInfoMgr::get_all_active_log_archive_tenants(
 }
 
 int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info_(
-    common::ObISQLClient& sql_client, const ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = -1;
-  const char* status_str = ObLogArchiveStatus::get_str(info.status_.status_);
-  const char* dest_name = is_backup_backup_ ? OB_STR_BACKUP_BACKUP_DEST : OB_STR_BACKUP_DEST;
+  const char *status_str = ObLogArchiveStatus::get_str(info.status_.status_);
+  const char *dest_name = is_backup_backup_ ? OB_STR_BACKUP_BACKUP_DEST : OB_STR_BACKUP_DEST;
 
   if (is_backup_backup_) {
     // do nothing
@@ -1287,13 +1287,13 @@ int ObLogArchiveBackupInfoMgr::update_log_archive_backup_info_(
 }
 
 int ObLogArchiveBackupInfoMgr::update_log_archive_status_(
-    common::ObISQLClient& sql_client, const ObLogArchiveBackupInfo& info)
+    common::ObISQLClient &sql_client, const ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = -1;
   ObDMLSqlSplicer dml_splicer;
-  const char* status_str = ObLogArchiveStatus::get_str(info.status_.status_);
+  const char *status_str = ObLogArchiveStatus::get_str(info.status_.status_);
   const uint64_t real_tenant_id = get_real_tenant_id(info.status_.tenant_id_);
 
   if (!info.is_valid() || is_backup_backup_) {
@@ -1333,7 +1333,7 @@ int ObLogArchiveBackupInfoMgr::update_log_archive_status_(
 }
 
 int ObLogArchiveBackupInfoMgr::update_extern_log_archive_backup_info(
-    const ObLogArchiveBackupInfo& info, share::ObIBackupLeaseService& backup_lease_service)
+    const ObLogArchiveBackupInfo &info, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest cluster_backup_dest;
@@ -1375,7 +1375,7 @@ int ObLogArchiveBackupInfoMgr::update_extern_log_archive_backup_info(
 }
 
 int ObLogArchiveBackupInfoMgr::get_extern_backup_info_path_(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id, share::ObBackupPath& path)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id, share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
 
@@ -1392,7 +1392,7 @@ int ObLogArchiveBackupInfoMgr::get_extern_backup_info_path_(
 }
 
 int ObLogArchiveBackupInfoMgr::read_extern_log_archive_backup_info(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id, ObExternLogArchiveBackupInfo& info)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id, ObExternLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -1410,13 +1410,13 @@ int ObLogArchiveBackupInfoMgr::read_extern_log_archive_backup_info(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::write_extern_log_archive_backup_info(const ObClusterBackupDest& cluster_backup_dest,
-    const uint64_t tenant_id, const ObExternLogArchiveBackupInfo& info,
-    share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::write_extern_log_archive_backup_info(const ObClusterBackupDest &cluster_backup_dest,
+    const uint64_t tenant_id, const ObExternLogArchiveBackupInfo &info,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = info.get_write_buf_size();
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1426,7 +1426,7 @@ int ObLogArchiveBackupInfoMgr::write_extern_log_archive_backup_info(const ObClus
   if (!info.is_valid() || OB_INVALID_TENANT_ID == tenant_id || !cluster_backup_dest.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(info), K(tenant_id), K(cluster_backup_dest));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(info.write_buf(buf, buf_size, pos))) {
@@ -1449,14 +1449,14 @@ int ObLogArchiveBackupInfoMgr::write_extern_log_archive_backup_info(const ObClus
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_log_archive_history_info(common::ObISQLClient& sql_client, const uint64_t tenant_id,
+int ObLogArchiveBackupInfoMgr::get_log_archive_history_info(common::ObISQLClient &sql_client, const uint64_t tenant_id,
     const int64_t archive_round, const int64_t copy_id, const bool for_update,
-    ObLogArchiveBackupInfo& archive_backup_info)
+    ObLogArchiveBackupInfo &archive_backup_info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   ObArray<ObLogArchiveBackupInfo> archive_backup_infos;
   archive_backup_info.reset();
 
@@ -1515,13 +1515,13 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_history_info(common::ObISQLClient
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_log_archive_history_infos(common::ObISQLClient& sql_client, const uint64_t tenant_id,
-    const bool for_update, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+int ObLogArchiveBackupInfoMgr::get_log_archive_history_infos(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+    const bool for_update, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
 
   if (tenant_id == OB_INVALID_ID) {
     ret = OB_INVALID_ARGUMENT;
@@ -1556,12 +1556,12 @@ int ObLogArchiveBackupInfoMgr::get_log_archive_history_infos(common::ObISQLClien
 }
 
 int ObLogArchiveBackupInfoMgr::get_all_log_archive_history_infos(
-    common::ObISQLClient& sql_client, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+    common::ObISQLClient &sql_client, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
 
   if (OB_FAIL(sql.assign_fmt("select %s,%s,%s,%s, time_to_usec(%s) %s, time_to_usec(%s) %s, %s,%s,%s,%s from %s",
           OB_STR_TENANT_ID,
@@ -1589,13 +1589,13 @@ int ObLogArchiveBackupInfoMgr::get_all_log_archive_history_infos(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_same_round_log_archive_history_infos(common::ObISQLClient& sql_client,
-    const int64_t round, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+int ObLogArchiveBackupInfoMgr::get_same_round_log_archive_history_infos(common::ObISQLClient &sql_client,
+    const int64_t round, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
 
   if (round < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -1630,7 +1630,7 @@ int ObLogArchiveBackupInfoMgr::get_same_round_log_archive_history_infos(common::
 }
 
 int ObLogArchiveBackupInfoMgr::inner_get_log_archvie_history_infos(
-    sqlclient::ObMySQLResult& result, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+    sqlclient::ObMySQLResult &result, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret)) {
@@ -1656,13 +1656,13 @@ int ObLogArchiveBackupInfoMgr::inner_get_log_archvie_history_infos(
 }
 
 int ObLogArchiveBackupInfoMgr::parse_log_archvie_history_status_(
-    common::sqlclient::ObMySQLResult& result, ObLogArchiveBackupInfo& info)
+    common::sqlclient::ObMySQLResult &result, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   char backup_dest[share::OB_MAX_BACKUP_DEST_LENGTH] = "";
   int64_t tmp_real_str_len = 0;
   int64_t tmp_compatible = 0;
-  ObTenantLogArchiveStatus& status = info.status_;
+  ObTenantLogArchiveStatus &status = info.status_;
   UNUSED(tmp_real_str_len);
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, status.tenant_id_, uint64_t);
@@ -1706,11 +1706,11 @@ int ObLogArchiveBackupInfoMgr::parse_log_archvie_history_status_(
 }
 
 int ObLogArchiveBackupInfoMgr::inner_read_extern_log_archive_backup_info(
-    const ObBackupPath& path, const char* storage_info, ObExternLogArchiveBackupInfo& info)
+    const ObBackupPath &path, const char *storage_info, ObExternLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need_retry*/);
@@ -1726,7 +1726,7 @@ int ObLogArchiveBackupInfoMgr::inner_read_extern_log_archive_backup_info(
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern log archive backup info is empty", K(ret), K(storage_info), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(util.read_single_file(path.get_ptr(), storage_info, buf, file_length, read_size))) {
@@ -1743,8 +1743,8 @@ int ObLogArchiveBackupInfoMgr::inner_read_extern_log_archive_backup_info(
 }
 
 int ObLogArchiveBackupInfoMgr::mark_extern_log_archive_backup_info_deleted(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id,
-    const common::ObIArray<int64_t>& round_ids, share::ObIBackupLeaseService& backup_lease_service)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id,
+    const common::ObIArray<int64_t> &round_ids, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObExternLogArchiveBackupInfo info;
@@ -1776,8 +1776,8 @@ int ObLogArchiveBackupInfoMgr::mark_extern_log_archive_backup_info_deleted(
 }
 
 int ObLogArchiveBackupInfoMgr::delete_marked_extern_log_archive_backup_info(
-    const ObClusterBackupDest& current_backup_dest, const uint64_t tenant_id,
-    const common::ObIArray<int64_t>& round_ids, bool& is_empty, share::ObIBackupLeaseService& backup_lease_service)
+    const ObClusterBackupDest &current_backup_dest, const uint64_t tenant_id,
+    const common::ObIArray<int64_t> &round_ids, bool &is_empty, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObExternLogArchiveBackupInfo info;
@@ -1813,13 +1813,13 @@ int ObLogArchiveBackupInfoMgr::delete_marked_extern_log_archive_backup_info(
 
 // for backup backup
 int ObLogArchiveBackupInfoMgr::get_all_backup_backup_log_archive_status(
-    common::ObISQLClient& sql_client, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+    common::ObISQLClient &sql_client, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   infos.reset();
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   if (!is_backup_backup_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("can only deal with copy");
@@ -1861,13 +1861,13 @@ int ObLogArchiveBackupInfoMgr::get_all_backup_backup_log_archive_status(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_backup_log_archive_round_list(common::ObISQLClient& sql_client,
-    const int64_t log_archive_round, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+int ObLogArchiveBackupInfoMgr::get_backup_backup_log_archive_round_list(common::ObISQLClient &sql_client,
+    const int64_t log_archive_round, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
 
   if (!is_backup_backup_) {
     ret = OB_INVALID_ARGUMENT;
@@ -1919,7 +1919,7 @@ int ObLogArchiveBackupInfoMgr::get_backup_backup_log_archive_round_list(common::
 }
 
 int ObLogArchiveBackupInfoMgr::mark_log_archive_history_info_deleted(
-    const ObLogArchiveBackupInfo& info, common::ObISQLClient& sql_proxy)
+    const ObLogArchiveBackupInfo &info, common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1954,7 +1954,7 @@ int ObLogArchiveBackupInfoMgr::mark_log_archive_history_info_deleted(
 }
 
 int ObLogArchiveBackupInfoMgr::delete_log_archive_info(
-    const ObLogArchiveBackupInfo& info, common::ObISQLClient& sql_client)
+    const ObLogArchiveBackupInfo &info, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = -1;
@@ -1979,7 +1979,7 @@ int ObLogArchiveBackupInfoMgr::delete_log_archive_info(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::delete_all_backup_backup_log_archive_info(common::ObISQLClient& sql_client)
+int ObLogArchiveBackupInfoMgr::delete_all_backup_backup_log_archive_info(common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = -1;
@@ -1996,7 +1996,7 @@ int ObLogArchiveBackupInfoMgr::delete_all_backup_backup_log_archive_info(common:
 }
 
 int ObLogArchiveBackupInfoMgr::delete_backup_backup_log_archive_info(
-    const uint64_t tenant_id, common::ObISQLClient& sql_client)
+    const uint64_t tenant_id, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = -1;
@@ -2013,14 +2013,14 @@ int ObLogArchiveBackupInfoMgr::delete_backup_backup_log_archive_info(
 }
 
 int ObLogArchiveBackupInfoMgr::get_all_same_round_in_progress_backup_info(
-    common::ObISQLClient& sql_client, const int64_t round, common::ObIArray<share::ObLogArchiveBackupInfo>& info_list)
+    common::ObISQLClient &sql_client, const int64_t round, common::ObIArray<share::ObLogArchiveBackupInfo> &info_list)
 {
   int ret = OB_SUCCESS;
   info_list.reset();
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
   ObDMLSqlSplicer dml;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
 
   if (round < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -2069,15 +2069,15 @@ int ObLogArchiveBackupInfoMgr::get_all_same_round_in_progress_backup_info(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_all_same_round_log_archive_infos(common::ObISQLClient& sql_client,
-    const uint64_t tenant_id, const int64_t round, common::ObIArray<share::ObLogArchiveBackupInfo>& info_list)
+int ObLogArchiveBackupInfoMgr::get_all_same_round_log_archive_infos(common::ObISQLClient &sql_client,
+    const uint64_t tenant_id, const int64_t round, common::ObIArray<share::ObLogArchiveBackupInfo> &info_list)
 {
   int ret = OB_SUCCESS;
   info_list.reset();
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
   ObDMLSqlSplicer dml;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
 
   if (OB_INVALID_ID == tenant_id || round < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -2122,8 +2122,8 @@ int ObLogArchiveBackupInfoMgr::get_all_same_round_log_archive_infos(common::ObIS
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_piece_list(common::ObISQLClient& sql_client, const uint64_t tenant_id,
-    const int64_t copy_id, common::ObIArray<share::ObBackupPieceInfo>& info_list)
+int ObLogArchiveBackupInfoMgr::get_backup_piece_list(common::ObISQLClient &sql_client, const uint64_t tenant_id,
+    const int64_t copy_id, common::ObIArray<share::ObBackupPieceInfo> &info_list)
 {
   int ret = OB_SUCCESS;
   info_list.reset();
@@ -2143,8 +2143,8 @@ int ObLogArchiveBackupInfoMgr::get_backup_piece_list(common::ObISQLClient& sql_c
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::check_has_round_mode_archive_in_dest(common::ObISQLClient& sql_client,
-    const share::ObBackupDest& backup_dest, const uint64_t tenant_id, bool& has_round_mode)
+int ObLogArchiveBackupInfoMgr::check_has_round_mode_archive_in_dest(common::ObISQLClient &sql_client,
+    const share::ObBackupDest &backup_dest, const uint64_t tenant_id, bool &has_round_mode)
 {
   int ret = OB_SUCCESS;
   has_round_mode = false;
@@ -2172,8 +2172,8 @@ int ObLogArchiveBackupInfoMgr::check_has_round_mode_archive_in_dest(common::ObIS
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::check_has_piece_mode_archive_in_dest(common::ObISQLClient& sql_client,
-    const share::ObBackupDest& backup_dest, const uint64_t tenant_id, bool& has_piece_mode)
+int ObLogArchiveBackupInfoMgr::check_has_piece_mode_archive_in_dest(common::ObISQLClient &sql_client,
+    const share::ObBackupDest &backup_dest, const uint64_t tenant_id, bool &has_piece_mode)
 {
   int ret = OB_SUCCESS;
   has_piece_mode = false;
@@ -2201,8 +2201,8 @@ int ObLogArchiveBackupInfoMgr::check_has_piece_mode_archive_in_dest(common::ObIS
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_piece_tenant_list(common::ObISQLClient& sql_client,
-    const int64_t backup_piece_id, const int64_t copy_id, common::ObIArray<share::ObBackupPieceInfo>& info_list)
+int ObLogArchiveBackupInfoMgr::get_backup_piece_tenant_list(common::ObISQLClient &sql_client,
+    const int64_t backup_piece_id, const int64_t copy_id, common::ObIArray<share::ObBackupPieceInfo> &info_list)
 {
   int ret = OB_SUCCESS;
   info_list.reset();
@@ -2225,7 +2225,7 @@ int ObLogArchiveBackupInfoMgr::get_backup_piece_tenant_list(common::ObISQLClient
 
 int ObLogArchiveBackupInfoMgr::get_backup_piece_copy_list(const int64_t incarnation, const uint64_t tenant_id,
     const int64_t round_id, const int64_t piece_id, const ObBackupBackupCopyIdLevel copy_id_level,
-    common::ObISQLClient& sql_client, common::ObIArray<share::ObBackupPieceInfo>& info_list)
+    common::ObISQLClient &sql_client, common::ObIArray<share::ObBackupPieceInfo> &info_list)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2257,13 +2257,13 @@ int ObLogArchiveBackupInfoMgr::get_backup_piece_copy_list(const int64_t incarnat
 }
 
 int ObLogArchiveBackupInfoMgr::get_all_cluster_level_backup_piece_copy_count(const int64_t incarnation,
-    const uint64_t tenant_id, const int64_t round_id, const int64_t piece_id, common::ObISQLClient& sql_client,
-    int64_t& copy_count)
+    const uint64_t tenant_id, const int64_t round_id, const int64_t piece_id, common::ObISQLClient &sql_client,
+    int64_t &copy_count)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   copy_count = 0;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
     if (OB_FAIL(
@@ -2295,8 +2295,8 @@ int ObLogArchiveBackupInfoMgr::get_all_cluster_level_backup_piece_copy_count(con
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_max_backup_piece(common::ObISQLClient& sql_client, const int64_t incarnation,
-    const uint64_t tenant_id, const int64_t copy_id, share::ObBackupPieceInfo& piece)
+int ObLogArchiveBackupInfoMgr::get_max_backup_piece(common::ObISQLClient &sql_client, const int64_t incarnation,
+    const uint64_t tenant_id, const int64_t copy_id, share::ObBackupPieceInfo &piece)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2325,9 +2325,9 @@ int ObLogArchiveBackupInfoMgr::get_max_backup_piece(common::ObISQLClient& sql_cl
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_min_available_backup_piece_id_in_backup_dest(const share::ObBackupDest& backup_dest,
-    const int64_t incarnation, const uint64_t tenant_id, const int64_t copy_id, common::ObISQLClient& sql_client,
-    int64_t& piece_id)
+int ObLogArchiveBackupInfoMgr::get_min_available_backup_piece_id_in_backup_dest(const share::ObBackupDest &backup_dest,
+    const int64_t incarnation, const uint64_t tenant_id, const int64_t copy_id, common::ObISQLClient &sql_client,
+    int64_t &piece_id)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2362,8 +2362,8 @@ int ObLogArchiveBackupInfoMgr::get_min_available_backup_piece_id_in_backup_dest(
 }
 
 int ObLogArchiveBackupInfoMgr::check_has_incomplete_file_info_smaller_than_backup_piece_id(const int64_t incarnation,
-    const uint64_t tenant_id, const int64_t backup_piece_id, const share::ObBackupDest& backup_dest,
-    common::ObISQLClient& sql_client, bool& has_incomplete)
+    const uint64_t tenant_id, const int64_t backup_piece_id, const share::ObBackupDest &backup_dest,
+    common::ObISQLClient &sql_client, bool &has_incomplete)
 {
   int ret = OB_SUCCESS;
   has_incomplete = false;
@@ -2394,8 +2394,8 @@ int ObLogArchiveBackupInfoMgr::check_has_incomplete_file_info_smaller_than_backu
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_max_frozen_backup_piece(common::ObISQLClient& sql_client, const int64_t incarnation,
-    const uint64_t tenant_id, const int64_t copy_id, share::ObBackupPieceInfo& piece)
+int ObLogArchiveBackupInfoMgr::get_max_frozen_backup_piece(common::ObISQLClient &sql_client, const int64_t incarnation,
+    const uint64_t tenant_id, const int64_t copy_id, share::ObBackupPieceInfo &piece)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2424,8 +2424,8 @@ int ObLogArchiveBackupInfoMgr::get_max_frozen_backup_piece(common::ObISQLClient&
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_last_piece_in_round(common::ObISQLClient& sql_client, const int64_t incarnation,
-    const uint64_t tenant_id, const int64_t round_id, share::ObBackupPieceInfo& piece)
+int ObLogArchiveBackupInfoMgr::get_last_piece_in_round(common::ObISQLClient &sql_client, const int64_t incarnation,
+    const uint64_t tenant_id, const int64_t round_id, share::ObBackupPieceInfo &piece)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2451,9 +2451,9 @@ int ObLogArchiveBackupInfoMgr::get_last_piece_in_round(common::ObISQLClient& sql
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_external_backup_piece_info(const share::ObBackupPath& path,
-    const common::ObString& storage_info, share::ObExternalBackupPieceInfo& info,
-    share::ObIBackupLeaseService& lease_service)
+int ObLogArchiveBackupInfoMgr::get_external_backup_piece_info(const share::ObBackupPath &path,
+    const common::ObString &storage_info, share::ObExternalBackupPieceInfo &info,
+    share::ObIBackupLeaseService &lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupFileSpinLock lock;
@@ -2471,11 +2471,11 @@ int ObLogArchiveBackupInfoMgr::get_external_backup_piece_info(const share::ObBac
 }
 
 int ObLogArchiveBackupInfoMgr::sync_backup_backup_piece_info(const uint64_t tenant_id,
-    const ObClusterBackupDest& src_backup_dest, const ObClusterBackupDest& dst_backup_dest,
-    share::ObIBackupLeaseService& lease_service)
+    const ObClusterBackupDest &src_backup_dest, const ObClusterBackupDest &dst_backup_dest,
+    share::ObIBackupLeaseService &lease_service)
 {
   int ret = OB_SUCCESS;
-  char* buf = NULL;
+  char *buf = NULL;
   ObBackupPath src_path, dst_path;
   ObStorageUtil util(false /*need_retry*/);
   int64_t file_length = 0;
@@ -2496,7 +2496,7 @@ int ObLogArchiveBackupInfoMgr::sync_backup_backup_piece_info(const uint64_t tena
     LOG_WARN("failed to get file length", K(ret), K(src_path));
   } else if (0 == file_length) {
     FLOG_INFO("external backup piece file is empty", K(ret), K(src_path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(src_path));
   } else if (OB_FAIL(util.read_single_file(
@@ -2512,12 +2512,12 @@ int ObLogArchiveBackupInfoMgr::sync_backup_backup_piece_info(const uint64_t tena
 }
 
 int ObLogArchiveBackupInfoMgr::parse_backup_backup_log_archive_status_(
-    sqlclient::ObMySQLResult& result, ObLogArchiveBackupInfo& info)
+    sqlclient::ObMySQLResult &result, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   int real_length = 0;
   char value_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = {0};
-  ObTenantLogArchiveStatus& status = info.status_;
+  ObTenantLogArchiveStatus &status = info.status_;
   UNUSED(real_length);  // only used for EXTRACT_STRBUF_FIELD_MYSQL
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, status.tenant_id_, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, status.incarnation_, int64_t);
@@ -2545,12 +2545,12 @@ int ObLogArchiveBackupInfoMgr::parse_backup_backup_log_archive_status_(
 }
 
 int ObLogArchiveBackupInfoMgr::parse_his_backup_backup_log_archive_status_(
-    sqlclient::ObMySQLResult& result, ObLogArchiveBackupInfo& info)
+    sqlclient::ObMySQLResult &result, ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   int real_length = 0;
   char value_str[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = {0};
-  ObTenantLogArchiveStatus& status = info.status_;
+  ObTenantLogArchiveStatus &status = info.status_;
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, status.tenant_id_, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, status.incarnation_, int64_t);
@@ -2568,9 +2568,9 @@ int ObLogArchiveBackupInfoMgr::parse_his_backup_backup_log_archive_status_(
   return ret;
 }
 
-const char* ObLogArchiveBackupInfoMgr::get_cur_table_name_() const
+const char *ObLogArchiveBackupInfoMgr::get_cur_table_name_() const
 {
-  const char* name = NULL;
+  const char *name = NULL;
   if (is_backup_backup_) {
     name = OB_ALL_BACKUP_BACKUP_LOG_ARCHIVE_STATUS_V2_TNAME;
   } else {
@@ -2579,9 +2579,9 @@ const char* ObLogArchiveBackupInfoMgr::get_cur_table_name_() const
   return name;
 }
 
-const char* ObLogArchiveBackupInfoMgr::get_his_table_name_() const
+const char *ObLogArchiveBackupInfoMgr::get_his_table_name_() const
 {
-  const char* name = NULL;
+  const char *name = NULL;
   if (is_backup_backup_) {
     name = OB_ALL_BACKUP_BACKUP_LOG_ARCHIVE_STATUS_HISTORY_TNAME;
   } else {
@@ -2601,8 +2601,8 @@ uint64_t ObLogArchiveBackupInfoMgr::get_real_tenant_id(const uint64_t normal_ten
   return real_tenant_id;
 }
 
-int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece(common::ObISQLClient& sql_client, const bool for_update,
-    const ObLogArchiveBackupInfo& info, ObNonFrozenBackupPieceInfo& non_frozen_piece)
+int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece(common::ObISQLClient &sql_client, const bool for_update,
+    const ObLogArchiveBackupInfo &info, ObNonFrozenBackupPieceInfo &non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   non_frozen_piece.reset();
@@ -2626,14 +2626,14 @@ int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece(common::ObISQLClient&
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece_(common::ObISQLClient& sql_client, const bool for_update,
-    const share::ObBackupPieceInfoKey& cur_key, ObNonFrozenBackupPieceInfo& non_frozen_piece)
+int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece_(common::ObISQLClient &sql_client, const bool for_update,
+    const share::ObBackupPieceInfoKey &cur_key, ObNonFrozenBackupPieceInfo &non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   int64_t prev_piece_id = 0;
   non_frozen_piece.reset();
 
@@ -2704,13 +2704,13 @@ int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece_(common::ObISQLClient
 }
 
 int ObLogArchiveBackupInfoMgr::get_backup_piece_list_(
-    common::ObISQLClient& proxy, const common::ObSqlString& sql, common::ObIArray<share::ObBackupPieceInfo>& piece_list)
+    common::ObISQLClient &proxy, const common::ObSqlString &sql, common::ObIArray<share::ObBackupPieceInfo> &piece_list)
 {
   int ret = OB_SUCCESS;
   piece_list.reset();
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
     if (OB_UNLIKELY(!sql.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", KR(ret), K(sql));
@@ -2740,7 +2740,7 @@ int ObLogArchiveBackupInfoMgr::get_backup_piece_list_(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::parse_backup_piece_(sqlclient::ObMySQLResult& result, ObBackupPieceInfo& info)
+int ObLogArchiveBackupInfoMgr::parse_backup_piece_(sqlclient::ObMySQLResult &result, ObBackupPieceInfo &info)
 {
   int ret = OB_SUCCESS;
   int real_length = 0;
@@ -2799,8 +2799,8 @@ int ObLogArchiveBackupInfoMgr::parse_backup_piece_(sqlclient::ObMySQLResult& res
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece(common::ObISQLClient& sql_client, const bool for_update,
-    const share::ObBackupPieceInfoKey& cur_key, share::ObNonFrozenBackupPieceInfo& piece)
+int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece(common::ObISQLClient &sql_client, const bool for_update,
+    const share::ObBackupPieceInfoKey &cur_key, share::ObNonFrozenBackupPieceInfo &piece)
 {
   int ret = OB_SUCCESS;
   piece.reset();
@@ -2814,14 +2814,14 @@ int ObLogArchiveBackupInfoMgr::get_non_frozen_backup_piece(common::ObISQLClient&
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_piece(common::ObISQLClient& sql_client, const bool for_update,
-    const share::ObBackupPieceInfoKey& cur_key, share::ObBackupPieceInfo& piece)
+int ObLogArchiveBackupInfoMgr::get_backup_piece(common::ObISQLClient &sql_client, const bool for_update,
+    const share::ObBackupPieceInfoKey &cur_key, share::ObBackupPieceInfo &piece)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   piece.reset();
 
   if (!cur_key.is_valid()) {
@@ -2870,7 +2870,7 @@ int ObLogArchiveBackupInfoMgr::get_backup_piece(common::ObISQLClient& sql_client
 }
 
 int ObLogArchiveBackupInfoMgr::update_backup_piece(
-    ObMySQLTransaction& trans, const ObNonFrozenBackupPieceInfo& non_frozen_piece)
+    ObMySQLTransaction &trans, const ObNonFrozenBackupPieceInfo &non_frozen_piece)
 {
   int ret = OB_SUCCESS;
 
@@ -2888,7 +2888,7 @@ int ObLogArchiveBackupInfoMgr::update_backup_piece(
 }
 
 int ObLogArchiveBackupInfoMgr::update_backup_piece(
-    common::ObISQLClient& sql_client, const share::ObBackupPieceInfo& piece)
+    common::ObISQLClient &sql_client, const share::ObBackupPieceInfo &piece)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -2939,7 +2939,7 @@ int ObLogArchiveBackupInfoMgr::update_backup_piece(
 
 // update tenant_clog_piece_info/cluster_clog_piece_info and single piece info
 int ObLogArchiveBackupInfoMgr::update_external_backup_piece(
-    const share::ObNonFrozenBackupPieceInfo& piece, share::ObIBackupLeaseService& backup_lease_service)
+    const share::ObNonFrozenBackupPieceInfo &piece, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   const bool is_backup_backup = false;
@@ -2971,7 +2971,7 @@ int ObLogArchiveBackupInfoMgr::update_external_backup_piece(
 }
 
 int ObLogArchiveBackupInfoMgr::update_external_backup_piece(
-    const ObBackupPieceInfo& piece, share::ObIBackupLeaseService& backup_lease_service)
+    const ObBackupPieceInfo &piece, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   const bool is_backup_backup = false;
@@ -2983,8 +2983,8 @@ int ObLogArchiveBackupInfoMgr::update_external_backup_piece(
 }
 
 int ObLogArchiveBackupInfoMgr::update_external_backup_backup_piece(
-    const share::ObClusterBackupDest& cluster_backup_dest, const ObBackupPieceInfo& piece,
-    share::ObIBackupLeaseService& backup_lease_service)
+    const share::ObClusterBackupDest &cluster_backup_dest, const ObBackupPieceInfo &piece,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   const bool is_backup_backup = true;
@@ -2998,7 +2998,7 @@ int ObLogArchiveBackupInfoMgr::update_external_backup_backup_piece(
 }
 
 int ObLogArchiveBackupInfoMgr::update_external_single_backup_piece_info(
-    const ObBackupPieceInfo& piece, share::ObIBackupLeaseService& backup_lease_service)
+    const ObBackupPieceInfo &piece, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(write_external_single_backup_piece_info_(piece, backup_lease_service))) {
@@ -3009,7 +3009,7 @@ int ObLogArchiveBackupInfoMgr::update_external_single_backup_piece_info(
 
 // for cluster or tenant
 int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(
-    const ObBackupPieceInfo& piece, bool is_backup_backup, share::ObIBackupLeaseService& backup_lease_service)
+    const ObBackupPieceInfo &piece, bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest cluster_backup_dest;
@@ -3026,7 +3026,7 @@ int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(
 
 // for cluster or tenant
 int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(
-    const ObNonFrozenBackupPieceInfo& piece, bool is_backup_backup, share::ObIBackupLeaseService& backup_lease_service)
+    const ObNonFrozenBackupPieceInfo &piece, bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest cluster_backup_dest;
@@ -3042,8 +3042,8 @@ int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(const share::ObClusterBackupDest& cluster_backup_dest,
-    const ObBackupPieceInfo piece, bool is_backup_backup, share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(const share::ObClusterBackupDest &cluster_backup_dest,
+    const ObBackupPieceInfo piece, bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObExternalBackupPieceInfo external_info;
@@ -3069,9 +3069,9 @@ int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(const share::ObClus
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(const share::ObClusterBackupDest& cluster_backup_dest,
-    const share::ObNonFrozenBackupPieceInfo& piece, bool is_backup_backup,
-    share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(const share::ObClusterBackupDest &cluster_backup_dest,
+    const share::ObNonFrozenBackupPieceInfo &piece, bool is_backup_backup,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObExternalBackupPieceInfo external_info;
@@ -3098,12 +3098,12 @@ int ObLogArchiveBackupInfoMgr::update_external_backup_piece_(const share::ObClus
   }
   return ret;
 }
-int ObLogArchiveBackupInfoMgr::inner_write_extern_log_archive_backup_piece_info_(const ObBackupPath& path,
-    const char* storage_info, const share::ObExternalBackupPieceInfo& info,
-    share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::inner_write_extern_log_archive_backup_piece_info_(const ObBackupPath &path,
+    const char *storage_info, const share::ObExternalBackupPieceInfo &info,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = info.get_write_buf_size();
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -3113,7 +3113,7 @@ int ObLogArchiveBackupInfoMgr::inner_write_extern_log_archive_backup_piece_info_
   if (!info.is_valid() || OB_ISNULL(storage_info) || path.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(info), K(storage_info), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(info.write_buf(buf, buf_size, pos))) {
@@ -3134,12 +3134,12 @@ int ObLogArchiveBackupInfoMgr::inner_write_extern_log_archive_backup_piece_info_
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::inner_read_external_backup_piece_info_(const ObBackupPath& path,
-    const char* storage_info, ObExternalBackupPieceInfo& info, share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::inner_read_external_backup_piece_info_(const ObBackupPath &path,
+    const char *storage_info, ObExternalBackupPieceInfo &info, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need_retry*/);
@@ -3156,7 +3156,7 @@ int ObLogArchiveBackupInfoMgr::inner_read_external_backup_piece_info_(const ObBa
     }
   } else if (0 == file_length) {
     FLOG_INFO("external log archive backup piece info is empty", K(ret), K(storage_info), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(backup_lease_service.check_lease())) {
@@ -3174,8 +3174,8 @@ int ObLogArchiveBackupInfoMgr::inner_read_external_backup_piece_info_(const ObBa
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_external_backup_piece_path_(const ObClusterBackupDest& cluster_backup_dest,
-    const uint64_t tenant_id, const bool is_backup_backup, ObBackupPath& path)
+int ObLogArchiveBackupInfoMgr::get_external_backup_piece_path_(const ObClusterBackupDest &cluster_backup_dest,
+    const uint64_t tenant_id, const bool is_backup_backup, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
 
@@ -3195,7 +3195,7 @@ int ObLogArchiveBackupInfoMgr::get_external_backup_piece_path_(const ObClusterBa
 
 // for single piece of tenant
 int ObLogArchiveBackupInfoMgr::write_external_single_backup_piece_info_(
-    const ObBackupPieceInfo& piece, share::ObIBackupLeaseService& backup_lease_service)
+    const ObBackupPieceInfo &piece, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -3204,15 +3204,15 @@ int ObLogArchiveBackupInfoMgr::write_external_single_backup_piece_info_(
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
   int64_t pos = 0;
-  char* buf = nullptr;
-  ObBackupCommonHeader* common_header = nullptr;
+  char *buf = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (!path.is_empty() || !piece.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(path), K(piece));
   } else if (OB_FAIL(cluster_backup_dest.set(piece.backup_dest_.ptr(), piece.key_.incarnation_))) {
     LOG_WARN("failed to set cluster backup dest", K(ret), K(piece));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_len)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_len));
   } else {
@@ -3261,12 +3261,12 @@ int ObLogArchiveBackupInfoMgr::write_external_single_backup_piece_info_(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::read_external_single_backup_piece_info(const ObBackupPath& path,
-    const ObString& storage_info, ObBackupPieceInfo& piece, share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::read_external_single_backup_piece_info(const ObBackupPath &path,
+    const ObString &storage_info, ObBackupPieceInfo &piece, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need_retry*/);
@@ -3285,7 +3285,7 @@ int ObLogArchiveBackupInfoMgr::read_external_single_backup_piece_info(const ObBa
   } else if (0 == file_length || file_length < sizeof(ObBackupCommonHeader)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("single piece info file is not incomplete", K(ret), K(path), K(storage_info));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(backup_lease_service.check_lease())) {
@@ -3297,7 +3297,7 @@ int ObLogArchiveBackupInfoMgr::read_external_single_backup_piece_info(const ObBa
     LOG_WARN("read file length not match", K(ret), K(file_length), K(read_size), K(path));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -3316,14 +3316,14 @@ int ObLogArchiveBackupInfoMgr::read_external_single_backup_piece_info(const ObBa
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_round_backup_piece_infos(common::ObISQLClient& sql_client, const bool for_update,
+int ObLogArchiveBackupInfoMgr::get_round_backup_piece_infos(common::ObISQLClient &sql_client, const bool for_update,
     const uint64_t tenant_id, const int64_t incarnation, const int64_t log_archive_round, const bool is_backup_backup,
-    common::ObIArray<share::ObBackupPieceInfo>& piece_infos)
+    common::ObIArray<share::ObBackupPieceInfo> &piece_infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   piece_infos.reset();
 
   if (tenant_id == OB_INVALID_ID || incarnation <= 0 || log_archive_round <= 0) {
@@ -3376,13 +3376,13 @@ int ObLogArchiveBackupInfoMgr::get_round_backup_piece_infos(common::ObISQLClient
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_log_archive_history_infos(common::ObISQLClient& sql_client,
-    const uint64_t tenant_id, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+int ObLogArchiveBackupInfoMgr::get_backup_log_archive_history_infos(common::ObISQLClient &sql_client,
+    const uint64_t tenant_id, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
 
   if (tenant_id == OB_INVALID_ID) {
     ret = OB_INVALID_ARGUMENT;
@@ -3418,13 +3418,13 @@ int ObLogArchiveBackupInfoMgr::get_backup_log_archive_history_infos(common::ObIS
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_original_backup_log_piece_infos(common::ObISQLClient& sql_client,
-    const bool for_update, const uint64_t tenant_id, common::ObIArray<share::ObBackupPieceInfo>& piece_infos)
+int ObLogArchiveBackupInfoMgr::get_original_backup_log_piece_infos(common::ObISQLClient &sql_client,
+    const bool for_update, const uint64_t tenant_id, common::ObIArray<share::ObBackupPieceInfo> &piece_infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   const int64_t incarnation = OB_START_INCARNATION;
   piece_infos.reset();
   const ObBackupFileStatus::STATUS file_status = ObBackupFileStatus::BACKUP_FILE_DELETED;
@@ -3475,8 +3475,8 @@ int ObLogArchiveBackupInfoMgr::get_original_backup_log_piece_infos(common::ObISQ
 //    piece n
 // And backup backup log use piece as basic cell to backup data.
 // Inorder to deal with this condition, we use some piece infos to get round information for compatibility
-int ObLogArchiveBackupInfoMgr::get_backup_log_archive_info_from_original_piece_infos(common::ObISQLClient& sql_client,
-    const uint64_t tenant_id, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo>& infos)
+int ObLogArchiveBackupInfoMgr::get_backup_log_archive_info_from_original_piece_infos(common::ObISQLClient &sql_client,
+    const uint64_t tenant_id, const bool for_update, common::ObIArray<ObLogArchiveBackupInfo> &infos)
 {
   int ret = OB_SUCCESS;
   infos.reset();
@@ -3497,7 +3497,7 @@ int ObLogArchiveBackupInfoMgr::get_backup_log_archive_info_from_original_piece_i
     LOG_WARN("backup piece infos can not sort", K(ret), K(piece_infos));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < piece_infos.count(); ++i) {
-      const ObBackupPieceInfo& backup_piece = piece_infos.at(i);
+      const ObBackupPieceInfo &backup_piece = piece_infos.at(i);
       if (0 == i) {
         if (OB_FAIL(trans_log_archive_info_from_piece_info_(backup_piece, log_archive_info))) {
           LOG_WARN("failed to trans log archive info from piece info", K(ret), K(backup_piece));
@@ -3537,9 +3537,9 @@ int ObLogArchiveBackupInfoMgr::get_backup_log_archive_info_from_original_piece_i
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_log_archive_info_from_piece_info(common::ObISQLClient& sql_client,
+int ObLogArchiveBackupInfoMgr::get_backup_log_archive_info_from_piece_info(common::ObISQLClient &sql_client,
     const uint64_t tenant_id, const int64_t piece_id, const int64_t copy_id, const bool for_update,
-    ObLogArchiveBackupInfo& info)
+    ObLogArchiveBackupInfo &info)
 {
   int ret = OB_SUCCESS;
   info.reset();
@@ -3558,7 +3558,7 @@ int ObLogArchiveBackupInfoMgr::get_backup_log_archive_info_from_piece_info(commo
 }
 
 int ObLogArchiveBackupInfoMgr::trans_log_archive_info_from_piece_info_(
-    const ObBackupPieceInfo& piece_info, ObLogArchiveBackupInfo& log_archive_info)
+    const ObBackupPieceInfo &piece_info, ObLogArchiveBackupInfo &log_archive_info)
 {
   int ret = OB_SUCCESS;
   log_archive_info.reset();
@@ -3587,13 +3587,13 @@ int ObLogArchiveBackupInfoMgr::trans_log_archive_info_from_piece_info_(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_piece(common::ObISQLClient& sql_client, const bool for_update,
-    const uint64_t tenant_id, const int64_t backup_piece_id, const int64_t copy_id, ObBackupPieceInfo& piece_info)
+int ObLogArchiveBackupInfoMgr::get_backup_piece(common::ObISQLClient &sql_client, const bool for_update,
+    const uint64_t tenant_id, const int64_t backup_piece_id, const int64_t copy_id, ObBackupPieceInfo &piece_info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   piece_info.reset();
 
   if (!sql_client.is_active() || tenant_id == OB_INVALID_ID || backup_piece_id < 0 || copy_id < 0) {
@@ -3625,13 +3625,13 @@ int ObLogArchiveBackupInfoMgr::get_backup_piece(common::ObISQLClient& sql_client
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_tenant_ids_with_piece_id(common::ObISQLClient& sql_client,
-    const int64_t backup_piece_id, const int64_t copy_id, common::ObIArray<uint64_t>& tenant_ids)
+int ObLogArchiveBackupInfoMgr::get_tenant_ids_with_piece_id(common::ObISQLClient &sql_client,
+    const int64_t backup_piece_id, const int64_t copy_id, common::ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   tenant_ids.reset();
 
   if (!sql_client.is_active() || backup_piece_id < 0 || copy_id < 0) {
@@ -3671,15 +3671,15 @@ int ObLogArchiveBackupInfoMgr::get_tenant_ids_with_piece_id(common::ObISQLClient
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_tenant_ids_with_round_id(common::ObISQLClient& sql_client, const bool for_update,
-    const int64_t backup_round_id, const int64_t copy_id, common::ObIArray<uint64_t>& tenant_ids)
+int ObLogArchiveBackupInfoMgr::get_tenant_ids_with_round_id(common::ObISQLClient &sql_client, const bool for_update,
+    const int64_t backup_round_id, const int64_t copy_id, common::ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   tenant_ids.reset();
-  const char* table_name = NULL;
+  const char *table_name = NULL;
 
   if (!sql_client.is_active() || backup_round_id < 0 || copy_id < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -3721,13 +3721,13 @@ int ObLogArchiveBackupInfoMgr::get_tenant_ids_with_round_id(common::ObISQLClient
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_backup_tenant_ids_with_snapshot(common::ObISQLClient& sql_client,
-    const int64_t snapshot_version, const bool is_backup_backup, common::ObIArray<uint64_t>& tenant_ids)
+int ObLogArchiveBackupInfoMgr::get_backup_tenant_ids_with_snapshot(common::ObISQLClient &sql_client,
+    const int64_t snapshot_version, const bool is_backup_backup, common::ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObMySQLProxy::ReadResult res;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   tenant_ids.reset();
 
   if (!sql_client.is_active() || snapshot_version < 0) {
@@ -3767,9 +3767,9 @@ int ObLogArchiveBackupInfoMgr::get_backup_tenant_ids_with_snapshot(common::ObISQ
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleting(const ObClusterBackupDest& cluster_backup_dest,
-    const uint64_t tenant_id, const common::ObIArray<share::ObBackupPieceInfoKey>& piece_keys,
-    const bool is_backup_backup, share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleting(const ObClusterBackupDest &cluster_backup_dest,
+    const uint64_t tenant_id, const common::ObIArray<share::ObBackupPieceInfoKey> &piece_keys,
+    const bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObExternalBackupPieceInfo external_info;
@@ -3796,15 +3796,14 @@ int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleting(const ObCluster
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleted(const ObClusterBackupDest& current_backup_dest,
-    const uint64_t tenant_id, const common::ObIArray<share::ObBackupPieceInfoKey>& piece_keys,
-    const bool is_backup_backup, bool& is_all_deleted, share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleted(const ObClusterBackupDest &current_backup_dest,
+    const uint64_t tenant_id, const common::ObIArray<share::ObBackupPieceInfoKey> &piece_keys,
+    const bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObExternalBackupPieceInfo external_info;
   ObBackupPath path;
   ObBackupFileSpinLock lock;
-  is_all_deleted = false;
 
   if (OB_FAIL(get_external_backup_piece_path_(current_backup_dest, tenant_id, is_backup_backup, path))) {
     LOG_WARN("failed to get cluster clog backup piece path", K(ret), K(current_backup_dest));
@@ -3820,15 +3819,13 @@ int ObLogArchiveBackupInfoMgr::mark_extern_backup_piece_deleted(const ObClusterB
   } else if (OB_FAIL(inner_write_extern_log_archive_backup_piece_info_(
                  path, current_backup_dest.get_storage_info(), external_info, backup_lease_service))) {
     LOG_WARN("failed to write_extern_log_archive_backup_info", K(ret), K(external_info));
-  } else {
-    is_all_deleted = external_info.is_all_piece_info_deleted();
   }
 
   return ret;
 }
 
 int ObLogArchiveBackupInfoMgr::get_extern_backup_info_path(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id, share::ObBackupPath& path)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id, share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_extern_backup_info_path_(cluster_backup_dest, tenant_id, path))) {
@@ -3837,8 +3834,8 @@ int ObLogArchiveBackupInfoMgr::get_extern_backup_info_path(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_external_backup_piece_path(const ObClusterBackupDest& cluster_backup_dest,
-    const uint64_t tenant_id, const bool is_backup_backup, share::ObBackupPath& path)
+int ObLogArchiveBackupInfoMgr::get_external_backup_piece_path(const ObClusterBackupDest &cluster_backup_dest,
+    const uint64_t tenant_id, const bool is_backup_backup, share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_external_backup_piece_path_(cluster_backup_dest, tenant_id, is_backup_backup, path))) {
@@ -3848,7 +3845,7 @@ int ObLogArchiveBackupInfoMgr::get_external_backup_piece_path(const ObClusterBac
 }
 
 int ObLogArchiveBackupInfoMgr::delete_extern_backup_info_file(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObStorageUtil util(false /*need_retry*/);
@@ -3876,7 +3873,7 @@ int ObLogArchiveBackupInfoMgr::delete_extern_backup_info_file(
 }
 
 int ObLogArchiveBackupInfoMgr::update_extern_backup_info_file_timestamp(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -3898,8 +3895,8 @@ int ObLogArchiveBackupInfoMgr::update_extern_backup_info_file_timestamp(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::delete_extern_backup_piece_file(const ObClusterBackupDest& cluster_backup_dest,
-    const uint64_t tenant_id, const bool is_backup_backup, share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveBackupInfoMgr::delete_extern_backup_piece_file(const ObClusterBackupDest &cluster_backup_dest,
+    const uint64_t tenant_id, const bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObStorageUtil util(false /*need_retry*/);
@@ -3924,12 +3921,14 @@ int ObLogArchiveBackupInfoMgr::delete_extern_backup_piece_file(const ObClusterBa
     LOG_WARN("log archive info is not empty, cannot delete it", K(ret), K(cluster_backup_dest), K(tenant_id));
   } else if (OB_FAIL(util.del_file(path.get_ptr(), cluster_backup_dest.get_storage_info()))) {
     LOG_WARN("failed to delete file", K(ret), K(path), K(cluster_backup_dest));
+  } else {
+    LOG_INFO("succeed to delete extern backup piece file", K(path), K(external_info));
   }
   return ret;
 }
 
 int ObLogArchiveBackupInfoMgr::update_extern_backup_piece_file_timestamp(
-    const ObClusterBackupDest& cluster_backup_dest, const uint64_t tenant_id, const bool is_backup_backup)
+    const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id, const bool is_backup_backup)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -3951,9 +3950,9 @@ int ObLogArchiveBackupInfoMgr::update_extern_backup_piece_file_timestamp(
   return ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_tenant_backup_piece_infos(common::ObISQLClient& sql_client,
+int ObLogArchiveBackupInfoMgr::get_tenant_backup_piece_infos(common::ObISQLClient &sql_client,
     const int64_t incarnation, const uint64_t tenant_id, const int64_t round_id, const int64_t piece_id,
-    common::ObIArray<share::ObBackupPieceInfo>& piece_infos)
+    common::ObIArray<share::ObBackupPieceInfo> &piece_infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -3977,15 +3976,15 @@ int ObLogArchiveBackupInfoMgr::get_tenant_backup_piece_infos(common::ObISQLClien
 }
 
 int ObLogArchiveBackupInfoMgr::get_max_backup_piece_id_in_backup_dest(
-    const share::ObBackupBackupCopyIdLevel copy_id_level, const share::ObBackupDest& backup_dest,
-    const uint64_t tenant_id, common::ObISQLClient& sql_client, int64_t& max_piece_id)
+    const share::ObBackupBackupCopyIdLevel copy_id_level, const share::ObBackupDest &backup_dest,
+    const uint64_t tenant_id, common::ObISQLClient &sql_client, int64_t &max_piece_id)
 {
   int ret = OB_SUCCESS;
   max_piece_id = 0;
   int64_t left_copy_id = 0;
   int64_t right_copy_id = 0;
   ObSqlString sql;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
@@ -4024,7 +4023,7 @@ int ObLogArchiveBackupInfoMgr::get_max_backup_piece_id_in_backup_dest(
 }
 
 bool ObLogArchiveBackupInfoMgr::CompareBackupPieceInfo::operator()(
-    const share::ObBackupPieceInfo& lhs, const share::ObBackupPieceInfo& rhs)
+    const share::ObBackupPieceInfo &lhs, const share::ObBackupPieceInfo &rhs)
 {
   bool b_ret = false;
   result_ = OB_SUCCESS;
@@ -4053,13 +4052,9 @@ bool ObLogArchiveBackupInfoMgr::CompareBackupPieceInfo::operator()(
   return b_ret;
 }
 
-int ObLogArchiveBackupInfoMgr::get_tenant_backup_piece_infos_with_file_status(
-    common::ObISQLClient &sql_client,
-    const int64_t incarnation,
-    const uint64_t tenant_id,
-    const ObBackupFileStatus::STATUS &file_status,
-    const bool is_backup_backup,
-    common::ObIArray<share::ObBackupPieceInfo> &piece_infos)
+int ObLogArchiveBackupInfoMgr::get_tenant_backup_piece_infos_with_file_status(common::ObISQLClient &sql_client,
+    const int64_t incarnation, const uint64_t tenant_id, const ObBackupFileStatus::STATUS &file_status,
+    const bool is_backup_backup, common::ObIArray<share::ObBackupPieceInfo> &piece_infos)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -4068,9 +4063,12 @@ int ObLogArchiveBackupInfoMgr::get_tenant_backup_piece_infos_with_file_status(
   if (OB_INVALID_ID == tenant_id || incarnation <= 0 || !ObBackupFileStatus::is_valid(file_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(tenant_id), K(incarnation), K(file_status));
-  } else if (OB_FAIL(sql.assign_fmt(
-      "SELECT * FROM %s WHERE incarnation = %ld AND tenant_id = %lu AND file_status = '%s'",
-      OB_ALL_BACKUP_PIECE_FILES_TNAME, incarnation, tenant_id, ObBackupFileStatus::get_str(file_status)))) {
+  } else if (OB_FAIL(
+                 sql.assign_fmt("SELECT * FROM %s WHERE incarnation = %ld AND tenant_id = %lu AND file_status = '%s'",
+                     OB_ALL_BACKUP_PIECE_FILES_TNAME,
+                     incarnation,
+                     tenant_id,
+                     ObBackupFileStatus::get_str(file_status)))) {
     LOG_WARN("failed to assign sql", KR(ret), K(incarnation), K(tenant_id));
   } else if (is_backup_backup) {
     if (OB_FAIL(sql.append_fmt(" AND copy_id > 0"))) {
