@@ -318,8 +318,23 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
             } else if (ob_is_extend(data_type)) {
               ret = OB_NOT_SUPPORTED;
             }
+
             if (OB_SUCC(ret)) {
-              val.set_int(node->value_);
+              if (node->str_value_) {
+                ObString cs_name = ObString(node->str_value_);
+                ObCharsetType charset_type = CHARSET_INVALID;
+                if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(cs_name.trim()))) {
+                  ret = OB_ERR_UNKNOWN_CHARSET;
+                  LOG_WARN("unknown charset", K(ret), K(cs_name));
+                } else {
+                  ParseNode tmp_node;
+                  tmp_node.value_ = node->value_;
+                  tmp_node.int16_values_[OB_NODE_CAST_COLL_IDX] = ObCharset::get_default_collation(charset_type);
+                  val.set_int(tmp_node.value_);
+                }
+              } else {
+                val.set_int(node->value_);
+              }
               c_expr->set_value(val);
               c_expr->set_param(val);
               expr = c_expr;
