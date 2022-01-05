@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace common {
 class QClock {
 public:
-  enum { MAX_QCLOCK_SLOT_NUM = OB_MAX_CPU_NUM * 32 };
+  enum { MAX_QCLOCK_SLOT_NUM = OB_MAX_CPU_NUM * 64 };
   struct ClockSlot {
     ClockSlot() : clock_(UINT64_MAX)
     {}
