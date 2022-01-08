@@ -145,7 +145,7 @@ int ObLogExprValues::compute_fd_item_set()
       if (OB_FAIL(ret)) {
         /*do nothing*/
       } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
-        LOG_WARN("falied to deduce fd item set", K(ret));
+        LOG_WARN("failed to deduce fd item set", K(ret));
       } else {
         set_fd_item_set(fd_item_set);
       }

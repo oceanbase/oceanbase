@@ -127,7 +127,7 @@ int ObInsertAllLogPlan::allocate_insert_values_as_top(ObLogicalOperator *&top)
   } else if (insert_all_stmt->is_error_logging() && OB_FAIL(values_op->extract_err_log_info())) {
     LOG_WARN("failed to extract error log exprs", K(ret));
   } else if (OB_FAIL(values_op->compute_property())) {
-    LOG_WARN("failed to compute propery", K(ret));
+    LOG_WARN("failed to compute property", K(ret));
   } else {
     if (NULL != top) {
       values_op->add_child(top);
