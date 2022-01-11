@@ -1909,8 +1909,10 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_tasks(
     int hash_ret = sys_tenant_deleted_backup_piece.exist_refactored(simple_piece_key);
     if (OB_HASH_EXIST == hash_ret) {
       delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_BACKUP_PIECE;
+      LOG_INFO("backup piece will be deleted", K(simple_piece_key));
     } else if (OB_HASH_NOT_EXIST == hash_ret) {
       delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
+      LOG_INFO("backup piece will not be deleted", K(simple_piece_key));
     } else {
       ret = OB_SUCCESS == hash_ret ? OB_ERR_UNEXPECTED : hash_ret;
       LOG_WARN("failed to check backup piece exist", K(ret), K(hash_ret), K(simple_piece_key));

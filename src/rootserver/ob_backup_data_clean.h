@@ -220,6 +220,8 @@ private:
       const ObBackupDataCleanElement &clean_element,
       common::ObIArray<ObLogArchiveRound> &log_archive_rounds,
       common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys);
+  int get_tenant_delete_piece(const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanElement &clean_element,
+      common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys);
 
   int delete_tenant_backup_meta_data(
       const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanTenant &clean_tenant);
