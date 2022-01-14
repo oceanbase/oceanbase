@@ -39,6 +39,7 @@ using table::ObTableBatchOperationResult;
 using table::ObITableBatchOperationResult;
 using table::ObTableQuery;
 using table::ObTableQueryResult;
+using table::ObTableQuerySyncResult;
 class ObTableApiProcessorBase;
 class ObTableService;
 class ObTableApiRowIterator;
@@ -126,7 +127,7 @@ class ObNormalTableQueryResultIterator: public table::ObTableQueryResultIterator
 {
 public:
   ObNormalTableQueryResultIterator(const ObTableQuery &query, table::ObTableQueryResult &one_result)
-      :one_result_(one_result),
+      :one_result_(&one_result),
        query_(&query),
        last_row_(NULL),
        batch_size_(query.get_batch()),
@@ -134,15 +135,19 @@ public:
                                  static_cast<int64_t>(common::OB_MAX_PACKET_BUFFER_LENGTH-1024))),
        scan_result_(NULL),
        is_first_result_(true),
-       has_more_rows_(true)
+       has_more_rows_(true),
+       is_query_sync_(false)
   {
   }
   virtual ~ObNormalTableQueryResultIterator() {}
   virtual int get_next_result(table::ObTableQueryResult *&one_result) override;
   virtual bool has_more_result() const override;
   void set_scan_result(common::ObNewRowIterator *scan_result) { scan_result_ = scan_result; }
+  virtual void set_one_result(ObTableQueryResult *result) {one_result_ = result;}
+  void set_query(const ObTableQuery *query) {query_ = query;}
+  void set_query_sync() { is_query_sync_ = true ; }
 private:
-  table::ObTableQueryResult &one_result_;
+  table::ObTableQueryResult *one_result_;
   const ObTableQuery *query_;
   common::ObNewRow *last_row_;
   int32_t batch_size_;
@@ -150,6 +155,7 @@ private:
   common::ObNewRowIterator *scan_result_;
   bool is_first_result_;
   bool has_more_rows_;
+  bool is_query_sync_;
 };
 
 struct ObTableServiceQueryCtx: public ObTableServiceGetCtx

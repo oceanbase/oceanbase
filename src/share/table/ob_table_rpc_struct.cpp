@@ -85,3 +85,8 @@ OB_SERIALIZE_MEMBER(ObTableQueryAndMutateRequest,
                     partition_id_,
                     entity_type_,
                     query_and_mutate_);
+
+OB_SERIALIZE_MEMBER((ObTableQuerySyncRequest, ObTableQueryRequest),
+                    query_session_id_,
+                    query_type_
+                    );
