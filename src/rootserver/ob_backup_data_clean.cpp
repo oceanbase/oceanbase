@@ -2587,8 +2587,6 @@ int ObBackupDataClean::mark_backup_set_info_deleting(
     LOG_WARN("failed to get need delete backup set ids", K(ret), K(clean_info));
   } else if (OB_FAIL(mark_backup_set_info_inner_table_deleting(clean_info, clean_element, backup_set_ids))) {
     LOG_WARN("failed to mark backup set info inner table deleted", K(ret), K(clean_info));
-  } else if (OB_FAIL(mark_extern_backup_set_info_deleting(clean_info, clean_element, backup_set_ids))) {
-    LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
   }
   return ret;
 }
@@ -2847,9 +2845,6 @@ int ObBackupDataClean::mark_log_archive_info_deleting(
     LOG_WARN("failed to get need delete clog round and piece", K(ret), K(clean_info));
   } else if (OB_FAIL(mark_log_archive_info_inner_table_deleting(clean_info, backup_piece_keys, log_archive_rounds))) {
     LOG_WARN("failed to mark backup set info inner table deleted", K(clean_info));
-  } else if (OB_FAIL(mark_extern_log_archive_info_deleting(
-                 clean_info, clean_element, backup_piece_keys, log_archive_rounds))) {
-    LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
   }
 
   return ret;
@@ -3319,6 +3314,11 @@ int ObBackupDataClean::delete_backup_extern_infos(
         LOG_WARN("failed to get need delete clog round and piece", K(ret), K(clean_info));
       } else if (OB_FAIL(delete_extern_tmp_files(clean_info, clean_element))) {
         LOG_WARN("failed to delete extern tmp files", K(ret), K(clean_info));
+      } else if (OB_FAIL(mark_extern_backup_set_info_deleting(clean_info, clean_element, backup_set_ids))) {
+        LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
+      } else if (OB_FAIL(mark_extern_log_archive_info_deleting(
+                     clean_info, clean_element, backup_piece_keys, log_archive_rounds))) {
+        LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
       } else if (OB_FAIL(delete_extern_backup_info_deleted(clean_info, clean_element, backup_set_ids))) {
         LOG_WARN("failed to makr extern backup info deleted", K(ret), K(clean_info), K(clean_element));
       } else if (OB_FAIL(delete_extern_clog_info_deleted(clean_info, clean_element, log_archive_rounds))) {
