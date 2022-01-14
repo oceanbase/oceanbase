@@ -228,7 +228,7 @@ int ObMultipleMultiScanMerge::construct_iters()
           iter->~ObStoreRowIterator();
           STORAGE_LOG(WARN, "Fail to push iter to iterator array, ", K(ret), K(i));
         }
-      } else if (OB_ISNULL(iters_.at(tables.count() - 1 - i))) {
+      } else if (OB_ISNULL(iter = iters_.at(tables.count() - 1 - i))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null iter", K(ret), "idx", tables.count() - 1 - i, K_(iters));
       } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, ranges_))) {
