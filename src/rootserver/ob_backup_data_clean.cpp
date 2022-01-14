@@ -2587,8 +2587,6 @@ int ObBackupDataClean::mark_backup_set_info_deleting(
     LOG_WARN("failed to get need delete backup set ids", K(ret), K(clean_info));
   } else if (OB_FAIL(mark_backup_set_info_inner_table_deleting(clean_info, clean_element, backup_set_ids))) {
     LOG_WARN("failed to mark backup set info inner table deleted", K(ret), K(clean_info));
-  } else if (OB_FAIL(mark_extern_backup_set_info_deleting(clean_info, clean_element, backup_set_ids))) {
-    LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
   }
   return ret;
 }
@@ -2847,9 +2845,6 @@ int ObBackupDataClean::mark_log_archive_info_deleting(
     LOG_WARN("failed to get need delete clog round and piece", K(ret), K(clean_info));
   } else if (OB_FAIL(mark_log_archive_info_inner_table_deleting(clean_info, backup_piece_keys, log_archive_rounds))) {
     LOG_WARN("failed to mark backup set info inner table deleted", K(clean_info));
-  } else if (OB_FAIL(mark_extern_log_archive_info_deleting(
-                 clean_info, clean_element, backup_piece_keys, log_archive_rounds))) {
-    LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
   }
 
   return ret;
@@ -3017,19 +3012,8 @@ int ObBackupDataClean::get_need_delete_clog_round_and_piece(const share::ObBacku
     ret = OB_NOT_INIT;
     LOG_WARN("backup data clean do not init", K(ret));
   } else if (clean_info.is_delete_backup_piece()) {
-    ObBackupPieceInfoKey piece_key;
-    if (clean_element.log_archive_round_array_.empty() || clean_element.log_archive_round_array_.count() > 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("delete backup piece get unexpected round infos", K(ret), K(clean_element));
-    } else {
-      piece_key.backup_piece_id_ = clean_info.backup_piece_id_;
-      piece_key.copy_id_ = clean_element.log_archive_round_array_.at(0).copy_id_;
-      piece_key.incarnation_ = clean_element.incarnation_;
-      piece_key.round_id_ = clean_element.log_archive_round_array_.at(0).log_archive_round_;
-      piece_key.tenant_id_ = clean_info.tenant_id_;
-      if (OB_FAIL(backup_piece_keys.push_back(piece_key))) {
-        LOG_WARN("failed to push backup piece key into array", K(ret), K(piece_key));
-      }
+    if (OB_FAIL(get_tenant_delete_piece(clean_info, clean_element, backup_piece_keys))) {
+      LOG_WARN("failed to get tenant delete piece", K(ret), K(clean_info), K(clean_element));
     }
   } else if (OB_SYS_TENANT_ID == clean_info.tenant_id_) {
     if (OB_FAIL(get_sys_tenant_delete_clog_round_and_piece(
@@ -3330,6 +3314,11 @@ int ObBackupDataClean::delete_backup_extern_infos(
         LOG_WARN("failed to get need delete clog round and piece", K(ret), K(clean_info));
       } else if (OB_FAIL(delete_extern_tmp_files(clean_info, clean_element))) {
         LOG_WARN("failed to delete extern tmp files", K(ret), K(clean_info));
+      } else if (OB_FAIL(mark_extern_backup_set_info_deleting(clean_info, clean_element, backup_set_ids))) {
+        LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
+      } else if (OB_FAIL(mark_extern_log_archive_info_deleting(
+                     clean_info, clean_element, backup_piece_keys, log_archive_rounds))) {
+        LOG_WARN("failed to mark extern backup set info deleted", K(ret), K(clean_info));
       } else if (OB_FAIL(delete_extern_backup_info_deleted(clean_info, clean_element, backup_set_ids))) {
         LOG_WARN("failed to makr extern backup info deleted", K(ret), K(clean_info), K(clean_element));
       } else if (OB_FAIL(delete_extern_clog_info_deleted(clean_info, clean_element, log_archive_rounds))) {
@@ -6858,6 +6847,45 @@ int ObBackupDataClean::remove_delete_expired_data_snapshot_(const ObSimpleBackup
     LOG_WARN("failed to init backup info manager", K(ret), K(simple_tenant));
   } else if (OB_FAIL(info_manager.delete_last_delete_epxired_data_snapshot(simple_tenant.tenant_id_, *sql_proxy_))) {
     LOG_WARN("failed to delete last delete epxired data snapshot", K(ret), K(simple_tenant));
+  }
+  return ret;
+}
+
+int ObBackupDataClean::get_tenant_delete_piece(const share::ObBackupCleanInfo &clean_info,
+    const ObBackupDataCleanElement &clean_element, common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPieceInfoKey piece_key;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data clean do not init", K(ret));
+  } else if (clean_element.log_archive_round_array_.empty() || clean_element.log_archive_round_array_.count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delete backup piece get unexpected round infos", K(ret), K(clean_element));
+  } else {
+    piece_key.backup_piece_id_ = clean_info.backup_piece_id_;
+    piece_key.copy_id_ = clean_element.log_archive_round_array_.at(0).copy_id_;
+    piece_key.incarnation_ = clean_element.incarnation_;
+    piece_key.round_id_ = clean_element.log_archive_round_array_.at(0).log_archive_round_;
+    piece_key.tenant_id_ = clean_info.tenant_id_;
+    if (OB_FAIL(backup_piece_keys.push_back(piece_key))) {
+      LOG_WARN("failed to push backup piece key into array", K(ret), K(piece_key));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_SYS_TENANT_ID == clean_info.tenant_id_) {
+        const bool overwrite_key = true;
+        ObSimplePieceKey simple_piece_key;
+        simple_piece_key.backup_piece_id_ = piece_key.backup_piece_id_;
+        simple_piece_key.copy_id_ = piece_key.copy_id_;
+        simple_piece_key.incarnation_ = piece_key.incarnation_;
+        simple_piece_key.round_id_ = piece_key.round_id_;
+        if (OB_FAIL(sys_tenant_deleted_backup_piece_.set_refactored_1(simple_piece_key, overwrite_key))) {
+          LOG_WARN("failed to set simple piece key", K(ret), K(simple_piece_key), K(piece_key));
+        }
+      }
+    }
   }
   return ret;
 }

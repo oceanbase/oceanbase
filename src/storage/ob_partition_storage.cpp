@@ -2186,14 +2186,14 @@ int ObPartitionStorage::check_new_row_shadow_pk(
       LOG_WARN(
           "index column count is invalid", K(ret), K(index_col_cnt), K(rowkey_cnt), K(spk_cnt), K(column_ids.count()));
     } else if (lib::is_mysql_mode()) {
-      // mysql兼容：只要unique index key中有null列，则需要填充shadow列
+      // mysql compatible: if the unique index key contains a null column, fill the shadow column
       bool rowkey_has_null = false;
       for (int64_t i = 0; !rowkey_has_null && i < index_col_cnt; i++) {
         rowkey_has_null = new_row.get_cell(i).is_null();
       }
       need_spk = rowkey_has_null;
     } else {
-      // oracle兼容：只有unique index key全为null列时，才需要填充shadow列
+      // oracle compatible: the shadow column needs to be filled only when all unique index keys are null columns
       bool is_rowkey_all_null = true;
       for (int64_t i = 0; is_rowkey_all_null && i < index_col_cnt; i++) {
         is_rowkey_all_null = new_row.get_cell(i).is_null();
@@ -3468,6 +3468,7 @@ int ObPartitionStorage::table_scan(
   ObTableScanIterator* iter = NULL;
   ObStoreCtx ctx;
   ctx.cur_pkey_ = pkey_;
+  ctx.is_thread_scope_ = param.is_thread_scope_;
 
   // STORAGE_LOG(DEBUG, "begin table scan", K(param));
   if (OB_UNLIKELY(!is_inited_)) {
@@ -3536,6 +3537,7 @@ int ObPartitionStorage::table_scan(
   ObTableScanIterIterator* iter = NULL;
   ObStoreCtx ctx;
   ctx.cur_pkey_ = pkey_;
+  ctx.is_thread_scope_ = param.is_thread_scope_;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;

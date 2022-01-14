@@ -62,6 +62,8 @@ public:
   static int check_multi_path_is_complete(const int64_t restore_timestamp,
       common::ObArray<share::ObBackupSetFileInfo> &set_info_list,
       common::ObArray<share::ObBackupPieceInfo> &piece_info_list, bool &is_complete);
+  static int check_can_restore_by_set_or_piece(const common::ObArray<share::ObSimpleBackupSetPath> &backup_set_list,
+      const common::ObArray<share::ObSimpleBackupPiecePath> &backup_piece_list);
 
 private:
   static int check_is_compat_backup_path(const char *cluster_name, const int64_t cluster_id,

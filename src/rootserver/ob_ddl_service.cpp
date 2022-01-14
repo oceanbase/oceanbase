@@ -6475,6 +6475,9 @@ int ObDDLService::create_table_partitions_for_physical_restore(const obrpc::ObRe
     LOG_WARN("root_balancer_ is null", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist. table may be droppped concurrently in physical restore", KR(ret), K(table_id));
   } else if (OB_FAIL(root_balancer_->alloc_partitions_for_create(*table_schema, create_mode, table_addr))) {
     LOG_WARN("alloc partition address failed", K(ret), KPC(table_schema));
   } else if (OB_FAIL(create_partitions_for_physical_restore(

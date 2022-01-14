@@ -3193,7 +3193,7 @@ int PartTransTask::to_string_trans_id()
       MEMCPY(buf, trans_id_buf, pos);
       buf[pos] = '\0';
 
-      trans_id_str_.assign(buf, static_cast<int32_t>(buf_len));
+      trans_id_str_.assign(buf, static_cast<int32_t>(pos));
     }
   }
 
