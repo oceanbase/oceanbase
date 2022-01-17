@@ -1,16 +1,12 @@
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software
- * according to the terms and conditions of the Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
- *
- * http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND,
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A
- * PARTICULAR PURPOSE.
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
 
@@ -46,16 +42,16 @@ using namespace share::schema;
 namespace observer {
 
 class MockObAllVirtualSysStat : public oceanbase::observer::ObAllVirtualSysStat {
-  public:
+public:
   virtual int get_next_row(common::ObNewRow*& row);
 };
 
 class MockObAllLatch : public oceanbase::observer::ObAllLatch {
-  public:
+public:
   virtual int get_next_row(common::ObNewRow*& row);
   virtual int set_ip(common::ObAddr* addr);
 
-  private:
+private:
   common::ObString ipstr_;
   int32_t port_;
 };
@@ -320,7 +316,7 @@ int MockObAllLatch::get_next_row(ObNewRow*& row)
 }
 
 class TestDIPerf : public ::testing::Test {
-  public:
+public:
   TestDIPerf();
   virtual ~TestDIPerf()
   {}
@@ -328,7 +324,7 @@ class TestDIPerf : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   DBInitializer db_initer_;
   ObSchemaServiceSQLImpl schema_service_;
   ObMultiVersionSchemaService multi_schema_service_;

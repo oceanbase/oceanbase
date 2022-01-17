@@ -58,7 +58,7 @@ namespace storage {
 
 typedef compaction::ObIPartitionMergeFuser::MERGE_ITER_ARRAY MERGE_ITER_ARRAY;
 class TestNewMinorFuserMerge : public ObMultiVersionSSTableTest {
-  public:
+public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
   TestNewMinorFuserMerge() : ObMultiVersionSSTableTest("test_new_minor_fuser")
   {}
@@ -563,10 +563,10 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_rowkey_across_macro_blo
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var1   -10     0       3        NOP     EXIST   CF\n"
-                        "0        var1   -9      -8      2        NOP     EXIST   CL\n"
-                        "1        var1   -7      -14     9        6       EXIST   CL\n"
-                        "2        var2   -8      -22     5        6       EXIST   CL\n";
+                        "0        var1   -10     0      3        NOP     EXIST   CF\n"
+                        "0        var1   -9      0      2        NOP     EXIST   CL\n"
+                        "1        var1   -7      0      9        6       EXIST   CL\n"
+                        "2        var2   -8      0      5        6       EXIST   CL\n";
   // minor mrege
 
   ObMacroBlockBuilder builder;
@@ -646,12 +646,12 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_rowkey_across_macro_blo
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var1   -10     0       3        NOP     EXIST   CF\n"
-                        "0        var1   -9      -8      2        NOP     EXIST   CL\n"
-                        "1        var1   -7      -24     NOP      19      EXIST   C\n"
-                        "1        var1   -6      -7      NOP      2       EXIST   C\n"
-                        "1        var1   -5      -5      NOP      9       EXIST   CL\n"
-                        "2        var2   -8      -22     3        6       EXIST   CL\n";
+                        "0        var1   -10     0      3        NOP     EXIST   CF\n"
+                        "0        var1   -9      0      2        NOP     EXIST   CL\n"
+                        "1        var1   -7      0      NOP      19      EXIST   C\n"
+                        "1        var1   -6      0      NOP      2       EXIST   C\n"
+                        "1        var1   -5      0      NOP      9       EXIST   CL\n"
+                        "2        var2   -8      0      3        6       EXIST   CL\n";
   // minor mrege
 
   ObMacroBlockBuilder builder;
@@ -716,7 +716,7 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_rowkey_across_macro_blo
 
   macro_data2[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
                    "0        var0  -6       -16      3        NOP     EXIST   CL\n"
-                   "1        var1  -12      -24      NOP      19      EXIST   CF\n"
+                   "1        var1  -12      -24      3        19      EXIST   CF\n"
                    "1        var1  -8       -22      3        6       EXIST   N\n";
 
   macro_data2[2] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
@@ -744,15 +744,15 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_rowkey_across_macro_blo
   const char* result1 =
       "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
       "0        var0   -10     0       3        7       EXIST   CF\n"  // two compact row need to compact together
-      "0        var0   -9      -24     NOP      19      EXIST   N\n"
-      "0        var0   -8      -22     3        6       EXIST   N\n"
-      "0        var0   -6      -16     3        7       EXIST   CL\n"
-      "1        var1   -12     -24     NOP      19      EXIST   CF\n"
-      "1        var1   -8      -22     3        6       EXIST   N\n"
-      "1        var1   -7      -15     3        6       EXIST   C\n"
-      "1        var1   -6      -7      NOP      2       EXIST   C\n"
-      "1        var1   -5      -5      NOP      9       EXIST   CL\n"
-      "2        var2   -8      -22     5        6       EXIST   CL\n";
+      "0        var0   -9      0      NOP      19      EXIST   N\n"
+      "0        var0   -8      0      3        6       EXIST   N\n"
+      "0        var0   -6      0      3        7       EXIST   CL\n"
+      "1        var1   -12     0      3        19      EXIST   CF\n"
+      "1        var1   -8      0      3        6       EXIST   C\n"
+      "1        var1   -7      0      3        6       EXIST   C\n"
+      "1        var1   -6      0      NOP      2       EXIST   C\n"
+      "1        var1   -5      0      NOP      9       EXIST   CL\n"
+      "2        var2   -8      0      5        6       EXIST   CL\n";
 
   // minor mrege
 
@@ -839,12 +839,12 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_multi_sstable)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -1      -9      7        NOP     EXIST   CLF\n"
-                        "1        var1  -12     0       5        19      EXIST   CF\n"
-                        "1        var1  -7      -24     5        21      EXIST   C\n"
-                        "1        var1  -4      0       5        2       EXIST   CL\n"
-                        "2        var2  -9      -22     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   CL\n";
+                        "0        var0  -1      0      7        NOP     EXIST   CLF\n"
+                        "1        var1  -12     0      5        19      EXIST   CF\n"
+                        "1        var1  -7      0      5        21      EXIST   C\n"
+                        "1        var1  -4      0      5        2       EXIST   CL\n"
+                        "2        var2  -9      0      18       7       EXIST   CF\n"
+                        "2        var2  -4      0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -913,7 +913,7 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_multi_sstable2)
   ObSSTable sstable3;
   const char* macro_data3[1];
   macro_data3[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
-                   "1        var1  -12      0       NOP      19      EXIST   CF\n"
+                   "1        var1  -12      0       1        19      EXIST   CF\n"
                    "1        var1  -8       -2      1        6       EXIST   N\n"
                    "1        var1  -7       -35     7        NOP     EXIST   L\n"
                    "2        var2  -9       -25     18       NOP     EXIST   CLF\n";
@@ -935,13 +935,13 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_multi_sstable2)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CL\n"
-                        "1        var1  -12     0       NOP      19      EXIST   CF\n"
-                        "1        var1  -8      -2      1        6       EXIST   N\n"
-                        "1        var1  -7      -35     7        19      EXIST   C\n"
-                        "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "0        var0  -9      0      9        12      EXIST   CL\n"
+                        "1        var1  -12     0      1        19      EXIST   CF\n"
+                        "1        var1  -8      0      1        6       EXIST   N\n"
+                        "1        var1  -7      0      7        19      EXIST   N\n"
+                        "1        var1  -4      0      NOP      9       EXIST   CL\n"
+                        "2        var2  -9      0      18       7       EXIST   CF\n"
+                        "2        var2  -4      0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -1044,13 +1044,13 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_multi_sstable3)
 
   const char* result1 =
       "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-      "0        var0  -9      -11     9        12      EXIST   CL\n"
-      "1        var1  -12     0       18       19      EXIST   CF\n"  // two compact rows with same rowkey & diff
-                                                                      // trans_version need compact
-      "1        var1  -8      -2      1        6       EXIST   N\n"
-      "1        var1  -7      -35     18       7       EXIST   CL\n"
-      "2        var2  -9      -25     18       9       EXIST   CF\n"
-      "2        var2  -4      -15     NOP      7       EXIST   L\n";
+      "0        var0  -9      0      9        12      EXIST   CL\n"
+      "1        var1  -12     0      18       19      EXIST   CF\n"  // two compact rows with same rowkey & diff
+                                                                     // trans_version need compact
+      "1        var1  -8      0      1        6       EXIST   N\n"
+      "1        var1  -7      0      18       7       EXIST   CL\n"
+      "2        var2  -9      0      18       9       EXIST   CF\n"
+      "2        var2  -4      0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -1137,9 +1137,9 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_multi_sstable_has_same_row)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -9       7        12      EXIST   CL\n"
-                        "1        var1  -7      -24     18       6       EXIST   CL\n"
-                        "2        var2  -9      -5      1        9       EXIST   CL\n";
+                        "0        var0  -9      0      7        12      EXIST   CL\n"
+                        "1        var1  -7      0      18       6       EXIST   CL\n"
+                        "2        var2  -9      0      1        9       EXIST   CL\n";
 
   // minor mrege
 
@@ -1229,11 +1229,11 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_new_sstable_had_old_rows)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -9       7        12      EXIST   CL\n"
-                        "1        var1  -12     0        7        6       EXIST   CF\n"
-                        "1        var1  -7      -24      18       6       EXIST   C\n"
-                        "1        var1  -2      0        21       12      EXIST   CL\n"
-                        "2        var2  -9      -5       1        9       EXIST   CL\n";
+                        "0        var0  -9      0       7        12      EXIST   CL\n"
+                        "1        var1  -12     0       7        6       EXIST   CF\n"
+                        "1        var1  -7      0       18       6       EXIST   C\n"
+                        "1        var1  -2      0       21       12      EXIST   CL\n"
+                        "2        var2  -9      0       1        9       EXIST   CL\n";
 
   // minor mrege
 
@@ -1323,12 +1323,12 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_new_sstable_had_old_rows2)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -14     -19      71       12      EXIST   C\n"
-                        "0        var0  -9      -9       7        12      EXIST   CL\n"
-                        "1        var1  -7      -24      21       68      EXIST   C\n"
-                        "1        var1  -6      0        21       NOP     EXIST   N\n"
-                        "1        var1  -4      0        91       12      EXIST   L\n"
-                        "2        var2  -9      -5       1        9       EXIST   CL\n";
+                        "0        var0  -14     0       71       12      EXIST   C\n"
+                        "0        var0  -9      0       7        12      EXIST   CL\n"
+                        "1        var1  -7      0       21       68      EXIST   C\n"
+                        "1        var1  -6      0       21       NOP     EXIST   N\n"
+                        "1        var1  -4      0       91       12      EXIST   CL\n"
+                        "2        var2  -9      0       1        9       EXIST   CL\n";
 
   // minor mrege
 
@@ -1418,12 +1418,12 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_delete_row)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -14     -19      71       12      EXIST   C\n"
-                        "0        var0  -9      -9       7        12      EXIST   CL\n"
-                        "1        var1  -7      -24      NOP      NOP     DELETE  C\n"
-                        "1        var1  -6      0        21       NOP     EXIST   N\n"
-                        "1        var1  -4      0        91       12      EXIST   L\n"
-                        "2        var2  -9      -5       1        9       EXIST   CL\n";
+                        "0        var0  -14     0       71       12      EXIST   C\n"
+                        "0        var0  -9      0       7        12      EXIST   CL\n"
+                        "1        var1  -7      0       NOP      NOP     DELETE  C\n"
+                        "1        var1  -6      0       21       NOP     EXIST   N\n"
+                        "1        var1  -4      0       91       12      EXIST   CL\n"
+                        "2        var2  -9      0       1        9       EXIST   CL\n";
 
   // minor mrege
 
@@ -1513,10 +1513,10 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_test_allocator)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint   var      var     flag    multi_version_row_flag\n"
-                        "0        var0  -14     -19      bbbbb    huluhulu  EXIST   C\n"
-                        "0        var0  -9      -9       biubiu   huluhulu  EXIST   CL\n"
-                        "1        var1  -7      -24      char77   kkkkk3    EXIST   CL\n"
-                        "2        var2  -9      -5       1        nnnnn     EXIST   CL\n";
+                        "0        var0  -14     0       bbbbb    huluhulu  EXIST   C\n"
+                        "0        var0  -9      0       biubiu   huluhulu  EXIST   CL\n"
+                        "1        var1  -7      0       char77   kkkkk3    EXIST   CL\n"
+                        "2        var2  -9      0       1        nnnnn     EXIST   CL\n";
 
   // minor mrege
 
@@ -1618,10 +1618,10 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_test_allocator2)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint   var      var     flag    multi_version_row_flag\n"
-                        "0        var0  -14     -39      bbbbb    akhgfajkhg  EXIST   C\n"
-                        "0        var0  -9      -9       biubiu   huluhulu  EXIST   CL\n"
-                        "1        var1  -7      -40      qjkfjkqhgkq hkgqhjkgqhkghqkhgkqh    EXIST   CL\n"
-                        "2        var2  -9      -5       1        nnnnn     EXIST   CL\n";
+                        "0        var0  -14     0       bbbbb    akhgfajkhg  EXIST   C\n"
+                        "0        var0  -9      0       biubiu   huluhulu  EXIST   CL\n"
+                        "1        var1  -7      0       qjkfjkqhgkq hkgqhjkgqhkghqkhgkqh    EXIST   CL\n"
+                        "2        var2  -9      0       1        nnnnn     EXIST   CL\n";
 
   // minor mrege
 
@@ -1722,7 +1722,7 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_uncommitted_row_running
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CL\n"
+                        "0        var0  -9      0       9        12      EXIST   CL\n"
                         "1        var1  MIN     -35     7        NOP     EXIST   U\n"
                         "1        var1  MIN     -26     NOP      11      EXIST   U\n"
                         "1        var1  MIN     -24     NOP      19      EXIST   U\n"
@@ -1731,8 +1731,8 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_uncommitted_row_running
                         "1        var1  MIN     -7      NOP      2       EXIST   U\n"
                         "1        var1  MIN     -6      NOP      2       EXIST   U\n"
                         "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "2        var2  -9      0       18       7       EXIST   CF\n"
+                        "2        var2  -4      0       NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -1836,10 +1836,10 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_uncommitted_row_abort)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CL\n"
+                        "0        var0  -9      0       9        12      EXIST   CL\n"
                         "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   CL\n";
+                        "2        var2  -9      0       18       7       EXIST   CF\n"
+                        "2        var2  -4      0       NOP      7       EXIST   CL\n";
 
   // minor mrege
   scan_trans_part_ctx_.clear_all();
@@ -1941,11 +1941,11 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_uncommitted_row_commit)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CL\n"
-                        "1        var1  -18     -35     7        11      EXIST   C\n"
-                        "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "0        var0  -9       0      9        12      EXIST   CL\n"
+                        "1        var1  -18      0      7        11      EXIST   C\n"
+                        "1        var1  -4       0      NOP      9       EXIST   CL\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -2043,11 +2043,11 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_uncommitted_row_commit2
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CL\n"
-                        "1        var1  -18     -12     7        6       EXIST   C\n"
-                        "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "0        var0  -9       0      9        12      EXIST   CL\n"
+                        "1        var1  -18      0      7        6       EXIST   C\n"
+                        "1        var1  -4       0      NOP      9       EXIST   CL\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -2123,8 +2123,8 @@ TEST_F(TestNewMinorFuserMerge, test_new_minor_fuser_with_multi_delete_row)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "1        var1   -40    -12     27      NOP    EXIST   C\n"
-                        "1        var1   -18    -10     NOP     NOP    DELETE  C\n"
+                        "1        var1   -40    0       27      NOP    EXIST   C\n"
+                        "1        var1   -18    0       NOP     NOP    DELETE  C\n"
                         "1        var1   -4     0       NOP     9      EXIST   CL\n";
 
   // minor mrege

@@ -69,7 +69,7 @@ ObBatchBuffer::IncPos& ObBatchBuffer::IncPos::next_block()
 }
 
 class ObBatchBuffer::Block : public ObIBatchBufferTask {
-  public:
+public:
   Block(ObBatchBuffer& host, int64_t seq, char* buf, int64_t block_count, bool auto_freeze)
       : host_(host),
         seq_(seq),
@@ -96,7 +96,7 @@ class ObBatchBuffer::Block : public ObIBatchBufferTask {
   }
   void reuse();
 
-  private:
+private:
   ObBatchBuffer& host_;
   int64_t seq_;
   int64_t status_seq_;

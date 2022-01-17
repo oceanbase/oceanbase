@@ -236,12 +236,8 @@ int ObCreateViewResolver::resolve(const ParseNode& parse_tree)
                 LOG_WARN("failed to init hashset", K(ret), K(select_item_size));
               }
               for (int64_t i = 0; OB_SUCC(ret) && i < select_item_size; ++i) {
-                if (OB_FAIL(
-                        check_select_stmt_col_name(select_stmt->get_select_item(i), index_array, i, view_col_names))) {
-                  SQL_RESV_LOG(WARN,
-                      "check select stmt col name failed",
-                      K(ret),
-                      K(select_stmt->get_select_item(i).alias_name_));
+                if (OB_FAIL(check_select_stmt_col_name(select_stmt->get_select_item(i), index_array, i, view_col_names, is_expr_or_col_dup, dup_col_name))){
+                  SQL_RESV_LOG(WARN, "check select stmt col name failed", K(ret), K(select_stmt->get_select_item(i).alias_name_));
                 }
               }
               if (OB_SUCC(ret)) {
@@ -262,7 +258,7 @@ int ObCreateViewResolver::resolve(const ParseNode& parse_tree)
               if (OB_UNLIKELY(select_item_size != view_children_num)) {
                 ret = OB_ERR_VIEW_WRONG_LIST;
                 LOG_WARN("view columns is not equal with select columns", K(select_item_size), K(view_children_num));
-              } else if (share::is_oracle_mode()) {  // need check if any dup. names in oracle mode
+              } else {  // need check if any dup. names in oracle mode
                 is_expr_or_col_dup = false;
                 specify_view_col = true;
                 dup_col_name.reset();
@@ -283,8 +279,6 @@ int ObCreateViewResolver::resolve(const ParseNode& parse_tree)
                     // do nothing
                   }
                 }
-              } else {
-                // do nothing
               }
             }
           }
@@ -306,6 +300,18 @@ int ObCreateViewResolver::resolve(const ParseNode& parse_tree)
               ObString scope_name = ObString::make_string(get_scope_name(T_FIELD_LIST_SCOPE));
               LOG_USER_ERROR(
                   OB_NON_UNIQ_ERROR, dup_col_name.length(), dup_col_name.ptr(), scope_name.length(), scope_name.ptr());
+            } else {
+              // do nothing
+            }
+          }
+
+          // 检查 mysql 模式下列名定义
+          if (share::is_mysql_mode() && !(is_sync_ddl_user && session_info_->is_inner())) {
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else if (is_expr_or_col_dup || is_view_col_dup) {
+              ret = OB_ERR_COLUMN_DUPLICATE;
+              LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, dup_col_name.length(), dup_col_name.ptr());
             } else {
               // do nothing
             }
@@ -538,8 +544,13 @@ int ObCreateViewResolver::stmt_print(
 }
 
 // check if alias too long or duplicate
-int ObCreateViewResolver::check_select_stmt_col_name(SelectItem& select_item, ObArray<int64_t>& index_array,
-    int64_t pos, common::hash::ObHashSet<ObString>& view_col_names)
+int ObCreateViewResolver::check_select_stmt_col_name(
+    SelectItem &select_item,
+    ObArray<int64_t> &index_array,
+    int64_t pos,
+    common::hash::ObHashSet<ObString> &view_col_names,
+    bool &is_expr_or_col_dup,
+    ObString &dup_col_name)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_HASH_NOT_EXIST;
@@ -566,8 +577,13 @@ int ObCreateViewResolver::check_select_stmt_col_name(SelectItem& select_item, Ob
   if (OB_SUCC(ret) && len_is_legal) {
     // check if dup
     if (OB_HASH_EXIST == (hash_ret = view_col_names.exist_refactored(col_name))) {
-      ret = OB_ERR_COLUMN_DUPLICATE;
-      LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, col_name.length(), col_name.ptr());
+      is_expr_or_col_dup = true;
+      if (dup_col_name.empty()) {
+        dup_col_name = col_name;
+      }
+      ret = OB_SUCCESS;
+      // ret = OB_ERR_COLUMN_DUPLICATE;
+      // LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, col_name.length(), col_name.ptr());
     } else {
       if (OB_FAIL(view_col_names.set_refactored(col_name, 0))) {
         SQL_RESV_LOG(WARN, "set column name to hash set failed", K(ret), K(col_name));
@@ -589,8 +605,8 @@ int ObCreateViewResolver::create_alias_names_auto(
   int hash_ret = OB_HASH_EXIST;
   for (int64_t j = 0; OB_SUCC(ret) && j < long_col_name_num; ++j) {
     hash_ret = OB_HASH_EXIST;
+    char temp_str_buf[number::ObNumber::MAX_PRINTABLE_SIZE];
     while (OB_SUCC(ret) && OB_HASH_EXIST == hash_ret) {
-      char temp_str_buf[number::ObNumber::MAX_PRINTABLE_SIZE];
       if (snprintf(temp_str_buf, sizeof(temp_str_buf), "Name_exp_%ld", auto_name_id) < 0) {
         ret = OB_SIZE_OVERFLOW;
         SQL_RESV_LOG(WARN, "failed to generate buffer for temp_str_buf", K(ret));

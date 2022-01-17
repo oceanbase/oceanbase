@@ -36,7 +36,7 @@ class ObDMLSqlSplicer;
 class ObIMergeErrorCb;
 // partition table (__all_core_table, __all_root_table, __all_tenant_meta_table) query && dml proxy
 class ObPartitionTableProxy {
-  public:
+public:
   ObPartitionTableProxy(common::ObISQLClient& sql_proxy) : sql_proxy_(sql_proxy), merge_error_cb_(NULL), config_(NULL)
   {}
   virtual ~ObPartitionTableProxy()
@@ -118,7 +118,7 @@ class ObPartitionTableProxy {
   static int fill_dml_splicer(const ObPartitionReplica& replica, ObDMLSqlSplicer& dml_splicer);
   TO_STRING_EMPTY();
 
-  protected:
+protected:
   common::ObISQLClient& get_sql_client();
 
   template <typename RESULT, typename COLS>
@@ -138,7 +138,7 @@ class ObPartitionTableProxy {
   int construct_partition_infos(RESULT& res, const COLS& cols, common::ObIAllocator& allocator,
       common::ObIArray<ObPartitionInfo*>& partition_infos);
 
-  protected:
+protected:
   common::ObISQLClient& sql_proxy_;
   common::ObMySQLTransaction trans_;
   ObIMergeErrorCb* merge_error_cb_;
@@ -147,7 +147,7 @@ class ObPartitionTableProxy {
 
 // for __all_core_table
 class ObKVPartitionTableProxy : public ObPartitionTableProxy {
-  public:
+public:
   ObKVPartitionTableProxy(common::ObISQLClient& sql_proxy)
       : ObPartitionTableProxy(sql_proxy),
         core_table_(OB_ALL_ROOT_TABLE_TNAME, sql_proxy),
@@ -156,7 +156,7 @@ class ObKVPartitionTableProxy : public ObPartitionTableProxy {
   {}
   virtual ~ObKVPartitionTableProxy()
   {}
-  virtual int reset()
+  virtual int reset() override
   {
     is_loaded_ = false;
     implicit_trans_started_ = false;
@@ -170,7 +170,7 @@ class ObKVPartitionTableProxy : public ObPartitionTableProxy {
 
   virtual int fetch_partition_info(const bool lock_replica, const uint64_t table_id, const int64_t partition_id,
       const bool filter_flag_replica, ObPartitionInfo& partition_info, const bool need_fetch_faillist = false,
-      const int64_t cluster_id = common::OB_INVALID_ID);
+      const int64_t cluster_id = common::OB_INVALID_ID) override;
 
   virtual int fetch_partition_infos(const uint64_t tenant_id, const uint64_t start_table_id,
       const int64_t start_partition_id, const bool filter_flag_replica, int64_t& max_fetch_count,
@@ -179,44 +179,44 @@ class ObKVPartitionTableProxy : public ObPartitionTableProxy {
 
   virtual int fetch_partition_infos_pt(const uint64_t pt_table_id, const int64_t pt_partition_id,
       const uint64_t start_table_id, const int64_t start_partition_id, int64_t& max_fetch_count,
-      common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist = false);
+      common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist = false) override;
 
   virtual int batch_fetch_partition_infos(const common::ObIArray<common::ObPartitionKey>& keys,
       common::ObIAllocator& allocator, common::ObArray<ObPartitionInfo*>& partitions,
       const int64_t cluster_id = common::OB_INVALID_ID) override;
 
-  virtual int update_replica(const ObPartitionReplica& replica, const bool replace);
-  virtual int update_replica(const ObPartitionReplica& replica);
+  virtual int update_replica(const ObPartitionReplica& replica, const bool replace) override;
+  virtual int update_replica(const ObPartitionReplica& replica) override;
   virtual int batch_report_with_optimization(
-      const common::ObIArray<ObPartitionReplica>& replicas, const bool with_role);
+      const common::ObIArray<ObPartitionReplica>& replicas, const bool with_role) override;
   virtual int batch_report_partition_role(
-      const common::ObIArray<share::ObPartitionReplica>& tasks, const common::ObRole new_role);
+      const common::ObIArray<share::ObPartitionReplica>& tasks, const common::ObRole new_role) override;
 
-  virtual int set_to_follower_role(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server);
+  virtual int set_to_follower_role(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server) override;
 
-  virtual int remove(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server);
+  virtual int remove(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server) override;
 
   virtual int set_unit_id(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const uint64_t unit_id);
+      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const uint64_t unit_id) override;
 
-  virtual int set_original_leader(const uint64_t table_id, const int64_t partition_id, const bool is_original_leader);
+  virtual int set_original_leader(const uint64_t table_id, const int64_t partition_id, const bool is_original_leader) override;
 
   virtual int update_rebuild_flag(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const bool rebuild);
+      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const bool rebuild) override;
 
   virtual int update_fail_list(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server,
-      const ObPartitionReplica::FailList& fail_list);
+      const ObPartitionReplica::FailList& fail_list) override;
 
   virtual int update_replica_status(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const ObReplicaStatus status);
+      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const ObReplicaStatus status) override;
 
   static int fill_dml_splicer_for_update(const ObPartitionReplica& replica, ObDMLSqlSplicer& dml_splicer);
 
-  private:
+private:
   // start transaction and load __all_root_table for update
   int load_for_update();
 
-  private:
+private:
   ObCoreTableProxy core_table_;
   bool is_loaded_;
   bool implicit_trans_started_;
@@ -224,11 +224,11 @@ class ObKVPartitionTableProxy : public ObPartitionTableProxy {
 
 // for __all_root_table, __all_tenant_meta_table
 class ObNormalPartitionTableProxy : public ObPartitionTableProxy {
-  public:
+public:
   const char* const NORMAL_STATUS = "REPLICA_STATUS_NORMAL";
   const char* const UNMERGED_STATUS = "REPLICA_STATUS_UNMERGED";
 
-  public:
+public:
   ObNormalPartitionTableProxy(common::ObISQLClient& sql_proxy) : ObPartitionTableProxy(sql_proxy)
   {}
   virtual ~ObNormalPartitionTableProxy()
@@ -240,7 +240,7 @@ class ObNormalPartitionTableProxy : public ObPartitionTableProxy {
 
   virtual int fetch_partition_info(const bool lock_replica, const uint64_t table_id, const int64_t partition_id,
       const bool filter_flag_replica, ObPartitionInfo& partition_info, const bool need_fetch_faillist = false,
-      const int64_t cluster_id = common::OB_INVALID_ID);
+      const int64_t cluster_id = common::OB_INVALID_ID) override;
 
   virtual int fetch_partition_infos(const uint64_t tenant_id, const uint64_t start_table_id,
       const int64_t start_partition_id, const bool filter_flag_replica, int64_t& max_fetch_count,
@@ -249,35 +249,35 @@ class ObNormalPartitionTableProxy : public ObPartitionTableProxy {
 
   virtual int fetch_partition_infos_pt(const uint64_t pt_table_id, const int64_t pt_partition_id,
       const uint64_t start_table_id, const int64_t start_partition_id, int64_t& max_fetch_count,
-      common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist = false);
+      common::ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist = false) override;
 
   virtual int batch_fetch_partition_infos(const common::ObIArray<common::ObPartitionKey>& keys,
       common::ObIAllocator& allocator, common::ObArray<ObPartitionInfo*>& partitions,
       const int64_t cluster_id = common::OB_INVALID_ID) override;
 
-  virtual int update_replica(const ObPartitionReplica& replica, const bool replace);
-  virtual int update_replica(const ObPartitionReplica& replica);
+  virtual int update_replica(const ObPartitionReplica& replica, const bool replace) override;
+  virtual int update_replica(const ObPartitionReplica& replica) override;
   virtual int batch_report_with_optimization(
-      const common::ObIArray<ObPartitionReplica>& replicas, const bool with_role);
+      const common::ObIArray<ObPartitionReplica>& replicas, const bool with_role) override;
   virtual int batch_report_partition_role(
-      const common::ObIArray<share::ObPartitionReplica>& tasks, const common::ObRole new_role);
+      const common::ObIArray<share::ObPartitionReplica>& tasks, const common::ObRole new_role) override;
 
-  virtual int set_to_follower_role(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server);
+  virtual int set_to_follower_role(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server) override;
 
-  virtual int remove(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server);
+  virtual int remove(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server) override;
 
   virtual int set_unit_id(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const uint64_t unit_id);
+      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const uint64_t unit_id) override;
 
   virtual int update_rebuild_flag(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const bool rebuild);
+      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const bool rebuild) override;
 
-  virtual int set_original_leader(const uint64_t table_id, const int64_t partition_id, const bool is_original_leader);
+  virtual int set_original_leader(const uint64_t table_id, const int64_t partition_id, const bool is_original_leader) override;
   virtual int update_fail_list(const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server,
-      const ObPartitionReplica::FailList& fail_list);
+      const ObPartitionReplica::FailList& fail_list) override;
 
   virtual int update_replica_status(
-      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const ObReplicaStatus status);
+      const uint64_t table_id, const int64_t partition_id, const common::ObAddr& server, const ObReplicaStatus status) override;
 
   // batch update data_version of replicas which been creating right now.
   // Note: only support __all_tenant_meta_table partitions
@@ -289,7 +289,7 @@ class ObNormalPartitionTableProxy : public ObPartitionTableProxy {
 
   static int fill_dml_splicer_for_update(const ObPartitionReplica& replica, ObDMLSqlSplicer& dml_splicer);
 
-  private:
+private:
   virtual int init_empty_string(common::ObSqlString& sql_string);
   virtual int fetch_partition_infos_impl(const char* pt_name, const uint64_t start_table_id,
       const int64_t start_partition_id, const bool filter_flag_replica, const int64_t max_fetch_count,
@@ -309,7 +309,7 @@ class ObNormalPartitionTableProxy : public ObPartitionTableProxy {
 };
 
 class ObNormalPartitionUpdateHelper : public ObDMLExecHelper {
-  public:
+public:
   ObNormalPartitionUpdateHelper(common::ObISQLClient& sql_client, const uint64_t tenant_id)
       : ObDMLExecHelper(sql_client, tenant_id)
   {}
@@ -324,7 +324,7 @@ class ObNormalPartitionUpdateHelper : public ObDMLExecHelper {
 };
 
 class ObPartitionTableProxyFactory {
-  public:
+public:
   ObPartitionTableProxyFactory(common::ObISQLClient& sql_proxy, ObIMergeErrorCb* cb, common::ObServerConfig* config)
       : kv_proxy_(sql_proxy), normal_proxy_(sql_proxy), merge_error_cb_(cb), config_(config)
   {}
@@ -337,11 +337,11 @@ class ObPartitionTableProxyFactory {
   // return NULL for invalid %pt_table_id
   virtual int get_proxy_of_partition_table(const uint64_t pt_table_id, ObPartitionTableProxy*& proxy);
 
-  private:
+private:
   // this factory can only be allocated on stack
   void* operator new(size_t);
 
-  private:
+private:
   ObKVPartitionTableProxy kv_proxy_;
   ObNormalPartitionTableProxy normal_proxy_;
   ObIMergeErrorCb* merge_error_cb_;

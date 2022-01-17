@@ -31,7 +31,7 @@ class FakeTabletManager;
 
 namespace common {
 class ObTimerTask {
-  public:
+public:
   ObTimerTask() : timeout_check_(true)
   {}
   virtual ~ObTimerTask(){};
@@ -64,12 +64,12 @@ class ObTimerTask {
     return true;
   }
 
-  private:
+private:
   bool timeout_check_;
 };
 
 class ObTimer : public lib::ThreadPool {
-  public:
+public:
   friend class oceanbase::tests::blocksstable::FakeTabletManager;
   ObTimer()
       : tasks_num_(0),
@@ -91,7 +91,7 @@ class ObTimer : public lib::ThreadPool {
   void wait();   // wait all running task finish
   void destroy();
 
-  public:
+public:
   int schedule(ObTimerTask& task, const int64_t delay, bool repeate = false);
   int schedule_repeate_task_immediately(ObTimerTask& task, const int64_t delay);
   bool task_exist(const common::ObTimerTask& task);
@@ -108,7 +108,7 @@ class ObTimer : public lib::ThreadPool {
   }
   void dump() const;
 
-  private:
+private:
   struct Token {
     Token() : scheduled_time(0), delay(0), task(NULL)
     {}
@@ -125,7 +125,7 @@ class ObTimer : public lib::ThreadPool {
   int schedule_task(ObTimerTask& task, const int64_t delay, const bool repeate, const bool is_scheduled_immediately);
   DISALLOW_COPY_AND_ASSIGN(ObTimer);
 
-  private:
+private:
   int32_t tasks_num_;
   int64_t wakeup_time_;
   bool is_inited_;

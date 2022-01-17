@@ -42,7 +42,7 @@ const char* const ENABLE_SQL_AUDIT = "enable_sql_audit";
 const char* const CONFIG_TRUE_VALUE = "1";
 const char* const CONFIG_FALSE_VALUE = "0";
 const char* const OBCONFIG_URL = "obconfig_url";
-const char* const _SCHEMA_HISTORY_RECYCLE_INTERVAL = "_schema_history_recycle_interval";
+const char* const SCHEMA_HISTORY_RECYCLE_INTERVAL = "schema_history_recycle_interval";
 const char* const _RECYCLEBIN_OBJECT_PURGE_FREQUENCY = "_recyclebin_object_purge_frequency";
 const char* const TDE_MODE = "tde_mode";
 const char* const EXTERNAL_KMS_INFO = "external_kms_info";
@@ -50,9 +50,11 @@ const char* const SSL_EXTERNAL_KMS_INFO = "ssl_external_kms_info";
 const char* const ENABLE_ONE_PHASE_COMMIT = "enable_one_phase_commit";
 const char* const CLOG_DISK_USAGE_LIMIT_PERCENTAGE = "clog_disk_usage_limit_percentage";
 const char* const CLOG_DISK_UTILIZATION_THRESHOLD = "clog_disk_utilization_threshold";
+const char *const CLUSTER_ID = "cluster_id";
+const char *const CLUSTER_NAME = "cluster";
 
 class ObServerConfig : public ObCommonConfig {
-  public:
+public:
   int init(const ObSystemConfig& config);
   static ObServerConfig& get_instance();
 
@@ -133,6 +135,11 @@ class ObServerConfig : public ObCommonConfig {
   }
   bool enable_static_engine_for_query() const;
 
+  bool enable_defensive_check() const
+  {
+    return _enable_defensive_check && lib::is_diagnose_info_enabled();
+  }
+
   bool is_major_version_upgrade() const
   {
     return false;
@@ -147,16 +154,17 @@ class ObServerConfig : public ObCommonConfig {
   }
   int check_and_refresh_major_compact_trigger();
   bool in_upgrade_mode() const;
+  int check_backup_manager_parameter();
 
   // Compatibility requirements, compatible with the old SPFILE format
   int deserialize_with_compat(const char* buf, const int64_t data_len, int64_t& pos);
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int64_t disk_actual_space_;
   ObAddr self_addr_;
 
-  public:
+public:
 ///////////////////////////////////////////////////////////////////////////////
 // use MACRO 'OB_CLUSTER_PARAMETER' to define new cluster parameters
 // in ob_parameter_seed.ipp:
@@ -166,14 +174,14 @@ class ObServerConfig : public ObCommonConfig {
 #include "share/parameter/ob_parameter_seed.ipp"
 #undef OB_CLUSTER_PARAMETER
 
-  protected:
+protected:
   ObServerConfig();
   virtual ~ObServerConfig();
   const ObSystemConfig* system_config_;
   static const int16_t OB_CONFIG_MAGIC = static_cast<int16_t>(0XBCDE);
   static const int16_t OB_CONFIG_VERSION = 1;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObServerConfig);
 };
 }  // namespace common

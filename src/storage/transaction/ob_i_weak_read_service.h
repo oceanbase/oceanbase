@@ -57,11 +57,11 @@ const char* wrs_level_to_str(const int level);
 
 class ObIWrsRpc;
 class ObIWeakReadService {
-  public:
+public:
   virtual ~ObIWeakReadService()
   {}
 
-  public:
+public:
   /// get SERVER level wrs version
   ///
   /// @param [in]  tenant_id   target tenant ID
@@ -93,7 +93,7 @@ class ObIWeakReadService {
   virtual void process_cluster_heartbeat_rpc_cb(const uint64_t tenant_id, const obrpc::ObRpcResultCode& rcode,
       const obrpc::ObWrsClusterHeartbeatResponse& res, const common::ObAddr& dst) = 0;
 
-  public:
+public:
   virtual int start() = 0;
   virtual void stop() = 0;
   virtual void wait() = 0;

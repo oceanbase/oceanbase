@@ -20,11 +20,11 @@
 namespace oceanbase {
 namespace sql {
 class ObExprReplace : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprReplace(common::ObIAllocator& alloc);
   virtual ~ObExprReplace();
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types_array, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
 
   static int calc(common::ObObj& result, const common::ObObj& text, const common::ObObj& from, const common::ObObj& to,
       common::ObExprStringBuf& string_buf);
@@ -47,7 +47,7 @@ class ObExprReplace : public ObStringExprOperator {
 
   static int eval_replace(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprReplace);
 

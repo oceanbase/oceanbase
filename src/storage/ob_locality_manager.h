@@ -25,7 +25,7 @@ class ObRemoteSqlProxy;
 }
 namespace storage {
 class ObLocalityManager : public share::ObILocalityManager, public share::ObIServerAuth {
-  public:
+public:
   ObLocalityManager();
   virtual ~ObLocalityManager()
   {
@@ -60,13 +60,13 @@ class ObLocalityManager : public share::ObILocalityManager, public share::ObISer
   virtual int is_local_server(const common::ObAddr& server, bool& is_local);
   int is_same_zone(const common::ObAddr& server, bool& is_same_zone);
 
-  private:
+private:
   int get_locality_zone(const uint64_t tenant_id, share::ObLocalityZone& locality_zone);
   int set_locality_info(share::ObLocalityInfo& locality_info);
   int check_if_locality_has_been_loaded();
   int set_partition_region_priority();
 
-  private:
+private:
   bool is_inited_;
   mutable common::SpinRWLock rwlock_;
   common::ObAddr self_;

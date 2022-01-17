@@ -24,7 +24,7 @@ enum {
 };
 
 class ObILogRpc {
-  public:
+public:
   ObILogRpc()
   {}
   virtual ~ObILogRpc()

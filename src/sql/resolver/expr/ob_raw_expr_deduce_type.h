@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprDeduceType : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprDeduceType(const ObSQLSessionInfo* my_session)
       : ObRawExprVisitor(), my_session_(my_session), alloc_(), expr_factory_(NULL)
   {}
@@ -54,9 +54,9 @@ class ObRawExprDeduceType : public ObRawExprVisitor {
   int check_type_for_case_expr(ObCaseOpRawExpr& case_expr, common::ObIAllocator& alloc);
   static bool skip_cast_expr(const ObRawExpr& parent, const int64_t child_idx);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprDeduceType);
   // function members
@@ -101,7 +101,7 @@ class ObRawExprDeduceType : public ObRawExprVisitor {
   int add_group_aggr_implicit_cast(ObAggFunRawExpr& expr, const ObCastMode& cast_mode);
   int adjust_cast_as_signed_unsigned(ObSysFunRawExpr& expr);
 
-  private:
+private:
   const sql::ObSQLSessionInfo* my_session_;
   common::ObArenaAllocator alloc_;
   ObRawExprFactory* expr_factory_;

@@ -21,24 +21,14 @@ namespace sql {
 namespace join {
 
 class ObHJBufMgr : public ObSqlMemoryCallback {
-  public:
-  ObHJBufMgr()
-      : reserve_memory_size_(0),
-        pre_total_alloc_size_(0),
-        total_alloc_size_(0),
-        total_left_alloc_size_(0),
-        page_size_(-1),
-        dumped_size_(0)
+public:
+  ObHJBufMgr() :
+    reserve_memory_size_(0), pre_total_alloc_size_(0), total_alloc_size_(0),
+    page_size_(-1), dumped_size_(0)
   {}
 
-  inline void set_page_size(int64_t page_size)
-  {
-    page_size_ = page_size;
-  }
-  inline int64_t get_page_size()
-  {
-    return page_size_;
-  }
+  inline void set_page_size(int64_t page_size) { page_size_ = page_size; }
+  inline int64_t get_page_size() { return page_size_; }
 
   void set_reserve_memory_size(int64_t reserve_memory_size)
   {
@@ -86,19 +76,16 @@ class ObHJBufMgr : public ObSqlMemoryCallback {
     return reserve_memory_size_ < page_size_ + total_alloc_size_;
   }
 
-  // OB_INLINE void finish_left_dump() { total_left_alloc_size_ = total_alloc_size_; }
-
   OB_INLINE bool need_dump()
   {
     return reserve_memory_size_ * RATIO / 100 < total_alloc_size_;
   }
 
-  private:
+private:
   const static int64_t RATIO = 80;
   int64_t reserve_memory_size_;
   int64_t pre_total_alloc_size_;
   int64_t total_alloc_size_;
-  int64_t total_left_alloc_size_;
   int64_t page_size_;
   int64_t dumped_size_;
 };

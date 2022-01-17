@@ -107,7 +107,8 @@ int ObInfoSchemaPartitionsTable::add_partitions(
     const ObDatabaseSchema& database_schema, ObObj* cells, const int64_t col_count)
 {
   int ret = OB_SUCCESS;
-  ObSArray<const ObTableSchema*> table_schemas;
+  ObSArray<const ObTableSchema *> table_schemas;
+  bool priv_passed = true;
   if (OB_ISNULL(schema_guard_) || OB_ISNULL(cells)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "schema manager or cells should not be null", K(ret));
@@ -122,8 +123,21 @@ int ObInfoSchemaPartitionsTable::add_partitions(
         SERVER_LOG(WARN, "table schema not exist", K(ret));
       } else if (table_schema->is_index_table() || table_schema->is_vir_table()) {
         continue;
-      } else if (OB_FAIL(add_partitions(*table_schema, database_schema.get_database_name_str(), cells, col_count))) {
-        SERVER_LOG(WARN, "failed to add table constraint of table schema", "table_schema", *table_schema, K(ret));
+      } else if (OB_FAIL(check_priv("table_acc",
+                                 database_schema.get_database_name_str(),
+                                 table_schema->get_table_name_str(),
+                                 tenant_id_,
+                                 priv_passed))) {
+        SERVER_LOG(WARN, "failed to check priv", K(ret), K(database_schema.get_database_name_str()),
+        K(table_schema->get_table_name_str()));
+      } else if (!priv_passed) {
+        continue;
+      } else if (OB_FAIL(add_partitions(*table_schema,
+                                        database_schema.get_database_name_str(),
+                                        cells,
+                                        col_count))){
+        SERVER_LOG(WARN, "failed to add table constraint of table schema",
+                   "table_schema", *table_schema, K(ret));
       }
     }
   }
@@ -353,32 +367,38 @@ int ObInfoSchemaPartitionsTable::add_partitions(
         }
         case TABLE_ROWS: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case AVG_ROW_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case DATA_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case MAX_DATA_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case INDEX_LENGTH: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case DATA_FREE: {
           // TODO no row info now
-          cells[cell_idx].set_uint64(0);
+          // cells[cell_idx].set_uint64(0);
+          cells[cell_idx].set_null();
           break;
         }
         case CREATE_TIME: {

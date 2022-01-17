@@ -27,7 +27,7 @@ class Cond;
  * the counter will decrease by one; when the counter returns to zero, another thread can acquire the mutex)
  */
 class RecMutex {
-  public:
+public:
   typedef LockT<RecMutex> Lock;
   typedef TryLockT<RecMutex> TryLock;
 
@@ -57,7 +57,7 @@ class RecMutex {
 
   bool willUnlock() const;
 
-  private:
+private:
   // noncopyable
   RecMutex(const RecMutex&);
   RecMutex& operator=(const RecMutex&);

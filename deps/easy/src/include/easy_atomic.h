@@ -95,6 +95,8 @@ static __inline__ void easy_spin_lock(easy_atomic_t* lock)
         __asm__(".byte 0xf3, 0x90");
 #elif defined(__aarch64__)
         __asm__("yield");  // for ARM
+#elif defined(__sw_64__)
+  //sw currently not provide related opcode
 #else
 #error arch unsupported
 #endif

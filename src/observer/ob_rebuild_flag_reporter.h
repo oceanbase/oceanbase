@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace observer {
 class ObRebuildFlagReporter : public common::ObDLinkBase<ObRebuildFlagReporter> {
-  public:
+public:
   ObRebuildFlagReporter();
   virtual ~ObRebuildFlagReporter();
 
@@ -59,13 +59,22 @@ class ObRebuildFlagReporter : public common::ObDLinkBase<ObRebuildFlagReporter> 
   {
     return false;
   }
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObRebuildFlagReporter& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
 
   TO_STRING_KV(K_(part_key), K_(server), K_(rebuild_flag));
 
-  private:
+private:
   int do_process();
 
-  private:
+private:
   bool inited_;
   common::ObPartitionKey part_key_;
   common::ObAddr server_;
@@ -73,7 +82,7 @@ class ObRebuildFlagReporter : public common::ObDLinkBase<ObRebuildFlagReporter> 
 };
 
 class ObRebuildFlagUpdater {
-  public:
+public:
   ObRebuildFlagUpdater()
   {}
   ~ObRebuildFlagUpdater()

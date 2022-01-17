@@ -51,7 +51,7 @@ const static int64_t MAX_ELEMENT_COUNT = 10000;                   // oss limit e
 const static int64_t MULTI_BASE_BUFFER_SIZE = 16 * 1024 * 1024L;  // the buf size of upload data
 
 class ObStorageOssStaticVar {
-  public:
+public:
   ObStorageOssStaticVar();
   virtual ~ObStorageOssStaticVar();
   static ObStorageOssStaticVar& get_instance();
@@ -59,7 +59,7 @@ class ObStorageOssStaticVar {
   common::ObCompressor* get_oss_compressor();
   common::ObCompressorType get_compressor_type();
 
-  private:
+private:
   common::ObCompressor* compressor_;
   common::ObCompressorType compress_type_;
 };
@@ -70,20 +70,20 @@ struct FrozenInfo {
 };
 
 class ObOssEnvIniter {
-  public:
+public:
   static ObOssEnvIniter& get_instance();
 
   int global_init();
   void global_destroy();
 
-  private:
+private:
   ObOssEnvIniter();
   common::SpinRWLock lock_;
   bool is_global_inited_;
 };
 
 class ObStorageOssBase {
-  public:
+public:
   ObStorageOssBase();
   virtual ~ObStorageOssBase();
 
@@ -96,32 +96,36 @@ class ObStorageOssBase {
       char*& remote_md5, int64_t& file_length);
   int get_oss_file_length(const common::ObString& name, int64_t& file_length);
   void print_oss_info(aos_status_s* aos_ret);
+  int64_t get_delete_mode() {return delete_mode_;}
 
-  protected:
+protected:
   aos_pool_t* aos_pool_;
   oss_request_options_t* oss_option_;
 
-  private:
+private:
   int parse_oss_arg(const common::ObString& uri);
   static int set_oss_field(const char* info, char* field, const int64_t length);
+  int set_delete_mode(const char *parameter);
 
-  private:
+private:
   bool is_inited_;
   char oss_domain_[OB_MAX_URI_LENGTH];
   char oss_endpoint_[MAX_OSS_ENDPOINT_LENGTH];
   char oss_id_[MAX_OSS_ID_LENGTH];
   char oss_key_[MAX_OSS_KEY_LENGTH];
+  int64_t delete_mode_;
   int init_oss_endpoint();
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssBase);
 };
 
 class ObStorageOssMultiPartWriter : public ObStorageOssBase, public ObIStorageWriter {
 
-  public:
+public:
   ObStorageOssMultiPartWriter();
   virtual ~ObStorageOssMultiPartWriter();
   int open(const common::ObString& uri, const common::ObString& storage_info);
   int write(const char* buf, const int64_t size);
+  int pwrite(const char* buf, const int64_t size, const int64_t offset);
   int close();
   int cleanup();
   int64_t get_length() const
@@ -133,11 +137,11 @@ class ObStorageOssMultiPartWriter : public ObStorageOssBase, public ObIStorageWr
     return is_opened_;
   }
 
-  private:
+private:
   int write_single_part();
   int upload_data(const char* buf, const int64_t size, char*& upload_buf, int64_t& upload_size);
 
-  private:
+private:
   common::ModulePageAllocator mod_;
   common::ModuleArena allocator_;
   char* base_buf_;
@@ -155,7 +159,7 @@ class ObStorageOssMultiPartWriter : public ObStorageOssBase, public ObIStorageWr
 
 class ObStorageOssReader : public ObStorageOssBase, public ObIStorageReader {
   // TODO: buf reuse
-  public:
+public:
   ObStorageOssReader();
   virtual ~ObStorageOssReader();
   int open(const common::ObString& uri, const common::ObString& storage_info);
@@ -170,7 +174,7 @@ class ObStorageOssReader : public ObStorageOssBase, public ObIStorageReader {
     return is_opened_;
   }
 
-  private:
+private:
   common::ObString bucket_;
   common::ObString object_;
   int64_t file_length_;
@@ -181,7 +185,7 @@ class ObStorageOssReader : public ObStorageOssBase, public ObIStorageReader {
 };
 
 class ObStorageOssUtil : public ObStorageOssBase, public ObIStorageUtil {
-  public:
+public:
   ObStorageOssUtil();
   virtual ~ObStorageOssUtil();
   virtual int is_exist(const common::ObString& uri, const common::ObString& storage_info, bool& exist);
@@ -199,19 +203,34 @@ class ObStorageOssUtil : public ObStorageOssBase, public ObIStorageUtil {
   virtual int get_pkeys_from_dir(const common::ObString& dir_path, const common::ObString& storage_info,
       common::ObIArray<common::ObPartitionKey>& pkeys);
   virtual int delete_tmp_files(const common::ObString& dir_path, const common::ObString& storage_info);
+  virtual int is_empty_directory(
+      const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);
+  virtual int check_backup_dest_lifecycle(
+      const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle);
+  virtual int list_directories(const common::ObString& uri, const common::ObString& storage_info,
+      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directories_names);
 
-  private:
+private:
   int strtotime(const char* date_time, int64_t& time);
+  int tagging_object(
+      const common::ObString &uri,
+      const common::ObString &bucket_str,
+      const common::ObString &object_str);
+  int delete_object(
+      const common::ObString &uri,
+      const common::ObString &bucket_str,
+      const common::ObString &object_str);
 };
 
 class ObStorageOssAppendWriter : public ObStorageOssBase, public ObIStorageWriter {
-  public:
+public:
   ObStorageOssAppendWriter();
   virtual ~ObStorageOssAppendWriter();
 
-  public:
+public:
   int open(const common::ObString& uri, const common::ObString& storage_info);
   int write(const char* buf, const int64_t size);
+  int pwrite(const char* buf, const int64_t size, const int64_t offset);
   int close();
   int64_t get_length() const
   {
@@ -222,7 +241,10 @@ class ObStorageOssAppendWriter : public ObStorageOssBase, public ObIStorageWrite
     return is_opened_;
   }
 
-  private:
+private:
+  int do_write(const char* buf, const int64_t size, const int64_t offset, const bool is_pwrite);
+
+private:
   bool is_opened_;
   int64_t file_length_;
   common::ObArenaAllocator allocator_;
@@ -233,22 +255,22 @@ class ObStorageOssAppendWriter : public ObStorageOssBase, public ObIStorageWrite
 };
 
 class ObStorageOssMetaMgr : public ObStorageOssBase, public ObIStorageMetaWrapper {
-  public:
+public:
   ObStorageOssMetaMgr();
   virtual ~ObStorageOssMetaMgr();
 
-  public:
+public:
   int get(const common::ObString& uri, const common::ObString& storage_info, char* buf, const int64_t buf_size,
       int64_t& read_size);
   int set(const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t buf_size);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssMetaMgr);
 };
 
 // TODO qiaxi remove, compat to old version
 class ObStorageOssMetaMgrOld : public ObStorageOssBase {
-  public:
+public:
   ObStorageOssMetaMgrOld();
   virtual ~ObStorageOssMetaMgrOld();
 
@@ -257,7 +279,7 @@ class ObStorageOssMetaMgrOld : public ObStorageOssBase {
 
   int str_to_int64(const char* nptr, int64_t& value);
 
-  private:
+private:
   common::ModulePageAllocator mod_;
   common::ModuleArena allocator_;
   common::ObString bucket_;

@@ -24,7 +24,7 @@ namespace dtl {
 // class ObDtlLinkedBuffer;
 
 class ObDtlTenantMemManager {
-  public:
+public:
   ObDtlTenantMemManager(uint64_t tenant_id);
   virtual ~ObDtlTenantMemManager()
   {
@@ -35,7 +35,7 @@ class ObDtlTenantMemManager {
   void destroy();
   int auto_free_on_time(bool with_tenant_resource);
 
-  public:
+public:
   ObDtlLinkedBuffer* alloc(int64_t chid, int64_t size);
   int free(ObDtlLinkedBuffer* buf);
   int64_t hash(int64_t chid);
@@ -47,7 +47,7 @@ class ObDtlTenantMemManager {
     return mem_mgrs_.count();
   }
 
-  private:
+private:
   void buffer_status();
 
   int64_t get_min_buffer_size();
@@ -55,12 +55,12 @@ class ObDtlTenantMemManager {
   int64_t variance_alloc_times();
   int64_t avg_alloc_times();
 
-  private:
+private:
   static const int64_t HASH_CNT = 128;
   uint64_t tenant_id_;
   common::ObSEArray<ObDtlChannelMemManager*, HASH_CNT> mem_mgrs_;
 
-  private:
+private:
   common::ObSEArray<int64_t, HASH_CNT> times_;
   int64_t hash_cnt_;
 };

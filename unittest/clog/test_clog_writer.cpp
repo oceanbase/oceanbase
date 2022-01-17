@@ -26,6 +26,7 @@
 #include "share/cache/ob_kv_storecache.h"
 #include "share/ob_tenant_mgr.h"
 #include "observer/ob_server_struct.h"
+#include "share/redolog/ob_log_file_reader.h"
 
 #include <libaio.h>
 #include <gtest/gtest.h>
@@ -38,7 +39,7 @@ using namespace oceanbase::lib;
 namespace oceanbase {
 namespace unittest {
 class MyMetaInfoGenerator : public ObIInfoBlockHandler {
-  public:
+public:
   MyMetaInfoGenerator()
   {}
   virtual ~MyMetaInfoGenerator()
@@ -78,7 +79,7 @@ int64_t MyMetaInfoGenerator::get_entry_cnt() const
 }
 
 class MyCLogItem : public ObICLogItem {
-  public:
+public:
   MyCLogItem() : buf_(NULL), data_len_(0), is_flushed_(false), file_id_(0), offset_(0), err_code_(0)
   {
     cond_.init(1);
@@ -138,15 +139,14 @@ void MyCLogItem::wait()
 }
 
 class TestCLogWriter : public ::testing::Test {
-  public:
+public:
   TestCLogWriter();
   virtual ~TestCLogWriter();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   char log_path_[1024];
-  char shm_path_[1024];
   char* log_buf_;
   ObLogDir log_dir_;
   ObLogWriteFilePool write_pool_;
@@ -163,8 +163,6 @@ TestCLogWriter::TestCLogWriter()
 {
   getcwd(log_path_, 1024);
   strcat(log_path_, "/test_clog");
-  getcwd(shm_path_, 1024);
-  strcat(shm_path_, "/test_clog/shm_buf");
   clog_cfg_.log_file_writer_ = &log_file_writer_;
   clog_cfg_.log_cache_ = &log_cache_;
   clog_cfg_.tail_ptr_ = &tail_cursor_;
@@ -189,6 +187,7 @@ void TestCLogWriter::SetUp()
   common::ObAddr addr(ObAddr::VER::IPV4, "100.81.152.48", 2828);
 
   GCTX.self_addr_ = addr;
+  system("rm -rf ./test_clog");
   system("mkdir test_clog");
   const int64_t hot_cache_size = 1L << 27;
   ret = log_cache_.init(addr, "clog_cache", 1, hot_cache_size);
@@ -200,10 +199,11 @@ void TestCLogWriter::SetUp()
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = file_store_.init(log_path_, CLOG_FILE_SIZE, clog_cfg_.type_);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = log_file_writer_.init(log_path_, shm_path_, CLOG_DIO_ALIGN_SIZE, &file_store_);
+  ret = log_file_writer_.init(log_path_, CLOG_DIO_ALIGN_SIZE, &file_store_);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = clog_writer_.init(clog_cfg_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ret = OB_LOG_FILE_READER.init();
 }
 
 void TestCLogWriter::TearDown()
@@ -290,16 +290,38 @@ TEST_F(TestCLogWriter, border)
   ret = clog_writer_.start(file_id, offset);
   ASSERT_EQ(OB_SUCCESS, ret);
 
+  const ObPartitionKey partition_key(1, 3001, 1);
+
   // normal write
   while (true) {
     if (offset > CLOG_MAX_DATA_OFFSET - 2 * 1024 * 1024) {
       log_item.data_len_ = 1024 * 1024 + 512 * 1024;
     } else {
-      log_item.data_len_ = ObRandom::rand(1, 1024 * 1024);
+      log_item.data_len_ = ObRandom::rand(1024, 1024 * 1024);
     }
 
     log_item.is_flushed_ = false;
     memset(log_item.buf_, (uint8_t)ObRandom::rand(100, 132), log_item.data_len_);
+
+    ObLogEntryHeader header;
+    common::ObProposalID rts;
+    rts.ts_ = ObTimeUtility::fast_current_time();
+    int64_t pos = 0;
+    const int64_t header_size = header.get_serialize_size();
+    ret = header.generate_header(OB_LOG_SUBMIT, partition_key,
+                                 1, log_item.buf_ + header_size, log_item.data_len_ - header_size,
+                                 ObTimeUtility::fast_current_time(),
+                                 ObTimeUtility::fast_current_time(),
+                                 rts,
+                                 ObTimeUtility::fast_current_time(),
+                                 ObVersion(0), true);
+    ASSERT_EQ(common::OB_SUCCESS, ret);
+    ret = header.serialize(log_item.buf_, log_item.data_len_, pos);
+    ASSERT_EQ(common::OB_SUCCESS, ret);
+    ASSERT_EQ(header_size, pos);
+
+    CLOG_LOG(INFO, "flush one item start", K(file_id), K(offset), K(log_item.data_len_));
+
     ret = clog_writer_.append_log(log_item);
     ASSERT_EQ(OB_SUCCESS, ret);
     log_item.wait();
@@ -316,25 +338,43 @@ TEST_F(TestCLogWriter, border)
       offset = (uint32_t)log_item.data_len_ + static_cast<offset_t>(block_meta_size);
     }
 
-    CLOG_LOG(INFO, "flush one item, ", K(offset), K(log_item.offset_), K(log_item.data_len_), K(file_id));
+    CLOG_LOG(INFO, "flush one item end", K(offset), K(log_item.offset_), K(log_item.data_len_), K(file_id));
 
     if (file_id > 3) {
       break;
     }
   }
 
-  // start with earlier pos
-  ObBaseLogBufferCtrl* log_ctrl = NULL;
-  ret = ObBaseLogBufferMgr::get_instance().get_buffer(shm_path_, log_ctrl);
-  ASSERT_EQ(OB_SUCCESS, ret);
   clog_writer_.destroy();
   log_file_writer_.reset();
 
-  log_ctrl->base_buf_->file_flush_pos_.file_offset_ = 0;
+  int64_t test_lower = lower_align(4096, 4096);
+  int64_t test_upper = upper_align(4096, 4096);
+  CLOG_LOG(INFO, "cooper", K(test_lower), K(test_upper));
+  ASSERT_EQ(4096, test_lower);
+  ASSERT_EQ(4096, test_upper);
+
+  //try locate last time write position
+  ObLogDirectReader log_reader;
+  ObLogCache log_cache;
+  ObTailCursor tail_cursor;
+  file_id_t restart_file_id = 0;
+  offset_t restart_file_id_offset = 0;
+
+  ret = log_reader.init(log_path_, nullptr, true, &log_cache_, &tail_cursor, ObLogWritePoolType::CLOG_WRITE_POOL);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = locate_clog_tail(1000000000, &file_store_, &log_reader, restart_file_id, restart_file_id_offset);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  offset = upper_align(offset, CLOG_DIO_ALIGN_SIZE);
+  ASSERT_EQ(file_id, restart_file_id);
+  ASSERT_EQ(offset, restart_file_id_offset);
+
+  // continue write clog
   ret = clog_writer_.init(clog_cfg_);
   ASSERT_EQ(OB_SUCCESS, ret);
-  offset_t new_offset = 0;
-  ret = clog_writer_.start(file_id, new_offset);
+  ret = clog_writer_.start(restart_file_id, restart_file_id_offset);
   ASSERT_EQ(OB_SUCCESS, ret);
   log_item.data_len_ = ObRandom::rand(1, 1024 * 1024);
   log_item.is_flushed_ = false;
@@ -344,6 +384,9 @@ TEST_F(TestCLogWriter, border)
   log_item.wait();
   ASSERT_EQ(OB_SUCCESS, log_item.err_code_);
   ASSERT_EQ(offset + static_cast<offset_t>(block_meta_size), log_item.offset_);
+
+  log_reader.destroy();
+  log_cache.destroy();
 }
 
 TEST_F(TestCLogWriter, errsim_aio_timeout)
@@ -393,75 +436,12 @@ TEST_F(TestCLogWriter, errsim_aio_timeout)
   usleep(100 * 1000);
 #endif
 }
-
-TEST_F(TestCLogWriter, crash)
-{
-  int ret = OB_SUCCESS;
-  int fd = 0;
-  ObBaseLogBufferCtrl* log_ctrl = NULL;
-  ObBaseLogBuffer* shm_buf = NULL;
-  file_id_t file_id = 1;
-  offset_t offset = 0;
-  ObAtomicFilePos file_pos;
-  int64_t write_len = 4096 * 8;
-
-  ret = clog_writer_.start(file_id, offset);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ret = ObBaseLogBufferMgr::get_instance().get_buffer(shm_path_, log_ctrl);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  shm_buf = log_ctrl->base_buf_;
-
-  // set first 32K data
-  memset(log_ctrl->data_buf_, (uint8_t)ObRandom::rand(100, 132), write_len);
-  file_pos.file_id_ = file_id;
-  file_pos.file_offset_ = (uint32_t)write_len;
-  ATOMIC_STORE(&shm_buf->file_write_pos_.atomic_, file_pos.atomic_);
-
-  clog_writer_.destroy();
-  log_file_writer_.reset();
-  ret = clog_writer_.init(clog_cfg_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  file_id = file_pos.file_id_;
-  offset = file_pos.file_offset_;
-  ret = clog_writer_.start(file_id, offset);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(shm_buf->file_flush_pos_.file_id_, file_id);
-  ASSERT_EQ(shm_buf->file_flush_pos_.file_offset_, write_len);
-  ret = write_pool_.get_fd(file_pos.file_id_, fd);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  char* read_buf = (char*)ob_malloc_align(4096, write_len);
-  ob_pread(fd, read_buf, write_len, 0);
-  ASSERT_TRUE(0 == memcmp(log_ctrl->data_buf_, read_buf, write_len));
-
-  // continue next 32K data and let writer catch up
-  memset(log_ctrl->data_buf_, (uint8_t)ObRandom::rand(132, 164), write_len);
-  file_pos.file_id_ = file_id;
-  file_pos.file_offset_ += (uint32_t)write_len;
-  ATOMIC_STORE(&shm_buf->file_write_pos_.atomic_, file_pos.atomic_);
-
-  clog_writer_.destroy();
-  log_file_writer_.reset();
-  ret = clog_writer_.init(clog_cfg_);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  file_id = file_pos.file_id_;
-  offset = file_pos.file_offset_;
-  ret = clog_writer_.start(file_id, offset);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(shm_buf->file_flush_pos_.file_id_, file_id);
-  ASSERT_EQ(shm_buf->file_flush_pos_.file_offset_, write_len + write_len);
-
-  ob_pread(fd, read_buf, write_len, write_len);
-  ASSERT_TRUE(0 == memcmp(log_ctrl->data_buf_, read_buf, write_len));
-
-  ob_free_align(read_buf);
-}
-}  // end namespace unittest
-}  // end namespace oceanbase
+} // end namespace unittest
+} // end namespace oceanbase
 
 int main(int argc, char** argv)
 {
+  system("rm -f test_clog_writer.log*");
   OB_LOGGER.set_file_name("test_clog_writer.log", true);
   OB_LOGGER.set_log_level("DEBUG");
 

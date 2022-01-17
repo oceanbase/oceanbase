@@ -47,7 +47,7 @@ class ObIPartitionGroupGuard;
 // 1. Save datum pointer of expression, locate datum once for each expression.
 // 2. Project number, string, integer (OBJ_DATUM_8BYTE_DATA) by groups, to reduce type detection.
 class ObRow2ExprsProjector {
-  public:
+public:
   explicit ObRow2ExprsProjector(common::ObIAllocator& alloc)
       : other_idx_(0),
         has_virtual_(false),
@@ -71,7 +71,7 @@ class ObRow2ExprsProjector {
     return has_virtual_;
   }
 
-  private:
+private:
   struct Item {
     int32_t obj_idx_;
     int32_t expr_idx_;
@@ -123,12 +123,12 @@ class ObRow2ExprsProjector {
 };
 
 class ObTableScanParam : public common::ObVTableScanParam {
-  public:
+public:
   ObTableScanParam()
       : common::ObVTableScanParam(),
         trans_desc_(NULL),
         table_param_(NULL),
-        allocator_(&CURRENT_CONTEXT.get_arena_allocator()),
+        allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         part_filter_(NULL),
         part_mgr_(NULL),
         column_orders_(nullptr),
@@ -137,13 +137,14 @@ class ObTableScanParam : public common::ObVTableScanParam {
         block_cache_hit_rate_(0),
         ref_table_id_(common::OB_INVALID_ID),
         partition_guard_(NULL),
-        iterator_mementity_(nullptr)
+        iterator_mementity_(nullptr),
+        is_thread_scope_(true)
   {}
   explicit ObTableScanParam(transaction::ObTransDesc& trans_desc)
       : common::ObVTableScanParam(),
         trans_desc_(&trans_desc),
         table_param_(NULL),
-        allocator_(&CURRENT_CONTEXT.get_arena_allocator()),
+        allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         part_filter_(NULL),
         part_mgr_(NULL),
         column_orders_(nullptr),
@@ -152,12 +153,13 @@ class ObTableScanParam : public common::ObVTableScanParam {
         block_cache_hit_rate_(0),
         ref_table_id_(common::OB_INVALID_ID),
         partition_guard_(NULL),
-        iterator_mementity_(nullptr)
+        iterator_mementity_(nullptr),
+        is_thread_scope_(true)
   {}
   virtual ~ObTableScanParam()
   {}
 
-  public:
+public:
   transaction::ObTransDesc* trans_desc_;  // transaction handle
   const share::schema::ObTableParam* table_param_;
   common::ObArenaAllocator* allocator_;
@@ -170,7 +172,8 @@ class ObTableScanParam : public common::ObVTableScanParam {
   int16_t block_cache_hit_rate_;
   uint64_t ref_table_id_;  // main table id
   ObIPartitionGroupGuard* partition_guard_;
-  lib::MemoryContext* iterator_mementity_;
+  lib::MemoryContext iterator_mementity_;
+  bool is_thread_scope_;
   OB_INLINE virtual bool is_valid() const
   {
     return (NULL != trans_desc_ && trans_desc_->is_valid_or_standalone_stmt() && ObVTableScanParam::is_valid());
@@ -180,10 +183,10 @@ class ObTableScanParam : public common::ObVTableScanParam {
     return column_orders_;
   }
 
-  private:
+private:
   virtual int init_rowkey_column_orders();
   // TO_STRING_KV(N_TRANS_DESC, trans_desc_);
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableScanParam);
 };
 
@@ -193,48 +196,41 @@ struct ObDMLBaseParam {
         schema_version_(-1),
         query_flag_(),
         sql_mode_(DEFAULT_OCEANBASE_MODE),
-        is_total_quantity_log_(false),
         tz_info_(NULL),
-        only_data_table_(false),
         table_param_(NULL),
         tenant_schema_version_(OB_INVALID_VERSION),
+        is_total_quantity_log_(false),
+        only_data_table_(false),
         is_ignore_(false),
-        duplicated_rows_(0),
         prelock_(false),
-        output_exprs_(NULL),
-        op_(NULL),
-        op_filters_(NULL),
-        row2exprs_projector_(NULL)
+        duplicated_rows_(0),
+        dml_allocator_(nullptr)
+  {
+    query_flag_.read_latest_ = common::ObQueryFlag::OBSF_MASK_READ_LATEST;
+  }
+  ~ObDMLBaseParam()
   {}
 
   int64_t timeout_;
   int64_t schema_version_;
   common::ObQueryFlag query_flag_;
   ObSQLMode sql_mode_;
-  bool is_total_quantity_log_;
-  const common::ObTimeZoneInfo* tz_info_;
-  bool only_data_table_;
+  const common::ObTimeZoneInfo *tz_info_;
   common::ObColumnExprArray virtual_columns_;
   common::ObExprCtx expr_ctx_;
   const share::schema::ObTableDMLParam* table_param_;
   int64_t tenant_schema_version_;
+  bool is_total_quantity_log_;
+  bool only_data_table_;
   bool is_ignore_;
-  mutable int64_t duplicated_rows_;
   bool prelock_;
-
-  // output for sql static typing engine, NULL for old sql engine scan.
-  const sql::ObExprPtrIArray* output_exprs_;
-  sql::ObOperator* op_;
-  const sql::ObExprPtrIArray* op_filters_;
-  ObRow2ExprsProjector* row2exprs_projector_;
-
+  mutable int64_t duplicated_rows_;
+  common::ObIAllocator *dml_allocator_;
   bool is_valid() const
   {
     return (timeout_ > 0 && schema_version_ >= 0);
   }
-  TO_STRING_KV(N_TIMEOUT, timeout_, N_SCHEMA_VERSION, schema_version_, N_SCAN_FLAG, query_flag_, N_SQL_MODE, sql_mode_,
-      N_IS_TOTAL_QUANTITY_LOG, is_total_quantity_log_, K_(only_data_table), KP_(table_param), K_(tenant_schema_version),
-      K_(is_ignore), K_(duplicated_rows), K_(prelock));
+  DECLARE_TO_STRING;
 };
 
 }  // end namespace storage

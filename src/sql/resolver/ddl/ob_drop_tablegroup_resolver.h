@@ -22,19 +22,19 @@ class ObDropTablegroupResolver : public ObDDLResolver {
   static const int64_t TG_NAME = 1;
   static const int64_t TG_NODE_COUNT = 2;
 
-  public:
+public:
   explicit ObDropTablegroupResolver(ObResolverParams& params);
   virtual ~ObDropTablegroupResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObDropTablegroupResolver);
 
-  private:
+private:
   // data members
 };
 

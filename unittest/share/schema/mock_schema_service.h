@@ -32,7 +32,7 @@ namespace share {
 namespace schema {
 
 class MockObTableSchema : public ObTableSchema {
-  public:
+public:
   MockObTableSchema(common::ObIAllocator* allocator) : ObTableSchema(allocator)
   {}
   MockObTableSchema()
@@ -52,7 +52,7 @@ class MockSchemaService : public ObMultiVersionSchemaService {
   typedef common::hash::ObHashMap<ObSchemaCacheKey, const ObSchemaCacheValue*, common::hash::NoPthreadDefendMode>
       NoSwapCache;
 
-  public:
+public:
   MockSchemaService()
   {}
   virtual ~MockSchemaService()
@@ -311,7 +311,7 @@ class MockSchemaService : public ObMultiVersionSchemaService {
     return ret;
   }
 
-  private:
+private:
   int convert_to_simple_schema(const ObTenantSchema& schema, ObSimpleTenantSchema& simple_schema)
   {
     int ret = OB_SUCCESS;
@@ -441,7 +441,7 @@ class MockSchemaService : public ObMultiVersionSchemaService {
     return ret;
   }
 
-  private:
+private:
   ObSchemaMgr mgr_;
   NoSwapCache cache_;
 };

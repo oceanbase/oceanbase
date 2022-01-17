@@ -20,7 +20,7 @@ namespace sql {
 class ObExprCollPred : public ObExprOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObExprCollPred(common::ObIAllocator& alloc);
   virtual ~ObExprCollPred();
 
@@ -55,10 +55,10 @@ class ObExprCollPred : public ObExprOperator {
       const ObExprCalcType calc_type, CollectionPredRes& result);
   static int compare_obj(const ObObj& obj1, const ObObj& obj2, ObCompareCtx& cmp_ctx);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCollPred);
 
-  private:
+private:
   ObMultiSetType ms_type_;
   ObMultiSetModifier ms_modifier_;
 };

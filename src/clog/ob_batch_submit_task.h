@@ -27,7 +27,7 @@ namespace clog {
 class ObICLogMgr;
 class ObILogEngine;
 class ObBatchSubmitDiskTask : public ObIBufferTask {
-  public:
+public:
   ObBatchSubmitDiskTask()
   {
     reset();
@@ -37,7 +37,7 @@ class ObBatchSubmitDiskTask : public ObIBufferTask {
     reset();
   }
 
-  public:
+public:
   void reset();
   int init(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
       const ObLogInfoArray& log_info_array, ObICLogMgr* clog_mgr, ObILogEngine* log_engine);
@@ -48,7 +48,7 @@ class ObBatchSubmitDiskTask : public ObIBufferTask {
   virtual int after_consume(const int handle_err, const void* arg, const int64_t before_push_cb_ts);
   TO_STRING_KV(K(partition_array_), K(log_info_array_), K(offset_));
 
-  private:
+private:
   bool is_inited_;
   transaction::ObTransID trans_id_;
   common::ObPartitionArray partition_array_;
@@ -57,17 +57,17 @@ class ObBatchSubmitDiskTask : public ObIBufferTask {
   ObILogEngine* log_engine_;
   offset_t offset_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchSubmitDiskTask);
 };
 
 class ObBatchSubmitDiskTaskFactory {
-  public:
+public:
   static ObBatchSubmitDiskTask* alloc(common::ObILogAllocator* alloc_mgr);
   static void free(ObBatchSubmitDiskTask* task);
   static void statistics();
 
-  private:
+private:
   static int64_t alloc_cnt_;
   static int64_t free_cnt_;
 };

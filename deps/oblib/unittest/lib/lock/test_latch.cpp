@@ -30,7 +30,7 @@ const int max_cnt = 1000;
 
 template <class MUTEX>
 class TestLatchContend : public lib::ThreadPool {
-  public:
+public:
   TestLatchContend()
   {}
   virtual ~TestLatchContend()
@@ -55,7 +55,7 @@ class TestLatchContend : public lib::ThreadPool {
     mutex_.unlock();
   }
 
-  private:
+private:
   MUTEX mutex_;
 };
 
@@ -86,14 +86,14 @@ struct RWLockTestParam {
 };
 
 class RWLockWithTimeout {
-  public:
+public:
   RWLockWithTimeout(bool has_timeout, uint32_t latch_id = ObLatchIds::DEFAULT_SPIN_RWLOCK)
       : latch_(), has_timeout_(has_timeout), latch_id_(latch_id)
   {}
   ~RWLockWithTimeout()
   {}
 
-  public:
+public:
   int rdlock()
   {
     return latch_.rdlock(latch_id_);
@@ -113,7 +113,7 @@ class RWLockWithTimeout {
     return latch_.unlock();
   }
 
-  private:
+private:
   ObLatch latch_;
   bool has_timeout_;
   uint32_t latch_id_;
@@ -124,7 +124,7 @@ DEFINE_HAS_MEMBER(wr2rdlock)
 int64_t k_rd = 0;
 template <class RWLOCK>
 class TestRWLockContend : public lib::ThreadPool {
-  public:
+public:
   explicit TestRWLockContend(const bool has_timeout = false) : lock_(has_timeout)
   {}
   virtual ~TestRWLockContend()
@@ -174,7 +174,7 @@ class TestRWLockContend : public lib::ThreadPool {
     param_ = param;
   }
 
-  private:
+private:
   RWLOCK lock_;
   ObRandom rand_;
   RWLockTestParam param_;
@@ -212,7 +212,7 @@ struct CriticalSec {
 static const int64_t core_test_th_cnt = 4;
 
 class ObLatchTestRun : public lib::ThreadPool {
-  public:
+public:
   ObLatchTestRun()
   {
     buf_ = (char*)malloc(sizeof(CriticalSec) * 2);
@@ -235,7 +235,7 @@ class ObLatchTestRun : public lib::ThreadPool {
     return out_;
   }
 
-  private:
+private:
   char* buf_;
   CriticalSec* cs_;
   char out_[10] = "Great!";

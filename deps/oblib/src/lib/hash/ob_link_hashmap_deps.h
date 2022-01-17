@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace common {
 class DCArrayAlloc : public IAlloc {
-  public:
+public:
   DCArrayAlloc() : label_(ObModIds::OB_CONCURRENT_HASH_MAP), tenant_id_(OB_SERVER_TENANT_ID)
   {}
   virtual ~DCArrayAlloc()
@@ -58,10 +58,10 @@ class DCArrayAlloc : public IAlloc {
     }
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(DCArrayAlloc);
 
-  private:
+private:
   lib::ObLabel label_;
   uint64_t tenant_id_;
 };
@@ -79,7 +79,7 @@ struct RefNode {
   int32_t uref_;
   int32_t href_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(RefNode);
 };
 
@@ -92,7 +92,7 @@ struct LinkHashNode final : RefNode {
   KeyHashNode<key_t> hash_link_;
   void* hash_val_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(LinkHashNode);
 };
 
@@ -112,14 +112,14 @@ struct LinkHashValue {
   }
   LinkHashNode<key_t>* hash_node_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(LinkHashValue);
 };
 
 // alloc must return constructed Node/Value.
 template <typename Key, typename Value>
 class AllocHandle {
-  public:
+public:
   typedef LinkHashNode<Key> Node;
   static Value* alloc_value()
   {
@@ -143,7 +143,7 @@ class AllocHandle {
 };
 
 class CountHandle {
-  public:
+public:
   CountHandle() : count_(0)
   {}
   ~CountHandle()
@@ -157,7 +157,7 @@ class CountHandle {
     return ATOMIC_FAA(&count_, x);
   }
 
-  private:
+private:
   int64_t count_;
 };
 }  // namespace common

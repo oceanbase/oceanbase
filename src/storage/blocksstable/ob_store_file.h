@@ -17,7 +17,6 @@
 #include "lib/atomic/ob_atomic.h"
 #include "ob_block_sstable_struct.h"
 #include "ob_local_file_system.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_micro_block_index_mgr.h"
 #include "share/ob_unit_getter.h"
 #include "share/ob_thread_mgr.h"
@@ -78,7 +77,7 @@ struct ObMacroBlockReadInfo {
 };
 
 class ObMacroBlocksHandle {
-  public:
+public:
   ObMacroBlocksHandle();
   virtual ~ObMacroBlocksHandle();
   int add(const MacroBlockId& macro_id);
@@ -112,14 +111,14 @@ class ObMacroBlocksHandle {
   TO_STRING_KV(K_(macro_id_list), "tenant_id", nullptr == file_ ? 0 : file_->get_tenant_id(), "file_id",
       nullptr == file_ ? 0 : file_->get_file_id());
 
-  private:
+private:
   common::ObArray<MacroBlockId> macro_id_list_;
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlocksHandle);
   ObStorageFile* file_;
 };
 
 class ObMacroBlockHandle {
-  public:
+public:
   ObMacroBlockHandle() : block_write_ctx_(NULL), file_(NULL)
   {}
   virtual ~ObMacroBlockHandle();
@@ -163,7 +162,7 @@ class ObMacroBlockHandle {
   }
   TO_STRING_KV(K_(macro_id), K_(io_handle), KP_(block_write_ctx));
 
-  private:
+private:
   MacroBlockId macro_id_;
   common::ObIOHandle io_handle_;
   ObMacroBlocksWriteCtx* block_write_ctx_;
@@ -171,7 +170,7 @@ class ObMacroBlockHandle {
 };
 
 class ObMacroBlockHandleV1 {
-  public:
+public:
   ObMacroBlockHandleV1();
   virtual ~ObMacroBlockHandleV1();
   ObMacroBlockHandleV1(const ObMacroBlockHandleV1& other);
@@ -205,20 +204,20 @@ class ObMacroBlockHandleV1 {
   }
   TO_STRING_KV(K_(macro_id), K_(io_handle));
 
-  private:
+private:
   MacroBlockId macro_id_;
   common::ObIOHandle io_handle_;
 };
 
 class ObStoreFileGCTask : public common::ObTimerTask {
-  public:
+public:
   ObStoreFileGCTask();
   virtual ~ObStoreFileGCTask();
   virtual void runTimerTask();
 };
 
 struct ObBadBlockInfo {
-  public:
+public:
   ObBadBlockInfo()
   {
     reset();
@@ -231,7 +230,7 @@ struct ObBadBlockInfo {
   }
   TO_STRING_KV(K(disk_id_), K(macro_block_id_), K(error_type_), K(store_file_path_), K(error_msg_), K(check_time_));
 
-  public:
+public:
   int64_t disk_id_;
   MacroBlockId macro_block_id_;
   int64_t error_type_;
@@ -241,18 +240,18 @@ struct ObBadBlockInfo {
 };
 
 class ObAllMacroIdIterator : public ObIMacroIdIterator {
-  public:
+public:
   ObAllMacroIdIterator();
   virtual ~ObAllMacroIdIterator();
   virtual int get_next_macro_id(MacroBlockId& block_id);
 
-  private:
+private:
   uint32_t cur_pos_;
 };
 
 template <typename T>
 class ObSegmentArray final {
-  public:
+public:
   ObSegmentArray();
   ~ObSegmentArray();
   int reserve(const int64_t size);
@@ -260,7 +259,7 @@ class ObSegmentArray final {
   T& operator[](const int64_t index);
   void reset();
 
-  private:
+private:
   static const int64_t ELEMENTS_PER_SEGMENT = 1638400;
   static const int64_t MAX_SEGMENT_CNT = 1024;  // max supported file 1600T
   common::ObArray<T> segments_[MAX_SEGMENT_CNT];
@@ -325,7 +324,7 @@ const T& ObSegmentArray<T>::operator[](const int64_t index) const
 }
 
 class ObStoreFile {
-  public:
+public:
   static ObStoreFile& get_instance();
   int init(const ObStorageEnv& storage_env, ObStoreFileSystem* store_file_system);
   int open(const bool is_physical_flashback = false);
@@ -363,7 +362,7 @@ class ObStoreFile {
   int is_free_block(const int64_t block_index, bool& is_free);
   int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage);
 
-  private:
+private:
   friend class ObStoreFileGCTask;
   friend class ObFileSystemInspectBadBlockTask;
   friend class ObAllMacroIdIterator;
@@ -400,7 +399,7 @@ class ObStoreFile {
     return macro_block_cnt / 64 + 1;
   }
 
-  private:
+private:
   static const int64_t RECYCLE_DELAY_US = 5 * 1000 * 1000;  // 5s
   static const int64_t INSPECT_DELAY_US = 1 * 1000 * 1000;  // 1s
   bool is_inited_;
@@ -432,6 +431,8 @@ class ObStoreFile {
   bool is_mark_sweep_enabled_;
   bool is_doing_mark_sweep_;
   ObThreadCond cond_;  // for mark sweep
+  bool is_fs_support_punch_hole_;
+  int block_file_fd_;
 };
 
 OB_INLINE bool ObStoreFile::is_valid(const MacroBlockId macro_id)

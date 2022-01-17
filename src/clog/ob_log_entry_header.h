@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace clog {
 class ObLogEntryHeader {
-  public:
+public:
   ObLogEntryHeader();
   ~ObLogEntryHeader();
 
@@ -192,11 +192,11 @@ class ObLogEntryHeader {
     return ENTRY_MAGIC == magic_number;
   }
 
-  private:
+private:
   int64_t calc_header_checksum() const;
   int64_t calc_data_checksum(const char* buf, const int64_t data_len) const;
 
-  private:
+private:
   static const int16_t ENTRY_MAGIC = 0x4552;  // RE means record
   static const int16_t OB_LOG_VERSION = 1;
   static const uint64_t TRANS_BATCH_COMMIT_FLAG = (1ULL << 63);
@@ -204,7 +204,7 @@ class ObLogEntryHeader {
   static const uint32_t IS_TRANS_LOG_FLAG = (1 << 31);
   static const uint32_t IS_TRANS_LOG_MASK = IS_TRANS_LOG_FLAG - 1;
 
-  private:
+private:
   int16_t magic_;
   int16_t version_;
   // The highest position of log_type is used to indicates
@@ -237,13 +237,13 @@ class ObLogEntryHeader {
   int64_t data_checksum_;
   common::ObVersion freeze_version_;
 
-  // The checksum of log header, acquirements:
+  // The checksum of log header, acquirement:
   // 1. Must locate in the last line of class declaration
   // 2. Must not exist virtual funtion
   // 3. Must keep the variable before this is 64-bit aligned
   int64_t header_checksum_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogEntryHeader);
 };
 

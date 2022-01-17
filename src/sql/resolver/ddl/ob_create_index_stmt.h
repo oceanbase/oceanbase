@@ -25,7 +25,7 @@ namespace sql {
 class ObCreateIndexStmt : public ObPartitionedStmt {
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
 
-  public:
+public:
   explicit ObCreateIndexStmt(common::ObIAllocator* name_pool);
   ObCreateIndexStmt();
   virtual ~ObCreateIndexStmt();
@@ -103,7 +103,7 @@ class ObCreateIndexStmt : public ObPartitionedStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(create_index_arg));
 
-  private:
+private:
   obrpc::ObCreateIndexArg create_index_arg_;
   uint64_t table_id_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateIndexStmt);

@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace rootserver {
 
 class ObThreadIdling {
-  public:
+public:
   explicit ObThreadIdling(volatile bool& stop);
   virtual ~ObThreadIdling()
   {}
@@ -30,7 +30,7 @@ class ObThreadIdling {
 
   virtual int64_t get_idle_interval_us() = 0;
 
-  private:
+private:
   common::ObThreadCond cond_;
   volatile bool& stop_;
   int64_t wakeup_cnt_;

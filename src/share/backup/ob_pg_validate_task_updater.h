@@ -25,7 +25,7 @@ class ObISQLClient;
 namespace share {
 
 class ObPGValidateTaskUpdater {
-  public:
+public:
   ObPGValidateTaskUpdater();
   virtual ~ObPGValidateTaskUpdater();
   int init(common::ObISQLClient& sql_client, bool dropped_tenant = false);
@@ -65,13 +65,13 @@ class ObPGValidateTaskUpdater {
 
   int batch_report_pg_task(const common::ObIArray<ObPGValidateTaskInfo>& pg_task_infos);
 
-  private:
+private:
   static const int64_t MAX_BATCH_SIZE = 1024;
   bool is_inited_;
   bool is_dropped_tenant_;
   common::ObISQLClient* sql_client_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPGValidateTaskUpdater);
 };
 

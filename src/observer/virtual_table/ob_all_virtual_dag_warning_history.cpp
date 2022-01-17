@@ -96,12 +96,12 @@ int ObAllVirtualDagWarningHistory::fill_cells(ObDagWarningInfo& dag_warning_info
         break;
       case MODULE:
         // module
-        cells[i].set_varchar(ObDagModuleStr[dag_warning_info.dag_type_]);
+        cells[i].set_varchar(share::ObIDag::get_dag_module_str(dag_warning_info.dag_type_));
         cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       case TYPE: {
         // dag_type
-        cells[i].set_varchar(share::ObIDag::ObIDagTypeStr[dag_warning_info.dag_type_]);
+        cells[i].set_varchar(share::ObIDag::get_dag_type_str(dag_warning_info.dag_type_));
         cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       }
@@ -113,8 +113,7 @@ int ObAllVirtualDagWarningHistory::fill_cells(ObDagWarningInfo& dag_warning_info
       }
       case STATUS:
         // dag_status
-        // dag_ret
-        cells[i].set_varchar(ObDagStatusStr[dag_warning_info.dag_status_]);
+        cells[i].set_varchar(ObDagWarningInfo::get_dag_status_str(dag_warning_info.dag_status_));
         cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       case GMT_CREATE:

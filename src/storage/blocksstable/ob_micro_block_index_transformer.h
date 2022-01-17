@@ -50,7 +50,7 @@ struct MediumNode {
 };
 
 class ObMicroBlockIndexTransformer {
-  public:
+public:
   ObMicroBlockIndexTransformer();
   ~ObMicroBlockIndexTransformer()
   {}
@@ -61,11 +61,13 @@ class ObMicroBlockIndexTransformer {
       const ObFullMacroBlockMeta& meta, char* buffer, const int64_t size, const ObMicroBlockIndexMgr*& idx_mgr);
   int64_t get_transformer_size() const;
 
-  private:
+private:
   struct NodeArray;
 
-  private:
+private:
   void reset();
+  void reuse();
+  int init_node_vector();
   int block_index_to_node_vector();
   int node_vector_to_node_array();
   int add_node_to_vector(MediumNode& cur_node, int index);
@@ -76,7 +78,7 @@ class ObMicroBlockIndexTransformer {
 
   int fill_block_index_mgr(char* buffer, int64_t size);
 
-  private:
+private:
   struct NodeArray {
     ObMicroIndexNode* base_;
     int64_t total_count_;
@@ -103,24 +105,23 @@ class ObMicroBlockIndexTransformer {
       return base_[index];
     }
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(NodeArray);
   };
 
-  private:
+private:
   ObMicroBlockIndexReader index_reader_;
   int64_t block_count_;  // count of micro blocks
   int64_t rowkey_column_count_;
   int64_t data_offset_;
+  common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator vec_allocator_;
 
-  common::ObVector<MediumNode> node_vector_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
+  common::ObVector<MediumNode, common::ObArenaAllocator> *node_vector_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
   int64_t node_vector_count_;
   NodeArray node_array_;
-
-  ObMicroBlockIndexMgr* micro_index_mgr_;
-  common::ObArenaAllocator allocator_;
-
-  private:
+  bool vec_inited_;
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockIndexTransformer);
 };
 }  // end namespace blocksstable

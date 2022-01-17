@@ -20,11 +20,11 @@ namespace memtable {
 class ObMemtable;
 // wrap memtable array interface
 class ObMemtableArrWrap {
-  public:
+public:
   ObMemtableArrWrap();
   ~ObMemtableArrWrap();
 
-  public:
+public:
   void reset();
   int inc_active_trx_count_at_active_mt(ObMemtable*& active_memtable);
   int dec_active_trx_count_at_active_mt();
@@ -40,12 +40,12 @@ class ObMemtableArrWrap {
   };
   bool is_reach_max_memtable_cnt()
   {
-    return get_count_() >= 16;
-  };
+    return get_count_() >= common::MAX_MEMSTORE_CNT;
+  }
   bool is_contain_this_memtable(ObMemtable* memtable);
   int check_memtable_count(int64_t& count);
 
-  private:
+private:
   int64_t get_count_() const
   {
     return mt_end_ - mt_start_;
@@ -53,8 +53,8 @@ class ObMemtableArrWrap {
   int update_max_trans_version_(const int64_t pos, const int64_t trans_version);
   int update_max_schema_version_(const int64_t pos, const int64_t schema_version);
 
-  private:
-  ObMemtable* mt_[common::MAX_MEMSTORE_CNT_IN_STORAGE];
+private:
+  ObMemtable* mt_[common::MAX_MEMSTORE_CNT];
   int64_t mt_start_;
   int64_t mt_end_;
 };

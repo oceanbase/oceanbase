@@ -29,7 +29,7 @@ class ObPxSqcMeta;
 struct ObPxInterruptID {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPxInterruptID() : query_interrupt_id_(0), px_interrupt_id_(0)
   {}
   void operator=(const ObPxInterruptID& other)
@@ -49,16 +49,16 @@ struct ObPxInterruptID {
 };
 
 class ObPxInterruptGuard {
-  public:
+public:
   ObPxInterruptGuard(const common::ObInterruptibleTaskID& interrupt_id_);
   ~ObPxInterruptGuard();
 
-  private:
+private:
   common::ObInterruptibleTaskID interrupt_id_;
 };
 
 class ObInterruptUtil {
-  public:
+public:
   // QC send interrupt to all SQC and tasks in the px.
   static int broadcast_px(common::ObIArray<sql::ObDfo*>& dfos, int code);
   // QC send interrupt to all SQC and tasks in the dfo
@@ -78,7 +78,7 @@ class ObInterruptUtil {
 };
 
 class ObDfoInterruptIdGen {
-  public:
+public:
   ObDfoInterruptIdGen(const common::ObInterruptibleTaskID& query_interrupt_id, const uint32_t server_id,
       const uint32_t qc_id, const uint64_t px_sequence_id)
       : query_interrupt_id_(query_interrupt_id), server_id_(server_id), qc_id_(qc_id), px_sequence_id_(px_sequence_id)
@@ -96,7 +96,7 @@ class ObDfoInterruptIdGen {
     return px_sequence_id_;
   }
 
-  private:
+private:
   const common::ObInterruptibleTaskID& query_interrupt_id_;
   const uint32_t server_id_;
   const uint32_t qc_id_;

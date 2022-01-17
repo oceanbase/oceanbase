@@ -30,13 +30,13 @@ enum ObRebuildSwitch {
 };
 
 class ObIPartitionReport {
-  public:
+public:
   ObIPartitionReport()
   {}
   virtual ~ObIPartitionReport()
   {}
   virtual int submit_pt_update_task(
-      const common::ObPartitionKey& part_key, const bool need_report_checksum = true, const bool with_role = false) = 0;
+      const common::ObPartitionKey& part_key, const bool need_report_checksum = true) = 0;
   virtual int submit_pt_update_role_task(const common::ObPartitionKey& pkey) = 0;
   virtual void submit_pg_pt_update_task(const common::ObPartitionArray& pg_partitions) = 0;
   virtual int submit_checksum_update_task(const common::ObPartitionKey& pkey, const uint64_t sstable_id,
@@ -54,6 +54,8 @@ class ObIPartitionReport {
   virtual int report_rebuild_replica_async(
       const common::ObPartitionKey& part_key, const common::ObAddr& server, const ObRebuildSwitch& rebuild_switch) = 0;
   virtual int update_pg_backup_task_info(const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_info_array) = 0;
+  virtual int report_pg_backup_backupset_task(const common::ObIArray<share::ObBackupBackupsetArg>& arg,
+      const common::ObIArray<int32_t>& results, const share::ObPGBackupBackupsetTaskInfo::TaskStatus& status) = 0;
 };
 
 }  // namespace storage

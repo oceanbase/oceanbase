@@ -24,7 +24,7 @@ class ObTableStat;
 class ObTableStatValueHandle;
 
 class ObTableStatCache : public common::ObKVCache<ObTableStat::Key, ObTableStat> {
-  public:
+public:
   ObTableStatCache();
   ~ObTableStatCache();
 

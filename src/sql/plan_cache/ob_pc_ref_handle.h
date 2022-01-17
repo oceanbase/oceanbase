@@ -31,7 +31,7 @@ class ObPreCalcExprFrameInfo;
 class ObSqlExpression;
 // pre-calculable expression list reference handler
 class PreCalcExprHandler {
-  public:
+public:
   // allocator which allocate memory to this object
   common::ObIAllocator* pc_alloc_;
   // allocator for expressions
@@ -62,7 +62,7 @@ class PreCalcExprHandler {
     pc_alloc_ = pc_alloc;
   }
 
-  public:
+public:
   int64_t get_ref_count() const
   {
     return ATOMIC_LOAD64(&ref_cnt_);
@@ -117,7 +117,7 @@ enum CacheRefHandleID {
 class ObCacheRefHandleMgr {
   friend class ObAllPlanCacheStat;
 
-  public:
+public:
   ObCacheRefHandleMgr() : tenant_id_(common::OB_INVALID_ID)
   {
     clear_ref_handles();
@@ -168,10 +168,10 @@ class ObCacheRefHandleMgr {
     return ATOMIC_LOAD(&CACHE_REF_HANDLES[ref_handle]);
   }
 
-  private:
+private:
   static const char* handle_name(const CacheRefHandleID handle);
 
-  private:
+private:
   volatile int64_t CACHE_REF_HANDLES[MAX_HANDLE];
   uint64_t tenant_id_;
 };

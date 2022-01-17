@@ -27,17 +27,17 @@ class ObExecContext;
 
 // row cache for one partition
 class ObPDMLOpRowIterator {
-  public:
+public:
   friend class ObPDMLOpBatchRowCache;
   ObPDMLOpRowIterator() = default;
   virtual ~ObPDMLOpRowIterator() = default;
   // get next row of row_store_it_
   int get_next_row(const ObExprPtrIArray& row);
 
-  private:
+private:
   int init_data_source(ObChunkDatumStore& row_datum_store, ObEvalCtx* eval_ctx);
 
-  private:
+private:
   ObChunkDatumStore::Iterator row_store_it_;
   ObEvalCtx* eval_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObPDMLOpRowIterator);
@@ -46,11 +46,11 @@ class ObPDMLOpRowIterator {
 // PDML row cache
 // cache rows for partitions
 class ObPDMLOpBatchRowCache final {
-  public:
+public:
   explicit ObPDMLOpBatchRowCache(ObEvalCtx* eval_ctx);
   ~ObPDMLOpBatchRowCache();
 
-  public:
+public:
   int init(uint64_t tenant_id, int64_t part_cnt, bool with_barrier);
   int add_row(const ObExprPtrIArray& row, int64_t part_id);
 
@@ -67,11 +67,11 @@ class ObPDMLOpBatchRowCache final {
   void reuse();
   void destroy();
 
-  private:
+private:
   int init_row_store(common::ObIAllocator& allocator, ObChunkDatumStore*& chunk_row_store);
   int create_new_bucket(int64_t part_id, ObChunkDatumStore*& row_store);
 
-  private:
+private:
   typedef common::hash::ObHashMap<int64_t, ObChunkDatumStore*, common::hash::NoPthreadDefendMode> PartitionStoreMap;
   // HashMap: part_id => chunk_datum_store_ ptr
   // dynamic add row store to map, when meet a new partition
@@ -86,13 +86,13 @@ class ObPDMLOpBatchRowCache final {
 };
 
 class ObDMLOpDataReader {
-  public:
+public:
   // read one row from DML operator and get part_id
   virtual int read_row(ObExecContext& ctx, const ObExprPtrIArray*& row, int64_t& part_id) = 0;
 };
 
 class ObDMLOpDataWriter {
-  public:
+public:
   // write rows to storage
   virtual int write_rows(ObExecContext& ctx, common::ObPartitionKey& pkey, ObPDMLOpRowIterator& iterator) = 0;
 };

@@ -36,7 +36,7 @@ class ObSelectIntoItem;
 
 template <class T>
 class UniqueSetWrapAllocer {
-  public:
+public:
   UniqueSetWrapAllocer() : allocator_(NULL)
   {}
   UniqueSetWrapAllocer(ObIAllocator& alloc) : allocator_(&alloc)
@@ -65,12 +65,12 @@ class UniqueSetWrapAllocer {
   void dec_ref()
   {}
 
-  private:
+private:
   ObIAllocator* allocator_;
 };
 
 class ObRawExprUniqueSet {
-  public:
+public:
   typedef UniqueSetWrapAllocer<typename common::hash::HashSetTypes<uint64_t>::AllocType> NodeAllocator;
   typedef common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode, common::hash::hash_func<uint64_t>,
       common::hash::equal_to<uint64_t>, NodeAllocator, common::hash::NormalPointer, common::ObWrapperAllocator,
@@ -99,10 +99,10 @@ class ObRawExprUniqueSet {
     return expr_array_;
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprUniqueSet);
 
-  private:
+private:
   NodeAllocator node_allocator_;
   common::ObWrapperAllocator bucket_allocator_;
   ExprPtrSet expr_set_;
@@ -143,7 +143,7 @@ int ObRawExprUniqueSet::append(const ObIArray<RawExprType*>& exprs)
 }
 
 class ObRawExprUtils {
-  public:
+public:
   /**
    * make expression from string
    *
@@ -174,19 +174,27 @@ class ObRawExprUtils {
       const common::ObString& expr_str, common::ObIAllocator& allocator, const ParseNode*& node);
   static int build_check_constraint_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info,
       const ParseNode& node, ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns);
+  static int check_deterministic(const ObRawExpr* expr, common::ObIAllocator& allocator,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
+  static int check_deterministic_single(const ObRawExpr* expr,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info,
       const ParseNode& node, ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(const common::ObString& expr_str, ObRawExprFactory& expr_factory,
       const ObSQLSessionInfo& session_info, ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(const common::ObString& expr_str, ObRawExprFactory& expr_factory,
       const ObSQLSessionInfo& session_info, const share::schema::ObTableSchema& table_schema, ObRawExpr*& expr,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_generated_column_expr(const common::ObString& expr_str, ObRawExprFactory& expr_factory,
       const ObSQLSessionInfo& session_info, uint64_t table_id, const share::schema::ObTableSchema& table_schema,
       const share::schema::ObColumnSchemaV2& gen_col_schema, ObRawExpr*& expr,
-      const ObSchemaChecker* schema_checker = NULL);
+      const ObSchemaChecker* schema_checker = NULL,
+      const ObResolverUtils::PureFunctionCheckStatus check_status = ObResolverUtils::DISABLE_CHECK);
   static int build_raw_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo& session_info, const ParseNode& node,
       ObRawExpr*& expr, common::ObIArray<ObQualifiedName>& columns, common::ObIArray<ObVarInfo>& sys_vars,
       common::ObIArray<ObAggFunRawExpr*>& aggr_exprs, common::ObIArray<ObWinFunRawExpr*>& win_exprs,
@@ -203,15 +211,18 @@ class ObRawExprUtils {
   /// replace all `from' to `to' in the raw_expr
   static int replace_all_ref_column(ObRawExpr*& raw_expr, const common::ObIArray<ObRawExpr*>& exprs, int64_t& offset);
   // if %expr_factory is not NULL, will deep copy %to expr. default behavior is shallow copy
-  static int replace_ref_column(
-      ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to, ObRawExprFactory* expr_factory = NULL);
+  // if except_exprs is not NULL, will skip the expr in except_exprs
+  static int replace_ref_column(ObRawExpr*& raw_expr, ObRawExpr* from, ObRawExpr* to,
+      ObRawExprFactory* expr_factory = NULL, const ObIArray<ObRawExpr*>* except_exprs = NULL);
   static int replace_level_column(ObRawExpr*& raw_expr, ObRawExpr* to, bool& replaced);
-  static int replace_ref_column(common::ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to);
+  static int replace_ref_column(common::ObIArray<ObRawExpr*>& exprs, ObRawExpr* from, ObRawExpr* to,
+      const ObIArray<ObRawExpr*>* except_exprs = NULL);
   static bool all_column_exprs(const common::ObIArray<ObRawExpr*>& exprs);
   /// extract column exprs from the raw expr
   static int extract_column_exprs(const ObRawExpr* raw_expr, common::ObIArray<ObRawExpr*>& column_exprs);
   static int extract_column_exprs(
       const common::ObIArray<ObRawExpr*>& exprs, common::ObIArray<ObRawExpr*>& column_exprs);
+  static int mark_column_explicited_reference(ObRawExpr& expr);
   static int extract_column_ids(const ObIArray<ObRawExpr*>& exprs, common::ObIArray<uint64_t>& column_ids);
   static int extract_column_ids(const ObRawExpr* raw_expr, common::ObIArray<uint64_t>& column_ids);
   static int extract_table_ids(const ObRawExpr* raw_expr, common::ObIArray<uint64_t>& table_ids);
@@ -425,7 +436,7 @@ class ObRawExprUtils {
   static int build_to_outfile_expr(ObRawExprFactory& expr_factory, const ObSQLSessionInfo* session_info,
       const ObSelectIntoItem* into_item, const ObIArray<ObRawExpr*>& exprs, ObRawExpr*& to_outfile_expr);
 
-  private:
+private:
   static int create_real_cast_expr(ObRawExprFactory& expr_factory, ObRawExpr* src_expr, const ObExprResType& dst_type,
       ObSysFunRawExpr*& func_expr, const ObSQLSessionInfo* session_info);
   ObRawExprUtils();

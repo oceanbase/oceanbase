@@ -85,12 +85,12 @@ int ObAllVirtualDtlFirstCachedBufferIterator::init()
 }
 
 class ObAllVirtualDtlFirstCachedBufferPoolOp {
-  public:
+public:
   class ObDtlFirstBufferHashMapOp {
-    public:
-    ObDtlFirstBufferHashMapOp(int64_t max_cnt, int64_t tenant_id,
+  public:
+    ObDtlFirstBufferHashMapOp(int64_t tenant_id,
         ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator>* first_buffer_info)
-        : max_cnt_(max_cnt), tenant_id_(tenant_id), first_buffer_infos_(first_buffer_info)
+        : tenant_id_(tenant_id), first_buffer_infos_(first_buffer_info)
     {}
     ~ObDtlFirstBufferHashMapOp()
     {
@@ -108,13 +108,12 @@ class ObAllVirtualDtlFirstCachedBufferPoolOp {
       return ret;
     }
 
-    private:
-    int64_t max_cnt_;
+  private:
     int64_t tenant_id_;
     ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator>* first_buffer_infos_;
   };
 
-  public:
+public:
   explicit ObAllVirtualDtlFirstCachedBufferPoolOp(
       uint64_t tenant_id, ObArray<ObAllVirtualDtlFirstBufferInfo, ObWrapperAllocator>* first_buffer_info)
       : tenant_id_(tenant_id), first_buffer_infos_(first_buffer_info)
@@ -126,8 +125,8 @@ class ObAllVirtualDtlFirstCachedBufferPoolOp {
   int operator()(ObDtlLocalFirstBufferCache* buffer_cache)
   {
     int ret = OB_SUCCESS;
-    ObDtlFirstBufferHashTable<uint64_t, ObDtlCacheBufferInfo>& buffer_map = buffer_cache->get_buffer_map();
-    ObDtlFirstBufferHashMapOp op(MAX_BUFFER_CNT_PER_TENANT, tenant_id_, first_buffer_infos_);
+    ObDtlFirstBufferHashTable<uint64_t, ObDtlCacheBufferInfo> &buffer_map = buffer_cache->get_buffer_map();
+    ObDtlFirstBufferHashMapOp op(tenant_id_, first_buffer_infos_);
     if (OB_FAIL(buffer_map.foreach_refactored(op))) {
       LOG_WARN("failed to get channel memory manager", K(ret));
     }
@@ -135,7 +134,7 @@ class ObAllVirtualDtlFirstCachedBufferPoolOp {
     return ret;
   }
 
-  private:
+private:
   // the maxinum of get channels
   static const int64_t MAX_BUFFER_CNT_PER_TENANT = 1000;
   uint64_t tenant_id_;

@@ -16,14 +16,14 @@
 namespace oceanbase {
 namespace sql {
 class ObKillResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObKillResolver(ObResolverParams& params) : ObCMDResolver(params)
   {}
   virtual ~ObKillResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObKillResolver);
 };
 }  // namespace sql

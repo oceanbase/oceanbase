@@ -55,13 +55,13 @@ struct ObTenantFreezeArg {
 };
 
 class ObTenantMgrRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObTenantMgrRpcProxy);
   RPC_AP(@PR5 post_freeze_request, OB_TENANT_MGR, (ObTenantFreezeArg));
 };
 
 class ObTenantMgrP : public ObRpcProcessor<obrpc::ObTenantMgrRpcProxy::ObRpc<OB_TENANT_MGR> > {
-  public:
+public:
   ObTenantMgrP(
       obrpc::ObCommonRpcProxy* rpc_proxy, const share::ObRsMgr* rs_mgr, storage::ObPartitionService* partition_service)
       : rpc_proxy_(rpc_proxy), rs_mgr_(rs_mgr), partition_service_(partition_service)
@@ -75,28 +75,28 @@ class ObTenantMgrP : public ObRpcProcessor<obrpc::ObTenantMgrRpcProxy::ObRpc<OB_
 
   const static int64_t MAX_CONCURRENT_MINOR_FREEZING = 10;
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   obrpc::ObCommonRpcProxy* rpc_proxy_;
   const share::ObRsMgr* rs_mgr_;
   storage::ObPartitionService* partition_service_;
   // used to control the max concurrent number of minor freezing
   static int64_t minor_freeze_token_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantMgrP);
 };
 
 class ObTenantMgrRpcCb : public ObTenantMgrRpcProxy::AsyncCB<OB_TENANT_MGR> {
-  public:
+public:
   ObTenantMgrRpcCb()
   {}
   virtual ~ObTenantMgrRpcCb()
   {}
 
-  public:
+public:
   int process();
   void on_timeout();
   rpc::frame::ObReqTransport::AsyncCB* clone(const rpc::frame::SPAlloc& alloc) const
@@ -113,7 +113,7 @@ class ObTenantMgrRpcCb : public ObTenantMgrRpcProxy::AsyncCB<OB_TENANT_MGR> {
     UNUSED(arg);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantMgrRpcCb);
 };
 
@@ -122,30 +122,30 @@ class ObTenantMgrRpcCb : public ObTenantMgrRpcProxy::AsyncCB<OB_TENANT_MGR> {
 namespace common {
 
 class ObTenantMgrTimerTask : public ObTimerTask {
-  public:
+public:
   ObTenantMgrTimerTask()
   {}
   virtual ~ObTenantMgrTimerTask()
   {}
 
-  public:
+public:
   virtual void runTimerTask();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantMgrTimerTask);
 };
 
 class ObPrintTenantMemstoreUsage : public ObTimerTask {
-  public:
+public:
   ObPrintTenantMemstoreUsage()
   {}
   virtual ~ObPrintTenantMemstoreUsage()
   {}
 
-  public:
+public:
   virtual void runTimerTask();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPrintTenantMemstoreUsage);
 };
 
@@ -168,12 +168,12 @@ struct ObRetryMajorInfo {
   TO_STRING_KV(K_(tenant_id), K_(major_version));
 };
 class ObTenantInfo : public ObDLinkBase<ObTenantInfo> {
-  public:
+public:
   ObTenantInfo();
   virtual ~ObTenantInfo()
   {}
 
-  public:
+public:
   uint64_t tenant_id_;
   int64_t mem_lower_limit_;
   int64_t mem_upper_limit_;
@@ -192,14 +192,14 @@ class ObTenantInfo : public ObDLinkBase<ObTenantInfo> {
   int64_t mem_memstore_left() const;
   void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantInfo);
 };
 
 class ObServerConfig;
 
 class ObTenantManager : public ObITenantMgr {
-  public:
+public:
   // this init is for obproxy only
   int init(const int64_t tenant_cnt = OB_ONLY_SYS_TENANT_COUNT);
   // in observer we only use this init func
@@ -258,10 +258,10 @@ class ObTenantManager : public ObITenantMgr {
     retry_major_info_ = retry_major_info;
   }
 
-  private:
+private:
   static const int64_t BUCKET_NUM = 1373;
 
-  private:
+private:
   ObTenantManager();
   virtual ~ObTenantManager();
   int init_tenant_map(const int64_t tenant_cnt);
@@ -275,6 +275,11 @@ class ObTenantManager : public ObITenantMgr {
   int check_and_do_freeze_by_total_limit();
   int print_tenant_node(
       ObTenantInfo& node, char* print_buf, int64_t buf_len, int64_t& pos, int64_t& total_active_memstore_hold);
+  int check_memory_used(const int64_t tenant_id,
+                        const double mem_active_memstore_used,
+                        const double mem_minor_freeze_trigger,
+                        const double mem_memstore_limit,
+                        bool &use_too_much_memory);
 
   struct ObTenantBucket {
     ObDList<ObTenantInfo> info_list_;
@@ -328,12 +333,12 @@ class ObTenantManager : public ObITenantMgr {
   common::ObMemstoreAllocatorMgr* allocator_mgr_;
   lib::ObMutex print_mutex_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantManager);
 };
 
 class ObTenantCpuShare {
-  public:
+public:
   /* Return value: The number of px threads assigned to tenant_id tenant */
   static int64_t calc_px_pool_share(uint64_t tenant_id, int64_t cpu_count);
 };

@@ -120,7 +120,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::transaction;
 
 class ObCodeGeneratorImpl::ColumnIndexProviderImpl : public jit::expr::ObColumnIndexProvider {
-  public:
+public:
   ColumnIndexProviderImpl(const RowDesc& input_row_desc, const int32_t* projector = NULL, int64_t projector_size = 0)
       : left_row_desc_(&input_row_desc), right_row_desc_(NULL), projector_(projector), projector_size_(projector_size)
   {}
@@ -163,10 +163,10 @@ class ObCodeGeneratorImpl::ColumnIndexProviderImpl : public jit::expr::ObColumnI
     return ret;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ColumnIndexProviderImpl);
 
-  private:
+private:
   const RowDesc* left_row_desc_;
   const RowDesc* right_row_desc_;
   const int32_t* projector_;
@@ -375,6 +375,11 @@ int ObCodeGeneratorImpl::set_other_properties(const ObLogPlan& log_plan, ObPhysi
             if (table_schema->is_oracle_sess_tmp_table()) {
               phy_plan.set_contain_oracle_session_level_temporary_table();
             }
+            LOG_DEBUG("plan contain temporary table",
+                "trx level",
+                table_schema->is_oracle_trx_tmp_table(),
+                "session level",
+                table_schema->is_oracle_sess_tmp_table());
           }
         }
       }
@@ -971,10 +976,11 @@ int ObCodeGeneratorImpl::recursive_get_column_expr(const ObColumnRefRawExpr*& co
       if (OB_ISNULL(table_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (!table_item->is_generated_table()) {
-        column = inner_column;
-      } else if (OB_FAIL(recursive_get_column_expr(column, *table_item))) {
+      } else if (table_item->is_generated_table() &&
+                 OB_FAIL(recursive_get_column_expr(inner_column, *table_item))) {
         LOG_WARN("faield to recursive get column expr", K(ret));
+      } else {
+        column = inner_column;
       }
     }
   }
@@ -1976,7 +1982,17 @@ int ObCodeGeneratorImpl::convert_normal_table_scan(
           LOG_WARN("check is table get failed", K(ret));
         } else if (!is_get) {
           ObTableLocation part_filter;
-          if (OB_FAIL(part_filter.init_table_location_with_rowkey(*schema_guard, filter_table_id, *session))) {
+          ObDMLStmt *root_stmt = NULL;
+          bool is_dml_table = false;
+          if (OB_ISNULL(root_stmt = op.get_plan()->get_optimizer_context().get_root_stmt())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("root stmt is invalid", K(ret), K(root_stmt));
+          } else if (FALSE_IT(is_dml_table = root_stmt->check_table_be_modified(filter_table_id))) {
+            // do nothing
+          } else if (OB_FAIL(part_filter.init_table_location_with_rowkey(*schema_guard,
+                                                                         filter_table_id,
+                                                                         *session,
+                                                                         is_dml_table))) {
             LOG_WARN("init table location with rowkey failed", K(ret), K(filter_table_id));
           } else if (OB_FAIL(phy_op->set_part_filter(part_filter))) {
             LOG_WARN("set part filter failed", K(ret));
@@ -3047,7 +3063,7 @@ int ObCodeGeneratorImpl::generate_root_row_desc(ObJoin* join, const std::pair<Ob
 }
 
 class LGITargetOp {
-  public:
+public:
   bool operator()(const ObPhyOperator& op) const
   {
     return PHY_LIGHT_GRANULE_ITERATOR == op.get_type();
@@ -3272,11 +3288,6 @@ int ObCodeGeneratorImpl::convert_exchange(
       RowDesc* out_row_desc = NULL;
       if (OB_FAIL(create_phy_op_desc(type, receive, out_row_desc, out_ops, op.get_op_id()))) {
         LOG_WARN("failed to create phy op and desc", K(ret));
-      } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2250) {
-        // after 2.2.50, remote plan will send SQL, instead of plan to the remote server
-        if (OB_FAIL(construct_basic_row_desc(op.get_output_exprs(), *out_row_desc))) {
-          LOG_WARN("construct basic row desc failed", K(ret), K(op.get_output_exprs()));
-        }
       } else if (child_ops.at(0).first->get_output_count() > 0 && child_ops.at(0).second->get_column_num() > 0 &&
                  OB_FAIL(copy_row_desc_by_projector(*child_ops.at(0).second,
                      child_ops.at(0).first->get_projector(),
@@ -3568,6 +3579,7 @@ int ObCodeGeneratorImpl::convert_set(ObLogSet& op, const PhyOpsDesc& child_ops, 
 
       const ObIArray<OrderItem>& search_order = op.get_search_ordering();
       OZ(r_union->search_by_col_lists_.init(search_order.count()));
+      OZ(r_union->init_op_schema_obj(search_order.count()));
       ARRAY_FOREACH(search_order, i)
       {
         const ObRawExpr* raw_expr = search_order.at(i).expr_;
@@ -3661,6 +3673,8 @@ int ObCodeGeneratorImpl::convert_internal_sort(
   int ret = OB_SUCCESS;
   if (OB_FAIL(sort.init_sort_columns(sort_column.count()))) {
     SQL_CG_LOG(WARN, "fail to init sort columns.", K(ret));
+  } else if (OB_FAIL(sort.init_op_schema_obj(sort_column.count()))) {
+    LOG_WARN("fail to init sort schema obj array", K(ret));
   }
   ARRAY_FOREACH(sort_column, i)
   {
@@ -3827,8 +3841,8 @@ int ObCodeGeneratorImpl::convert_subplan_filter(
   return ret;
 }
 
-int ObCodeGeneratorImpl::handle_pdml_shadow_pk(
-    const common::ObIArray<ObColumnRefRawExpr*>& index_dml_column_exprs, RowDesc* out_row_desc, ObPhyOperator* phy_op)
+int ObCodeGeneratorImpl::handle_pdml_shadow_pk(const common::ObIArray<ObColumnRefRawExpr*>& index_dml_column_exprs,
+    RowDesc* out_row_desc, RowDesc* extra_row_desc, ObPhyOperator* phy_op)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> calc_exprs;
@@ -3843,8 +3857,8 @@ int ObCodeGeneratorImpl::handle_pdml_shadow_pk(
     }
   }
   if (OB_SUCC(ret) && calc_exprs.count() > 0) {
-    if (OB_FAIL(add_compute(calc_exprs, *out_row_desc, out_row_desc, *phy_op))) {
-      LOG_WARN("failed ato add compute for calc exprs", K(ret));
+    if (OB_FAIL(add_compute(calc_exprs, *out_row_desc, extra_row_desc, *phy_op))) {
+      LOG_WARN("failed to add compute for calc exprs", K(ret), K(calc_exprs));
     } else {
       LOG_DEBUG("add inner compute success", K(calc_exprs));
     }
@@ -4095,7 +4109,8 @@ int ObCodeGeneratorImpl::convert_pdml_delete(ObLogDelete& op, const PhyOpsDesc& 
         pdml_delete->get_dml_row_desc().set_part_id_index(partition_expr_idx);
       }
       if (OB_SUCC(ret) && op.is_index_maintenance()) {
-        if (OB_FAIL(handle_pdml_shadow_pk(index_dml_info.column_exprs_, out_row_desc, pdml_delete))) {
+        // find shadow pk expr and add it to out row desc and calc_exprs
+        if (OB_FAIL(handle_pdml_shadow_pk(index_dml_info.column_exprs_, out_row_desc, out_row_desc, pdml_delete))) {
           LOG_WARN("failed to handle pdml shadow pk", K(ret), K(index_dml_info.column_exprs_));
         }
       }
@@ -4440,7 +4455,7 @@ int ObCodeGeneratorImpl::convert_pdml_update(ObLogUpdate& op, const PhyOpsDesc& 
       LOG_WARN("fail to add column id to table update operator", K(ret));
     }
     if (OB_SUCC(ret) && op.is_index_maintenance()) {
-      if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, phy_op))) {
+      if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, out_row_desc, phy_op))) {
         LOG_WARN("failed to handle pdml shadow pk", K(ret), K(dml_index_info.column_exprs_));
       }
     }
@@ -5848,7 +5863,14 @@ int ObCodeGeneratorImpl::convert_pdml_insert(ObLogInsert& op, const PhyOpsDesc& 
     }
 
     if (OB_SUCC(ret) && op.is_index_maintenance()) {
-      if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, phy_op))) {
+      RowDesc extra_row_desc;
+      if (OB_FAIL(extra_row_desc.init())) {
+        LOG_WARN("failed to init extra row desc", K(ret));
+      } else if (OB_FAIL(generate_insert_new_row_desc(&dml_index_info.column_exprs_,
+                     dml_index_info.column_convert_exprs_,
+                     *out_row_desc,
+                     extra_row_desc))) {
+      } else if (OB_FAIL(handle_pdml_shadow_pk(dml_index_info.column_exprs_, out_row_desc, &extra_row_desc, phy_op))) {
         LOG_WARN("failed to handle pdml shadow pk", K(ret), K(dml_index_info.column_exprs_));
       }
     }
@@ -6116,13 +6138,17 @@ int ObCodeGeneratorImpl::convert_duplicate_key_scan_info(
     RowDesc& row_desc, ObLogicalOperator* log_scan_op, ObUniqueIndexScanInfo& scan_info)
 {
   int ret = OB_SUCCESS;
-  ObLogPlan* log_plan = NULL;
-  ObPhyOperator* scan_root = NULL;
-  ObSqlSchemaGuard* schema_guard = NULL;
-  ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(log_scan_op) || OB_ISNULL(phy_plan_) || OB_ISNULL(log_plan = log_scan_op->get_plan()) ||
-      OB_ISNULL(session_info = log_plan->get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())) {
+  ObLogPlan *log_plan = NULL;
+  ObPhyOperator *scan_root = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObDMLStmt *root_stmt = NULL;
+  if (OB_ISNULL(log_scan_op)
+      || OB_ISNULL(phy_plan_)
+      || OB_ISNULL(log_plan = log_scan_op->get_plan())
+      || OB_ISNULL(session_info = log_plan->get_optimizer_context().get_session_info())
+      || OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_sql_schema_guard())
+      || OB_ISNULL(root_stmt = log_plan->get_optimizer_context().get_root_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(log_scan_op), K(phy_plan_), K(log_plan), K(session_info), K(schema_guard));
   } else if (OB_UNLIKELY(!log_scan_op->is_duplicated_checker_op())) {
@@ -6162,8 +6188,12 @@ int ObCodeGeneratorImpl::convert_duplicate_key_scan_info(
       LOG_WARN("allocate table location buffer failed", K(ret), K(sizeof(ObTableLocation)));
     } else {
       scan_info.index_location_ = new (buf) ObTableLocation(phy_plan_->get_allocator());
+      bool is_dml_table = root_stmt->check_table_be_modified(scan_info.index_tid_);
       if (OB_FAIL(scan_info.index_location_->init_table_location_with_rowkey(
-              *schema_guard, scan_info.index_tid_, *session_info))) {
+                                            *schema_guard,
+                                            scan_info.index_tid_,
+                                            *session_info,
+                                            is_dml_table))) {
         LOG_WARN("init index location failed", K(ret), KPC(log_scan_op));
       } else {
         scan_info.index_location_->set_table_id(scan_info.table_id_);
@@ -6902,9 +6932,10 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   RowDesc* out_row_desc = NULL;
   PhyOpsDesc table_scan_child_ops;
   PhyOpsDesc table_scan_out_ops;
-  ObSchemaGetterGuard* schema_guard = NULL;
-  const ObTableSchema* table_schema = NULL;
-  ObSQLSessionInfo* my_session = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObSQLSessionInfo *my_session = NULL;
+  ObDMLStmt *root_stmt = NULL;
   if (OB_ISNULL(op.get_index_back_scan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null table scan operator", K(ret));
@@ -6926,7 +6957,8 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   } else if (OB_FAIL(copy_row_desc(*table_scan_out_ops.at(0).second, *out_row_desc))) {
     LOG_WARN("failed to copy row desc", K(ret), K(*child_ops.at(0).second));
   } else if (OB_ISNULL(op.get_plan()) ||
-             OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_schema_guard())) {
+             OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_schema_guard()) ||
+             OB_ISNULL(root_stmt = op.get_plan()->get_optimizer_context().get_root_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get unexpected null", K(schema_guard), K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(op.get_ref_table_id(), table_schema))) {
@@ -6956,11 +6988,13 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
     if (OB_SUCC(ret)) {
       ObTableLocation& partition_id_getter = table_lookup->get_part_id_getter();
       // the other function may be more effective, TODO
+      bool is_dml_table = root_stmt->check_table_be_modified(lookup_info.table_id_);
       if (OB_FAIL(partition_id_getter.init_table_location_with_row_desc(
-              *op.get_plan()->get_optimizer_context().get_sql_schema_guard(),
-              lookup_info.ref_table_id_,
-              *child_ops.at(0).second,
-              *my_session))) {
+          *op.get_plan()->get_optimizer_context().get_sql_schema_guard(),
+          lookup_info.ref_table_id_,
+          *child_ops.at(0).second,
+          *my_session,
+          is_dml_table))) {
         LOG_WARN("the partition id init failed", K(ret));
       } else {
         partition_id_getter.set_table_id(op.get_table_id());
@@ -6974,7 +7008,7 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   }
 #endif
   // in any case, destroy row desc
-  if (NULL != table_scan_out_ops.at(0).second) {
+  if (table_scan_out_ops.count() > 0 && NULL != table_scan_out_ops.at(0).second) {
     ob_delete(table_scan_out_ops.at(0).second);
   }
   return ret;
@@ -7492,6 +7526,9 @@ int ObCodeGeneratorImpl::set_optimization_info(ObLogTableScan& log_ts, ObTableSc
       if (OB_FAIL(phy_ts->set_available_index_name(
               log_ts.get_table_opt_info()->available_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failed to set available index name", K(ret));
+      } else if (OB_FAIL(phy_ts->set_unstable_index_name(
+                     log_ts.get_table_opt_info()->unstable_index_name_, phy_plan_->get_allocator()))) {
+        LOG_WARN("failedd to set unstable index name", K(ret));
       } else if (OB_FAIL(phy_ts->set_pruned_index_name(
                      log_ts.get_table_opt_info()->pruned_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failedd to set prunned index name", K(ret));
@@ -8514,7 +8551,7 @@ int ObCodeGeneratorImpl::get_phy_op_type(ObLogicalOperator& log_op, ObPhyOperato
 }
 
 class TSCTargetOp {
-  public:
+public:
   bool operator()(const ObPhyOperator& op) const
   {
     return op.is_table_scan() && PHY_FAKE_TABLE != op.get_type();
@@ -8522,7 +8559,7 @@ class TSCTargetOp {
 };
 
 class SingleDMLTargetOp {
-  public:
+public:
   bool operator()(const ObPhyOperator& op) const
   {
     return op.is_dml_operator() && PHY_MULTI_PART_UPDATE != op.get_type() && PHY_MULTI_PART_INSERT != op.get_type() &&
@@ -8697,6 +8734,9 @@ int ObCodeGeneratorImpl::fill_sort_columns(const ColumnIndexProviderImpl& idx_pr
   int64_t sort_idx = OB_INVALID_INDEX;
   if (OB_FAIL(merge_receive.init_sort_columns(sort_keys.count()))) {
     LOG_WARN("fail to init sort column", K(ret));
+  } else if (NULL != phy_op && 
+      OB_FAIL(phy_op->init_op_schema_obj(sort_keys.count()))) {
+    LOG_WARN("fail to get op schema obj array", K(ret));
   }
   ARRAY_FOREACH(sort_keys, i)
   {

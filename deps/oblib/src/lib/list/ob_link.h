@@ -17,7 +17,7 @@ namespace oceanbase {
 namespace common {
 /// @class  single link item
 class ObSLink {
-  public:
+public:
   /// @fn constructor
   inline ObSLink()
   {
@@ -52,7 +52,7 @@ class ObSLink {
     return result;
   }
 
-  private:
+private:
   /// @fn initialize
   inline void initialize()
   {
@@ -64,7 +64,7 @@ class ObSLink {
 
 /// @class  double link list item
 class ObDLink {
-  public:
+public:
   /// @fn constructor
   inline ObDLink()
   {
@@ -168,7 +168,7 @@ class ObDLink {
     return prev_;
   }
 
-  private:
+private:
   /// @fn initialize
   inline void initialize()
   {

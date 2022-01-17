@@ -14,6 +14,8 @@
 #define OCEANBASE_CLOG_OB_LOG_RESTORE_MGR_H_
 
 #include "ob_log_define.h"
+#include "ob_simple_member_list.h"
+#include "common/ob_member_list.h"
 #include "common/ob_partition_key.h"
 #include "common/ob_role.h"
 #include "lib/lock/ob_spin_lock.h"
@@ -34,7 +36,7 @@ class ObILogEngine;
 class ObILogMembershipMgr;
 
 class ObLogRestoreMgr {
-  public:
+public:
   ObLogRestoreMgr()
       : lock_(),
         partition_service_(NULL),
@@ -48,12 +50,14 @@ class ObLogRestoreMgr {
         last_renew_location_time_(common::OB_INVALID_TIMESTAMP),
         last_check_state_time_(common::OB_INVALID_TIMESTAMP),
         restore_log_finish_ts_(common::OB_INVALID_TIMESTAMP),
+        last_query_last_restore_id_time_(OB_INVALID_TIMESTAMP),
         role_(common::INVALID_ROLE),
         partition_key_(),
         self_(),
         restore_leader_(),
         archive_restore_state_(share::REPLICA_NOT_RESTORE),
         fetch_log_result_(OB_ARCHIVE_FETCH_LOG_INIT),
+        restore_end_id_ack_list_(),
         is_inited_(false)
   {}
   ~ObLogRestoreMgr()
@@ -103,8 +107,10 @@ class ObLogRestoreMgr {
     return restore_log_finish_ts_;
   }
   bool is_standby_restore_state() const;
+  int check_last_restore_id_majority_equal(const common::ObMemberList& member_list);
+  int process_restore_end_id_resp(const common::ObAddr& server);
 
-  private:
+private:
   int leader_takeover_();
   int leader_revoke_();
   int leader_check_role_();
@@ -113,7 +119,7 @@ class ObLogRestoreMgr {
   int try_submit_restore_task_();
   int try_send_alive_req_();
 
-  private:
+private:
   // time threshold that follower judges leader down
   static const int64_t RESTORE_LEADER_TIMEOUT_THRESHOLD = 1 * 60 * 1000 * 1000l;
   // renew location interval
@@ -122,8 +128,10 @@ class ObLogRestoreMgr {
   static const int64_t RESTORE_CHECK_STATE_INTERVAL = 10 * 1000 * 1000l;
   // interval for follower sending alive req
   static const int64_t RESTORE_ALIVE_REQ_INTERVAL = 5 * 1000 * 1000l;
+  // time interval for restore_leader check restore_end_id
+  static const int64_t QUERY_RESTORE_ID_INTERVAL = 2 * 1000 * 1000l;
 
-  private:
+private:
   common::ObSpinLock lock_;
   storage::ObPartitionService* partition_service_;
   ObILogSWForStateMgr* sw_;
@@ -136,12 +144,14 @@ class ObLogRestoreMgr {
   int64_t last_renew_location_time_;
   int64_t last_check_state_time_;
   int64_t restore_log_finish_ts_;
+  int64_t last_query_last_restore_id_time_;
   common::ObRole role_;
   common::ObPartitionKey partition_key_;
   common::ObAddr self_;
   common::ObAddr restore_leader_;
   int16_t archive_restore_state_;
   ObArchiveFetchLogResult fetch_log_result_;
+  ObSimpleMemberList restore_end_id_ack_list_;
   bool is_inited_;
 };
 }  // namespace clog

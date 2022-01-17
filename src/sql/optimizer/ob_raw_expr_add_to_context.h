@@ -23,7 +23,7 @@ namespace sql {
  *  during output expr allocation.
  */
 class ObRawExprAddToContext : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprAddToContext(common::ObIArray<ExprProducer>* ctx, uint64_t id)
       : ctx_(ctx), consumer_id_(id), keep_working_(true)
   {}
@@ -48,13 +48,13 @@ class ObRawExprAddToContext : public ObRawExprVisitor {
   virtual int visit(ObWinFunRawExpr& expr);
   virtual int visit(ObPseudoColumnRawExpr& expr);
 
-  private:
+private:
   int add_expr(ObRawExpr& expr);
   // types and constants
 
-  private:
+private:
   // function members
-  private:
+private:
   common::ObIArray<ExprProducer>* ctx_;
   uint64_t consumer_id_;
   bool keep_working_;

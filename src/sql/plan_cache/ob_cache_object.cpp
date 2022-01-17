@@ -28,7 +28,7 @@ using namespace share::schema;
 namespace sql {
 ObCacheObject::ObCacheObject(ObCacheObjType co_type, lib::MemoryContext& mem_context /* = CURRENT_CONTEXT */)
     : mem_context_(mem_context),
-      allocator_(mem_context.get_safe_arena_allocator()),
+      allocator_(mem_context->get_safe_arena_allocator()),
       type_(co_type),
       ref_count_(0),
       tenant_schema_version_(OB_INVALID_VERSION),

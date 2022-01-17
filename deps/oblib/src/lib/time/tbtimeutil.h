@@ -26,7 +26,7 @@ namespace obsys {
  * @brief Simple encapsulation of linux time operation
  */
 class CTimeUtil {
-  public:
+public:
   /**
    * ms timestamp
    */

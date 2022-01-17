@@ -25,7 +25,7 @@ namespace sql {
 
 class ObArithResultTypeMap;
 class ObExprResultTypeUtil {
-  public:
+public:
   /* The way mysql calculates expressions is: first calculate a target type by column type,
    * Then, in the comparison stage, the value is converted to the modified type,
    * and then the comparison is made.

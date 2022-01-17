@@ -22,7 +22,7 @@ class ObExecContext;
 class ObPhyOperator;
 
 class ObExecutor {
-  public:
+public:
   ObExecutor();
   ~ObExecutor(){};
   int init(ObPhysicalPlan* plan);
@@ -30,19 +30,19 @@ class ObExecutor {
   int execute_plan(ObExecContext& ctx);
   int close(ObExecContext& ctx);
 
-  private:
+private:
   // disallow copy
   ObExecutor(const ObExecutor& other);
   ObExecutor& operator=(const ObExecutor& ohter);
 
-  private:
+private:
   int execute_local_single_partition_plan(ObExecContext& ctx);
   int execute_remote_single_partition_plan(ObExecContext& ctx);
   int execute_distributed_plan(ObExecContext& ctx);
   int execute_old_px_plan(ObExecContext& ctx);
   int execute_static_cg_px_plan(ObExecContext& ctx);
 
-  private:
+private:
   bool inited_;
   ObPhysicalPlan* phy_plan_;
   uint64_t execution_id_;

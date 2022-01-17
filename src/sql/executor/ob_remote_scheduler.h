@@ -22,13 +22,13 @@ class ObPhysicalPlan;
 class ObExecContext;
 class ObRemoteTask;
 class ObRemoteScheduler {
-  public:
+public:
   ObRemoteScheduler();
   virtual ~ObRemoteScheduler();
   int schedule(ObExecContext& ctx, ObPhysicalPlan* phy_plan);
   int async_execute_with_sql(ObExecContext& ctx, ObPhysicalPlan*);
 
-  private:
+private:
   int execute_with_plan(ObExecContext& ctx, ObPhysicalPlan* phy_plan);
   int execute_with_sql(ObExecContext& ctx, ObPhysicalPlan* phy_plan);
   int build_remote_task(ObExecContext& ctx, ObRemoteTask& remote_task, const DependenyTableStore& dependency_tables);

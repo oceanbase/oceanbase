@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObIntermTaskSpliter : public ObTaskSpliter {
-  public:
+public:
   ObIntermTaskSpliter();
   virtual ~ObIntermTaskSpliter();
   virtual int get_next_task(ObTaskInfo*& task);
@@ -28,18 +28,18 @@ class ObIntermTaskSpliter : public ObTaskSpliter {
     return ObTaskSpliter::INTERM_SPLIT;
   }
 
-  private:
+private:
   /* functions */
   int prepare();
 
-  private:
+private:
   /* variables */
   bool prepare_done_flag_;
   int64_t next_task_idx_;
   int64_t total_task_count_;
   common::ObSEArray<ObTaskInfo*, 8> store_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIntermTaskSpliter);
 };
 }  // namespace sql

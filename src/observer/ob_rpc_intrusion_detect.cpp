@@ -24,7 +24,7 @@ static int ez2ob_addr(ObAddr& addr, easy_addr_t ez_addr)
   int ret = OB_SUCCESS;
   addr.reset();
   if (AF_INET == ez_addr.family) {
-    (void*)addr.set_ipv4_addr(ntohl(ez_addr.u.addr), ntohs(ez_addr.port));
+    addr.set_ipv4_addr(ntohl(ez_addr.u.addr), ntohs(ez_addr.port));
   } else if (AF_INET6 == ez_addr.family) {  // ipv6
     ret = OB_NOT_SUPPORTED;
   }
@@ -47,7 +47,7 @@ static int on_connect(easy_connection_t* c)
     LOG_WARN("check server legitimate fail", K(ret), K(local_addr));
   } else if (!is_valid) {
     LOG_WARN("RPC INTRUSION DETECT: receive TCP connection out of this cluster,"
-             "may be a new server just add to this cluster or an 'ob_admin' operation happening",
+             "maybe a new server is just added to this cluster or an 'ob_admin' operation is running",
         K(local_addr));
   }
   return OB_SUCC(ret) ? EASY_OK : EASY_ERROR;

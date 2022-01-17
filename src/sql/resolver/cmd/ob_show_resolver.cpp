@@ -749,7 +749,28 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
         break;
       }
       case T_SHOW_TRIGGERS: {
-        ret = OB_NOT_SUPPORTED;
+        // Trigger is not supported in mysql mode and this is only used for mysqldump tool now.
+        // https://work.aone.alibaba-inc.com/issue/21188380
+        if (is_oracle_mode) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support show triggers in oracle mode", K(ret));
+        } else if (OB_UNLIKELY(parse_tree.num_child_ != 2 || NULL == parse_tree.children_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong",
+              K(ret),
+              K(parse_tree.num_child_),
+              K(parse_tree.children_));
+        } else {
+          if (OB_FAIL(sql_gen.init(params_.allocator_))) {
+            LOG_WARN("fail to init sql string generator", K(ret));
+          } else if (OB_FAIL(sql_gen.gen_select_str(ObShowSqlSet::SHOW_TRIGGERS_SELECT))) {
+            LOG_WARN("fail to generate select string", K(ret));
+          } else if (OB_FAIL(sql_gen.gen_from_str(ObShowSqlSet::SHOW_TRIGGERS_SUBQUERY))) {
+            LOG_WARN("fail to generate from string", K(ret));
+          } else {
+            sql_gen.assign_sql_str(select_sql);
+          }
+        }
         break;
       }
       case T_SHOW_WARNINGS:
@@ -1100,6 +1121,18 @@ int ObShowResolver::resolve(const ParseNode& parse_tree)
                 REAL_NAME(OB_ALL_RECYCLEBIN_TNAME, OB_ALL_VIRTUAL_RECYCLEBIN_AGENT_TNAME),
                 is_oracle_mode ? real_tenant_id : sql_tenant_id);
           }
+        }
+        break;
+      }
+      case T_SHOW_RESTORE_PREVIEW: {
+        if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+        } else {
+          show_resv_ctx.stmt_type_ = stmt::T_SHOW_RESTORE_PREVIEW;
+          GEN_SQL_STEP_1(ObShowSqlSet::SHOW_RESTORE_PREVIEW);
+          GEN_SQL_STEP_2(
+              ObShowSqlSet::SHOW_RESTORE_PREVIEW, OB_SYS_DATABASE_NAME, OB_VIRTUAL_SHOW_RESTORE_PREVIEW_TNAME);
         }
         break;
       }
@@ -2172,6 +2205,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_SYS_RECYCLEBIN, "SELECT OBJECT_NAME, ORIGINAL_NAME, 
     "then 'DATABASE' when 5 then 'AUX_VP' when 6 then 'TRIGGER' when 7 then 'TENANT' else 'INVALID' end as TYPE, "
     "gmt_create as CREATETIME FROM %s.%s where tenant_id = %lu OR TYPE = 7",
     NULL, NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_RESTORE_PREVIEW, NULL, "SELECT * FROM %s.%s", NULL, NULL);
 
 }  // namespace sql
 }  // namespace oceanbase

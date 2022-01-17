@@ -422,6 +422,14 @@ for RHEL4 support (GCC 3 doesn't support this instruction) */
 #define crc32_sse42_byte               \
   crc = __crc32cb(crc, (uint8_t)*buf); \
   len--, buf++
+#elif defined(__sw_64__)
+#define crc32_sse42_byte    nullptr
+
+/* opcodes taken from objdump of "crc32q (%%rdx), %%rcx"
+for RHEL4 support (GCC 3 doesn't support this instruction) */
+#define crc32_sse42_quadword  nullptr
+#else
+#error arch unsupported
 #endif /* defined(__GNUC__) && defined(__x86_64__) */
 
 inline static uint64_t crc64_sse42(uint64_t uCRC64, const char* buf, int64_t len)
@@ -2841,6 +2849,9 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char* buf, int64_t len)
   ob_crc64_sse42_func = &fast_crc64_sse42_manually;
   _OB_LOG(INFO, "Use manual crc32 table lookup for crc64 calculate");
 #endif
+#elif defined(__sw_64__)
+  ob_crc64_sse42_func = &fast_crc64_sse42_manually;
+  _OB_LOG(INFO, "Use manual crc32 table lookup for crc64 calculate");
 #else
 #error arch unsupported
 #endif

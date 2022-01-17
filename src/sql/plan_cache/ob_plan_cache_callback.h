@@ -19,10 +19,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPlanCacheAtomicOp {
-  protected:
+protected:
   typedef common::hash::HashMapPair<ObPlanCacheKey, ObPCVSet*> PlanCacheKV;
 
-  public:
+public:
   ObPlanCacheAtomicOp(const CacheRefHandleID ref_handle) : pcv_set_(NULL), ref_handle_(ref_handle)
   {}
   virtual ~ObPlanCacheAtomicOp()
@@ -32,23 +32,23 @@ class ObPlanCacheAtomicOp {
   // get pcv_set and increase reference count
   void operator()(PlanCacheKV& entry);
 
-  protected:
+protected:
   // when get value, need lock
   virtual int lock(ObPCVSet& pcv_set) = 0;
 
-  protected:
+protected:
   // According to the interface of ObHashTable, all returned values will be passed
   // back to the caller via the callback functor.
   // pcv_set_ - the plan cache value that is referenced.
   ObPCVSet* pcv_set_;
   CacheRefHandleID ref_handle_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheAtomicOp);
 };
 
 class ObPlanCacheWlockAndRef : public ObPlanCacheAtomicOp {
-  public:
+public:
   ObPlanCacheWlockAndRef(const CacheRefHandleID ref_handle) : ObPlanCacheAtomicOp(ref_handle)
   {}
   virtual ~ObPlanCacheWlockAndRef()
@@ -58,12 +58,12 @@ class ObPlanCacheWlockAndRef : public ObPlanCacheAtomicOp {
     return pcv_set.lock(false /*wlock*/);
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheWlockAndRef);
 };
 
 class ObPlanCacheRlockAndRef : public ObPlanCacheAtomicOp {
-  public:
+public:
   ObPlanCacheRlockAndRef(const CacheRefHandleID ref_handle) : ObPlanCacheAtomicOp(ref_handle)
   {}
   virtual ~ObPlanCacheRlockAndRef()
@@ -73,15 +73,15 @@ class ObPlanCacheRlockAndRef : public ObPlanCacheAtomicOp {
     return pcvs.lock(true /*rlock*/);
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheRlockAndRef);
 };
 
 class ObCacheObjAtomicOp {
-  protected:
+protected:
   typedef common::hash::HashMapPair<ObCacheObjID, ObCacheObject*> ObjKV;
 
-  public:
+public:
   ObCacheObjAtomicOp(const CacheRefHandleID ref_handle) : cache_obj_(NULL), ref_handle_(ref_handle)
   {}
   virtual ~ObCacheObjAtomicOp()
@@ -94,11 +94,11 @@ class ObCacheObjAtomicOp {
     return cache_obj_;
   }
 
-  protected:
+protected:
   ObCacheObject* cache_obj_;
   const CacheRefHandleID ref_handle_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCacheObjAtomicOp);
 };
 

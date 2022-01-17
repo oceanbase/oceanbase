@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxExchangeInput : public ObIPhyOperatorInput {
-  public:
+public:
   ObPxExchangeInput() : task_id_(common::OB_INVALID_ID), sqc_id_(common::OB_INVALID_ID), dfo_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObPxExchangeInput() = default;
@@ -52,14 +52,14 @@ class ObPxExchangeInput : public ObIPhyOperatorInput {
     return dfo_id_;
   }
 
-  protected:
+protected:
   int64_t task_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;
 };
 
 class ObPxExchangeOpInput : public ObOpInput {
-  public:
+public:
   ObPxExchangeOpInput(ObExecContext& ctx, const ObOpSpec& spec)
       : ObOpInput(ctx, spec),
         task_id_(common::OB_INVALID_ID),
@@ -95,7 +95,7 @@ class ObPxExchangeOpInput : public ObOpInput {
     return dfo_id_;
   }
 
-  protected:
+protected:
   int64_t task_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;

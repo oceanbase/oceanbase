@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace rootserver {
 
 class MockLeaderCoordinator : public ObLeaderCoordinator {
-  public:
+public:
   MOCK_METHOD0(coordinate, int());
   MOCK_METHOD0(smooth_coordinate, int());
   MOCK_METHOD0(start_smooth_coordinate, int());

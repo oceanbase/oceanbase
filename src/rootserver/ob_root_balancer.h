@@ -39,6 +39,7 @@
 #include "ob_partition_backup.h"
 #include "share/ob_unit_replica_counter.h"
 #include "ob_single_partition_balance.h"
+#include "rootserver/backup/ob_backup_backupset.h"
 
 namespace oceanbase {
 namespace common {
@@ -50,7 +51,7 @@ class ObPartitionInfo;
 class ObPartitionTableOperator;
 class ObSplitInfo;
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObMultiVersionSchemaService;
 class ObSchemaGetterGuard;
 }  // namespace schema
@@ -71,18 +72,18 @@ class ObSingleZoneModeMigrateReplica;
 class ObSinglePartitionBalance;
 
 class ObRootBalanceIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObRootBalanceIdling(volatile bool& stop, const ObRootBalancer& host) : ObThreadIdling(stop), host_(host)
   {}
 
   virtual int64_t get_idle_interval_us();
 
-  private:
+private:
   const ObRootBalancer& host_;
 };
 
 struct ObBalancerTargetSchemaInfo {
-  public:
+public:
   ObBalancerTargetSchemaInfo() : lock_(), tenant_schema_versions_()
   {}
   ~ObBalancerTargetSchemaInfo()
@@ -93,7 +94,7 @@ struct ObBalancerTargetSchemaInfo {
   void reset();
   TO_STRING_KV(K_(tenant_schema_versions));
 
-  private:
+private:
   common::SpinRWLock lock_;
   common::ObArray<share::TenantIdAndSchemaVersion> tenant_schema_versions_;
 };
@@ -105,7 +106,7 @@ struct ObBalancerTargetSchemaInfo {
 // - coordinate partition group members to the same.
 // - unit load balance. (migrate partition replica)
 class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProvider {
-  public:
+public:
   enum TaskStatus { UNKNOWN = 0, HAS_TASK, NO_TASK, MAX };
   ObRootBalancer();
   virtual ~ObRootBalancer();
@@ -137,16 +138,16 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   void check_server_deleting();
   virtual int alloc_tablegroup_partitions_for_create(const share::schema::ObTablegroupSchema& tablegroup_schema,
       const obrpc::ObCreateTableMode create_mode, common::ObIArray<ObPartitionAddr>& tablegroup_addr);
-  virtual int alloc_partitions_for_create(const share::schema::ObTableSchema& table,
+  virtual int alloc_partitions_for_create(const share::schema::ObSimpleTableSchemaV2& table,
       const obrpc::ObCreateTableMode create_mode, ObITablePartitionAddr& addr);
-  virtual int alloc_table_partitions_for_standby(const share::schema::ObTableSchema& table,
+  virtual int alloc_table_partitions_for_standby(const share::schema::ObSimpleTableSchemaV2& table,
       const common::ObIArray<ObPartitionKey>& keys, const obrpc::ObCreateTableMode create_mode,
       ObITablePartitionAddr& addr, share::schema::ObSchemaGetterGuard& guard);
   virtual int alloc_tablegroup_partitions_for_standby(const share::schema::ObTablegroupSchema& table_group,
       const common::ObIArray<ObPartitionKey>& keys, const obrpc::ObCreateTableMode create_mode,
       ObITablePartitionAddr& addr, share::schema::ObSchemaGetterGuard& guard);
 
-  virtual int standby_alloc_partitions_for_split(const share::schema::ObTableSchema& table,
+  virtual int standby_alloc_partitions_for_split(const share::schema::ObSimpleTableSchemaV2& table,
       const common::ObIArray<int64_t>& source_partition_ids, const common::ObIArray<int64_t>& dest_partition_ids,
       ObITablePartitionAddr& addr);
   template <typename SCHEMA>
@@ -156,7 +157,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   int alloc_partitions_for_split(const SCHEMA& table, const SCHEMA& new_schema, ObITablePartitionAddr& addr);
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
@@ -170,7 +171,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   // balance partition's in %tenant_id
   virtual int tenant_balance(const uint64_t tenant_id, int64_t& task_cnt);
   int check_locality(int64_t& task_cnt);
-  void stop();
+  void stop() override;
   void wakeup();
 
   bool is_inited() const
@@ -183,7 +184,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   }
   void set_active();
   // return OB_CANCELED if stop, else return OB_SUCCESS
-  int check_stop() const;
+  int check_stop() const override;
   int idle() const;
   int check_tenant_group_config_legality(
       common::ObIArray<ObTenantGroupParser::TenantNameGroup>& tenant_groups, bool& legal);
@@ -195,12 +196,13 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   {
     return task_mgr_;
   }
-  int64_t get_schedule_interval() const;
+  int64_t get_schedule_interval() const override;
   int refresh_unit_replica_counter(const uint64_t tenant_id);
   int create_unit_replica_counter(const uint64_t tenant_id);
   int destory_tenant_unit_array();
+  int get_backup_start_snapshot(int64_t& task_backup_snapshot);
 
-  private:
+private:
   int multiple_zone_deployment_tenant_balance(const uint64_t tenant_id,
       balancer::ObLeaderBalanceGroupContainer& balance_group_container,
       ObRootBalanceHelp::BalanceController& balance_controller, int64_t& task_cnt);
@@ -210,7 +212,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   int cancel_unit_migration(int64_t& task_cnt);
   static const int64_t LOG_INTERVAL = 30 * 1000 * 1000;
 
-  private:
+private:
   bool inited_;
   volatile int64_t active_;
   mutable ObRootBalanceIdling idling_;
@@ -247,6 +249,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
   ObSingleZoneModeMigrateReplica single_zone_mode_migrate_replica_;
   ObPartitionBackup pg_backup_;
   ObPartitionValidate pg_validate_;
+  ObPartitionBackupBackupset pg_backup_backupset_;
   bool has_server_deleting_;
   ObBalancerTargetSchemaInfo target_schema_info_;
   // root balancer hopes to use a sufficiently new schema to check the status of the replica
@@ -257,7 +260,7 @@ class ObRootBalancer : public ObRsReentrantThread, public share::ObCheckStopProv
 };
 
 class ObBlacklistProcess : public share::ObAsyncTask {
-  public:
+public:
   explicit ObBlacklistProcess() : init_(false), count_(0)
   {}
   virtual ~ObBlacklistProcess()
@@ -269,7 +272,7 @@ class ObBlacklistProcess : public share::ObAsyncTask {
   virtual int64_t get_deep_copy_size() const;
   share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
 
-  private:
+private:
   bool init_;
   int64_t count_;
   share::ObPartitionTableOperator* pt_;

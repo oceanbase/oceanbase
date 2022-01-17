@@ -36,7 +36,7 @@ class TestOptEstSel : public TestOptimizerUtils {
   };
   static const uint8_t YEAR_MAX_VALUE = 10;
 
-  public:
+public:
   TestOptEstSel();
   virtual ~TestOptEstSel();
   virtual void SetUp();
@@ -56,14 +56,14 @@ class TestOptEstSel : public TestOptimizerUtils {
   void get_log_plan(ObStmt& stmt, ObLogPlan*& plan);
   void run_test(const char* test_file, const char* result_file, const char* tmp_file, int64_t flag);
 
-  protected:
+protected:
   ObOptimizerContext* optctx_;
   ObAddr addr_;
   ObQueryHint query_hint_;
   bool is_datetime_;
   oceanbase::sql::ObSchemaChecker schema_checker_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestOptEstSel);
 };

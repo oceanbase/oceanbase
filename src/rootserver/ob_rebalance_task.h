@@ -185,7 +185,7 @@ enum class RebalanceKeyType : int64_t {
  *   2.2 a task_type which is used to specify the rebalance task type.
  */
 class ObRebalanceTaskKey {
-  public:
+public:
   ObRebalanceTaskKey()
       : key_1_(-1),
         key_2_(-1),
@@ -197,7 +197,7 @@ class ObRebalanceTaskKey {
   virtual ~ObRebalanceTaskKey()
   {}
 
-  public:
+public:
   bool is_valid() const;
   bool operator==(const ObRebalanceTaskKey& that) const;
   ObRebalanceTaskKey& operator=(const ObRebalanceTaskKey& that);
@@ -205,12 +205,16 @@ class ObRebalanceTaskKey {
   int init(const uint64_t key_1, const uint64_t key_2, const uint64_t key_3, const uint64_t key_4,
       const RebalanceKeyType key_type);
   int init(const ObRebalanceTaskKey& that);
+  RebalanceKeyType get_key_type() const
+  {
+    return key_type_;
+  }
   TO_STRING_KV(K_(key_1), K_(key_2), K_(key_3), K_(key_4), K_(key_type));
 
-  private:
+private:
   uint64_t inner_hash() const;
 
-  private:
+private:
   uint64_t key_1_;
   uint64_t key_2_;
   uint64_t key_3_;
@@ -239,6 +243,7 @@ enum ObRebalanceTaskType : int64_t {
   FAST_RECOVERY_TASK,
   VALIDATE_BACKUP,
   STANDBY_CUTDATA,
+  BACKUP_BACKUPSET,
   MAX_TYPE,
 };
 
@@ -266,7 +271,7 @@ class ObRebalanceTask;
  * derived classes include Migrate/Add/Type transform/Remove and so on
  */
 class ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObRebalanceTask;
   friend class ObMigrateReplicaTask;
   friend class ObTypeTransformTask;
@@ -281,8 +286,10 @@ class ObRebalanceTaskInfo {
   friend class ObRebalanceSqlBKGTask;
   friend class ObBackupTask;
   friend class ObValidateTask;
+  friend class ObStandbyCutDataTask;
+  friend class ObBackupBackupsetTask;
 
-  public:
+public:
   ObRebalanceTaskInfo()
       : task_key_(),
         pkey_(),
@@ -302,7 +309,7 @@ class ObRebalanceTaskInfo {
   virtual ~ObRebalanceTaskInfo()
   {}
 
-  public:
+public:
   virtual ObRebalanceTaskType get_rebalance_task_type() const = 0;
   virtual bool need_process_failed_task() const
   {
@@ -327,7 +334,7 @@ class ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const = 0;
 
-  public:
+public:
   uint64_t get_tenant_id() const
   {
     return pkey_.get_tenant_id();
@@ -403,7 +410,7 @@ class ObRebalanceTaskInfo {
       const common::ObReplicaType& dst_type, const bool is_restore = false);
   bool can_accumulate_in_standby(const ObRebalanceTaskInfo& other) const;
 
-  public:
+public:
   int assign(const ObRebalanceTaskInfo& task_info);
   int init_task_key(const uint64_t key_1, const uint64_t key_2, const uint64_t key_3, const uint64_t key_4,
       const RebalanceKeyType key_type)
@@ -423,18 +430,18 @@ class ObRebalanceTaskInfo {
     return task_key_;
   }
 
-  public:
+public:
   /* disallow copy constructor and operator= */
   ObRebalanceTaskInfo(const ObRebalanceTaskInfo&) = delete;
   ObRebalanceTaskInfo& operator=(const ObRebalanceTaskInfo&) = delete;
 
-  public:
+public:
   int check_leader(const ObRebalanceTask& task, const share::ObPartitionInfo& partition, common::ObAddr& leader) const;
   int update_with_partition(const common::ObAddr& dst) const;
   int try_update_unit_id(const share::ObPartitionInfo& partition, const OnlineReplica& online_replica) const;
   int force_check_partition_table(const share::ObPartitionInfo& partition) const;
 
-  protected:
+protected:
   ObRebalanceTaskKey task_key_;
   common::ObPartitionKey pkey_;
   int64_t cluster_id_;
@@ -458,16 +465,16 @@ class ObRebalanceTaskInfo {
 
 class ObFastRecoveryTask;
 class ObFastRecoveryTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObFastRecoveryTask;
 
-  public:
+public:
   ObFastRecoveryTaskInfo() : ObRebalanceTaskInfo(), src_(), dst_(), tenant_id_(OB_INVALID_ID), file_id_(-1)
   {}
   virtual ~ObFastRecoveryTaskInfo()
   {}
 
-  public:
+public:
   int build(const common::ObAddr& src, const common::ObAddr& dst, const common::ObAddr& rescue_server,
       const uint64_t tenant_id, const int64_t file_id);
   int assign(const ObFastRecoveryTaskInfo& task_info);
@@ -488,7 +495,7 @@ class ObFastRecoveryTaskInfo : public ObRebalanceTaskInfo {
     return dst_;
   }
 
-  public:
+public:
   /* virtual method implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -535,7 +542,7 @@ class ObFastRecoveryTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  private:
+private:
   common::ObAddr src_;
   common::ObAddr dst_;
   uint64_t tenant_id_;
@@ -544,22 +551,22 @@ class ObFastRecoveryTaskInfo : public ObRebalanceTaskInfo {
 
 class ObMigrateReplicaTask;
 class ObMigrateTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObMigrateReplicaTask;
 
-  public:
+public:
   ObMigrateTaskInfo() : ObRebalanceTaskInfo(), dst_(), src_(), data_src_(), quorum_(0)
   {}
   virtual ~ObMigrateTaskInfo()
   {}
 
-  public:
+public:
   int build(const obrpc::MigrateMode migrate_mode, const OnlineReplica& dst, const common::ObPartitionKey& pkey,
       const common::ObReplicaMember& src, const common::ObReplicaMember& data_src, const int64_t quorum,
       const bool is_restore, const bool is_manual = false);
   int assign(const ObMigrateTaskInfo& task_info);
 
-  public:
+public:
   /* virtual method implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -604,7 +611,7 @@ class ObMigrateTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(src), K_(data_src), K_(quorum),
       "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -628,12 +635,12 @@ class ObMigrateTaskInfo : public ObRebalanceTaskInfo {
     return quorum_;
   }
 
-  private:
+private:
   int check_quorum(const share::ObPartitionInfo& partition_info) const;
   int check_online_replica(const share::ObPartitionInfo& partition_info) const;
   int check_offline_replica(const share::ObPartitionInfo& partition_info) const;
 
-  private:
+private:
   OnlineReplica dst_;
   common::ObReplicaMember src_;
   common::ObReplicaMember data_src_;
@@ -643,23 +650,23 @@ class ObMigrateTaskInfo : public ObRebalanceTaskInfo {
 class ObTypeTransformTask;
 
 class ObTypeTransformTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObTypeTransformTask;
 
-  public:
+public:
   ObTypeTransformTaskInfo() : ObRebalanceTaskInfo(), dst_(), src_(), data_src_(), quorum_(0)
   {}
   virtual ~ObTypeTransformTaskInfo()
   {}
 
-  public:
+public:
   int build(const OnlineReplica& dst, const common::ObPartitionKey& pkey,
       const common::ObReplicaMember& src,       // replica before this transform
       const common::ObReplicaMember& data_src,  // data source of this task
       const int64_t quorum, const bool is_restore, const bool is_manual = false);
   int assign(const ObTypeTransformTaskInfo& task_info);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -704,7 +711,7 @@ class ObTypeTransformTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(src), K_(data_src), K_(quorum),
       "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -728,12 +735,12 @@ class ObTypeTransformTaskInfo : public ObRebalanceTaskInfo {
     return quorum_;
   }
 
-  protected:
+protected:
   int check_quorum(const share::ObPartitionInfo& partition) const;
   int check_online_replica(const share::ObPartitionInfo& partition) const;
   int check_paxos_member(const share::ObPartitionInfo& partition) const;
 
-  private:
+private:
   OnlineReplica dst_;
   common::ObReplicaMember src_;
   common::ObReplicaMember data_src_;
@@ -743,21 +750,21 @@ class ObTypeTransformTaskInfo : public ObRebalanceTaskInfo {
 class ObAddReplicaTask;
 
 class ObAddTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObAddReplicaTask;
 
-  public:
+public:
   ObAddTaskInfo() : ObRebalanceTaskInfo(), dst_(), data_src_(), quorum_(0)
   {}
   virtual ~ObAddTaskInfo()
   {}
 
-  public:
+public:
   int build(const OnlineReplica& dst, const common::ObPartitionKey& pkey, const common::ObReplicaMember& data_src,
       const int64_t quorum, const bool is_restore, const bool is_manual = false);
   int assign(const ObAddTaskInfo& task_info);
 
-  public:
+public:
   /* virtual method implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -804,7 +811,7 @@ class ObAddTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(data_src), K_(quorum),
       "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -824,12 +831,12 @@ class ObAddTaskInfo : public ObRebalanceTaskInfo {
     return quorum_;
   }
 
-  protected:
+protected:
   int check_quorum(const share::ObPartitionInfo& partition, const bool is_admin_force) const;
   int check_online_replica(const share::ObPartitionInfo& partition) const;
   int check_paxos_member(const share::ObPartitionInfo& partition) const;
 
-  private:
+private:
   OnlineReplica dst_;
   common::ObReplicaMember data_src_;
   int64_t quorum_;
@@ -838,10 +845,10 @@ class ObAddTaskInfo : public ObRebalanceTaskInfo {
 class ObRebuildReplicaTask;
 
 class ObRebuildTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObRebuildReplicaTask;
 
-  public:
+public:
   ObRebuildTaskInfo() : ObRebalanceTaskInfo(), dst_(), data_src_()
   {
     skip_change_member_list_ = true;
@@ -849,12 +856,12 @@ class ObRebuildTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObRebuildTaskInfo()
   {}
 
-  public:
+public:
   int build(const OnlineReplica& dst, const common::ObPartitionKey& pkey, const common::ObReplicaMember& data_src,
       const bool is_manual = false);
   int assign(const ObRebuildTaskInfo& task_info);
 
-  public:
+public:
   /* virtual method implment
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -901,7 +908,7 @@ class ObRebuildTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(data_src), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -917,7 +924,7 @@ class ObRebuildTaskInfo : public ObRebalanceTaskInfo {
     return dst_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
   common::ObReplicaMember data_src_;
 };
@@ -925,10 +932,10 @@ class ObRebuildTaskInfo : public ObRebalanceTaskInfo {
 class ObModifyQuorumTask;
 
 class ObModifyQuorumTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObModifiQuorumTask;
 
-  public:
+public:
   ObModifyQuorumTaskInfo() : ObRebalanceTaskInfo(), dst_(), quorum_(0), orig_quorum_(0), member_list_()
   {
     skip_change_member_list_ = true;
@@ -936,12 +943,12 @@ class ObModifyQuorumTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObModifyQuorumTaskInfo()
   {}
 
-  public:
+public:
   int build(const OnlineReplica& dst, const common::ObPartitionKey& pkey, const int64_t quorum,
       const int64_t orig_quorum, ObMemberList& member_list);
   int assign(const ObModifyQuorumTaskInfo& task_info);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -988,7 +995,7 @@ class ObModifyQuorumTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(quorum), K_(orig_quorum),
       K_(member_list), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1012,7 +1019,7 @@ class ObModifyQuorumTaskInfo : public ObRebalanceTaskInfo {
     return member_list_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
   int64_t quorum_;
   int64_t orig_quorum_;
@@ -1022,10 +1029,10 @@ class ObModifyQuorumTaskInfo : public ObRebalanceTaskInfo {
 class ObRestoreTask;
 
 class ObRestoreTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObRestoreTask;
 
-  public:
+public:
   ObRestoreTaskInfo() : ObRebalanceTaskInfo(), dst_(), restore_arg_()
   {
     skip_change_member_list_ = true;
@@ -1033,11 +1040,11 @@ class ObRestoreTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObRestoreTaskInfo()
   {}
 
-  public:
+public:
   int build(const common::ObPartitionKey& pkey, const share::ObRestoreArgs& restore_arg, const OnlineReplica& dst);
   int assign(const ObRestoreTaskInfo& task_info);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1084,7 +1091,7 @@ class ObRestoreTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(restore_arg), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1100,17 +1107,17 @@ class ObRestoreTaskInfo : public ObRebalanceTaskInfo {
     return restore_arg_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
   share::ObRestoreArgs restore_arg_;
 };
 
 class ObPhysicalRestoreTask;
 class ObPhysicalRestoreTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObPhysicalRestoreTask;
 
-  public:
+public:
   ObPhysicalRestoreTaskInfo() : ObRebalanceTaskInfo(), dst_(), restore_arg_()
   {
     skip_change_member_list_ = true;
@@ -1118,12 +1125,12 @@ class ObPhysicalRestoreTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObPhysicalRestoreTaskInfo()
   {}
 
-  public:
+public:
   int build(
       const common::ObPartitionKey& pkey, const share::ObPhysicalRestoreArg& restore_arg, const OnlineReplica& dst);
   int assign(const ObPhysicalRestoreTaskInfo& task_info);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1170,7 +1177,7 @@ class ObPhysicalRestoreTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(restore_arg), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1186,7 +1193,7 @@ class ObPhysicalRestoreTaskInfo : public ObRebalanceTaskInfo {
     return restore_arg_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
   share::ObPhysicalRestoreArg restore_arg_;
 };
@@ -1194,10 +1201,10 @@ class ObPhysicalRestoreTaskInfo : public ObRebalanceTaskInfo {
 class ObCopySSTableTask;
 
 class ObCopySSTableTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObCopySSTableTask;
 
-  public:
+public:
   ObCopySSTableTaskInfo() : ObRebalanceTaskInfo(), dst_(), data_src_(), index_table_id_(common::OB_INVALID_ID)
   {
     skip_change_member_list_ = true;
@@ -1205,12 +1212,12 @@ class ObCopySSTableTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObCopySSTableTaskInfo()
   {}
 
-  public:
+public:
   int build(const common::ObPartitionKey& pkey, const OnlineReplica& dst, const common::ObReplicaMember& data_src,
       const int64_t index_table_id = common::OB_INVALID_ID);
   int assign(const ObCopySSTableTaskInfo& task_info);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1257,7 +1264,7 @@ class ObCopySSTableTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(data_src), K_(index_table_id),
       "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1277,7 +1284,7 @@ class ObCopySSTableTaskInfo : public ObRebalanceTaskInfo {
     return index_table_id_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
   common::ObReplicaMember data_src_;
   uint64_t index_table_id_;
@@ -1286,21 +1293,21 @@ class ObCopySSTableTaskInfo : public ObRebalanceTaskInfo {
 class ObRemoveMemberTask;
 
 class ObRemoveMemberTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObRemoveMemberTask;
 
-  public:
+public:
   ObRemoveMemberTaskInfo() : ObRebalanceTaskInfo(), dst_(), quorum_(0), orig_quorum_(0), check_leader_(true)
   {}
   virtual ~ObRemoveMemberTaskInfo()
   {}
 
-  public:
+public:
   int build(const OnlineReplica& dst, const common::ObPartitionKey& pkey, const int64_t quorum,
       const int64_t orig_quorum, const bool check_leader = true);
   int assign(const ObRemoveMemberTaskInfo& task_info);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1345,7 +1352,7 @@ class ObRemoveMemberTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(quorum), K_(orig_quorum),
       K_(check_leader), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1369,7 +1376,7 @@ class ObRemoveMemberTaskInfo : public ObRebalanceTaskInfo {
     return check_leader_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
   int64_t quorum_;
   int64_t orig_quorum_;
@@ -1379,10 +1386,10 @@ class ObRemoveMemberTaskInfo : public ObRebalanceTaskInfo {
 class ObRemoveNonPaxosTask;
 
 class ObRemoveNonPaxosTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObRemoveNonPaxosTask;
 
-  public:
+public:
   ObRemoveNonPaxosTaskInfo() : ObRebalanceTaskInfo(), dst_()
   {
     skip_change_member_list_ = true;
@@ -1390,11 +1397,11 @@ class ObRemoveNonPaxosTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObRemoveNonPaxosTaskInfo()
   {}
 
-  public:
+public:
   int build(const OnlineReplica& dst, const common::ObPartitionKey& pkey);
   int assign(const ObRemoveNonPaxosTaskInfo& task_info);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1441,7 +1448,7 @@ class ObRemoveNonPaxosTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1453,17 +1460,17 @@ class ObRemoveNonPaxosTaskInfo : public ObRebalanceTaskInfo {
     return dst_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
 };
 
 class ObRebalanceSqlBKGTask;
 
 class ObSqlBKGDDistTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObRebalanceSqlBKGTask;
 
-  public:
+public:
   ObSqlBKGDDistTaskInfo() : ObRebalanceTaskInfo(), sql_bkgd_task_(), dst_()
   {
     skip_change_member_list_ = true;
@@ -1471,11 +1478,11 @@ class ObSqlBKGDDistTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObSqlBKGDDistTaskInfo()
   {}
 
-  public:
+public:
   int build(const sql::ObSchedBKGDDistTask& bkgd_task);
   int assign(const ObSqlBKGDDistTaskInfo& that);
 
-  public:
+public:
   /* virtual methods implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1522,7 +1529,7 @@ class ObSqlBKGDDistTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(sql_bkgd_task), "task_type", get_rebalance_task_type());
   const sql::ObSchedBKGDDistTask& get_sql_bkgd_task() const
@@ -1534,17 +1541,17 @@ class ObSqlBKGDDistTaskInfo : public ObRebalanceTaskInfo {
     return sql_bkgd_task_;
   }
 
-  private:
+private:
   sql::ObSchedBKGDDistTask sql_bkgd_task_;
   common::ObAddr dst_;
 };
 
 class ObBackupTask;
 class ObBackupTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObBackupTask;
 
-  public:
+public:
   ObBackupTaskInfo() : ObRebalanceTaskInfo(), dst_(), data_src_(), physical_backup_arg_()
   {
     skip_change_member_list_ = true;
@@ -1552,12 +1559,12 @@ class ObBackupTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObBackupTaskInfo()
   {}
 
-  public:
+public:
   int build(const common::ObPartitionKey& pkey, const OnlineReplica& dst, const common::ObReplicaMember& data_src,
       const share::ObPhysicalBackupArg& physical_backup_arg);
   int assign(const ObBackupTaskInfo& task_info);
 
-  public:
+public:
   /* virtual method implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1604,7 +1611,7 @@ class ObBackupTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(data_src),
       K_(physical_backup_arg), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1624,17 +1631,17 @@ class ObBackupTaskInfo : public ObRebalanceTaskInfo {
     return physical_backup_arg_;
   }
 
-  private:
+private:
   OnlineReplica dst_;
   common::ObReplicaMember data_src_;
   share::ObPhysicalBackupArg physical_backup_arg_;
 };
 
 class ObValidateTaskInfo : public ObRebalanceTaskInfo {
-  public:
+public:
   friend class ObValidateTask;
 
-  public:
+public:
   ObValidateTaskInfo() : ObRebalanceTaskInfo(), physical_validate_arg_()
   {
     skip_change_member_list_ = true;
@@ -1642,12 +1649,12 @@ class ObValidateTaskInfo : public ObRebalanceTaskInfo {
   virtual ~ObValidateTaskInfo()
   {}
 
-  public:
+public:
   int build(const common::ObPartitionKey& pkey, const common::ObReplicaMember& dst,
       const share::ObPhysicalValidateArg& physical_validate_arg);
   int assign(const ObValidateTaskInfo& task_info);
 
-  public:
+public:
   /* virtual method implement
    */
   virtual ObRebalanceTaskType get_rebalance_task_type() const override
@@ -1694,7 +1701,7 @@ class ObValidateTaskInfo : public ObRebalanceTaskInfo {
   virtual int get_virtual_rebalance_task_stat_info(
       common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(physical_validate_arg), "task_type", get_rebalance_task_type());
   const common::ObPartitionKey& get_partition_key() const
@@ -1710,23 +1717,180 @@ class ObValidateTaskInfo : public ObRebalanceTaskInfo {
     return physical_validate_arg_;
   }
 
-  private:
+private:
   share::ObPhysicalValidateArg physical_validate_arg_;
   common::ObReplicaMember dst_;
   common::ObAddr addr_;
 };
 
+class ObStandbyCutDataTaskInfo : public ObRebalanceTaskInfo {
+public:
+  friend class ObStandbyCutDataTask;
+
+public:
+  ObStandbyCutDataTaskInfo() : ObRebalanceTaskInfo(), dst_()
+  {
+    replica_.reset();
+  }
+  virtual ~ObStandbyCutDataTaskInfo()
+  {}
+
+public:
+  int build(const share::ObPartitionReplica& replica, const ObAddr& dst);
+  int assign(const ObStandbyCutDataTaskInfo& task_info);
+  const share::ObPartitionReplica& get_replica() const
+  {
+    return replica_;
+  }
+
+public:
+  /* virtual method implement
+   */
+  virtual ObRebalanceTaskType get_rebalance_task_type() const override
+  {
+    return ObRebalanceTaskType::STANDBY_CUTDATA;
+  }
+  virtual bool need_process_failed_task() const override
+  {
+    return false;
+  }
+  virtual const common::ObAddr& get_faillist_anchor() const override
+  {
+    return dst_;
+  }
+  virtual bool need_check_specific_src_data_volumn() const override
+  {
+    return false;
+  }
+  virtual bool need_check_specific_dst_data_volumn() const override
+  {
+    return false;
+  }
+  virtual common::ObAddr get_specific_server_data_src() const override
+  {
+    return common::ObAddr();
+  }
+  virtual common::ObAddr get_specific_server_data_dst() const override
+  {
+    return common::ObAddr();
+  }
+  virtual int get_execute_transmit_size(int64_t& execute_transmit_size) const override;
+  /* rebalance task executor related virtual interface
+   */
+  virtual int check_before_execute(const ObRebalanceTask& task, const share::ObPartitionInfo& partition,
+      const bool is_admin_force, common::ObAddr& leader) const override;
+  virtual bool need_switch_leader_before_execute(const common::ObAddr& curr_leader) const override
+  {
+    UNUSED(curr_leader);
+    return false;
+  }
+  virtual bool is_switch_leader_take_effect(const common::ObAddr& curr_leader) const override
+  {
+    UNUSED(curr_leader);
+    return true;
+  }
+  /* all_virtual_rebalance_task_stat virtual interface
+   */
+  virtual int get_virtual_rebalance_task_stat_info(
+      common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
+
+public:
+  virtual INHERIT_TO_STRING_KV(
+      "ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(dst), K_(replica), "task_type", get_rebalance_task_type());
+  const common::ObPartitionKey& get_partition_key() const
+  {
+    return pkey_;
+  }
+
+private:
+  common::ObAddr dst_;
+  share::ObPartitionReplica replica_;
+};
+
+class ObBackupBackupsetTaskInfo : public ObRebalanceTaskInfo {
+public:
+  friend class ObBackupBackupsetTask;
+
+public:
+  ObBackupBackupsetTaskInfo() : ObRebalanceTaskInfo()
+  {}
+  virtual ~ObBackupBackupsetTaskInfo()
+  {}
+
+public:
+  int build(const common::ObReplicaMember& data_src, const share::ObBackupBackupsetArg& arg);
+  int assign(const ObBackupBackupsetTaskInfo& task_info);
+
+public:
+  /* virtual method implement
+   */
+  virtual ObRebalanceTaskType get_rebalance_task_type() const override
+  {
+    return ObRebalanceTaskType::BACKUP_BACKUPSET;
+  }
+  virtual const common::ObAddr& get_faillist_anchor() const override
+  {
+    return data_src_.get_server();
+  }
+  virtual bool need_check_specific_src_data_volumn() const override
+  {
+    return true;
+  }
+  virtual bool need_check_specific_dst_data_volumn() const override
+  {
+    return true;
+  }
+  virtual common::ObAddr get_specific_server_data_src() const override
+  {
+    return data_src_.get_server();
+  }
+  virtual common::ObAddr get_specific_server_data_dst() const override
+  {
+    return data_src_.get_server();
+  }
+  virtual int get_execute_transmit_size(int64_t& execute_transmit_size) const override;
+  /* rebalance task executor related virtual interface
+   */
+  virtual int check_before_execute(const ObRebalanceTask& task, const share::ObPartitionInfo& partition,
+      const bool is_admin_force, common::ObAddr& leader) const override;
+  virtual bool need_switch_leader_before_execute(const common::ObAddr& curr_leader) const override
+  {
+    UNUSED(curr_leader);
+    return false;
+  }
+  virtual bool is_switch_leader_take_effect(const common::ObAddr& curr_leader) const override
+  {
+    UNUSED(curr_leader);
+    return true;
+  }
+  /* all_virtual_rebalance_task_stat虚接口
+   */
+  virtual int get_virtual_rebalance_task_stat_info(
+      common::ObAddr& src, common::ObAddr& data_src, common::ObAddr& dest, common::ObAddr& offline) const override;
+
+public:
+  virtual INHERIT_TO_STRING_KV("ObRebalanceTaskInfo", ObRebalanceTaskInfo, K_(data_src));
+  const share::ObBackupBackupsetArg& get_backup_backupset_arg() const
+  {
+    return backup_backupset_arg_;
+  }
+
+private:
+  common::ObReplicaMember data_src_;
+  share::ObBackupBackupsetArg backup_backupset_arg_;
+};
+
 class ObRebalanceTask : public common::ObDLinkBase<ObRebalanceTask> {
-  public:
+public:
   friend class ObRebalanceTaskMgr;
   friend class ObRebalanceTaskQueue;
 
-  public:
+public:
   typedef common::hash::ObHashMap<ObRebalanceTaskKey, ObRebalanceTaskInfo*, common::hash::NoPthreadDefendMode>
       TaskInfoMap;
   typedef common::hash::ObHashMap<common::ObAddr, ObRebalanceTaskInfo*, common::hash::NoPthreadDefendMode> AddrTaskMap;
 
-  public:
+public:
   ObRebalanceTask()
       : generate_time_(common::ObTimeUtility::current_time()),
         priority_(ObRebalanceTaskPriority::LOW_PRI),
@@ -1739,7 +1903,7 @@ class ObRebalanceTask : public common::ObDLinkBase<ObRebalanceTask> {
   virtual ~ObRebalanceTask()
   {}
 
-  public:
+public:
   /* general pure interfaces
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -1763,7 +1927,7 @@ class ObRebalanceTask : public common::ObDLinkBase<ObRebalanceTask> {
       obrpc::ObSrvRpcProxy& rpc_proxy, const common::ObAddr& leader, common::ObIArray<int>& rc_array) const = 0;
   virtual int log_execute_start() const = 0;
 
-  public:
+public:
   virtual void set_schedule()
   {
     for (int64_t i = 0; i < get_sub_task_count(); ++i) {
@@ -1846,7 +2010,7 @@ class ObRebalanceTask : public common::ObDLinkBase<ObRebalanceTask> {
   virtual TO_STRING_KV(
       K_(generate_time), K_(priority), K_(comment), K_(schedule_time), K_(executor_time), K_(task_id), K_(dst));
 
-  protected:
+protected:
   typedef common::hash::ObHashMap<common::ObPartitionKey, share::ObPartitionInfo*, common::hash::NoPthreadDefendMode>
       PartitionInfoMap;
   bool can_batch_get_partition_info() const;
@@ -1857,9 +2021,9 @@ class ObRebalanceTask : public common::ObDLinkBase<ObRebalanceTask> {
       PartitionInfoMap& partition_info_map) const;
   int check_table_schema() const;
 
-  protected:
+protected:
   static const int64_t TIMEOUT_US_PER_PARTITION = 5 * 1000000;  // 5s
-  private:
+private:
   int set_tenant_stat(AddrTaskMap& src_server_map, AddrTaskMap& dst_server_map, ObTenantTaskStatMap& tenant_stat_map);
   int set_server_stat(
       const AddrTaskMap& src_server_map, const AddrTaskMap& dst_server_map, ObServerTaskStatMap& server_stat_map);
@@ -1868,7 +2032,7 @@ class ObRebalanceTask : public common::ObDLinkBase<ObRebalanceTask> {
   int accumulate_dst_addr_server_map(
       AddrTaskMap& add_task_map, const common::ObAddr& dst_addr, ObRebalanceTaskInfo& task_info);
 
-  protected:
+protected:
   int64_t generate_time_;
   ObRebalanceTaskPriority priority_;
   const char* comment_;
@@ -1879,18 +2043,18 @@ class ObRebalanceTask : public common::ObDLinkBase<ObRebalanceTask> {
 };
 
 class ObMigrateReplicaTask : public ObRebalanceTask {
-  public:
+public:
   ObMigrateReplicaTask()
       : ObRebalanceTask(), task_infos_(), admin_force_(false), migrate_mode_(obrpc::MigrateMode::MT_MAX)
   {}
   virtual ~ObMigrateReplicaTask()
   {}
 
-  public:
+public:
   int build(const obrpc::MigrateMode migrate_mode, const common::ObIArray<ObMigrateTaskInfo>& task_infos,
       const common::ObAddr& dst, const ObRebalanceTaskPriority priority, const char* comment, bool admin_force = false);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -1941,7 +2105,7 @@ class ObMigrateReplicaTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(admin_force), "task_type", get_rebalance_task_type());
   bool is_admin_force() const
@@ -1953,27 +2117,27 @@ class ObMigrateReplicaTask : public ObRebalanceTask {
   int build_by_task_result(const obrpc::ObMigrateReplicaBatchRes& res);
   int assign(const ObMigrateReplicaTask& that);
 
-  private:
+private:
   int get_data_size(int64_t& data_size) const;
 
-  private:
+private:
   common::ObArray<ObMigrateTaskInfo> task_infos_;
   bool admin_force_;
   obrpc::MigrateMode migrate_mode_;
 };
 
 class ObTypeTransformTask : public ObRebalanceTask {
-  public:
+public:
   ObTypeTransformTask() : ObRebalanceTask(), task_infos_(), admin_force_(false)
   {}
   virtual ~ObTypeTransformTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObTypeTransformTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment,
       bool admin_force = false);
 
-  public:
+public:
   /* general pure interfaces
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2024,7 +2188,7 @@ class ObTypeTransformTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(admin_force), "task_type", get_rebalance_task_type());
   bool is_admin_force() const
@@ -2037,16 +2201,16 @@ class ObTypeTransformTask : public ObRebalanceTask {
   int assign(const ObTypeTransformTask& that);
   int add_type_transform_task_info(const ObTypeTransformTaskInfo& task_info);
 
-  private:
+private:
   int get_data_size(int64_t& data_size) const;
 
-  private:
+private:
   common::ObArray<ObTypeTransformTaskInfo> task_infos_;
   bool admin_force_;
 };
 
 class ObAddReplicaTask : public ObRebalanceTask {
-  public:
+public:
   ObAddReplicaTask() : ObRebalanceTask(), task_infos_(), admin_force_(false)
   {
     priority_ = HIGH_PRI;
@@ -2054,11 +2218,11 @@ class ObAddReplicaTask : public ObRebalanceTask {
   virtual ~ObAddReplicaTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObAddTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment,
       bool admin_force = false);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2109,7 +2273,7 @@ class ObAddReplicaTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(admin_force), "task_type", get_rebalance_task_type());
   bool is_admin_force() const
@@ -2121,25 +2285,25 @@ class ObAddReplicaTask : public ObRebalanceTask {
   int build_by_task_result(const obrpc::ObAddReplicaBatchRes& res);
   int assign(const ObAddReplicaTask& that);
 
-  private:
+private:
   int get_data_size(int64_t& data_size) const;
 
-  private:
+private:
   common::ObArray<ObAddTaskInfo> task_infos_;
   bool admin_force_;
 };
 
 class ObRebuildReplicaTask : public ObRebalanceTask {
-  public:
+public:
   ObRebuildReplicaTask() : ObRebalanceTask(), task_infos_()
   {}
   virtual ~ObRebuildReplicaTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObRebuildTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2190,7 +2354,7 @@ class ObRebuildReplicaTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), "task_type", get_rebalance_task_type());
   int build_rebuild_replica_rpc_arg(obrpc::ObRebuildReplicaBatchArg& arg) const;
@@ -2198,24 +2362,24 @@ class ObRebuildReplicaTask : public ObRebalanceTask {
   int build_by_task_result(const obrpc::ObRebuildReplicaBatchRes& res);
   int assign(const ObRebuildReplicaTask& that);
 
-  private:
+private:
   int get_data_size(int64_t& data_size) const;
 
-  private:
+private:
   common::ObArray<ObRebuildTaskInfo> task_infos_;
 };
 
 class ObModifyQuorumTask : public ObRebalanceTask {
-  public:
+public:
   ObModifyQuorumTask() : ObRebalanceTask(), task_infos_()
   {}
   virtual ~ObModifyQuorumTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObModifyQuorumTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2266,28 +2430,28 @@ class ObModifyQuorumTask : public ObRebalanceTask {
       common::ObIArray<int>& rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), "task_type", get_rebalance_task_type());
   int build_modify_quorum_rpc_arg(obrpc::ObModifyQuorumBatchArg& arg) const;
   int add_modify_quorum_task_info(const ObModifyQuorumTaskInfo& task_info);
   int assign(const ObModifyQuorumTask& that);
 
-  private:
+private:
   common::ObArray<ObModifyQuorumTaskInfo> task_infos_;
 };
 
 class ObRestoreTask : public ObRebalanceTask {
-  public:
+public:
   ObRestoreTask() : ObRebalanceTask(), task_infos_()
   {}
   virtual ~ObRestoreTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObRestoreTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2338,29 +2502,29 @@ class ObRestoreTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), "task_type", get_rebalance_task_type());
   int build_restore_rpc_arg(obrpc::ObRestoreReplicaArg& arg) const;
   int build_by_task_result(const obrpc::ObRestoreReplicaRes& res);
   int assign(const ObRestoreTask& that);
 
-  private:
+private:
   common::ObArray<ObRestoreTaskInfo> task_infos_;
 };
 
 class ObPhysicalRestoreTask : public ObRebalanceTask {
-  public:
+public:
   ObPhysicalRestoreTask() : ObRebalanceTask(), task_infos_()
   {}
   virtual ~ObPhysicalRestoreTask()
   {}
 
-  public:
+public:
   int build(
       const common::ObIArray<ObPhysicalRestoreTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2411,19 +2575,19 @@ class ObPhysicalRestoreTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), "task_type", get_rebalance_task_type());
   int build_restore_rpc_arg(obrpc::ObPhyRestoreReplicaArg& arg) const;
   int build_by_task_result(const obrpc::ObPhyRestoreReplicaRes& res);
   int assign(const ObPhysicalRestoreTask& that);
 
-  private:
+private:
   common::ObArray<ObPhysicalRestoreTaskInfo> task_infos_;
 };
 
 class ObCopySSTableTask : public ObRebalanceTask {
-  public:
+public:
   ObCopySSTableTask() : ObRebalanceTask(), task_infos_(), copy_sstable_type_(common::OB_COPY_SSTABLE_TYPE_INVALID)
   {
     priority_ = HIGH_PRI;
@@ -2431,11 +2595,11 @@ class ObCopySSTableTask : public ObRebalanceTask {
   virtual ~ObCopySSTableTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObCopySSTableTaskInfo>& task_infos,
       const common::ObCopySSTableType copy_sstable_type, const common::ObAddr& dst, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2486,7 +2650,7 @@ class ObCopySSTableTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV("ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(copy_sstable_type), "task_type",
       get_rebalance_task_type());
   int build_copy_sstable_rpc_arg(obrpc::ObCopySSTableBatchArg& arg) const;
@@ -2497,26 +2661,26 @@ class ObCopySSTableTask : public ObRebalanceTask {
   }
   int assign(const ObCopySSTableTask& that);
 
-  private:
+private:
   int get_data_size(int64_t& data_size) const;
 
-  private:
+private:
   common::ObArray<ObCopySSTableTaskInfo> task_infos_;
   common::ObCopySSTableType copy_sstable_type_;
 };
 
 class ObRemoveMemberTask : public ObRebalanceTask {
-  public:
+public:
   ObRemoveMemberTask() : ObRebalanceTask(), task_infos_(), admin_force_(false)
   {}
   virtual ~ObRemoveMemberTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObRemoveMemberTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment,
       const bool admin_force = false);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2567,7 +2731,7 @@ class ObRemoveMemberTask : public ObRebalanceTask {
       obrpc::ObSrvRpcProxy& rpc_proxy, const common::ObAddr& leader, common::ObIArray<int>& rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(admin_force), "task_type", get_rebalance_task_type());
   bool is_admin_force() const
@@ -2577,24 +2741,24 @@ class ObRemoveMemberTask : public ObRebalanceTask {
   int build_remove_member_rpc_arg(obrpc::ObMemberChangeBatchArg& arg) const;
   int add_remove_member_task_info(const ObRemoveMemberTaskInfo& task_info);
   int assign(const ObRemoveMemberTask& that);
-
-  private:
+  void clear_task_info();
+private:
   common::ObArray<ObRemoveMemberTaskInfo> task_infos_;
   bool admin_force_;
 };
 
 class ObRemoveNonPaxosTask : public ObRebalanceTask {
-  public:
+public:
   ObRemoveNonPaxosTask() : ObRebalanceTask(), task_infos_(), admin_force_(false)
   {}
   virtual ~ObRemoveNonPaxosTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObRemoveNonPaxosTaskInfo>& task_infos, const common::ObAddr& dst,
       const char* comment, const bool admin_force = false);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2645,7 +2809,7 @@ class ObRemoveNonPaxosTask : public ObRebalanceTask {
       common::ObIArray<int>& rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(admin_force), "task_type", get_rebalance_task_type());
   bool is_admin_force() const
@@ -2656,22 +2820,22 @@ class ObRemoveNonPaxosTask : public ObRebalanceTask {
   int add_remove_non_paxos_replica_task_info(const ObRemoveNonPaxosTaskInfo& task_info);
   int assign(const ObRemoveNonPaxosTask& that);
 
-  private:
+private:
   common::ObArray<ObRemoveNonPaxosTaskInfo> task_infos_;
   bool admin_force_;
 };
 
 class ObRebalanceSqlBKGTask : public ObRebalanceTask {
-  public:
+public:
   ObRebalanceSqlBKGTask() : ObRebalanceTask(), task_infos_()
   {}
   virtual ~ObRebalanceSqlBKGTask()
   {}
 
-  public:
+public:
   int build(const ObSqlBKGDDistTaskInfo& task_info, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2723,19 +2887,21 @@ class ObRebalanceSqlBKGTask : public ObRebalanceTask {
 
   int check_task_exist(bool& exist);
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), "task_type", get_rebalance_task_type());
   int build_rebalance_sql_bkg_rpc_arg(sql::ObBKGDDistExecuteArg& arg) const;
   int build_by_task_result(const sql::ObBKGDTaskCompleteArg& arg);
   int assign(const ObRebalanceSqlBKGTask& that);
 
-  private:
+private:
+  void notify_sql_scheduler(const int rc) const;
+
   common::ObArray<ObSqlBKGDDistTaskInfo> task_infos_;
 };
 
 class ObBackupTask : public ObRebalanceTask {
-  public:
+public:
   ObBackupTask() : ObRebalanceTask(), task_infos_()
   {
     priority_ = HIGH_PRI;
@@ -2743,10 +2909,10 @@ class ObBackupTask : public ObRebalanceTask {
   virtual ~ObBackupTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObBackupTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2797,7 +2963,7 @@ class ObBackupTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), "task_type", get_rebalance_task_type());
   int build_backup_rpc_arg(obrpc::ObBackupBatchArg& arg) const;
@@ -2808,24 +2974,24 @@ class ObBackupTask : public ObRebalanceTask {
     return task_id_;
   }
 
-  private:
+private:
   int get_data_size(int64_t& data_size) const;
 
-  private:
+private:
   common::ObArray<ObBackupTaskInfo> task_infos_;
 };
 
 class ObFastRecoveryTask : public ObRebalanceTask {
-  public:
+public:
   ObFastRecoveryTask() : ObRebalanceTask(), task_infos_(), dest_unit_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObFastRecoveryTask()
   {}
 
-  public:
+public:
   int build(const ObFastRecoveryTaskInfo& task_info, const uint64_t dest_unit_id, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2876,27 +3042,27 @@ class ObFastRecoveryTask : public ObRebalanceTask {
       common::ObIArray<int>& dummy_rc_array) const override;
   virtual int log_execute_start() const override;
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(dest_unit_id), "task_type", get_rebalance_task_type());
   int assign(const ObFastRecoveryTask& that);
 
-  private:
+private:
   common::ObArray<ObFastRecoveryTaskInfo> task_infos_;
   uint64_t dest_unit_id_;
 };
 
 class ObValidateTask : public ObRebalanceTask {
-  public:
+public:
   ObValidateTask() : ObRebalanceTask(), task_infos_()
   {}
   virtual ~ObValidateTask()
   {}
 
-  public:
+public:
   int build(const common::ObIArray<ObValidateTaskInfo>& task_infos, const common::ObAddr& dst, const char* comment);
 
-  public:
+public:
   /* general pure interfaces override
    */
   virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
@@ -2947,7 +3113,7 @@ class ObValidateTask : public ObRebalanceTask {
   virtual void notify_cancel() const override
   {}
 
-  public:
+public:
   virtual INHERIT_TO_STRING_KV(
       "ObRebalanceTask", ObRebalanceTask, K_(task_infos), "task_type", get_rebalance_task_type());
   int build_validate_rpc_arg(obrpc::ObValidateBatchArg& arg) const;
@@ -2959,11 +3125,174 @@ class ObValidateTask : public ObRebalanceTask {
     return task_id_;
   }
 
-  private:
+private:
   int get_data_size(int64_t& data_size) const;
 
-  private:
+private:
   common::ObArray<ObValidateTaskInfo> task_infos_;
+};
+
+class ObStandbyCutDataTask : public ObRebalanceTask {
+public:
+  ObStandbyCutDataTask()
+      : ObRebalanceTask(),
+        task_infos_(),
+        switchover_epoch_(GCTX.get_switch_epoch2()),
+        flashback_ts_(0),
+        abs_timeout_ts_(OB_INVALID_TIMESTAMP),
+        fo_trace_id_()
+  {}
+  virtual ~ObStandbyCutDataTask()
+  {}
+
+public:
+  int build(const common::ObIArray<ObStandbyCutDataTaskInfo>& task_infos, const common::ObAddr& dst,
+      const ObRebalanceTaskPriority priority, const char* comment, const int64_t flashback_ts,
+      const int64_t switchover_epoch, const int64_t abs_timeout_ts, common::ObCurTraceId::TraceId fo_trace_id);
+
+public:
+  /* general virtual interface override
+   */
+  virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
+      const int64_t min_task_timeout_us, int64_t& timeout_us) const override;
+  virtual ObRebalanceTaskType get_rebalance_task_type() const override
+  {
+    return ObRebalanceTaskType::STANDBY_CUTDATA;
+  }
+  virtual int64_t get_sub_task_count() const override
+  {
+    return task_infos_.count();
+  }
+  virtual const ObRebalanceTaskInfo* get_sub_task(const int64_t idx) const override
+  {
+    const ObRebalanceTaskInfo* ptr = nullptr;
+    if (idx >= 0 && idx < task_infos_.count()) {
+      ptr = &task_infos_.at(idx);
+    }
+    return ptr;
+  }
+  virtual ObRebalanceTaskInfo* get_sub_task(const int64_t idx) override
+  {
+    ObRebalanceTaskInfo* ptr = nullptr;
+    if (idx >= 0 && idx < task_infos_.count()) {
+      ptr = &task_infos_.at(idx);
+    }
+    return ptr;
+  }
+  /* rebalance task mgr virtual interface override
+   */
+  virtual bool skip_put_to_queue() const override
+  {
+    return false;
+  }
+  virtual int check_can_execute_on_dest(ObRebalanceTaskMgr& task_mgr, bool& can) const override;
+
+  virtual int log_execute_result(const common::ObIArray<int>& rc_array) const override;
+  virtual int64_t get_deep_copy_size() const override
+  {
+    return sizeof(ObStandbyCutDataTask);
+  }
+  virtual int clone(void* input_ptr, ObRebalanceTask*& out_task) const override;
+
+  /* rebalance task executor virtual interface implementation
+   */
+  virtual int check_before_execute(share::ObPartitionTableOperator& pt_operator, common::ObAddr& leader) const override;
+  virtual int execute(obrpc::ObSrvRpcProxy& rpc_proxy, const common::ObAddr& dummy_leader,
+      common::ObIArray<int>& dummy_rc_array) const override;
+  virtual int log_execute_start() const override;
+  virtual void notify_cancel() const override
+  {}
+
+public:
+  virtual INHERIT_TO_STRING_KV("ObRebalanceTask", ObRebalanceTask, K_(task_infos), K_(switchover_epoch),
+      K_(flashback_ts), K_(abs_timeout_ts), "task_type", get_rebalance_task_type());
+  int build_standby_cutdata_rpc_arg(obrpc::ObStandbyCutDataBatchTaskArg& arg) const;
+  int build_by_task_result(const obrpc::ObStandbyCutDataBatchTaskRes& res);
+  int assign(const ObStandbyCutDataTask& that);
+
+private:
+  common::ObArray<ObStandbyCutDataTaskInfo> task_infos_;
+  int64_t switchover_epoch_;
+  int64_t flashback_ts_;
+  int64_t abs_timeout_ts_;
+  common::ObCurTraceId::TraceId fo_trace_id_;
+};
+
+class ObBackupBackupsetTask : public ObRebalanceTask {
+public:
+  ObBackupBackupsetTask() : ObRebalanceTask(), task_infos_(), tenant_dropped_(false)
+  {}
+  virtual ~ObBackupBackupsetTask()
+  {}
+
+public:
+  int build(const common::ObIArray<ObBackupBackupsetTaskInfo>& task_infos, const common::ObAddr& dst,
+      const bool tenant_dropped, const char* comment);
+
+public:
+  /* general虚接口
+   */
+  virtual int get_timeout(const int64_t network_bandwidth, const int64_t server_concurrency_limit,
+      const int64_t min_task_timeout_us, int64_t& timeout_us) const override;
+  virtual ObRebalanceTaskType get_rebalance_task_type() const override
+  {
+    return ObRebalanceTaskType::BACKUP_BACKUPSET;
+  }
+  virtual int64_t get_sub_task_count() const override
+  {
+    return task_infos_.count();
+  }
+  virtual const ObRebalanceTaskInfo* get_sub_task(const int64_t idx) const override
+  {
+    const ObRebalanceTaskInfo* ptr = nullptr;
+    if (idx >= 0 && idx < task_infos_.count()) {
+      ptr = &task_infos_.at(idx);
+    }
+    return ptr;
+  }
+  virtual ObRebalanceTaskInfo* get_sub_task(const int64_t idx) override
+  {
+    ObRebalanceTaskInfo* ptr = nullptr;
+    if (idx >= 0 && idx < task_infos_.count()) {
+      ptr = &task_infos_.at(idx);
+    }
+    return ptr;
+  }
+  /* rebalance task mgr相关虚接口
+   */
+  virtual bool skip_put_to_queue() const override
+  {
+    return false;
+  }
+  virtual int check_can_execute_on_dest(ObRebalanceTaskMgr& task_mgr, bool& can) const override;
+  virtual int log_execute_result(const common::ObIArray<int>& rc_array) const override;
+  virtual int64_t get_deep_copy_size() const override
+  {
+    return sizeof(ObBackupBackupsetTask);
+  }
+  virtual int clone(void* input_ptr, ObRebalanceTask*& out_task) const override;
+  virtual void notify_cancel() const override
+  {}
+  /* rebalance task executor虚接口implement
+   */
+  virtual int check_before_execute(share::ObPartitionTableOperator& pt_operator, common::ObAddr& leader) const override;
+  virtual int execute(obrpc::ObSrvRpcProxy& rpc_proxy, const common::ObAddr& dummy_leader,
+      common::ObIArray<int>& dummy_rc_array) const override;
+  virtual int log_execute_start() const override;
+
+public:
+  virtual INHERIT_TO_STRING_KV(
+      "ObRebalanceTask", ObRebalanceTask, K_(tenant_dropped), K_(task_infos), "task_type", get_rebalance_task_type());
+  int build_backup_backupset_rpc_arg(obrpc::ObBackupBackupsetBatchArg& arg) const;
+  int build_by_task_result(const obrpc::ObBackupBackupsetBatchRes& res);
+  int assign(const ObBackupBackupsetTask& that);
+
+private:
+  int get_data_size(int64_t& data_size) const;
+
+private:
+  common::ObArray<ObBackupBackupsetTaskInfo> task_infos_;
+  bool tenant_dropped_;
 };
 
 }  // end namespace rootserver

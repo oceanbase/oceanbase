@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprIfNull : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprIfNull(common::ObIAllocator& alloc);
   virtual ~ObExprIfNull();
   virtual int calc_result_type2(
@@ -28,10 +28,10 @@ class ObExprIfNull : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_ifnull_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIfNull);
 
-  private:
+private:
   // data members
 };
 

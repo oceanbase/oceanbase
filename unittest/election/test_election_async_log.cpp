@@ -22,7 +22,7 @@ using namespace election;
 using namespace common;
 
 class TestElectionAsyncLog : public ::testing::Test {
-  public:
+public:
   TestElectionAsyncLog()
   {}
   virtual ~TestElectionAsyncLog()

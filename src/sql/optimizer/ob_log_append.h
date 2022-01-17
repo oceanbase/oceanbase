@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogAppend : public ObLogicalOperator {
-  public:
+public:
   ObLogAppend(ObLogPlan& plan);
   virtual ~ObLogAppend()
   {}
@@ -35,19 +35,19 @@ class ObLogAppend : public ObLogicalOperator {
   {
     type_ = type;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override
   {
     UNUSED(ctx);
     return common::OB_NOT_SUPPORTED;
   }
-  virtual bool is_consume_child_1by1() const
+  virtual bool is_consume_child_1by1() const override
   {
     return true;
   }
   VIRTUAL_TO_STRING_KV(K_(sub_plan_num));
 
-  private:
+private:
   ObLogPlan* sub_plan_[OB_SQL_MAX_CHILD_OPERATOR_NUM];
   int64_t sub_plan_num_;
 };

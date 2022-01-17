@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 class ObPartMgr {
-  public:
+public:
   ObPartMgr()
   {}
   virtual ~ObPartMgr()

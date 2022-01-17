@@ -34,7 +34,7 @@ class ColumnHashMap {
     struct HashNode* next_;
   };
 
-  public:
+public:
   ColumnHashMap(common::ObIAllocator& allocator)
       : allocator_(allocator), bucket_num_(0), buckets_(NULL), is_inited_(false)
   {}
@@ -45,19 +45,19 @@ class ColumnHashMap {
   int set(const uint64_t key, const int32_t value);
   int get(const uint64_t key, int32_t& value) const;
 
-  private:
+private:
   ColumnHashMap();
   ColumnHashMap(const ColumnHashMap& other);
   ColumnHashMap& operator=(const ColumnHashMap& other);
 
-  private:
+private:
   bool is_inited() const
   {
     return is_inited_;
   }
   int find_node(const uint64_t key, HashNode* head, HashNode*& node) const;
 
-  public:
+public:
   common::ObIAllocator& allocator_;
   int64_t bucket_num_;
   HashNode** buckets_;
@@ -117,7 +117,7 @@ class ColumnMap {
   typedef common::ObFixedArray<int32_t, common::ObIAllocator> ColumnArray;
 #define IS_SHADOW_COLUMN(column_id) (column_id >= OB_MIN_SHADOW_COLUMN_ID)
 
-  public:
+public:
   ColumnMap(common::ObIAllocator& allocator)
       : array_(allocator),
         shadow_array_(allocator),
@@ -142,17 +142,17 @@ class ColumnMap {
   int get(const uint64_t column_id, int32_t& proj) const;
   TO_STRING_KV(K(is_inited_), K(use_array_), K(shadow_use_array_), K(has_), K(has_shadow_));
 
-  private:
+private:
   ColumnMap();
   ColumnMap(const ColumnMap& other);
   ColumnMap& operator=(const ColumnMap& other);
 
-  private:
+private:
   int create(const bool use_array, const int64_t array_size, const int64_t offset,
       const common::ObIArray<uint64_t>& column_ids, const common::ObIArray<int32_t>& column_indexes, ColumnArray& array,
       ColumnHashMap& map);
 
-  private:
+private:
   ColumnArray array_;
   ColumnArray shadow_array_;
   ColumnHashMap map_;
@@ -167,16 +167,16 @@ class ColumnMap {
 class ObColumnParam {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObColumnParam(common::ObIAllocator& allocator);
   virtual ~ObColumnParam();
   virtual void reset();
 
-  private:
+private:
   ObColumnParam();
   DISALLOW_COPY_AND_ASSIGN(ObColumnParam);
 
-  public:
+public:
   inline void set_column_id(const uint64_t column_id)
   {
     column_id_ = column_id;
@@ -234,15 +234,36 @@ class ObColumnParam {
   {
     is_nullable_ = nullable;
   }
-  int assign(const ObColumnParam& other);
+  inline void set_gen_col_flag(const bool is_gen_col, const bool is_virtual)
+  {
+    is_gen_col_ = is_gen_col;
+    is_virtual_gen_col_ = is_virtual;
+  }
+  inline bool is_gen_col() const
+  {
+    return is_gen_col_;
+  }
+  inline bool is_virtual_gen_col() const
+  {
+    return is_virtual_gen_col_;
+  }
+  inline void set_is_hidden(const bool is_hidden)
+  {
+    is_hidden_ = is_hidden;
+  }
+  inline bool is_hidden() const
+  {
+    return is_hidden_;
+  }
+  int assign(const ObColumnParam &other);
 
   TO_STRING_KV(K_(column_id), K_(meta_type), K_(order), K_(accuracy), K_(orig_default_value), K_(cur_default_value),
-      K_(is_nullable));
+               K_(is_nullable), K_(is_gen_col), K_(is_virtual_gen_col), K_(is_hidden));
 
-  private:
+private:
   int deep_copy_obj(const common::ObObj& src, common::ObObj& dest);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   uint64_t column_id_;
   common::ObObjMeta meta_type_;
@@ -251,6 +272,41 @@ class ObColumnParam {
   common::ObObj orig_default_value_;
   common::ObObj cur_default_value_;
   bool is_nullable_;
+  bool is_gen_col_;
+  bool is_virtual_gen_col_;
+  bool is_hidden_;
+};
+
+class ObVerticalPartitionParam {
+  OB_UNIS_VERSION_V(1);
+
+public:
+  ObVerticalPartitionParam();
+  virtual ~ObVerticalPartitionParam();
+  void reset();
+
+public:
+  DECLARE_TO_STRING;
+  inline uint64_t get_table_id() const
+  {
+    return table_id_;
+  }
+  inline void set_table_id(uint64_t table_id)
+  {
+    table_id_ = table_id;
+  }
+  inline int64_t get_schema_version() const
+  {
+    return schema_version_;
+  }
+  inline void set_schema_version(int64_t version)
+  {
+    schema_version_ = version;
+  }
+
+private:
+  uint64_t table_id_;
+  int64_t schema_version_;
 };
 
 class ObTableSchema;
@@ -259,21 +315,21 @@ class ObTableSchemaParam;
 class ObTableParam {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   typedef common::ObFixedArray<ObColumnParam*, common::ObIAllocator> Columns;
   typedef common::ObFixedArray<int32_t, common::ObIAllocator> Projector;
   typedef common::ObFixedArray<ObColDesc, common::ObIAllocator> ColDescArray;
 
-  public:
+public:
   explicit ObTableParam(common::ObIAllocator& allocator);
   virtual ~ObTableParam();
   virtual void reset();
 
-  private:
+private:
   ObTableParam();
   DISALLOW_COPY_AND_ASSIGN(ObTableParam);
 
-  public:
+public:
   int convert(const ObTableSchema& table_schema, const ObTableSchema& index_schema,
       const common::ObIArray<uint64_t>& output_column_ids, const bool index_back);
 
@@ -281,11 +337,6 @@ class ObTableParam {
   // (right table index back not supported)
   int convert_join_mv_rparam(const ObTableSchema& mv_schema, const ObTableSchema& right_schema,
       const common::ObIArray<uint64_t>& mv_column_ids);
-
-  // convert from table schema param which is used in ObTableModify operators
-  // used to get conflict row only by row keys
-  int convert_schema_param(
-      const share::schema::ObTableSchemaParam& schema_param, const common::ObIArray<uint64_t>& output_column_ids);
 
   inline uint64_t get_table_id() const
   {
@@ -415,7 +466,7 @@ class ObTableParam {
   static int alloc_column(common::ObIAllocator& allocator, ObColumnParam*& col_ptr);
   static int create_column_map(const common::ObIArray<ObColumnParam*>& cols, ColumnMap& col_map);
 
-  private:
+private:
   int construct_columns_and_projector(const ObTableSchema& table_schema,
       const common::ObIArray<uint64_t>& output_column_ids, common::ObIArray<ObColumnParam*>& cols, ColumnMap& col_map,
       common::ObIArray<int32_t>& projector, common::ObIArray<int32_t>& output_projector);
@@ -441,7 +492,7 @@ class ObTableParam {
   int construct_lob_locator_param(const ObTableSchema& table_schema, const Columns& storage_project_columns,
       const Projector& access_projector, bool& use_lob_locator, int64_t& rowid_version, Projector& rowid_projector);
 
-  private:
+private:
   const static int64_t DEFAULT_COLUMN_MAP_BUCKET_NUM = 4;
   common::ObIAllocator& allocator_;
   uint64_t table_id_;

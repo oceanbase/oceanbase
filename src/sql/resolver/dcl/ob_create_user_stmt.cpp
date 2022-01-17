@@ -27,11 +27,14 @@ ObCreateUserStmt::ObCreateUserStmt(ObIAllocator* name_pool)
       tenant_id_(OB_INVALID_ID),
       users_(),
       if_not_exist_(false),
-      profile_id_(OB_INVALID_ID)
+      profile_id_(OB_INVALID_ID),
+      max_connections_per_hour_(0),
+      max_user_connections_(0)
 {}
 
 ObCreateUserStmt::ObCreateUserStmt()
-    : ObDDLStmt(NULL, stmt::T_CREATE_USER), tenant_id_(OB_INVALID_ID), users_(), if_not_exist_(false)
+    : ObDDLStmt(NULL, stmt::T_CREATE_USER), tenant_id_(OB_INVALID_ID), users_(),
+      if_not_exist_(false), max_connections_per_hour_(0), max_user_connections_(0)
 {}
 
 ObCreateUserStmt::~ObCreateUserStmt()

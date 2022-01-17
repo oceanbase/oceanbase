@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObTenantFilePGMetaCheckpointReader final {
-  public:
+public:
   ObTenantFilePGMetaCheckpointReader();
   ~ObTenantFilePGMetaCheckpointReader() = default;
   int read_checkpoint(const ObTenantFileKey& file_key, const ObTenantFileSuperBlock& super_block,

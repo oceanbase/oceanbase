@@ -31,7 +31,7 @@ namespace oceanbase {
 
 namespace share {
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObSchemaGetterGuard;
 class ObPartition;
 }  // namespace schema
@@ -48,31 +48,36 @@ class ITenantStatFinder;
 enum PartitionDistributePolicy { DISTRIBUTE_BY_AUTO = 0, DISTRIBUTE_BY_LEVEL_ONE, DISTRIBUTE_BY_LEVEL_TWO };
 
 class PartitionSchemaChecker {
-  public:
+public:
   static int check_same_primary_zone(const share::schema::ObPartitionSchema& ref,
       const share::schema::ObPartitionSchema& other, share::schema::ObSchemaGetterGuard& schema_guard, bool& same);
   static int check_same_primary_zone(const common::ObIArray<const share::schema::ObPartitionSchema*>& partition_schemas,
       share::schema::ObSchemaGetterGuard& schema_guard, bool& same);
-  static int check_same_primary_zone(const common::ObIArray<const share::schema::ObTableSchema*>& partition_schemas,
+  static int check_same_primary_zone(
+      const common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& partition_schemas,
       share::schema::ObSchemaGetterGuard& schema_guard, bool& same);
   static bool is_same_partition_schema(
-      const share::schema::ObTableSchema& ref, const share::schema::ObTableSchema& other);
-  static bool is_same_schema_partition_key_info(const common::ObRowkeyInfo& left, const common::ObRowkeyInfo& right);
-  static bool is_one_level_and_partition_by_range(common::ObIArray<const share::schema::ObTableSchema*>& schemas);
+      const share::schema::ObSimpleTableSchemaV2& ref, const share::schema::ObSimpleTableSchemaV2& other);
+  /*
+  static bool is_same_schema_partition_key_info(const common::ObRowkeyInfo &left,
+                                                const common::ObRowkeyInfo &right);
+                                                */
+  static bool is_one_level_and_partition_by_range(
+      common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& schemas);
 };
 
 class ShardGroupValidator {
-  public:
+public:
   static int check_table_schemas_compatible(ITenantStatFinder& stat_finder,
       share::schema::ObSchemaGetterGuard& schema_guard,
-      const common::ObIArray<const share::schema::ObTableSchema*>& tables, bool& compatible,
+      const common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& tables, bool& compatible,
       const bool check_primary_zone = false);
 };
 
 class IBalanceGroupContainer;
 
 class IBalanceGroupContainerBuilder {
-  public:
+public:
   IBalanceGroupContainerBuilder(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::hash::ObHashSet<uint64_t>& processed_tids, int64_t& max_used_balance_group_id,
       common::ObIAllocator& allocator, IBalanceGroupContainer& balance_group_container)
@@ -88,11 +93,11 @@ class IBalanceGroupContainerBuilder {
   virtual ~IBalanceGroupContainerBuilder()
   {}
 
-  public:
+public:
   int init(const uint64_t tenant_id);
   virtual int build() = 0;
 
-  protected:
+protected:
   bool inited_;
   uint64_t tenant_id_;
   share::schema::ObSchemaGetterGuard& schema_guard_;
@@ -104,7 +109,7 @@ class IBalanceGroupContainerBuilder {
 };
 
 class PartitionTableContainerBuilder : public IBalanceGroupContainerBuilder {
-  public:
+public:
   PartitionTableContainerBuilder(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::hash::ObHashSet<uint64_t>& processed_tids, int64_t& max_used_balance_group_id,
       common::ObIAllocator& allocator, IBalanceGroupContainer& balance_group_container)
@@ -114,15 +119,15 @@ class PartitionTableContainerBuilder : public IBalanceGroupContainerBuilder {
   virtual ~PartitionTableContainerBuilder()
   {}
 
-  public:
+public:
   int build() override;
 
-  private:
-  int build_partition_table_container(const share::schema::ObTableSchema* table_schema);
+private:
+  int build_partition_table_container(const share::schema::ObSimpleTableSchemaV2* table_schema);
 };
 
 class NonPartitionTableContainerBuilder : public IBalanceGroupContainerBuilder {
-  public:
+public:
   NonPartitionTableContainerBuilder(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::hash::ObHashSet<uint64_t>& processed_tids, int64_t& max_used_balance_group_id,
       common::ObIAllocator& allocator, IBalanceGroupContainer& balance_group_container)
@@ -132,16 +137,16 @@ class NonPartitionTableContainerBuilder : public IBalanceGroupContainerBuilder {
   virtual ~NonPartitionTableContainerBuilder()
   {}
 
-  public:
+public:
   int build() override;
 
-  private:
+private:
   int build_non_partition_table_container(
       const common::ObIArray<const share::schema::ObPartitionSchema*>& partition_schemas);
 };
 
 class ShardGroupContainerBuilder : public IBalanceGroupContainerBuilder {
-  public:
+public:
   ShardGroupContainerBuilder(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::hash::ObHashSet<uint64_t>& processed_tids, int64_t& max_used_balance_group_id,
       common::ObIAllocator& allocator, IBalanceGroupContainer& balance_group_container)
@@ -151,10 +156,10 @@ class ShardGroupContainerBuilder : public IBalanceGroupContainerBuilder {
   virtual ~ShardGroupContainerBuilder()
   {}
 
-  public:
+public:
   int build() override;
 
-  private:
+private:
   struct SameRangePartInfo {
     SameRangePartInfo()
         : pkey_(),
@@ -177,30 +182,31 @@ class ShardGroupContainerBuilder : public IBalanceGroupContainerBuilder {
   typedef common::ObArray<SameRangePartInfo, common::ObIAllocator&> SameRangeArray;
   typedef common::hash::ObHashMap<common::ObRowkey, SameRangeArray*> SameRangeMap;
   class TableSchemaPartitionCntCmp {
-    public:
-    TableSchemaPartitionCntCmp(common::ObArray<const share::schema::ObTableSchema*>& shardgroup_schemas)
+  public:
+    TableSchemaPartitionCntCmp(common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_schemas)
         : shardgroup_schemas_(shardgroup_schemas), ret_(common::OB_SUCCESS)
     {}
     int sort();
 
-    public:
-    bool operator()(const share::schema::ObTableSchema* l, const share::schema::ObTableSchema* r);
+  public:
+    bool operator()(const share::schema::ObSimpleTableSchemaV2* l, const share::schema::ObSimpleTableSchemaV2* r);
 
-    private:
-    common::ObArray<const share::schema::ObTableSchema*>& shardgroup_schemas_;
+  private:
+    common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_schemas_;
     int ret_;
   };
 
-  private:
-  int build_shardgroup_container(common::ObArray<const share::schema::ObTableSchema*>& shardgroup_table_schemas);
+private:
+  int build_shardgroup_container(
+      common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_table_schemas);
   int build_one_level_range_shard_partition_container(
-      common::ObArray<const share::schema::ObTableSchema*>& shardgroup_table_schemas, const bool primary_zone_match,
-      const common::ObZone& integrated_primary_zone);
+      common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shardgroup_table_schemas,
+      const bool primary_zone_match, const common::ObZone& integrated_primary_zone);
   int build_shardgroup_partition_container(
-      common::ObArray<const share::schema::ObTableSchema*>& shargroup_table_schemas, const bool primary_zone_match,
-      const common::ObZone& integrated_primary_zone);
+      common::ObArray<const share::schema::ObSimpleTableSchemaV2*>& shargroup_table_schemas,
+      const bool primary_zone_match, const common::ObZone& integrated_primary_zone);
   int set_same_range_array(SameRangeMap& same_range_map, const share::schema::ObPartition& partition,
-      const int64_t part_idx, const share::schema::ObTableSchema& table_schema);
+      const int64_t part_idx, const share::schema::ObSimpleTableSchemaV2& table_schema);
   int locate_same_range_array(
       SameRangeMap& same_range_map, const share::schema::ObPartition& partition, SameRangeArray*& same_range_array);
   int do_build_one_level_range_partition_container(SameRangeMap& same_range_map, const uint64_t base_index_group_id,
@@ -208,7 +214,7 @@ class ShardGroupContainerBuilder : public IBalanceGroupContainerBuilder {
 };
 
 class TableGroupContainerBuilder : public IBalanceGroupContainerBuilder {
-  public:
+public:
   TableGroupContainerBuilder(share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder,
       common::hash::ObHashSet<uint64_t>& processed_tids, int64_t& max_used_balance_group_id,
       common::ObIAllocator& allocator, IBalanceGroupContainer& balance_group_container)
@@ -218,15 +224,15 @@ class TableGroupContainerBuilder : public IBalanceGroupContainerBuilder {
   virtual ~TableGroupContainerBuilder()
   {}
 
-  public:
+public:
   int build() override;
 
-  private:
+private:
   int build_tablegroup_container(const share::schema::ObPartitionSchema* partition_schema);
 };
 
 class SinglePtBalanceContainerBuilder {
-  public:
+public:
   SinglePtBalanceContainerBuilder(BalanceGroupType balance_group_type, share::schema::ObSchemaGetterGuard& schema_guard,
       ITenantStatFinder& stat_finder, common::ObIAllocator& allocator, IBalanceGroupContainer& balance_group_container,
       int64_t& max_used_balance_group_id)
@@ -240,10 +246,10 @@ class SinglePtBalanceContainerBuilder {
   virtual ~SinglePtBalanceContainerBuilder()
   {}
 
-  public:
+public:
   int build(const share::schema::ObPartitionSchema& partition_schema);
 
-  private:
+private:
   int build_one_level_partition_table_container(const share::schema::ObPartitionSchema& partition_schema);
   int build_two_level_partition_table_container(const share::schema::ObPartitionSchema& partition_schema);
   int build_two_level_partition_table_container_by_first_level(
@@ -253,7 +259,7 @@ class SinglePtBalanceContainerBuilder {
   PartitionDistributePolicy get_partition_schema_distribute_policy(
       const share::schema::ObPartitionSchema& partition_schema);
 
-  private:
+private:
   BalanceGroupType balance_group_type_;
   share::schema::ObSchemaGetterGuard& schema_guard_;
   ITenantStatFinder& stat_finder_;
@@ -263,25 +269,25 @@ class SinglePtBalanceContainerBuilder {
 };
 
 class IBalanceGroupContainer {
-  public:
+public:
   IBalanceGroupContainer() : container_type_array_()
   {}
   virtual ~IBalanceGroupContainer()
   {}
 
-  public:
+public:
   virtual int collect_balance_group_box(const common::ObIArray<BalanceGroupBox*>& balance_group_box_array) = 0;
   const common::ObIArray<BalanceGroupContainerType>& get_container_type_array() const
   {
     return container_type_array_;
   }
 
-  protected:
+protected:
   common::ObSEArray<BalanceGroupContainerType, 2, common::ObNullAllocator> container_type_array_;
 };
 
 class ObSinglePtBalanceContainer : public IBalanceGroupContainer {
-  public:
+public:
   ObSinglePtBalanceContainer(const share::schema::ObPartitionSchema& partition_schema,
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : IBalanceGroupContainer(),
@@ -295,7 +301,7 @@ class ObSinglePtBalanceContainer : public IBalanceGroupContainer {
   virtual ~ObSinglePtBalanceContainer()
   {}
 
-  public:
+public:
   int init(const int64_t item_size);
   int build();
   virtual int collect_balance_group_box(const common::ObIArray<BalanceGroupBox*>& balance_group_box_array) override;
@@ -304,7 +310,7 @@ class ObSinglePtBalanceContainer : public IBalanceGroupContainer {
     return hash_index_collection_;
   }
 
-  private:
+private:
   bool inited_;
   const share::schema::ObPartitionSchema& partition_schema_;
   share::schema::ObSchemaGetterGuard& schema_guard_;
@@ -314,10 +320,10 @@ class ObSinglePtBalanceContainer : public IBalanceGroupContainer {
 };
 
 class ObBalanceGroupContainer : public IBalanceGroupContainer {
-  public:
+public:
   const int64_t PROCESSED_TABLE_MAP_SIZE = 100 * 1024;
 
-  public:
+public:
   ObBalanceGroupContainer(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : IBalanceGroupContainer(),
@@ -340,7 +346,7 @@ class ObBalanceGroupContainer : public IBalanceGroupContainer {
   virtual ~ObBalanceGroupContainer()
   {}
 
-  public:
+public:
   int init(const uint64_t tenant_id);
   virtual int build();
   virtual int get_gts_switch(bool& on);
@@ -349,7 +355,7 @@ class ObBalanceGroupContainer : public IBalanceGroupContainer {
     return processed_tids_;
   }
 
-  protected:
+protected:
   bool inited_;
   uint64_t tenant_id_;
   int64_t max_used_balance_group_id_;
@@ -364,7 +370,7 @@ class ObBalanceGroupContainer : public IBalanceGroupContainer {
 };
 
 class BalanceGroupBoxBuilder {
-  public:
+public:
   BalanceGroupBoxBuilder(const BalanceGroupType& balance_group_type,
       const common::ObIArray<BalanceGroupContainerType>& container_type_array,
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
@@ -380,7 +386,7 @@ class BalanceGroupBoxBuilder {
   virtual ~BalanceGroupBoxBuilder()
   {}
 
-  public:
+public:
   int init(const int64_t row_size, const int64_t col_size, const bool ignore_leader_balance,
       const common::ObZone& primary_zone);
   int set_item(const BalanceGroupBoxItem& item);
@@ -389,12 +395,12 @@ class BalanceGroupBoxBuilder {
     return output_box_array_;
   }
 
-  private:
+private:
   int init_square_id_map(const int64_t row_size, const int64_t col_size, const bool ignore_leader_balance,
       const common::ObZone& primary_zone);
   int init_hash_index_map(const int64_t row_size, const int64_t col_size);
 
-  protected:
+protected:
   bool inited_;
   BalanceGroupType balance_group_type_;
   // Since the memory life cycle of hash index map is different from that of SquareIdMap,
@@ -411,7 +417,7 @@ class BalanceGroupBoxBuilder {
 };
 
 class ObLeaderBalanceGroupContainer : public ObBalanceGroupContainer {
-  public:
+public:
   ObLeaderBalanceGroupContainer(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : ObBalanceGroupContainer(schema_guard, stat_finder, allocator), hash_index_collection_()
@@ -419,7 +425,7 @@ class ObLeaderBalanceGroupContainer : public ObBalanceGroupContainer {
   virtual ~ObLeaderBalanceGroupContainer()
   {}
 
-  public:
+public:
   int init(const uint64_t tenant_id);
   virtual int collect_balance_group_box(const common::ObIArray<BalanceGroupBox*>& balance_group_box_array) override;
   const HashIndexCollection& get_hash_index() const
@@ -427,12 +433,12 @@ class ObLeaderBalanceGroupContainer : public ObBalanceGroupContainer {
     return hash_index_collection_;
   }
 
-  private:
+private:
   HashIndexCollection hash_index_collection_;
 };
 
 class ObPartitionBalanceGroupContainer : public ObBalanceGroupContainer {
-  public:
+public:
   ObPartitionBalanceGroupContainer(
       share::schema::ObSchemaGetterGuard& schema_guard, ITenantStatFinder& stat_finder, common::ObIAllocator& allocator)
       : ObBalanceGroupContainer(schema_guard, stat_finder, allocator),
@@ -442,7 +448,7 @@ class ObPartitionBalanceGroupContainer : public ObBalanceGroupContainer {
   virtual ~ObPartitionBalanceGroupContainer()
   {}
 
-  public:
+public:
   int init(const uint64_t tenant_id);
   virtual int collect_balance_group_box(const common::ObIArray<BalanceGroupBox*>& balance_group_box_array) override;
   common::ObIArray<SquareIdMap*>& get_square_id_map_array()
@@ -455,7 +461,7 @@ class ObPartitionBalanceGroupContainer : public ObBalanceGroupContainer {
   }
   int calc_leader_balance_statistic(const common::ObZone& zone);
 
-  private:
+private:
   HashIndexCollection hash_index_collection_;
   SquareIdMapCollection square_id_map_collection_;
 };

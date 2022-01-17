@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprRadians : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprRadians(common::ObIAllocator& alloc);
   virtual ~ObExprRadians();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
@@ -26,7 +26,7 @@ class ObExprRadians : public ObFuncExprOperator {
   static int calc_radians_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   const static double radians_ratio_;
   DISALLOW_COPY_AND_ASSIGN(ObExprRadians);
 };

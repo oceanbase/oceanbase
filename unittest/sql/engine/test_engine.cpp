@@ -23,22 +23,22 @@
 #include "observer/ob_req_time_service.h"
 namespace test {
 class TestEngine : public TestOptimizerUtils {
-  public:
+public:
   TestEngine();
   virtual ~TestEngine();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestEngine);
 
-  protected:
+protected:
   // function members
   void do_code_generate(const ObLogPlan& log_plan, ObPhysicalPlan& phy_plan);
   int test_phy_plan(ObPhysicalPlan& plan);
 
-  protected:
+protected:
   // data members
 };
 

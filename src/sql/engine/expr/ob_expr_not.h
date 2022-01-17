@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprNot : public ObLogicalExprOperator {
-  public:
+public:
   explicit ObExprNot(common::ObIAllocator& alloc);
   virtual ~ObExprNot(){};
 
@@ -28,7 +28,7 @@ class ObExprNot : public ObLogicalExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_not(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNot) const;
 };
 }  // namespace sql

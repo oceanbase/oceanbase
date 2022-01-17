@@ -47,7 +47,7 @@ inline ObCmpNullPos default_null_pos()
 struct ObEnumSetInnerValue {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObEnumSetInnerValue() : numberic_value_(0), string_value_()
   {}
   ObEnumSetInnerValue(uint64_t numberic_value, common::ObString& string_value)
@@ -111,7 +111,7 @@ struct ObLobScale {
 };
 
 class ObObjMeta {
-  public:
+public:
   ObObjMeta() : type_(ObNullType), cs_level_(CS_LEVEL_INVALID), cs_type_(CS_TYPE_INVALID), scale_(-1)
   {}
 
@@ -855,7 +855,7 @@ class ObObjMeta {
     return offsetof(ObObjMeta, scale_) * 8;
   }
 
-  protected:
+protected:
   uint8_t type_;
   uint8_t cs_level_;  // collation level
   uint8_t cs_type_;   // collation type
@@ -1049,7 +1049,9 @@ struct ObObjPrintParams {
     struct {
       uint32_t need_cast_expr_ : 1;
       uint32_t is_show_create_view_ : 1;
-      uint32_t reserved_ : 30;
+      uint32_t use_memcpy_ : 1;
+      uint32_t skip_escape_ : 1;
+      uint32_t reserved_ : 28;
     };
   };
 };
@@ -1081,7 +1083,7 @@ union ObObjValue {
 
 class ObBatchChecksum;
 class ObObj {
-  public:
+public:
   // min, max extend value
   static const int64_t MIN_OBJECT_VALUE = UINT64_MAX - 2;
   static const int64_t MAX_OBJECT_VALUE = UINT64_MAX - 1;
@@ -1091,7 +1093,7 @@ class ObObj {
   static const char* MAX_OBJECT_VALUE_STR;
   static const char* NOP_VALUE_STR;
 
-  public:
+public:
   ObObj();
   ObObj(const ObObj& other);
   explicit ObObj(bool val);
@@ -2041,7 +2043,6 @@ class ObObj {
   bool can_compare(const ObObj& other) const;
   inline bool strict_equal(const ObObj& other) const;
   int check_collation_free_and_compare(const ObObj& other, int& cmp) const;
-  int check_collation_free_and_compare(const ObObj& other) const;
   int compare(const ObObj& other, int& cmp) const;
   int compare(const ObObj& other) const;
   int compare(const ObObj& other, ObCollationType cs_type, int& cmp) const;
@@ -2085,10 +2086,11 @@ class ObObj {
   //@{  deep copy
   bool need_deep_copy() const;
   OB_INLINE int64_t get_deep_copy_size() const;
-  int deep_copy(const ObObj& src, char* buf, const int64_t size, int64_t& pos);
-  void set_data_ptr(void* data_ptr);
-  const void* get_data_ptr() const;
-  // return byte length
+  int deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &pos);
+  void* get_deep_copy_obj_ptr();
+  void set_data_ptr(void *data_ptr);
+  const void *get_data_ptr() const;
+  //return byte length
   int64_t get_data_length() const;
 
   template <typename Allocator>
@@ -2137,12 +2139,12 @@ class ObObj {
   int get_char_length(const ObAccuracy accuracy, int32_t& char_len, bool is_oracle_mode) const;
   int convert_string_value_charset(ObCharsetType charset_type, ObIAllocator& allocator);
 
-  private:
+private:
   friend class tests::common::ObjTest;
   friend class ObCompactCellWriter;
   friend class ObCompactCellIterator;
 
-  public:
+public:
   ObObjMeta meta_;  // sizeof = 4
   union {
     int32_t val_len_;
@@ -3773,13 +3775,13 @@ struct ParamFlag {
 };
 
 class ObObjParam : public ObObj {
-  public:
+public:
   ObObjParam() : ObObj(), accuracy_(), res_flags_(0), raw_text_pos_(-1), raw_text_len_(-1)
   {}
   ObObjParam(const ObObj& other) : ObObj(other), accuracy_(), res_flags_(0), raw_text_pos_(-1), raw_text_len_(-1)
   {}
 
-  public:
+public:
   void reset();
   // accuracy.
   OB_INLINE void set_accuracy(const common::ObAccuracy& accuracy)
@@ -3940,7 +3942,7 @@ class ObObjParam : public ObObj {
     return offsetof(ObObjParam, flag_) * 8;
   }
 
-  private:
+private:
   ObAccuracy accuracy_;
   uint32_t res_flags_;  // BINARY, NUM, NOT_NULL, TIMESTAMP, etc
                         // reference: src/lib/regex/include/mysql_com.h
@@ -3953,7 +3955,7 @@ class ObObjParam : public ObObj {
 struct ObDataType {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDataType() : meta_(), accuracy_(), charset_(CHARSET_UTF8MB4), is_binary_collation_(false), is_zero_fill_(false)
   {}
   TO_STRING_KV(K_(meta), K_(accuracy), K_(charset), K_(is_binary_collation), K_(is_zero_fill));
@@ -4115,7 +4117,7 @@ typedef int64_t (*ob_obj_value_get_serialize_size)(const ObObj& obj);
 typedef uint64_t (*ob_obj_crc64_v3)(const ObObj& obj, const uint64_t hash);
 
 class ObObjUtil {
-  public:
+public:
   static ob_obj_hash get_murmurhash_v3(ObObjType type);
   static ob_obj_hash get_murmurhash_v2(ObObjType type);
   static ob_obj_crc64_v3 get_crc64_v3(ObObjType type);
@@ -4124,8 +4126,10 @@ class ObObjUtil {
 };
 
 class ObHexEscapeSqlStr {
-  public:
-  ObHexEscapeSqlStr(const common::ObString& str) : str_(str)
+public:
+  ObHexEscapeSqlStr(const common::ObString &str) : str_(str), skip_escape_(false)
+  {}
+  ObHexEscapeSqlStr(const common::ObString &str, const bool skip_escape) : str_(str), skip_escape_(skip_escape)
   {}
   ObString str() const
   {
@@ -4134,8 +4138,9 @@ class ObHexEscapeSqlStr {
   int64_t get_extra_length() const;
   DECLARE_TO_STRING;
 
-  private:
+private:
   ObString str_;
+  bool skip_escape_;
 };
 
 }  // namespace common

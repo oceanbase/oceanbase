@@ -25,11 +25,11 @@ namespace share {
 class ObCascadMember {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCascadMember();
   explicit ObCascadMember(const common::ObAddr& server, const int64_t cluster_id);
 
-  public:
+public:
   const common::ObAddr get_server() const
   {
     return server_;
@@ -54,7 +54,7 @@ class ObCascadMember {
   TO_STRING_KV(K_(server), K_(cluster_id));
   TO_YSON_KV(Y_(server), OB_ID(cluster_id), cluster_id_);
 
-  protected:
+protected:
   common::ObAddr server_;
   int64_t cluster_id_;
 };

@@ -21,7 +21,7 @@ using namespace common;
 using namespace clog;
 namespace unittest {
 class ObInfoBlockHandlerTest : public testing::Test {
-  public:
+public:
   static void SetUpTestCase()
   {
     EXPECT_EQ(OB_SUCCESS, commit_handler_.init());

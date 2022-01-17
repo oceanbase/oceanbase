@@ -39,17 +39,32 @@ int64_t ObArchiveTaskStatus::count()
   return ATOMIC_LOAD(&num_);
 }
 
-int ObArchiveTaskStatus::push_unlock(ObLink* link)
+int ObArchiveTaskStatus::push(ObLink* link, ObArchiveThreadPool& worker)
 {
   int ret = OB_SUCCESS;
+  WLockGuard guard(rwlock_);
 
   if (OB_ISNULL(link)) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "task is NULL", KR(ret), K(link));
+  } else if (0 >= ref_) {
+    ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
+    ARCHIVE_LOG(WARN, "ref_ already reach not bigger than zero, skip it", KR(ret), K(ref_));
   } else if (OB_FAIL(queue_.push(link))) {
     ARCHIVE_LOG(WARN, "push task fail", KR(ret), K(link));
   } else {
     num_++;
+  }
+
+  // try push task_status
+  if (OB_SUCC(ret) && !issue_) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = worker.push_task_status(this))) {
+      ARCHIVE_LOG(WARN, "push task_status fail", KR(tmp_ret));
+    } else {
+      issue_ = true;
+      ref_++;
+    }
   }
 
   return ret;
@@ -132,33 +147,7 @@ void ObArchiveTaskStatus::free(bool& is_discarded)
   }
 }
 
-int ObArchiveSendTaskStatus::push(ObArchiveSendTask& task, ObArchiveThreadPool& worker)
-{
-  WLockGuard guard(rwlock_);
-
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!task.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid send task", KR(ret), K(task));
-  } else if (0 >= ref_) {
-    ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "ref_ already reach not bigger than zero, skip it", KR(ret), K(ref_));
-  } else if (OB_FAIL(ObArchiveTaskStatus::push_unlock(&task))) {
-    ARCHIVE_LOG(WARN, "push fail", KR(ret), K(task));
-  } else if (issue_) {
-    // skip
-  } else if (OB_FAIL(worker.push_task_status(this))) {
-    ARCHIVE_LOG(WARN, "push send_task fail", KR(ret));
-  } else {
-    issue_ = true;
-    ref_++;
-  }
-
-  return ret;
-}
-
-int ObArchiveSendTaskStatus::mock_push(ObArchiveSendTask& task, common::ObSpLinkQueue& queue)
+int ObArchiveSendTaskStatus::mock_push(ObArchiveSendTask& task, ObSpLinkQueue& queue)
 {
   WLockGuard guard(rwlock_);
 
@@ -167,15 +156,20 @@ int ObArchiveSendTaskStatus::mock_push(ObArchiveSendTask& task, common::ObSpLink
   if (0 >= ref_) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "ref_ already reach not bigger than zero, skip it", KR(ret), K(ref_));
-  } else if (OB_FAIL(ObArchiveTaskStatus::push_unlock(&task))) {
+  } else if (OB_FAIL(queue_.push(&task))) {
     ARCHIVE_LOG(WARN, "push fail", KR(ret), K(task));
-  } else if (issue_) {
-    // skip
-  } else if (OB_FAIL(queue.push(this))) {
-    ARCHIVE_LOG(WARN, "push send_task fail", KR(ret));
   } else {
-    issue_ = true;
-    ref_++;
+    num_++;
+  }
+
+  if (OB_SUCC(ret) && !issue_) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = queue.push(this))) {
+      ARCHIVE_LOG(WARN, "push send_task_status fail", KR(tmp_ret));
+    } else {
+      issue_ = true;
+      ref_++;
+    }
   }
 
   return ret;
@@ -279,32 +273,6 @@ ObArchiveCLogTaskStatus::ObArchiveCLogTaskStatus(const ObPGKey& pg_key)
 
 ObArchiveCLogTaskStatus::~ObArchiveCLogTaskStatus()
 {}
-
-int ObArchiveCLogTaskStatus::push(ObPGArchiveCLogTask& task, ObArchiveThreadPool& worker)
-{
-  WLockGuard guard(rwlock_);
-
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!task.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    ARCHIVE_LOG(WARN, "invalid send task", KR(ret), K(task));
-  } else if (OB_FAIL(ObArchiveTaskStatus::push_unlock(&task))) {
-    ARCHIVE_LOG(WARN, "push fail", KR(ret), K(task));
-  } else if (0 >= ref_) {
-    ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
-    ARCHIVE_LOG(WARN, "ref_ already reach not bigger than zero, skip it", KR(ret), K(ref_));
-  } else if (issue_) {
-    // skip
-  } else if (OB_FAIL(worker.push_task_status(this))) {
-    ARCHIVE_LOG(WARN, "push clog_task fail", KR(ret));
-  } else {
-    issue_ = true;
-    ref_++;
-  }
-
-  return ret;
-}
 
 }  // namespace archive
 }  // namespace oceanbase

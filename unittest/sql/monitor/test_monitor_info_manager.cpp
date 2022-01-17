@@ -154,7 +154,7 @@ static const int64_t TEST_GET_COUNT = 4;
 namespace oceanbase {
 namespace sql {
 class TestMonitorInfoManager : public ::testing::Test, public share::ObThreadPool {
-  public:
+public:
   TestMonitorInfoManager() : seq_(0), monitor_mgr_()
   // test1_(&monitor_mgr_),
   // test2_(&monitor_mgr_)
@@ -202,7 +202,7 @@ class TestMonitorInfoManager : public ::testing::Test, public share::ObThreadPoo
   int do_gc();
   int build_monitor_info(int64_t query_id, int64_t plan_id, ObPhyPlanMonitorInfo* plan);
 
-  public:
+public:
   int64_t seq_;
   ObMonitorInfoManager monitor_mgr_;
   // TestGetByQueryId test1_;

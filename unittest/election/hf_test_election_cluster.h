@@ -24,7 +24,7 @@ using namespace common;
 namespace unittest {
 
 class TestElectionCluster : public ::testing::Test {
-  public:
+public:
   TestElectionCluster()
   {}
   virtual ~TestElectionCluster()

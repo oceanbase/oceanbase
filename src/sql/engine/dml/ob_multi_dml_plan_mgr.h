@@ -21,7 +21,7 @@ struct ObTableDMLCtx;
 
 class ObMultiDMLPlanMgr {
   struct PartValuesInfo {
-    public:
+  public:
     PartValuesInfo()
         : datum_store_(NULL),
           row_store_(NULL),
@@ -42,7 +42,7 @@ class ObMultiDMLPlanMgr {
   typedef common::ObSEArray<PartSubPlanArray, 4> IndexSubPlanInfo;
   typedef common::ObArrayWrap<IndexSubPlanInfo> TableSubPlanInfo;
 
-  public:
+public:
   ObMultiDMLPlanMgr(common::ObIAllocator& allocator)
       : allocator_(allocator),
         exec_ctx_(NULL),
@@ -77,7 +77,7 @@ class ObMultiDMLPlanMgr {
     return table_need_first_;
   }
 
-  private:
+private:
   int get_or_create_part_subplan_info(int64_t table_idx, int64_t index_idx, int64_t part_idx, int64_t op,
       PartValuesInfo*& part_subplan_info, bool is_static_engine = false);
   int get_server_op_info(
@@ -87,7 +87,7 @@ class ObMultiDMLPlanMgr {
       const ServerOpInfo table_op, const ObJobID& ob_job_id, uint64_t task_id, ObTaskInfo& task_info);
   int allocate_mini_task_info(ObTaskInfo*& task_info);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObExecContext* exec_ctx_;
   common::ObIArrayWrap<ObTableDMLCtx>* table_dml_ctxs_;

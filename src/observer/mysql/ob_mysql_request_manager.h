@@ -39,16 +39,16 @@ enum ObMySQLRequestStatus {
 };
 
 class ObMySQLRequestRecord {
-  public:
+public:
   common::ObConcurrentFIFOAllocator* allocator_;
   sql::ObAuditRecordData data_;
 
-  public:
+public:
   ObMySQLRequestRecord() : allocator_(nullptr)
   {}
   virtual ~ObMySQLRequestRecord();
 
-  public:
+public:
   virtual void destroy()
   {
     if (NULL != allocator_) {
@@ -56,7 +56,7 @@ class ObMySQLRequestRecord {
     }
   }
 
-  public:
+public:
   int64_t get_self_size() const
   {
     return sizeof(ObMySQLRequestRecord) + data_.get_extra_size();
@@ -64,14 +64,14 @@ class ObMySQLRequestRecord {
 };
 
 class ObMySQLRequestManager {
-  public:
+public:
   static const int64_t SQL_AUDIT_PAGE_SIZE = (1LL << 21) - (1LL << 13);  // 2M - 8k
   static const int64_t MAX_PARAM_BUF_SIZE = 64 * 1024;
   // number of deleted sql_audit records executing release_old one time
   static const int32_t BATCH_RELEASE_COUNT = 50000;
   static const int32_t MAX_RELEASE_TIME = 5 * 1000;  // 5ms
   static const int64_t US_PER_HOUR = 3600000000;
-  static const int64_t MAX_QUEUE_SIZE = 1000000;           // 100w
+  static const int64_t MAX_QUEUE_SIZE = 10000000;           // 10m
   static const int64_t MINI_MODE_MAX_QUEUE_SIZE = 100000;  // 10w
   // start to eliminate when sql_audit more than 9 millions records
   static const int64_t HIGH_LEVEL_EVICT_SIZE = 9000000;  // 900w
@@ -81,15 +81,15 @@ class ObMySQLRequestManager {
   static const int64_t EVICT_INTERVAL = 1000000;  // 1s
   typedef common::ObRaQueue::Ref Ref;
 
-  public:
+public:
   ObMySQLRequestManager();
   virtual ~ObMySQLRequestManager();
 
-  public:
+public:
   int init(uint64_t tenant_id, const int64_t max_mem_size, const int64_t queue_size);
   void destroy();
 
-  public:
+public:
   static int mtl_init(ObMySQLRequestManager*& req_mgr);
   static void mtl_destroy(ObMySQLRequestManager*& req_mgr);
 
@@ -103,7 +103,7 @@ class ObMySQLRequestManager {
     return request_id_;
   }
 
-  int record_request(const ObAuditRecordData& audit_record);
+  int record_request(const ObAuditRecordData& audit_record, bool is_sensitive = false);
 
   int64_t get_start_idx() const
   {
@@ -179,10 +179,10 @@ class ObMySQLRequestManager {
 
   static int get_mem_limit(uint64_t tenant_id, int64_t& mem_limit);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLRequestManager);
 
-  private:
+private:
   bool inited_;
   bool destroyed_;
   uint64_t request_id_;

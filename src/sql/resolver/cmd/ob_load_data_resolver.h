@@ -21,7 +21,7 @@ class ObLoadDataStmt;
 struct ObDataInFileStruct;
 
 class ObLoadDataResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObLoadDataResolver(ObResolverParams& params) : ObCMDResolver(params), current_scope_(T_LOAD_DATA_SCOPE)
   {}
   virtual ~ObLoadDataResolver()
@@ -49,7 +49,7 @@ class ObLoadDataResolver : public ObCMDResolver {
   int validate_stmt(ObLoadDataStmt* stmt);
   int resolve_hints(const ParseNode& node);
 
-  private:
+private:
   enum ParameterEnum {
     ENUM_OPT_LOCAL = 0,
     ENUM_FILE_NAME,

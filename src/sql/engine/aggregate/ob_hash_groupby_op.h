@@ -25,7 +25,7 @@ namespace sql {
 class ObHashGroupBySpec : public ObGroupBySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashGroupBySpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObGroupBySpec(alloc, type), group_exprs_(alloc), cmp_funcs_(alloc), est_group_cnt_(0)
   {}
@@ -41,11 +41,11 @@ class ObHashGroupBySpec : public ObGroupBySpec {
     est_group_cnt_ = cnt;
   }
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupBySpec);
 
-  public:
+public:
   ExprFixedArray group_exprs_;  // group by column
   ObCmpFuncs cmp_funcs_;
   int64_t est_group_cnt_;
@@ -53,16 +53,16 @@ class ObHashGroupBySpec : public ObGroupBySpec {
 
 // input rows is already sorted by groupby columns
 class ObHashGroupByOp : public ObGroupByOp {
-  public:
+public:
   struct DatumStoreLinkPartition : public common::ObDLinkBase<DatumStoreLinkPartition> {
-    public:
+  public:
     DatumStoreLinkPartition(common::ObIAllocator* alloc = nullptr) : datum_store_(alloc), part_id_(0)
     {}
     ObChunkDatumStore datum_store_;
     int64_t part_id_;
   };
 
-  public:
+public:
   static const int64_t MIN_PARTITION_CNT = 8;
   static const int64_t MAX_PARTITION_CNT = 256;
 
@@ -74,7 +74,7 @@ class ObHashGroupByOp : public ObGroupByOp {
   static constexpr const double EXTRA_MEM_RATIO = 0.25;
   static const int64_t FIX_SIZE_PER_PART = sizeof(DatumStoreLinkPartition) + ObChunkRowStore::BLOCK_SIZE;
 
-  public:
+public:
   ObHashGroupByOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObGroupByOp(exec_ctx, spec, input),
         curr_group_id_(common::OB_INVALID_INDEX),
@@ -112,7 +112,7 @@ class ObHashGroupByOp : public ObGroupByOp {
   {
     return aggr_processor_.get_aggr_hold_size();
   }
-  OB_INLINE int64_t get_local_hash_used_size() const
+  OB_INLINE int64_t get_hash_table_used_size() const
   {
     return local_group_rows_.mem_used();
   }
@@ -126,7 +126,11 @@ class ObHashGroupByOp : public ObGroupByOp {
   }
   OB_INLINE int64_t get_extra_size() const
   {
-    return get_local_hash_used_size() + get_dumped_part_used_size();
+    return get_dumped_part_used_size(); 
+  }
+  OB_INLINE int64_t get_data_size() const
+  { 
+    return get_aggr_used_size() + sql_mem_processor_.get_data_size();
   }
   OB_INLINE int64_t get_mem_used_size() const
   {
@@ -135,6 +139,10 @@ class ObHashGroupByOp : public ObGroupByOp {
   OB_INLINE int64_t get_mem_bound_size() const
   {
     return sql_mem_processor_.get_mem_bound();
+  }
+  OB_INLINE bool is_need_dump(double data_ratio)
+  {
+    return (get_mem_used_size() > get_mem_bound_size() * data_ratio);
   }
   OB_INLINE int64_t estimate_hash_bucket_size(const int64_t bucket_cnt) const
   {
@@ -152,6 +160,7 @@ class ObHashGroupByOp : public ObGroupByOp {
     }
     return (mem_size / sizeof(void*) / ObGroupRowHashTable::SIZE_BUCKET_SCALE);
   }
+  int init_group_store();
   int update_mem_status_periodically(
       const int64_t nth_cnt, const int64_t input_row, int64_t& est_part_cnt, bool& need_dump);
   int64_t detect_part_cnt(const int64_t rows) const;
@@ -170,16 +179,16 @@ class ObHashGroupByOp : public ObGroupByOp {
   int restore_groupby_datum();
   int init_mem_context(void);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupByOp);
 
-  private:
+private:
   ObGroupRowHashTable local_group_rows_;
   int64_t curr_group_id_;
 
   // memory allocator for group by partitions
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   ObDList<DatumStoreLinkPartition> dumped_group_parts_;
   ObChunkDatumStore group_store_;
 

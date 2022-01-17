@@ -87,7 +87,7 @@ TEST(TestCoLatch, wrlock)
 CoLatchTester g_tester;
 
 class LatchStress : public ThreadPool {
-  public:
+public:
   LatchStress()
   {}
   virtual ~LatchStress()
@@ -166,7 +166,7 @@ TEST(TestCoLatch, timeout)
 ObLatch g_latch;
 
 class LatchTimeout : public ThreadPool {
-  public:
+public:
   LatchTimeout()
   {}
   virtual ~LatchTimeout()

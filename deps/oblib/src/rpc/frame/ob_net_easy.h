@@ -53,7 +53,7 @@ struct ObNetOptions {
 class ObNetEasy {
   static const int64_t MAX_LISTEN_CNT = 4;
 
-  public:
+public:
   ObNetEasy();
   virtual ~ObNetEasy();
 
@@ -79,12 +79,15 @@ class ObNetEasy {
   int add_mysql_listen(const uint32_t port, ObReqHandler& handler, ObReqTransport*& transport);
   int add_mysql_unix_listen(const char* path, ObReqHandler& handler);
   int set_easy_keepalive(int easy_keepalive_enabled);
-  int load_ssl_config(const bool use_bkmi, const bool use_sm, const common::ObString& cert,
-      const common::ObString& public_cert, const common::ObString& private_key);
+  int load_ssl_config(const bool use_bkmi,
+                      const bool use_sm,
+                      const char *cert,
+                      const char *public_cert,
+                      const char *private_key);
 
   void on_ioth_start();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNetEasy);
   easy_io_t* create_eio_(const int io_cnt);
   int init_rpc_eio_(easy_io_t* eio, const ObNetOptions& opts);
@@ -96,7 +99,7 @@ class ObNetEasy {
   void update_eio_sql_tcp_keepalive(easy_io_t* eio, int64_t user_timeout, int enable_tcp_keepalive,
       int64_t tcp_keepidle, int64_t tcp_keepintvl, int64_t tcp_keepcnt);
 
-  protected:
+protected:
   ObReqTransport* transports_[MAX_LISTEN_CNT];
   int64_t proto_cnt_;
   easy_io_t* rpc_eio_;

@@ -21,38 +21,39 @@ namespace oceanbase {
 namespace share {
 
 class ObTenantBackupCleanInfoUpdater {
-  public:
+public:
   ObTenantBackupCleanInfoUpdater();
   virtual ~ObTenantBackupCleanInfoUpdater() = default;
   int init(common::ObISQLClient& sql_proxy);
   int insert_backup_clean_info(const uint64_t tenant_id, const ObBackupCleanInfo& clean_info);
-  int get_backup_clean_info(const uint64_t tenant_id, ObBackupCleanInfo& tenant_backup_task);
+  int get_backup_clean_info(const uint64_t tenant_id, const bool for_update, ObBackupCleanInfo& tenant_backup_task);
   int update_backup_clean_info(
       const uint64_t tenant_id, const ObBackupCleanInfo& src_clean_info, const ObBackupCleanInfo& dest_clean_info);
   int remove_clean_info(const uint64_t tenant_id, const ObBackupCleanInfo& clean_info);
   int get_backup_clean_info_status(
       const uint64_t tenant_id, common::ObISQLClient& trans, ObBackupCleanInfoStatus::STATUS& status);
   int get_deleted_tenant_clean_infos(common::ObIArray<ObBackupCleanInfo>& deleted_tenant_clean_infos);
+  int check_clean_task_is_dong(bool& is_doing);
 
-  private:
+private:
   int check_can_update_backup_clean_info(
       const ObBackupCleanInfoStatus::STATUS& src_status, const ObBackupCleanInfoStatus::STATUS& dest_status);
 
-  private:
+private:
   bool is_inited_;
   common::ObISQLClient* sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantBackupCleanInfoUpdater);
 };
 
 class ObBackupCleanInfoHistoryUpdater {
-  public:
+public:
   ObBackupCleanInfoHistoryUpdater();
   virtual ~ObBackupCleanInfoHistoryUpdater() = default;
   int init(common::ObISQLClient& sql_proxy);
   int insert_backup_clean_info(const ObBackupCleanInfo& clean_info);
   int remove_backup_clean_info(const uint64_t tenant_id);
 
-  private:
+private:
   bool is_inited_;
   common::ObISQLClient* sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanInfoHistoryUpdater);

@@ -49,7 +49,7 @@ struct ObCompactRowType {
 };
 
 class ObIStoreRowProcessor {
-  public:
+public:
   ObIStoreRowProcessor()
   {}
   virtual ~ObIStoreRowProcessor()
@@ -68,26 +68,26 @@ class ObIStoreRowProcessor {
 };
 
 class ObMacroBlockBuilder : public ObIStoreRowProcessor {
-  public:
+public:
   ObMacroBlockBuilder();
   virtual ~ObMacroBlockBuilder();
   virtual int open(storage::ObSSTableMergeCtx& ctx, const int64_t idx, const bool iter_complement,
       const ObIArray<share::schema::ObColDesc>& column_ids,
       const ObIArray<blocksstable::ObMacroBlockInfoPair>* lob_blocks = NULL) override;
   virtual int init_bloomfilter_if_need(storage::ObSSTableMergeCtx& ctx);
-  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx);
-  virtual int process(const blocksstable::ObMicroBlock& micro_block);
-  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type);
-  virtual int close();
-  virtual void reset();
-  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const
+  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx) override;
+  virtual int process(const blocksstable::ObMicroBlock& micro_block) override;
+  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type) override;
+  virtual int close() override;
+  virtual void reset() override;
+  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const override
   {
     return &desc_;
   }
-  virtual void set_purged_count(const int64_t count);
+  virtual void set_purged_count(const int64_t count) override;
   TO_STRING_KV(K_(desc), K_(sstable_merge_info), K_(writer));
 
-  protected:
+protected:
   void est_row(const ObCompactRowType::ObCompactRowTypeEnum& type, const bool is_output);
   int check_row_columns(const storage::ObStoreRow& row);
   int check_sparse_row_columns(const storage::ObStoreRow& row);
@@ -96,7 +96,12 @@ class ObMacroBlockBuilder : public ObIStoreRowProcessor {
   OB_INLINE int check_sparse_row_column(const common::ObObj& obj, const int64_t idx);
   int append_bloom_filter(const storage::ObStoreRow& row);
 
-  private:
+  enum CheckRowFlagStatus
+  {
+    CHECK_FIRST_ROW = 0,
+    CHECK_LAST_ROW = 1,
+  };
+private:
   storage::ObMergeType merge_type_;
   blocksstable::ObMacroBlockWriter* writer_;
   blocksstable::ObDataStoreDesc desc_;
@@ -109,32 +114,34 @@ class ObMacroBlockBuilder : public ObIStoreRowProcessor {
   blocksstable::ObBloomFilterDataWriter bf_macro_writer_;
   share::schema::ColumnMap* cols_id_map_;
   bool is_opened_;
+  CheckRowFlagStatus check_row_flag_status_;
+  int64_t last_compact_row_nop_cnt_;
 };
 
 class ObMacroBlockEstimator : public ObIStoreRowProcessor {
-  public:
+public:
   ObMacroBlockEstimator();
   virtual ~ObMacroBlockEstimator();
   virtual int open(storage::ObSSTableMergeCtx& ctx, const int64_t idx, const bool iter_complement,
       const ObIArray<share::schema::ObColDesc>& column_ids,
       const ObIArray<blocksstable::ObMacroBlockInfoPair>* lob_blocks = NULL) override;
-  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx);
-  virtual int process(const blocksstable::ObMicroBlock& micro_block);
-  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type);
-  virtual int close();
-  virtual void reset();
+  virtual int process(const blocksstable::ObMacroBlockCtx& macro_block_ctx) override;
+  virtual int process(const blocksstable::ObMicroBlock& micro_block) override;
+  virtual int process(const storage::ObStoreRow& row, const ObCompactRowType::ObCompactRowTypeEnum type) override;
+  virtual int close() override;
+  virtual void reset() override;
   OB_INLINE void set_component(ObIStoreRowProcessor* component)
   {
     component_ = component;
   }
-  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const
+  virtual const blocksstable::ObDataStoreDesc* get_data_store_desc() const override
   {
     return is_opened_ ? component_->get_data_store_desc() : NULL;
   }
-  virtual void set_purged_count(const int64_t count);
+  virtual void set_purged_count(const int64_t count) override;
   TO_STRING_KV(KP(component_));
 
-  private:
+private:
   int update_estimator(const storage::ObStoreRow& row);
   ObIStoreRowProcessor* component_;
   bool is_opened_;

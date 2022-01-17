@@ -18,14 +18,14 @@ namespace oceanbase {
 namespace storage {
 
 class ObIComparerCancel {
-  public:
+public:
   ObIComparerCancel() = default;
   virtual ~ObIComparerCancel() = default;
   virtual bool need_cancel() = 0;
 };
 
 class ObStoreRowComparer {
-  public:
+public:
   ObStoreRowComparer(int& comp_ret, const common::ObIArray<int64_t>& sort_column_index)
       : result_code_(comp_ret), sort_column_index_(sort_column_index), cancel_(NULL), cmp_times_(0)
   {}
@@ -34,7 +34,7 @@ class ObStoreRowComparer {
   OB_INLINE bool operator()(const ObStoreRow* left, const ObStoreRow* right);
   int& result_code_;
 
-  private:
+private:
   const common::ObIArray<int64_t>& sort_column_index_;
   ObIComparerCancel* cancel_;
   int64_t cmp_times_;

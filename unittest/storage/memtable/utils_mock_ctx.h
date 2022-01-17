@@ -32,13 +32,13 @@ struct ObMtCtxMembers {
 };
 
 class ObMtCtx : public ObIMemtableCtx, public ObMtCtxMembers {
-  public:
+public:
   ObMtCtx()
   {}
   ~ObMtCtx()
   {}
 
-  public:
+public:
   void fill_trace_log(const char* fmt, ...)
   {
     va_list args;
@@ -74,7 +74,7 @@ class ObMtCtx : public ObIMemtableCtx, public ObMtCtxMembers {
     return ret;
   }
 
-  public:
+public:
   int trans_begin()
   {
     return OB_SUCCESS;

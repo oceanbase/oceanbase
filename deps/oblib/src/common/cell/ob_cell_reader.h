@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObCellReader {
-  public:
+public:
   ObCellReader();
   virtual ~ObCellReader()
   {}
@@ -38,7 +38,7 @@ class ObCellReader {
   }
   int read_cell(common::ObObj& obj);
 
-  private:
+private:
   inline int read_oracle_timestamp(
       const ObObjType obj_type, const uint8_t meta_attr, const ObOTimestampMetaAttrType otmat, ObObj& obj);
   int read_interval_ds(ObObj& obj);
@@ -49,7 +49,7 @@ class ObCellReader {
   int read(const T*& ptr);
   inline int is_es_end_object(const common::ObObj& obj, bool& is_end_obj);
 
-  private:
+private:
   const char* buf_;
   int64_t buf_size_;
   int64_t pos_;

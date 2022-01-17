@@ -22,7 +22,7 @@ namespace sql {
 class ObTableDeleteReturningInput : public ObTableModifyInput {
   friend class ObTableDeleteReturning;
 
-  public:
+public:
   ObTableDeleteReturningInput() : ObTableModifyInput()
   {}
   virtual ~ObTableDeleteReturningInput()
@@ -32,23 +32,23 @@ class ObTableDeleteReturningInput : public ObTableModifyInput {
     return PHY_DELETE_RETURNING;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDeleteReturningInput);
 };
 
 class ObTableDeleteReturning : public ObTableDelete {
   class ObTableDeleteReturningCtx;
 
-  public:
+public:
   explicit ObTableDeleteReturning(common::ObIAllocator& alloc);
   ~ObTableDeleteReturning();
 
-  private:
+private:
   virtual int inner_open(ObExecContext& ctx) const override;
   virtual int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
   virtual int init_op_ctx(ObExecContext& ctx) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDeleteReturning);
 };
 

@@ -304,6 +304,7 @@ ObSqlPartitionLocationCache::LocationDistributedMode ObSqlPartitionLocationCache
     case OB_TENANT_VIRTUAL_SHOW_CREATE_TABLEGROUP_TID:
     case OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_TID:
     case OB_TENANT_VIRTUAL_SESSION_VARIABLE_TID:
+    case OB_VIRTUAL_SHOW_RESTORE_PREVIEW_TID:
     case OB_TENANT_VIRTUAL_GLOBAL_VARIABLE_TID:
     case OB_TENANT_VIRTUAL_OBJECT_DEFINITION_TID:
     case OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_TID:
@@ -473,7 +474,8 @@ ObSqlPartitionLocationCache::LocationDistributedMode ObSqlPartitionLocationCache
     case OB_ALL_VIRTUAL_REBALANCE_UNIT_DISTRIBUTION_STAT_TID:
     case OB_ALL_VIRTUAL_FREEZE_INFO_TID:
     case OB_ALL_VIRTUAL_CLUSTER_TID:
-    case OB_ALL_VIRTUAL_BACKUPSET_HISTORY_MGR_TID: {
+    case OB_ALL_VIRTUAL_BACKUPSET_HISTORY_MGR_TID:
+    case OB_ALL_VIRTUAL_BACKUP_CLEAN_INFO_TID: {
       loc_dist_mode = ObSqlPartitionLocationCache::LOC_DIST_MODE_ONLY_RS;
       break;
     }
@@ -575,7 +577,7 @@ int ObSqlPartitionLocationCache::build_distribute_location(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task exec ctx is NULL", K(ret), K(table_id), K(partition_id));
   } else if (OB_FAIL(task_exec_ctx_->get_addr_by_virtual_partition_id(partition_id, addr))) {
-    LOG_WARN("get addr by virtual partition id faild", K(ret), K(table_id), K(partition_id));
+    LOG_WARN("get addr by virtual partition id failed", K(ret), K(table_id), K(partition_id));
   } else if (FALSE_IT(replica_location.server_ = addr)) {
   } else if (OB_FAIL(location.add(replica_location))) {
     LOG_WARN("location add failed", K(ret), K(table_id), K(partition_id));

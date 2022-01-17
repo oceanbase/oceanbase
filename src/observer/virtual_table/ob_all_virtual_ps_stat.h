@@ -22,7 +22,7 @@ class ObPsCache;
 namespace observer {
 
 class ObAllVirtualPsStat : public ObAllPlanCacheBase {
-  public:
+public:
   ObAllVirtualPsStat() : ObAllPlanCacheBase()
   {}
   virtual ~ObAllVirtualPsStat()
@@ -31,7 +31,7 @@ class ObAllVirtualPsStat : public ObAllPlanCacheBase {
   virtual int inner_get_next_row() override;
   virtual int inner_open() override;
 
-  private:
+private:
   int fill_cells(sql::ObPsCache& ps_cache, uint64_t tenant_id);
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualPsStat);
 };

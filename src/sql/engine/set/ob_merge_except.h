@@ -19,10 +19,10 @@
 namespace oceanbase {
 namespace sql {
 class ObMergeExcept : public ObMergeSetOperator {
-  private:
+private:
   class ObMergeExceptCtx;
 
-  public:
+public:
   explicit ObMergeExcept(common::ObIAllocator& alloc);
   virtual ~ObMergeExcept();
   virtual int rescan(ObExecContext& ctx) const;
@@ -31,7 +31,7 @@ class ObMergeExcept : public ObMergeSetOperator {
 
   virtual void set_distinct(bool is_distinct);
 
-  private:
+private:
   int distinct_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   int all_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   /**
@@ -60,7 +60,7 @@ class ObMergeExcept : public ObMergeSetOperator {
    */
   virtual int inner_close(ObExecContext& ctx) const;
 
-  private:
+private:
   typedef int (ObMergeExcept::*GetNextRowFunc)(ObExecContext& ctx, const common::ObNewRow*& row) const;
   GetNextRowFunc get_next_row_func_;
   DISALLOW_COPY_AND_ASSIGN(ObMergeExcept);

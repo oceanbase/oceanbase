@@ -21,7 +21,7 @@ namespace schema {
 using namespace common;
 
 class TestFallbackSchemaMgr : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
@@ -58,7 +58,7 @@ TEST_F(TestFallbackSchemaMgr, fallback_schema_for_liboblog)
 static int64_t global_version = 1;
 
 class Worker : public share::ObThreadPool {
-  public:
+public:
   void run1()
   {
 

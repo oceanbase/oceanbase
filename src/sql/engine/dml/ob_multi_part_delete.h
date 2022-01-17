@@ -18,15 +18,15 @@ namespace sql {
 class ObMultiPartDelete : public ObTableModify, public ObMultiDMLInfo {
   class ObMultiPartDeleteCtx;
 
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   explicit ObMultiPartDelete(common::ObIAllocator& allocator);
   virtual ~ObMultiPartDelete();
 
-  virtual int create_operator_input(ObExecContext& ctx) const
+  virtual int create_operator_input(ObExecContext& ctx) const override
   {
     UNUSED(ctx);
     return common::OB_SUCCESS;
@@ -35,34 +35,34 @@ class ObMultiPartDelete : public ObTableModify, public ObMultiDMLInfo {
   {
     return subplan_has_foreign_key();
   }
-  virtual bool is_multi_dml() const
+  virtual bool is_multi_dml() const override
   {
     return true;
   }
 
-  private:
+private:
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
+  virtual int inner_close(ObExecContext& ctx) const override;
 
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  int init_op_ctx(ObExecContext& ctx) const;
+  int init_op_ctx(ObExecContext& ctx) const override;
   int shuffle_delete_row(ObExecContext& ctx, bool& got_row) const;
   /**
    * @brief called by get_next_row(), get a row from the child operator or row_store
    * @param ctx[in], execute context
    * @param row[out], ObSqlRow an obj array and row_size
    */
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
-  virtual int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
+  virtual int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
 };
 }  // namespace sql
 }  // namespace oceanbase

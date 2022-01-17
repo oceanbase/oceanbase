@@ -25,7 +25,7 @@ namespace schema {
 class ObMultiVersionSchemaService;
 }
 class ObUnitStatTableOperator {
-  public:
+public:
   ObUnitStatTableOperator();
   virtual ~ObUnitStatTableOperator();
 
@@ -35,19 +35,19 @@ class ObUnitStatTableOperator {
 
   int get_unit_stat(uint64_t tenant_id, share::ObUnitStatMap& unit_stat_map) const;
 
-  private:
+private:
   int check_stop() const
   {
     return check_stop_provider_->check_stop();
   }
 
-  private:
+private:
   bool inited_;
   share::ObPartitionTableOperator* pt_operator_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   share::ObCheckStopProvider* check_stop_provider_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUnitStatTableOperator);
 };
 }  // end namespace share

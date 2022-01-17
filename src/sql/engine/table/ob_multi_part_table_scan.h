@@ -22,13 +22,13 @@ namespace sql {
 class ObMultiPartTableScanInput : public ObTableScanInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiPartTableScanInput() : allocator_(common::ObModIds::OB_SQL_TABLE_LOOKUP), partitions_ranges_()
   {}
   virtual ~ObMultiPartTableScanInput();
   virtual void reset() override;
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
-  virtual ObPhyOperatorType get_phy_op_type() const
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
+  virtual ObPhyOperatorType get_phy_op_type() const override
   {
     return PHY_MULTI_PART_TABLE_SCAN;
   };
@@ -39,12 +39,12 @@ class ObMultiPartTableScanInput : public ObTableScanInput {
 };
 
 class ObMultiPartTableScan : public ObTableScan {
-  private:
+private:
   enum MultiPartScanState { DO_PARTITION_SCAN, OUTPUT_ROWS, EXECUTION_FINISHED };
   class ObMultiPartTableScanCtx : public ObTableScanCtx {
     friend class ObMultiPartTableScan;
 
-    public:
+  public:
     explicit ObMultiPartTableScanCtx(ObExecContext& ctx)
         : ObTableScanCtx(ctx), input_part_offset_(NOT_INIT), multi_part_scan_state_(DO_PARTITION_SCAN), scan_times_(0)
     {}
@@ -65,26 +65,26 @@ class ObMultiPartTableScan : public ObTableScan {
     int64_t scan_times_;
   };
 
-  public:
+public:
   explicit ObMultiPartTableScan(common::ObIAllocator& allocator);
   virtual ~ObMultiPartTableScan();
-  virtual int rescan(ObExecContext& ctx) const;
+  virtual int rescan(ObExecContext& ctx) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
-  virtual int inner_close(ObExecContext& ctx) const;
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
+  virtual int inner_close(ObExecContext& ctx) const override;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   virtual int create_operator_input(ObExecContext& ctx) const override final;
   virtual int init_op_ctx(ObExecContext& ctx) const override final;
   void get_used_range_count(ObExecContext& ctx, int64_t& range_count) const;
 
-  private:
+private:
   int do_next_partition_scan(ObExecContext& ctx) const;
 
-  private:
+private:
   static const int64_t NOT_INIT = 0;
 };
 }  // namespace sql

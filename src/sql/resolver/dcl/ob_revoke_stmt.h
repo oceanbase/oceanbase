@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObRevokeStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObRevokeStmt(common::ObIAllocator* name_pool);
   ObRevokeStmt();
   virtual ~ObRevokeStmt();
@@ -123,7 +123,7 @@ class ObRevokeStmt : public ObDDLStmt {
   }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   ObPrivSet priv_set_;
   share::schema::ObPrivLevel grant_level_;
@@ -146,7 +146,7 @@ class ObRevokeStmt : public ObDDLStmt {
   uint64_t grantor_id_;
   bool revoke_all_ora_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeStmt);
 };
 }  // end namespace sql

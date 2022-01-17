@@ -20,21 +20,21 @@ namespace common {
 
 template <typename ValueType, int CONCURRENCY = 1024>
 class ObDistFutex {
-  public:
+public:
   ObDistFutex()
   {}
   ~ObDistFutex()
   {}
 
-  public:
+public:
   int wait(volatile ValueType* p, ValueType v, int64_t timeout);
   int wake(volatile ValueType* p, int64_t n);
 
-  private:
+private:
   typedef lib::CoFutex FutexType;
   FutexType futex_[CONCURRENCY];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistFutex);
 };
 

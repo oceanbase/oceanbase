@@ -28,7 +28,7 @@ enum ObRpcCompressMode {
 };
 
 struct ObRpcCompressCtx {
-  public:
+public:
   ObRpcCompressCtx()
       : is_inited_(false),
         compress_mode_(RPC_STREAM_COMPRESS_NONE),
@@ -109,7 +109,7 @@ struct ObRpcCompressCtx {
   VIRTUAL_TO_STRING_KV(K(is_inited_), K(compress_mode_), K(block_size_), K(ring_buffer_pos_), K(ring_buffer_size_),
       KP(ring_buffer_), KP(compressor_));
 
-  public:
+public:
   bool is_inited_;
   ObRpcCompressMode compress_mode_;
   int16_t block_size_;
@@ -120,7 +120,7 @@ struct ObRpcCompressCtx {
 };
 
 struct ObRpcCompressCCtx : public ObRpcCompressCtx {
-  public:
+public:
   ObRpcCompressCCtx() : total_data_size_before_compress_(0), cctx_(NULL)
   {}
   ~ObRpcCompressCCtx()
@@ -131,13 +131,13 @@ struct ObRpcCompressCCtx : public ObRpcCompressCtx {
   TO_STRING_KV(K(is_inited_), K(compress_mode_), K(block_size_), K(ring_buffer_pos_), K(ring_buffer_size_),
       KP(ring_buffer_), K(total_data_size_before_compress_), KP(compressor_), KP(cctx_));
 
-  public:
+public:
   int64_t total_data_size_before_compress_;
   void* cctx_;
 };
 
 struct ObRpcCompressDCtx : public ObRpcCompressCtx {
-  public:
+public:
   ObRpcCompressDCtx() : dctx_(NULL)
   {}
   ~ObRpcCompressDCtx()
@@ -146,14 +146,14 @@ struct ObRpcCompressDCtx : public ObRpcCompressCtx {
   int reset_mode(ObRpcCompressMode new_mode);
   int free_ctx_mem();
 
-  public:
+public:
   TO_STRING_KV(K(is_inited_), K(compress_mode_), K(block_size_), K(ring_buffer_pos_), K(ring_buffer_size_),
       KP(ring_buffer_), KP(compressor_), KP(dctx_));
   void* dctx_;
 };
 
 struct ObRpcCompressCtxSet {
-  public:
+public:
   ObRpcCompressCtxSet()
   {}
   ~ObRpcCompressCtxSet()
@@ -161,13 +161,13 @@ struct ObRpcCompressCtxSet {
   void free_ctx_memory();
   TO_STRING_KV(K(compress_ctx_), K(decompress_ctx_));
 
-  public:
+public:
   ObRpcCompressCCtx compress_ctx_;
   ObRpcCompressDCtx decompress_ctx_;
 };
 
 struct ObCompressPacketHeader {
-  public:
+public:
   ObCompressPacketHeader() : magic_(0x00), full_size_(0)
   {}
   ~ObCompressPacketHeader()
@@ -185,7 +185,7 @@ struct ObCompressPacketHeader {
     return 0 != (magic_ & COMPRESS_RESULT_MASK);
   }
 
-  public:
+public:
   // The second and third digits from the bottom of magic_num indicate the compression algorithm, currently 00 means
   // lz4, 01 means zstd
   const int8_t COMPRESS_METHOD_MASK = 0x6;
@@ -204,7 +204,7 @@ struct ObCompressPacketHeader {
 
 // Do not modify this structure, do not add or delete fields at will
 struct ObCompressHeadPacketHeader : public ObCompressPacketHeader {
-  public:
+public:
   // The highest bit of Magic HeadPacket is 0
   ObCompressHeadPacketHeader()
       : total_data_len_before_compress_(0), total_data_len_after_compress_(0), compressed_size_(0), origin_size_(0)
@@ -221,7 +221,7 @@ struct ObCompressHeadPacketHeader : public ObCompressPacketHeader {
   TO_STRING_KV(K(magic_), K(full_size_), K(total_data_len_before_compress_), K(total_data_len_after_compress_),
       K(compressed_size_), K(origin_size_));
 
-  public:
+public:
   int32_t total_data_len_before_compress_;  // The size of the entire ObRpcPacket before compression
   int32_t total_data_len_after_compress_;   // The compressed size of the entire ObRpcPacket
   int16_t compressed_size_;                 // The size of compressed data in this package
@@ -230,7 +230,7 @@ struct ObCompressHeadPacketHeader : public ObCompressPacketHeader {
 
 // Do not modify this structure, do not add or delete fields at will
 struct ObCompressSegmentPacketHeader : public ObCompressPacketHeader {
-  public:
+public:
   ObCompressSegmentPacketHeader() : origin_size_(0)
   {}
   ~ObCompressSegmentPacketHeader()
@@ -241,7 +241,7 @@ struct ObCompressSegmentPacketHeader : public ObCompressPacketHeader {
   virtual int64_t get_encode_size() const;
   TO_STRING_KV(K(magic_), K(full_size_), K(origin_size_));
 
-  public:
+public:
   int16_t origin_size_;
 };
 
@@ -249,7 +249,7 @@ struct ObCompressSegmentPacketHeader : public ObCompressPacketHeader {
 // payload, determine how many members can be deserialized in the end
 struct ObCmdPacketInCompress : public ObCompressPacketHeader {
   // cmd packet post when in compress mode
-  public:
+public:
   enum CmdType {
     RPC_CMD_INVALID = 0,
     RPC_CMD_MODIFY_COMPRESS_MODE = 1,
@@ -276,7 +276,7 @@ struct ObCmdPacketInCompress : public ObCompressPacketHeader {
     return RPC_CMD_RESET_COMPRESS_CTX == cmd_type_;
   }
 
-  public:
+public:
   const int16_t CMD_PAY_LOAD = sizeof(cmd_type_) + sizeof(compress_mode_);
   const int8_t MAGIC_NUM = (int8_t)0xff;
   TO_STRING_KV(K(magic_), K(full_size_), K(payload_), K(cmd_type_), K(compress_mode_));
@@ -288,7 +288,7 @@ struct ObCmdPacketInCompress : public ObCompressPacketHeader {
 // If you want to add or delete members, you need to pay attention to compatibility
 struct ObCmdPacketInNormal {
   // cmd packet post when in normal mode
-  public:
+public:
   ObCmdPacketInNormal()
       : full_size_(0),
         payload_(CMD_PAY_LOAD),
@@ -317,7 +317,7 @@ struct ObCmdPacketInNormal {
   int64_t get_decode_size() const;
   TO_STRING_KV(K(full_size_), K(payload_), K(compress_mode_), K(block_size_), K(ring_buffer_size_));
 
-  public:
+public:
   // 4 bytes magic_num
   const int16_t CMD_PAY_LOAD = sizeof(compress_mode_) + sizeof(block_size_) + sizeof(ring_buffer_size_);
   int32_t full_size_;  // include following compressed packet

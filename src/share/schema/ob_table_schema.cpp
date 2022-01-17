@@ -1927,7 +1927,7 @@ bool ObTableSchema::is_valid() const
     if (is_virtual_table(table_id_) && 0 > rowkey_column_num_) {
       valid_ret = false;
       LOG_WARN("invalid rowkey_column_num:", K_(table_name), K_(rowkey_column_num));
-      // TODO:() confirm to delte it
+      // TODO:() confirm to delete it
     } else if (!is_virtual_table(table_id_) && 1 > rowkey_column_num_ && OB_INVALID_ID == dblink_id_) {
       valid_ret = false;
       LOG_WARN("no primary key specified:", K_(table_name));
@@ -3592,6 +3592,17 @@ int ObTableSchema::check_column_can_be_altered(const ObColumnSchemaV2* src_schem
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change int data type to small scale");
         LOG_WARN("can't not change int data type to small scale",
+            "src",
+            src_schema->get_data_type(),
+            "dst",
+            dst_schema->get_data_type(),
+            K(ret));
+      } else if ((src_schema->get_meta_type().is_varying_len_char_type()
+                  || src_schema->get_meta_type().is_text())
+               && dst_schema->get_meta_type().is_fixed_len_char_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change to fixed length char type");
+        LOG_WARN("can't not change to fixed length char type",
             "src",
             src_schema->get_data_type(),
             "dst",

@@ -24,7 +24,7 @@ namespace sql {
 
 // ps stmt key
 class ObPsSqlKey {
-  public:
+public:
   ObPsSqlKey() : db_id_(OB_INVALID_ID), ps_sql_(), allocator_(NULL)
   {}
   ObPsSqlKey(uint64_t db_id, const common::ObString& ps_sql) : db_id_(db_id), ps_sql_(ps_sql), allocator_(NULL)
@@ -65,7 +65,7 @@ class ObPsSqlKey {
   }  // not deep copy
   TO_STRING_KV(K_(db_id), K_(ps_sql));
 
-  private:
+private:
   uint64_t db_id_;  // tenant id encoded in database id
   common::ObString ps_sql_;
   common::ObIAllocator* allocator_;
@@ -73,7 +73,7 @@ class ObPsSqlKey {
 
 // ps stmt item
 class ObPsStmtItem {
-  public:
+public:
   ObPsStmtItem();
   explicit ObPsStmtItem(const ObPsStmtId stmt_id);
   explicit ObPsStmtItem(common::ObIAllocator* inner_allocator, common::ObIAllocator* external_allocator);
@@ -124,7 +124,7 @@ class ObPsStmtItem {
 
   TO_STRING_KV(K_(ref_count), K_(db_id), K_(ps_sql), K_(stmt_id));
 
-  private:
+private:
   volatile int64_t ref_count_;
   uint64_t db_id_;
   common::ObString ps_sql_;
@@ -137,7 +137,7 @@ class ObPsStmtItem {
 };
 
 struct ObPsSqlMeta {
-  public:
+public:
   explicit ObPsSqlMeta(common::ObIAllocator* allocator)
       : allocator_(allocator), param_fields_(allocator), column_fields_(allocator)
   {}
@@ -165,14 +165,14 @@ struct ObPsSqlMeta {
     return column_fields_;
   };
 
-  private:
+private:
   common::ObIAllocator* allocator_;
   ObFixedArray<ObField, common::ObIAllocator> param_fields_;
   ObFixedArray<ObField, common::ObIAllocator> column_fields_;
 };
 
 class ObPsStmtInfo {
-  public:
+public:
   explicit ObPsStmtInfo(common::ObIAllocator* inner_allocator);
   ObPsStmtInfo(common::ObIAllocator* inner_allocator, common::ObIAllocator* external_allocator);
   virtual ~ObPsStmtInfo()
@@ -241,6 +241,14 @@ class ObPsStmtInfo {
   inline uint64_t get_ps_stmt_checksum() const
   {
     return ps_stmt_checksum_;
+  }
+  inline void set_is_sensitive_sql(const bool is_sensitive_sql)
+  {
+    is_sensitive_sql_ = is_sensitive_sql;
+  }
+  inline bool get_is_sensitive_sql() const
+  {
+    return is_sensitive_sql_;
   }
 
   bool is_valid() const;
@@ -321,18 +329,13 @@ class ObPsStmtInfo {
   {
     tenant_version_ = tenant_version;
   }
-  void set_is_expired()
-  {
-    ATOMIC_STORE(&is_expired_, true);
-  }
-  int64_t is_expired()
-  {
-    return ATOMIC_LOAD(&is_expired_);
-  }
+  void set_is_expired() { ATOMIC_STORE(&is_expired_, true); }
+  bool is_expired() { return ATOMIC_LOAD(&is_expired_); }
+  bool *get_is_expired_evicted_ptr() { return &is_expired_evicted_; }
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   stmt::StmtType stmt_type_;
   uint64_t ps_stmt_checksum_;
   uint64_t db_id_;
@@ -351,12 +354,16 @@ class ObPsStmtInfo {
   ObPsStmtItem* ps_item_;
   int64_t tenant_version_;
   bool is_expired_;
+  // check whether has dec ref count for ps info expired
+  bool is_expired_evicted_;
 
   // ObDataBuffer is used to use the internal memory of ObPsStmtItem,
   // The memory essentially comes from inner_allocator_ in ObPsPlancache
   common::ObIAllocator* allocator_;
   // Point to inner_allocator_ in ObPsPlancache, used to release the memory of the entire ObPsStmtItem
   common::ObIAllocator* external_allocator_;
+  // Whether it contains sensitive information. If so, it will not be recorded in sql audit.
+  bool is_sensitive_sql_;
 };
 
 struct TypeInfo {
@@ -406,7 +413,7 @@ typedef common::ObSEArray<bool, 16> ParamCastArray;
 // the ps item and ps info references in the ps cache will be subtracted.
 // When the ps item/info reference count is 0, it will be released from the ps cache
 class ObPsSessionInfo {
-  public:
+public:
   ObPsSessionInfo(const int64_t num_of_params)
       : stmt_id_(common::OB_INVALID_STMT_ID),
         stmt_type_(stmt::T_NONE),
@@ -497,7 +504,7 @@ class ObPsSessionInfo {
 
   TO_STRING_KV(K_(stmt_id), K_(stmt_type), K_(num_of_params), K_(ref_cnt), K_(ps_stmt_checksum), K_(inner_stmt_id));
 
-  private:
+private:
   ObPsStmtId stmt_id_;
   stmt::StmtType stmt_type_;
   int64_t num_of_params_;
@@ -507,12 +514,12 @@ class ObPsSessionInfo {
   int64_t ref_cnt_;
   ObPsStmtId inner_stmt_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsSessionInfo);
 };
 
 class ObPsStmtInfoGuard {
-  public:
+public:
   ObPsStmtInfoGuard() : ps_cache_(NULL), stmt_info_(NULL), stmt_id_(common::OB_INVALID_STMT_ID)
   {}
   virtual ~ObPsStmtInfoGuard();
@@ -536,12 +543,12 @@ class ObPsStmtInfoGuard {
 
   int get_ps_sql(common::ObString& ps_sql);
 
-  private:
+private:
   ObPsCache* ps_cache_;
   ObPsStmtInfo* stmt_info_;
   ObPsStmtId stmt_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtInfoGuard);
 };
 

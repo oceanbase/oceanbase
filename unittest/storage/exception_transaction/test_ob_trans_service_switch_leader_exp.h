@@ -24,7 +24,7 @@
 namespace oceanbase {
 namespace unittest {
 class ObTransSwitchLeader {
-  public:
+public:
   ObTransSwitchLeader() : partitions_(common::ObModIds::OB_TRANS_PARTITION_ARRAY)
   {
     reset();
@@ -55,7 +55,7 @@ class ObTransSwitchLeader {
 
   TO_STRING_KV(K_(need_change), K_(change_back), K_(change_num), K_(partitions));
 
-  public:
+public:
   bool need_change_;
   bool change_back_;
   int64_t change_num_;
@@ -84,7 +84,7 @@ enum ObTransSwitchLeaderType {
 };
 
 class ObTransSwitchLeaderException {
-  public:
+public:
   ObTransSwitchLeaderException()
   {
     reset();
@@ -92,13 +92,13 @@ class ObTransSwitchLeaderException {
   virtual ~ObTransSwitchLeaderException()
   {}
 
-  public:
+public:
   void reset();
   ObTransSwitchLeader* get_switch_leader_exp(const int64_t type);
   int set_switch_leader(const int64_t type, const bool need_change, const bool change_back, const int64_t change_num);
   int set_switch_leader_partitions(const int64_t type, const common::ObPartitionArray& partitions);
 
-  public:
+public:
   ObTransSwitchLeader switch_leaders_[OB_SWITCH_LEADER_COUNT];
 };
 

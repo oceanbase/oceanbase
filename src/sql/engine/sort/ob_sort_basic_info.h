@@ -22,7 +22,7 @@ namespace sql {
 struct ObSortFieldCollation {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSortFieldCollation(
       uint32_t field_idx, common::ObCollationType cs_type, bool is_ascending, common::ObCmpNullPos null_pos)
       : field_idx_(field_idx), cs_type_(cs_type), is_ascending_(is_ascending), null_pos_(null_pos)

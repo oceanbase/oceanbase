@@ -21,7 +21,7 @@ namespace oceanbase {
 
 namespace share {
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObSchemaGetterGuard;
 }  // namespace schema
 }  // namespace share
@@ -35,14 +35,14 @@ class UnitStat;
 
 namespace balancer {
 class BalancerStringUtil {
-  public:
+public:
   static bool has_prefix(const common::ObString& str, const common::ObString& prefix);
   static int substract_numeric_suffix(const common::ObString& str, common::ObString& prefix, int64_t& digit_len);
   static int substract_extra_suffix(const common::ObString& str, common::ObString& prefix, common::ObString& suffix);
 };
 
 class ITenantStatFinder {
-  public:
+public:
   virtual uint64_t get_tenant_id() const = 0;
 
   virtual int get_all_pg_idx(const common::ObPartitionKey& pkey, const int64_t all_tg_idx, int64_t& all_pg_idx) = 0;
@@ -66,13 +66,13 @@ class ITenantStatFinder {
 };
 
 class TenantSchemaGetter : public ITenantStatFinder {
-  public:
+public:
   TenantSchemaGetter(const int64_t tenant_id) : ITenantStatFinder(), tenant_id_(tenant_id)
   {}
   virtual ~TenantSchemaGetter()
   {}
 
-  public:
+public:
   virtual uint64_t get_tenant_id() const override
   {
     return tenant_id_;
@@ -89,12 +89,12 @@ class TenantSchemaGetter : public ITenantStatFinder {
   virtual int get_gts_switch(bool& on) override;
   virtual int get_primary_partition_key(const int64_t all_pg_idx, common::ObPartitionKey& pkey) override;
 
-  private:
+private:
   uint64_t tenant_id_;
 };
 
 class StatFinderUtil {
-  public:
+public:
   // Find the schema of all physical tables from all_tg
   // NOTE: 1. May return empty set
   //       2. Filtered tables without partitions, such as virtual tables, views, etc.
@@ -105,11 +105,11 @@ class StatFinderUtil {
   // Obtaining the table list from StatFinder is a snapshot, not because of map_balancer
   // The result of each call in the running process is different
   static int get_need_balance_table_schemas_in_tenant(share::schema::ObSchemaGetterGuard& schema_guard,
-      uint64_t tenant_id, common::ObIArray<const share::schema::ObTableSchema*>& tables);
+      uint64_t tenant_id, common::ObIArray<const share::schema::ObSimpleTableSchemaV2*>& tables);
 };
 
 class IUnitProvider {
-  public:
+public:
   // Take the partition position of tablegroup **primary table** from all_tg_ according to all_tg_idx
   virtual int find_unit(int64_t all_tg_idx, int64_t part_idx, uint64_t& unit_id) const = 0;
   // Get the number of tenant units in each zone

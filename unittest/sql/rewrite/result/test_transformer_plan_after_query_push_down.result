@@ -112,9 +112,9 @@ SQL: select * from (select * from t1 order by c2 desc) a where 1=1 limit 1, 10;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), limit(10), offset(?)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, DESC]), topn(10 + ?)
-  2 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 ***************   Case 7   ***************
@@ -146,9 +146,9 @@ SQL: select * from (select * from t1 order by c2 desc) a where (1=1) and (0=0) l
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), limit(10), offset(?)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, DESC]), topn(10 + ?)
-  2 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 ***************   Case 9   ***************
@@ -180,9 +180,9 @@ SQL: select * from (select * from t1 order by c2 desc) a where 1 limit 1, 10;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil), limit(10), offset(?)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), limit(10), offset(?)
   1 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c2, DESC]), topn(10 + ?)
-  2 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  2 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p0)
 
 ***************   Case 11   ***************

@@ -28,7 +28,7 @@ namespace sql {
 class ObTableLookup::ObTableLookupCtx : public ObPhyOperatorCtx {
   friend class ObTableLookup;
 
-  public:
+public:
   explicit ObTableLookupCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx),
         allocator_(),
@@ -72,7 +72,7 @@ class ObTableLookup::ObTableLookupCtx : public ObPhyOperatorCtx {
     partitions_ranges_.set_mem_attr(attr);
   }
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   // for result
   ObMiniTaskResult result_;

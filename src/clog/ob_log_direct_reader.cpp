@@ -411,7 +411,7 @@ int64_t ObLogDirectReader::calc_read_size(const int64_t rbuf_len, const offset_t
   const int64_t size_limitted_by_file_size = limit_by_file_size(line_key_offset + try_read_size) - line_key_offset;
   // read size cannot exceed the length of the buff
   const int64_t unaligned_read_size = std::min(rbuf_len, size_limitted_by_file_size);
-  // avoid incomplate data in line cache
+  // avoid incompleted data in line cache
   const int64_t read_size = do_align_offset((offset_t)unaligned_read_size, CLOG_CACHE_SIZE);
   return read_size;
 }
@@ -476,7 +476,7 @@ int ObLogDirectReader::put_into_kvcache(const common::ObAddr& addr, const int64_
   return ret;
 }
 
-// The buffser used to read is thread local, line_buf points to this buffer.
+// The buffer used to read is thread local, line_buf points to this buffer.
 int ObLogDirectReader::read_disk_and_update_kvcache(const common::ObAddr& addr, const int64_t seq,
     const file_id_t want_file_id, const offset_t line_key_offset, ObReadBuf& read_buf, const char*& line_buf,
     ObReadCost& cost)
@@ -906,7 +906,7 @@ int ObLogDirectReader::get_log_file_type(ObLogWritePoolType& file_type) const
   return ret;
 }
 
-// read data from disk directlly
+// read data from disk directly
 int ObLogDirectReader::read_data_direct_impl(
     const ObReadParam& param, ObReadBuf& rbuf, ObReadRes& res, ObReadCost& cost)
 {
@@ -916,7 +916,7 @@ int ObLogDirectReader::read_data_direct_impl(
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "direct read not init", K(ret), K(param));
   } else if (OB_FAIL(is_valid_read_param(param, is_valid_param))) {
-    CLOG_LOG(WARN, "is_valid_read_param falied", K(ret), K(param), K(is_valid_param));
+    CLOG_LOG(WARN, "is_valid_read_param failed", K(ret), K(param), K(is_valid_param));
   } else if (OB_UNLIKELY(!is_valid_param) || OB_UNLIKELY(!rbuf.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid read argument", K(ret), K(param), K(rbuf));
@@ -1073,9 +1073,12 @@ int ObLogDirectReader::read_trailer(
     ObReadRes res;
     ObReadParam trailer_param;
     trailer_param.file_id_ = param.file_id_;
-    trailer_param.offset_ = CLOG_TRAILER_OFFSET;
-    trailer_param.read_len_ = CLOG_TRAILER_SIZE;
+    trailer_param.offset_ = CLOG_TRAILER_ALIGN_WRITE_OFFSET;  // 4k aligned write, but data is in last 512bytes
+    trailer_param.read_len_ = CLOG_DIO_ALIGN_SIZE;
     trailer_param.timeout_ = param.timeout_;
+
+    const char* trailer_buf = NULL;
+    int64_t trailer_len = 0;
 
     // always read trailed from disk, handling error code  specially
     if (OB_SUCCESS != (ret = read_data_direct_impl(trailer_param, rbuf, res, cost))) {
@@ -1084,8 +1087,15 @@ int ObLogDirectReader::read_trailer(
       } else {
         CLOG_LOG(WARN, "read trailer data error", K(ret), K(trailer_param));
       }
-    } else if (OB_FAIL(trailer.deserialize(res.buf_, res.data_len_, pos))) {
-      CLOG_LOG(WARN, "trailer deserialize fail", K(ret), K(res), K(pos));
+    } else {
+      trailer_buf = res.buf_ + (CLOG_DIO_ALIGN_SIZE - CLOG_TRAILER_SIZE);
+      trailer_len = CLOG_TRAILER_SIZE;
+    }
+
+    if (OB_FAIL(ret)) {
+      CLOG_LOG(WARN, "fail to read trailer data", K(ret));
+    } else if (OB_FAIL(trailer.deserialize(trailer_buf, trailer_len, pos))) {
+      CLOG_LOG(WARN, "trailer deserialize fail", K(ret), KP(trailer_buf), K(trailer_len), K(res), K(pos));
     } else if (OB_UNLIKELY(trailer.get_file_id() != trailer_param.file_id_ + 1)) {
       ret = OB_INVALID_DATA;
       CLOG_LOG(WARN,

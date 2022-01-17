@@ -27,7 +27,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObDtlMsgReader : public dtl::ObDtlMsgIterator {
-  public:
+public:
   virtual void set_iterator_end() = 0;
   virtual bool has_next() = 0;
 
@@ -39,20 +39,20 @@ class ObDtlMsgReader : public dtl::ObDtlMsgIterator {
 };
 
 class ObPxNewRowIterator : public ObDtlMsgReader {
-  public:
+public:
   ObPxNewRowIterator();
   virtual ~ObPxNewRowIterator();
 
-  int get_next_row(common::ObNewRow& row);
-  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx)
+  int get_next_row(common::ObNewRow& row) override;
+  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx) override
   {
     UNUSED(exprs);
     UNUSED(eval_ctx);
     return common::OB_ERR_UNEXPECTED;
   }
-  void reset();
+  void reset() override;
 
-  bool is_inited()
+  bool is_inited() override
   {
     return is_inited_;
   }
@@ -60,7 +60,7 @@ class ObPxNewRowIterator : public ObDtlMsgReader {
   {
     is_inited_ = true;
   }
-  bool has_next()
+  bool has_next() override
   {
     return rows_ > 0 && row_store_it_.has_next();
   }
@@ -69,7 +69,7 @@ class ObPxNewRowIterator : public ObDtlMsgReader {
     return is_eof_;
   }
 
-  bool is_iter_end()
+  bool is_iter_end() override
   {
     return is_iter_end_;
   }
@@ -79,8 +79,8 @@ class ObPxNewRowIterator : public ObDtlMsgReader {
     return row_store_.get_row_cnt();
   }
 
-  void set_iterator_end();
-  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer);
+  void set_iterator_end() override;
+  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer) override;
   void set_rows(int64_t rows)
   {
     rows_ = rows;
@@ -91,7 +91,7 @@ class ObPxNewRowIterator : public ObDtlMsgReader {
   }
   void set_end() override;
 
-  private:
+private:
   bool is_eof_;
   bool is_iter_end_;
   int64_t rows_;
@@ -101,19 +101,19 @@ class ObPxNewRowIterator : public ObDtlMsgReader {
 };
 
 class ObPxDatumRowIterator : public ObDtlMsgReader {
-  public:
+public:
   ObPxDatumRowIterator();
   virtual ~ObPxDatumRowIterator();
 
-  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx);
-  int get_next_row(common::ObNewRow& row)
+  int get_next_row(const ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx) override;
+  int get_next_row(common::ObNewRow& row) override
   {
     UNUSED(row);
     return common::OB_ERR_UNEXPECTED;
   }
-  void reset();
+  void reset() override;
 
-  bool is_inited()
+  bool is_inited() override
   {
     return is_inited_;
   }
@@ -121,7 +121,7 @@ class ObPxDatumRowIterator : public ObDtlMsgReader {
   {
     is_inited_ = true;
   }
-  bool has_next()
+  bool has_next() override
   {
     return rows_ > 0 && datum_store_it_.has_next();
   }
@@ -130,7 +130,7 @@ class ObPxDatumRowIterator : public ObDtlMsgReader {
     return is_eof_;
   }
 
-  bool is_iter_end()
+  bool is_iter_end() override
   {
     return is_iter_end_;
   }
@@ -140,8 +140,8 @@ class ObPxDatumRowIterator : public ObDtlMsgReader {
     return datum_store_.get_row_cnt();
   }
 
-  void set_iterator_end();
-  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer);
+  void set_iterator_end() override;
+  int load_buffer(const dtl::ObDtlLinkedBuffer& buffer) override;
   void set_rows(int64_t rows)
   {
     rows_ = rows;
@@ -152,7 +152,7 @@ class ObPxDatumRowIterator : public ObDtlMsgReader {
   }
   void set_end() override;
 
-  private:
+private:
   bool is_eof_;
   bool is_iter_end_;
   int64_t rows_;
@@ -164,7 +164,7 @@ class ObPxDatumRowIterator : public ObDtlMsgReader {
 class ObPxNewRow : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_NEW_ROW> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   // for deserialize
   ObPxNewRow()
       : des_row_buf_(nullptr),
@@ -240,7 +240,7 @@ class ObPxNewRow : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_NEW_ROW> {
   }
   TO_STRING_KV(K_(row_cell_count), K_(des_row_buf_size));
 
-  private:
+private:
   static const int64_t EOF_ROW_FLAG = -1;
   char* des_row_buf_;
   int64_t des_row_buf_size_;

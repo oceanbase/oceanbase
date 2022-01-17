@@ -22,7 +22,7 @@ namespace common {
 struct ObOptTableStatHandle;
 
 class ObOptTableStatCache : public common::ObKVCache<ObOptTableStat::Key, ObOptTableStat> {
-  public:
+public:
   int get_value(const ObOptTableStat::Key& key, ObOptTableStatHandle& handle);
   int put_value(const ObOptTableStat::Key& key, const ObOptTableStat& value);
   int put_and_fetch_value(const ObOptTableStat::Key& key, const ObOptTableStat& value, ObOptTableStatHandle& handle);

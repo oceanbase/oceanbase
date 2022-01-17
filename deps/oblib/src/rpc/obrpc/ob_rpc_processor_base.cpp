@@ -26,6 +26,7 @@
 #include "rpc/obrpc/ob_rpc_stat.h"
 #include "rpc/obrpc/ob_irpc_extra_payload.h"
 #include "rpc/obrpc/ob_rpc_processor_base.h"
+#include "rpc/obrpc/ob_rpc_net_handler.h"
 
 using namespace oceanbase::common;
 
@@ -47,6 +48,25 @@ ObRpcProcessorBase::~ObRpcProcessorBase()
     sc_->~ObRpcStreamCond();
     sc_ = NULL;
   }
+}
+
+int ObRpcProcessorBase::check_cluster_id()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    RPC_OBRPC_LOG(ERROR, "rpc_pkt_ should not be NULL", K(ret));
+  }  else if (INVALID_CLUSTER_ID != ObRpcNetHandler::CLUSTER_ID
+              && INVALID_CLUSTER_ID != rpc_pkt_->get_dst_cluster_id()
+              && ObRpcNetHandler::CLUSTER_ID != rpc_pkt_->get_dst_cluster_id()) {
+    // The verification is turned on locally and does not match the received pkt dst_cluster_id
+    ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
+    if (REACH_TIME_INTERVAL(500 * 1000)) {
+      RPC_OBRPC_LOG(WARN, "packet dst_cluster_id not match", K(ret), "self.dst_cluster_id", ObRpcNetHandler::CLUSTER_ID,
+               "pkt.dst_cluster_id", rpc_pkt_->get_dst_cluster_id(), "pkt", *rpc_pkt_);
+    }
+  }
+  return ret;
 }
 
 int ObRpcProcessorBase::deserialize()

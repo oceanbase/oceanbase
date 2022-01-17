@@ -24,7 +24,7 @@ namespace sql {
 class ObMultiTableReplace::ObMultiTableReplaceCtx : public ObTableReplace::ObTableReplaceCtx, public ObMultiDMLCtx {
   friend class ObMultiTableReplace;
 
-  public:
+public:
   explicit ObMultiTableReplaceCtx(ObExecContext& ctx)
       : ObTableReplaceCtx(ctx),
         ObMultiDMLCtx(ctx.get_allocator()),
@@ -41,7 +41,7 @@ class ObMultiTableReplace::ObMultiTableReplaceCtx : public ObTableReplace::ObTab
     replace_row_store_.reset();
   }
 
-  private:
+private:
   common::ObRowStore replace_row_store_;
   ObDupKeyCheckerCtx dupkey_checker_ctx_;
 };

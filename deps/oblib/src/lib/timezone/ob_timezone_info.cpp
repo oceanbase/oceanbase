@@ -39399,8 +39399,8 @@ int ObTimeZoneInfoPos::compare_upgrade(const ObTimeZoneInfoPos& other, bool& is_
 {
   int ret = OB_SUCCESS;
   is_equal = false;
-  const common::ObSArray<ObTZTransitionTypeInfo>& other_type = other.get_tz_tran_types();
-  const common::ObSArray<ObTZTransitionTypeInfo>& tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& other_type = other.get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& tz_tran_types = get_tz_tran_types();
 
   if (OB_UNLIKELY(tz_id_ != other.get_tz_id()) || OB_UNLIKELY(0 != other.get_tz_name().compare(tz_name_)) ||
       OB_UNLIKELY(default_type_ != other.get_default_trans_type()) ||
@@ -39464,7 +39464,7 @@ int ObTimeZoneInfoPos::get_timezone_offset(
     int64_t value, int32_t& offset_sec, common::ObString& tz_abbr_str, int32_t& tran_type_id) const
 {
   int ret = OB_SUCCESS;
-  const common::ObSArray<ObTZTransitionTypeInfo>& tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& tz_tran_types = get_tz_tran_types();
   int64_t type_cnt = tz_tran_types.count();
   int64_t type_idx = 0;
   if (OB_UNLIKELY(false == is_valid())) {
@@ -39516,7 +39516,7 @@ int ObTimeZoneInfoPos::get_timezone_offset(
     const int32_t tran_type_id, common::ObString& tz_abbr_str, int32_t& offset_sec) const
 {
   int ret = OB_SUCCESS;
-  const common::ObSArray<ObTZTransitionTypeInfo>& tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& tz_tran_types = get_tz_tran_types();
   int64_t type_idx = 0;
   if (OB_UNLIKELY(false == is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -39542,7 +39542,7 @@ int ObTimeZoneInfoPos::get_timezone_sub_offset(
     int64_t value, const ObString& tz_abbr_str, int32_t& offset_sec, int32_t& tz_id, int32_t& tran_type_id) const
 {
   int ret = OB_SUCCESS;
-  const common::ObSArray<ObTZRevertTypeInfo>& tz_revt_types = get_tz_revt_types();
+  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& tz_revt_types = get_tz_revt_types();
   tz_id = static_cast<int32_t>(tz_id_);
   int64_t type_idx = 0;
   if (OB_UNLIKELY(!is_valid())) {
@@ -39601,10 +39601,10 @@ int ObTimeZoneInfoPos::calc_revt_types()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tz info is invalid", K(ret));
   } else {
-    common::ObSArray<ObTZRevertTypeInfo>& tz_revt_types = tz_revt_types_[get_curr_idx() % 2];
+    common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& tz_revt_types = tz_revt_types_[get_curr_idx() % 2];
     tz_revt_types.reset();
     ObTZRevertTypeInfo revt_type_info;
-    const common::ObSArray<ObTZTransitionTypeInfo>& tz_tran_types = get_tz_tran_types();
+    const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& tz_tran_types = get_tz_tran_types();
 
     // add first revert type, type info is from default type
     revt_type_info.type_class_ = ObTZRevertTypeInfo::NORMAL;
@@ -39678,8 +39678,8 @@ OB_DEF_SERIALIZE(ObTimeZoneInfoPos)
 {
   int ret = OB_SUCCESS;
   ObString tz_name_str(static_cast<ObString::obstr_size_t>(strlen(tz_name_)), tz_name_);
-  const common::ObSArray<ObTZTransitionTypeInfo>& tz_tran_types = get_tz_tran_types();
-  const common::ObSArray<ObTZRevertTypeInfo>& tz_revt_types = get_tz_revt_types();
+  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& tz_revt_types = get_tz_revt_types();
   LST_DO_CODE(OB_UNIS_ENCODE, tz_id_, default_type_, tz_tran_types, tz_revt_types, tz_name_str);
   return ret;
 }
@@ -39689,8 +39689,8 @@ OB_DEF_DESERIALIZE(ObTimeZoneInfoPos)
   int ret = OB_SUCCESS;
   ObString tz_name_str;
   curr_idx_ = 0;
-  common::ObSArray<ObTZTransitionTypeInfo>& tz_tran_types = tz_tran_types_[0];
-  common::ObSArray<ObTZRevertTypeInfo>& tz_revt_types = tz_revt_types_[0];
+  common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& tz_tran_types = tz_tran_types_[0];
+  common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& tz_revt_types = tz_revt_types_[0];
   LST_DO_CODE(OB_UNIS_DECODE, tz_id_, default_type_, tz_tran_types, tz_revt_types, tz_name_str);
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(tz_name_str.length() + 1 > OB_MAX_TZ_NAME_LEN)) {
@@ -39987,6 +39987,5 @@ OB_SERIALIZE_MEMBER(ObIntervalYMValue, nmonth_);
 // Referenced by dereference pointer to avoid GCC reference packed filed error:
 //    cannot bind packed field fractional_second_ to `int32_t &`
 OB_SERIALIZE_MEMBER(ObIntervalDSValue, (*(int64_t*)&nsecond_), (*(int32_t*)&fractional_second_));
-
 }  // namespace common
 }  // namespace oceanbase

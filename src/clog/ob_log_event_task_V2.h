@@ -23,11 +23,11 @@ class ObPartitionService;
 namespace clog {
 class ObLogEventScheduler;
 class ObLogStateEventTaskV2 : public common::ObTimeWheelTask {
-  public:
+public:
   ObLogStateEventTaskV2();
   virtual ~ObLogStateEventTaskV2();
 
-  public:
+public:
   int init(const common::ObPartitionKey& partition_key, ObLogEventScheduler* event_scheduler,
       storage::ObPartitionService* partition_service);
   void destroy();
@@ -39,7 +39,7 @@ class ObLogStateEventTaskV2 : public common::ObTimeWheelTask {
   }
   int set_expected_ts(const int64_t delay);
 
-  private:
+private:
   static const int64_t MAX_EVENT_EXECUTE_DEPLAY_TS = 100 * 1000;
 
   bool is_inited_;
@@ -48,7 +48,7 @@ class ObLogStateEventTaskV2 : public common::ObTimeWheelTask {
   storage::ObPartitionService* partition_service_;
   int64_t expected_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogStateEventTaskV2);
 };
 

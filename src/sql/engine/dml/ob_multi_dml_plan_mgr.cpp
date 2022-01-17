@@ -22,7 +22,7 @@ using namespace common;
 using namespace share;
 namespace sql {
 class ObMultiDMLPlanMgr::ServerOpInfo {
-  public:
+public:
   ServerOpInfo()
   {}
   inline void reset()

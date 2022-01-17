@@ -27,7 +27,7 @@ namespace common {
  * Optimizer Table Level Statistics
  */
 class ObOptTableStat : public common::ObIKVCacheValue {
-  public:
+public:
   struct Key : public common::ObIKVCacheKey {
     Key() : table_id_(OB_INVALID_ID), partition_id_(OB_INVALID_INDEX)
     {}
@@ -230,7 +230,7 @@ class ObOptTableStat : public common::ObIKVCacheValue {
 
   TO_STRING_KV(K_(last_analyzed));
 
-  private:
+private:
   int64_t sstable_row_count_;
   int64_t memtable_row_count_;
   int64_t data_size_;

@@ -40,7 +40,7 @@ class ObIPartitionStorage;
 class ObBaseStorage;
 
 class MyFakePartition : public storage::MockObIPartition, public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   MyFakePartition() : pmeta_(), smeta_(), arena_(ObModIds::OB_PARTITION_SERVICE), storage_(NULL), unused(0)
   {}
   virtual ~MyFakePartition()
@@ -66,7 +66,7 @@ class MyFakePartition : public storage::MockObIPartition, public blocksstable::O
   }
   TO_STRING_EMPTY();
 
-  public:
+public:
   blocksstable::ObPartitionMeta pmeta_;
   blocksstable::ObSSTableMeta smeta_;
   ObArenaAllocator arena_;
@@ -76,7 +76,7 @@ class MyFakePartition : public storage::MockObIPartition, public blocksstable::O
 };
 
 class MyFakePartitionService : public MockObIPartitionService {
-  public:
+public:
   MyFakePartitionService()
       : partition_list_(),
         cp_fty_(NULL),
@@ -112,7 +112,7 @@ class MyFakePartitionService : public MockObIPartitionService {
     trans_ = trans;
   }
 
-  private:
+private:
   ObSEArray<ObIPartitionGroup*, 4096> partition_list_;
   ObPartitionComponentFactory* cp_fty_;
   ObArenaAllocator arena_;

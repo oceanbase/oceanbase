@@ -26,7 +26,7 @@ namespace sql {
 class ObPxMultiPartInsertInput : public ObPxModifyInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   virtual inline ObPhyOperatorType get_phy_op_type() const
   {
     return PHY_PX_MULTI_PART_INSERT;
@@ -37,12 +37,17 @@ class ObTableLocation;
 class ObPxMultiPartInsert : public ObDMLDataReader, public ObDMLDataWriter, public ObTableModify {
   OB_UNIS_VERSION(1);
 
-  private:
+private:
   class ObPxMultiPartInsertCtx;
   class ObPDMLRowIteratorWrapper : public common::ObNewRowIterator {
-    public:
+  public:
     ObPDMLRowIteratorWrapper(ObPxMultiPartInsertCtx& op_ctx)
-        : op_ctx_(op_ctx), iter_(nullptr), insert_projector_(nullptr), insert_projector_size_(0), insert_row_()
+        : op_ctx_(op_ctx),
+          iter_(nullptr),
+          insert_projector_(nullptr),
+          insert_projector_size_(0),
+          insert_row_(),
+          insert_op_(nullptr)
     {}
     virtual ~ObPDMLRowIteratorWrapper() = default;
 
@@ -56,22 +61,27 @@ class ObPxMultiPartInsert : public ObDMLDataReader, public ObDMLDataWriter, publ
     {
       iter_ = &iter;
     }
+    void set_insert_op(const ObPxMultiPartInsert* insert_op)
+    {
+      insert_op_ = insert_op;
+    }
     int get_next_row(common::ObNewRow*& row) override;
     void reset() override
     {}
 
-    private:
+  private:
     int project_row(const ObNewRow& input_row, ObNewRow& output_row) const;
 
-    private:
+  private:
     ObPxMultiPartInsertCtx& op_ctx_;
     ObPDMLRowIterator* iter_;
     int32_t* insert_projector_;
     int64_t insert_projector_size_;
     common::ObNewRow insert_row_;
+    const ObPxMultiPartInsert* insert_op_;
   };
   class ObPxMultiPartInsertCtx : public ObTableModifyCtx {
-    public:
+  public:
     explicit ObPxMultiPartInsertCtx(ObExecContext& ctx)
         : ObTableModifyCtx(ctx), data_driver_(op_monitor_info_), row_iter_wrapper_(*this)
     {}
@@ -84,7 +94,7 @@ class ObPxMultiPartInsert : public ObDMLDataReader, public ObDMLDataWriter, publ
     ObPDMLRowIteratorWrapper row_iter_wrapper_;
   };
 
-  public:
+public:
   explicit ObPxMultiPartInsert(common::ObIAllocator& alloc);
   virtual ~ObPxMultiPartInsert();
 
@@ -120,12 +130,12 @@ class ObPxMultiPartInsert : public ObDMLDataReader, public ObDMLDataWriter, publ
     with_barrier_ = w;
   }
 
-  private:
+private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
-  int process_row(ObExecContext& ctx, ObPxMultiPartInsertCtx* insert_ctx, const ObNewRow*& insert_row) const;
+  int process_row(ObExecContext& ctx, ObPxMultiPartInsertCtx* insert_ctx, const ObNewRow& insert_row) const;
 
-  private:
+private:
   ObDMLRowDesc row_desc_;
   ObDMLTableDesc table_desc_;
   int32_t* insert_projector_;

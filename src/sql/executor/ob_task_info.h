@@ -80,14 +80,14 @@ enum ObTaskState {
 class ObPhyOperator;
 
 class ObGranuleTaskInfo {
-  public:
+public:
   ObGranuleTaskInfo() : ranges_(), partition_id_(-1), task_id_(0)
   {}
   virtual ~ObGranuleTaskInfo()
   {}
   TO_STRING_KV(K_(ranges), K_(partition_id), K_(task_id));
 
-  public:
+public:
   common::ObSEArray<common::ObNewRange, 16> ranges_;
   // idx, part_locs in obtaskinfo's ObPartLoc
   // also represent the partition
@@ -98,7 +98,7 @@ class ObGranuleTaskInfo {
 
 // for NLJ partition pruning
 class ObGIPruningInfo {
-  public:
+public:
   ObGIPruningInfo() : part_id_(common::OB_INVALID_ID)
   {}
 
@@ -111,16 +111,16 @@ class ObGIPruningInfo {
     part_id_ = part_id;
   }
 
-  private:
+private:
   int64_t part_id_;
 };
 
 typedef common::hash::ObHashMap<uint64_t, ObGranuleTaskInfo, common::hash::NoPthreadDefendMode> GIPrepareTaskMap;
 
 class ObTaskInfo {
-  public:
+public:
   class ObPartLoc {
-    public:
+  public:
     ObPartLoc()
         : partition_key_(),
           depend_table_keys_(common::ObModIds::OB_SQL_EXECUTOR_TASK_INFO, OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -160,7 +160,7 @@ class ObTaskInfo {
     ObChunkDatumStore* datum_store_;
   };
   class ObRangeLocation {
-    public:
+  public:
     ObRangeLocation() : inner_alloc_("RangeLocation"), part_locs_(&inner_alloc_)
     {}
     explicit ObRangeLocation(common::ObIAllocator& allocator) : part_locs_(allocator), server_()
@@ -192,7 +192,7 @@ class ObTaskInfo {
     common::ObAddr server_;
   };
 
-  public:
+public:
   explicit ObTaskInfo(common::ObIAllocator& allocator);
   virtual ~ObTaskInfo();
   void set_root_op(ObPhyOperator* root_op)
@@ -362,11 +362,11 @@ class ObTaskInfo {
   TO_STRING_KV(N_TASK_LOC, task_location_, K_(range_location), K_(location_idx), K_(location_idx_list), K_(state),
       K_(child_task_results), K_(slice_count_pos), K_(background), K_(retry_times), K_(location_idx_list));
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTaskInfo);
 
-  private:
+private:
   ObRangeLocation range_location_;
   int64_t task_split_type_;
 
@@ -389,7 +389,7 @@ class ObTaskInfo {
 
   int32_t retry_times_;
 
-  private:
+private:
   int64_t ts_task_send_begin_;
   int64_t ts_task_recv_done_;
   int64_t ts_result_send_begin_;

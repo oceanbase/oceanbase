@@ -19,10 +19,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxReduceTransmitInput : public ObPxTransmitInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxReduceTransmitInput() : ObPxTransmitInput()
   {}
   virtual ~ObPxReduceTransmitInput()
@@ -34,21 +34,21 @@ class ObPxReduceTransmitInput : public ObPxTransmitInput {
 };
 
 class ObPxReduceTransmit : public ObPxTransmit {
-  public:
+public:
   class ObPxReduceTransmitCtx : public ObPxTransmitCtx {
-    public:
+  public:
     friend class ObPxReduceTransmit;
 
-    public:
+  public:
     explicit ObPxReduceTransmitCtx(ObExecContext& ctx);
     virtual ~ObPxReduceTransmitCtx();
   };
 
-  public:
+public:
   explicit ObPxReduceTransmit(common::ObIAllocator& alloc);
   virtual ~ObPxReduceTransmit();
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const;
   virtual int do_transmit(ObExecContext& ctx) const override;
   virtual int inner_close(ObExecContext& exec_ctx) const;

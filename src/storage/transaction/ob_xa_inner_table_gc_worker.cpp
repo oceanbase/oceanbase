@@ -61,6 +61,7 @@ void ObXAInnerTableGCWorker::run1()
   int64_t random_start_delay = ObRandom::rand(1, GCONF._xa_gc_interval);
   random_start_delay = (random_start_delay > 1000000) ? (random_start_delay / 1000000) : 1;
 
+  lib::set_thread_name("ObXAGCWorker");
   for (int64_t i = 0; i < random_start_delay && !has_set_stop(); ++i) {
     sleep(1);
   }

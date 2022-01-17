@@ -31,7 +31,7 @@ namespace sql {
 class ObPxCoordSpec : public ObPxReceiveSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxCoordSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObPxReceiveSpec(alloc, type), px_expected_worker_count_(0), qc_id_(common::OB_INVALID_ID)
   {}
@@ -51,12 +51,12 @@ class ObPxCoordSpec : public ObPxReceiveSpec {
 };
 
 class ObPxCoordOp : public ObPxReceiveOp, public ObPxRootDfoAction {
-  public:
+public:
   ObPxCoordOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxCoordOp()
   {}
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int rescan() override;
   virtual int inner_close() override;
@@ -89,7 +89,7 @@ class ObPxCoordOp : public ObPxReceiveOp, public ObPxRootDfoAction {
   virtual int receive_channel_root_dfo(ObExecContext& ctx, ObDfo& parent, ObPxTaskChSets& parent_ch_sets) override;
   virtual int receive_channel_root_dfo(ObExecContext& ctx, ObDfo& parent, dtl::ObDtlChTotalInfo& ch_info) override;
 
-  protected:
+protected:
   virtual int free_allocator()
   {
     return common::OB_SUCCESS;
@@ -119,7 +119,10 @@ class ObPxCoordOp : public ObPxReceiveOp, public ObPxRootDfoAction {
   int register_first_buffer_cache(ObDfo* root_dfo);
   void unregister_first_buffer_cache();
 
-  int check_all_sqc(common::ObIArray<ObDfo*>& active_dfos, bool& all_dfo_terminate);
+  int check_all_sqc(common::ObIArray<ObDfo *> &active_dfos, 
+      int64_t time_offset, 
+      bool &all_dfo_terminate, 
+      int64_t &cur_timestamp);
 
   int calc_allocated_worker_count(
       int64_t px_expected, int64_t query_expected, int64_t query_allocated, int64_t& allocated_worker_count);
@@ -135,7 +138,7 @@ class ObPxCoordOp : public ObPxReceiveOp, public ObPxRootDfoAction {
     return &first_buffer_cache_;
   }
 
-  protected:
+protected:
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator row_allocator_;
   ObPxCoordInfo coord_info_;

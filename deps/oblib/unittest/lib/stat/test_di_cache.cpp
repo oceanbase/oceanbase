@@ -26,7 +26,7 @@ using namespace oceanbase::common;
 
 const int64_t update_cnt = 100000;
 class TestSessionMultiThread : public CoKThread {
-  public:
+public:
   TestSessionMultiThread()
   {}
   virtual ~TestSessionMultiThread()

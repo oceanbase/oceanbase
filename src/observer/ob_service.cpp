@@ -40,6 +40,7 @@
 #include "share/ob_sstable_checksum_operator.h"
 #include "share/ob_pg_partition_meta_table_operator.h"
 #include "share/ob_zone_table_operation.h"
+#include "share/backup/ob_backup_backupset_operator.h"
 
 #include "storage/ob_partition_migrator.h"
 #include "storage/ob_partition_component_factory.h"
@@ -50,11 +51,13 @@
 #include "storage/ob_partition_scheduler.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "storage/ob_build_index_scheduler.h"
 #include "rootserver/ob_bootstrap.h"
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
 #include "observer/ob_server_schema_updater.h"
 #include "ob_server_event_history_table_operator.h"
+#include "share/ob_alive_server_tracer.h"
 
 namespace oceanbase {
 
@@ -118,6 +121,7 @@ ObService::ObService(const ObGlobalContext& gctx)
       stopped_(false),
       schema_updater_(),
       partition_table_updater_(),
+      partition_location_updater_(),
       index_status_report_queue_(),
       rebuild_flag_report_queue_(),
       pt_checker_(),
@@ -129,7 +133,7 @@ ObService::ObService(const ObGlobalContext& gctx)
 ObService::~ObService()
 {}
 
-int ObService::init(common::ObMySQLProxy& sql_proxy)
+int ObService::init(common::ObMySQLProxy& sql_proxy, share::ObIAliveServerTracer& server_tracer)
 {
   int ret = OB_SUCCESS;
 
@@ -148,6 +152,9 @@ int ObService::init(common::ObMySQLProxy& sql_proxy)
     LOG_ERROR("client_manager_.initialize failed", "self_addr", gctx_.self_addr_, K(ret));
   } else if (OB_FAIL(partition_table_updater_.init())) {
     LOG_WARN("init partition table updater failed", K(ret));
+  } else if (OB_FAIL(partition_location_updater_.init(
+                 *this, GCTX.par_ser_, GCTX.srv_rpc_proxy_, GCTX.location_cache_, server_tracer))) {
+    LOG_WARN("init partition location updater failed", KR(ret));
   } else if (OB_FAIL(checksum_updater_.init())) {
     LOG_WARN("fail to init checksum updater", K(ret));
   } else if (OB_FAIL(ObPGPartitionMTUpdater::get_instance().init())) {
@@ -269,6 +276,7 @@ void ObService::stop()
     stopped_ = true;
     schema_updater_.stop();
     partition_table_updater_.stop();
+    partition_location_updater_.stop();
     checksum_updater_.stop();
     ObPGPartitionMTUpdater::get_instance().stop();
     index_status_report_queue_.stop();
@@ -285,6 +293,7 @@ void ObService::wait()
   } else {
     schema_updater_.wait();
     partition_table_updater_.wait();
+    partition_location_updater_.wait();
     checksum_updater_.wait();
     ObPGPartitionMTUpdater::get_instance().wait();
     index_status_report_queue_.wait();
@@ -915,12 +924,10 @@ int ObService::submit_pt_update_role_task(const ObPartitionKey& pkey)
   return ret;
 }
 
-int ObService::submit_pt_update_task(
-    const ObPartitionKey& part_key, const bool need_report_checksum, const bool with_role)
+int ObService::submit_pt_update_task(const ObPartitionKey& part_key, const bool need_report_checksum)
 {
   int ret = OB_SUCCESS;
   const bool is_remove = false;
-  const int64_t version = 0;
   const ObSSTableChecksumUpdateType update_type = ObSSTableChecksumUpdateType::UPDATE_ALL;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -928,14 +935,37 @@ int ObService::submit_pt_update_task(
   } else if (!part_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(part_key), K(ret));
-  } else if (OB_FAIL(partition_table_updater_.async_update(part_key, with_role))) {
+  } else if (OB_FAIL(partition_table_updater_.async_update(part_key, false /*with_role*/))) {
     LOG_WARN("async_update failed", K(part_key), K(ret));
-  } else if (need_report_checksum && !part_key.is_pg() &&
-             OB_FAIL(checksum_updater_.add_task(part_key, is_remove, update_type))) {
-    LOG_WARN("fail to async update sstable checksum", K(ret));
-  } else {
-    // do nothing
+  } else if (need_report_checksum) {
+    if (part_key.is_pg()) {
+      ObPartitionArray pkeys;
+      ObIPartitionGroupGuard guard;
+      if (OB_FAIL(gctx_.par_ser_->get_partition(part_key, guard))) {
+        if (OB_PARTITION_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get partition", K(ret), K(part_key));
+        }
+      } else if (OB_ISNULL(guard.get_partition_group())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, partition must not be NULL", K(ret));
+      } else if (OB_FAIL(guard.get_partition_group()->get_all_pg_partition_keys(pkeys))) {
+        LOG_WARN("get pg partition fail", K(ret), K(part_key));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
+          if (OB_FAIL(checksum_updater_.add_task(pkeys.at(i), is_remove, update_type))) {
+            LOG_WARN("failt to async update sstable checksum", K(ret), K(pkeys.at(i)));
+          }
+        }
+      }
+    } else {
+      if (OB_FAIL(checksum_updater_.add_task(part_key, is_remove, update_type))) {
+        LOG_WARN("fail to async update sstable checksum", K(ret));
+      }
+    }
   }
+
   return ret;
 }
 
@@ -1475,7 +1505,12 @@ int ObService::sync_report_replica_info(
 
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(gctx_.sql_proxy_)) {
+  DEBUG_SYNC(SYNC_REPORT);
+  if (OB_SUCC(ret)) {
+    ret = E(EventTable::EN_PREVENT_SYNC_REPORT) OB_SUCCESS;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(gctx_.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
   } else {
@@ -1882,7 +1917,18 @@ int ObService::migrate_replica_batch(const obrpc::ObMigrateReplicaBatchArg& arg)
 int ObService::standby_cutdata_batch_task(const obrpc::ObStandbyCutDataBatchTaskArg& arg)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("receive standby_cutdata_batch_task request", K(arg));
+  LOG_INFO("receive standby cut data batch request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(gctx_.par_ser_->standby_cut_data_batch(arg))) {
+    LOG_WARN("add migrate batch fail", K(arg), K(ret));
+  } else {
+    LOG_INFO("standby cut data batch successfully", K(arg));
+  }
 
   return ret;
 }
@@ -1946,6 +1992,45 @@ int ObService::validate_backup_batch(const obrpc::ObValidateBatchArg& arg)
     LOG_WARN("validate backup batch fail", K(ret), K(arg));
   } else {
     LOG_INFO("validate backup batch successfully", K(arg));
+  }
+  return ret;
+}
+
+int ObService::backup_archive_log(const obrpc::ObBackupArchiveLogBatchArg& arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backup archive log get invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(gctx_.par_ser_->backup_archive_log(arg))) {
+    LOG_WARN("failed to backup archive log", K(ret), K(arg));
+  } else {
+    LOG_INFO("backup archive log successfully");
+  }
+  return ret;
+}
+
+int ObService::backup_backupset_batch(const obrpc::ObBackupBackupsetBatchArg& arg)
+{
+  int ret = OB_SUCCESS;
+
+  LOG_INFO("receive backup backupset request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_ISNULL(gctx_.par_ser_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition service shouldn't be null in gctx", KR(ret));
+  } else if (OB_FAIL(gctx_.par_ser_->backup_backupset_batch(arg))) {
+    LOG_WARN("failed to backup backupset batch", KR(ret), K(arg));
+  } else {
+    LOG_INFO("backup backupset successfully", K(arg));
   }
   return ret;
 }
@@ -2023,7 +2108,6 @@ int ObService::report_replica(const obrpc::ObReportSingleReplicaArg& arg)
   int ret = OB_SUCCESS;
   LOG_INFO("receive report replica request", K(arg.partition_key_));
   const bool need_report_checksum = false;
-  const bool with_role_report = true;
   ObPartitionArray pkeys;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -2052,8 +2136,10 @@ int ObService::report_replica(const obrpc::ObReportSingleReplicaArg& arg)
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(submit_pt_update_task(arg.partition_key_, need_report_checksum, with_role_report))) {
+    if (OB_FAIL(submit_pt_update_task(arg.partition_key_, need_report_checksum))) {
       LOG_WARN("async_update failed", K(arg.partition_key_), K(ret));
+    } else if (OB_FAIL(submit_pt_update_role_task(arg.partition_key_))) {
+      LOG_WARN("fail to submit pt update role task", K(ret), "pkey", arg.partition_key_);
     }
     // update partition meta table, ignore failed
     submit_pg_pt_update_task(pkeys);
@@ -2222,6 +2308,24 @@ int ObService::get_tenant_log_archive_status(
   return ret;
 }
 
+int ObService::get_tenant_log_archive_status_v2(
+    const share::ObGetTenantLogArchiveStatusArg& arg, share::ObServerTenantLogArchiveStatusWrapper& result)
+{
+  LOG_INFO("receive get_tenant_log_archive_status_v2 request", K(arg));
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(gctx_.par_ser_->get_tenant_log_archive_status_v2(arg, result))) {
+    LOG_WARN("failed to restore_replica", K(arg), K(ret));
+  } else {
+    LOG_INFO("finish get_tenant_log_archive_status_v2 request", K(arg), K(result));
+  }
+  return ret;
+}
 int ObService::copy_sstable_batch(const obrpc::ObCopySSTableBatchArg& arg)
 {
   LOG_INFO("receive copy sstable batch request", K(arg));
@@ -2876,8 +2980,7 @@ int ObService::report_replica()
             // The partition has been deleted. There is no need to trigger the report
             ret = OB_SUCCESS;
           }
-        } else if (OB_FAIL(submit_pt_update_task(
-                       partition->get_partition_key(), true /*need report checksum*/, true /*with role report*/))) {
+        } else if (OB_FAIL(submit_pt_update_task(partition->get_partition_key(), true /*need report checksum*/))) {
           if (OB_PARTITION_NOT_EXIST == ret) {
             // The GC thread is already working,
             // and deleted during traversal, the replica has been deleted needs to be avoided blocking the start process
@@ -2887,6 +2990,8 @@ int ObService::report_replica()
             LOG_WARN(
                 "submit partition table update task failed", K(ret), "partition_key", partition->get_partition_key());
           }
+        } else if (OB_FAIL(submit_pt_update_role_task(partition->get_partition_key()))) {
+          LOG_WARN("fail to submit pt update role task", K(ret), "pkey", partition->get_partition_key());
         } else {
           // Update partition meta table without concern for error codes
           submit_pg_pt_update_task(pkeys);
@@ -3438,17 +3543,13 @@ int ObService::check_physical_flashback_succ(
 int ObService::update_pg_backup_task_info(const common::ObIArray<share::ObPGBackupTaskInfo>& pg_task_info_array)
 {
   int ret = OB_SUCCESS;
-  ObTenantBackupTaskInfo task_info;
-  ObTenantBackupTaskInfo dest_task_info;
   ObMySQLTransaction trans;
   const int64_t MAX_EXECUTE_TIMEOUT_US = 5 * 60L * 1000 * 1000;  // 5min
   int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
   ObTimeoutCtx timeout_ctx;
-  int64_t macro_block_count = 0;
-  int64_t finish_partition_count = 0;
-  int64_t finish_macro_block_count = 0;
-  int64_t input_bytes = 0;
-  int64_t output_bytes = 0;
+  ObBackupStatistics backup_statistics;
+  ObTenantBackupTaskInfo task_info;
+  ObTenantBackupTaskInfo dest_task_info;
 
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -3456,57 +3557,100 @@ int ObService::update_pg_backup_task_info(const common::ObIArray<share::ObPGBack
   } else if (pg_task_info_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("pg backup status is invalid", K(ret), K(pg_task_info_array));
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
+    LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
+  } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
+    LOG_WARN("set timeout context failed", K(ret));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_))) {
+    LOG_WARN("failed to start trans", K(ret));
   } else {
-    for (int64_t i = 0; i < pg_task_info_array.count(); ++i) {
-      const ObPGBackupTaskInfo& pg_task_info = pg_task_info_array.at(i);
-      if (OB_SUCCESS != pg_task_info.result_) {
-        // do nothing
-      } else {
-        finish_partition_count += pg_task_info.finish_partition_count_;
-        macro_block_count += pg_task_info.macro_block_count_;
-        finish_macro_block_count += pg_task_info.finish_macro_block_count_;
-        input_bytes += pg_task_info.input_bytes_;
-        output_bytes += pg_task_info.output_bytes_;
-      }
-    }
-
-    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
-      LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
-    } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
-      LOG_WARN("set timeout context failed", K(ret));
-    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_))) {
-      LOG_WARN("failed to start trans", K(ret));
+    if (OB_FAIL(pg_backup_task_updater_.update_status_and_result_and_statics(
+            pg_task_info_array, trans, backup_statistics))) {
+      LOG_WARN("failed to update pg backup task status", K(ret), K(pg_task_info_array));
     } else {
       const uint64_t tenant_id = extract_tenant_id(pg_task_info_array.at(0).table_id_);
-      if (OB_FAIL(tenant_backup_task_updater_.get_tenant_backup_task(tenant_id, trans, task_info))) {
+      const bool for_update = true;
+      if (OB_FAIL(tenant_backup_task_updater_.get_tenant_backup_task(tenant_id, for_update, trans, task_info))) {
         LOG_WARN("failed to get tenant backup task info", K(ret), K(tenant_id));
       } else if (ObTenantBackupTaskInfo::DOING != task_info.status_ &&
                  ObTenantBackupTaskInfo::CANCEL != task_info.status_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tenant backup task status is unexpected", K(ret), K(task_info));
-      } else if (OB_FAIL(pg_backup_task_updater_.update_status_and_result_and_statics(pg_task_info_array))) {
-        LOG_WARN("failed to update pg backup task status", K(ret), K(pg_task_info_array));
       } else {
         dest_task_info = task_info;
-        dest_task_info.finish_partition_count_ += finish_macro_block_count;
-        dest_task_info.macro_block_count_ += macro_block_count;
-        dest_task_info.finish_macro_block_count_ += finish_macro_block_count;
-        dest_task_info.input_bytes_ += input_bytes;
-        dest_task_info.output_bytes_ += output_bytes;
+        dest_task_info.finish_partition_count_ += backup_statistics.finish_partition_count_;
+        dest_task_info.macro_block_count_ += backup_statistics.macro_block_count_;
+        dest_task_info.finish_macro_block_count_ += backup_statistics.finish_macro_block_count_;
+        dest_task_info.input_bytes_ += backup_statistics.input_bytes_;
+        dest_task_info.output_bytes_ += backup_statistics.output_bytes_;
         if (OB_FAIL(tenant_backup_task_updater_.update_tenant_backup_task(trans, task_info, dest_task_info))) {
           LOG_WARN("failed to update tenant backup task", K(ret), K(task_info), K(dest_task_info));
         }
       }
+    }
 
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(trans.end(true /*commit*/))) {
-          OB_LOG(WARN, "failed to commit", K(ret));
-        }
-      } else {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = trans.end(false /*rollback*/))) {
-          OB_LOG(WARN, "failed to rollback", K(ret), K(tmp_ret));
-        }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        OB_LOG(WARN, "failed to commit", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false /*rollback*/))) {
+        OB_LOG(WARN, "failed to rollback", K(ret), K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::report_pg_backup_backupset_task(const common::ObIArray<share::ObBackupBackupsetArg>& args,
+    const ObIArray<int32_t>& results, const share::ObPGBackupBackupsetTaskInfo::TaskStatus& status)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_EXECUTE_TIMEOUT_US = 60L * 1000 * 1000;  // 60s
+  ObTenantBackupBackupsetTaskInfo task_info;
+  ObMySQLTransaction trans;
+  ObTimeoutCtx timeout_ctx;
+  int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service do not init", KR(ret));
+  } else if (status >= ObPGBackupBackupsetTaskInfo::MAX || args.count() != results.count() || args.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pg backup status is invalid", KR(ret), K(args), K(results));
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
+    LOG_WARN("failed to set trx timeout", KR(ret), K(stmt_timeout));
+  } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
+    LOG_WARN("failed to set timeout", KR(ret), K(stmt_timeout));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_))) {
+    LOG_WARN("failed to start trans", KR(ret));
+  } else {
+    const uint64_t tenant_id = args.at(0).tenant_id_;
+    const int64_t job_id = args.at(0).job_id_;
+    const int64_t backup_set_id = args.at(0).backup_set_id_;
+    const bool dropped_tenant = args.at(0).tenant_dropped_;
+    SimpleBackupBackupsetTenant tenant;
+    tenant.is_dropped_ = dropped_tenant;
+    tenant.tenant_id_ = tenant_id;
+    if (OB_FAIL(ObTenantBackupBackupsetOperator::get_task_item(tenant, job_id, backup_set_id, task_info, trans))) {
+      LOG_WARN("failed to get tenant backup backupset task info", KR(ret), K(tenant), K(job_id), K(backup_set_id));
+    } else if (ObTenantBackupBackupsetTaskInfo::BACKUP != task_info.task_status_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant backup backupset task item status is not expected", KR(ret), K(task_info.task_status_));
+    } else if (OB_FAIL(
+                   ObPGBackupBackupsetOperator::batch_update_result_and_status(tenant, args, results, status, trans))) {
+      LOG_WARN("failed to batch update result and status", KR(ret), K(status));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        OB_LOG(WARN, "failed to commit", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false /*rollback*/))) {
+        OB_LOG(WARN, "failed to rollback", K(ret), K(tmp_ret));
       }
     }
   }
@@ -3533,6 +3677,22 @@ int ObService::pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg&
   return ret;
 }
 
+int ObService::submit_retry_ghost_index_task(const uint64_t index_id)
+{
+  int ret = OB_SUCCESS;
+  ObRetryGhostIndexScheduler &scheduler = ObRetryGhostIndexScheduler::get_instance();
+  ObRetryGhostIndexTask task;
+  if (OB_INVALID_ID == index_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index id", K(ret), K(index_id));
+  } else if (OB_FAIL(task.init(index_id))) {
+    LOG_WARN("fail to init ObRetryGhostIndexTask", K(ret), K(index_id));
+  } else if (OB_FAIL(scheduler.push_task(task))) {
+    LOG_WARN("fail to push ObRetryGhostIndexTask to scheduler", K(ret), K(task));
+  }
+  return ret;
+}
+
 int ObService::broadcast_rs_list(const ObRsListArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -3552,5 +3712,48 @@ int ObService::broadcast_rs_list(const ObRsListArg& arg)
   }
   return ret;
 }
+
+int ObService::submit_broadcast_task(const ObPartitionBroadcastTask& task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service do not init", KR(ret), K(task));
+  } else if (!task.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else if (OB_FAIL(partition_location_updater_.submit_broadcast_task(task))) {
+    LOG_WARN("submit broadcast task failed", KR(ret), K(task));
+  }
+  return ret;
+}
+
+int ObService::broadcast_locations(const obrpc::ObPartitionBroadcastArg& arg, obrpc::ObPartitionBroadcastResult& result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("service do not init", KR(ret), K(arg));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else {
+    ObPartitionUpdateTask task;
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.keys_.count(); i++) {
+      const ObPartitionBroadcastTask& key = arg.keys_.at(i);
+      task.reset();
+      if (OB_FAIL(task.init(key.get_table_id(), key.get_partition_id(), key.get_timestamp()))) {
+        LOG_WARN("fail to init task", KR(ret), K(key));
+      } else if (OB_FAIL(partition_location_updater_.submit_update_task(task))) {
+        LOG_WARN("fail to submit update task", KR(ret), K(task));
+      }
+    }
+  }
+  result.ret_ = ret;
+  LOG_DEBUG("receive broadcast locations", KR(ret), K(arg));
+  return ret;
+}
+
 }  // end namespace observer
 }  // end namespace oceanbase
+

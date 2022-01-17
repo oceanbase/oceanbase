@@ -25,7 +25,7 @@ class ObKillStmt;
 class ObKillSessionArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObKillSessionArg()
       : sess_id_(0),
         tenant_id_(common::OB_INVALID_TENANT_ID),
@@ -39,7 +39,7 @@ class ObKillSessionArg {
   int calculate_sessid(ObExecContext& ctx, const ObKillStmt& stmt);
   TO_STRING_KV(K(sess_id_), K(tenant_id_), K(user_id_), K(is_query_), K(has_user_super_privilege_));
 
-  public:
+public:
   uint32_t sess_id_;
   uint64_t tenant_id_;
   uint64_t user_id_;

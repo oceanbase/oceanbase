@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprDate : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprDate(common::ObIAllocator& alloc);
   virtual ~ObExprDate();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
@@ -30,7 +30,7 @@ class ObExprDate : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int eval_date(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDate);
 };

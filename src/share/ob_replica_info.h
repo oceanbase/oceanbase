@@ -66,13 +66,13 @@ struct ReplicaAttr {
 };
 
 class BaseReplicaAttrSet {
-  public:
+public:
   BaseReplicaAttrSet()
   {}
   virtual ~BaseReplicaAttrSet()
   {}
 
-  public:
+public:
   virtual const common::ObIArray<ReplicaAttr>& get_full_replica_attr_array() const = 0;
   virtual const common::ObIArray<ReplicaAttr>& get_logonly_replica_attr_array() const = 0;
   virtual const common::ObIArray<ReplicaAttr>& get_readonly_replica_attr_array() const = 0;
@@ -94,7 +94,7 @@ typedef common::ObArrayHelper<share::ReplicaAttr> SchemaReplicaAttrArray;
 typedef common::ObSEArray<share::ReplicaAttr, 7, common::ObNullAllocator> ReplicaAttrArray;
 
 class SchemaReplicaAttrSet : public BaseReplicaAttrSet {
-  public:
+public:
   SchemaReplicaAttrSet()
       : BaseReplicaAttrSet(), full_replica_attr_array_(), logonly_replica_attr_array_(), readonly_replica_attr_array_()
   {}
@@ -102,7 +102,7 @@ class SchemaReplicaAttrSet : public BaseReplicaAttrSet {
   {}
   int64_t get_convert_size() const;
 
-  public:
+public:
   virtual const common::ObIArray<ReplicaAttr>& get_full_replica_attr_array() const override
   {
     return full_replica_attr_array_;
@@ -128,7 +128,7 @@ class SchemaReplicaAttrSet : public BaseReplicaAttrSet {
     return readonly_replica_attr_array_;
   }
 
-  public:
+public:
   void reset()
   {
     full_replica_attr_array_.reset();
@@ -136,14 +136,14 @@ class SchemaReplicaAttrSet : public BaseReplicaAttrSet {
     readonly_replica_attr_array_.reset();
   }
 
-  private:
+private:
   SchemaReplicaAttrArray full_replica_attr_array_;
   SchemaReplicaAttrArray logonly_replica_attr_array_;
   SchemaReplicaAttrArray readonly_replica_attr_array_;
 };
 
 class ObReplicaAttrSet : public BaseReplicaAttrSet {
-  public:
+public:
   ObReplicaAttrSet()
       : BaseReplicaAttrSet(), full_replica_attr_array_(), logonly_replica_attr_array_(), readonly_replica_attr_array_()
   {}
@@ -237,7 +237,7 @@ class ObReplicaAttrSet : public BaseReplicaAttrSet {
   bool is_allserver_readonly_replica() const;
   bool is_specific_replica_attr() const;
 
-  private:
+private:
   ReplicaAttrArray full_replica_attr_array_;
   ReplicaAttrArray logonly_replica_attr_array_;
   ReplicaAttrArray readonly_replica_attr_array_;

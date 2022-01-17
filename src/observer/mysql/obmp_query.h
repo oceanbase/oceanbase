@@ -37,22 +37,22 @@ class ObFBPartitionParam;
 }  // namespace share
 namespace observer {
 class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_QUERY;
 
-  public:
+public:
   explicit ObMPQuery(const ObGlobalContext& gctx);
   virtual ~ObMPQuery();
 
-  public:
-  virtual void disconnect();
-  virtual void update_last_pkt_pos()
+public:
+  virtual void disconnect() override;
+  virtual void update_last_pkt_pos() override
   {
     if (NULL != ez_buf_) {
       comp_context_.update_last_pkt_pos(ez_buf_->last);
     }
   }
-  virtual int response_packet(obmysql::ObMySQLPacket& pkt)
+  virtual int response_packet(obmysql::ObMySQLPacket& pkt) override
   {
     return ObMPBase::response_packet(pkt);
   }
@@ -60,19 +60,19 @@ class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
   {
     return ObMPBase::flush_buffer(is_last);
   }
-  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL)
+  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL) override
   {
     return ObMPBase::send_error_packet(err, errmsg, is_partition_hit, extra_err_info);
   }
-  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param)
+  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param) override
   {
     return ObMPBase::send_ok_packet(session, ok_param);
   }
-  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result)
+  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result) override
   {
     return ObMPBase::send_eof_packet(session, result);
   }
-  virtual bool need_send_extra_ok_packet()
+  virtual bool need_send_extra_ok_packet() override
   {
     return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet();
   }
@@ -102,14 +102,14 @@ class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
     return is_com_filed_list_;
   }
 
-  protected:
-  int process();
-  int deserialize();
+protected:
+  int process() override;
+  int deserialize() override;
   int check_readonly_stmt(ObMySQLResultSet& result);
   int is_readonly_stmt(ObMySQLResultSet& result, bool& is_readonly);
-  virtual int after_process();
+  virtual int after_process() override;
 
-  private:
+private:
   int register_callback_with_async(ObQueryExecCtx& query_ctx);
   int response_result(ObQueryExecCtx& query_ctx, bool force_sync_resp, bool& async_resp_used);
   int get_tenant_schema_info_(const uint64_t tenant_id, ObTenantCachedSchemaGuardInfo* cache_info,
@@ -119,7 +119,7 @@ class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
   int process_single_stmt(const sql::ObMultiStmtItem& multi_stmt_item, sql::ObSQLSessionInfo& session,
       bool has_more_result, bool force_sync_resp, bool& async_resp_used, bool& need_disconnect);
 
-  virtual int before_response()
+  virtual int before_response() override
   {
     return OB_SUCCESS;
   }
@@ -133,10 +133,10 @@ class ObMPQuery : public ObMPBase, public ObIMPPacketSender {
       const ObMPParseStat& parse_stat, bool& optimization_done, bool& async_resp_used, bool& need_disconnect);
   int deserialize_com_field_list();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPQuery);
 
-  private:
+private:
   sql::ObSqlCtx ctx_;
   ObQueryRetryCtrl retry_ctrl_;
   common::ObString sql_;

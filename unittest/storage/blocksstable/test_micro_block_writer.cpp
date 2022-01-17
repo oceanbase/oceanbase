@@ -27,7 +27,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestMicroBlockWriter : public ::testing::Test {
-  public:
+public:
   static const int64_t rowkey_column_count = 2;
   // Every ObObjType from ObTinyIntType to ObHexStringType inclusive.
   // Skip ObNullType and ObExtendType because for external usage, a column type
@@ -35,7 +35,7 @@ class TestMicroBlockWriter : public ::testing::Test {
   static const int64_t column_num = ObHexStringType;
   static const int64_t macro_block_size = 2L * 1024 * 1024L;
 
-  public:
+public:
   TestMicroBlockWriter() : allocator_(ObModIds::TEST){};
   void SetUp();
   virtual void TearDown()
@@ -46,7 +46,7 @@ class TestMicroBlockWriter : public ::testing::Test {
   {}
   void test_alloc(char*& ptr, const int64_t size);
 
-  protected:
+protected:
   ObRowGenerate row_generate_;
   ObColumnMap column_map_;
   ObArenaAllocator allocator_;

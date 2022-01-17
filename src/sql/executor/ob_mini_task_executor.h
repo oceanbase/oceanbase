@@ -17,10 +17,13 @@
 #include "lib/allocator/ob_safe_arena.h"
 namespace oceanbase {
 namespace sql {
-class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
+class ObAPMiniTaskMgr {
   static const int64_t MAX_FINISH_QUEUE_CAPACITY = 512;
 
-  public:
+public:
+  static const int64_t OP_LOCAL_NUM = 1;
+  static constexpr const char *OP_LABEL = ObModIds::OB_SQL_EXECUTOR_MINI_TASK_MGR;
+
   ObAPMiniTaskMgr()
       : ref_count_(0),
         mgr_rcode_(common::OB_SUCCESS),
@@ -30,11 +33,8 @@ class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
         lock_()
   {}
   virtual ~ObAPMiniTaskMgr()
-  {}
-
-  int32_t get_type()
   {
-    return 0;
+    reset();
   }
   static ObAPMiniTaskMgr* alloc();
   static void free(ObAPMiniTaskMgr* item);
@@ -47,7 +47,7 @@ class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
     return ATOMIC_SAF((uint64_t*)&ref_count_, 1);
   }
   int init(ObSQLSessionInfo& session, ObExecutorRpcImpl* exec_rpc);
-  virtual void reset() override;
+  void reset();
   void set_mgr_rcode(int mgr_rcode)
   {
     mgr_rcode_ = mgr_rcode;
@@ -77,7 +77,7 @@ class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
     return trans_result_.wait_all_task(timeout);
   }
 
-  private:
+private:
   int64_t ref_count_;
   int mgr_rcode_;
   common::ObArray<ObAddr> rcode_addrs_;
@@ -88,21 +88,9 @@ class ObAPMiniTaskMgr : public common::ObDLinkBase<ObAPMiniTaskMgr> {
   mutable common::ObSpinLock lock_;
 };
 
-typedef common::ObGlobalFactory<ObAPMiniTaskMgr, 1, common::ObModIds::OB_SQL_EXECUTOR_MINI_TASK_MGR>
-    ObAPMiniTaskMgrGFactory;
-typedef common::ObTCFactory<ObAPMiniTaskMgr, 1, common::ObModIds::OB_SQL_EXECUTOR_MINI_TASK_MGR>
-    ObApMiniTaskMgrTCFactory;
-
-inline ObAPMiniTaskMgr* ObAPMiniTaskMgr::alloc()
+inline ObAPMiniTaskMgr *ObAPMiniTaskMgr::alloc()
 {
-  ObAPMiniTaskMgr* ap_mini_task_mgr = NULL;
-  if (OB_ISNULL(ObApMiniTaskMgrTCFactory::get_instance())) {
-    SQL_EXE_LOG(ERROR, "get ap mini task mgr factory instance failed");
-    ap_mini_task_mgr = NULL;
-  } else {
-    ap_mini_task_mgr = ObApMiniTaskMgrTCFactory::get_instance()->get(0);
-  }
-  return ap_mini_task_mgr;
+  return op_reclaim_alloc(ObAPMiniTaskMgr);
 }
 
 inline void ObAPMiniTaskMgr::free(ObAPMiniTaskMgr* item)
@@ -111,13 +99,8 @@ inline void ObAPMiniTaskMgr::free(ObAPMiniTaskMgr* item)
     int64_t ref_count = item->def_ref_count();
     if (OB_LIKELY(0 == ref_count)) {
       // nobody reference this object, so free it
-      if (OB_ISNULL(ObApMiniTaskMgrTCFactory::get_instance())) {
-        SQL_EXE_LOG(ERROR, "get ap mini task mgr factory instance failed");
-      } else {
-        item->reset();
-        ObApMiniTaskMgrTCFactory::get_instance()->put(item);
-        item = NULL;
-      }
+      op_reclaim_free(item);
+      item = nullptr;
     } else if (OB_UNLIKELY(ref_count < 0)) {
       SQL_EXE_LOG(ERROR, "ref_count is invalid", K(ref_count));
     }
@@ -126,7 +109,7 @@ inline void ObAPMiniTaskMgr::free(ObAPMiniTaskMgr* item)
 
 class ObSQLSessionInfo;
 class ObMiniTaskExecutor {
-  public:
+public:
   explicit ObMiniTaskExecutor(common::ObIAllocator& allocator) : ap_mini_task_mgr_(NULL)
   {
     UNUSED(allocator);
@@ -142,7 +125,7 @@ class ObMiniTaskExecutor {
   static int add_invalid_servers_to_retry_info(
       const int ret, const ObIArray<ObAddr>& addr, ObQueryRetryInfo& retry_info);
 
-  protected:
+protected:
   int mini_task_local_execute(ObExecContext& query_ctx, ObMiniTask& task, ObMiniTaskResult& task_result);
   int sync_fetch_local_result(ObExecContext& ctx, const ObPhyOperator& root_op, common::ObScanner& result);
   int sync_fetch_local_result(ObExecContext& ctx, const ObOpSpec& root_spec, ObScanner& result);
@@ -152,12 +135,12 @@ class ObMiniTaskExecutor {
       ObExecContext& ctx, int64_t ap_task_cnt, ObMiniTaskResult& result, ObMiniTaskRetryInfo& retry_info);
   int pop_ap_mini_task_event(ObExecContext& ctx, ObMiniTaskEvent*& complete_task);
 
-  protected:
+protected:
   ObAPMiniTaskMgr* ap_mini_task_mgr_;
 };
 
 class ObDMLMiniTaskExecutor : public ObMiniTaskExecutor {
-  public:
+public:
   explicit ObDMLMiniTaskExecutor(common::ObIAllocator& allocator) : ObMiniTaskExecutor(allocator)
   {}
   virtual ~ObDMLMiniTaskExecutor()
@@ -177,7 +160,7 @@ class ObDMLMiniTaskExecutor : public ObMiniTaskExecutor {
 };
 
 class ObLookupMiniTaskExecutor : public ObMiniTaskExecutor {
-  public:
+public:
   explicit ObLookupMiniTaskExecutor(common::ObIAllocator& allocator) : ObMiniTaskExecutor(allocator)
   {}
   virtual ~ObLookupMiniTaskExecutor()

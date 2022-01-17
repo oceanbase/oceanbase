@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace transaction {
 
 class ObGTSLocalCache {
-  public:
+public:
   ObGTSLocalCache()
   {
     reset();
@@ -63,7 +63,7 @@ class ObGTSLocalCache {
 
   TO_STRING_KV(K_(srr), K_(gts), K_(local_trans_version), K_(barrier_ts), K_(latest_srr));
 
-  private:
+private:
   // send rpc request timestamp
   MonotonicTs srr_;
   // The latest local gts value is always less than or equal to the gts leader

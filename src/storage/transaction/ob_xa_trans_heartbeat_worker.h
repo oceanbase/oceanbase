@@ -21,7 +21,7 @@ namespace transaction {
 class ObTransService;
 
 class ObXATransHeartbeatWorker : public share::ObThreadPool {
-  public:
+public:
   ObXATransHeartbeatWorker() : is_inited_(false), is_running_(false)
   {}
   ~ObXATransHeartbeatWorker()
@@ -29,15 +29,15 @@ class ObXATransHeartbeatWorker : public share::ObThreadPool {
     destroy();
   }
   int init(ObTransService* trans_service);
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
   void destroy();
 
-  public:
+public:
   virtual void run1() override;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   ObTransService* trans_service_;

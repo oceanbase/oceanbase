@@ -428,9 +428,12 @@ int ObDDLResolver::resolve_default_value(ParseNode* def_node,
             default_value.set_param_meta();
           } else if (ObFloatType == old_obj.get_type()) {
             float value = 0.0f;
-            old_obj.get_float(value);
-            default_value.set_float(-value);
-            default_value.set_param_meta();
+            if (OB_FAIL(old_obj.get_float(value))) {
+              SQL_RESV_LOG(WARN, "failed to get float value from old_obj", K(ret), K(old_obj));
+            } else {
+              default_value.set_float(-value);
+              default_value.set_param_meta();
+            }
           } else if (ObDoubleType == old_obj.get_type()) {
             double value = 0.0;
             if (OB_FAIL(old_obj.get_double(value))) {
@@ -506,6 +509,38 @@ int ObDDLResolver::set_database_name(const ObString& database_name)
   } else {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "allocator is null", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_table_id_pre(ParseNode* node)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != node) {
+    ParseNode* option_node = NULL;
+    int32_t num = 0;
+    if (T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "invalid parse node", K(ret));
+    } else if (OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "node children or session_info_ is null", K(node->children_), K(session_info_), K(ret));
+    } else {
+      num = node->num_child_;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
+      if (OB_ISNULL(option_node = node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "node is null", K(ret));
+      } else if (option_node->type_ == T_TABLE_ID) {
+        if (OB_ISNULL(option_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
+        } else {
+          table_id_ = static_cast<uint64_t>(option_node->children_[0]->value_);
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1872,7 +1907,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2& column, ParseNode
         if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
           SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
         } else if (data_type.get_meta_type().is_lob()) {
-          if (OB_FAIL(check_text_column_length_and_promote(column))) {
+          if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
             SQL_RESV_LOG(WARN, "fail to check text or blob column length", K(ret), K(column));
           }
         } else if (OB_FAIL(check_string_column_length(column, lib::is_oracle_mode()))) {
@@ -2571,7 +2606,7 @@ int ObDDLResolver::cast_default_value(ObObj& default_value, const ObTimeZoneInfo
     ObCastCtx cast_ctx(&allocator,
         &dtc_params,
         CUR_TIME,
-        share::is_oracle_mode() ? CM_ORACLE_MODE : CM_NONE,
+        share::is_oracle_mode() ? CM_ORACLE_MODE : CM_COLUMN_CONVERT,
         column_schema.get_collation_type(),
         NULL,
         &res_accuracy);
@@ -2910,8 +2945,8 @@ int ObDDLResolver::check_urowid_column_length(const share::schema::ObColumnSchem
   return ret;
 }
 
-int ObDDLResolver::check_text_length(
-    ObCharsetType cs_type, ObCollationType co_type, const char* name, ObObjType& type, int32_t& length)
+int ObDDLResolver::check_text_length(ObCharsetType cs_type, ObCollationType co_type, const char* name, ObObjType& type,
+    int32_t& length, bool need_rewrite_length, const bool is_byte_length /* = false */)
 {
   int ret = OB_SUCCESS;
   int64_t mbmaxlen = 0;
@@ -2919,14 +2954,21 @@ int ObDDLResolver::check_text_length(
   if (!ob_is_text_tc(type) || CHARSET_INVALID == cs_type || CS_TYPE_INVALID == co_type) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(ERROR, "column infomation is error", K(cs_type), K(co_type), K(ret));
-  } else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(co_type, mbmaxlen))) {
+  } else if (!is_byte_length && OB_FAIL(ObCharset::get_mbmaxlen_by_coll(co_type, mbmaxlen))) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "fail to get mbmaxlen", K(ret), K(co_type));
+  } else if (is_byte_length && OB_FALSE_IT(mbmaxlen = 1)) {
   } else if (0 == mbmaxlen) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(ERROR, "mbmaxlen can not be 0", K(ret), K(co_type), K(mbmaxlen));
-  } else if (length < 0) {
+  } else if (share::is_oracle_mode() || 0 == length) {
     length = default_length;
+  } else if (0 > length) {
+    ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+    LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, name,
+                   static_cast<int>(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType].get_length() / mbmaxlen));
+    SQL_RESV_LOG(WARN, "fail to check column data length",
+                 K(ret), K(length), K(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType].get_length()), K(mbmaxlen));
   } else {
     // eg. text(128) will be tinytext in mysql, and text(65537) will be mediumtext
     if (ObTextType == type) {
@@ -2958,17 +3000,51 @@ int ObDDLResolver::check_text_length(
       length = default_length;
     }
   }
+
+  if (OB_SUCC(ret) && share::is_mysql_mode() && need_rewrite_length) {
+    if (OB_FAIL(rewrite_text_length_mysql(type, length))) {
+      LOG_WARN("check_text_length_mysql fails", K(ret), K(type), K(length));
+    }
+  }
+  return ret;
+}
+
+// old version ObTinyTextType, ObTextType, ObMediumTextType, ObLongTextType max_length is incorrect
+// correct max_legth is ObTinyTextType:255 etc.
+// so when create new user table, must rewrite max column length
+int ObDDLResolver::rewrite_text_length_mysql(ObObjType& type, int32_t& length)
+{
+  int ret = OB_SUCCESS;
+  int32_t max_length = ObAccuracy::MAX_ACCURACY[type].get_length();
+  if (length < 0 || length > max_length) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("length can not be less than 0 or larger than max_length", K(ret), K(type), K(length), K(max_length));
+  } else if (ob_is_text_tc(type) && max_length == length) {
+    length = length - 1;
+  }
   return ret;
 }
 
 // TODO texttc should care about the the defined length not the actual length
-int ObDDLResolver::check_text_column_length_and_promote(ObColumnSchemaV2& column)
+int ObDDLResolver::check_text_column_length_and_promote(
+    ObColumnSchemaV2& column, int64_t table_id, const bool is_byte_length /* = false */)
 {
   int ret = OB_SUCCESS;
+  bool need_check_length = true;
   ObObjType type = column.get_data_type();
   int32_t length = column.get_data_length();
-  if (OB_FAIL(check_text_length(
-          column.get_charset_type(), column.get_collation_type(), column.get_column_name(), type, length))) {
+  if (OB_INVALID_ID != table_id && is_inner_table(table_id)) {
+    // inner table don't need to rewrite
+    // if table_id == OB_INVALID_ID, this is not inner_table
+    need_check_length = false;
+  }
+  if (OB_FAIL(check_text_length(column.get_charset_type(),
+          column.get_collation_type(),
+          column.get_column_name(),
+          type,
+          length,
+          need_check_length,
+          is_byte_length))) {
     LOG_WARN("failed to check text length", K(ret), K(column));
   } else {
     column.set_data_type(type);
@@ -3063,15 +3139,13 @@ int ObDDLResolver::resolve_part_func(ObResolverParams& params, const ParseNode* 
   }
   if (OB_SUCC(ret)) {
     // check duplicate of PARTITION_FUNC_TYPE_RANGE_COLUMNS
-    if (OB_SUCC(ret)) {
-      if (partition_func_type == PARTITION_FUNC_TYPE_RANGE_COLUMNS) {
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < partition_keys.count(); ++idx) {
-          const ObString& key_name = partition_keys.at(idx);
-          for (int64_t b_idx = 0; OB_SUCC(ret) && b_idx < idx; ++b_idx) {
-            if (ObCharset::case_insensitive_equal(key_name, partition_keys.at(b_idx))) {
-              ret = OB_ERR_SAME_NAME_PARTITION_FIELD;
-              LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION_FIELD, key_name.length(), key_name.ptr());
-            }
+    if (partition_func_type == PARTITION_FUNC_TYPE_RANGE_COLUMNS) {
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < partition_keys.count(); ++idx) {
+        const ObString& key_name = partition_keys.at(idx);
+        for (int64_t b_idx = 0; OB_SUCC(ret) && b_idx < idx; ++b_idx) {
+          if (ObCharset::case_insensitive_equal(key_name, partition_keys.at(b_idx))) {
+            ret = OB_ERR_SAME_NAME_PARTITION_FIELD;
+            LOG_USER_ERROR(OB_ERR_SAME_NAME_PARTITION_FIELD, key_name.length(), key_name.ptr());
           }
         }
       }
@@ -3700,7 +3774,8 @@ int ObDDLResolver::check_default_value(ObObj& default_value, const common::ObTim
       LOG_WARN("session load default system variable failed", K(ret));
     } else if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
-    } else if (OB_FAIL(ObResolverUtils::resolve_generated_column_expr(params, expr_str, table_schema, column, expr))) {
+    } else if (OB_FAIL(ObResolverUtils::resolve_generated_column_expr(
+                   params, expr_str, table_schema, column, expr, ObResolverUtils::CHECK_FOR_GENERATED_COLUMN))) {
       LOG_WARN("resolve generated column expr failed", K(ret));
     } else if (column.get_meta_type().is_null()) {
       column.set_data_type(expr->get_data_type());
@@ -6287,14 +6362,6 @@ int ObDDLResolver::get_enable_split_partition(const int64_t tenant_id, bool& ena
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", K(ret), K(tenant_id));
-  } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (!tenant_config.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get tenant config", K(ret), K(tenant_id));
-    } else {
-      enable_split_partition = tenant_config->_enable_split_partition;
-    }
   }
   return ret;
 }

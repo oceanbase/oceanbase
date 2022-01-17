@@ -20,7 +20,7 @@ namespace common {
 namespace hash {
 template <class K, uint64_t N = 1031, bool auto_free = false>
 class ObPlacementHashSet {
-  public:
+public:
   ObPlacementHashSet() : count_(0)
   {}
   ~ObPlacementHashSet()
@@ -44,7 +44,7 @@ class ObPlacementHashSet {
     return count_;
   };
 
-  protected:
+protected:
   ObBitSet<N, ModulePageAllocator, auto_free> flags_;
   K keys_[N];
   int64_t count_;

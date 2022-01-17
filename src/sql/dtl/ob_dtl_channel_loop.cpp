@@ -339,8 +339,9 @@ int ObDtlChannelLoop::process_channel(int64_t& nth_channel)
       remove_data_list(ch);
     }
     if (n_times > 100) {
+      // it's maybe unexpected !
       LOG_WARN("loop times", K(n_times));
-      sleep(10);
+      usleep(1);
     }
     ++loop_times_;
     if (ignore_interrupt_) {

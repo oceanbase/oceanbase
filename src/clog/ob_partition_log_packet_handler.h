@@ -28,7 +28,7 @@ class ObILogEngine;
 
 class ObIPartitionLogService;
 class ObPartitionLogPacketHandler : public ObIPartitionLogPacketHandler {
-  public:
+public:
   typedef ObIPartitionLogService LogService;
   typedef ObLogReqContext Context;
   ObPartitionLogPacketHandler() : partition_service_(NULL), clog_mgr_(NULL)
@@ -38,7 +38,7 @@ class ObPartitionLogPacketHandler : public ObIPartitionLogPacketHandler {
   int init(storage::ObPartitionService* partition_service, ObICLogMgr* clog_mgr);
   int handle_request(Context& req);
 
-  protected:
+protected:
   int handle_single_request(Context& req);
   int handle_batch_request(Context& req);
   static int receive_log(LogService* log_service, ObILogEngine* log_engine, Context& ctx, ReceiveLogType type);
@@ -73,8 +73,10 @@ class ObPartitionLogPacketHandler : public ObIPartitionLogPacketHandler {
   static int replace_sick_child(LogService* log_service, Context& ctx);
   static int process_leader_max_log_msg(LogService* log_service, Context& ctx);
   static int process_check_rebuild_req(LogService* log_service, Context& ctx);
+  static int process_restore_check_req(LogService* log_service, Context& ctx);
+  static int process_query_restore_end_id_resp(LogService* log_service, Context& ctx);
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   ObICLogMgr* clog_mgr_;
 };

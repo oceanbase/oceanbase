@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObTenantFileSuperBlockCheckpointReader final {
-  public:
+public:
   ObTenantFileSuperBlockCheckpointReader();
   ~ObTenantFileSuperBlockCheckpointReader() = default;
   void reset()
@@ -32,7 +32,7 @@ class ObTenantFileSuperBlockCheckpointReader final {
       blocksstable::ObStorageFileHandle& file_handle);
   common::ObIArray<blocksstable::MacroBlockId>& get_meta_block_list();
 
-  private:
+private:
   ObPGMetaItemReader reader_;
 };
 

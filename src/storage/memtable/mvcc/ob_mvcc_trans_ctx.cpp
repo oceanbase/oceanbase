@@ -257,6 +257,15 @@ int ObTransCallbackMgr::remove_callback_for_uncommited_txn(ObMemtable* memtable,
   return ret;
 }
 
+int ObTransCallbackMgr::clean_dirty_callbacks()
+{
+  int ret = OB_SUCCESS;
+
+  UNUSED(fifo_callback(guard(), TCB_CLEAN_DIRTY_CB));
+
+  return ret;
+}
+
 int ObTransCallbackMgr::calc_checksum_before_log_ts(const int64_t log_ts)
 {
   int ret = OB_SUCCESS;
@@ -387,7 +396,7 @@ int ObTransCallbackList::mark_frozen_data(
     TRANS_LOG(WARN, "memtable is null", KP(frozen_memtable), KP(active_memtable), K(ret));
   } else if (FALSE_IT(first_memtable = get_first_memtable())) {
   } else if (OB_ISNULL(first_memtable) || first_memtable == active_memtable) {
-    TRANS_LOG(INFO,
+    TRANS_LOG(DEBUG,
         "skip mark frozen data",
         K(callback_mgr_.get_ctx()),
         KP(first_memtable),
@@ -415,11 +424,11 @@ int ObTransCallbackList::mark_frozen_data(
     if (!marked) {
       int64_t i = 0;
       for (ObITransCallback* iter = start; NULL != iter && iter != end; iter = iter->get_prev()) {
-        TRANS_LOG(INFO, "debug: iter callback", K(*iter));
+        TRANS_LOG(DEBUG, "debug: iter callback", K(*iter));
       }
     }
 
-    TRANS_LOG(INFO, "iterate callbacks", K(callback_mgr_.get_ctx()), K(iter_cnt), K(cb_cnt), K(marked));
+    TRANS_LOG(DEBUG, "iterate callbacks", K(callback_mgr_.get_ctx()), K(iter_cnt), K(cb_cnt), K(marked));
   }
 
   return ret;
@@ -524,7 +533,9 @@ int ObTransCallbackList::remove_callback_fifo_callback(const ObITransCallback* s
         }
         length_--;
         cnt++;
-        callback_mgr_.get_ctx().callback_free(iter);
+        if (!iter->is_savepoint()) {
+          callback_mgr_.get_ctx().callback_free(iter);
+        }
         iter = next;
         same_mem_cb_cnt++;
       } else {
@@ -788,6 +799,8 @@ int ObMvccRowCallback::callback(
       }
     } else if (TCB_ELR_TRANS_PREPARING == type) {
       ret = elr_trans_preparing();
+    } else if (TCB_CLEAN_DIRTY_CB == type) {
+      ret = clean_dirty_cb();
     } else if (TCB_PRINT_CALLBACK == type) {
       ret = print_callback();
     } else {
@@ -910,6 +923,7 @@ int ObMvccRowCallback::row_pending()
   } else {
     if (NULL != tnode_) {
       if (INT64_MAX == ctx_.get_trans_version()) {
+        TRANS_LOG(ERROR, "It should never go here", K(*this), K_(ctx));
         unlink_trans_node();
       } else if (OB_FAIL(tnode_->fill_trans_version(ctx_.get_trans_version()))) {
         TRANS_LOG(WARN, "fill trans version failed", K(ret), K_(ctx));
@@ -1140,6 +1154,10 @@ int ObMvccRowCallback::trans_commit(const bool for_replay)
           const int64_t MAX_TRANS_NODE_CNT = 2 * GCONF._ob_elr_fast_freeze_threshold;
           if (value_.total_trans_node_cnt_ >= MAX_TRANS_NODE_CNT) {
             ctx_.set_contain_hotspot_row();
+          }
+          //print debug log when total trans node cnt great to 200 * 10000;
+          if (value_.total_trans_node_cnt_ > 2000000 && REACH_TIME_INTERVAL(120 * 1000 * 1000)) {
+            TRANS_LOG(INFO, "[FF] trans commit succ", K_(ctx), K_(value));
           }
           (void)ATOMIC_FAA(&value_.update_since_compact_, 1);
           if (value_.need_compact(for_read, for_replay)) {
@@ -1438,6 +1456,21 @@ int ObMvccRowCallback::fetch_rollback_data_size(int64_t& rollback_data_size)
 uint32_t ObMvccRowCallback::get_ctx_descriptor() const
 {
   return ctx_.get_ctx_descriptor();
+}
+
+int ObMvccRowCallback::clean_dirty_cb()
+{
+  int ret = OB_SUCCESS;
+
+  if (marked_for_logging_ || need_fill_redo_) {
+    // dirty callbacks
+    unlink_trans_node();
+    dec_pending_cb_count();
+    marked_for_logging_ = false;
+    need_fill_redo_ = false;
+  }
+
+  return ret;
 }
 
 };  // namespace memtable

@@ -16,6 +16,8 @@
 #include "share/backup/ob_backup_manager.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "share/backup/ob_backup_operator.h"
+#include "share/backup/ob_log_archive_backup_info_mgr.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -397,16 +399,27 @@ int ObBackupLeaseService::check_sys_backup_info_()
 {
   int ret = OB_SUCCESS;
   ObBackupInfoChecker checker;
+  ObBackupInnerTableVersion inner_table_version = OB_BACKUP_INNER_TABLE_VMAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_ERROR("not inited", K(ret));
-  } else if (OB_FAIL(checker.init(sql_proxy_))) {
+  } else if (OB_FAIL(share::ObBackupInfoOperator::get_inner_table_version(*sql_proxy_, inner_table_version))) {
+    LOG_WARN("failed to get backup inner table version", K(ret));
+  }
+
+  if (FAILEDx(checker.init(sql_proxy_, inner_table_version))) {
     LOG_WARN("failed to init checker", K(ret));
   } else if (OB_FAIL(checker.check(OB_SYS_TENANT_ID))) {
     LOG_WARN("failed to check sys backup info", K(ret));
   }
 
+  if (OB_SUCC(ret) && inner_table_version >= OB_BACKUP_INNER_TABLE_V2) {
+    ObLogArchiveBackupInfoMgr info_mgr;
+    if (OB_FAIL(info_mgr.check_sys_log_archive_status(*sql_proxy_))) {
+      LOG_WARN("failed to check sys backup log archive status ", K(ret));
+    }
+  }
   LOG_TRACE("finish check sys backup info", K(ret));
   return ret;
 }

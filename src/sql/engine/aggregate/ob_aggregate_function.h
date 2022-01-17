@@ -28,7 +28,7 @@ namespace sql {
 typedef common::ObDList<ObSqlExpression> ObAggrExprList;
 
 class ObAggregateDistinctItem {
-  public:
+public:
   ObAggregateDistinctItem()
       : group_id_(0), col_idx_(0), cs_type_(common::CS_TYPE_INVALID), cells_(NULL), cs_type_list_(NULL)
   {}
@@ -64,14 +64,14 @@ class ObAggregateDistinctItem {
 // We only implement distinct logic here, no common interface abstracted here,
 // use the derived class directly.
 class ObAggCellCtx {
-  public:
+public:
   // %alloc is used to initialize the structures, can not be used to hold the data
   explicit ObAggCellCtx(common::ObIAllocator& alloc);
   virtual ~ObAggCellCtx();
 
   virtual void reuse();
 
-  public:
+public:
   // for distinct calculate may be replace by hash based distinct in the future.
   ObUniqueSort* distinct_set_;
   common::ObArrayHelper<ObSortColumn> sort_columns_;
@@ -79,12 +79,12 @@ class ObAggCellCtx {
   int init_distinct_set(const uint64_t tenant_id, const common::ObIArray<common::ObCollationType>& cs_types,
       const int64_t sort_col_cnt, const bool need_rewind);
 
-  protected:
+protected:
   common::ObIAllocator& alloc_;
 };
 
 class ObGroupConcatRowStore {
-  public:
+public:
   ObGroupConcatRowStore();
   ~ObGroupConcatRowStore();
 
@@ -136,7 +136,7 @@ class ObGroupConcatRowStore {
     return need_sort_;
   }
 
-  private:
+private:
   bool need_sort_;
   int64_t rows_;
   int64_t iter_idx_;
@@ -147,7 +147,7 @@ class ObGroupConcatRowStore {
 };
 
 class ObGroupConcatCtx : public ObAggCellCtx {
-  public:
+public:
   ObGroupConcatCtx(common::ObIAllocator& alloc) : ObAggCellCtx(alloc), gc_rs_(NULL)
   {}
 
@@ -155,7 +155,7 @@ class ObGroupConcatCtx : public ObAggCellCtx {
 
   virtual void reuse() override;
 
-  public:
+public:
   ObGroupConcatRowStore* gc_rs_;
 };
 
@@ -166,7 +166,7 @@ enum {
 };
 
 class ObAggregateFunction {
-  public:
+public:
   struct GroupRow {
     GroupRow() : row_(NULL), ctx_(NULL)
     {}
@@ -185,7 +185,7 @@ class ObAggregateFunction {
     TO_STRING_KV(K(expr_), K(ctx_idx_));
   };
 
-  public:
+public:
   ObAggregateFunction();
   ~ObAggregateFunction();
   void set_int_div_as_double(bool did);
@@ -250,7 +250,7 @@ class ObAggregateFunction {
   int deep_copy_cur_row(ObNewRow*& prev_row, const ObNewRow cur_row);
   int compare_calc(ObObj& obj1, ObObj& obj2, const ObOpSchemaObj& extra_info, int32_t& compare_result, bool& is_asc);
 
-  private:
+private:
   inline ObAggCellCtx* get_agg_cell_ctx(const int64_t group_id, const int64_t cell_idx)
   {
     return cell_idx >= 0 ? row_array_.at(group_id).ctx_[cell_idx] : NULL;
@@ -306,7 +306,7 @@ class ObAggregateFunction {
   const static int64_t CONCAT_STR_BUF_LEN = common::OB_MAX_VARCHAR_LENGTH;
   const static int64_t STORED_ROW_MAGIC_NUM = 0xaaaabbbbccccdddd;
 
-  private:
+private:
   // data members
   bool has_distinct_;
   bool has_sort_;

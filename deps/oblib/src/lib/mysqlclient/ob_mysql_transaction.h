@@ -28,11 +28,11 @@ class ObISQLConnectionPool;
 // not thread safe sql transaction execution
 // use one connection
 class ObMySQLTransaction : public ObSingleConnectionProxy {
-  public:
+public:
   ObMySQLTransaction();
   virtual ~ObMySQLTransaction();
 
-  public:
+public:
   // start transaction
   virtual int start(ObISQLClient* proxy, bool with_snapshot = false);
   // end the transaction
@@ -42,11 +42,11 @@ class ObMySQLTransaction : public ObSingleConnectionProxy {
     return in_trans_;
   }
 
-  protected:
+protected:
   int start_transaction(bool with_snap_shot);
   int end_transaction(const bool commit);
 
-  protected:
+protected:
   int64_t start_time_;
   bool in_trans_;
 };

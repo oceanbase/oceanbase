@@ -24,7 +24,7 @@ namespace storage {
 struct ObBackupSSTableMetaInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupSSTableMetaInfo();
   virtual ~ObBackupSSTableMetaInfo() = default;
   int assign(const ObBackupSSTableMetaInfo& sstable_meta_info);
@@ -44,7 +44,7 @@ struct ObBackupSSTableMetaInfo {
 struct ObBackupPartitionStoreMetaInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupPartitionStoreMetaInfo();
   virtual ~ObBackupPartitionStoreMetaInfo() = default;
   int assign(const ObBackupPartitionStoreMetaInfo& partition_store_meta_info);
@@ -58,7 +58,7 @@ struct ObBackupPartitionStoreMetaInfo {
 struct ObBackupPGMetaInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBackupPGMetaInfo();
   virtual ~ObBackupPGMetaInfo() = default;
   int assign(const ObBackupPGMetaInfo& pg_meta_info);
@@ -75,7 +75,7 @@ struct ObBackupTableMacroIndex {
   static const int64_t TABLE_MACRO_INDEX_VERSION = 1;
   OB_UNIS_VERSION(TABLE_MACRO_INDEX_VERSION);
 
-  public:
+public:
   ObBackupTableMacroIndex();
   virtual ~ObBackupTableMacroIndex() = default;
   void reset();
@@ -99,7 +99,7 @@ struct ObBackupTableKeyInfo {
   static const int64_t BACKUP_TABLE_KEY_META_VERSION = 1;
   OB_UNIS_VERSION(BACKUP_TABLE_KEY_META_VERSION);
 
-  public:
+public:
   ObBackupTableKeyInfo();
   virtual ~ObBackupTableKeyInfo() = default;
   void reset();

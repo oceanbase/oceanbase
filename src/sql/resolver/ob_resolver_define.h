@@ -267,6 +267,7 @@ struct ObResolverParams {
         is_from_show_resolver_(false),
         is_restore_(false),
         is_from_create_view_(false),
+        is_from_create_table_(false),
         is_prepare_protocol_(false),
         is_prepare_stage_(false),
         is_dynamic_sql_(false),
@@ -285,14 +286,17 @@ struct ObResolverParams {
         new_cte_tid_(common::OB_MIN_CTE_TABLE_ID),
         new_gen_wid_(1),
         is_multi_table_insert_(false),
-        is_resolve_table_function_expr_(false)
+        is_resolve_table_function_expr_(false),
+        has_cte_param_list_(false),
+        has_recursive_word(false),        
+        is_column_ref_(true)
   {}
   bool is_force_trace_log()
   {
     return force_trace_log_;
   }
 
-  public:
+public:
   common::ObIAllocator* allocator_;
   ObSchemaChecker* schema_checker_;
   ObSQLSessionInfo* session_info_;
@@ -313,6 +317,7 @@ struct ObResolverParams {
   bool is_from_show_resolver_;
   bool is_restore_;
   bool is_from_create_view_;
+  bool is_from_create_table_;
   bool is_prepare_protocol_;
   bool is_prepare_stage_;
   bool is_dynamic_sql_;
@@ -326,7 +331,7 @@ struct ObResolverParams {
   bool have_same_table_name_;
   bool is_default_param_;
 
-  private:
+private:
   uint64_t new_gen_did_;
   uint64_t new_gen_cid_;
   uint64_t new_gen_qid_;
@@ -334,9 +339,12 @@ struct ObResolverParams {
   int64_t new_gen_wid_;  // when number
   friend class ObStmtResolver;
 
-  public:
+public:
   bool is_multi_table_insert_;           // used to mark is multi table insert
   bool is_resolve_table_function_expr_;  // used to mark resolve table function expr.
+  bool has_cte_param_list_;
+  bool has_recursive_word;
+  bool is_column_ref_;                   // used to mark normal column ref
 };
 }  // end namespace sql
 }  // end namespace oceanbase

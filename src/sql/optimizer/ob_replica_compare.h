@@ -17,11 +17,11 @@
 namespace oceanbase {
 namespace sql {
 class ObReplicaCompare {
-  public:
+public:
   enum CompareType { IS_OTHER_REGION, ZONE_TYPE, MERGE_STATUS, POS_TYPE, CMP_CNT };
   enum CompareRes { EQUAL, LESS, GREATER };
 
-  public:
+public:
   explicit ObReplicaCompare(ObRoutePolicyType policy_type);
   virtual ~ObReplicaCompare()
   {}
@@ -43,7 +43,7 @@ class ObReplicaCompare {
   typedef CompareRes (ObReplicaCompare::*CmpFuncPtr)(
       const ObRoutePolicy::CandidateReplica& replica1, const ObRoutePolicy::CandidateReplica& replica2);
 
-  private:
+private:
   int ret_;
   ObRoutePolicyType policy_type_;
   CmpFuncPtr cmp_func_array_[CMP_CNT];

@@ -25,7 +25,7 @@ namespace schema {
 class ObDatabaseSchema;
 
 class ObDatabaseSqlService : public ObDDLSqlService {
-  public:
+public:
   ObDatabaseSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObDatabaseSqlService()
@@ -41,7 +41,7 @@ class ObDatabaseSqlService : public ObDDLSqlService {
   virtual int drop_database_for_inspection(
       ObISQLClient& sql_client, const ObDatabaseSchema& db_schema, const int64_t new_schema_version);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDatabaseSqlService);
 };
 

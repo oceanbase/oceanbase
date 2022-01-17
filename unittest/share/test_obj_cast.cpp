@@ -21,7 +21,7 @@ namespace common {
 using namespace number;
 
 class TestObjCast : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}

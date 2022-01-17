@@ -14,7 +14,8 @@
 #define OB_LOG_FILE_STORE_H_
 
 #include <sys/stat.h>
-#include "ob_log_disk_manager.h"
+#include "lib/atomic/ob_atomic.h"
+#include "share/redolog/ob_log_disk_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
 namespace oceanbase {
@@ -53,7 +54,7 @@ struct ObLogFileIOInfo final {
 };
 
 class ObLogFileDescriptor final {
-  public:
+public:
   friend class ObLogFileStore;
   friend class ObLogFileReader;
 
@@ -77,7 +78,7 @@ class ObLogFileDescriptor final {
   static const int8_t WRITE_FLAG = 2;
   static const int8_t TEMP_FLAG = 4;
 
-  private:
+private:
   int get_log_fd(const int64_t disk_id);
   OB_INLINE bool is_tmp() const
   {
@@ -94,7 +95,7 @@ class ObLogFileDescriptor final {
   bool is_valid_state(const ObLogDiskState state);
   static const int8_t FLAG_MASK = 0x0F;
 
-  private:
+private:
   int8_t flag_;
 
   // local fd
@@ -108,7 +109,7 @@ class ObLogFileDescriptor final {
 };
 
 class ObLogFileReader final {
-  public:
+public:
   static int get_fd(
       const char* log_dir, const int64_t file_id, const ObRedoLogType log_type, ObLogFileDescriptor& log_fd);
   static int64_t pread(ObLogFileDescriptor& log_fd, void* buf, const int64_t count, const int64_t offset);
@@ -119,7 +120,7 @@ class ObLogFileReader final {
 // It exposes file_id to caller but hide the underlying multiple disks detail.
 // Caller read or write log file by file_id.
 class ObILogFileStore {
-  public:
+public:
   ObILogFileStore() : log_type_(OB_REDO_TYPE_INVALID)
   {}
   virtual ~ObILogFileStore()
@@ -159,6 +160,8 @@ class ObILogFileStore {
   virtual void try_recycle_file() = 0;
   virtual int update_free_quota() = 0;
   virtual bool free_quota_warn() const = 0;
+  virtual bool is_disk_warning() const = 0;
+  virtual void set_disk_warning(bool disk_warning) = 0;
   virtual ObRedoLogType get_redo_log_type() const
   {
     return log_type_;
@@ -169,26 +172,25 @@ class ObILogFileStore {
   static int format_file_path(
       char* buf, const int64_t size, const char* log_dir, const int64_t file_id, const bool is_tmp);
 
-  public:
+public:
   static const int OPEN_FLAG_READ = O_RDONLY | O_DIRECT;
   static const int OPEN_FLAG_WRITE = O_WRONLY | O_DIRECT | O_SYNC | O_CREAT | O_APPEND;
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   static const int64_t DEFAULT_DISK_USE_PERCENT = 80;  // default value for clog
   static const int64_t SLOG_DISK_USE_PERCENT = 80;
 
-  protected:
+protected:
   static const int MAX_IO_COUNT = 1024;
   static const int64_t AIO_TIMEOUT_SECOND = 30;
-  static const int64_t CLOG_AIO_TIMEOUT_SECOND = 300;
   static const int64_t AIO_RETRY_INTERVAL_US = 100 * 1000;  // 100ms
   static const int64_t MAX_DISK_COUNT = ObLogDiskManager::MAX_DISK_COUNT;
-  static const int MAX_IO_RETRY = 3;
+  static const int64_t MAX_IO_RETRY = LLONG_MAX;
 
   ObRedoLogType log_type_;
 };
 
 class ObLogFileStore : public ObILogFileStore {
-  public:
+public:
   ObLogFileStore();
   virtual ~ObLogFileStore();
 
@@ -259,7 +261,17 @@ class ObLogFileStore : public ObILogFileStore {
     return disk_mgr_->free_quota_warn();
   }
 
-  private:
+  virtual bool is_disk_warning() const
+  {
+    return ATOMIC_LOAD(&is_disk_warning_);
+  }
+
+  virtual void set_disk_warning(bool disk_warning)
+  {
+    ATOMIC_STORE(&is_disk_warning_, disk_warning);
+  }
+
+private:
   int inner_open(const int64_t file_id, const int8_t flag, ObLogFileDescriptor& log_fd);
   int inner_close(ObLogFileDescriptor& log_fd);
   int rename(const int64_t file_id);
@@ -270,8 +282,9 @@ class ObLogFileStore : public ObILogFileStore {
   bool process_retry(const int result, int64_t& retry);
   int process_failed_write();
   int fstat(const int64_t file_id, struct stat* file_stat) const;
+  void check_disk_warning(const int64_t begin_ts, const int64_t end_ts);
 
-  private:
+private:
   bool is_inited_;
   ObLogDiskManager* disk_mgr_;
 
@@ -284,6 +297,9 @@ class ObLogFileStore : public ObILogFileStore {
   struct iocb io_reqs_[MAX_DISK_COUNT];
   struct iocb* io_req_ptrs_[MAX_DISK_COUNT];
   ObLogFileIOInfo pending_wr_[MAX_DISK_COUNT];
+
+  // io hang state
+  bool is_disk_warning_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogFileStore);
 };

@@ -20,14 +20,14 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLessThan : public ObRelationalExprOperator {
-  public:
+public:
   ObExprLessThan();
   explicit ObExprLessThan(common::ObIAllocator& alloc);
   virtual ~ObExprLessThan(){};
   virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const override;
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   static int calc(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
       const common::ObCompareCtx& cmp_ctx, common::ObCastCtx& cast_ctx);
   static int calc_nocast(
@@ -38,7 +38,7 @@ class ObExprLessThan : public ObRelationalExprOperator {
     return ObRelationalExprOperator::cg_expr(expr_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLessThan);
 };
 

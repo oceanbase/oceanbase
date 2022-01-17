@@ -28,7 +28,7 @@ class ObSEArrayIterator;
 
 // ObNullAllocator cannot alloc buffer
 class ObNullAllocator : public ObIAllocator {
-  public:
+public:
   ObNullAllocator(const lib::ObLabel& label = ObModIds::OB_MOD_DO_NOT_USE_ME, int64_t tenant_id = OB_SERVER_TENANT_ID)
   {
     UNUSED(label);
@@ -38,12 +38,12 @@ class ObNullAllocator : public ObIAllocator {
   {
     UNUSED(allocator);
   }
-  virtual void* alloc(int64_t sz)
+  virtual void* alloc(const int64_t sz) override
   {
     UNUSEDx(sz);
     return nullptr;
   }
-  virtual void* alloc(int64_t sz, const ObMemAttr& attr)
+  virtual void* alloc(const int64_t sz, const ObMemAttr& attr) override
   {
     UNUSEDx(sz, attr);
     return nullptr;
@@ -55,11 +55,11 @@ class ObNullAllocator : public ObIAllocator {
 template <typename BlockAllocatorT>
 static inline void init_block_allocator(lib::MemoryContext& mem_entity, BlockAllocatorT& block_allocator)
 {
-  block_allocator = BlockAllocatorT(mem_entity.get_allocator());
+  block_allocator = BlockAllocatorT(mem_entity->get_allocator());
 }
 static inline void init_block_allocator(lib::MemoryContext& mem_entity, ModulePageAllocator& block_allocator)
 {
-  block_allocator = ModulePageAllocator(mem_entity.get_allocator(), block_allocator.get_label());
+  block_allocator = ModulePageAllocator(mem_entity->get_allocator(), block_allocator.get_label());
 }
 
 // ObSEArrayImpl is a high performant array for OceanBase developers,
@@ -69,7 +69,7 @@ static inline void init_block_allocator(lib::MemoryContext& mem_entity, ModulePa
 static const int64_t OB_DEFAULT_SE_ARRAY_COUNT = 64;
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
 class ObSEArrayImpl : public ObIArray<T> {
-  public:
+public:
   using ObIArray<T>::count;
   using ObIArray<T>::at;
 
@@ -285,15 +285,15 @@ class ObSEArrayImpl : public ObIArray<T> {
     return offsetof(ObSEArrayImpl, mem_context_) * 8;
   }
 
-  public:
+public:
   iterator begin();
   iterator end();
 
-  private:
+private:
   // types and constants
   static const int64_t DEFAULT_MAX_PRINT_COUNT = 32;
 
-  private:
+private:
   // if the object has construct but doesn't have virtual function, it cannot memcpy
   // but it doesn't need to call destructor
   inline bool is_memcpy_safe() const
@@ -310,8 +310,8 @@ class ObSEArrayImpl : public ObIArray<T> {
   {
     if (OB_UNLIKELY(!has_alloc_)) {
       if (auto_free) {
-        mem_context_ = &CURRENT_CONTEXT;
-        init_block_allocator(*mem_context_, block_allocator_);
+        mem_context_ = CURRENT_CONTEXT;
+        init_block_allocator(mem_context_, block_allocator_);
       }
       has_alloc_ = true;
     } else {
@@ -330,11 +330,11 @@ class ObSEArrayImpl : public ObIArray<T> {
     return block_allocator_.free(p);
   }
 
-  protected:
+protected:
   using ObIArray<T>::data_;
   using ObIArray<T>::count_;
 
-  private:
+private:
   char local_data_buf_[LOCAL_ARRAY_SIZE * sizeof(T)];
   int64_t block_size_;
   int64_t capacity_;
@@ -342,7 +342,7 @@ class ObSEArrayImpl : public ObIArray<T> {
   int error_;
   BlockAllocatorT block_allocator_;
   bool has_alloc_;
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
 };
 
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT, bool auto_free>
@@ -478,6 +478,9 @@ void ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>::pop_back()
 {
   if (OB_UNLIKELY(count_ <= 0)) {
   } else {
+    if (!is_memcpy_safe()) {
+      data_[count_ - 1].~T();
+    }
     --count_;
   }
 }
@@ -703,7 +706,7 @@ ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>::ObSEArrayImpl(
 
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
 class ObSEArray final : public ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free> {
-  public:
+public:
   using ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>::ObSEArrayImpl;
 };
 

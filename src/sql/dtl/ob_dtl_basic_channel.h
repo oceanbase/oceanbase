@@ -83,7 +83,7 @@ static_assert(ARRAYSIZEOF(msg_writer_map) == ObDtlMsgType::MAX, "invalid ms_writ
 // 2) ObRow msg
 // 3) Array<ObExprs> new engine msg
 class ObDtlChannelEncoder {
-  public:
+public:
   virtual int write(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, const bool is_eof) = 0;
   virtual int need_new_buffer(const ObDtlMsg& msg, ObEvalCtx* ctx, int64_t& need_size, bool& need_new) = 0;
   virtual void write_msg_type(ObDtlLinkedBuffer*) = 0;
@@ -98,7 +98,7 @@ class ObDtlChannelEncoder {
 };
 
 class ObDtlControlMsgWriter : public ObDtlChannelEncoder {
-  public:
+public:
   ObDtlControlMsgWriter() : type_(CONTROL_WRITER), write_buffer_(nullptr)
   {}
   virtual DtlWriterType type()
@@ -149,7 +149,7 @@ class ObDtlControlMsgWriter : public ObDtlChannelEncoder {
 };
 
 class ObDtlRowMsgWriter : public ObDtlChannelEncoder {
-  public:
+public:
   ObDtlRowMsgWriter();
   virtual ~ObDtlRowMsgWriter();
 
@@ -183,7 +183,7 @@ class ObDtlRowMsgWriter : public ObDtlChannelEncoder {
     buffer->msg_type() = ObDtlMsgType::PX_CHUNK_ROW;
   }
 
-  private:
+private:
   DtlWriterType type_;
   ObChunkRowStore row_store_;
   ObChunkRowStore::Block* block_;
@@ -215,7 +215,7 @@ OB_INLINE int ObDtlRowMsgWriter::write(const ObDtlMsg& msg, ObEvalCtx* eval_ctx,
 }
 
 class ObDtlDatumMsgWriter : public ObDtlChannelEncoder {
-  public:
+public:
   ObDtlDatumMsgWriter();
   virtual ~ObDtlDatumMsgWriter();
 
@@ -249,7 +249,7 @@ class ObDtlDatumMsgWriter : public ObDtlChannelEncoder {
     buffer->msg_type() = ObDtlMsgType::PX_DATUM_ROW;
   }
 
-  private:
+private:
   DtlWriterType type_;
   ObDtlLinkedBuffer* write_buffer_;
   ObChunkDatumStore::Block* block_;
@@ -283,7 +283,7 @@ OB_INLINE int ObDtlDatumMsgWriter::write(const ObDtlMsg& msg, ObEvalCtx* eval_ct
 }
 
 class SendMsgResponse {
-  public:
+public:
   SendMsgResponse();
   virtual ~SendMsgResponse();
 
@@ -321,7 +321,7 @@ class SendMsgResponse {
 
   TO_STRING_KV(KP_(inited), K_(ret));
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(SendMsgResponse);
   bool inited_;
@@ -339,17 +339,17 @@ class SendMsgResponse {
 class ObDtlBasicChannel : public ObDtlChannel {
   friend class ObDtlChanAgent;
 
-  public:
+public:
   explicit ObDtlBasicChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr& peer);
   virtual ~ObDtlBasicChannel();
 
-  virtual DtlChannelType get_channel_type()
+  virtual DtlChannelType get_channel_type() override
   {
     return DtlChannelType::BASIC_CHANNEL;
   }
 
   class ObDtlChannelBlockProc : public ObIDltChannelLoopPred {
-    public:
+  public:
     void set_ch_idx_var(int64_t* chan_idx)
     {
       chan_idx_ = chan_idx;
@@ -368,7 +368,7 @@ class ObDtlBasicChannel : public ObDtlChannel {
   virtual int send(
       const ObDtlMsg& msg, int64_t timeout_ts, ObEvalCtx* eval_ctx = nullptr, bool is_eof = false) override;
   virtual int feedup(ObDtlLinkedBuffer*& buffer) override;
-  virtual int attach(ObDtlLinkedBuffer*& linked_buffer, bool is_first_buffer_cached = false);
+  virtual int attach(ObDtlLinkedBuffer*& linked_buffer, bool is_first_buffer_cached = false) override;
   // don't call send&flush in different threads.
   virtual int flush(bool wait = true, bool wait_response = true) override;
 
@@ -397,8 +397,8 @@ class ObDtlBasicChannel : public ObDtlChannel {
   int unblock_on_decrease_size(int64_t size);
   bool belong_to_receive_data();
   bool belong_to_transmit_data();
-  virtual int clear_response_block();
-  virtual int wait_response();
+  virtual int clear_response_block() override;
+  virtual int wait_response() override;
   void inc_send_buffer_cnt()
   {
     ++send_buffer_cnt_;
@@ -425,12 +425,12 @@ class ObDtlBasicChannel : public ObDtlChannel {
   }
 
   int get_processed_buffer(int64_t timeout);
-  virtual int clean_recv_list();
+  virtual int clean_recv_list() override;
   void clean_broadcast_buffer();
   bool has_less_buffer_cnt();
   int push_back_send_list(ObDtlLinkedBuffer* buffer);
 
-  void set_dfc_idx(int64_t idx)
+  void set_dfc_idx(int64_t idx) override
   {
     dfc_idx_ = idx;
   }
@@ -444,7 +444,7 @@ class ObDtlBasicChannel : public ObDtlChannel {
 
   TO_STRING_KV(KP_(id), K_(peer));
 
-  protected:
+protected:
   int push_back_send_list();
   int wait_unblocking();
   int switch_buffer(const int64_t min_size, const bool is_eof, const int64_t timeout_ts);
@@ -461,12 +461,12 @@ class ObDtlBasicChannel : public ObDtlChannel {
     return &msg_response_;
   }
 
-  OB_INLINE virtual bool has_msg()
+  OB_INLINE virtual bool has_msg() override
   {
     return recv_buffer_cnt_ > processed_buffer_cnt_;
   }
 
-  protected:
+protected:
   bool is_inited_;
   const uint64_t local_id_;
   const int64_t peer_id_;
@@ -507,7 +507,7 @@ class ObDtlBasicChannel : public ObDtlChannel {
   ObDtlChannelBlockProc block_proc_;
   static const int64_t MAX_BUFFER_CNT = 2;
 
-  public:
+public:
   // TODO delete
   int64_t times_;
   int64_t write_buf_use_time_;

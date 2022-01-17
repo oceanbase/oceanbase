@@ -71,7 +71,7 @@ class ObPrivMgr {
   typedef ObjPrivInfos::iterator ObjPrivIter;
   typedef ObjPrivInfos::const_iterator ConstObjPrivIter;
 
-  public:
+public:
   ObPrivMgr();
   explicit ObPrivMgr(common::ObIAllocator& allocator);
   virtual ~ObPrivMgr();
@@ -141,11 +141,11 @@ class ObPrivMgr {
   int get_priv_schema_count(int64_t& priv_scheam_count) const;
   int get_schema_statistics(const ObSchemaType schema_type, ObSchemaStatisticsInfo& schema_info) const;
 
-  private:
+private:
   int get_db_priv_iter(const ObOriginalDBKey& db_key, DBPrivIter& target_db_priv_iter) const;
   int get_sys_priv_iter(const ObSysPrivKey& sys_key, SysPrivIter& target_sys_priv_iter) const;
 
-  private:
+private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;
   DBPrivInfos db_privs_;

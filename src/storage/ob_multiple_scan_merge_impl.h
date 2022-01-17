@@ -24,7 +24,7 @@
 namespace oceanbase {
 namespace storage {
 class ObQueryIteratorConsumer {
-  public:
+public:
   ObQueryIteratorConsumer()
   {
     reset();
@@ -81,20 +81,20 @@ class ObQueryIteratorConsumer {
   TO_STRING_KV(
       "consumers", ObArrayWrap<int64_t>(consumer_iters_, consumer_num_), K_(consumer_num), K_(base_sstable_iter_idx));
 
-  private:
+private:
   int64_t consumer_iters_[common::MAX_TABLE_CNT_IN_STORAGE];
   int64_t consumer_num_;
   int64_t base_sstable_iter_idx_;
 };
 
 class ObMultipleScanMergeImpl : public ObMultipleMerge {
-  public:
+public:
   ObMultipleScanMergeImpl();
   virtual ~ObMultipleScanMergeImpl();
 
   virtual int init(
-      const ObTableAccessParam& param, ObTableAccessContext& context, const ObGetTableParam& get_table_param);
-  virtual int inner_get_next_row(ObStoreRow& row);
+      const ObTableAccessParam& param, ObTableAccessContext& context, const ObGetTableParam& get_table_param) override;
+  virtual int inner_get_next_row(ObStoreRow& row) override;
   virtual void reset() override;
   virtual void reuse() override;
   inline bool is_scan_end() const
@@ -102,17 +102,17 @@ class ObMultipleScanMergeImpl : public ObMultipleMerge {
     return loser_tree_.empty();
   }
 
-  protected:
+protected:
   int reset_range(int idx, int64_t range_idx, const ObStoreRowkey* rowkey, const bool include_gap_key);
   int supply_consume();
   int prepare_range_skip();
   int inner_get_next_row(ObStoreRow& row, bool& need_retry);
   int prepare_loser_tree();
 
-  private:
+private:
   int try_skip_range(const ObStoreRow* row, int idx, uint8_t flag, bool first_pop, bool& skipped);
 
-  protected:
+protected:
   ObScanMergeLoserTreeCmp tree_cmp_;
   ObScanMergeLoserTree loser_tree_;
   bool iter_del_row_;
@@ -121,7 +121,7 @@ class ObMultipleScanMergeImpl : public ObMultipleMerge {
   ObRangePurger range_purger_;
   ObRangeSkip range_skip_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultipleScanMergeImpl);
 };
 

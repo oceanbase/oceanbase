@@ -927,13 +927,15 @@ int ObMemtableMultiVersionScanIterator::init(const storage::ObTableIterParam& pa
 int ObMemtableMultiVersionScanIterator::init_row_cells(ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
+  void *buf = nullptr;
   if (OB_ISNULL(allocator)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "allocator is null", K(ret), K(allocator));
-  } else if (NULL == (row_.row_val_.cells_ = (ObObj*)allocator->alloc(sizeof(ObObj) * columns_.count()))) {
+  } else if (NULL == (buf = (ObObj*)allocator->alloc(sizeof(ObObj) * columns_.count()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "alloc cells fail", K(ret), "size", sizeof(ObObj) * columns_.count());
   } else {
+    row_.row_val_.cells_ = new (buf) ObObj[columns_.count()];
     row_.row_val_.count_ = columns_.count();
   }
   return ret;
@@ -1337,6 +1339,8 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObStoreRo
         if (OB_ITER_END != ret) {
           TRANS_LOG(WARN, "failed to get next uncommitted node", K(ret), K(tnode));
         }
+      } else if (ObActionFlag::OP_DEL_ROW == row.flag_) {
+        continue;
       } else {
         const ObMvccTransNode* trans_node = reinterpret_cast<const ObMvccTransNode*>(tnode);
         if (OB_ISNULL(trans_node)) {

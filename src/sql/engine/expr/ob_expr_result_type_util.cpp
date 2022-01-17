@@ -613,9 +613,9 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObSQLSessionInfo
 
   if (OB_FAIL(ret)) {
   } else if (orig_type.is_character_type()) {
-    CK(LS_BYTE == orig_ls || LS_CHAR == orig_ls);
-    if (OB_FAIL(ret)) {
-    } else if (LS_BYTE == target_ls && LS_CHAR == orig_ls) {
+    // 当参数为 character 类型是，语义必定为 byte 或 char
+    if (LS_BYTE == target_ls && LS_CHAR == orig_ls) {
+      // 当从 char 语义 转化到 byte 语义时，需要乘以 mbmaxlen
       length *= mbmaxlen;
     } else if (LS_CHAR == target_ls && LS_BYTE == orig_ls) {
       ret = OB_ERR_UNEXPECTED;

@@ -24,44 +24,44 @@
 #define OB_DEFINE_PROCESSOR_S(cls, pcode, pname)              \
   OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)               \
   {                                                           \
-    public:                                                   \
+  public:                                                     \
     explicit pname(const ObGlobalContext& gctx) : gctx_(gctx) \
     {}                                                        \
                                                               \
-    protected:                                                \
+  protected:                                                  \
     int process();                                            \
                                                               \
-    private:                                                  \
+  private:                                                    \
     const ObGlobalContext& gctx_;                             \
   }
 
 #define OB_DEFINE_PROCESSOR_SM(cls, pcode, pname)             \
   OB_DEFINE_PROCESSOR(cls, obrpc::pcode, pname)               \
   {                                                           \
-    public:                                                   \
+  public:                                                     \
     explicit pname(const ObGlobalContext& gctx) : gctx_(gctx) \
     {}                                                        \
                                                               \
-    protected:                                                \
+  protected:                                                  \
     int process();                                            \
     int after_process();                                      \
                                                               \
-    private:                                                  \
+  private:                                                    \
     const ObGlobalContext& gctx_;                             \
   }
 
 #define RPC_PROCESSOR_X(pcode, pname)           \
   OB_DEFINE_PROCESSOR(Srv, obrpc::pcode, pname) \
   {                                             \
-    public:                                     \
+  public:                                       \
     explicit pname(int ret) : ret_(ret)         \
     {}                                          \
                                                 \
-    protected:                                  \
+  protected:                                    \
     int process();                              \
     int deserialize();                          \
                                                 \
-    private:                                    \
+  private:                                      \
     int ret_;                                   \
   }
 
@@ -70,16 +70,16 @@ namespace observer {
 
 OB_DEFINE_PROCESSOR(Srv, obrpc::OB_GET_DIAGNOSE_ARGS, ObGetDiagnoseArgsP)
 {
-  public:
+public:
   ObGetDiagnoseArgsP() : pwbuf_(), passwd_(), argsbuf_()
   {
     passwd_.assign_buffer(pwbuf_, sizeof(pwbuf_));
   }
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   char pwbuf_[64];
   common::ObString passwd_;
   char argsbuf_[1024];
@@ -105,6 +105,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_ROOT_PARTITION, ObRpcFetchRootPartitionP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_RS_LIST, ObRpcBroadcastRsListP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_ADD_REPLICA, ObRpcAddReplicaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_LOG_ARCHIVE_STATUS, ObRpcGetTenantLogArchiveStatusP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_LOG_ARCHIVE_STATUS_V2, ObRpcGetTenantLogArchiveStatusV2P);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REMOVE_NON_PAXOS_REPLICA, ObRpcRemoveNonPaxosReplicaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REMOVE_MEMBER, ObRpcRemoveMemberP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_MIGRATE_REPLICA, ObRpcMigrateReplicaP);
@@ -157,6 +158,8 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_FORCE_SET_SERVER_LIST, ObForceSetServerListP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_BACKUP_TASK_EXIST, ObRpcCheckBackupTaskExistP);
 OB_DEFINE_PROCESSOR_S(Common, OB_CHECK_BACKUP_SCHEDULER_WORKING, ObRpcCheckBackupSchuedulerWorkingP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_VALIDATE_BACKUP_BATCH, ObRpcValidateBackupBatchP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_ARCHIVE_LOG_BATCH, ObRpcBackupArchiveLogBatchP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BACKUP_BACKUPSET_BATCH, ObRpcBackupBackupsetBatchP);
 
 OB_DEFINE_PROCESSOR_S(Srv, OB_REPORT_REPLICA, ObReportReplicaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REPORT_SINGLE_REPLICA, ObReportSingleReplicaP);
@@ -174,6 +177,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_GET_MEMBER_LIST_AND_LEADER, ObRpcGetMemberListAndL
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_MEMBER_LIST_AND_LEADER_V2, ObRpcGetMemberListAndLeaderV2P);
 OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_GET_MEMBER_LIST_AND_LEADER, ObRpcBatchGetMemberListAndLeaderP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_GET_ROLE, ObRpcBatchGetRoleP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_LOCATIONS, ObRpcBroadcastLocationsP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_BATCH_GET_PROTECTION_LEVEL, ObRpcBatchGetProtectionLevelP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_NEED_OFFLINE_REPLICA, ObRpcCheckNeedOffineReplicaP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_FLASHBACK_INFO_DUMP, ObRpcCheckFlashbackInfoDumpP);

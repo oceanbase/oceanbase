@@ -16,6 +16,8 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server_struct.h"
 #include "share/config/ob_common_config.h"
+#include "ob_multi_tenant.h"
+#include "ob_tenant.h"
 
 using namespace oceanbase::common;
 
@@ -219,13 +221,16 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
 int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t DELAY_DEL_US = 10 * 60 * 1000 * 1000;  // 10min
   ObTenantConfig* config = nullptr;
+  ObTenant* tenant = NULL;
   ObLatchWGuard wr_guard(rwlock_, ObLatchIds::CONFIG_LOCK);
   if (is_virtual_tenant_id(tenant_id)) {
   } else if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
     LOG_WARN("get tenant config failed", K(tenant_id), K(ret));
-  } else if (config->get_current_version() + DELAY_DEL_US < ObTimeUtility::current_time()) {
+  } else if (OB_SUCC(GCTX.omt_->get_tenant(tenant_id, tenant))) {
+    // https://work.aone.alibaba-inc.com/issue/31717023
+    // 判断租户是否在这台机器上，避免启动时没有刷到租户时删掉了租户配置项
+    LOG_WARN("tenant still exist, try to delete tenant config later...", K(tenant_id));
   } else {
     static const int DEL_TRY_TIMES = 30;
     static const int64_t TIME_SLICE_PERIOD = 10000;

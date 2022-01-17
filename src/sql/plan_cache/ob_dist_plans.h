@@ -28,7 +28,7 @@ class ObPhyTableLocationInfo;
 class ObSqlPlanSet;
 
 class ObDistPlans {
-  public:
+public:
   ObDistPlans() : plan_set_(NULL), should_get_plan_directly_(false)
   {}
 
@@ -98,7 +98,7 @@ class ObDistPlans {
   // get first plan in the array if possible
   ObPhysicalPlan* get_first_plan();
 
-  private:
+private:
   /**
    * @brief check if loc constraint can meet in current loc cache.
    * if yes, return the plan
@@ -166,13 +166,13 @@ class ObDistPlans {
       const common::ObIArray<ObPhyTableLocationInfo>& phy_tbl_infos, ObIArray<PwjTable>& pwj_tables,
       ObPwjComparer& pwj_comparer, PWJPartitionIdMap& pwj_map, bool& is_same) const;
 
-  private:
+private:
   common::ObSEArray<ObPhysicalPlan*, 4> dist_plans_;
   ObSqlPlanSet* plan_set_;
   // optimize perf for single table distributed plan
   bool should_get_plan_directly_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistPlans);
 };
 

@@ -24,7 +24,7 @@ namespace sql {
 class ObPhyTableLocation;
 
 class ObTableInsertReturningInput : public ObTableInsertInput {
-  public:
+public:
   ObTableInsertReturningInput() : ObTableInsertInput()
   {}
   virtual ~ObTableInsertReturningInput()
@@ -34,7 +34,7 @@ class ObTableInsertReturningInput : public ObTableInsertInput {
     return PHY_INSERT_RETURNING;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertReturningInput);
 };
 
@@ -42,27 +42,27 @@ class ObTableInsertReturning : public ObTableInsert {
   class ObTableInsertReturningCtx;
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObTableInsertReturning(common::ObIAllocator& alloc);
   ~ObTableInsertReturning();
   void reset();
   void reuse();
   int set_insert_row_exprs();
 
-  protected:
+protected:
   int init_op_ctx(ObExecContext& ctx) const override;
   int inner_open(ObExecContext& ctx) const override;
   int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
   int inner_close(ObExecContext& ctx) const override;
 
-  protected:
+protected:
   // exprs for calculating the inserted row
   common::ObDList<ObSqlExpression> insert_row_exprs_;
   // projector for building the inserted row
   int32_t* insert_projector_;
   int64_t insert_projector_size_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableInsertReturning);
 };
 }  // namespace sql

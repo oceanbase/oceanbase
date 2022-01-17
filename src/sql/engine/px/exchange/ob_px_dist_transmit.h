@@ -18,7 +18,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxDistTransmitInput : public ObPxTransmitInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
   virtual ObPhyOperatorType get_phy_op_type() const
@@ -28,7 +28,7 @@ class ObPxDistTransmitInput : public ObPxTransmitInput {
 };
 
 class ObPxDistTransmit : public ObPxTransmit {
-  public:
+public:
   ObPxDistTransmit(common::ObIAllocator& alloc) : ObPxTransmit(alloc)
   {}
   virtual ~ObPxDistTransmit() = default;
@@ -39,7 +39,7 @@ class ObPxDistTransmit : public ObPxTransmit {
   virtual int init_op_ctx(ObExecContext& ctx) const override;
   virtual int create_operator_input(ObExecContext& ctx) const override;
 
-  private:
+private:
   int do_hash_dist(ObExecContext& ctx, ObPxTransmitCtx& op_ctx) const;
   int do_bc2host_dist(ObExecContext& ctx, ObPxTransmitCtx& op_ctx) const;
   int do_random_dist(ObExecContext& ctx, ObPxTransmitCtx& op_ctx) const;

@@ -32,7 +32,7 @@ class ObMySQLResult;
 namespace share {
 
 class ObSchemaStatusSnapshotUpdater {
-  public:
+public:
   ObSchemaStatusSnapshotUpdater(int64_t snapshot_timestamp) : snapshot_timestamp_(snapshot_timestamp)
   {}
   virtual ~ObSchemaStatusSnapshotUpdater()
@@ -40,13 +40,13 @@ class ObSchemaStatusSnapshotUpdater {
 
   int operator()(common::hash::HashMapPair<uint64_t, share::schema::ObRefreshSchemaStatus>& entry);
 
-  private:
+private:
   int64_t snapshot_timestamp_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaStatusSnapshotUpdater);
 };
 
 class ObSchemaStatusVersionUpdater {
-  public:
+public:
   ObSchemaStatusVersionUpdater(int64_t readable_schema_version) : readable_schema_version_(readable_schema_version)
   {}
   virtual ~ObSchemaStatusVersionUpdater()
@@ -54,13 +54,13 @@ class ObSchemaStatusVersionUpdater {
 
   int operator()(common::hash::HashMapPair<uint64_t, share::schema::ObRefreshSchemaStatus>& entry);
 
-  private:
+private:
   int64_t readable_schema_version_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaStatusVersionUpdater);
 };
 
 class ObSchemaStatusCreatedVersionUpdater {
-  public:
+public:
   ObSchemaStatusCreatedVersionUpdater(int64_t created_schema_version) : created_schema_version_(created_schema_version)
   {}
   virtual ~ObSchemaStatusCreatedVersionUpdater()
@@ -68,13 +68,13 @@ class ObSchemaStatusCreatedVersionUpdater {
 
   int operator()(common::hash::HashMapPair<uint64_t, share::schema::ObRefreshSchemaStatus>& entry);
 
-  private:
+private:
   int64_t created_schema_version_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaStatusCreatedVersionUpdater);
 };
 
 class ObSchemaStatusUpdater {
-  public:
+public:
   ObSchemaStatusUpdater(share::schema::ObRefreshSchemaStatus schema_status) : schema_status_(schema_status)
   {}
   virtual ~ObSchemaStatusUpdater()
@@ -82,14 +82,14 @@ class ObSchemaStatusUpdater {
 
   int operator()(common::hash::HashMapPair<uint64_t, share::schema::ObRefreshSchemaStatus>& entry);
 
-  private:
+private:
   share::schema::ObRefreshSchemaStatus schema_status_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaStatusUpdater);
 };
 
 // all operation of __all_core_table must be single partition transaction
 class ObSchemaStatusProxy {
-  public:
+public:
   static const char* OB_ALL_SCHEMA_STATUS_TNAME;
   static const char* TENANT_ID_CNAME;
   static const char* SNAPSHOT_TIMESTAMP_CNAME;
@@ -97,7 +97,7 @@ class ObSchemaStatusProxy {
   static const char* CREATED_SCHEMA_VERSION_CNAME;
   static const int64_t TENANT_SCHEMA_STATUS_BUCKET_NUM = 100;
 
-  public:
+public:
   ObSchemaStatusProxy(common::ObISQLClient& sql_proxy)
       : sql_proxy_(sql_proxy), schema_status_cache_(), is_inited_(false)
   {}
@@ -128,10 +128,10 @@ class ObSchemaStatusProxy {
 
   int update_schema_status(const share::schema::ObRefreshSchemaStatus& curr_schema_status);
 
-  private:
+private:
   int check_inner_stat();
 
-  private:
+private:
   common::ObISQLClient& sql_proxy_;
   common::hash::ObHashMap<uint64_t, share::schema::ObRefreshSchemaStatus, common::hash::ReadWriteDefendMode>
       schema_status_cache_;

@@ -138,6 +138,7 @@ int ObLogSubPlanFilter::check_if_match_partition_wise(const AllocExchContext& ct
         } else { /*do nothing*/
         }
       } else {
+        bool has_exch = false;
         if (child->get_sharding_info().is_match_all()) {
           is_partition_wise = false;
         } else if (OB_FAIL(get_equal_key(ctx, child, left_key, right_key))) {
@@ -150,8 +151,11 @@ int ObLogSubPlanFilter::check_if_match_partition_wise(const AllocExchContext& ct
                        child->get_sharding_info(),
                        is_partition_wise))) {
           LOG_WARN("failed to check match partition wise join", K(ret));
-        } else { /*do nothing*/
-        }
+        } else if (ctx.exchange_allocated_ && child->check_has_exchange_below(has_exch)) {
+          LOG_WARN("failed to check has exchange blew", K(ret));
+        } else if (has_exch) {
+          is_partition_wise = false;
+        } else { /*do nothing*/}
       }
     }
     if (OB_SUCC(ret)) {
@@ -699,6 +703,15 @@ int ObLogSubPlanFilter::compute_one_row_info()
     LOG_WARN("get unexpected null", K(child), K(ret));
   } else {
     set_is_at_most_one_row(child->get_is_at_most_one_row());
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post(first_child))) {
+    LOG_WARN("failed to allocate startup expr post", K(ret));
   }
   return ret;
 }

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 TOPDIR="$(dirname $(readlink -f "$0"))"
 BUILD_SH=${TOPDIR}/build.sh
 DEP_DIR=${TOPDIR}/deps/3rd/usr/local/oceanbase/deps/devel
@@ -86,7 +86,7 @@ function prepare_build_dir
 # dep_create
 function do_init
 {
-    (cd $TOPDIR/deps/3rd && sh dep_create.sh)
+    (cd $TOPDIR/deps/3rd && bash dep_create.sh)
 }
 
 # make build directory && cmake && make (if need)
@@ -116,7 +116,7 @@ function build
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug
         ;;
       xrpm)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_CCACHE=OFF -DOB_COMPRESS_DEBUG_SECTIONS=ON -DOB_STATIC_LINK_LGPL_DEPS=OFF -DOB_ENABLE_PCH=OFF -DOB_ENALBE_UNITY=OFF
+        do_build "$@" -DOB_BUILD_RPM=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_CCACHE=OFF -DOB_COMPRESS_DEBUG_SECTIONS=ON -DOB_STATIC_LINK_LGPL_DEPS=OFF
         ;;
       *)
         BUILD_ARGS=(debug "${BUILD_ARGS[@]}")

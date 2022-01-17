@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprBitNeg : public ObBitwiseExprOperator {
-  public:
+public:
   explicit ObExprBitNeg(common::ObIAllocator& alloc);
   virtual ~ObExprBitNeg(){};
 
@@ -26,7 +26,7 @@ class ObExprBitNeg : public ObBitwiseExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_bitneg_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitNeg);
 };
 }  // namespace sql

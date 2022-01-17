@@ -39,19 +39,19 @@ class ObColumnSchemaV2;
 class ObSchemaGetterGuard;
 
 class ObSchemaPrinter {
-  public:
+public:
   explicit ObSchemaPrinter(ObSchemaGetterGuard& schema_guard);
   virtual ~ObSchemaPrinter()
   {}
 
-  private:
+private:
   ObSchemaPrinter();
   DISALLOW_COPY_AND_ASSIGN(ObSchemaPrinter);
 
-  public:
+public:
   int print_table_definition(uint64_t table_id, char* buf, const int64_t& buf_len, int64_t& pos,
       const common::ObTimeZoneInfo* tz_info, const common::ObLengthSemantics default_length_semantics,
-      bool agent_mode) const;
+      bool agent_mode, ObSQLMode sql_mode = SMO_DEFAULT) const;
   int print_table_index_stroing(const share::schema::ObTableSchema* index_schema,
       const share::schema::ObTableSchema* table_schema, char* buf, const int64_t buf_len, int64_t& pos) const;
   int print_table_definition_fulltext_indexs(const common::ObIArray<common::ObString>& fulltext_indexs,
@@ -78,11 +78,15 @@ class ObSchemaPrinter {
 
   int print_table_definition_columns(const ObTableSchema& table_schema, char* buf, const int64_t& buf_len, int64_t& pos,
       const common::ObTimeZoneInfo* tz_info, const common::ObLengthSemantics default_length_semantics,
-      bool is_agent_mode = false) const;
+      bool is_agent_mode = false, ObSQLMode sql_mode = SMO_DEFAULT) const;
   int print_generated_column_definition(const ObColumnSchemaV2& gen_col, char* buf, int64_t buf_len,
       const ObTableSchema& table_schema, int64_t& pos) const;
-  int print_table_definition_indexes(
-      const ObTableSchema& table_schema, char* buf, const int64_t& buf_len, int64_t& pos, bool is_unique_index) const;
+  int print_table_definition_indexes(const ObTableSchema &table_schema,
+                                     char* buf,
+                                     const int64_t& buf_len,
+                                     int64_t& pos,
+                                     bool is_unique_index,
+                                     ObSQLMode sql_mode = SMO_DEFAULT) const;
   int print_table_definition_constraints(
       const ObTableSchema& table_schema, char* buf, const int64_t& buf_len, int64_t& pos) const;
   int print_index_column(const ObTableSchema& table_schema, const ObColumnSchemaV2& column,
@@ -106,7 +110,7 @@ class ObSchemaPrinter {
   int print_table_definition_store_format(
       const ObTableSchema& table_schema, char* buf, const int64_t& buf_len, int64_t& pos) const;
   int print_table_definition_table_options(const ObTableSchema& table_schema, char* buf, const int64_t& buf_len,
-      int64_t& pos, bool is_for_table_status, bool agent_mode = false) const;
+      int64_t& pos, bool is_for_table_status, bool agent_mode = false, ObSQLMode sql_mode = SMO_DEFAULT) const;
   int print_table_definition_comment_oracle(
       const ObTableSchema& table_schema, char* buf, const int64_t& buf_len, int64_t& pos) const;
   int print_table_definition_partition_options(const ObTableSchema& table_schema, char* buf, const int64_t& buf_len,
@@ -155,7 +159,7 @@ class ObSchemaPrinter {
   int print_hash_partition_elements(const ObPartitionSchema*& schema, char* buf, const int64_t& buf_len, int64_t& pos,
       bool agent_mode, const common::ObTimeZoneInfo* tz_info) const;
 
-  private:
+private:
   ObSchemaGetterGuard& schema_guard_;
 };
 

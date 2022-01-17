@@ -21,7 +21,7 @@ namespace sql {
 class ObTableUpdateReturningOpInput : public ObTableUpdateOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using ObTableUpdateOpInput::ObTableUpdateOpInput;
 
   virtual int init(ObTaskInfo& task_info) override
@@ -33,12 +33,12 @@ class ObTableUpdateReturningOpInput : public ObTableUpdateOpInput {
 class ObTableUpdateReturningSpec : public ObTableUpdateSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   using ObTableUpdateSpec::ObTableUpdateSpec;
 };
 
 class ObTableUpdateReturningOp : public ObTableUpdateOp {
-  public:
+public:
   using ObTableUpdateOp::ObTableUpdateOp;
 
   int get_next_row() override;

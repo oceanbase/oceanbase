@@ -565,7 +565,7 @@ int ObOperator::close()
     if (GCONF.enable_sql_audit) {
       op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
       ObPlanMonitorNodeList* list = MTL_GET(ObPlanMonitorNodeList*);
-      if (OB_LIKELY(nullptr != list && !ctx_.get_my_session()->is_inner() &&
+      if (OB_LIKELY(nullptr != list && ctx_.get_my_session()->is_user_session() &&
                     OB_PHY_PLAN_LOCAL != spec_.plan_->get_plan_type() &&
                     OB_PHY_PLAN_REMOTE != spec_.plan_->get_plan_type())) {
         IGNORE_RETURN list->submit_node(op_monitor_info_);

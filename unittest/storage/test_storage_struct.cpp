@@ -21,7 +21,7 @@ using namespace common;
 using namespace storage;
 
 class TestStorageStruct : public ::testing::Test {
-  public:
+public:
   TestStorageStruct();
   virtual ~TestStorageStruct();
 };

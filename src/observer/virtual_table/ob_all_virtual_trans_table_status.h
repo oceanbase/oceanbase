@@ -26,14 +26,14 @@ class ObTenantManager;
 namespace observer {
 
 class ObAllVirtualTransTableStatus : public common::ObVirtualTableIterator {
-  public:
+public:
   ObAllVirtualTransTableStatus();
   virtual ~ObAllVirtualTransTableStatus();
   virtual int init();
   virtual void reset();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum CACHE_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,

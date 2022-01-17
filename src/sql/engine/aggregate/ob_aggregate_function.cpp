@@ -1849,7 +1849,7 @@ int ObAggregateFunction::add_calc(ObObj& res, const ObObj& left, const ObObj& ri
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ObExprAdd::calc_for_agg(res_exp, *p_left, *p_right, expr_ctx_, -1))) {
-        SQL_ENG_LOG(WARN, "add calculate faild", K(*p_left), K(*p_right));
+        SQL_ENG_LOG(WARN, "add calculate failed", K(*p_left), K(*p_right));
       } else {
         ret = clone_cell(res_exp, res);
       }

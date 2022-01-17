@@ -95,7 +95,7 @@ struct ObOperatorKit {
 
 // Physical operator kit store
 class ObOpKitStore {
-  public:
+public:
   ObOpKitStore() : size_(0), kits_(NULL)
   {}
 
@@ -123,12 +123,12 @@ class ObPhyOperator;
 // ObExecContext serialize
 // ObDesExecContext for deseralize
 class ObExecContext {
-  public:
+public:
   /**
    * some operator need different rescan logic for GI
    */
   class ObPlanRestartGuard {
-    public:
+  public:
     explicit ObPlanRestartGuard(ObExecContext& ctx) : restart_plan_(ctx.get_restart_plan())
     {
       restart_plan_ = true;
@@ -138,11 +138,11 @@ class ObExecContext {
       restart_plan_ = false;
     }
 
-    private:
+  private:
     bool& restart_plan_;
   };
 
-  public:
+public:
   ObExecContext();
   explicit ObExecContext(common::ObIAllocator& allocator);
   virtual ~ObExecContext();
@@ -367,12 +367,12 @@ class ObExecContext {
 
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 
-  protected:
+protected:
   uint64_t get_ser_version() const;
   const static uint64_t SER_VERSION_0 = 0;
   const static uint64_t SER_VERSION_1 = 1;
 
-  public:
+public:
   ObPlanCacheManager* get_plan_cache_manager()
   {
     return plan_cache_manager_;
@@ -387,6 +387,8 @@ class ObExecContext {
   ObRawExprFactory* get_expr_factory();
 
   int check_status();
+  int fast_check_status(const int64_t n = 0xFF);
+
   void set_outline_params_wrapper(const share::schema::ObOutlineParamsWrapper* params)
   {
     outline_params_wrapper_ = params;
@@ -602,11 +604,11 @@ class ObExecContext {
   {
     return eval_ctx_;
   }
-  lib::MemoryContext* get_eval_res_mem()
+  lib::MemoryContext get_eval_res_mem()
   {
     return eval_res_mem_;
   }
-  lib::MemoryContext* get_eval_tmp_mem()
+  lib::MemoryContext get_eval_tmp_mem()
   {
     return eval_tmp_mem_;
   }
@@ -662,7 +664,9 @@ class ObExecContext {
     return expr_partition_id_;
   }
 
-  private:
+  int push_back_iter(common::ObNewRowIterator *iter);
+  int remove_iter(common::ObNewRowIterator *iter);
+private:
   int set_phy_op_ctx_ptr(uint64_t index, void* phy_op);
   void* get_phy_op_ctx_ptr(uint64_t index) const;
   /**
@@ -675,8 +679,8 @@ class ObExecContext {
   int serialize_operator_input_recursively(const ObPhyOperator* op, char*& buf, int64_t buf_len, int64_t& pos,
       int32_t& real_input_count, bool is_full_tree) const;
   int serialize_operator_input_len_recursively(const ObPhyOperator* op, int64_t& len, bool is_full_tree) const;
-
-  protected:
+  int release_table_ref();
+protected:
   /**
    * @brief the memory of exec context.
    * ------------------------------------------------
@@ -784,8 +788,8 @@ class ObExecContext {
   ObOpKitStore op_kit_store_;
 
   // expression evaluating memory and context.
-  lib::MemoryContext* eval_res_mem_;
-  lib::MemoryContext* eval_tmp_mem_;
+  lib::MemoryContext eval_res_mem_;
+  lib::MemoryContext eval_tmp_mem_;
   ObEvalCtx* eval_ctx_;
   ObQueryExecCtx* query_exec_ctx_;
   ObSEArray<ObSqlTempTableCtx, 1> temp_ctx_;
@@ -794,7 +798,7 @@ class ObExecContext {
   ObGIPruningInfo gi_pruning_info_;
 
   ObSchedInfo sched_info_;
-  lib::MemoryContext* lob_fake_allocator_;
+  lib::MemoryContext lob_fake_allocator_;
 
   // serialize operator inputs of %root_op_ subplan if root_op_ is not NULL
   const ObPhyOperator* root_op_;
@@ -805,8 +809,9 @@ class ObExecContext {
   int64_t fixed_id_;  // fixed part id or fixed subpart ids
   // for expr values op use
   int64_t expr_partition_id_;
-
-  private:
+  ObSEArray<common::ObNewRowIterator*, 1, common::ObIAllocator&> iters_;
+  int64_t check_status_times_;
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };
 

@@ -25,6 +25,7 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 
 ObMallocAllocator* ObMallocAllocator::instance_ = NULL;
+uint64_t ObMallocAllocator::max_used_tenant_id_ = 0;
 
 ObMallocAllocator::ObMallocAllocator() : locks_(), allocators_(), reserved_(0), urgent_(0)
 {}
@@ -53,8 +54,8 @@ void* ObMallocAllocator::alloc(const int64_t size)
 
 void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAttr& attr)
 {
-#if PERF_MODE
-  UNUSED(_attr);
+#ifdef OB_USE_ASAN
+  UNUSED(attr);
   return ::malloc(size);
 #else
   int ret = E(EventTable::EN_4) OB_SUCCESS;
@@ -110,12 +111,12 @@ void* ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   }
 
   return ptr;
-#endif  // PERF_MODE
+#endif
 }
 
 void* ObMallocAllocator::realloc(const void* ptr, const int64_t size, const oceanbase::lib::ObMemAttr& attr)
 {
-#if PERF_MODE
+#ifdef OB_USE_ASAN
   UNUSED(attr);
   return ::realloc(const_cast<void*>(ptr), size);
 #else
@@ -156,12 +157,12 @@ void* ObMallocAllocator::realloc(const void* ptr, const int64_t size, const ocea
   }
   return nptr;
   ;
-#endif  // PERF_MODE
+#endif
 }
 
 void ObMallocAllocator::free(void* ptr)
 {
-#if PERF_MODE
+#ifdef OB_USE_ASAN
   ::free(ptr);
 #else
   // directly free object instead of using tenant allocator.
@@ -206,6 +207,9 @@ ObTenantCtxAllocator* ObMallocAllocator::get_tenant_ctx_allocator(uint64_t tenan
 int ObMallocAllocator::create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id)
 {
   int ret = OB_SUCCESS;
+  if (tenant_id > max_used_tenant_id_) {
+    UNUSED(ATOMIC_BCAS(&max_used_tenant_id_, max_used_tenant_id_, tenant_id));
+  }
   if (INT64_MAX == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(lbt()), K(tenant_id), K(ret));
@@ -294,6 +298,7 @@ int ObMallocAllocator::create_tenant_ctx_allocator(uint64_t tenant_id, uint64_t 
               ObTenantCtxAllocator* next_allocator = *cur;
               *cur = allocator;
               ((*cur)->get_next()) = next_allocator;
+              LOG_INFO("tenant ctx allocator was created", K(tenant_id), K(ctx_id), K(lbt()));
             } else {
               allocator->~ObTenantCtxAllocator();
               allocer->free(buf);
@@ -413,6 +418,16 @@ int64_t ObMallocAllocator::get_tenant_hold(uint64_t tenant_id)
     return OB_SUCCESS;
   });
   return hold;
+}
+
+int64_t ObMallocAllocator::get_tenant_remain(uint64_t tenant_id)
+{
+  int64_t remain = 0;
+  with_resource_handle_invoke(tenant_id, [&remain](ObTenantMemoryMgr *mgr) {
+    remain = mgr->get_limit() - mgr->get_sum_hold() + mgr->get_cache_hold();
+    return OB_SUCCESS;
+  });
+  return remain;
 }
 
 int64_t ObMallocAllocator::get_tenant_rpc_hold(uint64_t tenant_id)

@@ -34,6 +34,11 @@ ob_set_subtarget(ob_share config
   config/ob_system_config_key.cpp
 )
 
+ob_set_subtarget(ob_share table
+  table/ob_table.cpp		
+  table/ob_table_rpc_struct.cpp		
+)
+
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
 ob_set_subtarget(ob_share inner_table
   inner_table/ob_inner_table_schema_misc.ipp
@@ -123,6 +128,7 @@ ob_set_subtarget(ob_share common
   ob_sstable_checksum_iterator.cpp
   ob_priv_common.cpp
   ob_bg_thread_monitor.cpp
+  ob_share_util.cpp
 )
 
 ob_set_subtarget(ob_share object
@@ -142,6 +148,7 @@ ob_set_subtarget(ob_share partition_table
   partition_table/ob_united_pt_operator.cpp
   partition_table/ob_inmemory_partition_table.cpp
   partition_table/ob_location_update_task.cpp
+  partition_table/ob_partition_location_task.cpp
   partition_table/ob_partition_info.cpp
   partition_table/ob_partition_location.cpp
   partition_table/ob_partition_location_cache.cpp
@@ -306,6 +313,17 @@ ob_set_subtarget(ob_share backup
   backup/ob_tenant_validate_task_updater.cpp
   backup/ob_pg_validate_task_updater.cpp
   backup/ob_validate_operator.cpp
+  backup/ob_backup_backupset_operator.h
+  backup/ob_backup_backupset_operator.cpp
+  backup/ob_backup_backuppiece_operator.h
+  backup/ob_backup_backuppiece_operator.cpp
+  backup/ob_backup_meta_store.h
+  backup/ob_backup_meta_store.cpp
+  backup/ob_backup_archive_log_round_stat.h
+  backup/ob_backup_archive_log_round_stat.cpp
+  backup/ob_multi_backup_dest_util.h
+  backup/ob_multi_backup_dest_util.cpp
+  ob_priv_common.cpp
 )
 
 ob_set_subtarget(ob_share interrupt

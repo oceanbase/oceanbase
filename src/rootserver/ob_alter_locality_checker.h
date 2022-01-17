@@ -27,7 +27,7 @@ class ObPartitionInfo;
 namespace schema {
 class ObMultiVersionSchemaService;
 class ObSchemaGetterGuard;
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObTenantSchema;
 }  // namespace schema
 }  // namespace share
@@ -46,7 +46,7 @@ class TenantBalanceStat;
 struct ObCommitAlterTenantLocalityArg : public obrpc::ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCommitAlterTenantLocalityArg() : tenant_id_(common::OB_INVALID_ID)
   {}
   bool is_valid() const
@@ -61,7 +61,7 @@ struct ObCommitAlterTenantLocalityArg : public obrpc::ObDDLArg {
 struct ObCommitAlterTablegroupLocalityArg : public obrpc::ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCommitAlterTablegroupLocalityArg() : tablegroup_id_(common::OB_INVALID_ID)
   {}
   bool is_valid() const
@@ -76,7 +76,7 @@ struct ObCommitAlterTablegroupLocalityArg : public obrpc::ObDDLArg {
 struct ObCommitAlterTableLocalityArg : public obrpc::ObDDLArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCommitAlterTableLocalityArg() : table_id_(common::OB_INVALID_ID)
   {}
   bool is_valid() const
@@ -89,7 +89,7 @@ struct ObCommitAlterTableLocalityArg : public obrpc::ObDDLArg {
 };
 
 class ObAlterLocalityChecker {
-  public:
+public:
   explicit ObAlterLocalityChecker(volatile bool& is_stop)
       : is_stop_(is_stop),
         schema_service_(NULL),
@@ -106,19 +106,19 @@ class ObAlterLocalityChecker {
   virtual ~ObAlterLocalityChecker()
   {}
 
-  public:
+public:
   int init(share::schema::ObMultiVersionSchemaService* schema_service,
       rootserver::ObLeaderCoordinator* leader_coordinator, obrpc::ObCommonRpcProxy* common_rpc_proxy,
       share::ObPartitionTableOperator* pt_operator, rootserver::ObServerManager* server_mgr, common::ObAddr& addr,
       rootserver::ObZoneManager* zone_mgr, rootserver::ObUnitManager* unit_mgr);
 
-  public:
+public:
   int check_alter_locality_finished(const uint64_t tenant_id,
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat);
   void notify_locality_modification();
   bool has_locality_modification() const;
 
-  private:
+private:
   int try_compensate_zone_locality(
       const bool compensate_readonly_all_server, common::ObIArray<share::ObZoneReplicaNumSet>& zone_locality);
   int get_readonly_all_server_compensation_mode(
@@ -127,7 +127,7 @@ class ObAlterLocalityChecker {
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& is_finished);
   int process_single_table(share::schema::ObSchemaGetterGuard& schema_guard,
-      const share::schema::ObTableSchema& table_schema, const share::schema::ObTenantSchema& tenant_schema,
+      const share::schema::ObSimpleTableSchemaV2& table_schema, const share::schema::ObTenantSchema& tenant_schema,
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& null_locality_table_finished, bool& table_locality_finished);
   int process_single_binding_tablegroup(share::schema::ObSchemaGetterGuard& schema_guard,
@@ -143,7 +143,8 @@ class ObAlterLocalityChecker {
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& tablegroup_locality_finished);
   int process_single_table_under_new_tablegroup(share::schema::ObSchemaGetterGuard& schema_guard,
-      const share::schema::ObTableSchema& table_schema, const share::schema::ObTablegroupSchema& tablegroup_schema,
+      const share::schema::ObSimpleTableSchemaV2& table_schema,
+      const share::schema::ObTablegroupSchema& tablegroup_schema,
       const balancer::HashIndexCollection& hash_index_collection, rootserver::TenantBalanceStat& tenant_stat,
       bool& table_locality_finished);
   int check_stop();
@@ -157,11 +158,11 @@ class ObAlterLocalityChecker {
   int check_partition_quorum_match(
       const share::ObPartitionInfo& partition, const int64_t paxos_num, bool& locality_match);
 
-  private:
+private:
   static const int64_t GET_SCHEMA_INTERVAL = 10 * 1000;  // 10ms
   static const int64_t GET_SCHEMA_RETRY_LIMIT = 3;
 
-  private:
+private:
   const volatile bool& is_stop_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
   rootserver::ObLeaderCoordinator* leader_coordinator_;

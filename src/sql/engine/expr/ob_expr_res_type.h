@@ -30,7 +30,7 @@ typedef common::ObObjMeta ObExprCalcType;
 class ObExprResType : public common::ObObjMeta {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObExprResType()
       : ObObjMeta(),
         accuracy_(),
@@ -77,7 +77,7 @@ class ObExprResType : public common::ObObjMeta {
     return !this->operator==(other);
   }
 
-  public:
+public:
   OB_INLINE void reset()
   {
     accuracy_.reset();
@@ -340,7 +340,7 @@ class ObExprResType : public common::ObObjMeta {
   // others.
   INHERIT_TO_STRING_KV(N_META, ObObjMeta, N_ACCURACY, accuracy_, N_FLAG, res_flags_, N_CALC_TYPE, calc_type_);
 
-  private:
+private:
   common::ObAccuracy accuracy_;       // when it is Extend type, used to represent datatype id
   common::ObAccuracy calc_accuracy_;  // when it is Extend type, length is used to represent datatype size
   common::ObObj param_;

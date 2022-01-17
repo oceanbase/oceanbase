@@ -412,5 +412,52 @@ int ObZoneTableOperation::get_zone_item_count(int64_t& cnt)
   return ret;
 }
 
+int ObZoneTableOperation::get_region_list(
+    common::ObISQLClient& sql_client, common::ObIArray<common::ObRegion>& region_list)
+{
+  int ret = OB_SUCCESS;
+  region_list.reset();
+  ObRegion region;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    ObMySQLResult* result = NULL;
+    char sql[OB_SHORT_SQL_LENGTH];
+    int n = snprintf(sql,
+        sizeof(sql),
+        "select info as region"
+        " from %s where zone != '' and name = 'region' ",
+        OB_ALL_ZONE_TNAME);
+    ObTimeoutCtx ctx;
+    if (n < 0 || n >= OB_SHORT_SQL_LENGTH) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("sql buf not enough", K(ret), K(n));
+    } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
+    } else if (OB_FAIL(sql_client.read(res, sql))) {
+      LOG_WARN("failed to do read", K(sql), K(ret));
+    } else if (NULL == (result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get result", K(sql), K(ret));
+    } else {
+      int64_t tmp_real_str_len = 0;
+      while (OB_SUCCESS == ret && OB_SUCCESS == (ret = result->next())) {
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, "region", region.ptr(), MAX_REGION_LENGTH, tmp_real_str_len);
+        (void)tmp_real_str_len;  // make compiler happy
+        if (OB_FAIL(region_list.push_back(region))) {
+          LOG_WARN("failed to add zone list", K(ret));
+        }
+      }
+
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get zone list", K(sql), K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
 }  // end namespace share
 }  // end namespace oceanbase

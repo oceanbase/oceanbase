@@ -24,7 +24,7 @@ using namespace common;
 using namespace storage;
 namespace unittest {
 class TestPartitionMigrateTableKeyMgr : public ::testing::Test {
-  public:
+public:
   TestPartitionMigrateTableKeyMgr()
   {}
   ~TestPartitionMigrateTableKeyMgr()
@@ -2007,6 +2007,7 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_no_new_
   int64_t need_reserve_major_snapshot = 0;
   bool need_reuse_local_minor = true;
   ObVersion version(2);
+  ObPartitionMigrateCtx part_ctx;
 
   // local_major_tables: [0, 200]
   // local_inc_tables: [(180, 200, 300), (10, 30)]
@@ -2056,7 +2057,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_no_new_
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(0, copy_sstables.count());
   ASSERT_EQ(0, need_reserve_major_snapshot);
 
@@ -2114,7 +2116,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_no_new_
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(0, copy_sstables.count());
   ASSERT_EQ(0, need_reserve_major_snapshot);
 }
@@ -2135,6 +2138,7 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_with_ne
   int64_t need_reserve_major_snapshot = 0;
   bool need_reuse_local_minor = true;
   ObVersion version(2);
+  ObPartitionMigrateCtx part_ctx;
 
   // local_major_tables: [0, 200]
   // local_inc_tables: [(180, 200, 300), (10, 30)]
@@ -2193,7 +2197,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_with_ne
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(1, copy_sstables.count());
   // ASSERT_EQ(300, need_reserve_major_snapshot);
 
@@ -2268,7 +2273,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_with_ne
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(1, copy_sstables.count());
   ASSERT_EQ(remote_major_tables.at(1), copy_sstables.at(0).src_table_key_);
 
@@ -2343,7 +2349,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_with_ne
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(1, copy_sstables.count());
   // ASSERT_EQ(300, need_reserve_major_snapshot);
 
@@ -2410,7 +2417,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_with_ne
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(1, copy_sstables.count());
   ASSERT_EQ(remote_major_tables.at(1), copy_sstables.at(0).src_table_key_);
   ASSERT_EQ(0, need_reserve_major_snapshot);
@@ -2477,7 +2485,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_with_ne
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(1, copy_sstables.count());
   ASSERT_EQ(remote_major_tables.at(1), copy_sstables.at(0).src_table_key_);
   ASSERT_EQ(0, need_reserve_major_snapshot);
@@ -2545,7 +2554,8 @@ TEST_F(TestPartitionMigrateTableKeyMgr, test_build_migrate_major_sstable_with_ne
           local_inc_tables,
           remote_major_tables,
           remote_inc_tables,
-          copy_sstables));
+          copy_sstables,
+          part_ctx));
   ASSERT_EQ(2, copy_sstables.count());
   ASSERT_EQ(remote_major_tables.at(0), copy_sstables.at(0).src_table_key_);
   ASSERT_EQ(remote_major_tables.at(1), copy_sstables.at(1).src_table_key_);

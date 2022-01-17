@@ -21,9 +21,9 @@
 namespace oceanbase {
 namespace share {
 class ObIndexStatusTableOperator {
-  public:
+public:
   struct ObBuildIndexStatus {
-    public:
+  public:
     ObBuildIndexStatus()
         : index_status_(share::schema::ObIndexStatus::INDEX_STATUS_NOT_FOUND),
           ret_code_(common::OB_SUCCESS),

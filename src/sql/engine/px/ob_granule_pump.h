@@ -34,7 +34,7 @@ namespace sql {
 #define ModifyOp typename ObEngineOpTraits<NEW_ENG>::TableModify
 
 class ObGranulePumpArgs {
-  public:
+public:
   ObGranulePumpArgs(ObExecContext& ctx, const common::ObIArray<common::ObPartitionArray>& pkey_arrays,
       common::ObIArray<ObPxPartitionInfo>& partitions_info, storage::ObPartitionService& part_ser)
       : ctx_(ctx),
@@ -90,7 +90,7 @@ class ObGranulePumpArgs {
   int64_t tablet_size_;
   uint64_t gi_attri_flag_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGranulePumpArgs);
 };
 
@@ -98,7 +98,7 @@ class ObGranulePumpArgs {
 // For single table scan, there is only on element in partition_keys_ in ObGITaskSet.
 // For Partition Wise N table scan(multiple tables in one GI ), there are N elements in partition_keys_ of ObGITaskSet.
 class ObGITaskSet {
-  public:
+public:
   struct Pos {
     Pos() : task_idx_(0), partition_idx_(0)
     {}
@@ -118,18 +118,18 @@ class ObGITaskSet {
   int assign(const ObGITaskSet& other);
   int set_pw_affi_partition_order(bool asc);
 
-  private:
+private:
   // reverse all tasks in the GI Task set.
   int reverse_task();
 
-  public:
+public:
   common::ObArray<ObPartitionKey> partition_keys_;
   common::ObArray<common::ObNewRange> ranges_;
   common::ObSEArray<int64_t, 2> offsets_;
   common::ObSEArray<int64_t, 2> partition_offsets_;
   Pos cur_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGITaskSet);
 };
 
@@ -159,24 +159,24 @@ static const int64_t PARTITION_WISE_JOIN_TSC_HASH_BUCKET_NUM = 8;
 typedef common::hash::ObHashMap<uint64_t, ObGITaskSet, common::hash::NoPthreadDefendMode> TaskSetMap;
 
 class ObGranuleSplitter {
-  public:
+public:
   ObGranuleSplitter() = default;
   virtual ~ObGranuleSplitter() = default;
 
   static int get_query_range(ObExecContext& ctx, const ObQueryRange& tsc_pre_query_range, ObIArray<ObNewRange>& ranges,
       int64_t table_id, bool partition_granule);
 
-  protected:
+protected:
   int split_gi_task(ObExecContext& ctx, const ObQueryRange& tsc_pre_query_range, int64_t table_id,
       const common::ObIArray<common::ObPartitionKey>& pkeys, int64_t parallelism, int64_t tablet_size,
       storage::ObPartitionService& partition_service, bool partition_granule, ObGITaskSet& task_set);
 
-  public:
+public:
   ObSEArray<ObPxPartitionInfo, 8> partitions_info_;
 };
 
 class ObRandomGranuleSplitter : public ObGranuleSplitter {
-  public:
+public:
   ObRandomGranuleSplitter() = default;
   virtual ~ObRandomGranuleSplitter() = default;
   template <bool NEW_ENG>
@@ -185,11 +185,11 @@ class ObRandomGranuleSplitter : public ObGranuleSplitter {
       storage::ObPartitionService& partition_service, GITaskArrayMap& gi_task_array_result,
       bool partition_granule = true);
 
-  private:
+private:
 };
 
 class ObAccessAllGranuleSplitter : public ObGranuleSplitter {
-  public:
+public:
   ObAccessAllGranuleSplitter() = default;
   virtual ~ObAccessAllGranuleSplitter() = default;
   template <bool NEW_ENG>
@@ -198,12 +198,12 @@ class ObAccessAllGranuleSplitter : public ObGranuleSplitter {
       storage::ObPartitionService& partition_service, GITaskArrayMap& gi_task_array_result,
       bool partition_granule = true);
 
-  private:
+private:
   int split_tasks_access_all(ObGITaskSet& taskset, int64_t parallelism, ObGITaskArray& taskset_array);
 };
 
 class ObPartitionWiseGranuleSplitter : public ObGranuleSplitter {
-  public:
+public:
   ObPartitionWiseGranuleSplitter() = default;
   virtual ~ObPartitionWiseGranuleSplitter() = default;
   template <bool NEW_ENG>
@@ -217,7 +217,7 @@ class ObPartitionWiseGranuleSplitter : public ObGranuleSplitter {
       storage::ObPartitionService& partition_service, GITaskArrayMap& gi_task_array_result,
       bool partition_granule = true);
 
-  private:
+private:
   int split_insert_gi_task(ObExecContext& ctx, const uint64_t insert_table_id, const int64_t row_key_count,
       const common::ObIArray<common::ObPartitionKey>& pkeys, int64_t parallelism, int64_t tablet_size,
       storage::ObPartitionService& partition_service, bool partition_granule, ObGITaskSet& task_set);
@@ -230,16 +230,16 @@ class ObPartitionWiseGranuleSplitter : public ObGranuleSplitter {
 };
 
 class ObAffinitizeGranuleSplitter : public ObGranuleSplitter {
-  public:
+public:
   ObAffinitizeGranuleSplitter() = default;
   virtual ~ObAffinitizeGranuleSplitter() = default;
 
-  protected:
+protected:
   int split_tasks_affinity(ObExecContext& ctx, ObGITaskSet& taskset, int64_t parallelism, ObGITaskArray& taskset_array);
 };
 
 class ObNormalAffinitizeGranuleSplitter : public ObAffinitizeGranuleSplitter {
-  public:
+public:
   ObNormalAffinitizeGranuleSplitter() = default;
   virtual ~ObNormalAffinitizeGranuleSplitter() = default;
   template <bool NEW_ENG>
@@ -250,7 +250,7 @@ class ObNormalAffinitizeGranuleSplitter : public ObAffinitizeGranuleSplitter {
 };
 
 class ObPWAffinitizeGranuleSplitter : public ObAffinitizeGranuleSplitter {
-  public:
+public:
   ObPWAffinitizeGranuleSplitter() = default;
   virtual ~ObPWAffinitizeGranuleSplitter() = default;
   template <bool NEW_ENG>
@@ -267,7 +267,7 @@ class ObPWAffinitizeGranuleSplitter : public ObAffinitizeGranuleSplitter {
 // the worker who revice the DFO will genrate a ObGranulePump object,
 // and the worker who end last destroy this object.
 class ObGranulePump {
-  private:
+private:
   static const int64_t OB_GRANULE_SHARED_POOL_POS = 0;
   enum ObGranuleSplitterType {
     GIT_UNINITIALIZED,
@@ -278,7 +278,7 @@ class ObGranulePump {
     GIT_RANDOM,
   };
 
-  public:
+public:
   ObGranulePump()
       : lock_(),
         parallelism_(-1),
@@ -303,7 +303,7 @@ class ObGranulePump {
   int try_fetch_pwj_tasks(ObIArray<ObGranuleTaskInfo>& infos, const ObIArray<int64_t>& op_ids, int64_t worker_id);
   DECLARE_TO_STRING;
 
-  private:
+private:
   template <bool NEW_ENG>
   int add_new_gi_task_inner(ObGranulePumpArgs& args, ObIArray<const TSCOp*>& scan_ops, const ModifyOp* modify_op);
 
@@ -321,7 +321,7 @@ class ObGranulePump {
 
   int find_taskset_by_tsc_id(uint64_t op_id, ObGITaskArray*& taskset_array);
 
-  private:
+private:
   common::ObSpinLock lock_;
   int64_t parallelism_;
   int64_t tablet_size_;

@@ -65,6 +65,7 @@
 #include "sql/engine/expr/ob_expr_not_in.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
 #include "sql/engine/expr/ob_expr_ip2int.h"
+#include "sql/engine/expr/ob_expr_inet.h"
 #include "sql/engine/expr/ob_expr_last_exec_id.h"
 #include "sql/engine/expr/ob_expr_last_trace_id.h"
 #include "sql/engine/expr/ob_expr_is.h"
@@ -105,6 +106,7 @@
 #include "sql/engine/expr/ob_expr_sinh.h"
 #include "sql/engine/expr/ob_expr_cosh.h"
 #include "sql/engine/expr/ob_expr_tanh.h"
+#include "sql/engine/expr/ob_expr_cot.h"
 #include "sql/engine/expr/ob_expr_trim.h"
 #include "sql/engine/expr/ob_expr_inner_trim.h"
 #include "sql/engine/expr/ob_expr_unhex.h"
@@ -121,6 +123,7 @@
 #include "sql/engine/expr/ob_expr_period_diff.h"
 #include "sql/engine/expr/ob_expr_unix_timestamp.h"
 #include "sql/engine/expr/ob_expr_maketime.h"
+#include "sql/engine/expr/ob_expr_makedate.h"
 #include "sql/engine/expr/ob_expr_extract.h"
 #include "sql/engine/expr/ob_expr_to_days.h"
 #include "sql/engine/expr/ob_expr_day_of_func.h"
@@ -141,6 +144,7 @@
 #include "sql/engine/expr/ob_expr_merging_frozen_time.h"
 #include "sql/engine/expr/ob_expr_remainder.h"
 #include "sql/engine/expr/ob_expr_repeat.h"
+#include "sql/engine/expr/ob_expr_export_set.h"
 #include "sql/engine/expr/ob_expr_replace.h"
 #include "sql/engine/expr/ob_expr_translate.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
@@ -166,6 +170,7 @@
 #include "sql/engine/expr/ob_expr_reverse.h"
 #include "sql/engine/expr/ob_expr_right.h"
 #include "sql/engine/expr/ob_expr_md5.h"
+#include "sql/engine/expr/ob_expr_crc32.h"
 #include "sql/engine/expr/ob_expr_lrpad.h"
 #include "sql/engine/expr/ob_expr_conv.h"
 #include "sql/engine/expr/ob_expr_sign.h"
@@ -205,6 +210,7 @@
 #include "sql/engine/expr/ob_expr_sys_connect_by_path.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 #include "sql/engine/expr/ob_expr_shadow_uk_project.h"
+#include "sql/engine/expr/ob_expr_time_format.h"
 #include "sql/engine/expr/ob_expr_interval.h"
 #include "sql/engine/expr/ob_expr_week_of_func.h"
 #include "sql/engine/expr/ob_expr_userenv.h"
@@ -256,10 +262,21 @@
 #include "sql/engine/expr/ob_expr_user_can_access_obj.h"
 #include "sql/engine/expr/ob_expr_empty_lob.h"
 #include "sql/engine/expr/ob_expr_radians.h"
+#include "sql/engine/expr/ob_expr_pi.h"
 #include "sql/engine/expr/ob_expr_to_outfile_row.h"
 #include "sql/engine/expr/ob_expr_format.h"
 #include "sql/engine/expr/ob_expr_quarter.h"
 #include "sql/engine/expr/ob_expr_bit_length.h"
+#include "sql/engine/expr/ob_expr_convert_tz.h"
+#include "sql/engine/expr/ob_expr_degrees.h"
+#include "sql/engine/expr/ob_expr_weight_string.h"
+#include "sql/engine/expr/ob_expr_any_value.h"
+#include "sql/engine/expr/ob_expr_validate_password_strength.h"
+#include "sql/engine/expr/ob_expr_benchmark.h"
+#include "sql/engine/expr/ob_expr_uuid_short.h"
+#include "sql/engine/expr/ob_expr_convert_tz.h"
+#include "sql/engine/expr/ob_expr_to_base64.h"
+#include "sql/engine/expr/ob_expr_from_base64.h"
 
 using namespace oceanbase::common;
 namespace oceanbase {
@@ -440,6 +457,13 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprNotIn);
   REG_OP(ObExprInt2ip);
   REG_OP(ObExprIp2int);
+  REG_OP(ObExprInetAton);
+  REG_OP(ObExprInet6Ntoa);
+  REG_OP(ObExprInet6Aton);
+  REG_OP(ObExprIsIpv4);
+  REG_OP(ObExprIsIpv6);
+  REG_OP(ObExprIsIpv4Mapped);
+  REG_OP(ObExprIsIpv4Compat);
   REG_OP(ObExprInsert);
   REG_OP(ObExprIs);
   REG_OP(ObExprIsNot);
@@ -504,19 +528,24 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTimeStampDiff);
   REG_OP(ObExprTimeDiff);
   REG_OP(ObExprPeriodDiff);
+  REG_OP(ObExprPeriodAdd);
   REG_OP(ObExprUnixTimestamp);
   REG_OP(ObExprMakeTime);
+  REG_OP(ObExprMakedate);
   REG_OP(ObExprExtract);
   REG_OP(ObExprToDays);
   REG_OP(ObExprPosition);
   REG_OP(ObExprFromDays);
   REG_OP(ObExprDateFormat);
+  REG_OP(ObExprGetFormat);
   REG_OP(ObExprStrToDate);
   REG_OP(ObExprCurDate);
   REG_OP(ObExprCurTime);
   REG_OP(ObExprSysdate);
   REG_OP(ObExprCurTimestamp);
   REG_OP(ObExprUtcTimestamp);
+  REG_OP(ObExprUtcTime);
+  REG_OP(ObExprUtcDate);
   REG_OP(ObExprTimeToUsec);
   REG_OP(ObExprUsecToTime);
   REG_OP(ObExprMergingFrozenTime);
@@ -526,6 +555,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprFuncCeiling);
   REG_OP(ObExprFuncDump);
   REG_OP(ObExprRepeat);
+  REG_OP(ObExprExportSet);
   REG_OP(ObExprReplace);
   REG_OP(ObExprFuncPartOldHash);
   REG_OP(ObExprFuncPartHash);
@@ -545,6 +575,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprCharset);
   REG_OP(ObExprCollation);
   REG_OP(ObExprCoercibility);
+  REG_OP(ObExprConvertTZ);
   REG_OP(ObExprSetCollation);
   REG_OP(ObExprReverse);
   REG_OP(ObExprRight);
@@ -586,6 +617,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprTruncate);
   REG_OP(ObExprDllUdf);
   REG_OP(ObExprExp);
+  REG_OP(ObExprAnyValue);
+  REG_OP(ObExprUuidShort);
   /* subquery comparison experator */
   REG_OP(ObExprSubQueryRef);
   REG_OP(ObExprSubQueryEqual);
@@ -608,6 +641,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprIfNull);
   REG_OP(ObExprConcatWs);
   REG_OP(ObExprCmpMeta);
+  REG_OP(ObExprCrc32);
   REG_OP(ObExprQuote);
   REG_OP(ObExprPad);
   REG_OP(ObExprHostIP);
@@ -637,6 +671,10 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprBool);
   REG_OP(ObExprSin);
   REG_OP(ObExprTan);
+  REG_OP(ObExprCos);
+  REG_OP(ObExprCot);
+  REG_OP(ObExprAsin);
+  REG_OP(ObExprAcos);
   REG_OP(ObExprCalcPartitionId);
   REG_OP(ObExprPartIdPseudoColumn);
   REG_OP(ObExprStmtId);
@@ -645,6 +683,18 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP(ObExprAtan2);
   REG_OP(ObExprToOutfileRow);
   REG_OP(ObExprFormat);
+  REG_OP(ObExprLog);
+  REG_OP(ObExprPi);
+  REG_OP(ObExprLastDay);
+  REG_OP(ObExprTimeFormat);
+  REG_OP(ObExprTimestamp);
+  REG_OP(ObExprDegrees);
+  REG_OP(ObExprValidatePasswordStrength);
+  REG_OP(ObExprWeightString);
+  REG_OP(ObExprBenchmark);
+  REG_OP(ObExprDay);
+  REG_OP(ObExprToBase64);
+  REG_OP(ObExprFromBase64);
   // register oracle system function
   REG_OP_ORCL(ObExprSysConnectByPath);
   REG_OP_ORCL(ObExprTimestampNvl);
@@ -791,8 +841,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprToBinaryDouble);
   REG_OP_ORCL(ObExprOracleNullif);
   REG_OP_ORCL(ObExprStmtId);
-
-  // for SPM
+  REG_OP_ORCL(ObExprEstimateNdv);
+  //for SPM
   REG_OP_ORCL(ObExprSpmLoadPlans);
   REG_OP_ORCL(ObExprSpmAlterBaseline);
   REG_OP_ORCL(ObExprSpmDropBaseline);
@@ -876,6 +926,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCharset);
   REG_OP_ORCL(ObExprCollation);
   REG_OP_ORCL(ObExprCoercibility);
+  REG_OP_ORCL(ObExprLastTraceId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

@@ -31,10 +31,10 @@ class ObTableSchema;
 class ObColumnSchemaV2;
 class ObServerSchemaService;
 class ObSchemaUtils {
-  public:
+public:
 #define UNDER_SYS_TENANT(id) ({ OB_SYS_TENANT_ID == extract_tenant_id(id); })
 
-  public:
+public:
   static uint64_t get_exec_tenant_id(const uint64_t tenant_id);
   static uint64_t get_extract_tenant_id(const uint64_t exec_tenant_id, const uint64_t tenant_id);
   static uint64_t get_extract_schema_id(const uint64_t exec_tenant_id, const uint64_t schema_id);
@@ -67,7 +67,7 @@ class ObSchemaUtils {
   }
   static int add_column_to_table_schema(ObColumnSchemaV2& column, ObTableSchema& table_schema);
   static int convert_sys_param_to_sysvar_schema(const ObSysParam& sysparam, ObSysVarSchema& sysvar_schema);
-  static int get_primary_zone_array(common::PageArena<>& alloc, const ObTableSchema& table_schema,
+  static int get_primary_zone_array(common::PageArena<>& alloc, const ObSimpleTableSchemaV2& table_schema,
       ObSchemaGetterGuard& schema_guard, common::ObIArray<ObZoneScore>& primary_zone_array);
   static int get_primary_zone_array(common::PageArena<>& alloc, const ObTablegroupSchema& tg_schema,
       ObSchemaGetterGuard& schema_guard, common::ObIArray<ObZoneScore>& primary_zone_array);
@@ -81,7 +81,7 @@ class ObSchemaUtils {
   static bool is_public_database(const common::ObString& db_name, bool is_oracle_mode);
   static bool is_public_database_case_cmp(const common::ObString& db_name, bool is_oracle_mode);
 
-  private:
+private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard& schema_guard, uint64_t tenant_id,
       share::ObSysVarClassType var_id, common::ObObj& value);
   // disallow construct

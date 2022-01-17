@@ -21,11 +21,11 @@
 namespace oceanbase {
 namespace sql {
 class ObLogTempTableInsert : public ObLogicalOperator {
-  public:
+public:
   ObLogTempTableInsert(ObLogPlan& plan);
   virtual ~ObLogTempTableInsert();
 
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     return clone(out);
   }
@@ -48,7 +48,7 @@ class ObLogTempTableInsert : public ObLogicalOperator {
     return temp_table_name_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTempTableInsert);
   uint64_t ref_table_id_;
   common::ObString temp_table_name_;

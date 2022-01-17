@@ -27,7 +27,7 @@ namespace sql {
 // REGISTER_PHY_OPERATOR(ObMergeUnion, PHY_MERGE_UNION);
 
 class ObMergeUnion::ObMergeUnionCtx : public ObMergeSetOperatorCtx {
-  public:
+public:
   explicit ObMergeUnionCtx(ObExecContext& ctx)
       : ObMergeSetOperatorCtx(ctx),
         cur_child_op_(NULL),
@@ -41,7 +41,7 @@ class ObMergeUnion::ObMergeUnionCtx : public ObMergeSetOperatorCtx {
     ObMergeSetOperatorCtx::destroy();
   }
 
-  private:
+private:
   ObPhyOperator* cur_child_op_;
   int64_t next_child_op_idx_;
   bool got_first_row_;

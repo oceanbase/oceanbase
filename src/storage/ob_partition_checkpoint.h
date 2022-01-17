@@ -20,28 +20,28 @@ namespace storage {
 class ObPartitionService;
 
 class ObCheckPoingLogCb : public clog::ObISubmitLogCb {
-  public:
+public:
   ObCheckPoingLogCb() : ps_(NULL), checkpoint_(0)
   {}
   ~ObCheckPoingLogCb()
   {}
   int init(ObPartitionService* ps, const int64_t checkpoint);
 
-  public:
+public:
   int on_success(const common::ObPartitionKey& partition_key, const clog::ObLogType log_type, const uint64_t log_id,
       const int64_t version, const bool batch_committed, const bool batch_last_succeed);
   int on_finished(const common::ObPartitionKey& partition_key, const uint64_t log_id);
 
-  public:
+public:
   TO_STRING_KV(K_(checkpoint));
 
-  private:
+private:
   ObPartitionService* ps_;
   int64_t checkpoint_;
 };
 
 class ObCheckPoingLogCbFactory {
-  public:
+public:
   static ObCheckPoingLogCb* alloc();
   static void release(ObCheckPoingLogCb* cb);
 };

@@ -20,21 +20,21 @@
 namespace oceanbase {
 namespace sql {
 class ObExprGreaterThan : public ObRelationalExprOperator {
-  public:
+public:
   ObExprGreaterThan();
   explicit ObExprGreaterThan(common::ObIAllocator& alloc);
   virtual ~ObExprGreaterThan(){};
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result2(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
+      common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override
   {
     return ObRelationalExprOperator::cg_expr(expr_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprGreaterThan);
 };
 

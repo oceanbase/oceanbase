@@ -34,7 +34,7 @@ enum class StatLevel {
 };
 
 class ObHistogram {
-  public:
+public:
   friend class ObOptColumnStat;
   static const int64_t MAX_NUM_BUCKETS = 1024;
   enum class Type {
@@ -45,7 +45,7 @@ class ObHistogram {
     HYBIRD,
   };
   struct Bucket {
-    public:
+  public:
     Bucket() : endpoint_repeat_count_(0), endpoint_num_(-1)
     {}
     Bucket(int64_t repeat_count, int64_t endpoint_num)
@@ -61,7 +61,7 @@ class ObHistogram {
     int64_t endpoint_num_;
     TO_STRING_KV(K_(endpoint_value), K_(endpoint_repeat_count), K_(endpoint_num));
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(Bucket);
   };
 
@@ -135,7 +135,7 @@ class ObHistogram {
   int bucket_is_popular(const Bucket& bkt, bool& is_popular) const;
   TO_STRING_KV(K_(type), K_(sample_size), K_(bucket_cnt), K_(buckets));
 
-  protected:
+protected:
   Type type_;
   double sample_size_;
   double density_;
@@ -144,7 +144,7 @@ class ObHistogram {
 };
 
 class ObOptColumnStat : public common::ObIKVCacheValue {
-  public:
+public:
   static const int64_t MAX_OBJECT_SERIALIZE_SIZE = 512;
   typedef ObHistogram::Bucket Bucket;
   typedef ObHistogram::Type HistogramType;
@@ -321,10 +321,10 @@ class ObOptColumnStat : public common::ObIKVCacheValue {
   TO_STRING_KV(K_(table_id), K_(partition_id), K_(column_id), K_(object_type), K_(num_distinct), K_(num_null),
       K_(min_value), K_(max_value));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOptColumnStat);
 
-  protected:
+protected:
   uint64_t table_id_;
   int64_t partition_id_;
   uint64_t column_id_;

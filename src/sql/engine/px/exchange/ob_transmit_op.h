@@ -21,7 +21,7 @@ namespace sql {
 class ObTransmitOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTransmitOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObOpInput(ctx, spec)
   {}
   virtual ~ObTransmitOpInput()
@@ -33,7 +33,7 @@ class ObTransmitOpInput : public ObOpInput {
 class ObTransmitSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTransmitSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObTransmitSpec()
   {}
@@ -163,7 +163,7 @@ class ObTransmitSpec : public ObOpSpec {
 };
 
 class ObTransmitOp : public ObOperator {
-  public:
+public:
   ObTransmitOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObTransmitOp()
   {}

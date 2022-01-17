@@ -526,6 +526,8 @@ uint64_t ObReplayStatus::get_min_unreplay_log_id()
 // the invoker needs to lock
 int64_t ObReplayStatus::get_min_unreplay_log_timestamp()
 {
+  // for cold partition: timestamp returned may be small then expected, need to be double check with
+  // value returned by log service
   uint64_t unused = UINT64_MAX;
   int64_t timestamp = INT64_MAX;
   get_min_unreplay_log(unused, timestamp);
@@ -534,19 +536,12 @@ int64_t ObReplayStatus::get_min_unreplay_log_timestamp()
 
 void ObReplayStatus::get_min_unreplay_log(uint64_t& unreplay_log_id, int64_t& timestamp)
 {
-  unreplay_log_id = UINT64_MAX;
-  timestamp = INT64_MAX;
+  // for cold partition: timestamp returned may be small then expected, need to be double check with
+  // value returned by log service
   {
     RLockGuard Rlock_guard(get_submit_log_info_rwlock());
-    uint64_t next_submit_log_id = get_next_submit_log_id();
-    int64_t next_submit_log_ts = get_next_submit_log_ts();
-    uint64_t last_slide_out_log_id = get_last_slide_out_log_id();
-    int64_t last_slide_out_log_ts = get_last_slide_out_log_ts();
-
-    if (next_submit_log_ts <= last_slide_out_log_ts) {
-      unreplay_log_id = next_submit_log_id;
-      timestamp = next_submit_log_ts;
-    }
+    unreplay_log_id = get_next_submit_log_id();
+    timestamp = get_next_submit_log_ts();
   }
 
   for (int64_t i = 0; i < REPLAY_TASK_QUEUE_SIZE; ++i) {
@@ -576,8 +571,7 @@ void ObReplayStatus::check_eagain_too_many_(const ObReplayStatus::CheckCanReplay
     }
     if ((eagain_count_ >= EAGAIN_COUNT_THRESHOLD) && (REACH_TIME_INTERVAL(1 * 1000 * 1000L))) {
       const int64_t cur_time = ObTimeUtil::current_time();
-      if ((!result.need_wait_schema_refresh_ && (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_NORMAL_THRESHOLD)) ||
-          (result.need_wait_schema_refresh_ && (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_BIG_THRESHOLD))) {
+      if (cur_time - eagain_start_ts_ > EAGAIN_INTERVAL_THRESHOLD) {
         REPLAY_LOG(ERROR,
             "retry submit on EAGAIN too many times",
             K(eagain_count_),
@@ -878,11 +872,9 @@ int ObReplayStatus::set_need_filter_trans_log(const ObPartitionKey& pkey, const 
 }
 
 int ObReplayStatus::check_and_submit_task(const ObPartitionKey& pkey, const uint64_t log_id, const int64_t log_ts,
-    const bool need_replay, const clog::ObLogType log_type, const int64_t sw_next_replay_log_ts)
+    const bool need_replay, const clog::ObLogType log_type, const int64_t next_replay_log_ts)
 {
   int ret = OB_SUCCESS;
-  const bool is_aggre_log = (clog::OB_LOG_AGGRE == log_type);
-  const bool is_nop_log = (clog::OB_LOG_NOP == log_type);
   // check when log slide out
   const int64_t last_slide_out_log_id = get_last_slide_out_log_id();
   if (OB_UNLIKELY(!is_enabled())) {
@@ -890,7 +882,7 @@ int ObReplayStatus::check_and_submit_task(const ObPartitionKey& pkey, const uint
     REPLAY_LOG(
         ERROR, "replay status is not enabled", K(need_replay), K(pkey), K(log_id), K(log_type), K(log_ts), K(ret));
   } else if (OB_UNLIKELY(!pkey.is_valid() || OB_INVALID_TIMESTAMP == log_ts || OB_INVALID_ID == log_id ||
-                         OB_INVALID_TIMESTAMP == sw_next_replay_log_ts)) {
+                         OB_INVALID_TIMESTAMP == next_replay_log_ts || next_replay_log_ts > log_ts)) {
     ret = OB_INVALID_ARGUMENT;
     REPLAY_LOG(ERROR,
         "invalid arguments",
@@ -899,18 +891,7 @@ int ObReplayStatus::check_and_submit_task(const ObPartitionKey& pkey, const uint
         K(log_id),
         K(log_ts),
         K(log_type),
-        K(sw_next_replay_log_ts),
-        K(ret));
-  } else if (OB_UNLIKELY((!is_nop_log) && (sw_next_replay_log_ts > log_ts))) {
-    ret = OB_ERR_UNEXPECTED;
-    REPLAY_LOG(ERROR,
-        "invalid arguments",
-        K(need_replay),
-        K(pkey),
-        K(log_id),
-        K(log_ts),
-        K(log_type),
-        K(sw_next_replay_log_ts),
+        K(next_replay_log_ts),
         K(ret));
   } else if (log_id != (last_slide_out_log_id + 1)) {
     ret = OB_ERR_UNEXPECTED;
@@ -947,14 +928,11 @@ int ObReplayStatus::check_and_submit_task(const ObPartitionKey& pkey, const uint
   } else {
     {
       if (!submit_log_task_.need_submit_log()) {
-        // do not inc next_submit_log_ts with aggre log, it's the biggest log_submit_timestamp among its
-        // logs
-        const int64_t next_submit_log_ts = is_aggre_log ? sw_next_replay_log_ts : log_ts;
         // here must modify log_ts first, or may lead to the rollback of min_unreplay_log_timestamp
         WLockGuard wlock_guard(get_submit_log_info_rwlock());
         const uint64_t old_next_submit_log_id = get_next_submit_log_id();
         const int64_t old_next_submit_log_ts = get_next_submit_log_ts();
-        set_next_submit_log_info(log_id, next_submit_log_ts);
+        set_next_submit_log_info(log_id, next_replay_log_ts);
         if (OB_FAIL(update_last_slide_out_log_info(log_id, log_ts))) {
           REPLAY_LOG(
               ERROR, "failed to update_last_slide_out_log_info", KR(ret), K(pkey), K(log_id), K(log_ts), K(log_type));

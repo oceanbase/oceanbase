@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObMicroBlockRowExister : public ObIMicroBlockRowFetcher {
-  public:
+public:
   ObMicroBlockRowExister();
   virtual ~ObMicroBlockRowExister();
   int is_exist(const common::ObStoreRowkey& rowkey, const ObFullMacroBlockMeta& macro_meta,

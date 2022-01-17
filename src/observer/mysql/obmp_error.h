@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObMPError : public ObMPBase {
-  public:
+public:
   explicit ObMPError(const int ret) : ObMPBase(GCTX), ret_(ret), need_disconnect_(false)
   {}
   virtual ~ObMPError()
@@ -33,14 +33,14 @@ class ObMPError : public ObMPBase {
     need_disconnect_ = value;
   }
 
-  protected:
+protected:
   int deserialize()
   {
     return OB_SUCCESS;
   }
   inline int process();
 
-  private:
+private:
   int ret_;
   int need_disconnect_;
   DISALLOW_COPY_AND_ASSIGN(ObMPError);

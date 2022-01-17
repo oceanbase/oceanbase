@@ -51,6 +51,15 @@ const char* sys_task_type_to_str(const ObSysTaskType& type)
     case PARTITION_BACKUP_TASK:
       str = "partition backup task";
       break;
+    case BACKUP_VALIDATION_TASK:
+      str = "backup validation task";
+      break;
+    case BACKUP_BACKUPSET_TASK:
+      str = "backup backupset task";
+      break;
+    case BACKUP_ARCHIVELOG_TASK:
+      str = "backup archivelog task";
+      break;
     default:
       str = "invalid task type";
   }

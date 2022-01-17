@@ -250,6 +250,14 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
           }
           break;
         }
+        case T_SFU_DOUBLE: {
+          ParseNode *tmp_node = const_cast<ParseNode *>(node);
+          tmp_node->type_ = T_DOUBLE;
+          if (OB_FAIL(process_datatype_or_questionmark(*tmp_node, expr))) {
+            LOG_WARN("fail to process datetype or questionmark", K(ret), K(tmp_node));
+          } else {/*do nothing*/}
+          break;
+        }
         case T_CAST_ARGUMENT: {
           ObConstRawExpr* c_expr = NULL;
           if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_INT, c_expr))) {
@@ -612,11 +620,20 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
         }
 
         case T_FUN_SYS_UTC_TIMESTAMP: {
-          ObString err_info("now");
+          ObString err_info("utc_timestamp");
           if (OB_FAIL(process_timestamp_node(node, err_info, expr))) {
             LOG_WARN("fail to process timestamp node", K(ret), K(node));
           } else {
             static_cast<ObSysFunRawExpr*>(expr)->set_func_name(ObString::make_string(N_UTC_TIMESTAMP));
+          }
+          break;
+        }
+        case T_FUN_SYS_UTC_TIME: {
+          ObString err_info("utc_time");
+          if (OB_FAIL(process_timestamp_node(node, err_info, expr))) {
+            LOG_WARN("fail to process timestamp node", K(ret), K(node));
+          } else {
+            static_cast<ObSysFunRawExpr*>(expr)->set_func_name(ObString::make_string(N_UTC_TIME));
           }
           break;
         }
@@ -692,6 +709,16 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode* node, ObRawExpr
             LOG_WARN("fail to create raw expr", K(ret));
           } else {
             f_expr->set_func_name(ObString::make_string(N_CUR_DATE));
+            expr = f_expr;
+          }
+          break;
+        }
+        case T_FUN_SYS_UTC_DATE: {
+          ObSysFunRawExpr* f_expr = NULL;
+          if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_UTC_DATE, f_expr))) {
+            LOG_WARN("fail to create raw expr", K(ret));
+          } else {
+            f_expr->set_func_name(ObString::make_string(N_UTC_DATE));
             expr = f_expr;
           }
           break;
@@ -1608,7 +1635,7 @@ int ObRawExprResolverImpl::process_char_charset_node(const ParseNode* node, ObRa
       LOG_WARN("invalid character set", K(charset_str), K(ret));
       LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset_str.length(), charset_str.ptr());
     } else {
-      ObCollationType coll_type = ObCharset::get_default_collation(charset_type);
+      ObCollationType coll_type = ObCharset::get_system_collation();
       ObObj val;
       val.set_varchar(charset_str);
       val.set_collation_type(coll_type);
@@ -2248,11 +2275,25 @@ int ObRawExprResolverImpl::process_like_node(const ParseNode* node, ObRawExpr*& 
       escape_node.str_value_ = "\\";
       escape_node.text_len_ = 0;
       escape_node.raw_text_ = NULL;
+
+      /*
+      bugfix:https://work.aone.alibaba-inc.com/issue/36691548
+      in NO_BACKSLASH_ESCAPES mode, 'like BINARY xxx' stmt should also set the escapes as null, instead of '\'
+      */
+      bool no_escapes = false;
+      if (node->children_[1]->type_ == T_FUN_SYS && node->children_[1]->num_child_ == 2 &&
+          node->children_[1]->children_[0]->str_len_ == 4 &&
+          (0 == strcmp(node->children_[1]->children_[0]->str_value_, "cast")) &&
+          node->children_[1]->children_[1]->num_child_ == 2  // T_EXPR_LIST node
+          && node->children_[1]->children_[1]->children_[1]->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_VARCHAR &&
+          node->children_[1]->children_[1]->children_[1]->int16_values_[OB_NODE_CAST_COLL_IDX] == BINARY_COLLATION) {
+        IS_NO_BACKSLASH_ESCAPES(ctx_.session_info_->get_sql_mode(), no_escapes);
+      }
       if (OB_FAIL(process_datatype_or_questionmark(escape_node, escape_expr))) {
         LOG_WARN("fail to resolver defalut excape node", K(ret));
       } else if (OB_FAIL(t_expr->add_param_expr(escape_expr))) {
         LOG_WARN("fail to set param expr");
-      } else if (lib::is_oracle_mode()) {
+      } else if (lib::is_oracle_mode() || no_escapes) {
         // Oracle mode, if not specify escape, then no escape, but the implementation of like must contain escape
         // so we rewrite like without escape
         // c1 like '%x\x%' --> c1 like replace('%x\x%', '\','\\') escape '\' -> c1 like '%x\\x%' escape '\'
@@ -2571,9 +2612,11 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode* node, ObRawExpr*& e
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid node children", K(node->num_child_));
   } else {
-    ctx_.parents_expr_info_.add_member(IS_AGG);
+    bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     AggNestedCheckerGuard agg_guard(ctx_);
-    if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+    if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+      LOG_WARN("failed to add member", K(ret));
+    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
       LOG_WARN("failed to check agg nested.", K(ret));
     } else if (T_FUN_COUNT == node->type_ && 1 == node->num_child_) {
       if (OB_UNLIKELY(T_STAR != node->children_[0]->type_)) {
@@ -2684,11 +2727,12 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode* node, ObRawExpr*& e
       // add invalid table bit index, avoid aggregate function expressions are used as filters
       if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
         LOG_WARN("failed to add member", K(ret));
+      } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
       } else {
         expr = agg_expr;
       }
     }
-    ctx_.parents_expr_info_.del_member(IS_AGG);
   }
   // set the expr in nested agg.
   if (OB_SUCC(ret) && is_in_nested_aggr) {
@@ -2718,10 +2762,12 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode* node, ObRawE
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inalid group concat node", K(ret), K(node->children_));
   } else {
-    ctx_.parents_expr_info_.add_member(IS_AGG);
-    ParseNode* expr_list_node = node->children_[1];
+    bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
+    ParseNode *expr_list_node = node->children_[1];
     AggNestedCheckerGuard agg_guard(ctx_);
-    if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+    if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+      LOG_WARN("failed to add member", K(ret));
+    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
       LOG_WARN("failed to check agg nested.", K(ret));
     } else if (share::is_mysql_mode() && is_in_nested_aggr) {
       ret = OB_ERR_INVALID_GROUP_FUNC_USE;
@@ -2802,8 +2848,11 @@ int ObRawExprResolverImpl::process_group_aggr_node(const ParseNode* node, ObRawE
       }
     }
     if (OB_SUCC(ret)) {
-      ctx_.parents_expr_info_.del_member(IS_AGG);
-      expr = agg_expr;
+      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
+      } else {
+        expr = agg_expr;
+      }
     }
   }
   if (OB_SUCC(ret) && is_in_nested_aggr) {
@@ -2839,9 +2888,11 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode* node, ObRawEx
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inalid group concat node", K(ret), K(node->children_));
   } else {
-    ctx_.parents_expr_info_.add_member(IS_AGG);
+    bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
     AggNestedCheckerGuard agg_guard(ctx_);
-    if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+    if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+      LOG_WARN("failed to add member", K(ret));
+    } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
       LOG_WARN("failed to check agg nested.", K(ret));
     } else if (NULL != node->children_[0] && T_DISTINCT == node->children_[0]->type_) {
       ret = OB_DISTINCT_NOT_ALLOWED;
@@ -2889,8 +2940,11 @@ int ObRawExprResolverImpl::process_keep_aggr_node(const ParseNode* node, ObRawEx
       }
     }
     if (OB_SUCC(ret)) {
-      ctx_.parents_expr_info_.del_member(IS_AGG);
-      expr = agg_expr;
+      if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
+      } else {
+        expr = agg_expr;
+      }
     }
   }
   if (OB_SUCC(ret) && is_in_nested_aggr) {
@@ -3369,6 +3423,7 @@ int ObRawExprResolverImpl::process_lnnvl_node(const ParseNode* node, ObRawExpr*&
   switch (param_type) {
     case T_FUN_SYS_LNNVL:
     case T_FUN_SYS_REGEXP_LIKE:
+    case T_OP_EXISTS:
     case T_OP_IS:
     case T_OP_IS_NOT:
     case T_OP_LIKE:
@@ -3430,6 +3485,13 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode* node, ObRawExpr
         name = ObString::make_string("ora_decode");
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (0 == name.case_compare("nextval")) {
+        ret = OB_ERR_FUNCTION_UNKNOWN;
+      }
+    }
+
     if (OB_FAIL(ret)) {
       /*^-^*/
     } else if (OB_FAIL(ob_write_string(ctx_.expr_factory_.get_allocator(), name, func_name))) {
@@ -3499,6 +3561,8 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode* node, ObRawExpr
       type = ObExprOperatorFactory::get_type_by_name("pow");
     } else if (0 == func_name.case_compare("ws")) {
       type = ObExprOperatorFactory::get_type_by_name("word_segment");
+    } else if (0 == func_name.case_compare("inet_ntoa")) {
+      type = ObExprOperatorFactory::get_type_by_name("int2ip");
     } else {
       type = ObExprOperatorFactory::get_type_by_name(func_name);
     }
@@ -4337,14 +4401,17 @@ int ObRawExprResolverImpl::check_and_canonicalize_window_expr(ObRawExpr* expr)
       }
     }
 
+    if (OB_SUCC(ret) && share::is_mysql_mode() && w_expr->has_frame_orig() &&
+        WINDOW_RANGE == win_type && 0 == order_items.count()) {
+      ret = OB_ERR_MISS_ORDER_BY_EXPR;
+      LOG_WARN("missing ORDER BY expression in the window specification", K(ret));
+    }
+
     // reset frame
-    if (OB_SUCC(ret)) {
-      if (0 == order_items.count() ||
-          (ObRawExprResolverImpl::should_not_contain_window_clause(func_type) && win_type != WINDOW_MAX)) {
-        win_type = WINDOW_MAX;
-        upper = Bound();
-        lower = Bound();
-      }
+    if (OB_SUCC(ret) && win_type != WINDOW_MAX && should_not_contain_window_clause(func_type)) {
+      win_type = WINDOW_MAX;
+      upper = Bound();
+      lower = Bound();
     }
 
     if (OB_SUCC(ret)) {
@@ -4633,7 +4700,10 @@ int ObRawExprResolverImpl::process_agg_udf_node(
   ctx_.parents_expr_info_.add_member(IS_AGG);
   AggNestedCheckerGuard agg_guard(ctx_);
   bool is_in_nested_aggr = false;
-  if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
+  bool need_add_flag = !ctx_.parents_expr_info_.has_member(IS_AGG);
+  if (need_add_flag && OB_FAIL(ctx_.parents_expr_info_.add_member(IS_AGG))) {
+    LOG_WARN("failed to add member", K(ret));
+  } else if (OB_FAIL(agg_guard.check_agg_nested(is_in_nested_aggr))) {
     LOG_WARN("failed to check agg nested.", K(ret));
   } else if (is_in_nested_aggr) {
     ret = OB_ERR_INVALID_GROUP_FUNC_USE;
@@ -4665,13 +4735,12 @@ int ObRawExprResolverImpl::process_agg_udf_node(
     // add invalid table bit index, avoid aggregate function expressions are used as filters
     if (OB_FAIL(agg_expr->get_relation_ids().add_member(0))) {
       LOG_WARN("failed to add member", K(ret));
+    } else if (need_add_flag && (ctx_.parents_expr_info_.del_member(IS_AGG))) {
+        LOG_WARN("failed to del member", K(ret));
     } else {
       expr = agg_expr;
     }
   }
-
-  // FIXME WHY?
-  ctx_.parents_expr_info_.del_member(IS_AGG);
   return ret;
 }
 

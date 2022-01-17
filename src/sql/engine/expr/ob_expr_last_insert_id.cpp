@@ -68,7 +68,7 @@ int ObExprLastInsertID::calc_resultN(
         } else {
           EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NO_RANGE_CHECK);
           expr_ctx.cast_mode_ &= ~(CM_WARN_ON_FAIL);
-          const ObObj& obj_tmp = objs_array[0];
+          const ObObj &obj_tmp = objs_array[0];
           EXPR_GET_UINT64_V2(obj_tmp, param_value);
           result.set_uint64(param_value);
         }

@@ -28,12 +28,12 @@ class ObAllVirtualEngineTable : public common::ObVirtualTableScannerIterator {
     SAVEPOINTS,
   };
 
-  public:
+public:
   ObAllVirtualEngineTable();
   virtual ~ObAllVirtualEngineTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualEngineTable);
 };
 }  // namespace observer

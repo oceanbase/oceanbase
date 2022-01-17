@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprNullSafeEqual : public ObRelationalExprOperator {
-  public:
+public:
   ObExprNullSafeEqual();
   explicit ObExprNullSafeEqual(common::ObIAllocator& alloc);
   virtual ~ObExprNullSafeEqual(){};
@@ -44,7 +44,7 @@ class ObExprNullSafeEqual : public ObRelationalExprOperator {
   static int ns_equal(
       const ObExpr& expr, ObDatum& res, ObExpr** left, ObEvalCtx& lctx, ObExpr** right, ObEvalCtx& rctx);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprNullSafeEqual);
 };
 

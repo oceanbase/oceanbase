@@ -25,7 +25,7 @@ class ObTransformOrExpansion : public ObTransformRule {
   static const int64_t MAX_TIMES_FOR_OR_EXPANSION;
   typedef ObBitSet<8> ColumnBitSet;
 
-  public:
+public:
   ObTransformOrExpansion(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::PRE_ORDER), try_times_(0)
   {}
   virtual ~ObTransformOrExpansion()
@@ -33,10 +33,10 @@ class ObTransformOrExpansion : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  protected:
+protected:
   virtual int adjust_transform_types(uint64_t& transform_types) override;
 
-  private:
+private:
   int check_stmt_validity(ObDMLStmt& stmt, bool& is_valid);
 
   int check_select_expr_validity(ObSelectStmt& stmt, bool& is_valid);
@@ -70,9 +70,9 @@ class ObTransformOrExpansion : public ObTransformRule {
   int adjust_or_expansion_stmt(const int64_t transformed_expr_pos, const int64_t param_pos, bool can_union_distinct,
       ObSelectStmt*& or_expansion_stmt);
   int create_expr_for_in_expr(const ObRawExpr& transformed_expr, const int64_t param_pos, bool can_union_distinct,
-      common::ObIArray<ObRawExpr*>& generated_exprs, common::ObIArray<ObQueryRefRawExpr*>& subqueries);
+      common::ObIArray<ObRawExpr*>& generated_exprs);
   int create_expr_for_or_expr(ObRawExpr& transformed_expr, const int64_t param_pos, bool can_union_distinct,
-      common::ObIArray<ObRawExpr*>& generated_exprs, common::ObIArray<ObQueryRefRawExpr*>& subqueries);
+      common::ObIArray<ObRawExpr*>& generated_exprs);
   int preprocess_or_condition(ObSelectStmt* select_stmt, ObRawExpr* expr, bool& can_union_distinct, bool& spj_is_unique,
       bool& skip_this_cond, const bool is_topk);
 
@@ -84,7 +84,7 @@ class ObTransformOrExpansion : public ObTransformRule {
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformOrExpansion);
 
-  private:
+private:
   int64_t try_times_;
 };
 

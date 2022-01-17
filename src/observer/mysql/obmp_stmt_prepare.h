@@ -25,7 +25,7 @@ namespace observer {
 struct ObGlobalContext;
 
 class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
-  public:
+public:
   static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STMT_PREPARE;
 
   explicit ObMPStmtPrepare(const ObGlobalContext& gctx);
@@ -60,43 +60,43 @@ class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
     return proxy_version_;
   }
 
-  protected:
-  virtual int deserialize();
+protected:
+  virtual int deserialize() override;
   virtual int before_process() override;
-  virtual int process();
+  virtual int process() override;
 
-  virtual void disconnect()
+  virtual void disconnect() override
   {
     ObMPBase::disconnect();
   }
-  virtual void update_last_pkt_pos()
+  virtual void update_last_pkt_pos() override
   {
     if (NULL != ez_buf_) {
       comp_context_.update_last_pkt_pos(ez_buf_->last);
     }
   }
-  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL)
+  virtual int send_error_packet(int err, const char* errmsg, bool is_partition_hit = true, void* extra_err_info = NULL) override
   {
     return ObMPBase::send_error_packet(err, errmsg, is_partition_hit, extra_err_info);
   }
-  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param)
+  virtual int send_ok_packet(sql::ObSQLSessionInfo& session, ObOKPParam& ok_param) override
   {
     return ObMPBase::send_ok_packet(session, ok_param);
   }
-  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result)
+  virtual int send_eof_packet(const sql::ObSQLSessionInfo& session, const ObMySQLResultSet& result) override
   {
     return ObMPBase::send_eof_packet(session, result);
   }
-  virtual int response_packet(obmysql::ObMySQLPacket& pkt)
+  virtual int response_packet(obmysql::ObMySQLPacket& pkt) override
   {
     return ObMPBase::response_packet(pkt);
   }
-  virtual bool need_send_extra_ok_packet()
+  virtual bool need_send_extra_ok_packet() override
   {
     return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet();
   }
 
-  private:
+private:
   int do_process(
       sql::ObSQLSessionInfo& session, const bool has_more_result, const bool force_sync_resp, bool& async_resp_used);
   int process_prepare_stmt(const sql::ObMultiStmtItem& multi_stmt_item, sql::ObSQLSessionInfo& session,
@@ -109,7 +109,7 @@ class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
   int send_column_packet(const sql::ObSQLSessionInfo& session, ObMySQLResultSet& result);
   int send_param_packet(const sql::ObSQLSessionInfo& session, ObMySQLResultSet& result);
 
-  private:
+private:
   ObQueryRetryCtrl retry_ctrl_;
   sql::ObSqlCtx ctx_;
   common::ObString sql_;
@@ -119,7 +119,7 @@ class ObMPStmtPrepare : public ObMPBase, public ObIMPPacketSender {
   int64_t exec_end_timestamp_;
   uint64_t proxy_version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtPrepare);
 
 };  // end of class ObMPStmtPrepare

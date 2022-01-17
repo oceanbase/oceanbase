@@ -22,12 +22,12 @@ using namespace common;
 using namespace share::schema;
 
 class TestAllClusterProxy : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   DBInitializer db_initer_;
 };
 

@@ -32,7 +32,7 @@ inline int32_t faa_if_positive(int32_t* addr, int32_t x)
 
 // DO NOT use me
 class BaseRefHandle {
-  public:
+public:
   typedef RefNode Node;
   enum { BORN_REF = INT32_MAX / 2 };
   explicit BaseRefHandle(RetireStation& retire_station)
@@ -59,7 +59,7 @@ class BaseRefHandle {
     retire_station_.purge(reclaim_list);
   }
 
-  protected:
+protected:
   QClock& qclock_;
   RetireStation& retire_station_;
   uint64_t qc_slot_;
@@ -67,7 +67,7 @@ class BaseRefHandle {
 
 // fast read, slow del, delay reclaim Value/Node
 class TCRefHandle final : public BaseRefHandle {
-  public:
+public:
   typedef RefNode Node;
   explicit TCRefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
   {}
@@ -93,7 +93,7 @@ class TCRefHandle final : public BaseRefHandle {
     return get_tcref().dec_ref(&node->uref_);
   }
 
-  private:
+private:
   static TCRef& get_tcref()
   {
     static TCRef tcref;
@@ -103,7 +103,7 @@ class TCRefHandle final : public BaseRefHandle {
 
 // balanced read/del performance, realtime reclaim Value, batch/delay reclaim Node.
 class RefHandle final : public BaseRefHandle {
-  public:
+public:
   typedef RefNode Node;
   explicit RefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
   {}
@@ -126,7 +126,7 @@ class RefHandle final : public BaseRefHandle {
 };
 
 class DummyRefHandle final : public BaseRefHandle {
-  public:
+public:
   typedef RefNode Node;
   enum { BORN_REF = 1 };
   explicit DummyRefHandle(RetireStation& retire_station) : BaseRefHandle(retire_station)
@@ -167,7 +167,7 @@ class DummyRefHandle final : public BaseRefHandle {
 template <typename Key, typename Value, typename AllocHandle = AllocHandle<Key, Value>, typename RefHandle = RefHandle,
     int64_t SHRINK_THRESHOLD = 8>
 class ObLinkHashMap {
-  protected:
+protected:
   typedef DCArrayAlloc ArrayAlloc;
   typedef DCHash<Key, SHRINK_THRESHOLD> Hash;
   typedef typename Hash::Node Node;
@@ -186,9 +186,9 @@ class ObLinkHashMap {
   };
   enum { RETIRE_LIMIT = 1024 };
 
-  public:
+public:
   class Iterator {
-    public:
+  public:
     explicit Iterator(ObLinkHashMap& hash) : hash_(hash), next_(hash_.next(nullptr))
     {}
     ~Iterator()
@@ -219,12 +219,12 @@ class ObLinkHashMap {
       }
     }
 
-    private:
+  private:
     ObLinkHashMap& hash_;
     HashNode* next_;
   };
 
-  public:
+public:
   explicit ObLinkHashMap(int64_t min_size = 1 << 16) : ref_handle_(get_retire_station()), hash_(array_alloc_, min_size)
   {}
   ObLinkHashMap(AllocHandle alloc_handle, int64_t min_size = 1 << 16)
@@ -434,7 +434,7 @@ class ObLinkHashMap {
     return map(remove_if);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLinkHashMap);
   static int err_code_map(int err)
   {
@@ -539,10 +539,10 @@ class ObLinkHashMap {
     return OB_ISNULL(iter) ? nullptr : next_node;
   }
 
-  protected:
+protected:
   template <typename Function>
   class HandleOn {
-    public:
+  public:
     HandleOn(ObLinkHashMap& hash, Function& fn) : hash_(hash), handle_(fn)
     {}
     bool operator()(Key& key, Value* value)
@@ -552,13 +552,13 @@ class ObLinkHashMap {
       return need_continue;
     }
 
-    private:
+  private:
     ObLinkHashMap& hash_;
     Function& handle_;
   };
   template <typename Function>
   class RemoveIf {
-    public:
+  public:
     RemoveIf(ObLinkHashMap& hash, Function& fn) : hash_(hash), predicate_(fn)
     {}
     bool operator()(Key& key, Value* value)
@@ -572,7 +572,7 @@ class ObLinkHashMap {
       return true;
     }
 
-    private:
+  private:
     ObLinkHashMap& hash_;
     Function& predicate_;
   };
@@ -583,14 +583,14 @@ class ObLinkHashMap {
     return true;
   }
 
-  protected:
+protected:
   static RetireStation& get_retire_station()
   {
     static RetireStation retire_station(get_global_qclock(), RETIRE_LIMIT);
     return retire_station;
   }
 
-  protected:
+protected:
   CountHandle count_handle_;
   AllocHandle alloc_handle_;
   RefHandle ref_handle_;
@@ -600,7 +600,7 @@ class ObLinkHashMap {
 
 template <typename Key, typename Value, typename AllocHandle>
 class ObTenantLinkHashMap : public ObLinkHashMap<Key, Value, AllocHandle> {
-  public:
+public:
   int create(uint64_t tenant_id, const Key& key, Value*& value)
   {
     int ret = OB_SUCCESS;

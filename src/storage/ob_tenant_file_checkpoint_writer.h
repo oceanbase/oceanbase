@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObTenantFileCheckpointWriter final {
-  public:
+public:
   ObTenantFileCheckpointWriter();
   ~ObTenantFileCheckpointWriter() = default;
   int init(
@@ -27,7 +27,7 @@ class ObTenantFileCheckpointWriter final {
   int write_checkpoint();
   void reset();
 
-  private:
+private:
   ObTenantFilePGMetaCheckpointWriter pg_meta_writer_;
   ObTenantFileKey tenant_file_key_;
   ObBaseFileMgr* file_mgr_;

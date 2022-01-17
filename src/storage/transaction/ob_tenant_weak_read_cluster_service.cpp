@@ -663,13 +663,12 @@ int ObTenantWeakReadClusterService::update_version(int64_t& affected_rows)
   } else if (OB_UNLIKELY(cur_leader_epoch != leader_epoch_)) {
     ret = OB_NOT_MASTER;
     CLUSTER_ISTAT("WRS leader changed when update CLUSTER version, need stop CLUSTER weak read service",
-        "tenant_id",
-        wrs_pkey_.get_tenant_id(),
-        K(cur_leader_epoch),
-        K(leader_epoch_));
-  } else if (!check_can_update_version_()) {
+        "tenant_id", wrs_pkey_.get_tenant_id(), K(cur_leader_epoch), K(leader_epoch_));
+  } else if (! check_can_update_version_()) {
     // check if can update version or not
-  } else if (OB_UNLIKELY((new_version = compute_version_(skipped_server_count, need_print)) <= 0)) {
+  } else if (FALSE_IT(new_version = compute_version_(skipped_server_count, need_print))) {
+    // nothing to do
+  } else if (OB_UNLIKELY(! is_valid_read_snapshot_version(new_version))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid CLUSTER weak read version", K(new_version), KR(ret));
   } else {

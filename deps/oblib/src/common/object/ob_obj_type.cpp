@@ -191,7 +191,7 @@ typedef int (*obSqlTypeStrWithoutAccuracyFunc)(char* buff, int64_t buff_length, 
   }
 
 // For datetime/timestamp/time
-#define DEF_TYPE_STR_FUNCS_SCALE(TYPE, STYPE1, STYPE2, STYPE3)                     \
+#define DEF_TYPE_STR_FUNCS_SCALE_DEFAULT_ZERO(TYPE, STYPE1, STYPE2, STYPE3)        \
   int ob_##TYPE##_str(char* buff,                                                  \
       int64_t buff_length,                                                         \
       int64_t& pos,                                                                \
@@ -210,6 +210,28 @@ typedef int (*obSqlTypeStrWithoutAccuracyFunc)(char* buff, int64_t buff_length, 
       } else {                                                                     \
         ret = databuff_printf(buff, buff_length, pos, STYPE1 STYPE2);              \
       }                                                                            \
+    } else {                                                                       \
+      ret = databuff_printf(buff, buff_length, pos, STYPE1 "(%ld)" STYPE2, scale); \
+    }                                                                              \
+    return ret;                                                                    \
+  }
+
+// For otimestamp, need print (0) if scale is zero
+#define DEF_TYPE_STR_FUNCS_SCALE(TYPE, STYPE1, STYPE2)                             \
+  int ob_##TYPE##_str(char *buff,                                                  \
+      int64_t buff_length,                                                         \
+      int64_t &pos,                                                                \
+      int64_t length,                                                              \
+      int64_t precision,                                                           \
+      int64_t scale,                                                               \
+      ObCollationType coll_type)                                                   \
+  {                                                                                \
+    int ret = OB_SUCCESS;                                                          \
+    UNUSED(length);                                                                \
+    UNUSED(precision);                                                             \
+    UNUSED(coll_type);                                                             \
+    if (scale < 0) {                                                               \
+      ret = databuff_printf(buff, buff_length, pos, STYPE1 STYPE2);                \
     } else {                                                                       \
       ret = databuff_printf(buff, buff_length, pos, STYPE1 "(%ld)" STYPE2, scale); \
     }                                                                              \
@@ -361,14 +383,14 @@ DEF_TYPE_STR_FUNCS_PRECISION_SCALE(ufloat, "float", " unsigned", "");
 DEF_TYPE_STR_FUNCS_PRECISION_SCALE(udouble, "double", " unsigned", "");
 DEF_TYPE_STR_FUNCS_PRECISION_SCALE(number, "decimal", "", "number");
 DEF_TYPE_STR_FUNCS_PRECISION_SCALE(unumber, "decimal", " unsigned", "");
-DEF_TYPE_STR_FUNCS_SCALE(datetime, "datetime", "", "date");
-DEF_TYPE_STR_FUNCS_SCALE(timestamp, "timestamp", "", "timestamp");
+DEF_TYPE_STR_FUNCS_SCALE_DEFAULT_ZERO(datetime, "datetime", "", "date");
+DEF_TYPE_STR_FUNCS_SCALE_DEFAULT_ZERO(timestamp, "timestamp", "", "timestamp");
 DEF_TYPE_STR_FUNCS(date, "date", "");
-DEF_TYPE_STR_FUNCS_SCALE(time, "time", "", "time");
+DEF_TYPE_STR_FUNCS_SCALE_DEFAULT_ZERO(time, "time", "", "time");
 DEF_TYPE_STR_FUNCS_PRECISION(year, "year", "");
-DEF_TYPE_STR_FUNCS_SCALE(timestamp_tz, "timestamp", " with time zone", "timestamp");
-DEF_TYPE_STR_FUNCS_SCALE(timestamp_ltz, "timestamp", " with local time zone", "timestamp");
-DEF_TYPE_STR_FUNCS_SCALE(timestamp_nano, "timestamp", "", "timestamp");
+DEF_TYPE_STR_FUNCS_SCALE(timestamp_tz, "timestamp", " with time zone");
+DEF_TYPE_STR_FUNCS_SCALE(timestamp_ltz, "timestamp", " with local time zone");
+DEF_TYPE_STR_FUNCS_SCALE(timestamp_nano, "timestamp", "");
 DEF_TYPE_STR_FUNCS_LENGTH(varchar, "varchar", "varbinary", "varchar2");
 DEF_TYPE_STR_FUNCS_LENGTH(char, "char", "binary", "char");
 DEF_TYPE_STR_FUNCS_LENGTH(hex_string, "hex_string", "hex_string", "hex_string");

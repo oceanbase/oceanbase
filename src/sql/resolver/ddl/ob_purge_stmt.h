@@ -24,7 +24,7 @@ namespace sql {
  */
 
 class ObPurgeTableStmt : public ObDDLStmt {
-  public:
+public:
   ObPurgeTableStmt() : ObDDLStmt(stmt::T_PURGE_TABLE)
   {}
   explicit ObPurgeTableStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_PURGE_TABLE)
@@ -48,7 +48,7 @@ class ObPurgeTableStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(purge_table_arg));
 
-  private:
+private:
   obrpc::ObPurgeTableArg purge_table_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObPurgeTableStmt);
 };
@@ -68,7 +68,7 @@ inline void ObPurgeTableStmt::set_table_name(const common::ObString& table_name)
  */
 
 class ObPurgeIndexStmt : public ObDDLStmt {
-  public:
+public:
   ObPurgeIndexStmt() : ObDDLStmt(stmt::T_PURGE_INDEX)
   {}
   explicit ObPurgeIndexStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_PURGE_INDEX)
@@ -97,7 +97,7 @@ class ObPurgeIndexStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(purge_index_arg));
 
-  private:
+private:
   obrpc::ObPurgeIndexArg purge_index_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObPurgeIndexStmt);
 };
@@ -122,7 +122,7 @@ inline void ObPurgeIndexStmt::set_table_name(const common::ObString& table_name)
  */
 
 class ObPurgeDatabaseStmt : public ObDDLStmt {
-  public:
+public:
   ObPurgeDatabaseStmt() : ObDDLStmt(stmt::T_PURGE_DATABASE)
   {}
   explicit ObPurgeDatabaseStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_PURGE_DATABASE)
@@ -145,7 +145,7 @@ class ObPurgeDatabaseStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(purge_db_arg));
 
-  private:
+private:
   obrpc::ObPurgeDatabaseArg purge_db_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObPurgeDatabaseStmt);
 };
@@ -165,7 +165,7 @@ inline void ObPurgeDatabaseStmt::set_db_name(const common::ObString& db_name)
  */
 
 class ObPurgeTenantStmt : public ObDDLStmt {
-  public:
+public:
   ObPurgeTenantStmt() : ObDDLStmt(stmt::T_PURGE_TENANT)
   {}
   explicit ObPurgeTenantStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_PURGE_TENANT)
@@ -188,7 +188,7 @@ class ObPurgeTenantStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(purge_tenant_arg));
 
-  private:
+private:
   obrpc::ObPurgeTenantArg purge_tenant_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObPurgeTenantStmt);
 };
@@ -207,7 +207,7 @@ inline void ObPurgeTenantStmt::set_tenant_name(const common::ObString& tenant_na
  * purge recyclebin
  */
 class ObPurgeRecycleBinStmt : public ObDDLStmt {
-  public:
+public:
   ObPurgeRecycleBinStmt() : ObDDLStmt(stmt::T_PURGE_RECYCLEBIN)
   {}
   explicit ObPurgeRecycleBinStmt(common::ObIAllocator* name_pool) : ObDDLStmt(name_pool, stmt::T_PURGE_RECYCLEBIN)
@@ -240,7 +240,7 @@ class ObPurgeRecycleBinStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(stmt_type), K_(purge_recyclebin_arg));
 
-  private:
+private:
   obrpc::ObPurgeRecycleBinArg purge_recyclebin_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObPurgeRecycleBinStmt);
 };

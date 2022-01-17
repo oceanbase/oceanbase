@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace share {
 
 class ObBackupScheduler {
-  public:
+public:
   ObBackupScheduler();
   virtual ~ObBackupScheduler();
   int init(const obrpc::ObBackupDatabaseArg& arg, schema::ObMultiVersionSchemaService& schema_service,
@@ -33,7 +33,7 @@ class ObBackupScheduler {
       rootserver::ObFreezeInfoManager& freeze_info_manager, rootserver::ObRestorePointService& restore_point_service);
   int start_schedule_backup();
 
-  private:
+private:
   int get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids);
   int check_can_backup(const common::ObIArray<ObBaseBackupInfoStruct>& infos);
   int schedule_backup(const common::ObIArray<uint64_t>& tenant_ids, ObBackupInfoManager& info_manager);
@@ -52,16 +52,15 @@ class ObBackupScheduler {
   int rollback_backup_infos(ObBackupInfoManager& info_manager);
   int rollback_backup_info(const ObBaseBackupInfoStruct& info, ObBackupInfoManager& info_manager);
   int check_backup_task_infos_status(const ObBaseBackupInfoStruct& info);
-  int check_tenant_can_backup(const uint64_t tenant_id, const int64_t backup_schema_version,
-      ObBackupInfoManager& info_manager, bool& can_backup);
+  int check_tenant_can_backup(const uint64_t tenant_id, const int64_t backup_schema_version, bool& can_backup);
   int check_gts_(const common::ObIArray<uint64_t>& tenant_ids);
-  int check_gts_(const uint64_t tenant_id);
   int init_frozen_schema_versions_(rootserver::ObFreezeInfoManager& freeze_info_manager, const int64_t frozen_version);
   int check_backup_schema_version_(const uint64_t tenant_id, const int64_t backup_schema_version);
   int create_backup_point(const uint64_t tenant_id);
   int check_log_archive_status();
+  int check_tenant_backup_data_version(const uint64_t tenant_id, ObBackupInfoManager& info_manager, bool& can_backup);
 
-  private:
+private:
   static const int64_t MAX_TENANT_BUCKET = 1024;
   bool is_inited_;
   obrpc::ObBackupDatabaseArg arg_;
@@ -77,6 +76,7 @@ class ObBackupScheduler {
   rootserver::ObRootBackup* root_backup_;
   rootserver::ObFreezeInfoManager* freeze_info_manager_;
   rootserver::ObRestorePointService* restore_point_service_;
+  ObLogArchiveBackupInfo sys_log_archive_info_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupScheduler);
 };
 

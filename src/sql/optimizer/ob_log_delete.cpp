@@ -36,23 +36,6 @@ int ObLogDelete::allocate_expr_pre(ObAllocExprContext& ctx)
   return ret;
 }
 
-int ObLogDelete::allocate_expr_post(ObAllocExprContext& ctx)
-{
-  int ret = OB_SUCCESS;
-  if (is_pdml() && is_index_maintenance()) {
-    // handle shadow pk column
-    if (OB_FAIL(alloc_shadow_pk_column_for_pdml(ctx))) {
-      LOG_WARN("failed alloc generated column for pdml index maintain", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
-      LOG_WARN("failed to allocate expr post for delete", K(ret));
-    }
-  }
-  return ret;
-}
-
 const char* ObLogDelete::get_name() const
 {
   const char* name = NULL;

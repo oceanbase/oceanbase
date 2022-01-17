@@ -22,7 +22,7 @@ namespace transaction {
 class ObTransService;
 
 class ObXAInnerTableGCWorker : public share::ObThreadPool {
-  public:
+public:
   ObXAInnerTableGCWorker() : is_inited_(false), is_running_(false), txs_(NULL)
   {}
   ~ObXAInnerTableGCWorker()
@@ -30,15 +30,15 @@ class ObXAInnerTableGCWorker : public share::ObThreadPool {
     destroy();
   }
   int init(ObTransService* txs);
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
   void destroy();
 
-  public:
+public:
   virtual void run1() override;
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   ObTransService* txs_;

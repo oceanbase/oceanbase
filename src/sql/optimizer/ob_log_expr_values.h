@@ -17,11 +17,11 @@
 namespace oceanbase {
 namespace sql {
 class ObLogExprValues : public ObLogicalOperator {
-  public:
+public:
   ObLogExprValues(ObLogPlan& plan) : ObLogicalOperator(plan), need_columnlized_(false)
   {}
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     return clone(out);
   }
@@ -34,7 +34,6 @@ class ObLogExprValues : public ObLogicalOperator {
     return need_columnlized_;
   }
   int add_values_expr(const common::ObIArray<ObRawExpr*>& value_exprs);
-  int add_str_values_array(const common::ObIArray<ObRawExpr*>& expr);
 
   const common::ObIArray<ObRawExpr*>& get_value_exprs() const
   {
@@ -44,10 +43,6 @@ class ObLogExprValues : public ObLogicalOperator {
   {
     return value_exprs_;
   }
-  const common::ObIArray<ObStrValues>& get_str_values_array() const
-  {
-    return str_values_array_;
-  }
   int check_range_param_continuous(bool& use_range_param) const;
   int get_value_param_range(int64_t row_index, int64_t& param_idx_start, int64_t& param_idx_end) const;
   virtual int est_cost() override;
@@ -56,19 +51,17 @@ class ObLogExprValues : public ObLogicalOperator {
   virtual int compute_table_set() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_one_row_info() override;
-  virtual int allocate_dummy_output();
-  uint64_t hash(uint64_t seed) const;
+  virtual int allocate_dummy_output() override;
+  uint64_t hash(uint64_t seed) const override;
   virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
-  private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+private:
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
-  private:
+private:
   bool need_columnlized_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
-  // only engine 3.0 used
-  common::ObSEArray<ObStrValues, 4, common::ModulePageAllocator, true> str_values_array_;
   DISALLOW_COPY_AND_ASSIGN(ObLogExprValues);
 };
 }  // namespace sql

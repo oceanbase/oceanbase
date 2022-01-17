@@ -23,7 +23,7 @@ namespace sql {
 class ObMultiPartDelete::ObMultiPartDeleteCtx : public ObTableModifyCtx, public ObMultiDMLCtx {
   friend class ObMultiPartDelete;
 
-  public:
+public:
   explicit ObMultiPartDeleteCtx(ObExecContext& ctx) : ObTableModifyCtx(ctx), ObMultiDMLCtx(ctx.get_allocator())
   {}
 

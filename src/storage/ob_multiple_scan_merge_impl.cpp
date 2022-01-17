@@ -12,6 +12,7 @@
 
 #include "ob_multiple_scan_merge_impl.h"
 #include "share/ob_get_compat_mode.h"
+#include "storage/ob_sstable.h"
 
 using namespace oceanbase::storage;
 using namespace oceanbase::common;
@@ -133,7 +134,6 @@ int ObMultipleScanMergeImpl::reset_range(
   gap_item.iter_idx_ = idx;
   gap_item.row_ = &row;
   int64_t remain_item = 0;
-  bool compare_result = false;
   const ObIArray<ObITable*>& tables = tables_handle_.get_tables();
   const int64_t tables_cnt = tables.count();
   const ObScanMergeLoserTreeItem* top_item = nullptr;
@@ -145,10 +145,12 @@ int ObMultipleScanMergeImpl::reset_range(
       STORAGE_LOG(WARN, "item or row is null", K(ret), KP(top_item));
     } else {
       const bool is_memtable = tables.at(tables_cnt - top_item->iter_idx_ - 1)->is_memtable();
-      if (top_item->iter_idx_ < idx ||
-          (!is_memtable &&
-              (compare_result = (tree_cmp_(gap_item, *top_item) < 0 || (!include_gap_key && 0 == compare_result))) &&
-              OB_SUCCESS == tree_cmp_.get_error_code())) {
+      const int64_t tree_ret = tree_cmp_(gap_item, *top_item);
+      if (top_item->iter_idx_ < idx
+          || (!is_memtable
+              // row in sstable is equal to or beyond gap row should be remained 
+              && (tree_ret < 0 || (include_gap_key && 0 == tree_ret))
+              && OB_SUCCESS == tree_cmp_.get_error_code())) {
         items[remain_item++] = *top_item;
       }
       if (OB_FAIL(tree_cmp_.get_error_code())) {
@@ -167,7 +169,7 @@ int ObMultipleScanMergeImpl::reset_range(
             "reset range compare",
             K(*gap_item.row_),
             K(*top_item->row_),
-            K(compare_result),
+            K(tree_ret),
             K(top_item->iter_idx_),
             K(idx),
             K(is_memtable));
@@ -256,10 +258,20 @@ int ObMultipleScanMergeImpl::prepare_range_skip()
 {
   int ret = OB_SUCCESS;
   memtable::ObIMemtableCtx* mem_ctx = access_ctx_->store_ctx_->mem_ctx_;
+  bool contain_uncommitted_row = false;
+  ObITable *table = NULL;
   ObITable* last_table = NULL;
   const ObIArray<ObITable*>& tables = tables_handle_.get_tables();
   if (tables.count() > 0) {
-    if (OB_FAIL(tables.at(tables.count() - 1, last_table))) {
+    // If sstable contains uncommitted rows, disable range skip
+    for (int64_t i = tables.count() - 1; OB_SUCC(ret) && !contain_uncommitted_row && i >= 0; --i) {
+      if (OB_FAIL(tables.at(i, table))) {
+        STORAGE_LOG(WARN, "Fail to get i store, ", K(i), K(ret));
+      } else if (table->is_sstable()) {
+        contain_uncommitted_row = static_cast<ObSSTable *>(table)->contain_uncommitted_row();
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(tables.at(tables.count() - 1, last_table))) {
       last_table = NULL;
     }
   } else {
@@ -269,9 +281,11 @@ int ObMultipleScanMergeImpl::prepare_range_skip()
 
   if (NULL != last_table) {
     const bool skip_switch = true;
-    bool enable_skip = skip_switch && (access_param_->iter_param_.table_id_ & 0xffffff) > 50000 &&
+    bool enable_skip = !contain_uncommitted_row && skip_switch &&
+                       (access_param_->iter_param_.table_id_ & 0xffffff) > 50000 &&
                        !access_ctx_->query_flag_.is_whole_macro_scan();
-    bool enable_purge = skip_switch && NULL != mem_ctx && mem_ctx->get_read_snapshot() < INT64_MAX - 1024 &&
+    bool enable_purge = !contain_uncommitted_row && skip_switch && NULL != mem_ctx &&
+                        mem_ctx->get_read_snapshot() < INT64_MAX - 1024 &&
                         mem_ctx->get_read_snapshot() > last_table->get_base_version();
     if (enable_skip) {
       range_skip_.init(&iters_);

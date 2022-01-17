@@ -676,6 +676,9 @@ int ObAdminSwitchReplicaRole::switch_zone_to_leader(const ObZone& zone, const ui
   ObArray<ObZone> excluded_zones;
   ObArray<ObAddr> excluded_servers;
   ObArray<uint64_t> tenant_ids;
+  ObLeaderCoordinator::StopServerInfoSet stop_server_info_set;
+  const int64_t BUCKET_NUM = 1000;
+  const int64_t bucket_num = hash::cal_next_prime(BUCKET_NUM);
   HEAP_VAR(ObGlobalInfo, global_info)
   {
     ObArray<ObZoneInfo> infos;
@@ -702,8 +705,10 @@ int ObAdminSwitchReplicaRole::switch_zone_to_leader(const ObZone& zone, const ui
         ObAddr invalid_server;
         if (OB_FAIL(get_switch_replica_tenants(zone, invalid_server, tenant_id, tenant_ids))) {
           LOG_WARN("get tenants of zone failed", K(zone), K(invalid_server), K(tenant_id), K(ret));
+        } else if (OB_FAIL(stop_server_info_set.create(bucket_num))) {
+          LOG_WARN("fail to create stop server info set", KR(ret), K(bucket_num));
         } else if (OB_FAIL(ctx_.leader_coordinator_->coordinate_tenants(
-                       excluded_zones, excluded_servers, tenant_ids, force))) {
+                       excluded_zones, excluded_servers, tenant_ids, stop_server_info_set, force))) {
           LOG_WARN("switch zone replica role to follower failed",
               K(excluded_zones),
               K(excluded_servers),
@@ -722,6 +727,9 @@ int ObAdminSwitchReplicaRole::switch_replica_by_server(
 {
   int ret = OB_SUCCESS;
   bool is_alive = false;
+  ObLeaderCoordinator::StopServerInfoSet stop_server_info_set;
+  const int64_t BUCKET_NUM = 1000;
+  const int64_t bucket_num = hash::cal_next_prime(BUCKET_NUM);
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -747,8 +755,10 @@ int ObAdminSwitchReplicaRole::switch_replica_by_server(
       LOG_WARN("get tenants of server failed", K(invalid_zone), K(server), K(tenant_id), K(ret));
     } else if (OB_FAIL(excluded_servers.push_back(server))) {
       LOG_WARN("push back server failed", K(ret));
-    } else if (OB_FAIL(
-                   ctx_.leader_coordinator_->coordinate_tenants(excluded_zones, excluded_servers, tenant_ids, force))) {
+    } else if (OB_FAIL(stop_server_info_set.create(bucket_num))) {
+      LOG_WARN("fail to create stop server info set", KR(ret), K(bucket_num));
+    } else if (OB_FAIL(ctx_.leader_coordinator_->coordinate_tenants(
+                   excluded_zones, excluded_servers, tenant_ids, stop_server_info_set, force))) {
       LOG_WARN("switch server replica role to follower failed", K(server), K(tenant_ids), K(force), K(ret));
     }
   } else {
@@ -762,6 +772,9 @@ int ObAdminSwitchReplicaRole::switch_replica_by_zone(const ObZone& zone, const u
 {
   int ret = OB_SUCCESS;
   bool zone_exist = false;
+  ObLeaderCoordinator::StopServerInfoSet stop_server_info_set;
+  const int64_t BUCKET_NUM = 1000;
+  const int64_t bucket_num = hash::cal_next_prime(BUCKET_NUM);
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -788,8 +801,10 @@ int ObAdminSwitchReplicaRole::switch_replica_by_zone(const ObZone& zone, const u
       LOG_WARN("get coordinate_tenants failed", K(zone), K(invalid_server), K(tenant_id), K(ret));
     } else if (OB_FAIL(excluded_zones.push_back(zone))) {
       LOG_WARN("push back zone failed", K(ret));
-    } else if (OB_FAIL(
-                   ctx_.leader_coordinator_->coordinate_tenants(excluded_zones, excluded_servers, tenant_ids, force))) {
+    } else if (OB_FAIL(stop_server_info_set.create(bucket_num))) {
+      LOG_WARN("fail to create stop server info set", KR(ret), K(bucket_num));
+    } else if (OB_FAIL(ctx_.leader_coordinator_->coordinate_tenants(
+                   excluded_zones, excluded_servers, tenant_ids, stop_server_info_set, force))) {
       LOG_WARN("switch zone replica role to follower failed", K(zone), K(tenant_ids), K(force), K(ret));
     }
   } else {
@@ -3315,7 +3330,7 @@ int ObAdminFlushCache::call_server(const common::ObAddr& server, const obrpc::Ob
 
 int ObAdminSetTP::execute(const obrpc::ObAdminSetTPArg& arg)
 {
-  LOG_INFO("execute report request", K(arg));
+  LOG_INFO("start execute set_tp request", K(arg));
   int ret = OB_SUCCESS;
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
@@ -3326,6 +3341,7 @@ int ObAdminSetTP::execute(const obrpc::ObAdminSetTPArg& arg)
   } else if (OB_FAIL(call_all(arg))) {
     LOG_WARN("execute report replica failed", K(ret), K(arg));
   }
+  LOG_INFO("end execute set_tp request", K(arg));
   return ret;
 }
 

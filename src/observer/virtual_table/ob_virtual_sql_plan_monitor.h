@@ -30,7 +30,7 @@ class ObTenantSpaceFetcher;
 
 namespace observer {
 class ObVirtualSqlPlanMonitor : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObVirtualSqlPlanMonitor();
   virtual ~ObVirtualSqlPlanMonitor();
   virtual int inner_open() override;
@@ -51,12 +51,12 @@ class ObVirtualSqlPlanMonitor : public common::ObVirtualTableScannerIterator {
     return is_use_index_;
   }
 
-  private:
+private:
   int convert_node_to_row(sql::ObMonitorNode& node, ObNewRow*& row);
   int extract_tenant_ids();
   int extract_request_ids(const uint64_t tenant_id, int64_t& start_id, int64_t& end_id, bool& is_valid);
 
-  private:
+private:
   enum COLUMN_ID {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -115,7 +115,7 @@ class ObVirtualSqlPlanMonitor : public common::ObVirtualTableScannerIterator {
   common::ObString ipstr_;
   int32_t port_;
   char server_ip_[common::MAX_IP_ADDR_LENGTH + 2];
-  char trace_id_[128];
+  char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
   bool is_first_get_;
   bool is_use_index_;
   common::ObSEArray<uint64_t, 16> tenant_id_array_;

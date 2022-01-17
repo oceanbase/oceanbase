@@ -44,7 +44,7 @@ using namespace share::schema;
 class ObIndexSSTableBuilder::BuildParam {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   BuildParam(
       uint64_t& data_table_id, RangeArrayArray& data_ranges, RangeArrayArray& index_ranges, common::ObIAllocator& alloc)
       : scan_table_id_(data_table_id), scan_ranges_(data_ranges), index_ranges_(index_ranges), alloc_(alloc)
@@ -52,7 +52,7 @@ class ObIndexSSTableBuilder::BuildParam {
 
   TO_STRING_KV(K(scan_table_id_), K(scan_ranges_), K(index_ranges_));
 
-  private:
+private:
   uint64_t& scan_table_id_;
   RangeArrayArray& scan_ranges_;
   RangeArrayArray& index_ranges_;
@@ -60,7 +60,7 @@ class ObIndexSSTableBuilder::BuildParam {
 };
 
 class ObIndexSSTableBuilder::ObBuildExecutor : public sqlclient::ObIExecutor {
-  public:
+public:
   ObBuildExecutor(ObIndexSSTableBuilder& builder) : ObIExecutor(), builder_(builder)
   {}
   virtual ~ObBuildExecutor()
@@ -95,12 +95,12 @@ class ObIndexSSTableBuilder::ObBuildExecutor : public sqlclient::ObIExecutor {
   }
   INHERIT_TO_STRING_KV("build index sstable", ObIExecutor, "job", builder_.job_);
 
-  private:
+private:
   ObIndexSSTableBuilder& builder_;
 };
 
 class ObIndexSSTableBuilder::ObClearExecutor : public sqlclient::ObIExecutor {
-  public:
+public:
   ObClearExecutor(int64_t job_id) : ObIExecutor(), job_id_(job_id)
   {}
   virtual ~ObClearExecutor()
@@ -114,12 +114,12 @@ class ObIndexSSTableBuilder::ObClearExecutor : public sqlclient::ObIExecutor {
   }
   INHERIT_TO_STRING_KV("clear index sstable builder intermediate result", ObIExecutor, K(job_id_));
 
-  private:
+private:
   int64_t job_id_;
 };
 
 class ObIndexSSTableBuilder::BuildIndexGuard : public common::ObDLinkBase<ObIndexSSTableBuilder::BuildIndexGuard> {
-  public:
+public:
   typedef ObIndexSSTableBuilder::BuildIndexGuard self_t;
   BuildIndexGuard(const uint64_t index_table_id) : unique_(true), index_table_id_(index_table_id)
   {
@@ -148,7 +148,7 @@ class ObIndexSSTableBuilder::BuildIndexGuard : public common::ObDLinkBase<ObInde
     return unique_;
   }
 
-  private:
+private:
   static ObLatch& get_lock()
   {
     static ObLatch latch;
@@ -789,6 +789,9 @@ int ObIndexSSTableBuilder::gen_data_exchange(ObPhysicalPlan& phy_plan, ObPhyOper
           if (OB_FAIL(
                   transmit->get_range_locations().push_back(ObTaskInfo::ObRangeLocation(phy_plan.get_allocator())))) {
             LOG_WARN("array push back failed", K(ret));
+          } else if (FALSE_IT(transmit->get_range_locations().at(
+                      transmit->get_range_locations().count() - 1).part_locs_.set_allocator(
+                          &phy_plan.get_allocator()))) {
           } else if (OB_FAIL(transmit->get_range_locations().at(idx).part_locs_.init(1))) {
             LOG_WARN("init fix array failed", K(ret));
           } else {
@@ -931,7 +934,10 @@ int ObIndexSSTableBuilder::gen_build_macro(ObPhysicalPlan& phy_plan, ObPhyOperat
   } else {
     sort->set_column_count(columns.count());
     if (OB_FAIL(sort->init_sort_columns(index_table_->get_rowkey_column_num()))) {
-      LOG_WARN("init sort column failed", K(ret), "rowkey_cnt", index_table_->get_rowkey_column_num());
+      LOG_WARN("init sort column failed",
+          K(ret), "rowkey_cnt", index_table_->get_rowkey_column_num());
+    } else if (OB_FAIL(sort->init_op_schema_obj(index_table_->get_rowkey_column_num()))) {
+      LOG_WARN("fail to init op schema obj", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < index_table_->get_rowkey_column_num(); i++) {
         const bool ascending = true;
@@ -1022,6 +1028,9 @@ int ObIndexSSTableBuilder::gen_macro_exchange(ObPhysicalPlan& phy_plan, ObPhyOpe
       for (int64_t i = 0; OB_SUCC(ret) && i < index_keys.get_partition_num(); i++) {
         if (OB_FAIL(range_locations.push_back(ObTaskInfo::ObRangeLocation(phy_plan.get_allocator())))) {
           LOG_WARN("array push back failed", K(ret));
+        } else if (FALSE_IT(
+                range_locations.at(range_locations.count() - 1).part_locs_.set_allocator(
+                    &phy_plan.get_allocator()))) {
         } else {
           auto& ranges = index_ranges_.at(std::min(i, index_ranges_.count() - 1));
           ObPartitionKey pkey;
@@ -1142,6 +1151,9 @@ int ObIndexSSTableBuilder::gen_sstable_exchange(ObPhysicalPlan& phy_plan, ObPhyO
       for (int64_t i = 0; OB_SUCC(ret) && i < index_keys.get_partition_num(); i++) {
         if (OB_FAIL(range_locations.push_back(ObTaskInfo::ObRangeLocation(phy_plan.get_allocator())))) {
           LOG_WARN("array push back failed", K(ret));
+        } else if (FALSE_IT(
+                range_locations.at(range_locations.count() - 1).part_locs_.set_allocator(
+                    &phy_plan.get_allocator()))) {
         } else {
           auto& range_location = range_locations.at(i);
           if (OB_FAIL(range_location.part_locs_.init(1))) {

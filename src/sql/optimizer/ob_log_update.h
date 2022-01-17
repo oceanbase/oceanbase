@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogUpdate : public ObLogDelUpd {
-  public:
+public:
   ObLogUpdate(ObLogPlan& plan) : ObLogDelUpd(plan), tables_assignments_(NULL), update_set_(false)
   {}
   virtual ~ObLogUpdate()
@@ -33,16 +33,15 @@ class ObLogUpdate : public ObLogDelUpd {
     return tables_assignments_;
   }
 
-  virtual int copy_without_child(ObLogicalOperator*& out);
-  int allocate_exchange_post(AllocExchContext* ctx);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
+  int allocate_exchange_post(AllocExchContext* ctx) override;
 
-  virtual int est_cost();
+  virtual int est_cost() override;
 
-  virtual uint64_t hash(uint64_t seed) const;
+  virtual uint64_t hash(uint64_t seed) const override;
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
-  virtual const char* get_name() const;
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
+  virtual const char* get_name() const override;
   void set_update_set(bool update_set)
   {
     update_set_ = update_set;
@@ -52,16 +51,19 @@ class ObLogUpdate : public ObLogDelUpd {
     return update_set_;
   }
 
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_replace_generated_agg_expr(
+      const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs) override;
 
-  private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet &raw_exprs) const override;
+
+private:
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
   int get_update_table(ObDMLStmt* stmt, ObColumnRefRawExpr* col_expr, uint64_t& ref_id);
 
   virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed) override;
 
-  private:
+private:
   // MySQL only, https://dev.mysql.com/doc/refman/8.0/en/update.html
   const ObTablesAssignments* tables_assignments_;
   // update ... set (a,b) = (subquery), (d,e) = (subquery)

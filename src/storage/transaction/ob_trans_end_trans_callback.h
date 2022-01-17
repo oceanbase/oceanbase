@@ -33,7 +33,7 @@ struct ObEndTransCallbackItem {
 typedef common::ObArray<ObEndTransCallbackItem> ObEndTransCallbackArray;
 
 class ObEndTransCallback {
-  public:
+public:
   ObEndTransCallback() : callback_count_(0), cb_(NULL), cb_type_(NULL), tenant_id_(common::OB_INVALID_TENANT_ID)
   {}
   ~ObEndTransCallback()
@@ -58,7 +58,7 @@ class ObEndTransCallback {
     return cb_;
   }
 
-  private:
+private:
   int64_t callback_count_;
   sql::ObIEndTransCallback* cb_;
   const char* cb_type_;
@@ -66,7 +66,7 @@ class ObEndTransCallback {
 };
 
 class EndTransCallbackTask : public ObTransTask {
-  public:
+public:
   EndTransCallbackTask()
   {
     reset();
@@ -87,7 +87,7 @@ class EndTransCallbackTask : public ObTransTask {
   static const int64_t MAX_NEED_WAIT_US = 500;
   TO_STRING_KV(K_(param), K_(trans_need_wait_wrap));
 
-  private:
+private:
   ObEndTransCallback end_trans_cb_;
   int param_;
   ObTransNeedWaitWrap trans_need_wait_wrap_;

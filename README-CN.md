@@ -21,31 +21,49 @@ OceanBase 数据库支持支付宝的全部核心业务，以及银行、保险�
 
 ## 快速上手
 
-请查看 [快速使用指南](https://open.oceanbase.com/quickStart) 开始试用 OceanBase 数据库。
+查看 [快速使用指南](https://open.oceanbase.com/quickStart) 开始试用 OceanBase 数据库。
 
 ## 文档
 
 - [简体中文](https://open.oceanbase.com/docs)
 - 英文（English）（Coming soon）
 
-## 支持的客户端
+## 客户端
 
 - [OBClient](https://github.com/oceanbase/obclient)
 
 ## 许可证
 
-OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPubL-2.0/index.html) 许可证。您可以免费复制及使用源代码。当您修改或分发源代码时，请遵守木兰协议。
+OceanBase 数据库使用 [MulanPubL - 2.0](http://license.coscl.org.cn/MulanPubL-2.0) 许可证。您可以免费复制及使用源代码。当您修改或分发源代码时，请遵守木兰协议。
 
-## 如何构建
+## 兼容性列表
 
-详细信息，参考 [使用源码构建 OceanBase 数据库](https://open.oceanbase.com/docs/community/oceanbase-database/V3.1.0/get-the-oceanbase-database-by-using-source-code)。
+| 操作系统 | 版本 | 架构 | 编译 | 包部署 | 编译部署 | mysqltest |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| Alibaba Cloud Linux | 2.1903 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| CentOS | 7.2, 8.3 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Debian | 9.8, 10.9 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Fedora | 33 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| MacOS | any | x86_64 | ❌ | ❌ | ❌ | ❌ |
+| openSUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| OpenAnolis | 8.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| SUSE | 15.2 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Ubuntu | 16.04, 18.04, 20.04 | x86_64 | ✅ | ✅ | ✅ | ✅ |
+| UOS | 20 | x86_64 | ✅ | ✅ | ✅ | ✅ |
 
-## 如何贡献
 
-我们十分欢迎并感谢您为我们贡献。以下是您参与贡献的几种方式：
+## OceanBase开发者手册
 
-- 向我们提 [issue](https://github.com/oceanbase/oceanbase/issues)。
-- 提交 PR，详情参见 [如何贡献](CONTRIBUTING.md)。
+1. [如何编译OceanBase源码](https://github.com/oceanbase/oceanbase/wiki/how_to_build)
+2. [如何设置IDE开发环境](https://github.com/oceanbase/oceanbase/wiki/how_to_setup_ide)
+3. [如何成为OceanBase Contributor](https://github.com/oceanbase/oceanbase/wiki/how_to_contribute)
+4. [如何修改OceanBase文档](https://github.com/oceanbase/oceanbase/wiki/how_to_modify_docs)
+5. [如何debug OceanBase](https://github.com/oceanbase/oceanbase/wiki/how_to_debug)
+6. [如何运行测试](https://github.com/oceanbase/oceanbase/wiki/how_to_test)
+7. [如何修bug](https://github.com/oceanbase/oceanbase/wiki/how_to_fix_bug)
+
+
+
 
 ## 获取帮助
 
@@ -54,3 +72,7 @@ OceanBase 数据库使用 [MulanPubL - 2.0](https://license.coscl.org.cn/MulanPu
 - [GitHub Issue](https://github.com/oceanbase/oceanbase/issues)
 - [官方网站](https://open.oceanbase.com/)
 - 知识问答（Coming soon）
+
+## Roadmap
+
+请参考[Roadmap](wiki/roadmap). 

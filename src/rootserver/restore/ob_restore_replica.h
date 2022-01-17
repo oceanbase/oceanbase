@@ -37,12 +37,12 @@ class OnlineReplica;
 class Partition;
 class Replica;
 class ObRestoreReplica {
-  public:
+public:
   explicit ObRestoreReplica(ObRestoreMgrCtx& restore_ctx, RestoreJob& job_info, const volatile bool& is_stop);
   ~ObRestoreReplica();
   int restore();
 
-  private:
+private:
   /* functions */
   int check_stop()
   {

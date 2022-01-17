@@ -20,7 +20,7 @@ using namespace blocksstable;
 using namespace storage;
 namespace unittest {
 class TestRowCache : public ::testing::Test {
-  public:
+public:
   TestRowCache();
   virtual void SetUp()
   {}
@@ -39,7 +39,7 @@ class TestRowCache : public ::testing::Test {
     return arena_;
   }
 
-  private:
+private:
   ModulePageAllocator alloc_;
   ModuleArena arena_;
 };

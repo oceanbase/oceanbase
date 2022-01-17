@@ -22,7 +22,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestSSTableMultiScanner : public ObSSTableTest {
-  public:
+public:
   TestSSTableMultiScanner();
   virtual ~TestSSTableMultiScanner();
   void test_one_case(const ObIArray<int64_t>& start_seeds, const int64_t count_perf_range, const int64_t hit_mode,

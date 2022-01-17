@@ -24,7 +24,7 @@ class ObVTableScanParam;
 namespace sql {
 class ObExecContext;
 class ObCreateVirtualTableParams {
-  public:
+public:
   ObCreateVirtualTableParams() : table_id_(common::OB_INVALID_ID), key_ranges_()
   {}
   virtual ~ObCreateVirtualTableParams()
@@ -36,7 +36,7 @@ class ObCreateVirtualTableParams {
 };
 
 class ObIVirtualTableIteratorFactory {
-  public:
+public:
   ObIVirtualTableIteratorFactory()
   {}
   virtual ~ObIVirtualTableIteratorFactory()
@@ -46,7 +46,7 @@ class ObIVirtualTableIteratorFactory {
       common::ObVTableScanParam& params, common::ObVirtualTableIterator*& vt_iter) = 0;
   virtual int revert_virtual_table_iterator(common::ObVirtualTableIterator* vt_iter) = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIVirtualTableIteratorFactory);
 };
 }  // namespace sql

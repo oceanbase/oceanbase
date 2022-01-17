@@ -386,6 +386,7 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
     SET_STMT_TYPE(T_SHOW_INDEXES);
     SET_STMT_TYPE(T_SHOW_PROCESSLIST);
     SET_STMT_TYPE(T_SHOW_TABLEGROUPS);
+    SET_STMT_TYPE(T_SHOW_RESTORE_PREVIEW);
     SET_STMT_TYPE(T_SHOW_RECYCLEBIN);
     SET_STMT_TYPE(T_SHOW_TENANT);
     SET_STMT_TYPE(T_CREATE_SAVEPOINT);
@@ -808,6 +809,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_date(time_val);
           val.set_scale(0);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
         }
         break;
       }
@@ -821,6 +823,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_time(time_val);
           val.set_scale(scale);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(MYSQL_LITERAL_PREFIX_TIME);
         }
         break;
       }
@@ -833,8 +836,8 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
         } else {
           val.set_datetime(time_val);
           val.set_scale(OB_MAX_DATE_PRECISION);
-          literal_prefix = ObString::make_string(ORALCE_LITERAL_PREFIX_DATE);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_DATE);
         }
         break;
       }
@@ -849,6 +852,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           val.set_datetime(time_val);
           val.set_scale(scale);
           val.set_param_meta(val.get_meta());
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_TIMESTAMP);
         }
         break;
       }
@@ -864,7 +868,7 @@ int ObResolverUtils::resolve_const(const ParseNode* node, const stmt::StmtType s
           /* use max scale bug:#18093350 */
           val.set_otimestamp_value(value_type, tz_value);
           val.set_scale(OB_MAX_TIMESTAMP_TZ_PRECISION);
-          literal_prefix = ObString::make_string(ORALCE_LITERAL_PREFIX_TIMESTAMP);
+          literal_prefix = ObString::make_string(LITERAL_PREFIX_TIMESTAMP);
           val.set_param_meta(val.get_meta());
         }
         break;
@@ -1161,7 +1165,7 @@ int ObResolverUtils::resolve_const_expr(
       LOG_WARN("impicit cast for oracle", K(ret));
       if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(
               ctx.expr_factory_, ctx.session_info_, op_exprs))) {
-        LOG_WARN("impicit cast faild", K(ret));
+        LOG_WARN("impicit cast failed", K(ret));
       }
     }
 
@@ -2961,11 +2965,6 @@ int ObResolverUtils::resolve_columns_for_partition_expr(ObRawExpr*& expr, ObIArr
               q_name.col_name_.ptr(),
               scope_name.length(),
               scope_name.ptr());
-        } else if (col_schema->is_autoincrement()) {
-          ret = OB_ERR_AUTO_PARTITION_KEY;
-          LOG_USER_ERROR(OB_ERR_AUTO_PARTITION_KEY,
-              col_schema->get_column_name_str().length(),
-              col_schema->get_column_name_str().ptr());
         } else if (OB_FAIL(partition_keys.push_back(q_name.col_name_))) {
           LOG_WARN("add column name failed", K(ret), K_(q_name.col_name));
         } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *col_expr))) {
@@ -3078,7 +3077,8 @@ int ObResolverUtils::resolve_partition_expr(ObResolverParams& params, const Pars
 }
 
 int ObResolverUtils::resolve_generated_column_expr(ObResolverParams& params, const ObString& expr_str,
-    ObTableSchema& tbl_schema, ObColumnSchemaV2& generated_column, ObRawExpr*& expr)
+    ObTableSchema& tbl_schema, ObColumnSchemaV2& generated_column, ObRawExpr*& expr,
+    const PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   const ParseNode* expr_node = NULL;
@@ -3087,14 +3087,16 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams& params, con
     LOG_WARN("allocator is null");
   } else if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(expr_str, *params.allocator_, expr_node))) {
     LOG_WARN("parse expr node from str failed", K(ret), K(expr_str));
-  } else if (OB_FAIL(resolve_generated_column_expr(params, expr_node, tbl_schema, generated_column, expr))) {
+  } else if (OB_FAIL(
+                 resolve_generated_column_expr(params, expr_node, tbl_schema, generated_column, expr, check_status))) {
     LOG_WARN("resolve generated column expr failed", K(ret), K(expr_str));
   }
   return ret;
 }
 
 int ObResolverUtils::resolve_generated_column_expr(ObResolverParams& params, const ParseNode* node,
-    ObTableSchema& tbl_schema, ObColumnSchemaV2& generated_column, ObRawExpr*& expr)
+    ObTableSchema& tbl_schema, ObColumnSchemaV2& generated_column, ObRawExpr*& expr,
+    const PureFunctionCheckStatus check_status)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2* col_schema = NULL;
@@ -3105,7 +3107,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams& params, con
   if (OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(node)) {
     ret = OB_NOT_INIT;
     LOG_WARN("resolve status is invalid", K_(params.expr_factory), K(session_info), K(node));
-  } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(*expr_factory, *session_info, *node, expr, columns))) {
+  } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(
+                 *expr_factory, *session_info, *node, expr, columns, params.schema_checker_, check_status))) {
     LOG_WARN("build generated column expr failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
@@ -3134,6 +3137,10 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams& params, con
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Define a blob column in generated column def is not supported", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "blob column in generated column definition");
+    } else if (share::is_mysql_mode() && col_schema->is_autoincrement()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("generated column cannot refer to auto-increment column", K(ret), K(*expr));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "generated column refer to auto-increment column");
     } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
       LOG_WARN("init column expr failed", K(ret));
     } else if (OB_FAIL(generated_column.add_cascaded_column_id(col_schema->get_column_id()))) {
@@ -3198,6 +3205,106 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams& params, con
     } else if (OB_FAIL(ObDDLResolver::print_expr_to_default_value(
                    *expr, generated_column, session_info->get_timezone_info()))) {
       LOG_WARN("fail to print_expr_to_default_value", KPC(expr), K(generated_column), K(ret));
+    }
+  }
+  return ret;
+}
+
+// This function is used to resolve the dependent columns of generated column when retrieve schema.
+// We use this function instead of build_generated_column_expr because there is not a thread-safe
+// mem_context and the expr is not necessary.
+int ObResolverUtils::resolve_generated_column_info(
+    const ObString& expr_str, ObIAllocator& allocator, ObItemType& root_expr_type, ObIArray<ObString>& column_names)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode* node = NULL;
+  if (OB_FAIL(ObRawExprUtils::parse_expr_node_from_str(expr_str, allocator, node))) {
+    LOG_WARN("parse expr node from string failed", K(ret), K(expr_str));
+  } else if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is null", K(ret));
+  } else if (OB_FAIL(SMART_CALL(resolve_column_info_recursively(node, column_names)))) {
+    LOG_WARN("failed to resolve column into");
+  } else {
+    ObItemType type = node->type_;
+    if (T_FUN_SYS == type) {
+      if (OB_UNLIKELY(1 > node->num_child_) || OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0])) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("invalid node children for fun_sys node", K(ret));
+      } else {
+        ObString func_name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+        if (0 == func_name.case_compare("bin")) {
+          type = ObExprOperatorFactory::get_type_by_name("conv");
+        } else if (0 == func_name.case_compare("oct")) {
+          type = ObExprOperatorFactory::get_type_by_name("conv");
+        } else if (0 == func_name.case_compare("lcase")) {
+          type = ObExprOperatorFactory::get_type_by_name("lower");
+        } else if (0 == func_name.case_compare("ucase")) {
+          type = ObExprOperatorFactory::get_type_by_name("upper");
+          // don't alias "power" to "pow" in oracle mode
+        } else if (!lib::is_oracle_mode() && 0 == func_name.case_compare("power")) {
+          type = ObExprOperatorFactory::get_type_by_name("pow");
+        } else if (0 == func_name.case_compare("ws")) {
+          type = ObExprOperatorFactory::get_type_by_name("word_segment");
+        } else if (0 == func_name.case_compare("inet_ntoa")) {
+          type = ObExprOperatorFactory::get_type_by_name("int2ip");
+        } else {
+          type = ObExprOperatorFactory::get_type_by_name(func_name);
+        }
+        if (OB_UNLIKELY(T_INVALID == (type))) {
+          ret = OB_ERR_FUNCTION_UNKNOWN;
+          LOG_WARN("function not exist", K(func_name), K(ret));
+        }
+      }
+    }
+    OX(root_expr_type = type);
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_column_info_recursively(const ParseNode* node, ObIArray<ObString>& column_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is null");
+  } else if (T_COLUMN_REF == node->type_) {
+    if (OB_UNLIKELY(node->num_child_ != 3)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node type", K_(node->type), K(node->num_child_), K(ret));
+    } else if (OB_UNLIKELY(node->children_[0] != NULL || node->children_[1] != NULL)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("database node or table node is not null", K_(node->type), K(ret));
+    } else if (OB_ISNULL(node->children_[2])) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("column node is null", K_(node->type), K(ret));
+    } else if (OB_UNLIKELY(T_STAR == node->children_[2]->type_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("column node can't be T_STAR", K_(node->type), K(ret));
+    } else {
+      ObString column_name(static_cast<int32_t>(node->children_[2]->str_len_), node->children_[2]->str_value_);
+      if (OB_FAIL(column_names.push_back(column_name))) {
+        LOG_WARN("Add column failed", K(ret));
+      }
+    }
+  } else if (T_OBJ_ACCESS_REF == node->type_) {
+    if (OB_UNLIKELY(node->num_child_ != 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node type", K_(node->type), K(node->num_child_), K(ret));
+    } else if (OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("node is NULL", K(node->num_child_));
+    } else if (T_IDENT == node->children_[0]->type_) {
+      ObString column_name(static_cast<int32_t>(node->children_[0]->str_len_), node->children_[0]->str_value_);
+      OZ(column_names.push_back(column_name));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+    const ParseNode* child_node = node->children_[i];
+    if (NULL == child_node) {
+      // do nothing
+    } else if (OB_FAIL(SMART_CALL(resolve_column_info_recursively(child_node, column_names)))) {
+      LOG_WARN("recursive resolve column node failed", K(ret));
     }
   }
   return ret;

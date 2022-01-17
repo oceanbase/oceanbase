@@ -22,7 +22,7 @@ class ObColumnSchemaV2;
 }  // namespace share
 namespace sql {
 class ObMergeResolver : public ObInsertResolver {
-  public:
+public:
   enum MergeNodeField {
     TARGET_NODE = 0,
     SOURCE_NODE,
@@ -34,16 +34,16 @@ class ObMergeResolver : public ObInsertResolver {
   };
   enum MergeResolveClause { NONE_CLAUSE, MATCH_CLAUSE, INSERT_COLUMN_CLAUSE, INSERT_VALUE_CLAUSE, INSERT_WHEN_CLAUSE };
 
-  public:
+public:
   explicit ObMergeResolver(ObResolverParams& params);
   virtual ~ObMergeResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  protected:
+protected:
   virtual int add_assignment(
       ObTablesAssignments& assigns, const TableItem* table_item, const ColumnItem* col_item, ObAssignment& assign);
 
-  private:
+private:
   int resolve_target_relation(const ParseNode* target_node);
   int resolve_source_relation(const ParseNode* source_node);
   int resolve_match_condition(const ParseNode* condition_node);
@@ -76,7 +76,7 @@ class ObMergeResolver : public ObInsertResolver {
   int check_stmt_validity();
   int get_equal_columns(ObIArray<ObString>& equal_cols);
 
-  private:
+private:
   // merge into x using y on (...) update set x.c1 = upd_val insert x.c1 values(ins_val)
   // update clause and insert clause, each has its own check constraint expression,
   // The difference is that the column ref expr in the check constraint expression is a different new value

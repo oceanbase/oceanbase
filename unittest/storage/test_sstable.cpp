@@ -21,7 +21,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestSSTable : public ObSSTableTest {
-  public:
+public:
   TestSSTable();
   virtual ~TestSSTable();
 };

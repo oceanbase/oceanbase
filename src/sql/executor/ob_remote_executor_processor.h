@@ -20,11 +20,11 @@ namespace oceanbase {
 namespace sql {
 template <typename T>
 class ObRemoteBaseExecuteP : public obrpc::ObRpcProcessor<T> {
-  public:
+public:
   ObRemoteBaseExecuteP(const observer::ObGlobalContext& gctx, bool is_execute_remote_plan = false)
       : obrpc::ObRpcProcessor<T>(),
         gctx_(gctx),
-        exec_ctx_(CURRENT_CONTEXT.get_arena_allocator(), gctx.session_mgr_),
+        exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
         vt_iter_factory_(*gctx_.vt_iter_creator_),
         sql_ctx_(),
         trans_state_(),
@@ -60,7 +60,7 @@ class ObRemoteBaseExecuteP : public obrpc::ObRpcProcessor<T> {
     return is_execute_remote_plan_;
   }
 
-  protected:
+protected:
   int base_init();
   int base_before_process(
       int64_t tenant_schema_version, int64_t sys_schema_version, const DependenyTableStore& dependency_tables);
@@ -82,7 +82,7 @@ class ObRemoteBaseExecuteP : public obrpc::ObRpcProcessor<T> {
   virtual void clean_result_buffer() = 0;
   bool query_can_retry_in_remote(int& last_err, int& err, ObSQLSessionInfo& session, int64_t& retry_times);
 
-  protected:
+protected:
   const observer::ObGlobalContext& gctx_;
   sql::ObDesExecContext exec_ctx_;
   ObSqlPartitionLocationCache partition_location_cache_;
@@ -103,84 +103,84 @@ class ObRemoteBaseExecuteP : public obrpc::ObRpcProcessor<T> {
 };
 /* Handle remote single partition situation (REMOTE) */
 class ObRpcRemoteExecuteP : public ObRemoteBaseExecuteP<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_REMOTE_EXECUTE> > {
-  public:
+public:
   ObRpcRemoteExecuteP(const observer::ObGlobalContext& gctx) : ObRemoteBaseExecuteP(gctx, true)
   {}
   virtual ~ObRpcRemoteExecuteP()
   {}
-  virtual int init();
+  virtual int init() override;
 
-  protected:
+protected:
   virtual int send_result_to_controller(ObExecContext& exec_ctx, const ObPhysicalPlan& plan) override;
-  virtual int before_process();
-  virtual int process();
-  virtual int before_response();
-  virtual int after_process();
-  virtual void cleanup();
+  virtual int before_process() override;
+  virtual int process() override;
+  virtual int before_response() override;
+  virtual int after_process() override;
+  virtual void cleanup() override;
   virtual void clean_result_buffer() override;
 
-  private:
+private:
   int get_participants(common::ObPartitionLeaderArray& pla);
 
-  private:
+private:
   ObPhysicalPlan phy_plan_;
 };
 
 class ObRpcRemoteSyncExecuteP
     : public ObRemoteBaseExecuteP<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_REMOTE_SYNC_EXECUTE> > {
-  public:
+public:
   ObRpcRemoteSyncExecuteP(const observer::ObGlobalContext& gctx) : ObRemoteBaseExecuteP(gctx)
   {}
   virtual ~ObRpcRemoteSyncExecuteP()
   {}
-  virtual int init();
+  virtual int init() override;
 
-  protected:
+protected:
   virtual int send_result_to_controller(ObExecContext& exec_ctx, const ObPhysicalPlan& plan) override;
-  virtual int before_process();
-  virtual int process();
-  virtual int before_response();
-  virtual int after_process();
-  virtual void cleanup();
+  virtual int before_process() override;
+  virtual int process() override;
+  virtual int before_response() override;
+  virtual int after_process() override;
+  virtual void cleanup() override;
   virtual void clean_result_buffer() override;
 };
 
 class ObRpcRemoteASyncExecuteP
     : public ObRemoteBaseExecuteP<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_REMOTE_ASYNC_EXECUTE> > {
-  public:
+public:
   ObRpcRemoteASyncExecuteP(const observer::ObGlobalContext& gctx)
       : ObRemoteBaseExecuteP(gctx), remote_result_(), is_from_batch_(false)
   {}
   virtual ~ObRpcRemoteASyncExecuteP()
   {}
-  virtual int init();
+  virtual int init() override;
   ObRemoteTask& get_arg()
   {
     return arg_;
   }
-  virtual int before_process();
-  virtual int process();
-  virtual int before_response();
-  virtual int after_process();
-  virtual void cleanup();
+  virtual int before_process() override;
+  virtual int process() override;
+  virtual int before_response() override;
+  virtual int after_process() override;
+  virtual void cleanup() override;
   void set_from_batch()
   {
     is_from_batch_ = true;
   }
 
-  protected:
+protected:
   virtual int send_result_to_controller(ObExecContext& exec_ctx, const ObPhysicalPlan& plan) override;
   int send_remote_result(ObRemoteResult& remote_result);
   virtual void clean_result_buffer() override;
 
-  private:
+private:
   ObRemoteResult remote_result_;
   bool is_from_batch_;
 };
 
 class ObRpcRemotePostResultP
     : public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_REMOTE_POST_RESULT> > {
-  public:
+public:
   ObRpcRemotePostResultP(const observer::ObGlobalContext& gctx) : gctx_(gctx), is_from_batch_(false)
   {
     set_preserve_recv_data();
@@ -228,7 +228,7 @@ class ObRpcRemotePostResultP
     }
   }
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
   bool is_from_batch_;
 };

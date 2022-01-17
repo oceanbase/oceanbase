@@ -22,7 +22,7 @@ namespace share {
 class ObClusterInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static const int64_t MAX_PASSWD_LENGTH = common::OB_MAX_PASSWORD_LENGTH;
   typedef common::ObFixedLengthString<common::OB_MAX_USERNAME_LENGTH> UserNameString;
   typedef common::ObFixedLengthString<MAX_PASSWD_LENGTH> PassWdString;
@@ -127,7 +127,7 @@ class ObClusterInfo {
       persistent_switchover_status_to_str(switchover_status_), K_(cluster_status), K_(switch_timestamp), K_(is_sync),
       K_(gc_snapshot_ts), K_(protection_mode), K_(version), K_(protection_level));
 
-  public:
+public:
   static const char* IN_MEMORY_SWITCHOVER_STATUS_ARRAY[];
   static const char* PERSISTENT_SWITCHOVER_STATUS_ARRAY[];
   static const char* CLUSTER_STATUS_ARRAY[];
@@ -139,15 +139,15 @@ class ObClusterInfo {
   PersistentSwitchOverStatus switchover_status_;
   common::ObClusterStatus cluster_status_;
 
-  private:
+private:
   // It can avoid the backoff of switching state, and can switch 1000 times at most in one switching process;
   // The last 10 bits are used to indicate the number of state changes in a switching process; each state change will
   // inc_switch_timestamp
   int64_t switch_timestamp_;
 
-  public:
+public:
   bool is_sync_;  // the cluster is sync with primary
-  public:
+public:
   int64_t gc_snapshot_ts_;
   common::ObProtectionMode protection_mode_;
   int64_t version_;  // Mark the change of each variable in cluster info to avoid state fallback
@@ -155,7 +155,7 @@ class ObClusterInfo {
 };
 
 class ObClusterInfoProxy {
-  public:
+public:
   ObClusterInfoProxy();
   virtual ~ObClusterInfoProxy();
   // the cluster's create timestamp
@@ -164,7 +164,7 @@ class ObClusterInfoProxy {
   static int update(
       common::ObISQLClient& sql_proxy, const ObClusterInfo& cluster_info, const bool with_login_info = false);
 
-  private:
+private:
   static const char* OB_ALL_CLUSTER_INFO_TNAME;
   static const char* LOGIN_NAME;
   static const char* LOGIN_PASSWD;

@@ -32,6 +32,8 @@ int ObReqProcessor::run()
   run_timestamp_ = ObTimeUtility::current_time();
   if (OB_FAIL(check_timeout())) {
     LOG_WARN("req timeout", K(ret));
+  } else if (OB_FAIL(check_cluster_id())) {
+    LOG_WARN("checking cluster ID failed", K(ret));
   } else if (OB_FAIL(deserialize())) {
     before_process_ret_ = ret;
     deseri_succ = false;
@@ -78,6 +80,11 @@ int ObReqProcessor::run()
   cleanup();
 
   return ret;
+}
+
+int ObReqProcessor::check_cluster_id()
+{
+  return OB_SUCCESS;
 }
 
 int ObReqProcessor::after_process()

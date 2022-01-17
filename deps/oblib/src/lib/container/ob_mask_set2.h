@@ -1,16 +1,12 @@
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software
- * according to the terms and conditions of the Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
- *
- * http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND,
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A
- * PARTICULAR PURPOSE.
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
 
@@ -25,7 +21,7 @@ namespace common {
 
 template <typename T>
 class ObMaskSet2 {
-  public:
+public:
   ObMaskSet2() : is_inited_(false), array_(NULL), bitset_()
   {}
   ~ObMaskSet2()
@@ -53,7 +49,7 @@ class ObMaskSet2 {
     bitset_.reuse();
   }
 
-  public:
+public:
   int mask(const T& key)
   {
     int ret = OB_SUCCESS;
@@ -143,7 +139,7 @@ class ObMaskSet2 {
     return bool_ret;
   }
 
-  private:
+private:
   bool is_inited_;
   const ObIArray<T>* array_;
   ObBitSet<> bitset_;

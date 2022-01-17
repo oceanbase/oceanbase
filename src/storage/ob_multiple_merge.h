@@ -24,16 +24,16 @@ namespace oceanbase {
 namespace storage {
 class ObIStoreRowFilter;
 class ObMultipleMerge : public ObQueryRowIterator {
-  public:
+public:
   typedef common::ObSEArray<ObStoreRowIterator*, common::MAX_TABLE_CNT_IN_STORAGE> MergeIterators;
 
-  public:
+public:
   ObMultipleMerge();
   virtual ~ObMultipleMerge();
   virtual int init(
       const ObTableAccessParam& param, ObTableAccessContext& context, const ObGetTableParam& get_table_param);
-  virtual int get_next_row(ObStoreRow*& row);
-  virtual void reset();
+  virtual int get_next_row(ObStoreRow*& row) override;
+  virtual void reset() override;
   virtual void reuse();
   inline const ObRowStat& get_row_stat() const
   {
@@ -61,8 +61,10 @@ class ObMultipleMerge : public ObQueryRowIterator {
     need_output_row_with_nop_ = false;
   }
   virtual int switch_iterator(const int64_t range_array_idx) override;
+  int refresh_table_on_demand();
+  virtual int release_table_ref() override;
 
-  protected:
+protected:
   int open();
   virtual int calc_scan_range() = 0;
   virtual int construct_iters() = 0;
@@ -81,9 +83,9 @@ class ObMultipleMerge : public ObQueryRowIterator {
   void reuse_iter_array();
   virtual int skip_to_range(const int64_t range_idx);
 
-  private:
+private:
   class ObTableCompartor {
-    public:
+  public:
     ObTableCompartor(int& ret) : ret_(ret)
     {}
     ~ObTableCompartor() = default;
@@ -110,11 +112,11 @@ class ObMultipleMerge : public ObQueryRowIterator {
       return bret;
     }
 
-    private:
+  private:
     int& ret_;
   };
 
-  private:
+private:
   int fuse_default(common::ObNewRow& row);
   int pad_columns(common::ObNewRow& row);
   int fill_virtual_columns(common::ObNewRow& row);
@@ -125,7 +127,6 @@ class ObMultipleMerge : public ObQueryRowIterator {
   int project2output_exprs(ObStoreRow& unprojected_row, ObStoreRow& cur_row);
   // destruct all iterators and reuse iter array
   int prepare_read_tables();
-  int refresh_table_on_demand();
   int check_need_refresh_table(bool& need_refresh);
   int save_curr_rowkey();
   int reset_tables();
@@ -136,7 +137,7 @@ class ObMultipleMerge : public ObQueryRowIterator {
   int check_row_in_current_range(const ObStoreRow& row);
   int fill_scale(common::ObNewRow& row);
 
-  protected:
+protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
   const ObTableAccessParam* access_param_;
@@ -166,8 +167,8 @@ class ObMultipleMerge : public ObQueryRowIterator {
   ObTableStoreStat table_stat_;
   bool skip_refresh_table_;
   bool read_memtable_only_;
-
-  private:
+  bool is_tables_reset_;
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMultipleMerge);
 };

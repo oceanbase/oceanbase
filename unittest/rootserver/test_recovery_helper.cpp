@@ -129,7 +129,7 @@ namespace rootserver {
 //}
 
 class TestRecoveryHelper : public ::testing::Test {
-  public:
+public:
   TestRecoveryHelper()
   {}
   virtual ~TestRecoveryHelper()
@@ -141,7 +141,7 @@ class TestRecoveryHelper : public ::testing::Test {
   int build_partition(int64_t table_id, ObPartitionInfo& partition, int64_t replica_cnt, int64_t pos = 6);
   int add_server();
 
-  public:
+public:
   // DBInitializer db_initer_;
   // FakePartPropertyGetter prop_getter_;
   // FakePartitionTableOperator pt_;

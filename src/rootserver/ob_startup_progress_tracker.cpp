@@ -148,7 +148,7 @@ int ObStartupProgressTracker::calculate_startup_progress(bool& is_finished)
           LOG_WARN("table iterator iterate failed", K(ret), K(table_iterator));
         }
       } else {
-        const ObTableSchema* table_schema = NULL;
+        const ObSimpleTableSchemaV2* table_schema = NULL;
         if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
           LOG_WARN("get table schema failed", KT(table_id), K(ret));
         } else if (NULL == table_schema) {

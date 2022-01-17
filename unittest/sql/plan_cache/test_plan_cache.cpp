@@ -55,7 +55,7 @@ void init_pc()
 }
 
 class TestPlanCache : public ::testing::Test {
-  public:
+public:
   TestPlanCache()
   {}
   virtual ~TestPlanCache()
@@ -65,7 +65,7 @@ class TestPlanCache : public ::testing::Test {
   void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   TestPlanCache(const TestPlanCache& other);
   TestPlanCache& operator=(const TestPlanCache& other);
@@ -293,7 +293,7 @@ void alter_table_schema_version()
 }
 
 class PlanCacheRunnable : public share::ObThreadPool {
-  public:
+public:
   void run1()
   {
     UNUSED(arg);

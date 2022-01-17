@@ -132,6 +132,42 @@ int ObExprStrToDate::calc_result_type2(
   return ret;
 }
 
+void print_user_warning(const int ret, ObString date_str)
+{
+  if (OB_INVALID_DATE_FORMAT == ret) {
+    ObString date_type_str("date");
+    LOG_USER_WARN(OB_ERR_TRUNCATED_WRONG_VALUE, date_type_str.length(), date_type_str.ptr(),
+                  date_str.length(), date_str.ptr());
+  } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_ARGUMENT == ret) {
+    ObString datetime_type_str("datetime");
+    ObString func_str("str_to_date");
+    LOG_USER_WARN(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
+                  datetime_type_str.length(), datetime_type_str.ptr(),
+                  date_str.length(), date_str.ptr(),
+                  func_str.length(), func_str.ptr());
+  }
+}
+
+int set_error_code(const int ori_ret, ObString date_str)
+{
+  int ret = ori_ret;
+  if (OB_INVALID_DATE_FORMAT == ret) {
+    ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+    ObString date_type_str("date");
+    LOG_USER_ERROR(OB_ERR_TRUNCATED_WRONG_VALUE, date_type_str.length(), date_type_str.ptr(),
+                  date_str.length(), date_str.ptr());
+  } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_ARGUMENT == ret) {
+    ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+    ObString datetime_type_str("datetime");
+    ObString func_str("str_to_date");
+    LOG_USER_ERROR(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
+                  datetime_type_str.length(), datetime_type_str.ptr(),
+                  date_str.length(), date_str.ptr(),
+                  func_str.length(), func_str.ptr());
+  }
+  return ret;
+}
+
 int ObExprStrToDate::calc_result2(ObObj& result, const ObObj& date, const ObObj& format, ObExprCtx& expr_ctx) const
 {
   int ret = OB_SUCCESS;
@@ -150,12 +186,16 @@ int ObExprStrToDate::calc_result2(ObObj& result, const ObObj& date, const ObObj&
         LOG_WARN("convert str to date failed", K(date), K(format), K(ret));
         if (CM_IS_WARN_ON_FAIL(expr_ctx.cast_mode_)) {
           if (OB_INVALID_DATE_FORMAT == ret) {
+            print_user_warning(ret, date_str);
             ret = OB_SUCCESS;
             result.set_date(ObTimeConverter::ZERO_DATE);
-          } else if (OB_INVALID_DATE_VALUE == ret) {
+          } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_ARGUMENT == ret) {
+            print_user_warning(ret, date_str);
             ret = OB_SUCCESS;
             result.set_null();
           }
+        } else {
+          ret = set_error_code(ret, date_str);
         }
       } else {
         result.set_datetime(value);
@@ -217,10 +257,16 @@ static int calc(const ObExpr& expr, ObEvalCtx& ctx, bool& is_null, int64_t& res_
             // if res type is not datetime, will call ObTimeConverter::datetime_to_time()
             // or ObTimeConverter::datetime_to_date()
             res_int = ObTimeConverter::ZERO_DATETIME;
-          } else if (OB_INVALID_DATE_VALUE == tmp_ret) {
+            print_user_warning(OB_INVALID_DATE_FORMAT, date_str);
+          } else if (OB_INVALID_DATE_VALUE == tmp_ret || OB_INVALID_ARGUMENT == tmp_ret) {
             ret = OB_SUCCESS;
             is_null = true;
+            print_user_warning(tmp_ret, date_str);
+          } else {
+            ret = tmp_ret;
           }
+        } else {
+          ret = set_error_code(tmp_ret, date_str);
         }
       }
     }

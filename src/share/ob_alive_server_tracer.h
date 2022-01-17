@@ -28,22 +28,23 @@ class ObCommonRpcProxy;
 }
 namespace share {
 class ObILocalityManager {
-  public:
+public:
   virtual int is_local_zone_read_only(bool& is_readonly) = 0;
   virtual int is_local_server(const common::ObAddr& server, bool& is_local) = 0;
 };
 
 class ObIAliveServerTracer {
-  public:
+public:
   virtual int is_alive(const common::ObAddr& addr, bool& alive, int64_t& trace_time) const = 0;
   virtual int get_server_status(
       const common::ObAddr& addr, bool& alive, bool& is_server_exist, int64_t& trace_time) const = 0;
 
   virtual int get_primary_cluster_id(int64_t& cluster_id) const = 0;
+  virtual int get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const = 0;
 };
 
 class ObAliveServerMap : public ObIAliveServerTracer {
-  public:
+public:
   const static int64_t HASH_SERVER_CNT = 2048;
 
   ObAliveServerMap();
@@ -61,12 +62,13 @@ class ObAliveServerMap : public ObIAliveServerTracer {
     UNUSED(cluster_id);
     return common::OB_OP_NOT_ALLOW;
   }
+  virtual int get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const;
 
-  private:
+private:
   virtual int refresh_server_list(const common::ObIArray<common::ObAddr>& server_list,
       common::hash::ObHashSet<common::ObAddr, common::hash::NoPthreadDefendMode>& servers);
 
-  private:
+private:
   bool is_inited_;
   mutable common::ObLatch lock_;
   int64_t trace_time_;
@@ -78,7 +80,7 @@ class ObAliveServerMap : public ObIAliveServerTracer {
 
 class ObAliveServerTracer;
 class ObAliveServerRefreshTask : public common::ObTimerTask {
-  public:
+public:
   const static int64_t REFRESH_INTERVAL_US = 5L * 1000 * 1000;  // 5 second
   explicit ObAliveServerRefreshTask(ObAliveServerTracer& tracker);
   virtual ~ObAliveServerRefreshTask();
@@ -86,7 +88,7 @@ class ObAliveServerRefreshTask : public common::ObTimerTask {
   int init();
   virtual void runTimerTask();
 
-  private:
+private:
   ObAliveServerTracer& tracer_;
   bool is_inited_;
   ;
@@ -95,7 +97,7 @@ class ObAliveServerRefreshTask : public common::ObTimerTask {
 };
 
 class ObAliveServerTracer : public ObIAliveServerTracer {
-  public:
+public:
   ObAliveServerTracer();
   virtual ~ObAliveServerTracer();
 
@@ -106,11 +108,12 @@ class ObAliveServerTracer : public ObIAliveServerTracer {
       const common::ObAddr& addr, bool& alive, bool& is_server_exist, int64_t& trace_time) const;
   virtual int get_primary_cluster_id(int64_t& cluster_id) const;
   virtual int refresh();
+  virtual int get_active_server_list(common::ObIArray<common::ObAddr>& addrs) const;
 
-  private:
+private:
   int refresh_primary_cluster_id();
 
-  private:
+private:
   const static int64_t SERVER_MAP_CNT = 2;
 
   bool is_inited_;

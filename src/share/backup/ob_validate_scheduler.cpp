@@ -84,11 +84,20 @@ int ObValidateScheduler::get_log_archive_time_range(const uint64_t tenant_id, in
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfo log_archive_info;
   bool for_update = false;
+  share::ObBackupInnerTableVersion inner_table_version;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("validate scheduler do not init", K(ret));
-  } else if (OB_FAIL(
-                 log_archive_mgr_.get_log_archive_backup_info(*sql_proxy_, for_update, tenant_id, log_archive_info))) {
+  } else if (OB_FAIL(ObBackupInfoOperator::get_inner_table_version(*sql_proxy_, inner_table_version))) {
+    LOG_WARN("Failed to get inner table version", K(ret));
+  } else if (inner_table_version < OB_BACKUP_INNER_TABLE_V3) {
+    ret = OB_BACKUP_CAN_NOT_START;
+    const char* msg = "inner table version is too old, waiting backup inner table upgrade";
+    LOG_INFO(msg, K(ret), K(inner_table_version));
+    LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, msg);
+  } else if (OB_FAIL(log_archive_mgr_.get_log_archive_backup_info(
+                 *sql_proxy_, for_update, tenant_id, inner_table_version, log_archive_info))) {
     LOG_WARN("failed to get log archive backup info", K(ret));
   } else {
     start_ts = log_archive_info.status_.start_ts_;
@@ -103,6 +112,7 @@ int ObValidateScheduler::check_backup_set_id_valid(const uint64_t tenant_id, con
   int64_t start_ts = 0;
   int64_t checkpoint_ts = 0;
   ObTenantBackupTaskInfo backup_info;
+  const bool for_update = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("validate scheduler do not init", K(ret));
@@ -110,8 +120,8 @@ int ObValidateScheduler::check_backup_set_id_valid(const uint64_t tenant_id, con
     // do nothing
   } else if (OB_FAIL(get_log_archive_time_range(tenant_id, start_ts, checkpoint_ts))) {
     LOG_WARN("failed to get log archive time range", K(tenant_id));
-  } else if (OB_FAIL(backup_history_updater_.get_tenant_backup_task(
-                 tenant_id, backup_set_id, OB_START_INCARNATION, backup_info))) {
+  } else if (OB_FAIL(backup_history_updater_.get_original_tenant_backup_task(
+                 tenant_id, backup_set_id, for_update, backup_info))) {
     LOG_WARN("failed to get tenant backup task", K(ret), K(tenant_id), K(backup_set_id));
   } else if (!backup_info.is_valid()) {
     ret = OB_INVALID_BACKUP_SET_ID;

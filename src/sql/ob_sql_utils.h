@@ -91,7 +91,7 @@ struct ObHiddenColumnItem {
 };
 
 class ObSQLUtils {
-  public:
+public:
   const static int64_t WITHOUT_FUNC_REGEXP = 1;
   const static int64_t WITHOUT_FUNC_ADDR_TO_PARTITION_ID = 2;
   const static int64_t OB_MYSQL50_TABLE_NAME_PREFIX_LENGTH = 9;
@@ -169,7 +169,7 @@ class ObSQLUtils {
       const share::schema::ObTableSchema& schema, const share::schema::ObColumnSchemaV2& gen_col,
       const common::ObIArray<share::schema::ObColDesc>& col_ids, common::ObIAllocator& allocator,
       common::ObISqlExpression*& expression, const bool make_column_expression);
-  static int make_default_expr_context(ObIAllocator& allocator, ObExprCtx& expr_ctx);
+  static int make_default_expr_context(uint64_t tenant_id, ObIAllocator& allocator, ObExprCtx& expr_ctx);
   static int calc_sql_expression(const ObISqlExpression* expr, const share::schema::ObTableSchema& schema,
       const ObIArray<share::schema::ObColDesc>& col_ids, const ObNewRow& row, ObIAllocator& allocator,
       ObExprCtx& expr_ctx, ObObj& result);
@@ -216,6 +216,7 @@ class ObSQLUtils {
   static int filter_hint_in_query_sql(common::ObIAllocator& allocator, const ObSQLSessionInfo& session,
       const common::ObString& sql, common::ObString& param_sql);
   static int filter_head_space(ObString& sql);
+  static char find_first_empty_char(const ObString &sql);
   static int construct_outline_sql(common::ObIAllocator& allocator, const ObSQLSessionInfo& session,
       const common::ObString& outline_content, const common::ObString& orig_sql, bool is_need_filter_hint,
       common::ObString& outline_sql);
@@ -331,8 +332,9 @@ class ObSQLUtils {
 
   static int print_identifier(char* buf, const int64_t buf_len, int64_t& pos,
       common::ObCollationType connection_collation, const common::ObString& identifier_name);
+  static bool is_one_part_table_can_skip_part_calc(const share::schema::ObTableSchema &schema);
 
-  private:
+private:
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString& name,
       const bool check_for_path_char, const int64_t max_ident_len);
   static bool check_mysql50_prefix(common::ObString& db_name);
@@ -379,7 +381,7 @@ struct ObAcsIndexInfo {
 };
 
 class RelExprCheckerBase {
-  public:
+public:
   const static int32_t FIELD_LIST_SCOPE;
   const static int32_t WHERE_SCOPE;
   const static int32_t GROUP_SCOPE;
@@ -401,7 +403,7 @@ class RelExprCheckerBase {
   const static int32_t JOIN_CONDITION_SCOPE;
   const static int32_t EXTRA_OUTPUT_SCOPE;
 
-  public:
+public:
   RelExprCheckerBase() : duplicated_checker_(), ignore_scope_(0)
   {}
   RelExprCheckerBase(int32_t ignore_scope) : duplicated_checker_(), ignore_scope_(ignore_scope)
@@ -418,14 +420,14 @@ class RelExprCheckerBase {
   virtual int add_expr(ObRawExpr*& expr) = 0;
   int add_exprs(common::ObIArray<ObRawExpr*>& exprs);
 
-  protected:
+protected:
   static const int64_t CHECKER_BUCKET_NUM = 1000;
   common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> duplicated_checker_;
   int32_t ignore_scope_;
 };
 
 class RelExprChecker : public RelExprCheckerBase {
-  public:
+public:
   RelExprChecker(common::ObIArray<ObRawExpr*>& rel_array) : RelExprCheckerBase(), rel_array_(rel_array)
   {}
 
@@ -436,25 +438,25 @@ class RelExprChecker : public RelExprCheckerBase {
   {}
   int add_expr(ObRawExpr*& expr);
 
-  private:
+private:
   common::ObIArray<ObRawExpr*>& rel_array_;
 };
 
 class FastRelExprChecker : public RelExprCheckerBase {
-  public:
+public:
   FastRelExprChecker(common::ObIArray<ObRawExpr*>& rel_array);
   FastRelExprChecker(common::ObIArray<ObRawExpr*>& rel_array, int32_t ignore_scope);
   virtual ~FastRelExprChecker();
   int add_expr(ObRawExpr*& expr);
   int dedup();
 
-  private:
+private:
   common::ObIArray<ObRawExpr*>& rel_array_;
   int64_t init_size_;
 };
 
 class RelExprPointerChecker : public RelExprCheckerBase {
-  public:
+public:
   RelExprPointerChecker(common::ObIArray<ObRawExprPointer>& rel_array)
       : RelExprCheckerBase(), rel_array_(rel_array), expr_id_map_()
   {}
@@ -464,15 +466,15 @@ class RelExprPointerChecker : public RelExprCheckerBase {
   virtual ~RelExprPointerChecker()
   {}
   virtual int init(int64_t bucket_num = CHECKER_BUCKET_NUM) override;
-  int add_expr(ObRawExpr*& expr);
+  int add_expr(ObRawExpr*& expr) override;
 
-  private:
+private:
   common::ObIArray<ObRawExprPointer>& rel_array_;
   common::hash::ObHashMap<uint64_t, uint64_t, common::hash::NoPthreadDefendMode> expr_id_map_;
 };
 
 class AllExprPointerCollector : public RelExprCheckerBase {
-  public:
+public:
   AllExprPointerCollector(common::ObIArray<ObRawExpr**>& rel_array) : RelExprCheckerBase(), rel_array_(rel_array)
   {}
   AllExprPointerCollector(common::ObIArray<ObRawExpr**>& rel_array, int32_t ignore_scope)
@@ -482,7 +484,7 @@ class AllExprPointerCollector : public RelExprCheckerBase {
   {}
   int add_expr(ObRawExpr*& expr);
 
-  private:
+private:
   common::ObIArray<ObRawExpr**>& rel_array_;
 };
 
@@ -492,6 +494,7 @@ struct ObSqlTraits {
   bool is_modify_tenant_stmt_;
   bool is_cause_implicit_commit_;
   bool is_commit_stmt_;
+  bool has_weight_string_func_stmt_; // sql中是否包含weight_string函数
   ObItemType stmt_type_;
 
   ObSqlTraits();
@@ -502,15 +505,16 @@ struct ObSqlTraits {
     is_modify_tenant_stmt_ = false;
     is_cause_implicit_commit_ = false;
     is_commit_stmt_ = false;
+    has_weight_string_func_stmt_ = false;
     stmt_type_ = T_INVALID;
   }
   TO_STRING_KV(
-      K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_), K(stmt_type_));
+      K(is_readonly_stmt_), K(is_modify_tenant_stmt_), K(is_cause_implicit_commit_), K(is_commit_stmt_),K(has_weight_string_func_stmt_), K(stmt_type_));
 };
 
 template <typename ValueType>
 class ObValueChecker {
-  public:
+public:
   ObValueChecker() = delete;
 
   constexpr ObValueChecker(ValueType min_value, ValueType max_value, int err_ret_code)
@@ -529,7 +533,7 @@ class ObValueChecker {
 
   TO_STRING_KV(K_(min_value), K_(max_value), K_(err_ret_code));
 
-  private:
+private:
   ValueType min_value_;
   ValueType max_value_;
   int err_ret_code_;
@@ -537,7 +541,7 @@ class ObValueChecker {
 
 template <typename ValueType>
 class ObPointerChecker {
-  public:
+public:
   ObPointerChecker() = delete;
 
   constexpr ObPointerChecker(int err_ret_code) : err_ret_code_(err_ret_code)
@@ -550,7 +554,7 @@ class ObPointerChecker {
 
   TO_STRING_KV(K_(err_ret_code));
 
-  private:
+private:
   int err_ret_code_;
 };
 
@@ -560,7 +564,7 @@ class ObEnumBitSet {
   static_assert(std::is_enum<T>::value, "typename must be a enum type");
   static_assert(static_cast<int>(T::MAX_VALUE) < MAX_ENUM_VALUE, "Please add MAX_VALUE in enum class");
 
-  public:
+public:
   inline ObEnumBitSet() : flag_(0)
   {}
   inline ObEnumBitSet(T value)
@@ -603,7 +607,7 @@ class ObEnumBitSet {
   }
   TO_STRING_KV(K_(flag));
 
-  private:
+private:
   inline uint64_t bit2flag(int bit) const
   {
     uint64_t v = 1;
@@ -618,7 +622,7 @@ OB_SERIALIZE_MEMBER_TEMP(template <typename T>, ObEnumBitSet<T>, flag_);
 struct ObImplicitCursorInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObImplicitCursorInfo()
       : stmt_id_(common::OB_INVALID_INDEX),
         affected_rows_(0),
@@ -642,7 +646,7 @@ struct ObImplicitCursorInfo {
 struct ObParamPosIdx {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObParamPosIdx() : pos_(0), idx_(0)
   {}
   ObParamPosIdx(int32_t pos, int32_t idx) : pos_(pos), idx_(idx)
@@ -655,7 +659,7 @@ struct ObParamPosIdx {
 };
 
 class ObVirtualTableResultConverter {
-  public:
+public:
   ObVirtualTableResultConverter()
       : key_alloc_(nullptr),
         key_cast_ctx_(),
@@ -699,7 +703,7 @@ class ObVirtualTableResultConverter {
       ObEvalCtx& eval_ctx, const common::ObIArray<ObExpr*>& src_exprs, const common::ObIArray<ObExpr*>& dst_exprs);
   int convert_column(ObObj& obj, uint64_t column_id, uint64_t idx);
 
-  private:
+private:
   int process_tenant_id(const ObIArray<bool>* extract_tenant_ids, const int64_t nth_col, ObIAllocator& allocator,
       bool decode, ObObj& obj);
   int convert_key(const ObRowkey& src, ObRowkey& dst, bool is_start_key, int64_t pos);
@@ -708,7 +712,7 @@ class ObVirtualTableResultConverter {
   int init_output_row(int64_t cell_cnt);
   int get_need_convert_key_ranges_pos(ObNewRange& key_range, int64_t& pos);
 
-  public:
+public:
   // the memory that allocated must be reset by caller
   ObIAllocator* key_alloc_;
   ObCastCtx key_cast_ctx_;
@@ -736,17 +740,17 @@ class ObVirtualTableResultConverter {
 };
 
 class ObLinkStmtParam {
-  public:
+public:
   static int write(char* buf, int64_t buf_len, int64_t& pos, int64_t param_idx);
   static int read_next(const char* buf, int64_t buf_len, int64_t& pos, int64_t& param_idx);
   static int64_t get_param_len();
 
-  private:
+private:
   static const int64_t PARAM_LEN;
 };
 
 class ObSqlFatalErrExtraInfoGuard : public common::ObFatalErrExtraInfoGuard {
-  public:
+public:
   ObSqlFatalErrExtraInfoGuard()
   {
     reset();
@@ -777,7 +781,7 @@ class ObSqlFatalErrExtraInfoGuard : public common::ObFatalErrExtraInfoGuard {
   }
   DECLARE_TO_STRING;
 
-  private:
+private:
   uint64_t tenant_id_;
   common::ObString cur_sql_;
   const ObPhysicalPlan* plan_;

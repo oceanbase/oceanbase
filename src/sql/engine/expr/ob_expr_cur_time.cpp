@@ -83,7 +83,151 @@ int ObExprUtcTimestamp::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_exp
   return OB_SUCCESS;
 }
 
-ObExprCurTimestamp::ObExprCurTimestamp(ObIAllocator& alloc)
+ObExprUtcTime::ObExprUtcTime(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_TIME, N_UTC_TIME, 0, NOT_ROW_DIMENSION)
+{
+}
+ObExprUtcTime::~ObExprUtcTime()
+{
+}
+
+int ObExprUtcTime::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  type.set_time();
+  type.set_result_flag(NOT_NULL_FLAG);
+  if (type.get_scale() < MIN_SCALE_FOR_TEMPORAL) {
+    type.set_scale(MIN_SCALE_FOR_TEMPORAL);
+  }
+  return OB_SUCCESS;
+}
+
+int ObExprUtcTime::calc_result0(ObObj &result, ObExprCtx &expr_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr_ctx.phy_plan_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr_ctx.phy_plan_ctx_ is null", K(ret));
+  } else if (OB_UNLIKELY(!expr_ctx.phy_plan_ctx_->has_cur_time())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan context don't have current time value");
+  } else {
+    int64_t ts_value = expr_ctx.phy_plan_ctx_->get_cur_time().get_timestamp();
+    int64_t t_value = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_time(ts_value,  NULL /* tz_info */, t_value))) {
+      LOG_WARN("failed to convert datetime to time", K(ret));
+    } else {
+      ObTimeConverter::trunc_datetime(result_type_.get_scale(), t_value);
+      result.set_time(t_value);
+    }
+  }
+  return ret;
+}
+
+int ObExprUtcTime::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
+{
+  UNUSED(raw_expr);
+  UNUSED(op_cg_ctx);
+  rt_expr.eval_func_ = ObExprUtcTime::eval_utc_time;
+  return OB_SUCCESS;
+}
+
+int ObExprUtcTime::eval_utc_time(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr_ctx.phy_plan_ctx_ is null", K(ret));
+  } else if (OB_UNLIKELY(!ctx.exec_ctx_.get_physical_plan_ctx()->has_cur_time())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan context don't have current time value");
+  } else {
+    int64_t ts_value = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_timestamp();
+    int64_t t_value = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_time(ts_value,  NULL /* tz_info */, t_value))) {
+      LOG_WARN("failed to convert datetime to time", K(ret));
+    } else {
+      ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, t_value);
+      expr_datum.set_time(t_value);
+    }
+  }
+  return ret;
+}
+
+ObExprUtcDate::ObExprUtcDate(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_DATE, N_UTC_DATE, 0, NOT_ROW_DIMENSION)
+{
+}
+ObExprUtcDate::~ObExprUtcDate()
+{
+}
+
+int ObExprUtcDate::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
+{
+  UNUSED(type_ctx);
+  type.set_date();
+  type.set_result_flag(NOT_NULL_FLAG);
+  type.set_scale(0);
+  return OB_SUCCESS;
+}
+
+int ObExprUtcDate::calc_result0(ObObj &result, ObExprCtx &expr_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr_ctx.phy_plan_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr_ctx.phy_plan_ctx_ is null", K(ret));
+  } else if (OB_UNLIKELY(!expr_ctx.phy_plan_ctx_->has_cur_time())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan context don't have current time value");
+  } else {
+    int64_t ts_value = 0;
+    ts_value = expr_ctx.phy_plan_ctx_->get_cur_time().get_timestamp();
+    int32_t d_value = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_date(ts_value, NULL /* tz_info */, d_value))) {
+      LOG_WARN("failed to convert datetime to date", K(ret));
+    } else {
+      result.set_date(d_value);
+    }
+  }
+  return ret;
+}
+
+int ObExprUtcDate::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
+{
+  UNUSED(raw_expr);
+  UNUSED(op_cg_ctx);
+  rt_expr.eval_func_ = ObExprUtcDate::eval_utc_date;
+  return OB_SUCCESS;
+}
+
+int ObExprUtcDate::eval_utc_date(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr);
+  if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr_ctx.phy_plan_ctx_ is null", K(ret));
+  } else if (OB_UNLIKELY(!ctx.exec_ctx_.get_physical_plan_ctx()->has_cur_time())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan context don't have current time value");
+  } else {
+    int64_t ts_value = ctx.exec_ctx_.get_physical_plan_ctx()->get_cur_time().get_timestamp();
+    int32_t d_value = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_date(ts_value, NULL /* tz_info */, d_value))) {
+      LOG_WARN("failed to convert datetime to date", K(ret));
+    } else {
+      expr_datum.set_date(d_value);
+    }
+  }
+  return ret;
+}
+
+ObExprCurTimestamp::ObExprCurTimestamp(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_CUR_TIMESTAMP, N_CUR_TIMESTAMP, 0, NOT_ROW_DIMENSION)
 {}
 ObExprCurTimestamp::~ObExprCurTimestamp()

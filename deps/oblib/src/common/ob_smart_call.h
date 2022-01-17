@@ -73,6 +73,7 @@ inline int call_with_new_stack(SContext& sctx)
   return ret;
 }
 
+#ifndef OB_USE_ASAN
 #define SMART_CALL(func)                                                   \
   ({                                                                       \
     int ret = OB_SUCCESS;                                                  \
@@ -84,9 +85,12 @@ inline int call_with_new_stack(SContext& sctx)
       std::function<int()> f = [&]() {                                     \
         int ret = OB_SUCCESS;                                              \
         try {                                                              \
+          in_try_stmt = true;                                              \
           ret = func;                                                      \
+          in_try_stmt = false;                                             \
         } catch (OB_BASE_EXCEPTION & except) {                             \
           ret = except.get_errno();                                        \
+          in_try_stmt = false;                                             \
         }                                                                  \
         return ret;                                                        \
       };                                                                   \
@@ -97,7 +101,14 @@ inline int call_with_new_stack(SContext& sctx)
     }                                                                      \
     ret;                                                                   \
   })
-
+#else
+#define SMART_CALL(func)  \
+  ({                      \
+    int ret = OB_SUCCESS; \
+    ret = func;           \
+    ret;                  \
+  })
+#endif
 }  // end of namespace common
 }  // end of namespace oceanbase
 

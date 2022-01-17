@@ -23,7 +23,7 @@ class ObTableModifyOp;
 class ObTableModifySpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableModifySpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   virtual ~ObTableModifySpec()
   {}
@@ -126,10 +126,10 @@ class ObTableModifySpec : public ObOpSpec {
     return false;
   }
 
-  public:
+public:
   virtual bool has_foreign_key() const;
 
-  public:
+public:
   uint64_t table_id_;
   uint64_t index_tid_;
   bool is_ignore_;
@@ -154,22 +154,22 @@ class ObTableModifySpec : public ObOpSpec {
   bool need_skip_log_user_error_;
   bool table_location_uncertain_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifySpec);
 };
 
 class ObTableModifyOpInput : public ObOpInput {
-  public:
+public:
   friend class ObTableModifyOp;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableModifyOpInput(ObExecContext& ctx, const ObOpSpec& spec)
       : ObOpInput(ctx, spec), location_idx_(common::OB_INVALID_INDEX), part_infos_()
   {}
   virtual ~ObTableModifyOpInput()
   {}
-  virtual void reset()
+  virtual void reset() override
   {
     location_idx_ = common::OB_INVALID_INDEX;
     part_infos_.reset();
@@ -187,7 +187,7 @@ class ObTableModifyOpInput : public ObOpInput {
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator)
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override
   {
     part_infos_.set_allocator(allocator);
   }
@@ -197,18 +197,18 @@ class ObTableModifyOpInput : public ObOpInput {
   }
   TO_STRING_KV(K_(location_idx), K_(part_infos));
 
-  private:
+private:
   int64_t location_idx_;
   common::ObFixedArray<DMLPartInfo, common::ObIAllocator> part_infos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifyOpInput);
 };
 
 class ObTableModifyOp : public ObOperator {
-  public:
+public:
   class DMLRowIterator : public common::ObNewRowIterator {
-    public:
+  public:
     DMLRowIterator(ObExecContext& ctx, ObTableModifyOp& op) : ctx_(ctx), op_(op)
     {}
     virtual ~DMLRowIterator()
@@ -223,14 +223,14 @@ class ObTableModifyOp : public ObOperator {
     // create project_row_ cells.
     int setup_project_row(const int64_t cnt);
 
-    protected:
+  protected:
     ObExecContext& ctx_;
     ObTableModifyOp& op_;
     common::ObNewRow project_row_;
   };
 
   class ForeignKeyHandle {
-    public:
+  public:
     struct ObFkRowResInfo {
       ObExpr* rt_expr_;
       ObDatum ori_datum_;
@@ -243,7 +243,7 @@ class ObTableModifyOp : public ObOperator {
     static int do_handle(ObTableModifyOp& modify_op, const ObForeignKeyArgArray& fk_args,
         const ObExprPtrIArray& old_row, const ObExprPtrIArray& new_row);
 
-    private:
+  private:
     static int value_changed(ObTableModifyOp& op, const common::ObIArray<ObForeignKeyColumn>& columns,
         const ObExprPtrIArray& old_row, const ObExprPtrIArray& new_row, bool& has_changed);
     static int check_exist(
@@ -263,7 +263,7 @@ class ObTableModifyOp : public ObOperator {
         ObEvalCtx& ctx, const ObExprPtrIArray& row, const ObForeignKeyArg& fk_arg, bool& is_self_ref);
   };
 
-  public:
+public:
   ObTableModifyOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObTableModifyOp()
   {}
@@ -300,7 +300,7 @@ class ObTableModifyOp : public ObOperator {
     ObOperator::destroy();
   }
 
-  public:
+public:
   int open_inner_conn();
   int close_inner_conn();
   int begin_nested_session(bool skip_cur_stmt_tables);
@@ -326,7 +326,13 @@ class ObTableModifyOp : public ObOperator {
   }
   const ObObjPrintParams get_obj_print_params()
   {
-    return CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
+    ObObjPrintParams print_params = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
+    print_params.need_cast_expr_ = true;
+  // bugfix:https://work.aone.alibaba-inc.com/issue/36658497
+  // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
+  // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
+    GET_SQL_MODE_BIT(IS_NO_BACKSLASH_ESCAPES, ctx_.get_my_session()->get_sql_mode(), print_params.skip_escape_);
+    return print_params;
   }
   int init_foreign_key_operation();
   int check_rowkey_is_null(const ObExprPtrIArray& row, int64_t rowkey_cnt, bool& is_null) const;
@@ -350,10 +356,10 @@ class ObTableModifyOp : public ObOperator {
     return ObOperator::get_next_row();
   }
 
-  protected:
-  OperatorOpenOrder get_operator_open_order() const;
-  virtual int inner_open();
-  virtual int inner_close();
+protected:
+  OperatorOpenOrder get_operator_open_order() const override;
+  virtual int inner_open() override;
+  virtual int inner_close() override;
 
   // project expressions to old style row, allocate cells from ctx_.get_allocator() if needed.
   int project_row(ObExpr* const* exprs, const int64_t cnt, common::ObNewRow& row) const;
@@ -375,10 +381,15 @@ class ObTableModifyOp : public ObOperator {
 
   int mark_lock_row_flag(int64_t flag);
 
-  int check_row_null(const ObExprPtrIArray& row, const common::ObIArray<ColumnContent>& column_infos) const;
-  int set_autoinc_param_pkey(const common::ObPartitionKey& pkey) const;
-  int get_part_location(const ObPhyTableLocation& table_location, const share::ObPartitionReplicaLocation*& out);
-  int get_part_location(common::ObIArray<DMLPartInfo>& part_keys);
+  int check_row_null(const ObExprPtrIArray &row,
+                     const common::ObIArray<ColumnContent> &column_infos,
+                     const common::ObIArray<ColumnContent> &update_col_infos) const;
+  int check_row_null(const ObExprPtrIArray &row,
+                     const common::ObIArray<ColumnContent> &column_infos) const;
+  int set_autoinc_param_pkey(const common::ObPartitionKey &pkey) const;
+  int get_part_location(const ObPhyTableLocation &table_location,
+                        const share::ObPartitionReplicaLocation *&out);
+  int get_part_location(common::ObIArray<DMLPartInfo> &part_keys);
 
   int get_gi_task();
   // filtered if filter return false value. (move from ObPhyOperator).
@@ -396,7 +407,7 @@ class ObTableModifyOp : public ObOperator {
 
   bool init_returning_store();
 
-  public:
+public:
   common::ObMySQLProxy* sql_proxy_;
   observer::ObInnerSQLConnection* inner_conn_;
   uint64_t tenant_id_;
@@ -421,7 +432,7 @@ class ObTableModifyOp : public ObOperator {
   ObChunkDatumStore returning_datum_store_;
   ObChunkDatumStore::Iterator returning_datum_iter_;
 
-  private:
+private:
   ObSQLSessionInfo::StmtSavedValue* saved_session_;
   char* saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)];
   // when got forgien key self reference, need to change row.

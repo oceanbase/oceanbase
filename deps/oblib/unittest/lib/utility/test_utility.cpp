@@ -304,7 +304,7 @@ void test_max_speed(const int64_t rate, const int64_t total_size, const int64_t 
   ASSERT_NE(0, rate);
   ObBandwidthThrottle throttle;
   int64_t cur_buf_size = 0;
-  int64_t avaliable_ts = 0;
+  // int64_t avaliable_ts = 0;
   if (total_size * 1000 * 1000 > INT64_MAX) {
     COMMON_LOG(ERROR, "total size is too large", K(total_size));
     FAIL();
@@ -312,7 +312,7 @@ void test_max_speed(const int64_t rate, const int64_t total_size, const int64_t 
   ASSERT_EQ(OB_SUCCESS, throttle.init(rate));
 
   int64_t start_time = ObTimeUtility::current_time();
-  int64_t sleep_time = 0;
+  // int64_t sleep_time = 0;
   int64_t expect_time = 0;
   int64_t count = 0;
   int64_t cost_time = 0;
@@ -641,6 +641,26 @@ TEST(utility, multi_thread_ob)
       pthread_join(pid_vector[i], NULL);
     }
   }
+}
+
+TEST(utility, ob_atoll_overflow)
+{
+  int ret = OB_SUCCESS;
+  const char* digital_num = "99999999999999999999999999";
+  int64_t val = 0;
+  ret = ob_atoll(digital_num, val);
+  ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
+  ret = OB_SUCCESS;
+}
+
+TEST(utility, ob_strtoull_overflow)
+{
+  int ret = OB_SUCCESS;
+  const char* digital_num = "99999999999999999999999999";
+  char* endptr = NULL;
+  uint64_t val = 0;
+  ret = ob_strtoull(digital_num, endptr, val);
+  ASSERT_EQ(OB_SIZE_OVERFLOW, ret);
 }
 
 int main(int argc, char** argv)

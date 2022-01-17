@@ -45,16 +45,17 @@ namespace common {
 
 template <typename T>
 class ObExtendibleRingBuffer : protected erb::ObExtendibleRingBufferBase<T*, erb::PtrSlot<T> > {
-  public:
+public:
   ObExtendibleRingBuffer();
   virtual ~ObExtendibleRingBuffer();
 
-  public:
-  int init(const int64_t begin_sn);
+public:
+  int init(const int64_t begin_sn,
+      const int64_t seg_size = erb::ObExtendibleRingBufferBase<T*, erb::PtrSlot<T> >::DEFAULT_SEG_SIZE);
   int destroy();
   bool is_inited() const;
 
-  public:
+public:
   // Get T* at sn.
   // sn should be in [begin_sn, end_sn)
   //
@@ -115,10 +116,10 @@ class ObExtendibleRingBuffer : protected erb::ObExtendibleRingBufferBase<T*, erb
   int64_t begin_sn() const;
   int64_t end_sn() const;
 
-  private:
+private:
   erb::RingBufferAlloc alloc_;
 
-  private:
+private:
   typedef ObExtendibleRingBuffer<T> MyType;
   typedef erb::ObExtendibleRingBufferBase<T*, erb::PtrSlot<T> > BaseType;
   DISALLOW_COPY_AND_ASSIGN(ObExtendibleRingBuffer<T>);
@@ -134,13 +135,13 @@ ObExtendibleRingBuffer<T>::~ObExtendibleRingBuffer()
 {}
 
 template <typename T>
-int ObExtendibleRingBuffer<T>::init(const int64_t begin_sn)
+int ObExtendibleRingBuffer<T>::init(const int64_t begin_sn, const int64_t seg_size)
 {
   int ret = OB_SUCCESS;
   if (begin_sn < 0) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "err begin sn", K(ret), K(begin_sn));
-  } else if (OB_SUCCESS != (ret = BaseType::init(begin_sn, &alloc_))) {
+  } else if (OB_SUCCESS != (ret = BaseType::init(begin_sn, &alloc_, seg_size))) {
     CLOG_LOG(WARN, "err init", K(ret), K(begin_sn));
   }
   return ret;

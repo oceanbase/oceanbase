@@ -19,7 +19,7 @@ namespace sql {
 class InsertTableInfo {
   friend class ObMultiTableInsert;
 
-  public:
+public:
   InsertTableInfo() : check_constraint_exprs_(), virtual_column_exprs_(), match_conds_exprs_(), when_conds_idx_(-1)
   {}
   virtual ~InsertTableInfo()
@@ -61,15 +61,15 @@ class ObTableLocation;
 class ObMultiTableInsert : public ObTableInsert, public ObMultiDMLInfo {
   class ObMultiTableInsertCtx;
 
-  public:
+public:
   static const int64_t INSERT_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   explicit ObMultiTableInsert(common::ObIAllocator& alloc);
   virtual ~ObMultiTableInsert();
 
-  virtual int create_operator_input(ObExecContext& ctx) const
+  virtual int create_operator_input(ObExecContext& ctx) const override
   {
     UNUSED(ctx);
     return common::OB_SUCCESS;
@@ -78,7 +78,7 @@ class ObMultiTableInsert : public ObTableInsert, public ObMultiDMLInfo {
   {
     return subplan_has_foreign_key();
   }
-  void reset();
+  void reset() override;
   int check_match_conditions(ObExprCtx& expr_ctx, const ObNewRow& row, bool have_insert_row,
       const InsertTableInfo* table_info, int64_t& pre_when_conds_idx, bool& continue_insert, bool& is_match) const;
   bool is_multi_insert_first() const
@@ -103,32 +103,32 @@ class ObMultiTableInsert : public ObTableInsert, public ObMultiDMLInfo {
   {
     return idx < multi_table_insert_infos_.count() ? multi_table_insert_infos_.at(idx) : NULL;
   }
-  virtual bool is_multi_dml() const
+  virtual bool is_multi_dml() const override
   {
     return true;
   }
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
-  virtual int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const;
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
+  virtual int get_next_row(ObExecContext& ctx, const ObNewRow*& row) const override;
+  virtual int inner_close(ObExecContext& ctx) const override;
   int shuffle_insert_row(ObExecContext& ctx, bool& got_row) const;
   int process_row(ObExecContext& ctx, ObMultiTableInsertCtx& insert_ctx, const ObNewRow*& insert_row) const;
   int prepare_insert_row(const ObNewRow* input_row, const DMLSubPlan& insert_dml_sub, ObNewRow& new_row) const;
   int deep_copy_rows(ObMultiTableInsertCtx*& insert_ctx, const ObNewRow& row, ObNewRow& new_row) const;
 
-  private:
+private:
   bool is_multi_insert_first_;
   common::ObFixedArray<InsertTableInfo*, common::ObIAllocator> multi_table_insert_infos_;
 };

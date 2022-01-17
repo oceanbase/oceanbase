@@ -93,14 +93,14 @@ inline bool casesame_cstr(const char* a, const char* b)
 enum ParserResultFormat { TREE_FORMAT, JSON_FORMAT };
 
 class TestSqlUtils {
-  public:
+public:
   TestSqlUtils();
   virtual ~TestSqlUtils()
   {}
   virtual void init();
   virtual void destroy();
 
-  public:
+public:
   static const int64_t MAX_SCHEMA_FILE_PATH = 128 - 1;
   // function members
   void load_schema_from_file(const char* file_path);
@@ -137,7 +137,7 @@ class TestSqlUtils {
     return schema_guard_;
   }
 
-  public:
+public:
   // table id
   hash::ObHashMap<uint64_t, uint64_t> next_user_table_id_map_;
   // user_id
@@ -165,7 +165,7 @@ class TestSqlUtils {
   ObPlanCacheManager plan_cache_mgr_;
   ::test::MockPartitionLocationCache part_cache_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestSqlUtils);
 };
 }  // namespace test

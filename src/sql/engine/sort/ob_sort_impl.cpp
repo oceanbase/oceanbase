@@ -233,7 +233,7 @@ int ObSortImpl::init(const uint64_t tenant_id, const SortColumns& sort_columns, 
     lib::ContextParam param;
     param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    if (NULL == mem_context_ && OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (NULL == mem_context_ && OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       LOG_WARN("create entity failed", K(ret));
     } else if (NULL == mem_context_) {
       ret = OB_ERR_UNEXPECTED;

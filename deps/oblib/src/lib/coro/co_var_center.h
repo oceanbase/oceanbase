@@ -33,7 +33,7 @@ extern pthread_key_t default_crls_key;
 class CoVarHook {
   friend class CoVarCenter;
 
-  protected:
+protected:
   using Func = std::function<void()>;
   CoVarHook(Func init, Func deinit) : init_(init), deinit_(deinit)
   {}
@@ -45,7 +45,7 @@ class CoVarHook {
 class CoRoutine;
 
 class CoVarCenter {
-  public:
+public:
   /// Apply new co-routine local variable with type of T. Every
   /// co-routine local variable should use this method to get offset of
   /// its CRLS buffer.
@@ -72,9 +72,9 @@ class CoVarCenter {
     return pos;
   }
 
-  int register_hook(CoVarHook* hook);
-  void at_routine_create();
-  void at_routine_exit();
+  int register_hook(CoVarHook *hook);
+  void at_routine_create(char *buffer);
+  void at_routine_exit(char *buffer);
 
   static CoVarCenter& instance()
   {
@@ -82,11 +82,11 @@ class CoVarCenter {
     return cvc_;
   }
 
-  private:
+private:
   CoVarCenter();
   ~CoVarCenter();
 
-  private:
+private:
   CoSpinLock lock_;
   int64_t size_ = 0;
 };

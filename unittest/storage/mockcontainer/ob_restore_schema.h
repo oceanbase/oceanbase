@@ -33,7 +33,7 @@ class ObStmt;
 class ObCreateIndexStmt;
 struct ObResolverParams;
 class ObRestoreSchema {
-  public:
+public:
   ObRestoreSchema();
   virtual ~ObRestoreSchema() = default;
   int parse_from_file(const char* filename, share::schema::ObSchemaGetterGuard*& schema_guard);
@@ -44,14 +44,14 @@ class ObRestoreSchema {
   // share::schema::ObSchemaManager *get_schema_manager();
   int init();
 
-  public:
+public:
   static const int64_t RESTORE_SCHEMA_VERSION = 1;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRestoreSchema);
 
-  protected:
+protected:
   // function members
   int do_parse_line(common::ObArenaAllocator& allocator, const char* query);
   int do_create_table(ObStmt* stmt);
@@ -61,7 +61,7 @@ class ObRestoreSchema {
   int add_database_schema(ObDatabaseSchema& database_schema);
   int add_table_schema(ObTableSchema& table_schema);
 
-  public:
+public:
   // data members
   // share::schema::ObSchemaManager schema_manager_;
   share::schema::MockSchemaService* schema_service_;

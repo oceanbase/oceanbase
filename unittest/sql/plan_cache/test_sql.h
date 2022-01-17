@@ -1,16 +1,12 @@
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software
- * according to the terms and conditions of the Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
- *
- * http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND,
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A
- * PARTICULAR PURPOSE.
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
 
@@ -37,7 +33,7 @@ struct TestSqlCtx {
 };
 
 class TestSQL : public TestOptimizerUtils {
-  public:
+public:
   TestSQL(const ObString& schema_file_name);
   virtual ~TestSQL();
   void TestBody()
@@ -81,11 +77,11 @@ class TestSQL : public TestOptimizerUtils {
     return merged_version_;
   }
 
-  protected:
+protected:
   ObAddr addr_;  // local addr
   int64_t merged_version_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestSQL);
 };

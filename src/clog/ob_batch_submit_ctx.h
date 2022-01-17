@@ -37,7 +37,7 @@ typedef common::LinkHashNode<transaction::ObTransID> BatchSubmitCtxHashNode;
 typedef common::LinkHashValue<transaction::ObTransID> BatchSubmitCtxHashValue;
 
 class ObBatchSubmitCtx : public BatchSubmitCtxHashValue {
-  public:
+public:
   ObBatchSubmitCtx()
   {
     reset();
@@ -47,7 +47,7 @@ class ObBatchSubmitCtx : public BatchSubmitCtxHashValue {
     destroy();
   }
 
-  public:
+public:
   int init(const transaction::ObTransID& trans_id, const common::ObPartitionArray& partition_array,
       const ObLogInfoArray& log_info_array, const ObLogPersistSizeArray& size_array,
       const ObISubmitLogCbArray& cb_array, const common::ObMemberList& member_list, const int64_t replica_num,
@@ -65,7 +65,7 @@ class ObBatchSubmitCtx : public BatchSubmitCtxHashValue {
   TO_STRING_KV(K(trans_id_), K(partition_array_), K(log_info_array_), K(log_persist_size_array_), K(member_list_),
       K(replica_num_), K(leader_), K(self_));
 
-  private:
+private:
   int make_cursor_array_(const ObLogCursor& base_log_cursor);
   int backfill_log_(const bool is_leader, ObBatchAckArray& batch_ack_array);
   int backfill_log_(const common::ObPartitionKey& partition_key, const ObLogInfo& log_info,
@@ -82,7 +82,7 @@ class ObBatchSubmitCtx : public BatchSubmitCtxHashValue {
   bool ack_need_split_() const;
   int handle_ack_array_(const common::ObAddr& server, const ObBatchAckArray& batch_ack_array);
 
-  private:
+private:
   static const int64_t SPLIT_INTERVAL = 500 * 1000;  // 500ms
   bool is_inited_;
   mutable lib::ObMutex lock_;
@@ -105,23 +105,23 @@ class ObBatchSubmitCtx : public BatchSubmitCtxHashValue {
   ObLogCursorArray log_cursor_array_;
   int64_t create_ctx_ts_;
   ObLogPersistSizeArray log_persist_size_array_;  // record clog size in file
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchSubmitCtx);
 };
 
 class ObBatchSubmitCtxFactory {
-  public:
+public:
   static ObBatchSubmitCtx* alloc(common::ObILogAllocator* alloc_mgr);
   static void free(ObBatchSubmitCtx* ctx);
   static void statistics();
 
-  private:
+private:
   static int64_t alloc_cnt_;
   static int64_t free_cnt_;
 };
 
 class ObBatchSubmitCtxAlloc {
-  public:
+public:
   ObBatchSubmitCtx* alloc_value()
   {
     return NULL;

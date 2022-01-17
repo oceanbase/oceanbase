@@ -19,20 +19,20 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSysConnectByPath : public ObExprOperator {
-  public:
+public:
   explicit ObExprSysConnectByPath(common::ObIAllocator& alloc);
   virtual ~ObExprSysConnectByPath()
   {}
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& left, const common::ObObj& right, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj& left, const common::ObObj& right, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_sys_path(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   static int eval_sys_connect_by_path(
       const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum, ObNLConnectByOpBase* connect_by_op);
 
-  private:
+private:
   static int StringContain(const common::ObString& src_str, const common::ObString& sub_str, bool& is_contain,
       common::ObCollationType cs_type);
   DISALLOW_COPY_AND_ASSIGN(ObExprSysConnectByPath) const;

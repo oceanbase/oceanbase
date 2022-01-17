@@ -48,7 +48,7 @@ class ObPartitionService;
 namespace observer {
 class ObPartitionTableChecker;
 class ObCheckPartitionTableTask : public common::IObDedupTask {
-  public:
+public:
   typedef common::ObSArray<common::ObAddr> ServerList;
   ObCheckPartitionTableTask(ObPartitionTableChecker& pt_checker, volatile const bool& stopped);
   virtual ~ObCheckPartitionTableTask();
@@ -67,13 +67,13 @@ class ObCheckPartitionTableTask : public common::IObDedupTask {
 
   TO_STRING_KV("pt_checker", reinterpret_cast<int64_t>(&pt_checker_));
 
-  private:
+private:
   ObPartitionTableChecker& pt_checker_;
   volatile const bool& stopped_;
 };
 
 class ObCheckDanglingReplicaTask : public common::IObDedupTask {
-  public:
+public:
   ObCheckDanglingReplicaTask(ObPartitionTableChecker& pt_checker, volatile const bool& stopped, int64_t version);
   virtual ~ObCheckDanglingReplicaTask();
 
@@ -91,14 +91,14 @@ class ObCheckDanglingReplicaTask : public common::IObDedupTask {
 
   TO_STRING_KV("pt_checker", reinterpret_cast<int64_t>(&pt_checker_), K_(version));
 
-  private:
+private:
   ObPartitionTableChecker& pt_checker_;
   volatile const bool& stopped_;
   int64_t version_;
 };
 
 class ObPartitionTableChecker : public common::ObTimerTask {
-  public:
+public:
   ObPartitionTableChecker();
   virtual ~ObPartitionTableChecker();
 
@@ -121,7 +121,7 @@ class ObPartitionTableChecker : public common::ObTimerTask {
   int check_partition_table();
   int check_dangling_replica_exist(const int64_t version);
 
-  private:
+private:
   typedef common::hash::ObHashMap<common::ObPartitionKey, share::ObPartitionReplica, common::hash::NoPthreadDefendMode>
       ObReplicaMap;
   static const int64_t SERVER_REPLICA_MAP_BUCKET_NUM = 64 * 1024;
@@ -129,7 +129,7 @@ class ObPartitionTableChecker : public common::ObTimerTask {
   static const int64_t PT_CHECK_QUEUE_SIZE = 64;
   static const int64_t PTTASK_MAP_SIZE = 256;
   static const int64_t PT_CHECK_THREAD_DEAD_THRESHOLD = 300L * 1000L * 1000L;  // 300s
-  private:
+private:
   // iterator partition table, and put replicas in current observer in hashset
   int build_replica_map(ObReplicaMap& server_replica_map);
   // check replica exist in partition table but not in observer
@@ -139,7 +139,7 @@ class ObPartitionTableChecker : public common::ObTimerTask {
       share::ObPartitionReplica& replica, share::ObPartitionReplica& local_replica, bool& is_equal);
   int member_list_is_equal(share::ObPartitionReplica::MemberList& a, share::ObPartitionReplica::MemberList& b);
 
-  private:
+private:
   bool inited_;
   volatile bool stopped_;
   share::ObPartitionTableOperator* pt_operator_;
@@ -149,7 +149,7 @@ class ObPartitionTableChecker : public common::ObTimerTask {
   int tg_id_;
   common::ObDedupQueue queue_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionTableChecker);
 };
 

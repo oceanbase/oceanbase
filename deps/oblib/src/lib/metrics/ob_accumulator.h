@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObAccumulator {
-  public:
+public:
   ObAccumulator() : freeze_value_(0), tmp_value_(0)
   {}
   ~ObAccumulator()
@@ -38,7 +38,7 @@ class ObAccumulator {
     return ATOMIC_LOAD(&freeze_value_);
   }
 
-  private:
+private:
   int64_t freeze_value_;
   int64_t tmp_value_;
 };

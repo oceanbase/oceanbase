@@ -21,10 +21,10 @@ class ObGbyBloomFilter;
 class ObGbyPartition;
 
 class ObHashGroupBy : public ObGroupBy {
-  private:
+private:
   class ObHashGroupByCtx;
 
-  public:
+public:
   static const int64_t MIN_PARTITION_CNT = 8;
   static const int64_t MAX_PARTITION_CNT = 256;
 
@@ -45,10 +45,10 @@ class ObHashGroupBy : public ObGroupBy {
 
   int get_hash_groupby_row_count(ObExecContext& exec_ctx, int64_t& hash_groupby_row_count) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupBy);
 
-  private:
+private:
   /**
    * @brief create operator context, only child operator can know it's specific operator type,
    * so must be overwrited by child operator,

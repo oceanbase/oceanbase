@@ -87,7 +87,7 @@ namespace schema {
   table_priv.set_schema_version(schema_version);
 
 class SchemaTestUtils {
-  public:
+public:
   SchemaTestUtils()
   {}
   virtual ~SchemaTestUtils()
@@ -140,7 +140,7 @@ class SchemaTestUtils {
            a.get_priv_set() == b.get_priv_set() && a.get_schema_version() == b.get_schema_version();
   }
 
-  private:
+private:
 };
 
 }  // namespace schema

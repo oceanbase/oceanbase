@@ -20,11 +20,11 @@
 namespace oceanbase {
 namespace clog {
 class ObLogTimerUtility {
-  public:
+public:
   ObLogTimerUtility() : bt1_(common::OB_INVALID_TIMESTAMP), bt2_(common::OB_INVALID_TIMESTAMP)
   {}
 
-  public:
+public:
   void start_timer()
   {
     if (ENABLE_CLOG_PERF) {
@@ -47,11 +47,11 @@ class ObLogTimerUtility {
     }
   }
 
-  private:
+private:
   int64_t bt1_;
   int64_t bt2_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTimerUtility);
 };
 }  // namespace clog

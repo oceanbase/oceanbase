@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace storage {
 class ObNonTransLog {
-  public:
+public:
   ObNonTransLog()
   {}
   virtual ~ObNonTransLog()

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxDatahubDataProvider {
-  public:
+public:
   virtual int get_msg_nonblock(const dtl::ObDtlMsg*& msg, int64_t timeout_ts) = 0;
   virtual void reset()
   {}
@@ -31,7 +31,7 @@ class ObPxDatahubDataProvider {
 
 template <typename T>
 class ObWholeMsgProvider : public ObPxDatahubDataProvider {
-  public:
+public:
   ObWholeMsgProvider() : msg_set_(false)
   {}
   virtual ~ObWholeMsgProvider() = default;
@@ -63,7 +63,7 @@ class ObWholeMsgProvider : public ObPxDatahubDataProvider {
   }
   TO_STRING_KV(K_(msg_set), K_(msg));
 
-  private:
+private:
   int check_status(int64_t timeout_ts)
   {
     int ret = common::OB_SUCCESS;
@@ -79,7 +79,7 @@ class ObWholeMsgProvider : public ObPxDatahubDataProvider {
     return ret;
   }
 
-  private:
+private:
   bool msg_set_;
   T msg_;
   common::ObThreadCond msg_ready_cond_;

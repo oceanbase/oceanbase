@@ -36,14 +36,14 @@ static const int64_t MAX_CACHED_VERSION_NUM = 4;
 // singleton class
 // concurrency control for schema manager constructing tasks.
 class ObSchemaConstructTask {
-  public:
+public:
   virtual ~ObSchemaConstructTask();
   static ObSchemaConstructTask& get_instance();
   // concurrency control for fetching the given schema version
   void cc_before(const int64_t version);
   void cc_after(const int64_t version);
 
-  private:
+private:
   static const int MAX_PARALLEL_TASK = 1;
   ObSchemaConstructTask();
   void lock();
@@ -62,14 +62,14 @@ class ObSchemaConstructTask {
   void wait(const int64_t version);
   void wakeup(const int64_t version);
 
-  private:
+private:
   common::ObArray<int64_t> schema_tasks_;
   pthread_mutex_t schema_mutex_;
   pthread_cond_t schema_cond_;
 };
 
 class ObSchemaVersionUpdater {
-  public:
+public:
   ObSchemaVersionUpdater(int64_t new_schema_version, bool ignore_error = true)
       : new_schema_version_(new_schema_version), ignore_error_(ignore_error){};
   virtual ~ObSchemaVersionUpdater(){};
@@ -95,7 +95,7 @@ class ObSchemaVersionUpdater {
     return ret;
   }
 
-  private:
+private:
   int64_t new_schema_version_;
   bool ignore_error_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaVersionUpdater);
@@ -106,13 +106,13 @@ class ObMultiVersionSchemaService;
 
 class ObSchemaGetterGuard;
 class ObMultiVersionSchemaService : public ObServerSchemaService {
-  public:
+public:
   static bool g_skip_resolve_materialized_view_definition_;
 
   enum RefreshSchemaMode { NORMAL = 0, FORCE_FALLBACK, FORCE_LAZY };
   const char* print_refresh_schema_mode(const RefreshSchemaMode mode);
 
-  public:
+public:
   static ObMultiVersionSchemaService& get_instance();
 
   // init the newest system or user table schema
@@ -121,7 +121,7 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
 
   int init_sys_schema(const common::ObIArray<ObTableSchema>& table_schemas);
 
-  public:
+public:
   //--------ddl funcs for RS module ---------//
   // check table exist
   int check_table_exist(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& table_name,
@@ -201,7 +201,7 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
   int check_tenant_is_restore(ObSchemaGetterGuard* schema_guard, const uint64_t tenant_id, bool& is_restore);
   int check_restore_tenant_exist(const common::ObIArray<uint64_t>& tenant_ids, bool& exist);
 
-  public:
+public:
   static const int64_t MAX_INT64_VALUE = ((((uint64_t)1) << 63) - 1);  // MAX INT64 VALUE
 
   // get the latest schema version
@@ -228,15 +228,15 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
   friend class tools::ObAgentTaskGenerator;
   friend class tools::ObAgentTaskWorker;
 
-  protected:
+protected:
   ObMultiVersionSchemaService();
   virtual ~ObMultiVersionSchemaService();
-  virtual int destroy();
+  virtual int destroy() override;
 
   virtual int publish_schema() override;
   virtual int publish_schema(const uint64_t tenant_id) override;
 
-  private:
+private:
   // check inner stat
   bool check_inner_stat() const;
   int init_schema_manager();
@@ -275,7 +275,7 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
   int get_schema_status(const common::ObArray<ObRefreshSchemaStatus>& schema_status_array, const uint64_t tenant_id,
       ObRefreshSchemaStatus& schema_status);
 
-  private:
+private:
   static const int64_t MAX_VERSION_COUNT = 64;
   static const int64_t MAX_VERSION_COUNT_FOR_LIBOBLOG = 6;
   static const int32_t MAX_RETRY_TIMES = 10;
@@ -294,14 +294,14 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
 
   bool with_timestamp_;
 
-  public:
+public:
   // schema_cache related
   int init_sys_tenant_user_schema();
 
-  int update_schema_cache(common::ObIArray<ObTableSchema*>& schema_array, const bool is_force = false);
-  int update_schema_cache(common::ObIArray<ObTableSchema>& schema_array, const bool is_force = false);
-  int update_schema_cache(const common::ObIArray<ObTenantSchema>& schema_array);
-  int update_schema_cache(const share::schema::ObSysVariableSchema& schema);
+  int update_schema_cache(common::ObIArray<ObTableSchema*>& schema_array, const bool is_force = false) override;
+  int update_schema_cache(common::ObIArray<ObTableSchema>& schema_array, const bool is_force = false) override;
+  int update_schema_cache(const common::ObIArray<ObTenantSchema>& schema_array) override;
+  int update_schema_cache(const share::schema::ObSysVariableSchema& schema) override;
   int build_full_materalized_view_schema(
       ObSchemaGetterGuard& schema_guard, common::ObIAllocator& allocator, ObTableSchema*& view_schema);
   virtual int get_schema(const ObSchemaMgr* mgr, const ObRefreshSchemaStatus& schema_status,
@@ -351,13 +351,13 @@ class ObMultiVersionSchemaService : public ObServerSchemaService {
   int fetch_link_table_schema(const ObDbLinkSchema& dblink_schema, const common::ObString& database_name,
       const common::ObString& table_name, common::ObIAllocator& allocator, ObTableSchema*& table_schema);
 
-  private:
+private:
   ObSchemaCache schema_cache_;
   ObSchemaMgrCache schema_mgr_cache_;
   ObSchemaMgrCache schema_mgr_cache_for_liboblog_;
   ObSchemaFetcher schema_fetcher_;
 
-  private:
+private:
   common::SpinRWLock schema_info_rwlock_;
   ObRefreshSchemaInfo last_refreshed_schema_info_;
   int64_t init_version_cnt_;

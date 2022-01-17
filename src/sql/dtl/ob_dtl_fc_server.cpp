@@ -410,8 +410,7 @@ void ObDfcServer::runTimerTask()
   {
     ObLockGuard<ObSpinLock> lock_guard(lock_);
     for (DfcHashMapIterator iter = tenant_dfc_map_.begin(); iter != tenant_dfc_map_.end(); ++iter) {
-      uint64_t tenant_id = iter->first;
-      ObTenantDfc* dfc = iter->second;
+      ObTenantDfc *dfc = iter->second;
       if (OB_ISNULL(dfc)) {
         LOG_WARN("null ptr, unexpected. ignore this tenant and continue", K(ret));
       } else if (OB_FAIL(dfc_list.push_back(dfc))) {

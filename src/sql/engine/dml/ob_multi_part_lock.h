@@ -18,11 +18,11 @@ namespace sql {
 class ObMultiPartLock : public ObTableModify, public ObMultiDMLInfo {
   class ObMultiPartLockCtx;
 
-  public:
+public:
   static const int64_t LOCK_OP = 0;
   static const int64_t DML_OP_CNT = 1;
 
-  public:
+public:
   explicit ObMultiPartLock(common::ObIAllocator& allocator);
   virtual ~ObMultiPartLock();
   virtual bool is_multi_dml() const
@@ -35,7 +35,7 @@ class ObMultiPartLock : public ObTableModify, public ObMultiDMLInfo {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
   virtual int inner_close(ObExecContext& ctx) const;
   virtual int init_op_ctx(ObExecContext& ctx) const;

@@ -88,7 +88,7 @@ int ObMacroMetaReplayMap::set(const ObMacroBlockKey& key, ObMacroBlockMetaV2& me
           delete_meta->~ObMacroBlockMetaV2();
           allocator_.free(delete_meta);
           delete_meta = nullptr;
-          LOG_INFO("succeed to overwrite replay macro meta", K(key), K(*new_meta), K(key.hash()));
+          LOG_INFO("succeed to overwrite replay macro meta", K(key), KP(new_meta), K(key.hash()));
         }
       }
     } else {
@@ -96,7 +96,7 @@ int ObMacroMetaReplayMap::set(const ObMacroBlockKey& key, ObMacroBlockMetaV2& me
     }
   } else {
     new_meta = nullptr;
-    LOG_INFO("succeed to set replay macro meta", K(key), K(*new_meta), K(key.hash()));
+    LOG_INFO("succeed to set replay macro meta", K(key), KP(new_meta), K(key.hash()));
   }
   if (nullptr != new_meta) {
     new_meta->~ObMacroBlockMetaV2();

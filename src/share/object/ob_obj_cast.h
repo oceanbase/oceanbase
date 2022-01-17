@@ -21,6 +21,7 @@
 #include "lib/charset/ob_charset.h"
 #include "share/ob_errno.h"
 
+
 namespace oceanbase {
 namespace common {
 
@@ -43,7 +44,7 @@ namespace common {
 #define CM_SET_MIN_IF_OVERFLOW (1ULL << 9)
 // when casting string to integer, round if not set this flag, otherwise trunc.
 // but ceil will always round to +inf, and floor will always round to -inf.
-#define CM_STRING_INTEGER_TRUNC (1ULL << 9)
+#define CM_STRING_INTEGER_TRUNC (1ULL << 57)
 #define CM_COLUMN_CONVERT (1ULL << 58)
 #define CM_ENABLE_BLOB_CAST (1ULL << 59)
 #define CM_EXPLICIT_CAST (1ULL << 60)
@@ -189,7 +190,7 @@ struct ObObjCastParams {
 };
 
 class ObExpectType {
-  public:
+public:
   ObExpectType() : type_(ObMaxType), cs_type_(CS_TYPE_INVALID), type_infos_(NULL)
   {}
   explicit ObExpectType(const ObObjType type) : type_(type), cs_type_(CS_TYPE_INVALID), type_infos_(NULL)
@@ -238,10 +239,10 @@ class ObExpectType {
 
   TO_STRING_KV(K(type_), K(cs_type_), KPC(type_infos_));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExpectType);
 
-  private:
+private:
   ObObjType type_;
   ObCollationType cs_type_;
   const ObIArray<ObString>* type_infos_;
@@ -257,7 +258,7 @@ typedef int (*ObCastEnumOrSetFunc)(
 bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_type, const ObObjType expect_type,
     const ObCollationType expect_cs_type);
 int ob_obj_to_ob_time_with_date(
-    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, bool is_dayofmonth = false);
+    const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time, const int64_t cur_ts_value, bool is_dayofmonth = false);
 int ob_obj_to_ob_time_without_date(const ObObj& obj, const ObTimeZoneInfo* tz_info, ObTime& ob_time);
 
 // CM_STRING_INTEGER_TRUNC only affect string to [unsigned] integer cast.
@@ -272,7 +273,7 @@ int common_string_integer(const ObCastMode& cast_mode, const ObObjType& in_type,
 typedef ObObjCastParams ObCastCtx;
 
 class ObHexUtils {
-  public:
+public:
   // text can be odd number, like 'aaa', treat as '0aaa'
   static int unhex(const common::ObString& text, common::ObCastCtx& cast_ctx, common::ObObj& result);
   static int hex(const common::ObString& text, common::ObCastCtx& cast_ctx, common::ObObj& result);
@@ -282,7 +283,7 @@ class ObHexUtils {
   static int get_uint(const common::ObObj& obj, common::ObCastCtx& cast_ctx, common::number::ObNumber& out);
   static int copy_raw(const common::ObObj& obj, common::ObCastCtx& cast_ctx, common::ObObj& result);
 
-  private:
+private:
   static int uint_to_raw(const common::number::ObNumber& text, common::ObCastCtx& cast_ctx, common::ObObj& result);
 };
 
@@ -295,7 +296,7 @@ int get_bit_len(const ObString& str, int32_t& bit_len);
 int get_bit_len(uint64_t value, int32_t& bit_len);
 int ob_obj_accuracy_check_only(const ObAccuracy& accuracy, const ObCollationType cs_type, const ObObj& obj);
 class ObObjCaster {
-  public:
+public:
   /*
    * Please note that,
    *
@@ -331,7 +332,7 @@ class ObObjCaster {
       const int16_t scale, const int64_t len, char* buf, int64_t& pos);
   static int can_cast_in_oracle_mode(const ObObjTypeClass expect_type, const ObObjTypeClass obj_type);
 
-  private:
+private:
   inline static int64_t get_idx_of_collate(ObCollationType cs_type)
   {
     int64_t idx = -1;
@@ -351,7 +352,7 @@ class ObObjCaster {
     return idx;
   }
 
-  private:
+private:
   static const bool CAST_MONOTONIC[ObMaxTC][ObMaxTC];
   static const bool ORDER_CONSISTENT[ObMaxTC][ObMaxTC];
   static const bool ORDER_CONSISTENT_WITH_BOTH_STRING[ObCharset::VALID_COLLATION_TYPES]
@@ -363,7 +364,7 @@ class ObObjCaster {
 };
 
 class ObObjEvaluator {
-  public:
+public:
   inline static int is_true(const ObObj& obj, bool& result)
   {
     return ObObjEvaluator::is_true(obj, CM_WARN_ON_FAIL, result);
@@ -385,14 +386,14 @@ int number_range_check_v2(ObObjCastParams& params, const ObAccuracy& accuracy, c
     const ObObj*& res_obj, const ObCastMode cast_mode);
 
 class ObNumberConstValue {
-  public:
+public:
   ObNumberConstValue()
   {}
   ~ObNumberConstValue()
   {}
   static int init(ObIAllocator& allocator, const lib::ObMemAttr& attr);
 
-  public:
+public:
   static const ObScale MAX_ORACLE_SCALE_DELTA = 0 - number::ObNumber::MIN_SCALE;
   static const ObScale MAX_ORACLE_SCALE_SIZE = number::ObNumber::MAX_SCALE - number::ObNumber::MIN_SCALE;
 

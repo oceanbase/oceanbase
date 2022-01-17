@@ -27,7 +27,7 @@ namespace sql {
 enum ObSqlWorkAreaType { HASH_WORK_AREA = 0, SORT_WORK_AREA = 1, MAX_TYPE };
 
 class ObSqlWorkAreaProfile : public common::ObDLinkBase<ObSqlWorkAreaProfile> {
-  public:
+public:
   ObSqlWorkAreaProfile(ObSqlWorkAreaType type)
       : ObDLinkBase(),
         random_id_(0),
@@ -265,7 +265,7 @@ class ObSqlWorkAreaProfile : public common::ObDLinkBase<ObSqlWorkAreaProfile> {
 
   TO_STRING_KV(K_(random_id), K_(type), K_(op_id), K_(cache_size), K_(one_pass_size), K_(expect_size));
 
-  private:
+private:
   static const int64_t MIN_BOUND_SIZE[ObSqlWorkAreaType::MAX_TYPE];
   int64_t random_id_;
   ObSqlWorkAreaType type_;
@@ -283,7 +283,7 @@ class ObSqlWorkAreaProfile : public common::ObDLinkBase<ObSqlWorkAreaProfile> {
   int64_t global_bound_size_;
   int64_t max_bound_;
 
-  public:
+public:
   int64_t delta_size_;
   int64_t data_size_;
   int64_t max_mem_used_;
@@ -292,7 +292,7 @@ class ObSqlWorkAreaProfile : public common::ObDLinkBase<ObSqlWorkAreaProfile> {
   int64_t dumped_size_;
   double data_ratio_;
 
-  public:
+public:
   // some statistics
   int64_t active_time_;  // init: start_time, unregister:
   int64_t number_pass_;
@@ -306,7 +306,7 @@ static constexpr const char* EXECUTION_AUTO_POLICY = "AUTO";
 static constexpr const char* EXECUTION_MANUAL_POLICY = "MANUAL";
 
 class ObSqlWorkAreaStat {
-  public:
+public:
   ObSqlWorkAreaStat()
       : seqno_(INT64_MAX),
         workarea_key_(),
@@ -326,7 +326,7 @@ class ObSqlWorkAreaStat {
         is_auto_policy_(false)
   {}
 
-  public:
+public:
   struct WorkareaKey {
     WorkareaKey(uint64_t plan_id, uint64_t operator_id) : plan_id_(plan_id), operator_id_(operator_id)
     {
@@ -376,7 +376,7 @@ class ObSqlWorkAreaStat {
     }
     TO_STRING_KV(K_(sql_id), K_(plan_id), K_(operator_id));
 
-    public:
+  public:
     char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];  // sql id
     uint64_t plan_id_;                               // plan id
     uint64_t operator_id_;                           // operator id
@@ -492,7 +492,7 @@ class ObSqlWorkAreaStat {
 
   TO_STRING_KV(K_(workarea_key), K_(op_type), K_(seqno));
 
-  public:
+public:
   int64_t seqno_;
   WorkareaKey workarea_key_;
   ObPhyOperatorType op_type_;
@@ -512,7 +512,7 @@ class ObSqlWorkAreaStat {
 };
 
 class ObSqlWorkareaProfileInfo {
-  public:
+public:
   ObSqlWorkareaProfileInfo() : profile_(ObSqlWorkAreaType::MAX_TYPE), plan_id_(0), sql_exec_id_(0), session_id_(0)
   {
     sql_id_[0] = '\0';
@@ -542,7 +542,7 @@ class ObSqlWorkareaProfileInfo {
 
   TO_STRING_KV(K_(sql_id), K_(plan_id), K_(sql_exec_id));
 
-  public:
+public:
   sql::ObSqlWorkAreaProfile profile_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_id_;
@@ -551,7 +551,7 @@ class ObSqlWorkareaProfileInfo {
 };
 
 class ObSqlWorkAreaIntervalStat {
-  public:
+public:
   ObSqlWorkAreaIntervalStat()
       : total_hash_cnt_(0),
         total_hash_size_(0),
@@ -562,7 +562,7 @@ class ObSqlWorkAreaIntervalStat {
         total_one_pass_size_(0)
   {}
 
-  public:
+public:
   void reset();
   int64_t get_total_hash_cnt() const
   {
@@ -596,7 +596,7 @@ class ObSqlWorkAreaIntervalStat {
   int analyze_profile(ObSqlWorkAreaProfile& profile, int64_t size, const int64_t one_pass_size, const int64_t max_size,
       bool is_one_pass = false);
 
-  private:
+private:
   int64_t total_hash_cnt_;
   int64_t total_hash_size_;
   int64_t total_sort_cnt_;
@@ -607,11 +607,11 @@ class ObSqlWorkAreaIntervalStat {
 };
 
 class ObTenantSqlMemoryCallback : public ObSqlMemoryCallback {
-  public:
+public:
   ObTenantSqlMemoryCallback() : total_alloc_size_(0), total_dump_size_(0)
   {}
 
-  public:
+public:
   virtual void alloc(int64_t size) override;
   virtual void free(int64_t size) override;
   virtual void dumped(int64_t size) override;
@@ -630,18 +630,18 @@ class ObTenantSqlMemoryCallback : public ObSqlMemoryCallback {
     return total_dump_size_;
   }
 
-  private:
+private:
   int64_t total_alloc_size_;
   int64_t total_dump_size_;
 };
 
 class ObSqlWorkAreaInterval {
-  public:
+public:
   ObSqlWorkAreaInterval(int64_t interval_idx, int64_t interval_cache_size)
       : interval_idx_(interval_idx), interval_cache_size_(interval_cache_size), mem_target_(-1), interval_stat_()
   {}
 
-  public:
+public:
   OB_INLINE int64_t get_interval_idx() const
   {
     return interval_idx_;
@@ -665,7 +665,7 @@ class ObSqlWorkAreaInterval {
     mem_target_ = mem_target;
   }
 
-  private:
+private:
   int64_t interval_idx_;
   int64_t interval_cache_size_;
   int64_t mem_target_;
@@ -673,7 +673,7 @@ class ObSqlWorkAreaInterval {
 };
 
 class ObWorkareaHistogram {
-  public:
+public:
   ObWorkareaHistogram(int64_t low_optimal_size, int64_t high_optimal_size)
       : low_optimal_size_(low_optimal_size),
         high_optimal_size_(high_optimal_size),
@@ -736,7 +736,7 @@ class ObWorkareaHistogram {
 
   TO_STRING_KV(K_(low_optimal_size), K_(high_optimal_size));
 
-  private:
+private:
   int64_t low_optimal_size_;
   int64_t high_optimal_size_;
   int64_t optimal_executions_;
@@ -746,7 +746,7 @@ class ObWorkareaHistogram {
 };
 
 class ObSqlMemoryList {
-  public:
+public:
   ObSqlMemoryList(int64_t seqno) : seqno_(seqno)
   {}
   ~ObSqlMemoryList()
@@ -768,14 +768,14 @@ class ObSqlMemoryList {
   }
   TO_STRING_KV(K_(seqno));
 
-  private:
+private:
   int64_t seqno_;
   ObSpinLock lock_;
   common::ObDList<ObSqlWorkAreaProfile> profile_list_;
 };
 
 class ObSqlWorkareaCurrentMemoryInfo {
-  public:
+public:
   ObSqlWorkareaCurrentMemoryInfo()
       : enable_(false),
         max_workarea_size_(0),
@@ -843,12 +843,12 @@ class ObSqlWorkareaCurrentMemoryInfo {
 };
 
 class ObTenantSqlMemoryManager {
-  private:
+private:
   static const int64_t MAX_WORKAREA_STAT_CNT = 1024;
 
-  public:
+public:
   class ObSqlWorkAreaCalcInfo {
-    public:
+  public:
     ObSqlWorkAreaCalcInfo()
         : wa_intervals_(nullptr),
           profile_cnt_(0),
@@ -878,12 +878,12 @@ class ObTenantSqlMemoryManager {
       return wa_intervals_;
     }
 
-    private:
+  private:
     int find_best_interval_index_by_mem_target(
         int64_t& interval_idx, const int64_t expect_mem_target, const int64_t total_memory_size);
     int calc_memory_target(int64_t idx, const int64_t pre_mem_target);
 
-    private:
+  private:
     ObSqlWorkAreaInterval* wa_intervals_;
     int64_t profile_cnt_;
     int64_t mem_target_;
@@ -892,7 +892,7 @@ class ObTenantSqlMemoryManager {
     int64_t min_bound_size_;
   };
 
-  public:
+public:
   ObTenantSqlMemoryManager(int64_t tenant_id)
       : wa_intervals_(nullptr),
         min_bound_size_(0),
@@ -917,7 +917,7 @@ class ObTenantSqlMemoryManager {
   ~ObTenantSqlMemoryManager()
   {}
 
-  public:
+public:
   static int mtl_init(ObTenantSqlMemoryManager*& sql_mem_mgr);
   static void mtl_destroy(ObTenantSqlMemoryManager*& sql_mem_mgr);
 
@@ -990,7 +990,7 @@ class ObTenantSqlMemoryManager {
     return sql_mem_callback_.get_total_alloc_size();
   }
 
-  private:
+private:
   OB_INLINE bool need_manual_calc_bound();
   OB_INLINE bool need_manual_by_drift();
 
@@ -1029,7 +1029,7 @@ class ObTenantSqlMemoryManager {
     return val % HASH_CNT;
   }
 
-  private:
+private:
   int fill_workarea_stat(ObSqlWorkAreaStat& wa_stat, ObSqlWorkAreaProfile& profile);
   int try_fill_workarea_stat(
       ObSqlWorkAreaStat::WorkareaKey& workarea_key, ObSqlWorkAreaProfile& profile, bool& need_insert);
@@ -1037,7 +1037,7 @@ class ObTenantSqlMemoryManager {
   int fill_workarea_histogram(ObSqlWorkAreaProfile& profile);
   int new_and_fill_workarea_stat(ObSqlWorkAreaStat::WorkareaKey& workarea_key, ObSqlWorkAreaProfile& profile);
 
-  private:
+private:
   static const int64_t INTERVAL_NUM = 1100;
   static const int64_t LESS_THAN_100M_INTERVAL_SIZE = 1 * 1024 * 1024;
   static const int64_t LESS_THAN_100M_CNT = 100;

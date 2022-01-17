@@ -17,14 +17,14 @@
 namespace oceanbase {
 namespace sql {
 class ObAlterOutlineResolver : public ObOutlineResolver {
-  public:
+public:
   explicit ObAlterOutlineResolver(ObResolverParams& params) : ObOutlineResolver(params)
   {}
   virtual ~ObAlterOutlineResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   static const int64_t OUTLINE_CHILD_COUNT = 3;
   DISALLOW_COPY_AND_ASSIGN(ObAlterOutlineResolver);
 };

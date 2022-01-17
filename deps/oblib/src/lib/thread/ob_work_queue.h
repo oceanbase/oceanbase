@@ -23,7 +23,7 @@ class ObWorkQueue;
 // 1. whether the timer task is repeat
 // 2. whether the async task need retry when failed
 class ObAsyncTimerTask : public share::ObAsyncTask, public common::ObTimerTask {
-  public:
+public:
   ObAsyncTimerTask(ObWorkQueue& work_queue) : work_queue_(work_queue)
   {
     set_retry_times(0);  // don't retry when process failed by default
@@ -37,19 +37,19 @@ class ObAsyncTimerTask : public share::ObAsyncTask, public common::ObTimerTask {
   virtual int64_t get_deep_copy_size() const override = 0;
   virtual ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override = 0;
 
-  private:
+private:
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAsyncTimerTask);
   // function members
-  protected:
+protected:
   // data members
   ObWorkQueue& work_queue_;
 };
 
 class ObWorkQueue {
-  public:
+public:
   ObWorkQueue();
   virtual ~ObWorkQueue();
 
@@ -69,7 +69,7 @@ class ObWorkQueue {
   int stop();
   int wait();
 
-  private:
+private:
   bool inited_;
   common::ObTimer timer_;
   share::ObAsyncTaskQueue task_queue_;

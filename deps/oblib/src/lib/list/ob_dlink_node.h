@@ -26,7 +26,7 @@ class ObDList;
 // The concrete node class B should inherit ObDLinkNode<B>
 template <typename Derived>
 class ObDLinkBase {
-  public:
+public:
   ObDLinkBase();
   virtual ~ObDLinkBase()
   {}
@@ -75,12 +75,12 @@ class ObDLinkBase {
     return 0;
   };
 
-  protected:
+protected:
   void add(Derived* prev, Derived* e, Derived* next);
   template <typename DLinkNode>
   friend class ObDList;
 
-  protected:
+protected:
   Derived* prev_;
   Derived* next_;
 };
@@ -171,7 +171,7 @@ struct ObDLinkNode : public ObDLinkBase<ObDLinkNode<T> > {
     return do_hash(data_);
   };
 
-  private:
+private:
   T data_;
 };
 

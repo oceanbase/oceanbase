@@ -327,9 +327,8 @@ int ObArchiveIlogFetchTaskMgr::handle_add_task_with_ilog_not_exist_(PGFetchTask&
     ilog_fetch_queue->set_ilog_file_id(task.ilog_file_id_);
     if (OB_FAIL(ilog_fetch_queue->push_task(task))) {
       ARCHIVE_LOG(WARN, "push_back fail", KR(ret), K(task));
-    } else if (OB_FAIL(list_.insert(ilog_fetch_queue, location))) {
-      ARCHIVE_LOG(WARN, "insert fail", KR(ret), K(task));
     } else {
+      (void)list_.insert(ilog_fetch_queue, location);
       ilog_count_++;
     }
   }

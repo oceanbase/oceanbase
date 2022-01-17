@@ -23,9 +23,9 @@ class ObConnectByWithIndex;
 class ObConnectByPumpBFS : public ObConnectByPumpBase {
   friend ObConnectByWithIndex;
 
-  private:
+private:
   class PathNode {
-    public:
+  public:
     PathNode() : prior_exprs_result_(NULL), paths_(), level_(0)
     {}
     ~PathNode()
@@ -49,7 +49,7 @@ class ObConnectByPumpBFS : public ObConnectByPumpBase {
   };
 
   class PumpNode {
-    public:
+  public:
     PumpNode() : pump_row_(NULL), output_row_(NULL), path_node_()
     {}
     ~PumpNode()
@@ -67,19 +67,19 @@ class ObConnectByPumpBFS : public ObConnectByPumpBase {
   };
 
   class RowComparer {
-    public:
+  public:
     explicit RowComparer(const ObIArray<ObSortColumn>& sort_columns, int& ret) : sort_columns_(sort_columns), ret_(ret)
     {}
     ~RowComparer()
     {}
     bool operator()(const PumpNode& pump_node1, const PumpNode& pump_node2);
 
-    private:
+  private:
     const ObIArray<ObSortColumn>& sort_columns_;
     int& ret_;
   };
 
-  public:
+public:
   ObConnectByPumpBFS()
       : ObConnectByPumpBase(),
         pump_stack_(),
@@ -105,7 +105,7 @@ class ObConnectByPumpBFS : public ObConnectByPumpBase {
   void free_memory();
   void free_memory_for_rescan();
 
-  private:
+private:
   int push_back_row_to_stack(const ObNewRow& left_row, const ObNewRow& output_row);
   int free_record_rows();
   int add_path_stack(PathNode& path_node);
@@ -115,7 +115,7 @@ class ObConnectByPumpBFS : public ObConnectByPumpBase {
   int free_path_stack();
   int free_pump_node_stack(ObIArray<PumpNode>& stack);
 
-  private:
+private:
   static const int64_t CONNECT_BY_MAX_NODE_NUM = (2L << 30) / sizeof(PumpNode);
   ObArray<PumpNode> pump_stack_;
   ObArray<PathNode> path_stack_;

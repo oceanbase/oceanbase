@@ -92,7 +92,7 @@ typedef common::ObSimpleIterator<ObTransMemoryStat, ObModIds::OB_TRANS_VIRTUAL_T
 typedef common::ObLinkHashMap<common::ObPartitionKey, ObDupTableLeaseTask> ObDupTableLeaseTaskMap;
 
 class KillTransArg {
-  public:
+public:
   KillTransArg(const bool graceful, const bool ignore_ro_trans, const bool need_kill_coord_ctx = true)
       : graceful_(graceful), ignore_ro_trans_(ignore_ro_trans), need_kill_coord_ctx_(need_kill_coord_ctx)
   {}
@@ -100,7 +100,7 @@ class KillTransArg {
   {}
   TO_STRING_KV(K_(graceful), K_(ignore_ro_trans), K_(need_kill_coord_ctx));
 
-  public:
+public:
   bool graceful_;
   bool ignore_ro_trans_;
   bool need_kill_coord_ctx_;
@@ -114,12 +114,12 @@ enum class ObThreadLocalTransCtxState : int {
 };
 
 class ObThreadLocalTransCtx {
-  public:
+public:
   static const int64_t MAX_BIG_TRANS_WORKER = 8;
   static const int64_t MINI_MODE_MAX_BIG_TRANS_WORKER = 1;
   static const int64_t MAX_BIG_TRANS_TASK = 100 * 1000;
 
-  public:
+public:
   ObThreadLocalTransCtx() : state_(ObThreadLocalTransCtxState::OB_THREAD_LOCAL_CTX_READY)
   {}
   ~ObThreadLocalTransCtx()
@@ -132,13 +132,13 @@ class ObThreadLocalTransCtx {
   }
   void destroy();
 
-  public:
+public:
   memtable::ObMemtableCtx memtable_ctx_;
   ObThreadLocalTransCtxState state_;
 } CACHE_ALIGNED;
 
 class ObTransService : public common::ObSimpleThreadPool {
-  public:
+public:
   ObTransService();
   virtual ~ObTransService()
   {
@@ -153,14 +153,14 @@ class ObTransService : public common::ObSimpleThreadPool {
   int init(const ObAddr& self, ObITransRpc* rpc, ObILocationAdapter* location_adapter, ObIClogAdapter* clog_adapter,
       storage::ObPartitionService* partition_service, share::schema::ObMultiVersionSchemaService* schema_service,
       ObITsMgr* ts_mgr);
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
   void destroy();
   int push(void* task);
   virtual void handle(void* task) override;
 
-  public:
+public:
   memtable::ObIMemtableCtxFactory* get_mem_ctx_factory();
   // interfaces for SQL
   /*
@@ -396,8 +396,8 @@ class ObTransService : public common::ObSimpleThreadPool {
   // get partition iterator
   int iterate_partition(ObPartitionIterator& partition_iter);
   int iterate_partition_mgr_stat(ObTransPartitionMgrStatIterator& partition_mgr_stat_iter);
-  // get transaction stat iterator by partition
-  int iterate_trans_stat(const common::ObPartitionKey& partition, ObTransStatIterator& trans_stat_iter);
+  // get transaction stat iterator without partition
+  int iterate_trans_stat_without_partition(ObTransStatIterator& trans_stat_iter);
   int print_all_trans_ctx(const common::ObPartitionKey& partition);
   // get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator& mem_stat_iter);
@@ -419,10 +419,11 @@ class ObTransService : public common::ObSimpleThreadPool {
   int xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStmtParam& stmt_param);
   // elr statistic
   int dump_elr_statistic();
-  int set_last_restore_log_id(const ObPartitionKey& pkey, const uint64_t last_restore_log_id);
+  int set_last_restore_log_info(
+      const ObPartitionKey& pkey, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int set_restore_snapshot_version(const ObPartitionKey& pkey, const int64_t restore_snapshot_version);
-  int update_restore_replay_info(
-      const ObPartitionKey& partition, const int64_t restore_snapshot_version, const uint64_t last_restore_log_id);
+  int update_restore_replay_info(const ObPartitionKey& partition, const int64_t restore_snapshot_version,
+      const uint64_t last_restore_log_id, const int64_t last_restore_log_ts);
   int xa_start_v2(
       const ObXATransID& xid, const int64_t flags, const int64_t xa_end_timeout_seconds, ObTransDesc& trans_desc);
   int xa_end_v2(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
@@ -451,7 +452,8 @@ class ObTransService : public common::ObSimpleThreadPool {
       const uint64_t tenant_id, const ObXATransID& xid, const int32_t state, int64_t& affected_rows);
   int delete_xa_branch(const uint64_t tenant_id, const ObXATransID& xid, const bool is_tightly_coupled);
   int delete_xa_all_tightly_branch(const uint64_t tenant_id, const ObXATransID& xid);
-  int xa_end_trans_v2(const ObXATransID& xid, const bool is_rollback, const int64_t flags, ObTransDesc& trans_desc);
+  int xa_end_trans_v2(const ObXATransID& xid, const bool is_rollback, const int64_t flags, ObTransDesc& trans_desc,
+      bool& access_temp_table);
   int gc_invalid_xa_record(const uint64_t tenant_id);
 
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
@@ -574,7 +576,7 @@ class ObTransService : public common::ObSimpleThreadPool {
     return &xa_rpc_;
   }
 
-  private:
+private:
   int generate_transaction_snapshot_(ObTransDesc& trans_desc, int64_t& snapshot_version);
   int end_trans_(bool is_rollback, ObTransDesc& trans_desc, sql::ObIEndTransCallback& cb,
       const int64_t stmt_expired_time, const MonotonicTs commit_time);
@@ -588,7 +590,7 @@ class ObTransService : public common::ObSimpleThreadPool {
   int end_trans_callback_(sql::ObIEndTransCallback& cb, const int cb_param, const uint64_t tenant_id);
   int init_memtable_ctx_(memtable::ObMemtableCtx* mem_ctx, const uint64_t tenant_id);
 
-  private:
+private:
   int recover_sche_ctx_(ObTransDesc& trans_desc, ObPartTransCtx* part_ctx);
   int handle_dist_start_stmt_(const ObStmtParam& stmt_param, const ObPartitionLeaderArray& pla,
       const ObStmtDesc& stmt_desc, ObTransDesc& trans_desc, ObPartitionArray& unreachable_partitions);
@@ -619,7 +621,7 @@ class ObTransService : public common::ObSimpleThreadPool {
   int handle_trans_ask_scheduler_status_request_(const ObTransMsg& msg, const int status);
   int query_xa_trans_(const ObXATransID& xid, const uint64_t tenant_id, ObPartitionKey& coordinator,
       ObTransID& trans_id, bool& is_xa_readonly);
-  int xa_commit_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
+  int xa_commit_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc, bool& access_temp_table);
   int xa_rollback_(const ObXATransID& xid, const int64_t flags, ObTransDesc& trans_desc);
   int two_phase_rollback_(
       const uint64_t tenant_id, const ObXATransID& xid, const ObTransID& trans_id, const ObTransDesc& trans_desc);
@@ -641,7 +643,7 @@ class ObTransService : public common::ObSimpleThreadPool {
   int set_trans_snapshot_version_for_serializable_(
       ObTransDesc& trans_desc, const int64_t stmt_snapshot_version, const bool is_stmt_snapshot_version_valid);
 
-  private:
+private:
   int check_and_handle_orphan_msg_(const int ret_code, const int64_t leader_epoch, const ObTransMsg& msg);
   int handle_participant_msg_(const ObTransMsg& msg, const common::ObPartitionKey& partition, const bool alloc);
   int handle_participant_bounded_staleness_msg_(const ObTransMsg& msg, const bool alloc);
@@ -716,7 +718,7 @@ class ObTransService : public common::ObSimpleThreadPool {
   int convert_sp_trans_to_dist_trans_(ObTransDesc& trans_desc);
   int check_snapshot_for_start_stmt_(const ObTransDesc& trans_desc, const ObPartitionLeaderArray& pla);
   memtable::ObMemtableCtx* alloc_tc_memtable_ctx_();
-  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool is_fast_select, const uint64_t tenant_id,
+  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool tls_enable /*thread local storage*/, const uint64_t tenant_id,
       memtable::ObMemtableCtx*& mt_ctx);
   void release_memtable_ctx_(const common::ObPartitionKey& pg_key, memtable::ObMemtableCtx* mt_ctx);
   int handle_start_stmt_request_(const ObTransMsg& msg);
@@ -733,10 +735,10 @@ class ObTransService : public common::ObSimpleThreadPool {
 
   int do_dist_rollback_(
       ObTransDesc& trans_desc, const int64_t sql_no, const common::ObPartitionArray& rollback_partitions);
-  int alloc_tmp_sche_ctx_(ObTransDesc& trans_desc, bool& use_tmp_sche_ctx);
-  void free_tmp_sche_ctx_(ObTransDesc& trans_desc);
+  int acquire_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx*& sche_ctx, bool& use_tmp_sche_ctx);
+  void release_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx* sche_ctx, const bool use_tmp_sche_ctx);
 
-  private:
+private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
   // max task count in message process queue
   static const int64_t MAX_MSG_TASK = 10 * 1000 * 1000;
@@ -747,13 +749,13 @@ class ObTransService : public common::ObSimpleThreadPool {
   static const int64_t MAX_TIME_INTERVAL_BETWEEN_MACHINE_US = 200 * 1000;
   static const int64_t CHANGING_LEADER_TXN_PER_ROUND = 200;
 
-  public:
+public:
   // send lease renew request interval for duplicated table partition
   static const int64_t DUP_TABLE_LEASE_INTERVAL_US = 1 * 1000 * 1000;  // 1s
   // default duplicated table partition lease timeout
   static const int64_t DEFAULT_DUP_TABLE_LEASE_TIMEOUT_INTERVAL_US = 11 * 1000 * 1000;  // 11s
   static const int64_t DUP_TABLE_LEASE_START_RENEW_INTERVAL_US = 4 * 1000 * 1000;       // 4s
-  protected:
+protected:
   bool is_inited_;
   bool is_running_;
   // for ObTransID
@@ -772,7 +774,7 @@ class ObTransService : public common::ObSimpleThreadPool {
   // dup table lease timer
   ObDupTableLeaseTimer dup_table_lease_timer_;
 
-  protected:
+protected:
   bool use_def_;
   // transaction communication on rpc
   ObITransRpc* rpc_;
@@ -785,7 +787,7 @@ class ObTransService : public common::ObSimpleThreadPool {
   storage::ObPartitionService* partition_service_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
 
-  private:
+private:
   // scheduler transaction context manager
   ObScheTransCtxMgr sche_trans_ctx_mgr_;
   // coordinator transaction context manager
@@ -809,7 +811,7 @@ class ObTransService : public common::ObSimpleThreadPool {
   ObXARpc xa_rpc_;
   ObLightTransCtxMgr light_trans_ctx_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransService);
 };
 

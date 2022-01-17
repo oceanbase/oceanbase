@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprNullif : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprNullif(common::ObIAllocator& alloc);
   virtual ~ObExprNullif(){};
 
@@ -33,10 +33,10 @@ class ObExprNullif : public ObFuncExprOperator {
     first_param_can_be_null_ = flag;
   }
 
-  protected:
+protected:
   bool first_param_can_be_null_;
 
-  private:
+private:
   int deduce_type(
       ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
   int se_deduce_type(ObExprResType& type, ObExprResType& cmp_type, const ObExprResType& type1,

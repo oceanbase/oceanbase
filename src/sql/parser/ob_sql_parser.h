@@ -25,7 +25,7 @@ class ObIAllocator;
 
 namespace sql {
 class ObSQLParser {
-  public:
+public:
   ObSQLParser(common::ObIAllocator& allocator, ObSQLMode mode) : allocator_(allocator), sql_mode_(mode)
   {}
 
@@ -36,10 +36,10 @@ class ObSQLParser {
   int parse_and_gen_sqlid(
       void* malloc_pool, const char* str_ptr, const int64_t str_len, const int64_t len, char* sql_id);
 
-  private:
+private:
   int gen_sqlid(const char* paramed_sql, const int64_t sql_len, const int64_t len, char* sql_id);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObSQLMode sql_mode_;
 };

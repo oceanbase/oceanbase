@@ -22,7 +22,7 @@ namespace sql {
 #define NEED_CHECK_WHEN_EXPR_TYPE(flag) (((flag)&CHECK_WHEN_EXPR_TYPE) != 0)
 
 class ObExprCase : public ObExprOperator {
-  public:
+public:
   explicit ObExprCase(common::ObIAllocator& alloc);
   virtual ~ObExprCase();
 
@@ -37,7 +37,7 @@ class ObExprCase : public ObExprOperator {
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int is_same_kind_type_for_case(const common::ObIArray<ObExprResType>& type_arr);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprCase);
 };

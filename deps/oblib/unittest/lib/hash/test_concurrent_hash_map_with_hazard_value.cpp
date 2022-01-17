@@ -50,7 +50,7 @@ struct Adder {
 typedef ObConcurrentHashMapWithHazardValue<Key, int64_t*> HashMap;
 
 class ValueAlloc : public HashMap::IValueAlloc {
-  public:
+public:
   int64_t* alloc()
   {
     return op_alloc(int64_t);
@@ -61,7 +61,7 @@ class ValueAlloc : public HashMap::IValueAlloc {
   }
 };
 class ValueReclaim : public HashMap::IValueReclaimCallback {
-  public:
+public:
   ValueReclaim() : reclaimed_num(0)
   {}
   void reclaim_value(int64_t* value)
@@ -126,7 +126,7 @@ TEST(TestObConcurrentHashMapWithHazardValue, hazard_value)
 
 int64_t create_num = 0;
 class ObStressThread : public cotesting::DefaultRunnable {
-  public:
+public:
   ObStressThread() : finished_count(0)
   {}
   void run1() final
@@ -174,7 +174,7 @@ class ObStressThread : public cotesting::DefaultRunnable {
   }
   HashMap* hashmap;
 
-  private:
+private:
   obsys::CThreadMutex mutex;
   int finished_count;
 };

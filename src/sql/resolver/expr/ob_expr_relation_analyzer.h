@@ -20,16 +20,16 @@ class ObRawExpr;
 class ObDMLStmt;
 class ObQueryRefRawExpr;
 class ObExprRelationAnalyzer {
-  public:
+public:
   explicit ObExprRelationAnalyzer();
   int pull_expr_relation_id_and_levels(ObRawExpr* expr, int32_t cur_stmt_level);
 
-  private:
+private:
   int init_expr_info(ObRawExpr& expr);
   int visit_expr(ObRawExpr& expr, int32_t stmt_level);
   int visit_stmt(ObDMLStmt* stmt);
 
-  private:
+private:
   // auto_free = false, only used in function stack
   common::ObSEArray<ObQueryRefRawExpr*, common::OB_MAX_SUBQUERY_LAYER_NUM> query_exprs_;
 };

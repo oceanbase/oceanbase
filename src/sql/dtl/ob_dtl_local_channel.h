@@ -33,11 +33,11 @@ namespace sql {
 namespace dtl {
 
 class ObDtlLocalChannel : public ObDtlBasicChannel {
-  public:
+public:
   explicit ObDtlLocalChannel(const uint64_t tenant_id, const uint64_t id, const common::ObAddr& peer);
   virtual ~ObDtlLocalChannel();
 
-  virtual DtlChannelType get_channel_type()
+  virtual DtlChannelType get_channel_type() override
   {
     return DtlChannelType::LOCAL_CHANNEL;
   }
@@ -46,9 +46,9 @@ class ObDtlLocalChannel : public ObDtlBasicChannel {
   virtual void destroy();
 
   virtual int feedup(ObDtlLinkedBuffer*& buffer) override;
-  virtual int send_message(ObDtlLinkedBuffer*& buf);
+  virtual int send_message(ObDtlLinkedBuffer*& buf) override;
 
-  private:
+private:
   int send_shared_message(ObDtlLinkedBuffer*& buf);
   int process_interm_result(ObDtlLinkedBuffer* buffer);
 };

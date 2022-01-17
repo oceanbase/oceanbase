@@ -576,13 +576,17 @@ int get_ethernet_speed(const ObString& devname, int64_t& speed)
   int rc = OB_SUCCESS;
   bool exist = false;
   char path[OB_MAX_FILE_NAME_LENGTH];
+  static int dev_file_exist = 1;
   if (0 == devname.length()) {
     _OB_LOG(WARN, "empty devname");
     rc = OB_INVALID_ARGUMENT;
   } else {
     IGNORE_RETURN snprintf(path, sizeof(path), "/sys/class/net/%.*s", devname.length(), devname.ptr());
     if (OB_SUCCESS != (rc = FileDirectoryUtils::is_exists(path, exist)) || !exist) {
+      if (dev_file_exist) {
       _OB_LOG(WARN, "path %s not exist", path);
+       dev_file_exist = 0;
+      }
       rc = OB_FILE_NOT_EXIST;
     }
   }
@@ -1099,7 +1103,7 @@ const char* get_default_if()
   if (file) {
     char dest[16] = {};
     char gw[16] = {};
-    char remain[1024] = {};
+    char remain[1024 + 1] = {};
     if (1 == fscanf(file, "%1024[^\n]\n", remain)) {
       while (1) {
         int r = fscanf(file, "%127s\t%15s\t%15s\t%1023[^\n]\n", ifname, dest, gw, remain);
@@ -1150,7 +1154,6 @@ static int pidfile_test(const char* pidfile)
   int fd = open(pidfile, O_RDONLY);
 
   if (fd < 0) {
-    LOG_ERROR("fid file doesn't exist", K(pidfile));
     ret = OB_FILE_NOT_EXIST;
   } else {
     if (lockf(fd, F_TEST, 0) != 0) {
@@ -1504,7 +1507,8 @@ int ObBandwidthThrottle::limit_and_sleep(
           K(speed_KB_per_s),
           K_(total_sleep_ms),
           K_(total_bytes),
-          K_(rate),
+          "rate_KB/s",
+          rate_,
           K(print_interval_ms));
       last_printed_bytes_ = total_bytes_;
       last_printed_sleep_ms_ = total_sleep_ms_;
@@ -1783,8 +1787,8 @@ int ob_strtoull(const char* str, char*& endptr, uint64_t& res)
   if (OB_ISNULL(str)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    tmp_res = strtoll(str, &endptr, 10);
-    if (INT64_MAX == tmp_res) {
+    tmp_res = strtoull(str, &endptr, 10);
+    if (UINT64_MAX == tmp_res) {
       ret = OB_SIZE_OVERFLOW;
     } else {
       res = tmp_res;

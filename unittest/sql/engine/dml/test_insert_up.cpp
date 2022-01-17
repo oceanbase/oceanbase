@@ -18,7 +18,7 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 class TestInsertUp : public ::testing::Test {
-  public:
+public:
   TestInsertUp()
   {}
   virtual ~TestInsertUp()

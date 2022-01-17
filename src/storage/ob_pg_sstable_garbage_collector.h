@@ -14,22 +14,40 @@
 #define OB_PG_SSTABLE_GARBAGE_COLLECTOR_H_
 
 #include "lib/task/ob_timer.h"
+#include "lib/queue/ob_link_queue.h"
+#include "ob_pg_mgr.h"
+#include "ob_sstable.h"
 
 namespace oceanbase {
 namespace storage {
 
-class ObPGSSTableGCTask : public common::ObTimerTask {
-  public:
+struct ObSSTableGCItem : common::ObLink
+{
+public:
+  ObSSTableGCItem() : key_() {}
+  virtual ~ObSSTableGCItem() {}
+
+  bool is_valid()
+  {
+    return key_.is_valid();
+  }
+
+  TO_STRING_KV(K_(key));
+
+public:
+  ObITable::TableKey key_;
+};
+
+class ObPGSSTableGCTask : public common::ObTimerTask
+{
+public:
   ObPGSSTableGCTask();
   virtual ~ObPGSSTableGCTask();
   virtual void runTimerTask() override;
-
-  private:
-  static const int64_t ONE_ROUND_RECYCLE_COUNT_THRESHOLD = 100000L;
 };
 
 class ObPGSSTableGarbageCollector {
-  public:
+public:
   ObPGSSTableGarbageCollector();
   ~ObPGSSTableGarbageCollector();
   int init();
@@ -38,14 +56,32 @@ class ObPGSSTableGarbageCollector {
   void wait();
   void destroy();
 
-  private:
+  int gc_free_sstable();
+  int push_sstable_into_gc_queue(ObITable::TableKey &key);
+
+private:
   int schedule_gc_task();
 
-  private:
-  static const int64_t GC_INTERVAL_US = 1 * 1000 * 1000L;
+  int gc_free_sstable_by_queue();
+  int gc_free_sstable_by_pg_iter();
+
+  int alloc_sstable_gc_item(ObSSTableGCItem *&item);
+  int push_sstable_gc_item(const ObSSTableGCItem *item);
+  void free_sstable_gc_item(const ObSSTableGCItem *item);
+
+private:
+  static const int64_t GC_INTERVAL_US = 20 * 1000L; // 20ms
+
+  static const int64_t DO_ONE_ROUND_PG_ITER_RECYCLE_THRESHOLD = 50L;
+
+  static const int64_t ONE_ROUND_RECYCLE_COUNT_THRESHOLD = 20000L;
+
   bool is_inited_;
   common::ObTimer timer_;
   ObPGSSTableGCTask gc_task_;
+
+  common::ObLinkQueue free_sstables_queue_;
+  int64_t do_gc_cnt_by_queue_;
 };
 
 }  // end namespace storage

@@ -38,7 +38,7 @@ using namespace oceanbase::share::schema;
   array.push_back(item)
 
 class ObGiPumpTest : public ::testing::Test {
-  public:
+public:
   const static int64_t TEST_PARTITION_COUNT = 5;
   const static int64_t TEST_SPLIT_TASK_COUNT = 8;
 
@@ -48,12 +48,12 @@ class ObGiPumpTest : public ::testing::Test {
   virtual void TearDown();
   void TestGISplitTaskCase(int64_t case_idx);
 
-  private:
+private:
   // disallow copy
   ObGiPumpTest(const ObGiPumpTest& other);
   ObGiPumpTest& operator=(const ObGiPumpTest& other);
 
-  public:
+public:
   // data members
   ObSEArray<ObPartitionArray, 32> pkeys_array_;
   ObFakePartitionServiceForGI partition_service_;

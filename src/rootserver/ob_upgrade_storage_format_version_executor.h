@@ -23,20 +23,20 @@ class ObUpgradeStorageFormatVersionExecutor;
 class ObRootService;
 class ObDDLService;
 class ObUpgradeStorageFormatVersionTask : public share::ObAsyncTask {
-  public:
+public:
   explicit ObUpgradeStorageFormatVersionTask(ObUpgradeStorageFormatVersionExecutor& executor) : executor_(&executor)
   {}
   virtual ~ObUpgradeStorageFormatVersionTask() = default;
-  virtual int64_t get_deep_copy_size() const;
-  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
+  virtual int64_t get_deep_copy_size() const override;
+  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
   virtual int process() override;
 
-  private:
+private:
   ObUpgradeStorageFormatVersionExecutor* executor_;
 };
 
 class ObUpgradeStorageFormatVersionExecutor {
-  public:
+public:
   ObUpgradeStorageFormatVersionExecutor();
   ~ObUpgradeStorageFormatVersionExecutor() = default;
   int init(ObRootService& root_service, ObDDLService& ddl_service);
@@ -45,13 +45,13 @@ class ObUpgradeStorageFormatVersionExecutor {
   void start();
   int stop();
 
-  private:
+private:
   int set_execute_mark();
   int check_stop();
   int upgrade_storage_format_version();
   int check_schema_sync();
 
-  private:
+private:
   bool is_inited_;
   bool is_stopped_;
   bool execute_;

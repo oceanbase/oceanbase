@@ -139,7 +139,7 @@ int ObTenantShowTables::inner_get_next_row()
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "table schema is NULL", K(ret), K(table_schema_idx_), K(tenant_id_), K(database_id_));
           } else if (table_schema->is_dropped_schema()) {
-            // skip
+            is_allow = false;
           } else {
             uint64_t cell_idx = 0;
             for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
@@ -157,7 +157,8 @@ int ObTenantShowTables::inner_get_next_row()
                 }
                 case TABLE_TYPE: {
                   if (OB_MYSQL_SCHEMA_ID == extract_pure_id(table_schema->get_database_id())) {
-                    cells[cell_idx].set_varchar(ObString::make_string("BASE TABLE"));
+                    cells[cell_idx].set_varchar(table_schema->is_user_view() ?
+                    ObString::make_string("VIEW") : ObString::make_string("BASE TABLE"));
                   } else {
                     cells[cell_idx].set_varchar(
                         ObString::make_string(ob_mysql_table_type_str(table_schema->get_table_type())));

@@ -4,12 +4,13 @@ include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
 project("OceanBase CE"
-  VERSION 3.1.0
+  VERSION 3.1.2
   DESCRIPTION "OceanBase distributed database system"
-  HOMEPAGE_URL "https://www.oceanbase.com/"
+  HOMEPAGE_URL "https://open.oceanbase.com/"
   LANGUAGES CXX C ASM)
 
 ob_define(WITH_OSS OFF)
+ob_define(ENABLE_FATAL_ERROR_HANG OFF)
 
 if(ENABLE_DEBUG_LOG)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_DEBUG_LOG")
@@ -21,14 +22,15 @@ if(WITH_OSS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_WITH_OSS")
 endif()
 
-message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
-message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
+if(OB_USE_ASAN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOB_USE_ASAN")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DOB_USE_ASAN")
+endif()
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-add_subdirectory(deps/easy)
-add_subdirectory(deps/oblib)
-add_subdirectory(src)
+if (ENABLE_FATAL_ERROR_HANG)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DFATAL_ERROR_HANG")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFATAL_ERROR_HANG")
+endif()
 
 include(CMakeDependentOption)
 # OB_BUILD_RPM => include tools and build them.
@@ -51,11 +53,38 @@ cmake_dependent_option(
   "NOT OB_BUILD_RPM" OFF)
 option(OB_BUILD_TEST "" OFF)
 
+# OB_BUILD_RPM => build sql proxy parser
+cmake_dependent_option(
+  OB_BUILD_LIBOB_SQL_PROXY_PARSER "Build lib_sql_proxy_parser" OFF
+  "NOT OB_BUILD_RPM;NOT OB_BUILD_LIBOB_SQL_PROXY_PARSER" ON
+)
+
+# OB_BUILD_RPM => build liboblog
+cmake_dependent_option(
+  OB_BUILD_LIBOBLOG "Build liboblog" OFF
+  "NOT OB_BUILD_RPM;NOT OB_BUILD_LIBOBLOG" ON
+)
+
+message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
+message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+add_subdirectory(deps/easy)
+add_subdirectory(deps/oblib)
+add_subdirectory(src)
+
 include(CTest)
 if (OB_BUILD_UNITTEST)
   add_subdirectory(unittest)
 elseif(OB_INCLUDE_UNITTEST)
   add_subdirectory(unittest EXCLUDE_FROM_ALL)
+endif()
+
+if (OB_BUILD_TOOLS)
+  add_subdirectory(tools)
+elseif (OB_INCLUDE_TOOLS)
+  add_subdirectory(tools EXCLUDE_FROM_ALL)
 endif()
 
 include(cmake/RPM.cmake)

@@ -21,19 +21,17 @@ namespace oceanbase {
 namespace sql {
 namespace join {
 
-class ObStoredJoinRow;
+struct ObStoredJoinRow;
 class ObHJBatch {
-  public:
-  ObHJBatch(common::ObIAllocator& alloc, ObHJBufMgr* buf_mgr, uint64_t tenant_id, int32_t part_level, int32_t batchno)
-      : alloc_(alloc),
-        chunk_row_store_(&alloc),
+public:
+  ObHJBatch(common::ObIAllocator &alloc, ObHJBufMgr *buf_mgr, uint64_t tenant_id, int32_t part_level, int32_t batchno)
+      : chunk_row_store_(&alloc),
         inner_callback_(nullptr),
         part_level_(part_level),
         batchno_(batchno),
         is_chunk_iter_(false),
         buf_mgr_(buf_mgr),
         tenant_id_(tenant_id),
-        timeout_ms_(1000000),
         n_get_rows_(0),
         n_add_rows_(0),
         pre_total_size_(0),
@@ -158,9 +156,7 @@ class ObHJBatch {
     return chunk_row_store_;
   }
 
-  private:
-  const int64_t ROW_CNT_PER = 0x3FF;
-  common::ObIAllocator& alloc_;
+private:
   sql::ObChunkRowStore chunk_row_store_;
   sql::ObChunkRowStore::RowIterator row_store_iter_;
   sql::ObChunkRowStore::ChunkIterator chunk_iter_;
@@ -170,7 +166,6 @@ class ObHJBatch {
   bool is_chunk_iter_;
   ObHJBufMgr* buf_mgr_;
   uint64_t tenant_id_;
-  int64_t timeout_ms_;
   int64_t n_get_rows_;
   int64_t n_add_rows_;
 

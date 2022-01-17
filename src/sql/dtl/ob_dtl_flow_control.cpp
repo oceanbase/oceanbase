@@ -59,7 +59,7 @@ int ObDtlFlowControl::init(uint64_t tenant_id, int64_t chan_cnt)
   } else {
     ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (tenant_config.is_valid() && true == tenant_config->_px_message_compression) {
-      compressor_type_ = ObCompressorType::STREAM_LZ4_COMPRESSOR;
+      compressor_type_ = ObCompressorType::LZ4_COMPRESSOR;
     }
     is_init_ = true;
     tenant_id_ = tenant_id;
@@ -237,6 +237,7 @@ int ObDtlFlowControl::block_channel(ObDtlChannel* ch)
       LOG_WARN("channel is blocked", K(ret), K(idx));
     } else {
       set_block(idx);
+      ch->set_blocked();
       LOG_TRACE("transmit set channel block trace", K(ch), KP(ch->get_id()), K(ch->get_peer()), K(idx));
     }
   }
@@ -257,6 +258,7 @@ int ObDtlFlowControl::unblock_channel(ObDtlChannel* ch)
       LOG_WARN("failed to clear response block info", K(ret));
     } else if (is_block(idx)) {
       unblock(idx);
+      ch->set_blocked();
     }
     LOG_TRACE("channel unblock", K(ch), KP(ch->get_id()), K(ch->get_peer()), K(idx), K(is_block(idx)));
   }

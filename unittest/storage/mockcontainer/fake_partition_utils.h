@@ -27,7 +27,7 @@ namespace storage {
 
 class FakePartition;
 class FakePartitionStorage : public storage::MockObIPartitionStorage {
-  public:
+public:
   FakePartitionStorage(FakePartition& holder) : holder_(holder)
   {}
   virtual ~FakePartitionStorage()
@@ -82,12 +82,12 @@ class FakePartitionStorage : public storage::MockObIPartitionStorage {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   FakePartition& holder_;
 };
 
 class FakePartition : public storage::MockObIPartition, public blocksstable::ObIBaseStorageLogEntry {
-  public:
+public:
   FakePartition() : pmeta_(), smeta_(), arena_(ObModIds::OB_PARTITION_SERVICE), storage_(*this)
   {}
   virtual ~FakePartition()
@@ -114,7 +114,7 @@ class FakePartition : public storage::MockObIPartition, public blocksstable::ObI
     return pos;
   }
 
-  public:
+public:
   blocksstable::ObPartitionMeta pmeta_;
   blocksstable::ObSSTableMeta smeta_;
   ObArenaAllocator arena_;
@@ -122,7 +122,7 @@ class FakePartition : public storage::MockObIPartition, public blocksstable::ObI
 };
 
 class FakePartitionService : public MockObIPartitionService {
-  public:
+public:
   FakePartitionService() : partition_list_(), cp_fty_(NULL), arena_(ObModIds::OB_PARTITION_SERVICE)
   {
     init();
@@ -143,7 +143,7 @@ class FakePartitionService : public MockObIPartitionService {
   virtual int replay_base_storage_log(
       const int64_t log_seq_num, const int64_t subcmd, const char* buf, const int64_t len, int64_t& pos);
 
-  private:
+private:
   ObSEArray<ObIPartitionGroup*, 4096> partition_list_;
   ObPartitionComponentFactory* cp_fty_;
   ObArenaAllocator arena_;

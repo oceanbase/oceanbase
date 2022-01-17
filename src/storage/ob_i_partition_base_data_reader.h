@@ -58,10 +58,10 @@ struct ObMigrateSSTableInfo {
 // ObPartitionMacroBlockObReader (storage/ob_partition_base_data_ob_reader.cpp): data comes from remote ob
 // ObPartitionMacroBlockOSSReader (not implemented): data comes from backup oss
 class ObIPartitionMacroBlockReader {
-  public:
+public:
   enum Type {
     MACRO_BLOCK_OB_READER = 0,
-    MACRO_BLOCK_RESTORE_READER = 1,
+    MACRO_BLOCK_RESTORE_READER = 1,  // not used anymore
     MACRO_BLOCK_BACKUP_READER = 2,
     MACRO_BLOCK_RESTORE_READER_V1 = 3,  // not used any more
     MACRO_BLOCK_RESTORE_READER_V2 = 4,
@@ -79,7 +79,7 @@ class ObIPartitionMacroBlockReader {
   int deserialize_macro_meta(char* buf, int64_t data_len, int64_t& pos, common::ObIAllocator& allocator,
       blocksstable::ObFullMacroBlockMeta& full_meta);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIPartitionMacroBlockReader);
 };
 
@@ -104,7 +104,7 @@ struct ObLogicTableMeta {
 };
 
 class ObILogicBaseMetaReader {
-  public:
+public:
   ObILogicBaseMetaReader()
   {}
   virtual ~ObILogicBaseMetaReader()
@@ -112,15 +112,15 @@ class ObILogicBaseMetaReader {
 
   virtual int fetch_end_key_list(common::ObIArray<common::ObStoreRowkey>& end_key_list) = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObILogicBaseMetaReader);
 };
 
 class ObIPhysicalBaseMetaReader {
-  public:
+public:
   enum Type {
     BASE_DATA_META_OB_READER,
-    BASE_DATA_META_RESTORE_READER,
+    BASE_DATA_META_RESTORE_READER,  // not used anymore
     BASE_DATA_META_OB_COMPAT_READER,
     BASE_DATA_META_BACKUP_READER,
     BASE_DATA_META_RESTORE_READER_V1,
@@ -135,16 +135,16 @@ class ObIPhysicalBaseMetaReader {
   virtual int fetch_macro_block_list(common::ObIArray<blocksstable::ObSSTablePair>& macro_block_list) = 0;
   virtual Type get_type() const = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIPhysicalBaseMetaReader);
 };
 
 class ObIPGPartitionBaseDataMetaObReader {
-  public:
+public:
   enum Type {
     BASE_DATA_META_OB_READER = 0,
     BASE_DATA_META_OB_COMPAT_READER = 1,
-    BASE_DATA_META_OB_RESTORE_READER = 2,
+    BASE_DATA_META_OB_RESTORE_READER = 2,  // not used anymore
     BASE_DATA_META_OB_BACKUP_READER = 3,
     BASE_DATA_META_OB_RESTORE_READER_V1 = 4,
     BASE_DATA_META_OB_RESTORE_READER_V2 = 5,
@@ -156,7 +156,7 @@ class ObIPGPartitionBaseDataMetaObReader {
   virtual int fetch_pg_partition_meta_info(obrpc::ObPGPartitionMetaInfo& partition_meta_info) = 0;
   virtual Type get_type() const = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIPGPartitionBaseDataMetaObReader);
 };
 
@@ -201,7 +201,7 @@ struct ObMigrateTableInfo {
   void reuse();
   TO_STRING_KV(K_(table_id), K_(multi_version_start), K_(ready_for_read), K_(major_sstables), K_(minor_sstables));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrateTableInfo);
 };
 
@@ -219,14 +219,14 @@ struct ObMigratePartitionInfo final {
   void reset();
   TO_STRING_KV(K_(src), K_(meta), K_(table_id_list), K_(table_infos), K_(is_restore));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMigratePartitionInfo);
 };
 
 class ObIPartitionGroupMetaRestoreReader {
-  public:
+public:
   enum Type {
-    PG_META_RESTORE_READER,
+    PG_META_RESTORE_READER,  // not used anymore
     PG_META_RESTORE_READER_V1,
     PG_META_RESTORE_READER_V2,
   };
@@ -244,7 +244,7 @@ class ObIPartitionGroupMetaRestoreReader {
 };
 
 class ObIPhyRestoreMacroIndexStore {
-  public:
+public:
   enum Type {
     PHY_RESTORE_MACRO_INDEX_STORE_V1 = 1,
     PHY_RESTORE_MACRO_INDEX_STORE_V2 = 2,

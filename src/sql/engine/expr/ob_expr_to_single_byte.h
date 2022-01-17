@@ -18,13 +18,18 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprToSingleByte : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprToSingleByte(common::ObIAllocator& alloc);
   virtual ~ObExprToSingleByte();
-  int calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
-  int calc_result1(common::ObObj& result, const common::ObObj& obj, common::ObExprCtx& expr_ctx) const;
-
-  private:
+  int calc_result_type1(ObExprResType &type,
+                        ObExprResType &type1,
+                        common::ObExprTypeCtx &type_ctx) const;
+  int calc_result1(common::ObObj &result,
+                   const common::ObObj &obj,
+                   common::ObExprCtx &expr_ctx) const;
+  int cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const;
+  static int calc_to_single_byte(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToSingleByte);
 };
 

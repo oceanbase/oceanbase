@@ -298,6 +298,10 @@ int ObGVPartitionInfo::inner_get_next_row(ObNewRow*& row)
           // schema_version
           cur_row_.cells_[i].set_int(info.get_data_info().get_schema_version());
           break;
+        case OB_APP_MIN_COLUMN_ID + 33:
+          // last_replay_log_ts
+          cur_row_.cells_[i].set_int(info.get_data_info().get_last_replay_log_ts());
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(col_id));

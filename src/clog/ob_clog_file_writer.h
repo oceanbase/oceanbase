@@ -33,12 +33,11 @@ class ObTailCursor;
 // Local disk IO should be aligned and can be in-place-update.
 // OFS AIO can be unaligned but should be append-only.
 class ObCLogBaseFileWriter {
-  public:
+public:
   ObCLogBaseFileWriter();
   virtual ~ObCLogBaseFileWriter();
 
-  virtual int init(
-      const char* log_dir, const char* shm_path, const uint32_t align_size, const common::ObILogFileStore* file_store);
+  virtual int init(const char* log_dir, const uint32_t align_size, const common::ObILogFileStore* file_store);
   virtual void destroy();
 
   // When log engine start, need to flush remaining content in shared memory buffer to log file
@@ -86,17 +85,17 @@ class ObCLogBaseFileWriter {
   // append log item meta and data to buffer
   int append_log_entry(const char* item_buf, const uint32_t len);
 
-  protected:
+protected:
   // align memory buffer, append padding_entry if need
   virtual int align_buf() = 0;
 
-  protected:
+protected:
   int append_padding_entry(const uint32_t padding_size);
   int append_info_block_entry(ObIInfoBlockHandler* info_getter);
   int append_trailer_entry(const uint32_t info_block_offset);
   int flush_trailer_entry();
   // append all data in buffer to log cache
-  int cache_buf(ObLogCache* log_cache);
+  int cache_buf(ObLogCache* log_cache, const char* buf, const uint32_t buf_len);
 
   OB_INLINE bool need_align() const
   {
@@ -107,11 +106,9 @@ class ObCLogBaseFileWriter {
     buf_write_pos_ = 0;
   }
 
-  protected:
+protected:
   bool is_inited_;
-  common::ObBaseLogBufferCtrl* log_ctrl_;
-  common::ObBaseLogBuffer* shm_buf_;
-  char* shm_data_buf_;
+  char* aligned_data_buf_;
   uint32_t buf_write_pos_;
   uint32_t file_offset_;
   // the last aligned part padding size of the buffer
@@ -121,12 +118,12 @@ class ObCLogBaseFileWriter {
   uint32_t file_id_;
   char log_dir_[common::MAX_PATH_SIZE];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCLogBaseFileWriter);
 };
 
 class ObCLogLocalFileWriter : public ObCLogBaseFileWriter {
-  public:
+public:
   ObCLogLocalFileWriter() : blank_buf_(NULL)
   {}
   virtual ~ObCLogLocalFileWriter()
@@ -134,9 +131,9 @@ class ObCLogLocalFileWriter : public ObCLogBaseFileWriter {
     destroy();
   }
 
-  virtual int init(const char* log_dir, const char* shm_path, const uint32_t align_size,
-      const common::ObILogFileStore* file_store) override;
-  virtual void destroy();
+virtual int init(const char *log_dir,
+  const uint32_t align_size, const common::ObILogFileStore *file_store) override;
+  virtual void destroy() override;
 
   virtual int load_file(uint32_t& file_id, uint32_t& offset, bool enable_pre_creation = false) override;
   // Local disk format:
@@ -155,10 +152,10 @@ class ObCLogLocalFileWriter : public ObCLogBaseFileWriter {
 
   void reset();
 
-  protected:
+protected:
   virtual int align_buf() override;
 
-  private:
+private:
   // last padding entry need sync to log cache
   int cache_last_padding_entry(ObLogCache* log_cache);
   // cache blank space between info block and trailer entry
@@ -167,7 +164,7 @@ class ObCLogLocalFileWriter : public ObCLogBaseFileWriter {
   // truncate buf after flush
   void truncate_buf();
 
-  private:
+private:
   char* blank_buf_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCLogLocalFileWriter);

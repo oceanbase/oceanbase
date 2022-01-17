@@ -86,7 +86,6 @@ int ObLobMacroBlockReader::open(const MacroBlockId& block_id, const bool is_sys_
     const ObFullMacroBlockMeta& full_meta, const common::ObPartitionKey& pkey, ObStorageFileHandle& file_handle)
 {
   int ret = OB_SUCCESS;
-  ObMacroBlockMetaHandle meta_handle;
   ObStorageFile* file = NULL;
   UNUSED(pkey);
   if (OB_UNLIKELY(!is_inited_)) {
@@ -523,7 +522,7 @@ int ObLobDataReader::read_all_direct_index(const ObLobIndex& index, ObIArray<ObL
           if (0 == i) {
             ObFullMacroBlockMeta full_meta;
             if (OB_FAIL(sstable_->get_meta(block_id, full_meta))) {
-              LOG_WARN("fail to get meata", K(ret));
+              LOG_WARN("fail to get meta", K(ret));
             } else if (OB_UNLIKELY(!full_meta.is_valid())) {
               ret = OB_ERR_SYS;
               LOG_WARN("ObMacroBlockMeta is not valid", K(ret));

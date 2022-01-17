@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprFromTz : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprFromTz(common::ObIAllocator& alloc);
   virtual ~ObExprFromTz()
   {}
@@ -32,7 +32,7 @@ class ObExprFromTz : public ObFuncExprOperator {
   static int eval_from_tz(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFromTz);
 };

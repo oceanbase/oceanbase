@@ -38,7 +38,7 @@ class ObTableSchema;
 class ObColumnSchemaV2;
 };  // namespace schema
 class ObIndexBuilderUtil {
-  public:
+public:
   static int adjust_expr_index_args(obrpc::ObCreateIndexArg& arg, share::schema::ObTableSchema& data_schema,
       common::ObIArray<share::schema::ObColumnSchemaV2*>& gen_columns);
   static int generate_ordinary_generated_column(sql::ObRawExpr& expr, share::schema::ObTableSchema& data_schema,
@@ -50,10 +50,10 @@ class ObIndexBuilderUtil {
       const common::ObOrderType order_type, common::ObRowDesc& row_desc, share::schema::ObTableSchema& table_schema,
       const bool is_hidden = false);
 
-  private:
+private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
   class FulltextColumnOrder {
-    public:
+  public:
     FulltextColumnOrder()
     {}
     ~FulltextColumnOrder()

@@ -21,7 +21,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::omt;
 class TestMergeDistinct : public ObMergeDistinct {
-  public:
+public:
   TestMergeDistinct() : ObMergeDistinct(alloc_)
   {}
   ~TestMergeDistinct()
@@ -29,7 +29,7 @@ class TestMergeDistinct : public ObMergeDistinct {
 };
 
 class TestMergeDistinctTest : public ::testing::Test {
-  public:
+public:
   TestMergeDistinctTest();
   virtual ~TestMergeDistinctTest();
   virtual void SetUp();
@@ -96,17 +96,17 @@ class TestMergeDistinctTest : public ::testing::Test {
     return physical_plan_;
   }
 
-  protected:
+protected:
   ObFakeTable fake_table_;
   ObFakeTable result_table_;
   ObPhysicalPlan physical_plan_;
 
-  private:
+private:
   // disallow copy
   TestMergeDistinctTest(const TestMergeDistinctTest& other);
   TestMergeDistinctTest& operator=(const TestMergeDistinctTest& other);
 
-  private:
+private:
   // data members
 };
 

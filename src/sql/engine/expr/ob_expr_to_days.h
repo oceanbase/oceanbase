@@ -17,15 +17,16 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprToDays : public ObFuncExprOperator {
-  public:
+public:
   ObExprToDays();
   explicit ObExprToDays(common::ObIAllocator& alloc);
   virtual ~ObExprToDays();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& date, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result_type1(
+      ObExprResType& type, ObExprResType& date, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& date, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToDays);
 };
 }  // namespace sql

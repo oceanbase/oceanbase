@@ -18,10 +18,10 @@
 namespace oceanbase {
 namespace common {
 class ObCompressor {
-  public:
+public:
   static const char* none_compressor_name;
 
-  public:
+public:
   ObCompressor()
   {}
   virtual ~ObCompressor()

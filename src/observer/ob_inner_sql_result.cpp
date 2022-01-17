@@ -67,7 +67,7 @@ int ObInnerSQLResult::init()
       .set_properties(lib::USE_TL_PAGE_OPTIONAL)
       .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
       .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-  if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+  if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
     LOG_WARN("create memory entity failed", K(ret));
   } else {
     result_set_ = new (buf_) ObResultSet(session_, mem_context_->get_arena_allocator());
@@ -100,6 +100,7 @@ int ObInnerSQLResult::open()
         ret = OB_INIT_TWICE;
         LOG_WARN("result set already open", K(ret));
       } else if (OB_FAIL(result_set_->sync_open())) {
+        ObResultSet::refresh_location_cache(result_set_->get_exec_context().get_task_exec_ctx(), true, ret);
         LOG_WARN("open result set failed", K(ret));
         // move after precess_retry().
         //        result_set_->close();
@@ -147,6 +148,7 @@ int ObInnerSQLResult::inner_close(bool need_retry)
   WITH_CONTEXT(mem_context_)
   {
     if (OB_FAIL(result_set_->close(need_retry))) {
+      ObResultSet::refresh_location_cache(result_set_->get_exec_context().get_task_exec_ctx(), true, ret);
       LOG_WARN("result set close failed", K(ret), K(need_retry));
     }
   }
@@ -168,6 +170,7 @@ int ObInnerSQLResult::next()
     {
       if (OB_FAIL(result_set_->get_next_row(row_))) {
         if (OB_ITER_END != ret) {
+          ObResultSet::refresh_location_cache(result_set_->get_exec_context().get_task_exec_ctx(), true, ret);
           LOG_WARN("get next row failed", K(ret));
         }
       }

@@ -20,7 +20,7 @@ namespace sql {
 class ObExprPrior : public ObExprOperator {
   typedef common::ObExprStringBuf IAllocator;
 
-  public:
+public:
   explicit ObExprPrior(common::ObIAllocator& alloc);
   virtual ~ObExprPrior(){};
 
@@ -30,9 +30,9 @@ class ObExprPrior : public ObExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_prior_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   //  static int calc_(const common::ObObj &param, common::ObObj &res, common::ObCastCtx &cast_ctx);
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprPrior) const;
 };
 }  // namespace sql

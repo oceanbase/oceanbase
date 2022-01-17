@@ -23,19 +23,19 @@ namespace sql {
  * ObLogValues is currently being used as 'explain' and 'help' operator.
  */
 class ObLogValues : public ObLogicalOperator {
-  public:
+public:
   static const int64_t MAX_EXPLAIN_BUFFER_SIZE = 1024 * 1024;
   ObLogValues(ObLogPlan& plan)
       : ObLogicalOperator(plan), explain_plan_(NULL), stmt_(NULL), row_store_(plan.get_allocator())
   {}
   virtual ~ObLogValues()
   {}
-  virtual int allocate_exchange_post(AllocExchContext* ctx)
+  virtual int allocate_exchange_post(AllocExchContext* ctx) override
   {
     UNUSED(ctx);
     return common::OB_SUCCESS;
   }
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     out = NULL;
     return common::OB_SUCCESS;
@@ -64,7 +64,7 @@ class ObLogValues : public ObLogicalOperator {
   {
     return row_store_;
   }
-  uint64_t hash(uint64_t seed) const
+  uint64_t hash(uint64_t seed) const override
   {
     if (NULL != explain_plan_) {
       seed = do_hash(*explain_plan_, seed);
@@ -96,7 +96,7 @@ class ObLogValues : public ObLogicalOperator {
     return ret;
   }
 
-  private:
+private:
   ObLogPlan* explain_plan_;
   ObStmt* stmt_;
   common::ObRowStore row_store_;

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace rootserver {
 
 class ObCancelValidateScheduler {
-  public:
+public:
   ObCancelValidateScheduler();
   virtual ~ObCancelValidateScheduler();
 
@@ -29,7 +29,7 @@ class ObCancelValidateScheduler {
       rootserver::ObRootValidate& root_validate);
   int start_schedule_cancel_validate();
 
-  private:
+private:
   bool is_inited_;
   uint64_t tenant_id_;
   int64_t job_id_;

@@ -235,7 +235,7 @@ int ObTableReplaceOp::try_insert(ObSQLSessionInfo& my_session, const ObPartition
   OZ(project_row(MY_SPEC.output_.get_data(), MY_SPEC.get_output_count(), new_row));
   if (OB_SUCC(ret)) {
     record_++;
-    NG_TRACE_TIMES(2, repalce_start_insert);
+    NG_TRACE_TIMES(2, replace_start_insert);
     if (OB_SUCC(partition_service.insert_row(my_session.get_trans_desc(),
             dml_param,
             part_key,
@@ -447,9 +447,10 @@ int ObTableReplaceOp::check_values(bool& is_equal) const
         MY_SPEC.table_column_exprs_.at(i)->basic_funcs_->null_first_cmp_);
 
     if (schema::ObColumnSchemaV2::is_hidden_pk_column_id(MY_SPEC.column_ids_[i])) {
-    } else if (OB_FAIL(MY_SPEC.output_.at(i)->eval(eval_ctx_, insert_datum) ||
-                       OB_FAIL(MY_SPEC.table_column_exprs_.at(i)->eval(eval_ctx_, del_datum)))) {
-      LOG_WARN("eval expr failed", K(ret));
+    } else if (OB_FAIL(MY_SPEC.output_.at(i)->eval(eval_ctx_, insert_datum))) {
+      LOG_WARN("fail to eval insert when replace", K(ret));
+    } else if (OB_FAIL(MY_SPEC.table_column_exprs_.at(i)->eval(eval_ctx_, del_datum))) {
+      LOG_WARN("fail to eval delete when replace", K(ret));
     } else if (0 != MY_SPEC.output_.at(i)->basic_funcs_->null_first_cmp_(*insert_datum, *del_datum)) {
       is_equal = false;
     }

@@ -35,6 +35,7 @@
 #include "share/schema/ob_synonym_mgr.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/ob_sql_mock_schema_utils.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/ob_schema_checker.h"
@@ -247,6 +248,37 @@ int ObSchemaGetterGuard::get_can_read_index_array(uint64_t table_id, uint64_t* i
     size = can_read_count;
   }
 
+  return ret;
+}
+
+int ObSchemaGetterGuard::check_has_local_unique_index(uint64_t table_id, bool& has_local_unique_index)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema* table_schema = NULL;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const ObSimpleTableSchemaV2* index_schema = NULL;
+  has_local_unique_index = false;
+  if (OB_FAIL(get_table_schema(table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot get table schema for table ", K(table_id));
+  } else if (OB_FAIL(table_schema->get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos without delay_deleted_tid failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (OB_FAIL(get_table_schema(simple_index_infos.at(i).table_id_, index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(simple_index_infos.at(i).table_id_));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
+    } else if (OB_UNLIKELY(index_schema->is_final_invalid_index())) {
+      // invalid index status, need ingore
+    } else if (index_schema->is_local_unique_index_table()) {
+      has_local_unique_index = true;
+      break;
+    }
+  }
   return ret;
 }
 
@@ -1884,9 +1916,11 @@ int ObSchemaGetterGuard::add_role_id_recursively(uint64_t role_id, ObSessionPriv
 }
 
 // for privilege
-int ObSchemaGetterGuard::check_user_access(const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st)
+int ObSchemaGetterGuard::check_user_access(
+    const ObUserLoginInfo& login_info, ObSessionPrivInfo& s_priv, SSL* ssl_st, const ObUserInfo*& sel_user_info)
 {
   int ret = OB_SUCCESS;
+  sel_user_info = NULL;
   if (OB_FAIL(get_tenant_id(login_info.tenant_name_, s_priv.tenant_id_))) {
     LOG_WARN("Invalid tenant", "tenant_name", login_info.tenant_name_, K(ret));
   } else if (OB_FAIL(check_tenant_schema_guard(s_priv.tenant_id_))) {
@@ -1967,7 +2001,6 @@ int ObSchemaGetterGuard::check_user_access(const ObUserLoginInfo& login_info, Ob
           }
         }
       }
-
       if (OB_SUCC(ret)) {
         if (matched_user_info != NULL && matched_user_info->get_is_locked()) {
           ret = OB_ERR_USER_IS_LOCKED;
@@ -2011,7 +2044,7 @@ int ObSchemaGetterGuard::check_user_access(const ObUserLoginInfo& login_info, Ob
         s_priv.host_name_ = user_info->get_host_name_str();
         s_priv.user_priv_set_ = user_info->get_priv_set();
         s_priv.db_ = login_info.db_;
-
+        sel_user_info = user_info;
         // load role priv
         if (OB_SUCC(ret)) {
           const ObSEArray<uint64_t, 8>& role_id_array = user_info->get_role_id_array();

@@ -21,7 +21,7 @@ namespace lib {
 
 template <typename LockT>
 class ObLockGuard {
-  public:
+public:
   explicit ObLockGuard(LockT& lock);
   ~ObLockGuard();
   inline int get_ret() const
@@ -29,7 +29,7 @@ class ObLockGuard {
     return ret_;
   }
 
-  private:
+private:
   // disallow copy
   ObLockGuard(const ObLockGuard& other);
   ObLockGuard& operator=(const ObLockGuard& other);
@@ -38,7 +38,7 @@ class ObLockGuard {
   void* operator new(std::size_t size, const std::nothrow_t& nothrow_constant) throw();
   void* operator new(std::size_t size, void* ptr) throw();
 
-  private:
+private:
   // data members
   LockT& lock_;
   int ret_;

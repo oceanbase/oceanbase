@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace observer {
 class ObAllVirtualDeadlockStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualDeadlockStat() : start_to_read_(false), cycle_offset_(0), cur_id_(-1), end_id_(0)
   {}
   virtual ~ObAllVirtualDeadlockStat()
@@ -26,12 +26,12 @@ class ObAllVirtualDeadlockStat : public common::ObVirtualTableScannerIterator {
     destroy();
   }
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   virtual void destroy();
 
-  private:
+private:
   enum {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -47,13 +47,13 @@ class ObAllVirtualDeadlockStat : public common::ObVirtualTableScannerIterator {
     LOCK_WAIT_TS,
   };
 
-  private:
+private:
   bool start_to_read_;
   uint32_t cycle_offset_;
   int32_t cur_id_;
   int32_t end_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualDeadlockStat);
 };
 }  // namespace observer

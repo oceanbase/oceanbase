@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprRemainder : public ObArithExprOperator {
-  public:
+public:
   ObExprRemainder();
   explicit ObExprRemainder(common::ObIAllocator& alloc);
   virtual ~ObExprRemainder(){};
@@ -33,7 +33,7 @@ class ObExprRemainder : public ObArithExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
   static int calc_remainder_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   static int remainder_float(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObIAllocator* allocator, common::ObScale scale);
   static int remainder_double(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
@@ -42,7 +42,7 @@ class ObExprRemainder : public ObArithExprOperator {
       common::ObIAllocator* allocator, common::ObScale scale);
   DISALLOW_COPY_AND_ASSIGN(ObExprRemainder);
 
-  private:
+private:
   static ObArithFunc remainder_funcs_[common::ObMaxTC];
 };
 }  // namespace sql

@@ -21,7 +21,7 @@ namespace observer {
 
 // Iterate tables of all tenants
 class ObIterateVirtualTable : public ObAgentTableBase {
-  public:
+public:
   ObIterateVirtualTable();
   virtual ~ObIterateVirtualTable();
 
@@ -34,10 +34,10 @@ class ObIterateVirtualTable : public ObAgentTableBase {
 
   int set_column_name_with_tenant_id(const char* column_name);
 
-  private:
+private:
   virtual int init_non_exist_map_item(MapItem& item, const share::schema::ObColumnSchemaV2& col) override;
 
-  virtual int setup_inital_rowkey_condition(common::ObSqlString& cols, common::ObSqlString& vals);
+  virtual int setup_inital_rowkey_condition(common::ObSqlString& cols, common::ObSqlString& vals) override;
   virtual int add_extra_condition(common::ObSqlString& sql) override;
 
   bool check_tenant_in_range(const uint64_t tenant_id, const common::ObNewRange& range);
@@ -51,7 +51,7 @@ class ObIterateVirtualTable : public ObAgentTableBase {
 
   int str_to_int(const ObString& str, int64_t& value);
 
-  private:
+private:
   int64_t tenant_idx_;
   uint64_t cur_tenant_id_;
   // For sys table under user tenant, record real tenant id (effective_tenant_id()) in

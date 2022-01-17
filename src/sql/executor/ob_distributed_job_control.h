@@ -18,16 +18,16 @@
 namespace oceanbase {
 namespace sql {
 class ObDistributedJobControl : public ObJobControl {
-  public:
+public:
   ObDistributedJobControl();
   virtual ~ObDistributedJobControl();
 
-  virtual int get_ready_jobs(common::ObIArray<ObJob*>& jobs, bool serial_sched = false) const;
+  virtual int get_ready_jobs(common::ObIArray<ObJob*>& jobs, bool serial_sched = false) const override;
   virtual int sort_job_scan_part_locs(ObExecContext& ctx) override;
   virtual int init_job_finish_queue(ObExecContext& ctx) override;
   int get_root_job(ObJob*& root_job) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistributedJobControl);
 };
 }  // namespace sql

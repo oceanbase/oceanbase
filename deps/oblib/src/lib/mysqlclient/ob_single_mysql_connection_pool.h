@@ -24,28 +24,28 @@ namespace oceanbase {
 namespace common {
 namespace sqlclient {
 class ObSingleMySQLServerProvider : public ObMySQLServerProvider {
-  public:
+public:
   ObSingleMySQLServerProvider();
   void init(const ObAddr& server);
-  virtual int get_cluster_list(common::ObIArray<int64_t>& cluster_list);
-  virtual int get_server(const int64_t cluster_id, const int64_t svr_idx, common::ObAddr& server);
-  virtual int64_t get_cluster_count() const;
-  virtual int64_t get_server_count() const;
-  virtual int64_t get_server_count(const int64_t cluster_id) const;
-  int refresh_server_list(void);
+  virtual int get_cluster_list(common::ObIArray<int64_t>& cluster_list) override;
+  virtual int get_server(const int64_t cluster_id, const int64_t svr_idx, common::ObAddr& server) override;
+  virtual int64_t get_cluster_count() const override;
+  virtual int64_t get_server_count() const override;
+  virtual int64_t get_server_count(const int64_t cluster_id) const override;
+  int refresh_server_list(void) override;
   int prepare_refresh() override;
 
-  private:
+private:
   ObAddr server_;
 };
 
 class ObSingleMySQLConnectionPool : public ObMySQLConnectionPool {
-  public:
+public:
   ObSingleMySQLConnectionPool();
   ~ObSingleMySQLConnectionPool();
   int init(const ObAddr& server, const ObConnPoolConfigParam& config);
 
-  private:
+private:
   ObSingleMySQLServerProvider provider_;
 };
 }  // namespace sqlclient

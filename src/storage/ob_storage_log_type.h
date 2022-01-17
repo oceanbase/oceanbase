@@ -81,7 +81,7 @@ enum ObStorageLogType {
 };
 
 class ObStorageLogTypeToString {
-  public:
+public:
   static const char* storage_log_type_to_string(const int64_t log_type)
   {
     const char* log_type_str = NULL;
@@ -226,7 +226,7 @@ class ObStorageLogTypeToString {
   }
 };
 class ObStorageLogTypeChecker {
-  public:
+public:
   static bool is_trans_log(const int64_t log_type)
   {
     return (OB_LOG_TRANS_REDO == log_type || OB_LOG_TRANS_PREPARE == log_type ||
@@ -357,7 +357,7 @@ class ObStorageLogTypeChecker {
 };
 
 class ObTransLogType {
-  public:
+public:
   static bool is_valid(const int64_t log_type)
   {
     return ObStorageLogTypeChecker::is_trans_log(log_type);

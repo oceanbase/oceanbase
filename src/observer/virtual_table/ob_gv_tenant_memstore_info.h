@@ -35,11 +35,11 @@ class ObGVTenantMemstoreInfo : public common::ObVirtualTableScannerIterator {
     FREEZE_CNT
   };
 
-  public:
+public:
   ObGVTenantMemstoreInfo();
   virtual ~ObGVTenantMemstoreInfo();
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   inline void set_tenant_mgr(common::ObTenantManager* tenant_mgr)
@@ -51,12 +51,12 @@ class ObGVTenantMemstoreInfo : public common::ObVirtualTableScannerIterator {
     addr_ = addr;
   }
 
-  private:
+private:
   common::ObTenantManager* tenant_mgr_;
   uint64_t current_pos_;
   common::ObAddr addr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGVTenantMemstoreInfo);
 };
 

@@ -22,7 +22,7 @@ const int64_t DefaultMaxQueueNum = 32;
 const int64_t DefaultQueueNum = 0;
 template <int MAX_QUEUE_NUM = DefaultMaxQueueNum>
 class ObMultiFixedQueue {
-  public:
+public:
   ObMultiFixedQueue() : inited_(false), queue_num_(DefaultQueueNum)
   {}
   virtual ~ObMultiFixedQueue()
@@ -33,7 +33,7 @@ class ObMultiFixedQueue {
     }
   }
 
-  public:
+public:
   int init(const int64_t queue_size, const int64_t queue_num);
   int destroy();
 
@@ -42,17 +42,17 @@ class ObMultiFixedQueue {
 
   int get_task_count(const int64_t queue_index, int64_t& task_count);
 
-  private:
+private:
   int init_queue_(const int64_t queue_num, const int64_t queue_size);
   void destroy_queue_(const int64_t queue_num);
 
-  private:
+private:
   bool inited_;
   ObFixedQueue<void> queue_[MAX_QUEUE_NUM];
   ObCond queue_conds_[MAX_QUEUE_NUM];
   int64_t queue_num_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiFixedQueue);
 };
 

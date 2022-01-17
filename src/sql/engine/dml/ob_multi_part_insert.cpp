@@ -22,7 +22,7 @@ namespace sql {
 class ObMultiPartInsert::ObMultiPartInsertCtx : public ObTableInsert::ObTableInsertCtx, public ObMultiDMLCtx {
   friend class ObMultiPartInsert;
 
-  public:
+public:
   explicit ObMultiPartInsertCtx(ObExecContext& ctx) : ObTableInsertCtx(ctx), ObMultiDMLCtx(ctx.get_allocator())
   {}
   ~ObMultiPartInsertCtx()

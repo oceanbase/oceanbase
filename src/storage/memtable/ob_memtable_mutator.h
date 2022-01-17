@@ -31,11 +31,11 @@ class RedoDataNode;
 class ObMemtableMutatorMeta {
   static const uint64_t MMB_MAGIC = 0x6174756d;  // #muta
   static const int64_t MIN_META_SIZE = 24;       // sizeof(MutatorMetaV1)
-  public:
+public:
   ObMemtableMutatorMeta();
   ~ObMemtableMutatorMeta();
 
-  public:
+public:
   int inc_row_count();
   int64_t get_row_count() const;
   int fill_header(const char* buf, const int64_t data_len);
@@ -60,19 +60,19 @@ class ObMemtableMutatorMeta {
   }
   bool is_row_start() const;
 
-  public:
+public:
   int64_t get_serialize_size() const;
   int serialize(char* buf, const int64_t buf_len, int64_t& pos);
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
 
-  public:
+public:
   int64_t to_string(char* buffer, const int64_t length) const;
 
-  private:
+private:
   bool check_magic();
   uint32_t calc_meta_crc(const char* buf);
 
-  private:
+private:
   uint32_t magic_;
   uint32_t meta_crc_;
   int16_t meta_size_;
@@ -86,7 +86,7 @@ class ObMemtableMutatorMeta {
 };
 
 class ObMemtableMutatorRow {
-  public:
+public:
   ObMemtableMutatorRow();
   ObMemtableMutatorRow(const uint64_t table_id, const common::ObStoreRowkey& rowkey, const int64_t table_version,
       const ObRowData& new_row, const ObRowData& old_row, const storage::ObRowDml dml_type, const uint32_t modify_count,
@@ -110,7 +110,7 @@ class ObMemtableMutatorRow {
   TO_STRING_KV(K_(row_size), K_(table_id), K_(rowkey), K_(table_version), K_(dml_type), K_(update_seq), K_(new_row),
       K_(old_row), K_(acc_checksum), K_(version), K_(sql_no), K_(flag));
 
-  public:
+public:
   char obj_array_[sizeof(common::ObObj) * common::OB_MAX_ROWKEY_COLUMN_NUMBER];
   uint32_t row_size_;
   uint64_t table_id_;
@@ -127,11 +127,11 @@ class ObMemtableMutatorRow {
 };
 
 class ObMemtableMutatorWriter {
-  public:
+public:
   ObMemtableMutatorWriter();
   ~ObMemtableMutatorWriter();
 
-  public:
+public:
   int set_buffer(char* buf, const int64_t buf_len);
   int append_kv(const uint64_t table_id, const common::ObStoreRowkey& rowkey, const int64_t table_version,
       const RedoDataNode& redo);
@@ -145,7 +145,7 @@ class ObMemtableMutatorWriter {
   static int handle_big_row_data(const char* in_buf, const int64_t in_buf_len, int64_t& in_buf_pos, char* out_buf,
       const int64_t out_buf_len, int64_t& out_buf_pos);
 
-  private:
+private:
   ObMemtableMutatorMeta meta_;
   common::ObDataBuffer buf_;
 
@@ -153,12 +153,12 @@ class ObMemtableMutatorWriter {
 };
 
 class ObMemtableMutatorIterator {
-  public:
+public:
   ObMemtableMutatorIterator();
   ~ObMemtableMutatorIterator();
   void reset();
 
-  public:
+public:
   int set_tenant_id(const uint64_t tenant_id);
   int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   // for replay
@@ -191,10 +191,10 @@ class ObMemtableMutatorIterator {
   }
   TO_STRING_KV(K_(meta), K_(big_row), K_(big_row_pos));
 
-  private:
+private:
   void reset_big_row_args_();
 
-  private:
+private:
   ObMemtableMutatorMeta meta_;
   common::ObDataBuffer buf_;
   ObMemtableMutatorRow row_;

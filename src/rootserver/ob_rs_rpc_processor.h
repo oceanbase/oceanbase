@@ -82,7 +82,7 @@ bool is_allow_when_drop_tenant(const obrpc::ObRpcPacketCode pcode)
 }
 
 class ObRootServerRPCProcessorBase {
-  public:
+public:
   ObRootServerRPCProcessorBase(ObRootService& rs, const bool full_service, const bool major_freeze_done,
       const bool is_ddl_like, obrpc::ObDDLArg* arg)
       : root_service_(rs),
@@ -92,7 +92,7 @@ class ObRootServerRPCProcessorBase {
         ddl_arg_(arg)
   {}
 
-  protected:
+protected:
   int process_(const obrpc::ObRpcPacketCode pcode) __attribute__((noinline))
   {
     int ret = common::OB_SUCCESS;
@@ -221,7 +221,7 @@ class ObRootServerRPCProcessorBase {
     return common::OB_RS_NOT_MASTER;
   }
 
-  protected:
+protected:
   ObRootService& root_service_;
   const bool full_service_;
   const bool major_freeze_done_;
@@ -231,13 +231,13 @@ class ObRootServerRPCProcessorBase {
 
 template <obrpc::ObRpcPacketCode pcode>
 class ObRootServerRPCProcessor : public obrpc::ObCommonRpcProxy::Processor<pcode>, public ObRootServerRPCProcessorBase {
-  public:
+public:
   ObRootServerRPCProcessor(ObRootService& rs, const bool full_service, const bool major_freeze_done,
       const bool is_ddl_like, obrpc::ObDDLArg* arg = NULL)
       : ObRootServerRPCProcessorBase(rs, full_service, major_freeze_done, is_ddl_like, arg)
   {}
 
-  protected:
+protected:
   virtual int before_process()
   {
     common::ObThreadFlags::set_rs_flag();
@@ -258,12 +258,12 @@ class ObRootServerRPCProcessor : public obrpc::ObCommonRpcProxy::Processor<pcode
 
 #define DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, full_service, major_freeze_done, is_ddl_like, arg) \
   class pname : public ObRootServerRPCProcessor<pcode> {                                                \
-    public:                                                                                             \
+  public:                                                                                               \
     explicit pname(ObRootService& rs)                                                                   \
         : ObRootServerRPCProcessor<pcode>(rs, full_service, major_freeze_done, is_ddl_like, arg)        \
     {}                                                                                                  \
                                                                                                         \
-    protected:                                                                                          \
+  protected:                                                                                            \
     virtual int leader_process()                                                                        \
     {                                                                                                   \
       return root_service_.stmt;                                                                        \
@@ -325,6 +325,10 @@ DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_VALIDATE_BACKUP_BATCH_RES, ObRpcValidateBackupBatchResP, receive_batch_balance_over(arg_));
 DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_STANDBY_CUTDATA_BATCH_TASK_RES, ObRpcStandbyCutDataBatchTaskResP, receive_batch_balance_over(arg_));
+DEFINE_RS_RPC_PROCESSOR(
+    obrpc::OB_BACKUP_BACKUPSET_BATCH_RES, ObRpcBackupBackupsetBatchResP, receive_batch_balance_over(arg_));
+DEFINE_RS_RPC_PROCESSOR(
+    obrpc::OB_BACKUP_ARCHIVE_LOG_BATCH_RES, ObRpcBackupArchiveLogBatchResP, handle_backup_archive_log_batch_res(arg_));
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_REBUILD_REPLICA, ObRpcAdminRebuildReplicaP, admin_rebuild_replica(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_DS_ACTION, ObBroadcastDSActionP, broadcast_ds_action(arg_));
@@ -538,6 +542,9 @@ DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_PHYSICAL_RESTORE_RES, ObRpcPhysicalRestoreResultP, send_physical_restore_result(arg_));
 DEFINE_RS_RPC_PROCESSOR(
     obrpc::OB_UPDATE_STANDBY_CLUSTER_INFO, ObUpdateStandbyClusterInfoP, update_standby_cluster_info(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_ARCHIVE_LOG, ObBackupArchiveLogP, handle_backup_archive_log(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPSET, ObBackupBackupsetP, handle_backup_backupset(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_BACKUPPIECE, ObBackupBackupPieceP, handle_backup_backuppiece(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

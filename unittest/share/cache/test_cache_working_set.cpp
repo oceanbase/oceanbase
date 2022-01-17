@@ -28,7 +28,7 @@ namespace oceanbase {
 using namespace share;
 namespace common {
 class TestCacheWorkingSet : public ::testing::Test {
-  public:
+public:
   static const int64_t K_SIZE = 10;
   static const int64_t V_SIZE = 16 * 1024;
   typedef TestKVCacheKey<K_SIZE> Key;
@@ -39,7 +39,7 @@ class TestCacheWorkingSet : public ::testing::Test {
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   uint64_t tenant_id_;
   int64_t mem_limit_;
 };

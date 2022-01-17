@@ -29,7 +29,22 @@ ObExprLog::ObExprLog(ObIAllocator& alloc) : ObExprOperator(alloc, T_FUN_SYS_LOG,
 int ObExprLog::calc_result_type2(
     ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprTypeCtx& type_ctx) const
 {
-  return calc_trig_function_result_type2(type, type1, type2, type_ctx);
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    if (NOT_ROW_DIMENSION != row_dimension_) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP; // arithmetic not support row
+    } else if (ObMaxType == type1.get_type() || ObMaxType == type2.get_type()) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    } else {
+      type.set_double();
+      type1.set_calc_type(type.get_type());
+      type2.set_calc_type(type.get_type());
+      ObExprOperator::calc_result_flag2(type, type1, type2);
+    }
+  } else if (OB_FAIL(calc_trig_function_result_type2(type, type1, type2, type_ctx))) {
+    LOG_WARN("failed to calc_trig_function_result_type2", K(ret));
+  } else {/*do nothing*/}
+  return ret;
 }
 
 int ObExprLog::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2, ObExprCtx& expr_ctx) const
@@ -55,12 +70,26 @@ int ObExprLog::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2,
     // binary_double, result type is double
     double double_base = obj1.get_double();
     double double_x = obj2.get_double();
-    double result_double = std::log(double_x) / std::log(double_base);
-    if (isinf(result_double) || isnan(result_double)) {
-      ret = OB_OPERATE_OVERFLOW;
+    if (lib::is_mysql_mode() && (double_base <= 0 || double_x <= 0)) {
+      LOG_USER_WARN(OB_EER_INVALID_ARGUMENT_FOR_LOGARITHM);
+      result.set_null();
     } else {
-      result.set_double(result_double);
+      double result_double = std::log(double_x) / std::log(double_base);
+      if (isinf(result_double) || isnan(result_double)) {
+        if (lib::is_mysql_mode()) {
+          LOG_USER_WARN(OB_EER_INVALID_ARGUMENT_FOR_LOGARITHM);
+          result.set_null();
+        } else {
+          ret = OB_OPERATE_OVERFLOW;
+        }
+      } else {
+        result.set_double(result_double);
+      }
     }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid calc type, expected number/double", K(get_type_name(obj1.get_type())),
+                                                         K(get_type_name(obj2.get_type())), K(ret));
   }
   return ret;
 }
@@ -74,8 +103,18 @@ int calc_log_expr_double(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datum)
     LOG_WARN("eval arg failed", K(ret), K(expr));
   } else if (base->is_null() || x->is_null()) {
     res_datum.set_null();
-  } else if (OB_FAIL(ObExprPow::safe_set_double(res_datum, std::log(x->get_double()) / std::log(base->get_double())))) {
-    LOG_WARN("set double failed", K(ret), K(base->get_double()), K(x->get_double()));
+  } else if (lib::is_mysql_mode() && (x->get_double() <= 0 || base->get_double() <= 0)) {
+    LOG_USER_WARN(OB_EER_INVALID_ARGUMENT_FOR_LOGARITHM);
+    res_datum.set_null();
+  } else if (OB_FAIL(ObExprPow::safe_set_double(res_datum,
+          std::log(x->get_double()) / std::log(base->get_double())))) {
+    if (lib::is_mysql_mode() && OB_OPERATE_OVERFLOW == ret) {
+      ret = OB_SUCCESS;
+      LOG_USER_WARN(OB_EER_INVALID_ARGUMENT_FOR_LOGARITHM);
+      res_datum.set_null();
+    } else {
+      LOG_WARN("set double failed", K(ret), K(base->get_double()), K(x->get_double()));
+    }
   }
   return ret;
 }

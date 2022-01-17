@@ -63,10 +63,10 @@ struct Pair {
 
 template <typename Factory>
 struct TSI {
-  public:
+public:
   typedef typename Factory::InstanceType T;
 
-  public:
+public:
   TSI(Factory& factory) : create_err_(0), factory_(factory)
   {
     create_err_ = pthread_key_create(&key_, destroy);
@@ -94,7 +94,7 @@ struct TSI {
     return val;
   }
 
-  private:
+private:
   static void destroy(void* arg)
   {
     if (NULL != arg) {
@@ -109,7 +109,7 @@ struct TSI {
 // Can not be deleted, regardless of memory
 template <typename T>
 class SimpleList {
-  public:
+public:
   SimpleList() : tail_((T*)&guard_)
   {
     tail_->next_ = tail_;
@@ -141,23 +141,23 @@ class SimpleList {
     return tail_->next_;
   }
 
-  private:
+private:
   T* guard_;
   T* tail_;
 };
 
 template <typename Allocator>
 class ObHandyAllocatorWrapper : public Allocator {
-  public:
+public:
   ObHandyAllocatorWrapper() : allocated_(0)
   {}
   ~ObHandyAllocatorWrapper()
   {}
 
-  private:
+private:
   volatile int64_t allocated_;
 
-  public:
+public:
   int64_t get_alloc_size() const
   {
     return allocated_;

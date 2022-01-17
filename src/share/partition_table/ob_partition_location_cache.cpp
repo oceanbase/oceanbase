@@ -27,6 +27,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rs_mgr.h"
+#include "share/ob_share_util.h"
 #include "share/partition_table/ob_location_update_task.h"
 #include "share/partition_table/ob_partition_table_operator.h"
 #include "share/partition_table/ob_remote_partition_table_operator.h"
@@ -42,6 +43,7 @@
 #include "share/ob_server_blacklist.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "share/cache/ob_cache_name_define.h"
 
 namespace oceanbase {
 using namespace common;
@@ -318,6 +320,26 @@ int ObLocationLeaderCache::set_strong_leader_info(
   return ret;
 }
 
+// OB_INVALID_TENANT_ID means flush all tenant's leader cache
+int ObLocationLeaderCache::flush_cache(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < CACHE_NUM; i++) {
+    ObLocationLeaderInfo &info = buffer_[i];
+    SpinWLockGuard guard(info.get_lock());
+    ObLocationLeader *&value_ptr = info.get_value();
+    if (OB_NOT_NULL(value_ptr)) {
+      const ObLocationCacheKey &key = value_ptr->get_key();
+      if (OB_INVALID_TENANT_ID == tenant_id || tenant_id == extract_tenant_id(key.table_id_)) {
+        // reset cache
+        value_ptr->set_strong_leader_info(LocationInfo());
+        LOG_TRACE("flush user leader cache", KR(ret), K(key));
+      }
+    }
+  }
+  return ret;
+}
+
 ///////////////////////////////////////////
 bool ObILocationFetcher::treat_sql_as_timeout(const int error_code)
 {
@@ -511,10 +533,7 @@ int ObILocationFetcher::fill_location(ObPartitionInfo& partition_info, ObPartiti
       location.set_renew_time(ObTimeUtility::current_time());
       location.set_sql_renew_time(ObTimeUtility::current_time());
       ObReplicaLocation leader;
-      if (location.size() <= 0) {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("location is empty", K(ret), K(location));
-      } else if (OB_FAIL(location.get_leader_by_election(leader))) {
+      if (OB_FAIL(location.get_leader_by_election(leader))) {
         if (OB_LOCATION_LEADER_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           LOG_DEBUG("location leader not exist", K(ret), K(location));
@@ -637,7 +656,7 @@ int ObLocationFetcher::fetch_vtable_location(const uint64_t table_id, ObSArray<O
     LOG_WARN("table is not virtual table", KT(table_id), K(ret));
   } else {
     LOG_INFO("fetch virtual table location with tenant", "tenant", THIS_WORKER.get_rpc_tenant(), KT(table_id));
-    int64_t timeout_us = OB_FETCH_LOCATION_TIMEOUT;
+    int64_t timeout_us = GCONF.location_cache_refresh_sql_timeout;
     if (ObTimeoutCtx::get_ctx().is_timeout_set()) {
       timeout_us = std::min(timeout_us, ObTimeoutCtx::get_ctx().get_timeout());
     }
@@ -718,7 +737,7 @@ int ObLocationFetcher::batch_renew_sys_table_location_by_rpc(const ObPartitionLo
   } else {
     results.reset();
     obrpc::ObBatchGetRoleArg arg;
-    const int64_t timeout_ts = OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+    const int64_t timeout_ts = GCONF.location_cache_refresh_rpc_timeout;
     rootserver::ObBatchGetRoleProxy proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_get_role);
     const ObIArray<ObReplicaLocation>& location_array = core_table_location.get_replica_locations();
     /*
@@ -805,7 +824,7 @@ int ObLocationFetcher::renew_location_with_rpc_v2(
   is_new_location_valid = true;
   common::ObPartitionKey pkey;
   const uint64_t tenant_id = get_rpc_tenant_id(cached_location.get_table_id());
-  const int64_t default_timeout = OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+  const int64_t default_timeout = GCONF.location_cache_refresh_rpc_timeout;
   int64_t timeout_us = default_timeout;
   const ObIArray<ObReplicaLocation>& location_array = cached_location.get_replica_locations();
   ObMemberListAndLeaderArg member_info;
@@ -1305,7 +1324,7 @@ int ObLocationFetcher::batch_renew_location_with_rpc(const common::ObIArray<cons
     rootserver::ObBatchRpcRenewLocProxy proxy_batch(
         *srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_get_member_list_and_leader);
     // gather rpc results
-    const int64_t timeout_ts = OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+    const int64_t timeout_ts = GCONF.location_cache_refresh_rpc_timeout;
     for (int64_t i = 0; i < infos.count(); i++) {  // ignore failure
       ObLocationRpcRenewInfo& info = infos.at(i);
       if (!info.is_valid()) {
@@ -2001,6 +2020,24 @@ int ObLocationAsyncUpdateQueueSet::init(ObServerConfig& config)
   return ret;
 }
 
+int ObLocationAsyncUpdateQueueSet::set_thread_count(const int64_t thread_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!lib::is_mini_mode() && thread_cnt > 0) {
+    if (OB_FAIL(tenant_space_update_queue_.set_thread_count(thread_cnt))) {
+      LOG_ERROR("fail to set thread count", KR(ret), K(thread_cnt));
+    } else if (OB_FAIL(user_update_queue_.set_thread_count(thread_cnt))) {
+      LOG_ERROR("fail to set thread count", KR(ret), K(thread_cnt));
+    } else {
+      LOG_INFO("[LOCATION] location queue may change thread cnt", K(thread_cnt));
+    }
+  }
+  return ret;
+}
+
 int ObLocationAsyncUpdateQueueSet::add_task(const ObLocationAsyncUpdateTask& task)
 {
   int ret = OB_SUCCESS;
@@ -2180,6 +2217,13 @@ int ObPartitionLocationCache::reload_config()
     LOG_WARN("not init", K(ret));
   } else {
     sem_.set_max_count(config_->location_fetch_concurrency);
+    int64_t thread_cnt = config_->location_refresh_thread_count;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = local_async_queue_set_.set_thread_count(thread_cnt))) {
+      LOG_WARN("fail to set thread count", KR(tmp_ret), K(thread_cnt));
+    } else if (OB_SUCCESS != (tmp_ret = remote_async_queue_set_.set_thread_count(thread_cnt))) {
+      LOG_WARN("fail to set thread count", KR(tmp_ret), K(thread_cnt));
+    }
   }
   return ret;
 }
@@ -2561,7 +2605,7 @@ int ObPartitionLocationCache::get(const uint64_t table_id, ObIArray<ObPartitionL
     LOG_WARN("location cache is not inited", K(ret));
   } else {
     if (!is_virtual_table(table_id)) {
-      const ObTableSchema* table = NULL;
+      const ObSimpleTableSchemaV2* table = NULL;
       ObSchemaGetterGuard schema_guard;
       const uint64_t tenant_id = extract_tenant_id(table_id);
       if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -3237,6 +3281,7 @@ int ObPartitionLocationCache::renew_location(const uint64_t table_id, const int6
 
   bool refresh_by_rpc = false;
   bool refresh_by_sql = false;
+  bool can_erase = false;
   bool exist_in_cache = true;
   // try to get from cache, maybe other thread has already fetched location
   if (OB_SUCC(ret)) {
@@ -3352,6 +3397,7 @@ int ObPartitionLocationCache::renew_location(const uint64_t table_id, const int6
           }
         }
       } else {
+        can_erase = true;
         EVENT_INC(LOCATION_CACHE_SQL_RENEW);
       }
       if (location.get_replica_locations().count() > 0) {
@@ -3369,13 +3415,17 @@ int ObPartitionLocationCache::renew_location(const uint64_t table_id, const int6
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(update_location(table_id, partition_id, cluster_id, new_location))) {
-        LOG_WARN("update location in cache failed", K(ret), KT(table_id), K(partition_id), K(new_location));
+      if (OB_FAIL(update_location(table_id, partition_id, cluster_id, can_erase, new_location))) {
+        LOG_WARN(
+            "update location in cache failed", K(ret), KT(table_id), K(partition_id), K(can_erase), K(new_location));
       } else if (result_filter_not_readable_replica &&
                  OB_FAIL(location.assign_with_only_readable_replica(new_location))) {
         LOG_WARN("assign with only readable replica fail", K(ret), K(location), K(new_location));
       } else if (!result_filter_not_readable_replica && OB_FAIL(location.assign(new_location))) {
         LOG_WARN("assign location fail", K(ret), K(location), K(new_location));
+      } else if (location.size() <= 0) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("location is empty", KR(ret), K(location));
       }
     }
   } else {
@@ -3466,7 +3516,8 @@ int ObPartitionLocationCache::check_skip_rpc_renew_v2(const ObPartitionLocation&
 }
 
 int ObPartitionLocationCache::update_location(
-    const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id, const ObPartitionLocation& location)
+    const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id,
+    const bool can_erase, const ObPartitionLocation& location)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -3475,6 +3526,13 @@ int ObPartitionLocationCache::update_location(
   } else if (!ObIPartitionTable::is_valid_key(table_id, partition_id) || !location.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KT(table_id), K(partition_id), K(location));
+  } else if (location.size() <= 0) {
+    if (!can_erase) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("location is empty", KR(ret), K(table_id), K(partition_id), K(cluster_id), K(location));
+    } else if (OB_FAIL(erase_location(table_id, partition_id, cluster_id))) {
+      LOG_WARN("fail to erase location", KR(ret), K(table_id), K(partition_id), K(cluster_id));
+    }
   } else {
     ObLocationCacheKey cache_key(table_id, partition_id, cluster_id);
     if (use_sys_cache(table_id)) {
@@ -3534,6 +3592,45 @@ int ObPartitionLocationCache::update_location(
         ob_free(buffer);
         buffer = NULL;
       }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionLocationCache::erase_location(
+    const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!ObIPartitionTable::is_valid_key(table_id, partition_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KT(table_id), K(partition_id), K(cluster_id));
+  } else if (use_sys_cache(table_id)) {
+    // use_sys_cache() includes user_sys_leader_cache(), and sys cache shouldn't be erased.
+  } else {
+    ObLocationCacheKey cache_key(table_id, partition_id, cluster_id);
+    // try erase user leader cache
+    if (cluster_id_ == cluster_id) {
+      LocationInfo leader_info;
+      int tmp_ret = leader_cache_.get_strong_leader_info(cache_key, leader_info);
+      if (OB_SUCCESS == tmp_ret) {
+        leader_info.reset();
+        tmp_ret = leader_cache_.set_strong_leader_info(cache_key, leader_info, false /*force update*/);
+        LOG_TRACE("erase user leader cache", KR(tmp_ret), K(cache_key));
+      }
+    }
+    // try erase user location cache
+    if (OB_FAIL(user_cache_.erase(cache_key))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_TRACE("user location cache not exist", K(cache_key));
+      } else {
+        LOG_WARN("fail to erase user location cache", KR(ret), K(cache_key));
+      }
+    } else {
+      LOG_TRACE("erase user location cache", K(cache_key));
     }
   }
   return ret;
@@ -4134,27 +4231,11 @@ int ObPartitionLocationCache::add_update_task(const ObLocationAsyncUpdateTask& t
 int ObPartitionLocationCache::set_timeout_ctx(common::ObTimeoutCtx& ctx)
 {
   int ret = OB_SUCCESS;
-  int64_t abs_timeout_us = ctx.get_abs_timeout();
-
-  if (abs_timeout_us < 0) {
-    abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_FETCH_LOCATION_TIMEOUT_US;
+  int64_t default_timeout = GCONF.location_cache_refresh_rpc_timeout +
+                            GCONF.location_cache_refresh_sql_timeout;
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
+    LOG_WARN("fail to set default_timeout_ctx", KR(ret));
   }
-  if (THIS_WORKER.get_timeout_ts() > 0 && THIS_WORKER.get_timeout_ts() < abs_timeout_us) {
-    abs_timeout_us = THIS_WORKER.get_timeout_ts();
-  }
-
-  if (OB_FAIL(ctx.set_abs_timeout(abs_timeout_us))) {
-    LOG_WARN("set timeout failed", K(ret), K(abs_timeout_us));
-  } else if (ctx.is_timeouted()) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("is timeout",
-        K(ret),
-        "abs_timeout",
-        ctx.get_abs_timeout(),
-        "this worker timeout ts",
-        THIS_WORKER.get_timeout_ts());
-  }
-
   return ret;
 }
 
@@ -4325,7 +4406,8 @@ int ObPartitionLocationCache::batch_renew_location(const common::ObIArray<ObLoca
             ObWaitEventIds::PT_LOCATION_CACHE_LOCK_WAIT, wait_event_time_out, unused, unused, unused);
 
         // ignore acquire fail
-        abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_FETCH_LOCATION_TIMEOUT_US;
+        abs_timeout_us = ObTimeUtility::current_time() + GCONF.location_cache_refresh_rpc_timeout +
+                         GCONF.location_cache_refresh_sql_timeout;
         int tmp_ret = sem_.acquire(abs_timeout_us);
         if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("acquire failed", K(tmp_ret));
@@ -4396,6 +4478,7 @@ int ObPartitionLocationCache::batch_renew_location(const common::ObIArray<ObLoca
 
     // Step 3 : batch renew
     if (OB_SUCC(ret) && locations.count() > 0) {
+      bool can_erase = false;
       ObSEArray<ObPartitionLocation*, UNIQ_TASK_QUEUE_BATCH_EXECUTE_NUM> new_locations;
       common::ObTimeoutCtx ctx;
       if (OB_FAIL(set_batch_timeout_ctx(locations.count(), renew_type, ctx))) {
@@ -4448,6 +4531,7 @@ int ObPartitionLocationCache::batch_renew_location(const common::ObIArray<ObLoca
             LOG_WARN("fail to batch renew sys table location by rpc", K(tmp_ret), "key_cnt", renew_keys.count());
           }
         } else {
+          can_erase = true;
           EVENT_INC(LOCATION_CACHE_SQL_RENEW);
         }
       } else {
@@ -4471,8 +4555,11 @@ int ObPartitionLocationCache::batch_renew_location(const common::ObIArray<ObLoca
           if (OB_ISNULL(new_location)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("location is null", K(ret), K(i));
-          } else if (OB_FAIL(update_location(
-                         new_location->get_table_id(), new_location->get_partition_id(), cluster_id, *new_location))) {
+          } else if (OB_FAIL(update_location(new_location->get_table_id(),
+                         new_location->get_partition_id(),
+                         cluster_id,
+                         can_erase,
+                         *new_location))) {
             LOG_WARN("fail to update location", K(ret), KPC(new_location));
           }
           if (OB_SUCC(ret)) {
@@ -4636,9 +4723,9 @@ int ObPartitionLocationCache::set_batch_timeout_ctx(
   UNUSED(task_cnt);
   if (abs_timeout_us < 0) {
     if (ObLocationAsyncUpdateTask::MODE_SQL_ONLY == type) {
-      abs_timeout_us = ObTimeUtility::current_time() + 2 * DEFAULT_FETCH_LOCATION_TIMEOUT_US;
+      abs_timeout_us = ObTimeUtility::current_time() + 2 * GCONF.location_cache_refresh_sql_timeout;
     } else {
-      abs_timeout_us = ObTimeUtility::current_time() + 2 * ObLocationFetcher::OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT;
+      abs_timeout_us = ObTimeUtility::current_time() + 2 * GCONF.location_cache_refresh_rpc_timeout;
     }
   }
   if (THIS_WORKER.get_timeout_ts() > 0 && THIS_WORKER.get_timeout_ts() < abs_timeout_us) {
@@ -4656,7 +4743,6 @@ int ObPartitionLocationCache::set_batch_timeout_ctx(
         "this worker timeout ts",
         THIS_WORKER.get_timeout_ts());
   }
-
   return ret;
 }
 /*-----batch async renew location end -----*/
@@ -4676,7 +4762,7 @@ int ObPartitionLocationCache::batch_renew_sys_table_location_by_rpc(common::ObIA
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
-  ctx.set_timeout(ObLocationFetcher::OB_FETCH_MEMBER_LIST_AND_LEADER_TIMEOUT * 2);
+  ctx.set_timeout(GCONF.location_cache_refresh_rpc_timeout);
   ObPartitionLocation core_table_location;
   bool is_nonblock = false;
   bool filter_not_readable_replica = true;
@@ -4719,6 +4805,124 @@ int64_t ObPartitionLocationCache::get_primary_cluster_id() const
     cluster_id = remote_server_provider_->get_primary_cluster_id();
   }
   return cluster_id;
+}
+
+int ObPartitionLocationCache::LeaderCacheKeyGetter::operator()(
+    common::hash::HashMapPair<ObLocationCacheKey, LocationInfo> &entry)
+{
+  int ret = OB_SUCCESS;
+  const ObLocationCacheKey &key = entry.first;
+  const uint64_t tenant_id = extract_tenant_id(key.table_id_);
+  if (OB_INVALID_TENANT_ID == tenant_id_ || tenant_id_ == tenant_id) {
+    if (OB_FAIL(keys_.push_back(key))) {
+      LOG_WARN("fail to push back key", KR(ret), K(key));
+    }
+  }
+  return ret;
+}
+
+int ObPartitionLocationCache::LocationCacheKeyGetter::operator()(
+    common::hash::HashMapPair<ObLocationCacheKey, ObPartitionLocation> &entry)
+{
+  int ret = OB_SUCCESS;
+  const ObLocationCacheKey &key = entry.first;
+  const uint64_t tenant_id = extract_tenant_id(key.table_id_);
+  if (OB_INVALID_TENANT_ID == tenant_id_ || tenant_id_ == tenant_id) {
+    if (OB_FAIL(keys_.push_back(key))) {
+      LOG_WARN("fail to push back key", KR(ret), K(key));
+    }
+  }
+  return ret;
+}
+
+// OB_INVALID_TENANT_ID means flush all tenant's location cache
+int ObPartitionLocationCache::flush_cache(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(tenant_id));
+  } else {
+    // 1. flush sys cache, overwrite ret
+    int64_t start_time = ObTimeUtility::fast_current_time();
+    LOG_INFO("begin flush sys location cache", K(tenant_id));
+    LocationCacheKeyGetter location_key_getter(tenant_id);
+    if (OB_FAIL(sys_cache_.foreach_refactored(location_key_getter))) {
+      LOG_WARN("fail to get location cache key", KR(ret), K(tenant_id));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < location_key_getter.get_keys().count(); i++) {
+        const ObLocationCacheKey &key = location_key_getter.get_keys().at(i);
+        if (OB_FAIL(sys_cache_.erase_refactored(key))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            LOG_TRACE("sys cache not exist, just skip", KR(ret), K(key));
+          } else {
+            LOG_WARN("fail to erase sys cache", KR(ret), K(key));
+          }
+        } else {
+          LOG_TRACE("erase sys cache", KR(ret), K(key));
+        }
+      }  // end for
+    }
+    LOG_INFO("finish flush sys location cache",
+        KR(ret),
+        K(tenant_id),
+        "cost_ts",
+        ObTimeUtility::fast_current_time() - start_time);
+
+    // 2. flush sys leader cache, overwrite ret
+    start_time = ObTimeUtility::fast_current_time();
+    LOG_INFO("begin flush sys leader cache", K(tenant_id));
+    LeaderCacheKeyGetter leader_key_getter(tenant_id);
+    if (OB_FAIL(sys_leader_cache_.foreach_refactored(leader_key_getter))) {
+      LOG_WARN("fail to get leader cache key", KR(ret), K(tenant_id));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < leader_key_getter.get_keys().count(); i++) {
+        const ObLocationCacheKey &key = leader_key_getter.get_keys().at(i);
+        if (OB_FAIL(sys_leader_cache_.erase_refactored(key))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            LOG_TRACE("sys leader cache not exist, just skip", KR(ret), K(key));
+          } else {
+            LOG_WARN("fail to erase sys leader cache", KR(ret), K(key));
+          }
+        } else {
+          LOG_TRACE("erase sys leader cache", KR(ret), K(key));
+        }
+      }  // end for
+    }
+    LOG_INFO("finish flush sys leader cache",
+        KR(ret),
+        K(tenant_id),
+        "cost_ts",
+        ObTimeUtility::fast_current_time() - start_time);
+
+    // 3. flush user cache, overwrite ret
+    // user cache store in sys tenant, so we always flush all tenant's user location cache.
+    start_time = ObTimeUtility::fast_current_time();
+    LOG_INFO("begin flush user location cache", K(tenant_id));
+    if (OB_FAIL(common::ObKVGlobalCache::get_instance().erase_cache(OB_LOCATION_CACHE_NAME))) {
+      LOG_WARN("fail to flush user location cache", KR(ret), K(tenant_id));
+    }
+    LOG_INFO("finish flush user location cache",
+        KR(ret),
+        K(tenant_id),
+        "cost_ts",
+        ObTimeUtility::fast_current_time() - start_time);
+
+    // 4. flush user leader cache, overwrite ret
+    start_time = ObTimeUtility::fast_current_time();
+    LOG_INFO("begin flush user leader cache", K(tenant_id));
+    if (OB_FAIL(leader_cache_.flush_cache(tenant_id))) {
+      LOG_WARN("fail to flush user leader cache", KR(ret), K(tenant_id));
+    }
+    LOG_INFO("finish flush user leader cache",
+        KR(ret),
+        K(tenant_id),
+        "cost_ts",
+        ObTimeUtility::fast_current_time() - start_time);
+  }
+  return ret;
 }
 
 }  // end namespace share

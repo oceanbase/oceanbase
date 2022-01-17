@@ -29,11 +29,11 @@ namespace common {
  * short time before reading the log again
  */
 class ObLogReader {
-  public:
+public:
   static const int64_t WAIT_TIME = 1000000;  // us
   static const int FAIL_TIMES = 60;
 
-  public:
+public:
   ObLogReader();
   virtual ~ObLogReader();
 
@@ -60,12 +60,12 @@ class ObLogReader {
   inline int get_cursor(common::ObLogCursor& cursor);
   inline int get_next_cursor(common::ObLogCursor& cursor);
 
-  private:
+private:
   int seek(uint64_t log_seq);
   int open_log_(const uint64_t log_file_id, const uint64_t last_log_seq = 0);
   int read_log_(LogCommand& cmd, uint64_t& log_seq, char*& log_data, int64_t& data_len);
 
-  private:
+private:
   uint64_t cur_log_file_id_;
   uint64_t cur_log_seq_id_;
   uint64_t max_log_file_id_;

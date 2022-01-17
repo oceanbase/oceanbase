@@ -47,7 +47,7 @@ struct Callable {
 
 typedef void* (*pthread_handler_t)(void*);
 class BaseWorker {
-  public:
+public:
   static const int64_t MAX_N_THREAD = 16;
   struct WorkContext {
     WorkContext() : callable_(NULL), idx_(0)
@@ -65,7 +65,7 @@ class BaseWorker {
     int64_t idx_;
   };
 
-  public:
+public:
   BaseWorker() : n_thread_(0), thread_running_(false)
   {}
   ~BaseWorker()
@@ -73,7 +73,7 @@ class BaseWorker {
     wait();
   }
 
-  public:
+public:
   BaseWorker& set_thread_num(int64_t n)
   {
     n_thread_ = n;
@@ -137,7 +137,7 @@ class BaseWorker {
     return err;
   }
 
-  protected:
+protected:
   int64_t n_thread_;
   bool thread_running_;
   WorkContext ctx_[MAX_N_THREAD];
@@ -201,13 +201,13 @@ class RWT : public Callable {
     int64_t idx_;
   };
 
-  public:
+public:
   RWT() : n_read_thread_(0), n_write_thread_(0), n_admin_thread_(0)
   {}
   virtual ~RWT()
   {}
 
-  public:
+public:
   int64_t get_thread_num()
   {
     return 1 + n_read_thread_ + n_write_thread_ + n_admin_thread_;
@@ -283,7 +283,7 @@ class RWT : public Callable {
     return 0;
   }
 
-  protected:
+protected:
   int64_t n_read_thread_;
   int64_t n_write_thread_;
   int64_t n_admin_thread_;
@@ -342,13 +342,13 @@ struct BaseConfig {
 };
 
 class FixedAllocator : public ObIAllocator {
-  public:
+public:
   FixedAllocator(char* buf, int64_t limit) : buf_(buf), limit_(limit), pos_(0)
   {}
   virtual ~FixedAllocator()
   {}
 
-  public:
+public:
   void reset()
   {
     pos_ = 0;
@@ -369,7 +369,7 @@ class FixedAllocator : public ObIAllocator {
     UNUSED(ptr);
   }
 
-  private:
+private:
   char* buf_;
   int64_t limit_;
   int64_t pos_;

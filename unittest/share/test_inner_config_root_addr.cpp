@@ -24,14 +24,14 @@ using testing::_;
 using ::testing::Return;
 
 class TestInnerConfigRootAddr : public ::testing::Test {
-  public:
+public:
   TestInnerConfigRootAddr();
   ~TestInnerConfigRootAddr();
   virtual void SetUp();
   virtual void TearDown()
   {}
 
-  protected:
+protected:
   ObServerConfig& config_;
   MockMySQLProxy sql_proxy_;
   ObInnerConfigRootAddr ic_;

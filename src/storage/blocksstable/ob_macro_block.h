@@ -73,6 +73,10 @@ struct ObDataStoreDesc {
   // major_working_cluster_version_ == 0 means upgrade from old cluster
   // which still use freezeinfo without cluster version
   int64_t major_working_cluster_version_;
+  bool iter_complement_;
+  bool is_unique_index_;
+  common::ObArenaAllocator allocator_;
+  
   ObDataStoreDesc()
   {
     reset();
@@ -100,18 +104,18 @@ struct ObDataStoreDesc {
       K_(store_micro_block_column_checksum), K_(snapshot_version), K_(need_calc_physical_checksum), K_(need_index_tree),
       K_(need_prebuild_bloomfilter), K_(bloomfilter_rowkey_prefix), KP_(rowkey_helper), "column_types",
       common::ObArrayWrap<common::ObObjMeta>(column_types_, row_column_count_), K_(pg_key), K_(file_handle),
-      K_(need_check_order), K_(need_index_tree), K_(major_working_cluster_version));
+      K_(need_check_order), K_(need_index_tree), K_(major_working_cluster_version), K_(iter_complement), K_(is_unique_index));
 
-  private:
+private:
   int cal_row_store_type(const share::schema::ObTableSchema& table_schema, const storage::ObMergeType merge_type);
   int get_major_working_cluster_version();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDataStoreDesc);
 };
 
 class ObMicroBlockCompressor {
-  public:
+public:
   ObMicroBlockCompressor();
   virtual ~ObMicroBlockCompressor();
   void reset();
@@ -119,7 +123,7 @@ class ObMicroBlockCompressor {
   int compress(const char* in, const int64_t in_size, const char*& out, int64_t& out_size);
   int decompress(const char* in, const int64_t in_size, const int64_t uncomp_size, const char*& out, int64_t& out_size);
 
-  private:
+private:
   bool is_none_;
   int64_t micro_block_size_;
   common::ObCompressor* compressor_;
@@ -154,7 +158,7 @@ struct ObMicroBlockDesc {
 };
 
 class ObMacroBlock {
-  public:
+public:
   ObMacroBlock();
   virtual ~ObMacroBlock();
   int init(ObDataStoreDesc& spec);
@@ -202,7 +206,7 @@ class ObMacroBlock {
     return header_->micro_block_index_offset_;
   }
 
-  private:
+private:
   int write_micro_record_header(const ObMicroBlockDesc& micro_block_desc);
   int reserve_header(const ObDataStoreDesc& spec);
   int build_header(const int64_t cur_macro_seq);
@@ -212,7 +216,7 @@ class ObMacroBlock {
   int add_column_checksum(const int64_t* to_add_checksum, const int64_t column_cnt, int64_t* column_checksum);
   int init_row_reader(const ObRowStoreType row_store_type);
 
-  private:
+private:
   OB_INLINE int64_t get_remain_size() const
   {
     return data_.remain() - index_.get_block_size();
@@ -230,12 +234,12 @@ class ObMacroBlock {
     return get_micro_block_data_size() + index_.get_block_size() - ObMicroBlockIndexWriter::INDEX_ENTRY_SIZE;
   }
 
-  private:
+private:
   ObDataStoreDesc* spec_;
   ObIRowReader* row_reader_;
   ObFlatRowReader flat_row_reader_;
   ObSparseRowReader sparse_row_reader_;
-  ObSelfBufferWriter data_;  // micro header + data blocks;
+  ObSelfBufferWriter data_;  // macro header + data blocks;
   ObMicroBlockIndexWriter index_;
   ObSSTableMacroBlockHeader* header_;  // macro header store in head of data_;
   uint16_t* column_ids_;

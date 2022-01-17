@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObCreateFuncStmt : public ObDDLStmt {
-  public:
+public:
   ObCreateFuncStmt() : ObDDLStmt(stmt::T_CREATE_FUNC)
   {}
   ~ObCreateFuncStmt()
@@ -36,7 +36,7 @@ class ObCreateFuncStmt : public ObDDLStmt {
     return create_func_arg_;
   }
 
-  private:
+private:
   obrpc::ObCreateUserDefinedFunctionArg create_func_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateFuncStmt);
 };

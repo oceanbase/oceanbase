@@ -133,7 +133,6 @@ int ObPartitionMetaBackupReader::read_sstable_meta(ObITable::TableKey& table_key
   ObTableHandle tmp_handle;
   ObSSTable* sstable = NULL;
   blocksstable::ObSSTablePair pair;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (OB_FAIL(ObPartitionService::get_instance().acquire_sstable(table_key, tmp_handle))) {
@@ -437,7 +436,6 @@ int ObPartitionMetaBackupReader::build_backup_sstable_info(const ObSSTable* ssta
   int ret = OB_SUCCESS;
   sstable_info.reset();
   blocksstable::ObSSTablePair pair;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (OB_ISNULL(sstable)) {
@@ -527,7 +525,6 @@ ObMacroBlockBackupSyncReader::ObMacroBlockBackupSyncReader()
       is_data_ready_(false),
       macro_arg_(),
       backup_index_tid_(0),
-      meta_handle_(),
       full_meta_(),
       macro_handle_(),
       data_(),
@@ -552,7 +549,6 @@ void ObMacroBlockBackupSyncReader::reset()
   is_data_ready_ = false;
   macro_arg_.reset();
   backup_index_tid_ = 0;
-  meta_handle_.reset();
   full_meta_.reset();
   macro_handle_.reset();
   data_.assign(NULL, 0, 0);
@@ -1257,7 +1253,8 @@ ObBackupFileAppender::ObBackupFileAppender()
       storage_appender_(StorageOpenMode::EXCLUSIVE_CREATE),
       common_header_(NULL),
       backup_arg_(NULL),
-      bandwidth_throttle_(NULL)
+      bandwidth_throttle_(NULL),
+      inner_error_(OB_SUCCESS)
 {}
 
 ObBackupFileAppender::~ObBackupFileAppender()
@@ -1286,6 +1283,7 @@ int ObBackupFileAppender::open(common::ObInOutBandwidthThrottle& bandwidth_throt
     file_type_ = type;
     backup_arg_ = &backup_arg;
     bandwidth_throttle_ = &bandwidth_throttle;
+    file_offset_ = 0;
 
     switch (type) {
       case BACKUP_META:
@@ -1893,6 +1891,12 @@ int ObBackupFileAppender::write_tail()
       STORAGE_LOG(WARN, "sync upload file tail fail", K(ret));
     }
   }
+
+  if (OB_FAIL(ret)) {
+    if (OB_SUCCESS == inner_error_) {
+      inner_error_ = ret;
+    }
+  }
   return ret;
 }
 
@@ -1921,7 +1925,7 @@ int ObBackupFileAppender::close()
   }
 
   if (storage_appender_.is_opened()) {
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && OB_SUCCESS == inner_error_) {
       if (OB_FAIL(write_tail())) {
         STORAGE_LOG(WARN, "writer tail mark fail", K(ret), K(storage_appender_));
       }
@@ -1933,9 +1937,9 @@ int ObBackupFileAppender::close()
       STORAGE_LOG(WARN, "close appender fail", K(ret), K(tmp_ret), K(storage_appender_));
     }
   }
-  file_offset_ = 0;
+  inner_error_ = OB_SUCCESS;
   is_opened_ = false;
-  STORAGE_LOG(INFO, "finish close bakcup file appender", K(ret), K(tmp_ret));
+  STORAGE_LOG(INFO, "finish close backup file appender", K(ret), K(tmp_ret));
   return ret;
 }
 
@@ -1948,6 +1952,9 @@ int ObBackupFileAppender::sync_upload()
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObBackupFileAppender is not init", K(ret), K(!is_opened_));
+  } else if (OB_SUCCESS != inner_error_) {
+    ret = inner_error_;
+    STORAGE_LOG(WARN, "inner error has been seted, can not sync upload", K(inner_error_));
   } else if (OB_UNLIKELY(0 == data_buffer_.length())) {
     STORAGE_LOG(INFO, "no need to upload", K(ret), K(data_buffer_.length()));
   } else if (OB_ISNULL(common_header_)) {
@@ -1958,6 +1965,7 @@ int ObBackupFileAppender::sync_upload()
     int64_t advance_size = align_size - data_buffer_.length();
     common_header_->data_zlength_ = common_header_->data_length_;
     common_header_->align_length_ = advance_size;
+
     if (OB_FAIL(common_header_->set_checksum(data_buffer_.data() + common_header_->header_length_,
             data_buffer_.length() - common_header_->header_length_))) {
       STORAGE_LOG(WARN, "common header set checksum fail", K(ret), K(*common_header_));
@@ -1966,9 +1974,10 @@ int ObBackupFileAppender::sync_upload()
     }
 
 #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && ObBackupFileType::BACKUP_META_INDEX == file_type_) {
       ret = E(EventTable::EN_BACKUP_META_INDEX_BUFFER_NOT_COMPLETED) OB_SUCCESS;
-      if (OB_FAIL(ret) && ObBackupFileType::BACKUP_META_INDEX == file_type_) {
+      if (OB_FAIL(ret)) {
+        LOG_INFO("errsim file type", K(file_type_), K(data_buffer_.length()));
         if (0 == data_buffer_.length() / 2) {
           ret = OB_SUCCESS;
         } else if (OB_FAIL(storage_appender_.write(data_buffer_.data(), data_buffer_.length() / 2))) {
@@ -1981,9 +1990,10 @@ int ObBackupFileAppender::sync_upload()
 #endif
 
 #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && ObBackupFileType::BACKUP_MACRO_DATA_INDEX == file_type_) {
       ret = E(EventTable::EN_BACKUP_MACRO_INDEX_BUFFER_NOT_COMPLETED) OB_SUCCESS;
-      if (OB_FAIL(ret) && ObBackupFileType::BACKUP_MACRO_DATA_INDEX == file_type_) {
+      if (OB_FAIL(ret)) {
+        LOG_INFO("errsim file type", K(file_type_), K(data_buffer_.length()));
         if (0 == data_buffer_.length() / 2) {
           ret = OB_SUCCESS;
         } else if (OB_FAIL(storage_appender_.write(data_buffer_.data(), data_buffer_.length() / 2))) {
@@ -2014,10 +2024,15 @@ int ObBackupFileAppender::sync_upload()
           STORAGE_LOG(WARN, "failed to limit_out_and_sleep", K(ret));
         }
       }
+    }
+    file_offset_ += data_buffer_.length();
+    data_buffer_.reuse();
+    common_header_ = NULL;
+  }
 
-      file_offset_ += data_buffer_.length();
-      data_buffer_.reuse();
-      common_header_ = NULL;
+  if (OB_FAIL(ret)) {
+    if (OB_SUCCESS == inner_error_) {
+      inner_error_ = ret;
     }
   }
   return ret;
@@ -2791,7 +2806,8 @@ int ObBackupPhysicalPGCtx::fetch_prev_macro_index(const ObPhyRestoreMacroIndexSt
     ret = OB_NOT_OPEN;
     LOG_WARN("not opened yet", K(ret));
   } else if (OB_UNLIKELY(!macro_index_store.is_inited() || !macro_arg.is_valid() ||
-                         !macro_arg.table_key_ptr_->is_major_sstable())) {
+                         !macro_arg.table_key_ptr_->is_major_sstable() ||
+                         macro_arg.table_key_ptr_->is_trans_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(macro_index_store), K(macro_arg));
   } else {
@@ -2939,13 +2955,19 @@ int ObBackupPhysicalPGCtx::fetch_retry_points(const ObString& path, const ObStri
     while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
       common_header = NULL;
       int64_t end_pos = 0;
-      if (OB_FAIL(buffer_reader.get(common_header))) {
+      if (buffer_reader.remain() < sizeof(ObBackupCommonHeader)) {
+        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(buffer_reader.remain()));
+        break;
+      } else if (OB_FAIL(buffer_reader.get(common_header))) {
         STORAGE_LOG(WARN, "read macro index common header fail", K(ret));
       } else if (OB_ISNULL(common_header)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "macro index common header is null", K(ret));
       } else if (OB_FAIL(common_header->check_valid())) {
         STORAGE_LOG(WARN, "common_header is not vaild", K(ret));
+      } else if (common_header->data_length_ + common_header->align_length_ > buffer_reader.remain()) {
+        STORAGE_LOG(INFO, "backup data has incomplete data, skip it", K(*common_header), K(buffer_reader.remain()));
+        break;
       } else if (common_header->data_length_ > buffer_reader.remain()) {
         ret = OB_BUF_NOT_ENOUGH;
         STORAGE_LOG(WARN, "buffer_reader not enough", K(ret));
@@ -3089,16 +3111,8 @@ int ObBackupPhysicalPGCtx::check_table_exist(
   if (OB_UNLIKELY(!macro_index_store.is_inited() || !table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(macro_index_store), K(table_key));
-  } else if (OB_FAIL(macro_index_store.get_macro_index_array(table_key, macro_index_array))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      is_exist = false;
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_ISNULL(macro_index_array)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("macro index array should not be NULL", K(ret), K(table_key));
-  } else {
-    is_exist = true;
+  } else if (OB_FAIL(macro_index_store.check_table_exist(table_key, is_exist))) {
+    STORAGE_LOG(WARN, "failed to check table exist", K(ret), K(table_key));
   }
   return ret;
 }
@@ -3319,6 +3333,7 @@ int ObBackupCopyPhysicalTask::process()
           }
         }
       }
+      STORAGE_LOG(INFO, "reuse backup macro count", K(block_info), K(copy_count), K(reuse_count));
     }
   }
   if (OB_FAIL(ret)) {
@@ -3352,7 +3367,6 @@ int ObBackupCopyPhysicalTask::fetch_backup_macro_block_arg(const share::ObPhysic
   int ret = OB_SUCCESS;
   ObTableHandle tmp_handle;
   ObSSTable* sstable = NULL;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta full_meta;
 
   if (!table_key.is_valid() || macro_idx < 0) {
@@ -3380,7 +3394,7 @@ int ObBackupCopyPhysicalTask::fetch_backup_macro_block_arg(const share::ObPhysic
       macro_arg.fetch_arg_.macro_block_index_ = macro_idx;
       macro_arg.fetch_arg_.data_version_ = full_meta.meta_->data_version_;
       macro_arg.fetch_arg_.data_seq_ = full_meta.meta_->data_seq_;
-      if (!table_key.is_major_sstable()) {
+      if (!table_key.is_major_sstable() || table_key.is_trans_sstable()) {
         macro_arg.need_copy_ = true;
       } else {
         switch (backup_arg.backup_type_) {
@@ -3603,7 +3617,7 @@ int ObBackupCopyPhysicalTask::get_datafile_appender(const ObITable::TableType& t
       STORAGE_LOG(WARN, "BandwidthThrottle should not be null here", K(ret));
     } else if (OB_FAIL(arg.get_backup_base_data_info(path_info))) {
       STORAGE_LOG(WARN, "get backup base data info fail", K(ret), K(arg), K(pg_key));
-    } else if (ObITable::is_major_sstable(table_type)) {
+    } else if (ObITable::is_major_sstable(table_type) && !ObITable::is_trans_sstable(table_type)) {
       if (OB_FAIL(ObBackupPathUtil::get_major_macro_block_file_path(path_info,
               pg_key.get_table_id(),
               pg_key.get_partition_id(),
@@ -3612,7 +3626,7 @@ int ObBackupCopyPhysicalTask::get_datafile_appender(const ObITable::TableType& t
               path))) {
         STORAGE_LOG(WARN, "failed to get macro file path", K(ret));
       }
-    } else if (ObITable::is_minor_sstable(table_type)) {
+    } else if (ObITable::is_minor_sstable(table_type) || ObITable::is_trans_sstable(table_type)) {
       if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(path_info,
               pg_key.get_table_id(),
               pg_key.get_partition_id(),
@@ -3729,7 +3743,7 @@ int ObBackupCopyPhysicalTask::reuse_block_index(
         } else if (OB_UNLIKELY(cur_index.data_length_ > 0)) {
           ret = OB_INIT_TWICE;
           STORAGE_LOG(WARN, "macro index is already init before reuse.", K(ret), K(i), K(cur_index));
-        } else if (!cur_index.table_key_ptr_->is_major_sstable()) {
+        } else if (!cur_index.table_key_ptr_->is_major_sstable() || cur_index.table_key_ptr_->is_trans_sstable()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "sstable is not major sstable, can not reuse block index", K(ret), K(cur_index));
         } else if (OB_FAIL(backup_pg_ctx_->fetch_prev_macro_index(*macro_index, macro_arg, prev_index))) {
@@ -3797,20 +3811,48 @@ int ObBackupFinishTask::init(ObMigrateCtx& ctx)
 int ObBackupFinishTask::process()
 {
   int ret = OB_SUCCESS;
+  ObBackupDataType data_type;
+
   if (NULL != ctx_) {
     STORAGE_LOG(INFO, "start ObBackupFinishTask process", "pkey", ctx_->replica_op_arg_.key_);
   }
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
+  } else if(FALSE_IT(data_type.type_ = ctx_->physical_backup_ctx_.get_backup_data_type())) {
   } else if (OB_FAIL(ctx_->physical_backup_ctx_.close())) {
     STORAGE_LOG(WARN, "failed to close physical backup ctx", K(ret), "pkey", ctx_->replica_op_arg_.key_);
   } else {
     const int64_t end_macro_index_pos = ctx_->physical_backup_ctx_.macro_index_appender_.get_upload_size();
     ctx_->data_statics_.output_bytes_ += end_macro_index_pos;
-    ctx_->data_statics_.finish_partition_count_ = ctx_->data_statics_.partition_count_;
+    if (data_type.is_major_backup()) {
+      ctx_->data_statics_.finish_partition_count_ = ctx_->data_statics_.partition_count_;
+    }
     STORAGE_LOG(INFO, "backup task finished", K(ctx_->pg_meta_));
   }
+
+#ifdef ERRSIM
+  const int64_t fake_type = GCONF.fake_once_init_restore_macro_index_store;
+  if (fake_type != 0 && OB_SUCC(ret)) {
+    if (1 == fake_type && ObBackupDataType::BACKUP_MAJOR == ctx_->physical_backup_ctx_.get_backup_data_type()) {
+      static int64_t major_succeed_count = 0;
+      ++major_succeed_count;
+      if (major_succeed_count == 10) {
+        // only fake the 10th backup error once
+        ret = OB_IO_ERROR;
+        LOG_ERROR("fake major sstable backup io error", K(ret));
+      }
+    } else if (2 == fake_type && ObBackupDataType::BACKUP_MINOR == ctx_->physical_backup_ctx_.get_backup_data_type()) {
+      static int64_t minor_succeed_count = 0;
+      ++minor_succeed_count;
+      if (minor_succeed_count == 10) {
+        // only fake the 10th backup error once
+        ret = OB_IO_ERROR;
+        LOG_ERROR("fake minor sstable backup io error", K(ret));
+      }
+    }
+  }
+#endif
 
   if (OB_FAIL(ret) && nullptr != ctx_) {
     ctx_->set_result_code(ret);
@@ -3822,6 +3864,145 @@ OB_SERIALIZE_MEMBER(ObBackupMacroData, meta_, data_);
 ObBackupMacroData::ObBackupMacroData(blocksstable::ObBufferHolder& meta, blocksstable::ObBufferReader& data)
     : meta_(meta), data_(data)
 {}
+
+ObBackupMetaIndexReformer::ObBackupMetaIndexReformer()
+    : is_inited_(false), lock_(), backup_lease_service_(NULL), path_info_()
+{}
+
+ObBackupMetaIndexReformer::~ObBackupMetaIndexReformer()
+{}
+
+int ObBackupMetaIndexReformer::init(
+    const ObBackupBaseDataPathInfo& path_info, share::ObIBackupLeaseService& backup_lease_service)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup meta index putter init twice", K(ret));
+  } else if (!path_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init backup meta index putter get invalid argument", K(ret), K(path_info));
+  } else {
+    path_info_ = path_info;
+    backup_lease_service_ = &backup_lease_service;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexReformer::upload_backup_meta_index(const ObIArray<ObBackupMetaIndex>& backup_meta_indexs)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup meta index putter do not init", K(ret));
+  } else if (backup_meta_indexs.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("upload backup meta index get invalid argument", K(ret), K(backup_meta_indexs));
+  } else if (OB_FAIL(upload_backup_meta_index_(backup_meta_indexs))) {
+    LOG_WARN("failed to upload backup meta index", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexReformer::upload_backup_meta_index_(const ObIArray<ObBackupMetaIndex>& backup_meta_indexs)
+{
+  int ret = OB_SUCCESS;
+  ObSelfBufferWriter data_buffer;
+  ObBackupPath path;
+  ObStorageUtil util(false /*need_retry*/);
+
+  const int64_t buf_size = get_buffer_size_(backup_meta_indexs);
+  if (buf_size <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("buf size is unexpected", K(ret), K(buf_size));
+  } else if (OB_FAIL(data_buffer.ensure_space(buf_size))) {
+    LOG_WARN("data_buffer not enough", K(buf_size));
+  } else if (OB_FAIL(write_buf_(backup_meta_indexs, data_buffer))) {
+    LOG_WARN("failed to write buf", K(ret), K(buf_size));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tenant_data_meta_index_path(path_info_, path))) {
+    LOG_WARN("failed to get tenant data meta index path", K(ret), K(path_info_));
+  } else if (OB_FAIL(util.mk_parent_dir(path.get_ptr(), path_info_.dest_.get_storage_info()))) {
+    LOG_WARN("failed tog mk parent dir", K(ret), K(path));
+  } else if (OB_FAIL(backup_lease_service_->check_lease())) {
+    LOG_WARN("failed to check lease", K(ret));
+  } else if (OB_FAIL(util.write_single_file(
+                 path.get_ptr(), path_info_.dest_.get_storage_info(), data_buffer.data(), buf_size))) {
+    LOG_WARN("failed to write single file", K(ret), K(path));
+  } else {
+    // TODO(muwei.ym): modify log level later
+    FLOG_INFO("succeed to upload backup meta index", K(path));
+  }
+  return ret;
+}
+
+int64_t ObBackupMetaIndexReformer::get_buffer_size_(const ObIArray<ObBackupMetaIndex>& backup_meta_indexs)
+{
+  int64_t buf_size = 0;
+  buf_size += (sizeof(ObBackupCommonHeader) * 2);  // header and tail
+
+  for (int64_t i = 0; i < backup_meta_indexs.count(); ++i) {
+    const ObBackupMetaIndex& backup_meta_index = backup_meta_indexs.at(i);
+    buf_size += backup_meta_index.get_serialize_size();
+  }
+  return buf_size;
+}
+
+int ObBackupMetaIndexReformer::write_buf_(
+    const ObIArray<ObBackupMetaIndex>& backup_meta_indexs, ObSelfBufferWriter& data_buffer)
+{
+  int ret = OB_SUCCESS;
+  const int64_t header_len = sizeof(ObBackupCommonHeader);
+  int64_t write_size = 0;
+
+  char* header_buf = data_buffer.data();
+  if (OB_FAIL(data_buffer.advance_zero(header_len))) {
+    STORAGE_LOG(WARN, "advance failed", K(ret), K(header_len));
+  } else {
+    int64_t start_pos = data_buffer.pos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < backup_meta_indexs.count(); ++i) {
+      const ObBackupMetaIndex& meta_index = backup_meta_indexs.at(i);
+      if (OB_FAIL(data_buffer.write_serialize(meta_index))) {
+        LOG_WARN("failed to write serialize meta index", K(ret), K(meta_index));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // make common header
+      ObBackupCommonHeader* common_header = NULL;
+      common_header = reinterpret_cast<ObBackupCommonHeader*>(header_buf);
+      common_header->reset();
+      common_header->compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+      common_header->data_type_ = BACKUP_META_INDEX;
+      common_header->header_length_ = header_len;
+      write_size = data_buffer.pos() - start_pos;
+      common_header->data_length_ = write_size;
+      common_header->data_zlength_ = common_header->data_length_;
+      common_header->align_length_ = 0;
+      if (OB_FAIL(common_header->set_checksum(data_buffer.data() + common_header->header_length_,
+              data_buffer.length() - common_header->header_length_))) {
+        STORAGE_LOG(WARN, "common header set checksum fail", K(ret), K(*common_header));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // make tailer
+      if (data_buffer.remain() != header_len) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tailer buffer is not enough", K(ret), K(data_buffer.capacity()), K(data_buffer.pos()), K(header_len));
+      } else {
+        char* tailer_buf = data_buffer.current();
+        ObBackupCommonHeader* tailer = NULL;
+        tailer = reinterpret_cast<ObBackupCommonHeader*>(tailer_buf);
+        tailer->reset();
+        tailer->compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+        tailer->data_type_ = ObBackupFileType::BACKUP_FILE_END_MARK;
+        tailer->set_header_checksum();
+      }
+    }
+  }
+  return ret;
+}
 
 }  // namespace storage
 }  // namespace oceanbase

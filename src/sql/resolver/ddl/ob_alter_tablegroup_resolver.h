@@ -22,7 +22,7 @@ class ObAlterTablegroupResolver : public ObTableGroupResolver {
   static const int TG_NAME = 0;
   static const int TABLE_LIST = 1;
 
-  public:
+public:
   explicit ObAlterTablegroupResolver(ObResolverParams& params);
   virtual ~ObAlterTablegroupResolver();
   virtual int resolve(const ParseNode& parse_tree);
@@ -31,7 +31,7 @@ class ObAlterTablegroupResolver : public ObTableGroupResolver {
     return static_cast<ObAlterTablegroupStmt*>(stmt_);
   };
 
-  private:
+private:
   int resolve_partition_options(const ParseNode& node);
   int resolve_add_partition(const ParseNode& node);
   int resolve_drop_partition(const ParseNode& node);

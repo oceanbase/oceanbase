@@ -18,12 +18,12 @@
 namespace oceanbase {
 namespace sql {
 class ObLogMaterial : public ObLogicalOperator {
-  public:
+public:
   ObLogMaterial(ObLogPlan& plan) : ObLogicalOperator(plan)
   {}
   virtual ~ObLogMaterial()
   {}
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     return clone(out);
   }
@@ -36,7 +36,7 @@ class ObLogMaterial : public ObLogicalOperator {
     return true;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogMaterial);
 };
 }  // namespace sql

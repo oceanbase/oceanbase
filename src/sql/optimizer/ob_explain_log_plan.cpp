@@ -108,18 +108,24 @@ int ObExplainLogPlan::generate_raw_plan()
             buf[ObLogValues::MAX_EXPLAIN_BUFFER_SIZE - 1] = '\0';
           }
         }
-        ObObj obj;
-        obj.set_varchar(ObString::make_string(buf));
-        ObNewRow row;
-        row.cells_ = &obj;
-        row.count_ = 1;
-        values->add_row(row);
-        set_phy_plan_type(OB_PHY_PLAN_LOCAL);
-        set_plan_root(values);
-        values->mark_is_plan_root();
-        // set values operator id && set max operator id for LogPlan
-        values->set_op_id(0);
-        set_max_op_id(1);
+        
+        if (OB_SUCC(ret)) {
+          ObObj obj;
+          obj.set_varchar(ObString::make_string(buf));
+          ObNewRow row;
+          row.cells_ = &obj;
+          row.count_ = 1;
+          if (OB_FAIL(values->add_row(row))) {
+            LOG_WARN("failed to add row", K(ret));
+          } else {
+            set_phy_plan_type(OB_PHY_PLAN_LOCAL);
+            set_plan_root(values);
+            values->mark_is_plan_root();
+            // set values operator id && set max operator id for LogPlan
+            values->set_op_id(0);
+            set_max_op_id(1);
+          }
+        }
         if (NULL != buf) {
           get_allocator().free(buf);
           buf = NULL;

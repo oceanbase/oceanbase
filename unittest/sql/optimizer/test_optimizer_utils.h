@@ -48,17 +48,17 @@ using oceanbase::sql::ObTableLocation;
 namespace test {
 
 class MockCacheObjectFactory {
-  public:
+public:
   static int alloc(ObCacheObject*& cache_obj, ObCacheObjType co_type, uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   static int alloc(ObPhysicalPlan*& plan, uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   static void free(ObCacheObject* cache_obj);
 
-  private:
+private:
   static void inner_free(ObCacheObject*);
 };
 
 class TestOptimizerUtils : public TestSqlUtils, public ::testing::Test {
-  public:
+public:
   TestOptimizerUtils();
   virtual ~TestOptimizerUtils();
   virtual void init();
@@ -132,7 +132,7 @@ class TestOptimizerUtils : public TestSqlUtils, public ::testing::Test {
     return ret;
   }
 
-  protected:
+protected:
   int64_t case_id_;
   ObOptimizerContext* optctx_;
   bool is_json_;
@@ -146,7 +146,7 @@ class TestOptimizerUtils : public TestSqlUtils, public ::testing::Test {
   ::test::MockOptStatService opt_stat_;
   ::test::MockPartitionService partition_service_;
   // data members
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestOptimizerUtils);
   // function members

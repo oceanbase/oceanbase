@@ -19,12 +19,12 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualIOStat : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualIOStat();
   virtual ~ObAllVirtualIOStat();
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum IOStatColumn {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -36,12 +36,12 @@ class ObAllVirtualIOStat : public common::ObVirtualTableScannerIterator {
     IO_BENCH_RESULT,
   };
 
-  private:
+private:
   char svr_ip_[common::OB_IP_STR_BUFF];
   char disk_type_[common::OB_MAX_DISK_TYPE_LENGTH];
   char io_bench_result_[common::OB_MAX_IO_BENCH_RESULT_LENGTH];
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualIOStat);
 };
 

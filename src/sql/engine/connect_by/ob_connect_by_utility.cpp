@@ -575,10 +575,7 @@ int ObConnectByPump::calc_prior_and_check_cycle(PumpNode& node, bool set_refacto
         int idx = 0;
         DLIST_FOREACH(expr, *connect_by_prior_exprs_)
         {
-          if (OB_ISNULL(expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expr is NULL", K(ret));
-          } else if (OB_FAIL(expr->calc(*expr_ctx_, *node.pump_row_, prior_exprs_result_row_.cells_[idx]))) {
+          if (OB_FAIL(expr->calc(*expr_ctx_, *node.pump_row_, prior_exprs_result_row_.cells_[idx]))) {
             LOG_WARN("fail to calc prior expr", KPC(expr));
           } else {
             ++idx;

@@ -22,42 +22,42 @@ namespace oceanbase {
 namespace observer {
 
 class ObSqlWorkareaMemoryInfoIterator {
-  public:
+public:
   ObSqlWorkareaMemoryInfoIterator();
   ~ObSqlWorkareaMemoryInfoIterator()
   {
     destroy();
   }
 
-  public:
+public:
   void destroy();
   void reset();
   int init();
   int get_next_wa_memory_info(sql::ObSqlWorkareaCurrentMemoryInfo*& wa_stat, uint64_t& tenant_id);
 
-  private:
+private:
   int get_next_batch_wa_memory_info();
 
-  private:
+private:
   sql::ObSqlWorkareaCurrentMemoryInfo memory_info_;
   common::ObSEArray<uint64_t, 16> tenant_ids_;
   int64_t cur_nth_tenant_;
 };
 
 class ObSqlWorkareaMemoryInfo : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObSqlWorkareaMemoryInfo();
   virtual ~ObSqlWorkareaMemoryInfo()
   {
     destroy();
   }
 
-  public:
+public:
   void destroy();
   void reset();
   int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   enum STORAGE_COLUMN {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
@@ -75,7 +75,7 @@ class ObSqlWorkareaMemoryInfo : public common::ObVirtualTableScannerIterator {
   int get_server_ip_and_port();
   int fill_row(uint64_t tenant_id, sql::ObSqlWorkareaCurrentMemoryInfo& memory_info, common::ObNewRow*& row);
 
-  private:
+private:
   common::ObString ipstr_;
   int32_t port_;
   ObSqlWorkareaMemoryInfoIterator iter_;

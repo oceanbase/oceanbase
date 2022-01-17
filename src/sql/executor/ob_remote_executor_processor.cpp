@@ -295,7 +295,9 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext& exec_ctx, const ObP
       bool need_flush = false;
       if (is_static_engine) {
         bool added = false;
-        if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_, exec_ctx.get_eval_ctx(), added))) {
+        if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_,
+                                        exec_ctx.get_eval_ctx(),
+                                        added))) {
           LOG_WARN("fail add row to scanner", K(ret));
         } else if (!added) {
           need_flush = true;
@@ -406,58 +408,55 @@ int ObRemoteBaseExecuteP<T>::auto_end_phy_trans(bool is_rollback, const ObPartit
 {
   int ret = OB_SUCCESS;
   int end_ret = OB_SUCCESS;
-
-  if (trans_state_.is_start_participant_executed() && trans_state_.is_start_participant_success()) {
-    if (OB_SUCCESS != (end_ret = ObSqlTransControl::end_participant(exec_ctx_, is_rollback, participants))) {
-      ret = (OB_SUCCESS == ret) ? end_ret : ret;
-      LOG_WARN("fail to end participant", K(ret), K(end_ret), K(is_rollback), K(participants), K(exec_ctx_));
-    }
-    trans_state_.clear_start_participant_executed();
+  bool ac = false;
+  ObEndTransSyncCallback callback;
+  ObSQLSessionInfo *my_session = GET_MY_SESSION(exec_ctx_);
+  if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ret is OB_SUCCESS, but session is NULL", K(ret));
+  } else if (OB_FAIL(my_session->get_autocommit(ac))) {
+    LOG_WARN("fail to get autocommit", K(ret));
   }
 
-  if (trans_state_.is_start_stmt_executed() && trans_state_.is_start_stmt_success()) {
-    if (OB_SUCCESS != (end_ret = ObSqlTransControl::end_stmt(exec_ctx_, is_rollback || OB_SUCCESS != ret))) {
-      ret = (OB_SUCCESS == ret) ? end_ret : ret;
-      LOG_WARN("fail to end stmt", K(ret), K(end_ret), K(is_rollback), K(exec_ctx_));
-    }
-    trans_state_.clear_start_stmt_executed();
-  }
-  if (trans_state_.is_start_trans_executed() && trans_state_.is_start_trans_success()) {
-    ObSQLSessionInfo* my_session = GET_MY_SESSION(exec_ctx_);
-    if (OB_ISNULL(my_session)) {
-      if (OB_SUCC(ret)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("ret is OB_SUCCESS, but session is NULL", K(ret));
-      } else {
-        LOG_ERROR("ret is not OB_SUCCESS, and session is NULL", K(ret));
+  if (OB_SUCC(ret)) {
+    if (trans_state_.is_start_participant_executed() && trans_state_.is_start_participant_success()) {
+      if (OB_SUCCESS != (end_ret = ObSqlTransControl::end_participant(exec_ctx_, is_rollback, participants))) {
+        ret = (OB_SUCCESS == ret) ? end_ret : ret;
+        LOG_WARN("fail to end participant", K(ret), K(end_ret), K(is_rollback), K(participants), K(exec_ctx_));
       }
-    } else {
+      trans_state_.clear_start_participant_executed();
+    }
+
+    if (trans_state_.is_start_stmt_executed() && trans_state_.is_start_stmt_success()) {
+      if (OB_SUCCESS != (end_ret = ObSqlTransControl::end_stmt(exec_ctx_, is_rollback || OB_SUCCESS != ret))) {
+        ret = (OB_SUCCESS == ret) ? end_ret : ret;
+        LOG_WARN("fail to end stmt", K(ret), K(end_ret), K(is_rollback), K(exec_ctx_));
+      }
+      trans_state_.clear_start_stmt_executed();
+    }
+    if (trans_state_.is_start_trans_executed() && trans_state_.is_start_trans_success()) {
       bool in_trans = my_session->get_in_transaction();
-      bool ac = false;
-      if (OB_FAIL(my_session->get_autocommit(ac))) {
-        LOG_WARN("fail to get autocommit", K(ret));
-      } else if (ObSqlTransUtil::plan_can_end_trans(ac, in_trans)) {
+      if (ObSqlTransUtil::plan_can_end_trans(ac, in_trans)) {
         if (!my_session->is_standalone_stmt()) {
-          ObEndTransSyncCallback callback;
-          is_rollback = (is_rollback || OB_SUCCESS != ret);
-          if (OB_FAIL(callback.init(&(my_session->get_trans_desc()), my_session))) {
+          if (OB_SUCCESS != (end_ret = callback.init(&(my_session->get_trans_desc()), my_session))) {
+            ret = (OB_SUCCESS == ret) ? end_ret : ret;
             LOG_WARN("fail init callback", K(ret));
-          } else {
-            int wait_ret = OB_SUCCESS;
-            if (OB_SUCCESS != (end_ret = ObSqlTransControl::implicit_end_trans(
-                                   exec_ctx_, is_rollback, callback))) {  // implicit commit, no rollback
-              ret = (OB_SUCCESS == ret) ? end_ret : ret;
-              LOG_WARN("fail end implicit trans", K(is_rollback), K(ret));
-            }
-            if (OB_UNLIKELY(OB_SUCCESS != (wait_ret = callback.wait()))) {
-              LOG_WARN("sync end trans callback return an error!",
-                  K(ret),
-                  K(wait_ret),
-                  K(is_rollback),
-                  K(my_session->get_trans_desc()));
-            }
-            ret = OB_SUCCESS != ret ? ret : wait_ret;
           }
+          is_rollback = (is_rollback || OB_SUCCESS != ret);
+          int wait_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (end_ret = ObSqlTransControl::implicit_end_trans(
+                      exec_ctx_, is_rollback, callback))) { // implicit commit, no rollback
+            ret = (OB_SUCCESS == ret) ? end_ret : ret;
+            LOG_WARN("fail end implicit trans", K(is_rollback), K(ret));
+          }
+          if (OB_UNLIKELY(OB_SUCCESS != (wait_ret = callback.wait()))) {
+            LOG_WARN("sync end trans callback return an error!",
+                K(ret),
+                K(wait_ret),
+                K(is_rollback),
+                K(my_session->get_trans_desc()));
+          }
+          ret = OB_SUCCESS != ret? ret : wait_ret;
         }
         trans_state_.clear_start_trans_executed();
       } else {
@@ -686,7 +685,11 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask& task)
   ObPhysicalPlan* plan = nullptr;
   ObPhysicalPlanCtx* plan_ctx = nullptr;
   CacheRefHandleID cache_handle_id = MAX_HANDLE;
-  if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
+  int inject_err_no = EVENT_CALL(EventTable::EN_REMOTE_EXEC_ERR);
+  if (0 != inject_err_no) {
+    ret = inject_err_no;
+    LOG_WARN("Injection OB_LOCATION_NOT_EXIST error", K(ret));
+  } else if (OB_ISNULL(session = exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session is NULL", K(ret), K(task));
   } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(exec_ctx_))) {
@@ -1174,7 +1177,8 @@ int ObRpcRemoteASyncExecuteP::send_result_to_controller(ObExecContext& exec_ctx,
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("failed to get next row", K(ret));
           }
-        } else if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_, exec_ctx.get_eval_ctx(), added))) {
+        } else if (OB_FAIL(scanner.try_add_row(se_op->get_spec().output_,
+                                               exec_ctx.get_eval_ctx(), added))) {
           LOG_WARN("fail add row to scanner", K(ret));
         } else if (!added) {
           buffer_enough = true;

@@ -14,21 +14,36 @@
 #include "lib/utility/ob_print_utils.h"
 #include "common/ob_common_utility.h"
 
-namespace oceanbase {
-namespace common {
-
+extern "C" {
 void right_to_die_or_duty_to_live_c()
 {
-  right_to_die_or_duty_to_live();
+  ::oceanbase::common::right_to_die_or_duty_to_live();
+}
 }
 
+namespace oceanbase {
+namespace common {
+RLOCAL(bool, in_try_stmt);
+
+// To die or to live, it's a problem.
 void right_to_die_or_duty_to_live()
 {
-  const ObFatalErrExtraInfoGuard* extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
+  const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
   BACKTRACE(
       ERROR, true, "Trying so hard to die, extra_info=(%s)", (NULL == extra_info) ? NULL : to_cstring(*extra_info));
-  throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
-  _OB_LOG(ERROR, "Trying very hard to live");
+#ifdef FATAL_ERROR_HANG
+  while (true) {
+    sleep(120);
+  }
+#else
+  if (in_try_stmt) {
+    throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();
+  } else {
+    while (true) {
+      sleep(5);
+    }
+  }
+#endif
 }
 
 }  // namespace common

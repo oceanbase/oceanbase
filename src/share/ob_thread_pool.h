@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace share {
 
 class ObThreadPool : public lib::ThreadPool {
-  public:
+public:
   void run0() override
   {
     // Create worker for current thread.

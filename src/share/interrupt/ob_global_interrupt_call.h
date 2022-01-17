@@ -36,7 +36,7 @@ namespace common {
 struct ObInterruptibleTaskID {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObInterruptibleTaskID() : first_(0), last_(0)
   {}
 
@@ -98,7 +98,7 @@ class ObInterruptChecker {
 
   friend class ObGlobalInterruptManager;
 
-  public:
+public:
   /// Only the interface is provided externally:
   /// is_interrupted(): Determine whether to receive interrupt information
   /// is_set_and_interrupted(): Determine whether the interrupt information is received, if the interrupt is not
@@ -125,7 +125,7 @@ class ObInterruptChecker {
 
   void interrupt(ObInterruptCode& interrupt_code);
 
-  private:
+private:
   /*
    * T_ARRAY_SIZE represents the maximum number of interrupts that an execution unit can receive during execution.
    * These interrupt information are stored in an array of fixed size T_ARRAY_SIZE.
@@ -133,7 +133,7 @@ class ObInterruptChecker {
   static const uint64_t T_ARRAY_SIZE = 16;
   DISALLOW_COPY_AND_ASSIGN(ObInterruptChecker);
 
-  private:
+private:
   bool interrupted_;
   ObInterruptCode interrupt_code_array_[T_ARRAY_SIZE];
   int64_t array_pos_;
@@ -164,7 +164,7 @@ struct ObInterruptCheckerNode {
 
 /// Atomic insertion callback, used when taskid is registered by multiple interrupt checkers
 class ObInterruptCheckerAddCall {
-  public:
+public:
   void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
 
   ObInterruptCheckerAddCall(ObInterruptCheckerNode* checker_node) : checker_node_(checker_node), is_empty_(false){};
@@ -174,14 +174,14 @@ class ObInterruptCheckerAddCall {
     return is_empty_;
   }
 
-  private:
+private:
   ObInterruptCheckerNode* checker_node_;
   bool is_empty_;
 };
 
 /// Atomic removal callback, lock the bucket to avoid reading and inserting operations during removal
 class ObInterruptCheckerRemoveCall {
-  public:
+public:
   void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
 
   ObInterruptCheckerRemoveCall(ObInterruptCheckerNode* checker_node) : checker_node_(checker_node), is_empty_(false){};
@@ -191,7 +191,7 @@ class ObInterruptCheckerRemoveCall {
     return is_empty_;
   }
 
-  private:
+private:
   ObInterruptCheckerNode* checker_node_;
   bool is_empty_;
 };
@@ -199,18 +199,18 @@ class ObInterruptCheckerRemoveCall {
 /// Atomic write callback of map
 /// Modify the semaphore state in the checker by callback when acquiring the bucket read lock
 class ObInterruptCheckerUpdateCall {
-  public:
+public:
   void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
 
   ObInterruptCheckerUpdateCall(ObInterruptCode& code) : code_(code){};
 
-  private:
+private:
   ObInterruptCode code_;
 };
 
 // Get checker_node_ through map
 class ObInterruptGetCheckerNodeCall {
-  public:
+public:
   void operator()(hash::HashMapPair<ObInterruptibleTaskID, ObInterruptCheckerNode*>& entry);
 
   ObInterruptGetCheckerNodeCall(ObInterruptChecker* checker)
@@ -225,7 +225,7 @@ class ObInterruptGetCheckerNodeCall {
     return checker_node_;
   }
 
-  private:
+private:
   ObInterruptChecker* checker_;
   ObInterruptCheckerNode* checker_node_;
   bool checker_exist_;
@@ -235,12 +235,12 @@ class ObInterruptGetCheckerNodeCall {
 /// Exist in singleton mode to provide
 /// Interface for remote interrupt signal transmission
 class ObGlobalInterruptManager {
-  private:
+private:
   /// Use 100W as the bucket initialization parameter of Map
   static const int64_t DEFAULT_HASH_MAP_BUCKETS_COUNT = 1000000;  // 100w
   static const int64_t MINI_MODE_HASH_MAP_BUCKETS_COUNT = 10000;  // 1w
   static const int64_t DEFAULT_NODE_NUM = 1000000;                // 100w
-  public:
+public:
   /// Hashmap with SpinLock, because the coroutine interrupt signal lock time is short, and there is almost no resource
   /// conflict, so SpinLock is used
   typedef hash::ObHashMap<ObInterruptibleTaskID, ObInterruptCheckerNode*, hash::SpinReadWriteDefendMode,
@@ -249,7 +249,7 @@ class ObGlobalInterruptManager {
           DEFAULT_NODE_NUM, hash::MultiWriteDefendMode>>
       MAP;
 
-  public:
+public:
   static ObGlobalInterruptManager* getInstance();
 
   /// The initialization method is used to obtain the host and rpc transmitter of the current machine, and initialize
@@ -280,14 +280,14 @@ class ObGlobalInterruptManager {
     return map_;
   }
 
-  private:
+private:
   ObGlobalInterruptManager() : rpc_proxy_(nullptr), map_(), is_inited_(false){};
   ObGlobalInterruptManager(const ObGlobalInterruptManager&){};
 
-  private:
+private:
   static ObGlobalInterruptManager* instance_;
 
-  private:
+private:
   ObAddr local_;
   ObInterruptRpcProxy* rpc_proxy_;
   MAP map_;

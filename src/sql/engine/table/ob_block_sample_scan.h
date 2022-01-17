@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObBlockSampleScanInput : public ObTableScanInput {
-  public:
+public:
   virtual ObPhyOperatorType get_phy_op_type() const
   {
     return PHY_BLOCK_SAMPLE_SCAN;
@@ -29,9 +29,9 @@ class ObBlockSampleScanInput : public ObTableScanInput {
 class ObBlockSampleScan : public ObTableScan {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   class ObBlockSampleScanCtx : public ObTableScanCtx {
-    public:
+  public:
     ObBlockSampleScanCtx(ObExecContext& ctx) : ObTableScanCtx(ctx)
     {}
   };
@@ -40,8 +40,8 @@ class ObBlockSampleScan : public ObTableScan {
   virtual ~ObBlockSampleScan()
   {}
 
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   inline void set_sample_info(const common::SampleInfo& sample_info)
   {
     sample_info_ = sample_info;
@@ -54,13 +54,13 @@ class ObBlockSampleScan : public ObTableScan {
   {
     return sample_info_;
   }
-  virtual int prepare_scan_param(ObExecContext& ctx) const;
+  virtual int prepare_scan_param(ObExecContext& ctx) const override;
   OB_INLINE virtual bool need_filter_row() const override
   {
     return true;
   }
 
-  private:
+private:
   common::SampleInfo sample_info_;
 };
 

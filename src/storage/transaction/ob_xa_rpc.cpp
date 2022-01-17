@@ -239,7 +239,7 @@ int ObXAEndTransP::process()
             break;
           }
         }
-        if (is_rollback) {
+        if (is_rollback && is_terminated) {
           // one phase rollback or terminate
           if (OB_FAIL(sche_ctx->xa_rollback_session_terminate())) {
             TRANS_LOG(WARN, "rollback xa trans failed", K(ret), K(xid), K(trans_id), K(is_rollback));
@@ -360,7 +360,8 @@ int ObXASyncStatusResponseP::process()
   const bool is_stmt_pull = arg_.get_is_stmt_pull();
   ObScheTransCtxMgr& sche_trans_ctx_mgr = global_ctx_.par_ser_->get_trans_service()->get_sche_trans_ctx_mgr();
   // TRANS_LOG(INFO, "", K(trans_desc));
-  if (OB_FAIL(sche_trans_ctx_mgr.get_trans_ctx(SCHE_PARTITION_ID, trans_id, for_replay, is_readonly, alloc, ctx))) {
+  if (OB_FAIL(sche_trans_ctx_mgr.get_trans_ctx(
+          SCHE_PARTITION_ID, trans_id, for_replay, is_readonly, alloc, ctx, false /*wait_init*/))) {
     TRANS_LOG(WARN, "get transaction context error", K(ret), K(trans_id));
   } else if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;

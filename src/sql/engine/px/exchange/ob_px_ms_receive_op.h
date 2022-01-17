@@ -31,10 +31,10 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxMSReceiveOpInput : public ObPxReceiveOpInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMSReceiveOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxReceiveOpInput(ctx, spec)
   {}
   virtual ~ObPxMSReceiveOpInput()
@@ -44,7 +44,7 @@ class ObPxMSReceiveOpInput : public ObPxReceiveOpInput {
 class ObPxMSReceiveSpec : public ObPxReceiveSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMSReceiveSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   // [sort_exprs, output_exprs]The first is the sorting column, and the second is the receive output column
   ExprFixedArray all_exprs_;
@@ -54,14 +54,14 @@ class ObPxMSReceiveSpec : public ObPxReceiveSpec {
 };
 
 class ObPxMSReceiveOp : public ObPxReceiveOp {
-  public:
+public:
   ObPxMSReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxMSReceiveOp()
   {}
 
-  private:
+private:
   class MergeSortInput {
-    public:
+  public:
     MergeSortInput(ObChunkDatumStore* get_row_store, ObChunkDatumStore* add_row_ptr, bool finish)
         : get_row_store_(get_row_store), add_row_store_(add_row_ptr), finish_(finish), reader_()
     {}
@@ -86,7 +86,7 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
 
     TO_STRING_KV(K_(finish));
 
-    public:
+  public:
     ObChunkDatumStore* get_row_store_;
     ObChunkDatumStore* add_row_store_;
     bool finish_;
@@ -104,7 +104,7 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
   // and switch add_row_store_ to get_row_store_ , get_row_store_ to add_row_store_
   // Switch the add and get of the data back and forth like this
   class GlobalOrderInput : public MergeSortInput {
-    public:
+  public:
     GlobalOrderInput(uint64_t tenant_id)
         : MergeSortInput(nullptr, nullptr, false), get_reader_(), add_row_reader_(nullptr), get_row_reader_(nullptr)
     {
@@ -124,14 +124,14 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
     virtual void clean_row_store(ObExecContext& ctx);
     virtual bool is_empty();
 
-    private:
+  private:
     int create_chunk_datum_store(ObExecContext& ctx, uint64_t tenant_id, ObChunkDatumStore*& row_store);
     virtual int reset_add_row_store(bool& reset);
     virtual int switch_get_row_store();
     int get_one_row_from_channels(ObPxMSReceiveOp* ms_receive_op, ObPhysicalPlanCtx* phy_plan_ctx, int64_t channel_idx,
         const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& eval_ctx);
 
-    private:
+  private:
     static const int64_t MAX_ROWS_PER_STORE = 50L;
     uint64_t tenant_id_;
     // Due to the need for two datum stores to switch back and forth,
@@ -156,7 +156,7 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
   // channel will have a row_store to cache all data, and LocalOrderInput will specify the range of its own order
   // segment [start_pos, end_pos). Then continue to pop the data according to the range
   class LocalOrderInput : public MergeSortInput {
-    public:
+  public:
     explicit LocalOrderInput() : MergeSortInput(nullptr, nullptr, false), datum_store_()
     {
       get_row_store_ = &datum_store_;
@@ -175,12 +175,12 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
     virtual void clean_row_store(ObExecContext& ctx);
     int open();
 
-    public:
+  public:
     ObChunkDatumStore datum_store_;
   };
 
   class Compare {
-    public:
+  public:
     Compare();
     int init(const ObIArray<ObSortFieldCollation>* sort_collations, const ObIArray<ObSortCmpFunc>* sort_cmp_funs);
 
@@ -202,13 +202,13 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
       new (this) Compare();
     }
 
-    public:
+  public:
     int ret_;
     const ObIArray<ObSortFieldCollation>* sort_collations_;
     const ObIArray<ObSortCmpFunc>* sort_cmp_funs_;
     const common::ObIArray<const ObChunkDatumStore::StoredRow*>* rows_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(Compare);
   };
 
@@ -222,7 +222,7 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
     return task_channels_.count();
   }
 
-  private:
+private:
   int new_local_order_input(MergeSortInput*& out_msi);
   int get_all_rows_from_channels(ObPhysicalPlanCtx* phy_plan_ctx);
   int try_link_channel() override;
@@ -231,7 +231,7 @@ class ObPxMSReceiveOp : public ObPxReceiveOp {
   int get_one_row_from_channels(ObPhysicalPlanCtx* phy_plan_ctx, int64_t channel_idx, const ObIArray<ObExpr*>& exprs,
       ObEvalCtx& eval_ctx, const ObChunkDatumStore::StoredRow*& store_row);
 
-  private:
+private:
   static const int64_t MAX_INPUT_NUMBER = 10000L;
   ObPxNewRow* ptr_px_row_;
   dtl::ObDtlChannelLoop* ptr_row_msg_loop_;

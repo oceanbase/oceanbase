@@ -31,7 +31,7 @@ namespace share {
 namespace schema {
 
 class GetBatchSchemasFuncs0 {
-  public:
+public:
   // return non schema
   int get_batch_tenants(const int64_t schema_version, ObArray<uint64_t>& tenant_ids, ObISQLClient& client,
       ObIArray<ObTenantSchema>& tenant_infos)
@@ -102,7 +102,7 @@ class GetBatchSchemasFuncs0 {
 };
 
 class GetBatchSchemasFuncs1 {
-  public:
+public:
   // return one schema
   int get_batch_tenants(const int64_t schema_version, ObArray<uint64_t>& tenant_ids, ObISQLClient& client,
       ObIArray<ObTenantSchema>& tenant_infos)
@@ -197,11 +197,11 @@ class GetBatchSchemasFuncs1 {
 };
 
 class TestSchemaCache : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   GetBatchSchemasFuncs0 get_batch_schemas_funcs0;
   GetBatchSchemasFuncs1 get_batch_schemas_funcs1;
 };
@@ -399,7 +399,7 @@ using ::testing::_;
 using ::testing::Invoke;
 using ::testing::Return;
 class MockSchemaServiceSQLImpl : public ObSchemaServiceSQLImpl {
-  public:
+public:
   MOCK_METHOD4(get_batch_tenants, int(const int64_t, ObArray<uint64_t>&, ObISQLClient&, ObIArray<ObTenantSchema>&));
   MOCK_METHOD4(get_batch_users, int(const int64_t, ObArray<uint64_t>&, ObISQLClient&, ObIArray<ObUserInfo>&));
   MOCK_METHOD4(get_batch_databases, int(const int64_t, ObArray<uint64_t>&, ObISQLClient&, ObIArray<ObDatabaseSchema>&));

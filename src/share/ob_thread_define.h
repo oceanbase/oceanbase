@@ -38,8 +38,8 @@ TG_DEF(PartSerSlogWr, PartSerSlogWr, "", TG_STATIC, QUEUE_THREAD,
 TG_DEF(LogScan, LogScan, "", TG_STATIC, TIMER_GROUP,
     ThreadCountPair(clog::ObLogScanRunnable::MAX_THREAD_CNT, clog::ObLogScanRunnable::MINI_MODE_THREAD_CNT))
 TG_DEF(ReplayEngine, ReplayEngine, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(sysconf(_SC_NPROCESSORS_ONLN), 2),
-    !lib::is_mini_mode() ? common::REPLAY_TASK_QUEUE_SIZE * OB_MAX_PARTITION_NUM_PER_SERVER
-                         : common::REPLAY_TASK_QUEUE_SIZE * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
+    !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_PARTITION_NUM_PER_SERVER
+                         : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
 TG_DEF(LogCb, LogCb, "", TG_STATIC, QUEUE_THREAD,
     ThreadCountPair(clog::ObCLogMgr::CLOG_CB_THREAD_COUNT, clog::ObCLogMgr::MINI_MODE_CLOG_CB_THREAD_COUNT),
     clog::CLOG_CB_TASK_QUEUE_SIZE)
@@ -72,6 +72,9 @@ TG_DEF(DDLTaskExecutor1, DDLTaskExecutor1, "", TG_STATIC, OB_THREAD_POOL,
 TG_DEF(DDLTaskExecutor2, DDLTaskExecutor2, "", TG_STATIC, OB_THREAD_POOL,
     ThreadCountPair(
         storage::ObBuildIndexScheduler::DEFAULT_THREAD_CNT, storage::ObBuildIndexScheduler::MINI_MODE_THREAD_CNT))
+TG_DEF(DDLTaskExecutor3, DDLTaskExecutor3, "", TG_STATIC, OB_THREAD_POOL,
+    ThreadCountPair(storage::ObRetryGhostIndexScheduler::DEFAULT_THREAD_CNT,
+        storage::ObRetryGhostIndexScheduler::DEFAULT_THREAD_CNT))
 TG_DEF(FetchLogEngine, FetchLogEngine, "", TG_STATIC, QUEUE_THREAD,
     ThreadCountPair(clog::CLOG_FETCH_LOG_THREAD_COUNT, clog::MINI_MODE_CLOG_FETCH_LOG_THREAD_COUNT),
     clog::CLOG_FETCH_LOG_TASK_QUEUE_SIZE)
@@ -137,4 +140,5 @@ TG_DEF(LogMysqlPool, LogMysqlPool, "", TG_STATIC, TIMER)
 TG_DEF(TblCliSqlPool, TblCliSqlPool, "", TG_STATIC, TIMER)
 TG_DEF(QueryExecCtxGC, QueryExecCtxGC, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(DtlDfc, DtlDfc, "", TG_STATIC, TIMER)
+TG_DEF(DDLRetryGhostIndex, DDLRetryGhostIndex, "", TG_STATIC, TIMER)
 #endif

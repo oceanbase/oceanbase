@@ -27,7 +27,7 @@ class ObJob;
 class ObTransmitInput : public ObIPhyOperatorInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTransmitInput() : ObIPhyOperatorInput(), job_(NULL)
   {}
   virtual ~ObTransmitInput()
@@ -43,7 +43,7 @@ class ObTransmitInput : public ObIPhyOperatorInput {
     return job_;
   }
 
-  private:
+private:
   ObJob* job_;
 };
 
@@ -52,7 +52,7 @@ typedef common::ObColumnInfo ObTransmitRepartColumn;
 struct ObHashColumn : public common::ObColumnInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashColumn() : expr_idx_(OB_INVALID_INDEX), cmp_type_(common::ObNullType)
   {}
 
@@ -65,11 +65,11 @@ struct ObHashColumn : public common::ObColumnInfo {
 class ObTransmit : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObTransmitCtx : public ObPhyOperatorCtx {
     friend class ObTransmit;
 
-    public:
+  public:
     explicit ObTransmitCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {}
     virtual ~ObTransmitCtx()
@@ -80,12 +80,12 @@ class ObTransmit : public ObSingleChildPhyOperator {
     }
   };
 
-  public:
+public:
   explicit ObTransmit(common::ObIAllocator& alloc);
   virtual ~ObTransmit();
   // virtual int close(ObExecContext &ctx) const;
-  void reset();
-  void reuse();
+  void reset() override;
+  void reuse() override;
   inline void set_interm_result_manager(ObIntermResultManager* result_mgr);
   inline void set_split_task_count(int64_t count);
   inline int64_t get_split_task_count() const;
@@ -106,7 +106,7 @@ class ObTransmit : public ObSingleChildPhyOperator {
   {
     return job_conf_;
   }
-  int add_compute(ObColumnExpression* expr);
+  int add_compute(ObColumnExpression* expr) override;
   int add_filter(ObSqlExpression* expr);
 
   int init_repart_columns(int64_t repart_count, int64_t repart_sub_count);
@@ -207,12 +207,12 @@ class ObTransmit : public ObSingleChildPhyOperator {
     return SlaveMappingType::SM_NONE != slave_mapping_type_;
   }
 
-  protected:
-  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const;
-  virtual int inner_open(ObExecContext& ctx) const;
+protected:
+  virtual int inner_get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
+  virtual int inner_open(ObExecContext& ctx) const override;
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const override;
 
-  protected:
+protected:
   inline bool is_repart_exchange() const
   {
     return OB_REPARTITION_NO_REPARTITION != repartition_type_;
@@ -222,7 +222,7 @@ class ObTransmit : public ObSingleChildPhyOperator {
     return OB_REPARTITION_NO_REPARTITION == repartition_type_;
   }
   // more goes here
-  protected:
+protected:
   int64_t split_task_count_;
   int64_t parallel_server_count_;
   int64_t server_parallel_thread_count_;
@@ -250,7 +250,7 @@ class ObTransmit : public ObSingleChildPhyOperator {
   bool has_lgi_;
   int partition_id_idx_;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTransmit);
 };

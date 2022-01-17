@@ -33,7 +33,7 @@ namespace sql {
 class ObChunkDatumStore {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   static inline int row_copy_size(const common::ObIArray<ObExpr*>& exprs, ObEvalCtx& ctx, int64_t& size)
   {
     int ret = OB_SUCCESS;
@@ -119,8 +119,14 @@ class ObChunkDatumStore {
    */
   template <typename T = ObChunkDatumStore::StoredRow>
   class LastStoredRow {
-    public:
-    LastStoredRow(ObIAllocator& alloc) : store_row_(nullptr), alloc_(alloc), max_size_(0), reuse_(false)
+  public:
+    LastStoredRow(ObIAllocator& alloc)
+        : store_row_(nullptr),
+          alloc_(alloc),
+          max_size_(0),
+          reuse_(false),
+          pre_alloc_row1_(nullptr),
+          pre_alloc_row2_(nullptr)
     {}
     ~LastStoredRow()
     {}
@@ -141,17 +147,31 @@ class ObChunkDatumStore {
         int64_t head_size = sizeof(T);
         reuse = OB_ISNULL(store_row_) ? false : reuse && (max_size_ >= row_size + head_size + extra_size);
         if (reuse && OB_NOT_NULL(store_row_)) {
+          // switch buffer for write
+          store_row_ = (store_row_ == pre_alloc_row1_ ? pre_alloc_row2_ : pre_alloc_row1_);
           buf = reinterpret_cast<char*>(store_row_);
           new_row = store_row_;
           buffer_len = max_size_;
         } else {
+          // alloc 2 buffer with same length
           buffer_len = (!reuse_ ? row_size : row_size * 2) + head_size + extra_size;
-          if (OB_ISNULL(buf = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
+          char* buf1 = nullptr;
+          char* buf2 = nullptr;
+          if (OB_ISNULL(buf1 = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
-          } else if (OB_ISNULL(new_row = new (buf) T())) {
+          } else if (OB_ISNULL(buf2 = reinterpret_cast<char*>(alloc_.alloc(buffer_len)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
+          } else if (OB_ISNULL(pre_alloc_row1_ = new (buf1) T())) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
+          } else if (OB_ISNULL(pre_alloc_row2_ = new (buf2) T())) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SQL_ENG_LOG(ERROR, "failed to new row", K(ret));
+          } else {
+            buf = buf1;
+            new_row = pre_alloc_row1_;
           }
         }
         if (OB_SUCC(ret)) {
@@ -221,11 +241,16 @@ class ObChunkDatumStore {
     ObIAllocator& alloc_;
     int64_t max_size_;
     bool reuse_;
+
+  private:
+    // To avoid writing memory overwrite, alloc 2 row for alternate writing
+    T* pre_alloc_row1_;
+    T* pre_alloc_row2_;
   };
 
   template <typename T = ObChunkDatumStore::StoredRow>
   class ShadowStoredRow {
-    public:
+  public:
     ShadowStoredRow() : alloc_(nullptr), store_row_(nullptr), saved_(false)
     {}
     ~ShadowStoredRow()
@@ -303,7 +328,7 @@ class ObChunkDatumStore {
     }
     TO_STRING_KV(KPC_(store_row));
 
-    private:
+  private:
     common::ObIAllocator* alloc_;
     T* store_row_;
     bool saved_;
@@ -417,7 +442,7 @@ class ObChunkDatumStore {
   } __attribute__((packed));
 
   struct BlockList {
-    public:
+  public:
     BlockList() : head_(NULL), last_(NULL), size_(0)
     {}
     inline int64_t get_size() const
@@ -468,7 +493,7 @@ class ObChunkDatumStore {
     }
     TO_STRING_KV(K_(size), K_(head), K_(last), K_(*head), K_(last));
 
-    private:
+  private:
     Block* head_;
     Block* last_;
     int64_t size_;
@@ -488,7 +513,7 @@ class ObChunkDatumStore {
    * |----------------|
    * */
   class BlockBuffer {
-    public:
+  public:
     static const int64_t HEAD_SIZE = sizeof(Block); /* n_rows, check_sum */
     BlockBuffer() : data_(NULL), cur_pos_(0), cap_(0)
     {}
@@ -550,7 +575,7 @@ class ObChunkDatumStore {
     friend ObChunkDatumStore;
     friend Block;
 
-    private:
+  private:
     union {
       char* data_;
       Block* block;
@@ -561,7 +586,7 @@ class ObChunkDatumStore {
 
   class ChunkIterator;
   class RowIterator {
-    public:
+  public:
     friend class ObChunkDatumStore;
     RowIterator();
     virtual ~RowIterator()
@@ -595,7 +620,7 @@ class ObChunkDatumStore {
     TO_STRING_KV(KP_(store), K_(*store), K_(cur_iter_blk), K_(cur_row_in_blk), K_(cur_pos_in_blk), K_(n_blocks),
         K_(cur_nth_block));
 
-    private:
+  private:
     explicit RowIterator(ObChunkDatumStore* row_store);
     void reset_cursor()
     {
@@ -606,7 +631,7 @@ class ObChunkDatumStore {
       cur_nth_block_ = 0;
     }
 
-    protected:
+  protected:
     ObChunkDatumStore* store_;
     Block* cur_iter_blk_;
     int64_t cur_row_in_blk_;  // cur nth row in cur block for in-mem debug
@@ -616,10 +641,10 @@ class ObChunkDatumStore {
   };
 
   class ChunkIterator {
-    public:
+  public:
     enum IterEndState { PROCESSING = 0x00, MEM_ITER_END = 0x01, DISK_ITER_END = 0x02 };
 
-    public:
+  public:
     friend class ObChunkDatumStore;
     ChunkIterator();
     virtual ~ChunkIterator();
@@ -674,10 +699,10 @@ class ObChunkDatumStore {
     TO_STRING_KV(KP_(store), KP_(cur_iter_blk), KP_(cur_iter_blk_buf), K_(cur_chunk_n_blocks), K_(cur_iter_pos),
         K_(file_size), K_(chunk_read_size), KP_(chunk_mem));
 
-    private:
+  private:
     void reset_cursor(const int64_t file_size);
 
-    protected:
+  protected:
     ObChunkDatumStore* store_;
     Block* cur_iter_blk_;
     BlockBuffer* cur_iter_blk_buf_; /*for reuse of cur_iter_blk_;
@@ -701,7 +726,7 @@ class ObChunkDatumStore {
   };
 
   class Iterator {
-    public:
+  public:
     friend class ObChunkDatumStore;
     Iterator() : start_iter_(false)
     {}
@@ -742,16 +767,16 @@ class ObChunkDatumStore {
       return chunk_it_.get_chunk_read_size();
     }
 
-    private:
+  private:
     explicit Iterator(ObChunkDatumStore* row_store);
 
-    protected:
+  protected:
     bool start_iter_;
     ChunkIterator chunk_it_;
     RowIterator row_it_;
   };
 
-  public:
+public:
   const static int64_t BLOCK_SIZE = (64L << 10);
   static const int32_t DATUM_SIZE = sizeof(common::ObDatum);
 
@@ -894,7 +919,7 @@ class ObChunkDatumStore {
   int update_iterator(Iterator& org_it);
   int clean_block(Block* clean_block);
 
-  private:
+private:
   OB_INLINE int add_row(
       const common::ObIArray<ObExpr*>& exprs, ObEvalCtx* ctx, const int64_t row_size, StoredRow** stored_row);
   static int get_timeout(int64_t& timeout_ms);
@@ -919,7 +944,8 @@ class ObChunkDatumStore {
   inline int dump_one_block(BlockBuffer* item);
 
   int write_file(void* buf, int64_t size);
-  int read_file(void* buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle& handle);
+  int read_file(void *buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle &handle,
+      const int64_t file_size, const int64_t cur_pos);
   int aio_read_file(void* buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle& handle);
   int aio_read_file(ChunkIterator& it, int64_t read_size);
   bool need_dump(int64_t extra_size);
@@ -944,7 +970,7 @@ class ObChunkDatumStore {
       callback_->free(size);
   }
 
-  private:
+private:
   bool inited_;
   uint64_t tenant_id_;
   const char* label_;

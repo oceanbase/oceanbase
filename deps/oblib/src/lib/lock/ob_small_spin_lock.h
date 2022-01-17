@@ -62,11 +62,11 @@ class ObSmallSpinLockGuard;
 
 template <typename IntType, int64_t LockBit = 0, int64_t MaxSpin = 500, int64_t USleep = 100>
 class ObSmallSpinLock {
-  public:
+public:
   typedef ObSmallSpinLock<IntType, LockBit, MaxSpin, USleep> MyType;
   typedef ObSmallSpinLockGuard<MyType> Guard;
   typedef ObSmallSpinLockGuard<MyType> guard;  // Adapt to old code.
-  public:
+public:
   // Constructor.
   // Usage I: To build a lock from nothing.
   // Non-lock bits are init to default value.
@@ -86,7 +86,7 @@ class ObSmallSpinLock {
     return reinterpret_cast<MyType&>(val);
   }
 
-  public:
+public:
   // Init.
   // Init lock bit. Other bits of IntType unchanged.
   void init()
@@ -156,7 +156,7 @@ class ObSmallSpinLock {
     lock_ = static_cast<IntType>((val & (~LOCK_MASK)) | (lock_ & (LOCK_MASK)));
   }
 
-  private:
+private:
   static const IntType LOCK_MASK = static_cast<IntType>(1) << LockBit;
   IntType lock_;
 };
@@ -164,7 +164,7 @@ class ObSmallSpinLock {
 // Lock guard.
 template <typename LockType>
 class ObSmallSpinLockGuard {
-  public:
+public:
   explicit ObSmallSpinLockGuard(LockType& lock) : lock_(&lock)
   {
     lock_->lock();
@@ -174,7 +174,7 @@ class ObSmallSpinLockGuard {
     lock_->unlock();
   }
 
-  private:
+private:
   LockType* lock_;
   DISALLOW_COPY_AND_ASSIGN(ObSmallSpinLockGuard);
 };
@@ -233,7 +233,7 @@ struct ObPtrSpinLock {
 // Lock guard.
 template <typename LockType>
 class ObPtrSpinLockGuard {
-  public:
+public:
   explicit ObPtrSpinLockGuard(LockType& lock) : lock_(&lock)
   {
     lock_->lock();
@@ -243,7 +243,7 @@ class ObPtrSpinLockGuard {
     lock_->unlock();
   }
 
-  private:
+private:
   LockType* lock_;
   DISALLOW_COPY_AND_ASSIGN(ObPtrSpinLockGuard);
 };

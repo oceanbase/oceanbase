@@ -40,19 +40,19 @@ class ObCacheObjectFactory;
 
 namespace observer {
 class ObSessionOpenCursor {
-  public:
+public:
   explicit ObSessionOpenCursor()
   {}
   virtual ~ObSessionOpenCursor()
   {}
   bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSessionOpenCursor);
 };
 
 class ObVirtualOpenCursorTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   struct SessionInfo {
     uint32_t version;  // session version
     uint32_t id;       // session id
@@ -68,7 +68,7 @@ class ObVirtualOpenCursorTable : public common::ObVirtualTableScannerIterator {
   typedef common::ObSEArray<SessionInfo, 8> SessionInfoArray;
   typedef common::hash::ObHashMap<ObString, SessionInfoArray> SidMap;
   class ObEachSessionId {
-    public:
+  public:
     explicit ObEachSessionId(ObIAllocator* alloc) : is_success_(false), allocator_(alloc)
     {}
     virtual ~ObEachSessionId()
@@ -81,7 +81,7 @@ class ObVirtualOpenCursorTable : public common::ObVirtualTableScannerIterator {
       return sids_map_;
     }
 
-    private:
+  private:
     SidMap sids_map_;
     bool is_success_;
     ObIAllocator* allocator_;
@@ -107,11 +107,11 @@ class ObVirtualOpenCursorTable : public common::ObVirtualTableScannerIterator {
   }
   int set_addr(const common::ObAddr& addr);
 
-  protected:
+protected:
   int fill_cells(ObNewRow*& row, bool& is_filled);
   int fill_cells_impl(const SessionInfo& sess_info, const sql::ObPhysicalPlan* plan);
 
-  private:
+private:
   enum {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
@@ -127,7 +127,7 @@ class ObVirtualOpenCursorTable : public common::ObVirtualTableScannerIterator {
     SQL_EXEC_ID,
   };
 
-  private:
+private:
   sql::ObSQLSessionMgr* sess_mgr_;
   sql::ObPlanCacheManager* pcm_;
   common::ObSEArray<uint64_t, 1024> plan_id_array_;

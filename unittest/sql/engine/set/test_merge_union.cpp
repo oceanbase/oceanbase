@@ -27,7 +27,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 
 class TestMergeUnion : public ObMergeUnion {
-  public:
+public:
   TestMergeUnion() : ObMergeUnion(alloc_)
   {}
   virtual ~TestMergeUnion()
@@ -35,19 +35,19 @@ class TestMergeUnion : public ObMergeUnion {
 };
 
 class TestMergeUnionTest : public ::testing::Test {
-  public:
+public:
   TestMergeUnionTest();
   virtual ~TestMergeUnionTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
-  private:
+protected:
+private:
   // disallow copy
   TestMergeUnionTest(const TestMergeUnionTest& other);
   TestMergeUnionTest& operator=(const TestMergeUnionTest& other);
 
-  private:
+private:
   // data members
 };
 TestMergeUnionTest::TestMergeUnionTest()

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace rootserver {
 class ObUnitLoadHistoryTableOperator : public share::ObEventHistoryTableOperator {
-  public:
+public:
   virtual ~ObUnitLoadHistoryTableOperator()
   {}
 
@@ -29,7 +29,7 @@ class ObUnitLoadHistoryTableOperator : public share::ObEventHistoryTableOperator
 
   int add_load(int64_t tenant_id, ObResourceWeight& weight, UnitStat& us);
 
-  private:
+private:
   ObUnitLoadHistoryTableOperator()
   {}
   DISALLOW_COPY_AND_ASSIGN(ObUnitLoadHistoryTableOperator);

@@ -23,14 +23,19 @@ namespace clog {
 class ObConfirmedInfo {
   OB_UNIS_VERSION(1);
 
-  public:
-  ObConfirmedInfo() : data_checksum_(0), epoch_id_(common::OB_INVALID_TIMESTAMP), accum_checksum_(0)
+public:
+  ObConfirmedInfo()
+      : data_checksum_(0),
+        epoch_id_(common::OB_INVALID_TIMESTAMP),
+        accum_checksum_(0),
+        submit_timestamp_(common::OB_INVALID_TIMESTAMP)
   {}
   ~ObConfirmedInfo()
   {}
 
-  public:
-  int init(const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum);
+public:
+  int init(const int64_t data_checksum, const int64_t epoch_id, const int64_t accum_checksum,
+      const int64_t submit_timestamp_);
   int64_t get_data_checksum() const
   {
     return data_checksum_;
@@ -43,6 +48,10 @@ class ObConfirmedInfo {
   {
     return accum_checksum_;
   }
+  int64_t get_submit_timestamp() const
+  {
+    return submit_timestamp_;
+  }
   void reset()
   {
     data_checksum_ = 0;
@@ -54,33 +63,35 @@ class ObConfirmedInfo {
     data_checksum_ = confirmed_info.data_checksum_;
     epoch_id_ = confirmed_info.epoch_id_;
     accum_checksum_ = confirmed_info.accum_checksum_;
+    submit_timestamp_ = confirmed_info.submit_timestamp_;
   }
   friend bool operator==(const ObConfirmedInfo& lhs, const ObConfirmedInfo& rhs);
   TO_STRING_KV(K_(data_checksum), K_(epoch_id), K_(accum_checksum));
 
-  private:
+private:
   int64_t data_checksum_;
   int64_t epoch_id_;
   int64_t accum_checksum_;
+  int64_t submit_timestamp_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConfirmedInfo);
 };
 
 inline bool operator==(const ObConfirmedInfo& lhs, const ObConfirmedInfo& rhs)
 {
   return (lhs.data_checksum_ == rhs.data_checksum_) && (lhs.epoch_id_ == rhs.epoch_id_) &&
-         (lhs.accum_checksum_ == rhs.accum_checksum_);
+         (lhs.accum_checksum_ == rhs.accum_checksum_) && (lhs.submit_timestamp_ == rhs.submit_timestamp_);
 }
 
 class ObMembershipLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMembershipLog();
   ~ObMembershipLog();
 
-  public:
+public:
   int64_t get_replica_num() const;
   int64_t get_timestamp() const;
   const common::ObMemberList& get_member_list() const;
@@ -96,7 +107,7 @@ class ObMembershipLog {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   static const int16_t MS_LOG_VERSION = 1;
   int16_t version_;
   int64_t replica_num_;
@@ -106,18 +117,18 @@ class ObMembershipLog {
   int64_t type_;
   int64_t cluster_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMembershipLog);
 };
 
 class ObRenewMembershipLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRenewMembershipLog();
   ~ObRenewMembershipLog();
 
-  public:
+public:
   int64_t get_replica_num() const;
   int64_t get_timestamp() const;
   const common::ObMemberList& get_member_list() const;
@@ -137,7 +148,7 @@ class ObRenewMembershipLog {
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   int64_t replica_num_;
   int64_t timestamp_;
   common::ObMemberList member_list_;
@@ -147,48 +158,48 @@ class ObRenewMembershipLog {
   common::ObProposalID ms_proposal_id_;
   uint64_t barrier_log_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRenewMembershipLog);
 };
 
 class ObNopLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObNopLog() : version_(NOP_LOG_VERSION)
   {}
   ~ObNopLog()
   {}
 
-  private:
+private:
   static const int16_t NOP_LOG_VERSION = 1;
   int16_t version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNopLog);
 };
 
 class ObPreparedLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPreparedLog() : version_(PREPARED_LOG_VERSION)
   {}
   ~ObPreparedLog()
   {}
 
-  private:
+private:
   static const int16_t PREPARED_LOG_VERSION = 1;
   int16_t version_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPreparedLog);
 };
 
 class ObLogArchiveInnerLog {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObLogArchiveInnerLog()
       : version_(ARCHIVE_CHECKPOINT_LOG_VERSION),
         checkpoint_ts_(common::OB_INVALID_TIMESTAMP),
@@ -222,13 +233,13 @@ class ObLogArchiveInnerLog {
   }
   TO_STRING_KV(K_(version), K_(checkpoint_ts), K_(round_start_ts), K_(round_snapshot_version));
 
-  private:
+private:
   static const int16_t ARCHIVE_CHECKPOINT_LOG_VERSION = 1;
   int16_t version_;
   int64_t checkpoint_ts_;
   int64_t round_start_ts_;          // only kickoff log use this
   int64_t round_snapshot_version_;  // only kickoff log use this.use for recovery point by qianchen
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveInnerLog);
 };
 

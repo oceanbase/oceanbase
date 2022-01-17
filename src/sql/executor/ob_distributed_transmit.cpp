@@ -160,11 +160,11 @@ int ObDistributedTransmit::inner_open(ObExecContext& exec_ctx) const
   ObIArray<ObSliceEvent>* slice_events = NULL;
 
   uint64_t slice_table_id = repartition_table_id_;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema* table_schema = NULL;
+  ObSchemaGetterGuard *schema_guard = exec_ctx.get_sql_ctx()->schema_guard_;
+  const ObTableSchema *table_schema = NULL;
 
-  int64_t interm_result_buf_len = get_split_task_count() * sizeof(ObIntermResult*);
-  if (OB_ISNULL(child_op_)) {
+  int64_t interm_result_buf_len = get_split_task_count() * sizeof(ObIntermResult *);
+  if (OB_ISNULL(child_op_) || OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child op is NULL", K(ret));
   } else if (OB_UNLIKELY(get_split_task_count() <= 0)) {
@@ -212,9 +212,7 @@ int ObDistributedTransmit::inner_open(ObExecContext& exec_ctx) const
   }
 
   if (OB_SUCC(ret) && OB_INVALID_ID != slice_table_id) {
-    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
-      LOG_WARN("faile to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_table_schema(slice_table_id, table_schema))) {
+    if (OB_FAIL(schema_guard->get_table_schema(slice_table_id, table_schema))) {
       LOG_WARN("faile to get table schema", K(ret), K(slice_table_id));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;

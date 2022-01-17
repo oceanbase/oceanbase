@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#include <numeric>
 #include "ob_task_define.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/utility/ob_simple_rate_limiter.h"
@@ -24,7 +24,7 @@ namespace share {
 class ObLogRateLimiter : public lib::ObSimpleRateLimiter {
   friend class ObTaskController;
 
-  public:
+public:
   bool is_force_allows() const override
   {
     return OB_UNLIKELY(allows_ > 0);
@@ -36,7 +36,7 @@ class ObLogRateLimiter : public lib::ObSimpleRateLimiter {
     }
   }
 
-  private:
+private:
   static RLOCAL(int64_t, allows_);
 };
 

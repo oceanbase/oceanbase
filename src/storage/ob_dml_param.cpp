@@ -15,8 +15,7 @@
 #include "lib/container/ob_iarray.h"
 #include "share/ob_errno.h"
 #include "share/schema/ob_schema_struct.h"
-#include "share/schema/ob_table_param.h"
-#include "sql/engine/expr/ob_expr.h"
+#include "share/schema/ob_table_dml_param.h"
 
 namespace oceanbase {
 namespace storage {
@@ -187,5 +186,28 @@ DEF_TO_STRING(ObRow2ExprsProjector::Item)
   return pos;
 }
 
+DEF_TO_STRING(ObDMLBaseParam)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(N_TIMEOUT,
+      timeout_,
+      N_SCHEMA_VERSION,
+      schema_version_,
+      N_SCAN_FLAG,
+      query_flag_,
+      N_SQL_MODE,
+      sql_mode_,
+      N_IS_TOTAL_QUANTITY_LOG,
+      is_total_quantity_log_,
+      K_(only_data_table),
+      KPC_(table_param),
+      K_(tenant_schema_version),
+      K_(is_ignore),
+      K_(duplicated_rows),
+      K_(prelock));
+  J_OBJ_END();
+  return pos;
+}
 }  // namespace storage
 }  // namespace oceanbase

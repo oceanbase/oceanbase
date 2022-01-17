@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObDirectLogReader : public ObSingleLogReader {
-  public:
+public:
   ObDirectLogReader();
   virtual ~ObDirectLogReader();
 

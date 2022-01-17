@@ -44,20 +44,20 @@ class ObCreateTableStmt;
 class ObTableStmt;
 
 class ObTableExecutorUtils {
-  public:
+public:
   static int get_first_stmt(
       const common::ObString& stmt, common::ObString& first_stmt, ObSQLMode sql_mode = DEFAULT_OCEANBASE_MODE);
 };
 
 class ObCreateTableExecutor {
-  public:
+public:
   ObCreateTableExecutor();
   virtual ~ObCreateTableExecutor();
   int execute(ObExecContext& ctx, ObCreateTableStmt& stmt);
   int set_index_arg_list(ObExecContext& ctx, ObCreateTableStmt& stmt);
   int execute_ctas(ObExecContext& ctx, ObCreateTableStmt& stmt, obrpc::ObCommonRpcProxy* common_rpc_proxy);
 
-  private:
+private:
   int prepare_ins_arg(ObCreateTableStmt& stmt, const ObSQLSessionInfo* my_session, ObSqlString& ins_sql);
   int prepare_alter_arg(
       ObCreateTableStmt& stmt, const ObSQLSessionInfo* my_session, obrpc::ObAlterTableArg& alter_table_arg);
@@ -67,12 +67,12 @@ class ObCreateTableExecutor {
 
 class ObAlterTableStmt;
 class ObAlterTableExecutor {
-  public:
+public:
   ObAlterTableExecutor();
   virtual ~ObAlterTableExecutor();
   int execute(ObExecContext& ctx, ObAlterTableStmt& stmt);
 
-  private:
+private:
   struct PartitionServer {
     PartitionServer() : pkey_(), server_()
     {}
@@ -199,89 +199,89 @@ class ObAlterTableExecutor {
 
   int refresh_schema_for_table(const uint64_t tenant_id);
 
-  private:
+private:
   // DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
 };
 
 class ObDropTableStmt;
 class ObDropTableExecutor {
-  public:
+public:
   ObDropTableExecutor();
   virtual ~ObDropTableExecutor();
   int execute(ObExecContext& ctx, ObDropTableStmt& stmt);
 
-  private:
+private:
 };
 
 class ObRenameTableStmt;
 class ObRenameTableExecutor {
-  public:
+public:
   ObRenameTableExecutor();
   virtual ~ObRenameTableExecutor();
   int execute(ObExecContext& ctx, ObRenameTableStmt& stmt);
 
-  private:
+private:
 };
 
 class ObTruncateTableStmt;
 class ObTruncateTableExecutor {
-  public:
+public:
   ObTruncateTableExecutor();
   virtual ~ObTruncateTableExecutor();
   int execute(ObExecContext& ctx, ObTruncateTableStmt& stmt);
 
-  private:
+private:
 };
 
 class ObCreateTableLikeStmt;
 class ObCreateTableLikeExecutor {
-  public:
+public:
   ObCreateTableLikeExecutor();
   virtual ~ObCreateTableLikeExecutor();
   int execute(ObExecContext& ctx, ObCreateTableLikeStmt& stmt);
 
-  private:
+private:
 };
 
 class ObFlashBackTableFromRecyclebinStmt;
 class ObFlashBackTableFromRecyclebinExecutor {
-  public:
+public:
   ObFlashBackTableFromRecyclebinExecutor()
   {}
   virtual ~ObFlashBackTableFromRecyclebinExecutor()
   {}
   int execute(ObExecContext& ctx, ObFlashBackTableFromRecyclebinStmt& stmt);
 
-  private:
+private:
 };
 
 class ObFlashBackTableToScnStmt;
 class ObFlashBackTableToScnExecutor {
-  public:
+public:
   ObFlashBackTableToScnExecutor()
   {}
   virtual ~ObFlashBackTableToScnExecutor()
   {}
   int execute(ObExecContext& ctx, ObFlashBackTableToScnStmt& stmt);
 
-  private:
+private:
 };
 
 class ObPurgeTableStmt;
 class ObPurgeTableExecutor {
-  public:
+public:
   ObPurgeTableExecutor()
   {}
   virtual ~ObPurgeTableExecutor()
   {}
   int execute(ObExecContext& ctx, ObPurgeTableStmt& stmt);
 
-  private:
+private:
 };
 
 class ObOptimizeTableStmt;
 class ObOptimizeTableExecutor {
-  public:
+public:
   ObOptimizeTableExecutor() = default;
   virtual ~ObOptimizeTableExecutor() = default;
   int execute(ObExecContext& ctx, ObOptimizeTableStmt& stmt);
@@ -289,7 +289,7 @@ class ObOptimizeTableExecutor {
 
 class ObOptimizeTenantStmt;
 class ObOptimizeTenantExecutor {
-  public:
+public:
   ObOptimizeTenantExecutor() = default;
   virtual ~ObOptimizeTenantExecutor() = default;
   int execute(ObExecContext& ctx, ObOptimizeTenantStmt& stmt);
@@ -299,7 +299,7 @@ class ObOptimizeTenantExecutor {
 
 class ObOptimizeAllStmt;
 class ObOptimizeAllExecutor {
-  public:
+public:
   ObOptimizeAllExecutor() = default;
   virtual ~ObOptimizeAllExecutor() = default;
   int execute(ObExecContext& ctx, ObOptimizeAllStmt& stmt);

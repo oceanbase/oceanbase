@@ -43,7 +43,7 @@ using namespace oceanbase::common::sqlclient;
 
 template <typename T>
 class TenantIdTrait {
-  public:
+public:
   explicit TenantIdTrait(const T& value) : value_(value)
   {}
   uint64_t get_tenant_id() const
@@ -51,12 +51,12 @@ class TenantIdTrait {
     return value_.tenant_id_;
   }
 
-  private:
+private:
   const T& value_;
 };
 template <>
 class TenantIdTrait<uint64_t> {
-  public:
+public:
   explicit TenantIdTrait(const uint64_t value) : value_(value)
   {}
   uint64_t get_tenant_id() const
@@ -64,7 +64,7 @@ class TenantIdTrait<uint64_t> {
     return common::extract_tenant_id(value_);
   }
 
-  private:
+private:
   uint64_t value_;
 };
 
@@ -4746,6 +4746,9 @@ int ObServerSchemaService::try_fetch_publish_sys_schemas(const ObRefreshSchemaSt
       LOG_WARN("add index table id failed", K(ret));
     } else if (OB_FAIL(sys_table_ids.push_back(
                    combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_V2_HISTORY_IDX_DATA_TABLE_ID_TID)))) {
+      LOG_WARN("add index table id failed", K(ret));
+    } else if (OB_FAIL(sys_table_ids.push_back(
+                   combine_id(OB_SYS_TENANT_ID, OB_ALL_BACKUP_PIECE_FILES_IDX_DATA_TABLE_ID_TID)))) {
       LOG_WARN("add index table id failed", K(ret));
     } else if (OB_FAIL(schema_service_->get_sys_table_schemas(sys_table_ids, sql_client, allocator1, sys_schemas))) {
       LOG_WARN("get_batch_table_schema failed", K(sys_table_ids), K(ret));

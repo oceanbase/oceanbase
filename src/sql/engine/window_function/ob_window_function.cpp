@@ -1364,16 +1364,16 @@ int ObWindowFunction::ObWindowFunctionCtx::get_next_row(const ObNewRow*& row)
         for (int64_t i = ++last_output_row_; i < rw_.count() && OB_SUCC(ret); ++i) {
           const ObNewRow* child_row = NULL;
           if (OB_FAIL(rw_.at(i, child_row))) {
-            LOG_WARN("get row faild", K(ret), K(i));
+            LOG_WARN("get row failed", K(ret), K(i));
           } else {
             for (int64_t j = 0; j < child_row->get_count() && OB_SUCC(ret); ++j) {
               cur_row.cells_[j] = child_row->get_cell(j);
             }
             const ObNewRow* res_row = NULL;
             if (op_->is_parallel_ && OB_FAIL(func_ctx->rw_.at(0, res_row))) {
-              LOG_WARN("get row faild", K(ret), K(i));
+              LOG_WARN("get row failed", K(ret), K(i));
             } else if (!op_->is_parallel_ && OB_FAIL(func_ctx->rw_.at(i, res_row))) {
-              LOG_WARN("get row faild", K(ret), K(i));
+              LOG_WARN("get row failed", K(ret), K(i));
             } else {
               int64_t cell_idx = res_row->count_;
               DLIST_FOREACH_NORET(func, func_list_)
@@ -1458,7 +1458,7 @@ int ObWindowFunction::ObWindowFunctionCtx::parallel_winbuf_process()
       LOG_WARN("fail to get whole msg", K(ret));
     }
   } else if (OB_FAIL(func_ctx->rw_.at(0, res_row))) {
-    LOG_WARN("get row faild", K(ret), K(res_row));
+    LOG_WARN("get row failed", K(ret), K(res_row));
   } else if (OB_FAIL(get_whole_msg(false, whole, res_row))) {
     LOG_WARN("fail to get whole msg", K(ret));
   } else if (whole.is_empty_) {
@@ -1491,7 +1491,7 @@ int ObWindowFunction::ObWindowFunctionCtx::parallel_winbuf_process()
               case T_FUN_SUM: {
                 ObObj res;
                 if (OB_FAIL(ObExprAdd::calc_for_agg(res, new_row->cells_[index], row->cells_[index], expr_ctx_, -1))) {
-                  LOG_WARN("add calculate faild", K(ret), K(index));
+                  LOG_WARN("add calculate failed", K(ret), K(index));
                 } else if (res.need_deep_copy()) {
                   char* copy_data = NULL;
                   int64_t copy_size = res.get_deep_copy_size();

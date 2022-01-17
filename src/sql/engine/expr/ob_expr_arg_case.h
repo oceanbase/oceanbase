@@ -23,7 +23,7 @@ typedef int (*ob_get_cmp_type_func)(common::ObObjType& type, const common::ObObj
     const common::ObObjType& type2, const common::ObObjType& type3);
 
 class ObExprArgCase : public ObExprOperator {
-  public:
+public:
   explicit ObExprArgCase(common::ObIAllocator& alloc);
   virtual ~ObExprArgCase();
 
@@ -54,11 +54,11 @@ class ObExprArgCase : public ObExprOperator {
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprArgCase);
 
-  private:
+private:
   bool need_cast_;
 };
 }  // namespace sql

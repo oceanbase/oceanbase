@@ -16,10 +16,10 @@
 namespace oceanbase {
 namespace common {
 class SpinQueue {
-  public:
+public:
   enum { MIN_QLEN = 4 };
 
-  public:
+public:
   SpinQueue() : push_(0), pop_(0), pos_mask_(0), items_(NULL)
   {}
   ~SpinQueue()
@@ -79,7 +79,7 @@ class SpinQueue {
     return pop_ + pos_mask_ + 1 - push_;
   }
 
-  private:
+private:
   volatile uint64_t push_ CACHE_ALIGNED;
   volatile uint64_t pop_ CACHE_ALIGNED;
   uint64_t pos_mask_ CACHE_ALIGNED;

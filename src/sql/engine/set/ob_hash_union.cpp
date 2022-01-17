@@ -18,17 +18,17 @@ using namespace common;
 
 namespace sql {
 class ObHashUnion::ObHashUnionCtx : public ObHashSetOperatorCtx {
-  public:
+public:
   explicit ObHashUnionCtx(ObExecContext& ctx) : ObHashSetOperatorCtx(ctx), cur_child_op_(NULL), is_left_child_(true)
   {}
 
   virtual ~ObHashUnionCtx()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHashUnionCtx);
 
-  protected:
+protected:
   ObPhyOperator* cur_child_op_;
   bool is_left_child_;
 

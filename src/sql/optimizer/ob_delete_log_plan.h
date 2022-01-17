@@ -23,7 +23,7 @@ namespace sql {
  */
 class ObLogDelete;
 class ObDeleteLogPlan : public ObLogPlan {
-  public:
+public:
   ObDeleteLogPlan(ObOptimizerContext& ctx, const ObDeleteStmt* delete_stmt)
       : ObLogPlan(ctx, delete_stmt), delete_op_(NULL)
   {}
@@ -32,12 +32,12 @@ class ObDeleteLogPlan : public ObLogPlan {
   int generate_raw_plan();
   virtual int generate_plan();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDeleteLogPlan);
   int allocate_delete_as_top(ObLogicalOperator*& top);
   int allocate_pdml_delete_as_top(ObLogicalOperator*& top);
 
-  private:
+private:
   ObLogDelete* delete_op_;
 };
 }  // namespace sql

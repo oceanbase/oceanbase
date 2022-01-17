@@ -268,7 +268,7 @@ int ObDMLResolver::resolve_sql_expr(
     if (OB_SUCC(ret) && op_exprs.count() > 0) {
       if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(
               ctx.expr_factory_, ctx.session_info_, op_exprs))) {
-        LOG_WARN("implicit cast faild", K(ret));
+        LOG_WARN("implicit cast failed", K(ret));
       }
     }
 
@@ -325,7 +325,7 @@ int ObDMLResolver::resolve_columns_field_list_first(
         } else if (select_item_expr->is_column_ref_expr()) {
           ObColumnRefRawExpr* column_ref_expr = static_cast<ObColumnRefRawExpr*>(select_item_expr);
           if (ObCharset::case_insensitive_equal(sel_stmt->get_select_item(j).is_real_alias_
-                                                    ? column_ref_expr->get_alias_column_name()
+                                                    ? sel_stmt->get_select_item(j).alias_name_
                                                     : column_ref_expr->get_column_name(),
                   columns.at(i).col_name_)) {
             if (found) {
@@ -567,6 +567,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem& table_item, const 
       col_expr->set_synonym_db_name(table_item.synonym_db_name_);
       col_expr->set_synonym_name(table_item.synonym_name_);
       col_expr->set_column_attr(table_item.get_table_name(), col_schema->get_column_name_str());
+      col_expr->set_from_alias_table(!table_item.alias_name_.empty());
       col_expr->set_database_name(table_item.database_name_);
       // column maybe from alias table, so must reset ref id by table id from table_item
       col_expr->set_ref_id(table_item.table_id_, col_schema->get_column_id());
@@ -638,6 +639,7 @@ int ObDMLResolver::resolve_columns(ObRawExpr*& expr, ObArray<ObQualifiedName>& c
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     ObQualifiedName& q_name = columns.at(i);
     ObRawExpr* real_ref_expr = NULL;
+    params_.is_column_ref_ = expr->is_column_ref_expr();
     if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref expr failed", K(ret), K(q_name));
       report_user_error_msg(ret, expr, q_name);
@@ -1120,7 +1122,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode& parse_tree, TableItem*& 
       } else if (table_schema->is_vir_table() && !stmt->is_select_stmt()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "DML operation on Virtual Table/Temporary Table");
-      } else if (params_.is_from_create_view_ && table_schema->is_mysql_tmp_table()) {
+      } else if ((params_.is_from_create_view_ || params_.is_from_create_table_) && table_schema->is_mysql_tmp_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
       } else if (OB_FAIL(resolve_table_partition_expr(*table_item, *table_schema))) {
@@ -2006,6 +2008,9 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id, c
             K(params_.contain_dml_),
             K(is_inner_table(tschema->get_table_id())),
             K(session_info_->is_inner()));
+      } else if (!GCONF._ob_enable_px_for_inner_sql &&
+                 ObSQLSessionInfo::USER_SESSION != session_info_->get_session_type()) {
+        stmt->get_query_ctx()->forbid_use_px_ = true;
       } else {
         // use px, including PL, inner sql, inner connection sql triggered by CMD
       }
@@ -2093,6 +2098,7 @@ int ObDMLResolver::expand_view(TableItem& view_item)
     ObViewTableResolver view_resolver(params_, get_view_db_name(), get_view_name());
     view_resolver.set_current_level(current_level_);
     view_resolver.set_current_view_item(view_item);
+    view_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
     if (OB_FAIL(do_expand_view(view_item, view_resolver))) {
       LOG_WARN("do expand view resolve failed", K(ret));
     }
@@ -2742,7 +2748,7 @@ int ObDMLResolver::resolve_is_expr(ObRawExpr*& expr)
         if (OB_FAIL(flag_expr->formalize(session_info_))) {
           LOG_WARN("formalize expr failed", K(ret));
         }
-      } else if (column_item->is_auto_increment()) {
+      } else if (column_item->is_auto_increment() && T_NULL == is_expr->get_param_expr(1)->get_expr_type()) {
         if (OB_FAIL(resolve_autoincrement_column_is_null(expr))) {
           LOG_WARN("fail to process autoincrement column is null", K(ret));
         } else {
@@ -2988,6 +2994,7 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode& node, ObIArray<Ob
     ObExprResolveContext ctx(*params_.expr_factory_, session_info_->get_timezone_info(), OB_NAME_CASE_INVALID);
     ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
     ctx.query_ctx_ = params_.query_ctx_;
+    ctx.session_info_ = params_.session_info_;
     ObRawExprCanonicalizerImpl canonicalizer(ctx);
     if (OB_FAIL(resolve_sql_expr(node, expr))) {
       LOG_WARN("resolve sql expr failed", K(ret));
@@ -4242,8 +4249,6 @@ int ObDMLResolver::do_resolve_subquery_info(const ObSubQueryInfo& subquery_info,
     LOG_WARN("Unknown statement type in subquery", "stmt_type", subquery_info.sub_query_->type_);
   } else if (OB_FAIL(child_resolver.resolve_child_stmt(*(subquery_info.sub_query_)))) {
     LOG_WARN("resolve select subquery failed", K(ret));
-  } else if (OB_FAIL(try_add_remove_const_epxr(*child_resolver.get_child_stmt()))) {
-    LOG_WARN("try add subquery value expr failed", K(ret));
   } else {
     sub_stmt = child_resolver.get_child_stmt();
     subquery_info.ref_expr_->set_output_column(sub_stmt->get_select_item_size());
@@ -4281,22 +4286,7 @@ int ObDMLResolver::try_add_remove_const_epxr(ObSelectStmt& stmt)
   int ret = OB_SUCCESS;
   CK(NULL != session_info_);
   CK(NULL != params_.expr_factory_);
-  // do not add remove_const for select ... from dual.
-  bool is_from_dual = false;
-  ObSelectStmt* ref_query = NULL;
-  if (0 == stmt.get_having_expr_size() && 0 == stmt.get_condition_size()) {
-    if (0 == stmt.get_from_item_size()) {
-      is_from_dual = true;
-    } else if (stmt.is_single_table_stmt() && OB_NOT_NULL(stmt.get_table_item(0)) &&
-               stmt.get_table_item(0)->is_generated_table() &&
-               OB_NOT_NULL(ref_query = stmt.get_table_item(0)->ref_query_) && 0 == ref_query->get_from_item_size() &&
-               0 == ref_query->get_having_expr_size() && 0 == ref_query->get_condition_size() &&
-               1 == ref_query->get_select_item_size() && OB_NOT_NULL(ref_query->get_select_item(0).expr_) &&
-               ref_query->get_select_item(0).expr_->is_const_expr()) {
-      is_from_dual = true;
-    }
-  }
-  if (OB_SUCC(ret) && session_info_->use_static_typing_engine() && !is_from_dual) {
+  if (OB_SUCC(ret) && session_info_->use_static_typing_engine()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_select_item_size(); ++i) {
       ObRawExpr*& expr = stmt.get_select_item(i).expr_;
       CK(NULL != expr);
@@ -9857,7 +9847,7 @@ int ObDMLResolver::fill_index_column_convert_exprs(bool use_static_engine, const
     }
     if (is_shadow_pk_column && use_static_engine) {
       ObColumnRefRawExpr* column_ref_expr = column_exprs.at(i);
-      if (OB_FAIL(column_convert_exprs.push_back(column_ref_expr))) {
+      if (OB_FAIL(column_convert_exprs.push_back(column_ref_expr->get_dependant_expr()))) {
         LOG_WARN("failed to push back to column convert exprs", K(ret));
       }
     } else if (is_shadow_pk_column) {

@@ -22,7 +22,7 @@ class Path;
 }  // namespace oceanbase
 namespace test {
 class TestJoinOrder : public TestOptimizerUtils {
-  public:
+public:
   TestJoinOrder()
   {}
   ~TestJoinOrder()

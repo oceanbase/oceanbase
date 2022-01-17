@@ -19,14 +19,14 @@ namespace oceanbase {
 namespace storage {
 
 class ObSSTableRowMultiExister : public ObSSTableRowMultiGetter {
-  public:
+public:
   ObSSTableRowMultiExister();
   virtual ~ObSSTableRowMultiExister();
 
-  protected:
+protected:
   virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row);
 
-  private:
+private:
   ObStoreRow store_row_;
 };
 

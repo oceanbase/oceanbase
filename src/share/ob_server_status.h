@@ -179,7 +179,7 @@ struct ObServerStatus {
   int64_t ssl_key_expired_time_;
   bool in_recovery_for_takenover_by_rs_;
 
-  private:
+private:
   static int get_status_str(const char* strs[], const int64_t strs_len, const int64_t status, const char*& str);
 };
 

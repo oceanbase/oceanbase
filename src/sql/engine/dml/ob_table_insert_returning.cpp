@@ -26,7 +26,7 @@ using namespace storage;
 using namespace share;
 namespace sql {
 class ObTableInsertReturning::ObTableInsertReturningCtx : public ObTableInsertCtx {
-  public:
+public:
   explicit ObTableInsertReturningCtx(ObExecContext& ctx) : ObTableInsertCtx(ctx), new_row_()
   {}
 
@@ -38,7 +38,7 @@ class ObTableInsertReturning::ObTableInsertReturningCtx : public ObTableInsertCt
     ObTableInsertCtx::destroy();
   }
 
-  public:
+public:
   common::ObNewRow insert_row_;
   common::ObNewRow new_row_;
 };

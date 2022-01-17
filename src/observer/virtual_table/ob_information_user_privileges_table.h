@@ -27,9 +27,9 @@ class ObUserInfo;
 }  // namespace share
 namespace observer {
 class ObInfoSchemaUserPrivilegesTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   class StaticInit {
-    public:
+  public:
     StaticInit();
   };
   friend class ObInfoSchemaUserPrivilegesTable::StaticInit;
@@ -49,7 +49,7 @@ class ObInfoSchemaUserPrivilegesTable : public common::ObVirtualTableScannerIter
     user_id_ = user_id;
   }
 
-  private:
+private:
   enum USER_PRIVS_COLUMN { GRANTEE = 16, TABLE_CATALOG, PRIVILEGE_TYPE, IS_GRANTABLE, MAX_USER_PRIVS_COLUMN };
   enum {
     MAX_COL_COUNT = 4,

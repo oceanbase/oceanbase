@@ -64,7 +64,7 @@ struct ObRbNode {
 
 #define RBNODE(type, rblink)                                                                                          \
   class ObRbNode##_##rblink : public container::ObRbNode<type> {                                                      \
-    public:                                                                                                           \
+  public:                                                                                                             \
     OB_INLINE static type* get_left(const type* n)                                                                    \
     {                                                                                                                 \
       return n->rblink##_.get_left();                                                                                 \
@@ -117,7 +117,7 @@ struct ObDummyCompHelper {
 // Red-black tree structure.
 template <class T, class Compare, class L = typename T ::ObRbNode_rblink>
 class ObRbTree {
-  public:
+public:
   struct ObRbPath {
     T* node_;
     int cmp_;
@@ -882,7 +882,7 @@ class ObRbTree {
     L::set_right(node_source, node_target);
   }
 
-  private:
+private:
   // Node initializer
   OB_INLINE void init_node(T* node)
   {
@@ -933,7 +933,7 @@ class ObRbTree {
     set_right(return_node, node);
   }
 
-  private:
+private:
   T* root_;
   CompHepler compare_;
   DISALLOW_COPY_AND_ASSIGN(ObRbTree);

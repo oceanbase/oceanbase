@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class TCRef {
-  public:
+public:
   enum { REF_LIMIT = INT32_MAX / 2 };
   TCRef(int32_t ref_count_per_thread = 8) : ref_count_per_thread_(ref_count_per_thread)
   {
@@ -129,7 +129,7 @@ class TCRef {
     return ref_cnt;
   }
 
-  private:
+private:
   int32_t xref_(int32_t* p, int32_t x)
   {
     return ATOMIC_AAF(p, x);
@@ -140,7 +140,7 @@ class TCRef {
     return qsync;
   }
 
-  private:
+private:
   int32_t ref_count_per_thread_;
   int32_t total_ref_count_;
   int32_t** ref_;

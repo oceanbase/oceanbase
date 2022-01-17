@@ -41,41 +41,49 @@ class ObSchemaGetterGuard;
 namespace rootserver {
 
 class OBackupAutoDeleteExpiredIdling : public ObThreadIdling {
-  public:
+public:
   explicit OBackupAutoDeleteExpiredIdling(volatile bool& stop) : ObThreadIdling(stop)
   {}
   virtual int64_t get_idle_interval_us();
 };
 
 class ObBackupAutoDeleteExpiredData : public ObRsReentrantThread, public ObIBackupScheduler {
-  public:
+public:
   ObBackupAutoDeleteExpiredData();
   virtual ~ObBackupAutoDeleteExpiredData();
   int init(common::ObServerConfig& cfg, ObMySQLProxy& sql_proxy,
       share::schema::ObMultiVersionSchemaService& schema_service, ObBackupDataClean& backup_data_clean,
       share::ObIBackupLeaseService& backup_lease_service);
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
   void wakeup();
   int idle() const;
-  virtual bool is_working() const
+  virtual bool is_working() const override
   {
     return is_working_;
   }
-  int start();
+  int start() override;
   ;
 
-  private:
-  int check_can_auto_delete(
-      const bool auto_delete_expired_backup, const int64_t backup_recovery_window, bool& can_delete);
-  int get_last_succeed_delete_expired_snapshot(int64_t& last_succ_delete_expired_snapshot);
+private:
+  int check_can_auto_handle_backup(const bool is_auto, const int64_t backup_recovery_window, bool& can_delete);
+  int get_last_succeed_delete_obsolete_snapshot(int64_t& last_succ_delete_expired_snapshot);
   int schedule_auto_delete_expired_data(const int64_t backup_recovery_window);
+  int schedule_auto_delete_obsolete();
+  void switch_delete_obsolete_action();
 
-  private:
+private:
+  enum ObBackupDeleteObsoleteAction {
+    NONE = 0,
+    DELETE_OBSOLETE_BACKUP = 1,
+    DELETE_OBSOLETE_BACKUP_BACKUP = 2,
+  };
+
+private:
   bool is_inited_;
   common::ObServerConfig* config_;
   common::ObMySQLProxy* sql_proxy_;
@@ -84,8 +92,9 @@ class ObBackupAutoDeleteExpiredData : public ObRsReentrantThread, public ObIBack
   ObBackupDataClean* backup_data_clean_;
   bool is_working_;
   share::ObIBackupLeaseService* backup_lease_service_;
+  ObBackupDeleteObsoleteAction delete_obsolete_action_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupAutoDeleteExpiredData);
 };
 

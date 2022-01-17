@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace storage {
 
 struct ObSSTableMergeInfoKey {
-  public:
+public:
   ObSSTableMergeInfoKey() : table_id_(common::OB_INVALID_ID), partition_id_(common::OB_INVALID_ID)
   {}
   ObSSTableMergeInfoKey(const int64_t table_id, const int64_t partition_id)
@@ -63,7 +63,7 @@ struct ObSSTableMergeInfoValue {
 };
 
 struct ObTableModificationInfo {
-  public:
+public:
   ObTableModificationInfo()
   {
     reset();
@@ -81,7 +81,7 @@ struct ObTableModificationInfo {
   TO_STRING_KV(K_(table_id), K_(partition_id), K_(insert_row_count), K_(update_row_count), K_(delete_row_count),
       K_(max_snapshot_version));
 
-  public:
+public:
   uint64_t table_id_;
   int64_t partition_id_;
   int64_t insert_row_count_;
@@ -91,14 +91,14 @@ struct ObTableModificationInfo {
 };
 
 class ObSSTableMergeInfoIterator {
-  public:
+public:
   ObSSTableMergeInfoIterator();
   virtual ~ObSSTableMergeInfoIterator();
   int open();
   int get_next_merge_info(ObSSTableMergeInfo& merge_info);
   void reset();
 
-  private:
+private:
   int64_t major_info_idx_;
   int64_t major_info_cnt_;
   int64_t minor_info_idx_;
@@ -107,14 +107,14 @@ class ObSSTableMergeInfoIterator {
 };
 
 class ObSSTableMergeInfoMgr {
-  public:
+public:
   int init(const int64_t memory_limit = MERGE_INFO_MEMORY_LIMIT);
   void destroy();
   static ObSSTableMergeInfoMgr& get_instance();
   int add_sstable_merge_info(const ObSSTableMergeInfo& merge_info);
   int get_modification_infos(common::ObIArray<ObTableModificationInfo>& infos);
 
-  private:
+private:
   friend class ObSSTableMergeInfoIterator;
   typedef common::hash::ObHashMap<ObSSTableMergeInfoKey, ObSSTableMergeInfoValue*, common::hash::NoPthreadDefendMode>
       ObSSTableMergeInfoMap;

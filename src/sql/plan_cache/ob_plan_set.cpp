@@ -901,14 +901,18 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan& plan, ObPlanCacheCtx& pc_ctx, int64_t
               array_binding_plan_ = &plan;
             }
           } else {
-            local_plan_ = &plan;
-            local_phy_locations_.reset();
-            if (OB_FAIL(init_phy_location(phy_locations.count()))) {
-              SQL_PC_LOG(WARN, "init phy location failed");
-            } else if (OB_FAIL(local_phy_locations_.assign(phy_locations))) {
-              SQL_PC_LOG(WARN, "fail to assign phy locations");
+            if (NULL != local_plan_) {
+              ret = OB_SQL_PC_PLAN_DUPLICATE;
+            } else {
+              local_plan_ = &plan;
+              local_phy_locations_.reset();
+              if (OB_FAIL(init_phy_location(phy_locations.count()))) {
+                SQL_PC_LOG(WARN, "init phy location failed");
+              } else if (OB_FAIL(local_phy_locations_.assign(phy_locations))) {
+                SQL_PC_LOG(WARN, "fail to assign phy locations");
+              }
+              LOG_DEBUG("local phy locations", K(local_phy_locations_));
             }
-            LOG_DEBUG("local phy locations", K(local_phy_locations_));
           }
         } break;
         case OB_PHY_PLAN_REMOTE: {
@@ -1191,8 +1195,9 @@ int ObSqlPlanSet::get_local_plan_direct(ObPlanCacheCtx& pc_ctx, bool& is_direct_
       plan = local_plan_;
     }
     if (OB_SUCC(ret) && plan != NULL) {
-      int last_retry_err = pc_ctx.sql_ctx_.session_info_->get_retry_info().get_last_query_retry_err();
-      if (plan->is_last_open_succ()) {
+      int last_retry_err = pc_ctx.sql_ctx_.session_info_
+                             ->get_retry_info().get_last_query_retry_err();
+      if (plan->is_last_exec_succ()) {
         is_direct_local_plan = true;
       } else if (pc_ctx.sql_ctx_.session_info_->get_is_in_retry() && is_local_plan_opt_allowed(last_retry_err)) {
         is_direct_local_plan = true;

@@ -85,7 +85,7 @@ struct ObRowStore::BlockInfo {
       const ObIArray<int64_t>& reserved_columns, const ObNewRow& row, int64_t payload, StoredRow*& stored_row);
   friend class ObRowStore::BlockList;
 
-  private:
+private:
 #ifdef __clang__
   int64_t magic_ [[gnu::unused]];
 #else

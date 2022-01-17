@@ -52,7 +52,7 @@ namespace sqlclient {
 class ObServerConnectionPool;
 class ObMySQLServerProvider;
 class ObMySQLConnectionPool : public common::ObTimerTask, public ObISQLConnectionPool {
-  public:
+public:
   friend class common::ObMySQLProxy;
   friend class common::ObMySQLProxyUtil;
   friend class common::ObMySQLTransaction;
@@ -63,7 +63,7 @@ class ObMySQLConnectionPool : public common::ObTimerTask, public ObISQLConnectio
   static const int64_t DEFAULT_TRANSACTION_TIMEOUT_US = 100 * 1000 * 1000;
   typedef common::ObList<ObServerConnectionPool*, common::ObArenaAllocator> ServerList;
   class ClusterServerList {
-    public:
+  public:
     ClusterServerList() = delete;
     ClusterServerList(common::ObArenaAllocator& allocator) : cluster_id_(common::OB_INVALID_ID), server_list_(allocator)
     {}
@@ -82,14 +82,14 @@ class ObMySQLConnectionPool : public common::ObTimerTask, public ObISQLConnectio
       return server_list_;
     }
 
-    private:
+  private:
     int64_t cluster_id_;
     ServerList server_list_;
     DISALLOW_COPY_AND_ASSIGN(ClusterServerList);
   };
   typedef common::ObList<ClusterServerList*, common::ObArenaAllocator> ClusterList;
 
-  public:
+public:
   ObMySQLConnectionPool();
   ~ObMySQLConnectionPool();
 
@@ -113,6 +113,8 @@ class ObMySQLConnectionPool : public common::ObTimerTask, public ObISQLConnectio
   {
     return is_updated_;
   }
+  bool is_use_ssl() const { return is_use_ssl_; }
+  void disable_ssl() { is_use_ssl_ = false; }
   int64_t to_string(char* buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
@@ -154,7 +156,7 @@ class ObMySQLConnectionPool : public common::ObTimerTask, public ObISQLConnectio
     return db_user_;
   }
 
-  protected:
+protected:
   // update interval.
   // update ms list in backgroud thread and
   // recycle not-in-use unavaliable ms connections
@@ -173,12 +175,13 @@ class ObMySQLConnectionPool : public common::ObTimerTask, public ObISQLConnectio
   int renew_server_connection_pool(const int64_t cluster_id, common::ObAddr& server);
   int get_cluster_server_list_(const int64_t cluster_id, ClusterServerList*& cluster_server_list) const;
 
-  protected:
+protected:
   static const int64_t OB_MAX_PASS_WORD_LENGTH = 64;
   static const int MAX_SERVER_GONE_INTERVAL = 1000 * 1000 * 1;  // 1 sec
 
   bool is_updated_;
   bool is_stop_;
+  bool is_use_ssl_;
   ObMySQLConnection::Mode mode_;
 
   int tg_id_;
@@ -198,13 +201,13 @@ class ObMySQLConnectionPool : public common::ObTimerTask, public ObISQLConnectio
 
 class ObDbLinkConnectionPool : public ObMySQLConnectionPool {
   // dblink.
-  public:
+public:
   int create_dblink_pool(uint64_t dblink_id, const ObAddr& server, const ObString& db_tenant, const ObString& db_user,
       const ObString& db_pass, const ObString& db_name);
   int acquire_dblink(uint64_t dblink_id, ObMySQLConnection*& dblink_conn);
   int release_dblink(ObMySQLConnection* dblink_conn);
 
-  private:
+private:
   int get_dblink_pool(uint64_t dblink_id, ObServerConnectionPool*& dblink_pool);
   int do_acquire_dblink(uint64_t dblink_id, ObMySQLConnection*& dblink_conn);
   int try_connect_dblink(ObMySQLConnection* dblink_conn);

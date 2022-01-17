@@ -32,7 +32,7 @@ namespace election {
 static const char* tmp_dir = "tmpdir";
 
 class ElectionTestEnv {
-  public:
+public:
   ElectionTestEnv()
   {}
 

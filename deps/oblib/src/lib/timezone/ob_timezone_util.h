@@ -65,7 +65,7 @@ typedef struct st_time_zone_info {
 } TIME_ZONE_INFO;
 
 class ObTimezoneUtils {
-  public:
+public:
   ObTimezoneUtils();
   virtual ~ObTimezoneUtils();
 
@@ -79,7 +79,7 @@ class ObTimezoneUtils {
   virtual int parse_timezone_file(const ObString& timezone_file_name);
   virtual int print_tz_to_sql(const char* tz_name);
 
-  private:
+private:
   ObTimezoneUtils(const ObTimezoneUtils& other);
   ObTimezoneUtils& operator=(const ObTimezoneUtils& other);
 

@@ -32,7 +32,7 @@ class ObServerSchemaUpdater;
 typedef ObUniqTaskQueue<ObServerSchemaTask, ObServerSchemaUpdater> ObServerSchemaTaskQueue;
 
 class ObServerSchemaTask : public common::ObDLinkBase<ObServerSchemaTask> {
-  public:
+public:
   friend class ObServerSchemaUpdater;
   enum TYPE {
     ASYNC_REFRESH,  // async schema refresh task caused by sql
@@ -71,16 +71,25 @@ class ObServerSchemaTask : public common::ObDLinkBase<ObServerSchemaTask> {
   {
     return schema_info_.get_schema_version();
   }
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObServerSchemaTask& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
   TO_STRING_KV(K_(type), K_(did_retry), K_(schema_info));
 
-  private:
+private:
   TYPE type_;
   bool did_retry_;
   share::schema::ObRefreshSchemaInfo schema_info_;
 };
 
 class ObServerSchemaUpdater {
-  public:
+public:
   ObServerSchemaUpdater() : schema_mgr_(NULL), inited_(false)
   {}
   ~ObServerSchemaUpdater()
@@ -99,12 +108,12 @@ class ObServerSchemaUpdater {
   int process_barrier(const ObServerSchemaTask& task, bool& stopped);
   int batch_process_tasks(const common::ObIArray<ObServerSchemaTask>& batch_tasks, bool& stopped);
 
-  private:
+private:
   int process_refresh_task(const ObServerSchemaTask& task);
   int process_release_task();
   int process_async_refresh_tasks(const common::ObIArray<ObServerSchemaTask>& tasks);
 
-  private:
+private:
   static const int32_t SSU_MAX_THREAD_NUM = 1;
   static const int64_t SSU_TASK_QUEUE_SIZE = 1024;
   static const int64_t SSU_TASK_MAP_SIZE = 1024;

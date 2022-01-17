@@ -16,14 +16,14 @@
 namespace oceanbase {
 namespace sql {
 class ObEmptyQueryResolver : public ObCMDResolver {
-  public:
+public:
   explicit ObEmptyQueryResolver(ObResolverParams& params) : ObCMDResolver(params)
   {}
   virtual ~ObEmptyQueryResolver()
   {}
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObEmptyQueryResolver);
 };
 }  // namespace sql

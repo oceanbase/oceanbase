@@ -19,7 +19,7 @@ using namespace common;
 namespace share {
 namespace schema {
 class FakeSchemaService : public MockSchemaService {
-  public:
+public:
   const static uint64_t TENANT_ID = 1;
   const static int64_t TABLE_COUNT = 256;
   FakeSchemaService() : null_table_id_(0), table_cnt_(0), version_(0)
@@ -137,7 +137,7 @@ class FakeSchemaService : public MockSchemaService {
   //}
   virtual int check_table_exist(const uint64_t table_id, bool& exist);
 
-  public:
+public:
   uint64_t null_table_id_;
   ObArray<uint64_t> table_ids_;
   ObTableSchema tables_[TABLE_COUNT];

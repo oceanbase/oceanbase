@@ -32,8 +32,9 @@
 
 namespace oceanbase {
 namespace sql {
+class ObRawExprUtils;
 class ObRoutineMatchInfo {
-  public:
+public:
   struct MatchInfo {
     MatchInfo() : need_cast_(false), src_type_(ObMaxType), dest_type_(ObMaxType)
     {}
@@ -80,17 +81,22 @@ class ObRoutineMatchInfo {
     return match_info_.at(i).dest_type_;
   }
 
-  public:
+public:
   common::ObSEArray<MatchInfo, 16> match_info_;
 
   TO_STRING_KV(K_(match_info));
 };
 struct ObResolverUtils {
   enum RangeElementsNode { PARTITION_NAME_NODE = 0, PARTITION_ELEMENT_NODE = 1 };
+  enum PureFunctionCheckStatus {
+    DISABLE_CHECK = 0,
+    CHECK_FOR_GENERATED_COLUMN,
+    CHECK_FOR_FUNCTION_INDEX,
+  };
   static const int NAMENODE = 1;
   static ObItemType item_type_;
 
-  public:
+public:
   static int get_all_function_table_column_names(
       const TableItem& table_item, ObResolverParams& params, ObIArray<ObString>& column_names);
   static int check_function_table_column_exist(
@@ -184,9 +190,14 @@ struct ObResolverUtils {
       const share::schema::ObTableSchema& tbl_schema, share::schema::ObPartitionFuncType part_func_type,
       ObRawExpr*& part_expr, common::ObIArray<common::ObString>* part_keys);
   static int resolve_generated_column_expr(ObResolverParams& params, const common::ObString& expr_str,
-      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr);
+      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr,
+      const PureFunctionCheckStatus check_status = DISABLE_CHECK);
   static int resolve_generated_column_expr(ObResolverParams& params, const ParseNode* node,
-      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr);
+      share::schema::ObTableSchema& tbl_schema, share::schema::ObColumnSchemaV2& generated_column, ObRawExpr*& expr,
+      const PureFunctionCheckStatus check_status = DISABLE_CHECK);
+  static int resolve_generated_column_info(const common::ObString& expr_str, ObIAllocator& allocator,
+      ObItemType& root_expr_type, common::ObIArray<common::ObString>& column_names);
+  static int resolve_column_info_recursively(const ParseNode* node, common::ObIArray<common::ObString>& column_names);
   static int resolve_default_expr_v2_column_expr(ObResolverParams& params, const common::ObString& expr_str,
       share::schema::ObColumnSchemaV2& default_expr_v2_column, ObRawExpr*& expr);
   static int resolve_default_expr_v2_column_expr(ObResolverParams& params, const ParseNode* node,
@@ -323,7 +334,7 @@ struct ObResolverUtils {
   static int check_duplicated_column(ObSelectStmt& select_stmt, bool can_skip = false);
   static void escape_char_for_oracle_mode(ObString& str);
 
-  private:
+private:
   static int check_and_generate_column_name(const ObMaterializedViewContext& ctx, char* buf, const int64_t buf_len,
       const uint64_t table_id, const uint64_t column_id, const ObString& col_name, ObString& new_col_name);
 
@@ -349,7 +360,7 @@ struct ObResolverUtils {
     return ret;
   }
 
-  private:
+private:
   static int log_err_msg_for_partition_value(const ObQualifiedName& name);
   static int check_partition_range_value_result_type(const share::schema::ObPartitionFuncType part_type,
       const ObColumnRefRawExpr& part_column_expr, ObRawExpr& part_value_expr);

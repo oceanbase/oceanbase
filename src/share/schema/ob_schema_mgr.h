@@ -39,7 +39,7 @@ class ObServerSchemaService;
 class ObSchemaGetterGuard;
 
 class ObSimpleTenantSchema : public ObSchema {
-  public:
+public:
   ObSimpleTenantSchema();
   explicit ObSimpleTenantSchema(common::ObIAllocator* allocator);
   ObSimpleTenantSchema(const ObSimpleTenantSchema& src_schema);
@@ -188,7 +188,7 @@ class ObSimpleTenantSchema : public ObSchema {
     in_recyclebin_ = in_recyclebin;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t schema_version_;
   common::ObString tenant_name_;
@@ -205,7 +205,7 @@ class ObSimpleTenantSchema : public ObSchema {
 };
 
 class ObSimpleUserSchema : public ObSchema {
-  public:
+public:
   ObSimpleUserSchema();
   explicit ObSimpleUserSchema(common::ObIAllocator* allocator);
   ObSimpleUserSchema(const ObSimpleUserSchema& src_schema);
@@ -281,7 +281,7 @@ class ObSimpleUserSchema : public ObSchema {
     return OB_ROLE == type_;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t user_id_;
   int64_t schema_version_;
@@ -291,7 +291,7 @@ class ObSimpleUserSchema : public ObSchema {
 };
 
 class ObSimpleDatabaseSchema : public ObSchema {
-  public:
+public:
   ObSimpleDatabaseSchema();
   explicit ObSimpleDatabaseSchema(common::ObIAllocator* allocator);
   ObSimpleDatabaseSchema(const ObSimpleDatabaseSchema& src_schema);
@@ -372,7 +372,7 @@ class ObSimpleDatabaseSchema : public ObSchema {
     return drop_schema_version_ > 0;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t database_id_;
   int64_t schema_version_;
@@ -383,7 +383,7 @@ class ObSimpleDatabaseSchema : public ObSchema {
 };
 
 class ObSimpleTablegroupSchema : public ObSchema {
-  public:
+public:
   ObSimpleTablegroupSchema();
   explicit ObSimpleTablegroupSchema(common::ObIAllocator* allocator);
   ObSimpleTablegroupSchema(const ObSimpleTablegroupSchema& src_schema);
@@ -517,7 +517,7 @@ class ObSimpleTablegroupSchema : public ObSchema {
     is_mock_global_index_invalid_ = is_invalid;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   uint64_t tablegroup_id_;
   int64_t schema_version_;
@@ -608,14 +608,17 @@ struct GetTableKeyV2<ObIndexSchemaHashWrapper, ObSimpleTableSchemaV2*> {
       if (OB_UNLIKELY(OB_SUCCESS != index_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
         ObIndexSchemaHashWrapper null_wrap;
         return null_wrap;
-      } else if (is_oracle_mode && !index_schema->is_in_recyclebin()) {
-        // oracle mode and index is not in recyclebin
-        ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-            index_schema->get_tenant_id(), index_schema->get_database_id(), index_schema->get_origin_index_name_str());
+      } else if (index_schema->is_in_recyclebin()) {  // index is in recyclebin
+        ObIndexSchemaHashWrapper index_schema_hash_wrapper(index_schema->get_tenant_id(),
+            index_schema->get_database_id(),
+            common::OB_INVALID_ID,
+            index_schema->get_table_name_str());
         return index_schema_hash_wrapper;
-      } else {  // mysql mode or index is in recyclebin
-        ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-            index_schema->get_tenant_id(), index_schema->get_database_id(), index_schema->get_table_name_str());
+      } else {
+        ObIndexSchemaHashWrapper index_schema_hash_wrapper(index_schema->get_tenant_id(),
+            index_schema->get_database_id(),
+            is_oracle_mode ? common::OB_INVALID_ID : index_schema->get_data_table_id(),
+            index_schema->get_origin_index_name_str());
         return index_schema_hash_wrapper;
       }
     } else {
@@ -691,7 +694,7 @@ class ObSchemaMgr {
   typedef common::hash::ObPointerHashMap<ObConstraintInfoHashWrapper, ObSimpleConstraintInfo*, GetTableKeyV2>
       ConstraintNameMap;
 
-  public:
+public:
   ObSchemaMgr();
   explicit ObSchemaMgr(common::ObIAllocator& allocator);
   virtual ~ObSchemaMgr();
@@ -840,7 +843,7 @@ class ObSchemaMgr {
   int get_schema_count(int64_t& schema_count) const;
   int get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo>& schema_infos) const;
 
-  private:
+private:
   inline bool check_inner_stat() const;
   inline static bool compare_tenant(const ObSimpleTenantSchema* lhs, const ObSimpleTenantSchema* rhs);
   inline static bool equal_tenant(const ObSimpleTenantSchema* lhs, const ObSimpleTenantSchema* rhs);
@@ -887,7 +890,7 @@ class ObSchemaMgr {
   int rebuild_schema_meta_if_not_consistent();
   int rebuild_table_hashmap(uint64_t& fk_cnt, uint64_t& cst_cnt);
   int rebuild_db_hashmap();
-
+  uint64_t extract_data_table_id_from_index_name(const common::ObString& index_name) const;
   int get_table_schema(const uint64_t tenant_id, const uint64_t database_id, const uint64_t session_id,
       const common::ObString& table_name, const ObSimpleTableSchemaV2*& table_schema) const;
   int get_index_schema(const uint64_t tenant_id, const uint64_t database_id, const common::ObString& table_name,
@@ -915,7 +918,7 @@ class ObSchemaMgr {
   int get_tablegroup_statistics(ObSchemaStatisticsInfo& schema_info) const;
   int get_table_statistics(ObSchemaStatisticsInfo& schema_info) const;
 
-  private:
+private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator& allocator_;
   int64_t schema_version_;

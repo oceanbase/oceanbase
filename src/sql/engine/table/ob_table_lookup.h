@@ -27,7 +27,7 @@ namespace sql {
 typedef struct _ObLookupInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   _ObLookupInfo()
       : ref_table_id_(common::OB_INVALID_ID),
         table_id_(common::OB_INVALID_ID),
@@ -59,10 +59,10 @@ class ObTableLookup : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
   class ObTableLookupCtx;
 
-  private:
+private:
   enum LookupState { INDEX_SCAN, DISTRIBUTED_LOOKUP, OUTPUT_ROWS, EXECUTION_FINISHED };
 
-  public:
+public:
   explicit ObTableLookup(common::ObIAllocator& alloc);
   virtual ~ObTableLookup();
 
@@ -83,7 +83,7 @@ class ObTableLookup : public ObSingleChildPhyOperator {
     return table_location_;
   }
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -115,11 +115,11 @@ class ObTableLookup : public ObSingleChildPhyOperator {
    */
   virtual int inner_close(ObExecContext& ctx) const;
 
-  private:
+private:
   int process_row(ObExecContext& ctx, const common::ObNewRow* row, int64_t& part_row_cnt) const;
   int wait_all_task(ObTableLookupCtx& dml_ctx, ObPhysicalPlanCtx* plan_ctx) const;
 
-  private:
+private:
   /*
    *  default row count
    * */

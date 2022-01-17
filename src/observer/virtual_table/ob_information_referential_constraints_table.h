@@ -30,7 +30,7 @@ class ObDatabaseSchema;
 namespace observer {
 
 class ObInfoSchemaReferentialConstraintsTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObInfoSchemaReferentialConstraintsTable();
   virtual ~ObInfoSchemaReferentialConstraintsTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -41,14 +41,14 @@ class ObInfoSchemaReferentialConstraintsTable : public common::ObVirtualTableSca
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   int add_fk_constraints_in_db(
       const share::schema::ObDatabaseSchema& database_schema, common::ObObj* cells, const int64_t col_count);
   int add_fk_constraints_in_table(const share::schema::ObTableSchema& table_schema,
       const common::ObString& database_name, common::ObObj* cells, const int64_t col_count);
   uint64_t tenant_id_;
 
-  private:
+private:
   enum REFERENTIAL_CONSTRAINTS_COLUMN_COUNT_COLUMN {
     CONSTRAINT_CATALOG = common::OB_APP_MIN_COLUMN_ID,
     CONSTRAINT_SCHEMA,

@@ -31,7 +31,7 @@ enum ObMacroBlockCheckLevel {
 
 // note: this class is NOT thread safe
 class ObSSTableMacroBlockChecker {
-  public:
+public:
   ObSSTableMacroBlockChecker() : flat_reader_(), allocator_(common::ObModIds::OB_MACRO_BLOCK_CHECKER), macro_reader_()
   {}
   virtual ~ObSSTableMacroBlockChecker()
@@ -40,7 +40,7 @@ class ObSSTableMacroBlockChecker {
       ObMacroBlockCheckLevel check_level = CHECK_LEVEL_AUTO);
   void destroy();
 
-  private:
+private:
   int check_macro_buf(
       const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf, const int64_t macro_block_buf_size);
   int check_data_header(const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf,
@@ -60,7 +60,7 @@ class ObSSTableMacroBlockChecker {
       const ObMacroBlockCommonHeader& common_header, const char* macro_block_buf, const ObFullMacroBlockMeta& meta);
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMacroBlockChecker);
 
-  private:
+private:
   ObMicroBlockReader flat_reader_;
   ObSparseMicroBlockReader sparse_reader_;
   common::ObArenaAllocator allocator_;

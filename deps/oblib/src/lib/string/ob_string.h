@@ -32,10 +32,10 @@ extern uint64_t murmurhash(const void* data, int32_t len, uint64_t hash);
  * @data_length_ : actual data length of %ptr_
  */
 class ObString final {
-  public:
+public:
   typedef int32_t obstr_size_t;
 
-  public:
+public:
   ObString() : buffer_size_(0), data_length_(0), ptr_(NULL)
   {}
 
@@ -100,7 +100,7 @@ class ObString final {
    *
    */
 
-  inline int clone(const ObString& rv, ObDataBuffer& buf);
+  int clone(const ObString& rv, ObDataBuffer& buf);
 
   // reset
   void reset()
@@ -609,7 +609,11 @@ class ObString final {
     if (OB_ISNULL(ptr_) || data_length_ == 0) {
       ret = false;
     } else {
-      for (int i = 0; i < data_length_; ++i) {
+      int i = 0;
+      if (data_length_ >= 2 && ptr_[0] == '-') {
+        i += 1;
+      }
+      for (; i < data_length_; ++i) {
         if (!isdigit(ptr_[i])) {
           ret = false;
         }
@@ -633,7 +637,7 @@ class ObString final {
     return offsetof(ObString, ptr_) * 8;
   }
 
-  private:
+private:
   obstr_size_t buffer_size_;
   obstr_size_t data_length_;
   char* ptr_;

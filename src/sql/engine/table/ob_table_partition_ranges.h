@@ -30,7 +30,7 @@ class ObEvalCtx;
 class ObPartitionScanRanges {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPartitionScanRanges() : ranges_(), partition_id_(common::OB_INVALID_INDEX), deserialize_allocator_(NULL)
   {}
   explicit ObPartitionScanRanges(common::ObIAllocator* allocator)
@@ -51,20 +51,20 @@ class ObPartitionScanRanges {
   int64_t partition_id_;
   TO_STRING_KV(K_(partition_id), K_(ranges));
 
-  private:
+private:
   common::ObIAllocator* deserialize_allocator_;
 };
 
 class ObMultiPartitionsRangesWarpper {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   enum GetRangeMode {
     PARTITION_PARTICLE,
     RANGE_PARTICLE,
   };
 
-  public:
+public:
   explicit ObMultiPartitionsRangesWarpper()
       : allocator_(common::ObModIds::OB_SQL_TABLE_LOOKUP),
         partitions_ranges_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_),
@@ -102,10 +102,10 @@ class ObMultiPartitionsRangesWarpper {
     allocator_.set_attr(attr);
   }
 
-  private:
+private:
   int init_main_table_rowkey(const int64_t column_count, common::ObNewRow& row);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   common::ObArray<ObPartitionScanRanges*, common::ObIAllocator&> partitions_ranges_;
   common::ObNewRow main_table_rowkey_;

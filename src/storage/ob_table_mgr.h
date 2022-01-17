@@ -24,17 +24,16 @@ namespace storage {
 class ObCreateSSTableParamWithTable;
 class ObCreateSSTableParamWithPartition;
 class ObPartitionComponentFactory;
-class ObOldSSTable;
 
 class ObTableMgrGCTask : public common::ObTimerTask {
-  public:
+public:
   ObTableMgrGCTask();
   virtual ~ObTableMgrGCTask();
   virtual void runTimerTask() override;
 };
 
 class ObTableMgr : public blocksstable::ObIRedoModule {
-  public:
+public:
   static const int64_t DEFAULT_HASH_MAP_BUCKETS_COUNT = 100000;  // 10w
   static const int64_t GC_INTERVAL_US = 60 * 1000 * 1000;
   struct CompletedTableNode;
@@ -44,7 +43,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   typedef common::hash::ObPreAllocLinkHashMap<uint64_t, ObITable, AllTableNode, ObTableProtector> AllTableMap;
 
   struct CompletedTableNode : public common::hash::ObPreAllocLinkHashNode<ObITable::TableKey, ObITable> {
-    public:
+  public:
     explicit CompletedTableNode(ObITable& item) : ObPreAllocLinkHashNode(item), next_(NULL)
     {}
     virtual ~CompletedTableNode()
@@ -64,20 +63,20 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   };
 
   class CompletedTableGetFunctor : public CompletedTableMap::GetFunctor {
-    public:
+  public:
     explicit CompletedTableGetFunctor(ObTableHandle& handle) : handle_(handle)
     {}
     virtual ~CompletedTableGetFunctor()
     {}
     virtual int operator()(ObITable& table) override;
 
-    private:
+  private:
     ObTableHandle& handle_;
     DISALLOW_COPY_AND_ASSIGN(CompletedTableGetFunctor);
   };
 
   class UnneedCompletedTableFinder : public CompletedTableMap::ForeachFunctor {
-    public:
+  public:
     UnneedCompletedTableFinder();
     virtual ~UnneedCompletedTableFinder();
     int init(const int64_t max_batch_count);
@@ -92,7 +91,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
       return is_full_;
     }
 
-    private:
+  private:
     bool is_inited_;
     int64_t max_batch_count_;
     bool is_full_;
@@ -124,7 +123,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   };
 
   class UnneedAllTableFinder : public AllTableMap::ForeachFunctor {
-    public:
+  public:
     UnneedAllTableFinder()
     {}
     virtual ~UnneedAllTableFinder()
@@ -135,13 +134,13 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
       return del_tables_;
     }
 
-    private:
+  private:
     common::ObArray<ObITable*> del_tables_;
     DISALLOW_COPY_AND_ASSIGN(UnneedAllTableFinder);
   };
 
   class AllTableEraseChecker : public AllTableMap::EraseChecker {
-    public:
+  public:
     virtual int operator()(ObITable& table) override;
   };
 
@@ -153,21 +152,17 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   void destroy();
   void stop();
 
-  int acquire_old_table(const ObITable::TableKey& table_key, ObTableHandle& handle);
   int create_memtable(ObITable::TableKey& table_key, ObTableHandle& handle);
   int release_table(ObITable* table);
   int clear_unneed_tables();
-  int load_sstable(const char* buf, int64_t buf_len, int64_t& pos);
-  int replay_add_old_sstable(ObSSTable* sstable);
-  int replay_del_old_sstable(const ObITable::TableKey& table_key);
-  virtual int replay(const blocksstable::ObRedoModuleReplayParam& param) override;
-  virtual int parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream) override;
+  virtual int replay(const blocksstable::ObRedoModuleReplayParam& param) { UNUSED(param); return OB_NOT_SUPPORTED; }
+  virtual int parse(const int64_t subcmd, const char* buf, const int64_t len, FILE* stream) override { UNUSEDx(subcmd, buf, len, stream); return OB_NOT_SUPPORTED; }
   int check_sstables();
   int check_tenant_sstable_exist(const uint64_t tenant_id, bool& is_exist);
   int free_all_sstables();
   int get_all_tables(ObTablesHandle& handle);
 
-  private:
+private:
   ObTableMgr();
   virtual ~ObTableMgr();
   int complete_memtable(memtable::ObMemtable* memtable, const int64_t snapshot_version, const int64_t freeze_log_ts);
@@ -181,10 +176,6 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   //  int write_create_sstable_log(ObSSTable &sstable);
   int write_delete_sstable_log(const ObITable::TableKey& table_key);
   int write_complete_sstable_log(ObSSTable& sstable, const bool use_inc_macro_block_slog);
-  int replay_create_sstable(const char* buf, const int64_t buf_len);
-  int replay_complete_sstable(const char* buf, const int64_t buf_len);
-  int replay_delete_sstable(const char* buf, const int64_t buf_len);
-  int replay_delete_sstable(const ObITable::TableKey& table_key);
   int schedule_release_task();
   int check_can_complete_sstables(ObTablesHandle& handle);
   int remove_completed_sstables(common::ObIArray<ObITable*>& write_slog_tables);
@@ -197,7 +188,7 @@ class ObTableMgr : public blocksstable::ObIRedoModule {
   int lock_multi_bucket_lock(common::ObMultiBucketLockGuard& guard, common::ObIArray<ObITable*>& tables);
   void free_all_tables();
 
-  private:
+private:
   bool is_inited_;
   CompletedTableMap completed_table_map_;
   AllTableMap all_table_map_;

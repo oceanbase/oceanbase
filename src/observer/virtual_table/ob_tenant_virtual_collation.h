@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace observer {
 class ObTenantVirtualCollation : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObTenantVirtualCollation()
   {}
   ~ObTenantVirtualCollation()
@@ -29,7 +29,7 @@ class ObTenantVirtualCollation : public common::ObVirtualTableScannerIterator {
   }
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   ObTenantVirtualCollation(const ObTenantVirtualCollation& other) = delete;
   ObTenantVirtualCollation& operator=(const ObTenantVirtualCollation& other) = delete;
   enum COLLATION_COLUMN { COLLATION = common::OB_APP_MIN_COLUMN_ID, CHARSET, ID, IS_DEFAULT, IS_COMPILED, SORTLEN };

@@ -422,6 +422,7 @@ int ObDeleteResolver::resolve_global_delete_index_info(const TableItem& table_it
       index_dml_info.index_tid_ = index_tid[i];
       index_dml_info.rowkey_cnt_ = index_schema->get_rowkey_column_num();
       index_dml_info.part_cnt_ = index_schema->get_partition_cnt();
+      index_dml_info.index_type_ = index_schema->get_index_type();
       if (OB_FAIL(index_schema->get_index_name(index_dml_info.index_name_))) {
         LOG_WARN("get index name from index schema failed", K(ret));
       } else if (OB_FAIL(delete_stmt->add_multi_table_dml_info(index_dml_info))) {

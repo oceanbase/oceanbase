@@ -54,7 +54,7 @@ struct ObReqTimeInfo : public common::ObDLinkBase<ObReqTimeInfo> {
 };
 
 class ObGlobalReqTimeService {
-  public:
+public:
   ObGlobalReqTimeService() : lock_(common::ObLatchIds::OB_REQ_TIMEINFO_LIST_LOCK), time_info_list_()
   {}
 
@@ -117,7 +117,7 @@ class ObGlobalReqTimeService {
 
   static void check_req_timeinfo();
 
-  private:
+private:
   common::SpinRWLock lock_;
   common::ObDList<ObReqTimeInfo> time_info_list_;
 };

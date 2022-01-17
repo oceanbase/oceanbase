@@ -74,7 +74,7 @@ struct ObRebuildReplicaResult {
 
 class ObRebuildReplicaService;
 class ObRebuildReplicaTaskProducer : public common::ObTimerTask {
-  public:
+public:
   ObRebuildReplicaTaskProducer(ObRebuildReplicaTaskScheduler& scheduler);
   virtual ~ObRebuildReplicaTaskProducer();
   int init(ObPartitionService* partition_service, obrpc::ObPartitionServiceRpcProxy* srv_rpc_proxy,
@@ -87,7 +87,7 @@ class ObRebuildReplicaTaskProducer : public common::ObTimerTask {
   void destroy();
   virtual void runTimerTask();
 
-  private:
+private:
   struct ObRebuildReplicaConvergeInfo {
     ObRebuildReplicaConvergeInfo();
     int assign(const ObRebuildReplicaConvergeInfo& task);
@@ -101,7 +101,7 @@ class ObRebuildReplicaTaskProducer : public common::ObTimerTask {
     DISALLOW_COPY_AND_ASSIGN(ObRebuildReplicaConvergeInfo);
   };
 
-  private:
+private:
   int generate_replica_info();
   int build_local_replica_info();
   int get_remote_replica_info();
@@ -109,7 +109,7 @@ class ObRebuildReplicaTaskProducer : public common::ObTimerTask {
   int set_replica_info(const ObRebuildReplicaInfo& d_replica_info);
   int add_replica_info();
 
-  private:
+private:
   bool is_inited_;
   volatile bool stopped_;
   storage::ObPartitionService* partition_service_;
@@ -118,12 +118,12 @@ class ObRebuildReplicaTaskProducer : public common::ObTimerTask {
   common::ObArray<ObRebuildReplicaConvergeInfo> converge_info_array_;
   ObRebuildReplicaTaskScheduler& scheduler_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRebuildReplicaTaskProducer);
 };
 
 class ObRebuildReplicaTaskScheduler : public lib::ThreadPool {
-  public:
+public:
   ObRebuildReplicaTaskScheduler();
   virtual ~ObRebuildReplicaTaskScheduler();
   int init(ObPartitionService* partition_service, ObRebuildReplicaService* rebuild_replica_service);
@@ -132,7 +132,7 @@ class ObRebuildReplicaTaskScheduler : public lib::ThreadPool {
   void run1() final;
   void notify();
 
-  private:
+private:
   struct HeapComparator {
     explicit HeapComparator(int& ret);
     bool operator()(const ObRebuildReplicaInfo* info1, const ObRebuildReplicaInfo* info2);
@@ -141,11 +141,11 @@ class ObRebuildReplicaTaskScheduler : public lib::ThreadPool {
       return ret_;
     }
 
-    private:
+  private:
     int& ret_;
   };
 
-  private:
+private:
   typedef common::ObBinaryHeap<const ObRebuildReplicaInfo*, HeapComparator> Heap;
   typedef common::hash::ObHashMap<ObPGKey, ObRebuildReplicaInfo, common::hash::NoPthreadDefendMode> ObReplicaInfoMap;
   int build_task_heap(Heap& heap);
@@ -154,7 +154,7 @@ class ObRebuildReplicaTaskScheduler : public lib::ThreadPool {
   int add_replica_info_to_heap(Heap& heap);
   int change_rebuild_action(const ObPGKey& pg_key, const ObRebuildReplicaInfo::RebuildAction rebuild_action);
 
-  private:
+private:
   static const int64_t SCHEDULER_WAIT_TIME_MS = 60 * 1000;  // 60s
   bool is_inited_;
   ObPartitionService* partition_service_;
@@ -165,12 +165,12 @@ class ObRebuildReplicaTaskScheduler : public lib::ThreadPool {
   common::ObThreadCond cond_;
   bool need_idle_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRebuildReplicaTaskScheduler);
 };
 
 class ObRebuildReplicaService {
-  public:
+public:
   ObRebuildReplicaService();
   virtual ~ObRebuildReplicaService();
   void destroy();
@@ -183,7 +183,7 @@ class ObRebuildReplicaService {
   }
   void stop();
 
-  private:
+private:
   static const int64_t DELAY_US = 15LL * 1000LL * 1000LL;  // 15s
   bool is_inited_;
   common::TCRWLock lock_;
@@ -192,7 +192,7 @@ class ObRebuildReplicaService {
   ObArray<ObRebuildReplicaInfo> replica_info_array_;
   common::ObTimer task_procuder_timer_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRebuildReplicaService);
 };
 

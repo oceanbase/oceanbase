@@ -27,18 +27,18 @@ static const int64_t MAX_OB_TRANS_SERVICE_NUM = 4;
 static const int64_t OB_REPLICA_NUM = 3;
 
 class ObRpcLoss {
-  public:
+public:
   ObRpcLoss() : times_(0)
   {}
   ~ObRpcLoss()
   {}
 
-  public:
+public:
   int64_t times_;
 };
 
 class ObTestElectionCluster : public ObIElectionRpc {
-  public:
+public:
   ObTestElectionCluster()
   {}
   virtual ~ObTestElectionCluster()
@@ -59,11 +59,11 @@ class ObTestElectionCluster : public ObIElectionRpc {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   static const int32_t MAX_ELECTION_MSG_COUNT = 6;
   int start_one_(const int64_t idx, const char* ip, const int32_t rpc_port);
 
-  public:
+public:
   bool inited_;
   int32_t base_rpc_port_;
   const char* ip_;
@@ -77,7 +77,7 @@ class ObTestElectionCluster : public ObIElectionRpc {
 };
 
 class TestObElectionCluster : public ::testing::Test {
-  public:
+public:
   TestObElectionCluster()
   {}
   virtual ~TestObElectionCluster()
@@ -89,7 +89,7 @@ class TestObElectionCluster : public ::testing::Test {
   static void TearDownTestCase()
   {}
 
-  public:
+public:
   ObTestElectionCluster cluster_;
   common::ObPartitionKey test_partition_;
   common::ObAddr leader_;

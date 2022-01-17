@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObSSStore : public ObSSStore {
-  public:
+public:
   MockObSSStore()
   {}
   virtual ~MockObSSStore()

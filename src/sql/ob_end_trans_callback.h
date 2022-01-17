@@ -26,7 +26,7 @@
 namespace oceanbase {
 namespace sql {
 class ObSharedEndTransCallback : public ObIEndTransCallback {
-  public:
+public:
   ObSharedEndTransCallback();
   virtual ~ObSharedEndTransCallback();
 
@@ -37,14 +37,14 @@ class ObSharedEndTransCallback : public ObIEndTransCallback {
 };
 
 class ObExclusiveEndTransCallback : public ObIEndTransCallback {
-  public:
+public:
   enum EndTransType {
     END_TRANS_TYPE_INVALID,
     END_TRANS_TYPE_EXPLICIT,  // Explicit commit
     END_TRANS_TYPE_IMPLICIT,  // Implicit commit
   };
 
-  public:
+public:
   ObExclusiveEndTransCallback();
   virtual ~ObExclusiveEndTransCallback();
 
@@ -79,7 +79,7 @@ class ObExclusiveEndTransCallback : public ObIEndTransCallback {
     is_txs_end_trans_called_ = false;
   }
 
-  protected:
+protected:
   ObExclusiveEndTransCallback::EndTransType end_trans_type_;
   bool has_set_need_rollback_;
   bool is_need_rollback_;
@@ -87,7 +87,7 @@ class ObExclusiveEndTransCallback : public ObIEndTransCallback {
 };
 
 class ObEndTransSyncCallback : public ObExclusiveEndTransCallback {
-  public:
+public:
   ObEndTransSyncCallback();
   virtual ~ObEndTransSyncCallback();
   virtual void callback(int cb_param);
@@ -104,7 +104,7 @@ class ObEndTransSyncCallback : public ObExclusiveEndTransCallback {
   int init(const transaction::ObTransDesc* trans_desc, ObSQLSessionInfo* session);
   void reset();
 
-  private:
+private:
   /* functions */
 
   /* variables */
@@ -117,7 +117,7 @@ class ObEndTransSyncCallback : public ObExclusiveEndTransCallback {
 };
 
 class ObEndTransAsyncCallback : public ObExclusiveEndTransCallback {
-  public:
+public:
   ObEndTransAsyncCallback();
   virtual ~ObEndTransAsyncCallback();
   virtual void callback(int cb_param);
@@ -140,14 +140,14 @@ class ObEndTransAsyncCallback : public ObExclusiveEndTransCallback {
     mysql_end_trans_cb_.reset();
   }
 
-  private:
+private:
   /* macro */
   observer::ObSqlEndTransCb mysql_end_trans_cb_;
   DISALLOW_COPY_AND_ASSIGN(ObEndTransAsyncCallback);
 };
 
 class ObNullEndTransCallback : public ObSharedEndTransCallback {
-  public:
+public:
   ObNullEndTransCallback() : ObSharedEndTransCallback()
   {}
   virtual ~ObNullEndTransCallback()
@@ -171,10 +171,10 @@ class ObNullEndTransCallback : public ObSharedEndTransCallback {
   }
   virtual int init(const transaction::ObTransID& trans_id);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNullEndTransCallback);
 
-  private:
+private:
   transaction::ObTransID trans_id_;
 };
 

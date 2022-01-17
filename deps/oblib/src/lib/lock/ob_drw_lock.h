@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace common {
 class DRWLock {
-  public:
+public:
   explicit DRWLock(const uint32_t latch_id = ObLatchIds::DEFAULT_DRW_LOCK) : latches_(), latch_id_(latch_id)
   {}
   ~DRWLock()
@@ -33,7 +33,7 @@ class DRWLock {
   inline int wrunlock();
   inline int try_wrlock();
   class RDLockGuard {
-    public:
+  public:
     explicit RDLockGuard(DRWLock& rwlock) : rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.rdlock()))) {
@@ -53,15 +53,15 @@ class DRWLock {
       return ret_;
     }
 
-    private:
+  private:
     DRWLock& rwlock_;
     int ret_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(RDLockGuard);
   };
   class WRLockGuard {
-    public:
+  public:
     explicit WRLockGuard(DRWLock& rwlock) : rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrlock()))) {
@@ -81,15 +81,15 @@ class DRWLock {
       return ret_;
     }
 
-    private:
+  private:
     DRWLock& rwlock_;
     int ret_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(WRLockGuard);
   };
   class WRRetryLockGuard {
-    public:
+  public:
     WRRetryLockGuard(DRWLock& rwlock) : rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       const int64_t start_us = ObTimeUtility::current_time();
@@ -116,25 +116,25 @@ class DRWLock {
       return ret_;
     }
 
-    private:
+  private:
     static const int64_t BASE_US = 100 * 1000;        // 100 ms
     static const int64_t UPPER_US = 3 * 1000 * 1000;  // 3s
-    private:
+  private:
     DRWLock& rwlock_;
     int ret_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(WRRetryLockGuard);
   };
 
-  private:
+private:
   struct AlignedLatch {
     ObLatch latch_;
   } CACHE_ALIGNED;
   AlignedLatch latches_[OB_MAX_CPU_NUM];
   uint32_t latch_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(DRWLock);
 };
 

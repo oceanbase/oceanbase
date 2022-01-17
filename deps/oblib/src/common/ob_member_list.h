@@ -22,11 +22,11 @@ template <int64_t MAX_MEMBER_NUM>
 class ObMemberListBase {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMemberListBase();
   ~ObMemberListBase();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int add_member(const common::ObMember& member);
@@ -51,7 +51,7 @@ class ObMemberListBase {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   TO_YSON_KV(OB_ID(member), common::ObArrayWrap<common::ObMember>(member_, member_number_));
 
-  private:
+private:
   int64_t member_number_;
   common::ObMember member_[MAX_MEMBER_NUM];
 };

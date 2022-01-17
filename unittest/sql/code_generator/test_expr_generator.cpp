@@ -27,21 +27,21 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class TestExprGenerator : public ::testing::Test {
-  public:
+public:
   TestExprGenerator();
   virtual ~TestExprGenerator();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestExprGenerator);
 
-  protected:
+protected:
   // function members
   void generate_expr(const char* expr_str, const char*& post_expr);
 
-  protected:
+protected:
   // data members
   ObPhysicalPlan phy_plan_;
 };

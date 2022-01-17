@@ -24,7 +24,7 @@ namespace sql {
 class ObPxMultiPartInsertOpInput : public ObPxMultiPartModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartInsertOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxMultiPartModifyOpInput(ctx, spec)
   {}
   int init(ObTaskInfo& task_info) override
@@ -32,14 +32,14 @@ class ObPxMultiPartInsertOpInput : public ObPxMultiPartModifyOpInput {
     return ObPxMultiPartModifyOpInput::init(task_info);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartInsertOpInput);
 };
 
 class ObPxMultiPartInsertSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartInsertSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableModifySpec(alloc, type), row_desc_(), table_desc_(), insert_row_exprs_(&alloc)
   {}
@@ -48,7 +48,7 @@ class ObPxMultiPartInsertSpec : public ObTableModifySpec {
     return true;
   }
 
-  public:
+public:
   ObDMLOpRowDesc row_desc_;
   ObDMLOpTableDesc table_desc_;
   ExprFixedArray insert_row_exprs_;
@@ -58,10 +58,10 @@ class ObPxMultiPartInsertSpec : public ObTableModifySpec {
 class ObPxMultiPartInsertOp : public ObDMLOpDataReader, public ObDMLOpDataWriter, public ObTableModifyOp {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   /**ObPDMLOpRowIteratorWrapper**/
   class ObPDMLOpRowIteratorWrapper : public common::ObNewRowIterator {
-    public:
+  public:
     ObPDMLOpRowIteratorWrapper(ObExecContext& exec_ctx, ObPxMultiPartInsertOp* op)
         : ctx_(exec_ctx), iter_(nullptr), insert_row_(), read_row_from_iter_(NULL), insert_row_exprs_(NULL), op_(op)
     {}
@@ -81,7 +81,7 @@ class ObPxMultiPartInsertOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
     }
     int get_next_row(common::ObNewRow*& row) override;
 
-    private:
+  private:
     ObExecContext& ctx_;
     ObPDMLOpRowIterator* iter_;
     common::ObNewRow insert_row_;
@@ -90,14 +90,14 @@ class ObPxMultiPartInsertOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
     ObPxMultiPartInsertOp* op_;
   };
 
-  public:
+public:
   ObPxMultiPartInsertOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableModifyOp(exec_ctx, spec, input),
         data_driver_(exec_ctx.get_eval_ctx(), exec_ctx.get_allocator(), op_monitor_info_),
         row_iter_wrapper_(exec_ctx, this)
   {}
 
-  public:
+public:
   virtual bool has_foreign_key() const
   {
     return false;
@@ -111,13 +111,13 @@ class ObPxMultiPartInsertOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
   virtual int inner_open();
   virtual int inner_close();
 
-  private:
+private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
 
   int process_row();
 
-  private:
+private:
   ObPDMLOpDataDriver data_driver_;
   // Used to calc the child output row and return the row required by the DML operation
   ObPDMLOpRowIteratorWrapper row_iter_wrapper_;

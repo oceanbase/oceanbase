@@ -104,7 +104,7 @@ typedef common::ObSimpleIterator<ObTransAuditStmtInfo, common::ObModIds::OB_TRAN
     ObTransAuditStmtInfoIterator;
 
 class ObTransAuditRecord {
-  public:
+public:
   ObTransAuditRecord() : is_valid_(false), ctx_(NULL)
   {}
   ~ObTransAuditRecord()
@@ -112,7 +112,7 @@ class ObTransAuditRecord {
   int init(ObTransCtx* ctx);
   void reset();
 
-  public:
+public:
   // Obtain transaction audit data, if the ctx pointer is valid, get it directly from ctx,
   // otherwise get it from buffer
   int get_trans_audit_data(
@@ -145,7 +145,7 @@ class ObTransAuditRecord {
 
   static const int64_t STMT_INFO_COUNT = 32;
 
-  private:
+private:
   ObTransAuditCommonInfo common_info_;
 
   ObTransAuditInfo trans_info_;
@@ -153,7 +153,7 @@ class ObTransAuditRecord {
 
   ObTransAuditStmtInfo stmt_info_[STMT_INFO_COUNT];
 
-  private:
+private:
   common::SpinRWLock lock_;
   bool is_valid_;  // It is used to judge whether it contains valid data during iteration,
                    // and it is valid after transaction set_ctx_addr
@@ -166,7 +166,7 @@ class ObTransAuditRecord {
  * After the transaction ends, put the address free_addrs_ but do not clear the content
  */
 class ObTransAuditRecordMgr {
-  public:
+public:
   ObTransAuditRecordMgr() : is_inited_(false), record_count_(0), records_(NULL)
   {}
   ~ObTransAuditRecordMgr()
@@ -174,14 +174,14 @@ class ObTransAuditRecordMgr {
     destroy();
   }
 
-  public:
+public:
   int init(const int32_t mem_size, const uint64_t tenant_id);
   void destroy();
 
   static int mtl_init(ObTransAuditRecordMgr*& rec_mgr);
   static void mtl_destroy(ObTransAuditRecordMgr*& rec_mgr);
 
-  public:
+public:
   int get_empty_record(ObTransAuditRecord*& record);
   int get_record(const int32_t index, ObTransAuditRecord*& record);
   int revert_record(ObTransAuditRecord* record);
@@ -191,22 +191,22 @@ class ObTransAuditRecordMgr {
     return record_count_;
   }
 
-  private:
+private:
   // Maximum memory used by transaction records
   static const int64_t MAX_TRANS_RECORD_MEMORY_SIZE = 100 * 1024 * 1024;           // 100 MB
   static const int64_t MINI_MODE_MAX_TRANS_RECORD_MEMORY_SIZE = 32 * 1024 * 1024;  // 32 MB
-  private:
+private:
   bool is_inited_;
   int32_t record_count_;
   common::ObFixedQueue<ObTransAuditRecord> free_addrs_;
   ObTransAuditRecord* records_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTransAuditRecordMgr);
 };
 
 class ObTransAuditRecordIterator {
-  public:
+public:
   ObTransAuditRecordIterator() : last_ret_(common::OB_SUCCESS), record_index_(0), record_mgr_(nullptr)
   {}
   ~ObTransAuditRecordIterator()
@@ -215,14 +215,14 @@ class ObTransAuditRecordIterator {
   bool is_vaild();
   int get_next(ObTransAuditRecord*& record);
 
-  private:
+private:
   int last_ret_;
   int32_t record_index_;
   ObTransAuditRecordMgr* record_mgr_;
 };
 
 class ObTransAuditDataIterator {
-  public:
+public:
   ObTransAuditDataIterator()
   {}
   ~ObTransAuditDataIterator()
@@ -236,16 +236,16 @@ class ObTransAuditDataIterator {
     return rec_iter_.is_vaild();
   }
 
-  public:
+public:
   int get_next(
       ObTransAuditCommonInfo& common_info, ObTransAuditInfo& trans_info, char* trace_log_buffer, int64_t buf_len);
 
-  private:
+private:
   ObTransAuditRecordIterator rec_iter_;
 };
 
 class ObTransSQLAuditDataIterator {
-  public:
+public:
   ObTransSQLAuditDataIterator()
   {}
   ~ObTransSQLAuditDataIterator()
@@ -256,10 +256,10 @@ class ObTransSQLAuditDataIterator {
     return stmt_info_iter_.is_ready() && rec_iter_.is_vaild();
   }
 
-  public:
+public:
   int get_next(ObTransAuditCommonInfo& common_info, ObTransAuditStmtInfo& stmt_info);
 
-  private:
+private:
   ObTransAuditStmtInfoIterator stmt_info_iter_;
   ObTransAuditCommonInfo common_info_;
   ObTransAuditRecordIterator rec_iter_;

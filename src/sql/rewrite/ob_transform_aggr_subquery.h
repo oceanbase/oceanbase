@@ -21,7 +21,7 @@ namespace sql {
 class ObUpdateStmt;
 
 class ObTransformAggrSubquery : public ObTransformRule {
-  public:
+public:
   ObTransformAggrSubquery(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
   virtual ~ObTransformAggrSubquery()
@@ -29,7 +29,7 @@ class ObTransformAggrSubquery : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   enum PullupFlag { USE_OUTER_JOIN = 1, ADD_CASE_WHEN_EXPR = 2, JOIN_FIRST = 4, AGGR_FIRST = 8 };
 
   /**
@@ -115,13 +115,13 @@ class ObTransformAggrSubquery : public ObTransformRule {
 
   int get_trans_view(ObDMLStmt& stmt, ObSelectStmt*& view_stmt, ObRawExpr* root_expr, bool post_group_by);
 
-  int do_join_first_transform(ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr);
+  int do_join_first_transform(ObSelectStmt& select_stmt, TransformParam& trans_param, ObRawExpr* root_expr, const bool is_first_trans);
 
-  int get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys);
+  int get_unique_keys(ObDMLStmt& stmt, ObIArray<ObRawExpr*>& pkeys, const bool is_first_trans);
 
   int transform_from_list(ObDMLStmt& stmt, ObSelectStmt& subquery, const int64_t pullup_flag);
 
-  int rebuild_conditon(ObSelectStmt& stmt);
+  int rebuild_conditon(ObSelectStmt& stmt, ObSelectStmt& subquery);
 
   int check_subquery_aggr_item(const ObSelectStmt& subquery, bool& is_valid);
 
@@ -147,6 +147,21 @@ class ObTransformAggrSubquery : public ObTransformRule {
 
   int replace_columns_and_aggrs(ObRawExpr*& expr, ObTransformerCtx* ctx);
 
+  /**
+   * @brief
+   * revert subquery alias, only used for update vector assignments
+   *  update t1 set (id, name) = (select id, name from t1 where rownum <= 1) where grade < (select max(grade) from t2
+   * where id < t1.id); after one iteration transformed, the stmt looks like this: update (select id, name,
+   * alias_ref(id) as o1, alias_ref(name) as o2 from t1 where xxx) v set v.id = v.o1, v.name = v.o2; the alias_ref
+   * should not be occurred in the v since v can not be transformed, so we should revert it, the result looks like this:
+   *  update (select id, name from t1 where xxx) v set v.id = alias_ref(id), v.name = alias_ref(name);
+   *
+   * @param child_stmt
+   * @param upper_stmt
+   * @return int
+   */
+  int revert_vec_assign_exprs(ObSelectStmt *&child_stmt, ObDMLStmt *&upper_stmt);
+
   inline bool is_exists_op(const ObItemType type)
   {
     return type == T_OP_EXISTS || type == T_OP_NOT_EXISTS;
@@ -159,8 +174,9 @@ class ObTransformAggrSubquery : public ObTransformRule {
   int is_valid_group_by(const ObSelectStmt& subquery, bool& is_valid);
   int extract_no_rewrite_select_exprs(ObDMLStmt*& stmt);
   int extract_no_rewrite_expr(ObRawExpr* expr);
+  int check_subquery_semi_conditions(ObSelectStmt &subquery, bool &is_valid);
 
-  private:
+private:
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;
 };
 

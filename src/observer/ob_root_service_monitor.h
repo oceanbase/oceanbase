@@ -26,7 +26,7 @@ class ObPartitionService;
 
 namespace observer {
 class ObRootServiceMonitor : public share::ObThreadPool {
-  public:
+public:
   ObRootServiceMonitor(rootserver::ObRootService& root_service, storage::ObPartitionService& partition_service);
   virtual ~ObRootServiceMonitor();
   int init();
@@ -34,20 +34,20 @@ class ObRootServiceMonitor : public share::ObThreadPool {
   int start();
   void stop();
 
-  private:
+private:
   static const int64_t MONITOR_ROOT_SERVICE_INTERVAL_US = 100 * 1000;  // 100ms
 
   int monitor_root_service();
   int try_start_root_service();
   int wait_rs_finish_start();
 
-  private:
+private:
   bool inited_;
   rootserver::ObRootService& root_service_;
   int64_t fail_count_;
   storage::ObPartitionService& partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRootServiceMonitor);
 };
 }  // end namespace observer

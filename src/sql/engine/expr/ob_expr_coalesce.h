@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprCoalesce : public ObExprOperator {
-  public:
+public:
   explicit ObExprCoalesce(common::ObIAllocator& alloc);
   virtual ~ObExprCoalesce();
   virtual int calc_result_typeN(
@@ -29,7 +29,7 @@ class ObExprCoalesce : public ObExprOperator {
   static int calc(common::ObObj& result, const common::ObObj* objs_stack, int64_t param_num,
       const ObExprResType& expected_type, common::ObCastCtx& cast_ctx);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCoalesce);
 };
 }  // namespace sql

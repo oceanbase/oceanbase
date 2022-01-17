@@ -15,7 +15,6 @@
 #include "share/ob_force_print_log.h"
 #include "ob_i_table.h"
 #include "ob_sstable.h"
-#include "ob_old_sstable.h"
 #include "ob_table_mgr.h"
 #include "memtable/ob_memtable.h"
 #include "share/ob_force_print_log.h"
@@ -162,23 +161,6 @@ int ObTableHandle::get_sstable(ObSSTable*& sstable)
     STORAGE_LOG(WARN, "not sstable", K(ret), K(table_->get_key()));
   } else {
     sstable = static_cast<ObSSTable*>(table_);
-  }
-  return ret;
-}
-
-int ObTableHandle::get_old_sstable(ObOldSSTable*& sstable)
-{
-  int ret = OB_SUCCESS;
-  sstable = NULL;
-
-  if (OB_ISNULL(table_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (!table_->is_sstable()) {
-    ret = OB_ENTRY_NOT_EXIST;
-    STORAGE_LOG(WARN, "not sstable", K(ret), K(table_->get_key()));
-  } else {
-    sstable = static_cast<ObOldSSTable*>(table_);
   }
   return ret;
 }
@@ -485,7 +467,15 @@ void ObTablesHandle::reset()
   memstore_retired_ = NULL;
 }
 
-int ObTablesHandle::check_continues(const ObLogTsRange* log_ts_range)
+void ObTablesHandle::reset_tables()
+{
+  for (int64_t i = 0; i < tables_.count(); ++i) {
+    ObTableMgr::get_instance().release_table(tables_.at(i));
+  }
+  tables_.reset();
+}
+
+int ObTablesHandle::check_continues(const ObLogTsRange *log_ts_range)
 {
   int ret = OB_SUCCESS;
   bool is_all_contain = false;

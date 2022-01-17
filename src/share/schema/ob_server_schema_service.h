@@ -203,7 +203,7 @@ struct VersionHisVal {
 };
 
 class ObMaxSchemaVersionFetcher {
-  public:
+public:
   ObMaxSchemaVersionFetcher() : max_schema_version_(common::OB_INVALID_VERSION)
   {}
   virtual ~ObMaxSchemaVersionFetcher()
@@ -215,13 +215,13 @@ class ObMaxSchemaVersionFetcher {
     return max_schema_version_;
   }
 
-  private:
+private:
   int64_t max_schema_version_;
   DISALLOW_COPY_AND_ASSIGN(ObMaxSchemaVersionFetcher);
 };
 
 class ObSchemaVersionGetter {
-  public:
+public:
   ObSchemaVersionGetter() : schema_version_(common::OB_INVALID_VERSION)
   {}
   virtual ~ObSchemaVersionGetter()
@@ -233,7 +233,7 @@ class ObSchemaVersionGetter {
     return schema_version_;
   }
 
-  private:
+private:
   int64_t schema_version_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaVersionGetter);
 };
@@ -241,7 +241,7 @@ class ObSchemaVersionGetter {
 class ObSchemaGetterGuard;
 
 class ObServerSchemaService {
-  public:
+public:
 #define ALLOW_NEXT_LOG() ObTaskController::get().allow_next_syslog();
 #define SCHEMA_KEY_FUNC(SCHEMA)                                                                \
   struct SCHEMA##_key_hash_func {                                                              \
@@ -481,7 +481,7 @@ class ObServerSchemaService {
     common::ObArenaAllocator allocator_;
   };
 
-  public:
+public:
   int init(common::ObMySQLProxy* sql_proxy, common::ObDbLinkProxy* dblink_proxy, const common::ObCommonConfig* config);
   explicit ObServerSchemaService(bool enable_backup = false);
   virtual ~ObServerSchemaService();
@@ -544,7 +544,7 @@ class ObServerSchemaService {
 
   int check_tenant_can_use_new_table(const uint64_t tenant_id, bool& can) const;
 
-  protected:
+protected:
   bool check_inner_stat() const;
   int check_stop() const;
   virtual int fallback_schema_mgr(
@@ -566,12 +566,12 @@ class ObServerSchemaService {
 
   int destroy_schema_struct(uint64_t tenant_id);
 
-  private:
+private:
   virtual int destroy();
 
   // stats table instances in schem mgrs
   class ObTable {
-    public:
+  public:
     ObTable() : version_(0), combined_id_(0){};
     virtual ~ObTable(){};
     uint64_t hash() const
@@ -697,7 +697,7 @@ class ObServerSchemaService {
   int try_update_split_schema_version_v2(
       const share::schema::ObRefreshSchemaStatus& schema_status, const uint64_t tenant_id);
 
-  protected:
+protected:
   int update_table_columns(const uint64_t tenant_id, ObTableSchema& table_schema);
   virtual int update_schema_cache(common::ObIArray<ObTableSchema*>& schema_array, const bool is_force = false) = 0;
   virtual int update_schema_cache(common::ObIArray<ObTableSchema>& schema_array, const bool is_forece = false) = 0;
@@ -713,7 +713,7 @@ class ObServerSchemaService {
       const common::ObIArray<ObTableSchema*>& schemas, common::ObIArray<ObSimpleTableSchemaV2>& simple_schemas);
   int convert_to_simple_schema(const ObTableSchema& schema, ObSimpleTableSchemaV2& simple_schema);
 
-  protected:
+protected:
   // core table count
   const static int64_t MIN_TABLE_COUNT = 1;
   static const int64_t REFRESH_SCHEMA_INTERVAL_US = 100 * 1000;  // 100ms
@@ -746,7 +746,7 @@ class ObServerSchemaService {
   const static int VERSION_HIS_MAP_BUCKET_NUM = 64 * 1024;
   common::hash::ObHashMap<VersionHisKey, VersionHisVal, common::hash::ReadWriteDefendMode> version_his_map_;
 
-  private:
+private:
   static const int64_t BUCKET_SIZE = 128;
   int64_t core_schema_version_;
   int64_t schema_version_;
@@ -754,7 +754,7 @@ class ObServerSchemaService {
   int64_t baseline_schema_version_;
   RefreshSchemaType refresh_schema_type_;
 
-  protected:
+protected:
   // new schema management by tenant, need protected by lock
   const static int TENANT_MAP_BUCKET_NUM = 1024;
   const static int MOCK_SCHEMA_BUCKET_NUM = 100;

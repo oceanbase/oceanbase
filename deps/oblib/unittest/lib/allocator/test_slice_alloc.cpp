@@ -24,7 +24,7 @@ using namespace oceanbase::common;
 
 #define ISIZE 64
 struct AllocInterface {
-  public:
+public:
   virtual void* alloc() = 0;
   virtual void free(void* p) = 0;
   virtual int64_t hold()
@@ -38,7 +38,7 @@ struct AllocInterface {
 };
 
 struct MallocWrapper : public AllocInterface {
-  public:
+public:
   void* alloc()
   {
     return ::malloc(ISIZE);
@@ -50,7 +50,7 @@ struct MallocWrapper : public AllocInterface {
 };
 
 struct ObMallocWrapper : public AllocInterface {
-  public:
+public:
   void* alloc()
   {
     return common::ob_malloc(ISIZE);
@@ -62,7 +62,7 @@ struct ObMallocWrapper : public AllocInterface {
 };
 
 struct SmallAllocWrapper : public AllocInterface, public ObSmallAllocator {
-  public:
+public:
   SmallAllocWrapper()
   {
     alloc_.init(ISIZE);
@@ -76,12 +76,12 @@ struct SmallAllocWrapper : public AllocInterface, public ObSmallAllocator {
     alloc_.free(p);
   }
 
-  private:
+private:
   ObSmallAllocator alloc_;
 };
 
 struct OpAllocWrapper : public AllocInterface {
-  public:
+public:
   struct Item {
     char data[ISIZE];
   };
@@ -96,7 +96,7 @@ struct OpAllocWrapper : public AllocInterface {
 };
 
 struct OpReclaimAllocWrapper : public AllocInterface {
-  public:
+public:
   struct Item {
     char data[ISIZE];
   };
@@ -112,7 +112,7 @@ struct OpReclaimAllocWrapper : public AllocInterface {
 
 ObMemAttr mem_attr;
 struct SliceAllocWrapper : public AllocInterface {
-  public:
+public:
   SliceAllocWrapper() : alloc_(ISIZE, mem_attr, OB_MALLOC_BIG_BLOCK_SIZE)
   {
     alloc_.set_nway(64);
@@ -134,12 +134,12 @@ struct SliceAllocWrapper : public AllocInterface {
     return alloc_.hold();
   }
 
-  private:
+private:
   ObSliceAlloc alloc_;
 };
 
 struct VSliceAllocWrapper : public AllocInterface {
-  public:
+public:
   VSliceAllocWrapper() : alloc_(mem_attr, OB_MALLOC_BIG_BLOCK_SIZE)
   {
     alloc_.set_nway(64);
@@ -161,12 +161,12 @@ struct VSliceAllocWrapper : public AllocInterface {
     return alloc_.hold();
   }
 
-  private:
+private:
   ObVSliceAlloc alloc_;
 };
 
 struct SimpleFifoAllocWrapper : public AllocInterface {
-  public:
+public:
   SimpleFifoAllocWrapper() : alloc_(mem_attr, OB_MALLOC_BIG_BLOCK_SIZE)
   {
     alloc_.set_nway(64);
@@ -188,13 +188,13 @@ struct SimpleFifoAllocWrapper : public AllocInterface {
     return alloc_.hold();
   }
 
-  private:
+private:
   ObSimpleFifoAlloc alloc_;
 };
 
 ObTCCounter gcounter;
 class FixedStack {
-  public:
+public:
   FixedStack() : top_(base_)
   {}
   void push(void* p)
@@ -208,7 +208,7 @@ class FixedStack {
     return *--top_;
   }
 
-  private:
+private:
   void** top_;
   void* base_[4096];
 };

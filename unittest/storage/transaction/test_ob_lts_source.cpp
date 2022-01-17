@@ -22,13 +22,13 @@ using namespace transaction;
 namespace unittest {
 
 class TestObTsCbTask : public ObTsCbTask {
-  public:
+public:
   TestObTsCbTask()
   {}
   ~TestObTsCbTask()
   {}
 
-  public:
+public:
   int get_gts_callback(const MonotonicTs srr, const int64_t ts, const MonotonicTs receive_gts_ts)
   {
     UNUSED(srr);
@@ -61,7 +61,7 @@ class TestObTsCbTask : public ObTsCbTask {
 };
 
 class TestObLtsSource : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

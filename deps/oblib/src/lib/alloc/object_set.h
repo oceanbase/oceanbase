@@ -25,7 +25,7 @@ namespace common {
 class ObAllocator;
 }
 namespace lib {
-class MemoryContext;
+class __MemoryContext__;
 class ObTenantCtxAllocator;
 class IBlockMgr;
 class ISetLocker;
@@ -39,8 +39,8 @@ class ObjectSet {
   typedef AObject* FreeList;
   typedef ABitSet BitMap;
 
-  public:
-  ObjectSet(MemoryContext* mem_context = nullptr, const uint32_t ablock_size = INTACT_NORMAL_AOBJECT_SIZE);
+public:
+  ObjectSet(__MemoryContext__* mem_context = nullptr, const uint32_t ablock_size = INTACT_NORMAL_AOBJECT_SIZE);
   ~ObjectSet();
 
   // main interfaces
@@ -78,7 +78,7 @@ class ObjectSet {
   inline int64_t get_normal_used() const;
   inline int64_t get_normal_alloc() const;
 
-  private:
+private:
   AObject* alloc_normal_object(const uint32_t cls, const ObMemAttr& attr);
   AObject* alloc_big_object(const uint64_t size, const ObMemAttr& attr);
 
@@ -100,8 +100,8 @@ class ObjectSet {
   void do_free_object(AObject* obj);
   void do_free_dirty_list();
 
-  private:
-  MemoryContext* mem_context_;
+private:
+  __MemoryContext__* mem_context_;
   ISetLocker* locker_;
   common::ObLocalModSet* mod_set_;
   IBlockMgr* blk_mgr_;

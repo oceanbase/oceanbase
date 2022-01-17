@@ -23,7 +23,7 @@ ObQueryExecCtx* ObQueryExecCtx::alloc(ObSQLSessionInfo& session)
 {
   int ret = OB_SUCCESS;
   ObQueryExecCtx* query_ctx = nullptr;
-  MemoryContext* entity = nullptr;
+  MemoryContext entity = nullptr;
   if (OB_ISNULL(entity = session.get_ctx_mem_context())) {
     ObMemAttr mem_attr;
     mem_attr.tenant_id_ = session.get_effective_tenant_id();
@@ -36,7 +36,7 @@ ObQueryExecCtx* ObQueryExecCtx::alloc(ObSQLSessionInfo& session)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
     // Memory entity used by result set may be accessed across threads during
     // asynchronous execution, so we must use ROOT_CONTEXT
-    if (OB_FAIL(ROOT_CONTEXT.CREATE_CONTEXT(entity, param))) {
+    if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(entity, param))) {
       LOG_WARN("create entity failed", K(ret), K(mem_attr));
     } else if (NULL == entity) {
       ret = OB_ERR_UNEXPECTED;
@@ -47,7 +47,7 @@ ObQueryExecCtx* ObQueryExecCtx::alloc(ObSQLSessionInfo& session)
     session.set_ctx_mem_context(nullptr);
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(query_ctx = op_reclaim_alloc_args(ObQueryExecCtx, session, *entity))) {
+    if (OB_ISNULL(query_ctx = op_reclaim_alloc_args(ObQueryExecCtx, session, entity))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(sizeof(ObQueryExecCtx)));
     } else {
@@ -69,7 +69,7 @@ void ObQueryExecCtx::free(ObQueryExecCtx* query_ctx)
     int64_t ref_cnt = query_ctx->dec_ref_count();
     if (0 == ref_cnt) {
       ObSQLSessionInfo& session = query_ctx->get_result_set().get_session();
-      MemoryContext& mem_context = query_ctx->mem_context_;
+      MemoryContext mem_context = query_ctx->mem_context_;
       query_ctx->cache_schema_info_->try_revert_schema_guard();
       query_ctx->cache_schema_info_ = NULL;
       op_reclaim_free(query_ctx);
@@ -79,10 +79,10 @@ void ObQueryExecCtx::free(ObQueryExecCtx* query_ctx)
         // save memory entity to session if none memory entity in session, otherwise
         // destroy it.
         if (nullptr == session.get_ctx_mem_context()) {
-          mem_context.reset_remain_one_page();
-          session.set_ctx_mem_context(&mem_context);
+          mem_context->reset_remain_one_page();
+          session.set_ctx_mem_context(mem_context);
         } else {
-          DESTROY_CONTEXT(&mem_context);
+          DESTROY_CONTEXT(mem_context);
         }
       }
     } else if (ref_cnt < 0) {

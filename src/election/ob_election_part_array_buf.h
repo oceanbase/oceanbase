@@ -22,7 +22,7 @@ namespace election {
 static const int64_t MAX_EG_PARTITION_NUM = 100;  // limits of election group size
 
 class ObPartArrayBuffer {
-  public:
+public:
   ObPartArrayBuffer() : cur_eg_version_(-1), serialize_size_(0)
   {}
   ~ObPartArrayBuffer()
@@ -49,10 +49,10 @@ class ObPartArrayBuffer {
   }
   int update_content(const common::ObPartitionArray& part_array);
 
-  public:
+public:
   static const int64_t ARRAY_BUF_SIZE = 4096;
 
-  private:
+private:
   char buf_[ARRAY_BUF_SIZE];
   int64_t cur_eg_version_;
   int64_t serialize_size_;

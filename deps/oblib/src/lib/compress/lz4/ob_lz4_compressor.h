@@ -20,7 +20,7 @@ namespace common {
 #define OB_PUBLIC_API __attribute__((visibility("default")))
 
 class OB_PUBLIC_API ObLZ4Compressor : public ObCompressor {
-  public:
+public:
   int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
       int64_t& dst_data_size);
 
@@ -31,12 +31,12 @@ class OB_PUBLIC_API ObLZ4Compressor : public ObCompressor {
 
   int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
 
-  private:
+private:
   static const char* compressor_name;
 };
 
 class OB_PUBLIC_API ObLZ4Compressor191 : public ObCompressor {
-  public:
+public:
   int compress(const char* src_buffer, const int64_t src_data_size, char* dst_buffer, const int64_t dst_buffer_size,
       int64_t& dst_data_size);
 
@@ -47,7 +47,7 @@ class OB_PUBLIC_API ObLZ4Compressor191 : public ObCompressor {
 
   int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
 
-  private:
+private:
   static const char* compressor_name;
 };
 

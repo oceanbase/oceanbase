@@ -110,7 +110,7 @@ int ObDtlAsynSender::asyn_send()
     if (OB_FAIL(syn_send())) {
       LOG_WARN("failed to syn send message", K(ret));
     }
-    LOG_ERROR("failed to calc batch buffer cnt", K(ret));
+    LOG_TRACE("failed to calc batch buffer cnt", K(ret));
   } else {
     dtl::ObDtlChannel* ch = NULL;
     int tmp_ret = OB_SUCCESS;

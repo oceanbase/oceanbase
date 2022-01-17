@@ -18,21 +18,21 @@
 namespace oceanbase {
 namespace sql {
 class ObExprCalcURowID : public ObExprOperator {
-  public:
+public:
   explicit ObExprCalcURowID(common::ObIAllocator& alloc);
   virtual ~ObExprCalcURowID();
 
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_statck, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types_statck, int64_t param_num,
+      common::ObExprTypeCtx& type_ctx) const override;
 
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* obj_stack, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* obj_stack, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
   static int calc_urowid(const ObExpr& rt_expr, ObEvalCtx& eva_ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCalcURowID);
 };
 }  // namespace sql

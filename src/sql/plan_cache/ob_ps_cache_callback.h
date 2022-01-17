@@ -23,7 +23,7 @@ namespace sql {
 class ObPCVSet;
 
 class ObGetClosedStmtIdOp {
-  public:
+public:
   ObGetClosedStmtIdOp(common::ObIArray<std::pair<ObPsStmtId, int64_t> >* expired_ps,
       common::ObIArray<std::pair<ObPsStmtId, int64_t> >* closed_ps)
       : closed_ps_(closed_ps), expired_ps_(expired_ps), used_size_(0), callback_ret_(OB_SUCCESS)
@@ -43,8 +43,14 @@ class ObGetClosedStmtIdOp {
       id_time.first = entry.first;
       id_time.second = entry.second->get_last_closed_timestamp();
       if (entry.second->is_expired()) {
-        if (OB_SUCCESS != (callback_ret_ = expired_ps_->push_back(id_time))) {
-          SQL_PC_LOG(WARN, "fail to push back key", K_(callback_ret));
+        // for expired ps info, only evicted once;
+        // use cas, because auto cache evict and flush ps cache may concurrent
+        // processing
+        if (ATOMIC_BCAS(entry.second->get_is_expired_evicted_ptr(), false,
+                        true)) {
+          if (OB_SUCCESS != (callback_ret_ = expired_ps_->push_back(id_time))) {
+            SQL_PC_LOG(WARN, "fail to push back key", K_(callback_ret));
+          }
         }
       } else {
         if (OB_SUCCESS != (callback_ret_ = closed_ps_->push_back(id_time))) {
@@ -65,7 +71,7 @@ class ObGetClosedStmtIdOp {
     return used_size_;
   }
 
-  private:
+private:
   common::ObIArray<std::pair<ObPsStmtId, int64_t> >* closed_ps_;
   common::ObIArray<std::pair<ObPsStmtId, int64_t> >* expired_ps_;
   int64_t used_size_;
@@ -74,7 +80,7 @@ class ObGetClosedStmtIdOp {
 };
 
 class ObGetAllStmtIdOp {
-  public:
+public:
   explicit ObGetAllStmtIdOp(common::ObIArray<ObPsStmtId>* key_array) : key_array_(key_array), callback_ret_(OB_SUCCESS)
   {}
 
@@ -94,7 +100,7 @@ class ObGetAllStmtIdOp {
     return callback_ret_;
   }
 
-  private:
+private:
   common::ObIArray<ObPsStmtId>* key_array_;
   int callback_ret_;
   DISALLOW_COPY_AND_ASSIGN(ObGetAllStmtIdOp);
@@ -103,7 +109,7 @@ class ObGetAllStmtIdOp {
 class ObPsStmtItemRefAtomicOp {
   typedef common::hash::HashMapPair<ObPsSqlKey, ObPsStmtItem*> PsStmtIdKV;
 
-  public:
+public:
   ObPsStmtItemRefAtomicOp() : stmt_item_(NULL), callback_ret_(common::OB_SUCCESS)
   {}
   virtual ~ObPsStmtItemRefAtomicOp()
@@ -116,7 +122,7 @@ class ObPsStmtItemRefAtomicOp {
     return callback_ret_;
   }
 
-  private:
+private:
   ObPsStmtItem* stmt_item_;
   int callback_ret_;
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtItemRefAtomicOp);
@@ -125,7 +131,7 @@ class ObPsStmtItemRefAtomicOp {
 class ObPsStmtItemDerefAtomicOp {
   typedef common::hash::HashMapPair<ObPsSqlKey, ObPsStmtItem*> PsStmtIdKV;
 
-  public:
+public:
   ObPsStmtItemDerefAtomicOp() : ret_(common::OB_SUCCESS), is_erase_(false)
   {}
   virtual ~ObPsStmtItemDerefAtomicOp()
@@ -140,7 +146,7 @@ class ObPsStmtItemDerefAtomicOp {
     return is_erase_;
   }
 
-  private:
+private:
   int ret_;
   bool is_erase_;
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtItemDerefAtomicOp);
@@ -149,7 +155,7 @@ class ObPsStmtItemDerefAtomicOp {
 class ObPsStmtInfoRefAtomicOp {
   typedef common::hash::HashMapPair<ObPsStmtId, ObPsStmtInfo*> PsStmtInfoKV;
 
-  public:
+public:
   ObPsStmtInfoRefAtomicOp() : stmt_info_(NULL), callback_ret_(common::OB_SUCCESS)
   {}
   virtual ~ObPsStmtInfoRefAtomicOp()
@@ -162,7 +168,7 @@ class ObPsStmtInfoRefAtomicOp {
   }
   void operator()(const PsStmtInfoKV& entry);
 
-  private:
+private:
   ObPsStmtInfo* stmt_info_;
   int callback_ret_;
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtInfoRefAtomicOp);
@@ -171,7 +177,7 @@ class ObPsStmtInfoRefAtomicOp {
 class ObPsStmtInfoDerefAtomicOp {
   typedef common::hash::HashMapPair<ObPsStmtId, ObPsStmtInfo*> PsStmtInfoKV;
 
-  public:
+public:
   ObPsStmtInfoDerefAtomicOp() : ret_(common::OB_SUCCESS), is_erase_(false)
   {}
   virtual ~ObPsStmtInfoDerefAtomicOp()
@@ -186,17 +192,17 @@ class ObPsStmtInfoDerefAtomicOp {
     return is_erase_;
   }
 
-  private:
+private:
   int ret_;
   bool is_erase_;
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtInfoDerefAtomicOp);
 };
 
 class ObPsPCVSetAtomicOp {
-  protected:
+protected:
   typedef common::hash::HashMapPair<ObPlanCacheKey, ObPCVSet*> PsPlanCacheKV;
 
-  public:
+public:
   ObPsPCVSetAtomicOp(const CacheRefHandleID ref_handle) : pcv_set_(NULL), ref_handle_(ref_handle)
   {}
   virtual ~ObPsPCVSetAtomicOp()
@@ -206,23 +212,23 @@ class ObPsPCVSetAtomicOp {
   // get pcv_set and increase reference count
   void operator()(PsPlanCacheKV& entry);
 
-  protected:
+protected:
   // when get value, need lock
   virtual int lock(ObPCVSet& pcv_set) = 0;
 
-  protected:
+protected:
   // According to the interface of ObHashTable, all returned values will be passed
   // back to the caller via the callback functor.
   // pcv_set_ - the plan cache value that is referenced.
   ObPCVSet* pcv_set_;
   const CacheRefHandleID ref_handle_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsPCVSetAtomicOp);
 };
 
 class ObPsPCVSetWlockAndRef : public ObPsPCVSetAtomicOp {
-  public:
+public:
   ObPsPCVSetWlockAndRef(const CacheRefHandleID ref_handle) : ObPsPCVSetAtomicOp(ref_handle)
   {}
   virtual ~ObPsPCVSetWlockAndRef()
@@ -232,12 +238,12 @@ class ObPsPCVSetWlockAndRef : public ObPsPCVSetAtomicOp {
     return pcv_set.lock(false /*wlock*/);
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsPCVSetWlockAndRef);
 };
 
 class ObPsPCVSetRlockAndRef : public ObPsPCVSetAtomicOp {
-  public:
+public:
   ObPsPCVSetRlockAndRef(const CacheRefHandleID ref_handle) : ObPsPCVSetAtomicOp(ref_handle)
   {}
   virtual ~ObPsPCVSetRlockAndRef()
@@ -247,7 +253,7 @@ class ObPsPCVSetRlockAndRef : public ObPsPCVSetAtomicOp {
     return pcvs.lock(true /*rlock*/);
   };
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPsPCVSetRlockAndRef);
 };
 

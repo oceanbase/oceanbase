@@ -1130,7 +1130,6 @@ int ObMvccRow::check_row_locked(
   }
   // locked by other
   if (is_locked && lock_descriptor != ctx.get_ctx_descriptor()) {
-    lock_descriptor = row_lock_.get_exclusive_uid();
     int64_t lock_wait_start_ts =
         ctx.get_lock_wait_start_ts() > 0 ? ctx.get_lock_wait_start_ts() : common::ObClockGenerator::getClock();
     int64_t query_abs_lock_wait_timeout = ctx.get_query_abs_lock_wait_timeout(lock_wait_start_ts);
@@ -1234,17 +1233,19 @@ int ObMvccRow::lock_for_write(const ObMemtableKey* key, ObIMvccCtx& ctx)
     }
   }
 
-  // remote sql?
-  const int64_t is_remote_sql =
-      (static_cast<ObMemtableCtx&>(ctx).get_trans_ctx()->get_trans_id().get_server() != OBSERVER.get_self());
-  if (OB_SUCCESS != (tmp_ret = get_global_lock_wait_mgr().post_lock(ret,
-                         row_lock_,
-                         *key,
-                         query_abs_lock_wait_timeout,
-                         is_remote_sql,
-                         total_trans_node_cnt_,
-                         ctx.is_can_elr(),
-                         uid))) {}
+  if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
+    // remote sql?
+    const int64_t is_remote_sql =
+        (static_cast<ObMemtableCtx&>(ctx).get_trans_ctx()->get_trans_id().get_server() != OBSERVER.get_self());
+    if (OB_SUCCESS != (tmp_ret = get_global_lock_wait_mgr().post_lock(ret,
+                           row_lock_,
+                           *key,
+                           query_abs_lock_wait_timeout,
+                           is_remote_sql,
+                           total_trans_node_cnt_,
+                           ctx.is_can_elr(),
+                           uid))) {}
+  }
   const bool enable_perf_event = GCONF.enable_perf_event;
   ctx.set_lock_wait_start_ts(0);
   if (OB_SUCC(ret)) {

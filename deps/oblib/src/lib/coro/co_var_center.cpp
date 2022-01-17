@@ -72,35 +72,21 @@ int CoVarCenter::register_hook(CoVarHook* hook)
   return static_cast<int>(num);
 }
 
-void CoVarCenter::at_routine_create()
+void CoVarCenter::at_routine_create(char *buffer)
 {
-  char* buffer = nullptr;
-  if (OB_LIKELY(CoSched::get_active_routine() != nullptr)) {
-    buffer = CoSched::get_active_routine()->get_crls_buffer();
-    assert(buffer != nullptr);
-  } else {
-    ob_abort();
-  }
-
-  int64_t& num = reinterpret_cast<int64_t&>(*(&buffer[coro::CoConfig::MAX_CRLS_SIZE] - 8));
+  int64_t &num = reinterpret_cast<int64_t&>(*(&buffer[coro::CoConfig::MAX_CRLS_SIZE]-8));
   num = 0;
 }
 
-void CoVarCenter::at_routine_exit()
+void CoVarCenter::at_routine_exit(char *buffer)
 {
-  if (CoSched::get_active_routine() != CoSched::get_instance()) {
-    char* buffer = nullptr;
-    if (OB_LIKELY(CoSched::get_active_routine() != nullptr)) {
-      buffer = CoSched::get_active_routine()->get_crls_buffer();
-    }
-    const auto MAX_CRLS_SIZE = coro::CoConfig::MAX_CRLS_SIZE;
-    int64_t& num = reinterpret_cast<int64_t&>(*(&buffer[MAX_CRLS_SIZE] - 8));
-    CoVarHook** last = reinterpret_cast<CoVarHook**>(&buffer[MAX_CRLS_SIZE] - 16);
-    for (int64_t i = num - 1; i >= 0; i--) {
-      last[-i]->deinit_();
-    }
-    num = 0;
+  const auto MAX_CRLS_SIZE = coro::CoConfig::MAX_CRLS_SIZE;
+  int64_t &num = reinterpret_cast<int64_t&>(*(&buffer[MAX_CRLS_SIZE]-8));
+  CoVarHook **last = reinterpret_cast<CoVarHook**>(&buffer[MAX_CRLS_SIZE]-16);
+  for (int64_t i = num-1; i >= 0; i--) {
+    last[-i]->deinit_();
   }
+  num = 0;
 }
 
 }  // namespace lib

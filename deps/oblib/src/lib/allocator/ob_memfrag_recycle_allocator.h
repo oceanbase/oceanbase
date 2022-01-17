@@ -23,7 +23,7 @@ namespace common {
 // The interface of rewritable classes, which provides rewrite_switch methods to rewrite itself to
 // new memory.
 class ObIRewritable {
-  public:
+public:
   ObIRewritable();
 
   virtual ~ObIRewritable();
@@ -50,7 +50,7 @@ class ObIRewritable {
 // registered rewritable object to rewrite itself to current working allocator, at last free memory of
 // standby allocator after expire duration time.
 class ObMemfragRecycleAllocator : public ObIAllocator {
-  public:
+public:
   ObMemfragRecycleAllocator();
   virtual ~ObMemfragRecycleAllocator();
 
@@ -106,7 +106,7 @@ class ObMemfragRecycleAllocator : public ObIAllocator {
   int64_t get_all_alloc_size() const;
   int64_t get_cur_alloc_size() const;
 
-  private:
+private:
   enum ObMemfragRecycleAllocatorState { INIT, SWITCHING_PREPARE, SWITCHING, SWITCHING_OVER };
 
   static const int64_t META_MAGIC_NUM = 0x4D455441;
@@ -125,7 +125,7 @@ class ObMemfragRecycleAllocator : public ObIAllocator {
 
   bool need_switch(ObDelayFreeAllocator& allocator);
 
-  private:
+private:
   ObDelayFreeAllocator allocator_[2];
   int64_t cur_allocator_pos_;
   enum ObMemfragRecycleAllocatorState state_;
@@ -136,33 +136,33 @@ class ObMemfragRecycleAllocator : public ObIAllocator {
   lib::ObMutex mutex_;
   bool inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemfragRecycleAllocator);
 };
 
 // A singleton which is used for recycling memory of all ObMemfragRecycleAllocator periodically.
 class ObMRAllocatorRecycler {
-  public:
+public:
   static ObMRAllocatorRecycler& get_instance();
   int register_allocator(ObMemfragRecycleAllocator* allocator);
   int deregister_allocator(ObMemfragRecycleAllocator* allocator);
   void recycle();
   void set_schedule_interval_us(const int64_t interval_us);
 
-  private:
+private:
   class SelfCreator {
-    public:
+  public:
     SelfCreator();
     virtual ~SelfCreator();
   };
   class ObMRAllocatorRecycleTask : public ObTimerTask {
-    public:
+  public:
     ObMRAllocatorRecycleTask();
     virtual ~ObMRAllocatorRecycleTask();
     void runTimerTask();
   };
 
-  private:
+private:
   ObMRAllocatorRecycler();
   virtual ~ObMRAllocatorRecycler();
   static const int64_t MAX_META_MEMORY_ALLOCATOR_COUNT = 8;
@@ -174,7 +174,7 @@ class ObMRAllocatorRecycler {
   ObMemfragRecycleAllocator* allocators_[MAX_META_MEMORY_ALLOCATOR_COUNT];
   bool is_scheduled_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMRAllocatorRecycler);
 };
 

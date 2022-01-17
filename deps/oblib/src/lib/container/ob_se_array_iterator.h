@@ -34,14 +34,14 @@ template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT, bool a
 class ObSEArrayIterator {
   friend class ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>;
 
-  public:
+public:
   typedef T value_type;
   typedef int64_t difference_type;
   typedef T* pointer;
   typedef T& reference;
   typedef std::random_access_iterator_tag iterator_category;
 
-  public:
+public:
   ObSEArrayIterator() : arr_(NULL), index_(0)
   {}
   explicit ObSEArrayIterator(ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>* arr, int64_t index)
@@ -124,7 +124,7 @@ class ObSEArrayIterator {
     return (index_ <= rhs.index_);
   }
 
-  private:
+private:
   ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>* arr_;
   int64_t index_;
 };

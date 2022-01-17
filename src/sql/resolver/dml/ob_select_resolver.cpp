@@ -55,6 +55,7 @@ ObSelectResolver::ObSelectResolver(ObResolverParams& params)
       transpose_item_(NULL)
 {
   params_.is_from_create_view_ = params.is_from_create_view_;
+  params_.is_from_create_table_ = params.is_from_create_table_;
 }
 
 ObSelectResolver::~ObSelectResolver()
@@ -97,6 +98,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
   right_resolver.set_current_level(current_level_);
   right_resolver.set_in_set_query(true);
   right_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
+  right_resolver.set_resolver(&left_resolver);
 
   OC((left_resolver.set_cte_ctx)(cte_ctx_));
   OC((right_resolver.set_cte_ctx)(cte_ctx_));
@@ -123,6 +125,7 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
     LOG_WARN("failed to identify anchor member", K(ret));
   } else if (!need_swap_child) {
     left_select_stmt = identify_anchor_resolver.get_child_stmt();
+    right_resolver.set_resolver(&identify_anchor_resolver);
   } else {
     left_member = PARSE_SELECT_LATER;
     right_member = PARSE_SELECT_FORMER;
@@ -132,6 +135,26 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
       LOG_WARN("failed to resolve child stmt", K(ret));
     } else {
       left_select_stmt = left_resolver.get_child_stmt();
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (!params_.has_cte_param_list_ && right_resolver.saved_left_resolver != NULL &&
+        !right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.empty()) {
+      right_resolver.cte_ctx_.cte_col_names_.reset();
+      cte_ctx_.cte_col_names_.reset();
+      for (int64_t i = 0; OB_SUCC(ret) && i < right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.count(); ++i) {
+        if (OB_FAIL(right_resolver.cte_ctx_.cte_col_names_.push_back(
+                right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to right resolver
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pass cte column name to child resolver failed");
+        }
+        if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(
+                right_resolver.saved_left_resolver->cte_ctx_.cte_col_names_.at(i)))) {  // to parent resolver
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("pass cte column name to child resolver failed");
+        }
+      }
     }
   }
 
@@ -448,6 +471,7 @@ int ObSelectResolver::set_cte_ctx(ObCteResolverCtx& cte_ctx, bool copy_col_name 
 {
   int ret = OB_SUCCESS;
   cte_ctx_ = cte_ctx;
+  cte_ctx_.is_recursive_cte_ = false;
   cte_ctx_.cte_col_names_.reset();
   cte_ctx_.is_cte_subquery_ = in_subquery;
   if (cte_ctx_.is_with_resolver())
@@ -1245,15 +1269,9 @@ int ObSelectResolver::resolve_order_item(const ParseNode& sort_node, OrderItem& 
     }
     if (OB_FAIL(resolve_sql_expr(*(sort_node.children_[0]), order_item.expr_))) {
       LOG_WARN("resolve sql expression failed", K(ret));
+    } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), order_item.expr_, order_item, select_stmt))) {
+        LOG_WARN("fail to resolve literal order item", K(ret), K(*order_item.expr_));
     } else {
-      ObRawExpr* expr = order_item.expr_;
-      if (expr->has_flag(CNT_SET_OP) && !expr->has_flag(IS_SET_OP)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Orderby expression after set operation");
-      } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), expr, order_item, select_stmt))) {
-        LOG_WARN("fail to resolve literal order item", K(ret), K(*expr));
-      } else {
-      }
     }
   }
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
@@ -1357,8 +1375,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode& node)
           ret = OB_ERR_TOO_LONG_IDENT;
           LOG_WARN("alias name too long", K(ret), K(select_item.alias_name_));
         }
-      } else if (OB_UNLIKELY(params_.is_from_create_view_ &&
-                             0 == select_item.expr_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME))) {
+      } else if (OB_UNLIKELY((params_.is_from_create_view_ || params_.is_from_create_table_)
+                             && 0 == select_item.expr_name_.case_compare(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME))) {
         // must name alias for rowid
         //  eg: create view/table as select rowid from t1;
         ret = OB_NO_COLUMN_ALIAS;
@@ -1421,6 +1439,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode& node)
         } else if (T_FUN_SYS_SEQ_NEXTVAL == select_item.expr_->get_expr_type()) {
           // sequence expr, expr is seq_name.nextval or seq_name.currval
           // but column name displayed should be nextval or currval
+          if (T_OP_POS == project_node->type_) {
+            project_node = project_node->children_[0];
+          }
           if (T_OBJ_ACCESS_REF != project_node->type_) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected select item type", K(select_item), K(project_node->type_), K(ret));
@@ -1511,6 +1532,13 @@ int ObSelectResolver::resolve_field_list(const ParseNode& node)
     } else if (OB_FAIL(recursive_check_grouping_columns(select_stmt, select_item.expr_))) {
       LOG_WARN("failed to recursive check grouping columns", K(ret));
     } else { /*do nothing*/
+    }
+
+    // add for cte:
+    if (OB_SUCC(ret) && !params_.has_cte_param_list_) {
+      if (OB_FAIL(cte_ctx_.cte_col_names_.push_back(select_item.alias_name_))) {
+        LOG_WARN("push back column alia name failed", K(ret));
+      }
     }
 
   }  // end for
@@ -2126,12 +2154,12 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
   ObSelectStmt* select_stmt = NULL;
   TableItem* table_item = NULL;
   bool duplicate_name = false;
+  if (NULL != node && cte_ctx_.is_with_resolver() && same_level == false){
+    LOG_DEBUG("same_level = false, oracle not supported, mysql feature");
+  }
   if (OB_ISNULL(select_stmt = get_select_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(select_stmt), K_(node->type));
-  } else if (NULL != node && cte_ctx_.is_with_resolver() && same_level == false) {
-    ret = OB_ERR_UNSUPPORTED_USE_OF_CTE;
-    LOG_WARN("invalid argument, oracle cte do not support a with clause nest", K(select_stmt), K_(node->type));
   } else if (OB_ISNULL(node)) {
     // do nothing
   } else if (OB_UNLIKELY(node->type_ != T_WITH_CLAUSE_LIST)) {
@@ -2140,6 +2168,10 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
     LOG_WARN("resolver with_clause_as met unexpected node type", K_(node->type));
   } else {
     int num_child = node->num_child_;
+    if (node->value_ == 0)
+      params_.has_recursive_word = false;
+    else
+      params_.has_recursive_word = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < num_child; ++i) {
       // alias tblname [(alia colname1, alia colname2)](subquery) [search clause][cycle clause]
       ParseNode* child_node = node->children_[i];
@@ -2977,7 +3009,10 @@ int ObSelectResolver::add_fake_schema(ObSelectStmt* left_stmt)
             ObColumnRefRawExpr* select_expr = static_cast<ObColumnRefRawExpr*>(expr);
             ObColumnSchemaV2* new_col = static_cast<ObColumnSchemaV2*>(allocator_->alloc(sizeof(ObColumnSchemaV2)));
             new_col = new (new_col) ObColumnSchemaV2(allocator_);
-            new_col->set_column_name(cte_ctx_.cte_col_names_.at(i));
+            if (!OB_ISNULL(saved_left_resolver))
+              new_col->set_column_name(saved_left_resolver->cte_ctx_.cte_col_names_.at(i));
+            else
+              new_col->set_column_name(cte_ctx_.cte_col_names_.at(i));
             new_col->set_tenant_id(tbl_schema->get_tenant_id());
             new_col->set_table_id(magic_table_id);
             new_col->set_column_id(magic_col_id + i);
@@ -3006,7 +3041,9 @@ int ObSelectResolver::get_opt_alias_colnames_for_recursive_cte(ObIArray<ObString
   int ret = OB_SUCCESS;
   if (OB_ISNULL(parse_tree)) {
     LOG_DEBUG("the opt_alias_colnames parse tree is null");
+    params_.has_cte_param_list_ = false;
   } else {
+    params_.has_cte_param_list_ = true;
     int64_t alias_num = parse_tree->num_child_;
     for (int64_t i = 0; OB_SUCC(ret) && i < alias_num; ++i) {
       if (parse_tree->children_[i]->str_len_ <= 0) {
@@ -4262,9 +4299,23 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(const ObQualifiedName&
   int ret = OB_SUCCESS;
   // first, find column in current namespace
   if (OB_UNLIKELY(T_ORDER_SCOPE == current_scope_)) {
-    if (OB_FAIL(resolve_column_ref_alias_first(q_name, real_ref_expr))) {
-      LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref alias first failed", K(ret), K(q_name));
+    if (!params_.is_column_ref_) {
+      // if the item behind order by is an expr, then we should resolve column
+      // select id as data, data from test order by data + 1;
+      // select id as data, data from test order by sum(data);
+      // select id + 1 as data, data from test order by sum(data);
+      if (OB_FAIL(resolve_column_ref_table_first(q_name, real_ref_expr, false))) {
+        LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref table first failed", K(ret), K(q_name));
+      }
+    } else {
+      // should raise an error
+      // select id + 1 as data, data from test order by data
+      // select id as data, data from test order by data
+      if (OB_FAIL(resolve_column_ref_alias_first(q_name, real_ref_expr))) {
+        LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref alias first failed", K(ret), K(q_name));
+      }
     }
+    
   } else if (OB_UNLIKELY(T_HAVING_SCOPE == current_scope_)) {
     if (OB_FAIL(resolve_column_ref_for_having(q_name, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref for having failed", K(ret), K(q_name));
@@ -4275,7 +4326,7 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(const ObQualifiedName&
     }
   } else {
     // search column in table columns first
-    if (OB_FAIL(resolve_column_ref_table_first(q_name, real_ref_expr))) {
+    if (OB_FAIL(resolve_column_ref_table_first(q_name, real_ref_expr, true))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref table first failed", K(ret), K(q_name));
     }
   }
@@ -4456,23 +4507,30 @@ int ObSelectResolver::resolve_column_ref_in_group_by(const ObQualifiedName& q_na
     LOG_WARN("select stmt is null");
   } else if (!is_oracle_mode() && q_name.parent_aggr_level_ < current_level_) {
     // the column don't located in aggregate function in having clause
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_group_expr_size(); ++i) {
+    // resolve column refs from group by and rollup exprs
+    ObSEArray<ObRawExpr *, 16> group_and_rollup_exprs;
+    if (OB_FAIL(append(group_and_rollup_exprs, select_stmt->get_group_exprs()))) {
+      LOG_WARN("failed to append group exprs", K(ret));
+    } else if (OB_FAIL(append(group_and_rollup_exprs, select_stmt->get_rollup_exprs()))) {
+      LOG_WARN("failed to append rollup exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_and_rollup_exprs.count(); ++i) {
       bool is_hit = false;
-      ObRawExpr* group_expr = NULL;
-      ObColumnRefRawExpr* col_ref = NULL;
-      if (OB_ISNULL(group_expr = select_stmt->get_group_exprs().at(i))) {
+      ObRawExpr *expr = NULL;
+      ObColumnRefRawExpr *col_ref = NULL;
+      if (OB_ISNULL(expr = group_and_rollup_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("group expr is null");
-      } else if (group_expr->is_column_ref_expr()) {
-        col_ref = static_cast<ObColumnRefRawExpr*>(group_expr);
-        if (OB_FAIL(ObResolverUtils::check_column_name(session_info_, q_name, *col_ref, is_hit))) {
-          LOG_WARN("check column name failed", K(ret), K(q_name));
-        } else if (is_hit) {
-          if (NULL == real_ref_expr) {
-            real_ref_expr = col_ref;
-          } else if (real_ref_expr != col_ref) {
-            ret = OB_NON_UNIQ_ERROR;
-          }
+        LOG_WARN("expr is null", K(ret));
+      } else if (!expr->is_column_ref_expr()) {
+        // do nothing
+      } else if (OB_FALSE_IT(col_ref = static_cast<ObColumnRefRawExpr *>(expr))) {
+      } else if (OB_FAIL(ObResolverUtils::check_column_name(session_info_, q_name, *col_ref, is_hit))) {
+        LOG_WARN("check column name failed", K(ret), K(q_name));
+      } else if (is_hit) {
+        if (OB_ISNULL(real_ref_expr)) {
+          real_ref_expr = col_ref;
+        } else if (real_ref_expr != col_ref) {
+          ret = OB_NON_UNIQ_ERROR;
         }
       }
     }
@@ -4591,7 +4649,9 @@ int ObSelectResolver::resolve_column_ref_for_having(const ObQualifiedName& q_nam
   return ret;
 }
 
-int ObSelectResolver::resolve_column_ref_table_first(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr)
+int ObSelectResolver::resolve_column_ref_table_first(
+  const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr,
+  bool need_further_match_alias /* = true */)
 {
   int ret = OB_SUCCESS;
   // search column ref in table columns first, follow by alias name
@@ -4605,18 +4665,20 @@ int ObSelectResolver::resolve_column_ref_table_first(const ObQualifiedName& q_na
     } else {
       LOG_WARN("resolve table column ref failed", K(ret));
     }
-  } else if (OB_FAIL(resolve_alias_column_ref(q_name, tmp_ref))) {
-    if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ILLEGAL_REFERENCE == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("try to hit column on target list failed", K(ret));
+  } else if (need_further_match_alias) {
+    if (OB_FAIL(resolve_alias_column_ref(q_name, tmp_ref))) {
+      if (OB_ERR_BAD_FIELD_ERROR == ret || OB_ILLEGAL_REFERENCE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("try to hit column on target list failed", K(ret));
+      }
+    } else if (!ObRawExprUtils::is_same_column_ref(real_ref_expr, tmp_ref)) {
+      // if column name exist in both table columns and alias name list, use table column and produce warning msg
+      ObString col_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
+      ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+      LOG_USER_WARN(OB_NON_UNIQ_ERROR, col_name.length(), col_name.ptr(), scope_name.length(), scope_name.ptr());
     }
-  } else if (!ObRawExprUtils::is_same_column_ref(real_ref_expr, tmp_ref)) {
-    // if column name exist in both table columns and alias name list, use table column and produce warning msg
-    ObString col_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
-    ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-    LOG_USER_WARN(OB_NON_UNIQ_ERROR, col_name.length(), col_name.ptr(), scope_name.length(), scope_name.ptr());
-  }
+  } else { /* do nothing */}
   return ret;
 }
 
@@ -4779,8 +4841,14 @@ inline bool ObSelectResolver::column_need_check_group_by(const ObQualifiedName& 
 int ObSelectResolver::wrap_alias_column_ref(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr)
 {
   int ret = OB_SUCCESS;
-  if (q_name.parent_aggr_level_ >= 0 && current_level_ <= q_name.parent_aggr_level_) {
-    ObAliasRefRawExpr* alias_expr = NULL;
+  // aggr in window function isn't used to wrap column ref, just only expand alias column, and do
+  // wrap alias column ref is used to help analyze aggregate pullup for alias column in aggr. the
+  // other situation should expand alias column directly.
+  // eg: select sum(t1.c1) from t1 order by (select sum(t1.c1) from t2);
+  // sum(t1.c1) in subquery is from parent stmt.
+  if (!q_name.parents_expr_info_.has_member(IS_WINDOW_FUNC) && q_name.parent_aggr_level_ >= 0 &&
+      current_level_ <= q_name.parent_aggr_level_) {
+    ObAliasRefRawExpr *alias_expr = NULL;
     if (OB_FAIL(ObRawExprUtils::build_alias_column_expr(
             *params_.expr_factory_, real_ref_expr, current_level_, alias_expr))) {
       LOG_WARN("build alias column expr failed", K(ret));
@@ -5434,7 +5502,12 @@ int ObSelectResolver::identify_anchor_member(
   if (OB_FAIL(identify_anchor_resolver.resolve_child_stmt(parse_tree))) {
     if (OB_ERR_NEED_INIT_BRANCH_IN_RECURSIVE_CTE == ret) {
       need_swap_childa = true;
-      ret = OB_SUCCESS;
+      if (is_oracle_mode()){
+        ret = OB_SUCCESS;
+      } else if (params_.has_recursive_word) {
+        ret = OB_ERR_CTE_NEED_QUERY_BLOCKS;  // mysql error: Recursive Common Table Expression 'cte' should have one or
+                                             // more non-recursive query blocks followed by one or more recursive ones
+      }
     } else {
       LOG_WARN("Failed to find anchor member", K(ret));
     }

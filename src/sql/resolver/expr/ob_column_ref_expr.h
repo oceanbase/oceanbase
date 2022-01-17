@@ -20,7 +20,7 @@ namespace jit {
 namespace expr {
 
 class ObColumnRefExpr : virtual public ObExpr {
-  public:
+public:
   ObColumnRefExpr(ObItemType expr_type = T_INVALID) : ObExpr(expr_type)
   {
     set_expr_class(EXPR_COLUMN_REF);

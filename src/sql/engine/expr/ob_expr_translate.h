@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprTranslate : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprTranslate(common::ObIAllocator& alloc);
   virtual ~ObExprTranslate();
 
@@ -38,7 +38,7 @@ class ObExprTranslate : public ObStringExprOperator {
       const common::ObString& to_str, common::ObCollationType cs_type, common::ObIAllocator& tmp_alloc,
       common::ObIAllocator& res_alloc, common::ObString& res_str, bool& is_null);
 
-  private:
+private:
   typedef common::hash::ObHashMap<common::ObString, common::ObString> StringHashMap;
 
   static int insert_map(const common::ObString& key_str, const common::ObString& val_str,

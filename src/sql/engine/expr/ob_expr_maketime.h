@@ -26,7 +26,7 @@ namespace sql {
 // mysql> SELECT MAKETIME(12,15,30);
 //        -> '12:15:30'
 class ObExprMakeTime : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprMakeTime(common::ObIAllocator& alloc);
   virtual ~ObExprMakeTime();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
@@ -37,7 +37,7 @@ class ObExprMakeTime : public ObFuncExprOperator {
   static int eval_maketime(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& result);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // Parse ObNumber object (arg: sec) and split it into integer/quotient part and remainder part.
   // Fetch the integer part.
   // E.G:

@@ -18,12 +18,12 @@
 namespace oceanbase {
 namespace sql {
 class ObOptimizerPartitionLocationCache : public share::ObIPartitionLocationCache {
-  public:
+public:
   static const int64_t LOCATION_CACHE_BUCKET_NUM = 32;
   ObOptimizerPartitionLocationCache(common::ObIAllocator& allocator, share::ObIPartitionLocationCache* location_cache);
   virtual ~ObOptimizerPartitionLocationCache();
 
-  virtual PartitionLocationCacheType get_type() const
+  virtual PartitionLocationCacheType get_type() const override
   {
     return ObOptimizerPartitionLocationCache::PART_LOC_CACHE_TYPE_OPTIMIZER;
   }
@@ -69,16 +69,16 @@ class ObOptimizerPartitionLocationCache : public share::ObIPartitionLocationCach
   virtual int nonblock_renew_with_limiter(
       const common::ObPartitionKey& partition, const int64_t expire_renew_time, bool& is_limited) override;
   // link table.
-  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location);
+  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location) override;
   inline share::ObIPartitionLocationCache* get_location_cache()
   {
     return location_cache_;
   }
 
-  private:
+private:
   int insert_or_replace_optimizer_cache(share::ObLocationCacheKey& key, share::ObPartitionLocation* location);
 
-  private:
+private:
   typedef common::hash::ObHashMap<share::ObLocationCacheKey, share::ObPartitionLocation*,
       common::hash::NoPthreadDefendMode>
       PartitionLocationMap;
@@ -86,7 +86,7 @@ class ObOptimizerPartitionLocationCache : public share::ObIPartitionLocationCach
   share::ObIPartitionLocationCache* location_cache_;
   PartitionLocationMap optimizer_cache_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOptimizerPartitionLocationCache);
 };
 

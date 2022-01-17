@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObBasicCostInfo;
 class ObLogSubPlanFilter : public ObLogicalOperator {
-  public:
+public:
   ObLogSubPlanFilter(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         exec_params_(),
@@ -30,7 +30,7 @@ class ObLogSubPlanFilter : public ObLogicalOperator {
   {}
   ~ObLogSubPlanFilter()
   {}
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   int allocate_exchange_post(AllocExchContext* ctx) override;
   int check_if_match_partition_wise(const AllocExchContext& ctx, bool& is_partition_wise);
   int has_serial_child(bool& has_serial_child);
@@ -47,8 +47,8 @@ class ObLogSubPlanFilter : public ObLogicalOperator {
   int gen_output_columns();
   virtual int est_cost() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual int transmit_op_ordering();
-  virtual int transmit_local_ordering();
+  virtual int transmit_op_ordering() override;
+  virtual int transmit_local_ordering() override;
 
   /**
    *  Get the exec params
@@ -109,12 +109,12 @@ class ObLogSubPlanFilter : public ObLogicalOperator {
 
   int get_subquery_exprs(ObIArray<ObRawExpr*>& subquery_exprs);
 
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
 
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
-  virtual int re_calc_cost();
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
+  virtual int re_calc_cost() override;
   int get_children_cost_info(common::ObIArray<ObBasicCostInfo>& children_cost_info);
-  uint64_t hash(uint64_t seed) const;
+  uint64_t hash(uint64_t seed) const override;
   void set_update_set(bool update_set)
   {
     update_set_ = update_set;
@@ -123,18 +123,18 @@ class ObLogSubPlanFilter : public ObLogicalOperator {
   {
     return update_set_;
   }
-  int allocate_granule_pre(AllocGIContext& ctx);
-  int allocate_granule_post(AllocGIContext& ctx);
+  int allocate_granule_pre(AllocGIContext& ctx) override;
+  int allocate_granule_post(AllocGIContext& ctx) override;
   virtual int compute_one_row_info() override;
-
-  protected:
+  int allocate_startup_expr_post() override;
+protected:
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> exec_params_;
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 8, common::ModulePageAllocator, true> onetime_exprs_;
   common::ObBitSet<> init_plan_idxs_;
   common::ObBitSet<> one_time_idxs_;
   bool update_set_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);
 };
 }  // end of namespace sql

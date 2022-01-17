@@ -22,7 +22,7 @@ namespace common {
 // @note thread-safe
 template <typename T>
 class ObConnectionAllocator {
-  public:
+public:
   ObConnectionAllocator();
   virtual ~ObConnectionAllocator();
 
@@ -31,12 +31,12 @@ class ObConnectionAllocator {
   T* get_cached();
   int put_cached(T* obj);
 
-  private:
+private:
   // disallow copy
   ObConnectionAllocator(const ObConnectionAllocator& other);
   ObConnectionAllocator& operator=(const ObConnectionAllocator& other);
 
-  private:
+private:
   // data members
   ObSpinLock lock_;
   ObPool<> pool_;

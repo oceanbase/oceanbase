@@ -242,6 +242,14 @@ int ObAllVirtualBackupSetHistoryMgr::inner_get_next_row(ObNewRow*& row)
           cells[i].set_int(backup_recovery_window_);
           break;
         }
+        case START_REPLAY_LOG_TS: {
+          cells[i].set_int(tenant_backup_task_info_.start_replay_log_ts_);
+          break;
+        }
+        case DATE: {
+          cells[i].set_int(tenant_backup_task_info_.date_);
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

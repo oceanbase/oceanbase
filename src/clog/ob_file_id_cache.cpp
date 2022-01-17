@@ -21,7 +21,7 @@ namespace clog {
 // Not thread safe
 template <typename T>
 class ObLog2FileList : public ObISegArray<T> {
-  public:
+public:
   ObLog2FileList() : is_inited_(false), item_cnt_(0), allocator_(NULL), head_(NULL), tail_(NULL)
   {}
 
@@ -34,7 +34,7 @@ class ObLog2FileList : public ObISegArray<T> {
     tail_ = NULL;
   }
 
-  public:
+public:
   virtual int init(ObSmallAllocator* allocator) override
   {
     int ret = OB_SUCCESS;
@@ -143,7 +143,7 @@ class ObLog2FileList : public ObISegArray<T> {
     return is_empty_();
   }
 
-  virtual int search_boundary(const T& item, T& prev_item, T& next_item)
+  virtual int search_boundary(const T& item, T& prev_item, T& next_item) override
   {
     int ret = OB_SUCCESS;
     if (IS_NOT_INIT) {
@@ -185,7 +185,7 @@ class ObLog2FileList : public ObISegArray<T> {
     return sizeof(DListNode);
   }
 
-  private:
+private:
   bool is_empty_() const
   {
     return head_ == NULL && tail_ == NULL;
@@ -243,27 +243,27 @@ class ObLog2FileList : public ObISegArray<T> {
     return ret;
   }
 
-  private:
+private:
   friend class ObFileIdList;
   class DListNode {
-    public:
+  public:
     DListNode() : value_(), next_(NULL), prev_(NULL)
     {}
 
-    public:
+  public:
     T value_;
     DListNode* next_;
     DListNode* prev_;
   };
 
-  private:
+private:
   bool is_inited_;
   int32_t item_cnt_;
   ObSmallAllocator* allocator_;
   DListNode* head_;
   DListNode* tail_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLog2FileList);
 };
 
@@ -789,6 +789,8 @@ int ObFileIdList::prepare_container_()
         container_ptr_->destroy();
         log2file_list_allocator_->free(container_ptr_);
         container_ptr_ = tmp_container_ptr;
+        use_seg_array_ = true;
+        CSR_LOG(INFO, "use seg array in prepare_container_ function");
       }
     }
   } else {
@@ -846,7 +848,7 @@ bool ObFileIdCachePurgeByFileId::need_wait(bool& need_print_error) const
   bool bool_ret = false;
   need_print_error = false;
   const file_id_t curr_max_file_id = file_id_cache_.get_curr_max_file_id();
-  // This measn that ilog can be purged, but ilog index don't in file_id_cahce
+  // This means that ilog can be purged, but ilog index don't in file_id_cache
   if (OB_INVALID_FILE_ID == curr_max_file_id || curr_max_file_id < min_file_id_) {
     bool_ret = true;
     need_print_error = true;
@@ -1016,7 +1018,7 @@ int ObFileIdCache::init(const int64_t server_seq, const common::ObAddr& addr, Ob
   } else if (OB_FAIL(map_.init(MAP_LABEL, MAP_TENANT_ID))) {
     CSR_LOG(WARN, "map_ init error", K(ret));
   } else if (OB_FAIL(filter_map_.init("FAST_PG_FILTER", MAP_TENANT_ID))) {
-    CSR_LOG(WARN, "fliter_map_ init error", K(ret));
+    CSR_LOG(WARN, "filter_map_ init error", K(ret));
   } else {
     curr_max_file_id_ = OB_INVALID_FILE_ID;
     next_can_purge_log2file_timestamp_ = OB_INVALID_TIMESTAMP;
@@ -1065,8 +1067,8 @@ void ObFileIdCache::destroy()
 // 1. OB_SUCCESS                          prev_item and next_item are both valid
 // 2. OB_ERR_OUT_OF_UPPER_BOUND           prev_item valid, next_item invalid
 // 3. OB_ERR_OUT_OF_LOWER_BOUND           prev_item invalid, next_item valid
-// 4. OB_PARTITION_NOT_EXIST              partiiton not exist, prev_item and next_item are both invalid
-// 5. OB_NEED_RETRY                       need retrym prev_item and next_item are both invalid
+// 4. OB_PARTITION_NOT_EXIST              partition not exist, prev_item and next_item are both invalid
+// 5. OB_NEED_RETRY                       need retry prev_item and next_item are both invalid
 // 6. Others
 int ObFileIdCache::locate(const ObPartitionKey& pkey, const int64_t target_value, const bool locate_by_log_id,
     Log2File& prev_item, Log2File& next_item)
@@ -1323,7 +1325,7 @@ bool ObFileIdCache::ObUndoAppendFunctor::operator()(const ObPartitionKey& pkey, 
     CSR_LOG(WARN, "list undo_append error", K(broken_file_id_), K(pkey), K(empty), KP(list));
   } else if (empty) {
     if (OB_FAIL(dead_pkeys_.push_back(pkey))) {
-      CSR_LOG(WARN, "push pkey inito dead_pkeys error", K(ret), K(dead_pkeys_), K(pkey));
+      CSR_LOG(WARN, "push pkey into dead_pkeys error", K(ret), K(dead_pkeys_), K(pkey));
     } else {
       CSR_LOG(TRACE, "dead_pkey", K(pkey), K(broken_file_id_), KP(list));
     }
@@ -1542,7 +1544,7 @@ int ObFileIdCache::undo_append_(const file_id_t broken_file_id)
   WLockGuard wguard(rwlock_);
   if (OB_UNLIKELY(OB_INVALID_FILE_ID == broken_file_id)) {
     ret = OB_INVALID_ARGUMENT;
-    CSR_LOG(WARN, "ObFileIdCachel undo_append error", K(ret), K(broken_file_id));
+    CSR_LOG(WARN, "ObFileIdCache undo_append error", K(ret), K(broken_file_id));
   } else {
     ObUndoAppendFunctor undo_functor(broken_file_id);
     if (OB_FAIL(map_.for_each(undo_functor))) {

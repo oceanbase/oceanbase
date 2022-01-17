@@ -2791,8 +2791,10 @@ int ObUnitManager::inner_get_pool_ids_of_tenant(const uint64_t tenant_id, ObIArr
         LOG_DEBUG("get_pools_by_tenant failed", K(tenant_id), K(ret));
       } else {
         // just return empty pool_ids
+        if (OB_GTS_TENANT_ID != tenant_id) {
+          LOG_INFO("tenant doesn't own any pool", K(tenant_id), KR(ret));
+        }
         ret = OB_SUCCESS;
-        LOG_WARN("tenant doesn't own any pool", K(tenant_id), K(ret));
       }
     } else if (NULL == pools) {
       ret = OB_ERR_UNEXPECTED;
@@ -8185,8 +8187,8 @@ int ObUnitManager::check_can_migrate_in(const ObAddr& server, bool& can_migrate_
   return ret;
 }
 
-int ObUnitManager::try_migrate_unit(const uint64_t unit_id, const ObUnitStat& unit_stat,
-    const ObIArray<ObUnitStat>& migrating_unit_stat, const ObAddr& dst, const bool is_manual)
+int ObUnitManager::try_migrate_unit(const uint64_t unit_id, const uint64_t tenant_id, const ObUnitStat &unit_stat,
+    const ObIArray<ObUnitStat> &migrating_unit_stat, const ObAddr &dst, const bool is_manual)
 {
   int ret = OB_SUCCESS;
   ObServerStatus server_status;
@@ -8234,7 +8236,12 @@ int ObUnitManager::try_migrate_unit(const uint64_t unit_id, const ObUnitStat& un
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(migrate_unit(unit_id, dst, is_manual))) {
+      bool can_migrate = false;
+      if (OB_FAIL(check_unit_can_migrate(tenant_id, can_migrate))) {
+        LOG_WARN("fail to check unit can migrate", KR(ret), K(tenant_id), K(can_migrate));
+      } else if (!can_migrate) {
+        LOG_INFO("can't migrate unit, don't need auto migrate unit", K(tenant_id));
+      } else if (OB_FAIL(migrate_unit(unit_id, dst, is_manual))) {
         LOG_WARN("fail migrate unit", K(unit_id), K(dst), K(ret));
       }
     }

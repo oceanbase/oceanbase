@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObNoneCompressor : public ObCompressor {
-  public:
+public:
   ObNoneCompressor()
   {}
   virtual ~ObNoneCompressor()
@@ -30,7 +30,7 @@ class ObNoneCompressor : public ObCompressor {
   virtual const char* get_compressor_name() const;
   virtual int get_max_overflow_size(const int64_t src_data_size, int64_t& max_overflow_size) const;
 
-  private:
+private:
   static const char* compressor_name;
 };
 

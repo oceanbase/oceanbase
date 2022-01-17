@@ -21,12 +21,12 @@ namespace sql {
 typedef common::ObIArray<common::ObString> ObStringIArray;
 
 class ObLogLink : public ObLogicalOperator {
-  public:
+public:
   ObLogLink(ObLogPlan& plan);
   virtual ~ObLogLink()
   {}
-  virtual int copy_without_child(ObLogicalOperator*& out);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
@@ -47,11 +47,11 @@ class ObLogLink : public ObLogicalOperator {
     return stmt_fmt_len_;
   }
 
-  private:
+private:
   int gen_link_stmt_fmt_buf();
   int gen_link_stmt_param_infos();
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   ObLinkStmt link_stmt_;
   char* stmt_fmt_buf_;

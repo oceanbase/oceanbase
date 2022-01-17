@@ -28,7 +28,7 @@ using ::testing::Return;
 namespace rootserver {
 // multiclustermanage
 class TestMultiClusterManager_load_Test : public testing::Test {
-  public:
+public:
   TestMultiClusterManager_load_Test() : cluster_mgr_()
   {}
   virtual ~TestMultiClusterManager_load_Test()
@@ -39,7 +39,7 @@ class TestMultiClusterManager_load_Test : public testing::Test {
   virtual void TestBody()
   {}
 
-  private:
+private:
   ObMultiClusterManager cluster_mgr_;
 };
 

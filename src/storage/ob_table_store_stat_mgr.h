@@ -25,7 +25,7 @@
 namespace oceanbase {
 namespace storage {
 struct ObMergeIterStat {
-  public:
+public:
   ObMergeIterStat()
   {
     reset();
@@ -45,7 +45,7 @@ struct ObMergeIterStat {
 };
 
 struct ObBlockAccessStat {
-  public:
+public:
   ObBlockAccessStat()
   {
     reset();
@@ -65,7 +65,7 @@ struct ObBlockAccessStat {
 };
 
 struct ObTableStoreStat {
-  public:
+public:
   ObTableStoreStat();
   ~ObTableStoreStat() = default;
 
@@ -105,7 +105,7 @@ struct ObTableStoreStat {
 };
 
 struct ObTableStoreStatKey {
-  public:
+public:
   ObTableStoreStatKey() : table_id_(common::OB_INVALID_ID), partition_id_(common::OB_INVALID_ID)
   {}
   ObTableStoreStatKey(const uint64_t table_id, const int64_t partition_id)
@@ -134,7 +134,7 @@ struct ObTableStoreStatKey {
 };
 
 struct ObTableStoreStatNode {
-  public:
+public:
   ObTableStoreStatNode() : pre_(NULL), next_(NULL), stat_(NULL)
   {}
   ~ObTableStoreStatNode()
@@ -152,26 +152,26 @@ struct ObTableStoreStatNode {
 };
 
 class ObTableStoreStatIterator {
-  public:
+public:
   ObTableStoreStatIterator();
   virtual ~ObTableStoreStatIterator();
   int open();
   int get_next_stat(ObTableStoreStat& stat);
   void reset();
 
-  private:
+private:
   int64_t cur_idx_;
   bool is_opened_;
 };
 
 class ObTableStoreStatMgr {
-  public:
+public:
   int init(const int64_t limit_cnt = DEFAULT_MAX_CNT);
   void destroy();
   static ObTableStoreStatMgr& get_instance();
   int report_stat(const ObTableStoreStat& stat);
 
-  private:
+private:
   ObTableStoreStatMgr();
   virtual ~ObTableStoreStatMgr();
   void move_node_to_head(ObTableStoreStatNode* node);
@@ -188,7 +188,7 @@ class ObTableStoreStatMgr {
   static const int64_t REPORT_TASK_INTERVAL_US = 1000 * 1000;  // 1 seconds
 
   class ReportTask : public common::ObTimerTask {
-    public:
+  public:
     ReportTask() : stat_mgr_(NULL)
     {}
     virtual ~ReportTask()
@@ -202,7 +202,7 @@ class ObTableStoreStatMgr {
     }
     virtual void runTimerTask();
 
-    private:
+  private:
     ObTableStoreStatMgr* stat_mgr_;
     DISALLOW_COPY_AND_ASSIGN(ReportTask);
   };

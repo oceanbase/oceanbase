@@ -242,11 +242,16 @@ int ObServerLocalityCache::get_server_region(const common::ObAddr& server, commo
     for (int64_t i = 0; !is_found && i < server_locality_array_.count(); ++i) {
       const share::ObServerLocality& server_locality = server_locality_array_.at(i);
       if (server_locality.get_addr() == server) {
-        region = server_locality.get_region();
-        is_found = true;
+        if (!server_locality.get_region().is_empty()) {
+          // assign region only when it is not empty
+          region = server_locality.get_region();
+          is_found = true;
+        }
       }
     }
     if (!is_found) {
+      // if its locality is not found or its region is empty, we will try
+      // get region from region_map.
       ret = get_server_region_from_map_(server, region);
       LOG_TRACE("not found server in server_locality_array_", K(ret), K(server), K(region));
     }

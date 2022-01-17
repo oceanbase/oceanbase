@@ -23,7 +23,7 @@ class ObIPartitionGroup;
 class ObPartitionWorker : public share::ObThreadPool {
   const int64_t DIVISION_PARTITION_CNT = 100;
 
-  public:
+public:
   ObPartitionWorker() : inited_(false), partition_service_(NULL)
   {}
   ~ObPartitionWorker()
@@ -32,17 +32,17 @@ class ObPartitionWorker : public share::ObThreadPool {
   }
   int init(storage::ObPartitionService* ps);
   void destroy();
-  int start();
-  void stop();
-  void wait();
+  int start() override;
+  void stop() override;
+  void wait() override;
 
-  public:
+public:
   virtual void run1() override;
 
-  private:
+private:
   int scan_all_partitions_(int64_t& valid_user_part_count, int64_t& valid_inner_part_count);
 
-  private:
+private:
   bool inited_;
   storage::ObPartitionService* partition_service_;
 };

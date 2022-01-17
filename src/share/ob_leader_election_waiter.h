@@ -29,13 +29,13 @@ class ObMySQLResult;
 }  // namespace common
 namespace share {
 namespace schema {
-class ObTableSchema;
+class ObSimpleTableSchemaV2;
 class ObTablegroupSchema;
 }  // namespace schema
 class ObPartitionTableOperator;
 
 class ObLeaderElectionWaiter {
-  public:
+public:
   struct ExpectedLeader {
     common::ObPartitionKey partition_;
     common::ObAddr exp_leader_;
@@ -58,7 +58,7 @@ class ObLeaderElectionWaiter {
   int wait(const uint64_t table_id, const int64_t partition_id, const int64_t timeout, common::ObAddr& leader);
   // when observer finish sending create table rpc to rs,
   // invoke following function to wait the new table's leader elected
-  int wait(const share::schema::ObTableSchema& table_schema, const int64_t timeout);
+  int wait(const share::schema::ObSimpleTableSchemaV2& table_schema, const int64_t timeout);
   int wait(const share::schema::ObTablegroupSchema& tablegroup_schema, const int64_t timeout);
   int wait(
       const common::ObArray<uint64_t>& table_ids, const common::ObArray<int64_t>& part_nums, const int64_t timeout);
@@ -71,7 +71,7 @@ class ObLeaderElectionWaiter {
     return pt_operator_;
   }
 
-  private:
+private:
   static const int64_t CHECK_LEADER_ELECT_INTERVAL_US = 500 * 1000L;    // 500ms
   static const int64_t CHECK_LEADER_CHANGE_INTERVAL_US = 3000 * 1000L;  // 3s
 
@@ -79,7 +79,7 @@ class ObLeaderElectionWaiter {
       const int64_t abs_timeout, common::ObAddr& leader);
   int check_sleep(const int64_t interval_us);
 
-  private:
+private:
   volatile bool& stop_;
   common::ObArenaAllocator allocator_;
   share::ObPartitionTableOperator& pt_operator_;
@@ -96,22 +96,22 @@ inline void ObLeaderElectionWaiter::ExpectedLeader::reset()
 }
 
 class ObUserPartitionLeaderWaiter {
-  public:
+public:
   typedef ObLeaderElectionWaiter::ExpectedLeader ExpectedLeader;
 
-  public:
+public:
   ObUserPartitionLeaderWaiter(common::ObMySQLProxy& mysql_proxy, volatile bool& stop)
       : mysql_proxy_(mysql_proxy), stop_(stop)
   {}
   virtual ~ObUserPartitionLeaderWaiter()
   {}
 
-  public:
+public:
   // leader wait interface for user partition, invoked by leader coordinator
   int tenant_user_partition_wait(
       const uint64_t tenant_id, common::ObIArray<ExpectedLeader>& expected_leaders, const int64_t timeout);
 
-  private:
+private:
   static const int64_t CHECK_LEADER_CHANGE_INTERVAL_BASE_US = 100 * 1000;  // 100ms
   static const int64_t CHECK_LEADER_CHANGE_INTERVAL_MAX_US = 4 * 1000000;  // 4s
   typedef common::hash::ObHashMap<common::ObPartitionKey, ExpectedLeader*, common::hash::NoPthreadDefendMode>
@@ -128,7 +128,7 @@ class ObUserPartitionLeaderWaiter {
   void interval_sleep(const int64_t sleep_interval);
   int check_cancel();
 
-  private:
+private:
   common::ObMySQLProxy& mysql_proxy_;
   volatile bool& stop_;
 };

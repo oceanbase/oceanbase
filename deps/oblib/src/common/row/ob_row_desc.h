@@ -21,7 +21,7 @@ namespace common {
 
 /// Line description
 class ObRowDesc {
-  public:
+public:
   struct Desc {
     uint64_t table_id_;
     uint64_t column_id_;
@@ -42,7 +42,7 @@ class ObRowDesc {
     };
   };
 
-  public:
+public:
   ObRowDesc();
   ~ObRowDesc();
   /**
@@ -83,13 +83,13 @@ class ObRowDesc {
 
   int assign(const ObRowDesc& other);
 
-  private:
+private:
   struct DescIndex {
     Desc desc_;
     int64_t idx_;
   };
 
-  private:
+private:
   static const int64_t MAX_COLUMNS_COUNT = common::OB_ROW_MAX_COLUMNS_COUNT;  // 512
   static uint64_t HASH_COLLISIONS_COUNT;
   // data members

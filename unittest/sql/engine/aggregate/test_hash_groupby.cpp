@@ -24,18 +24,18 @@ using namespace oceanbase::sql;
 using namespace oceanbase::blocksstable;
 
 class ObHashGroupbyTest : public TestDataFilePrepare {
-  public:
+public:
   ObHashGroupbyTest();
   virtual ~ObHashGroupbyTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObHashGroupbyTest(const ObHashGroupbyTest& other);
   ObHashGroupbyTest& operator=(const ObHashGroupbyTest& other);
 
-  private:
+private:
   // data members
 };
 ObHashGroupbyTest::ObHashGroupbyTest() : TestDataFilePrepare("TestDisk_groupby", 2 << 20, 5000)
@@ -57,7 +57,7 @@ void ObHashGroupbyTest::TearDown()
   TestDataFilePrepare::TearDown();
 }
 class TestHashGroupBy : public ObHashGroupBy {
-  public:
+public:
   TestHashGroupBy() : ObHashGroupBy(alloc_)
   {}
   virtual ~TestHashGroupBy()

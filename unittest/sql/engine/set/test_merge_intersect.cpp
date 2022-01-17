@@ -26,7 +26,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
 class TestMergeIntersect : public ObMergeIntersect {
-  public:
+public:
   TestMergeIntersect() : ObMergeIntersect(alloc_)
   {}
   virtual ~TestMergeIntersect()
@@ -34,18 +34,18 @@ class TestMergeIntersect : public ObMergeIntersect {
 };
 
 class TestMergeIntersectTest : public ::testing::Test {
-  public:
+public:
   TestMergeIntersectTest();
   virtual ~TestMergeIntersectTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   TestMergeIntersectTest(const TestMergeIntersectTest& other);
   TestMergeIntersectTest& operator=(const TestMergeIntersectTest& other);
 
-  private:
+private:
   // data members
 };
 TestMergeIntersectTest::TestMergeIntersectTest()

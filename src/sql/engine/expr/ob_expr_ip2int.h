@@ -18,21 +18,21 @@
 namespace oceanbase {
 namespace sql {
 class ObExprIp2int : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprIp2int(common::ObIAllocator& alloc);
   virtual ~ObExprIp2int();
-  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const override;
   static int calc(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx);
-  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result1(common::ObObj& result, const common::ObObj& text, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int ip2int_varchar(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   // helper func
   template <typename T>
   static int ip2int(T& result, const common::ObString& text);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIp2int);
 };
 

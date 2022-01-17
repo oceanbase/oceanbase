@@ -48,14 +48,14 @@ struct ObReplicaStat {
 
 // Access class for oceanbase.__all_virtual_partition_info
 class ObIReplicaStatIterator {
-  public:
+public:
   virtual ~ObIReplicaStatIterator()
   {}
   virtual int next(ObReplicaStat& replica_stat) = 0;
 };
 
 class ObReplicaStatIterator : public ObIReplicaStatIterator {
-  public:
+public:
   ObReplicaStatIterator();
   virtual ~ObReplicaStatIterator();
   int init(common::ObMySQLProxy& proxy);
@@ -63,10 +63,10 @@ class ObReplicaStatIterator : public ObIReplicaStatIterator {
   int next(ObReplicaStat& replica_stat) override;
   int close();
 
-  private:
+private:
   int cons_replica_stat(const common::sqlclient::ObMySQLResult& res, ObReplicaStat& replica_stat);
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* sql_proxy_;
   common::ObMySQLProxy::MySQLResult res_;
@@ -78,7 +78,7 @@ class ObReplicaStatIterator : public ObIReplicaStatIterator {
 // External fault injection case by case is tedious,
 // it is good to depend on the input data from an external physical table
 class ObReplicaStatUpdater {
-  public:
+public:
   static int insert_stat(common::ObISQLClient& sql_client, ObReplicaStat& replica_stat);
   static int migrate_stat(common::ObISQLClient& sql_client, const common::ObPartitionKey& p,
       const common::ObAddr& from_svr, const common::ObAddr& to_svr);

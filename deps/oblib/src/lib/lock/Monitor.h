@@ -30,7 +30,7 @@ namespace tbutil {
  */
 template <class T>
 class Monitor {
-  public:
+public:
   typedef LockT<Monitor<T> > Lock;
   typedef TryLockT<Monitor<T> > TryLock;
 
@@ -86,7 +86,7 @@ class Monitor {
    */
   void notifyAll();
 
-  private:
+private:
   Monitor(const Monitor&);
   Monitor& operator=(const Monitor&);
 

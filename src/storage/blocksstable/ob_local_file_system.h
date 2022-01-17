@@ -22,7 +22,7 @@ class ObStoreFile;
 class ObLocalFileSystem;
 
 class ObLocalStorageFile : public ObStorageFile {
-  public:
+public:
   virtual ~ObLocalStorageFile() = default;
 
   virtual int init(const common::ObAddr& svr_addr, const FileType file_type) override;
@@ -49,7 +49,7 @@ class ObLocalStorageFile : public ObStorageFile {
 
   VIRTUAL_TO_STRING_KV(K(file_type_), K(tenant_id_), K(file_id_));
 
-  private:
+private:
   ObStoreFileSystem* file_system_;
 
   friend class ObLocalFileSystem;
@@ -60,7 +60,7 @@ class ObLocalStorageFile : public ObStorageFile {
 };
 
 class ObLocalFileSystem : public ObStoreFileSystem {
-  public:
+public:
   // The SUPER BLOCK OFFSET MUST NOT be modified
   static const int64_t MASTER_SUPER_BLOCK_OFFSET = 0;
   static const int64_t BACKUP_SUPER_BLOCK_OFFSET = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
@@ -113,9 +113,11 @@ class ObLocalFileSystem : public ObStoreFileSystem {
   virtual int get_super_block_version(int64_t& super_block_version) override;
   virtual int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage) override;
 
+  OB_INLINE int get_block_file_fd() const { return fd_.fd_; }
+
   TO_STRING_KV("type", "LOCAL");
 
-  private:
+private:
   int open(bool& exist);
   // read/write super block to/from buffer holder
   template <typename SuperBlockClass>
@@ -123,7 +125,7 @@ class ObLocalFileSystem : public ObStoreFileSystem {
   int inner_write_super_block();
   int inner_get_super_block_version(const int64_t offset, int64_t& super_block_version);
 
-  private:
+private:
   bool is_opened_;
   common::ObDiskFd fd_;
   int64_t macro_block_size_;

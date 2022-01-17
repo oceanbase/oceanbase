@@ -373,7 +373,10 @@ int ObRawExprDeduceType::calc_result_type(
 
     LOG_DEBUG("debug for expr params calc meta", K(types));
 
-    if (OB_SUCC(ret) && share::is_oracle_mode() && !my_session_->use_static_typing_engine()) {
+    if (OB_SUCC(ret)
+        && share::is_oracle_mode()
+        && expr.get_expr_type() != T_FUN_SYS_NVL
+        && !my_session_->use_static_typing_engine()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < types.count(); i++) {
         ObExprResType& param = types.at(i);
         if (param.get_calc_meta().is_character_type()) {
@@ -415,7 +418,7 @@ int ObRawExprDeduceType::calc_result_type(
 
     if (OB_SUCC(ret)) {
       ObItemType item_type = expr.get_expr_type();
-      if (T_FUN_SYS_UTC_TIMESTAMP == item_type || T_FUN_SYS_CUR_TIMESTAMP == item_type ||
+      if (T_FUN_SYS_UTC_TIME == item_type || T_FUN_SYS_UTC_TIMESTAMP == item_type || T_FUN_SYS_CUR_TIMESTAMP == item_type ||
           T_FUN_SYS_LOCALTIMESTAMP == item_type || T_FUN_SYS_CUR_TIME == item_type || T_FUN_SYS_SYSDATE == item_type ||
           T_FUN_SYS_SYSTIMESTAMP == item_type) {
         /*
@@ -1397,6 +1400,28 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
               LOG_WARN("failed to add group aggr implicit cast", K(ret));
             }
           }
+        }
+        break;
+      }
+      case T_FUN_MAX:
+      case T_FUN_MIN: {
+        ObRawExpr *child_expr = NULL;
+        if (OB_ISNULL(child_expr = expr.get_param_expr(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param expr is null");
+        } else if (OB_UNLIKELY(ob_is_enumset_tc(child_expr->get_data_type()))) {
+          // To compatible with MySQL, we need to add cast expression that enumset to varchar
+          // to evalute MIN/MAX aggregate functions.
+          need_add_cast = true;
+          const ObExprResType& res_type = child_expr->get_result_type();
+          result_type.set_varchar();
+          result_type.set_length(res_type.get_length());
+          result_type.set_collation_type(res_type.get_collation_type());
+          result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+          expr.set_result_type(result_type);
+        } else {
+          expr.set_result_type(child_expr->get_result_type());
+          expr.unset_result_flag(OB_MYSQL_NOT_NULL_FLAG);
         }
         break;
       }

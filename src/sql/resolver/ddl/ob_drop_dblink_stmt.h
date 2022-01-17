@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropDbLinkStmt : public ObDDLStmt {
-  public:
+public:
   ObDropDbLinkStmt();
   explicit ObDropDbLinkStmt(common::ObIAllocator* name_pool);
   virtual ~ObDropDbLinkStmt();
@@ -47,7 +47,7 @@ class ObDropDbLinkStmt : public ObDDLStmt {
 
   TO_STRING_KV(K_(drop_dblink_arg));
 
-  private:
+private:
   obrpc::ObDropDbLinkArg drop_dblink_arg_;
 };
 }  // namespace sql

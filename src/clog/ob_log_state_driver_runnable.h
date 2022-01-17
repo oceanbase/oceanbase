@@ -26,20 +26,20 @@ class ObIElectionMgr;
 
 namespace clog {
 class ObLogStateDriverRunnable : public share::ObThreadPool {
-  public:
+public:
   ObLogStateDriverRunnable();
   virtual ~ObLogStateDriverRunnable();
 
-  public:
+public:
   int init(storage::ObPartitionService* partition_service, election::ObIElectionMgr* election_mgr);
   void destroy();
   void run1();
 
-  private:
+private:
   void state_driver_loop();
   void check_can_start_service_();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
   election::ObIElectionMgr* election_mgr_;
   bool already_disk_error_;
@@ -49,7 +49,7 @@ class ObLogStateDriverRunnable : public share::ObThreadPool {
   int64_t last_check_time_for_replica_state_;
   int64_t last_check_time_for_broadcast_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogStateDriverRunnable);
 };
 

@@ -342,7 +342,7 @@ bool operator<(const ObDatabaseSchema& lv, const ObDatabaseSchema& rv)
 };
 
 class ObSchemaTestUtils {
-  public:
+public:
   static void assert_view_equal(const ObViewSchema& l_view, const ObViewSchema& r_view);
   static void assert_expire_condition_equal(const ObString& l_ec, const ObString& r_ec);
   static void assert_tg_equal(const ObTablegroupSchema& l_tg, const ObTablegroupSchema& r_tg);

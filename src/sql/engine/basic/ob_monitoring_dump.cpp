@@ -22,7 +22,7 @@ namespace sql {
 OB_SERIALIZE_MEMBER((ObMonitoringDump, ObSingleChildPhyOperator), flags_, dst_op_id_);
 
 class ObMonitoringDump::ObMonitoringDumpCtx : public ObPhyOperatorCtx {
-  public:
+public:
   explicit ObMonitoringDumpCtx(ObExecContext& ctx)
       : ObPhyOperatorCtx(ctx),
         op_name_(),
@@ -47,7 +47,7 @@ class ObMonitoringDump::ObMonitoringDumpCtx : public ObPhyOperatorCtx {
   uint64_t last_row_time_;
   bool first_row_fetched_;
 
-  private:
+private:
   friend class ObMonitoringDump;
 };
 

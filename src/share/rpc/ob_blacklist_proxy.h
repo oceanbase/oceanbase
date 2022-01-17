@@ -24,7 +24,7 @@ namespace obrpc {
 struct ObBlacklistReq {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObBlacklistReq()
   {
     reset();
@@ -59,7 +59,7 @@ struct ObBlacklistReq {
 struct ObBlacklistResp {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObBlacklistResp()
   {
     reset();
@@ -107,14 +107,14 @@ struct ObBlacklistResp {
 };
 
 class ObBlacklistRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObBlacklistRpcProxy);
   RPC_AP(PR1 post_request, OB_SERVER_BLACKLIST_REQ, (ObBlacklistReq));
   RPC_AP(PR1 post_response, OB_SERVER_BLACKLIST_RESP, (ObBlacklistResp));
   int send_req(const common::ObAddr& dst, const int64_t dst_cluster_id, const ObBlacklistReq& req);
   int send_resp(const common::ObAddr& dst, const int64_t dst_cluster_id, const ObBlacklistResp& resp);
 
-  private:
+private:
   static const int64_t BLACK_LIST_MSG_TIMEOUT = 10 * 1000 * 1000;
 };
 

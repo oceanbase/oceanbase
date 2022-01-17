@@ -20,6 +20,8 @@
 //
 //C0: int OB_MAX_ERROR_CODE                           -----> ob errno
 //C1: char *ERROR_NAME[OB_MAX_ERROR_CODE];            -----> store ob errno name
+//C2: char *ERROR_CAUSE[OB_MAX_ERROR_CODE];           -----> store ob errno cause
+//C3: char *ERROR_SOLUTION[OB_MAX_ERROR_CODE];        -----> store ob errno solution
 //M1: int MYSQL_ERRNO[OB_MAX_ERROR_CODE];             -----> store mysql errno
 //M2: char *SQLSTATE[OB_MAX_ERROR_CODE];              -----> store mysql errstate
 //M3: char *STR_ERROR[OB_MAX_ERROR_CODE];             -----> store mysql errmsg without parameter
@@ -35,6 +37,13 @@
 //DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4) <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, ORA, R3, R4)
 //DEFINE_PLS_ERROR(C1, C0, M1, M2, M3, R1, R3)                <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, PLS, R3, R3)
 //DEFINE_PLS_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4)    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, PLS, R3, R4)
+//
+//DEFINE_ERROR(C1, C0, M1, M2, M3, C2, C3)                            <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, -600, M2, M3, M3, C2, C3)
+//DEFINE_ERROR_EXT(C1, C0, M1, M2, M3, M4, C2, C3)                    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, -600, M2, M3, M4, C2, C3)
+//DEFINE_ORACLE_ERROR(C1, C0, M1, M2, M3, R1, R3, C2, C3)             <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, ORA, R3, R3, C2, C3)
+//DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4, C2, C3) <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, ORA, R3, R4, C2, C3)
+//DEFINE_PLS_ERROR(C1, C0, M1, M2, M3, R1, R3, C2, C3)                <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M3, R1, PLS, R3, R3, C2, C3)
+//DEFINE_PLS_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, R3, R4, C2, C3)    <==>   DEFINE_ORACLE_ERROR_EXT(C1, C0, M1, M2, M3, M4, R1, PLS, R3, R4, C2, C3)
 //
 //DEFINE_ERROR(C1, C0, M1, M2, M3)
 //   M1 = (M1 == -1 ? C0 : M1)
@@ -382,7 +391,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_DIVISOR_IS_ZERO, -4333,-1, "HY000", "divisor is equal
 DEFINE_ERROR(OB_ERR_AES_IV_LENGTH, -4336, ER_AES_INVALID_IV, "HY000", "The initialization vector supplied to aes_encrypt is too short. Must be at least 16 bytes long");
 DEFINE_ERROR(OB_STORE_DIR_ERROR, -4337, -1, "HY000", "store directory structure error");
 DEFINE_ERROR(OB_OPEN_TWICE, -4338, -1, "HY000", "open twice");
-DEFINE_ERROR(OB_RAID_SUPER_BLOCK_NOT_MACTH, -4339, -1, "HY000", "raid super block not match");
+DEFINE_ERROR(OB_RAID_SUPER_BLOCK_NOT_MATCH, -4339, -1, "HY000", "raid super block not match");
 DEFINE_ERROR(OB_NOT_OPEN, -4340, -1, "HY000", "not opened");
 DEFINE_ERROR(OB_NOT_IN_SERVICE, -4341, -1, "HY000", "target module is not in service");
 DEFINE_ERROR(OB_RAID_DISK_NOT_NORMAL, -4342, -1, "HY000", "raid disk not in normal status");
@@ -412,6 +421,8 @@ DEFINE_ERROR(OB_OBCONFIG_CLUSTER_NOT_EXIST, -4368, -1, "HY000", "cluster not exi
 DEFINE_ORACLE_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED, -4374, -1, "HY000", "value larger than specified precision allowed for this column", 1438, "value larger than specified precision allowed for this column");
 DEFINE_ERROR(OB_DISK_ERROR, -4375, -1, "HY000", "observer has disk error");
 DEFINE_ORACLE_ERROR(OB_UNIMPLEMENTED_FEATURE, -4376, -1, "HY000", "unimplemented feature", 3001, "unimplemented feature");
+DEFINE_ERROR_EXT(OB_ERR_DEFENSIVE_CHECK, -4377, -1, "HY000", "fatal internal error", "fatal internal error in [%.*s]");
+DEFINE_ERROR(OB_CLUSTER_NAME_HASH_CONFLICT, -4378, -1, "HY000", "cluster name conflict");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000
@@ -560,7 +571,10 @@ DEFINE_ERROR_EXT(OB_ADD_CLUSTER_NOT_ALLOWED, -4709, -1, "HY000", "Add cluster no
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_CONSUMER_GROUP_NOT_EXIST, -4710, -1, "HY000", "consumer group does not exist", "consumer group %.*s does not exist", 29368, "consumer group does not exist", "consumer group %.*s does not exist");
 DEFINE_ERROR_EXT(OB_CLUSTER_NOT_ACCESSIBLE, -4711, -1, "HY000", "cluster is not accessible", "cluster is not accessible, cluster_id: %ld");
 DEFINE_ERROR_EXT(OB_TENANT_RESOURCE_UNIT_EXIST, -4712, -1, "HY000", "tenant already has resource unit configured", "tenant already has resource unit configured, tenant_id: %ld, observer: \'%s\'");
-
+DEFINE_ERROR_EXT(OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX, -4713, -1, "HY000", "rebuild global index failed when drop/truncate partitions", "rebuild global index:'%.*s' failed when drop/truncate partitions");
+DEFINE_ORACLE_ERROR(OB_ERR_ATLER_TABLE_ILLEGAL_FK, -4714, -1, "HY000", "unique/primary keys in table referenced by enabled foreign keys", 02266, "unique/primary keys in table referenced by enabled foreign keys");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_RESOURCE_MANAGER_PRIVILEGE, -4715, -1, "HY000", "insufficient Resource Manager privileges", 56713, "insufficient Resource Manager privileges");
+DEFINE_ORACLE_ERROR(OB_ERR_RES_MGR_PLAN_NOT_EXIST, -4718, -1, "HY000", "specified resource manager plan does not exist in the data dictionary", 7452, "specified resource manager plan does not exist in the data dictionary");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -824,7 +838,7 @@ DEFINE_ORACLE_ERROR(OB_EER_NULL_IN_VALUES_LESS_THAN, -5285, ER_NULL_IN_VALUES_LE
 DEFINE_ERROR(OB_ERR_PARTITION_CONST_DOMAIN_ERROR, -5286, ER_PARTITION_CONST_DOMAIN_ERROR, "HY000", "Partition constant is out of partition function domain");
 DEFINE_ERROR(OB_ERR_TOO_MANY_PARTITION_FUNC_FIELDS, -5287, ER_TOO_MANY_PARTITION_FUNC_FIELDS_ERROR, "HY000", "Too many fields in \'list of partition fields\'");
 DEFINE_ERROR_EXT(OB_ERR_BAD_FT_COLUMN, -5288, ER_BAD_FT_COLUMN, "HY000", "Column cannot be part of FULLTEXT index", "Column '%.*s' cannot be part of FULLTEXT index");
-DEFINE_ERROR_EXT(OB_ERR_KEY_DOES_NOT_EXISTS, -5289, ER_KEY_DOES_NOT_EXITS, "42000", "key does not exist in table", "Key '%.*s' doesn't exist in table '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_KEY_DOES_NOT_EXISTS, -5289, ER_KEY_DOES_NOT_EXISTS, "42000", "key does not exist in table", "Key '%.*s' doesn't exist in table '%.*s'");
 DEFINE_ERROR_EXT(OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, -5290, ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN, "HY000", "non-default value for generated column is not allowed", "The value specified for generated column '%.*s' in table '%.*s' is not allowed");
 DEFINE_ERROR(OB_ERR_BAD_CTXCAT_COLUMN, -5291, -1, "HY000", "The CTXCAT column must be contiguous in the index column list");
 DEFINE_ERROR_EXT(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, -5292, ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "HY000", "not supported for generated columns", "'%s' is not supported for generated columns.");
@@ -1199,7 +1213,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_EPAREN, -5813, -1, "HY000", "unmatched parenth
 DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ESUBREG, -5814, -1, "HY000", "invalid back reference in regular expression", 12727, "invalid back reference in regular expression");
 DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ERANGE, -5815, -1, "HY000", "invalid range in regular expression", 12728, "invalid range in regular expression");
 DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ECTYPE, -5816, -1, "HY000", "invalid character class in regular expression", 12729, "invalid character class in regular expression");
-DEFINE_ERROR(OB_ERR_REGEXP_ECOLLATE, -5817, -1, "HY000", "invalid collation class in regular expression", 12731, "invalid collation class in regular expression");
+DEFINE_ORACLE_ERROR(OB_ERR_REGEXP_ECOLLATE, -5817, -1, "HY000", "invalid collation class in regular expression", 12731, "invalid collation class in regular expression");
 DEFINE_ERROR(OB_ERR_REGEXP_EBRACE, -5818, -1, "HY000", "braces {} not balanced in in regular expression");
 DEFINE_ERROR(OB_ERR_REGEXP_BADBR, -5819, -1, "HY000", "invalid repetition count(s) in regular expression");
 DEFINE_ERROR(OB_ERR_REGEXP_BADRPT, -5820, -1, "HY000", "The regular expression was too complex and current library can't be parsed");
@@ -1284,7 +1298,7 @@ DEFINE_ORACLE_ERROR(OB_ROWID_VIEW_NO_KEY_PRESERVED, -5902, -1, "HY000", "cannot 
 DEFINE_ORACLE_ERROR(OB_ROWID_VIEW_HAS_DISTINCT_ETC, -5903, -1, "HY000", "cannot select ROWID from, or sample, a view with DISTINCT, GROUP BY, etc", 1446, "cannot select ROWID from, or sample, a view with DISTINCT, GROUP BY, etc");
 DEFINE_ORACLE_ERROR(OB_ERR_AT_LEAST_ONE_COLUMN_NOT_VIRTUAL, -5904, -1, "HY000", "table must have at least 1 column that is not virtual", 54037, "table must have at least 1 column that is not virtual");
 DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED, -5905, -1, "HY000", "only pure functions can be indexed", 1743, "only pure functions can be indexed");
-DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION, -5906, -1, "HY000", "only pure functions can be specified in a virtual column expression", 54002, "only pure functions can be specified in a virtual column expression");
+DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION, -5906, -1, "HY000", "Expression of generated column contains a disallowed function", 54002, "only pure functions can be specified in a virtual column expression");
 DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_OPERATION_ON_VIRTUAL_COLUMNS, -5907, -1, "HY000", "UPDATE operation disallowed on virtual columns", 54017, "UPDATE operation disallowed on virtual columns");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_COLUMN_EXPRESSION, -5908, -1, "HY000", "Invalid column expression was specified", 54016, "Invalid column expression was specified");
 DEFINE_ORACLE_ERROR(OB_ERR_IDENTITY_COLUMN_COUNT_EXCE_LIMIT, -5909, -1, "HY000", "table can have only one identity column", 30669, "table can have only one identity column");
@@ -1311,6 +1325,9 @@ DEFINE_ERROR_EXT(OB_ERR_WINDOW_NAME_IS_NOT_DEFINE, -5929, -1, "HY000", "Window n
 DEFINE_ORACLE_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, -5930, -1, "HY000", "maximum open cursors exceeded", 1000, "maximum open cursors exceeded");
 DEFINE_ORACLE_ERROR(OB_ERR_ARG_INVALID, -5931, -1, "HY000", "argument is null, invalid, or out of range", 21560, "argument %.*s is null, invalid, or out of range");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_NAME_STRING, -5932, -1, "HY000", "unexpected name string", 21560, "unexpected name string '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_CTE_NEED_QUERY_BLOCKS, -5976, -1, "HY000", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s");
+DEFINE_ERROR_EXT(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION, -5936, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect value for function", "Incorrect %.*s value: '%.*s' for function %.*s");
+DEFINE_ERROR_EXT(OB_ERR_USER_EXCEED_RESOURCE, -5967, 1226, "42000", "User has exceeded the resource", "User '%.*s' has exceeded the '%s' resource (current value: %lu)");
 
 ////////////////////////////////////////////////////////////////
 //error code for transaction, mvcc and commitlog -6001 ---- -7000
@@ -1518,8 +1535,15 @@ DEFINE_ERROR(OB_BACKUP_MOUNT_FILE_NOT_VALID, -9051, -1, "HY000", "backup mount f
 DEFINE_ERROR(OB_BACKUP_CLEAN_INFO_NOT_MATCH, -9052, -1, "HY000", "backup clean info not match");
 DEFINE_ERROR(OB_CANCEL_DELETE_BACKUP_NOT_ALLOWED, -9053, -1, "HY000", "cancel delete backup do not allow");
 DEFINE_ERROR(OB_BACKUP_CLEAN_INFO_NOT_EXIST, -9054, -1, "HY000", "backup clean info not exists");
-DEFINE_ERROR_EXT(OB_ERR_DROP_TRUNCATE_PARTITION_REBUILD_INDEX, -9055, -1, "HY000", "rebuild global index failed when drop/truncate partitions", "rebuild global index:'%.*s' failed when drop/truncate partitions");
-DEFINE_ORACLE_ERROR(OB_ERR_ATLER_TABLE_ILLEGAL_FK, -9056, -1, "HY000", "unique/primary keys in table referenced by enabled foreign keys", 02266, "unique/primary keys in table referenced by enabled foreign keys");
+DEFINE_ERROR_EXT(OB_CANNOT_SET_BACKUP_REGION, -9057, -1, "HY000", "can not set backup region", "can not set backup region, because %s");
+DEFINE_ERROR_EXT(OB_CANNOT_SET_BACKUP_ZONE, -9058, -1, "HY000", "can not set backup zone", "can not set backup zone, because %s");
+DEFINE_ERROR(OB_BACKUP_BACKUP_REACH_MAX_BACKUP_TIMES, -9059, -1, "HY000", "backup backup has reached max backup times");
+DEFINE_ERROR_DEP(OB_COS_ERROR, -9060, -1, "HY000", "COS error");
+DEFINE_ERROR_DEP(OB_IO_LIMIT, -9061, -1, "HY000", "IO limit");
+DEFINE_ERROR(OB_BACKUP_BACKUP_REACH_COPY_LIMIT, -9062, -1, "HY000", "reach backup backup copy limit");
+DEFINE_ERROR(OB_BACKUP_IO_PROHIBITED, -9063, -1, "HY000", "backup io is prohibited");
+DEFINE_ERROR(OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA, -9064, -1, "HY000", "the archive log and backup data are not continuous");
+DEFINE_ERROR(OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, -9069, -1, "HY000", "deleting backup piece is not allowed");
 
 ////////////////////////////////////////////////////////////////
 //error code for STORAGE3.0 -9100 ~

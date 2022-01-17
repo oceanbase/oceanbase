@@ -20,18 +20,18 @@ namespace oceanbase {
 namespace sql {
 
 class ObMVTableScanInput : public ObTableScanInput {
-  public:
+public:
   virtual ObPhyOperatorType get_phy_op_type() const;
 };
 
 class ObMVTableScan : public ObTableScan {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObMVTableScanCtx : public ObTableScanCtx {
     friend class ObMVTableScan;
 
-    public:
+  public:
     ObMVTableScanCtx(ObExecContext& ctx) : ObTableScanCtx(ctx)
     {}
     virtual void destroy()
@@ -40,11 +40,11 @@ class ObMVTableScan : public ObTableScan {
       ObTableScanCtx::destroy();
     }
 
-    protected:
+  protected:
     storage::ObTableScanParam right_scan_param_;
   };
 
-  public:
+public:
   explicit ObMVTableScan(common::ObIAllocator& allocator);
   virtual ~ObMVTableScan()
   {}
@@ -72,17 +72,17 @@ class ObMVTableScan : public ObTableScan {
   virtual int init_op_ctx(ObExecContext& ctx) const;
   virtual int prepare_scan_param(ObExecContext& ctx) const;
 
-  protected:
+protected:
   int do_table_scan(ObExecContext& ctx, bool is_rescan) const;
 
-  private:
+private:
   share::schema::ObTableParam right_table_param_;
   uint64_t right_table_location_key_;
 };
 
 // TODO : not implemented right row, Added here to adapt the template.
 class ObMVTableScanSpec : public ObTableScanSpec {
-  public:
+public:
   uint64_t get_right_table_location_key() const
   {
     return 0;

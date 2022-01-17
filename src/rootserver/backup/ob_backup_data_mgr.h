@@ -17,50 +17,56 @@
 #include "share/backup/ob_backup_struct.h"
 #include "storage/ob_partition_base_data_physical_restore.h"
 #include "share/backup/ob_backup_path.h"
+#include "share/backup/ob_extern_backup_info_mgr.h"
 
 namespace oceanbase {
 namespace rootserver {
 
 class ObBackupDataMgr {
-  public:
+public:
   ObBackupDataMgr();
   virtual ~ObBackupDataMgr();
-  int init(const share::ObClusterBackupDest& backup_dest, const uint64_t tenant_id, const int64_t full_backup_set_id,
-      const int64_t inc_backup_set_id);
+  int init(const share::ObClusterBackupDest& backup_dest, const uint64_t tenant_id,
+      const ObExternBackupInfo& extern_backup_info);
   int get_base_data_table_id_list(common::ObIArray<int64_t>& table_id_array);
   int get_table_pg_meta_index(const int64_t table_id, common::ObIArray<ObBackupMetaIndex>& meta_index_array);
   int get_pg_meta_index(const ObPartitionKey& pkey, ObBackupMetaIndex& meta_index);
   int get_pg_meta(const ObPartitionKey& pkey, storage::ObPartitionGroupMeta& pg_meta);
 
-  private:
+private:
   int get_clog_pkey_list(common::ObIArray<common::ObPartitionKey>& pkeys);
 
-  private:
+private:
   bool is_inited_;
   storage::ObPhyRestoreMetaIndexStore meta_index_;
   share::ObClusterBackupDest cluster_backup_dest_;
   int64_t full_backup_set_id_;
   int64_t inc_backup_set_id_;
   uint64_t tenant_id_;
+  int64_t backup_date_;
+  int64_t compatible_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataMgr);
 };
 
 class ObBackupListDataMgr {
-  public:
+public:
   ObBackupListDataMgr();
   virtual ~ObBackupListDataMgr();
-  int init(const share::ObClusterBackupDest& backup_dest, const int64_t log_archive_round, const uint64_t tenant_id);
+  int init(const share::ObClusterBackupDest& backup_dest, const int64_t log_archive_round, const uint64_t tenant_id,
+      const int64_t backup_piece_id, const int64_t create_piece_ts);
   int get_clog_pkey_list(common::ObIArray<common::ObPartitionKey>& pkeys);
 
-  private:
+private:
   bool is_inited_;
   share::ObClusterBackupDest cluster_backup_dest_;
   int64_t log_archive_round_;
   uint64_t tenant_id_;
+  int64_t backup_piece_id_;
+  int64_t create_piece_ts_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupListDataMgr);
 };
 

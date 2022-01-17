@@ -260,17 +260,20 @@ int ObMemtableCtx::set_host_(ObMemtable* host, const bool for_replay)
     ret = OB_NOT_MASTER;
   } else if (host == get_active_mt()) {
     // do nothing
+  } else if (memtable_arr_wrap_.is_contain_this_memtable(host)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "memstore already exist", K(ret), K(*this), KP(host));
   } else if (memtable_arr_wrap_.is_reach_max_memtable_cnt()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "reach max memstore in storage", K(ret), K(*this), KP(host));
-  } else {
-    if (memtable_arr_wrap_.is_contain_this_memtable(host)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "memstore already exist", K(ret), K(*this), KP(host));
-    } else if (OB_FAIL(host->inc_active_trx_count())) {
-      TRANS_LOG(ERROR, "increase active_trx_count error", K(ret), K(*this), KP(host));
+  } else if (OB_FAIL(host->inc_active_trx_count())) {
+    TRANS_LOG(ERROR, "increase active_trx_count error", K(ret), K(*this), KP(host));
+  } else if (OB_FAIL(memtable_arr_wrap_.add_memtable(host))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = host->dec_active_trx_count())) {
+      TRANS_LOG(ERROR, "decrease active_trx_count error when add memtable fail", K(tmp_ret), K(ret), K(*this), KP(host));
     } else {
-      memtable_arr_wrap_.add_memtable(host);
+      TRANS_LOG(WARN, "decrease active_trx_count success when add memtable fail", K(ret), K(*this), KP(host));
     }
   }
   return ret;
@@ -792,6 +795,7 @@ int ObMemtableCtx::do_trans_end(const bool commit, const int64_t trans_version, 
     if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
       TRANS_LOG(ERROR, "callback alloc and free count not match", K(*this));
     }
+    (void)partition_audit_info_cache_.stmt_end_update_audit_info(commit);
     // flush partition audit statistics cached in ctx to partition
     if (NULL != ATOMIC_LOAD(&ctx_) && OB_UNLIKELY(OB_SUCCESS != (tmp_ret = flush_audit_partition_cache_(commit)))) {
       TRANS_LOG(WARN, "flush audit partition cache error", K(tmp_ret), K(commit), K(*ctx_));
@@ -844,8 +848,15 @@ int ObMemtableCtx::trans_replay_end(const bool commit, const int64_t trans_versi
   int ret = OB_SUCCESS;
   int cs_ret = OB_SUCCESS;
 
-  if (commit && 0 != checksum && !ObServerConfig::get_instance().ignore_replay_checksum_error) {
-    const uint64_t checksum4 = calc_checksum4();
+  // We must calculate the checksum and generate the checksum_log_ts even when
+  // the checksum verification is unnecessary. This because the trans table
+  // merge may be triggered after clear state in which the callback has already
+  const uint64_t checksum4 = calc_checksum4();
+
+  if (commit
+      && 0 != checksum
+      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100
+      && !ObServerConfig::get_instance().ignore_replay_checksum_error) {
     if (checksum != checksum4) {
       cs_ret = OB_CHECKSUM_ERROR;
       TRANS_LOG(ERROR, "MT_CTX: replay checksum error", K(ret), K(*this), K(commit), K(checksum), K(checksum4));
@@ -1567,6 +1578,49 @@ int ObMemtableCtx::remove_callback_for_uncommited_txn(ObMemtable* mt, int64_t& c
     TRANS_LOG(WARN, "fail to reset log gen if necessary", K(ret), K(mt));
   } else if (OB_FAIL(trans_mgr_.remove_callback_for_uncommited_txn(mt, cnt))) {
     TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt));
+  }
+
+  return ret;
+}
+
+// If leader switches to follower and marks some callbacks which have not been
+// submmitted to sliding window. We need clean the dirty callbacks because
+// follower can not submit the log and decrement the pending_cb_count_ and the
+// mini merge will not be allowed before txn finishes. Which add the dependency
+// from minor merge to txn termination.
+//
+// NB: Because we remove the trans node before txn termination, we should guarantee
+// the txn should finally abort. Except the case 3.2(TODO: handora.qc): generalize
+// the process of clean dirty callbacks
+//
+// We solve the problem in the following way:
+// - When leader is revoking and no non-2pc logs of txn has already been
+//   submitted to sliding window and no on-the-fly log:
+//   - Case 1: We rollback the txn immediately, so no dirty callbacks need to be
+//     removed
+// - When leader is revoking and some non-2pc logs of txn has already been
+//   submitted to sliding window:
+//   - Case 2.1: We only solve the case with no on-the-fly logs(because we have no idea
+//     whether the on-the-fly log is paxos-choosen or not)
+//   - If the state is not synced successfully(txn need abort), so we remove all
+//     marked trans node
+// - When replaying start working:
+//   - Case 3.1: If txn has a on-the-fly log, it means some logs are not paxos-choosen
+//     successfully(txn need abort), so we remove all marked trans node
+//   - Case 3.2: If txn has no on-the-fly log and no trans state is synced by the leader
+//     transfer(txn may need abort, while we donot have the information whether the
+//     original leader successfully synced the log), and we also remove all marked trans node.
+//
+int ObMemtableCtx::clean_dirty_callbacks()
+{
+  int ret = OB_SUCCESS;
+
+  ObByteLockGuard guard(lock_);
+
+  if (OB_FAIL(trans_mgr_.clean_dirty_callbacks())) {
+    TRANS_LOG(WARN, "fail to dirty callbacks", K(ret));
+  } else {
+    TRANS_LOG(INFO, "clean dirty callbacks successfully", K(*this));
   }
 
   return ret;

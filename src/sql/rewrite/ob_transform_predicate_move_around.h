@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObInsertStmt;
 class ObTransformPredicateMoveAround : public ObTransformRule {
-  public:
+public:
   ObTransformPredicateMoveAround(ObTransformerCtx* ctx);
 
   virtual ~ObTransformPredicateMoveAround();
@@ -27,7 +27,7 @@ class ObTransformPredicateMoveAround : public ObTransformRule {
   virtual int transform_one_stmt(
       ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   virtual bool need_rewrite(const common::ObIArray<ObParentDMLStmt>& parent_stmts, const ObDMLStmt& stmt);
 
   int pullup_predicates(ObDMLStmt* stmt, ObIArray<int64_t>& select_list, ObIArray<ObRawExpr*>& properties);
@@ -127,7 +127,7 @@ class ObTransformPredicateMoveAround : public ObTransformRule {
 
   int print_debug_info(const char* str, ObDMLStmt* stmt, ObIArray<ObRawExpr*>& preds);
 
-  private:
+private:
   typedef ObSEArray<ObRawExpr*, 4> PullupPreds;
   ObArenaAllocator allocator_;
   hash::ObHashMap<uint64_t, int64_t> stmt_map_;

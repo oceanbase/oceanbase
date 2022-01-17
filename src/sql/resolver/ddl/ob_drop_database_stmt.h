@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropDatabaseStmt : public ObDDLStmt {
-  public:
+public:
   ObDropDatabaseStmt(common::ObIAllocator* name_pool)
       : ObDDLStmt(name_pool, stmt::T_DROP_DATABASE), drop_database_arg_(), server_charset_(), server_collation_()
   {}
@@ -75,7 +75,7 @@ class ObDropDatabaseStmt : public ObDDLStmt {
     drop_database_arg_.to_recyclebin_ = to_recyclebin;
   }
 
-  private:
+private:
   obrpc::ObDropDatabaseArg drop_database_arg_;
   common::ObString server_charset_;
   common::ObString server_collation_;

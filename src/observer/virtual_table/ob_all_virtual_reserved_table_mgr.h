@@ -43,21 +43,21 @@ class ObAllVirtualReservedTableMgr : public common::ObVirtualTableScannerIterato
     RESERVE_POINT_VERSION,
   };
 
-  public:
+public:
   ObAllVirtualReservedTableMgr();
   virtual ~ObAllVirtualReservedTableMgr();
   int init();
   virtual void reset() override;
   virtual int inner_get_next_row(common::ObNewRow*& row) override;
 
-  private:
+private:
   const char* get_reserve_type_name_(storage::ObRecoveryPointType type);
   int get_point_next_table_(storage::ObITable*& table);
   int get_mgr_next_point_();
   int get_mgr_next_table_(storage::ObITable*& table);
   int get_next_table_(storage::ObITable*& table);
 
-  private:
+private:
   bool is_inited_;
   char svr_ip_[common::OB_MAX_SERVER_ADDR_SIZE];
   int32_t svr_port_;
@@ -69,7 +69,7 @@ class ObAllVirtualReservedTableMgr : public common::ObVirtualTableScannerIterato
   storage::ObRecoveryPointIterator point_iter_;
   storage::ObIPartitionGroupIterator* partition_itertor_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualReservedTableMgr);
 };
 

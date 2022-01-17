@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace unittest {
 class MockObElectionCallback : public election::ObIElectionCallback {
-  public:
+public:
   int on_get_election_priority(election::ObElectionPriority& priority)
   {
     priority.set_candidate(true);

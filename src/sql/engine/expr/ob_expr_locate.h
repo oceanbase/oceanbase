@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprLocate : public ObLocationExprOperator {
-  public:
+public:
   explicit ObExprLocate(common::ObIAllocator& alloc);
   virtual ~ObExprLocate();
   virtual int calc_result_typeN(
@@ -25,7 +25,7 @@ class ObExprLocate : public ObLocationExprOperator {
   virtual int calc_resultN(
       common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   static const int8_t PARAM_NUM_TWO = 2;
   static const int8_t PARAM_NUM_THREE = 3;
 

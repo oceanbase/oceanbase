@@ -32,7 +32,7 @@ class ObMultiVersionSchemaService;
 }  // namespace share
 namespace rootserver {
 class ObDailyMergeSequenceGenerator {
-  public:
+public:
   friend class TestDailyMergeSequenceGenerator_get_merge_unit_index_Test;
   friend class TestDailyMergeSequenceGenerator_build_merge_unit_Test;
   friend class TestDailyMergeSequenceGenerator_calc_distribution_Test;
@@ -75,7 +75,7 @@ class ObDailyMergeSequenceGenerator {
   typedef common::ObSEArray<ObMergeUnit, DEFAULT_MERGE_UNIT_COUNT> ObMergeUnitArray;
   typedef common::ObSEArray<ObConflictPair, DEFAULT_MERGE_UNIT_COUNT> ObConflictPairs;
   class ObMergeUnitGenerator {
-    public:
+  public:
     ObMergeUnitGenerator() : inited_(false), zone_mgr_(NULL), server_manager_(NULL)
     {}
     ~ObMergeUnitGenerator()
@@ -83,32 +83,32 @@ class ObDailyMergeSequenceGenerator {
     void init(ObZoneManager& zone_manager, ObServerManager& server_manager);
     int build_merge_unit(ObMergeUnitArray& merge_units);
 
-    private:
+  private:
     bool inited_;
     int build_merge_unit_by_zone(ObMergeUnitArray& merge_units);
     ObZoneManager* zone_mgr_;
     ObServerManager* server_manager_;
   };
   class ObConflictPairPriorityCmp {
-    public:
+  public:
     ObConflictPairPriorityCmp(ObDailyMergeSequenceGenerator& generator) : generator_(generator)
     {}
     ~ObConflictPairPriorityCmp()
     {}
     bool operator()(const ObConflictPair& first, const ObConflictPair& second);
 
-    private:
+  private:
     ObDailyMergeSequenceGenerator& generator_;
   };
   class ObMergePriorityCmp {
-    public:
+  public:
     ObMergePriorityCmp(ObZoneManager* zone_mgr) : zone_mgr_(zone_mgr)
     {}
     ~ObMergePriorityCmp()
     {}
     bool operator()(const ObConflictPair& first, const ObConflictPair& second);
 
-    private:
+  private:
     ObZoneManager* zone_mgr_;
   };
 
@@ -118,7 +118,7 @@ class ObDailyMergeSequenceGenerator {
       share::schema::ObMultiVersionSchemaService& schema_service);
   int get_next_zone(bool merge_by_turn, const int64_t concurrency_count, common::ObIArray<common::ObZone>& zones);
 
-  private:
+private:
   int get_next_zone_by_turn(common::ObIArray<common::ObZone>& zones);
   int get_next_zone_no_turn(common::ObIArray<common::ObZone>& zones);
   int get_next_zone_by_priority(common::ObIArray<common::ObZone>& to_merge);
@@ -147,7 +147,7 @@ class ObDailyMergeSequenceGenerator {
   int add_conflict_pair(const ObZone& first, const ObZone& second);
   int get_leader_count(const ObZone& zone, int64_t& leader_count);
 
-  private:
+private:
   ObZoneManager* zone_mgr_;
   ObServerManager* server_manager_;
   share::ObPartitionTableOperator* pt_;

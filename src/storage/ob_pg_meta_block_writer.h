@@ -29,7 +29,7 @@ enum ObPGMetaItemType {
 };
 
 class ObIPGMetaItem {
-  public:
+public:
   ObIPGMetaItem() = default;
   virtual ~ObIPGMetaItem() = default;
   virtual int serialize(const char*& buf, int64_t& pos) = 0;
@@ -37,21 +37,21 @@ class ObIPGMetaItem {
 };
 
 class ObIPGWriteMetaItemCallback {
-  public:
+public:
   ObIPGWriteMetaItemCallback();
   virtual ~ObIPGWriteMetaItemCallback();
   virtual int process() = 0;
 };
 
 class ObIPGMetaItemIterator {
-  public:
+public:
   ObIPGMetaItemIterator() = default;
   virtual ~ObIPGMetaItemIterator() = default;
   virtual int get_next_item(ObIPGMetaItem*& meta_item) = 0;
 };
 
 class ObPGMetaBlockWriter final {
-  public:
+public:
   ObPGMetaBlockWriter();
   ~ObPGMetaBlockWriter() = default;
   int init(blocksstable::ObStorageFileHandle& file_handle);
@@ -62,7 +62,7 @@ class ObPGMetaBlockWriter final {
   ObIArray<blocksstable::MacroBlockId>& get_meta_block_list();
   void reset();
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator allocator_;
   common::ObIODesc io_desc_;
@@ -75,7 +75,7 @@ class ObPGMetaBlockWriter final {
 };
 
 struct ObPGMetaItemHeader {
-  public:
+public:
   ObPGMetaItemHeader() : type_(0), reserved_(0), size_(0)
   {}
   ~ObPGMetaItemHeader() = default;
@@ -85,7 +85,7 @@ struct ObPGMetaItemHeader {
 };
 
 class ObPGMetaItemWriter final {
-  public:
+public:
   ObPGMetaItemWriter();
   ~ObPGMetaItemWriter() = default;
   int init(blocksstable::ObStorageFileHandle& file_handle);
@@ -95,12 +95,12 @@ class ObPGMetaItemWriter final {
   int close();
   void reset();
 
-  private:
+private:
   int write_block();
   int write_item_header(const ObIPGMetaItem* item, const int64_t item_len);
   int write_item_content(const char* item_buf, const int64_t item_buf_len, int64_t& item_pos);
 
-  private:
+private:
   static const int64_t HEADER_SIZE =
       sizeof(blocksstable::ObMacroBlockCommonHeader) + sizeof(blocksstable::ObLinkedMacroBlockHeaderV2);
   bool is_inited_;

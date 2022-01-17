@@ -675,10 +675,10 @@ int ObWhereSubQueryPullup::check_correlated_where_expr_can_pullup(
   if (OB_FAIL(ObOptimizerUtil::get_groupby_win_func_common_exprs(subquery, common_part_exprs, is_valid))) {
     LOG_WARN("failed to get common exprs", K(ret));
   }
-  ObIArray<ObRawExpr*>& where_exprs = subquery.get_condition_exprs();
-  for (int64_t i = 0; OB_SUCC(ret) && i < where_exprs.count(); ++i) {
-    ObSEArray<ObRawExpr*, 4> column_exprs;
-    ObRawExpr* expr = where_exprs.at(i);
+  ObIArray<ObRawExpr*> &where_exprs = subquery.get_condition_exprs();
+  for (int64_t i = 0; OB_SUCC(ret) && can_pullup && i < where_exprs.count(); ++i) {
+    ObSEArray<ObRawExpr *, 4> column_exprs;
+    ObRawExpr *expr = where_exprs.at(i);
     bool is_correlated = false;
     if (OB_FAIL(ObTransformUtils::is_correlated_expr(expr, subquery.get_current_level() - 1, is_correlated))) {
       LOG_WARN("failed to check is correlated expr", K(ret));
@@ -1075,8 +1075,9 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(
   ObSEArray<ObRawExpr*, 4> right_hand_exprs;
   ObSEArray<ObRawExpr*, 4> new_conditions;
   ObSEArray<ObRawExpr*, 4> correlated_conds;
-  SemiInfo* info = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(subquery) || OB_ISNULL(expr) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
+  SemiInfo *info = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(subquery) || OB_ISNULL(expr) || OB_ISNULL(ctx_)
+      || OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(subquery), K(expr));
   } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_, stmt, subquery, right_table))) {
@@ -1095,7 +1096,9 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(
     subquery->set_limit_offset(NULL, NULL);
   }
 
-  if (OB_FAIL(subquery->get_select_exprs(right_hand_exprs))) {
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(subquery->get_select_exprs(right_hand_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(generate_conditions(stmt, right_hand_exprs, subquery, expr, new_conditions))) {
     // create conditions with left_hand and subquery's original targetlist
@@ -1104,22 +1107,30 @@ int ObWhereSubQueryPullup::pullup_correlated_subquery_as_view(
     LOG_WARN("failed to append exprs", K(ret));
   } else {
     ObSqlBitSet<> table_set;
-    ObSEArray<ObDMLStmt*, 4> ignore_stmts;
+    ObSEArray<ObRawExpr*, 4> origin_correlated_conds;
+    ObSEArray<ObDMLStmt *, 4> ignore_stmts;
     ObSEArray<ObRawExpr*, 4> column_exprs;
     ObSEArray<ObRawExpr*, 4> upper_column_exprs;
-    if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*subquery, subquery->get_table_items(), table_set))) {
+    if (OB_FAIL(subquery->get_table_rel_ids(subquery->get_table_items(), table_set))) {
       LOG_WARN("failed to get rel ids", K(ret));
-    } else if (OB_FAIL(get_correlated_conditions(*subquery, correlated_conds))) {
+    } else if (OB_FAIL(get_correlated_conditions(*subquery, origin_correlated_conds))) {
       LOG_WARN("failed to get semi conditions", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::remove_item(subquery->get_condition_exprs(), correlated_conds))) {
+    } else if (OB_FAIL(ObOptimizerUtil::remove_item(subquery->get_condition_exprs(),
+                                                    origin_correlated_conds))) {
       LOG_WARN("failed to remove condition expr", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::extract_column_exprs(
-                   correlated_conds, subquery->get_current_level(), table_set, ignore_stmts, column_exprs))) {
+    } else if (OB_FAIL(ObRawExprUtils::copy_exprs(*ctx_->expr_factory_, origin_correlated_conds,
+                                                  correlated_conds, COPY_REF_DEFAULT))) {
+      LOG_WARN("failed to copy exprs", K(ret));
+    } else if(OB_FAIL(ObTransformUtils::extract_column_exprs(correlated_conds,
+                                                             subquery->get_current_level(),
+                                                             table_set, ignore_stmts,
+                                                             column_exprs))) {
       LOG_WARN("extract column exprs failed", K(ret));
-    } else if (column_exprs.empty()) {
-      /* do nothing */
     } else if (OB_FALSE_IT(subquery->get_select_items().reset())) {
-    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, column_exprs, subquery))) {
+    } else if (column_exprs.empty()) {
+      ret = ObTransformUtils::create_dummy_select_item(*subquery, ctx_);
+    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, column_exprs,
+                                                            subquery))) {
       LOG_WARN("failed to create select item", K(ret));
     } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *right_table, stmt, upper_column_exprs))) {
       LOG_WARN("failed to create columns for view", K(ret));
@@ -1244,7 +1255,7 @@ int ObWhereSubQueryPullup::fill_semi_left_table_ids(ObDMLStmt* stmt, SemiInfo* i
     } else if (OB_FAIL(left_rel_ids.del_member(right_idx))) {
       LOG_WARN("failed to delete members", K(ret));
     } else if (!left_rel_ids.is_empty()) {
-      ret = ObTransformUtils::relids_to_table_ids(stmt, left_rel_ids, info->left_table_ids_);
+      ret = stmt->relids_to_table_ids(left_rel_ids, info->left_table_ids_);
     } else if (OB_UNLIKELY(0 == stmt->get_from_item_size()) ||
                OB_ISNULL(table = stmt->get_table_item(stmt->get_from_item(0)))) {
       ret = OB_ERR_UNEXPECTED;
@@ -2048,15 +2059,19 @@ int ObWhereSubQueryPullup::generate_conditions(ObDMLStmt* stmt, ObIArray<ObRawEx
         }
         right_vector = row_expr;
       }
-      if (OB_SUCC(ret) && OB_FAIL(ObRawExprUtils::create_double_op_expr(
-                              *expr_factory, ctx_->session_info_, oper_type, cmp_expr, left_hand, right_vector))) {
-        LOG_WARN("failed to create comparison expr", K(ret));
-      } else if (!expr->has_flag(IS_WITH_ALL)) {
-        // do nothing
-      } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*expr_factory, cmp_expr, lnnvl_expr))) {
-        LOG_WARN("failed to build lnnvl expr", K(ret));
-      } else {
-        cmp_expr = lnnvl_expr;
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObRawExprUtils::create_double_op_expr(
+                      *expr_factory, ctx_->session_info_, oper_type,
+                      cmp_expr, left_hand, right_vector))) {
+          LOG_WARN("failed to create comparison expr", K(ret));
+        } else if (!expr->has_flag(IS_WITH_ALL)) {
+          // do nothing
+        } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(
+                             *expr_factory, cmp_expr, lnnvl_expr))) {
+          LOG_WARN("failed to build lnnvl expr", K(ret));
+        } else {
+          cmp_expr = lnnvl_expr;
+        }
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(cmp_expr->formalize(ctx_->session_info_))) {
@@ -2139,17 +2154,28 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt* stmt, bool& tra
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < cond_exprs.count(); ++i) {
-    ObSEArray<ObQueryRefRawExpr*, 4> queries;
-    ObSEArray<const ObRawExpr*, 1> tmp;
+    ObSEArray<ObQueryRefRawExpr *, 4> queries;
     bool is_null_reject = false;
     if (OB_FAIL(get_single_set_subquery(stmt->get_current_level(), cond_exprs.at(i), queries))) {
       LOG_WARN("failed to get single set subquery", K(ret));
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < queries.count(); ++j) {
-      if (is_vector_query(queries.at(j))) {
+      ObSEArray<const ObRawExpr *, 1> tmp;
+      if (OB_ISNULL(queries.at(j)) ||
+          OB_UNLIKELY(!queries.at(j)->is_ref_stmt()) ||
+          OB_ISNULL(queries.at(j)->get_ref_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid subquery", K(ret));
+      } else if (is_vector_query(queries.at(j))) {
         // not necessary limitation
-      } else if (OB_FAIL(ObTransformUtils::is_null_reject_condition(cond_exprs.at(i), tmp, is_null_reject))) {
+      } else if (OB_FAIL(tmp.push_back(queries.at(j)))) {
+        LOG_WARN("failed to push back query", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::is_null_reject_condition(
+                    cond_exprs.at(i), tmp, is_null_reject))) {
         LOG_WARN("failed to check is null reject condition", K(ret));
+      } else if (!is_null_reject &&
+                 queries.at(j)->get_ref_stmt()->get_semi_info_size() > 0) {
+        // do nothing
       } else if (OB_FAIL(unnest_single_set_subquery(stmt, queries.at(j), !is_null_reject, false))) {
         LOG_WARN("failed to unnest single set subquery", K(ret));
       } else {

@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObLogSelectInto : public ObLogicalOperator {
-  public:
+public:
   ObLogSelectInto(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         into_type_(T_INTO_OUTFILE),
@@ -99,10 +99,10 @@ class ObLogSelectInto : public ObLogicalOperator {
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   virtual int transmit_op_ordering() override;
-  virtual uint64_t hash(uint64_t seed) const;
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual uint64_t hash(uint64_t seed) const override;
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
 
-  private:
+private:
   ObItemType into_type_;
   common::ObObj outfile_name_;
   common::ObObj filed_str_;

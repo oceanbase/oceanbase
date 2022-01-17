@@ -49,7 +49,7 @@ struct ObArithRule {
 
 template <int D1, int D2>
 class ObArithRuleMap {
-  public:
+public:
   ObArithRuleMap()
   {}
   ~ObArithRuleMap()
@@ -63,7 +63,7 @@ class ObArithRuleMap {
     return arith_rule_map_[i][j];
   }
 
-  private:
+private:
   ObArithRule arith_rule_map_[D1][D2];
 };
 
@@ -80,7 +80,7 @@ struct ObArithResultTypeChoice {
 };
 
 class ObArithFlag {
-  public:
+public:
   ObArithFlag() : flags_(0)
   {}
   ObArithFlag(uint64_t flags) : flags_(flags)
@@ -101,12 +101,12 @@ class ObArithFlag {
   }
   TO_STRING_KV(K(flags_));
 
-  private:
+private:
   uint64_t flags_;
 };
 
 class ObArithResultTypeMap {
-  public:
+public:
   enum OP : uint64_t {
     ADD = 1ULL << 0,
     SUB = 1ULL << 1,
@@ -126,13 +126,14 @@ class ObArithResultTypeMap {
 
   typedef bool (*is_type_func)(common::ObObjType type);
 
-  static constexpr int flag2bit(uint64_t flag)
+  static int flag2bit(uint64_t flag)
   {
+    OB_ASSERT(0ULL != flag);
     return static_cast<int>(__builtin_ctzll(flag));
   }
 
   class RulesApplyer {
-    public:
+  public:
     RulesApplyer(ObArithResultTypeMap& map, ObArithFlag op_flags, TypeBitset& type1_bitset, TypeBitset& type2_bitset)
         : map_(map),
           op_flags_(op_flags),
@@ -202,7 +203,7 @@ class ObArithResultTypeMap {
       return for_each(set_param2);
     }
 
-    private:
+  private:
     template <typename func>
     RulesApplyer& for_each(func& f)
     {
@@ -320,7 +321,7 @@ class ObArithResultTypeMap {
     return arith_rule_maps_[flag2bit(flag)].get_rule(type1, type2);
   }
 
-  private:
+private:
   ObArithRuleMap<TYPE_COUNT, TYPE_COUNT> arith_rule_maps_[OP_CNT];
   TypeBitset types_in_tc_set_[TC_COUNT];
   TypeBitset types_set_[TYPE_COUNT];

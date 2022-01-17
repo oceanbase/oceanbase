@@ -25,14 +25,14 @@ namespace sql {
 class ObValuesSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObValuesSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   common::ObRowStore row_store_;
 };
 
 class ObValuesOp : public ObOperator {
-  public:
+public:
   ObValuesOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -45,7 +45,7 @@ class ObValuesOp : public ObOperator {
     ObOperator::destroy();
   }
 
-  private:
+private:
   common::ObNewRow cur_row_;
   common::ObRowStore::Iterator row_store_it_;
 };

@@ -18,13 +18,13 @@
 namespace oceanbase {
 namespace sql {
 class ObBootstrapResolver : public ObSystemCmdResolver {
-  public:
+public:
   explicit ObBootstrapResolver(ObResolverParams& params);
   virtual ~ObBootstrapResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBootstrapResolver);
 };
 }  // namespace sql

@@ -32,7 +32,7 @@ class ObProto20PktContext;
 class ObVirtualCSProtocolProcessor;
 
 class ObMySQLHandler : public rpc::frame::ObReqHandler {
-  public:
+public:
   explicit ObMySQLHandler(rpc::frame::ObReqDeliver& deliver);
   virtual ~ObMySQLHandler();
 
@@ -62,7 +62,7 @@ class ObMySQLHandler : public rpc::frame::ObReqHandler {
 
   inline ObVirtualCSProtocolProcessor* get_protocol_processor(easy_connection_t* c);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLHandler);
   /**
    * write data through raw socket
@@ -74,12 +74,12 @@ class ObMySQLHandler : public rpc::frame::ObReqHandler {
   int write_data(int fd, char* buffer, size_t length) const;
   int read_data(int fd, char* buffer, size_t length) const;
 
-  protected:
+protected:
   ObMysqlProtocolProcessor mysql_processor_;
   ObMysqlCompressProtocolProcessor compress_processor_;
   Ob20ProtocolProcessor ob_2_0_processor_;
 
-  private:
+private:
   rpc::frame::ObReqDeliver& deliver_;
 };  // end of class ObMySQLHandler
 

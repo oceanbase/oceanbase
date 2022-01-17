@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace storage {
 
 class ObPGMetaItem : public ObIPGMetaItem {
-  public:
+public:
   ObPGMetaItem();
   virtual ~ObPGMetaItem() = default;
   virtual int serialize(const char*& buf, int64_t& buf_len) override;
@@ -35,21 +35,21 @@ class ObPGMetaItem : public ObIPGMetaItem {
   }
   TO_STRING_KV(KP_(buf), K_(buf_len));
 
-  private:
+private:
   const char* buf_;
   int64_t buf_len_;
 };
 
 // sstable meta and pg meta
 class ObPGMetaCheckpointWriter final {
-  public:
+public:
   ObPGMetaCheckpointWriter();
   ~ObPGMetaCheckpointWriter() = default;
   int init(ObPGMetaItem& pg_meta, ObPGMetaItemWriter& writer);
   int write_checkpoint();
   void reset();
 
-  private:
+private:
   bool is_inited_;
   ObPGMetaItemWriter* writer_;
   ObPGMetaItem pg_meta_;

@@ -343,7 +343,7 @@ int ObSSTableDataBlockReader::dump_sstable_data_block()
         STORAGE_LOG(ERROR, "failed to get micro block data", K(ret));
       } else if (OB_UNLIKELY(!micro_data.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexcepted micro data", K(micro_data), K(ret));
+        STORAGE_LOG(WARN, "Unexpected micro data", K(micro_data), K(ret));
       } else if (OB_FAIL(dump_sstable_micro_header(micro_data.get_buf(), macro_loader.get_micro_index()))) {
         STORAGE_LOG(ERROR, "Failed to dump sstble micro block header", K(ret));
       } else if (OB_FAIL(dump_sstable_micro_data(micro_data))) {
@@ -453,7 +453,7 @@ int ObSSTableDataBlockReader::dump_lob_data_block()
           STORAGE_LOG(WARN, "Failed to decompress lob micro block data", K(ret));
         } else if (OB_UNLIKELY(!micro_data.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexcepted micro data", K(micro_data), K(ret));
+          STORAGE_LOG(WARN, "Unexpected micro data", K(micro_data), K(ret));
         } else {
           const ObLobMicroBlockHeader* header = reinterpret_cast<const ObLobMicroBlockHeader*>(micro_data.get_buf());
           ObSSTablePrinter::print_lob_micro_header(header);
@@ -489,7 +489,7 @@ int ObSSTableDataBlockReader::dump_bloom_filter_data_block()
       STORAGE_LOG(WARN, "Failed to decompress bloom filter micro block data", K(ret));
     } else if (OB_UNLIKELY(!micro_data.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexcepted micro data", K(micro_data), K(ret));
+      STORAGE_LOG(WARN, "Unexpected micro data", K(micro_data), K(ret));
     } else {
       const ObBloomFilterMicroBlockHeader* header =
           reinterpret_cast<const ObBloomFilterMicroBlockHeader*>(micro_data.get_buf());

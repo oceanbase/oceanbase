@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace unittest {
 
 class SortIndices {
-  public:
+public:
   SortIndices(const common::ObIArray<blocksstable::MacroBlockId>& block_ids) : block_ids_(block_ids)
   {}
   bool operator()(int64_t i, int64_t j) const
@@ -33,12 +33,12 @@ class SortIndices {
     return block_ids_.at(i) < block_ids_.at(j);
   }
 
-  private:
+private:
   const common::ObIArray<blocksstable::MacroBlockId>& block_ids_;
 };
 
 class TestHashMapPerformance : public ::testing::Test {
-  public:
+public:
   TestHashMapPerformance();
   virtual ~TestHashMapPerformance();
   int prepare_hash_map(const int64_t count, const double load_factor);
@@ -62,7 +62,7 @@ class TestHashMapPerformance : public ::testing::Test {
   int test_array_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids);
   int test_cuckoo_hash_performance(const common::ObIArray<blocksstable::MacroBlockId>& block_ids);
 
-  private:
+private:
   common::hash::ObHashMap<blocksstable::MacroBlockId, int64_t, common::hash::NoPthreadDefendMode> hash_map_;
   common::ObArrayHashMap<blocksstable::MacroBlockId, int64_t> array_hash_map_;
   common::hash::ObCuckooHashMap<blocksstable::MacroBlockId, int64_t> cuckoo_hash_map_;

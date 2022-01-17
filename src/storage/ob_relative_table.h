@@ -23,7 +23,7 @@ namespace storage {
 class ObRelativeTable {
   friend class ObRelativeTables;
 
-  public:
+public:
   ObTablesHandle tables_handle_;
 
   ObRelativeTable()
@@ -33,13 +33,18 @@ class ObRelativeTable {
   bool set_schema_param(const share::schema::ObTableSchemaParam* param);
   uint64_t get_table_id() const;
   int64_t get_schema_version() const;
-  int get_col_desc(const uint64_t column_id, share::schema::ObColDesc& col_desc) const;
-  int get_col_desc_by_idx(const int64_t idx, share::schema::ObColDesc& col_desc) const;
-  int get_rowkey_col_id_by_idx(const int64_t idx, uint64_t& col_id) const;
-  int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc>& column_ids) const;
-  int get_column_data_length(const uint64_t column_id, int32_t& len) const;
-  int is_rowkey_column_id(const uint64_t column_id, bool& is_rowkey) const;
-  int is_column_nullable(const uint64_t column_id, bool& is_nullable) const;
+  int get_col_desc(const uint64_t column_id, share::schema::ObColDesc &col_desc) const;
+  int get_col_desc_by_idx(const int64_t idx, share::schema::ObColDesc &col_desc) const;
+  int get_rowkey_col_id_by_idx(const int64_t idx, uint64_t &col_id) const;
+  int get_rowkey_column_ids(common::ObIArray<share::schema::ObColDesc> &column_ids) const;
+  int get_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
+  int get_column_data_length(const uint64_t column_id, int32_t &len) const;
+  int is_rowkey_column_id(const uint64_t column_id, bool &is_rowkey) const;
+  int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
+  int is_column_nullable_for_read(const uint64_t column_id, bool &is_nullable_for_read) const;
+  int is_nop_default_value(const uint64_t column_id, bool &is_nop) const;
+  int is_hidden_column(const uint64_t column_id, bool &is_hidden) const;
+  int is_gen_column(const uint64_t column_id, bool &is_gen_col) const;
   OB_INLINE bool allow_not_ready() const
   {
     return allow_not_ready_;
@@ -59,13 +64,12 @@ class ObRelativeTable {
   bool can_read_index() const;
   bool is_unique_index() const;
   bool is_domain_index() const;
-  int check_rowkey_in_column_ids(const common::ObIArray<uint64_t>& column_ids, const bool has_other_column) const;
-  int check_column_in_map(const share::schema::ColumnMap& col_map) const;
-  int check_index_column_in_map(const share::schema::ColumnMap& col_map, const int64_t data_table_rowkey_cnt) const;
-  int build_table_param(const common::ObIArray<uint64_t>& out_col_ids, share::schema::ObTableParam& table_param) const;
-  int build_index_row(const common::ObNewRow& table_row, const share::schema::ColumnMap& col_map,
-      const bool only_rowkey, common::ObNewRow& index_row, bool& null_idx_val,
-      common::ObIArray<share::schema::ObColDesc>* idx_columns);
+  int check_rowkey_in_column_ids(const common::ObIArray<uint64_t> &column_ids, const bool has_other_column) const;
+  int check_column_in_map(const share::schema::ColumnMap &col_map) const;
+  int check_index_column_in_map(const share::schema::ColumnMap &col_map, const int64_t data_table_rowkey_cnt) const;
+  int build_index_row(const common::ObNewRow &table_row, const share::schema::ColumnMap &col_map,
+      const bool only_rowkey, common::ObNewRow &index_row, bool &null_idx_val,
+      common::ObIArray<share::schema::ObColDesc> *idx_columns);
   OB_INLINE bool use_schema_param() const
   {
     return use_schema_param_;
@@ -78,17 +82,20 @@ class ObRelativeTable {
   {
     return schema_param_;
   }
-  TO_STRING_KV("index_id", NULL == schema_ ? 0 : schema_->get_table_id(), KP(schema_), K_(allow_not_ready),
-      K_(use_schema_param), KPC(schema_param_));
+  OB_INLINE const share::schema::ObTableSchema *get_schema() const
+  {
+    return schema_;
+  }
+  TO_STRING_KV(K_(allow_not_ready), K_(use_schema_param), KPC_(schema), KPC_(schema_param));
 
-  private:
+private:
   int get_rowkey_col_desc_by_idx(const int64_t idx, share::schema::ObColDesc& col_desc) const;
   // must follow index column order
   int set_index_value(const common::ObNewRow& table_row, const share::schema::ColumnMap& col_map,
       const share::schema::ObColDesc& col_desc, const int64_t rowkey_size, common::ObNewRow& index_row,
       common::ObIArray<share::schema::ObColDesc>* idx_columns);
 
-  private:
+private:
   bool allow_not_ready_;
   const share::schema::ObTableSchema* schema_;
   const share::schema::ObTableSchemaParam* schema_param_;
@@ -96,7 +103,7 @@ class ObRelativeTable {
 };
 
 class ObRelativeTables {
-  public:
+public:
   explicit ObRelativeTables(common::ObIAllocator& allocator)
       : idx_cnt_(0),
         max_col_num_(0),
@@ -147,7 +154,7 @@ class ObRelativeTables {
     return index_tables_buf_count_;
   }
 
-  private:
+private:
   int prepare_data_table(const int64_t read_snapshot, ObPartitionStore& store);
   int prepare_index_tables(
       const int64_t read_snapshot, const common::ObIArray<uint64_t>* upd_col_ids, ObPartitionStore& store);
@@ -159,13 +166,13 @@ class ObRelativeTables {
   int check_tenant_schema_version(share::schema::ObMultiVersionSchemaService& schema_service, const uint64_t tenant_id,
       const uint64_t table_id, const int64_t tenant_schema_version);
 
-  public:
+public:
   int64_t idx_cnt_;
   int64_t max_col_num_;
   ObRelativeTable data_table_;
   ObRelativeTable* index_tables_;
 
-  private:
+private:
   int64_t index_tables_buf_count_;
   common::ObIAllocator& allocator_;
 

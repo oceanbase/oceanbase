@@ -36,11 +36,11 @@ class CoBaseSched : public CoThread, public EventBase {
   using RunFuncT = std::function<void()>;
   using ExitCBFuncT = std::function<void()>;
 
-  public:
+public:
   class Worker;
   class Task;
 
-  public:
+public:
   CoBaseSched();
   virtual ~CoBaseSched();
 
@@ -57,7 +57,7 @@ class CoBaseSched : public CoThread, public EventBase {
   int submit(const RunFuncT& func);
   static int add_exit_cb(const ExitCBFuncT& func);
 
-  protected:
+protected:
   using TaskList = common::ObDList<Task>;
   using List = common::ObDList<Worker>;
   using LinkedNode = common::ObDLinkNode<Worker*>;
@@ -90,13 +90,13 @@ class CoBaseSched : public CoThread, public EventBase {
   void cancel_timer(CoTimer& timer) override;
   void store_loop_time();
 
-  protected:
+protected:
   // set if scheduler won't exit unless other stop it.
   bool keep_alive_;
   // tasks others submit to this scheduler.
   TaskList tasks_;
 
-  protected:
+protected:
   List routines_;
   List finished_routines_;
   LinkedList runnables_;
@@ -113,7 +113,7 @@ class CoBaseSched::Worker : public CoRoutine, public common::ObDLinkBase<Worker>
   using LinkedNode = CoBaseSched::LinkedNode;
   using LinkedList = CoBaseSched::LinkedList;
 
-  public:
+public:
   Worker(CoBaseSched& sched, Task* task = nullptr) : CoRoutine(sched), sched_(sched), node_(), task_(task)
   {
     node_.get_data() = this;
@@ -124,27 +124,27 @@ class CoBaseSched::Worker : public CoRoutine, public common::ObDLinkBase<Worker>
   void sleep_until(int64_t abs_time) override;
   void add_to_runnable(LinkedList& list);
 
-  protected:
+protected:
   CoBaseSched& get_sched()
   {
     return sched_;
   }
 
-  private:
+private:
   virtual void on_status_change(RunStatus prev, RunStatus curr) final;
 
-  private:
+private:
   CoBaseSched& sched_;
   LinkedNode node_;  // runnable node.
   Task* task_;
 };
 
 class CoBaseSched::Task : public common::ObDLinkBase<Task> {
-  public:
+public:
   Task(const RunFuncT& func) : func_(func)
   {}
 
-  public:
+public:
   RunFuncT func_;
 };
 

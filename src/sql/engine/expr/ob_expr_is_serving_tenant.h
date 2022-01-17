@@ -18,19 +18,19 @@
 namespace oceanbase {
 namespace sql {
 class ObExprIsServingTenant : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprIsServingTenant(common::ObIAllocator& alloc);
   virtual ~ObExprIsServingTenant();
 
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& type1, ObExprResType& type2, ObExprResType& type3,
-      common::ObExprTypeCtx& type_ctx) const;
+      common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_result3(common::ObObj& result, const common::ObObj& obj1, const common::ObObj& obj2,
-      const common::ObObj& obj3, common::ObExprCtx& expr_ctx) const;
+      const common::ObObj& obj3, common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
   static int eval_is_serving_tenant(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static int check_serving_tenant(
       bool& serving, ObExecContext& exec_ctx, const common::ObString& ip, const int64_t port, const uint64_t tenant_id);
   /* functions */

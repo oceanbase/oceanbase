@@ -49,18 +49,18 @@ class ObConcurrentHashMapWithHazardValue {};
 
 template <typename Key, typename Value>
 class ObConcurrentHashMapWithHazardValue<Key, Value*> {
-  public:
+public:
   class IValueAlloc {
-    public:
+  public:
     virtual Value* alloc() = 0;
     virtual void free(Value* value) = 0;
   };
   class IValueReclaimCallback {
-    public:
+  public:
     virtual void reclaim_value(Value* value) = 0;
   };
 
-  public:
+public:
   ObConcurrentHashMapWithHazardValue();
   ObConcurrentHashMapWithHazardValue(IHashAlloc& hash_alloc, IArrayAlloc& array_alloc);
   int init();
@@ -89,10 +89,10 @@ class ObConcurrentHashMapWithHazardValue<Key, Value*> {
   // return OB_SUCCESS for success, other for errors.
   int get_count(int64_t& cnt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObConcurrentHashMapWithHazardValue);
 
-  private:
+private:
   typedef HashRoot SHashRoot;
   typedef HashBase<Key, Value*> SHash;
   typedef typename SHash::Iterator SScanIterator;
@@ -100,10 +100,10 @@ class ObConcurrentHashMapWithHazardValue<Key, Value*> {
   typedef typename SHash::Handle SGetHandle;
   typedef typename SHash::Handle SPutHandle;
 
-  protected:
+protected:
   /// this class is for ObConcurrentHashMapWithHazardValue
   class DefaultValueAlloc : public IValueAlloc {
-    public:
+  public:
     Value* alloc()
     {
       return op_alloc(Value);
@@ -116,52 +116,52 @@ class ObConcurrentHashMapWithHazardValue<Key, Value*> {
   };
   /// this class is for ObConcurrentHashMapWithHazardValue
   class DefaultValueReclaimCallback : public IValueReclaimCallback {
-    public:
+  public:
     DefaultValueReclaimCallback() : alloc_(NULL)
     {}
     int init(IValueAlloc* alloc);
     virtual void reclaim_value(Value* value);
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(DefaultValueReclaimCallback);
 
-    private:
+  private:
     IValueAlloc* alloc_;
   };
   /// this class is for ObHazardPointer
   class HazardPtrReclaimCallback : public ObHazardPointer::ReclaimCallback {
-    public:
+  public:
     HazardPtrReclaimCallback() : value_reclaim_callback_(NULL)
     {}
     int init(IValueReclaimCallback* value_reclaim_callback);
     virtual void reclaim_ptr(uintptr_t ptr);
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(HazardPtrReclaimCallback);
 
-    private:
+  private:
     IValueReclaimCallback* value_reclaim_callback_;
   };
   /// this class is for HashBase <ob_hash.h>
   class HashReclaimCallback : public SHash::IKVRCallback {
-    public:
+  public:
     HashReclaimCallback() : hazard_ptr_(NULL)
     {}
     int init(ObHazardPointer* hazard_ptr);
     virtual void reclaim_key_value(Key& key, Value*& value);
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(HashReclaimCallback);
 
-    private:
+  private:
     ObHazardPointer* hazard_ptr_;
   };
 
-  private:
+private:
   int err_code_map(int err) const;
   int check_init() const;
 
-  private:
+private:
   ObHazardPointer hazard_pointer_;
   HazardPtrReclaimCallback hazard_ptr_reclaim_callback_;
   IValueAlloc* value_alloc_;

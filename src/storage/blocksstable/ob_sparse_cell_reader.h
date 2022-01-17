@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace blocksstable {
 class ObSparseCellReader {
-  public:
+public:
   ObSparseCellReader();
   virtual ~ObSparseCellReader()
   {
@@ -36,7 +36,7 @@ class ObSparseCellReader {
   }
   int read_cell(common::ObObj& obj);
 
-  private:
+private:
   inline int read_oracle_timestamp(const common::ObObjType obj_type, const uint8_t meta_attr,
       const common::ObOTimestampMetaAttrType otmat, common::ObObj& obj);
   int read_interval_ds(common::ObObj& obj);
@@ -47,7 +47,7 @@ class ObSparseCellReader {
   template <class T>
   static const T* read(const char* row_buf, int64_t& pos);
 
-  private:
+private:
   const char* buf_;
   int64_t buf_size_;
   int64_t pos_;

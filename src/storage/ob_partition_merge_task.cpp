@@ -594,6 +594,7 @@ ObSSTableMergeCtx::ObSSTableMergeCtx()
       merge_log_ts_(INT_MAX),
       trans_table_end_log_ts_(0),
       trans_table_timestamp_(0),
+    pg_last_replay_log_ts_(0),
       read_base_version_(0)
 {}
 
@@ -1037,8 +1038,11 @@ int ObSSTableMergePrepareTask::process()
                  storage = static_cast<ObPartitionStorage*>(ctx->partition_guard_.get_pg_partition()->get_storage()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The partition storage must not NULL", K(ret), K(ctx));
-  } else if (ctx->param_.is_multi_version_minor_merge() &&
-             OB_FAIL(pg->get_pg_storage().get_trans_table_end_log_ts_and_timestamp(
+  } else if (ctx->param_.is_mini_merge()
+             && OB_FAIL(pg->get_pg_storage().get_last_replay_log_ts(ctx->pg_last_replay_log_ts_))) {
+    LOG_WARN("failed to get pg last replay log ts", K(ret), K(ctx->param_));
+  } else if (ctx->param_.is_mini_merge()
+             && OB_FAIL(pg->get_pg_storage().get_trans_table_end_log_ts_and_timestamp(
                  ctx->trans_table_end_log_ts_, ctx->trans_table_timestamp_))) {
     LOG_WARN("failed to get trans_table end_log_ts and timestamp", K(ret), K(ctx->param_));
   } else if (OB_FAIL(storage->build_merge_ctx(*ctx))) {
@@ -1046,7 +1050,7 @@ int ObSSTableMergePrepareTask::process()
   } else if (ctx->param_.is_multi_version_minor_merge()) {
     if (ctx->log_ts_range_.is_empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("Unexcepted empty log ts range in minor merge", K(ret), K(ctx->log_ts_range_));
+      LOG_ERROR("Unexpected empty log ts range in minor merge", K(ret), K(ctx->log_ts_range_));
     } else {
       ctx->merge_log_ts_ = ctx->log_ts_range_.end_log_ts_;
     }
@@ -1819,7 +1823,7 @@ int ObTransTableMergeTask::get_merged_trans_sstable(ObTableHandle& table_handle,
       if (OB_FAIL(tables_handle_.get_first_sstable(sstable))) {
         LOG_WARN("failed to get fist sstable", K(ret), K_(pg_key), K(table_key));
       } else if (OB_FAIL(table_handle.set_table(sstable))) {
-        LOG_WARN("failde to set table", K(ret), K_(pg_key), K(table_key));
+        LOG_WARN("failed to set table", K(ret), K_(pg_key), K(table_key));
       }
     } else if (OB_FAIL(data_blocks.push_back(&writer.get_macro_block_write_ctx()))) {
       LOG_WARN("fail to push back data block", K(ret));

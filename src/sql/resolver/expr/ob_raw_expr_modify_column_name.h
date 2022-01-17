@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRawExprModifyColumnName : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprModifyColumnName(common::ObString new_column_name, common::ObString orig_column_name) : ObRawExprVisitor()
   {
     orig_column_name_ = orig_column_name;
@@ -45,7 +45,7 @@ class ObRawExprModifyColumnName : public ObRawExprVisitor {
   virtual int visit(ObWinFunRawExpr& expr);
   virtual int visit(ObPseudoColumnRawExpr& expr);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExprModifyColumnName);
   common::ObString orig_column_name_;
   common::ObString new_column_name_;

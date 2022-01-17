@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExecuteStmt : public ObCMDStmt {
-  public:
+public:
   ObExecuteStmt()
       : ObCMDStmt(stmt::T_EXECUTE), prepare_id_(common::OB_INVALID_ID), prepare_type_(stmt::T_NONE), params_()
   {}
@@ -58,7 +58,7 @@ class ObExecuteStmt : public ObCMDStmt {
 
   TO_STRING_KV(N_SQL_ID, prepare_id_, N_STMT_TYPE, prepare_type_, N_PARAM, params_);
 
-  private:
+private:
   ObPsStmtId prepare_id_;
   stmt::StmtType prepare_type_;
   common::ObArray<const sql::ObRawExpr*> params_;

@@ -120,7 +120,8 @@ struct BaseTableOptInfo {
         heuristic_rule_(HeuristicRule::MAX_RULE),
         available_index_id_(),
         available_index_name_(),
-        pruned_index_name_()
+        pruned_index_name_(),
+        unstable_index_name_()
   {}
 
   // this following variables are tracked to remember how base table access path are generated
@@ -129,10 +130,11 @@ struct BaseTableOptInfo {
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> available_index_id_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> available_index_name_;
   common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> pruned_index_name_;
+  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> unstable_index_name_;
 };
 
 class Path {
-  public:
+public:
   Path()
       : path_type_(INVALID),
         parent_(NULL),
@@ -256,7 +258,7 @@ class Path {
   TO_STRING_KV(K_(path_type), K_(cost), K_(op_cost), K_(exec_params), K_(ordering), K_(is_inner_path),
       K_(inner_row_count), K_(interesting_order_info));
 
-  public:
+public:
   // member variables
   PathType path_type_;
   ObJoinOrder* parent_;
@@ -274,12 +276,12 @@ class Path {
   common::ObSEArray<std::pair<int64_t, ObRawExpr*>, 4, common::ModulePageAllocator, true> nl_params_;  // parameters for
                                                                                                        // inner path
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(Path);
 };
 
 class AccessPath : public Path {
-  public:
+public:
   AccessPath(
       uint64_t table_id, uint64_t ref_table_id, uint64_t index_id, ObJoinOrder* parent, ObOrderDirection direction)
       : Path(ACCESS, parent),
@@ -396,7 +398,7 @@ class AccessPath : public Path {
     return est_cost_info_;
   }
   const ObShardingInfo* get_sharding_info() const;
-  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const
+  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const override
   {
     BUF_PRINTF("@");
     BUF_PRINTF("%lu", table_id_);
@@ -408,7 +410,7 @@ class AccessPath : public Path {
       K_(output_row_count), K_(phy_query_range_row_count), K_(query_range_row_count), K_(index_back_row_count),
       K_(index_back_cost), K_(est_cost_info), K_(sample_info), K_(range_prefix_count));
 
-  public:
+public:
   // member variables
   uint64_t table_id_;
   uint64_t ref_table_id_;
@@ -436,12 +438,12 @@ class AccessPath : public Path {
   int64_t range_prefix_count_;  // prefix count
   BaseTableOptInfo* table_opt_info_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(AccessPath);
 };
 
 class JoinPath : public Path {
-  public:
+public:
   JoinPath()
       : Path(JOIN, NULL),
         left_path_(NULL),
@@ -483,7 +485,7 @@ class JoinPath : public Path {
   int cost_nest_loop_join(double& op_cost, double& cost);
   int cost_merge_join(double& op_cost, double& cost);
   int cost_hash_join(double& op_cost, double& cost);
-  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const
+  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const override
   {
     BUF_PRINTF("<");
     if (NULL != left_path_) {
@@ -514,7 +516,7 @@ class JoinPath : public Path {
     BUF_PRINTF(">");
   }
 
-  public:
+public:
   const Path* left_path_;
   const Path* right_path_;
   JoinAlgo join_algo_;  // join method
@@ -529,12 +531,12 @@ class JoinPath : public Path {
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> equal_join_condition_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> other_join_condition_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(JoinPath);
 };
 
 class SubQueryPath : public Path {
-  public:
+public:
   SubQueryPath() : Path(SUBQUERY, NULL), subquery_id_(common::OB_INVALID_ID), root_(NULL)
   {}
   SubQueryPath(ObLogicalOperator* root) : Path(SUBQUERY, NULL), subquery_id_(common::OB_INVALID_ID), root_(root)
@@ -542,17 +544,17 @@ class SubQueryPath : public Path {
   virtual ~SubQueryPath()
   {}
   virtual int estimate_cost() override;
-  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const
+  virtual void get_name_internal(char* buf, const int64_t buf_len, int64_t& pos) const override
   {
     BUF_PRINTF("@sub_");
     BUF_PRINTF("%lu", subquery_id_);
   }
 
-  public:
+public:
   uint64_t subquery_id_;
   ObLogicalOperator* root_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(SubQueryPath);
 };
 
@@ -581,7 +583,7 @@ struct InnerPathInfo {
 typedef common::ObSEArray<InnerPathInfo, 8, common::ModulePageAllocator, true> InnerPathInfos;
 
 class ObJoinOrder {
-  public:
+public:
   struct PathHelper {
     PathHelper()
         : is_inner_path_(false),
@@ -611,6 +613,7 @@ class ObJoinOrder {
   static const int8_t NEED_BNL = 0x1 << 3;
   // used for heuristic index selection
   static const int64_t TABLE_HEURISTIC_UNIQUE_KEY_RANGE_THRESHOLD = 10000;
+  static const int64_t PRUNING_ROW_COUNT_THRESHOLD = 1000;
 
   ObJoinOrder(common::ObIAllocator* allocator, ObLogPlan* plan, PathType type)
       : allocator_(allocator),
@@ -643,10 +646,13 @@ class ObJoinOrder {
   {}
   virtual ~ObJoinOrder();
 
-  int prunning_index(const uint64_t table_id, const uint64_t base_table_id, const ObDMLStmt* stmt,
+  int skyline_prunning_index(const uint64_t table_id, const uint64_t base_table_id, const ObDMLStmt* stmt,
       const bool do_prunning, const ObIndexInfoCache& index_info_cache,
       const common::ObIArray<uint64_t>& valid_index_ids, common::ObIArray<uint64_t>& skyline_index_ids,
       ObIArray<ObRawExpr*>& restrict_infos);
+
+  int pruning_unstable_access_path(BaseTableOptInfo *table_opt_info, ObIArray<AccessPath *> &access_paths);
+  int try_pruning_base_table_access_path(ObIArray<AccessPath *> &access_paths, ObIArray<uint64_t> &unstable_index_id);
 
   int cal_dimension_info(const uint64_t table_id, const uint64_t data_table_id, const uint64_t index_table_id,
       const ObDMLStmt* stmt, ObIndexSkylineDim& index_dim, const ObIndexInfoCache& index_info_cache,
@@ -657,8 +663,8 @@ class ObJoinOrder {
   int fill_index_info_cache(const uint64_t table_id, const uint64_t base_table_id,
       const common::ObIArray<uint64_t>& valid_index_ids, ObIndexInfoCache& index_info_cache, PathHelper& helper);
 
-  int compute_pruned_index(const uint64_t table_id, const uint64_t base_table_id,
-      common::ObIArray<uint64_t>& available_index, PathHelper& helper);
+  int fill_opt_info_index_name(const uint64_t base_table_id, ObIArray<uint64_t>& available_index_id,
+      ObIArray<uint64_t>& unstable_index_id, BaseTableOptInfo* table_opt_info);
 
   int extract_used_column_ids(const uint64_t table_id, const uint64_t ref_table_id, ObEstSelInfo& est_sel_info,
       ObIArray<uint64_t>& column_ids, const bool eliminate_rowid_col = false);
@@ -1026,7 +1032,7 @@ class ObJoinOrder {
   }
   TO_STRING_KV(K_(type), K_(output_rows), K_(interesting_paths));
 
-  private:
+private:
   int add_access_filters(
       AccessPath* path, const common::ObIArray<ObRawExpr*>& index_keys, const ObIArray<ObRawExpr*>& restrict_infos);
 
@@ -1128,11 +1134,11 @@ class ObJoinOrder {
       const ObIArray<ObRawExpr*>& join_condition, const ObIArray<ObRawExpr*>& equal_join_condition,
       const ObJoinType join_type);
 
-  private:
+private:
   int find_matching_cond(const ObIArray<ObRawExpr*>& join_conditions, const OrderItem& left_ordering,
       const OrderItem& right_ordering, const EqualSets& equal_sets, int64_t& common_prefix_idx);
 
-  private:
+private:
   int compute_cost_and_prune_access_path(PathHelper& helper, ObIArray<AccessPath*>& access_paths);
   int revise_output_rows_after_creating_path(PathHelper& helper, ObIArray<AccessPath*>& access_paths);
   int fill_filters(const common::ObIArray<ObRawExpr*>& all_filters, const ObQueryRange* query_range,
@@ -1195,7 +1201,7 @@ class ObJoinOrder {
   int add_partition_column(
       ObDMLStmt& stmt, const uint64_t table_id, const uint64_t column_id, ObIArray<ColumnItem>& partition_columns);
 
-  public:
+public:
   inline double get_average_output_row_size()
   {
     return avg_output_row_size_;
@@ -1209,7 +1215,7 @@ class ObJoinOrder {
     avg_output_row_size_ = average_row_size;
   }
 
-  private:
+private:
   int choose_best_inner_path(const ObJoinOrder* left_tree, const ObJoinOrder* right_tree,
       const ObIArray<ObRawExpr*>& join_conditions, const ObJoinType join_type, const bool force_mat,
       ObIArray<Path*>& right_inner_paths);
@@ -1262,7 +1268,7 @@ class ObJoinOrder {
   friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
   friend class ::test::TestJoinOrder_ob_join_order_src_Test;
 
-  private:
+private:
   common::ObIAllocator* allocator_;
   ObLogPlan* plan_;
   PathType type_;
@@ -1299,7 +1305,7 @@ class ObJoinOrder {
   // cache for all inner path
   InnerPathInfos inner_path_infos_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObJoinOrder);
 };
 }  // namespace sql

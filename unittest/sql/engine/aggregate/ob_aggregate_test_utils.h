@@ -32,7 +32,7 @@
 using namespace oceanbase::share;
 using namespace oceanbase::omt;
 class TestAggregateFactory {
-  public:
+public:
   TestAggregateFactory()
   {}
   ~TestAggregateFactory()
@@ -207,7 +207,7 @@ class TestAggregateFactory {
     return physical_plan_;
   }
 
-  private:
+private:
   static void add_aggr_column(
       ObGroupBy& groupby_op, bool is_distinct, bool is_number = true, ObCollationType agg_cs_type = CS_TYPE_UTF8MB4_BIN)
   {
@@ -409,7 +409,7 @@ class TestAggregateFactory {
     }
   }
 
-  private:
+private:
   static ObPhysicalPlan physical_plan_;
   static ObFakeTable fake_table_;
   static ObFakeTable result_table_;

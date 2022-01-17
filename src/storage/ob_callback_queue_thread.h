@@ -33,7 +33,7 @@ enum ObCbTaskType {
 };
 
 class LeaderActiveArg {
-  public:
+public:
   LeaderActiveArg() : is_elected_by_changing_leader_(false)
   {}
   ~LeaderActiveArg()
@@ -45,7 +45,7 @@ class LeaderActiveArg {
   }
   TO_STRING_KV(K_(is_elected_by_changing_leader));
 
-  public:
+public:
   bool is_elected_by_changing_leader_;
 };
 
@@ -81,13 +81,13 @@ struct ObCbTask {
 };
 
 class ObCallbackQueueThread : public lib::TGTaskHandler {
-  public:
+public:
   static int64_t QUEUE_THREAD_NUM;
   static const int64_t MINI_MODE_QUEUE_THREAD_NUM = 2;
   ObCallbackQueueThread();
   virtual ~ObCallbackQueueThread();
 
-  public:
+public:
   virtual int init(ObPartitionService* partition_service, int tg_id);
   virtual int push(const ObCbTask* task);
   virtual void handle(void* task);
@@ -97,18 +97,18 @@ class ObCallbackQueueThread : public lib::TGTaskHandler {
     return tg_id_;
   }
 
-  private:
+private:
   int get_task(ObCbTask*& task);
   void free_task(ObCbTask* task);
 
-  private:
+private:
   bool inited_;
   ObPartitionService* partition_service_;
   common::ObFixedQueue<ObCbTask> free_queue_;
   ObCbTask* tasks_;
   int tg_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCallbackQueueThread);
 };
 

@@ -441,7 +441,8 @@ static int cfind(struct vars* v, struct cnfa* cnfa, struct colormap* cm)
  ^ static int cfindloop(struct vars *, struct cnfa *, struct colormap *,
  ^	struct dfa *, struct dfa *, chr **);
  */
-static int cfindloop(struct vars* v, struct cnfa* cnfa, struct colormap* cm, struct dfa* d, struct dfa* s,
+static int cfindloop(struct vars* v, struct cnfa* cnfa __attribute__((unused)),
+    struct colormap* cm __attribute__((unused)), struct dfa* d, struct dfa* s,
     chr** coldp) /* where to put coldstart pointer */
 {
   chr* begin;

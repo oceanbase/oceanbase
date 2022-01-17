@@ -21,6 +21,9 @@ ob_lib_add_target(oblib_lib_coro_context
   coro/context/asm/jump_x86_64_sysv_elf_gas.S
   coro/context/asm/make_x86_64_sysv_elf_gas.S
   coro/context/asm/ontop_x86_64_sysv_elf_gas.S
+  coro/context/asm/make_sw_64_sysv_elf_gas.S
+  coro/context/asm/jump_sw_64_sysv_elf_gas.S
+  coro/context/asm/ontop_sw_64_aapcs_elf_gas.S
 )
 disable_pch(oblib_lib_coro_context)
 
@@ -67,7 +70,6 @@ ob_set_subtarget(oblib_lib common
   allocator/ob_thread_mempool.cpp
   allocator/ob_page_manager.cpp
   alloc/block_set.cpp
-  alloc/malloc_hook.cpp
   alloc/object_set.cpp
   alloc/ob_malloc_allocator.cpp
   alloc/ob_tenant_ctx_allocator.cpp
@@ -137,6 +139,7 @@ ob_set_subtarget(oblib_lib common
   oblog/ob_log_module.ipp
   oblog/ob_trace_log.cpp
   oblog/ob_warning_buffer.cpp
+  oblog/ob_log_compressor.cpp
   ob_name_id_def.cpp
   ob_replica_define.cpp
   profile/ob_atomic_event.cpp
@@ -235,6 +238,7 @@ ob_lib_add_pchs(lib
   oblog/ob_log.h
   oblog/ob_base_log_writer.h
   oblog/ob_async_log_struct.h
+  oblog/ob_log_compressor.h
   hash/fnv_hash.h
   coro/co_var.h
   time/Time.h
@@ -472,3 +476,7 @@ ob_lib_add_pchs(lib
   hash/ob_concurrent_hash_map.h
 )
 
+add_library(malloc_hook STATIC
+  alloc/malloc_hook.cpp
+  alloc/malloc_hook.h)
+target_link_libraries(malloc_hook oblib_base)

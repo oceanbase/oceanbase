@@ -32,7 +32,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObIPartitionService : public ObPartitionService {
-  public:
+public:
   MOCK_METHOD1(on_leader_revoke, int(const common::ObPartitionKey& pkey));
   MOCK_METHOD1(on_leader_takeover, int(const common::ObPartitionKey& pkey));
   MOCK_METHOD1(on_leader_active, int(const common::ObPartitionKey& pkey));
@@ -177,8 +177,6 @@ class MockObIPartitionService : public ObPartitionService {
       int(const int64_t cmd_type, const ObPartitionKey &pkey));
   MOCK_CONST_METHOD2(get_role,
       int(const common::ObPartitionKey &pkey, common::ObRole &role));
-  MOCK_CONST_METHOD2(get_role_for_partition_table,
-      int(const common::ObPartitionKey &pkey, common::ObRole &role));
   MOCK_CONST_METHOD2(get_leader_curr_member_list,
       int(const common::ObPartitionKey &pkey, common::ObMemberList &member_list));
   MOCK_METHOD2(change_leader,
@@ -208,7 +206,7 @@ class MockObIPartitionService : public ObPartitionService {
 };
 
 class MockObIPartitionArrayGuard : public ObIPartitionArrayGuard {
-  public:
+public:
   MOCK_METHOD1(push_back, int(ObIPartitionGroup* partition));
   MOCK_METHOD1(at, ObIPartitionGroup*(int64_t i));
   MOCK_METHOD0(count, int64_t);
@@ -222,7 +220,7 @@ namespace oceanbase {
 namespace storage {
 
 class MockObIPartitionArrayGuard : public ObIPartitionArrayGuard {
-  public:
+public:
 };
 
 }  // namespace storage

@@ -25,7 +25,7 @@ class ObTransSplitInfo;
 enum ListenerAction { LISTENER_COMMIT = 0, LISTENER_ABORT, LISTENER_CLEAR };
 
 class ObTransListenerHandler {
-  public:
+public:
   ObTransListenerHandler() : part_ctx_(NULL), is_commit_log_synced_(false), is_inited_(false), in_clear_(false)
   {}
   ~ObTransListenerHandler()
@@ -94,12 +94,12 @@ class ObTransListenerHandler {
   }
   TO_STRING_KV(K_(is_commit_log_synced), K_(is_inited));
 
-  private:
+private:
   int init_listener_mask_set_(ObPartTransCtx* ctx);
   int try_respond_participant_(const int64_t msg_type, const ListenerAction action);
   DISALLOW_COPY_AND_ASSIGN(ObTransListenerHandler);
 
-  private:
+private:
   ObPartTransCtx* part_ctx_;
   common::ObMaskSet listener_mask_set_;
   bool is_commit_log_synced_;

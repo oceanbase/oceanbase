@@ -25,7 +25,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObMySQLDBTable : public common::ObVirtualTableScannerIterator {
-  private:
+private:
   enum MySQLDBTableColumns {
     HOST = 16,
     DB,
@@ -51,7 +51,7 @@ class ObMySQLDBTable : public common::ObVirtualTableScannerIterator {
     TRIGGER_PRIV,
   };
 
-  public:
+public:
   ObMySQLDBTable();
   virtual ~ObMySQLDBTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -62,11 +62,11 @@ class ObMySQLDBTable : public common::ObVirtualTableScannerIterator {
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   int get_user_info(const uint64_t user_id, const share::schema::ObUserInfo*& user_info);
   uint64_t tenant_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLDBTable);
 };
 }  // namespace observer

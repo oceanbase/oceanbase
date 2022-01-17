@@ -29,7 +29,7 @@ enum ObSQLConnPoolType {
 };
 
 class ObISQLConnectionPool {
-  public:
+public:
   ObISQLConnectionPool(){};
   virtual ~ObISQLConnectionPool(){};
 

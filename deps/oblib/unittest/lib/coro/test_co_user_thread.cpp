@@ -55,7 +55,7 @@ TEST(TestCoKThread, DynamicThread)
   class : public CoXThread {
     std::atomic<int64_t> n_threads_;
 
-    public:
+  public:
     int set_thread_count(int64_t n_threads)
     {
       n_threads_ = n_threads;

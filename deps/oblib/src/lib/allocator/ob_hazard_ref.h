@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class HazardRef {
-  public:
+public:
   enum {
     MAX_THREAD_NUM = OB_MAX_THREAD_NUM,
     THREAD_REF_COUNT_LIMIT = 8,
@@ -26,7 +26,7 @@ class HazardRef {
   };
   const static uint64_t INVALID_VERSION = UINT64_MAX;
 
-  public:
+public:
   explicit HazardRef(bool debug = false) : cur_ver_(1), debug_(debug)
   {
     for (int i = 0; i < TOTAL_REF_COUNT_LIMIT; i++) {
@@ -54,13 +54,13 @@ class HazardRef {
     return min_version;
   }
 
-  private:
+private:
   static uint64_t min(uint64_t x, uint64_t y)
   {
     return x < y ? x : y;
   }
 
-  private:
+private:
   uint64_t cur_ver_ CACHE_ALIGNED;
   bool debug_;
   uint64_t ref_array_[TOTAL_REF_COUNT_LIMIT];
@@ -81,7 +81,7 @@ struct HazardNode {
 };
 
 class HazardNodeList {
-  public:
+public:
   HazardNodeList() : count_(0), tail_(&head_)
   {
     head_.next_ = &head_;
@@ -137,14 +137,14 @@ class HazardNodeList {
     }
   }
 
-  private:
+private:
   int64_t count_;
   HazardNode head_;
   HazardNode* tail_;
 };
 
 class RetireList {
-  public:
+public:
   enum { MAX_THREAD_NUM = OB_MAX_THREAD_NUM };
   struct ThreadRetireList {
     ThreadRetireList()
@@ -155,9 +155,9 @@ class RetireList {
     HazardNodeList prepare_list_;
   };
 
-  public:
+public:
   class RetireNodeIterator {
-    public:
+  public:
     explicit RetireNodeIterator(RetireList* host) : thread_offset_(0), host_(host)
     {}
     ~RetireNodeIterator()
@@ -178,12 +178,12 @@ class RetireList {
       return ret_node;
     }
 
-    private:
+  private:
     int64_t thread_offset_;
     RetireList* host_;
   };
 
-  public:
+public:
   RetireList() : hazard_version_(0)
   {}
   virtual ~RetireList()
@@ -215,7 +215,7 @@ class RetireList {
     }
   }
 
-  private:
+private:
   HazardNode* reclaim_node(ThreadRetireList* retire_list)
   {
     HazardNode* p = NULL;
@@ -234,13 +234,13 @@ class RetireList {
     return get_itid() < MAX_THREAD_NUM ? retire_list_ + get_itid() : NULL;
   }
 
-  private:
+private:
   uint64_t hazard_version_ CACHE_ALIGNED;
   ThreadRetireList retire_list_[MAX_THREAD_NUM];
 };
 
 class HazardHandle {
-  public:
+public:
   explicit HazardHandle(HazardRef& href) : href_(href), ref_(NULL)
   {}
   virtual ~HazardHandle()
@@ -261,13 +261,13 @@ class HazardHandle {
     }
   }
 
-  private:
+private:
   HazardRef& href_;
   uint64_t* ref_;
 };
 
 class RetireListHandle {
-  public:
+public:
   typedef HazardNode Node;
   typedef HazardNodeList NodeList;
   RetireListHandle(HazardRef& href, RetireList& retire_list) : href_(href), retire_list_(retire_list)
@@ -313,7 +313,7 @@ class RetireListHandle {
     retire_list_.retire(node);
   }
 
-  private:
+private:
   HazardRef& href_;
   RetireList& retire_list_;
   NodeList alloc_list_;

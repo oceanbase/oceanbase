@@ -256,12 +256,12 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"leaves", LEAVES},
     {"leak", LEAK},
     {"leak_mod", LEAK_MOD},
-    {"leak_rate", LEAK_RATE},
     {"less", LESS},
     {"level", LEVEL},
     {"linestring", LINESTRING},
     {"list", LIST_},
     {"listagg", LISTAGG},
+    {"ln", LN},
     {"local", LOCAL},
     {"locality", LOCALITY},
     {"location", LOCATION},
@@ -269,6 +269,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"locks", LOCKS},
     {"logfile", LOGFILE},
     {"logonly_replica_num", LOGONLY_REPLICA_NUM},
+    {"log", LOG},
     {"logs", LOGS},
     {"major", MAJOR},
     {"manual", MANUAL},
@@ -566,7 +567,6 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"sysdate", SYSDATE},
     {"system", SYSTEM},
     {"system_user", SYSTEM_USER},
-    {"synonym", SYNONYM},
     {"swaps", SWAPS},
     {"switch", SWITCH},
     {"switches", SWITCHES},
@@ -664,7 +664,14 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"network", NETWORK},
     {"logical_reads", LOGICAL_READS},
     {"queue_time", QUEUE_TIME},
-    {"obsolete", OBSOLETE}};
+    {"obsolete", OBSOLETE},
+    {"backuppiece", BACKUPPIECE},
+    {"backup_backup_dest", BACKUP_BACKUP_DEST},
+    {"backed", BACKED},
+    {"preview", PREVIEW},
+    {"up", UP},
+    {"times", TIMES},
+    {"backupround", BACKUPROUND}};
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html
  ALTER TABLE

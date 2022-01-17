@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTruncateTableResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObTruncateTableResolver(ObResolverParams& params);
   virtual ~ObTruncateTableResolver();
   virtual int resolve(const ParseNode& parse_tree);
@@ -29,7 +29,7 @@ class ObTruncateTableResolver : public ObDDLResolver {
     return static_cast<ObTruncateTableStmt*>(stmt_);
   };
 
-  private:
+private:
   static const int64_t TABLE_NODE = 0; /* 0. table_node  */
   DISALLOW_COPY_AND_ASSIGN(ObTruncateTableResolver);
 };

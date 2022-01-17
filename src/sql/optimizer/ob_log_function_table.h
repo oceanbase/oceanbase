@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogFunctionTable : public ObLogicalOperator {
-  public:
+public:
   ObLogFunctionTable(ObLogPlan& plan) : ObLogicalOperator(plan), table_id_(OB_INVALID_ID), value_expr_(NULL)
   {}
 
@@ -25,7 +25,7 @@ class ObLogFunctionTable : public ObLogicalOperator {
   {}
 
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   void add_values_expr(ObRawExpr* expr)
   {
     value_expr_ = expr;
@@ -43,7 +43,7 @@ class ObLogFunctionTable : public ObLogicalOperator {
   virtual int compute_equal_set() override;
   virtual int compute_fd_item_set() override;
   virtual int compute_table_set() override;
-  uint64_t hash(uint64_t seed) const;
+  uint64_t hash(uint64_t seed) const override;
   int generate_access_exprs(ObIArray<ObRawExpr*>& access_exprs) const;
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
   virtual int allocate_expr_post(ObAllocExprContext& ctx) override;
@@ -56,12 +56,12 @@ class ObLogFunctionTable : public ObLogicalOperator {
   {
     return table_id_;
   }
-  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
-  private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+private:
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
-  private:
+private:
   uint64_t table_id_;
   ObRawExpr* value_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObLogFunctionTable);

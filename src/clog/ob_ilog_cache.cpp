@@ -124,7 +124,7 @@ int ObIlogCache::init(const ObIlogCacheConfig& config, ObIlogPerFileCacheBuilder
     ret = OB_INIT_TWICE;
   } else if (!config.is_valid() || NULL == pf_cache_builder) {
     ret = OB_INVALID_ARGUMENT;
-    CSR_LOG(WARN, "ivnalid config for ObIlogCache", K(ret), K(config), KP(pf_cache_builder));
+    CSR_LOG(WARN, "invalid config for ObIlogCache", K(ret), K(config), KP(pf_cache_builder));
   } else if (OB_FAIL(wrapper_allocator_.init(WRAPPER_ALLOC_SIZE,
                  WRAPPER_ALLOCATOR_LABEL,
                  WRAPPER_ALLOCATOR_TENANT_ID,
@@ -438,7 +438,7 @@ int ObIlogCache::do_locate_by_timestamp_(const file_id_t file_id, const common::
       if (OB_FAIL(force_wash())) {
         CSR_LOG(WARN, "force_wash error", K(ret));
       } else {
-        ret = OB_NEED_RETRY;  // memory sequeezed for new file now, retry
+        ret = OB_NEED_RETRY;  // memory squeezed for new file now, retry
       }
     }
   } while (OB_NEED_RETRY == ret && ++retry_times < RETRY_COUNT_FOR_WAIT_READY);
@@ -825,7 +825,7 @@ int ObIlogCache::wash_victim(const file_id_t victim_file_id)
   // Concurrency control
   // Steps: erase -> wait -> destroy
   // Note 1: Load ilog file is finished in prepare_cache_node.
-  // Note 2: Erasing victim_file_id from map immediately, the quere in flying will insert a new node into map.
+  // Note 2: Erasing victim_file_id from map immediately, the queue in flying will insert a new node into map.
   // the memory of two nodes and their per_file_cache are independent.
   EraseNodeFunctor erase_fn;
   if (OB_FAIL(node_map_.erase_if(victim_file_id, erase_fn))) {

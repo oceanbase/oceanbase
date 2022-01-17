@@ -24,7 +24,7 @@ class ObTaskInfo;
 class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   enum ObJoinState { JS_JOIN_END = 0, JS_READ_LEFT, JS_READ_RIGHT, JS_STATE_COUNT };
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
   struct ObBatchIndexJoinCtx {
@@ -37,7 +37,7 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
   class ObNestedLoopJoinCtx : public ObBasicNestedLoopJoinCtx {
     friend class ObNestedLoopJoin;
 
-    public:
+  public:
     ObNestedLoopJoinCtx(ObExecContext& ctx)
         : ObBasicNestedLoopJoinCtx(ctx), state_(JS_READ_LEFT), batch_join_ctx_(), is_left_end_(false)
     //  connect_by_pump_()
@@ -51,18 +51,18 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
       ObBasicNestedLoopJoinCtx::destroy();
     }
 
-    private:
+  private:
     ObJoinState state_;
     ObBatchIndexJoinCtx batch_join_ctx_;
     bool is_left_end_;
     //    ObConnectByPump connect_by_pump_;
   };
 
-  public:
+public:
   explicit ObNestedLoopJoin(common::ObIAllocator& alloc);
   virtual ~ObNestedLoopJoin();
-  virtual void reset();
-  virtual void reuse();
+  virtual void reset() override;
+  virtual void reuse() override;
   virtual int rescan(ObExecContext& exec_ctx) const;
   virtual int switch_iterator(ObExecContext& ctx) const override;
 
@@ -91,19 +91,19 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
     cache_limit_ = cache_limit;
   }
 
-  private:
+private:
   // state operation and transfer function type.
   typedef int (ObNestedLoopJoin::*state_operation_func_type)(ObNestedLoopJoinCtx& join_ctx) const;
   typedef int (ObNestedLoopJoin::*state_function_func_type)(
       ObNestedLoopJoinCtx& join_ctx, const common::ObNewRow*& row) const;
-  virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
+  virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& exec_ctx) const;
-  virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const;
+  virtual int inner_open(ObExecContext& exec_ctx) const override;
+  virtual int inner_create_operator_ctx(ObExecContext& exec_ctx, ObPhyOperatorCtx*& op_ctx) const override;
   int prepare_rescan_params_for_group(ObNestedLoopJoinCtx& join_ctx) const;
   // JS_JOIN_END state operation and transfer functions.
   int join_end_operate(ObNestedLoopJoinCtx& join_ctx) const;
@@ -125,8 +125,9 @@ class ObNestedLoopJoin : public ObBasicNestedLoopJoin {
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];
   // nested loop join with index seek, batch
   int batch_index_join_get_next(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
+  int reset_rescan_params(ObExecContext& ctx) const;
 
-  private:
+private:
   int bij_fill_left_rows(ObExecContext& exec_ctx) const;
   int bij_join_rows(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
 

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class ObStorageFileUtil : public ObIStorageUtil {
-  public:
+public:
   ObStorageFileUtil();
   virtual ~ObStorageFileUtil();
   virtual int is_exist(const common::ObString& uri, const common::ObString& storage_info, bool& exist);
@@ -34,17 +34,23 @@ class ObStorageFileUtil : public ObIStorageUtil {
   virtual int get_pkeys_from_dir(const common::ObString& uri, const common::ObString& storage_info,
       common::ObIArray<common::ObPartitionKey>& pkeys);
   virtual int delete_tmp_files(const common::ObString& dir_path, const common::ObString& storage_info);
+  virtual int is_empty_directory(
+      const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);
+  virtual int check_backup_dest_lifecycle(
+      const common::ObString& dir_path, const common::ObString& storage_info, bool& is_set_lifecycle);
+  virtual int list_directories(const common::ObString& uri, const common::ObString& storage_info,
+      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directories_names);
 
-  private:
+private:
   int get_partition_ids_from_dir(const char* dir_path, common::ObIArray<int64_t>& partition_ids);
   int get_tmp_file_format_timestamp(const char* file_name, bool& is_tmp_file, int64_t& timestamp);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileUtil);
 };
 
 class ObStorageFileReader : public ObIStorageReader {
-  public:
+public:
   ObStorageFileReader();
   virtual ~ObStorageFileReader();
   virtual int open(const common::ObString& uri, const common::ObString& storage_info);
@@ -59,7 +65,7 @@ class ObStorageFileReader : public ObIStorageReader {
     return is_opened_;
   }
 
-  private:
+private:
   int fd_;
   bool is_opened_;
   char path_[OB_MAX_URI_LENGTH];
@@ -69,12 +75,13 @@ class ObStorageFileReader : public ObIStorageReader {
 
 // Only used for NFS file systems mounted in direct form, so there is no fsync
 class ObStorageFileBaseWriter : public ObIStorageWriter {
-  public:
+public:
   ObStorageFileBaseWriter();
   virtual ~ObStorageFileBaseWriter();
   virtual int open(const common::ObString& uri, const common::ObString& storage_info) = 0;
   virtual int open(const int flags);
   virtual int write(const char* buf, const int64_t size);
+  virtual int pwrite(const char* buf, const int64_t size, const int64_t offset);
   virtual int close();
   virtual int64_t get_length() const
   {
@@ -85,26 +92,26 @@ class ObStorageFileBaseWriter : public ObIStorageWriter {
     return is_opened_;
   }
 
-  protected:
+protected:
   int fd_;
   bool is_opened_;
   char path_[OB_MAX_URI_LENGTH];
   int64_t file_length_;
   bool has_error_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileBaseWriter);
 };
 
 // Only used for NFS file systems mounted in direct form, so there is no fsync
 class ObStorageFileWriter : public ObStorageFileBaseWriter {
-  public:
+public:
   ObStorageFileWriter();
   virtual ~ObStorageFileWriter();
   virtual int open(const common::ObString& uri, const common::ObString& storage_info);
   virtual int close() override;
 
-  private:
+private:
   char real_path_[OB_MAX_URI_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileWriter);
 };
@@ -112,17 +119,17 @@ class ObStorageFileWriter : public ObStorageFileBaseWriter {
 // Only used for NFS file systems mounted in direct form, so there is no fsync
 // use file lock to gurantee one process appendding this file
 class ObStorageFileAppender : public ObStorageFileBaseWriter {
-  public:
+public:
   ObStorageFileAppender();
   ObStorageFileAppender(StorageOpenMode mode);
   virtual ~ObStorageFileAppender();
   virtual int open(const common::ObString& uri, const common::ObString& storage_info);
   virtual int close() override;
 
-  private:
+private:
   int get_open_flag_and_mode_(int& flag, bool& need_lock);
 
-  private:
+private:
   bool need_unlock_;
   StorageOpenMode open_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileAppender);
@@ -130,7 +137,7 @@ class ObStorageFileAppender : public ObStorageFileBaseWriter {
 
 // Only used for NFS file systems mounted in direct form, so there is no fsync
 class ObStorageFileMetaWrapper : public ObIStorageMetaWrapper {
-  public:
+public:
   ObStorageFileMetaWrapper();
   virtual ~ObStorageFileMetaWrapper();
 
@@ -139,7 +146,7 @@ class ObStorageFileMetaWrapper : public ObIStorageMetaWrapper {
   virtual int set(
       const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t buf_size);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileMetaWrapper);
 };
 

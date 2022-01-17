@@ -19,22 +19,22 @@
 namespace oceanbase {
 namespace sql {
 class ObExprStrToDate : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprStrToDate(common::ObIAllocator& alloc);
   virtual ~ObExprStrToDate();
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& date, ObExprResType& format, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& date, const common::ObObj& format, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType& date, ObExprResType& format, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result2(common::ObObj& result, const common::ObObj& date, const common::ObObj& format,
+      common::ObExprCtx& expr_ctx) const override;
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprStrToDate);
 };
 
 class ObExprOracleToDate : public ObExprToTemporalBase {
-  public:
+public:
   explicit ObExprOracleToDate(common::ObIAllocator& alloc) : ObExprToTemporalBase(alloc, T_FUN_SYS_TO_DATE, N_TO_DATE)
   {}
   virtual ~ObExprOracleToDate()

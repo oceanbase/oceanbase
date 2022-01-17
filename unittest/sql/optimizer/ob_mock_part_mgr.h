@@ -27,7 +27,7 @@ class ObSchemaManager;
 }  // namespace oceanbase
 namespace test {
 class ObMockPartMgr : public oceanbase::common::ObPartMgr {
-  public:
+public:
   ObMockPartMgr() : schema_guard_(NULL)
   {}
 

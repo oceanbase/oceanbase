@@ -28,7 +28,7 @@ class ObGlobalContext;
 // from the upper to responding packet queue. The deliver rules is
 // defined by those macros named
 class ObReqDeliver {
-  public:
+public:
   virtual ~ObReqDeliver()
   {}
 
@@ -40,10 +40,10 @@ class ObReqDeliver {
 };  // end of class ObPktDeliver
 
 class ObReqQDeliver : public ObReqDeliver {
-  public:
+public:
   explicit ObReqQDeliver(ObiReqQHandler& qhandler);
 
-  protected:
+protected:
   ObiReqQHandler& qhandler_;
 };  // end of class ObReqQDeliver
 

@@ -21,7 +21,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObMySQLUserTable : public common::ObVirtualTableScannerIterator {
-  private:
+private:
   enum MySQLUserTableColumns {
     HOST = 16,
     USER_NAME,
@@ -68,7 +68,7 @@ class ObMySQLUserTable : public common::ObVirtualTableScannerIterator {
     PASSWORD_EXPIRED,
   };
 
-  public:
+public:
   ObMySQLUserTable();
   virtual ~ObMySQLUserTable();
 
@@ -80,10 +80,10 @@ class ObMySQLUserTable : public common::ObVirtualTableScannerIterator {
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLUserTable);
 };
 }  // namespace observer

@@ -28,7 +28,7 @@ class ObPartTransCtxDependencyWrap {
   friend class ObElrPrevTransArrIterator;
   friend class ObElrNextTransArrIterator;
 
-  public:
+public:
   ObPartTransCtxDependencyWrap()
   {
     reset();
@@ -65,10 +65,10 @@ class ObPartTransCtxDependencyWrap {
   void clear_cur_stmt_prev_trans_item();
   int merge_cur_stmt_prev_trans_arr();
 
-  public:
+public:
   TO_STRING_KV(K_(prev_trans_arr), K_(next_trans_arr), K_(prev_trans_commit_count));
 
-  private:
+private:
   // merge prev transaction and clear duplicate item
   int add_cur_stmt_prev_trans_item_(const ObTransID& trans_id, uint32_t ctx_id, int64_t commit_version);
   int remove_prev_trans_item_(const ObTransID& trans_id, uint32_t ctx_id, int64_t commit_version);
@@ -89,7 +89,7 @@ class ObPartTransCtxDependencyWrap {
   }
   int merge_cur_stmt_prev_trans_item_();
 
-  private:
+private:
   ObPartTransCtx* part_ctx_;
   ObElrTransInfoArray prev_trans_arr_;
   ObElrTransInfoArray cur_stmt_prev_trans_arr_;
@@ -102,7 +102,7 @@ class ObPartTransCtxDependencyWrap {
 };
 
 class ObElrTransArrGuard {
-  public:
+public:
   ObElrTransArrGuard() : trans_arr_(NULL), trans_lock_(NULL)
   {}
   ~ObElrTransArrGuard();
@@ -112,13 +112,13 @@ class ObElrTransArrGuard {
     return *trans_arr_;
   }
 
-  private:
+private:
   ObElrTransInfoArray* trans_arr_;
   common::SpinRWLock* trans_lock_;
 };
 
 class ObElrTransArrIterator {
-  public:
+public:
   ObElrTransArrIterator(ObElrTransInfoArray& trans_arr, common::SpinRWLock& trans_lock)
       : trans_arr_(trans_arr), trans_lock_(trans_lock), index_(0)
   {}
@@ -126,14 +126,14 @@ class ObElrTransArrIterator {
   {}
   ObElrTransInfo* next();
 
-  private:
+private:
   ObElrTransInfoArray& trans_arr_;
   common::SpinRWLock& trans_lock_;
   int index_;
 };
 
 class ObElrPrevTransArrIterator : public ObElrTransArrIterator {
-  public:
+public:
   ObElrPrevTransArrIterator(ObPartTransCtxDependencyWrap& ctx_dependency_wrap)
       : ObElrTransArrIterator(ctx_dependency_wrap.prev_trans_arr_, ctx_dependency_wrap.prev_trans_lock_)
   {}
@@ -142,7 +142,7 @@ class ObElrPrevTransArrIterator : public ObElrTransArrIterator {
 };
 
 class ObElrNextTransArrIterator : public ObElrTransArrIterator {
-  public:
+public:
   ObElrNextTransArrIterator(ObPartTransCtxDependencyWrap& ctx_dependency_wrap)
       : ObElrTransArrIterator(ctx_dependency_wrap.next_trans_arr_, ctx_dependency_wrap.next_trans_lock_)
   {}

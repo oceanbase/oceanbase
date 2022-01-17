@@ -39,7 +39,7 @@ inline bool is_double_row(const int64_t row_count)
 }
 
 class ObISQLClient {
-  public:
+public:
   class ReadResult;
 
   ObISQLClient() : active_(true)
@@ -79,7 +79,7 @@ class ObISQLClient {
   virtual bool is_oracle_mode() const = 0;
 
   class ReadResult {
-    public:
+  public:
     const static int64_t BUF_SIZE = 64 * 1024;
     friend class ObISQLClient;
 
@@ -108,7 +108,7 @@ class ObISQLClient {
       return common::OB_SUCCESS;
     }
 
-    private:
+  private:
     sqlclient::ObISQLResultHandler* result_handler_;
     char buf_[BUF_SIZE];
   };
@@ -123,7 +123,7 @@ class ObISQLClient {
   }
   void set_inactive();
 
-  protected:
+protected:
   volatile bool active_;
 };
 

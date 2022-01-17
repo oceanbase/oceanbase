@@ -60,7 +60,7 @@ enum {
 
 namespace transaction {
 class TransResultInfo {
-  public:
+public:
   TransResultInfo() : result_info_(NULL), registered_(false)
   {}
   ~TransResultInfo()
@@ -82,16 +82,16 @@ class TransResultInfo {
     registered_ = registered;
   }
 
-  private:
+private:
   ObTransResultInfo* result_info_;
   bool registered_;
 };
 
 // participant transaction context
 class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
-  friend class IterateTransStatFunctor;
+  friend class IterateTransStatForKeyFunctor;
 
-  public:
+public:
   ObPartTransCtx()
       : ObDistTransCtx("participant", ObTransCtxType::PARTICIPANT),
         ObTsCbTask(),
@@ -112,11 +112,11 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
       const common::ObPartitionKey& self, ObITransCtxMgr* ctx_mgr, const ObStartTransParam& trans_param,
       const uint64_t cluster_version, ObTransService* trans_service, const uint64_t cluster_id,
       const int64_t leader_epoch, const bool can_elr);
-  virtual void destroy();
+  virtual void destroy() override;
   void reset();
   int construct_context(const ObTransMsg& msg);
 
-  public:
+public:
   int start_trans();
   int start_task(const ObTransDesc& trans_desc, const int64_t snapshot_version, const bool need_update_gts,
       storage::ObIPartitionGroup* ob_partition);
@@ -125,13 +125,13 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int end_task_(
       const bool is_rollback, const ObTransDesc& trans_desc, const int64_t sql_no, const int64_t stmt_min_sql_no);
   int handle_message(const ObTransMsg& msg);
-  bool is_inited() const;
-  int handle_timeout(const int64_t delay);
+  bool is_inited() const override;
+  int handle_timeout(const int64_t delay) override;
   int get_end_trans_callback_item(ObEndTransCallbackArray& cb_array);
   /*
    * graceful kill: wait trx finish logging
    */
-  int kill(const KillTransArg& arg, ObEndTransCallbackArray& cb_array);
+  int kill(const KillTransArg& arg, ObEndTransCallbackArray& cb_array) override;
   int wait_1pc_trx_end_in_spliting(bool& trx_end);
   int check_cur_partition_split_(bool& is_split_partition);
   memtable::ObMemtableCtx* get_memtable_ctx()
@@ -139,14 +139,14 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
     return &mt_ctx_;
   }
   int set_memtable_ctx(memtable::ObIMemtableCtx* mt_ctx);
-  int leader_revoke(const bool first_check, bool& need_release, ObEndTransCallbackArray& cb_array);
-  int leader_takeover(const int64_t checkpoint);
-  int leader_active(const storage::LeaderActiveArg& arg);
-  bool can_be_freezed() const;
+  int leader_revoke(const bool first_check, bool& need_release, ObEndTransCallbackArray& cb_array) override;
+  int leader_takeover(const int64_t checkpoint) override;
+  int leader_active(const storage::LeaderActiveArg& arg) override;
+  bool can_be_freezed() const override;
   int kill_trans(bool& need_convert_to_dist_trans);
   int commit(const bool is_rollback, sql::ObIEndTransCallback* cb, bool is_readonly, const MonotonicTs commit_time,
       const int64_t stmt_expired_time, const ObStmtRollbackInfo& stmt_rollback_info,
-      const common::ObString& app_trace_info, bool& need_convert_to_dist_trans);
+      const common::ObString& app_trace_info, bool& need_convert_to_dist_trans) override;
   int set_stmt_info(const ObTransStmtInfo& stmt_info);
   const ObTransStmtInfo& get_stmt_info() const
   {
@@ -171,21 +171,21 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   {
     return get_global_trans_version_();
   }
-  uint64_t hash() const
+  uint64_t hash() const override
   {
     return trans_id_.hash();
   }
-  int get_gts_callback(const MonotonicTs srr, const int64_t gts, const MonotonicTs receive_gts_ts);
-  int gts_elapse_callback(const MonotonicTs srr, const int64_t gts);
-  MonotonicTs get_stc() const
+  int get_gts_callback(const MonotonicTs srr, const int64_t gts, const MonotonicTs receive_gts_ts) override;
+  int gts_elapse_callback(const MonotonicTs srr, const int64_t gts) override;
+  MonotonicTs get_stc() const override
   {
     return stc_;
   }
-  int64_t get_request_ts() const
+  int64_t get_request_ts() const override
   {
     return gts_request_ts_;
   }
-  uint64_t get_tenant_id() const
+  uint64_t get_tenant_id() const override
   {
     return tenant_id_;
   }
@@ -201,7 +201,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
     return mutator_log_no_;
   }
 
-  public:
+public:
   int replay_sp_redo_log(
       const ObSpTransRedoLog& log, const int64_t timestamp, const uint64_t log_id, int64_t& log_table_version);
   int replay_sp_commit_log(const ObSpTransCommitLog& log, const int64_t timestamp, const uint64_t log_id);
@@ -311,6 +311,10 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   {
     return is_dirty_;
   }
+  bool has_synced_log() const
+  {
+    return 0 != max_durable_log_ts_;
+  }
   int64_t get_forbidden_sql_no() const
   {
     return ATOMIC_LOAD(&forbidden_sql_no_);
@@ -375,14 +379,19 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   {
     return enable_new_1pc_;
   }
+  bool is_task_match()
+  {
+    return stmt_info_.is_task_match();
+  }
   void remove_trans_table();
-  int clear_trans_after_restore(
-      const int64_t restore_version, const uint64_t last_restore_log_id, const int64_t fake_terminate_log_ts);
+  int clear_trans_after_restore(const int64_t restore_version, const uint64_t last_restore_log_id,
+      const int64_t last_restore_log_ts, const int64_t fake_terminate_log_ts);
   bool is_in_trans_table_state();
   virtual int64_t get_part_trans_action() const override;
   int rollback_stmt(const int64_t from_sql_no, const int64_t to_sql_no);
+  bool need_update_schema_version(const uint64_t log_id, const int64_t log_ts);
 
-  public:
+public:
   INHERIT_TO_STRING_KV("ObDistTransCtx", ObDistTransCtx, K_(snapshot_version), K_(local_trans_version),
       K_(submit_log_pending_count), K_(submit_log_count), K_(stmt_info), K_(global_trans_version), K_(redo_log_no),
       K_(mutator_log_no), K_(session_id), K_(is_gts_waiting), K_(part_trans_action), K_(timeout_task),
@@ -391,13 +400,14 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
       K_(is_dup_table_prepare), K_(dup_table_syncing_log_id), K_(is_prepare_leader_revoke), K_(is_local_trans),
       K_(forbidden_sql_no), K(is_dirty_), K_(undo_status), K_(max_durable_sql_no), K_(max_durable_log_ts),
       K(mt_ctx_.get_checksum_log_ts()), K_(is_changing_leader), K_(has_trans_state_log),
-      K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx), K(mt_ctx_.get_callback_count()),
-      K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id));
+      K_(is_trans_state_sync_finished), K_(status), K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx),
+      K(mt_ctx_.get_callback_count()), K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
+      K_(status), K_(is_xa_trans_prepared));
 
-  public:
+public:
   static const int64_t OP_LOCAL_NUM = 16;
 
-  private:
+private:
   int init_memtable_ctx_(ObTransService* txs, const uint64_t tenant_id);
   bool is_in_2pc_() const;
   bool is_logging_() const;
@@ -438,7 +448,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   }
   int submit_log_sync_(const int64_t log_type, bool& has_redo_log);
 
-  private:
+private:
   int handle_start_stmt_request_(const ObTransMsg& msg);
   int handle_stmt_rollback_request_(const ObTransMsg& msg);
   int handle_2pc_prepare_request_(const ObTransMsg& msg);
@@ -457,7 +467,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int handle_2pc_prepare_request_raw_(int status);
   int handle_2pc_prepare_redo_request_raw_(int status);
 
-  private:
+private:
   int drive_();
   void check_prev_trans_state_();
   int start_trans_();
@@ -485,7 +495,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int do_clear_();
   int on_prepare_redo_();  // after redo/prepare log written
   int on_prepare_(const bool batch_committed, const int64_t timestamp);
-  int on_sp_commit_(const bool commit);
+  int on_sp_commit_(const bool commit, const int64_t timestamp = OB_INVALID_TIMESTAMP);
   int on_dist_commit_();
   int on_dist_abort_();
   int on_clear_(const bool need_response);
@@ -599,10 +609,10 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int fake_kill_(const int64_t terminate_log_ts);
   int kill_v2_(const int64_t terminate_log_ts);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtx);
 
-  private:
+private:
   // 0x0078746374726170 means reset partctx
   static const int64_t PART_CTX_MAGIC_NUM = 0x0078746374726170;
   static const int64_t REPLAY_PRINT_TRACE_THRESHOLD = 10 * 1000;      // 10 ms
@@ -610,7 +620,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   static const int64_t END_STMT_SLEEP_US = 10 * 1000;                 // 10ms
   static const int64_t MAX_END_STMT_RETRY_TIMES = 100;
 
-  private:
+private:
   bool is_inited_;
   ObIClogAdapter* clog_adapter_;
   ObTransSubmitLogCb submit_log_cb_;
@@ -672,7 +682,6 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   bool is_dup_table_prepare_;
   uint64_t dup_table_syncing_log_id_;
   int64_t dup_table_syncing_log_ts_;
-  uint64_t async_applying_log_id_;
   int64_t async_applying_log_ts_;
   ObTransUndoStatus undo_status_;
   int32_t max_durable_sql_no_;
@@ -687,6 +696,18 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   bool is_prepared_;
   bool is_gts_waiting_;
   bool batch_commit_trans_;
+  // Whether there exists a trans state log for the current leader transfer
+  //
+  // It is implemented as follow:
+  // - For the New Leader:
+  //   - we set the value to true when we replay the trans state log
+  //     if the new leader is me
+  //   - we reset the value when leader is active
+  // - For the original Leader:
+  //   - we reset the value before each leader transfer
+  //   - we set the value to true when we synced the trans state log
+  //   - we reset the value when leader is revoked if no on-the-fly log
+  //     exist
   bool is_trans_state_sync_finished_;
   bool is_changing_leader_;
   bool can_rollback_stmt_;
@@ -705,7 +726,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   bool is_redo_prepared_;
   bool has_gen_last_redo_log_;
   // this let clear_log's timestamp always
-  // greate than commit timestamp of all participants
+  // greater than commit timestamp of all participants
   int64_t clear_log_base_ts_;
   TransResultInfo result_info_;
   int64_t end_log_ts_for_batch_commit_;
@@ -721,6 +742,7 @@ class ObPartTransCtx : public ObDistTransCtx, public ObTsCbTask {
   int64_t last_redo_log_mutator_size_;
   bool is_xa_trans_prepared_;
   bool has_write_or_replay_mutator_redo_log_;
+  bool is_in_redo_with_prepare_;
 };
 
 #if defined(__x86_64__)

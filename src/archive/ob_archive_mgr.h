@@ -47,7 +47,7 @@ class ObArchiveMgr : public share::ObThreadPool {
   static const int64_t THREAD_INTERVAL = 50 * 1000L;
   static const int64_t CHECK_ARCHIVE_STOP_INTERVAL = 1000 * 1000L;
 
-  private:
+private:
   // 1. archive inital status is 0
   // 2. archive_mgr start archive if necessary, put all pg leader into pre_queue of pg_mgr,
   //    then set archive status 1
@@ -75,7 +75,7 @@ class ObArchiveMgr : public share::ObThreadPool {
     LOG_ARCHIVE_MAX
   };
   */
-  public:
+public:
   // status 1, 2
   // pg_mgr dispatch_pg / clog_split / sender / leader_takeover add task
   bool is_in_archive_status() const;
@@ -92,11 +92,11 @@ class ObArchiveMgr : public share::ObThreadPool {
 
   bool is_server_archive_stop(const int64_t incarnation, const int64_t round);
 
-  public:
+public:
   ObArchiveMgr();
   virtual ~ObArchiveMgr();
 
-  public:
+public:
   int init(clog::ObILogEngine* log_engine, logservice::ObExtLogService* ext_log_service,
       storage::ObPartitionService* partition_service, const common::ObAddr& addr);
   void destroy();
@@ -104,7 +104,7 @@ class ObArchiveMgr : public share::ObThreadPool {
   void stop();
   void wait();
 
-  public:
+public:
   // interface for outer call
   int add_pg_log_archive_task(ObIPartitionGroup* partition);
   int delete_pg_log_archive_task(ObIPartitionGroup* partition);
@@ -115,10 +115,11 @@ class ObArchiveMgr : public share::ObThreadPool {
   // occur fatal error, notify all archive modules stop
   int mark_encounter_fatal_err(const common::ObPartitionKey& pg_key, const int64_t incarnation, const int64_t round);
 
-  public:
+public:
   // interface for inner call
   void notify_all_archive_round_started();
   bool has_encounter_fatal_err(const int64_t incarnation, const int64_t round);
+
   ObArchivePGMgr* get_pg_mgr()
   {
     return &pg_mgr_;
@@ -131,8 +132,12 @@ class ObArchiveMgr : public share::ObThreadPool {
   {
     return &archive_sender_;
   }
+  const ObArchiveRoundMgr& get_archive_round_mgr() const
+  {
+    return archive_round_mgr_;
+  }
 
-  private:
+private:
   int handle_start_archive_(const int64_t incarnation, const int64_t archive_round);
   void run1();
   int init_components_();
@@ -145,12 +150,14 @@ class ObArchiveMgr : public share::ObThreadPool {
   int set_log_archive_stop_status_();
   int clear_pg_archive_task_();
   int clear_archive_info_();
-  int set_log_archive_info_(share::ObLogArchiveBackupInfo& info);
+  int set_log_archive_info_(
+      const share::ObLogArchiveBackupInfo& info, const int64_t piece_id, const int64_t piece_create_date);
 
-  int start_archive_(share::ObLogArchiveBackupInfo& info);
+  int start_archive_(
+      const share::ObLogArchiveBackupInfo& info, const int64_t rs_piece_id, const int64_t rs_piece_create_date);
   int stop_archive_();
 
-  private:
+private:
   void do_thread_task_();
 
   bool need_check_switch_archive_();
@@ -161,17 +168,20 @@ class ObArchiveMgr : public share::ObThreadPool {
   void print_archive_status_();
   void do_force_stop_archive_work_threads_();
 
-  bool check_if_need_switch_log_archive_(
-      share::ObLogArchiveBackupInfo& info, bool& need_stop, bool& need_start, bool& need_force_stop);
-  int check_and_set_start_archive_ts_(const int64_t incarnation, const int64_t round, int64_t& start_ts);
+  int check_if_need_switch_log_archive_(const share::ObLogArchiveBackupInfo& backup_info,
+      const share::ObNonFrozenBackupPieceInfo& non_piece_info, bool& need_stop, bool& need_start, bool& need_force_stop,
+      bool& need_switch_piece, int64_t& rs_piece_id, int64_t& rs_piece_create_date);
+  int check_and_set_start_archive_ts_(
+      const int64_t incarnation, const int64_t round, const bool is_oss, int64_t& start_ts);
+  bool check_ob_ready_();
 
-  private:
+private:
   bool inited_;
 
   int64_t last_check_stop_ts_;
   int64_t server_start_archive_tstamp_;  // server start archive time
 
-  public:
+public:
   common::ObAddr self_;
   ObArchiveAllocator allocator_;
   ObArchiveScheduler archive_scheduler_;
@@ -188,7 +198,7 @@ class ObArchiveMgr : public share::ObThreadPool {
   logservice::ObExtLogService* ext_log_service_;
   storage::ObPartitionService* partition_service_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveMgr);
 };
 

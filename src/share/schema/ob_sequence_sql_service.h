@@ -26,7 +26,7 @@ namespace schema {
 class ObSequenceSchema;
 
 class ObSequenceSqlService : public ObDDLSqlService {
-  public:
+public:
   ObSequenceSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObSequenceSqlService()
@@ -41,11 +41,11 @@ class ObSequenceSqlService : public ObDDLSqlService {
   virtual int drop_sequence(const ObSequenceSchema& sequence_schema, const int64_t new_schema_version,
       common::ObISQLClient* sql_client, const common::ObString* ddl_stmt_str = NULL);
 
-  private:
+private:
   int add_sequence(
       common::ObISQLClient& sql_client, const ObSequenceSchema& sequence_schema, const bool only_history = false);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSequenceSqlService);
 };
 

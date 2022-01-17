@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace unittest {
 class MockObElectionMgr : public election::ObElectionMgr {
-  public:
+public:
   int set_election_rpc(election::ObIElectionRpc* election_rpc)
   {
     int ret = common::OB_SUCCESS;
@@ -41,7 +41,7 @@ class MockObElectionMgr : public election::ObElectionMgr {
     return idx_;
   }
 
-  public:
+public:
   common::ObAddr addr_;
   int64_t idx_;
 };

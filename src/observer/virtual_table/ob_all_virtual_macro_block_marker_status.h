@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObAllVirtualMacroBlockMarkerStatus : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObAllVirtualMacroBlockMarkerStatus();
   virtual ~ObAllVirtualMacroBlockMarkerStatus();
 
@@ -29,7 +29,7 @@ class ObAllVirtualMacroBlockMarkerStatus : public common::ObVirtualTableScannerI
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   char svr_ip_[common::MAX_IP_ADDR_LENGTH];
   char comment_[common::MAX_TABLE_COMMENT_LENGTH];
   blocksstable::ObMacroBlockMarkerStatus marker_status_;

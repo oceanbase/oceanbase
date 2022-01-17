@@ -25,14 +25,14 @@ class ObCuckooHashMap;
 
 template <typename _key_type, typename _value_type, typename _hashfunc, typename _equal>
 class ObCuckooHashMapIterator {
-  private:
+private:
   typedef ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal> HashMap;
   typedef ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal> HashMapIterator;
   typedef HashMapPair<_key_type, _value_type> pair_type;
   typedef pair_type& reference;
   typedef pair_type* pointer;
 
-  public:
+public:
   ObCuckooHashMapIterator(
       const HashMap& map, const int64_t bucket_pos, const int64_t slot_pos, const int64_t slot_count)
       : map_(&map), bucket_pos_(bucket_pos), slot_pos_(slot_pos), slot_count_(slot_count)
@@ -95,7 +95,7 @@ class ObCuckooHashMapIterator {
     return iter;
   }
 
-  private:
+private:
   const HashMap* map_;
   int64_t bucket_pos_;
   int64_t slot_pos_;
@@ -108,7 +108,7 @@ class ObCuckooHashMapIterator;
 template <typename _key_type, typename _value_type, typename _hashfunc = hash_func<_key_type>,
     typename _equal = equal_to<_key_type>>
 class ObCuckooHashMap {
-  public:
+public:
   typedef ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal> iterator;
   ObCuckooHashMap();
   ~ObCuckooHashMap();
@@ -126,7 +126,7 @@ class ObCuckooHashMap {
     return is_inited_;
   }
 
-  private:
+private:
   friend class ObCuckooHashMapIterator<_key_type, _value_type, _hashfunc, _equal>;
   static const int64_t MAX_CUCKOO_INSERT_DEPTH = 40;
   static const int64_t BUCKET_SLOT_COUNT = 4;
@@ -159,7 +159,7 @@ class ObCuckooHashMap {
     int64_t slot_pos_;
   };
 
-  private:
+private:
   uint64_t hash1(const _key_type& key) const;
   uint64_t hash2(const uint64_t hash_val) const;
   int get_impl(const uint64_t hash_val, const bool is_first_hash, const _key_type& key, SlotPos& pos) const;
@@ -179,7 +179,7 @@ class ObCuckooHashMap {
   int rehash();
   int64_t advised_bucket_num(const int64_t elem_count);
 
-  private:
+private:
   bool is_inited_;
   Bucket* buckets_;
   int64_t bucket_num_;

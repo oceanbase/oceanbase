@@ -29,7 +29,7 @@ using namespace election;
 using namespace common;
 
 class TestObElectionPriority : public ::testing::Test {
-  public:
+public:
   TestObElectionPriority()
   {}
   ~TestObElectionPriority()
@@ -42,10 +42,10 @@ class TestObElectionPriority : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   int init();
 
-  public:
+public:
   int create_deprepare_msg(common::ObSArray<ObElectionPriority>& priority_array, ObElectionVoteMsgPool& msg_pool);
   ObElectionVoteMsgPool msg_pool_;
   MockElection election_;

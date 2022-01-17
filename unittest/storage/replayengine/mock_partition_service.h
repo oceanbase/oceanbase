@@ -30,7 +30,7 @@ class ObBaseStorage;
 }  // namespace storage
 namespace unittest {
 class MockPartition : public storage::MockObIPartitionGroup {
-  public:
+public:
   MockPartition() : tenant_id_(1001)
   {
     partition_key_.init(1, 1, 1);
@@ -38,7 +38,7 @@ class MockPartition : public storage::MockObIPartitionGroup {
   virtual ~MockPartition()
   {}
 
-  public:
+public:
   void reset()
   {
     replay_status_.reset();
@@ -308,20 +308,20 @@ class MockPartition : public storage::MockObIPartitionGroup {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   uint64_t tenant_id_;
   ObReplayStatus replay_status_;
   common::ObPartitionKey partition_key_;
 };
 
 class MockPartitionService : public storage::MockObIPartitionService {
-  public:
+public:
   MockPartitionService()
   {}
   virtual ~MockPartitionService()
   {}
 
-  public:
+public:
   void reset()
   {
     mock_partition_.reset();
@@ -793,7 +793,7 @@ class MockPartitionService : public storage::MockObIPartitionService {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   MockPartition mock_partition_;
 };
 

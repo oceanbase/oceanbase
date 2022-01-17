@@ -24,7 +24,7 @@ namespace oceanbase {
 namespace sql {
 
 struct ObMPParseStat {
-  public:
+public:
   ObMPParseStat() : parse_fail_(false), fail_ret_(common::OB_SUCCESS), fail_query_idx_(-1)
   {}
   void reset()
@@ -43,7 +43,7 @@ struct PreParseResult {
 };
 
 class ObParser {
-  public:
+public:
   explicit ObParser(common::ObIAllocator& allocator, ObSQLMode mode,
       common::ObCollationType conn_collation = common::CS_TYPE_UTF8MB4_GENERAL_CI);
   virtual ~ObParser();
@@ -53,10 +53,18 @@ class ObParser {
   bool is_single_stmt(const common::ObString& stmt);
   int split_multiple_stmt(const common::ObString& stmt, common::ObIArray<common::ObString>& queries,
       ObMPParseStat& parse_fail, bool is_ret_first_stmt = false);
-  int parse_sql(const common::ObString& stmt, ParseResult& parse_result);
+  //@param:
+  //  no_throw_parser_error is used to mark not throw parser error. in the split multi stmt
+  //  situation we will try find ';' delimiter to parser part of string in case of save memory,
+  //  but this maybe parser error and throw error info. However, we will still try parser remain
+  //  string when parse part of string failed, if we throw parse part error info, maybe will let
+  //  someone misunderstand have bug, So, we introduce this mark to decide to throw parser erorr.
+  //  eg: select '123;' from dual; select '123' from dual;
+  int parse_sql(const common::ObString& stmt, ParseResult& parse_result,
+      const bool no_throw_parser_error = false);
 
   virtual int parse(const common::ObString& stmt, ParseResult& parse_result, ParseMode mode = STD_MODE,
-      const bool is_batched_multi_stmt_split_on = false);
+      const bool is_batched_multi_stmt_split_on = false, const bool no_throw_parser_error = false);
 
   virtual void free_result(ParseResult& parse_result);
   /**
@@ -78,16 +86,16 @@ class ObParser {
   int prepare_parse(const common::ObString& query, void* ns, ParseResult& parse_result);
   static int pre_parse(const common::ObString& stmt, PreParseResult& res);
 
-  private:
+private:
   static int scan_trace_id(const char* ptr, int64_t len, int32_t& pos, common::ObString& trace_id);
   static bool is_trace_id_end(char ch);
   static bool is_space(char ch);
   // types and constants
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObParser);
   // function members
-  private:
+private:
   // data members
   common::ObIAllocator* allocator_;
   // when sql_mode = "ANSI_QUOTES", Treat " as an identifier quote character

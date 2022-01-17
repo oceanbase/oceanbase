@@ -23,7 +23,7 @@ class ObPhyTableLocation;
 class ObTableAppendInput : public ObIPhyOperatorInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableAppendInput() : ObIPhyOperatorInput(), location_idx_(common::OB_INVALID_INDEX)
   {}
   virtual ~ObTableAppendInput() = default;
@@ -37,7 +37,7 @@ class ObTableAppendInput : public ObIPhyOperatorInput {
     return location_idx_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableAppendInput);
   int64_t location_idx_;
 };
@@ -45,9 +45,9 @@ class ObTableAppendInput : public ObIPhyOperatorInput {
 class ObTableAppend : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   class Operator2RowIter : public common::ObNewRowIterator {
-    public:
+  public:
     Operator2RowIter(ObExecContext& ctx, const ObPhyOperator& op) : ctx_(ctx), op_(op)
     {}
 
@@ -57,7 +57,7 @@ class ObTableAppend : public ObSingleChildPhyOperator {
     virtual void reset()
     {}
 
-    private:
+  private:
     ObExecContext& ctx_;
     const ObPhyOperator& op_;
   };
@@ -77,13 +77,13 @@ class ObTableAppend : public ObSingleChildPhyOperator {
     return table_id_;
   }
 
-  protected:
+protected:
   virtual int inner_open(ObExecContext& ctx) const override;
   virtual int inner_close(ObExecContext& ctx) const override;
   int get_part_location(ObExecContext& ctx, const ObPhyTableLocation& table_location,
       const share::ObPartitionReplicaLocation*& out) const;
 
-  protected:
+protected:
   uint64_t table_id_;
 };
 }  // end namespace sql

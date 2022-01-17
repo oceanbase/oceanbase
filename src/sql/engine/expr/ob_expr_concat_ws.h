@@ -17,14 +17,14 @@ namespace oceanbase {
 namespace sql {
 // stands for Concatenate With Separator and is a special form of CONCAT()
 class ObExprConcatWs : public ObStringExprOperator {
-  public:
+public:
   ObExprConcatWs();
   explicit ObExprConcatWs(common::ObIAllocator& alloc);
   virtual ~ObExprConcatWs();
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
   // connect two strings by separator
   static int concat_ws(
       const common::ObString obj1, const common::ObString obj2, const int64_t buf_len, char** string_buf, int64_t& pos);
@@ -36,7 +36,7 @@ class ObExprConcatWs : public ObStringExprOperator {
   static int calc(const common::ObString& sep_str, const common::ObIArray<common::ObString>& words,
       common::ObIAllocator& alloc, common::ObString& res_str);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConcatWs);
 };

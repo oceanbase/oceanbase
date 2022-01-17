@@ -91,6 +91,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(ObExecContext& ctx, ObD
     }
   } else {
     const ObPhyTableLocation* table_loc = NULL;
+    ObPhyTableLocationGuard full_table_loc;
     uint64_t table_location_key = OB_INVALID_INDEX;
     uint64_t ref_table_id = OB_INVALID_ID;
     if (scan_ops.count() > 0) {
@@ -106,8 +107,10 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(ObExecContext& ctx, ObD
     if (dml_op && dml_op->is_table_location_uncertain()) {
       bool is_weak = false;
       if (OB_FAIL(ObTaskExecutorCtxUtil::get_full_table_phy_table_location(
-              ctx, table_location_key, ref_table_id, is_weak, table_loc))) {
+              ctx, table_location_key, ref_table_id, is_weak, full_table_loc))) {
         LOG_WARN("fail to get phy table location", K(ret));
+      } else {
+        table_loc = full_table_loc.get_loc();
       }
     } else {
       if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(ctx, table_location_key, ref_table_id, table_loc))) {
@@ -504,6 +507,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(
     // pass
   } else {
     const ObPhyTableLocation* table_loc = nullptr;
+    ObPhyTableLocationGuard full_table_loc;
     uint64_t table_location_key = common::OB_INVALID_ID;
     uint64_t ref_table_id = common::OB_INVALID_ID;
     if (FALSE_IT(table_location_key = dml_op->get_table_id())) {
@@ -512,8 +516,10 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(
       if (dml_op->is_table_location_uncertain()) {
         bool is_weak = false;
         if (OB_FAIL(ObTaskExecutorCtxUtil::get_full_table_phy_table_location(
-                ctx, table_location_key, ref_table_id, is_weak, table_loc))) {
+                ctx, table_location_key, ref_table_id, is_weak, full_table_loc))) {
           LOG_WARN("fail to get phy table location", K(ret));
+        } else {
+          table_loc = full_table_loc.get_loc();
         }
       } else {
         if (OB_FAIL(ObTaskExecutorCtxUtil::get_phy_table_location(ctx, table_location_key, ref_table_id, table_loc))) {
@@ -939,14 +945,17 @@ int ObPxTreeSerializer::deserialize_tree(const char* buf, int64_t data_len, int6
 
   // Terminate serialization when meet ObReceive, as this op indicates
   if (OB_SUCC(ret)) {
-    bool serialize_child = is_fulltree || (!IS_RECEIVE(op->get_type()));
+    bool is_receive = IS_RECEIVE(op->get_type());
+    bool serialize_child = is_fulltree || !is_receive;
     if (serialize_child) {
       if (OB_FAIL(op->create_child_array(op->get_child_num()))) {
         LOG_WARN("create child array failed", K(ret), K(op->get_child_num()));
       }
       for (int32_t i = 0; OB_SUCC(ret) && i < op->get_child_num(); i++) {
         ObPhyOperator* child = NULL;
-        if (OB_FAIL(deserialize_tree(buf, data_len, pos, phy_plan, child, is_fulltree, tsc_ops))) {
+        ObSEArray<const ObTableScan*, 4> dummy_ops;  // don't collect child-dfo scan ops
+        if (OB_FAIL(
+                deserialize_tree(buf, data_len, pos, phy_plan, child, is_fulltree, is_receive ? dummy_ops : tsc_ops))) {
           LOG_WARN("fail to deserialize tree", K(ret));
         } else if (OB_FAIL(op->set_child(i, *child))) {
           LOG_WARN("fail to set child", K(ret));

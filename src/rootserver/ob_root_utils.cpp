@@ -19,6 +19,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/hash/ob_hashset.h"
 #include "share/ob_rpc_struct.h"
+#include "share/ob_share_util.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_struct.h"
@@ -348,7 +349,7 @@ int ObTenantUtils::remove_ineffective_task(ObMySQLTransaction& trans, const uint
   return ret;
 }
 
-bool ObTenantUtils::is_balance_target_schema(const share::schema::ObTableSchema& table_schema)
+bool ObTenantUtils::is_balance_target_schema(const share::schema::ObSimpleTableSchemaV2& table_schema)
 {
   return USER_TABLE == table_schema.get_table_type() || TMP_TABLE == table_schema.get_table_type() ||
          MATERIALIZED_VIEW == table_schema.get_table_type() || TMP_TABLE_ORA_SESS == table_schema.get_table_type() ||
@@ -2655,33 +2656,8 @@ int ObRootUtils::get_rs_default_timeout_ctx(ObTimeoutCtx& ctx)
 {
   int ret = OB_SUCCESS;
   const int64_t DEFAULT_TIMEOUT_US = 2 * 1000 * 1000;  // 2s
-  int64_t abs_timeout_us = ctx.get_abs_timeout();
-  int64_t worker_timeout_us = THIS_WORKER.get_timeout_ts();
-
-  if (0 < abs_timeout_us) {
-    // nothing
-    // ctx was setted, no need to set again
-  } else if (INT64_MAX == worker_timeout_us) {
-    // is backgroup thread, set timeout is 2s.
-    abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US;
-  } else if (0 < worker_timeout_us) {
-    // if work has timeouts, set timeout equal to work's
-    abs_timeout_us = worker_timeout_us;
-  } else {
-    // if work has no timeout, it is not possible, but ignore error, set timeout to 2s
-    abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_TIMEOUT_US;
-  }
-
-  if (OB_FAIL(ctx.set_abs_timeout(abs_timeout_us))) {
-    LOG_WARN("set timeout failed", K(ret), K(abs_timeout_us));
-  } else if (ctx.is_timeouted()) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("is timeout",
-        K(ret),
-        "abs_timeout",
-        ctx.get_abs_timeout(),
-        "this worker timeout ts",
-        THIS_WORKER.get_timeout_ts());
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TIMEOUT_US))) {
+    LOG_WARN("fail to set default_timeout_ctx", KR(ret));
   }
   return ret;
 }

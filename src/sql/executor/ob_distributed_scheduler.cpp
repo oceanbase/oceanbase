@@ -661,9 +661,10 @@ int ObDistributedScheduler::schedule(ObExecContext& ctx, ObPhysicalPlan* phy_pla
     } else {
       LOG_WARN("fail to schedule, print jobs' status", K(ret), K(fail_ret), "jobs_status", jc_status_buf);
     }
-    if (OB_SUCCESS != (fail_ret = signal_schedule_error(ret))) {
-      LOG_WARN("fail to signal schedule error", K(fail_ret));
-    }
+    // 移到do_schedule中、执行wait_root_use_up_data之前的位置
+//  if (OB_SUCCESS != (fail_ret = signal_schedule_error(ret))) {
+//    LOG_WARN("fail to signal schedule error", K(fail_ret));
+//  }
   }
   NG_TRACE(distributed_schedule_end);
   return ret;

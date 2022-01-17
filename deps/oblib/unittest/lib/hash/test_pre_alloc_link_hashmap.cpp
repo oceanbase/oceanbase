@@ -58,7 +58,7 @@ struct Node : public ObPreAllocLinkHashNode<int64_t, Item> {
 };
 
 class ItemProtector {
-  public:
+public:
   static void hold(Item& item)
   {
     ++item.ref_;
@@ -116,7 +116,7 @@ struct TestForeachCheckRef : public TestMap::ForeachFunctor {
 class TestEraseChecker : public TestMap::EraseChecker
 
 {
-  public:
+public:
   virtual ~TestEraseChecker()
   {}
   virtual int operator()(Item& item)
@@ -130,7 +130,7 @@ class TestEraseChecker : public TestMap::EraseChecker
 };
 
 class TestGetFunctor : public TestMap::GetFunctor {
-  public:
+public:
   TestGetFunctor() : item_(NULL)
   {}
   virtual ~TestGetFunctor()
@@ -148,7 +148,7 @@ class TestGetFunctor : public TestMap::GetFunctor {
   }
   Item* item_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestGetFunctor);
 };
 

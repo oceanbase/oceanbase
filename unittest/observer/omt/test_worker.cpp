@@ -23,7 +23,7 @@ using namespace oceanbase::omt;
 using namespace oceanbase::observer;
 
 class TestWorker : public ObThWorker, public ::testing::Test {
-  public:
+public:
   TestWorker() : ObThWorker(procor_), omt_(procor_)
   {
     all_mock_init();
@@ -46,7 +46,7 @@ class TestWorker : public ObThWorker, public ::testing::Test {
     destroy();
   }
 
-  protected:
+protected:
   ObFakeWorkerProcessor procor_;
   ObMultiTenant omt_;
 };

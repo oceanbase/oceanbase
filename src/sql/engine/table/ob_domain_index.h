@@ -24,9 +24,9 @@ class ObIterExprOperator;
 class ObDomainIndex : public ObNoChildrenPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  protected:
+protected:
   class ObDomainIndexCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     explicit ObDomainIndexCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx),
           index_scan_iters_(ctx.get_allocator()),
@@ -42,7 +42,7 @@ class ObDomainIndex : public ObNoChildrenPhyOperator {
       ObPhyOperatorCtx::destroy_base();
     }
 
-    private:
+  private:
     common::ObFixedArray<common::ObNewRowIterator*, common::ObIAllocator> index_scan_iters_;
     common::ObFixedArray<storage::ObTableScanParam*, common::ObIAllocator> index_scan_params_;
     common::ObArenaAllocator index_allocator_;
@@ -66,7 +66,7 @@ class ObDomainIndex : public ObNoChildrenPhyOperator {
   //    ObSqlExpression *fulltext_filter_;
   //    ObQueryRange *index_range_;
   //  };
-  public:
+public:
   explicit ObDomainIndex(common::ObIAllocator& allocator);
   virtual ~ObDomainIndex();
 
@@ -119,7 +119,7 @@ class ObDomainIndex : public ObNoChildrenPhyOperator {
   }
   int rescan(ObExecContext& ctx) const;
 
-  private:
+private:
   /**
    * @brief get next row, call get_next to get a row,
    * if filters exist, call each filter in turn to filter the row,
@@ -160,7 +160,7 @@ class ObDomainIndex : public ObNoChildrenPhyOperator {
       ObExecContext& ctx, const common::ObObj& keyword, ObSqlExpression*& fulltext_filter, bool need_deep_copy) const;
   inline int replace_key_range(common::ObNewRange& key_range, const common::ObObj& keyword) const;
 
-  private:
+private:
   uint64_t table_op_id_;
   common::ObIAllocator& allocator_;
   // common::ObFixedArray<ObIndexScanInfo, common::ObIAllocator> index_scan_info_;

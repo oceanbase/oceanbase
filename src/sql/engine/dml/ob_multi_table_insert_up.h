@@ -22,7 +22,7 @@ class ObTableLocation;
 class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
   class ObMultiTableInsertUpCtx;
 
-  public:
+public:
   // insert a row if there is no duplicate row with all unique index, otherwise
   // delete and insert a row.
   static const int64_t DELETE_OP = 0;
@@ -30,11 +30,11 @@ class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
   static const int64_t UPDATE_OP = 2;
   static const int64_t DML_OP_CNT = 3;
 
-  public:
+public:
   explicit ObMultiTableInsertUp(common::ObIAllocator& alloc);
   virtual ~ObMultiTableInsertUp();
 
-  virtual int create_operator_input(ObExecContext& ctx) const
+  virtual int create_operator_input(ObExecContext& ctx) const override
   {
     UNUSED(ctx);
     return common::OB_SUCCESS;
@@ -49,25 +49,25 @@ class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
   }
   int shuffle_final_delete_row(ObExecContext& ctx, const common::ObNewRow& delete_row) const;
   int shuffle_final_insert_row(ObExecContext& ctx, const common::ObNewRow& insert_row) const;
-  virtual bool is_multi_dml() const
+  virtual bool is_multi_dml() const override
   {
     return true;
   }
 
-  protected:
+protected:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const;
+  virtual int init_op_ctx(ObExecContext& ctx) const override;
   /**
    * @brief open operator, not including children operators.
    * called by open.
    * Every op should implement this method.
    */
-  virtual int inner_open(ObExecContext& ctx) const;
-  virtual int inner_close(ObExecContext& ctx) const;
+  virtual int inner_open(ObExecContext& ctx) const override;
+  virtual int inner_close(ObExecContext& ctx) const override;
   int load_insert_up_row(ObExecContext& ctx, common::ObRowStore& row_store) const;
   int shuffle_insert_up_row(ObExecContext& ctx, bool& got_row) const;
   int shuffle_insert_row(ObExecContext& ctx, common::ObPartMgr& part_mgr, ObMultiTableInsertUpCtx& replace_ctx,
@@ -75,7 +75,7 @@ class ObMultiTableInsertUp : public ObTableInsertUp, public ObMultiDMLInfo {
   int shuffle_update_row(ObExecContext& ctx, common::ObPartMgr& part_mgr, ObMultiTableInsertUpCtx& insert_up_ctx,
       const common::ObNewRow& insert_row, const common::ObNewRow& duplicate_row) const;
 
-  private:
+private:
   ObDuplicatedKeyChecker duplicate_key_checker_;
 };
 }  // namespace sql

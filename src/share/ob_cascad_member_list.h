@@ -23,11 +23,11 @@ namespace share {
 class ObCascadMemberList {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCascadMemberList();
   ~ObCascadMemberList();
 
-  public:
+public:
   void reset();
   bool is_valid() const;
   int add_member(const ObCascadMember& member);
@@ -45,7 +45,7 @@ class ObCascadMemberList {
   int deep_copy(const ObCascadMemberList& member_list);
   TO_STRING_KV(K(member_array_));
 
-  private:
+private:
   typedef common::ObSEArray<ObCascadMember, 1> ObCascadMemberArray;
   ObCascadMemberArray member_array_;
 };

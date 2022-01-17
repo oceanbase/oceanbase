@@ -11,189 +11,159 @@
  */
 
 #include "malloc_hook.h"
-#include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_defer.h"
+#include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_malloc.h"
 
-namespace oceanbase {
-int64_t lib::memalign_size = 0;
-namespace lib {
-RLOCAL(int, glibc_hook_opt);
-}  // namespace lib
-}  // namespace oceanbase
-
+using namespace oceanbase;
 using namespace oceanbase::common;
-using namespace oceanbase::lib;
 
-#if 0
-EXTERN_C_BEGIN
-extern void *__libc_malloc(size_t size);
-extern void __libc_free(void *ptr);
-extern void *__libc_realloc(void *ptr, size_t size);
+uint64_t up_align(uint64_t x, uint64_t align)
+{
+  return (x + (align - 1)) & ~(align - 1);
+}
 
-static ObMemAttr mattr{OB_SERVER_TENANT_ID, ObModIds::OB_JIT_MALLOC, ObCtxIds::GLIBC};
-#define up_align(x, y) (((x) + ((y)-1)) / (y) * (y))
+struct Header
+{
+  static const uint32_t MAGIC_CODE = 0XA1B2C3D1;
+  static const uint32_t SIZE;
+  Header(int32_t size, bool from_mmap)
+    : magic_code_(MAGIC_CODE),
+      data_size_(size),
+      offset_(0),
+      from_mmap_(from_mmap)
+  {}
+  bool check_magic_code() const { return MAGIC_CODE == magic_code_; }
+  void mark_unused() { magic_code_ &= ~0x1; }
+  static Header *ptr2header(void *ptr) { return reinterpret_cast<Header*>((char*)ptr - SIZE); }
+  uint32_t magic_code_;
+  int32_t data_size_;
+  uint32_t offset_;
+  uint8_t from_mmap_;
+  char padding_[3];
+  char data_[0];
+} __attribute__((aligned (16)));
 
-void *calloc(size_t nmemb, size_t size)
+const uint32_t Header::SIZE = offsetof(Header, data_);
+const size_t max_retry_size = 2 << 30; // 2G
+
+void *ob_malloc_retry(size_t size)
 {
   void *ptr = nullptr;
-  if (OB_LIKELY(nmemb != 0) && OB_LIKELY(size != 0)) {
-    void *pheader = nullptr;
-    size_t all_size = HOOK_HEADER_SIZE + nmemb * size;
-    if (glibc_hook_opt != GHO_NOHOOK) {
-      do {
-        pheader = ob_malloc(all_size, mattr);
-        if (OB_UNLIKELY(nullptr == pheader)) {
-          this_routine::usleep(10000);  // 10ms
-        }
-      } while (OB_UNLIKELY(nullptr == pheader) &&
-               OB_UNLIKELY(glibc_hook_opt == GHO_NONULL));
-    } else {
-      pheader = __libc_malloc(all_size);
+  do {
+    static ObMemAttr attr(OB_SERVER_TENANT_ID, "glibc_malloc", ObCtxIds::GLIBC);
+    ptr = ob_malloc(size, attr);
+    if (OB_ISNULL(ptr)) {
+      ::usleep(10000);  // 10ms
     }
-    if (OB_LIKELY(pheader != nullptr)) {
-      MEMSET(pheader, 0, all_size);
-      HookHeader *header = new (pheader) HookHeader();
-      header->data_size_ = all_size - HOOK_HEADER_SIZE;
-      header->from_glibc_ = GHO_NOHOOK == glibc_hook_opt;
-      ptr = header->data_;
+  } while (OB_ISNULL(ptr) && !(size > max_retry_size || 0 == size));
+  return ptr;
+}
+
+static __thread bool in_hook = false;
+void *ob_malloc_hook(size_t size, const void *)
+{
+  void *ptr = nullptr;
+  size_t real_size = size + Header::SIZE;
+  void *tmp_ptr = nullptr;
+  bool from_mmap = false;
+  if (OB_UNLIKELY(in_hook)) {
+    if (MAP_FAILED == (tmp_ptr = ::mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+      tmp_ptr = nullptr;
     }
+    from_mmap = true;
+  } else {
+    bool in_hook_bak = in_hook;
+    in_hook = true;
+    DEFER(in_hook = in_hook_bak);
+    tmp_ptr = ob_malloc_retry(real_size);
+  }
+  if (OB_LIKELY(tmp_ptr != nullptr)) {
+    auto *header = new (tmp_ptr) Header(size, from_mmap);
+    ptr = header->data_;
   }
   return ptr;
 }
 
-void *malloc(size_t size)
-{
-  void *ptr = nullptr;
-  if (OB_LIKELY(size != 0)) {
-    void *pheader = nullptr;
-    size_t all_size = HOOK_HEADER_SIZE + size;
-    if (glibc_hook_opt != GHO_NOHOOK) {
-      do {
-        pheader = ob_malloc(all_size, mattr);
-        if (OB_UNLIKELY(nullptr == pheader)) {
-          this_routine::usleep(10000); // 10ms
-        }
-      } while (OB_UNLIKELY(nullptr == pheader) &&
-               OB_UNLIKELY(glibc_hook_opt == GHO_NONULL));
-    } else {
-      pheader = __libc_malloc(all_size);
-    }
-    if (OB_LIKELY(pheader != nullptr)) {
-      HookHeader *header = new (pheader) HookHeader();
-      header->data_size_ = size;
-      header->from_glibc_ = GHO_NOHOOK == glibc_hook_opt;
-      ptr = header->data_;
-    }
-  }
-  return ptr;
-}
-
-void free(void *ptr)
+void ob_free_hook(void *ptr, const void *)
 {
   if (OB_LIKELY(ptr != nullptr)) {
-    HookHeader *header = reinterpret_cast<HookHeader*>((char*)ptr - HOOK_HEADER_SIZE);
-    if (OB_UNLIKELY(header->MAGIC_CODE_ != HOOK_MAGIC_CODE)) {
-#ifndef NDEBUG
-      // debug mode
-      abort();
-#else
-      _OB_LOG(ERROR,
-              "unexpected magic, memory broken or mismatched hook function is invoked!!!");
-      return;
-#endif
-    }
+    auto *header = Header::ptr2header(ptr);
+    abort_unless(header->check_magic_code());
+    header->mark_unused();
     void *orig_ptr = (char*)header - header->offset_;
-    // Temporary code, used to count the usage of the align interface
-    if (0xabcd1234 == *(int64_t*)&header->padding__[0]) {
-      ATOMIC_FAA(&oceanbase::lib::memalign_size, -header->data_size_);
-    }
-    if (!header->from_glibc_) {
-      ob_free(orig_ptr);
+    if (OB_UNLIKELY(header->from_mmap_)) {
+      ::munmap(orig_ptr, header->data_size_ + Header::SIZE + header->offset_);
     } else {
-      __libc_free(orig_ptr);
+      bool in_hook_bak = in_hook;
+      in_hook = true;
+      DEFER(in_hook = in_hook_bak);
+      ob_free(orig_ptr);
     }
   }
 }
 
-void *realloc(void *ptr, size_t size)
+void *ob_realloc_hook(void *ptr, size_t size, const void *caller)
 {
   void *nptr = nullptr;
-  HookHeader *old_header = nullptr;
-  void *orig_ptr = nullptr;
-  if (ptr != nullptr) {
-    old_header = reinterpret_cast<HookHeader*>((char*)ptr - HOOK_HEADER_SIZE);
-    abort_unless(HOOK_MAGIC_CODE == old_header->MAGIC_CODE_);
-    orig_ptr = (char*)old_header - old_header->offset_;
-  }
-  if (nullptr == ptr ||
-      (old_header->from_glibc_ == (GHO_NOHOOK == glibc_hook_opt))) {
-    void *pheader = nullptr;
-    size_t all_size = size != 0 ? HOOK_HEADER_SIZE + size : 0;
-    if (glibc_hook_opt != GHO_NOHOOK) {
-      do {
-        pheader = ob_realloc(orig_ptr, all_size, mattr);
-        if (OB_UNLIKELY(nullptr == pheader)) {
-          this_routine::usleep(10000); // 10ms
-        }
-      } while (OB_UNLIKELY(nullptr == pheader) &&
-               OB_UNLIKELY(glibc_hook_opt == GHO_NONULL));
-    } else {
-      pheader = __libc_realloc(orig_ptr, all_size);
+  size_t real_size = size + Header::SIZE;
+  void *tmp_ptr = nullptr;
+  bool from_mmap = false;
+  if (OB_UNLIKELY(in_hook)) {
+    if (MAP_FAILED == (tmp_ptr = ::mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+      tmp_ptr = nullptr;
     }
-    if (OB_LIKELY(pheader != nullptr)) {
-      HookHeader *new_header = new (pheader) HookHeader();
-      new_header->data_size_ = all_size - HOOK_HEADER_SIZE;
-      new_header->from_glibc_ = GHO_NOHOOK == glibc_hook_opt;
-      nptr = new_header->data_;
-    }
+    from_mmap = true;
   } else {
-    // When ptr is not empty, and hook and non-hook need to be called separately
-    if (size != 0) {
-      nptr = malloc(size);
-      if (nptr != nullptr) {
-        memmove(nptr, ptr, MIN(old_header->data_size_, size));
-      }
+    bool in_hook_bak = in_hook;
+    in_hook = true;
+    DEFER(in_hook = in_hook_bak);
+    tmp_ptr = ob_malloc_retry(real_size);
+  }
+  if (OB_LIKELY(tmp_ptr != nullptr)) {
+    auto *header = new (tmp_ptr) Header(size, from_mmap);
+    nptr = header->data_;
+    if (ptr != nullptr) {
+      auto *old_header = Header::ptr2header(ptr);
+      abort_unless(old_header->check_magic_code());
+      memmove(nptr, ptr, MIN(old_header->data_size_, size));
+      ob_free_hook(old_header->data_, caller);
     }
-    free(ptr);
   }
   return nptr;
 }
 
-void *memalign(size_t align, size_t size)
+void *ob_memalign_hook(size_t alignment, size_t size, const void *)
 {
   void *ptr = nullptr;
-  if (OB_LIKELY(size != 0)) {
+  if (OB_LIKELY(size > 0)) {
     // Make sure alignment is power of 2
     {
       size_t a = 8;
-      while (a < align)
+      while (a < alignment)
         a <<= 1;
-      align = a;
+      alignment = a;
     }
+    size_t real_size = 2 * MAX(alignment, Header::SIZE) + size;
     void *tmp_ptr = nullptr;
-    size_t all_size = 2 * MAX(align, HOOK_HEADER_SIZE) + size;
-    if (glibc_hook_opt != GHO_NOHOOK) {
-      do {
-        tmp_ptr = ob_malloc(all_size, mattr);
-        if (OB_UNLIKELY(nullptr == tmp_ptr)) {
-          this_routine::usleep(10000); // 10ms
-        }
-      } while (OB_UNLIKELY(nullptr == tmp_ptr) &&
-               OB_UNLIKELY(glibc_hook_opt == GHO_NONULL));
+    bool from_mmap = false;
+    if (OB_UNLIKELY(in_hook)) {
+      if (MAP_FAILED == (tmp_ptr = ::mmap(nullptr, real_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
+        tmp_ptr = nullptr;
+      }
+      from_mmap = true;
     } else {
-      tmp_ptr = __libc_malloc(all_size);
+      bool in_hook_bak = in_hook;
+      in_hook = true;
+      DEFER(in_hook = in_hook_bak);
+      tmp_ptr = ob_malloc_retry(real_size);
     }
     if (OB_LIKELY(tmp_ptr != nullptr)) {
-      ATOMIC_FAA(&oceanbase::lib::memalign_size, size);
-      char *start = (char *)tmp_ptr + HOOK_HEADER_SIZE;
-      char *align_ptr = (char *)up_align(
-          reinterpret_cast<int64_t>(start), align);
-      char *pheader = align_ptr - HOOK_HEADER_SIZE;
+      char *start = (char *)tmp_ptr + Header::SIZE;
+      char *align_ptr = (char *)up_align(reinterpret_cast<int64_t>(start), alignment);
+      char *pheader = align_ptr - Header::SIZE;
       size_t offset = pheader - (char*)tmp_ptr;
-      HookHeader *header = new (pheader) HookHeader();
-      *(int64_t*)&header->padding__[0] = 0xabcd1234;
-      header->data_size_ = size;
-      header->from_glibc_ = GHO_NOHOOK == glibc_hook_opt;
+      auto *header = new (pheader) Header(size, from_mmap);
       header->offset_ = offset;
       ptr = header->data_;
     }
@@ -201,36 +171,17 @@ void *memalign(size_t align, size_t size)
   return ptr;
 }
 
-void *valloc(size_t size)
-{
-  return memalign(sysconf(_SC_PAGESIZE), size);
-}
-
-int posix_memalign(void **memptr, size_t alignment, size_t size)
-{
-  int err = 0;
-
-  if (OB_UNLIKELY(nullptr == memptr)) {
-    err = -EINVAL;
-  } else {
-    *memptr = nullptr;
-    void *ptr = memalign(alignment, size);
-    if (OB_UNLIKELY(nullptr == ptr)) {
-      err = -ENOMEM;
-    } else {
-      *memptr = ptr;
-    }
-  }
-
-  return err;
-}
-
-char *strdup(const char *s)
-{
-  size_t len = strlen(s) + 1;
-  void *new_s = malloc(len);
-  return new_s != nullptr ? (char*)memcpy(new_s, s, len) : nullptr;
-}
-
-EXTERN_C_END
+#if !defined(__MALLOC_HOOK_VOLATILE)
+#define MALLOC_HOOK_MAYBE_VOLATILE /**/
+#else
+#define MALLOC_HOOK_MAYBE_VOLATILE __MALLOC_HOOK_VOLATILE
 #endif
+
+extern "C" {
+__attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __malloc_hook)(size_t, const void *) = ob_malloc_hook;
+__attribute__((visibility("default"))) void (*MALLOC_HOOK_MAYBE_VOLATILE __free_hook)(void *, const void *) = ob_free_hook;
+__attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __realloc_hook)(void *, size_t, const void *) = ob_realloc_hook;
+__attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __memalign_hook)(size_t, size_t, const void *) = ob_memalign_hook;
+}
+
+void init_malloc_hook() {}

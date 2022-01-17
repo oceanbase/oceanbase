@@ -131,10 +131,10 @@ struct TransposeItem {
 };
 
 struct ObUnpivotInfo {
-  public:
+public:
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObUnpivotInfo() : is_include_null_(false), old_column_count_(0), for_column_count_(0), unpivot_column_count_(0)
   {}
   ObUnpivotInfo(const bool is_include_null, const int64_t old_column_count, const int64_t for_column_count,
@@ -482,7 +482,7 @@ struct JoinedTable : public TableItem {
 };
 
 class SemiInfo {
-  public:
+public:
   SemiInfo(ObJoinType join_type = LEFT_SEMI_JOIN)
       : join_type_(join_type),
         semi_id_(common::OB_INVALID_ID),
@@ -564,7 +564,8 @@ struct ObMaterializedViewContext {
 typedef common::ObSEArray<ObAssignment, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> ObAssignments;
 /// all assignments of one table
 struct ObTableAssignment {
-  ObTableAssignment() : table_id_(OB_INVALID_ID), assignments_(), is_update_part_key_(false)
+  ObTableAssignment()
+      : table_id_(OB_INVALID_ID), assignments_(), is_update_part_key_(false), is_update_unique_key_(false)
   {}
 
   int deep_copy(ObRawExprFactory& expr_factory, const ObTableAssignment& other);
@@ -579,14 +580,15 @@ struct ObTableAssignment {
       seed = do_hash(assignments_.at(j), seed);
     }
     seed = do_hash(is_update_part_key_, seed);
-
+    seed = do_hash(is_update_unique_key_, seed);
     return seed;
   }
 
   uint64_t table_id_;
   ObAssignments assignments_;
   bool is_update_part_key_;
-  TO_STRING_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key));
+  bool is_update_unique_key_;
+  TO_STRING_KV(K_(table_id), N_ASSIGN, assignments_, K_(is_update_part_key), K_(is_update_unique_key));
 };
 /// multi-table assignments
 typedef common::ObSEArray<ObTableAssignment, 3, common::ModulePageAllocator, true> ObTablesAssignments;
@@ -595,7 +597,7 @@ enum EQUAL_SET_SCOPE { SCOPE_WHERE = 1 << 0, SCOPE_HAVING = 1 << 1, SCOPE_MAX = 
 
 /// In fact, ObStmt is ObDMLStmt.
 class ObDMLStmt : public ObStmt {
-  public:
+public:
   struct PartExprArray {
     PartExprArray() : table_id_(common::OB_INVALID_ID), index_tid_(common::OB_INVALID_ID)
     {}
@@ -634,7 +636,7 @@ class ObDMLStmt : public ObStmt {
   };
   typedef common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ObViewTableIds;
 
-  public:
+public:
   explicit ObDMLStmt(stmt::StmtType type);
   virtual ~ObDMLStmt();
   int assign(const ObDMLStmt& other);
@@ -993,6 +995,15 @@ class ObDMLStmt : public ObStmt {
   TableItem* get_table_item(const FromItem item);
   const TableItem* get_table_item(const FromItem item) const;
   int get_table_item_idx(const TableItem* child_table, int64_t& idx) const;
+
+  int relids_to_table_ids(const ObSqlBitSet<> &table_set, ObIArray<uint64_t> &table_ids) const;
+  int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const uint64_t table_id, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObSqlBitSet<> &table_set) const;
+  int get_from_tables(ObRelIds &table_set) const;
+  int get_from_tables(ObSqlBitSet<> &table_set) const;
+
   int add_table_item(const ObSQLSessionInfo* session_info, TableItem* table_item);
   int add_table_item(const ObSQLSessionInfo* session_info, ObIArray<TableItem*>& table_items);
   int add_table_item(const ObSQLSessionInfo* session_info, TableItem* table_item, bool& have_same_table_name);
@@ -1004,9 +1015,10 @@ class ObDMLStmt : public ObStmt {
   int append_id_to_view_name(char* buf, int64_t buf_len, int64_t& pos, bool is_temp = false);
   int32_t get_table_bit_index(uint64_t table_id) const;
   int set_table_bit_index(uint64_t table_id);
-  ColumnItem* get_column_item(uint64_t table_id, const common::ObString& col_name);
-  int add_column_item(ColumnItem& column_item);
-  int add_column_item(ObIArray<ColumnItem>& column_items);
+  ColumnItem *get_column_item(uint64_t table_id, const common::ObString &col_name);
+  ColumnItem *get_column_item(uint64_t table_id, uint64_t column_id);
+  int add_column_item(ColumnItem &column_item);
+  int add_column_item(ObIArray<ColumnItem> &column_items);
   int remove_column_item(uint64_t table_id, uint64_t column_id);
   int remove_column_item(uint64_t table_id);
   int remove_column_item(const ObRawExpr* column_expr);
@@ -1391,7 +1403,7 @@ class ObDMLStmt : public ObStmt {
   }
   int reset_statement_id(const ObDMLStmt& other);
 
-  protected:
+protected:
   int check_and_convert_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
   int check_and_convert_index_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
   int check_and_convert_leading_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
@@ -1403,7 +1415,7 @@ class ObDMLStmt : public ObStmt {
   int check_and_convert_pq_map_hint(const ObSQLSessionInfo& session_info, ObStmtHint& hint);
   //////////end of functions for sql hint/////////////
 
-  protected:
+protected:
   int replace_expr_in_joined_table(JoinedTable& joined_table, ObRawExpr* from, ObRawExpr* to);
   int create_table_item(TableItem*& table_item);
 
@@ -1413,7 +1425,7 @@ class ObDMLStmt : public ObStmt {
     return inner_get_relation_exprs(expr_checker);
   }
 
-  protected:
+protected:
   int construct_join_tables(const ObDMLStmt& other);
   int construct_join_table(const ObDMLStmt& other, const JoinedTable& other_joined_table, JoinedTable& joined_table);
   int extract_column_expr(
@@ -1426,7 +1438,7 @@ class ObDMLStmt : public ObStmt {
   int replace_expr_for_joined_table(const common::ObIArray<ObRawExpr*>& other_exprs,
       const common::ObIArray<ObRawExpr*>& new_exprs, JoinedTable& joined_tables);
 
-  protected:
+protected:
   /**
    * @note
    * Per MySQL 5.7, the following clauses are common in 'select', 'delete' and 'update' statement:
@@ -1493,7 +1505,7 @@ class ObDMLStmt : public ObStmt {
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> check_constraint_exprs_;
   common::ObSEArray<ObUserVarIdentRawExpr*, 4, common::ModulePageAllocator, true> user_var_exprs_;
 
-  private:
+private:
   bool has_is_table_;
   bool eliminated_;
   bool has_temp_table_;

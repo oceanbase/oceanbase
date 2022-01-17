@@ -25,7 +25,7 @@ class ObIOMaster;
 
 template <int64_t SIZE>
 class ObIOMemoryPool {
-  public:
+public:
   ObIOMemoryPool()
       : is_inited_(false), capacity_(0), free_count_(0), allocator_(nullptr), begin_ptr_(nullptr), bitmap_(nullptr)
   {}
@@ -43,13 +43,13 @@ class ObIOMemoryPool {
     return SIZE;
   }
 
-  private:
+private:
   int init_bitmap(const int64_t block_count, ObIAllocator& allocator);
   void bitmap_unset(const int64_t idx);
   void bitmap_set(const int64_t idx);
   bool bitmap_test(const int64_t idx);
 
-  private:
+private:
   bool is_inited_;
   int64_t capacity_;
   int64_t free_count_;
@@ -60,7 +60,7 @@ class ObIOMemoryPool {
 };
 
 class ObIOAllocator final {
-  public:
+public:
   ObIOAllocator();
   virtual ~ObIOAllocator();
   int init(const int64_t mem_limit, const int64_t page_size);
@@ -69,7 +69,7 @@ class ObIOAllocator final {
   void free(void* ptr);
   int64_t allocated();
 
-  private:
+private:
   static const int64_t MICRO_POOL_BLOCK_SIZE = 16L * 1024L + 2 * DIO_READ_ALIGN_SIZE;
   static const int64_t MACRO_POOL_BLOCK_SIZE = 2L * 1024L * 1024L + DIO_READ_ALIGN_SIZE;
   static const int64_t DEFAULT_MICRO_POOL_COUNT = 10L * 1000L;
@@ -88,7 +88,7 @@ class ObIOAllocator final {
 
 template <typename T>
 class ObIOPool {
-  public:
+public:
   int init(const int64_t count, ObIAllocator& allocator);
   void destroy();
   int push(T* ptr)
@@ -104,12 +104,12 @@ class ObIOPool {
     return pool_.capacity();
   }
 
-  private:
+private:
   ObFixedQueue<T> pool_;
 };
 
 class ObIOResourceManager {
-  public:
+public:
   static const int64_t MAX_CHANNEL_CNT = common::OB_MAX_DISK_NUMBER;
   ObIOResourceManager();
   virtual ~ObIOResourceManager();
@@ -127,7 +127,7 @@ class ObIOResourceManager {
     return &io_allocator_;
   }
 
-  private:
+private:
   bool inited_;
   ObIOAllocator io_allocator_;  // for limit memory of ObDisk
   ObConcurrentFIFOAllocator master_allocator_;

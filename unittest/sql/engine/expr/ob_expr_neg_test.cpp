@@ -17,18 +17,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprNegTest : public ::testing::Test {
-  public:
+public:
   ObExprNegTest();
   virtual ~ObExprNegTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprNegTest(const ObExprNegTest& other);
   ObExprNegTest& operator=(const ObExprNegTest& other);
 
-  protected:
+protected:
   // data members
 };
 

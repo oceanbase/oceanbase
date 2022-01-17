@@ -18,14 +18,14 @@
 namespace oceanbase {
 namespace sql {
 class ObExprMul : public ObArithExprOperator {
-  public:
+public:
   ObExprMul();
   explicit ObExprMul(common::ObIAllocator& alloc, ObExprOperatorType type = T_OP_MUL);
   virtual ~ObExprMul(){};
   virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_result2(
-      common::ObObj& result, const common::ObObj& left, const common::ObObj& right, common::ObExprCtx& expr_ctx) const;
+      ObExprResType& type, ObExprResType& type1, ObExprResType& type2, common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_result2(common::ObObj& result, const common::ObObj& left, const common::ObObj& right,
+      common::ObExprCtx& expr_ctx) const override;
   static int calc(common::ObObj& res, const common::ObObj& ojb1, const common::ObObj& obj2,
       common::ObIAllocator* allocator, common::ObScale scale);
   static int calc(common::ObObj& res, const common::ObObj& ojb1, const common::ObObj& obj2, common::ObExprCtx& expr_ctx,
@@ -75,10 +75,10 @@ class ObExprMul : public ObArithExprOperator {
   static int mul_interval(common::ObObj& res, const common::ObObj& left, const common::ObObj& right,
       common::ObIAllocator* allocator, common::ObScale scale);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprMul);
 
-  public:
+public:
   // very very effective implementation
   // if false is returned, the result of multiplication will be stored in res
   template <typename T1, typename T2, typename T3>
@@ -116,7 +116,7 @@ class ObExprMul : public ObArithExprOperator {
     return ret;
   }
 
-  private:
+private:
   static ObArithFunc mul_funcs_[common::ObMaxTC];
   static ObArithFunc agg_mul_funcs_[common::ObMaxTC];
   static const int64_t SHIFT_OFFSET = 32;
@@ -124,7 +124,7 @@ class ObExprMul : public ObArithExprOperator {
 // Mul expr for aggregation, different with ObExprMul:
 //  No overflow check for double type.
 class ObExprAggMul : public ObExprMul {
-  public:
+public:
   explicit ObExprAggMul(common::ObIAllocator& alloc) : ObExprMul(alloc, T_OP_AGG_MUL)
   {}
 };

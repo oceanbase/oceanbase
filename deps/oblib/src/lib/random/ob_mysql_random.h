@@ -21,7 +21,7 @@
 namespace oceanbase {
 namespace common {
 class ObMysqlRandom {
-  public:
+public:
   ObMysqlRandom()
   {
     MEMSET(this, 0, sizeof(*this));
@@ -36,14 +36,14 @@ class ObMysqlRandom {
     return is_inited_;
   }
 
-  public:
+public:
   bool is_inited_;
   uint64_t seed1_;
   uint64_t seed2_;
   uint64_t max_value_;
   double max_value_double_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMysqlRandom);
 };
 

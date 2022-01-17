@@ -36,7 +36,7 @@ class ObILogDir;
 class ObIlogFileBuilder;
 
 class PinnedMemory {
-  public:
+public:
   PinnedMemory();
   ~PinnedMemory();
   int init(const int64_t size);
@@ -45,7 +45,7 @@ class PinnedMemory {
   bool is_valid(const int64_t size) const;
   TO_STRING_KV(KP(pinned_memory_), K(size_));
 
-  private:
+private:
   char* pinned_memory_;
   int64_t size_;
   bool is_inited_;
@@ -53,11 +53,11 @@ class PinnedMemory {
 };
 
 class ObIlogStore {
-  public:
+public:
   ObIlogStore();
   ~ObIlogStore();
 
-  public:
+public:
   int init(const file_id_t next_ilog_file_id, common::ObILogFileStore* file_store, ObFileIdCache* file_id_cache,
       ObLogDirectReader* direct_reader, storage::ObPartitionService* partition_service);
   void destroy();
@@ -65,7 +65,7 @@ class ObIlogStore {
   void stop();
   void wait();
 
-  public:
+public:
   // retry inside the function
   // caller guarantees that the same partition_key is called from
   // a single thread, log_id is monotonically increasing.
@@ -99,6 +99,7 @@ class ObIlogStore {
   // return value
   // 1) OB_SUCCESS, query success
   // 2) OB_PARTITION_NOT_EXIST, partition not exist
+  //
   // query the min_log_id and min_log_ts in the partition
   int get_memstore_min_log_id_and_ts(
       const common::ObPartitionKey& partition_key, uint64_t& ret_min_log_id, int64_t& ret_min_log_ts) const;
@@ -110,11 +111,11 @@ class ObIlogStore {
   // ilog writer worker
   void runTimerTask();
 
-  private:
+private:
   const static int64_t DEFAULT_MEMSTORE_COUNT = 16;
-  const static int64_t TIMER_TASK_INTERVAL = 2 * 1000 * 1000;
+  const static int64_t TIMER_TASK_INTERVAL = 100 * 1000; // 100ms
   // PINNED_MEMORY_SIZE should set as ObIlogMemstore::CURSOR_SIZE_TRIGGER(32MB)
-  // however, in concurrent secenarios, it will causes that the size of
+  // however, in concurrent scenarios, it will causes that the size of
   // ObIlogMemstore will exceed than ObIlogMemstore::CURSOR_SIZE_TRIGGER.
   // therefore, set PINNED_MEMORY_SIZE as double ObIlogMemstore::CURSOR_SIZE_TRIGGER
   const static int64_t PINNED_MEMORY_SIZE = 2 * ObIlogMemstore::CURSOR_SIZE_TRIGGER;
@@ -144,13 +145,12 @@ class ObIlogStore {
 
   // this function return the range of ObIlogMemstore which can be merged
   // end_idx is the last index of ObIlogMemstore which can be merged
-  // is_ilog_not_continous_trigger means that the next ObIlogMemstore after
-  // end_idx is whether trigger by OB_ILOG_NOT_CONTINOUS.
-  int get_merge_range_(int64_t& end_idx, bool& is_ilog_not_continous_trigger);
+  // need_switch_file means that whether we need switch ilog file
+  int get_merge_range_(int64_t& end_idx, bool& need_switch_file);
 
   // merge all ObIlogMemstore in [0, end_idx] to merge_after_memstore
   // end_idx is the last index of frozen_memstore_array_
-  // memstore_after_merge is the container to merge forzen_memstore_array_
+  // memstore_after_merge is the container to merge frozen_memstore_array_
   int merge_frozen_memstore_(int64_t& end_idx, FrozenMemstore& memstore_after_merge);
   int build_and_write_file_(ObIlogFileBuilder& builder);
   int check_need_dump_(bool& need_dump, int64_t curr_memstore_seq);
@@ -161,10 +161,10 @@ class ObIlogStore {
   // free_memstore_array_ records the memstore need to release memory
   // builder is used to write memstore_after_merge into file
   // 1) if trigger_type is OB_TIMER_TRIGGER_TYPE or OB_CLOG_SIZE_TRIGGER_TYPE,
-  //    don't need apeend info_block into file_id_cache, free_memstore_array records the
+  //    don't need append info_block into file_id_cache, free_memstore_array records the
   //    memstore located in [0, end_idx).
   // 2) if trigger_type is OB_ILOG_NOT_CONTINOUS_TYPE or OB_MERGE_NEED_SWITCH_FILE_TRIGGER_TYPE,
-  //    need append info_block into file_id_cache and swith ilog file, free_memstore_array
+  //    need append info_block into file_id_cache and switch ilog file, free_memstore_array
   //    records the memstore located in [0, end_idx]
   int handle_different_trigger_type_(const FrozenMemstore& memstore_after_merge, const int64_t& end_idx,
       IlogMemstoreArray& free_memstore_array, ObIlogFileBuilder& builder);
@@ -175,24 +175,24 @@ class ObIlogStore {
   //    after doing merge
   bool need_merge_frozen_memstore_array_by_trigger_type_(const ObIlogFreezeTriggerType& trigger_type) const;
 
-  int do_merge_frozen_memstore_(const FrozenMemstoreArray& frozen_memstore_array, bool is_ilog_not_continous_trigger,
-      FrozenMemstore& memstore_after_merge);
+  int do_merge_frozen_memstore_(
+      const FrozenMemstoreArray& frozen_memstore_array, bool need_switch_file, FrozenMemstore& memstore_after_merge);
 
   void alloc_memstore_(ObIlogMemstore*& memstore);
 
-  private:
+private:
   class IlogWriterTask : public common::ObTimerTask {
-    public:
+  public:
     IlogWriterTask() : ilog_store_(NULL)
     {}
     ~IlogWriterTask()
     {}
 
-    public:
+  public:
     int init(ObIlogStore* ilog_store);
     virtual void runTimerTask();
 
-    private:
+  private:
     ObIlogStore* ilog_store_;
   };
 
@@ -232,7 +232,7 @@ class ObIlogStore {
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
 
-  private:
+private:
   mutable RWLock lock_;
   bool is_inited_;
   file_id_t next_ilog_file_id_;
@@ -251,7 +251,7 @@ class ObIlogStore {
   PinnedMemory pinned_memory_;
   IlogWriterTask task_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIlogStore);
 };
 }  // namespace clog

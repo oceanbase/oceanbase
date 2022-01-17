@@ -27,7 +27,7 @@ class ObColumnSchemaV2;
 }  // namespace share
 namespace rootserver {
 class ObCoreMetaTable : public common::ObVirtualTableProjector {
-  public:
+public:
   ObCoreMetaTable();
   virtual ~ObCoreMetaTable();
 
@@ -35,14 +35,14 @@ class ObCoreMetaTable : public common::ObVirtualTableProjector {
 
   virtual int inner_get_next_row(common::ObNewRow*& row);
 
-  private:
+private:
   int get_full_row(const share::schema::ObTableSchema* table, const share::ObPartitionReplica& replica,
       common::ObIArray<Column>& columns);
   bool inited_;
   share::ObPartitionTableOperator* pt_operator_;
   share::schema::ObSchemaGetterGuard* schema_guard_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCoreMetaTable);
 };
 

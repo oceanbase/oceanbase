@@ -249,6 +249,7 @@ int ObDDLService::prepare_create_partition(ObPartitionCreator& creator, ObTableS
       int64_t non_paxos_replica_num = 0;
       ObCreateTableMode create_mode = OB_CREATE_TABLE_MODE_LOOSE;
       share::ObSimpleFrozenStatus frozen_status;
+      int64_t restore = REPLICA_NOT_RESTORE;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(
                      freeze_info_manager_->get_frozen_status_for_create_partition(OB_SYS_TENANT_ID, frozen_status))) {
@@ -270,6 +271,7 @@ int ObDDLService::prepare_create_partition(ObPartitionCreator& creator, ObTableS
                      is_bootstrap,
                      is_standby,
                      create_mode,
+                     restore,
                      frozen_status))) {
         LOG_WARN("create partitions failed", K(ret), K(table_addr), K(table_schema), K(frozen_version));
       }
@@ -283,6 +285,7 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(
 {
   int ret = OB_SUCCESS;
   bool is_standby = false;
+  bool is_restore = false;
   int64_t version_in_inner_table = OB_INVALID_VERSION;
   ObRefreshSchemaStatus schema_status;
   bool use_local = false;
@@ -294,7 +297,9 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", K(ret));
-  } else if (is_standby && OB_SYS_TENANT_ID != tenant_id) {
+  } else if (OB_FAIL(schema_service_->check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+    LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id));
+  } else if ((is_standby && OB_SYS_TENANT_ID != tenant_id) || is_restore) {
     ObSchemaStatusProxy* schema_status_proxy = GCTX.schema_status_proxy_;
     if (OB_ISNULL(schema_status_proxy)) {
       ret = OB_ERR_UNEXPECTED;
@@ -302,8 +307,11 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(
     } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id, schema_status))) {
       LOG_WARN("failed to get tenant refresh schema status", KR(ret), K(tenant_id));
     } else if (OB_INVALID_VERSION == schema_status.readable_schema_version_) {
-      // Although it is a standalone cluster, the schema status has been reset, and the internal table can be refreshed.
-      // At this time, the standby database already has a leader
+      // 1. For standby cluster: schema_status is reset, we can refresh schema now.
+      // 2. For restore tenant: sys replicas are restored.
+    } else if (is_restore) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Can't refresh schema when sys replicas are not restored yet", KR(ret), K(tenant_id));
     } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
     } else {
@@ -2279,6 +2287,16 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist, const ObString
           LOG_WARN("failed to create table schema", K(ret), "schema", schemas.at(0));
         }
       }
+
+      // write schema for new create sys table
+      if (OB_SUCC(ret) && OB_ALL_BACKUP_PIECE_FILES_TID == extract_pure_id(first_table.get_table_id())) {
+        ObArray<ObTableSchema> schemas;
+        if (OB_FAIL(add_sys_table_index(first_table.get_table_id(), schemas))) {
+          LOG_WARN("fail to add sys table index", K(ret), "table_id", first_table.get_table_id());
+        } else if (OB_FAIL(ddl_operator.create_table(schemas.at(0), trans, NULL, true /*need_sync_schema_version*/))) {
+          LOG_WARN("failed to create table schema", K(ret), "schema", schemas.at(0));
+        }
+      }
       if (OB_SUCC(ret)) {
         const int64_t last_schema_version = ddl_operator.get_last_operation_schema_version();
         bool gts_on = false;
@@ -3979,7 +3997,9 @@ int ObDDLService::update_global_index(ObAlterTableArg& arg, const uint64_t tenan
     } else if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get_index_tid_array failed", K(ret));
     } else {
+      int64_t delay_deleted_global_index_count = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+        bool is_delay_delete = false;
         const ObTableSchema* index_table_schema = NULL;
         if (OB_FAIL(schema_guard.get_table_schema(simple_index_infos.at(i).table_id_, index_table_schema))) {
           LOG_WARN("get_table_schema failed", "table id", simple_index_infos.at(i).table_id_, K(ret));
@@ -4009,8 +4029,13 @@ int ObDDLService::update_global_index(ObAlterTableArg& arg, const uint64_t tenan
             ObTableSchema new_table_schema;
             if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
               LOG_WARN("fail to assign schema", K(ret));
-            } else if (OB_FAIL(rebuild_index_in_trans(
-                           schema_guard, new_table_schema, frozen_version, NULL, arg.create_mode_, &trans))) {
+            } else if (OB_FAIL(rebuild_index_in_trans(schema_guard,
+                           new_table_schema,
+                           frozen_version,
+                           NULL,
+                           arg.create_mode_,
+                           &trans,
+                           &is_delay_delete))) {
               LOG_WARN("ddl_service_ rebuild_index failed", KR(ret));
             } else {
               ObSArray<obrpc::ObIndexArg*>& index_arg_list = arg.index_arg_list_;
@@ -4027,11 +4052,22 @@ int ObDDLService::update_global_index(ObAlterTableArg& arg, const uint64_t tenan
                   LOG_WARN("fail to assign index schema", KR(ret), K(new_table_schema));
                 } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
                   LOG_WARN("push back to index_arg_list failed", KR(ret), K(create_index_arg));
+                } else if (is_delay_delete) {
+                  delay_deleted_global_index_count++;
                 }
               }
             }
           }
         }
+      }
+      // In the case of delayed deletion, it is necessary to determine
+      // whether the sum of rebuilt indexex exceeds the maximum index of the data table.
+      if (OB_SUCC(ret) && 0 < delay_deleted_global_index_count &&
+          orig_table_schema.get_index_tid_count() + delay_deleted_global_index_count > OB_MAX_INDEX_PER_TABLE) {
+        ret = OB_ERR_TOO_MANY_KEYS;
+        LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
+        int64_t index_count = orig_table_schema.get_index_tid_count();
+        LOG_WARN("too many index for table", K(OB_MAX_INDEX_PER_TABLE), K(index_count), K(ret));
       }
     }
   }
@@ -6429,7 +6465,7 @@ int ObDDLService::create_table_partitions_for_physical_restore(const obrpc::ObRe
   int ret = OB_SUCCESS;
   RS_TRACE(create_table_partitions_begin);
   const uint64_t table_id = arg.schema_id_;
-  const ObCreateTableMode create_mode = ObCreateTableMode::OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
+  const ObCreateTableMode create_mode = ObCreateTableMode::OB_CREATE_TABLE_MODE_LOOSE;
   const ObTableSchema* table_schema = NULL;
   ObTablePartitionAddr table_addr;
   if (OB_FAIL(check_inner_stat())) {
@@ -6439,6 +6475,9 @@ int ObDDLService::create_table_partitions_for_physical_restore(const obrpc::ObRe
     LOG_WARN("root_balancer_ is null", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist. table may be droppped concurrently in physical restore", KR(ret), K(table_id));
   } else if (OB_FAIL(root_balancer_->alloc_partitions_for_create(*table_schema, create_mode, table_addr))) {
     LOG_WARN("alloc partition address failed", K(ret), KPC(table_schema));
   } else if (OB_FAIL(create_partitions_for_physical_restore(
@@ -6630,7 +6669,12 @@ int ObDDLService::binding_table_partitions(const share::schema::ObTableSchema& t
         int64_t part_cnt = -1;
         common::ObPGKey pg_key;
         if (OB_FAIL(pg_info.get_partition_cnt(part_cnt))) {
-          LOG_WARN("fail to get partition cnt", K(ret));
+          if (OB_PARTITION_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            // because of don't wait leader, here maybe all replica is FLAG_REPLICA
+          } else {
+            LOG_WARN("fail to get partition cnt", KR(ret));
+          }
         } else if (OB_FAIL(pg_key.init(pg_info.get_table_id(), pg_info.get_partition_id(), part_cnt))) {
           LOG_WARN("fail to init pg key", K(ret));
         } else if (OB_FAIL(pg_info.find_leader_v2(leader_replica))) {
@@ -8390,7 +8434,7 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg& arg, const int64
 // If sql_trans is NULL, you need to create a transaction inside the function
 int ObDDLService::drop_table_in_trans(ObSchemaGetterGuard& schema_guard, const ObTableSchema& table_schema,
     const bool is_rebuild_index, const bool is_index, const bool to_recyclebin, const ObString* ddl_stmt_str,
-    ObMySQLTransaction* sql_trans, DropTableIdHashSet* drop_table_set)
+    ObMySQLTransaction* sql_trans, DropTableIdHashSet* drop_table_set, bool* is_delay_delete /*NULL*/)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_index);
@@ -8435,8 +8479,13 @@ int ObDDLService::drop_table_in_trans(ObSchemaGetterGuard& schema_guard, const O
             LOG_WARN("fail to try modify tenant primary zone entity count", KR(ret));
           }
         }
-        if (OB_SUCC(ret) && OB_FAIL(ddl_operator.drop_table(
-                                table_schema, trans, ddl_stmt_str, false /*is_truncate_table*/, drop_table_set))) {
+        if (OB_SUCC(ret) && OB_FAIL(ddl_operator.drop_table(table_schema,
+                                trans,
+                                ddl_stmt_str,
+                                false /*is_truncate_table*/,
+                                drop_table_set,
+                                false,
+                                is_delay_delete))) {
           LOG_WARN("ddl_operator drop_table failed", K(table_schema), KR(ret));
         }
       }
@@ -9158,6 +9207,8 @@ int ObDDLService::purge_database(const ObPurgeDatabaseArg& arg, int64_t& pz_coun
         // bypass
       } else if (schema->get_primary_zone().empty()) {
         // bypass
+      } else if (USER_INDEX == schema->get_table_type()) {
+        // bypass, hope some day, pz_value can be removed from oceanbase
       } else {
         ++pz_count;
       }
@@ -10155,7 +10206,7 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg& arg, const int64_t froz
 // If sql_trans is NULL, you need to create a transaction inside the function
 int ObDDLService::rebuild_index_in_trans(ObSchemaGetterGuard& schema_guard, ObTableSchema& index_schema,
     const int64_t frozen_version, const ObString* ddl_stmt_str, const obrpc::ObCreateTableMode create_mode,
-    ObMySQLTransaction* sql_trans)
+    ObMySQLTransaction* sql_trans, bool* is_delay_delete /*NULL*/)
 {
   int ret = OB_SUCCESS;
   uint64_t new_table_id = index_schema.get_table_id();
@@ -10167,7 +10218,8 @@ int ObDDLService::rebuild_index_in_trans(ObSchemaGetterGuard& schema_guard, ObTa
     LOG_WARN("schema_service must not null", KR(ret));
   } else if (OB_ISNULL(sql_trans) && OB_FAIL(trans.start(sql_proxy_))) {
     LOG_WARN("start transaction failed", KR(ret));
-  } else if (OB_FAIL(drop_table_in_trans(schema_guard, index_schema, true, true, false, ddl_stmt_str, &trans, NULL))) {
+  } else if (OB_FAIL(drop_table_in_trans(
+                 schema_guard, index_schema, true, true, false, ddl_stmt_str, &trans, NULL, is_delay_delete))) {
     LOG_WARN("drop_table failed", K(index_schema), KR(ret));
   } else if (FALSE_IT(new_table_id = OB_INVALID_ID)) {
   } else if (OB_FAIL(schema_service->fetch_new_table_id(index_schema.get_tenant_id(), new_table_id))) {
@@ -10379,6 +10431,7 @@ int ObDDLService::construct_partitions_for_standby(share::schema::ObSchemaGetter
     const ObCreateTableMode create_mode = OB_CREATE_TABLE_MODE_LOOSE;
     obrpc::ObSetMemberListArg member_list_arg;
     share::ObSplitPartition split_info;
+    const int64_t restore = REPLICA_RESTORE_STANDBY;
     for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); ++i) {
       const ObPartitionKey& key = keys.at(i);
       const ObPartitionAddr& part_addr = addrs.at(i);
@@ -10389,6 +10442,7 @@ int ObDDLService::construct_partitions_for_standby(share::schema::ObSchemaGetter
               schema_version,
               last_replay_log_id,
               create_mode,
+              restore,
               part_addr,
               split_info,
               frozen_status,
@@ -10442,6 +10496,7 @@ int ObDDLService::create_partitions_for_create(const ObTableSchema& table, const
     ObArray<int64_t> part_ids;
     ObPartIdsGenerator gen(table);
     share::ObSimpleFrozenStatus frozen_status;
+    int64_t restore = REPLICA_NOT_RESTORE;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(freeze_info_manager_->get_frozen_status_for_create_partition(tenant_id, frozen_status))) {
       LOG_WARN("fail to get freeze info", K(ret), K(frozen_status));
@@ -10461,6 +10516,7 @@ int ObDDLService::create_partitions_for_create(const ObTableSchema& table, const
                    false,
                    is_standby,
                    create_mode,
+                   restore,
                    frozen_status,
                    last_replay_log_id))) {
       LOG_WARN("prepare create partitions failed", K(ret));
@@ -10544,6 +10600,7 @@ int ObDDLService::create_partitions_for_split(const int64_t schema_version, cons
 
       // all_part_num contains the number of all partitions before and after the split;
       const int64_t all_part_num = table.get_all_part_num() + inc_partition_cnt;
+      int64_t restore = REPLICA_NOT_RESTORE;
       if (OB_FAIL(prepare_create_partitions(creator,
               new_table,
               table.get_table_id(),
@@ -10558,6 +10615,7 @@ int ObDDLService::create_partitions_for_split(const int64_t schema_version, cons
               false,
               is_standby,
               create_mode,
+              restore,
               frozen_status))) {
         LOG_WARN("prepare create partitions failed", K(ret));
       } else if (OB_FAIL(creator.execute())) {
@@ -10572,8 +10630,8 @@ int ObDDLService::prepare_create_partitions(ObPartitionCreator& creator, const u
     const int64_t schema_version, const int64_t partition_num, const int64_t partition_cnt,
     const int64_t paxos_replica_num, const int64_t non_paxos_replica_num, const ObIArray<int64_t>& partition_ids,
     const ObITablePartitionAddr& table_addr, const ObIArray<ObTableSchema>& schemas, const bool is_bootstrap,
-    const bool is_standby, ObCreateTableMode create_mode, const ObSimpleFrozenStatus& frozen_status,
-    const uint64_t last_replay_log_id)
+    const bool is_standby, ObCreateTableMode create_mode, const int64_t restore,
+    const ObSimpleFrozenStatus& frozen_status, const uint64_t last_replay_log_id)
 {
   int ret = OB_SUCCESS;
   ObTableSchema* new_schema = NULL;
@@ -10594,6 +10652,7 @@ int ObDDLService::prepare_create_partitions(ObPartitionCreator& creator, const u
                  is_bootstrap,
                  is_standby,
                  create_mode,
+                 restore,
                  frozen_status,
                  last_replay_log_id))) {
     LOG_WARN("fail to prepare create partition", KR(ret));
@@ -10611,8 +10670,8 @@ int ObDDLService::prepare_create_partitions(ObPartitionCreator& creator, const O
     const uint64_t table_id, const int64_t schema_version, const int64_t partition_num, const int64_t partition_cnt,
     const int64_t paxos_replica_num, const int64_t non_paxos_replica_num, const ObIArray<int64_t>& partition_ids,
     const ObITablePartitionAddr& table_addr, const ObIArray<ObTableSchema>& schemas, const bool is_bootstrap,
-    const bool is_standby, ObCreateTableMode create_mode, const ObSimpleFrozenStatus& frozen_status,
-    const uint64_t last_replay_log_id)
+    const bool is_standby, ObCreateTableMode create_mode, const int64_t restore,
+    const ObSimpleFrozenStatus& frozen_status, const uint64_t last_replay_log_id)
 {
   int ret = OB_SUCCESS;
 
@@ -10737,6 +10796,7 @@ int ObDDLService::prepare_create_partitions(ObPartitionCreator& creator, const O
                        schema_version,
                        last_replay_log_id,
                        create_mode,
+                       restore,
                        part_addr,
                        split_info,
                        frozen_status,
@@ -10755,7 +10815,7 @@ int ObDDLService::prepare_create_partitions(ObPartitionCreator& creator, const O
 int ObDDLService::construct_create_partition_creator(const common::ObPartitionKey& pkey,
     const common::ObIArray<share::schema::ObTableSchema>& schemas, const int64_t paxos_replica_num,
     const int64_t non_paxos_replica_num, const int64_t schema_version, const int64_t last_replay_log_id,
-    const obrpc::ObCreateTableMode create_mode, const ObPartitionAddr& part_addr,
+    const obrpc::ObCreateTableMode create_mode, const int64_t restore, const ObPartitionAddr& part_addr,
     const share::ObSplitPartition& split_info, const share::ObSimpleFrozenStatus& frozen_status, const bool is_standby,
     const bool is_bootstrap, ObPartitionCreator& creator)
 {
@@ -10794,7 +10854,7 @@ int ObDDLService::construct_create_partition_creator(const common::ObPartitionKe
         creator.set_create_mode(mode);
         if (OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE == create_mode) {
           // restore tenant, need reset sys table member_list
-          if (!ObSysTableChecker::is_backup_private_tenant_table(table_id)) {
+          if (REPLICA_NOT_RESTORE != restore) {
             arg.member_list_.reset();
           }
         } else if (creator.is_ignore_member_list()) {
@@ -10822,24 +10882,15 @@ int ObDDLService::construct_create_partition_creator(const common::ObPartitionKe
           // No need to create a non-paxos copy of the standby database,
           // there is no persistent member list, standby_restore will have problems
         } else {
-          int64_t restore = REPLICA_NOT_RESTORE;
           common::ObRole role = FOLLOWER;
+          int64_t new_restore = restore;
           if (OB_CREATE_TABLE_MODE_RESTORE == create_mode &&
               ObReplicaTypeCheck::is_replica_with_ssstore(a->replica_type_)) {
             // logical restore
-            restore = REPLICA_LOGICAL_RESTORE_DATA;
-          } else if (OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE == create_mode) {
-            // physical restore
-            // Here, only the physical restoration of the tenant will come,
-            // and it is judged at the upper level whether to change the initial restore state
-            restore = REPLICA_RESTORE_DATA;
-          } else if (is_standby && !ObMultiClusterUtil::is_cluster_private_table(table_id)) {
-            restore = REPLICA_RESTORE_STANDBY;
-          } else {
-            restore = REPLICA_NOT_RESTORE;
+            new_restore = REPLICA_LOGICAL_RESTORE_DATA;
           }
-          if (OB_FAIL(set_flag_role(a->initial_leader_, is_standby, restore, table_id, role))) {
-            LOG_WARN("fail to set flag role", KR(ret), K(is_standby), K(restore), K(table_id), K(role));
+          if (OB_FAIL(set_flag_role(a->initial_leader_, is_standby, new_restore, table_id, role))) {
+            LOG_WARN("fail to set flag role", KR(ret), K(is_standby), K(restore), K(new_restore), K(table_id), K(role));
           } else if (OB_FAIL(fill_create_partition_arg(table_id,
                          partition_cnt,
                          paxos_replica_num,
@@ -10849,7 +10900,7 @@ int ObDDLService::construct_create_partition_creator(const common::ObPartitionKe
                          now,
                          is_bootstrap,
                          is_standby,
-                         restore,
+                         new_restore,
                          frozen_status,
                          arg))) {
             LOG_WARN("fail to fill ObCreatePartitionArg",
@@ -10863,7 +10914,7 @@ int ObDDLService::construct_create_partition_creator(const common::ObPartitionKe
                 *a,
                 "timestamp",
                 now);
-          } else if (OB_FAIL(fill_flag_replica(table_id, partition_cnt, partition_id, arg, *a, role, flag_replica))) {
+          } else if (OB_FAIL(fill_flag_replica(table_id, partition_cnt, partition_id, arg, *a, flag_replica))) {
             LOG_WARN("fail to fill flag replica",
                 K(ret),
                 K(table_id),
@@ -11038,8 +11089,7 @@ int ObDDLService::set_flag_role(const bool initial_leader, const bool is_standby
 }
 
 int ObDDLService::fill_flag_replica(const uint64_t table_id, const int64_t partition_cnt, const int64_t partition_id,
-    const ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr, const common::ObRole role,
-    share::ObPartitionReplica& flag_replica)
+    const ObCreatePartitionArg& arg, const ObReplicaAddr& replica_addr, share::ObPartitionReplica& flag_replica)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -11077,7 +11127,6 @@ int ObDDLService::fill_flag_replica(const uint64_t table_id, const int64_t parti
           replica_addr.replica_type_);
     } else {
       flag_replica.is_restore_ = arg.restore_;
-      flag_replica.role_ = role;
       if (arg.ignore_member_list_) {
         // not fill member list
       } else if (REPLICA_RESTORE_DATA == flag_replica.is_restore_ ||
@@ -13058,7 +13107,12 @@ int ObDDLService::modify_tenant(const ObModifyTenantArg& arg)
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObDDLSQLTransaction trans(schema_service_);
     trans.set_end_tenant_id(OB_SYS_TENANT_ID);
-    if (orig_tenant_schema->get_tenant_id() <= OB_MAX_RESERVED_TENANT_ID) {
+    if (orig_tenant_schema->is_restore()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN(
+          "rename tenant while tenant is in physical restore status is not allowed", KR(ret), KPC(orig_tenant_schema));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "rename tenant while tenant is in physical restore status is");
+    } else if (orig_tenant_schema->get_tenant_id() <= OB_MAX_RESERVED_TENANT_ID) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("rename special tenant not supported", K(ret), K(orig_tenant_schema->get_tenant_id()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename special tenant");
@@ -13393,7 +13447,7 @@ int ObDDLService::record_tablegroup_locality_event_history(const AlterLocalityOp
         tablegroup_schema.get_previous_locality_str());
     if (job_id < 1) {
       ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("faild to create rs job", K(tablegroup_schema.get_tenant_id()));
+      LOG_WARN("failed to create rs job", K(tablegroup_schema.get_tenant_id()));
     }
   } else if (ROLLBACK_ALTER_LOCALITY == alter_locality_op) {
     ObRsJobInfo job_info;
@@ -13439,7 +13493,7 @@ int ObDDLService::record_tablegroup_locality_event_history(const AlterLocalityOp
         tablegroup_schema.get_locality_str());
     if (job_id < 1) {
       ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("faild to create rs job", K(tablegroup_schema.get_tenant_id()));
+      LOG_WARN("failed to create rs job", K(tablegroup_schema.get_tenant_id()));
     }
   } else if (NOP_LOCALITY_OP == alter_locality_op) {
     int64_t job_id = RS_JOB_CREATE(ALTER_TABLEGROUP_LOCALITY,
@@ -13456,7 +13510,7 @@ int ObDDLService::record_tablegroup_locality_event_history(const AlterLocalityOp
         tablegroup_schema.get_previous_locality_str());
     if (job_id < 1) {
       ret = OB_SQL_OPT_ERROR;
-      LOG_WARN("faild to create rs job", K(tablegroup_schema.get_tenant_id()));
+      LOG_WARN("failed to create rs job", K(tablegroup_schema.get_tenant_id()));
     } else if (OB_FAIL(RS_JOB_COMPLETE(job_id, 0, trans))) {
       LOG_WARN("failed to complete rs job", K(ret), K(tablegroup_schema.get_tenant_id()));
     }
@@ -13859,15 +13913,22 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg& arg,
     LOG_WARN("paxos replica num error", K(ret), K(paxos_replica_num));
   }
 
-  common::hash::ObHashSet<uint64_t> restore_pure_ids;
+  // For physical restore, init restore_partition_map
+  common::hash::ObHashMap<uint64_t, ObReplicaRestoreStatus> restore_partition_map;
   int64_t tenant_space_tables_cnt = ARRAYSIZEOF(tenant_space_tables);
-  if (FAILEDx(restore_pure_ids.create(hash::cal_next_prime(tenant_space_tables_cnt), "ResPureIds", "ResPureIds"))) {
-    LOG_WARN("failed to create restore pure ids", K(ret));
+  if (FAILEDx(restore_partition_map.create(hash::cal_next_prime(tenant_space_tables_cnt), "ResPartMap"))) {
+    LOG_WARN("failed to create restore partition map", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.restore_pkeys_.count(); i++) {
       uint64_t pure_id = extract_pure_id(arg.restore_pkeys_.at(i).get_table_id());
-      if (OB_FAIL(restore_pure_ids.set_refactored(pure_id, 0 /*not overwrite*/))) {
-        LOG_WARN("fail to set key", K(ret), K(pure_id));
+      if (OB_FAIL(restore_partition_map.set_refactored(pure_id, REPLICA_RESTORE_DATA, 0 /*not overwrite*/))) {
+        LOG_WARN("fail to set restore data key", KR(ret), K(pure_id));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.restore_log_pkeys_.count(); i++) {
+      uint64_t pure_id = extract_pure_id(arg.restore_log_pkeys_.at(i).get_table_id());
+      if (OB_FAIL(restore_partition_map.set_refactored(pure_id, REPLICA_RESTORE_ARCHIVE_DATA, 0 /*not overwrite*/))) {
+        LOG_WARN("fail to set restore log key", KR(ret), K(pure_id));
       }
     }
   }
@@ -13897,24 +13958,32 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg& arg,
         ObArray<int64_t> part_ids;
         ObPartIdsGenerator gen(copy);
         ObCreateTableMode create_mode = OB_CREATE_TABLE_MODE_LOOSE;
-        if (OB_SUCC(ret) && is_restore) {
-          int64_t table_id = copy.get_table_id();
+        int64_t non_paxos_replica_num = 0;
+        int64_t restore = REPLICA_NOT_RESTORE;
+        int64_t table_id = copy.get_table_id();
+        if (OB_FAIL(ret)) {
+        } else if (is_restore) {  // physical restore
+          create_mode = OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
           if (ObSysTableChecker::is_backup_private_tenant_table(table_id)) {
-            create_mode = OB_CREATE_TABLE_MODE_LOOSE;
+            restore = REPLICA_NOT_RESTORE;
           } else {
-            int hash_ret = restore_pure_ids.exist_refactored(extract_pure_id(table_id));
-            if (OB_HASH_EXIST == hash_ret) {
-              create_mode = OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
+            ObReplicaRestoreStatus status;
+            int hash_ret = restore_partition_map.get_refactored(extract_pure_id(table_id), status);
+            if (OB_SUCCESS == hash_ret) {
+              restore = status;
             } else if (OB_HASH_NOT_EXIST == hash_ret) {
-              create_mode = OB_CREATE_TABLE_MODE_LOOSE;
+              // create sys table in tenant space which were not backuped in lower version.
+              restore = REPLICA_NOT_RESTORE;
             } else {
               ret = hash_ret;
               LOG_WARN("fail to get key", K(ret), K(table_id));
             }
           }
+        } else if (is_standby) {  // standby cluster
+          if (!ObMultiClusterUtil::is_cluster_private_table(table_id)) {
+            restore = REPLICA_RESTORE_STANDBY;
+          }
         }
-        // Use non-strict mode when creating tenant, do not check non_paxos_replica_num
-        int64_t non_paxos_replica_num = 0;
         if (FAILEDx(gen.gen(part_ids))) {
           LOG_WARN("generate part ids failed", K(ret));
         } else if (OB_FAIL(schemas.push_back(copy))) {
@@ -13932,6 +14001,7 @@ int ObDDLService::do_create_tenant_partitions(const ObCreateTenantArg& arg,
                        false,
                        is_standby,
                        create_mode,
+                       restore,
                        frozen_status))) {
           LOG_WARN("fail to create partitions", K(ret));
         } else {
@@ -14049,6 +14119,28 @@ int ObDDLService::drop_tenant(const ObDropTenantArg& arg)
         LOG_WARN("ddl_operator drop_tenant failed", K(tenant_id), KR(ret));
       } else if (OB_FAIL(ddl_operator.drop_restore_point(tenant_id, trans))) {
         LOG_WARN("fail to drop restore point", K(ret), K(tenant_id));
+      } else if (tenant_schema->is_in_recyclebin()) {
+        // try recycle record from __all_recyclebin
+        ObArray<ObRecycleObject> recycle_objs;
+        ObSchemaService* schema_service_impl = NULL;
+        if (OB_ISNULL(schema_service_) || OB_ISNULL(schema_service_->get_schema_service())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema service is null", KR(ret), KP_(schema_service));
+        } else if (FALSE_IT(schema_service_impl = schema_service_->get_schema_service())) {
+        } else if (OB_FAIL(schema_service_impl->fetch_recycle_object(OB_SYS_TENANT_ID,
+                       tenant_schema->get_tenant_name_str(),
+                       ObRecycleObject::TENANT,
+                       trans,
+                       recycle_objs))) {
+          LOG_WARN("get_recycle_object failed", KR(ret), KPC(tenant_schema));
+        } else if (0 == recycle_objs.size()) {
+          // skip
+        } else if (1 < recycle_objs.size()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("records should not be more than 1", KR(ret), KPC(tenant_schema), K(recycle_objs));
+        } else if (OB_FAIL(schema_service_impl->delete_recycle_object(OB_SYS_TENANT_ID, recycle_objs.at(0), trans))) {
+          LOG_WARN("delete_recycle_object failed", KR(ret), KPC(tenant_schema));
+        }
       }
     } else {  // put tenant into recyclebin
       ObTenantSchema new_tenant_schema = *tenant_schema;
@@ -15088,7 +15180,6 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
   int64_t non_paxos_replica_num = OB_INVALID_COUNT;
   const uint64_t tenant_id = tablegroup_schema.get_tenant_id();
   const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
-  bool is_standby = false;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || !frozen_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(frozen_status));
@@ -15106,8 +15197,6 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN(
         "array count unexpected", K(ret), "tg_addr_count", tablegroup_addr.count(), "part_ids_count", part_ids.count());
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("fail to get cluster", KR(ret), K(is_standby), K(tablegroup_schema));
   } else {
     obrpc::ObCreatePartitionArg arg;
     share::ObSplitPartition split_info;
@@ -15132,7 +15221,6 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
         FOREACH_CNT_X(a, part_addr, OB_SUCC(ret))
         {
           ObPartitionReplica flag_replica;
-          common::ObRole role = FOLLOWER;
           if (OB_UNLIKELY(nullptr == a || nullptr == rpc_proxy_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("addr or rpc_proxy is null", K(ret));
@@ -15148,27 +15236,24 @@ int ObDDLService::create_tablegroup_partitions_for_create(const share::schema::O
             } else {
               restore = REPLICA_NOT_RESTORE;
             }
-            if (OB_FAIL(set_flag_role(a->initial_leader_, is_standby, restore, tablegroup_id, role))) {
-              LOG_WARN("fail to set flag role", KR(ret));
-            } else if (OB_FAIL(fill_create_partition_arg(tablegroup_id,
-                           tablegroup_schema.get_partition_cnt(),
-                           paxos_replica_num,
-                           non_paxos_replica_num,
-                           partition_id,
-                           *a,
-                           now,
-                           false /*is_bootstrap*/,
-                           false /*is_standby*/,
-                           restore,
-                           frozen_status,
-                           arg))) {
+            if (OB_FAIL(fill_create_partition_arg(tablegroup_id,
+                    tablegroup_schema.get_partition_cnt(),
+                    paxos_replica_num,
+                    non_paxos_replica_num,
+                    partition_id,
+                    *a,
+                    now,
+                    false /*is_bootstrap*/,
+                    false /*is_standby*/,
+                    restore,
+                    frozen_status,
+                    arg))) {
               LOG_WARN("fail to fill ObCreatePartitionArg", K(ret), K(tablegroup_id));
             } else if (OB_FAIL(fill_flag_replica(tablegroup_id,
                            tablegroup_schema.get_partition_cnt(),
                            partition_id,
                            arg,
                            *a,
-                           role,
                            flag_replica))) {
               LOG_WARN("fail to fill flag replica", K(ret), K(tablegroup_id));
             } else if (OB_FAIL(creator.add_flag_replica(flag_replica))) {
@@ -15197,7 +15282,7 @@ int ObDDLService::create_tablegroup_partitions_for_physical_restore(const obrpc:
   int ret = OB_SUCCESS;
   RS_TRACE(create_tablegroup_partitions_begin);
   const uint64_t tablegroup_id = arg.schema_id_;
-  const ObCreateTableMode create_mode = ObCreateTableMode::OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
+  const ObCreateTableMode create_mode = ObCreateTableMode::OB_CREATE_TABLE_MODE_LOOSE;
   const ObTablegroupSchema* tablegroup_schema = NULL;
   common::ObArray<ObPartitionAddr> tablegroup_addr;
   if (OB_FAIL(check_inner_stat())) {
@@ -15232,7 +15317,7 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
 {
   int ret = OB_SUCCESS;
   const uint64_t schema_id = restore_arg.schema_id_;
-  const ObCreateTableMode create_mode = ObCreateTableMode::OB_CREATE_TABLE_MODE_PHYSICAL_RESTORE;
+  const ObCreateTableMode create_mode = ObCreateTableMode::OB_CREATE_TABLE_MODE_LOOSE;
   bool is_standby = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
@@ -15242,8 +15327,6 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
   } else if (!partition_schema.has_self_partition()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("table/tablegroup should has self partition", K(ret), K(schema_id));
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("fail to get standby cluster", KR(ret), K(partition_schema));
   } else {
     ObPartIdsGenerator gen(partition_schema);
     ObArray<int64_t> part_ids;
@@ -15295,12 +15378,9 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
           FOREACH_CNT_X(a, part_addr, OB_SUCC(ret))
           {
             ObPartitionReplica flag_replica;
-            common::ObRole role = FOLLOWER;
             if (OB_UNLIKELY(nullptr == a || nullptr == rpc_proxy_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("addr or rpc_proxy is null", K(ret));
-            } else if (OB_FAIL(set_flag_role(a->initial_leader_, is_standby, restore, partition_id, role))) {
-              LOG_WARN("fail to set flag role", KR(ret));
             } else if (OB_FAIL(fill_create_partition_arg(schema_id,
                            partition_schema.get_partition_cnt(),
                            paxos_replica_num,
@@ -15314,13 +15394,8 @@ int ObDDLService::create_partitions_for_physical_restore(ObSchemaGetterGuard& sc
                            frozen_status,
                            arg))) {
               LOG_WARN("fail to fill ObCreatePartitionArg", K(ret), K(schema_id));
-            } else if (OB_FAIL(fill_flag_replica(schema_id,
-                           partition_schema.get_partition_cnt(),
-                           partition_id,
-                           arg,
-                           *a,
-                           role,
-                           flag_replica))) {
+            } else if (OB_FAIL(fill_flag_replica(
+                           schema_id, partition_schema.get_partition_cnt(), partition_id, arg, *a, flag_replica))) {
               LOG_WARN("fail to fill flag replica", K(ret), K(schema_id));
             } else if (OB_FAIL(creator.add_flag_replica(flag_replica))) {
               LOG_WARN("fail to add flag replica to partition creator", K(ret), K(flag_replica));
@@ -17181,6 +17256,9 @@ int ObDDLService::set_passwd(const ObSetPasswdArg& arg)
   const ObString& user_name = arg.user_;
   const ObString& host_name = arg.host_;
   const ObString& passwd = arg.passwd_;
+  const bool modify_max_connections = arg.modify_max_connections_;
+  const uint64_t max_connections_per_hour = arg.max_connections_per_hour_;
+  const uint64_t max_user_connections = arg.max_user_connections_;
   const share::schema::ObSSLType ssl_type = arg.ssl_type_;
 
   ObSchemaGetterGuard schema_guard;
@@ -17197,11 +17275,23 @@ int ObDDLService::set_passwd(const ObSetPasswdArg& arg)
       ret = OB_USER_NOT_EXIST;  // no such user
       LOG_WARN("Try to set password for non-exist user", K(tenant_id), K(user_name), K(host_name), K(ret));
     } else if (share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED == ssl_type) {
-      if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), passwd, ddl_stmt_str))) {
-        LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
-      } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-      } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd, &ddl_sql))) {
-        LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
+      if (modify_max_connections) {
+        if (OB_FAIL(ObDDLSqlGenerator::gen_set_max_connections_sql(
+              ObAccountArg(user_name, host_name), max_connections_per_hour, max_user_connections,
+              ddl_stmt_str))) {
+          LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
+        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+        } else if (OB_FAIL(set_max_connection_in_trans(tenant_id, user_id,
+                max_connections_per_hour, max_user_connections, &ddl_sql))) {
+          LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
+        }
+      } else {
+        if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name), passwd, ddl_stmt_str))) {
+          LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
+        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
+        } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd, &ddl_sql))) {
+          LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
+        }
       }
     } else {
       if (OB_FAIL(
@@ -17233,6 +17323,49 @@ int ObDDLService::set_passwd_in_trans(
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       if (OB_FAIL(ddl_operator.set_passwd(tenant_id, user_id, new_passwd, ddl_stmt_str, trans))) {
         LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id), K(new_passwd));
+      }
+      if (trans.is_started()) {
+        int temp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+          ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        }
+      }
+    }
+  }
+
+  // publish schema
+  if (OB_SUCC(ret)) {
+    ret = publish_schema(tenant_id);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("pubish schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::set_max_connection_in_trans(
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const uint64_t max_connections_per_hour,
+    const uint64_t max_user_connections,
+    const ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  ObDDLSQLTransaction trans(schema_service_);
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init");
+  } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Tenant_id or user_id is invalid", K(tenant_id), K(user_id), K(ret));
+  } else {
+    if (OB_FAIL(trans.start(sql_proxy_))) {
+      LOG_WARN("Start transaction failed", K(ret));
+    } else {
+      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+      if (OB_FAIL(ddl_operator.set_max_connections(tenant_id, user_id, max_connections_per_hour,
+          max_user_connections, ddl_stmt_str, trans))) {
+        LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id));
       }
       if (trans.is_started()) {
         int temp_ret = OB_SUCCESS;
@@ -18807,7 +18940,11 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg& arg)
     uint64_t database_id = OB_INVALID_ID;
     if (OB_SUCC(ret)) {
       bool database_exist = false;
-      if (OB_FAIL(schema_service_->check_database_exist(tenant_id, database_name, database_id, database_exist))) {
+      if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
+        database_id = OB_OUTLINE_DEFAULT_DATABASE_ID;
+        database_exist = true;
+      } else if (OB_FAIL(
+                     schema_service_->check_database_exist(tenant_id, database_name, database_id, database_exist))) {
         LOG_WARN("failed to check database exist!",
             K(tenant_id),
             K(database_name),
@@ -22287,7 +22424,7 @@ int ObDDLService::get_tenant_primary_zone_entity_count(
       } else if (tablegroup_schema->get_primary_zone().empty()) {
         // go on next
       } else {
-        pz_entity_count;
+        ++pz_entity_count;
       }
     }
   }
@@ -22580,7 +22717,8 @@ bool ObDDLService::add_sys_table_index(const uint64_t table_id, common::ObIArray
   int ret = OB_SUCCESS;
   uint64_t pure_id = extract_pure_id(table_id);
   uint64_t tenant_id = extract_tenant_id(table_id);
-  if (OB_ALL_TABLE_V2_HISTORY_TID == pure_id || OB_ALL_TABLE_HISTORY_TID == pure_id) {
+  if (OB_ALL_TABLE_V2_HISTORY_TID == pure_id || OB_ALL_TABLE_HISTORY_TID == pure_id ||
+      OB_ALL_BACKUP_PIECE_FILES_TID == pure_id) {
     ObTableSchema index_schema;
     switch (pure_id) {
       case OB_ALL_TABLE_HISTORY_TID: {
@@ -22591,6 +22729,12 @@ bool ObDDLService::add_sys_table_index(const uint64_t table_id, common::ObIArray
       }
       case OB_ALL_TABLE_V2_HISTORY_TID: {
         if (OB_FAIL(ObInnerTableSchema::all_table_v2_history_idx_data_table_id_schema(index_schema))) {
+          LOG_WARN("fail to create index schema", K(ret), K(index_schema));
+        }
+        break;
+      }
+      case OB_ALL_BACKUP_PIECE_FILES_TID: {
+        if (OB_FAIL(ObInnerTableSchema::all_backup_piece_files_idx_data_table_id_schema(index_schema))) {
           LOG_WARN("fail to create index schema", K(ret), K(index_schema));
         }
         break;

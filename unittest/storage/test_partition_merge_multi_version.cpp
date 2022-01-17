@@ -58,7 +58,7 @@ namespace storage {
 
 typedef compaction::ObIPartitionMergeFuser::MERGE_ITER_ARRAY MERGE_ITER_ARRAY;
 class TestMultiVersionMerge : public ObMultiVersionSSTableTest {
-  public:
+public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
   TestMultiVersionMerge() : ObMultiVersionSSTableTest("test_multi_version_merge")
   {}
@@ -1989,13 +1989,13 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CLF\n"
+                        "0        var0  -9       0      9        12      EXIST   CLF\n"
                         "1        var1  MIN     -16     8        NOP     EXIST   U\n"
                         "1        var1  MIN     -12     NOP      NOP     EXIST   U\n"
-                        "1        var1  -24     -10     7        6       EXIST   C\n"
-                        "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "1        var1  -24      0      7        6       EXIST   C\n"
+                        "1        var1  -4       0      NOP      9       EXIST   CL\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -2101,13 +2101,13 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans2)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CLF\n"
+                        "0        var0  -9       0      9        12      EXIST   CLF\n"
                         "1        var1  MIN     -89     NOP      9       EXIST   U\n"  // trans_id_3
-                        "1        var1  -24     -17     7        12      EXIST   C\n"  // trans_id_2
-                        "1        var1  -16     -10     7        6       EXIST   C\n"  // trans_id_1
-                        "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "1        var1  -24      0      7        12      EXIST   C\n"  // trans_id_2
+                        "1        var1  -16      0      7        6       EXIST   C\n"  // trans_id_1
+                        "1        var1  -4       0      NOP      9       EXIST   CL\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -2224,15 +2224,15 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CLF\n"
+                        "0        var0  -9       0      9        12      EXIST   CLF\n"
                         "1        var1  MIN     -89     NOP      9       EXIST   U\n"  // trans_id_5
-                        "1        var1  -35     -17     7        12      EXIST   C\n"  // trans_id_4
-                        "1        var1  -29     -13     NOP      28      EXIST   N\n"  // trans_id_3
-                        "1        var1  -24     -12     NOP      71      EXIST   N\n"  // trans_id_2
-                        "1        var1  -16     -10     7        6       EXIST   C\n"  // trans_id_1
-                        "1        var1  -4      0       NOP      9       EXIST   L\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "1        var1  -35      0      7        12      EXIST   C\n"  // trans_id_4
+                        "1        var1  -29      0      NOP      28      EXIST   N\n"  // trans_id_3
+                        "1        var1  -24      0      NOP      71      EXIST   N\n"  // trans_id_2
+                        "1        var1  -16      0      7        6       EXIST   C\n"  // trans_id_1
+                        "1        var1  -4       0      NOP      9       EXIST   L\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -2269,10 +2269,10 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact2)
                   "0        var0   -9     -9      7       12      EXIST   CL\n";
 
   macro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
-                  "1        var1   MIN    -14     NOP     59      EXIST   U   trans_id_4\n";
+                  "1        var1   MIN    -14     NOP     59      EXIST   U   trans_id_2\n";
 
   macro_data[2] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
-                  "1        var1   MIN2   -13     81      28      EXIST   U   trans_id_3\n";
+                  "1        var1   MIN2   -13     81      28      EXIST   U   trans_id_2\n";
 
   macro_data[3] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
                   "1        var1   MIN2   -12     NOP     71      EXIST   U   trans_id_2\n"
@@ -2349,16 +2349,14 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact2)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CLF\n"
+                        "0        var0  -9       0      9        12      EXIST   CLF\n"
                         "1        var1  MIN     -89     NOP      9       EXIST   U\n"  // trans_id_5
-                        "1        var1  -35     -17     81       12      EXIST   C\n"  // trans_id_4
-                        "1        var1  -29     -13     81       28      EXIST   C\n"  // trans_id_3
-                        "1        var1  -24     -12     NOP      71      EXIST   N\n"  // trans_id_2
-                        "1        var1  -16     -10     NOP      6       EXIST   N\n"  // trans_id_1
-                        "1        var1  -16     -7      7        2       EXIST   C\n"
-                        "1        var1  -4      0       NOP      9       EXIST   L\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "1        var1  -35      0      81       12      EXIST   C\n"  // trans_id_4
+                        "1        var1  -24      0      81       59      EXIST   C\n"  // trans_id_2
+                        "1        var1  -16      0      7        6       EXIST   C\n"  // trans_id_1
+                        "1        var1  -4       0      NOP      9       EXIST   CL\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -2478,16 +2476,16 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CLF\n"
+                        "0        var0  -9       0      9        12      EXIST   CLF\n"
                         "1        var1  MIN     -93     NOP      17      EXIST   U\n"  // trans_id_6
-                        "1        var1  -61     -91     NOP      72      EXIST   C\n"  // trans_id_5
-                        "1        var1  -35     -17     NOP      12      EXIST   C\n"  // trans_id_4
-                        "1        var1  -29     -13     NOP      28      EXIST   N\n"  // trans_id_3
-                        "1        var1  -24     -12     NOP      71      EXIST   N\n"  // trans_id_2
-                        "1        var1  -16     -10     NOP      6       EXIST   C\n"  // trans_id_1
-                        "1        var1  -4      0       NOP      9       EXIST   L\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "1        var1  -61      0      NOP      72      EXIST   C\n"  // trans_id_5
+                        "1        var1  -35      0      NOP      12      EXIST   C\n"  // trans_id_4
+                        "1        var1  -29      0      NOP      28      EXIST   N\n"  // trans_id_3
+                        "1        var1  -24      0      NOP      71      EXIST   N\n"  // trans_id_2
+                        "1        var1  -16      0      NOP      6       EXIST   C\n"  // trans_id_1
+                        "1        var1  -4       0      NOP      9       EXIST   L\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -2584,10 +2582,10 @@ TEST_F(TestMultiVersionMerge, test_merge_with_same_sql_sequence)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "1        var1  -35     -14     18       59      EXIST   C\n"    // trans_id_4
-                        "1        var1  -29     -13     NOP      28      EXIST   N\n"    // trans_id_3
-                        "1        var1  -24     -12     NOP      71      EXIST   N\n"    // trans_id_2
-                        "1        var1  -16     -10     18       6       EXIST   CL\n";  // trans_id_1
+                        "1        var1  -35      0      18       59      EXIST   C\n"    // trans_id_4
+                        "1        var1  -29      0      NOP      28      EXIST   N\n"    // trans_id_3
+                        "1        var1  -24      0      NOP      71      EXIST   N\n"    // trans_id_2
+                        "1        var1  -16      0      18       6       EXIST   CL\n";  // trans_id_1
 
   // minor mrege
 
@@ -2686,8 +2684,8 @@ TEST_F(TestMultiVersionMerge, test_merge_with_magic_row)
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
                         "1        var1   MAGIC  MAGIC   NOP      NOP     EXIST   LM\n"
-                        "2        var2   -92    -71     18       1       EXIST   C\n"    // trans_id_4
-                        "2        var2   -29    -9      18       0       EXIST   CL\n";  // trans_id_2
+                        "2        var2   -92     0      18       1       EXIST   C\n"    // trans_id_4
+                        "2        var2   -29     0      18       0       EXIST   CL\n";  // trans_id_2
 
   // minor mrege
 
@@ -2810,8 +2808,8 @@ TEST_F(TestMultiVersionMerge, test_merge_with_magic_row2)
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
                         "1        var1   -39    0       18      59      EXIST   CF\n"
                         "1        var1   -29    0       18      59      EXIST   C \n"
-                        "1        var1   -1     -6      18      2       EXIST   CL \n"
-                        "2        var2   -92    -71     18      1       EXIST   CLF\n";
+                        "1        var1   -1     0       18      2       EXIST   CL \n"
+                        "2        var2   -92    0       18      1       EXIST   CLF\n";
 
   // minor mrege
 
@@ -2935,7 +2933,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_magic_row3)
                         "1        var1   -39    0       18      59      EXIST   CF\n"
                         "1        var1   -29    0       18      59      EXIST   C \n"
                         "1        var1   -12    0       20      59      EXIST   CL \n"
-                        "2        var2   -92    -71     18      1       EXIST   CLF\n";
+                        "2        var2   -92    0       18      1       EXIST   CLF\n";
 
   // minor mrege
 
@@ -3134,12 +3132,12 @@ TEST_F(TestMultiVersionMerge, test_sstable_merge_cut_with_multi_trans)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     9        12      EXIST   CLF\n"
+                        "0        var0  -9       0     9        12      EXIST   CLF\n"
                         "1        var1  MIN     -16     8        NOP     EXIST   U\n"
                         "1        var1  MIN     -12     NOP      NOP     EXIST   U\n"
-                        "1        var1  -4      0       NOP      9       EXIST   CL\n"
-                        "2        var2  -9      -25     18       7       EXIST   CF\n"
-                        "2        var2  -4      -15     NOP      7       EXIST   L\n";
+                        "1        var1  -4       0      NOP      9       EXIST   CL\n"
+                        "2        var2  -9       0      18       7       EXIST   CF\n"
+                        "2        var2  -4       0      NOP      7       EXIST   CL\n";
 
   // minor mrege
 
@@ -3219,8 +3217,8 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_sstable)
   ObExtStoreRange range;
 
   const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
-                        "0        var0  -9      -11     NOP      NOP     DELETE   CLF\n"
-                        "1        var1  -38     -0      -1       -20     EXIST    CLF\n";
+                        "0        var0  -9       0      NOP      NOP     DELETE   CLF\n"
+                        "1        var1  -38      0      -1       -20     EXIST    CLF\n";
 
   // minor mrege
 
@@ -3233,6 +3231,261 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_sstable)
   range.get_range().set_whole_range();
   prepare_query_param(trans_version_range);
   context_.query_flag_.is_sstable_cut_ = true;
+  ASSERT_EQ(OB_SUCCESS, range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
+  if (OB_NOT_NULL(merged_sstable)) {
+    context_.read_out_type_ = FLAT_ROW_STORE;
+    ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(param_, context_, range, scanner));
+    ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+    ASSERT_TRUE(res_iter.equals(*scanner, true));
+    scanner->~ObStoreRowIterator();
+  } else {
+    STORAGE_LOG(ERROR, "merged_sstable is null");
+  }
+}
+
+TEST_F(TestMultiVersionMerge, test_trans_cross_sstable_and_first_is_delete_row)
+{
+  GCONF._enable_sparse_row = false;
+  ObMemtableCtxFactory mem_ctx;
+  ObSSTableMergeCtx merge_context;
+  const int64_t rowkey_cnt = TEST_ROWKEY_COLUMN_CNT + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  storage::ObTablesHandle tables_handle;
+  ObSSTable sstable1;
+  const char* macro_data[4];
+  macro_data[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                  "1        var1   MIN   -12     -1     -20      DELETE  U   trans_id_1\n"
+                  "1        var1   MIN   -10     NOP     6       EXIST   U   trans_id_1\n";
+
+  macro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                  "1        var1   MIN   -7      NOP     2       EXIST   U   trans_id_1\n"
+                  "1        var1   MIN   -6      7       2       EXIST   LU   trans_id_1\n";
+
+  prepare_data_start(sstable1, macro_data, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data, 1);
+  prepare_one_macro(&macro_data[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable1);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable1));
+
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObSSTable sstable2;
+  const char* macro_data2[1];
+  macro_data2[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag trans_id\n"
+                   "1        var1  -38     0       NOP      NOP    DELETE   CLF   trans_id_0\n";
+
+  prepare_data_start(sstable2, macro_data2, rowkey_cnt, 10, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data2, 1);
+  prepare_data_end(sstable2);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable2));
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+  int ret = OB_SUCCESS;
+  test_trans_part_ctx_.clear_all();
+  if (OB_FAIL(test_trans_part_ctx_.add_transaction_status(transaction::ObTransTableStatusType::COMMIT, 38))) {
+    STORAGE_LOG(ERROR, "add transaction status failed", K(ret));
+  }
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+
+  prepare_merge_context(tables_handle, MINI_MINOR_MERGE, false, trans_version_range, merge_context);
+  context_.query_flag_.is_sstable_cut_ = true;
+  ObMockIterator res_iter;
+  ObStoreRowIterator* scanner = NULL;
+  ObExtStoreRange range;
+
+  const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
+                        "1        var1  -38      0     NOP      NOP     DELETE    CLF\n";
+
+  // minor mrege
+
+  ObMacroBlockBuilder builder;
+  ObSSTable* merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergeUtil::merge_partition(&mem_ctx, merge_context, builder, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  res_iter.reset();
+  range.get_range().set_whole_range();
+  prepare_query_param(trans_version_range);
+  context_.query_flag_.is_sstable_cut_ = true;
+  ASSERT_EQ(OB_SUCCESS, range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
+  if (OB_NOT_NULL(merged_sstable)) {
+    context_.read_out_type_ = FLAT_ROW_STORE;
+    ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(param_, context_, range, scanner));
+    ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+    ASSERT_TRUE(res_iter.equals(*scanner, true));
+    scanner->~ObStoreRowIterator();
+  } else {
+    STORAGE_LOG(ERROR, "merged_sstable is null");
+  }
+}
+/*
+TEST_F(TestMultiVersionMerge, test_trans_cross_sstable_check_flag_bug)
+{
+  GCONF._enable_sparse_row = false;
+  ObMemtableCtxFactory mem_ctx;
+  ObSSTableMergeCtx merge_context;
+  const int64_t rowkey_cnt = TEST_ROWKEY_COLUMN_CNT + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  storage::ObTablesHandle tables_handle;
+  ObSSTable sstable1;
+  const char* macro_data[2];
+  macro_data[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "1        var1   -40   0     -1     -20      EXIST   CF\n"
+                  "1        var1   -30   0     NOP     6       EXIST   N\n";
+
+  macro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "1        var1   -28   0      NOP     2       EXIST   N\n"
+                  "1        var1   -26   0      7       NOP     EXIST   L\n";
+
+  prepare_data_start(sstable1, macro_data, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data, 1);
+  prepare_one_macro(&macro_data[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable1);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable1));
+
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObSSTable sstable2;
+  const char* macro_data2[2];
+  macro_data2[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                   "1        var1  -49     0       8       NOP    EXIST   CF\n";
+
+  macro_data2[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                   "1        var1  -46     0      18       NOP    EXIST   L\n";
+
+  prepare_data_start(sstable2, macro_data2, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data2, 1);
+  prepare_one_macro(&macro_data2[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable2);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable2));
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObSSTable sstable3;
+  const char* macro_data3[2];
+  macro_data3[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                   "1        var1  -52     0      90       NOP    EXIST   CF\n";
+
+  macro_data3[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                   "1        var1  -49     0      26       NOP    EXIST   L\n";
+
+  prepare_data_start(sstable3, macro_data3, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data3, 1);
+  prepare_one_macro(&macro_data3[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable3);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable3));
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  int ret = OB_SUCCESS;
+  test_trans_part_ctx_.clear_all();
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+
+  prepare_merge_context(tables_handle, MINI_MINOR_MERGE, false, trans_version_range, merge_context);
+  ObMockIterator res_iter;
+  ObStoreRowIterator* scanner = NULL;
+  ObExtStoreRange range;
+
+  const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
+                        "1        var1  -52     0      90       -20    EXIST   CF\n"
+                        "1        var1  -49     0      26       NOP    EXIST   N\n"
+                        "1        var1  -46     0      18       NOP    EXIST   N\n"
+                        "1        var1  -40     0     -1       -20    EXIST   C\n"
+                        "1        var1   -30    0     NOP      6       EXIST   N\n"
+                        "1        var1   -28    0      7       2       EXIST   C\n"
+                        "1        var1   -26    0      7       NOP     EXIST   L\n";
+
+  // minor mrege
+
+  ObMacroBlockBuilder builder;
+  ObSSTable* merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergeUtil::merge_partition(&mem_ctx, merge_context, builder, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  res_iter.reset();
+  range.get_range().set_whole_range();
+  prepare_query_param(trans_version_range);
+  context_.query_flag_.is_sstable_cut_ = true;
+  ASSERT_EQ(OB_SUCCESS, range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
+  if (OB_NOT_NULL(merged_sstable)) {
+    context_.read_out_type_ = FLAT_ROW_STORE;
+    ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(param_, context_, range, scanner));
+    ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+    ASSERT_TRUE(res_iter.equals(*scanner, true));
+    scanner->~ObStoreRowIterator();
+  } else {
+    STORAGE_LOG(ERROR, "merged_sstable is null");
+  }
+}
+*/
+TEST_F(TestMultiVersionMerge, test_nop_pos_check_with_del_row)
+{
+  GCONF._enable_sparse_row = false;
+  ObMemtableCtxFactory mem_ctx;
+  ObSSTableMergeCtx merge_context;
+  const int64_t rowkey_cnt = TEST_ROWKEY_COLUMN_CNT + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  storage::ObTablesHandle tables_handle;
+  ObSSTable sstable1;
+  const char* macro_data[2];
+  macro_data[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "1        var1   -10    0     NOP     NOP     DELETE  CLF\n"
+                  "2        var2   -17    0     NOP     6       EXIST   CLF\n";
+
+  macro_data[1] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                  "3        var3   -19   0      NOP     2       EXIST   CLF\n";
+
+  prepare_data_start(sstable1, macro_data, rowkey_cnt, 9, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data, 1);
+  prepare_one_macro(&macro_data[1], 1, INT64_MAX, nullptr, nullptr, true);
+  prepare_data_end(sstable1);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable1));
+
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObSSTable sstable2;
+  const char* macro_data2[1];
+  macro_data2[0] = "bigint   var   bigint bigint  bigint   bigint  flag    multi_version_row_flag\n"
+                   "1        var1  -38     0       NOP      18     EXIST    CLF\n"
+                   "2        var2  -29     0       82       3      EXIST    CLF\n";
+
+  prepare_data_start(sstable2, macro_data2, rowkey_cnt, 10, "none", FLAT_ROW_STORE, 0);
+  prepare_one_macro(macro_data2, 1);
+  prepare_data_end(sstable2);
+  ASSERT_EQ(OB_SUCCESS, tables_handle.add_table(&sstable2));
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+  int ret = OB_SUCCESS;
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+
+  prepare_merge_context(tables_handle, MINI_MINOR_MERGE, false, trans_version_range, merge_context);
+  context_.query_flag_.is_sstable_cut_ = true;
+  ObMockIterator res_iter;
+  ObStoreRowIterator* scanner = NULL;
+  ObExtStoreRange range;
+
+  const char* result1 = "bigint   var   bigint  bigint bigint   bigint  flag    multi_version_row_flag\n"
+                        "1        var1  -38      0     NOP      18     EXIST    CF\n"
+                        "1        var1  -10      0     NOP      NOP    DELETE   CL\n"
+                        "2        var2  -29      0     82       3      EXIST    CF\n"
+                        "2        var2  -17      0     NOP      6      EXIST    CL\n"
+                        "3        var3  -19      0     NOP      2      EXIST    CLF\n";
+
+  // minor mrege
+
+  ObMacroBlockBuilder builder;
+  ObSSTable* merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, ObPartitionMergeUtil::merge_partition(&mem_ctx, merge_context, builder, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  res_iter.reset();
+  range.get_range().set_whole_range();
+  prepare_query_param(trans_version_range);
   ASSERT_EQ(OB_SUCCESS, range.to_collation_free_range_on_demand_and_cutoff_range(allocator_));
   if (OB_NOT_NULL(merged_sstable)) {
     context_.read_out_type_ = FLAT_ROW_STORE;

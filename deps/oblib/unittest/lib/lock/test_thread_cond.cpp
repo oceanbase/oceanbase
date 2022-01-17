@@ -19,12 +19,12 @@
 namespace oceanbase {
 namespace common {
 class TestThreadCondStress : public lib::ThreadPool {
-  public:
+public:
   TestThreadCondStress(ObThreadCond& cond, const bool is_wait);
   virtual ~TestThreadCondStress();
   void run1() final;
 
-  private:
+private:
   ObThreadCond& cond_;
   bool is_wait_;
 };

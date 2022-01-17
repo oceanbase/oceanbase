@@ -106,7 +106,8 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_db(
     const share::schema::ObDatabaseSchema& database_schema, common::ObObj* cells, const int64_t col_count)
 {
   int ret = OB_SUCCESS;
-  ObSArray<const ObTableSchema*> table_schemas;
+  ObSArray<const ObTableSchema *> table_schemas;
+  bool priv_passed = true;
 
   if (OB_ISNULL(schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -121,6 +122,15 @@ int ObInfoSchemaReferentialConstraintsTable::add_fk_constraints_in_db(
         ret = OB_TABLE_NOT_EXIST;
         SERVER_LOG(WARN, "table schema not exist", K(ret));
       } else if (table_schema->is_index_table() || table_schema->is_view_table()) {
+        continue;
+      } else if (OB_FAIL(check_priv("table_acc",
+                                 database_schema.get_database_name_str(),
+                                 table_schema->get_table_name_str(),
+                                 tenant_id_,
+                                 priv_passed))) {
+        SERVER_LOG(WARN, "failed to check priv", K(ret), K(database_schema.get_database_name_str()),
+        K(table_schema->get_table_name_str()));
+      } else if (!priv_passed) {
         continue;
       } else if (OB_FAIL(add_fk_constraints_in_table(
                      *table_schema, database_schema.get_database_name_str(), cells, col_count))) {

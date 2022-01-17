@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace common {
 template <class T>
 class ObSmallObjPool {
-  public:
+public:
   struct ObjItem {
     enum {
       SRC_UNKNOWN = 0,  // Fixed allocation of elements, not released
@@ -41,11 +41,11 @@ class ObSmallObjPool {
 
   static const int64_t DEFAULT_FIXED_COUNT = 1024;
 
-  public:
+public:
   ObSmallObjPool();
   virtual ~ObSmallObjPool();
 
-  public:
+public:
   int alloc(T*& obj);
   int free(T* obj);
   int64_t get_free_count() const
@@ -61,15 +61,15 @@ class ObSmallObjPool {
     return fixed_count_;
   }
 
-  public:
+public:
   int init(const int64_t fixed_count = DEFAULT_FIXED_COUNT, const lib::ObLabel& label = ObModIds::OB_SMALL_OBJ_POOL,
       const uint64_t tenant_id = OB_SERVER_TENANT_ID, const int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE);
   void destroy();
 
-  private:
+private:
   int alloc_obj_(T*& obj);
 
-  private:
+private:
   bool inited_;
   int64_t fixed_count_;
   int64_t free_count_;
@@ -77,7 +77,7 @@ class ObSmallObjPool {
   ObFixedQueue<ObjItem> free_list_;
   ObSmallAllocator allocator_;  // Obj allocator
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSmallObjPool);
 };
 

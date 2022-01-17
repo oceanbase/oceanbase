@@ -41,7 +41,7 @@ class ObILogMembershipMgr;
 class ObILogEngine;
 
 class ObLogCascadingMgr {
-  public:
+public:
   // reset parent reason type
   enum ResetPType {
     REJECT_MSG = 0,
@@ -59,7 +59,7 @@ class ObLogCascadingMgr {
   ObLogCascadingMgr();
   virtual ~ObLogCascadingMgr();
 
-  public:
+public:
   int init(const common::ObAddr& self, const common::ObPartitionKey& partition_key, ObILogSWForCasMgr* sw,
       ObILogStateMgrForCasMgr* state_mgr, ObILogMembershipMgr* mm, ObILogEngine* log_engine,
       share::ObIPSCb* partition_service_cb);
@@ -76,7 +76,7 @@ class ObLogCascadingMgr {
   }
   bool is_valid_child(const common::ObAddr& server) const;
   int reject_server(const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type) const;
-  int process_reject_msg(const common::ObAddr& server, const int32_t msg_type);
+  int process_reject_msg(const common::ObAddr& server, const int64_t cluster_id, const int32_t msg_type);
   int process_region_change(const common::ObRegion& new_region);
   int process_fetch_reg_server_req(const common::ObAddr& server, const common::ObReplicaType replica_type,
       const bool is_self_lag_behind, const bool is_request_leader, const bool is_need_force_register,
@@ -97,6 +97,10 @@ class ObLogCascadingMgr {
   share::ObCascadMember get_parent() const
   {
     return parent_;
+  }
+  share::ObCascadMember get_prev_parent() const
+  {
+    return prev_parent_;
   }
   common::ObAddr get_parent_addr() const
   {
@@ -128,10 +132,10 @@ class ObLogCascadingMgr {
   int primary_process_protect_mode_switch();
   int leader_try_update_sync_standby_child(const bool need_renew_loc);
 
-  private:
+private:
   typedef common::ObSEArray<common::ObRegion, 8> RegionArray;
 
-  private:
+private:
   int set_parent_(const common::ObAddr& new_parent_addr, const int64_t cluster_id);
   void reset_parent_(const uint32_t reset_type);
   int get_parent_candidate_list_(const common::ObAddr& server, const common::ObReplicaType replica_type,
@@ -154,13 +158,13 @@ class ObLogCascadingMgr {
   bool is_valid_child_unlock_(const common::ObAddr& server) const;
   bool need_update_parent_() const;
 
-  private:
+private:
   typedef common::SpinRLockGuard RLockGuard;
   typedef common::SpinWLockGuard WLockGuard;
 
   static const int64_t MAX_CHILD_NUM = 5;
 
-  private:
+private:
   bool is_inited_;
   mutable common::SpinRWLock lock_;
   common::ObAddr self_;

@@ -28,7 +28,7 @@ class ObMySQLProxy;
  * SQL Service for fetching/updating table level statistics and column level statistics
  */
 class ObOptStatSqlService {
-  public:
+public:
   ObOptStatSqlService();
   ~ObOptStatSqlService();
   bool is_inited() const
@@ -48,7 +48,7 @@ class ObOptStatSqlService {
   int update_column_stat(const common::ObIArray<ObOptColumnStat*>& column_stats);
   int delete_column_stat(const ObIArray<ObOptColumnStat*>& column_stats);
 
-  private:
+private:
   int get_table_stat_sql(const ObOptColumnStat& stat, const int64_t current_time, ObSqlString& sql_string);
   int get_column_stat_sql(const ObOptColumnStat& stat, const int64_t current_time, ObSqlString& sql_string);
   int get_histogram_stat_sql(const ObOptColumnStat& stat, common::ObIAllocator& allocator,
@@ -57,7 +57,7 @@ class ObOptStatSqlService {
   int get_obj_binary_hex_str(const common::ObObj& obj, common::ObIAllocator& allocator, common::ObString& out_str);
   int hex_str_to_obj(const char* buf, int64_t buf_len, common::ObIAllocator& allocator, common::ObObj& obj);
 
-  private:
+private:
   int fetch_histogram_stat(
       const ObOptColumnStat::Key& key, const ObHistogram& basic_histogram_info, ObOptColumnStat& stat);
   int fill_bucket_stat(sqlclient::ObMySQLResult& result, ObOptColumnStat& stat, int64_t& last_endpoint_num);

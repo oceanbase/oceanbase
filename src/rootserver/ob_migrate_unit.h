@@ -23,7 +23,7 @@ class ObMigrateTaskInfo;
 struct TenantBalanceStat;
 
 class ObMigrateUnit {
-  public:
+public:
   ObMigrateUnit();
   virtual ~ObMigrateUnit()
   {}
@@ -35,7 +35,7 @@ class ObMigrateUnit {
   // check unit migrate finish
   int unit_migrate_finish(int64_t& task_cnt);
 
-  private:
+private:
   /* two return value:
    * 1 task_cnt: task count
    * 2 do_accumulated: try_accumulate_task_info has the semantic of trying to perform;
@@ -45,7 +45,7 @@ class ObMigrateUnit {
       const ObMigrateTaskInfo& task_info, const Partition* cur_partition, const Replica* cur_replica,
       const Partition*& first_migrate_p, const Replica*& first_migrate_r, int64_t& task_cnt, bool& do_accumulated);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMigrateUnit);
   // function members
@@ -55,7 +55,7 @@ class ObMigrateUnit {
     return check_stop_provider_->check_stop();
   }
 
-  private:
+private:
   // data members
   bool inited_;
   ObUnitManager* unit_mgr_;

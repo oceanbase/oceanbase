@@ -21,15 +21,15 @@ namespace common {
 #define TRACE_ID_FORMAT "Y%lX-%016lX"
 struct ObCurTraceId {
   class Guard {
-    public:
+  public:
     explicit Guard(const ObAddr& addr);
     ~Guard();
 
-    private:
+  private:
     bool need_reset_;
   };
   class SeqGenerator {
-    public:
+  public:
     enum { BATCH = 1 << 20 };
     static uint64_t gen_seq()
     {
@@ -44,7 +44,7 @@ struct ObCurTraceId {
   class TraceId {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     inline TraceId()
     {
       uval_[0] = 0;
@@ -130,7 +130,21 @@ struct ObCurTraceId {
       return 0 != id_.is_user_request_;
     }
 
-    private:
+    inline int set(const char* buf)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(buf)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        int32_t return_value = sscanf(buf, TRACE_ID_FORMAT, &uval_[0], &uval_[1]);
+        if (0 != return_value && 2 != return_value) {
+          ret = OB_ERR_UNEXPECTED;
+        }
+      }
+      return ret;
+    }
+
+  private:
     union {
       struct {
         uint32_t ip_ : 32;
@@ -199,11 +213,8 @@ struct ObCurTraceId {
 
   inline static TraceId* get_trace_id()
   {
-    static RLOCAL(TraceId*, TRACE_ID);
-    if (OB_UNLIKELY(TRACE_ID == nullptr)) {
-      TRACE_ID = new (std::nothrow) TraceId();
-    }
-    return TRACE_ID;
+    static thread_local TraceId TRACE_ID;
+    return &TRACE_ID;
   }
 
   inline static void mark_user_request()
@@ -214,6 +225,14 @@ struct ObCurTraceId {
   inline static bool is_user_request()
   {
     return get_trace_id()->is_user_request();
+  }
+
+  inline static void set(const char* buf)
+  {
+    TraceId* trace_id = get_trace_id();
+    if (NULL != trace_id) {
+      trace_id->set(buf);
+    }
   }
 };
 

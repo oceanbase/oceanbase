@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprPartId : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprPartId(common::ObIAllocator& alloc);
   virtual ~ObExprPartId()
   {}
@@ -32,7 +32,7 @@ class ObExprPartId : public ObFuncExprOperator {
 
   static int eval_part_id(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprPartId);
 };
 }  // end namespace sql

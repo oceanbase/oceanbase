@@ -30,7 +30,7 @@ class ObExecContext;
 class ObCreateUserStmt;
 class ObDropUserExecutor;
 class ObCreateUserExecutor {
-  public:
+public:
   ObCreateUserExecutor()
   {}
   virtual ~ObCreateUserExecutor()
@@ -42,16 +42,16 @@ class ObCreateUserExecutor {
       const common::ObIArray<int64_t>& index, common::ObIArray<common::ObString>& users,
       common::ObIArray<common::ObString>& hosts);
 
-  private:
+private:
   int create_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObCreateUserArg& arg) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUserExecutor);
 };
 
 class ObDropUserStmt;
 class ObDropUserExecutor {
-  public:
+public:
   ObDropUserExecutor()
   {}
   virtual ~ObDropUserExecutor()
@@ -63,31 +63,31 @@ class ObDropUserExecutor {
       common::ObIArray<common::ObString>& dst_users, common::ObIArray<common::ObString>& dst_hosts);
   int execute(ObExecContext& ctx, ObDropUserStmt& stmt);
 
-  private:
+private:
   int drop_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObDropUserArg& arg);
   DISALLOW_COPY_AND_ASSIGN(ObDropUserExecutor);
 };
 
 class ObLockUserStmt;
 class ObLockUserExecutor {
-  public:
+public:
   ObLockUserExecutor()
   {}
   virtual ~ObLockUserExecutor()
   {}
   int execute(ObExecContext& ctx, ObLockUserStmt& stmt);
 
-  private:
+private:
   int lock_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObLockUserArg& arg);
   DISALLOW_COPY_AND_ASSIGN(ObLockUserExecutor);
 };
 
 class ObAlterUserProfileStmt;
 class ObAlterUserProfileExecutor {
-  private:
+private:
   int set_role_exec(ObExecContext& ctx, ObAlterUserProfileStmt& stmt);
 
-  public:
+public:
   ObAlterUserProfileExecutor()
   {}
   virtual ~ObAlterUserProfileExecutor()
@@ -99,28 +99,28 @@ class ObAlterUserProfileExecutor {
 
 class ObRenameUserStmt;
 class ObRenameUserExecutor {
-  public:
+public:
   ObRenameUserExecutor()
   {}
   virtual ~ObRenameUserExecutor()
   {}
   int execute(ObExecContext& ctx, ObRenameUserStmt& stmt);
 
-  private:
+private:
   int rename_user(obrpc::ObCommonRpcProxy* rpc_proxy, const obrpc::ObRenameUserArg& arg);
   DISALLOW_COPY_AND_ASSIGN(ObRenameUserExecutor);
 };
 
 class ObAlterUserPrimaryZoneStmt;
 class ObAlterUserPrimaryZoneExecutor {
-  public:
+public:
   ObAlterUserPrimaryZoneExecutor()
   {}
   virtual ~ObAlterUserPrimaryZoneExecutor()
   {}
   int execute(ObExecContext& ctx, ObAlterUserPrimaryZoneStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserPrimaryZoneExecutor);
 };
 

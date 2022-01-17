@@ -19,11 +19,11 @@ namespace oceanbase {
 namespace sql {
 
 class ObBigEndian {
-  public:
+public:
   static int put_uint16(unsigned char* b, uint16_t v);
   static int put_uint32(unsigned char* b, uint32_t v);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObBigEndian);
 };
@@ -36,10 +36,10 @@ struct ObUUIDNode {
 };
 
 class ObUUIDTime {
-  public:
+public:
   static int get_time(uint64_t& time, uint16_t& seq);
 
-  private:
+private:
   static int time_now(uint64_t& now);
   static void reset_clock_seq();
   static const uint64_t LILLIAN = 2299160;              // Julian day of 15 Oct 1582
@@ -54,7 +54,7 @@ class ObUUIDTime {
 };
 
 class ObExprUuid : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprUuid(common::ObIAllocator& alloc);
   explicit ObExprUuid(
       common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension);
@@ -65,11 +65,11 @@ class ObExprUuid : public ObFuncExprOperator {
   static int eval_uuid(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  protected:
+protected:
   static int calc(unsigned char* scratch);
   // aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
   static const common::ObLength LENGTH_UUID = 36;  // chars not bytes
-  private:
+private:
   static ObUUIDNode* uuid_node;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprUuid);
@@ -86,7 +86,7 @@ inline int ObExprUuid::calc_result_type0(ObExprResType& type, common::ObExprType
 }
 
 class ObExprSysGuid : public ObExprUuid {
-  public:
+public:
   explicit ObExprSysGuid(common::ObIAllocator& alloc);
   virtual ~ObExprSysGuid();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -99,10 +99,10 @@ class ObExprSysGuid : public ObExprUuid {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   static const common::ObLength LENGTH_SYS_GUID = 16;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSysGuid);
 };
 

@@ -16,6 +16,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/backup/ob_backup_operator.h"
+#include "share/backup/ob_backup_file_lock_mgr.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/container/ob_se_array_iterator.h"
 #include "lib/container/ob_array_iterator.h"
@@ -488,6 +489,7 @@ int ObTenantNameSimpleMgr::read_backup_file(const ObClusterBackupDest& cluster_b
   int64_t file_length = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
+  ObBackupFileSpinLock lock;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -497,6 +499,10 @@ int ObTenantNameSimpleMgr::read_backup_file(const ObClusterBackupDest& cluster_b
     LOG_ERROR("cannot read backup simple mgr twice", K(ret), K(meta_));
   } else if (OB_FAIL(ObBackupPathUtil::get_tenant_name_info_path(cluster_backup_dest, path))) {
     LOG_WARN("failed to get tenant name path", K(ret));
+  } else if (OB_FAIL(lock.init(path))) {
+    LOG_WARN("failed to init lock", K(ret), K(path));
+  } else if (OB_FAIL(lock.lock())) {
+    LOG_WARN("failed to lock backup file", K(ret), K(path));
   } else if (OB_FAIL(util.get_file_length(path.get_obstr(), cluster_backup_dest.get_storage_info(), file_length))) {
     if (OB_BACKUP_FILE_NOT_EXIST != ret) {
       LOG_WARN("failed to get file length", K(ret));
@@ -527,6 +533,7 @@ int ObTenantNameSimpleMgr::write_backup_file(const ObClusterBackupDest& cluster_
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
   int64_t pos = 0;
+  ObBackupFileSpinLock lock;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -541,6 +548,10 @@ int ObTenantNameSimpleMgr::write_backup_file(const ObClusterBackupDest& cluster_
     LOG_ERROR("write buf size not match", K(ret), K(pos), K(buf_size));
   } else if (OB_FAIL(ObBackupPathUtil::get_tenant_name_info_path(cluster_backup_dest, path))) {
     LOG_WARN("failed to get tenant name path", K(ret));
+  } else if (OB_FAIL(lock.init(path))) {
+    LOG_WARN("failed to init lock", K(ret), K(path));
+  } else if (OB_FAIL(lock.lock())) {
+    LOG_WARN("failed to lock backup file", K(ret), K(path));
   } else if (OB_FAIL(util.mk_parent_dir(path.get_obstr(), cluster_backup_dest.get_storage_info()))) {
     LOG_WARN("failed to mkdir", K(ret), K(path));
   } else if (OB_FAIL(util.write_single_file(path.get_obstr(), cluster_backup_dest.get_storage_info(), buf, buf_size))) {
@@ -724,7 +735,9 @@ int ObTenantNameMgr::get_backup_tenant_ids_from_schema_(ObSchemaGetterGuard& sch
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
     const uint64_t tenant_id = tenant_ids.at(i);
     const ObTenantSchema* tenant_info = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+    if (tenant_id < OB_USER_TENANT_ID) {
+      // do nothing
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
       LOG_WARN("Failed to get tenant info", K(ret), K(tenant_id));
     } else if (tenant_info->is_restore()) {
       // skip backup tenant is restore

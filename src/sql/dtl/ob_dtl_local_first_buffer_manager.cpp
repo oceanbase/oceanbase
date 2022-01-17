@@ -26,7 +26,7 @@ using namespace oceanbase::lib;
 using namespace oceanbase::share;
 
 class PinFunction {
-  public:
+public:
   void operator()(ObDtlLocalFirstBufferCache* val)
   {
     val->pin();
@@ -59,7 +59,7 @@ int ObDtlLocalFirstBufferCache::init(int64_t bucket_num, int64_t concurrent_cnt)
     bucket_num = CHANNEL_HASH_BUCKET_NUM;
     LOG_DEBUG("unexepct  bucket number", K(bucket_num), K(concurrent_cnt));
   }
-  if (0 >= bucket_num || MAX_BITSET_CNT < bucket_num) {
+  if (0 >= bitset_cnt_ || MAX_BITSET_CNT < bitset_cnt_) {
     bitset_cnt_ = MAX_BITSET_CNT;
     LOG_DEBUG("unexepct bucket number", K(bucket_num), K(concurrent_cnt));
   }

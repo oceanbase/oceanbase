@@ -23,7 +23,7 @@ class ObTableRowStoreOpInput : public ObOpInput {
   friend class ObTableRowStoreOp;
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTableRowStoreOpInput(ObExecContext& ctx, const ObOpSpec& spec)
       : ObOpInput(ctx, spec), multi_row_store_(), allocator_(NULL)
   {}
@@ -41,36 +41,36 @@ class ObTableRowStoreOpInput : public ObOpInput {
    * @brief set allocator which is used for deserialize, but not all objects will use allocator
    * while deserializing, so you can override it if you need.
    */
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator);
+  virtual void set_deserialize_allocator(common::ObIAllocator* allocator) override;
 
-  private:
+private:
   // One partition corresponds to one row store
   common::ObFixedArray<ObChunkDatumStore*, common::ObIAllocator> multi_row_store_;
   common::ObIAllocator* allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableRowStoreOpInput);
 };
 
 class ObTableRowStoreSpec : public ObOpSpec {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTableRowStoreSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type), table_id_(common::OB_INVALID_ID)
   {}
   ~ObTableRowStoreSpec()
   {}
 
-  public:
+public:
   uint64_t table_id_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableRowStoreSpec);
 };
 
 class ObTableRowStoreOp : public ObOperator {
-  public:
+public:
   ObTableRowStoreOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input), row_store_idx_(0)
   {}
@@ -106,11 +106,11 @@ class ObTableRowStoreOp : public ObOperator {
 
   int fetch_stored_row();
 
-  private:
+private:
   ObChunkDatumStore::Iterator row_store_it_;
   int64_t row_store_idx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableRowStoreOp);
 };
 }  // namespace sql

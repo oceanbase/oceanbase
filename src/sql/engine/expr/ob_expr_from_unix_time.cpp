@@ -119,9 +119,9 @@ int ObExprFromUnixTime::calc(ObObj& result, const ObObj& param, const ObObj& for
     result.set_null();
   } else if (OB_UNLIKELY(ObStringTC != format.get_type_class())) {
     result = format;
-  } else if (OB_UNLIKELY(NULL == expr_ctx.calc_buf_)) {
+  } else if (OB_UNLIKELY(NULL == expr_ctx.calc_buf_) || OB_ISNULL(expr_ctx.exec_ctx_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("string_buf is null");
+    LOG_WARN("string_buf is null", K(ret), K(expr_ctx.calc_buf_));
   } else if (OB_UNLIKELY(NULL == (buf = reinterpret_cast<char*>(expr_ctx.calc_buf_->alloc(BUF_LEN))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("no more memory to alloc for buf");
@@ -133,7 +133,8 @@ int ObExprFromUnixTime::calc(ObObj& result, const ObObj& param, const ObObj& for
       ObTime ob_time;
       if (OB_UNLIKELY(value < 0)) {
         result.set_null();
-      } else if (OB_FAIL(ob_obj_to_ob_time_with_date(tmp, get_timezone_info(expr_ctx.my_session_), ob_time))) {
+      } else if (OB_FAIL(ob_obj_to_ob_time_with_date(tmp, get_timezone_info(expr_ctx.my_session_), ob_time,
+                    get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx())))) {
         LOG_WARN("failed to convert obj to ob time");
       } else if (OB_UNLIKELY(format.get_string().empty())) {
         result.set_null();

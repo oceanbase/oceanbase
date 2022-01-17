@@ -22,16 +22,16 @@ class ObPartitionService;
 }
 namespace clog {
 class ObLogRpcProcessor : public obrpc::ObRpcProcessor<obrpc::ObLogRpcProxy::ObRpc<obrpc::OB_CLOG> > {
-  public:
+public:
   ObLogRpcProcessor(storage::ObPartitionService* partition_service) : partition_service_(partition_service)
   {}
   virtual ~ObLogRpcProcessor()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 };  // end namespace clog

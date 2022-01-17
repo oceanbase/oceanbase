@@ -33,7 +33,7 @@ namespace observer {
 class TestInformationSchemaService : public ::testing::Test {
   typedef int (*schema_create_func)(share::schema::ObTableSchema& table_schema);
 
-  public:
+public:
   TestInformationSchemaService();
   virtual ~TestInformationSchemaService()
   {}
@@ -47,7 +47,7 @@ class TestInformationSchemaService : public ::testing::Test {
 
   void fill_session();
 
-  protected:
+protected:
   // ObSchemaManager schema_manager_;
   ObArenaAllocator allocator_;
   sql::ObSQLSessionInfo session_info_;
@@ -117,7 +117,7 @@ void TestInformationSchemaService::fill_table_schema(
 }
 
 class MockObSchemaGetterGuard : public ObSchemaGetterGuard {
-  public:
+public:
   int add_database_schema(ObDatabaseSchema* database_schema);
   int add_table_schema(ObTableSchema* table_schema);
   MOCK_METHOD2(get_database_schemas_in_tenant,
@@ -128,7 +128,7 @@ class MockObSchemaGetterGuard : public ObSchemaGetterGuard {
   int get_table_schemas_from_database(
       const uint64_t tenant_id, const uint64_t database_id, ObIArray<const ObTableSchema*>& table_schemas);
 
-  private:
+private:
   ObSArray<const ObDatabaseSchema*> database_schemas_;
   ObSArray<const ObTableSchema*> table_schemas_;
 };
@@ -265,6 +265,7 @@ TEST_F(TestInformationSchemaService, partitions)
   partitions_iter.set_schema_guard(&schema_guard);
   partitions_iter.set_tenant_id(real_tenant_id);
   partitions_iter.set_allocator(&allocator_);
+  partitions_iter.set_session(&session_info_);
   add_output_column_ids(partitions_iter, share::ObInnerTableSchema::partitions_schema, table);
   partitions_iter.set_table_schema(&table);
   share::FakePartPropertyGetter property_getter;
@@ -288,6 +289,7 @@ TEST_F(TestInformationSchemaService, partitions)
   partitions_iter.set_schema_guard(&schema_guard);
   partitions_iter.set_tenant_id(real_tenant_id);
   partitions_iter.set_allocator(&allocator_);
+  partitions_iter.set_session(&session_info_);
   partitions_iter.set_table_schema(&null_table_schema);
   row = NULL;
   partitions_iter.set_reserved_column_cnt(25);
@@ -310,6 +312,7 @@ TEST_F(TestInformationSchemaService, partitions)
   partitions_iter.set_schema_guard(&schema_guard);
   partitions_iter.set_tenant_id(real_tenant_id);
   partitions_iter.set_allocator(&allocator_);
+  partitions_iter.set_session(&session_info_);
   partitions_iter.set_table_schema(&table_schema_1);
   row = NULL;
   partitions_iter.set_reserved_column_cnt(25);

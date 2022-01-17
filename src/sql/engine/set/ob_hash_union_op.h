@@ -21,12 +21,12 @@ namespace sql {
 class ObHashUnionSpec : public ObHashSetSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashUnionSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 };
 
 class ObHashUnionOp : public ObHashSetOp {
-  public:
+public:
   ObHashUnionOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObHashUnionOp()
   {}
@@ -37,10 +37,10 @@ class ObHashUnionOp : public ObHashSetOp {
   virtual int rescan() override;
   virtual void destroy() override;
 
-  private:
+private:
   int get_child_next_row();
 
-  private:
+private:
   ObOperator* cur_child_op_;
   bool is_left_child_;
 };

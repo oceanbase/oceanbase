@@ -18,19 +18,19 @@
 namespace oceanbase {
 namespace common {
 class ObRecursiveMutex {
-  public:
+public:
   explicit ObRecursiveMutex(const uint32_t latch_id = ObLatchIds::DEFAULT_RECURSIVE_MUTEX);
   ~ObRecursiveMutex();
   int lock();
   int unlock();
   int trylock();
 
-  private:
+private:
   ObLatch latch_;
   uint32_t latch_id_;
   uint32_t lock_cnt_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRecursiveMutex);
 };
 

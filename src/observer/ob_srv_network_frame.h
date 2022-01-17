@@ -34,7 +34,7 @@ namespace oceanbase {
 namespace observer {
 
 class ObSrvNetworkFrame {
-  public:
+public:
   enum { NET_IO_NORMAL_GID = 0, NET_IO_HP_GID = 64, NET_IO_BATCH_GID = 72 };
   explicit ObSrvNetworkFrame(ObGlobalContext& gctx);
 
@@ -52,7 +52,11 @@ class ObSrvNetworkFrame {
 
   int reload_config();
   int reload_ssl_config();
-  static uint64_t get_ssl_file_hash(bool& file_exist);
+  static int extract_expired_time(const char *const cert_file, int64_t &expired_time);
+  static uint64_t get_ssl_file_hash(const char *ca_cert_file,
+      const char *ssl_cert_file,
+      const char *ssl_key_file,
+      bool &file_exist);
   ObSrvDeliver& get_deliver()
   {
     return deliver_;
@@ -63,7 +67,7 @@ class ObSrvNetworkFrame {
   rpc::frame::ObReqTransport* get_batch_rpc_req_transport();
   inline rpc::frame::ObReqTranslator& get_xlator();
 
-  private:
+private:
   ObGlobalContext& gctx_;
 
   ObSrvXlator xlator_;

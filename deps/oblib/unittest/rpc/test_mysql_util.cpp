@@ -22,7 +22,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 
 class TestObMySQLUtil : public ::testing::Test {
-  public:
+public:
   TestObMySQLUtil()
   {}
 
@@ -32,7 +32,7 @@ class TestObMySQLUtil : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  protected:
+protected:
 };
 
 #define PREPEND_ZEROS(char_size, offset, src_str, result_str) \

@@ -46,7 +46,7 @@ class ObGtsRequestRpc;
 class EndTransCallbackTask;
 
 class ObTransCtxFactory {
-  public:
+public:
   static ObTransCtx* alloc(const int64_t ctx_type);
   static void release(ObTransCtx* ctx);
   static int64_t get_alloc_count()
@@ -66,7 +66,7 @@ class ObTransCtxFactory {
     return ATOMIC_LOAD(&active_part_ctx_count_);
   }
 
-  private:
+private:
   static const char* mod_type_;
   static int64_t active_sche_ctx_count_;
   static int64_t active_coord_ctx_count_;
@@ -76,7 +76,7 @@ class ObTransCtxFactory {
 
 template <typename T, int64_t STATISTIC_INTERVAL = TRANS_MEM_STAT_INTERVAL>
 class TransObjFactory {
-  public:
+public:
   explicit TransObjFactory(const char* mod_type) : alloc_count_(0), release_count_(0)
   {
     (void)snprintf(mod_type_, sizeof(mod_type_) - 1, "%s", mod_type);
@@ -98,7 +98,7 @@ class TransObjFactory {
     return mod_type_;
   }
 
-  private:
+private:
   static const int64_t MOD_TYPE_SIZE = 64;
   char mod_type_[MOD_TYPE_SIZE];
   int64_t alloc_count_;
@@ -144,14 +144,14 @@ void TransObjFactory<T, STATISTIC_INTERVAL>::release(T* obj)
 
 #define MAKE_FACTORY_CLASS_DEFINE_(object_name, object_name2) \
   class object_name##Factory {                                \
-    public:                                                   \
+  public:                                                     \
     static object_name2* alloc();                             \
     static void release(object_name2* obj);                   \
     static int64_t get_alloc_count();                         \
     static int64_t get_release_count();                       \
     static const char* get_mod_type();                        \
                                                               \
-    private:                                                  \
+  private:                                                    \
     static const char* mod_type_;                             \
     static int64_t alloc_count_;                              \
     static int64_t release_count_;                            \
@@ -161,14 +161,14 @@ void TransObjFactory<T, STATISTIC_INTERVAL>::release(T* obj)
 #define MAKE_FACTORY_CLASS_DEFINE_V2(object_name, object_name2) MAKE_FACTORY_CLASS_DEFINE_(object_name, object_name2)
 
 class ObPartitionTransCtxMgrFactory {
-  public:
+public:
   static ObPartitionTransCtxMgr* alloc(const uint64_t tenant_id);
   static void release(ObPartitionTransCtxMgr* mgr);
   static int64_t get_alloc_count();
   static int64_t get_release_count();
   static const char* get_mod_type();
 
-  private:
+private:
   static const char* mod_type_;
   static int64_t alloc_count_;
   static int64_t release_count_;

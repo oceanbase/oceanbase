@@ -23,7 +23,7 @@ using namespace common;
 using namespace transaction;
 namespace unittest {
 class TestObTransMsg : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {
     init_();
@@ -31,10 +31,10 @@ class TestObTransMsg : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   int init_();
 
-  public:
+public:
   // valid partition parameters
   static const int64_t VALID_TABLE_ID = 1;
   static const int32_t VALID_PARTITION_ID = 1;
@@ -50,7 +50,7 @@ class TestObTransMsg : public ::testing::Test {
   static const char* LOCAL_IP;
   static const uint64_t TENANT_ID = 1001;
 
-  public:
+public:
   common::ObAddr observer_;
 };
 const char* TestObTransMsg::LOCAL_IP = "127.0.0.1";

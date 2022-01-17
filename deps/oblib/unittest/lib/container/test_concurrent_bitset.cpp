@@ -16,7 +16,7 @@
 #include "lib/atomic/ob_atomic.h"
 using namespace oceanbase::common;
 class TestConcurrentBitset : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
@@ -42,7 +42,7 @@ class TestConcurrentBitset : public ::testing::Test {
   template <typename bitset_type>
   void concurrent_set_find_first_zero_bit(bitset_type& bitset);
 
-  protected:
+protected:
   ObConcurrentBitset<UINT16_MAX> bitset_;
   ObConcurrentBitset<UINT16_MAX, true> bitset_lock_;
 };

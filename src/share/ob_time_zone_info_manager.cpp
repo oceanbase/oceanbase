@@ -206,7 +206,7 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get result", K(result), K(ret));
       } else if (OB_FAIL(fill_tz_info_map(*result, tz_info_map_))) {
-        LOG_WARN("fail to fill tz_info_map", K(ret));
+        LOG_ERROR("fail to fill tz_info_map", K(ret));
       } else {
         last_version_ = current_tz_version;
         LOG_INFO("success to fetch tz_info map",
@@ -243,7 +243,7 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_sys_table()
         LOG_WARN("fail to get result", K(result), K(ret));
       } else {
         if (OB_FAIL(fill_tz_info_map(*result, tz_info_map_))) {
-          LOG_WARN("fail to fill tz_info_map", K(ret));
+          LOG_ERROR("fail to fill tz_info_map", K(ret));
         } else {
           //(void)print_tz_info_map();
           if (OB_UNLIKELY(false == is_usable_)) {
@@ -285,6 +285,7 @@ int ObTimeZoneInfoManager::set_tz_info_map(
       LOG_WARN("fail to insert new_tz_info to tz_info_id_map", KPC(tz_pos_value), K(ret));
     } else if (OB_FAIL(tz_info_map.name_map_.insert_and_get(new_tz_info.get_tz_name(), name_id_value))) {
       tz_info_map.id_map_.revert(tz_pos_value);
+      tz_info_map.id_map_.del(new_tz_info.get_tz_id());
       LOG_WARN("fail to insert new_tz_info to tz_info_name_map_", K(name_id_value), K(ret));
     } else {
       tz_info_map.id_map_.revert(tz_pos_value);
@@ -297,8 +298,8 @@ int ObTimeZoneInfoManager::set_tz_info_map(
     // do nothing
   } else {
     LOG_INFO("need to upgrade transition time", KPC(stored_tz_info), K(new_tz_info));
-    common::ObSArray<ObTZTransitionTypeInfo>& next_tz_tran_types = stored_tz_info->get_next_tz_tran_types();
-    common::ObSArray<ObTZRevertTypeInfo>& next_tz_revt_types = stored_tz_info->get_next_tz_revt_types();
+    common::ObSArray<ObTZTransitionTypeInfo, ObMalloc>& next_tz_tran_types = stored_tz_info->get_next_tz_tran_types();
+    common::ObSArray<ObTZRevertTypeInfo, ObMalloc>& next_tz_revt_types = stored_tz_info->get_next_tz_revt_types();
     if (OB_FAIL(next_tz_tran_types.assign(new_tz_info.get_tz_tran_types()))) {
       LOG_WARN("fail to assign next_tz_tran_types", K(new_tz_info.get_tz_tran_types()), K(ret));
     } else if (OB_FAIL(next_tz_revt_types.assign(new_tz_info.get_tz_revt_types()))) {
@@ -388,11 +389,17 @@ int ObTimeZoneInfoManager::fill_tz_info_map(sqlclient::ObMySQLResult& result, Ob
     EXTRACT_BOOL_FIELD_MYSQL(result, "is_dst", tz_tran_type.info_.is_dst_);
 
     if (OB_SUCC(ret)) {
-      EXTRACT_INT_FIELD_MYSQL(result, "transition_time", tz_tran_type.lower_time_, int64_t);
-      // is NULL transition time
-      if (OB_ERR_NULL_VALUE == ret) {
-        ret = OB_SUCCESS;
-        is_tran_time_null = true;
+      int64_t int_value = 0;
+      if (OB_FAIL(result.get_int("transition_time", int_value))) {
+        //is NULL transition time
+        if (OB_ERR_NULL_VALUE == ret) {
+          ret = OB_SUCCESS;
+          is_tran_time_null = true;
+        } else {
+          LOG_WARN("fail to get column transition_time in row", K(ret));
+        }
+      } else {
+        tz_tran_type.lower_time_ = int_value;
       }
     }
 

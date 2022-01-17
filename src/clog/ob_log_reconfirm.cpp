@@ -126,6 +126,8 @@ ObLogReconfirm::ObLogReconfirm()
       last_renew_sync_standby_loc_ts_(OB_INVALID_TIMESTAMP),
       failover_truncate_log_id_(OB_INVALID_ID),
       max_membership_version_(OB_INVALID_TIMESTAMP),
+      last_check_start_id_(OB_INVALID_ID),
+      last_notify_sync_standby_time_(OB_INVALID_TIMESTAMP),
       is_standby_reconfirm_(false),
       receive_previous_max_log_ts_(false),
       is_inited_(false)
@@ -195,11 +197,21 @@ int ObLogReconfirm::init_reconfirm_()
     CLOG_LOG(WARN, "submit_replay_task failed", K_(partition_key), K(ret));
   } else if (!state_mgr_->is_cluster_allow_handle_prepare()) {
     ret = OB_STATE_NOT_MATCH;
-    CLOG_LOG(WARN, "cluster state do not allow handle prepare", K_(partition_key), K(ret));
+    common::ObClusterType cluster_type = INVALID_CLUSTER_TYPE;
+    share::ServerServiceStatus server_status = share::OBSERVER_INVALID_STATUS;
+    GCTX.get_cluster_type_and_status(cluster_type, server_status);
+    CLOG_LOG(ERROR,
+        "cluster state do not allow handle prepare, it's maybe executing switchover",
+        K_(partition_key),
+        K(ret),
+        K(cluster_type),
+        K(server_status));
   } else if (GCTX.is_primary_cluster() && GCTX.need_sync_to_standby() &&
              !share::ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) &&
-             OB_FAIL(cascading_mgr_->leader_try_update_sync_standby_child(false))) {  // not trigger renew location
+             OB_FAIL(cascading_mgr_->leader_try_update_sync_standby_child(true))) {
     // primary leader cannot get standby leader from location cache, need renew
+    // if sw is empty, leader need renew location here,
+    // because state_mgr just triggers renew when sw is not empty
     const int64_t now = ObTimeUtility::current_time();
     if (OB_INVALID_TIMESTAMP == last_renew_sync_standby_loc_ts_ ||
         now - last_renew_sync_standby_loc_ts_ >= PRIMARY_RENEW_LOCATION_TIME_INTERVAL) {
@@ -541,7 +553,9 @@ void ObLogReconfirm::reset()
     last_push_renew_ms_log_ts_ = OB_INVALID_TIMESTAMP;
     last_renew_sync_standby_loc_ts_ = OB_INVALID_TIMESTAMP;
     failover_truncate_log_id_ = OB_INVALID_ID;
+    last_check_start_id_ = OB_INVALID_ID;
     max_membership_version_ = OB_INVALID_TIMESTAMP;
+    last_notify_sync_standby_time_ = OB_INVALID_TIMESTAMP;
     is_standby_reconfirm_ = false;
     receive_previous_max_log_ts_ = false;
   }
@@ -621,7 +635,7 @@ int ObLogReconfirm::try_filter_invalid_log_()
       if (OB_LOG_NOP == header->get_log_type()) {
         const ObProposalID curr_proposal_id = state_mgr_->get_proposal_id();
         header->set_log_type(OB_LOG_TRUNCATE);       // update log_type
-        header->set_epoch_id(curr_proposal_id.ts_);  // updatge epoch_id
+        header->set_epoch_id(curr_proposal_id.ts_);  // update epoch_id
         header->update_header_checksum();            // update header_checksum
         // advance leader_ts_ to filter subsequent logs
         leader_ts_ = header->get_epoch_id();
@@ -785,7 +799,7 @@ int ObLogReconfirm::confirm_log_()
               CLOG_LOG(WARN, "try_update_nop_or_truncate_timestamp fail", K(ret), K_(partition_key));
             } else if (OB_FAIL(sw_->submit_log(log_ptr->get_header(), log_ptr->get_buf(), NULL))) {
               CLOG_LOG(
-                  ERROR, "submit log failed", K_(partition_key), K(ret), K_(next_id), K_(start_id), K_(max_flushed_id));
+                  WARN, "submit log failed", K_(partition_key), K(ret), K_(next_id), K_(start_id), K_(max_flushed_id));
               break;
             } else {
               CLOG_LOG(TRACE, "submit log success", K_(partition_key), K_(next_id), K_(start_id), K_(max_flushed_id));
@@ -801,14 +815,42 @@ int ObLogReconfirm::confirm_log_()
         }
       }
     }  // end while
+
+    // In case of rebuild in leader reconfirm:
+    // 1. when majority has already recycled specified log, the follower
+    //    will trigger rebuild for leader, leader will advance the base
+    //    storage info and truncate the sliding window, therefore, the log
+    //    of next_id will not be majority, however, the start id of sliding
+    //    window has greater than next_id.
+    // 2. when majority has specified log, but others has already recycled
+    //    specified log, so these followers will trigger rebuild for leader,
+    //    leader will advance the next_id until submit_log return
+    //    OB_ERROR_OUT_OF_RANGE
+    // We need to ensure that next_id can be advanced correctly in above
+    // two scenarios.
+    if (OB_SUCC(ret) || OB_ERROR_OUT_OF_RANGE == ret) {
+      const uint64_t new_start_id = sw_->get_start_id();
+      if (new_start_id > next_id_) {
+        next_id_ = new_start_id;
+        // When next_id_ is inceased, last_ts_ also need update
+        // Or later NOP log's submit_timestamp may fallback
+        const int64_t last_submit_ts = sw_->get_last_submit_timestamp();
+        (void)try_update_last_ts_(last_submit_ts);
+        CLOG_LOG(INFO,
+            "there may execute a rebuild operation in\
+            leader reconfirm",
+            K(ret),
+            K(new_start_id),
+            K(next_id_));
+      }
+      ret = OB_SUCCESS;
+    }
+
     if (OB_SUCC(ret) && next_id_ <= max_flushed_id_ && next_id_ >= log_info_array_.get_end_id()) {
       // process next log_range
       if (OB_EAGAIN == (ret = init_log_info_range_(next_id_))) {
-        // ret is EAGAIN when some log has slide out, need update next_id_ and retry
-        const uint64_t new_start_id = sw_->get_start_id();
-        if (new_start_id > next_id_) {
-          next_id_ = new_start_id;
-        }
+        // ret is EAGAIN when some log has slide out, need update next_id_
+        // and retry
       } else if (OB_FAIL(ret)) {
         CLOG_LOG(WARN, "init_log_info_range_ failed", K_(partition_key), K(ret));
       } else {
@@ -859,6 +901,68 @@ bool ObLogReconfirm::need_fetch_log_()
   return bool_ret;
 }
 
+bool ObLogReconfirm::is_log_task_waiting_standby_ack_(const uint64_t start_id)
+{
+  bool bool_ret = false;
+  if (IS_NOT_INIT) {
+  } else {
+    const int64_t* ref = NULL;
+    ObLogTask* log_task = NULL;
+    if (OB_SUCCESS == (sw_->get_log_task(start_id, log_task, ref))) {
+      log_task->lock();
+      if (GCTX.is_primary_cluster() && GCTX.need_sync_to_standby() && log_task->is_local_majority_flushed() &&
+          !log_task->is_standby_majority_finished()) {
+        bool_ret = true;
+      }
+      log_task->unlock();
+    }
+    if (NULL != ref) {
+      sw_->revert_log_task(ref);
+      ref = NULL;
+    }
+  }
+  return bool_ret;
+}
+
+int ObLogReconfirm::primary_leader_try_notify_sync_standby_()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (GCTX.is_primary_cluster() && GCTX.need_sync_to_standby() &&
+             !share::ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id()) && !sw_->is_empty()) {
+    const uint64_t start_id = sw_->get_start_id();
+    const int64_t now = ObTimeUtility::current_time();
+    if (last_check_start_id_ != start_id) {
+      last_check_start_id_ = start_id;
+      last_notify_sync_standby_time_ = OB_INVALID_TIMESTAMP;
+    } else if (is_log_task_waiting_standby_ack_(start_id)) {
+      if (OB_INVALID_TIMESTAMP == last_notify_sync_standby_time_ ||
+          now - last_notify_sync_standby_time_ <= CLOG_RECONFIRM_PRIMARY_NOTIFY_STANDBY_INTERVAL) {
+        last_notify_sync_standby_time_ = now;
+        // primary leader update location cache to get sync_standby_child
+        (void)cascading_mgr_->leader_try_update_sync_standby_child(true);
+        share::ObCascadMember sync_standby_child = cascading_mgr_->get_sync_standby_child();
+        if (!sync_standby_child.is_valid()) {
+          // sync_standby_child is invalid, skip
+        } else if (OB_FAIL(log_engine_->reject_server(sync_standby_child.get_server(),
+                       sync_standby_child.get_cluster_id(),
+                       partition_key_,
+                       OB_REPLICA_MSG_TYPE_QUICK_REGISTER))) {
+          CLOG_LOG(WARN, "reject_server failed", K_(partition_key), K(ret));
+        } else {
+          CLOG_LOG(INFO,
+              "reject sync_standby_child to trigger quick register success",
+              K_(partition_key),
+              K(sync_standby_child));
+        }
+      }
+    } else {
+    }
+  }
+  return ret;
+}
+
 int ObLogReconfirm::reconfirm_log_()
 {
   int ret = OB_SUCCESS;
@@ -868,6 +972,7 @@ int ObLogReconfirm::reconfirm_log_()
     if (need_fetch_log_()) {
       ret = try_fetch_log_();
     }
+    (void)primary_leader_try_notify_sync_standby_();
     if (OB_SUCC(ret)) {
       ret = confirm_log_();
     }
@@ -930,6 +1035,11 @@ int ObLogReconfirm::reconfirm()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
+    if (GCTX.is_primary_cluster() &&
+        !share::ObMultiClusterUtil::is_cluster_private_table(partition_key_.get_table_id())) {
+      // debug sync block point for primary non-private table
+      DEBUG_SYNC(BLOCK_CLOG_PRIMARY_RECONFIRM);
+    }
     uint64_t new_start_id = sw_->get_start_id();
     // For newly created partition, follower replica maybe not ready.
     // Leader need retry send prepare request quickly.
@@ -1030,7 +1140,7 @@ int ObLogReconfirm::reconfirm()
                 max_flushed_id_ + 1);
             state_ = START_WORKING;
             if (OB_INVALID_TIMESTAMP != last_ts_ && OB_FAIL(sw_->try_update_submit_timestamp(last_ts_))) {
-              CLOG_LOG(ERROR, "sw update timestamp error", K(ret), K(last_ts_));
+              CLOG_LOG(ERROR, "sw update timestamp error", K(ret), K_(partition_key), K(last_ts_));
             } else {
               ret = mm_->write_start_membership(OB_LOG_START_MEMBERSHIP);
             }
@@ -1070,6 +1180,8 @@ int ObLogReconfirm::reconfirm()
                 "start_working log_id",
                 max_flushed_id_ + 1);
             state_ = FINISHED;
+          } else {
+            (void)primary_leader_try_notify_sync_standby_();
           }
         }
         if (state_ != FINISHED) {
@@ -1268,7 +1380,7 @@ int ObLogReconfirm::receive_log(const ObLogEntry& log_entry, const ObAddr& serve
     const uint64_t range_start_id = log_info_array_.get_start_id();
     const uint64_t range_end_id = log_info_array_.get_end_id();
     if (START_WORKING == state_) {
-      CLOG_LOG(INFO, "reveive log in START_WORKING state, ignore", K_(state), K_(partition_key), K(log_id));
+      CLOG_LOG(INFO, "receive log in START_WORKING state, ignore", K_(state), K_(partition_key), K(log_id));
     } else if (state_ != RECONFIRMING) {
       ret = OB_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "receive log in wrong state", K(ret), K_(state), K_(partition_key), K(server), K(log_id));
@@ -1382,7 +1494,7 @@ int ObLogReconfirm::generate_nop_log_(const uint64_t log_id, const int64_t idx)
   } else {
     ObLogEntryHeader header;
     ObLogEntry log_entry;
-    // set proposal_id to 0, ensure that if there is a valid log, it will be rewrited
+    // set proposal_id to 0, ensure that if there is a valid log, it will be rewritten
     // set epoch_id_ to 0, it will be filtered out later
     ObProposalID invalid_proposal_id;
     const bool is_trans_log = false;

@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateSynonymStmt : public ObDDLStmt {
-  public:
+public:
   const static int OB_DEFAULT_ARRAY_SIZE = 16;
   explicit ObCreateSynonymStmt(common::ObIAllocator* name_pool);
   ObCreateSynonymStmt();
@@ -88,9 +88,9 @@ class ObCreateSynonymStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(create_synonym_arg));
 
-  private:
+private:
   //  int set_table_id(ObStmtResolver &ctx, const uint64_t table_id);
-  private:
+private:
   obrpc::ObCreateSynonymArg create_synonym_arg_;
 };
 

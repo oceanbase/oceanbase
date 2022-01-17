@@ -81,7 +81,6 @@
 #include "sql/resolver/cmd/ob_show_resolver.h"
 #include "sql/resolver/cmd/ob_alter_system_resolver.h"
 #include "sql/resolver/cmd/ob_kill_resolver.h"
-#include "sql/resolver/cmd/ob_set_names_resolver.h"
 #include "sql/resolver/cmd/ob_set_transaction_resolver.h"
 #include "sql/resolver/cmd/ob_bootstrap_resolver.h"
 #include "sql/resolver/cmd/ob_empty_query_resolver.h"
@@ -575,6 +574,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       case T_SHOW_CREATE_TENANT:
       case T_SHOW_RECYCLEBIN:
       case T_SHOW_CREATE_TABLEGROUP:
+      case T_SHOW_TRIGGERS:
+      case T_SHOW_RESTORE_PREVIEW:
       case T_SHOW_STATUS: {
         REGISTER_STMT_RESOLVER(Show);
         break;
@@ -639,12 +640,6 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       }
       case T_ALTER_SESSION_SET: {
         REGISTER_STMT_RESOLVER(AlterSessionSet);
-        break;
-      }
-      case T_SET_NAMES:
-        // fall through
-      case T_SET_CHARSET: {
-        REGISTER_STMT_RESOLVER(SetNames);
         break;
       }
       case T_KILL: {
@@ -810,12 +805,32 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
         REGISTER_STMT_RESOLVER(DropDbLink);
         break;
       }
+      case T_BACKUP_BACKUPSET: {
+        REGISTER_STMT_RESOLVER(BackupBackupset);
+        break;
+      }
+      case T_BACKUP_ARCHIVELOG: {
+        REGISTER_STMT_RESOLVER(BackupArchiveLog);
+        break;
+      }
       case T_BACKUP_SET_ENCRYPTION: {
         REGISTER_STMT_RESOLVER(BackupSetEncryption);
         break;
       }
       case T_BACKUP_SET_DECRYPTION: {
         REGISTER_STMT_RESOLVER(BackupSetDecryption);
+        break;
+      }
+      case T_BACKUP_BACKUPPIECE: {
+        REGISTER_STMT_RESOLVER(BackupBackupPiece);
+        break;
+      }
+      case T_ADD_RESTORE_SOURCE: {
+        REGISTER_STMT_RESOLVER(AddRestoreSource);
+        break;
+      }
+      case T_CLEAR_RESTORE_SOURCE: {
+        REGISTER_STMT_RESOLVER(ClearRestoreSource);
         break;
       }
       case T_CREATE_RESTORE_POINT: {

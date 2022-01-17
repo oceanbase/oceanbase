@@ -15,18 +15,18 @@
 using namespace oceanbase::common;
 
 class ObSEArrayTest : public ::testing::Test {
-  public:
+public:
   ObSEArrayTest();
   virtual ~ObSEArrayTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObSEArrayTest(const ObSEArrayTest& other);
   ObSEArrayTest& operator=(const ObSEArrayTest& other);
 
-  private:
+private:
   // data members
 };
 

@@ -25,7 +25,7 @@ namespace common {
 // ObStringBufT is used to store the ObString and ObObj object.
 template <typename PageAllocatorT = ModulePageAllocator, typename PageArenaT = PageArena<char, PageAllocatorT> >
 class ObStringBufT {
-  public:
+public:
   explicit ObStringBufT(
       const lib::ObLabel& label = ObModIds::OB_STRING_BUF, const int64_t block_size = DEF_MEM_BLOCK_SIZE);
   explicit ObStringBufT(PageArenaT& arena);
@@ -33,7 +33,7 @@ class ObStringBufT {
   int reset();
   int reuse();
 
-  public:
+public:
   // Writes a string to buf.
   // @param [in] str the string object to be stored.
   // @param [out] stored_str records the stored ptr and length of string.
@@ -80,11 +80,11 @@ class ObStringBufT {
     arena_.free(static_cast<char*>(ptr));
   }
 
-  private:
+private:
   static const int64_t DEF_MEM_BLOCK_SIZE;
   static const int64_t MIN_DEF_MEM_BLOCK_SIZE;
 
-  private:
+private:
   PageArenaT local_arena_;
   PageArenaT& arena_;
   DISALLOW_COPY_AND_ASSIGN(ObStringBufT);

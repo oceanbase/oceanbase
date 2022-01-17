@@ -34,7 +34,7 @@ class ObGIInput : public ObIPhyOperatorInput {
   friend class ObGranuleIteratorCtx;
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObGIInput()
       : parallelism_(-1),
         worker_id_(common::OB_INVALID_INDEX),
@@ -72,10 +72,10 @@ class ObGIInput : public ObIPhyOperatorInput {
     return worker_id_;
   }
 
-  private:
+private:
   int deep_copy_range(ObIAllocator* allocator, const ObNewRange& src, ObNewRange& dst);
 
-  private:
+private:
   // the dop, the QC deside the dop before our task send to SQC server
   // but the dop may be change as the worker server don't has enough process.
   int64_t parallelism_;
@@ -86,7 +86,7 @@ class ObGIInput : public ObIPhyOperatorInput {
   common::ObSEArray<common::ObPartitionKey, 16> pkeys_;
   ObGranulePump* pump_;
 
-  private:
+private:
   common::ObIAllocator* deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObGIInput);
 };
@@ -94,7 +94,7 @@ class ObGIInput : public ObIPhyOperatorInput {
 class ObGranuleIterator : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   enum ObGranuleIteratorState {
     GI_UNINITIALIZED,
     GI_PREPARED,
@@ -103,9 +103,9 @@ class ObGranuleIterator : public ObSingleChildPhyOperator {
     GI_END,
   };
 
-  public:
+public:
   class ObGranuleIteratorCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     ObGranuleIteratorCtx(ObExecContext& exec_ctx)
         : ObPhyOperatorCtx(exec_ctx),
           parallelism_(-1),
@@ -119,7 +119,8 @@ class ObGranuleIterator : public ObSingleChildPhyOperator {
           all_task_fetched_(false),
           is_rescan_(false),
           rescan_taskset_(nullptr),
-          rescan_task_idx_(0)
+          rescan_task_idx_(0),
+          pwj_rescan_task_infos_()
     {}
     virtual ~ObGranuleIteratorCtx()
     {
@@ -146,9 +147,10 @@ class ObGranuleIterator : public ObSingleChildPhyOperator {
     const ObGITaskSet* rescan_taskset_ = NULL;
     common::ObSEArray<ObGITaskSet::Pos, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_;
     int64_t rescan_task_idx_;
+    common::ObSEArray<ObGranuleTaskInfo, 2> pwj_rescan_task_infos_;
   };
 
-  public:
+public:
   explicit ObGranuleIterator(common::ObIAllocator& alloc);
   virtual ~ObGranuleIterator();
   virtual void reset() override;
@@ -161,7 +163,7 @@ class ObGranuleIterator : public ObSingleChildPhyOperator {
   virtual int inner_close(ObExecContext& ctx) const override;
   virtual int inner_create_operator_ctx(ObExecContext& ctx, ObPhyOperatorCtx*& op_ctx) const;
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const override;
-  virtual int create_operator_input(ObExecContext& ctx) const;
+  virtual int create_operator_input(ObExecContext& ctx) const override;
   virtual OperatorOpenOrder get_operator_open_order(ObExecContext& ctx) const override
   {
     UNUSED(ctx);
@@ -170,7 +172,7 @@ class ObGranuleIterator : public ObSingleChildPhyOperator {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObGranuleIterator);
 
-  public:
+public:
   int set_tscs(common::ObIArray<const ObTableScan*>& tscs);
   int set_dml_op(ObTableModify* dml_op);
   void set_related_id(uint64_t ref_id)
@@ -228,7 +230,7 @@ class ObGranuleIterator : public ObSingleChildPhyOperator {
     return gi_attri_flag_;
   }
 
-  private:
+private:
   int try_fetch_task(ObExecContext& ctx, ObGranuleTaskInfo& info) const;
   int fetch_full_pw_tasks(
       ObExecContext& ctx, ObIArray<ObGranuleTaskInfo>& infos, const ObIArray<int64_t>& op_ids) const;
@@ -241,7 +243,7 @@ class ObGranuleIterator : public ObSingleChildPhyOperator {
   }
   int get_gi_task_consumer_node(const ObPhyOperator* cur, ObPhyOperator*& child) const;
 
-  private:
+private:
   uint64_t ref_table_id_;
   int64_t tablet_size_;
   // work and task affinitize

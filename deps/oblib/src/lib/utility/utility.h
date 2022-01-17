@@ -71,7 +71,7 @@ int32_t parse_string_to_int_array(const char* line, const char del, int32_t* arr
 bool is2n(int64_t input);
 constexpr int64_t next_pow2(const int64_t x)
 {
-  return x ? (1ULL << (8 * sizeof(int64_t) - __builtin_clzll(x - 1))) : 1;
+  return x > 1LL ? (1ULL << (8 * sizeof(int64_t) - __builtin_clzll(x - 1))) : 1LL;
 }
 
 bool all_zero(const char* buffer, const int64_t size);
@@ -444,6 +444,8 @@ inline bool is_cpu_support_sse42()
   return 0 != (data & CPUID_STD_SSE4_2);
 #elif defined(__aarch64__)
   return 0;
+#elif defined(__sw_64__)
+  return 0;
 #else
 #error arch unsupported
 #endif
@@ -682,7 +684,7 @@ int add_var_to_array_no_dup(T* array, const int64_t size, int64_t& num, const T&
 
 template <typename T, int64_t N = 1>
 class ObPtrGuard {
-  public:
+public:
   explicit ObPtrGuard(ObIAllocator& allocator) : ptr_(NULL), allocator_(allocator)
   {}
   ~ObPtrGuard()
@@ -722,16 +724,16 @@ class ObPtrGuard {
     return ptr_;
   }
 
-  private:
+private:
   T* ptr_;
   ObIAllocator& allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPtrGuard);
 };
 
 class ObTimeGuard {
-  public:
+public:
   explicit ObTimeGuard(const char* owner = "unknown", const int64_t warn_threshold = INT64_MAX)
   {
     start_ts_ = common::ObTimeUtility::fast_current_time();
@@ -764,10 +766,10 @@ class ObTimeGuard {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   DECLARE_TO_YSON_KV;
 
-  private:
+private:
   static const int64_t MAX_CLICK_COUNT = 16;
 
-  private:
+private:
   int64_t start_ts_;
   int64_t last_ts_;
   int64_t click_count_;
@@ -778,7 +780,7 @@ class ObTimeGuard {
 };
 
 class ObTimeInterval {
-  public:
+public:
   explicit ObTimeInterval(const int64_t interval, const bool first_reach = true) : last_ts_(0), interval_(interval)
   {
     if (!first_reach) {
@@ -802,13 +804,13 @@ class ObTimeInterval {
     return bool_ret;
   }
 
-  private:
+private:
   mutable int64_t last_ts_;
   const int64_t interval_;
 };
 
 class ObBandwidthThrottle {
-  public:
+public:
   ObBandwidthThrottle();
   ~ObBandwidthThrottle();
   int init(const int64_t rate, const char* comment = "unknown");
@@ -817,12 +819,12 @@ class ObBandwidthThrottle {
       const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time, int64_t& sleep_us);
   void destroy();
 
-  private:
+private:
   int cal_limit(const int64_t bytes, int64_t& avaliable_timestamp);
   static int do_sleep(
       const int64_t next_avaliable_ts, const int64_t last_active_time, const int64_t max_idle_time, int64_t& sleep_us);
 
-  private:
+private:
   common::ObSpinLock lock_;
   int64_t rate_;  // bandwidth limit bytes/s.
   int64_t next_avaliable_timestamp_;
@@ -837,7 +839,7 @@ class ObBandwidthThrottle {
 };
 
 class ObInOutBandwidthThrottle {
-  public:
+public:
   ObInOutBandwidthThrottle();
   ~ObInOutBandwidthThrottle();
 
@@ -847,7 +849,7 @@ class ObInOutBandwidthThrottle {
   int limit_out_and_sleep(const int64_t bytes, const int64_t last_active_time, const int64_t max_idle_time);
   void destroy();
 
-  private:
+private:
   ObBandwidthThrottle in_throttle_;
   ObBandwidthThrottle out_throttle_;
 };
@@ -996,16 +998,16 @@ inline int objects_copy(T* dest, const T* src, int64_t count)
 }
 
 class ObMiniStat {
-  public:
+public:
   class ObStatItem {
-    public:
+  public:
     ObStatItem(const char* item, const int64_t stat_interval)
         : item_(item), stat_interval_(stat_interval), last_ts_(0), stat_count_(0)
     {}
     ~ObStatItem()
     {}
 
-    public:
+  public:
     void stat()
     {
       const int64_t cur_ts = ::oceanbase::common::ObTimeUtility::fast_current_time();
@@ -1017,14 +1019,14 @@ class ObMiniStat {
       }
     }
 
-    private:
+  private:
     const char* const item_;
     const int64_t stat_interval_;
     int64_t last_ts_;
     int64_t stat_count_;
   };
 
-  public:
+public:
   static void stat(ObStatItem& item)
   {
     item.stat();
@@ -1032,7 +1034,7 @@ class ObMiniStat {
 };
 
 class ObIntWarp {
-  public:
+public:
   ObIntWarp() : v_(0)
   {}
   explicit ObIntWarp(const uint64_t v) : v_(v)
@@ -1075,18 +1077,18 @@ class ObIntWarp {
   }
   TO_STRING_KV(K_(v));
 
-  private:
+private:
   uint64_t v_;
 };
 
 class ObTsWindows {
-  public:
+public:
   ObTsWindows() : start_(0), base_(0), end_(0)
   {}
   ~ObTsWindows()
   {}
 
-  public:
+public:
   void set(const int64_t start, const int64_t base, const int64_t end)
   {
     start_ = start;
@@ -1116,10 +1118,10 @@ class ObTsWindows {
     return end_;
   }
 
-  public:
+public:
   TO_STRING_KV(K_(start), K_(base), K_(end));
 
-  private:
+private:
   int64_t start_;
   int64_t base_;
   int64_t end_;

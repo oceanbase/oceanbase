@@ -56,7 +56,7 @@ struct ObDFMLimit {
 };
 
 class ObDFMFlag {
-  public:
+public:
   // ElementFlag are defined according to oracle doc
   // see Format Models: https://docs.oracle.com/cd/B19306_01/server.102/b14200/sql_elements004.htm#i34924
   // Note: FF1-FF9 and FF should be together
@@ -302,7 +302,7 @@ class ObDFMFlag {
     return is_flag_valid(flag) && (EXPECTED_MATCHING_LENGTH[flag] > 0);
   }
 
-  private:
+private:
   static int64_t calc_max_len_of_patterns();
 };
 
@@ -381,7 +381,7 @@ struct ObDFMElem {
 typedef ObIArray<ObDFMElem> ObDFMElemArr;
 
 class ObDFMUtil {
-  public:
+public:
   static const int64_t UNKNOWN_LENGTH_OF_ELEMENT = 20;
   static const int64_t COMMON_ELEMENT_NUMBER = 10;
   static int parse_datetime_format_string(const ObString& fmt_str, ObDFMElemArr& elements);
@@ -426,7 +426,7 @@ class ObDFMUtil {
     return '-' == ch || '+' == ch;
   }
 
-  private:
+private:
   static inline bool is_uppercase_char(const char ch)
   {
     return (0 == (ch & (1 << 5)));

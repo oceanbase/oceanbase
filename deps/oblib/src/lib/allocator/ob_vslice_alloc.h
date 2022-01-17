@@ -23,7 +23,7 @@ namespace common {
 extern ObBlockAllocMgr default_blk_alloc;
 
 class ObBlockVSlicer {
-  public:
+public:
   typedef ObBlockVSlicer Host;
   struct Item {
     Item(Host* host, int64_t size) : host_(host), size_(size)
@@ -73,7 +73,7 @@ class ObBlockVSlicer {
     return 0 == ATOMIC_AAF(&ref_, val);
   }
 
-  private:
+private:
   int64_t blk_size_ CACHE_ALIGNED;
   int64_t ref_ CACHE_ALIGNED;
   int64_t pos_ CACHE_ALIGNED;
@@ -81,13 +81,13 @@ class ObBlockVSlicer {
 };
 
 class ObVSliceAlloc {
-  public:
+public:
   enum { MAX_ARENA_NUM = 32, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
   typedef ObBlockAllocMgr BlockAlloc;
   typedef ObBlockVSlicer Block;
   typedef ObSimpleSync Sync;
   class Arena : public Sync {
-    public:
+  public:
     Arena() : blk_(NULL)
     {}
     Block* blk()
@@ -103,11 +103,11 @@ class ObVSliceAlloc {
       return ATOMIC_TAS(&blk_, NULL);
     }
 
-    private:
+  private:
     Block* blk_;
   } CACHE_ALIGNED;
 
-  public:
+public:
   ObVSliceAlloc() : nway_(0), bsize_(0), blk_alloc_(default_blk_alloc)
   {}
   ObVSliceAlloc(const ObMemAttr& attr, int block_size = DEFAULT_BLOCK_SIZE, BlockAlloc& blk_alloc = default_blk_alloc)
@@ -241,7 +241,7 @@ class ObVSliceAlloc {
     return ratio;
   }
 
-  private:
+private:
   Block* prepare_block()
   {
     Block* blk = NULL;
@@ -256,7 +256,7 @@ class ObVSliceAlloc {
     blk_alloc_.free_block(blk, blk->get_blk_size());
   }
 
-  protected:
+protected:
   int nway_ CACHE_ALIGNED;
   int64_t bsize_;
   ObMemAttr mattr_;

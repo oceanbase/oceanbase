@@ -42,7 +42,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestRowReader : public ::testing::Test {
-  public:
+public:
   static const int64_t rowkey_column_count = 1;
   // Every ObObjType from ObTinyIntType to ObHexStringType inclusive.
   // Skip ObNullType and ObExtendType because for external usage, a column type
@@ -57,7 +57,7 @@ class TestRowReader : public ::testing::Test {
       ObLobType};
   static const int64_t column_num = ObMaxType - sizeof(not_test_type) / sizeof(ObObjType);
 
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown();
   char* get_serialize_buf()
@@ -65,12 +65,12 @@ class TestRowReader : public ::testing::Test {
     return serialize_buf_;
   }
 
-  private:
+private:
   int build_column_map(const int64_t* columns, const int64_t count);
   int init_column_map(const ObStoreRow& writer_row, ObArray<ObColDesc>& columns);
   char* serialize_buf_;
 
-  protected:
+protected:
   ObRowGenerate row_generate_;
   ObColumnMap column_map_;
   ObTableSchema table_schema_;

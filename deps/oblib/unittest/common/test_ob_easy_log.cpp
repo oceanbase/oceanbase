@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace common {
 class TestEasyLog : public ::testing::Test {
-  public:
+public:
   TestEasyLog()
   {}
   virtual ~TestEasyLog()
@@ -28,7 +28,7 @@ class TestEasyLog : public ::testing::Test {
   virtual void TearDown()
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestEasyLog);
 };
 

@@ -33,33 +33,33 @@ class ObZoneManager;
 class TenantBalanceStat;
 
 class ObBackupValidateLoadBalancer {
-  public:
+public:
   ObBackupValidateLoadBalancer() = default;
   virtual ~ObBackupValidateLoadBalancer() = default;
 
   int init(rootserver::ObServerManager& server_mgr, rootserver::ObZoneManager& zone_mgr);
   int get_next_server(common::ObAddr& server);
 
-  private:
+private:
   int get_all_server_in_region(const common::ObRegion& region, common::ObIArray<common::ObAddr>& server_list);
   int get_zone_list(const common::ObRegion& region, common::ObIArray<common::ObZone>& zone_list);
   int choose_server(const common::ObIArray<common::ObAddr>& server_list, common::ObAddr& server);
 
-  private:
+private:
   bool is_inited_;
   rootserver::ObServerManager* server_mgr_;
   rootserver::ObZoneManager* zone_mgr_;
 };
 
 class ObPartitionValidate {
-  public:
+public:
   ObPartitionValidate();
   virtual ~ObPartitionValidate();
   int init(common::ObMySQLProxy& sql_proxy, ObRebalanceTaskMgr& task_mgr, ObServerManager& server_mgr,
       ObZoneManager& zone_mgr);
   int partition_validate(const uint64_t tenant_id, int64_t& task_cnt);
 
-  private:
+private:
   struct ObBackupSetPGTaskList {
     ObBackupSetPGTaskList(){};
     virtual ~ObBackupSetPGTaskList(){};
@@ -101,7 +101,7 @@ class ObPartitionValidate {
     }
   };
 
-  private:
+private:
   int get_backup_validate_task_info(const int64_t job_id, share::ObBackupValidateTaskInfo& task_info);
   int get_log_archive_backup_info_(const int64_t snapshot_version,
       const common::ObArray<share::ObLogArchiveBackupInfo>& log_infos, share::ObLogArchiveBackupInfo& log_info);
@@ -113,7 +113,7 @@ class ObPartitionValidate {
       const uint64_t tenant_id, common::ObArray<share::ObTenantBackupTaskInfo>& backup_infos);
   int get_extern_backup_set_infos(const int64_t backup_set_id,
       const common::ObArray<share::ObTenantBackupTaskInfo>& backup_infos, int64_t& full_backup_set_id,
-      int64_t& inc_backup_set_id, int64_t& cluster_version);
+      int64_t& inc_backup_set_id, int64_t& cluster_version, int64_t& backup_date, int64_t& compatible);
   int check_need_validate_clog(const share::ObBackupValidateTaskInfo& task_info,
       const share::ObPGValidateTaskInfo& pg_task_info, const common::ObArray<share::ObLogArchiveBackupInfo>& log_infos,
       const common::ObArray<share::ObTenantBackupTaskInfo>& backup_infos, bool& need_validate_clog);
@@ -149,13 +149,13 @@ class ObPartitionValidate {
       const int64_t backup_set_id, const int64_t log_archive_round,
       const share::ObTenantValidateTaskInfo& tenant_task_info, const common::ObPartitionKey& pg_key,
       const common::ObAddr& server, const share::ObTaskId& trace_id, const int64_t cluster_version,
-      share::ObPhysicalValidateArg& arg);
+      const int64_t backup_date, const int64_t compatible, share::ObPhysicalValidateArg& arg);
   int build_pg_validate_task_info(const common::ObAddr& addr, const share::ObTaskId& trace_id,
       const share::ObPGValidateTaskInfo& src_pg_info, share::ObPGValidateTaskInfo& pg_task_info);
   int batch_update_pg_task_infos(
       const bool is_dropped_tenant, const common::ObIArray<share::ObPGValidateTaskInfo>& task_info);
 
-  private:
+private:
   bool is_inited_;
   common::ObMySQLProxy* sql_proxy_;
   rootserver::ObRootValidate* root_validate_;
@@ -165,7 +165,7 @@ class ObPartitionValidate {
   rootserver::ObBackupValidateLoadBalancer load_balancer_;
   share::ObPGValidateTaskUpdater pg_task_updater_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionValidate);
 };
 

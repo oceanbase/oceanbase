@@ -47,7 +47,7 @@ static const int64_t PART_NUM = 4;
 
 ObServerConfig& config = ObServerConfig::get_instance();
 class MockLocalityManager : public ObILocalityManager {
-  public:
+public:
   struct ServerInfo {
     ServerInfo() : server_(), is_local_(false)
     {}
@@ -80,13 +80,13 @@ class MockLocalityManager : public ObILocalityManager {
   common::ObArray<ServerInfo> server_info_;
 };
 class TestLocationUpdateTask : public ::testing::Test {
-  public:
+public:
   TestLocationUpdateTask();
 
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   void basic_test(const uint64_t tid);
   void whole_table_test(const uint64_t tid);
   void check_location(const uint64_t tid, const int64_t pid, const ObPartitionLocation& location);

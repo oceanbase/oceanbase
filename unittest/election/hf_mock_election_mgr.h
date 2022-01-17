@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace unittest {
 
 class MockElectionMgr : public election::ObElectionMgr {
-  public:
+public:
   int set_election_rpc(election::ObIElectionRpc* election_rpc)
   {
     int ret = common::OB_SUCCESS;

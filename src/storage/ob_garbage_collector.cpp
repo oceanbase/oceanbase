@@ -37,13 +37,13 @@ using namespace share;
 using namespace share::schema;
 namespace storage {
 class ObGarbageCollector::InsertPGFunctor {
-  public:
+public:
   explicit InsertPGFunctor(const common::ObPGKey& pg_key) : pg_key_(pg_key), ret_value_(common::OB_SUCCESS)
   {}
   ~InsertPGFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObAddr& leader, common::ObPartitionArray& pg_array)
   {
     if (OB_SUCCESS != (ret_value_ = pg_array.push_back(pg_key_))) {
@@ -56,16 +56,16 @@ class ObGarbageCollector::InsertPGFunctor {
     return ret_value_;
   }
 
-  private:
+private:
   common::ObPGKey pg_key_;
   int ret_value_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(InsertPGFunctor);
 };
 
 class ObGarbageCollector::QueryPGIsValidMemberFunctor {
-  public:
+public:
   QueryPGIsValidMemberFunctor(obrpc::ObSrvRpcProxy* rpc_proxy, ObPartitionService* partition_service,
       const common::ObAddr& self_addr, const int64_t gc_seq, ObGCCandidateArray& gc_candidates)
       : rpc_proxy_(rpc_proxy),
@@ -78,7 +78,7 @@ class ObGarbageCollector::QueryPGIsValidMemberFunctor {
   ~QueryPGIsValidMemberFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObAddr& leader, common::ObPartitionArray& pg_array)
   {
     if (OB_SUCCESS != (ret_value_ = handle_pg_array_(leader, pg_array))) {
@@ -91,13 +91,13 @@ class ObGarbageCollector::QueryPGIsValidMemberFunctor {
     return ret_value_;
   }
 
-  private:
+private:
   int handle_pg_array_(const common::ObAddr& leader, const common::ObPartitionArray& pg_array);
   int handle_rpc_response_(const common::ObAddr& leader, const obrpc::ObQueryIsValidMemberResponse& response);
   bool is_normal_readonly_replica_(ObIPartitionGroup* pg) const;
   int try_renew_location_(const common::ObPartitionArray& pg_array);
 
-  private:
+private:
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   ObPartitionService* partition_service_;
   common::ObAddr self_addr_;
@@ -105,12 +105,12 @@ class ObGarbageCollector::QueryPGIsValidMemberFunctor {
   ObGCCandidateArray& gc_candidates_;
   int ret_value_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(QueryPGIsValidMemberFunctor);
 };
 
 class ObGarbageCollector::QueryPGFlushedIlogIDFunctor {
-  public:
+public:
   QueryPGFlushedIlogIDFunctor(
       obrpc::ObSrvRpcProxy* rpc_proxy, PGOfflineIlogFlushedInfoMap& pg_offline_ilog_flushed_info_map)
       : rpc_proxy_(rpc_proxy),
@@ -120,7 +120,7 @@ class ObGarbageCollector::QueryPGFlushedIlogIDFunctor {
   ~QueryPGFlushedIlogIDFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObAddr& leader, common::ObPartitionArray& pg_array)
   {
     if (OB_SUCCESS != (ret_value_ = handle_pg_array_(leader, pg_array))) {
@@ -133,28 +133,28 @@ class ObGarbageCollector::QueryPGFlushedIlogIDFunctor {
     return ret_value_;
   }
 
-  private:
+private:
   int handle_pg_array_(const common::ObAddr& leader, const common::ObPartitionArray& pg_array);
   int handle_rpc_response_(const common::ObAddr& server, const obrpc::ObQueryMaxFlushedILogIdResponse& response);
 
-  private:
+private:
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   PGOfflineIlogFlushedInfoMap& pg_offline_ilog_flushed_info_map_;
   int ret_value_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(QueryPGFlushedIlogIDFunctor);
 };
 
 class ObGarbageCollector::ExecuteSchemaDropFunctor {
-  public:
+public:
   ExecuteSchemaDropFunctor(common::ObMySQLProxy* sql_proxy, ObPartitionService* partition_service)
       : sql_proxy_(sql_proxy), partition_service_(partition_service), ret_value_(common::OB_SUCCESS)
   {}
   ~ExecuteSchemaDropFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObPGKey& pg_key, const PGOfflineIlogFlushedInfo& info)
   {
     if (OB_SUCCESS != (ret_value_ = handle_each_pg_(pg_key, info))) {
@@ -167,16 +167,16 @@ class ObGarbageCollector::ExecuteSchemaDropFunctor {
     return ret_value_;
   }
 
-  private:
+private:
   int handle_each_pg_(const common::ObPGKey& pg_key, const PGOfflineIlogFlushedInfo& info);
   int delete_tenant_gc_partition_info_(const common::ObPGKey& pg_key);
 
-  private:
+private:
   common::ObMySQLProxy* sql_proxy_;
   ObPartitionService* partition_service_;
   int ret_value_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ExecuteSchemaDropFunctor);
 };
 
@@ -283,7 +283,7 @@ void ObGarbageCollector::run1()
     int ret = OB_SUCCESS;
     TenantSet gc_tenant_set;
     ObGCCandidateArray gc_candidates;
-    const int64_t gc_interval = GC_INTERVAL;
+    int64_t gc_interval = GC_INTERVAL;
 #ifdef ERRSIM
     gc_interval = std::min(gc_interval, (int64_t)ObServerConfig::get_instance().schema_drop_gc_delay_time);
 #endif
@@ -300,7 +300,7 @@ void ObGarbageCollector::run1()
       (void)execute_gc_except_leader_schema_drop_(gc_candidates);
       (void)execute_gc_for_leader_schema_drop_(gc_candidates);
 
-      (void)execute_gc_tenant_tmp_file_(gc_tenant_set);
+      (void)execute_gc_tenant_tmp_file_();
     }
     usleep(gc_interval);
     seq_++;
@@ -502,18 +502,31 @@ int ObGarbageCollector::handle_pg_offline_ilog_flushed_info_map_(
   return ret;
 }
 
-int ObGarbageCollector::execute_gc_tenant_tmp_file_(TenantSet& gc_tenant_set)
+int ObGarbageCollector::execute_gc_tenant_tmp_file_()
 {
   int ret = OB_SUCCESS;
-
+  ObSEArray<uint64_t, 16> tenant_ids;
+  ObSchemaGetterGuard schema_guard;
   const int64_t begin_time = ObTimeUtility::current_time();
-
-  for (TenantSet::iterator it = gc_tenant_set.begin(); OB_SUCC(ret) && it != gc_tenant_set.end(); ++it) {
-    const uint64_t tenant_id = it->first;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove_tenant_file(tenant_id))) {
-      STORAGE_LOG(WARN, "remove tenant tmp file failed", K(ret), K(tenant_id));
-    } else {
-      STORAGE_LOG(INFO, "remove tenant tmp file success", K(ret), K(tenant_id));
+  if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.get_all_tenant_id(tenant_ids))) {
+    STORAGE_LOG(WARN, "fail to get all tenant ids", K(ret));
+  } else if (OB_FAIL(schema_service_->get_schema_guard(schema_guard))) {
+    STORAGE_LOG(WARN, "fail to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.check_formal_guard())) {
+    STORAGE_LOG(WARN, "schema_guard is not formal", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+      const uint64_t tenant_id = tenant_ids.at(i);
+      bool tenant_has_been_dropped = false;
+      if (OB_FAIL(schema_guard.check_if_tenant_has_been_dropped(tenant_id, tenant_has_been_dropped))) {
+        STORAGE_LOG(WARN, "fail to check if tenant hash been dropped", K(ret), K(tenant_id));
+      } else if (!tenant_has_been_dropped) {
+        continue;// do nothing, just skip.
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove_tenant_file(tenant_id))) {
+        STORAGE_LOG(WARN, "remove tenant tmp file failed", K(ret), K(tenant_id));
+      } else {
+        STORAGE_LOG(INFO, "remove tenant tmp file success", K(ret), K(tenant_id));
+      }
     }
   }
 
@@ -1210,6 +1223,9 @@ int ObGarbageCollector::gc_check_log_archive_(
       STORAGE_LOG(INFO,
           "leader schema drop pg, wait to gc because offline log has not been archived in mandatory mode",
           K(pg_key));
+    } else if (GCONF.gc_wait_archive) {
+      // In optional mode, GC wait util archive offline log successfully if parameter gc_wait_archive is true
+      STORAGE_LOG(INFO, "leader schema drop pg, wait to gc because gc_wait_archive is true", K(pg_key));
     } else if (ObTimeUtility::current_time() - pg->get_gc_schema_drop_ts() <= delay_interval) {
       STORAGE_LOG(INFO,
           "leader schema drop pg, wait to gc because offline log has not been archived in optional mode",

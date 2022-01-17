@@ -27,7 +27,7 @@ namespace oceanbase {
 using namespace clog;
 namespace unittest {
 class TestObRawLogIterator : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown();
   void prepare_entry();
@@ -401,9 +401,9 @@ TEST_F(TestObRawLogIterator, test_read_data)
   int64_t header_len = meta.get_serialize_size() + header_offset;
   ObLogDir log_dir;
 
-  ObTailCursor* tail = new ObTailCursor();
+  ObTailCursor tail;
   EXPECT_EQ(OB_SUCCESS, log_dir.init(path));
-  EXPECT_EQ(OB_SUCCESS, reader.init(path, shm_path, true, &cache, tail, ObLogWritePoolType::CLOG_WRITE_POOL));
+  EXPECT_EQ(OB_SUCCESS, reader.init(path, shm_path, true, &cache, &tail, ObLogWritePoolType::CLOG_WRITE_POOL));
   EXPECT_EQ(OB_SUCCESS, write_file());
 
   // Test init failed

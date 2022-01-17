@@ -23,7 +23,7 @@ using namespace share::schema;
 
 namespace unittest {
 class TestSSTableSingleExist : public ObSSTableTest {
-  public:
+public:
   TestSSTableSingleExist();
   virtual ~TestSSTableSingleExist();
   virtual void SetUp();

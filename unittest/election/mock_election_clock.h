@@ -24,30 +24,30 @@ using namespace oceanbase::election;
 
 // for clock_skew
 class MockClockSkew : public ObElectionClock {
-  public:
+public:
   MockClockSkew(int64_t skew = 0);
   ~MockClockSkew();
   void set_skew(int64_t skew);
 
-  public:
+public:
   virtual int64_t get_current_ts(void) const;
 
-  protected:
+protected:
   int64_t skew_;
   mutable ObSpinLock lock_;
 };
 
 // for clock_skew_random
 class MockClockSkewRandom : public ObElectionClock {
-  public:
+public:
   MockClockSkewRandom(int64_t low = 0, int64_t high = 0);
   ~MockClockSkewRandom();
   void set_skew_random(int64_t low, int64_t high);
 
-  public:
+public:
   virtual int64_t get_current_ts(void) const;
 
-  protected:
+protected:
   int64_t low_;
   int64_t high_;
   mutable ObSpinLock lock_;

@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace transaction {
 class ObTsMgr;
 class ObGtsResponseHandler : public rpc::frame::ObReqProcessor {
-  public:
+public:
   ObGtsResponseHandler()
   {
     reset();
@@ -33,7 +33,7 @@ class ObGtsResponseHandler : public rpc::frame::ObReqProcessor {
   int init(observer::ObSrvTask* task, ObTsMgr* ts_mgr);
   void reset();
 
-  protected:
+protected:
   int deserialize()
   {
     return common::OB_SUCCESS;
@@ -54,14 +54,14 @@ class ObGtsResponseHandler : public rpc::frame::ObReqProcessor {
     return common::OB_SUCCESS;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGtsResponseHandler);
   observer::ObSrvTask* task_;
   ObTsMgr* ts_mgr_;
 };  // end of class ObGtsResponseHandler
 
 class ObGtsResponseTask : public observer::ObSrvTask {
-  public:
+public:
   ObGtsResponseTask()
   {
     reset();
@@ -88,7 +88,7 @@ class ObGtsResponseTask : public observer::ObSrvTask {
   }
   TO_STRING_KV(KP(this), K_(queue_index), K_(ts_type));
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t queue_index_;
   ObGtsResponseHandler handler_;
@@ -96,11 +96,11 @@ class ObGtsResponseTask : public observer::ObSrvTask {
 };
 
 class ObGtsResponseTaskFactory {
-  public:
+public:
   static ObGtsResponseTask* alloc();
   static void free(ObGtsResponseTask* task);
 
-  private:
+private:
   static int64_t alloc_count_;
   static int64_t free_count_;
 };

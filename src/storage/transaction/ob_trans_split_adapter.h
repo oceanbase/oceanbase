@@ -36,7 +36,7 @@ class ObTrx2PCPrepareResponse;
 class ObTransSplitInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   int init(const common::ObPartitionKey& src_pk, const common::ObIArray<common::ObPartitionKey>& dest_pks);
   bool is_valid() const
   {
@@ -54,7 +54,7 @@ class ObTransSplitInfo {
   int assign(const ObTransSplitInfo& other);
   TO_STRING_KV(K_(src_pk), K_(dest_pks));
 
-  private:
+private:
   common::ObPartitionKey src_pk_;
   common::ObPartitionArray dest_pks_;
 };
@@ -62,7 +62,7 @@ class ObTransSplitInfo {
 typedef common::ObSEArray<ObTransSplitInfo, 2> ObTransSplitInfoArray;
 
 class ObTransSplitAdapter {
-  public:
+public:
   static int update_participant_list(ObCoordTransCtx* ctx, common::ObPartitionArray& ctx_participants,
       common::ObMaskSet& ctx_mask_set, const ObTransSplitInfoArray& split_info_arr,
       common::ObPartitionArray& new_participants);

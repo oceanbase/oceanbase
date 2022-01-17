@@ -47,7 +47,7 @@ struct WorkerIndex {
 };
 
 class SimpleWorker : public CoSetSched::Worker {
-  public:
+public:
   SimpleWorker(CoSetSched& sched, VoidFuncT func) : CoSetSched::Worker(sched, func)
   {}
   SimpleWorker(CoSetSched& sched, Idx1FuncT func) : CoSetSched::Worker(sched, [this, func] { func(wi_.grp_co_idx_); })
@@ -56,7 +56,7 @@ class SimpleWorker : public CoSetSched::Worker {
       : CoSetSched::Worker(sched, [this, func] { func(wi_.grp_th_idx_, wi_.grp_co_idx_); })
   {}
 
-  public:
+public:
   WorkerIndex wi_;
 };
 
@@ -65,7 +65,7 @@ class SimpleWorker : public CoSetSched::Worker {
 class SimpleSched : public CoSetSched {
   using WorkerT = SimpleWorker;
 
-  public:
+public:
   template <class FuncT>
   SimpleSched(FuncT func, int cnt, WorkerIndex& wi) : cnt_(cnt), workers_(), wi_(wi)
   {
@@ -96,7 +96,7 @@ class SimpleSched : public CoSetSched {
     return ret;
   }
 
-  private:
+private:
   int prepare() final
   {
     int ret = CoSetSched::create_set(0);
@@ -106,7 +106,7 @@ class SimpleSched : public CoSetSched {
     return ret;
   }
 
-  private:
+private:
   int cnt_;
   std::vector<WorkerT*> workers_;
   WorkerIndex& wi_;
@@ -117,7 +117,7 @@ class SimpleSched : public CoSetSched {
 class FlexPool {
   using Sched = SimpleSched;
 
-  public:
+public:
   FlexPool()
   {}
 
@@ -165,7 +165,7 @@ class FlexPool {
     }
   }
 
-  private:
+private:
   std::vector<Sched*> th_pools_;
   WorkerIndex wi_;
 };

@@ -157,6 +157,9 @@ int ObMergeGroupByOp::rewrite_rollup_column(ObExpr*& diff_expr)
         diff_expr = NULL;
       }
     }
+    if (is_distinct_expr) {
+      diff_expr = nullptr;
+    }
   }
   return ret;
 }
@@ -418,7 +421,6 @@ int ObMergeGroupByOp::rollup_and_calc_results(const int64_t group_id, const ObEx
     if (OB_FAIL(aggr_processor_.rollup_process(group_id, diff_expr))) {
       LOG_WARN("failed to rollup aggregation results", K(ret));
     }
-    diff_expr = 0;
   }
   if (OB_SUCC(ret)) {
     clear_evaluated_flag();

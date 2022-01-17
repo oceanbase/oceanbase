@@ -26,7 +26,7 @@ namespace schema {
 class ObSynonymInfo;
 
 class ObSynonymSqlService : public ObDDLSqlService {
-  public:
+public:
   ObSynonymSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObSynonymSqlService()
@@ -42,10 +42,10 @@ class ObSynonymSqlService : public ObDDLSqlService {
   virtual int drop_synonym(const ObSynonymInfo& synonym_info, const int64_t new_schema_version,
       common::ObISQLClient* sql_client, const common::ObString* ddl_stmt_str = NULL);
 
-  private:
+private:
   int add_synonym(common::ObISQLClient& sql_client, const ObSynonymInfo& synonym_info, const bool only_history = false);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSynonymSqlService);
 };
 

@@ -49,7 +49,7 @@ namespace observer {
 constexpr const char ObInnerSQLConnection::LABEL[];
 
 class ObInnerSQLConnection::ObSqlQueryExecutor : public sqlclient::ObIExecutor {
-  public:
+public:
   explicit ObSqlQueryExecutor(const ObString& sql) : sql_(sql)
   {}
   explicit ObSqlQueryExecutor(const char* sql) : sql_(ObString::make_string(sql))
@@ -58,11 +58,24 @@ class ObInnerSQLConnection::ObSqlQueryExecutor : public sqlclient::ObIExecutor {
   virtual ~ObSqlQueryExecutor()
   {}
 
-  virtual int execute(sql::ObSql& engine, sql::ObSqlCtx& ctx, sql::ObResultSet& res)
+  virtual int execute(sql::ObSql& engine, sql::ObSqlCtx& ctx, sql::ObResultSet& res) override
   {
     observer::ObReqTimeGuard req_timeinfo_guard;
-    res.get_session().store_query_string(sql_);
-    return engine.stmt_query(sql_, ctx, res);
+    int ret = OB_SUCCESS;
+    // Deep copy sql, because sql may be destroyed before result iteration.
+    const int64_t alloc_size = sizeof(ObString) + sql_.length() + 1;  // 1 for C terminate char
+    void *mem = res.get_mem_pool().alloc(alloc_size);
+    if (NULL == mem) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      ObString *dup_sql = new (mem) ObString(sql_.length(), sql_.length(), static_cast<char *>(mem) + sizeof(ObString));
+      MEMCPY(dup_sql->ptr(), sql_.ptr(), sql_.length());
+      dup_sql->ptr()[sql_.length()] = '\0';
+      res.get_session().store_query_string(*dup_sql);
+      ret = engine.stmt_query(*dup_sql, ctx, res);
+    }
+    return ret;
   }
 
   // process result after result open
@@ -73,7 +86,7 @@ class ObInnerSQLConnection::ObSqlQueryExecutor : public sqlclient::ObIExecutor {
 
   INHERIT_TO_STRING_KV("ObIExecutor", ObIExecutor, K_(sql));
 
-  private:
+private:
   ObString sql_;
 };
 
@@ -473,13 +486,17 @@ int ObInnerSQLConnection::process_retry(
   if (need_retry) {
     LOG_WARN("need retry, set ret to OB_SUCCESS", K(ret), K(last_ret), K(retry_cnt));
     retry_info.set_last_query_retry_err(last_ret);
+    if (OB_ISNULL(extern_session_)) {
+    } else {
+      extern_session_->get_retry_info_for_update().set_last_query_retry_err(last_ret);
+    }
     ret = OB_SUCCESS;
   }
   return ret;
 }
 
 class ObInnerSQLTimeRecord : public ObITimeRecord {
-  public:
+public:
   ObInnerSQLTimeRecord(sql::ObSQLSessionInfo& session)
       : session_(session), execute_start_timestamp_(0), execute_end_timestamp_(0)
   {}
@@ -526,7 +543,7 @@ class ObInnerSQLTimeRecord : public ObITimeRecord {
     execute_end_timestamp_ = v;
   }
 
-  private:
+private:
   sql::ObSQLSessionInfo& session_;
   int64_t execute_start_timestamp_;
   int64_t execute_end_timestamp_;
@@ -790,9 +807,11 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor& executor, ObInnerSQLResu
               local_sys_schema_version);
         }
 
+        int ret_code = OB_SUCCESS;
         if (OB_FAIL(ret)) {
           // do nothing
         } else if (OB_FAIL(SMART_CALL(do_query(executor, res)))) {
+          ret_code = ret;
           LOG_WARN("execute failed", K(ret), K(executor), K(retry_cnt));
           int tmp_ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);
           if (OB_SUCCESS != tmp_ret) {
@@ -805,6 +824,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor& executor, ObInnerSQLResu
             LOG_WARN("failed to close result", K(close_ret), K(ret));
           }
         }
+        get_session().set_session_in_retry(need_retry, ret_code);
         execute_start_timestamp_ = res.get_execute_start_ts();
         execute_end_timestamp_ = res.get_execute_end_ts();
 

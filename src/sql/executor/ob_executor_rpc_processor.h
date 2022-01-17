@@ -30,17 +30,17 @@
 #define OB_DEFINE_SQL_TASK_PROCESSOR(cls, pcode, pname)                                 \
   OB_DEFINE_SQL_PROCESSOR(cls, obrpc::pcode, pname)                                     \
   {                                                                                     \
-    public:                                                                             \
+  public:                                                                               \
     pname(const observer::ObGlobalContext& gctx) : gctx_(gctx) exec_ctx_(), phy_plan_() \
     {}                                                                                  \
     virturl ~pname()                                                                    \
     {}                                                                                  \
     virtual int init();                                                                 \
                                                                                         \
-    protected:                                                                          \
+  protected:                                                                            \
     virtual int process();                                                              \
                                                                                         \
-    private:                                                                            \
+  private:                                                                              \
     const observer::ObGlobalContext& gctx_;                                             \
     sql::ObExecContext& exec_ctx_;                                                      \
     sql::ObPhysicalPlan& phy_plan_;                                                     \
@@ -49,17 +49,17 @@
 #define OB_DEFINE_SQL_CMD_PROCESSOR(cls, pcode, pname)         \
   OB_DEFINE_SQL_PROCESSOR(cls, obrpc::pcode, pname)            \
   {                                                            \
-    public:                                                    \
+  public:                                                      \
     pname(const observer::ObGlobalContext& gctx) : gctx_(gctx) \
     {}                                                         \
     virtual ~pname()                                           \
     {}                                                         \
                                                                \
-    protected:                                                 \
+  protected:                                                   \
     int process();                                             \
     int preprocess_arg();                                      \
                                                                \
-    private:                                                   \
+  private:                                                     \
     const observer::ObGlobalContext& gctx_;                    \
     common::ObArenaAllocator alloc_;                           \
   }
@@ -78,13 +78,13 @@ class ObIntermResultManager;
 class ObIntermResultIterator;
 
 class ObWorkerSessionGuard {
-  public:
+public:
   ObWorkerSessionGuard(ObSQLSessionInfo* session);
   ~ObWorkerSessionGuard();
 };
 
 class ObDistExecuteBaseP {
-  public:
+public:
   ObDistExecuteBaseP(const observer::ObGlobalContext& gctx, bool sync)
       : gctx_(gctx),
         exec_ctx_(gctx.session_mgr_),
@@ -123,15 +123,15 @@ class ObDistExecuteBaseP {
     return exec_ctx_;
   }
 
-  protected:
+protected:
   virtual int param_preprocess(ObTask& task);
   virtual int execute_dist_plan(ObTask& task, ObTaskCompleteEvent& task_event);
   virtual void record_exec_timestamp(bool is_first, ObExecTimestamp& exec_timestamp) = 0;
 
-  private:
+private:
   int get_participants(common::ObPartitionIArray& participants, const ObTask& task);
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
   sql::ObDesExecContext exec_ctx_;
   observer::ObVirtualTableIteratorFactory vt_iter_factory_;
@@ -152,7 +152,7 @@ class ObDistExecuteBaseP {
 // Remain this class, only for compatibility
 class ObRpcDistExecuteP : public ObDistExecuteBaseP,
                           public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_DIST_EXECUTE>> {
-  public:
+public:
   ObRpcDistExecuteP(const observer::ObGlobalContext& gctx) : ObDistExecuteBaseP(gctx, true)
   {
     set_preserve_recv_data();
@@ -165,7 +165,7 @@ class ObRpcDistExecuteP : public ObDistExecuteBaseP,
     ObExecStatUtils::record_exec_timestamp(*this, is_first, exec_timestamp);
   }
 
-  protected:
+protected:
   virtual int before_process();
   virtual int process();
   virtual int after_process();
@@ -174,7 +174,7 @@ class ObRpcDistExecuteP : public ObDistExecuteBaseP,
 
 class ObRpcAPDistExecuteP : public ObDistExecuteBaseP,
                             public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_AP_DIST_EXECUTE>> {
-  public:
+public:
   ObRpcAPDistExecuteP(const observer::ObGlobalContext& gctx) : ObDistExecuteBaseP(gctx, false)
   {
     set_preserve_recv_data();
@@ -187,7 +187,7 @@ class ObRpcAPDistExecuteP : public ObDistExecuteBaseP,
     ObExecStatUtils::record_exec_timestamp(*this, is_first, exec_timestamp);
   }
 
-  protected:
+protected:
   virtual int before_process();
   virtual int process();
   virtual int after_process();
@@ -196,7 +196,7 @@ class ObRpcAPDistExecuteP : public ObDistExecuteBaseP,
 };
 
 class ObRpcAPDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB_AP_DIST_EXECUTE> {
-  public:
+public:
   ObRpcAPDistExecuteCB(const common::ObAddr& server, const ObTaskID& ob_task_id, const ObCurTraceId::TraceId& trace_id,
       int64_t timeout_ts)
       : task_loc_(server, ob_task_id), timeout_ts_(timeout_ts)
@@ -206,7 +206,7 @@ class ObRpcAPDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB
   virtual ~ObRpcAPDistExecuteCB()
   {}
 
-  public:
+public:
   virtual int process();
   virtual void on_invalid()
   {
@@ -228,13 +228,13 @@ class ObRpcAPDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB
     UNUSED(arg);
   }
 
-  private:
+private:
   void free_my_memory()
   {
     result_.reset();
   }
 
-  private:
+private:
   ObTaskLocation task_loc_;
   common::ObCurTraceId::TraceId trace_id_;
   int64_t timeout_ts_;
@@ -242,7 +242,7 @@ class ObRpcAPDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB
 };
 
 class ObMiniTaskBaseP {
-  public:
+public:
   ObMiniTaskBaseP(const observer::ObGlobalContext& gctx)
       : gctx_(gctx),
         exec_ctx_(gctx.session_mgr_),
@@ -275,7 +275,7 @@ class ObMiniTaskBaseP {
     return exec_start_timestamp_;
   }
 
-  protected:
+protected:
   int prepare_task_env(ObMiniTask& task);
   int execute_subplan(const ObOpSpec& root_spec, ObScanner& scanner);
   int execute_mini_plan(ObMiniTask& task, ObMiniTaskResult& result);
@@ -283,7 +283,7 @@ class ObMiniTaskBaseP {
   int sync_send_result(ObExecContext& exec_ctx, ObOperator& op, ObScanner& scanner);
   virtual void record_exec_timestamp(bool is_first, ObExecTimestamp& exec_timestamp) = 0;
 
-  protected:
+protected:
   const observer::ObGlobalContext& gctx_;
   sql::ObDesExecContext exec_ctx_;
   observer::ObVirtualTableIteratorFactory vt_iter_factory_;
@@ -300,20 +300,20 @@ class ObMiniTaskBaseP {
 class ObRpcMiniTaskExecuteP
     : public ObMiniTaskBaseP,
       public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_MINI_TASK_EXECUTE>> {
-  public:
+public:
   ObRpcMiniTaskExecuteP(const observer::ObGlobalContext& gctx) : ObMiniTaskBaseP(gctx)
   {
     set_preserve_recv_data();
   }
   virtual int init();
 
-  protected:
+protected:
   virtual void record_exec_timestamp(bool is_first, ObExecTimestamp& exec_timestamp)
   {
     ObExecStatUtils::record_exec_timestamp(*this, is_first, exec_timestamp);
   }
 
-  protected:
+protected:
   virtual int before_process();
   virtual int process();
   virtual int before_response();
@@ -327,20 +327,20 @@ class ObRpcMiniTaskExecuteP
 class ObRpcAPMiniDistExecuteP
     : public ObMiniTaskBaseP,
       public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_AP_MINI_DIST_EXECUTE>> {
-  public:
+public:
   ObRpcAPMiniDistExecuteP(const observer::ObGlobalContext& gctx) : ObMiniTaskBaseP(gctx)
   {
     set_preserve_recv_data();
   }
   virtual int init();
 
-  protected:
+protected:
   virtual void record_exec_timestamp(bool is_first, ObExecTimestamp& exec_timestamp)
   {
     ObExecStatUtils::record_exec_timestamp(*this, is_first, exec_timestamp);
   }
 
-  protected:
+protected:
   virtual int before_process();
   virtual int process();
   virtual int before_response();
@@ -352,7 +352,7 @@ class ObRpcAPMiniDistExecuteP
 };
 
 class ObRpcAPMiniDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB_AP_MINI_DIST_EXECUTE> {
-  public:
+public:
   ObRpcAPMiniDistExecuteCB(ObAPMiniTaskMgr* ap_mini_task_mgr, const ObTaskID& task_id,
       const ObCurTraceId::TraceId& trace_id, const ObAddr& dist_server_, int64_t timeout_ts);
   virtual ~ObRpcAPMiniDistExecuteCB()
@@ -360,7 +360,7 @@ class ObRpcAPMiniDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc
     free_my_memory();
   }
 
-  public:
+public:
   virtual int process();
   virtual void on_invalid()
   {
@@ -381,13 +381,13 @@ class ObRpcAPMiniDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc
     UNUSED(arg);
   }
 
-  public:
+public:
   static void deal_with_rpc_timeout_err(const int64_t timeout_ts, int& err);
 
-  private:
+private:
   void free_my_memory();
 
-  private:
+private:
   ObAPMiniTaskMgr* ap_mini_task_mgr_;
   ObTaskID task_id_;
   common::ObCurTraceId::TraceId trace_id_;
@@ -397,42 +397,42 @@ class ObRpcAPMiniDistExecuteCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc
 };
 
 class ObPingSqlTaskBaseP {
-  public:
+public:
   ObPingSqlTaskBaseP(const observer::ObGlobalContext& gctx) : gctx_(gctx)
   {}
   virtual ~ObPingSqlTaskBaseP()
   {}
 
-  protected:
+protected:
   int try_forbid_task(const ObPingSqlTask& ping_task, bool& forbid_succ);
   int try_kill_task(const ObPingSqlTask& ping_task, bool& is_running);
 
-  protected:
+protected:
   const observer::ObGlobalContext& gctx_;
 };
 
 class ObRpcAPPingSqlTaskP : public ObPingSqlTaskBaseP,
                             public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_AP_PING_SQL_TASK>> {
-  public:
+public:
   ObRpcAPPingSqlTaskP(const observer::ObGlobalContext& gctx) : ObPingSqlTaskBaseP(gctx)
   {}
   virtual ~ObRpcAPPingSqlTaskP()
   {}
 
-  protected:
+protected:
   virtual int process();
 };
 
 class ObDistributedSchedulerManager;
 class ObRpcAPPingSqlTaskCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB_AP_PING_SQL_TASK> {
-  public:
+public:
   ObRpcAPPingSqlTaskCB(const ObTaskID& task_id);
   virtual ~ObRpcAPPingSqlTaskCB()
   {
     free_my_memory();
   }
 
-  public:
+public:
   int set_dist_task_mgr(ObDistributedSchedulerManager* dist_task_mgr);
   int set_mini_task_mgr(ObAPMiniTaskMgr* mini_task_mgr);
   virtual int process();
@@ -470,10 +470,10 @@ class ObRpcAPPingSqlTaskCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB
     UNUSED(arg);
   }
 
-  protected:
+protected:
   void free_my_memory();
 
-  protected:
+protected:
   ObTaskID task_id_;
   ObDistributedSchedulerManager* dist_task_mgr_;
   ObAPMiniTaskMgr* mini_task_mgr_;
@@ -482,7 +482,7 @@ class ObRpcAPPingSqlTaskCB : public obrpc::ObExecutorRpcProxy::AsyncCB<obrpc::OB
 
 class ObRpcTaskFetchResultP
     : public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_TASK_FETCH_RESULT>> {
-  public:
+public:
   ObRpcTaskFetchResultP(const observer::ObGlobalContext& gctx) : gctx_(gctx)
   {
     set_preserve_recv_data();
@@ -491,19 +491,19 @@ class ObRpcTaskFetchResultP
   {}
   virtual int init();
 
-  protected:
+protected:
   virtual int process();
 
-  private:
+private:
   int sync_send_result(ObIntermResultIterator& iter);
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
 };
 
 class ObRpcTaskFetchIntermResultP
     : public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_TASK_FETCH_INTERM_RESULT>> {
-  public:
+public:
   ObRpcTaskFetchIntermResultP(const observer::ObGlobalContext& gctx) : gctx_(gctx)
   {
     set_preserve_recv_data();
@@ -511,19 +511,19 @@ class ObRpcTaskFetchIntermResultP
   virtual ~ObRpcTaskFetchIntermResultP()
   {}
   // virtual int init();
-  protected:
+protected:
   virtual int process();
 
-  private:
+private:
   int sync_send_result(ObIntermResultIterator& iter);
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
 };
 
 class ObRpcBKGDTaskCompleteP
     : public obrpc::ObRpcProcessor<obrpc::ObExecutorRpcProxy::ObRpc<obrpc::OB_BKGD_TASK_COMPLETE>> {
-  public:
+public:
   ObRpcBKGDTaskCompleteP(const observer::ObGlobalContext&)
   {
     set_preserve_recv_data();

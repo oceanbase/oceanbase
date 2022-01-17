@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObCreateFuncResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObCreateFuncResolver(ObResolverParams& params);
   virtual ~ObCreateFuncResolver();
 

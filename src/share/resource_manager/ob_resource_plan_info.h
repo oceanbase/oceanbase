@@ -25,7 +25,7 @@ class ObString;
 namespace share {
 
 class ObGroupName {
-  public:
+public:
   ObGroupName(){};
   int set_group_name(const common::ObString& name)
   {
@@ -48,24 +48,24 @@ class ObGroupName {
   }
   TO_STRING_KV(K_(group_name));
 
-  private:
+private:
   common::ObString group_name_;
   char group_name_buf_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
 };
 
 class ObPlanDirective {
-  public:
+public:
   static const int INTERNAL_GROUP_NAME_COUNT = 2;
   static const common::ObString INTERNAL_GROUP_NAME[INTERNAL_GROUP_NAME_COUNT];
   static bool is_internal_group_name(const common::ObString& name);
 
-  public:
+public:
   ObPlanDirective()
       : tenant_id_(common::OB_INVALID_ID), mgmt_p1_(100), utilization_limit_(100), group_name_(), level_(1)
   {}
   ~ObPlanDirective() = default;
 
-  public:
+public:
   int set_tenant_id(uint64_t tenant_id)
   {
     tenant_id_ = tenant_id;
@@ -89,24 +89,24 @@ class ObPlanDirective {
   TO_STRING_KV(
       K_(tenant_id), "group_name", group_name_.get_group_name(), K_(mgmt_p1), K_(utilization_limit), K_(level));
 
-  public:
+public:
   uint64_t tenant_id_;
   int64_t mgmt_p1_;
   int64_t utilization_limit_;
   ObGroupName group_name_;
   int level_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanDirective);
 };
 
 class ObResourceMappingRule {
-  public:
+public:
   ObResourceMappingRule() : tenant_id_(common::OB_INVALID_ID), attr_(), value_(), group_()
   {}
   ~ObResourceMappingRule() = default;
 
-  public:
+public:
   int set_tenant_id(uint64_t tenant_id)
   {
     tenant_id_ = tenant_id;
@@ -133,13 +133,13 @@ class ObResourceMappingRule {
   int assign(const ObResourceMappingRule& other);
   TO_STRING_KV(K_(tenant_id), K_(attr), K_(value), K_(group));
 
-  public:
+public:
   uint64_t tenant_id_;
   common::ObString attr_;
   common::ObString value_;
   common::ObString group_;
 
-  private:
+private:
   char attr_buf_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
   char value_buf_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
   char group_buf_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
@@ -147,12 +147,12 @@ class ObResourceMappingRule {
 };
 
 class ObResourceUserMappingRule {
-  public:
+public:
   ObResourceUserMappingRule() : tenant_id_(common::OB_INVALID_ID), user_id_(), group_id_(), group_name_()
   {}
   ~ObResourceUserMappingRule() = default;
 
-  public:
+public:
   void set_tenant_id(uint64_t tenant_id)
   {
     tenant_id_ = tenant_id;
@@ -172,13 +172,13 @@ class ObResourceUserMappingRule {
   int assign(const ObResourceUserMappingRule& other);
   TO_STRING_KV(K_(tenant_id), K_(user_id), K_(group_id), "group_name", group_name_.get_group_name());
 
-  public:
+public:
   uint64_t tenant_id_;
   uint64_t user_id_;
   uint64_t group_id_;
   ObGroupName group_name_;
 
-  private:
+private:
   char group_name_buf_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObResourceUserMappingRule);
 };

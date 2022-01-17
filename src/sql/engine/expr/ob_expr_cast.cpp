@@ -137,9 +137,22 @@ int ObExprCast::get_cast_string_len(ObExprResType& type1, ObExprResType& type2, 
       case ObHexStringType:
       case ObRawType:
       case ObNVarchar2Type:
-      case ObNCharType: {
+      case ObNCharType:
+      case ObEnumType:
+      case ObSetType:
+      case ObEnumInnerType:
+      case ObSetInnerType:
+      case ObURowIDType:
+      case ObLobType: {
         res_len = type1.get_length();
         length_semantics = type1.get_length_semantics();
+        break;
+      }
+      case ObBitType: {
+        if (scale > 0) {
+          res_len = scale;
+        }
+        res_len = (res_len + 7) / 8;
         break;
       }
       default: {
@@ -368,7 +381,19 @@ int ObExprCast::calc_result_type2(
         OZ(ObRawExprUtils::setup_extra_cast_utf8_type(dst_type, dst_type_utf8));
         OX(type1.set_calc_meta(dst_type_utf8.get_obj_meta()));
       } else {
-        type1.set_calc_meta(type1.get_obj_meta());
+        bool need_warp = false;
+        if (ob_is_enumset_tc(type1.get_type())) {
+          // For enum/set type, need to check whether warp to string is required.
+          if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(type1.get_type(), type1.get_calc_type(), false, need_warp))) {
+            LOG_WARN("need_wrap_to_string failed", K(ret), K(type1));
+          }
+        } else if (OB_LIKELY(need_warp)) {
+          // need_warp is true, no-op and keep type1's calc_type is dst_type. It will be wrapped
+          // to string in ObRawExprWrapEnumSet::visit(ObSysFunRawExpr &expr) later.
+        } else {
+          // need_warp is false, set calc_type to type1 itself.
+          type1.set_calc_meta(type1.get_obj_meta());
+        }
       }
     } else {
       // no need to set cast mode, already setup while deduce type.
@@ -480,6 +505,10 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
     }
     LOG_DEBUG("get accuracy from result_type", K(src_type), K(dest_type), K(accuracy), K(result_type_));
     ObCastMode cast_mode = CM_EXPLICIT_CAST;
+    if (share::is_mysql_mode() && ob_is_string_type(src_type) &&
+        ((ob_is_int_tc(dest_type)) || ob_is_uint_tc(dest_type))) {
+      cast_mode |= CM_STRING_INTEGER_TRUNC;
+    }
     if (ObDateTimeTC == dest_tc || ObDateTC == dest_tc || ObTimeTC == dest_tc) {
       cast_mode |= CM_NULL_ON_WARN;
     } else if (ob_is_int_uint(src_tc, dest_tc)) {
@@ -573,7 +602,9 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
           } else {
             buf_obj1 = *to_type_obj;
             buf_obj1.set_collation(result_type_);
-            buf_obj1.get_string(text);
+            if (OB_FAIL(buf_obj1.get_string(text))) {
+              LOG_WARN("Failed to get buf_obj1 string", K(ret));
+            }
           }
 
           if (OB_FAIL(ret)) {

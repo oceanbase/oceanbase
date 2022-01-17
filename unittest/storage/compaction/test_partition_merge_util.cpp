@@ -33,13 +33,13 @@ namespace compaction {
 
 static const int64_t BASE_ROW_COUNT = 2;
 class TestPartitionMergeUtil : public TestDataFilePrepare {
-  public:
+public:
   TestPartitionMergeUtil();
   virtual ~TestPartitionMergeUtil();
   virtual void SetUp();
   virtual void TearDown();
 
-  protected:
+protected:
   void prepare_schema();
   void create_base_sstable();
   void create_inc_sstable1();

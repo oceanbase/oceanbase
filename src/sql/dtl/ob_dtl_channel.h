@@ -53,13 +53,13 @@ namespace dtl {
 
 // define dtl process api
 class ObIDtlChannelProc {
-  public:
+public:
   virtual int process(const ObDtlLinkedBuffer&, dtl::ObDtlMsgIterator*) = 0;
 };
 
 // define interface for process_one/process_one_if
 class ObIDltChannelLoopPred {
-  public:
+public:
   virtual bool pred_process(int64_t, ObDtlChannel*) = 0;
 };
 
@@ -76,10 +76,10 @@ class ObDtlFlowControl;
 #define IS_RECEIVE_CHANNEL(chid) (!!(chid & 0x1))
 
 class ObDtlChannel : public common::ObDLinkBase<ObDtlChannel> {
-  public:
+public:
   enum class DtlChannelType { LOCAL_CHANNEL = 0, RPC_CHANNEL = 1, BASIC_CHANNEL = 2 };
 
-  public:
+public:
   explicit ObDtlChannel(uint64_t id, const common::ObAddr& peer);
   virtual ~ObDtlChannel()
   {}
@@ -213,18 +213,11 @@ class ObDtlChannel : public common::ObDLinkBase<ObDtlChannel> {
       }
     } while (1);
   }
-  void set_drain()
-  {
-    set_status(DTL_CHAN_DARIN);
-  }
-  void set_eof()
-  {
-    set_status(DTL_CHAN_EOF);
-  }
-  void set_first_buffer()
-  {
-    set_status(DTL_CHAN_FIRST_BUF);
-  }
+
+  void set_drain() { set_status(DTL_CHAN_DARIN); }
+  void set_eof() { set_status(DTL_CHAN_EOF); }
+  void set_first_buffer() { set_status(DTL_CHAN_FIRST_BUF); }
+  void set_blocked() { set_status(DTL_CHAN_BLOCKED); }
 
   int set_bcast_chan_ids(common::ObIArray<uint64_t>& chans);
   int get_bcast_chan_ids(common::ObIArray<uint64_t>& chans);
@@ -257,7 +250,7 @@ class ObDtlChannel : public common::ObDLinkBase<ObDtlChannel> {
     compressor_type_ = type;
   }
 
-  protected:
+protected:
   common::ObThreadCond cond_;
   int64_t pins_;
   uint64_t id_;
@@ -281,7 +274,7 @@ class ObDtlChannel : public common::ObDLinkBase<ObDtlChannel> {
 
   common::ObCompressorType compressor_type_;
 
-  public:
+public:
   // ObDtlChannel is link base, so it add extra link
   // link data list
   void remove_self();

@@ -26,6 +26,7 @@ using namespace common;
 static const char* BASE_BACKUP_VERSION_STR = "base_backup_version";  // only used for restore
 static ObBackupInfoSimpleItem backup_info_item_list[] = {
     {"backup_dest", ""},
+    {"backup_backup_dest", ""},
     {"backup_status", "STOP"},  // ObBackupInfoStatus::STOP
     {"backup_type", ""},
     {"backup_snapshot_version", ""},
@@ -39,7 +40,9 @@ static ObBackupInfoSimpleItem backup_info_item_list[] = {
     {"backup_scheduler_leader", ""},
     {"backup_encryption_mode", ""},
     {"backup_passwd", ""},
-    {"last_delete_expired_data_snapshot", ""},
+    {"enable_auto_backup_archivelog", ""},
+    {"delete_obsolete_backup_snapshot", ""},
+    {"delete_obsolete_backup_backup_snapshot", ""},
 };
 
 ObBackupInfoItem::ObBackupInfoItem(ObBackupInfoItem::ItemList& list, const char* name, const char* value)
@@ -134,9 +137,9 @@ int ObBackupInfoItem::set_value(const char* buf)
     LOG_WARN("set value get invalid argument", K(ret), KP(buf));
   } else {
     const int64_t len = strlen(buf);
-    if (len > OB_INNER_TABLE_DEFAULT_VALUE_LENTH) {
+    if (len >= OB_INNER_TABLE_DEFAULT_VALUE_LENTH) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("set value buf length is unexpected", K(ret), K(len));
+      LOG_WARN("buffer len is unexpected", K(ret), K(len));
     } else {
       STRNCPY(value_.ptr(), buf, len);
       value_.ptr()[len] = '\0';
@@ -236,8 +239,8 @@ int ObBackupItemTransUpdater::end(const bool commit)
 
 #define INIT_ITEM(field, value_def) field##_(list_, #field, value_def)
 #define CONSTRUCT_BASE_BACKUP_INFO()                                                                               \
-  INIT_ITEM(backup_dest, ""), INIT_ITEM(backup_status, ""), INIT_ITEM(backup_type, ""),                            \
-      INIT_ITEM(backup_snapshot_version, ""), INIT_ITEM(backup_schema_version, ""),                                \
+  INIT_ITEM(backup_dest, ""), INIT_ITEM(backup_backup_dest, ""), INIT_ITEM(backup_status, ""),                     \
+      INIT_ITEM(backup_type, ""), INIT_ITEM(backup_snapshot_version, ""), INIT_ITEM(backup_schema_version, ""),    \
       INIT_ITEM(backup_data_version, ""), INIT_ITEM(backup_set_id, ""), INIT_ITEM(incarnation, ""),                \
       INIT_ITEM(backup_task_id, ""), INIT_ITEM(detected_backup_region, ""), INIT_ITEM(backup_encryption_mode, ""), \
       INIT_ITEM(backup_passwd, "")
@@ -294,6 +297,7 @@ DEF_TO_STRING(ObBaseBackupInfo)
   J_OBJ_START();
   J_KO("tenant_id", tenant_id_);
   J_KO("backup_dest", backup_dest_);
+  J_KO("backup_backup_dest", backup_backup_dest_);
   J_KO("backup_status", backup_status_);
   // TODO  backup finish it later
 
@@ -411,6 +415,8 @@ int ObBackupInfoManager::get_backup_info(
   int ret = OB_SUCCESS;
   if (OB_FAIL(updater.load(tenant_id, info.backup_dest_, false /*no need lock*/))) {
     LOG_WARN("failed to load backup dest", K(ret), K(tenant_id));
+  } else if (OB_FAIL(updater.load(tenant_id, info.backup_backup_dest_))) {
+    LOG_WARN("failed to load backup backup dest", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.load(tenant_id, info.backup_data_version_))) {
     LOG_WARN("failed to load backup data version", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.load(tenant_id, info.backup_schema_version_))) {
@@ -424,7 +430,7 @@ int ObBackupInfoManager::get_backup_info(
   } else if (OB_FAIL(updater.load(tenant_id, info.backup_type_))) {
     LOG_WARN("failed to load backup type", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.load(tenant_id, info.detected_backup_region_))) {
-    LOG_WARN("failed to load backup schema version", K(ret), K(tenant_id));
+    LOG_WARN("failed to load backup detected backup region", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.load(tenant_id, info.incarnation_))) {
     LOG_WARN("failed to load backup incarnation", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.load(tenant_id, info.backup_task_id_))) {
@@ -450,6 +456,8 @@ int ObBackupInfoManager::update_backup_info(
     LOG_WARN("update backup info get invalid argument", K(ret), K(info));
   } else if (OB_FAIL(updater.update(tenant_id, info.backup_dest_))) {
     LOG_WARN("failed to update backup dest", K(ret), K(tenant_id));
+  } else if (OB_FAIL(updater.update(tenant_id, info.backup_backup_dest_))) {
+    LOG_WARN("failed to update backup backup dest", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.update(tenant_id, info.backup_data_version_))) {
     LOG_WARN("failed to update backup data version", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.update(tenant_id, info.backup_schema_version_))) {
@@ -463,7 +471,7 @@ int ObBackupInfoManager::update_backup_info(
   } else if (OB_FAIL(updater.update(tenant_id, info.backup_type_))) {
     LOG_WARN("failed to update backup type", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.update(tenant_id, info.detected_backup_region_))) {
-    LOG_WARN("failed to update backup schema version", K(ret), K(tenant_id));
+    LOG_WARN("failed to update backup detected backup region", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.update(tenant_id, info.incarnation_))) {
     LOG_WARN("failed to update backup incarnation", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.update(tenant_id, info.backup_task_id_))) {
@@ -600,6 +608,9 @@ int ObBackupInfoManager::convert_info_to_struct(const ObBaseBackupInfo& info, Ob
   } else if (!info.backup_dest_.value_.is_empty() &&
              OB_FAIL(info_struct.backup_dest_.assign(info.backup_dest_.value_.ptr()))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(info));
+  } else if (!info.backup_backup_dest_.value_.is_empty() &&
+             OB_FAIL(info_struct.backup_backup_dest_.assign(info.backup_backup_dest_.value_.ptr()))) {
+    LOG_WARN("failed to assign backup backup dest", K(ret), K(info));
   } else if (!info.detected_backup_region_.value_.is_empty() &&
              OB_FAIL(info_struct.detected_backup_region_.assign(info.detected_backup_region_.value_.ptr()))) {
     LOG_WARN("failed to assign detected backup region", K(ret), K(info));
@@ -658,6 +669,8 @@ int ObBackupInfoManager::convert_struct_to_info(const ObBaseBackupInfoStruct& in
       LOG_WARN("failed to set backup data version", K(ret), K(info_struct));
     } else if (OB_FAIL(info.backup_dest_.set_value(info_struct.backup_dest_.ptr()))) {
       LOG_WARN("failed to set backup dest", K(ret), K(info_struct));
+    } else if (OB_FAIL(info.backup_backup_dest_.set_value(info_struct.backup_backup_dest_.ptr()))) {
+      LOG_WARN("failed to set backup backup dest", K(ret), K(info_struct));
     } else if (OB_FAIL(info.detected_backup_region_.set_value(info_struct.detected_backup_region_.ptr()))) {
       LOG_WARN("failed to set backup region", K(ret), K(info_struct));
     } else if (OB_FAIL(info.backup_type_.set_value(info_struct.backup_type_.get_backup_type_str()))) {
@@ -728,7 +741,7 @@ int ObBackupInfoManager::get_tenant_ids(common::ObIArray<uint64_t>& tenant_ids)
   return ret;
 }
 
-int ObBackupInfoManager::get_detected_region(const uint64_t tenant_id, ObIArray<ObRegion>& detected_region)
+int ObBackupInfoManager::get_detected_region(const uint64_t tenant_id, ObIArray<ObBackupRegion>& detected_region)
 {
   int ret = OB_SUCCESS;
   const char* name = "detected_backup_region";
@@ -743,24 +756,9 @@ int ObBackupInfoManager::get_detected_region(const uint64_t tenant_id, ObIArray<
   } else if (OB_FAIL(
                  ObTenantBackupInfoOperation::load_info_item(*proxy_, tenant_id, detected_region_item, need_lock))) {
     LOG_WARN("failed to detected info", K(ret), K(tenant_id));
-  } else {
-    ObString detected_region_str;
-    ObString detected_regions_str(detected_region_item.value_.ptr());
-    bool split_end = false;
-    ObRegion region;
-    while (!split_end && OB_SUCC(ret)) {
-      detected_region_str = detected_regions_str.split_on(',');
-      if (detected_region_str.empty() && NULL == detected_region_str.ptr()) {
-        split_end = true;
-        detected_region_str = detected_regions_str;
-      }
-      region = detected_region_str.trim();
-      if (!region.is_empty()) {
-        if (OB_FAIL(detected_region.push_back(region))) {
-          LOG_WARN("failed to push detected region into array", K(ret), K(region));
-        }
-      }
-    }
+  } else if (OB_FAIL(ObBackupUtils::parse_backup_format_input(
+                 detected_region_item.value_.ptr(), MAX_REGION_LENGTH, detected_region))) {
+    LOG_WARN("failed to parse backup format input", K(ret), K(tenant_id), K(detected_region_item));
   }
   return ret;
 }
@@ -783,6 +781,47 @@ int ObBackupInfoManager::get_backup_status(
     LOG_WARN("failed to detected info", K(ret), K(tenant_id));
   } else if (OB_FAIL(status.set_info_backup_status(backup_status_item.get_value_ptr()))) {
     LOG_WARN("failed to set backup info status", K(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObBackupInfoManager::get_backup_backup_dest(
+    const uint64_t tenant_id, common::ObISQLClient& trans, ObBaseBackupInfoStruct::BackupDest& dest)
+{
+  int ret = OB_SUCCESS;
+  ObBackupInfoItem dest_item;
+  const char* name = "backup_backup_dest";
+  dest_item.name_ = name;
+  const bool need_lock = true;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup info manager do not init", K(ret));
+  } else if (OB_FAIL(find_tenant_id(tenant_id))) {
+    LOG_WARN("failed to find tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTenantBackupInfoOperation::load_info_item(trans, tenant_id, dest_item, need_lock))) {
+    LOG_WARN("failed to load info item", K(ret), K(tenant_id));
+  } else if (OB_FAIL(dest.assign(dest_item.value_.ptr()))) {
+    LOG_WARN("failed to assign backup backup dest", K(ret), K(dest_item));
+  }
+  return ret;
+}
+
+int ObBackupInfoManager::update_backup_backup_dest(
+    const uint64_t tenant_id, common::ObISQLClient& trans, const ObBaseBackupInfoStruct::BackupDest& backup_dest)
+{
+  int ret = OB_SUCCESS;
+  ObBackupInfoItem dest_item;
+  const char* name = "backup_backup_dest";
+  dest_item.name_ = name;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup info manager do not init", K(ret));
+  } else if (OB_FAIL(find_tenant_id(tenant_id))) {
+    LOG_WARN("failed to find tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(dest_item.set_value(backup_dest.ptr()))) {
+    LOG_WARN("failed to set backup backup dest", K(ret), K(tenant_id));
+  } else if (OB_FAIL(dest_item.update(trans, tenant_id))) {
+    LOG_WARN("failed to update backup backup dest", K(ret), K(tenant_id));
   }
   return ret;
 }
@@ -902,38 +941,53 @@ int ObBackupInfoManager::insert_restore_tenant_base_backup_version(
 int ObBackupInfoManager::get_job_id(int64_t& job_id)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
   ObBackupInfoItem job_id_item;
   const char* name = "job_id";
   job_id_item.name_ = name;
   const int64_t FIRST_JOB_ID = 1;
-  const bool need_lock = false;
-  // TODO : need to do in one transaction
+  const bool need_lock = true;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup info manager do not init", K(ret));
-  } else if (job_id < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("insert job id get invalid argument", K(ret));
-  } else if (OB_FAIL(ObTenantBackupInfoOperation::load_info_item(*proxy_, OB_SYS_TENANT_ID, job_id_item, need_lock))) {
-    if (OB_BACKUP_INFO_NOT_EXIST == ret) {
-      if (OB_FAIL(job_id_item.set_value(FIRST_JOB_ID))) {
-        LOG_WARN("failed to set job id", K(ret));
-      } else if (OB_FAIL(job_id_item.insert(*proxy_, OB_SYS_TENANT_ID))) {
+  } else if (OB_FAIL(trans.start(proxy_))) {
+    LOG_WARN("failed to start trans", K(ret));
+  } else {
+    if (OB_FAIL(ObTenantBackupInfoOperation::load_info_item(*proxy_, OB_SYS_TENANT_ID, job_id_item, need_lock))) {
+      if (OB_BACKUP_INFO_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(job_id_item.set_value(FIRST_JOB_ID))) {
+          LOG_WARN("failed to set job id", K(ret));
+        } else if (OB_FAIL(job_id_item.insert(*proxy_, OB_SYS_TENANT_ID))) {
+          LOG_WARN("failed to update job id", K(ret));
+        } else if (FALSE_IT(job_id = FIRST_JOB_ID)) {
+          // do nothing
+        }
+      }
+    } else {
+      int64_t tmp_job_id = 0;
+      if (OB_FAIL(job_id_item.get_int_value(tmp_job_id))) {
+        LOG_WARN("failed to get int value", K(ret));
+      } else if (OB_FAIL(job_id_item.set_value(tmp_job_id + 1))) {
+        LOG_WARN("failed to set value", K(ret));
+      } else if (OB_FAIL(job_id_item.update(*proxy_, OB_SYS_TENANT_ID))) {
         LOG_WARN("failed to update job id", K(ret));
-      } else if (FALSE_IT(job_id = FIRST_JOB_ID)) {
+      } else if (FALSE_IT(job_id = tmp_job_id + 1)) {
         // do nothing
       }
     }
-  } else {
-    int64_t tmp_job_id = 0;
-    if (OB_FAIL(job_id_item.get_int_value(tmp_job_id))) {
-      LOG_WARN("failed to get int value", K(ret));
-    } else if (OB_FAIL(job_id_item.set_value(tmp_job_id + 1))) {
-      LOG_WARN("failed to set value", K(ret));
-    } else if (OB_FAIL(job_id_item.update(*proxy_, OB_SYS_TENANT_ID))) {
-      LOG_WARN("failed to update job id", K(ret));
-    } else if (FALSE_IT(job_id = tmp_job_id + 1)) {
-      // do nothing
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        LOG_WARN("failed to commit", K(ret));
+      } else {
+        LOG_INFO("succeed to get_job_id", K(ret));
+      }
+    } else {
+      if (OB_SUCCESS != (tmp_ret = trans.end((false /*commit*/)))) {
+        LOG_WARN("failed to rollback", K(ret), K(tmp_ret));
+      }
     }
   }
   return ret;
@@ -989,48 +1043,52 @@ int ObBackupInfoManager::is_backup_started(bool& is_started)
   return ret;
 }
 
-int ObBackupInfoManager::get_last_delete_expired_data_snapshot(
-    const uint64_t tenant_id, common::ObISQLClient& trans, int64_t& last_delete_expired_data_snapshot)
+int ObBackupInfoManager::get_enable_auto_backup_archivelog(
+    const uint64_t tenant_id, common::ObISQLClient& trans, bool& is_enable)
 {
   int ret = OB_SUCCESS;
-  last_delete_expired_data_snapshot = 0;
-  ObBackupInfoItem last_delete_expired_snaphost_item;
-  const char* name = "last_delete_expired_data_snapshot";
-  last_delete_expired_snaphost_item.name_ = name;
+  is_enable = false;
+  ObBackupInfoItem enable_backup_archivelog_item;
+  const char* name = "enable_auto_backup_archivelog";
+  enable_backup_archivelog_item.name_ = name;
   const bool need_lock = true;
+  int64_t int_value;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup info manager do not init", K(ret));
   } else if (OB_FAIL(find_tenant_id(tenant_id))) {
     LOG_WARN("failed to find tenant id", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObTenantBackupInfoOperation::load_info_item(
-                 trans, tenant_id, last_delete_expired_snaphost_item, need_lock))) {
+                 trans, tenant_id, enable_backup_archivelog_item, need_lock))) {
     LOG_WARN("failed to detected info", K(ret), K(tenant_id));
-  } else if (last_delete_expired_snaphost_item.value_.is_empty()) {
+  } else if (enable_backup_archivelog_item.value_.is_empty()) {
     // do nothing
-  } else if (OB_FAIL(last_delete_expired_snaphost_item.get_int_value(last_delete_expired_data_snapshot))) {
-    LOG_WARN("failed to get int value", K(ret), K(last_delete_expired_snaphost_item));
+  } else if (OB_FAIL(enable_backup_archivelog_item.get_int_value(int_value))) {
+    LOG_WARN("failed to get int value", K(ret), K(enable_backup_archivelog_item));
+  } else {
+    is_enable = 1 == int_value ? true : false;
   }
   return ret;
 }
 
-int ObBackupInfoManager::update_last_delete_expired_data_snapshot(
-    const uint64_t tenant_id, const int64_t last_delete_expired_data_snapshot, common::ObISQLClient& trans)
+int ObBackupInfoManager::update_enable_auto_backup_archivelog(
+    const uint64_t tenant_id, const bool is_enable, common::ObISQLClient& trans)
 {
   int ret = OB_SUCCESS;
-  ObBackupInfoItem last_delete_expired_snaphost_item;
-  const char* name = "last_delete_expired_data_snapshot";
-  last_delete_expired_snaphost_item.name_ = name;
+  ObBackupInfoItem enable_backup_archivelog_item;
+  const char* name = "enable_auto_backup_archivelog";
+  enable_backup_archivelog_item.name_ = name;
+  const int64_t int_value = is_enable ? 1 : 0;
 
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup info manager do not init", K(ret));
   } else if (OB_FAIL(find_tenant_id(tenant_id))) {
     LOG_WARN("failed to find tenant id", K(ret), K(tenant_id));
-  } else if (OB_FAIL(last_delete_expired_snaphost_item.set_value(last_delete_expired_data_snapshot))) {
-    LOG_WARN("failed to set backup scheduler leader", K(ret), K(last_delete_expired_data_snapshot), K(tenant_id));
-  } else if (OB_FAIL(last_delete_expired_snaphost_item.update(trans, tenant_id))) {
-    LOG_WARN("failed to update scheduler leader", K(ret), K(tenant_id), K(last_delete_expired_snaphost_item));
+  } else if (OB_FAIL(enable_backup_archivelog_item.set_value(int_value))) {
+    LOG_WARN("failed to set enable backup archivelog item", K(ret), K(is_enable), K(tenant_id));
+  } else if (OB_FAIL(enable_backup_archivelog_item.update(trans, tenant_id))) {
+    LOG_WARN("failed to update enable backup archivelog", K(ret), K(tenant_id), K(enable_backup_archivelog_item));
   }
   return ret;
 }
@@ -1094,19 +1152,100 @@ int ObBackupInfoManager::check_can_update_(
   return ret;
 }
 
+int ObBackupInfoManager::get_delete_obsolete_snapshot(const uint64_t tenant_id,
+    const obrpc::ObBackupManageArg::Type& type, common::ObISQLClient& trans, int64_t& last_delete_obsolete_snapshot)
+{
+  int ret = OB_SUCCESS;
+  last_delete_obsolete_snapshot = 0;
+  ObBackupInfoItem delete_obsolete_snapshot_item;
+  const bool need_lock = true;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup info manager do not init", K(ret));
+  } else if (obrpc::ObBackupManageArg::DELETE_OBSOLETE_BACKUP != type &&
+             obrpc::ObBackupManageArg::DELETE_OBSOLETE_BACKUP_BACKUP != type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get delete obsolete snapshot get invalid argument", K(ret), K(type));
+  } else {
+    const char* name = obrpc::ObBackupManageArg::DELETE_OBSOLETE_BACKUP == type
+                           ? "delete_obsolete_backup_snapshot"
+                           : "delete_obsolete_backup_backup_snapshot";
+    delete_obsolete_snapshot_item.name_ = name;
+
+    if (OB_FAIL(find_tenant_id(tenant_id))) {
+      LOG_WARN("failed to find tenant id", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ObTenantBackupInfoOperation::load_info_item(
+                   trans, tenant_id, delete_obsolete_snapshot_item, need_lock))) {
+      LOG_WARN("failed to detected info", K(ret), K(tenant_id));
+    } else if (delete_obsolete_snapshot_item.value_.is_empty()) {
+      // do nothing
+    } else if (OB_FAIL(delete_obsolete_snapshot_item.get_int_value(last_delete_obsolete_snapshot))) {
+      LOG_WARN("failed to get int value", K(ret), K(delete_obsolete_snapshot_item));
+    }
+  }
+  return ret;
+}
+
+int ObBackupInfoManager::update_delete_obsolete_snapshot(const uint64_t tenant_id,
+    const obrpc::ObBackupManageArg::Type& type, const int64_t last_delete_obsolete_snapshot,
+    common::ObISQLClient& trans)
+{
+  int ret = OB_SUCCESS;
+  ObBackupInfoItem delete_obsolete_snapshot_item;
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup info manager do not init", K(ret));
+  } else if (obrpc::ObBackupManageArg::DELETE_OBSOLETE_BACKUP != type &&
+             obrpc::ObBackupManageArg::DELETE_OBSOLETE_BACKUP_BACKUP != type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get delete obsolete snapshot get invalid argument", K(ret), K(type));
+  } else {
+    const char* name = obrpc::ObBackupManageArg::DELETE_OBSOLETE_BACKUP == type
+                           ? "delete_obsolete_backup_snapshot"
+                           : "delete_obsolete_backup_backup_snapshot";
+    delete_obsolete_snapshot_item.name_ = name;
+    if (OB_FAIL(find_tenant_id(tenant_id))) {
+      LOG_WARN("failed to find tenant id", K(ret), K(tenant_id));
+    } else if (OB_FAIL(delete_obsolete_snapshot_item.set_value(last_delete_obsolete_snapshot))) {
+      LOG_WARN("failed to set backup scheduler leader", K(ret), K(delete_obsolete_snapshot_item), K(tenant_id));
+    } else if (OB_FAIL(delete_obsolete_snapshot_item.update(trans, tenant_id))) {
+      LOG_WARN("failed to update scheduler leader", K(ret), K(tenant_id), K(delete_obsolete_snapshot_item));
+    }
+  }
+  return ret;
+}
+
+int ObBackupInfoManager::delete_last_delete_epxired_data_snapshot(const uint64_t tenant_id, common::ObISQLClient& trans)
+{
+  int ret = OB_SUCCESS;
+  const char* name = "last_delete_expired_data_snapshot";
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup info manager do not init", K(ret));
+  } else if (OB_FAIL(find_tenant_id(tenant_id))) {
+    LOG_WARN("failed to find tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTenantBackupInfoOperation::remove_info_item(trans, tenant_id, name))) {
+    LOG_WARN("failed to remove info item", K(ret), K(name));
+  }
+  return ret;
+}
+
 ObBackupInfoSimpleItem::ObBackupInfoSimpleItem() : name_(""), value_("")
 {}
 
 ObBackupInfoSimpleItem::ObBackupInfoSimpleItem(const char* name, const char* value) : name_(name), value_(value)
 {}
 
-ObBackupInfoChecker::ObBackupInfoChecker() : is_inited_(false), sql_proxy_(nullptr)
+ObBackupInfoChecker::ObBackupInfoChecker()
+    : is_inited_(false), sql_proxy_(nullptr), inner_table_version_(OB_BACKUP_INNER_TABLE_VMAX)
 {}
 
 ObBackupInfoChecker::~ObBackupInfoChecker()
 {}
 
-int ObBackupInfoChecker::init(common::ObMySQLProxy* sql_proxy)
+int ObBackupInfoChecker::init(
+    common::ObMySQLProxy* sql_proxy, const share::ObBackupInnerTableVersion& inner_table_version)
 {
   int ret = OB_SUCCESS;
 
@@ -1118,6 +1257,7 @@ int ObBackupInfoChecker::init(common::ObMySQLProxy* sql_proxy)
     LOG_WARN("invalid args", K(ret), KP(sql_proxy));
   } else {
     sql_proxy_ = sql_proxy;
+    inner_table_version_ = inner_table_version;
     is_inited_ = true;
   }
   return ret;
@@ -1161,12 +1301,12 @@ int ObBackupInfoChecker::check(const uint64_t tenant_id)
     LOG_WARN("failed to get_status_line_count_", K(ret), K(tenant_id));
   } else if (OB_FAIL(get_new_items_(*sql_proxy_, tenant_id, false /*for update*/, new_items))) {
     LOG_WARN("failed to get new items", K(ret), K(tenant_id));
-  } else if (new_items.empty() && 0 != status_line_count) {
+  } else if (new_items.empty() && (0 != status_line_count || inner_table_version_ > OB_BACKUP_INNER_TABLE_V1)) {
     // do no thing
   } else if (OB_FAIL(trans.start(sql_proxy_))) {
     LOG_WARN("failed to start trans", K(ret));
   } else {
-    if (0 == status_line_count) {
+    if (0 == status_line_count && OB_BACKUP_INNER_TABLE_V1 == inner_table_version_) {
       if (OB_FAIL(insert_log_archive_status_(trans, tenant_id))) {
         LOG_WARN("failed to insert log archive srtatus", K(ret), K(tenant_id));
       }
@@ -1279,7 +1419,11 @@ int ObBackupInfoChecker::get_new_items_(common::ObISQLClient& trans, const uint6
     } else {
       const int64_t count = ARRAYSIZEOF(backup_info_item_list);
       for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-        if (OB_FAIL(items.push_back(backup_info_item_list[i]))) {
+        const ObBackupInfoSimpleItem& item = backup_info_item_list[i];
+        if (inner_table_version_ > OB_BACKUP_INNER_TABLE_V1 && (0 == strcmp("log_archive_status", item.name_))) {
+          // no need prepare these item for new version inner table
+          // TODO(zeyong): remove backup_scheduler_leader after backup lease upgrade
+        } else if (OB_FAIL(items.push_back(item))) {
           LOG_WARN("failed to add items", K(ret), K(i));
         }
       }
@@ -1311,7 +1455,7 @@ int ObBackupInfoChecker::get_new_items_(common::ObISQLClient& trans, const uint6
       }
 
       if (OB_SUCC(ret) && !found) {
-        LOG_DEBUG("unkown item", K(ret), K(sql), K(tenant_id), K(name_str), K(items));
+        LOG_DEBUG("unknown item", K(ret), K(sql), K(tenant_id), K(name_str), K(items));
       }
     }
   }
@@ -1352,7 +1496,7 @@ int ObBackupInfoChecker::insert_new_item_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid affected_rows", K(ret), K(affected_rows), K(sql));
   } else {
-    LOG_INFO("[LOG_ARCHIVE] insert_new_item_", K(sql));
+    FLOG_INFO("[LOG_ARCHIVE] insert_new_item_", K(sql));
   }
 
   return ret;
@@ -1382,7 +1526,7 @@ int ObBackupInfoChecker::insert_log_archive_status_(common::ObMySQLTransaction& 
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid affected_rows", K(ret), K(affected_rows), K(sql));
   } else {
-    LOG_INFO("[LOG_ARCHIVE] insert_log_archive_status_", K(sql));
+    LOG_INFO("[LOG_ARCHIVE] insert_log_archive_status_", K(inner_table_version_), K(sql));
   }
   return ret;
 }

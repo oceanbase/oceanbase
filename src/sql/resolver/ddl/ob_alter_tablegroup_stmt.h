@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObAlterTablegroupStmt : public ObTablegroupStmt {
-  public:
+public:
   explicit ObAlterTablegroupStmt(common::ObIAllocator* name_pool);
   ObAlterTablegroupStmt();
   virtual ~ObAlterTablegroupStmt();
@@ -32,7 +32,7 @@ class ObAlterTablegroupStmt : public ObTablegroupStmt {
   int add_table_item(const obrpc::ObTableItem& table_item);
   void set_tablegroup_name(const common::ObString& tablegroup_name);
   obrpc::ObAlterTablegroupArg& get_alter_tablegroup_arg();
-  virtual obrpc::ObDDLArg& get_ddl_arg()
+  virtual obrpc::ObDDLArg& get_ddl_arg() override
   {
     return alter_tablegroup_arg_;
   }
@@ -49,7 +49,7 @@ class ObAlterTablegroupStmt : public ObTablegroupStmt {
 
   TO_STRING_KV(K_(alter_tablegroup_arg));
 
-  private:
+private:
   obrpc::ObAlterTablegroupArg alter_tablegroup_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObAlterTablegroupStmt);
 };

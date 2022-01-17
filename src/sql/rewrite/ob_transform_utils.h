@@ -43,7 +43,7 @@ enum CheckStmtUniqueFlags {
 };
 
 class ObTransformUtils {
-  private:
+private:
   struct UniqueCheckInfo {
     UniqueCheckInfo()
     {}
@@ -60,7 +60,7 @@ class ObTransformUtils {
     int assign(const UniqueCheckInfo& other);
     void reset();
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckInfo);
   };
   struct UniqueCheckHelper {
@@ -76,12 +76,24 @@ class ObTransformUtils {
     ObSchemaChecker* schema_checker_;
     ObSQLSessionInfo* session_info_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(UniqueCheckHelper);
   };
 
-  public:
+public:
+  enum NULLABLE_SCOPE {
+    NS_FROM     = 1 << 0,
+    NS_WHERE    = 1 << 1,
+    NS_GROUPBY  = 1 << 2,
+    NS_HAVING   = 1 << 3,
+    NS_TOP      = 1 << 4
+  };
+
   static int is_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_correlated);
+
+  static int is_correlated_subquery(ObSelectStmt* subquery,
+                                    int32_t correlated_level,
+                                    bool &is_correlated);
 
   static int is_direct_correlated_expr(const ObRawExpr* expr, int32_t correlated_level, bool& is_direct_correlated);
 
@@ -263,6 +275,12 @@ class ObTransformUtils {
   static int find_expr(const ObIArray<const ObRawExpr*>& source, const ObRawExpr* target, bool& bret);
 
   static int find_expr(const ObIArray<OrderItem>& source, const ObRawExpr* target, bool& bret);
+
+  static int check_nullable_exprs_in_groupby(ObDMLStmt *stmt, ObRawExpr *expr, int nullable_scope, bool &found);
+
+  static int find_expr_in_groupby_clause(ObSelectStmt *select_stmt, ObRawExpr *column_expr, bool &found);
+  
+  static int find_expr_in_scala_groupby(ObSelectStmt *select_stmt, ObRawExpr *expr, bool &found);
 
   /**
    * @brief is_null_propagate_type
@@ -734,7 +752,7 @@ class ObTransformUtils {
 
   static int replace_with_groupby_exprs(ObSelectStmt* select_stmt, ObRawExpr*& expr);
 
-  private:
+private:
   static int create_select_item_for_subquery(
       ObSelectStmt& stmt, ObSelectStmt*& child_stmt, ObIAllocator& alloc, ObIArray<ObRawExpr*>& query_ref_exprs);
 

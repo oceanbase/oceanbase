@@ -51,8 +51,8 @@ void ObIlogAccessor::destroy()
   inited_ = false;
 }
 
-int ObIlogAccessor::init(const char* dir_name, const char* shm_path, const int64_t server_seq,
-    const common::ObAddr& addr, ObLogCache* log_cache)
+int ObIlogAccessor::init(
+    const char* dir_name, const int64_t server_seq, const common::ObAddr& addr, ObLogCache* log_cache)
 {
   int ret = OB_SUCCESS;
   const bool use_log_cache = true;
@@ -69,8 +69,12 @@ int ObIlogAccessor::init(const char* dir_name, const char* shm_path, const int64
     CSR_LOG(ERROR, "file_store_ init failed", K(ret));
   } else if (OB_FAIL(file_id_cache_.init(server_seq, addr, this))) {
     CSR_LOG(ERROR, "file_id_cache_ init failed", K(ret));
-  } else if (OB_FAIL(direct_reader_.init(
-                 dir_name, shm_path, use_log_cache, log_cache, &log_tail_, ObLogWritePoolType::ILOG_WRITE_POOL))) {
+  } else if (OB_FAIL(direct_reader_.init(dir_name,
+                 nullptr /*no shared memory*/,
+                 use_log_cache,
+                 log_cache,
+                 &log_tail_,
+                 ObLogWritePoolType::ILOG_WRITE_POOL))) {
     CSR_LOG(ERROR, "direct_reader_ init failed", K(ret));
   } else if (OB_FAIL(buffer_.init(OB_MAX_LOG_BUFFER_SIZE, CLOG_DIO_ALIGN_SIZE, ObModIds::OB_CLOG_INFO_BLK_HNDLR))) {
     CSR_LOG(ERROR, "buffer init failed", K(ret));
@@ -564,7 +568,6 @@ int ObIlogAccessor::check_partition_ilog_can_be_purged(const common::ObPartition
   can_purge = false;
   uint64_t last_replay_log_id = OB_INVALID_ID;
   int64_t unused_ts = OB_INVALID_TIMESTAMP;
-  storage::ObIPartitionGroupGuard guard;
   if (false == inited_) {
     ret = OB_NOT_INIT;
     CSR_LOG(ERROR, "ObIlogAccessor is not init", K(ret));
@@ -596,7 +599,7 @@ int ObIlogAccessor::check_partition_ilog_can_be_purged(const common::ObPartition
 }
 
 class ObIlogStorage::PurgeCheckFunctor {
-  public:
+public:
   PurgeCheckFunctor(ObIlogStorage* host, int64_t max_decided_trans_version, file_id_t file_id)
       : host_(host), max_decided_trans_version_(max_decided_trans_version), file_id_(file_id), can_purge_(true)
   {}
@@ -604,7 +607,7 @@ class ObIlogStorage::PurgeCheckFunctor {
   ~PurgeCheckFunctor()
   {}
 
-  public:
+public:
   bool operator()(const common::ObPartitionKey& partition_key, const IndexInfoBlockEntry& index_info_block_entry)
   {
     int ret = OB_SUCCESS;
@@ -634,13 +637,13 @@ class ObIlogStorage::PurgeCheckFunctor {
     return can_purge_;
   }
 
-  private:
+private:
   ObIlogStorage* host_;
   int64_t max_decided_trans_version_;
   file_id_t file_id_;
   bool can_purge_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(PurgeCheckFunctor);
 };
 
@@ -685,7 +688,7 @@ void ObIlogStorage::ObIlogStorageTimerTask::purge_stale_file_()
   } else if (OB_FAIL(ilog_storage_->purge_stale_file())) {
     CSR_LOG(WARN, "ilog_storage_timer purge_stale_file failed", K(ret));
   } else {
-    CSR_LOG(TRACE, "ilog_storage_timer pruge_stale_file success");
+    CSR_LOG(TRACE, "ilog_storage_timer purge_stale_file success");
   }
 }
 
@@ -698,7 +701,7 @@ void ObIlogStorage::ObIlogStorageTimerTask::purge_stale_ilog_index_()
   } else if (OB_FAIL(ilog_storage_->purge_stale_ilog_index()) && OB_NEED_WAIT != ret) {
     CSR_LOG(WARN, "ilog_storage_timer purge_stale_ilog_index failed", K(ret));
   } else {
-    CSR_LOG(INFO, "ilog_storage_timer pruge_stale_ilog_index_ success", K(ret));
+    CSR_LOG(INFO, "ilog_storage_timer purge_stale_ilog_index_ success", K(ret));
   }
 }
 
@@ -717,9 +720,8 @@ ObIlogStorage::~ObIlogStorage()
   destroy();
 }
 
-int ObIlogStorage::init(const char* dir_name, const char* shm_path, const int64_t server_seq,
-    const common::ObAddr& addr, ObLogCache* log_cache, ObPartitionService* partition_service,
-    ObCommitLogEnv* commit_log_env)
+int ObIlogStorage::init(const char* dir_name, const int64_t server_seq, const common::ObAddr& addr,
+    ObLogCache* log_cache, ObPartitionService* partition_service, ObCommitLogEnv* commit_log_env)
 {
   int ret = OB_SUCCESS;
 
@@ -742,7 +744,7 @@ int ObIlogStorage::init(const char* dir_name, const char* shm_path, const int64_
         KP(commit_log_env),
         K(server_seq),
         K(addr));
-  } else if (OB_FAIL(ObIlogAccessor::init(dir_name, shm_path, server_seq, addr, log_cache))) {
+  } else if (OB_FAIL(ObIlogAccessor::init(dir_name, server_seq, addr, log_cache))) {
     CSR_LOG(ERROR, "failed to init ObIlogAccessor", K(ret));
   } else if (OB_FAIL(init_next_ilog_file_id_(next_ilog_file_id))) {
     CSR_LOG(ERROR, "get_next_ilog_file_id failed", K(ret));
@@ -841,7 +843,7 @@ int ObIlogStorage::get_cursor_batch(
     if (OB_FAIL(get_cursor_from_file_(partition_key, query_log_id, result))) {
       // subsequent code will judge the error number, determines if need tot return error.
       CSR_LOG(TRACE, "get_cursor_from_file_ failed", K(ret), K(partition_key), K(query_log_id));
-      // handle logs betweent ilog_store and memstore.
+      // handle logs between ilog_store and memstore.
       if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {
         if (OB_SUCCESS == tmp_ret && query_log_id < min_log_id) {
           CSR_LOG(INFO,

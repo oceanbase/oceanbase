@@ -28,7 +28,7 @@ namespace sql {
 class ObExecContext;
 
 class ObPrefixSort : public ObSortImpl {
-  public:
+public:
   ObPrefixSort();
 
   // init && start fetch %op rows
@@ -40,12 +40,12 @@ class ObPrefixSort : public ObSortImpl {
   void reuse();
   void reset();
 
-  private:
+private:
   // fetch rows in same prefix && do sort, set %cur_row_ to NULL all child rows are fetched.
   int fetch_rows();
   using ObSortImpl::init;
 
-  private:
+private:
   int64_t prefix_pos_;
   const SortColumns* full_sort_columns_;
   common::ObArrayHelper<ObSortColumn> base_sort_columns_;
@@ -61,17 +61,17 @@ class ObPrefixSort : public ObSortImpl {
 class ObSort : public ObSingleChildPhyOperator, public ObSortableTrait {
   OB_UNIS_VERSION_V(1);
   static const int64_t MEM_LIMIT_SIZE = 128 * 1024 * 1024;  // 128M
-  private:
+private:
   class ObSortCtx : public ObPhyOperatorCtx {
     friend class ObSort;
 
-    public:
+  public:
     explicit ObSortCtx(ObExecContext& ctx);
     virtual ~ObSortCtx()
     {}
     virtual void destroy();
 
-    private:
+  private:
     ObSortImpl sort_impl_;
     ObPrefixSort prefix_sort_impl_;
     ObInMemoryTopnSort topn_sort_;
@@ -81,7 +81,7 @@ class ObSort : public ObSingleChildPhyOperator, public ObSortableTrait {
     int64_t ret_row_count_;
   };
 
-  public:
+public:
   explicit ObSort(common::ObIAllocator& alloc);
   virtual ~ObSort()
   {}
@@ -125,7 +125,7 @@ class ObSort : public ObSingleChildPhyOperator, public ObSortableTrait {
       calc_exprs_, N_ORDER_BY, sort_columns_, N_LIMIT, mem_limit_, "minimum_row_count", minimum_row_count_,
       "topk_precision", topk_precision_);
 
-  private:
+private:
   // function members
   int process_sort(ObExecContext& exec_ctx, ObSortCtx& sort_ctx) const;
   int get_int_value(ObExecContext& ctx, const ObSqlExpression* in_val, int64_t& out_val) const;
@@ -177,7 +177,7 @@ class ObSort : public ObSingleChildPhyOperator, public ObSortableTrait {
 
   int topn_sort_next(ObExecContext& exec_ctx, ObSortCtx& sort_ctx, const ObNewRow*& row) const;
 
-  private:
+private:
   int64_t mem_limit_;  // unused, use GCONF.__sort_area_size as mem limit instead
   ObSqlExpression* topn_expr_;
   // used for topk

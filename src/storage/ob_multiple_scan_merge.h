@@ -17,11 +17,11 @@
 namespace oceanbase {
 namespace storage {
 class ObMultipleScanMerge : public ObMultipleScanMergeImpl {
-  public:
+public:
   ObMultipleScanMerge();
   virtual ~ObMultipleScanMerge();
 
-  public:
+public:
   static int estimate_row_count(const common::ObQueryFlag query_flag, const uint64_t table_id,
       const common::ObExtStoreRange& range, const common::ObIArray<ObITable*>& tables, ObPartitionEst& cost_estimate,
       common::ObIArray<common::ObEstRowCountRecord>& est_records);
@@ -33,15 +33,16 @@ class ObMultipleScanMerge : public ObMultipleScanMergeImpl {
     iter_del_row_ = iter_del_row;
   }
 
-  protected:
+protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
-  virtual int inner_get_next_row(ObStoreRow& row);
+
+  virtual int inner_get_next_row(ObStoreRow& row) override;
   virtual int is_range_valid() const override;
   virtual int prepare() override;
   virtual void collect_merge_stat(ObTableStoreStat& stat) const override;
 
-  private:
+private:
   const common::ObExtStoreRange* range_;
   common::ObExtStoreRange cow_range_;
 

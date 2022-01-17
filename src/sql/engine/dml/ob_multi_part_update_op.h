@@ -19,7 +19,7 @@ namespace sql {
 class ObMultiPartUpdateSpec : public ObTableUpdateSpec, public ObMultiDMLInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiPartUpdateSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableUpdateSpec(alloc, type), ObMultiDMLInfo(alloc)
   {}
@@ -37,12 +37,12 @@ class ObMultiPartUpdateSpec : public ObTableUpdateSpec, public ObMultiDMLInfo {
 };
 
 class ObMultiPartUpdateOp : public ObTableUpdateOp, public ObMultiDMLCtx {
-  public:
+public:
   static const int64_t DELETE_OP = 0;
   static const int64_t INSERT_OP = 1;
   static const int64_t UPDATE_OP = 2;
   static const int64_t DML_OP_CNT = 3;  // multi table update mybe contain 3 kinds dml op
-  public:
+public:
   ObMultiPartUpdateOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableUpdateOp(ctx, spec, input),
         ObMultiDMLCtx(ctx.get_allocator()),
@@ -53,7 +53,7 @@ class ObMultiPartUpdateOp : public ObTableUpdateOp, public ObMultiDMLCtx {
   ~ObMultiPartUpdateOp()
   {}
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int inner_close() override;
   virtual int inner_get_next_row();
@@ -79,7 +79,7 @@ class ObMultiPartUpdateOp : public ObTableUpdateOp, public ObMultiDMLCtx {
     ++affected_rows_;
   }
 
-  private:
+private:
   int64_t found_rows_;
   int64_t changed_rows_;
   int64_t affected_rows_;

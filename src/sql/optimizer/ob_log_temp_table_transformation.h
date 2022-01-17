@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogTempTableTransformation : public ObLogicalOperator {
-  public:
+public:
   ObLogTempTableTransformation(ObLogPlan& plan);
   virtual ~ObLogTempTableTransformation();
 
@@ -30,7 +30,7 @@ class ObLogTempTableTransformation : public ObLogicalOperator {
   virtual int allocate_exchange(AllocExchContext* ctx, ObExchangeInfo& exch_info) override;
   virtual int compute_op_ordering() override;
   virtual int transmit_local_ordering() override;
-  virtual bool is_consume_child_1by1() const
+  virtual bool is_consume_child_1by1() const override
   {
     return true;
   }
@@ -38,6 +38,7 @@ class ObLogTempTableTransformation : public ObLogicalOperator {
   virtual int est_cost() override;
 
   int get_temp_table_exprs(ObIArray<ObRawExpr*>& set_exprs) const;
+  int allocate_startup_expr_post() override;
 };
 
 }  // end of namespace sql

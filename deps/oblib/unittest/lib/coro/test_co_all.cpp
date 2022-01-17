@@ -95,7 +95,7 @@ TEST(TestCoAll, Statistics)
 }
 
 class CoThreadExit : public ThreadPool {
-  public:
+public:
   CoThreadExit()
   {}
   virtual ~CoThreadExit()

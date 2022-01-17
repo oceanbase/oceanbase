@@ -2348,7 +2348,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                       new_table_schema.get_charset_type(),
                       new_table_schema.get_collation_type()))) {
                 RS_LOG(WARN, "failed to fill column charset info");
-              } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+              } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(
+                             *alter_column_schema, origin_table_schema.get_table_id()))) {
                 RS_LOG(WARN, "failed to check text or blob column length");
               }
             } else if (ObEnumSetTC == col_tc) {
@@ -2568,7 +2569,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                         new_table_schema.get_charset_type(),
                         new_table_schema.get_collation_type()))) {
                   RS_LOG(WARN, "failed to fill column charset info");
-                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(
+                               *alter_column_schema, origin_table_schema.get_table_id()))) {
                   RS_LOG(WARN, "failed to check text or blob column length");
                 }
               }
@@ -2775,7 +2777,8 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                         new_table_schema.get_charset_type(),
                         new_table_schema.get_collation_type()))) {
                   RS_LOG(WARN, "failed to fill column charset info");
-                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(*alter_column_schema))) {
+                } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(
+                               *alter_column_schema, origin_table_schema.get_table_id()))) {
                   RS_LOG(WARN, "failed to check text or blob column length");
                 }
               }
@@ -4017,28 +4020,24 @@ int ObDDLOperator::drop_table_for_inspection(const ObTableSchema& orig_table_sch
   } else if (OB_FAIL(schema_service->get_table_sql_service().drop_table_for_inspection(
                  trans, orig_table_schema, new_schema_version))) {
     LOG_WARN("drop table for inspection failed", K(ret));
-  } else if (orig_table_schema.is_in_recyclebin()) {
+  } else if (OB_RECYCLEBIN_SCHEMA_ID == extract_pure_id(orig_table_schema.get_database_id())) {
+    // FIXME: remove [!is_dropped_schema()] from ObSimpleTableSchemaV2::is_in_recyclebin()
     ObRecycleObject::RecycleObjType recycle_type = ObRecycleObject::get_type_by_table_schema(orig_table_schema);
-    const ObRecycleObject* recycle_obj = NULL;
     ObArray<ObRecycleObject> recycle_objs;
-    if (NULL == recycle_obj) {
-      if (OB_FAIL(schema_service->fetch_recycle_object(orig_table_schema.get_tenant_id(),
-              orig_table_schema.get_table_name_str(),
-              recycle_type,
-              trans,
-              recycle_objs))) {
-        LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
-      } else if (recycle_objs.size() != 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
-      } else {
-        recycle_obj = &recycle_objs.at(0);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(schema_service->delete_recycle_object(orig_table_schema.get_tenant_id(), *recycle_obj, trans))) {
-        LOG_WARN("delete_recycle_object failed", K(ret), K(*recycle_obj));
-      }
+    if (OB_FAIL(schema_service->fetch_recycle_object(orig_table_schema.get_tenant_id(),
+            orig_table_schema.get_table_name_str(),
+            recycle_type,
+            trans,
+            recycle_objs))) {
+      LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
+    } else if (0 == recycle_objs.size()) {
+      // bugfix: https://work.aone.alibaba-inc.com/issue/35723010
+    } else if (recycle_objs.size() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
+    } else if (OB_FAIL(schema_service->delete_recycle_object(
+                   orig_table_schema.get_tenant_id(), recycle_objs.at(0), trans))) {
+      LOG_WARN("delete_recycle_object failed", K(ret), K(recycle_objs.at(0)));
     }
   }
   if (OB_FAIL(ret)) {
@@ -5160,9 +5159,10 @@ int ObDDLOperator::check_is_delay_delete(const int64_t tenant_id, bool& is_delay
   if (OB_SUCC(ret)) {
     int64_t reserved_schema_version = -1;
     ObBackupInfoMgr& bk_info = ObBackupInfoMgr::get_instance();
-
-    if (OB_FAIL(bk_info.get_delay_delete_schema_version(
-            tenant_id, schema_service_, is_delay_delete, reserved_schema_version))) {
+    if (OB_SYS_TENANT_ID == tenant_id) {
+      // sys tenant won't backup or restore
+    } else if (OB_FAIL(bk_info.get_delay_delete_schema_version(
+                   tenant_id, schema_service_, is_delay_delete, reserved_schema_version))) {
       LOG_WARN("get delay delete snaptshot version failed", KR(ret));
     }
   }
@@ -5426,17 +5426,19 @@ int ObDDLOperator::drop_obj_privs(
 
 int ObDDLOperator::drop_table(const ObTableSchema& table_schema, ObMySQLTransaction& trans,
     const ObString* ddl_stmt_str /*=NULL*/, const bool is_truncate_table /*false*/,
-    DropTableIdHashSet* drop_table_set /*=NULL*/, const bool is_drop_db /*false*/)
+    DropTableIdHashSet* drop_table_set /*=NULL*/, const bool is_drop_db /*false*/, bool* is_delay_delete /*NULL*/)
 {
   int ret = OB_SUCCESS;
-  bool is_delay_delete = false;
-  if (OB_FAIL(check_is_delay_delete(table_schema.get_tenant_id(), is_delay_delete))) {
+  bool tmp = false;
+  is_delay_delete = (NULL == is_delay_delete) ? &tmp : is_delay_delete;
+  if (OB_FAIL(check_is_delay_delete(table_schema.get_tenant_id(), *is_delay_delete))) {
     LOG_WARN("check is delay delete failed", K(ret), K(table_schema.get_tenant_id()));
-  } else if (is_delay_delete) {
+  } else if (*is_delay_delete) {
     // do nothing
   } else if (table_schema.is_dropped_schema() && OB_FAIL(drop_table_for_inspection(table_schema, trans))) {
     LOG_WARN("drop table for dropped shema failed", K(ret));
   }
+
   if (OB_FAIL(ret)) {
   } else if (!table_schema.is_dropped_schema() &&
              OB_FAIL(drop_table_for_not_dropped_schema(
@@ -5512,8 +5514,14 @@ int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema& table_schema)
 {
   int ret = OB_SUCCESS;
   ObAutoincrementService& autoinc_service = share::ObAutoincrementService::get_instance();
-  if (0 != table_schema.get_autoinc_column_id()) {
-    uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t tenant_id = table_schema.get_tenant_id();
+  bool is_restore = false;
+  if (OB_FAIL(schema_service_.check_tenant_is_restore(NULL, tenant_id, is_restore))) {
+    LOG_WARN("fail to check if tenant is restore", KR(ret), K(tenant_id));
+  } else if (is_restore) {
+    // bugfix:https://work.aone.alibaba-inc.com/issue/33571720
+    // skip
+  } else if (0 != table_schema.get_autoinc_column_id()) {
     uint64_t table_id = table_schema.get_table_id();
     uint64_t autoinc_column_id = table_schema.get_autoinc_column_id();
     LOG_INFO("begin to clear all auto-increment cache", K(tenant_id), K(table_id), K(autoinc_column_id));
@@ -7222,6 +7230,54 @@ int ObDDLOperator::set_passwd(const uint64_t tenant_id, const uint64_t user_id, 
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_passwd(
                      new_user_info, new_schema_version, ddl_stmt_str, trans))) {
+        LOG_WARN("Failed to set passwd", K(tenant_id), K(user_id), K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDDLOperator::set_max_connections(
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    const uint64_t max_connections_per_hour,
+    const uint64_t max_user_connections,
+    const ObString *ddl_stmt_str,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id and user_id must not be null", K(tenant_id), K(user_id), K(ret));
+  } else if (OB_ISNULL(schema_sql_service)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schama service_impl and schema manage must not null",
+        "schema_service_impl", schema_sql_service, K(ret));
+  } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else {
+    const ObUserInfo *user_info = NULL;
+    if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+      LOG_WARN("failed to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      ret = OB_ERR_USER_NOT_EXIST;
+      LOG_WARN("User not exist", K(ret));
+    } else {
+      int64_t new_schema_version = OB_INVALID_VERSION;
+      ObUserInfo new_user_info = *user_info;
+      if (OB_INVALID_ID != max_connections_per_hour) {
+        new_user_info.set_max_connections(max_connections_per_hour);
+      }
+      if (OB_INVALID_ID != max_user_connections) {
+        new_user_info.set_max_user_connections(max_user_connections);
+      }
+      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_sql_service->get_user_sql_service().set_max_connections(
+                        new_user_info, new_schema_version, ddl_stmt_str, trans))) {
         LOG_WARN("Failed to set passwd", K(tenant_id), K(user_id), K(ret));
       }
     }

@@ -181,6 +181,11 @@ int ObServerConfig::read_config()
         OB_LOG(WARN, "Failed to check and refresh major_compact_trigger", K(temp_ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_SUCCESS != (temp_ret = check_backup_manager_parameter())) {
+        OB_LOG(WARN, "Failed to check backup manager parameter", K(temp_ret));
+      }
+    }
   }
   return ret;
 }
@@ -230,6 +235,17 @@ int ObServerConfig::check_and_refresh_major_compact_trigger()
 
   return ret;
 }
+
+int ObServerConfig::check_backup_manager_parameter()
+{
+  int ret = OB_SUCCESS;
+  if (_auto_update_reserved_backup_timestamp && auto_delete_expired_backup) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(ERROR, "backup manager can not both update reserved backup timestamp and delete backup");
+  }
+  return ret;
+}
+
 
 void ObServerConfig::print() const
 {

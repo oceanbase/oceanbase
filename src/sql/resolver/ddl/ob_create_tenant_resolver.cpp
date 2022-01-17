@@ -129,20 +129,26 @@ int ObCreateTenantResolver::resolve(const ParseNode& parse_tree)
 
   bool is_oracle_mode = false;
   if (OB_SUCC(ret)) {
-    for (int64_t i = 0; i < mystmt->get_sys_var_nodes().count(); i++) {
-      const ObVariableSetStmt::VariableSetNode& node = mystmt->get_sys_var_nodes().at(i);
-      if (0 == node.variable_name_.case_compare("ob_compatibility_mode")) {
-        ObConstRawExpr* const_expr = static_cast<ObConstRawExpr*>(node.value_expr_);
-        if (nullptr == const_expr) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("const expr is null", K(ret));
-        } else {
-          ObObj value = const_expr->get_value();
-          ObString str;
-          if (OB_FAIL(value.get_string(str))) {
-            LOG_WARN("get string failed", K(ret));
-          } else if (0 == str.case_compare("oracle")) {
-            is_oracle_mode = true;
+    for (int64_t i = 0; i < mystmt->get_sys_var_nodes().count() && OB_SUCC(ret); i++) {
+      const ObVariableSetStmt::VariableNamesSetNode& var_names_node = mystmt->get_sys_var_nodes().at(i);
+      if (OB_UNLIKELY(!var_names_node.is_set_variable_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("not allow to set names when create tenant according to symtax", K(ret));
+      } else {
+        const ObVariableSetStmt::VariableSetNode& node = var_names_node.var_set_node_;
+        if (0 == node.variable_name_.case_compare("ob_compatibility_mode")) {
+          ObConstRawExpr* const_expr = static_cast<ObConstRawExpr*>(node.value_expr_);
+          if (nullptr == const_expr) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("const expr is null", K(ret));
+          } else {
+            ObObj value = const_expr->get_value();
+            ObString str;
+            if (OB_FAIL(value.get_string(str))) {
+              LOG_WARN("get string failed", K(ret));
+            } else if (0 == str.case_compare("oracle")) {
+              is_oracle_mode = true;
+            }
           }
         }
       }

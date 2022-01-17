@@ -24,9 +24,9 @@ namespace sql {
 class ObTask;
 class ObTaskInfo;
 class ObTaskRunnerNotifierService {
-  public:
+public:
   class ObKillTaskRunnerNotifier {
-    public:
+  public:
     ObKillTaskRunnerNotifier() : ret_(common::OB_ERR_UNEXPECTED)
     {}
     virtual ~ObKillTaskRunnerNotifier()
@@ -37,19 +37,19 @@ class ObTaskRunnerNotifierService {
       return ret_;
     }
 
-    private:
+  private:
     int ret_;
 
-    private:
+  private:
     DISALLOW_COPY_AND_ASSIGN(ObKillTaskRunnerNotifier);
   };
 
   class Guard {
-    public:
+  public:
     Guard(const ObTaskID& task_id, ObTaskRunnerNotifier* notifier);
     ~Guard();
 
-    private:
+  private:
     const ObTaskID task_id_;
   };
 
@@ -65,7 +65,7 @@ class ObTaskRunnerNotifierService {
   void reset();
   int init();
 
-  private:
+private:
   static const int64_t NOTIFIER_MAP_BUCKET_SIZE = 1024;
 
   static ObTaskRunnerNotifierService* instance_;
@@ -78,7 +78,7 @@ class ObTaskRunnerNotifierService {
   bool inited_;
   common::hash::ObHashMap<ObTaskID, ObTaskRunnerNotifier*> notifier_map_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTaskRunnerNotifierService);
 };
 

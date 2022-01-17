@@ -49,6 +49,9 @@ void PGLogArchiveStat::reset()
   index_file_offset_ = -1;
   cur_data_file_id_ = 0;
   data_file_offset_ = -1;
+  clog_split_task_num_ = 0;
+  send_task_num_ = 0;
+  cur_piece_id_ = OB_BACKUP_INVALID_PIECE_ID;
 }
 
 ObAllVirtualPGLogArchiveStat::ObAllVirtualPGLogArchiveStat()
@@ -209,6 +212,15 @@ int ObAllVirtualPGLogArchiveStat::inner_get_next_row(ObNewRow*& row)
           break;
         case CUR_DATA_FILE_OFFSET:
           cur_row_.cells_[i].set_int(stat.data_file_offset_);
+          break;
+        case CLOG_SPLIT_TASK_NUM:
+          cur_row_.cells_[i].set_int(stat.clog_split_task_num_);
+          break;
+        case SEND_TASK_NUM:
+          cur_row_.cells_[i].set_int(stat.send_task_num_);
+          break;
+        case CUR_PIECE_ID:
+          cur_row_.cells_[i].set_int(stat.cur_piece_id_);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

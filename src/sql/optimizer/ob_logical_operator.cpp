@@ -1507,7 +1507,7 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp& op, void* ctx
             //   select /*+NO_REWRITE*/ count(*) from t1 group by 1 + (select 1 > all (select 0));
             //
             if ((*e)->has_const_or_const_expr_flag() && !(*e)->has_flag(CNT_VOLATILE_CONST) &&
-                !(*e)->has_flag(IS_EXEC_PARAM)) {
+                !(*e)->has_flag(CNT_EXEC_PARAM)) {
               ObRawExpr* remove_const_expr = NULL;
               OZ(ObRawExprUtils::build_remove_const_expr(
                   get_plan()->get_optimizer_context().get_expr_factory(), *session, *e, remove_const_expr));
@@ -1534,6 +1534,8 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp& op, void* ctx
         }
         break;
       }
+      case ALLOC_STARTUP_EXPR:
+        break;
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected access of default branch", K(op), K(ret));
@@ -1917,6 +1919,12 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp& op, void* ct
       case ALLOC_LINK: {
         if (OB_FAIL(allocate_link_post())) {
           LOG_WARN("failed to allocate link post", K(ret));
+        }
+        break;
+      }
+      case ALLOC_STARTUP_EXPR: {
+        if (OB_FAIL(allocate_startup_expr_post())) {
+          LOG_WARN("failed to alloc startup expr post", K(ret));
         }
         break;
       }
@@ -5203,26 +5211,41 @@ int ObLogicalOperator::allocate_dummy_output_access()
         } else if (type_ == log_op_def::LOG_GRANULE_ITERATOR &&
                    get_plan()->get_optimizer_context().is_batched_multi_stmt()) {
           ret = append_array_no_dup(output_exprs_, get_child(first_child)->get_output_exprs());
-        } else {
-          ObRawExpr* partition_id_expr = NULL;
-          if (log_op_def::LOG_EXCHANGE == type_) {
+        } else if (log_op_def::LOG_EXCHANGE == type_) {
+          ObRawExpr *partition_id_expr = NULL;
+          ObLogExchange *exchange_op = NULL;
+          exchange_op = static_cast<ObLogExchange*>(this);
+          if (exchange_op->get_is_remote() && exchange_op->is_producer()) {
+            // https://work.aone.alibaba-inc.com/issue/33487009
+            // 0. EXCHANGE IN REMOTE
+            // 1.  EXCHANGE OUT REMOTE
+            // 2.   TABLE SCAN / OTHERS
+            // exchange_out_remote must copy output from exchange_in_remote
+            // operators 0 and 1 must have the same output
+            if (OB_ISNULL(get_parent())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("parent is null", K(ret), K(get_plan()), K(type_), K(id_));
+            } else if (OB_FAIL(output_exprs_.assign(get_parent()->get_output_exprs()))) {
+              LOG_WARN("copy_exprs fails", K(ret));
+            }
+          } else {
             for (int64_t i = 0; i < output_exprs_.count() && OB_ISNULL(partition_id_expr); i++) {
               ObRawExpr* expr = output_exprs_.at(i);
               if (expr->get_expr_type() == T_PDML_PARTITION_ID) {
                 partition_id_expr = expr;
               }
             }
-          }
-          if (OB_FAIL(output_exprs_.assign(get_child(first_child)->get_output_exprs()))) {
-            LOG_WARN("copy_exprs fails", K(ret));
-          } else if (OB_NOT_NULL(partition_id_expr)) {
-            LOG_DEBUG("append the partition id expr to output exprs", K(*partition_id_expr));
-            if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, partition_id_expr))) {
-              LOG_WARN("failed to add partition id expr to output exprs", K(ret));
+            if (OB_FAIL(output_exprs_.assign(get_child(first_child)->get_output_exprs()))) {
+              LOG_WARN("copy_exprs fails", K(ret));
+            } else if (OB_NOT_NULL(partition_id_expr)) {
+              LOG_DEBUG("append the partition id expr to output exprs", K(*partition_id_expr));
+              if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, partition_id_expr))) {
+                LOG_WARN("failed to add partition id expr to output exprs", K(ret));
+              }
             }
-          } else {
-            LOG_DEBUG("succ to assign output_exprs_", K(output_exprs_));
           }
+        } else if (OB_FAIL(output_exprs_.assign(get_child(first_child)->get_output_exprs()))) {
+          LOG_WARN("copy_exprs fails", K(ret));
         }
       } else { /* Do nothing */
       }
@@ -5745,19 +5768,32 @@ int ObLogicalOperator::inner_set_merge_sort(ObLogicalOperator* producer, ObLogic
     if (OB_SUCC(ret) && 0 < sort->get_sort_keys().count()) {
       // just use sort keys, avoid output_exprs are incorrect
       consumer_exchange->set_is_merge_sort(true);
-      consumer_exchange->set_local_order(!global_order);
-      need_remove = true;
-      if (global_order && OB_FAIL(producer_exchange->set_op_ordering(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set op ordering", K(ret));
-      } else if (!global_order && OB_FAIL(producer_exchange->set_local_ordering(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set local ordering", K(ret));
-      } else if (OB_FAIL(consumer_exchange->set_sort_keys(sort->get_sort_keys()))) {
-        LOG_WARN("failed to set op ordering", K(ret));
-      } else {
-        LOG_TRACE("sort keys of exchange",
-            K(ret),
-            K(consumer_exchange->get_sort_keys()),
-            K(consumer_exchange->is_task_order()));
+      //for local merge sort in px_coord_merge_sort, we push down the sort operator
+      //keep the local order in sort op
+      if (!global_order && ObPQDistributeMethod::MAX_VALUE 
+                                      == consumer_exchange->get_dist_method()) {
+        if (OB_FAIL(producer_exchange->allocate_sort_below(0, sort->get_sort_keys()))) {
+          LOG_WARN("failed to allocate sort", K(ret));
+        } else {
+          global_order = true;
+          static_cast<ObLogSort *>(producer_exchange->get_child(0))->set_local_merge_sort(true);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        consumer_exchange->set_local_order(!global_order);
+        need_remove = true;
+        if (global_order && OB_FAIL(producer_exchange->set_op_ordering(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set op ordering", K(ret));
+        } else if (!global_order && OB_FAIL(producer_exchange->set_local_ordering(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set local ordering", K(ret));
+        } else if (OB_FAIL(consumer_exchange->set_sort_keys(sort->get_sort_keys()))) {
+          LOG_WARN("failed to set op ordering", K(ret));
+        } else {
+          LOG_TRACE("sort keys of exchange",
+              K(ret),
+              K(consumer_exchange->get_sort_keys()),
+              K(consumer_exchange->is_task_order()));
+        }
       }
     }
   }
@@ -6192,10 +6228,19 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext& ctx)
   } else if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpected null", K(ret), K(get_plan()));
-  } else if (LOG_TABLE_SCAN != get_type() && LOG_JOIN != get_type() && LOG_SET != get_type() &&
-             LOG_GROUP_BY != get_type() && LOG_DISTINCT != get_type() && LOG_SUBPLAN_FILTER != get_type() &&
-             LOG_WINDOW_FUNCTION != get_type() && LOG_UPDATE != get_type() && LOG_DELETE != get_type() &&
-             LOG_INSERT != get_type() && LOG_MERGE != get_type() && LOG_FOR_UPD != get_type()) {
+  } else if (LOG_TABLE_SCAN != get_type()
+             && LOG_JOIN != get_type()
+             && LOG_SET != get_type()
+             && LOG_GROUP_BY != get_type()
+             && LOG_DISTINCT != get_type()
+             && LOG_LIMIT != get_type()
+             && LOG_SUBPLAN_FILTER != get_type()
+             && LOG_WINDOW_FUNCTION != get_type()
+             && LOG_UPDATE != get_type()
+             && LOG_DELETE != get_type()
+             && LOG_INSERT != get_type()
+             && LOG_MERGE != get_type()
+             && LOG_FOR_UPD != get_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Only special op can allocate a granule iterator", K(get_type()));
   } else {
@@ -6392,17 +6437,31 @@ int ObLogicalOperator::push_down_limit(AllocExchContext* ctx, ObRawExpr* limit_c
     }
     // push down limit expr
     if (OB_SUCC(ret)) {
+      bool need_child_limit = true;
+      bool need_pws_limit = false;
       if (OB_ISNULL(child = exchange_point->get_child(first_child))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(exchange_point), K(ret));
       } else if ((log_op_def::instance_of_log_table_scan(child->get_type())) &&
                  !is_virtual_table(static_cast<ObLogTableScan*>(child)->get_ref_table_id()) &&
-                 NULL == static_cast<ObLogTableScan*>(child)->get_limit_expr()) {
+                 NULL == static_cast<ObLogTableScan*>(child)->get_limit_expr() &&
+                 !is_fetch_with_ties) {
         // Do NOT allocate LIMIT operator, and push down limit onto table scan directly.
-        ObLogTableScan* table_scan = static_cast<ObLogTableScan*>(child);
+        ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(child);
         table_scan->set_limit_offset(new_limit_count_expr, NULL);
-      } else {
-        if (OB_FAIL(exchange_point->allocate_limit_below(first_child, new_limit_count_expr))) {
+        need_child_limit = true;
+      } else if (child->is_partition_wise()) {
+        ObLogicalOperator *exch = NULL;
+        if (ctx->exchange_allocated_ && OB_FAIL(child->find_first_recursive(LOG_EXCHANGE, exch))) {
+          LOG_WARN("failed to find first exchange", K(ret));
+        } else if (exch == NULL) {
+          need_pws_limit = true;
+        }
+      }
+
+      if (OB_SUCC(ret) && need_child_limit) {
+        if (OB_FAIL(exchange_point->allocate_limit_below(first_child,
+                                                         new_limit_count_expr))) {
           LOG_WARN("failed to allocte limit below", K(ret));
         } else if (OB_ISNULL(child_limit = exchange_point->get_child(first_child))) {
           ret = OB_ERR_UNEXPECTED;
@@ -6416,6 +6475,27 @@ int ObLogicalOperator::push_down_limit(AllocExchContext* ctx, ObRawExpr* limit_c
           child_limit->set_card(get_card());
           child_limit->set_op_cost(get_op_cost());
           child_limit->set_width(get_width());
+        }
+      }
+
+      if (OB_SUCC(ret) && need_pws_limit) {
+        ObLogicalOperator *pws_limit = NULL;
+        if (OB_FAIL(child_limit->allocate_limit_below(first_child,
+                                                         new_limit_count_expr))) {
+          LOG_WARN("failed to allocte limit below", K(ret));
+        } else if (OB_ISNULL(pws_limit = child_limit->get_child(first_child))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(pws_limit), K(child), K(ret));
+        } else if (OB_FAIL(pws_limit->set_expected_ordering(get_expected_ordering()))) {
+          LOG_WARN("failed to set expected ordering", K(ret));
+        } else if (OB_FAIL(pws_limit->replace_generated_agg_expr(ctx->group_push_down_replaced_exprs_))) {
+          LOG_WARN("failed to replace agg expr", K(ret));
+        } else {
+          static_cast<ObLogLimit*>(pws_limit)->set_fetch_with_ties(is_fetch_with_ties);
+          pws_limit->set_card(get_card());
+          pws_limit->set_op_cost(get_op_cost());
+          pws_limit->set_width(get_width());
+          pws_limit->set_is_partition_wise(true);
         }
       }
     }
@@ -6632,6 +6712,74 @@ int ObLogicalOperator::generate_link_sql_pre(GenLinkStmtContext& link_ctx)
   UNUSED(link_ctx);
   return OB_SUCCESS;
 }
+
+int ObLogicalOperator::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    if (OB_FAIL(allocate_startup_expr_post(i))) {
+      LOG_WARN("failed to allocate startup expr post", K(i), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = get_child(child_idx);
+  if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null child", K(ret));
+  } else if (is_dml_operator() || 
+            log_op_def::LOG_TEMP_TABLE_INSERT == get_type()) {
+    //do nothing
+  } else if (child->get_startup_exprs().empty()) {
+    //do nothing
+  } else {
+    ObSEArray<ObRawExpr*, 4> non_startup_exprs, new_startup_exprs;
+    ObIArray<ObRawExpr*> &startup_exprs = child->get_startup_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < startup_exprs.count(); ++i) {
+      if (OB_ISNULL(startup_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (startup_exprs.at(i)->has_flag(CNT_ROWNUM) ||
+                 startup_exprs.at(i)->has_flag(CNT_EXEC_PARAM)) {
+        if (OB_FAIL(non_startup_exprs.push_back(startup_exprs.at(i)))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      } else if (OB_FAIL(new_startup_exprs.push_back(startup_exprs.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (get_startup_exprs().empty() &&
+          OB_FAIL(add_startup_exprs(new_startup_exprs))) {
+        LOG_WARN("failed to add startup exprs", K(ret));
+      } else {
+        bool mark_exchange_out = false;
+        if (log_op_def::LOG_EXCHANGE == child->get_type()) {
+          ObLogExchange *exchange_out = static_cast<ObLogExchange*>(child);
+          if (exchange_out->is_px_producer()) {
+            if (log_op_def::LOG_EXCHANGE == get_type()) {
+              ObLogExchange *exchange_in = static_cast<ObLogExchange*>(this);
+              if (!exchange_in->is_rescanable()) {
+                mark_exchange_out = true;
+              }
+            }
+          }
+        }
+        if (!mark_exchange_out) {
+          if (OB_FAIL(child->get_startup_exprs().assign(non_startup_exprs))) {
+            LOG_WARN("failed to assign exprs", K(ret));
+          } 
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObLogicalOperator::allocate_link_node_above(int64_t child_idx)
 {
@@ -8468,3 +8616,21 @@ int ObLogicalOperator::check_subplan_filter_child_exchange_rescanable()
   }
   return ret;
 }
+
+int ObLogicalOperator::child_has_exchange(const ObLogicalOperator *op, bool &find)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || find) {
+    /*do nothing*/
+  } else if (log_op_def::LOG_EXCHANGE == op->get_type()) {
+    find = true;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && !find && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(child_has_exchange(op->get_child(i), find)))) {
+        LOG_WARN("fail to find tsc recursive", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+

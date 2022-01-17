@@ -26,7 +26,7 @@ namespace pub {
 
 template <PacketCode pcode>
 class MockP : public ObRpcProcessor<pcode> {
-  public:
+public:
   int process()
   {
     return ObRpcProcessor<pcode>::response_result();
@@ -34,7 +34,7 @@ class MockP : public ObRpcProcessor<pcode> {
 };
 
 class MockPacketHandler : public ObNetRpcHandler {
-  public:
+public:
   int process(easy_request_t* r)
   {
     int ret = EASY_OK;
@@ -70,7 +70,7 @@ class MockPacketHandler : public ObNetRpcHandler {
     return ret;
   }
 
-  private:
+private:
 #define REG_PKT(pcode)      \
   case pcode: {             \
     p = new MockP<pcode>(); \
@@ -115,7 +115,7 @@ class MockPacketHandler : public ObNetRpcHandler {
 };  // end of class MockPacketHandler
 
 class MockServer : public ObNetEasy {
-  public:
+public:
   int init(int port)
   {
     int ret = OB_SUCCESS;
@@ -129,7 +129,7 @@ class MockServer : public ObNetEasy {
     return ret;
   }
 
-  private:
+private:
   MockPacketHandler phandler_;
 };  // end of class MockServer
 

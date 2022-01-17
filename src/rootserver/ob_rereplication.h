@@ -29,7 +29,7 @@ namespace rootserver {
 class ObRebalanceTaskMgr;
 class ObZoneManager;
 class ObRereplication {
-  public:
+public:
   ObRereplication();
   virtual ~ObRereplication()
   {}
@@ -41,7 +41,7 @@ class ObRereplication {
   int replicate_to_unit(int64_t& task_cnt);
   int remove_permanent_offline_replicas(int64_t& task_cnt);
 
-  private:
+private:
   int check_inner_stat();
   int check_stop() const
   {
@@ -57,7 +57,7 @@ class ObRereplication {
   int get_readonly_all_server_compensation_mode(share::schema::ObSchemaGetterGuard& schema_guard,
       const Partition& partition, bool& compensate_readonly_all_server) const;
 
-  private:
+private:
   // data members
   bool inited_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
@@ -68,7 +68,7 @@ class ObRereplication {
   share::ObCheckStopProvider* check_stop_provider_;
   ObUnitManager* unit_mgr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRereplication);
 };
 

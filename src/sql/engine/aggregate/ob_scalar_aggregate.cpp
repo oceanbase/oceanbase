@@ -22,7 +22,7 @@ namespace oceanbase {
 using namespace common;
 namespace sql {
 class ObScalarAggregate::ObScalarAggregateCtx : public ObGroupByCtx {
-  public:
+public:
   explicit ObScalarAggregateCtx(ObExecContext& exec_ctx) : ObGroupByCtx(exec_ctx), started_(false)
   {}
   virtual void destroy()
@@ -30,7 +30,7 @@ class ObScalarAggregate::ObScalarAggregateCtx : public ObGroupByCtx {
     ObGroupByCtx::destroy();
   }
 
-  private:
+private:
   bool started_;
 
   friend class ObScalarAggregate;

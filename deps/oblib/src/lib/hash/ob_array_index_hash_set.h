@@ -26,11 +26,11 @@ namespace hash {
 
 template <typename ItemArray, typename Item, uint64_t N = 1031>
 class ObArrayIndexHashSet {
-  public:
+public:
   typedef uint32_t IndexType;
   static const IndexType INVALID_INDEX = UINT32_MAX;
 
-  public:
+public:
   ObArrayIndexHashSet() : array_(NULL), collision_count_(0), index_base_(INVALID_INDEX)
   {}
   explicit ObArrayIndexHashSet(const ItemArray& array) : array_(&array), index_base_(INVALID_INDEX)
@@ -128,7 +128,7 @@ class ObArrayIndexHashSet {
     return (index >= index_base_ && index < index_base_ + N);
   }
 
-  private:
+private:
   STATIC_ASSERT(N < UINT32_MAX, "unsupport N more than UINT32_MAX");
 
   const ItemArray* array_;

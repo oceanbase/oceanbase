@@ -96,112 +96,6 @@ int ObRepartSliceIdxCalc::get_slice_idx(const common::ObNewRow& row, int64_t& sl
   return ret;
 }
 
-int ObRepartSliceIdxCalc::init_partition_cache_map()
-{
-  int ret = OB_SUCCESS;
-  ObPartitionLevel level = table_schema_.get_part_level();
-  if (PARTITION_LEVEL_ONE == level || PARTITION_LEVEL_TWO == level) {
-    int64_t part_num = table_schema_.get_part_option().get_part_num();
-    const ObPartition* part = NULL;
-    bool check_dropped_schema = false;
-    ObPartIteratorV2 iter(table_schema_, check_dropped_schema);
-    if (part_num < 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the part num is not correct", K(ret), K(part_num));
-    } else if (OB_FAIL(init_cache_map(part_id_to_part_array_idx_))) {
-      LOG_WARN("init the part_id_to_part_array_idx map fail", K(ret), K(table_schema_));
-    } else {
-      int i = 0;
-      while (OB_SUCC(ret) && OB_SUCC(iter.next(part))) {
-        if (OB_ISNULL(part)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL ptr", K(ret), K(part));
-        } else if (OB_FAIL(part_id_to_part_array_idx_.set_refactored(part->get_part_id(), i))) {
-          LOG_WARN("fail to set part_id_to_part_array_idx", K(ret), K(part_num), K(i), K(*part));
-        } else {
-          i++;
-        }
-      }
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-      }
-    }
-
-    if (OB_SUCC(ret) && table_schema_.is_hash_part()) {
-      if (OB_FAIL(init_cache_map(part_idx_to_part_id_))) {
-        LOG_WARN("init the part_idx_to_part_array_id map fail", K(ret), K(table_schema_));
-      } else {
-        iter.init(table_schema_, check_dropped_schema);
-        while (OB_SUCC(ret) && OB_SUCC(iter.next(part))) {
-          if (OB_ISNULL(part)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("NULL ptr", K(ret), K(part));
-          } else if (OB_FAIL(part_idx_to_part_id_.set_refactored(part->get_part_idx(), part->get_part_id()))) {
-            LOG_WARN("fail to set part_idx_to_part_id", K(ret), K(part_num), K(*part));
-          }
-        }
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-        }
-        if (OB_SUCC(ret)) {
-          // set the part_idx_to_part_id map to shuffle_service_
-          shuffle_service_.set_part_idx_to_part_id_map(&part_idx_to_part_id_);
-        }
-      }
-    }
-
-    if (OB_SUCC(ret) && PARTITION_LEVEL_TWO == level) {
-      int64_t subpart_num = table_schema_.get_sub_part_option().get_part_num();
-      ObSubPartition** subpart_array = table_schema_.get_def_subpart_array();
-      if (subpart_num < 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the sub part num is not correct", K(ret), K(subpart_num));
-      } else if (OB_ISNULL(subpart_array)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the sub part array is null", K(ret), K(subpart_array));
-      } else if (OB_FAIL(init_cache_map(subpart_id_to_subpart_array_idx_))) {
-        LOG_WARN("init the subpart_id_to_subpart_idx map fail", K(ret), K(table_schema_));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < subpart_num; i++) {
-          const ObSubPartition* subpart = subpart_array[i];
-          if (OB_FAIL(subpart_id_to_subpart_array_idx_.set_refactored(subpart->get_sub_part_id(), i))) {
-            LOG_WARN("fail to set subpart_id_to_subpart_idx", K(ret), K(i), K(subpart_num), K(*subpart));
-          }
-        }
-      }
-      if (OB_SUCC(ret) && table_schema_.is_hash_subpart()) {
-        if (OB_FAIL(init_cache_map(subpart_idx_to_subpart_id_))) {
-          LOG_WARN("init the subpart_idx_to_subpart_id map fail", K(ret), K(table_schema_));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < subpart_num; i++) {
-            const ObSubPartition* subpart = subpart_array[i];
-            if (OB_FAIL(subpart_idx_to_subpart_id_.set_refactored(
-                    subpart->get_sub_part_idx(), subpart->get_sub_part_id()))) {
-              LOG_WARN("fail to set subpart_idx_to_subpart_id", K(i), K(subpart_num), K(ret), K(*subpart));
-            }
-          }
-          // set the subpart_idx_to_subpart_id to shuffle_service_
-          shuffle_service_.set_subpart_idx_to_subpart_id_map(&subpart_idx_to_subpart_id_);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObRepartSliceIdxCalc::init_cache_map(hash::ObHashMap<int64_t, int64_t, hash::NoPthreadDefendMode>& map)
-{
-  int ret = OB_SUCCESS;
-  if (map.created()) {
-    if (OB_FAIL(map.reuse())) {
-      LOG_WARN("reuse the partition info map fail", K(ret));
-    }
-  } else if (OB_FAIL(map.create(DEFAULT_CACHE_MAP_BUCKET_NUM, ObModIds::OB_HASH_BUCKET_PX_TRANSIMIT_REPART))) {
-    LOG_WARN("create the partition info map fail", K(ret));
-  }
-  return ret;
-}
-
 int ObRepartSliceIdxCalc::get_partition_id(const common::ObNewRow& row, int64_t& partition_id)
 {
   int ret = OB_SUCCESS;
@@ -284,6 +178,7 @@ int ObRepartSliceIdxCalc::get_partition_id(ObEvalCtx& eval_ctx, int64_t& partiti
 {
   int ret = OB_SUCCESS;
   ObDatum* partition_id_datum = NULL;
+  CalcTypeGuard calc_type_guard(eval_ctx.exec_ctx_);
   if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_FIRST == repart_type_) {
     eval_ctx.exec_ctx_.set_partition_id_calc_type(CALC_IGNORE_SUB_PART);
   } else if (OB_REPARTITION_ONE_SIDE_ONE_LEVEL_SUB == repart_type_) {
@@ -335,6 +230,9 @@ int ObRepartSliceIdxCalc::get_previous_row_partition_id(ObObj& partition_id)
 int ObSlaveMapRepartIdxCalcBase::init()
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRepartSliceIdxCalc::init())) {
+    LOG_WARN("fail init base", K(ret));
+  }
   // In the case of pkey random, a partition can be processed by all workers on the SQC where it is located,
   // So one partition_id may correspond to multiple task idx,
   // Form the mapping relationship between partition_id -> task_idx_list
@@ -345,8 +243,10 @@ int ObSlaveMapRepartIdxCalcBase::init()
   // p1 : [task1,task2,task3]
   // p2 : [task4,task5]
   const ObPxPartChMapArray& part_ch_array = part_ch_info_.part_ch_array_;
-  if (OB_FAIL(part_to_task_array_map_.create(max(1, part_ch_array.count()), ObModIds::OB_SQL_PX))) {
-    LOG_WARN("fail create part to task array map", "count", part_ch_array.count(), K(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(part_to_task_array_map_.create(max(1, part_ch_array.count()), ObModIds::OB_SQL_PX))) {
+      LOG_WARN("fail create part to task array map", "count", part_ch_array.count(), K(ret));
+    }
   }
 
   ARRAY_FOREACH_X(part_ch_array, idx, cnt, OB_SUCC(ret))
@@ -546,18 +446,25 @@ int ObRepartSliceIdxCalc::build_repart_ch_map(ObPxPartChMap& affinity_map)
     LOG_WARN("fail create hashmap", "count", part_ch_array.count(), K(ret));
   }
 
+  int64_t partition_id = common::OB_INVALID_INDEX_INT64;
   ARRAY_FOREACH_X(part_ch_array, idx, cnt, OB_SUCC(ret))
   {
     LOG_DEBUG("map build", K(idx), K(cnt), "key", part_ch_array.at(idx).first_, "val", part_ch_array.at(idx).second_);
-    if (OB_FAIL(affinity_map.set_refactored(part_ch_array.at(idx).first_, part_ch_array.at(idx).second_))) {
-      LOG_WARN("fail add item to hash map",
-          K(idx),
-          K(cnt),
-          "key",
-          part_ch_array.at(idx).first_,
-          "val",
-          part_ch_array.at(idx).second_,
-          K(ret));
+    if (partition_id != part_ch_array.at(idx).first_) {
+      partition_id = part_ch_array.at(idx).first_;
+      if (OB_FAIL(affinity_map.set_refactored(part_ch_array.at(idx).first_, part_ch_array.at(idx).second_))) {
+        LOG_WARN("fail add item to hash map",
+            K(idx),
+            K(cnt),
+            "key",
+            part_ch_array.at(idx).first_,
+            "val",
+            part_ch_array.at(idx).second_,
+            K(ret));
+      }
+    } else {
+      // skip, same partition id may take more than one entry in part_ch_array.
+      // (e.g slave mapping pkey hash)
     }
   }
   return ret;
@@ -915,7 +822,7 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_idx(const common::ObNewRow& row, int64_
     LOG_WARN("the size of slave map part task channel map is zero", K(ret));
   } else if (OB_FAIL(get_multi_hash_value(row, hash_val))) {
     LOG_WARN("failed to get hash values", K(ret));
-  } else if (OB_FAIL(get_partition_id(row, partition_id))) {
+  } else if (OB_FAIL(ObRepartSliceIdxCalc::get_partition_id(row, partition_id))) {
     LOG_WARN("failed to get_partition_id", K(ret));
   } else if (OB_INVALID_INDEX == partition_id) {
     slice_idx = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
@@ -923,7 +830,12 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_idx(const common::ObNewRow& row, int64_
     ObPxPartChMapItem item;
     const ObPxPartChMapArray& part_ch_array = part_ch_info_.part_ch_array_;
     if (OB_FAIL(affi_hash_map_.get_refactored(partition_id, item))) {
-      LOG_WARN("failed to get item", K(ret));
+      if (OB_HASH_NOT_EXIST == ret) {
+        LOG_WARN("can't get the right partition", K(ret), K(partition_id), K(slice_idx));
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      } else {
+        LOG_WARN("failed to get item", K(ret));
+      }
     } else {
       int64_t offset = hash_val % (item.second_ - item.first_);
       slice_idx = part_ch_array.at(item.first_ + offset).second_;

@@ -28,7 +28,7 @@ class ObISQLConnectionPool;
 // thread safe sql proxy
 // TODO : implement retry logic by general method (macros e.t.)
 class ObCommonSqlProxy : public ObISQLClient {
-  public:
+public:
   // FIXME : remove this typedef?
   typedef ReadResult MySQLResult;
 
@@ -71,7 +71,7 @@ class ObCommonSqlProxy : public ObISQLClient {
 
   int execute(const uint64_t tenant_id, sqlclient::ObIExecutor& executor);
 
-  protected:
+protected:
   int acquire(sqlclient::ObISQLConnection*& conn);
   int read(sqlclient::ObISQLConnection* conn, ReadResult& result, const uint64_t tenant_id, const char* sql);
 
@@ -81,7 +81,7 @@ class ObCommonSqlProxy : public ObISQLClient {
 };
 
 class ObMySQLProxy : public ObCommonSqlProxy {
-  public:
+public:
   virtual bool is_oracle_mode() const override
   {
     return false;
@@ -89,7 +89,7 @@ class ObMySQLProxy : public ObCommonSqlProxy {
 };
 
 class ObOracleSqlProxy : public ObCommonSqlProxy {
-  public:
+public:
   virtual bool is_oracle_mode() const override
   {
     return true;
@@ -105,7 +105,7 @@ class ObOracleSqlProxy : public ObCommonSqlProxy {
 };
 
 class ObDbLinkProxy : public ObMySQLProxy {
-  public:
+public:
   virtual int init(sqlclient::ObDbLinkConnectionPool* pool);
   int create_dblink_pool(uint64_t dblink_id, const ObAddr& server, const ObString& db_tenant, const ObString& db_user,
       const ObString& db_pass, const ObString& db_name);
@@ -115,7 +115,7 @@ class ObDbLinkProxy : public ObMySQLProxy {
   int dblink_read(sqlclient::ObMySQLConnection* dblink_conn, ReadResult& result, const char* sql);
   int rollback(sqlclient::ObMySQLConnection* dblink_conn);
 
-  private:
+private:
   int prepare_enviroment(sqlclient::ObMySQLConnection* dblink_conn, int link_type);
   int execute_init_sql(sqlclient::ObMySQLConnection* dblink_conn);
   bool is_prepare_env;

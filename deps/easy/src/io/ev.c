@@ -531,6 +531,8 @@ EV_CPP(extern "C" {
   #define ev_mb() __asm__ __volatile ("mfence" ::: "memory")
 #elif defined(__aarch64__)
   #define ev_mb() __asm__ __volatile ("dsb sy" ::: "memory")  //for ARM
+#elif defined(__sw_64__)
+#define ev_mb() __sync_synchronize()
 #else
     #error arch unsupported
 #endif

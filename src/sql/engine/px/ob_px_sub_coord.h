@@ -39,7 +39,7 @@ class ObPxSQCHandler;
 
 #define ENG_OP typename ObEngineOpTraits<NEW_ENG>
 class ObPxSubCoord {
-  public:
+public:
   explicit ObPxSubCoord(const observer::ObGlobalContext& gctx, ObPxRpcInitSqcArgs& arg)
       : gctx_(gctx),
         sqc_arg_(arg),
@@ -88,7 +88,7 @@ class ObPxSubCoord {
   int init_first_buffer_cache(bool is_rpc_worker, int64_t dop);
   void destroy_first_buffer_cache();
 
-  private:
+private:
   int setup_loop_proc(ObSqcCtx& sqc_ctx) const;
   int setup_op_input(ObExecContext& ctx, ObPhyOperator& root, ObSqcCtx& sqc_ctx,
       ObPartitionReplicaLocationIArray& tsc_locations, int64_t& tsc_locations_idx,
@@ -121,7 +121,7 @@ class ObPxSubCoord {
     return &first_buffer_cache_;
   }
 
-  private:
+private:
   const observer::ObGlobalContext& gctx_;
   ObPxRpcInitSqcArgs& sqc_arg_;
   ObSqcCtx sqc_ctx_;

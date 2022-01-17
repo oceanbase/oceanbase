@@ -137,7 +137,7 @@ struct ObKVCacheInst {
 };
 
 class ObKVCacheInstHandle {
-  public:
+public:
   ObKVCacheInstHandle();
   virtual ~ObKVCacheInstHandle();
   void reset();
@@ -149,14 +149,14 @@ class ObKVCacheInstHandle {
   ObKVCacheInstHandle& operator=(const ObKVCacheInstHandle& other);
   VIRTUAL_TO_STRING_KV(K_(inst_->status));
 
-  private:
+private:
   friend class ObKVCacheInstMap;
   ObKVCacheInstMap* map_;
   ObKVCacheInst* inst_;
 };
 
 class ObKVCacheInstMap {
-  public:
+public:
   ObKVCacheInstMap();
   virtual ~ObKVCacheInstMap();
   int init(const int64_t max_entry_cnt, const ObKVCacheConfig* configs, const ObITenantMgr& tenant_mgr);
@@ -174,7 +174,7 @@ class ObKVCacheInstMap {
   int get_mb_list(const uint64_t tenant_id, ObTenantMBListHandle& list_handle);
   int dec_mb_list_ref(ObTenantMBList* list);
 
-  private:
+private:
   friend class ObKVCacheInstHandle;
   typedef hash::ObHashMap<ObKVCacheInstKey, ObKVCacheInst*, hash::NoPthreadDefendMode> KVCacheInstMap;
   typedef ObFixedHashMap<uint64_t, ObTenantMBList*> TenantMBListMap;

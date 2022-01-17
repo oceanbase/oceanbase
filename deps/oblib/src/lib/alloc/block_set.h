@@ -26,7 +26,7 @@ class ISetLocker;
 class BlockSet {
   friend class ObTenantCtxAllocator;
 
-  public:
+public:
   BlockSet();
   ~BlockSet();
 
@@ -52,7 +52,7 @@ class BlockSet {
     locker_ = locker;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(BlockSet);
 
   void add_free_block(ABlock* block);
@@ -63,7 +63,7 @@ class BlockSet {
   void free_chunk(AChunk* const chunk);
   void check_block(ABlock* block);
 
-  private:
+private:
   lib::ObMutex mutex_;
   // block_list_ can not be initialized, the state is maintained by avail_bm_
   union {

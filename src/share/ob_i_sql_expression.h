@@ -126,7 +126,7 @@ struct ObExprCtx {
 
 // class sql::ObBasicSessionInfo;
 class ObExprTypeCtx {
-  public:
+public:
   ObExprTypeCtx()
       : coll_type_(CS_TYPE_INVALID),
         div_precision_increment_(OB_INVALID_COUNT),
@@ -207,7 +207,7 @@ class ObExprTypeCtx {
   TO_STRING_KV(K_(coll_type), K_(div_precision_increment), K_(ob_max_allowed_packet), KP_(session), KP_(udf_meta),
       K_(cast_mode));
 
-  private:
+private:
   //  const sql::ObSQLSessionInfo *my_session_;
   ObCollationType coll_type_;
   int64_t div_precision_increment_;
@@ -217,12 +217,14 @@ class ObExprTypeCtx {
   // In the type inference, the expression can set cast_mode to control the behavior of each parameter for type
   // conversion Just add your own special cast mode, some regular modes will be automatically added before putting in
   // the cast expr
+  // Set cast_mode of type_ctx when calc_result_type works for static engine.
+  // Usually need to override get_cast_mode() of ObExprOperator which works for non_static engine
   common::ObCastMode cast_mode_;
   sql::ObRawExpr* raw_expr_;
 };
 
 class ObISqlExpression {
-  public:
+public:
   virtual int calc(ObExprCtx& expr_ctx, const common::ObNewRow& row, common::ObObj& result) const = 0;
   virtual int calc(
       ObExprCtx& expr_ctx, const common::ObNewRow& row1, const common::ObNewRow& row2, common::ObObj& result) const = 0;
@@ -231,7 +233,7 @@ class ObISqlExpression {
 };
 
 class ObIColumnExpression {
-  public:
+public:
   virtual int64_t get_result_index() const = 0;
   virtual int calc_and_project(ObExprCtx& expr_ctx, common::ObNewRow& row) const = 0;
   /// Print expression

@@ -18,18 +18,18 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
 class ObLessThanTest : public ::testing::Test {
-  public:
+public:
   ObLessThanTest();
   virtual ~ObLessThanTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObLessThanTest(const ObLessThanTest& other);
   ObLessThanTest& operator=(const ObLessThanTest& other);
 
-  protected:
+protected:
   // data members
 };
 

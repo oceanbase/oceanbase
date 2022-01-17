@@ -36,7 +36,7 @@ class ObIPartitionComponentFactory;
 class ObIPartitionStorage;
 class ObReplayStatus;
 class MockObPartition : public ObIPartition {
-  public:
+public:
   int init(const common::ObPartitionKey& key, ObIPartitionComponentFactory* cp_fty,
       share::schema::ObMultiVersionSchemaService* schema_service, ObBaseStorage* base_storage,
       clog::ObIPartitionLogService* pls, transaction::ObTransService* txs)
@@ -236,12 +236,7 @@ class MockObPartition : public ObIPartition {
     UNUSED(role);
     return OB_NOT_SUPPORTED;
   }
-  int get_role_for_partition_table(common::ObRole& role) const
-  {
-    UNUSED(role);
-    return OB_NOT_SUPPORTED;
-  }
-  int get_leader_curr_member_list(common::ObMemberList& member_list) const
+  int get_leader_curr_member_list(common::ObMemberList &member_list) const
   {
     UNUSED(member_list);
     return OB_NOT_SUPPORTED;
@@ -321,12 +316,12 @@ class MockObPartition : public ObIPartition {
     return NULL;
   }
 
-  protected:
+protected:
   common::ObPartitionKey partition_key_;
   ObReplayStatus relay_ststus_;
   ObPartitionMCState partition_mc_state_;
 
-  private:
+private:
   // disallow copy
   // DISALLOW_COPY_AND_ASSIGN(ObIPartition);
 };

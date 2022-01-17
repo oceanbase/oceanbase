@@ -22,7 +22,7 @@ namespace sql {
 class ObSequenceSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObSequenceSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec, K_(nextval_seq_ids));
@@ -32,7 +32,7 @@ class ObSequenceSpec : public ObOpSpec {
 };
 
 class ObSequenceOp : public ObOperator {
-  public:
+public:
   ObSequenceOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObSequenceOp();
 
@@ -53,7 +53,7 @@ class ObSequenceOp : public ObOperator {
     ObOperator::destroy();
   }
 
-  private:
+private:
   bool is_valid();
   int init_op();
   /**
@@ -65,7 +65,7 @@ class ObSequenceOp : public ObOperator {
 
   int try_get_next_row();
 
-  private:
+private:
   share::ObSequenceCache* sequence_cache_;
   common::ObSEArray<share::schema::ObSequenceSchema, 1> seq_schemas_;
 };

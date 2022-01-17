@@ -25,7 +25,7 @@ namespace sql {
 class ObReceiveOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObReceiveOpInput(ObExecContext& ctx, const ObOpSpec& spec);
   virtual ~ObReceiveOpInput();
   virtual void reset() override;
@@ -46,7 +46,7 @@ class ObReceiveOpInput : public ObOpInput {
   };
   int get_result_location(const int64_t child_job_id, const int64_t child_task_id, common::ObAddr& svr);
 
-  protected:
+protected:
   uint64_t pull_slice_id_;
   int64_t child_job_id_;
   uint64_t child_op_id_;
@@ -56,7 +56,7 @@ class ObReceiveOpInput : public ObOpInput {
 class ObReceiveSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObReceiveSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   bool is_receive() const override
@@ -75,7 +75,7 @@ class ObReceiveSpec : public ObOpSpec {
 };
 
 class ObReceiveOp : public ObOperator {
-  public:
+public:
   ObReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObReceiveOp()
   {}

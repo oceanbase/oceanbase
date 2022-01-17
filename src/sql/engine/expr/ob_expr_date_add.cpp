@@ -170,7 +170,7 @@ int ObExprDateAdjust::calc_result3(ObObj& result, const ObObj& date, const ObObj
           } else {
             uint64_t sub_num = 1;
             number::ObNumber tmp_sub_num;
-            // add a positive or minus a negtive number, truncate decimal part.
+            // add a positive or minus a negative number, truncate decimal part.
             if (OB_FAIL(interval_num.trunc(0))) {
               LOG_WARN("trunc decimal failed", K(ret));
             } else if ((is_add && is_neg)) {
@@ -593,7 +593,11 @@ int ObExprLastDay::calc_result_type1(ObExprResType& type, ObExprResType& type1, 
 {
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
-  type.set_datetime();
+  if (is_oracle_mode()) {
+    type.set_datetime();
+  } else {
+    type.set_date();
+  }
   type.set_scale(OB_MAX_DATE_PRECISION);
   type1.set_calc_type(ObDateTimeType);
   type1.set_calc_scale(OB_MAX_DATETIME_PRECISION);
@@ -606,14 +610,32 @@ int ObExprLastDay::calc_result1(common::ObObj& result, const common::ObObj& obj,
   UNUSED(expr_ctx);
   int64_t ori_date_utc = 0;
   int64_t res_date_utc = 0;
-  if (obj.is_null_oracle()) {
+
+  const ObObjType res_type = is_oracle_mode() ? ObDateTimeType : ObDateType;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = expr_ctx.my_session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (obj.is_null()) {
     result.set_null();
   } else if (OB_FAIL(obj.get_datetime(ori_date_utc))) {
     LOG_WARN("fail to get datetime", K(ret));
-  } else if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc))) {
-    LOG_WARN("fail to calc last mday", K(ret));
+  } else if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc, res_type, false))) {
+    LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_type));
+    if (!is_oracle_mode()) {
+      uint64_t cast_mode = 0;
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+      if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+        result.set_null();
+        ret = OB_SUCCESS;
+      }
+    }
   } else {
-    result.set_datetime(res_date_utc);
+    if (is_oracle_mode()) {
+      result.set_datetime(res_date_utc);
+    } else {
+      result.set_date(static_cast<int32_t>(res_date_utc));
+    }
     result.set_scale(OB_MAX_DATE_PRECISION);
   }
   return ret;
@@ -639,18 +661,36 @@ int ObExprLastDay::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, Ob
 int ObExprLastDay::calc_last_day(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param1 = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {
+  ObDatum *param1 = NULL;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {
     LOG_WARN("eval first param value failed");
   } else if (param1->is_null()) {
     expr_datum.set_null();
   } else {
+    const ObObjType res_type = is_oracle_mode() ? ObDateTimeType : ObDateType;
     int64_t ori_date_utc = param1->get_datetime();
     int64_t res_date_utc = 0;
-    if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc))) {
-      LOG_WARN("fail to calc last mday", K(ret));
+    if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(
+            ori_date_utc, res_date_utc, res_type, false))) {
+      LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
+      if (!is_oracle_mode()) {
+        uint64_t cast_mode = 0;
+        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+        if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+          expr_datum.set_null();
+          ret = OB_SUCCESS;
+        }
+      }
     } else {
-      expr_datum.set_datetime(res_date_utc);
+      if (is_oracle_mode()) {
+        expr_datum.set_datetime(res_date_utc);
+      } else {
+        expr_datum.set_date(static_cast<int32_t>(res_date_utc));
+      }
     }
   }
 

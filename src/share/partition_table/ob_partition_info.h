@@ -53,7 +53,8 @@ enum ObReplicaRestoreStatus {
   REPLICA_RESTORE_WAIT_ALL_DUMPED = 7,  // waiting for all replicas in cluster to finish dumping
   REPLICA_RESTORE_MEMBER_LIST = 8,      // waiting for member list persistence to majority
   REPLICA_RESTORE_MAX,
-  REPLICA_RESTORE_STANDBY = 100,  // standby replica restore
+  REPLICA_RESTORE_STANDBY = 100,      // standby replica restore
+  REPLICA_RESTORE_STANDBY_CUT = 101,  // standby replica cut sstable
   REPLICA_RESTORE_STANDBY_MAX,
 };
 
@@ -62,11 +63,11 @@ int get_replica_status(const char* str, ObReplicaStatus& status);
 struct ObPartitionReplica {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   struct Member {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     Member() : timestamp_(0)
     {}
     Member(const common::ObAddr& server, const int64_t timestamp) : server_(server), timestamp_(timestamp)
@@ -93,7 +94,7 @@ struct ObPartitionReplica {
   struct FailMsg {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     FailMsg() : task_type_(-1), start_pos_(0), count_(0)
     {}
     virtual ~FailMsg()
@@ -126,7 +127,7 @@ struct ObPartitionReplica {
     int64_t count_;
   };
 
-  public:
+public:
   static const int64_t DEFAULT_REPLICA_COUNT = 7;
   typedef common::ObSEArray<Member, DEFAULT_REPLICA_COUNT> MemberList;
   static const int64_t DEFAULT_FAIL_LIST_COUNT = 100;
@@ -241,7 +242,7 @@ struct ObPartitionReplica {
     return common::is_sys_table(table_id_) || in_physical_restore_status() || in_standby_restore();
   }
 
-  public:
+public:
   uint64_t table_id_;
   int64_t partition_id_;
   int64_t partition_cnt_;
@@ -300,7 +301,7 @@ struct ObPartitionReplica {
 class ObPartitionInfo {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   typedef common::ObIArray<ObPartitionReplica> ReplicaArray;
 
   ObPartitionInfo();
@@ -388,7 +389,7 @@ class ObPartitionInfo {
 
   static int alloc_new_partition_info(common::ObIAllocator& alloctor, ObPartitionInfo*& partition);
 
-  private:
+private:
   // found:
   //   return OB_SUCCESS, set %idx to array index of %replicas_
   //
@@ -399,13 +400,13 @@ class ObPartitionInfo {
 
   int verify_checksum(const ObPartitionReplica& replica) const;
 
-  private:
+private:
   uint64_t table_id_;
   int64_t partition_id_;
   common::ObIAllocator* allocator_;
   common::ObSEArray<ObPartitionReplica, ObPartitionReplica::DEFAULT_REPLICA_COUNT> replicas_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionInfo);
 };
 

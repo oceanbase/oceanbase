@@ -17,12 +17,12 @@
 namespace oceanbase {
 namespace sql {
 class ObUseDatabaseResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObUseDatabaseResolver(ObResolverParams& params);
   virtual ~ObUseDatabaseResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUseDatabaseResolver);
 };

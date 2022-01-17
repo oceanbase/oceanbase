@@ -30,7 +30,7 @@ class ObTableKeyMgrUtil {
   virtual ~ObTableKeyMgrUtil()
   {}
 
-  public:
+public:
   static int convert_minor_table_key(
       const storage::ObITable::TableKey& minor_table_key, storage::ObITable::TableKey& tmp_table_key);
   static int classify_mgirate_tables(const uint64_t table_id, const common::ObIArray<ObITable::TableKey>& all_tables,
@@ -38,13 +38,13 @@ class ObTableKeyMgrUtil {
   static int convert_src_table_keys(const int64_t log_id, const int64_t table_id, const bool is_only_major_sstable,
       const ObTablesHandle& handle, ObIArray<storage::ObITable::TableKey>& table_keys);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableKeyMgrUtil);
 };
 
 // src table key manager
 class ObSrcTableKeyManager {
-  public:
+public:
   ObSrcTableKeyManager();
   virtual ~ObSrcTableKeyManager();
   int init(const int64_t snapshot_version, const int64_t table_id, const ObPartitionKey& pkey,
@@ -52,7 +52,7 @@ class ObSrcTableKeyManager {
   int add_table_key(const ObITable::TableKey& table_key);
   int get_table_keys(common::ObIArray<ObITable::TableKey>& table_keys);
 
-  private:
+private:
   int add_major_table(const ObITable::TableKey& table_key);
   int add_minor_table(const ObITable::TableKey& table_key);
   int add_mem_table(const ObITable::TableKey& mem_table_key);
@@ -60,7 +60,7 @@ class ObSrcTableKeyManager {
       const ObITable::TableKey& mem_table_key, common::ObIArray<storage::ObITable::TableKey>& tmp_key_list);
   int check_and_cut_memtable_range(ObITable::TableKey& table_key);
 
-  private:
+private:
   static const int64_t RETRY_INTERVAL = 1000 * 1000L;
   bool is_inited_;
   int64_t snapshot_version_;
@@ -74,7 +74,7 @@ class ObSrcTableKeyManager {
 };
 
 class ObDestTableKeyManager {
-  public:
+public:
   ObDestTableKeyManager()
   {}
   virtual ~ObDestTableKeyManager()
@@ -91,7 +91,7 @@ class ObDestTableKeyManager {
   static int convert_sstable_info_to_table_key(
       const ObMigrateTableInfo::SSTableInfo& sstable_info, ObITable::TableKey& table_key);
 
-  private:
+private:
   static int check_table_continues(const common::ObIArray<ObITable::TableKey>& tables, bool& is_continues);
   static int get_all_needed_table(const common::ObIArray<ObITable::TableKey>& local_inc_tables,
       const common::ObIArray<ObITable::TableKey>& remote_inc_tables,

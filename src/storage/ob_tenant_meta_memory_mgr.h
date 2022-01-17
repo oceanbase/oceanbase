@@ -19,15 +19,15 @@ namespace oceanbase {
 namespace storage {
 
 class ObTenantMetaMemoryMgr {
-  public:
+public:
   int init();
   // need update when the schema_version or memory_size has been changed
   int try_update_tenant_info(const uint64_t tenant_id, const int64_t schema_version);
   static ObTenantMetaMemoryMgr& get_instance();
 
-  private:
+private:
   struct TenantInfo {
-    public:
+  public:
     TenantInfo() : schema_version_(0), memory_size_(0)
     {}
     TenantInfo(const int64_t schema_version, const int64_t memory_size)
@@ -47,7 +47,7 @@ class ObTenantMetaMemoryMgr {
   virtual ~ObTenantMetaMemoryMgr();
   void destroy();
 
-  private:
+private:
   lib::ObMutex lock_;
   // key: tenant_id
   common::hash::ObHashMap<uint64_t, TenantInfo, common::hash::NoPthreadDefendMode> tenant_meta_memory_map_;

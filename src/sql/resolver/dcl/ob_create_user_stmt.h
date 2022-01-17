@@ -20,7 +20,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateUserStmt : public ObDDLStmt {
-  public:
+public:
   explicit ObCreateUserStmt(common::ObIAllocator* name_pool);
   ObCreateUserStmt();
   virtual ~ObCreateUserStmt();
@@ -74,9 +74,25 @@ class ObCreateUserStmt : public ObDDLStmt {
     create_user_arg_.primary_zone_ = primary_zone;
     return OB_SUCCESS;
   }
+  uint64_t get_max_connections_per_hour()
+  {
+    return max_connections_per_hour_;
+  }
+  void set_max_connections_per_hour(uint64_t val)
+  {
+    max_connections_per_hour_ = val;
+  }
+  uint64_t get_max_user_connections()
+  {
+    return max_user_connections_;
+  }
+  void set_max_user_connections(uint64_t val)
+  {
+    max_user_connections_ = val;
+  }
   DECLARE_VIRTUAL_TO_STRING;
 
-  private:
+private:
   // data members
   uint64_t tenant_id_;
   common::ObStrings users_;  // (user1, host1, pass1, need_enc1;
@@ -86,8 +102,10 @@ class ObCreateUserStmt : public ObDDLStmt {
   bool if_not_exist_;
   uint64_t profile_id_;  // only used in oracle mode
   obrpc::ObCreateUserArg create_user_arg_;
+  uint64_t max_connections_per_hour_;
+  uint64_t max_user_connections_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUserStmt);
 };
 }  // end namespace sql

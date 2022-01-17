@@ -36,7 +36,7 @@ static const common::ObString CHECK_CONSTRAINT_TYPE = "CHECK";
 static const common::ObString FOREIGN_KEY_CONSTRAINT_TYPE = "FOREIGN KEY";
 
 class ObInfoSchemaTableConstraintsTable : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObInfoSchemaTableConstraintsTable();
   virtual ~ObInfoSchemaTableConstraintsTable();
   virtual int inner_get_next_row(common::ObNewRow*& row);
@@ -47,7 +47,7 @@ class ObInfoSchemaTableConstraintsTable : public common::ObVirtualTableScannerIt
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   int add_table_constraints(
       const share::schema::ObDatabaseSchema& database_schema, common::ObObj* cells, const int64_t col_count);
   int add_table_constraints(const share::schema::ObTableSchema& table_schema, const common::ObString& database_name,
@@ -63,7 +63,7 @@ class ObInfoSchemaTableConstraintsTable : public common::ObVirtualTableScannerIt
 
   uint64_t tenant_id_;
 
-  private:
+private:
   enum TABLE_CONSTRAINTS_COLUMN {
     CONSTRAINT_CATALOG = common::OB_APP_MIN_COLUMN_ID,
     CONSTRAINT_SCHEMA,

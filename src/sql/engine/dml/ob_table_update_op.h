@@ -21,7 +21,7 @@ namespace sql {
 class ObTableUpdateOpInput : public ObTableModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableUpdateOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObTableModifyOpInput(ctx, spec)
   {}
   virtual int init(ObTaskInfo& task_info) override
@@ -33,7 +33,7 @@ class ObTableUpdateOpInput : public ObTableModifyOpInput {
 class ObTableUpdateSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTableUpdateSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObTableUpdateSpec();
 
@@ -50,7 +50,7 @@ class ObTableUpdateSpec : public ObTableModifySpec {
   INHERIT_TO_STRING_KV("table_modify_spec", ObTableModifySpec, K_(updated_column_ids), K_(updated_column_infos),
       K_(old_row), K_(new_row));
 
-  public:
+public:
   common::ObFixedArray<uint64_t, common::ObIAllocator> updated_column_ids_;
   common::ObFixedArray<ColumnContent, common::ObIAllocator> updated_column_infos_;
   ExprFixedArray old_row_;
@@ -58,7 +58,7 @@ class ObTableUpdateSpec : public ObTableModifySpec {
 };
 
 class ObTableUpdateOp : public ObTableModifyOp {
-  public:
+public:
   friend ObTableModifyOp;
 
   ObTableUpdateOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
@@ -92,7 +92,7 @@ class ObTableUpdateOp : public ObTableModifyOp {
     return found_rows_;
   }
 
-  protected:
+protected:
   bool check_row_whether_changed() const;
   int update_rows(int64_t& affected_rows);
   // update all rows in open phase,
@@ -102,7 +102,7 @@ class ObTableUpdateOp : public ObTableModifyOp {
   // update single row
   int do_row_update();
 
-  protected:
+protected:
   bool has_got_old_row_;
   int64_t found_rows_;
   int64_t changed_rows_;

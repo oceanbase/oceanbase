@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprStmtId : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprStmtId(common::ObIAllocator& alloc);
   virtual ~ObExprStmtId()
   {}
@@ -26,7 +26,7 @@ class ObExprStmtId : public ObFuncExprOperator {
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
   virtual int calc_result0(common::ObObj& result, common::ObExprCtx& expr_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprStmtId);
 };
 }  // end namespace sql

@@ -25,11 +25,11 @@ class ObISQLConnectionPool;
 // use one connection to execute multiple statements
 // @note not thread safe
 class ObSingleConnectionProxy : public ObISQLClient {
-  public:
+public:
   ObSingleConnectionProxy();
   virtual ~ObSingleConnectionProxy();
 
-  public:
+public:
   virtual int escape(
       const char* from, const int64_t from_size, char* to, const int64_t to_size, int64_t& out_size) override;
   // %res should be destructed before execute other sql
@@ -59,7 +59,7 @@ class ObSingleConnectionProxy : public ObISQLClient {
     errno_ = common::OB_SUCCESS;
   }
 
-  protected:
+protected:
   void close();
   void set_errno(int err)
   {
@@ -70,10 +70,10 @@ class ObSingleConnectionProxy : public ObISQLClient {
     return errno_;
   }
 
-  public:
+public:
   bool check_inner_stat() const;
 
-  private:
+private:
   int errno_;
   int64_t statement_count_;
   sqlclient::ObISQLConnection* conn_;

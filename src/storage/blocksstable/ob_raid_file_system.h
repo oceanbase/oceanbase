@@ -186,7 +186,7 @@ struct ObRaidFileStatus {
 };
 
 class ObRaidStripLocation {
-  public:
+public:
   ObRaidStripLocation();
 
   int init(
@@ -197,7 +197,7 @@ class ObRaidStripLocation {
       K_(blocksstable_size), K_(include_header), K_(is_inited), K_(strip_skewing_step), K_(cur_idx), K_(has_next),
       K_(strip_infos));
 
-  private:
+private:
   struct StripInfo final {
     StripInfo();
     int64_t disk_idx_;
@@ -234,7 +234,7 @@ struct ObRaidDiskUtil {
 };
 
 class ObRaidIOErrorHandler final : public ObIIOErrorHandler {
-  public:
+public:
   ObRaidIOErrorHandler();
   virtual ~ObRaidIOErrorHandler()
   {}
@@ -248,7 +248,7 @@ class ObRaidIOErrorHandler final : public ObIIOErrorHandler {
   TO_STRING_KV(K_(is_inited), K_(macro_block_ctx), K_(offset), K_(size), K_(io_desc), KP_(out_io_buf),
       K_(out_io_buf_size), K_(aligned_offset));
 
-  private:
+private:
   bool is_inited_;
   ObMacroBlockCtx macro_block_ctx_;
   int64_t offset_;  // offset of read_info
@@ -262,7 +262,7 @@ class ObRaidIOErrorHandler final : public ObIIOErrorHandler {
 };
 
 class ObRaidRecoverIOCallback : public ObIOCallback {
-  public:
+public:
   struct RecoverParam {
     common::ObSEArray<int64_t, OB_MAX_DISK_NUMBER> input_index_;
     common::ObSEArray<int64_t, OB_MAX_DISK_NUMBER> recover_index_;
@@ -289,7 +289,7 @@ class ObRaidRecoverIOCallback : public ObIOCallback {
   TO_STRING_KV(K_(is_inited), KP_(allocator), KP_(buf), KP_(io_buf_size), K_(io_buf_size), K_(recover_param),
       K_(out_offset), KP_(out_io_buf), K_(out_io_buf_size));
 
-  private:
+private:
   bool is_inited_;
   common::ObIAllocator* allocator_;  // TODO(): replace it
   char* buf_;                        // whole buf
@@ -304,7 +304,7 @@ class ObRaidRecoverIOCallback : public ObIOCallback {
 };
 
 class ObRaidFileWriteMgr final : public common::ObIOWriteFinishCallback {
-  public:
+public:
   ObRaidFileWriteMgr();
   ~ObRaidFileWriteMgr();
   int init();
@@ -312,7 +312,7 @@ class ObRaidFileWriteMgr final : public common::ObIOWriteFinishCallback {
   int record_start(const int64_t block_index);  // if old request to same block not finish, will wait
   int notice_finish(const int64_t block_index);
 
-  private:
+private:
   bool is_inited_;
   ObThreadCond cond_;
   hash::ObHashSet<int64_t, hash::NoPthreadDefendMode> block_set_;
@@ -320,43 +320,43 @@ class ObRaidFileWriteMgr final : public common::ObIOWriteFinishCallback {
 };
 
 class ObRaidRebuildTask final : public common::ObTimerTask {
-  public:
+public:
   ObRaidRebuildTask(ObRaidFileSystem& file_system);
   virtual ~ObRaidRebuildTask();
   void runTimerTask();
 
-  private:
+private:
   ObRaidFileSystem& file_system_;
   DISALLOW_COPY_AND_ASSIGN(ObRaidRebuildTask);
 };
 
 class ObRaidFileSystem : public ObStoreFileSystem {
-  public:
+public:
   ObRaidFileSystem();
   virtual ~ObRaidFileSystem();
 
-  virtual int init(const ObStorageEnv& storage_env, storage::ObPartitionService& partition_service);
-  virtual void destroy();
-  virtual int async_write(const ObStoreFileWriteInfo& write_info, common::ObIOHandle& io_handle);
-  virtual int async_read(const ObStoreFileReadInfo& read_info, common::ObIOHandle& io_handle);
+  virtual int init(const ObStorageEnv& storage_env, storage::ObPartitionService& partition_service) override;
+  virtual void destroy() override;
+  virtual int async_write(const ObStoreFileWriteInfo& write_info, common::ObIOHandle& io_handle) override;
+  virtual int async_read(const ObStoreFileReadInfo& read_info, common::ObIOHandle& io_handle) override;
   virtual int write_server_super_block(const ObServerSuperBlock& super_block) override;
   virtual int read_server_super_block(ObServerSuperBlock& super_block) override;
-  virtual int fsync();
-  virtual int64_t get_total_data_size() const;
-  virtual int init_file_ctx(const ObStoreFileType& file_type, blocksstable::ObStoreFileCtx& file_ctx) const;
+  virtual int fsync() override;
+  virtual int64_t get_total_data_size() const override;
+  virtual int init_file_ctx(const ObStoreFileType& file_type, blocksstable::ObStoreFileCtx& file_ctx) const override;
   virtual bool is_disk_full() const override;
   int init_recover_io_master(const ObMacroBlockCtx& macro_block_ctx, const int64_t aligned_offset,
       const int64_t out_io_buf_size, const ObIODesc& io_desc, const ObBitSet<OB_MAX_DISK_NUMBER>& recover_disk_idx_set,
       ObRaidRecoverIOCallback& callback, ObIOMaster* io_master);
-  virtual int add_disk(const ObString& diskgroup_name, const ObString& disk_path, const ObString& alias_name);
-  virtual int drop_disk(const ObString& diskgroup_name, const ObString& alias_name);
+  virtual int add_disk(const ObString& diskgroup_name, const ObString& disk_path, const ObString& alias_name) override;
+  virtual int drop_disk(const ObString& diskgroup_name, const ObString& alias_name) override;
   int do_rebuild_task();
   virtual int get_disk_status(ObDiskStats& disk_stats) override;
   int64_t get_raid_src_data_num() const;
 
-  virtual int start();
-  virtual void stop();
-  virtual void wait();
+  virtual int start() override;
+  virtual void stop() override;
+  virtual void wait() override;
 
   // used in report bad block.
   virtual int get_macro_block_info(const storage::ObTenantFileKey& file_key, const MacroBlockId& macro_block_id,
@@ -376,7 +376,7 @@ class ObRaidFileSystem : public ObStoreFileSystem {
 
   TO_STRING_KV("type", "RAID");
 
-  private:
+private:
   int open(bool& is_formated);
   int init_raid(
       const int64_t min_total_space, const int64_t min_free_disk_space, common::ObIArray<ObScanDiskInfo>& disk_status);
@@ -406,7 +406,7 @@ class ObRaidFileSystem : public ObStoreFileSystem {
   int write_strip_data(const ObDiskID& disk_id, const int64_t offset, const char* strip_buf, const int64_t strip_size);
   int finish_rebuild_disk(const ObDiskID& disk_id, const int64_t rebuild_macro_count);
 
-  private:
+private:
   bool is_opened_;
   mutable lib::ObMutex mutex_;       // TODO(): add latch id later
   mutable common::SpinRWLock lock_;  // TODO(): add latch id later

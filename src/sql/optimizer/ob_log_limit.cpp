@@ -51,7 +51,7 @@ int ObLogLimit::allocate_exchange_post(AllocExchContext* ctx)
 {
   int ret = OB_SUCCESS;
   bool is_basic = false;
-  bool should_push_limit = (!is_calc_found_rows_ && (limit_percent_ == NULL));
+  bool should_push_limit = (!is_calc_found_rows_ && limit_count_ != NULL);
   ObLogicalOperator* exchange_point = NULL;
   ObExchangeInfo exch_info;
   if (OB_ISNULL(ctx)) {
@@ -73,6 +73,16 @@ int ObLogLimit::allocate_exchange_post(AllocExchContext* ctx)
     sharding_info_.set_location_type(OB_TBL_LOCATION_LOCAL);
   }
   return ret;
+}
+
+int ObLogLimit::allocate_granule_pre(AllocGIContext &ctx)
+{
+  return pw_allocate_granule_pre(ctx);
+}
+
+int ObLogLimit::allocate_granule_post(AllocGIContext &ctx)
+{
+  return pw_allocate_granule_post(ctx);
 }
 
 int ObLogLimit::transmit_op_ordering()

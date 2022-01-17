@@ -35,22 +35,22 @@ class ObAllVirtualRaidStat : public common::ObVirtualTableScannerIterator {
     PERCENT,
   };
 
-  public:
+public:
   ObAllVirtualRaidStat();
   virtual ~ObAllVirtualRaidStat();
   int init(const common::ObAddr& addr);
 
-  public:
+public:
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   blocksstable::ObDiskStats disk_stats_;
   int64_t cur_idx_;
   common::ObAddr addr_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualRaidStat);
 };
 

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObRevokeResolver : public ObDCLResolver {
-  private:
+private:
   int resolve_revoke_role_inner(const ParseNode* revoke_role, ObRevokeStmt* revoke_stmt);
   int resolve_revoke_sysprivs_inner(const ParseNode* revoke_role, ObRevokeStmt* revoke_stmt);
   int resolve_mysql(const ParseNode& parse_tree);
@@ -27,13 +27,13 @@ class ObRevokeResolver : public ObDCLResolver {
       share::ObRawObjPrivArray& obj_priv_array, bool& revoke_all_ora);
   static int trans_ora_sys_priv_to_obj(ParseNode* priv_type_node);
 
-  public:
+public:
   explicit ObRevokeResolver(ObResolverParams& params);
   virtual ~ObRevokeResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRevokeResolver);
 };

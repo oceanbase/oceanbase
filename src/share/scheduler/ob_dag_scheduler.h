@@ -41,7 +41,7 @@ class ObITask : public common::ObDLinkBase<ObITask> {
   friend class ObIDag;
   friend class ObDagScheduler;
 
-  public:
+public:
   enum ObITaskType {
     TASK_TYPE_UT = 0,
     TASK_TYPE_MACROMERGE = 1,
@@ -86,6 +86,9 @@ class ObITask : public common::ObDLinkBase<ObITask> {
     TASK_TYPE_RESTORE_TAILORED_PREPARE = 40,
     TASK_TYPE_RESTORE_TAILORED_PROCESS = 41,
     TASK_TYPE_RESTORE_TAILORED_FINISH = 42,
+    TASK_TYPE_BACKUP_BACKUPSET = 43,
+    TASK_TYPE_BACKUP_ARCHIVELOG = 44,
+
     TASK_TYPE_MAX,
   };
 
@@ -124,7 +127,7 @@ class ObITask : public common::ObDLinkBase<ObITask> {
   }
   VIRTUAL_TO_STRING_KV(K_(type), K_(status), K(dag_));
 
-  private:
+private:
   virtual int generate_next_task(ObITask*& next_task)
   {
     UNUSED(next_task);
@@ -132,7 +135,7 @@ class ObITask : public common::ObDLinkBase<ObITask> {
   }
   virtual int process() = 0;
 
-  private:
+private:
   void reset();
   int copy_dep_to(ObITask& other_task) const;
   void set_status(const ObITaskStatus status)
@@ -174,10 +177,10 @@ class ObITask : public common::ObDLinkBase<ObITask> {
   }
   int generate_next_task();
 
-  protected:
+protected:
   ObIDag* dag_;
 
-  private:
+private:
   ObITaskType type_;
   ObITaskStatus status_;
   int64_t indegree_;
@@ -187,7 +190,7 @@ class ObITask : public common::ObDLinkBase<ObITask> {
 };
 
 class ObFakeTask : public ObITask {
-  public:
+public:
   ObFakeTask() : ObITask(TASK_TYPE_FAKE)
   {}
   virtual ~ObFakeTask()
@@ -196,7 +199,7 @@ class ObFakeTask : public ObITask {
 };
 
 class ObIDag : public common::ObDLinkBase<ObIDag> {
-  public:
+public:
   // priority from high to low, high priority tasks can preempt low priority tasks util their lower bound
   enum ObIDagPriority {
     DAG_PRIO_TRANS_TABLE_MERGE = 0,
@@ -211,22 +214,23 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
     DAG_PRIO_CREATE_INDEX,
     DAG_PRIO_SSTABLE_SPLIT,
     DAG_PRIO_VALIDATE,
+    /* add new item in ObIDagPriorityStr */
     DAG_PRIO_MAX,
   };
-  const static common::ObString ObIDagPriorityStr[DAG_PRIO_MAX]; /* = {
-     "DAG_PRIO_TRANS_TABLE_MERGE",
-     "DAG_PRIO_SSTABLE_MINI_MERGE",
-     "DAG_PRIO_SSTABLE_MINOR_MERGE",
-     "DAG_PRIO_GROUP_MIGRATE",
-     "DAG_PRIO_MIGRATE_HIGH",
-     "DAG_PRIO_MIGRATE_MID",
-     "DAG_PRIO_SSTABLE_MAJOR_MERGE",
-     "DAG_PRIO_BACKUP",
-     "DAG_PRIO_MIGRATE_LOW",
-     "DAG_PRIO_CREATE_INDEX",
-     "DAG_PRIO_SSTABLE_SPLIT",
-     "DAG_PRIO_VALIDATE"
-   };*/
+  const static char *ObIDagPriorityStr[DAG_PRIO_MAX]; /* = {
+    "DAG_PRIO_TRANS_TABLE_MERGE",
+    "DAG_PRIO_SSTABLE_MINI_MERGE",
+    "DAG_PRIO_SSTABLE_MINOR_MERGE",
+    "DAG_PRIO_GROUP_MIGRATE",
+    "DAG_PRIO_MIGRATE_HIGH",
+    "DAG_PRIO_MIGRATE_MID",
+    "DAG_PRIO_SSTABLE_MAJOR_MERGE",
+    "DAG_PRIO_BACKUP",
+    "DAG_PRIO_MIGRATE_LOW",
+    "DAG_PRIO_CREATE_INDEX",
+    "DAG_PRIO_SSTABLE_SPLIT",
+    "DAG_PRIO_VALIDATE",
+  };*/
 
   // We limit the max concurrency of tasks by UpLimitType (ult for short)
   // why not simply use Priority? since several priorities may share one UpLimitType
@@ -243,18 +247,19 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
     DAG_ULT_CREATE_INDEX = 5,
     DAG_ULT_SPLIT = 6,
     DAG_ULT_BACKUP = 7,
+    /* add new item in ObIDagUpLimitTypeStr */
     DAG_ULT_MAX,
   };
-  const static common::ObString ObIDagUpLimitTypeStr[DAG_ULT_MAX]; /* = {
-     "DAG_ULT_MINI_MERGE",
-     "DAG_ULT_MINOR_MERGE",
-     "DAG_ULT_GROUP_MIGRATE",
-     "DAG_ULT_MIGRATE",
-     "DAG_ULT_MAJOR_MERGE",
-     "DAG_ULT_CREATE_INDEX",
-     "DAG_ULT_SPLIT",
-     "DAG_ULT_BACKUP"
-   };*/
+  const static char *ObIDagUpLimitTypeStr[DAG_ULT_MAX]; /* = {
+    "DAG_ULT_MINI_MERGE",
+    "DAG_ULT_MINOR_MERGE",
+    "DAG_ULT_GROUP_MIGRATE",
+    "DAG_ULT_MIGRATE",
+    "DAG_ULT_MAJOR_MERGE",
+    "DAG_ULT_CREATE_INDEX",
+    "DAG_ULT_SPLIT",
+    "DAG_ULT_BACKUP",};*/
+
   enum ObIDagType {
     DAG_TYPE_UT = 0,
     DAG_TYPE_SSTABLE_MINOR_MERGE = 1,
@@ -274,10 +279,54 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
     DAG_TYPE_SERVER_PREPROCESS = 15,
     DAG_TYPE_FAST_RECOVERY = 16,
     DAG_TYPE_VALIDATE = 17,
+    DAG_TYPE_BACKUP_BACKUPSET = 18,
+    DAG_TYPE_BACKUP_ARCHIVELOG = 19,
+    /* add new item in ObIDagTypeStr and ObIDagModuleStr*/
     DAG_TYPE_MAX,
   };
 
-  const static char* ObIDagTypeStr[DAG_TYPE_MAX];
+  const static char *ObIDagTypeStr[DAG_TYPE_MAX]; /* = {
+    "DAG_UT",
+    "DAG_MINOR_MERGE",
+    "DAG_MAJOR_MERGE",
+    "DAG_CREATE_INDEX",
+    "DAG_SSTABLE_SPLIT",
+    "DAG_UNIQUE_CHECKING",
+    "DAG_MIGRATE",
+    "DAG_MAJOR_FINISH",
+    "DAG_GROUP_MIGRATE",
+    "DAG_BUILD_INDEX",
+    "DAG_MINI_MERGE",
+    "DAG_TRANS_MERGE",
+    "DAG_RECOVERY_SPLIT",
+    "DAG_RECOVERY_RECOVER",
+    "DAG_TYPE_BACKUP",
+    "DAG_SERVER_PREPROCESS",
+    "DAG_FAST_RECOVERY",
+    "DAG_TYPE_VALIDATE",
+    "DAG_TYPE_BACKUP_BACKUPSET",
+    "DAG_TYPE_BACKUP_ARCHIVELOG",
+   };*/
+
+  const static char *ObIDagModuleStr[share::ObIDag::DAG_TYPE_MAX]; /* = {
+   "EMPTY",
+   "COMPACTION",
+   "COMPACTION",
+   "INDEX",
+   "SPLIT",
+   "OTHER",
+   "MIGRATE",
+   "COMPACTION",
+   "MIGRATE",
+   "INDEX",
+   "COMPACTION",
+   "TRANS_TABLE_MERGE",
+   "FAST_RECOVERY",
+   "FAST_RECOVERY",
+   "BACKUP",
+   "OTHER",
+   "OTHER",
+   "OTHER",};*/
 
   enum ObDagStatus {
     DAG_STATUS_INITING = 0,
@@ -316,10 +365,10 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
   {
     return type_;
   }
-  const char* get_name() const
-  {
-    return ObIDagTypeStr[type_];
-  }
+  static const char *get_dag_type_str(enum ObIDagType type);
+  static const char *get_dag_prio_str(enum ObIDagPriority prio);
+  static const char *get_dag_module_str(enum ObIDagType type);
+  static const char *get_dag_uplimit_type_str(enum ObIDagUpLimitType uplimit_type);
   bool has_set_stop()
   {
     return is_stop_;
@@ -345,17 +394,17 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
   DECLARE_VIRTUAL_TO_STRING;
   DISABLE_COPY_ASSIGN(ObIDag);
 
-  public:
+public:
   virtual bool operator==(const ObIDag& other) const = 0;
   virtual int64_t hash() const = 0;
   virtual int64_t get_tenant_id() const = 0;
   virtual int fill_comment(char* buf, const int64_t buf_len) const = 0;
   virtual int64_t get_compat_mode() const = 0;
 
-  protected:
+protected:
   int dag_ret_;
 
-  private:
+private:
   typedef common::ObDList<ObITask> TaskList;
   typedef lib::ObLockGuard<ObIDag> ObDagGuard;
   static const int64_t DEFAULT_TASK_NUM = 32;
@@ -367,7 +416,7 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
   friend class ObDagWorker;
   friend ObDagGuard;
 
-  private:
+private:
   void free_task(ObITask& task);
   int finish_task(ObITask& task, int64_t& available_cnt);
   bool is_valid();
@@ -403,7 +452,7 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
     --running_task_cnt_;
   }
 
-  private:
+private:
   common::ObConcurrentFIFOAllocator allocator_;
   bool is_inited_;
   ObIDagPriority priority_;
@@ -419,7 +468,7 @@ class ObIDag : public common::ObDLinkBase<ObIDag> {
 
 template <typename T, int PRIOS>
 class ObPriorityList {
-  public:
+public:
   enum { PRIO_CNT = PRIOS };
 
   bool add_first(T* item, const int64_t prio)
@@ -544,12 +593,12 @@ class ObPriorityList {
     return ret;
   }
 
-  private:
+private:
   common::ObDList<T> dlists_[PRIOS];
 };
 
 class ObDagWorker : public lib::ThreadPool, public common::ObDLinkBase<ObDagWorker> {
-  public:
+public:
   typedef common::ObDLinkNode<ObDagWorker*> Node;
   typedef common::ObDList<Node> WorkerNodeList;
   enum DagWorkerStatus {
@@ -560,7 +609,7 @@ class ObDagWorker : public lib::ThreadPool, public common::ObDLinkBase<ObDagWork
     DWS_STOP,
   };
 
-  public:
+public:
   ObDagWorker();
   ~ObDagWorker();
   int init(const int64_t check_period);
@@ -583,13 +632,13 @@ class ObDagWorker : public lib::ThreadPool, public common::ObDLinkBase<ObDagWork
     return self_;
   }
 
-  private:
+private:
   void notify(DagWorkerStatus status);
 
-  private:
+private:
   static __thread ObDagWorker* self_;
   static const uint32_t SLEEP_TIME_MS = 100;  // 100ms
-  private:
+private:
   common::ObThreadCond cond_;
   ObITask* task_;
   DagWorkerStatus status_;
@@ -599,7 +648,7 @@ class ObDagWorker : public lib::ThreadPool, public common::ObDLinkBase<ObDagWork
 };
 
 class ObLoadShedder {
-  public:
+public:
   enum ObLoadType {
     LOAD_PAST_ONE = 0,
     LOAD_PAST_FIVE = 1,
@@ -618,7 +667,7 @@ class ObLoadShedder {
       "load_past_one", load_avg_[LOAD_PAST_ONE], "load_past_five", load_avg_[LOAD_PAST_FIVE], "load_past_fifteen",
       load_avg_[LOAD_PAST_FIFTEEN]);
 
-  private:
+private:
   static const int64_t DEFAULT_LOAD_PER_CPU_THRESHOLD = 500;
   static const int64_t DEFAULT_LOAD_SHEDDING_FACTOR = 2;
   static constexpr int64_t LOAD_SHEDDING_FACTOR[LOAD_TYPE_MAX] = {
@@ -628,7 +677,7 @@ class ObLoadShedder {
   };
   void refresh_load_shedding_factor();
 
-  private:
+private:
   int64_t cpu_cnt_online_;
   int64_t cpu_cnt_configure_;
   double load_avg_[LOAD_TYPE_MAX];
@@ -639,7 +688,7 @@ class ObLoadShedder {
 class ObDagScheduler : public lib::ThreadPool {
   friend class ObDagWorker;
 
-  public:
+public:
   static ObDagScheduler& get_instance();
   int init(const common::ObAddr& addr, const int64_t check_period = DEFAULT_CHECK_PERIOD,
       const int32_t work_thread_num = 0, const int64_t dag_limit = DEFAULT_MAX_DAG_NUM,
@@ -684,7 +733,7 @@ class ObDagScheduler : public lib::ThreadPool {
   int check_dag_exist(const ObIDag* dag, bool& exist);
   int cancel_dag(const ObIDag* dag);
 
-  private:
+private:
   struct ThreadLimit {
     int32_t min_thread_;
     int32_t max_thread_;
@@ -755,7 +804,7 @@ class ObDagScheduler : public lib::ThreadPool {
       ObIDag::DAG_ULT_SPLIT,
       ObIDag::DAG_ULT_BACKUP};
 
-  private:
+private:
   ObDagScheduler();
   virtual ~ObDagScheduler();
   int schedule();
@@ -775,7 +824,7 @@ class ObDagScheduler : public lib::ThreadPool {
   void dump_dag_status();
   int check_need_load_shedding(const int64_t priority, const bool for_schedule, bool& need_shedding);
 
-  private:
+private:
   bool is_inited_;
   common::ObAddr addr_;
   DagMap dag_map_;

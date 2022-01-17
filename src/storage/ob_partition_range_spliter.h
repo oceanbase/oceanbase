@@ -96,7 +96,7 @@ struct ObSSTableRangePara {
 };
 
 class ObMacroEndkeyIterator {
-  public:
+public:
   ObMacroEndkeyIterator();
   ~ObMacroEndkeyIterator() = default;
   OB_INLINE bool is_valid() const
@@ -120,7 +120,7 @@ class ObMacroEndkeyIterator {
 };
 
 class ObPartitionParallelRanger {
-  public:
+public:
   explicit ObPartitionParallelRanger(common::ObArenaAllocator& allocator);
   ~ObPartitionParallelRanger();
   ObPartitionParallelRanger() = delete;
@@ -135,7 +135,7 @@ class ObPartitionParallelRanger {
   TO_STRING_KV(KPC(store_range_), K_(endkey_iters), KP_(last_macro_endkey), K_(total_endkey_cnt), K_(sample_cnt),
       K_(parallel_target_count), K_(is_inited));
 
-  private:
+private:
   int calc_sample_count(common::ObIArray<ObSSTableRangePara>& range_paras, const int64_t paralell_target_count);
   int init_macro_iters(common::ObIArray<ObSSTableRangePara>& range_paras);
   int build_parallel_range_heap();
@@ -145,7 +145,7 @@ class ObPartitionParallelRanger {
   int check_rowkey_equal(const common::ObStoreRowkey& rowkey1, const common::ObStoreRowkey& rowkey2, bool& equal);
   int check_continuous(common::ObIArray<common::ObStoreRange>& range_array);
 
-  private:
+private:
   const common::ObStoreRange* store_range_;
   common::ObArray<ObMacroEndkeyIterator*> endkey_iters_;
   common::ObArenaAllocator& allocator_;
@@ -185,7 +185,7 @@ struct ObRangeSplitInfo {
 };
 
 class ObPartitionRangeSpliter {
-  public:
+public:
   ObPartitionRangeSpliter();
   ~ObPartitionRangeSpliter();
   void reset();
@@ -195,20 +195,20 @@ class ObPartitionRangeSpliter {
       common::ObIArray<ObStoreRange>& range_array);
   TO_STRING_KV(K_(parallel_ranger));
 
-  private:
+private:
   int build_range_paras(common::ObIArray<ObSSTable*>& sstables, const common::ObStoreRange& store_range,
       common::ObIArray<ObSSTableRangePara>& range_paras);
   int build_range_para(ObSSTable* sstable, const ObExtStoreRange& ext_range, ObSSTableRangePara& range_para);
   int get_size_info(common::ObIArray<ObSSTableRangePara>& range_paras, int64_t& total_row_count, int64_t& total_size);
   int get_single_range_info(const ObSSTableRangePara& range_para, int64_t& total_row_count, int64_t& total_size);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   ObPartitionParallelRanger parallel_ranger_;
 };
 
 class ObPartitionMultiRangeSpliter {
-  public:
+public:
   // return total size(byte) of all sstables in read_tables
   int get_multi_range_size(
       ObTablesHandle& read_tables, const common::ObIArray<common::ObStoreRange>& range_array, int64_t& total_size);
@@ -216,7 +216,7 @@ class ObPartitionMultiRangeSpliter {
       const int64_t expected_task_count, common::ObIAllocator& allocator,
       common::ObArrayArray<common::ObStoreRange>& multi_range_split_array);
 
-  private:
+private:
   static const int64_t MIN_SPLIT_TASK_SIZE = 2 << 20;
   static const int64_t MIN_SPLIT_TAGET_SSTABLE_SIZE = MIN_SPLIT_TASK_SIZE * 3;
   static const int64_t SPLIT_TASK_SIZE_HIGH_WATER_MARK_FACTOR = 125;
@@ -225,7 +225,7 @@ class ObPartitionMultiRangeSpliter {
   typedef common::ObSEArray<common::ObStoreRange, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitArray;
   typedef common::ObSEArray<ObRangeSplitInfo, DEFAULT_STORE_RANGE_ARRAY_SIZE> RangeSplitInfoArray;
 
-  private:
+private:
   int get_split_sstables(ObTablesHandle& read_tables, common::ObIArray<ObSSTable*>& sstables);
   int split_multi_ranges(RangeSplitInfoArray& range_info_array, const int64_t expected_task_count,
       const int64_t total_size, common::ObIAllocator& allocator,
@@ -238,7 +238,7 @@ class ObPartitionMultiRangeSpliter {
   int build_single_range_array(const common::ObIArray<common::ObStoreRange>& range_array,
       common::ObIAllocator& allocator, common::ObArrayArray<common::ObStoreRange>& multi_range_split_array);
 
-  private:
+private:
   ObPartitionRangeSpliter range_spliter_;
 };
 

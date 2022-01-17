@@ -82,6 +82,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
         retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
         LOG_WARN("result response failed, check if need retry", K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
         ret = cli_ret;
+      } else {
+        ObResultSet::refresh_location_cache(result.get_exec_context().get_task_exec_ctx(), true, ret);
       }
       // After judging whether you need to retry, we won't judge whether to retry later
       THIS_WORKER.disable_retry();
@@ -189,7 +191,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet& result)
       OB_BATCHED_MULTI_STMT_ROLLBACK != ret) {
     // if OB_BATCHED_MULTI_STMT_ROLLBACK is err ret of batch stmt rollback,not return to client, retry
     int sret = OB_SUCCESS;
-    bool is_partition_hit = session_.partition_hit().get_bool();
+    bool is_partition_hit = session_.get_err_final_partition_hit(ret);
     if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
       LOG_WARN("send error packet fail", K(sret), K(ret));
     }
@@ -264,7 +266,7 @@ int ObSyncPlanDriver::response_query_result(
           ctx_.schema_guard_,
           session_.get_effective_tenant_id()));
       if (OB_FAIL(sender_.response_packet(rp))) {
-        LOG_WARN("response packet fail", K(ret), K(*row), K(row_num), K(can_retry));
+        LOG_WARN("response packet fail", K(ret), KP(row), K(row_num), K(can_retry));
         // break;
       } else {
         // LOG_DEBUG("response row succ", K(*row));
@@ -431,7 +433,7 @@ int ObRemotePlanDriver::response_result(ObMySQLResultSet& result)
   if (!retry_ctrl_.need_retry()) {
     if (OB_FAIL(ret) && !process_ok) {
       int sret = OB_SUCCESS;
-      bool is_partition_hit = session_.partition_hit().get_bool();
+      bool is_partition_hit = session_.get_err_final_partition_hit(ret);
       if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
         LOG_WARN("send error packet fail", K(sret), K(ret));
       }

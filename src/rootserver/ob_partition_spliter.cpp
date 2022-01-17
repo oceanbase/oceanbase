@@ -194,7 +194,7 @@ int ObPartitionSpliter::try_split_partition()
 
 /////////////////////////////////////////////
 
-int ObPartitionSplitExecutor::split_table_partition(const share::schema::ObTableSchema& schema,
+int ObPartitionSplitExecutor::split_table_partition(const share::schema::ObSimpleTableSchemaV2& schema,
     share::ObPartitionTableOperator& pt_operator, obrpc::ObSrvRpcProxy& rpc_proxy, ObSplitPartitionArg& arg,
     ObSplitProgress& split_process)
 {

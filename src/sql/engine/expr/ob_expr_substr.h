@@ -19,17 +19,17 @@ namespace oceanbase {
 namespace sql {
 
 class ObExprSubstr : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprSubstr(common::ObIAllocator& alloc);
   virtual ~ObExprSubstr();
   virtual int calc_result2(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,
-      common::ObExprCtx& expr_ctx) const;
+      common::ObExprCtx& expr_ctx) const override;
   virtual int calc_result3(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,
-      const common::ObObj& length, common::ObExprCtx& expr_ctx) const;
-  virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types_stack, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      const common::ObObj& length, common::ObExprCtx& expr_ctx) const override;
+  virtual int calc_result_typeN(ObExprResType& type, ObExprResType* types_stack, int64_t param_num,
+      common::ObExprTypeCtx& type_ctx) const override;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
 
   static int substr(common::ObString& output, const common::ObString& input, const int64_t pos, const int64_t len,
       common::ObCollationType cs_type);
@@ -41,7 +41,7 @@ class ObExprSubstr : public ObStringExprOperator {
 
   static int eval_substr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   int calc_result_length(
       ObExprResType* types_array, int64_t param_num, common::ObCollationType cs_type, int64_t& res_len) const;
   int calc_result2_for_mysql(common::ObObj& result, const common::ObObj& text, const common::ObObj& start_pos,

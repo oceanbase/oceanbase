@@ -25,21 +25,21 @@ using namespace oceanbase::lib;
 using namespace oceanbase;
 
 class TestRawExprResolver : public ::testing::Test {
-  public:
+public:
   TestRawExprResolver();
   virtual ~TestRawExprResolver();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExprResolver);
 
-  protected:
+protected:
   // function members
   void resolve(const char* expr, const char*& json_expr);
 
-  protected:
+protected:
   // data members
 };
 
@@ -63,7 +63,7 @@ void TestRawExprResolver::resolve(const char* expr, const char*& json_expr)
   ObArray<ObAggFunRawExpr*> aggr_exprs;
   ObArray<ObWinFunRawExpr*> win_exprs;
   const char* expr_str = expr;
-  ObIAllocator& allocator = CURRENT_CONTEXT.get_arena_allocator();
+  ObIAllocator& allocator = CURRENT_CONTEXT->get_arena_allocator();
   ObRawExprFactory expr_factory(allocator);
   ObTimeZoneInfo tz_info;
   ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;

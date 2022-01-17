@@ -20,13 +20,13 @@ class ObNewRow;
 }
 namespace observer {
 class ObShowIntermResult : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowIntermResult();
   virtual ~ObShowIntermResult();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObShowIntermResult);
 };
 }  // namespace observer

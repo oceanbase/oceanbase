@@ -26,7 +26,7 @@ class ObISubmitLogCb;
 namespace storage {
 class ObPartitionGroup;
 class ObPartitionLoopWorker {
-  public:
+public:
   ObPartitionLoopWorker()
   {
     reset();
@@ -85,7 +85,7 @@ class ObPartitionLoopWorker {
       K_(last_max_trans_version), K_(next_gene_checkpoint_log_ts), K_(safe_slave_read_timestamp),
       K_(last_checkpoint_value));
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionLoopWorker);
   static const int64_t COLD_PARTITION_CHECKPOINT_INTERVAL = 3600LL * 1000 * 1000;
   static const int64_t COLD_PARTITION_CHECKPOINT_PS_LIMIT = 1000;
@@ -102,7 +102,7 @@ class ObPartitionLoopWorker {
   int check_dup_table_partition_();
   int get_readable_info_(ObPartitionReadableInfo& readable_info);
 
-  protected:
+protected:
   bool is_inited_;
   common::ObPartitionKey pkey_;
   clog::ObIPartitionLogService* pls_;

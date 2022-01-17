@@ -55,7 +55,7 @@ class ObSql {
   static const int64_t max_error_length;
   static const int64_t SQL_MEM_SIZE_LIMIT;
 
-  public:
+public:
   /// init SQL module
   int init(common::ObStatManager* stat_mgr, common::ObOptStatManager* opt_stat_mgr,
       rpc::frame::ObReqTransport* transport, storage::ObPartitionService* partition_service,
@@ -63,12 +63,12 @@ class ObSql {
       common::ObAddr& addr, share::ObRsMgr& rs_mgr);
   void destroy();
 
-  public:
+public:
   /// print statatistics of SQL module
   void stat();
 
-  public:
-  // These interface are one one mapping whit MySQL request type currently
+public:
+  // These interface are one one mapping with MySQL request type currently
 
   // Interface of SQL Engine for OB_MYSQL_COM_QUERY request
   //
@@ -166,12 +166,12 @@ class ObSql {
 
   int init_result_set(ObSqlCtx& context, ObResultSet& result_set);
 
-  public:
+public:
   // for sql test only
   friend bool compare_stmt(const char* schema_file, const char* str1, const char* str2);
   int fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo& stmt_info, ObResultSet& result);
 
-  public:
+public:
   ObSql()
       : inited_(false),
         stat_mgr_(NULL),
@@ -199,17 +199,17 @@ class ObSql {
     return partition_service_;
   }
 
-  private:
+private:
   // disallow copy
   ObSql(const ObSql& other);
   ObSql& operator=(const ObSql& other);
 
-  private:
+private:
   int construct_param_store(const ParamStore& params, ParamStore& param_store);
   int do_real_prepare(const ObString& stmt, ObSqlCtx& context, ObResultSet& result, bool is_inner_sql);
 
   int do_add_ps_cache(const ObString& sql, int64_t param_cnt, share::schema::ObSchemaGetterGuard& schema_guard,
-      stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql);
+      stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql, bool is_sensitive_sql);
 
   int fill_result_set(ObResultSet& result, ObSqlCtx* context, const bool is_ps_mode, ObStmt& stmt);
 
@@ -291,7 +291,7 @@ class ObSql {
 
   int replace_const_expr(common::ObIArray<ObRawExpr*>& raw_exprs, ParamStore& param_store);
   int replace_const_expr(ObRawExpr* raw_expr, ParamStore& param_store);
-  int generate_sql_id(ObPlanCacheCtx& pc_ctx, bool add_plan_to_pc);
+  void generate_sql_id(ObPlanCacheCtx& pc_ctx, bool add_plan_to_pc, int err_code);
   int pc_add_plan(ObPlanCacheCtx& pc_ctx, ObResultSet& result, ObOutlineState& outline_state, ObPlanCache* plan_cache);
   // Check whether the parameterized template SQL can be prepared
   void check_template_sql_can_be_prepare(ObPlanCacheCtx& pc_ctx, ObPhysicalPlan& plan);
@@ -307,7 +307,7 @@ class ObSql {
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
 
-  private:
+private:
   bool inited_;
   // BEGIN Global singleton dependent interface
   common::ObStatManager* stat_mgr_;

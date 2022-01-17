@@ -18,7 +18,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 class MyRunnable : public TGRunnable {
-  public:
+public:
   void run1() override
   {
     run_count_++;

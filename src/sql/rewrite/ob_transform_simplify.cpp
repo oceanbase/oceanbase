@@ -269,7 +269,7 @@ int ObTransformSimplify::try_push_down_outer_join_conds(ObDMLStmt* stmt, JoinedT
   } else if (!join_table->right_table_->is_basic_table() && !join_table->right_table_->is_generated_table() &&
              !join_table->right_table_->is_joined_table()) {
     /*do nothing*/
-  } else if (OB_FAIL(ObTransformUtils::get_table_rel_ids(*stmt, *join_table->right_table_, right_table_ids))) {
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*join_table->right_table_, right_table_ids))) {
     LOG_WARN("failed to get target table rel ids", K(ret));
   } else {
     ObSEArray<ObRawExpr*, 16> push_down_conds;
@@ -300,13 +300,20 @@ int ObTransformSimplify::try_push_down_outer_join_conds(ObDMLStmt* stmt, JoinedT
   return ret;
 }
 
-int ObTransformSimplify::push_down_on_condition(ObDMLStmt* stmt, JoinedTable* join_table, ObIArray<ObRawExpr*>& conds)
-{
+int ObTransformSimplify::push_down_on_condition(ObDMLStmt *stmt,
+                                                JoinedTable *join_table,
+                                                ObIArray<ObRawExpr*> &conds) {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 16> old_column_exprs;
-  ObSEArray<ObRawExpr*, 16> new_column_exprs;
-  ObSelectStmt* child_stmt = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(join_table) || OB_ISNULL(join_table->right_table_)) {
+  ObSEArray<ObRawExpr *, 16> new_conds;
+  ObSEArray<ObRawExpr *, 16> old_column_exprs;
+  ObSEArray<ObRawExpr *, 16> new_column_exprs;
+  ObSEArray<ObQueryRefRawExpr*, 2> subqueries;
+  ObSEArray<ObRawExpr *, 16> new_select_list;
+  ObSEArray<ObRawExpr *, 16> new_column_list;
+  ObSelectStmt *child_stmt = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(join_table) ||
+      OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->allocator_) ||
+      OB_ISNULL(join_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret));
   } else if (!join_table->is_left_join() || !join_table->right_table_->is_generated_table() ||
@@ -315,23 +322,54 @@ int ObTransformSimplify::push_down_on_condition(ObDMLStmt* stmt, JoinedTable* jo
     LOG_WARN("unexpected join table", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(join_table->get_join_conditions(), conds))) {
     LOG_WARN("failed to remove item", K(ret));
-  } else if (OB_FAIL(child_stmt->add_condition_exprs(conds))) {
+  } else if (OB_FAIL(ObRawExprUtils::copy_exprs(*ctx_->expr_factory_, conds,
+                                                new_conds, COPY_REF_DEFAULT))) {
+    LOG_WARN("failed to copy exprs", K(ret));
+  } else if (OB_FAIL(child_stmt->add_condition_exprs(new_conds))) {
     LOG_WARN("failed to add condotion exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(conds, child_stmt->get_subquery_exprs()))) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
-  } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-    LOG_WARN("failed to adjust subquery list", K(ret));
-  } else if (OB_FAIL(child_stmt->adjust_subquery_stmt_parent(stmt, child_stmt))) {
-    LOG_WARN("failed to adjust subquery stmt parent", K(ret));
-  } else if (OB_FAIL(stmt->get_column_exprs(join_table->right_table_->table_id_, old_column_exprs))) {
-    LOG_WARN("failed to get column exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
-                 old_column_exprs, *child_stmt, new_column_exprs))) {
-    LOG_WARN("failed to conver column exprs", K(ret));
-  } else if (OB_FAIL(child_stmt->replace_inner_stmt_expr(old_column_exprs, new_column_exprs))) {
-    LOG_WARN("failed to replace stmt exprs", K(ret));
-  } else if (OB_FAIL(child_stmt->formalize_stmt(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize stmt", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(new_conds, subqueries))) {
+    LOG_WARN("failed to extract subquery", K(ret));
+  } else if (OB_FAIL(append(child_stmt->get_subquery_exprs(), subqueries))) {
+    LOG_WARN("failed to append subquery list", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), subqueries))) {
+    LOG_WARN("failed to remove subqueries", K(ret));
+  } else if (!stmt->is_merge_stmt()) {
+    /* do nothing */
+  } else if (OB_FAIL(append(new_select_list, subqueries))) {
+    LOG_WARN("failed to append exprs", K(ret));
+    /* for merge into, subqueries in join condition are shared by match condition,
+      here add subqueries to child select items. */
+  } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, new_select_list,
+                                                          child_stmt))) {
+    LOG_WARN("failed to create select item", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_, *join_table->right_table_,
+                                                                stmt, new_select_list,
+                                                                new_column_list))) {
+    LOG_WARN("failed to create columns for table item", K(ret));
+  } else if (OB_FAIL(stmt->remove_table_item(join_table->right_table_))) {
+    LOG_WARN("failed to remove table item", K(ret));
+  } else if (OB_FAIL(stmt->replace_inner_stmt_expr(new_select_list, new_column_list))) {
+    LOG_WARN("failed to replace inner stmt expr", K(ret));
+  } else if (OB_FAIL(stmt->get_table_items().push_back(join_table->right_table_))) {
+    LOG_WARN("failed to push back table item", K(ret));
+  } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
+    LOG_WARN("failed to update column item rel id", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    child_stmt->set_parent_namespace_stmt(stmt->get_parent_namespace_stmt());
+    if (OB_FAIL(child_stmt->adjust_subquery_stmt_parent(stmt, child_stmt))) {
+      LOG_WARN("failed to adjust subquery stmt parent", K(ret));
+    } else if (OB_FAIL(stmt->get_column_exprs(join_table->right_table_->table_id_, old_column_exprs))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(
+                  old_column_exprs, *child_stmt, new_column_exprs))) {
+      LOG_WARN("failed to conver column exprs", K(ret));
+    } else if (OB_FAIL(child_stmt->replace_inner_stmt_expr(old_column_exprs, new_column_exprs))) {
+      LOG_WARN("failed to replace stmt exprs", K(ret));
+    } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    }
   }
   return ret;
 }
@@ -542,14 +580,11 @@ int ObTransformSimplify::get_upper_column_exprs(ObSelectStmt& upper_stmt, ObSele
     if (OB_ISNULL(stmt_select_expr = stmt.get_select_item(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_ISNULL(
-                   column_item = upper_stmt.get_column_item_by_id(table_item->table_id_, i + OB_APP_MIN_COLUMN_ID))) {
-      // disable these aggr expr which can not be found in upper stmt,
-      // otherwise, following elimination will meet unexpected, such as
-      // inner stmt count(1) cnt with upper stmt max.
-      if (stmt_select_expr->is_aggr_expr()) {
-        is_valid = false;
-      }
+    } else if (OB_ISNULL(column_item = upper_stmt.get_column_item_by_id(table_item->table_id_,
+                                                                    i + OB_APP_MIN_COLUMN_ID))) {
+      // a select expr contains aggr function, it's not used by upper stmt.
+      // project pruning will remove it, do not transform here.
+      is_valid = !stmt_select_expr->has_flag(CNT_AGG);
     } else if (OB_ISNULL(column_item->expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null expr", K(ret));
@@ -687,7 +722,8 @@ int ObTransformSimplify::replace_is_null_condition(ObDMLStmt* stmt, bool& trans_
       if (OB_ISNULL(cond = stmt->get_condition_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("condition expr is null", K(ret));
-      } else if (OB_FAIL(inner_replace_is_null_condition(stmt, stmt->get_condition_exprs().at(i), is_happened))) {
+      } else if (OB_FAIL(inner_replace_is_null_condition(stmt, stmt->get_condition_exprs().at(i),
+                    ObTransformUtils::NULLABLE_SCOPE::NS_WHERE, is_happened))) {
         LOG_WARN("failed to replace is null expr", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -696,7 +732,8 @@ int ObTransformSimplify::replace_is_null_condition(ObDMLStmt* stmt, bool& trans_
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
       ObSelectStmt* sel_stmt = static_cast<ObSelectStmt*>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
-        if (OB_FAIL(inner_replace_is_null_condition(sel_stmt, sel_stmt->get_having_exprs().at(i), is_happened))) {
+        if (OB_FAIL(inner_replace_is_null_condition(sel_stmt, sel_stmt->get_having_exprs().at(i),
+                ObTransformUtils::NULLABLE_SCOPE::NS_TOP, is_happened))) {
           LOG_WARN("failed to replace is null expr", K(ret));
         } else {
           trans_happened |= is_happened;
@@ -707,7 +744,7 @@ int ObTransformSimplify::replace_is_null_condition(ObDMLStmt* stmt, bool& trans_
   return ret;
 }
 
-int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, bool& trans_happened)
+int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, int nullable_scope, bool& trans_happened)
 {
   int ret = OB_SUCCESS;
   bool is_happened = false;
@@ -729,7 +766,7 @@ int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawE
       if (OB_ISNULL(temp = op_expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(SMART_CALL(inner_replace_is_null_condition(stmt, temp, is_happened)))) {
+      } else if (OB_FAIL(SMART_CALL(inner_replace_is_null_condition(stmt, temp, nullable_scope, is_happened)))) {
         LOG_WARN("failed to replace is null expr", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -740,7 +777,7 @@ int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawE
 
   if (OB_SUCC(ret) && (T_OP_IS == expr->get_expr_type() || T_OP_IS_NOT == expr->get_expr_type())) {
     // do transforamtion for its own exprs
-    if (OB_FAIL(do_replace_is_null_condition(stmt, expr, is_happened))) {
+    if (OB_FAIL(do_replace_is_null_condition(stmt, expr, nullable_scope, is_happened))) {
       LOG_WARN("failed to replace is null condition", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -759,7 +796,7 @@ int ObTransformSimplify::inner_replace_is_null_condition(ObDMLStmt* stmt, ObRawE
   return ret;
 }
 
-int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, bool& trans_happened)
+int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr*& expr, int nullable_scope, bool& trans_happened)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -785,6 +822,7 @@ int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr
           is_expected = true;
         } else if (child_0->is_column_ref_expr()) {
           bool sql_auto_is_null = false;
+          bool found = false;
           const ObColumnRefRawExpr* col_expr = static_cast<const ObColumnRefRawExpr*>(child_0);
           uint64_t table_id = col_expr->get_table_id();
           if (OB_FAIL(ctx_->session_info_->get_sql_auto_is_null(sql_auto_is_null))) {
@@ -795,6 +833,11 @@ int ObTransformSimplify::do_replace_is_null_condition(ObDMLStmt* stmt, ObRawExpr
                     !col_expr->get_result_type().is_date() && !(sql_auto_is_null && col_expr->is_auto_increment()))) {
               if (OB_FAIL(is_expected_table_for_replace(stmt, table_id, is_expected))) {
                 LOG_WARN("fail to judge expected table", K(ret), K(table_id), K(is_expected));
+              } else if (is_expected && OB_FAIL(ObTransformUtils::check_nullable_exprs_in_groupby(stmt,
+                                                const_cast<ObColumnRefRawExpr*>(col_expr), nullable_scope, found))) {
+                LOG_WARN("fail to checkin nullable in groupby", K(ret), K(table_id), K(is_expected));
+              } else if (found) {
+                is_expected = false;
               }
             }
           }
@@ -921,6 +964,9 @@ int ObTransformSimplify::extract_null_expr(
       LOG_WARN("failed to check is question mark pre param", K(ret));
     } else if (!is_pre_param) {
       // do nothing
+    } else if (OB_UNLIKELY(value.get_unknown() < 0 || value.get_unknown() >= param_store.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param index", K(ret), K(value.get_unknown()), K(param_store.count()));
     } else if (param_store.at(value.get_unknown()).is_null()) {
       if (OB_FAIL(null_expr_lists.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -970,19 +1016,18 @@ int ObTransformSimplify::is_expected_table_for_replace(ObDMLStmt* stmt, uint64_t
       LOG_WARN("fail to judge expected table", K(ret));
     } else { /*do nothing*/
     }
-  } else {
-    // table from current stmt
-    if (table_item->is_basic_table() || table_item->is_generated_table()) {
-      bool is_on_null_side = false;
-      if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table_item->table_id_, is_on_null_side))) {
-        LOG_WARN("check is table on null side failed", K(ret), K(*table_item));
-      } else {
-        is_expected = !is_on_null_side;
-      }
+  } else if (table_item->is_basic_table()) {
+    bool is_on_null_side = false;
+    if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table_item->table_id_, is_on_null_side))) {
+      LOG_WARN("check is table on null side failed", K(ret), K(*table_item));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table item type", K_(table_item->type));
+      is_expected = !is_on_null_side;
     }
+  } else if (table_item->is_generated_table()) {
+    is_expected = false;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table item type", K_(table_item->type));
   }
   return ret;
 }
@@ -2961,36 +3006,31 @@ int ObTransformSimplify::try_remove_redundent_select(ObSelectStmt& stmt, ObSelec
   }
   return ret;
 }
-
 /**
  * @brief check_subquery_valid
- * check subquery return equal or less than one row
+ * check subquery return equal one row, if empty do nothing
+ * has limit 可能使结果为空不做改写;
+ * select ... where rownum >2; rownum不包含1必空，包含判断较难，暂不处理
  * subquery should in format of:
- * 1. select ... from dual;
- * 2. select aggr() ...;  <- no group by
- * 3. select ... limit 0/1;
- * 4. select ... where rownum < 2;
- * case 3 and 4 is not ignored at the present
+ * 1. select ... from dual;  no where condition
+ * 2. select aggr() ...;  <- no group by, no having
  */
 int ObTransformSimplify::check_subquery_valid(ObSelectStmt& stmt, bool& is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = false;
-  int64_t limit = -1;
-  if (stmt.has_set_op() || stmt.is_hierarchical_query()) {
+  ObRawExpr *sel_expr = NULL;
+  if (stmt.is_set_stmt() || stmt.is_hierarchical_query()) {
     // do nothing
-  } else if (0 == stmt.get_from_item_size()) {
-    is_valid = true;
-  } else if (OB_FAIL(ObTransformUtils::get_stmt_limit_value(stmt, limit))) {
-    LOG_WARN("failed to get stmt limit value", K(ret));
-  } else if (0 == limit || 1 == limit) {
-    is_valid = true;
-  } else if (0 == stmt.get_group_expr_size()) {
-    ObRawExpr* sel_expr = NULL;
+  } else {
     if (OB_UNLIKELY(1 != stmt.get_select_item_size()) || OB_ISNULL(sel_expr = stmt.get_select_item(0).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected subquery", K(ret), K(stmt.get_select_item_size()), K(sel_expr));
-    } else if (sel_expr->has_flag(CNT_AGG)) {
+    } else if (OB_NOT_NULL(stmt.get_limit_expr())) {
+      // do nothing
+    } else if (0 == stmt.get_from_item_size() && 0 == stmt.get_condition_size()) {
+      is_valid = true;
+    } else if (0 == stmt.get_group_expr_size() && 0 == stmt.get_having_expr_size() && sel_expr->has_flag(CNT_AGG)) {
       is_valid = true;
     }
   }

@@ -22,17 +22,17 @@ class ObString;
 }
 namespace observer {
 class ObShowCreateDatabase : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowCreateDatabase();
   virtual ~ObShowCreateDatabase();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int calc_show_database_id(uint64_t& show_database_id);
   int fill_row_cells(uint64_t show_database_id, const common::ObString& database_name);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateDatabase);
 };
 }  // namespace observer

@@ -26,7 +26,7 @@ class ObOptStatService;
 class ObOptColumnStatHandle;
 
 struct ObOptTableStatVersion final {
-  public:
+public:
   ObOptTableStatVersion() : stat_version_(0)
   {
     key_.reset();
@@ -42,7 +42,7 @@ struct ObOptTableStatVersion final {
 };
 
 class ObOptStatManager {
-  public:
+public:
   ObOptStatManager();
   virtual ~ObOptStatManager()
   {}
@@ -66,17 +66,17 @@ class ObOptStatManager {
     return inited_;
   }
   class ObRefreshStatTask : public common::IObDedupTask {
-    public:
+  public:
     explicit ObRefreshStatTask(ObOptStatManager* manager)
         : common::IObDedupTask(T_REFRESH_OPT_STAT), stat_manager_(manager)
     {}
     virtual ~ObRefreshStatTask()
     {}
-    virtual int64_t hash() const
+    virtual int64_t hash() const override
     {
       return 0;
     }
-    virtual bool operator==(const common::IObDedupTask& other) const
+    virtual bool operator==(const common::IObDedupTask& other) const override
     {
       UNUSED(other);
       return false;
@@ -85,23 +85,23 @@ class ObOptStatManager {
     {
       return sizeof(*this);
     }
-    virtual common::IObDedupTask* deep_copy(char* buffer, const int64_t buf_size) const;
-    virtual int64_t get_abs_expired_time() const
+    virtual common::IObDedupTask* deep_copy(char* buffer, const int64_t buf_size) const override;
+    virtual int64_t get_abs_expired_time() const override
     {
       return 0;
     }
-    virtual int process();
+    virtual int process() override;
     int init(const obrpc::ObUpdateStatCacheArg& analyze_arg)
     {
       return analyze_arg_.assign(analyze_arg);
     }
 
-    protected:
+  protected:
     ObOptStatManager* stat_manager_;
     obrpc::ObUpdateStatCacheArg analyze_arg_;
   };
 
-  protected:
+protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;
   common::ObDedupQueue refresh_stat_task_queue_;

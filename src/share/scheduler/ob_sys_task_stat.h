@@ -40,6 +40,8 @@ enum ObSysTaskType {
   FAST_RECOVERY_TASK = 10,
   PARTITION_BACKUP_TASK = 11,
   BACKUP_VALIDATION_TASK = 12,
+  BACKUP_BACKUPSET_TASK = 13,
+  BACKUP_ARCHIVELOG_TASK = 14,
   MAX_SYS_TASK_TYPE
 };
 
@@ -59,7 +61,7 @@ struct ObSysTaskStat {
 };
 
 class ObSysTaskStatMgr {
-  public:
+public:
   ObSysTaskStatMgr();
   virtual ~ObSysTaskStatMgr();
 
@@ -73,7 +75,7 @@ class ObSysTaskStatMgr {
   int cancel_task(const ObTaskId& task_id);
   int is_task_cancel(const ObTaskId& task_id, bool& is_cancel);
 
-  private:
+private:
   common::SpinRWLock lock_;
   common::ObArray<ObSysTaskStat> task_array_;
   common::ObAddr self_addr_;

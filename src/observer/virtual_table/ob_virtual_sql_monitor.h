@@ -30,7 +30,7 @@ class ObPhyPlanMonitorInfo;
 }  // namespace sql
 namespace observer {
 class ObVirtualSqlMonitor : public common::ObVirtualTableProjector {
-  public:
+public:
   ObVirtualSqlMonitor();
   virtual ~ObVirtualSqlMonitor();
   int inner_open();
@@ -42,7 +42,7 @@ class ObVirtualSqlMonitor : public common::ObVirtualTableProjector {
     tenant_id_ = tenant_id;
   }
 
-  private:
+private:
   enum COLUMN_ID {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     SVR_IP,
@@ -62,7 +62,7 @@ class ObVirtualSqlMonitor : public common::ObVirtualTableProjector {
   int get_next_monitor_info();
   static const int64_t OB_MAX_INFO_LENGTH = 1024;
 
-  private:
+private:
   sql::ObMonitorInfoManager* monitor_manager_;
   int64_t start_id_;
   int64_t end_id_;

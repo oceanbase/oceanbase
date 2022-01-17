@@ -176,7 +176,7 @@ extern const char* get_feedback_element_type_str(const ObFeedbackElementType typ
 extern bool is_valid_fb_element_type(const int64_t type);
 
 class ObSeriPosGuard {
-  public:
+public:
   ObSeriPosGuard(int64_t& pos, int& ret) : pos_(pos), orig_pos_(pos), ret_(ret)
   {}
 
@@ -187,7 +187,7 @@ class ObSeriPosGuard {
     }
   }
 
-  private:
+private:
   int64_t& pos_;
   int64_t orig_pos_;
   int& ret_;
@@ -200,7 +200,7 @@ class ObSeriPosGuard {
 
 template <class T>
 class ObAbstractFeedbackObject {
-  public:
+public:
   ObAbstractFeedbackObject(const ObFeedbackElementType type) : type_(type)
   {}
   virtual ~ObAbstractFeedbackObject()
@@ -237,7 +237,7 @@ class ObAbstractFeedbackObject {
 
   TO_STRING_KV("type", get_feedback_element_type_str(type_));
 
-  protected:
+protected:
   // when MIN_FB_ELE == type_ means this class just a common obj without ObFeedbackElementType
   // , so no need seri or deseri type_, just like ObFeedbackReplicaLocation.
   ObFeedbackElementType type_;

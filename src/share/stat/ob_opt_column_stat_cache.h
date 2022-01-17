@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace common {
 class ObOptColumnStatHandle;
 class ObOptColumnStatCache : public common::ObKVCache<ObOptColumnStat::Key, ObOptColumnStat> {
-  public:
+public:
   ObOptColumnStatCache()
   {}
   ~ObOptColumnStatCache()
@@ -46,7 +46,7 @@ class ObOptColumnStatCache : public common::ObKVCache<ObOptColumnStat::Key, ObOp
  *
  */
 class ObOptColumnStatHandle {
-  public:
+public:
   friend class ObOptColumnStatCache;
   ObOptColumnStatHandle() : stat_(nullptr), cache_(nullptr)
   {}
@@ -69,7 +69,7 @@ class ObOptColumnStatHandle {
   const ObOptColumnStat* stat_;
   TO_STRING_KV(K(stat_));
 
-  private:
+private:
   ObOptColumnStatCache* cache_;
   ObKVCacheHandle handle_;
 };

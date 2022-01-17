@@ -181,8 +181,7 @@ int ObInsertResolver::resolve(const ParseNode& parse_tree)
     }
   }
 
-  if (OB_SUCC(ret) && insert_stmt->value_from_select() && session_info_->use_static_typing_engine() &&
-      !insert_stmt->get_insert_up()) {
+  if (OB_SUCC(ret) && insert_stmt->value_from_select() && !insert_stmt->get_insert_up()) {
     if (OB_FAIL(fill_index_dml_info_column_conv_exprs())) {
       LOG_WARN("fail to fill index dml info column conv exprs", K(ret));
     }
@@ -345,6 +344,7 @@ int ObInsertResolver::resolve_multi_table_dml_info(uint64_t table_offset /*defau
         index_dml_info.index_tid_ = index_schema->get_table_id();
         index_dml_info.rowkey_cnt_ = index_schema->get_rowkey_column_num();
         index_dml_info.part_cnt_ = index_schema->get_partition_cnt();
+        index_dml_info.index_type_ = index_schema->get_index_type();
         if (OB_FAIL(index_schema->get_index_name(index_dml_info.index_name_))) {
           LOG_WARN("get index name from index schema failed", K(ret));
         } else if (OB_FAIL(insert_stmt->add_multi_table_dml_info(index_dml_info))) {
@@ -1875,6 +1875,10 @@ int ObInsertResolver::save_autoinc_params(uint64_t table_offset /*default 0*/)
           if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
             param.autoinc_increment_ = 1;
             param.autoinc_offset_ = 1;
+            param.part_value_no_order_ = true;
+          } else if (column_schema->is_tbl_part_key_column()) {
+            // don't keep intra-partition value asc order when partkey column is auto inc
+            param.part_value_no_order_ = true;
           }
           uint64_t tid = insert_stmt->get_insert_table_id(table_offset);
           const ObIArray<ObColumnRefRawExpr*>* table_columns = NULL;

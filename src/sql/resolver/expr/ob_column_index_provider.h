@@ -20,7 +20,7 @@ namespace jit {
 namespace expr {
 
 class ObColumnIndexProvider {
-  public:
+public:
   ObColumnIndexProvider()
   {}
   /**
@@ -33,7 +33,7 @@ class ObColumnIndexProvider {
    */
   virtual int get_idx(const ObExpr* raw_expr, int64_t& index) const = 0;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnIndexProvider);
 };
 

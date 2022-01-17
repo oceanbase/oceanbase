@@ -21,7 +21,7 @@ namespace sql {
 class ObTopKSpec : public ObOpSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTopKSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   bool is_valid() const;
@@ -34,12 +34,12 @@ class ObTopKSpec : public ObOpSpec {
   ObExpr* org_limit_;
   ObExpr* org_offset_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTopKSpec);
 };
 
 class ObTopKOp : public ObOperator {
-  public:
+public:
   ObTopKOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
 
   virtual int inner_open() override;
@@ -52,7 +52,7 @@ class ObTopKOp : public ObOperator {
     ObOperator::destroy();
   }
 
-  private:
+private:
   int get_topk_final_count();
 
   DISALLOW_COPY_AND_ASSIGN(ObTopKOp);

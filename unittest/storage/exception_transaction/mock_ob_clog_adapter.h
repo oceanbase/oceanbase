@@ -27,7 +27,7 @@ class ObITransSubmitLogCb;
 }
 namespace unittest {
 class LogServiceSubmitTask {
-  public:
+public:
   LogServiceSubmitTask() : cb_(NULL)
   {}
   ~LogServiceSubmitTask()
@@ -49,13 +49,13 @@ class LogServiceSubmitTask {
     return partition_key_;
   }
 
-  private:
+private:
   transaction::ObITransSubmitLogCb* cb_;
   ObPartitionKey partition_key_;
 };
 
 class MockObClogAdapter : public transaction::ObIClogAdapter, public ObSimpleThreadPool {
-  public:
+public:
   MockObClogAdapter()
   {
     ObSimpleThreadPool::init(1, 10000);

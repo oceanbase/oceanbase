@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprObVersion : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprObVersion(common::ObIAllocator& alloc);
   virtual ~ObExprObVersion();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;

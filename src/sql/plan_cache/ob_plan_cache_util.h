@@ -469,7 +469,8 @@ struct ObPlanCacheCtx {
         should_add_plan_(true),
         must_be_positive_index_(),
         multi_stmt_fp_results_(allocator),
-        handle_id_(MAX_HANDLE)
+        handle_id_(MAX_HANDLE),
+        is_remote_executor_(false)
   {
     bl_key_.tenant_id_ = tenant_id;
     fp_result_.pc_key_.is_ps_mode_ = is_ps_mode_;
@@ -548,6 +549,7 @@ struct ObPlanCacheCtx {
   // used for store fp results for multi_stmt optimization
   common::ObFixedArray<ObFastParserResult, common::ObIAllocator> multi_stmt_fp_results_;
   CacheRefHandleID handle_id_;
+  bool is_remote_executor_;
 };
 
 struct ObPlanCacheStat {
@@ -698,7 +700,7 @@ struct ObPlanStat {
   int64_t expected_worker_count_;
   int64_t outline_version_;
   int64_t outline_id_;
-  bool is_last_open_succ_;
+  bool is_last_exec_succ_;
   common::ObString sp_info_str_;
   common::ObString param_infos_;
   common::ObString sys_vars_str_;
@@ -727,6 +729,10 @@ struct ObPlanStat {
   // check whether plan has stable performance
   bool enable_plan_expiration_;
   int64_t first_exec_row_count_;
+  int64_t first_elapsed_time_;
+  int64_t sample_times_;
+  int64_t sample_exec_row_count_;
+  int64_t sample_exec_usec_;
 
   uint64_t sessid_;
   char plan_tmp_tbl_name_str_[STMT_MAX_LEN];
@@ -782,7 +788,7 @@ struct ObPlanStat {
         expected_worker_count_(-1),
         outline_version_(common::OB_INVALID_VERSION),
         outline_id_(common::OB_INVALID_ID),
-        is_last_open_succ_(true),
+        is_last_exec_succ_(true),
         is_evolution_(false),
         asyn_baseline_stat_(ASYN_NOTHING),
         is_bind_sensitive_(false),
@@ -847,7 +853,7 @@ struct ObPlanStat {
         expected_worker_count_(rhs.expected_worker_count_),
         outline_version_(rhs.outline_version_),
         outline_id_(rhs.outline_id_),
-        is_last_open_succ_(rhs.is_last_open_succ_),
+        is_last_exec_succ_(rhs.is_last_exec_succ_),
         is_evolution_(rhs.is_evolution_),
         asyn_baseline_stat_(rhs.asyn_baseline_stat_),
         bl_info_(rhs.bl_info_),
@@ -996,7 +1002,7 @@ struct ObPlanStat {
       K_(execute_times), K_(disk_reads), K_(direct_writes), K_(buffer_gets), K_(application_wait_time),
       K_(concurrency_wait_time), K_(user_io_wait_time), K_(rows_processed), K_(elapsed_time), K_(cpu_time),
       K_(large_querys), K_(delayed_large_querys), K_(outline_version), K_(outline_id), K_(is_evolution),
-      K_(is_last_open_succ), K_(is_bind_sensitive), K_(is_bind_aware), K_(is_last_open_succ), K_(timeout_count),
+      K_(is_last_exec_succ), K_(is_bind_sensitive), K_(is_bind_aware), K_(is_last_exec_succ), K_(timeout_count),
       K_(bl_info));
 };
 
@@ -1065,12 +1071,12 @@ struct ObGetAllPlanIdOp {
   int set_key_array(common::ObIArray<uint64_t>* key_array);
   int operator()(common::hash::HashMapPair<ObCacheObjID, ObCacheObject*>& entry);
 
-  public:
+public:
   common::ObIArray<uint64_t>* key_array_;
 };
 
 struct ObPhyLocationGetter {
-  public:
+public:
   // used for getting plan
   static int get_phy_locations(const ObIArray<ObTableLocation>& table_locations, const ObPlanCacheCtx& pc_ctx,
       share::ObIPartitionLocationCache& location_cache, ObIArray<ObPhyTableLocationInfo>& phy_location_infos,

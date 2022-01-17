@@ -1688,8 +1688,19 @@ int ObTableSqlService::add_single_column(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
       } else {
-        bool is_all_table = combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_TID) == table_id ||
-                            combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_V2_TID) == table_id;
+        /*
+         * We try to modify __all_table's content in __all_core_table when __all_table/__all_table_v2 adds new columns.
+         * For compatibility, we will add new columns to __all_table/__all_table_v2 at the same time, which means we
+         * modify
+         * __all_table's content in __all_core_table twice in such situaction.
+         *
+         * When we add string-like columns to __all_table/__all_table_v2, it may cause -4016 error because the second
+         * modification will do nothing and affected_rows won't change. To fix that, we skip the modification caused by
+         * adding columns to __all_table_v2.
+         *
+         */
+        bool is_all_table = combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_TID) == table_id;
+        //|| combine_id(OB_SYS_TENANT_ID, OB_ALL_TABLE_V2_TID) == table_id;
         bool is_all_column = combine_id(OB_SYS_TENANT_ID, OB_ALL_COLUMN_TID) == table_id;
         if (is_all_table || is_all_column) {
           if (OB_FAIL(supplement_for_core_table(sql_client, is_all_table, column))) {
@@ -2080,7 +2091,7 @@ int ObTableSqlService::create_table(ObTableSchema& table, ObISQLClient& sql_clie
   if (OB_SUCCESS == ret && 0 != table.get_autoinc_column_id()) {
     if (OB_FAIL(add_sequence(
             table.get_tenant_id(), table.get_table_id(), table.get_autoinc_column_id(), table.get_auto_increment()))) {
-      LOG_WARN("insert sequence record faild", K(ret), K(table));
+      LOG_WARN("insert sequence record failed", K(ret), K(table));
     }
     end_usec = ObTimeUtility::current_time();
     cost_usec = end_usec - start_usec;
@@ -2090,7 +2101,7 @@ int ObTableSqlService::create_table(ObTableSchema& table, ObISQLClient& sql_clie
   // hidden primary key start with 1; incre
   if (OB_SUCCESS == ret && NULL != table.get_column_schema(OB_HIDDEN_PK_INCREMENT_COLUMN_ID)) {
     if (OB_FAIL(add_sequence(table.get_tenant_id(), table.get_table_id(), OB_HIDDEN_PK_INCREMENT_COLUMN_ID, 1))) {
-      LOG_WARN("insert sequence record faild", K(ret), K(table));
+      LOG_WARN("insert sequence record failed", K(ret), K(table));
     }
     end_usec = ObTimeUtility::current_time();
     cost_usec = end_usec - start_usec;

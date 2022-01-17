@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObCreateTablegroupStmt : public ObTablegroupStmt {
-  public:
+public:
   ObCreateTablegroupStmt();
   explicit ObCreateTablegroupStmt(common::ObIAllocator* name_pool);
   virtual ~ObCreateTablegroupStmt();
@@ -33,7 +33,7 @@ class ObCreateTablegroupStmt : public ObTablegroupStmt {
   virtual int set_primary_zone(const common::ObString& zone) override;
   virtual int set_locality(const common::ObString& locality) override;
   obrpc::ObCreateTablegroupArg& get_create_tablegroup_arg();
-  virtual obrpc::ObDDLArg& get_ddl_arg()
+  virtual obrpc::ObDDLArg& get_ddl_arg() override
   {
     return create_tablegroup_arg_;
   }
@@ -51,7 +51,7 @@ class ObCreateTablegroupStmt : public ObTablegroupStmt {
   }
   TO_STRING_KV(K_(create_tablegroup_arg));
 
-  private:
+private:
   obrpc::ObCreateTablegroupArg create_tablegroup_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObCreateTablegroupStmt);
 };

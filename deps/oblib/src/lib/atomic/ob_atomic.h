@@ -36,6 +36,9 @@ namespace common {
     OB_ATOMIC_EVENT(atomic_pause); \
     asm("yield\n");                \
   })  // for ARM
+#elif defined(__sw_64__)
+#define WEAK_BARRIER() __sync_synchronize()
+#define PAUSE()
 #else
 #error arch unsupported
 #endif

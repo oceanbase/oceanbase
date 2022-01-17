@@ -18,7 +18,7 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace unittest {
 class TestObPartitionKey : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()

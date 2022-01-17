@@ -19,7 +19,7 @@ class ObIFreezeCb;
 }
 namespace unittest {
 class MockObFreezeTransCb : public storage::ObIFreezeCb {
-  public:
+public:
   MockObFreezeTransCb()
   {}
   virtual ~MockObFreezeTransCb()

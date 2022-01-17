@@ -33,7 +33,7 @@ using namespace share;
 using namespace omt;
 
 class MockSqlExpression : public ObSqlExpression {
-  public:
+public:
   MockSqlExpression(ObIAllocator& alloc) : ObSqlExpression(alloc)
   {
     set_item_count(10);
@@ -44,7 +44,7 @@ class MockSqlExpression : public ObSqlExpression {
 #define TEST_HJ_DUMP_SET_HASH_AREA_SIZE(size) (set_hash_area_size(size))
 
 class ObHashJoinDumpTest : public blocksstable::TestDataFilePrepare, public ::testing::WithParamInterface<ObJoinType> {
-  public:
+public:
   ObHashJoinDumpTest()
       : blocksstable::TestDataFilePrepare("TestDiskIR", 2 << 20, 5000),
         hash_join_(alloc_),
@@ -105,7 +105,7 @@ class ObHashJoinDumpTest : public blocksstable::TestDataFilePrepare, public ::te
   // iterate hash join result and verify result with merge join.
   void run_test(int64_t print_row_cnt = 0);
 
-  protected:
+protected:
   struct JoinPlan {
     explicit JoinPlan(ObJoin& join, ObIAllocator& alloc) : join_(join), left_(alloc), right_(alloc), expr_(alloc)
     {}

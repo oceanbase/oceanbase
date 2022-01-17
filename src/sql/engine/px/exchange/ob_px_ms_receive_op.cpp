@@ -141,6 +141,11 @@ int ObPxMSReceiveOp::inner_close()
   if (release_merge_sort_ret != common::OB_SUCCESS) {
     LOG_WARN("release dtl channel failed", K(release_merge_sort_ret));
   }
+
+  release_channel_ret = erase_dtl_interm_result();
+  if (release_channel_ret != common::OB_SUCCESS) {
+    LOG_TRACE("release interm result failed", KR(release_channel_ret));
+  }
   return ret;
 }
 

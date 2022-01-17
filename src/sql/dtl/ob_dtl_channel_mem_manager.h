@@ -29,7 +29,7 @@ namespace dtl {
 // class ObDtlLinkedBuffer;
 
 class ObDtlChannelMemManager {
-  public:
+public:
   ObDtlChannelMemManager(uint64_t tenant_id);
   virtual ~ObDtlChannelMemManager()
   {
@@ -39,7 +39,7 @@ class ObDtlChannelMemManager {
   int init();
   void destroy();
 
-  public:
+public:
   ObDtlLinkedBuffer* alloc(int64_t chid, int64_t size);
   int free(ObDtlLinkedBuffer* buf, bool auto_free = true);
 
@@ -111,14 +111,14 @@ class ObDtlChannelMemManager {
     return free_queue_.size();
   }
 
-  private:
+private:
   bool out_of_memory();
   int64_t get_used_memory_size();
   int64_t get_max_dtl_memory_size();
   int64_t get_max_tenant_memory_limit_size();
   void real_free(ObDtlLinkedBuffer* buf);
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t size_per_buffer_;
   int64_t seqno_;

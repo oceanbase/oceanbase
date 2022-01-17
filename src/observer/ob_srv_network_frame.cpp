@@ -56,7 +56,11 @@ int ObSrvNetworkFrame::init()
   const char* mysql_unix_path = "unix:run/mysql.sock";
   const uint32_t rpc_port = static_cast<uint32_t>(GCONF.rpc_port);
   ObNetOptions opts;
-  const int io_cnt = static_cast<int>(GCONF.net_thread_count);
+  int io_cnt = static_cast<int>(GCONF.net_thread_count);
+  // make net thread count adaptive
+  if (0 == io_cnt) {
+    io_cnt = max(6, get_cpu_num() / 8);
+  }
   const int hp_io_cnt = static_cast<int>(GCONF.high_priority_net_thread_count);
   const bool use_easy_ma = hp_io_cnt > 0;
   opts.rpc_io_cnt_ = io_cnt;
@@ -174,11 +178,11 @@ int ObSrvNetworkFrame::reload_config()
   return ret;
 }
 
-int extract_expired_time(const char* const cert_file, int64_t& expired_time)
+int ObSrvNetworkFrame::extract_expired_time(const char *const cert_file, int64_t &expired_time)
 {
   int ret = OB_SUCCESS;
-  X509* cert = NULL;
-  BIO* b = NULL;
+  X509 *cert = NULL;
+  BIO *b = NULL;
   if (OB_ISNULL(b = BIO_new_file(cert_file, "r"))) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "BIO_new_file failed", K(ret), K(cert_file));
@@ -186,16 +190,16 @@ int extract_expired_time(const char* const cert_file, int64_t& expired_time)
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "PEM_read_bio_X509 failed", K(ret), K(cert_file));
   } else {
-    ASN1_TIME* notAfter = X509_get_notAfter(cert);
+    ASN1_TIME *notAfter = X509_get_notAfter(cert);
     struct tm tm1;
-    memset(&tm1, 0, sizeof(tm1));
-    tm1.tm_year = (notAfter->data[0] - '0') * 10 + (notAfter->data[1] - '0') + 100;
-    tm1.tm_mon = (notAfter->data[2] - '0') * 10 + (notAfter->data[3] - '0') - 1;
-    tm1.tm_mday = (notAfter->data[4] - '0') * 10 + (notAfter->data[5] - '0');
-    tm1.tm_hour = (notAfter->data[6] - '0') * 10 + (notAfter->data[7] - '0');
-    tm1.tm_min = (notAfter->data[8] - '0') * 10 + (notAfter->data[9] - '0');
-    tm1.tm_sec = (notAfter->data[10] - '0') * 10 + (notAfter->data[11] - '0');
-    expired_time = mktime(&tm1) * 1000000;  // us
+    memset (&tm1, 0, sizeof (tm1));
+    tm1.tm_year = (notAfter->data[ 0] - '0') * 10 + (notAfter->data[ 1] - '0') + 100;
+    tm1.tm_mon  = (notAfter->data[ 2] - '0') * 10 + (notAfter->data[ 3] - '0') - 1;
+    tm1.tm_mday = (notAfter->data[ 4] - '0') * 10 + (notAfter->data[ 5] - '0');
+    tm1.tm_hour = (notAfter->data[ 6] - '0') * 10 + (notAfter->data[ 7] - '0');
+    tm1.tm_min  = (notAfter->data[ 8] - '0') * 10 + (notAfter->data[ 9] - '0');
+    tm1.tm_sec  = (notAfter->data[10] - '0') * 10 + (notAfter->data[11] - '0');
+    expired_time = mktime(&tm1) * 1000000;//us
   }
 
   if (NULL != cert) {
@@ -207,14 +211,18 @@ int extract_expired_time(const char* const cert_file, int64_t& expired_time)
   return ret;
 }
 
-uint64_t ObSrvNetworkFrame::get_ssl_file_hash(bool& file_exist)
+uint64_t ObSrvNetworkFrame::get_ssl_file_hash(const char *ca_cert_file,
+    const char *ssl_cert_file,
+    const char *ssl_key_file,
+    bool &file_exist)
 {
   file_exist = false;
   uint64_t hash_value = 0;
   struct stat tmp_buf[3];
 
-  if (0 == stat(OB_SSL_CA_FILE, tmp_buf + 0) && 0 == stat(OB_SSL_CERT_FILE, tmp_buf + 1) &&
-      0 == stat(OB_SSL_KEY_FILE, tmp_buf + 2)) {
+  if (0 == stat(ca_cert_file, tmp_buf + 0)
+      && 0 == stat(ssl_cert_file, tmp_buf + 1)
+      && 0 == stat(ssl_key_file, tmp_buf + 2)) {
     file_exist = true;
     hash_value = murmurhash(&(tmp_buf[0].st_mtime), sizeof(tmp_buf[0].st_mtime), hash_value);
     hash_value = murmurhash(&(tmp_buf[1].st_mtime), sizeof(tmp_buf[1].st_mtime), hash_value);
@@ -232,17 +240,22 @@ int ObSrvNetworkFrame::reload_ssl_config()
 
     ObString ssl_config(GCONF.ssl_external_kms_info.str());
     bool file_exist = false;
-    const uint64_t new_hash_value = ssl_config.empty() ? get_ssl_file_hash(file_exist) : ssl_config.hash();
+    const uint64_t new_hash_value = ssl_config.empty()
+        ? get_ssl_file_hash(OB_SSL_CA_FILE, OB_SSL_CERT_FILE, OB_SSL_KEY_FILE, file_exist)
+        : ssl_config.hash();
     if (ssl_config.empty() && !file_exist) {
       ret = OB_INVALID_CONFIG;
       LOG_WARN("ssl file not available", K(new_hash_value));
       LOG_USER_ERROR(OB_INVALID_CONFIG, "ssl file not available");
     } else if (last_ssl_info_hash_ == new_hash_value) {
       LOG_INFO("no need reload_ssl_config", K(new_hash_value));
-
     } else {
       bool use_bkmi = false;
       bool use_sm = false;
+      const char *ca_cert = NULL;
+      const char *public_cert = NULL;
+      const char *private_key = NULL;
+
       share::ObSSLClient client;
       if (!ssl_config.empty()) {
         if (OB_FAIL(client.init(ssl_config.ptr(), ssl_config.length()))) {
@@ -252,12 +265,20 @@ int ObSrvNetworkFrame::reload_ssl_config()
         } else {
           use_bkmi = client.is_bkmi_mode();
           use_sm = client.is_sm_scene();
+          ca_cert = client.get_root_ca().ptr();
+          public_cert = client.public_cert_.content_.ptr();
+          private_key = client.private_key_.content_.ptr();
         }
       } else {
-        if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE, OB_SSL_CERT_FILE, OB_SSL_KEY_FILE, true, false)) {
+        if (EASY_OK != easy_ssl_ob_config_check(OB_SSL_CA_FILE, OB_SSL_CERT_FILE,
+                                                OB_SSL_KEY_FILE, true, false)) {
           ret = OB_INVALID_CONFIG;
           LOG_WARN("key and cert not match", K(ret));
           LOG_USER_ERROR(OB_INVALID_CONFIG, "key and cert not match");
+        } else {
+          ca_cert = OB_SSL_CA_FILE;
+          public_cert = OB_SSL_CERT_FILE;
+          private_key = OB_SSL_KEY_FILE;
         }
       }
 
@@ -267,9 +288,9 @@ int ObSrvNetworkFrame::reload_ssl_config()
           OB_LOG(WARN, "extract_expired_time failed", K(ret), K(use_bkmi));
         } else if (OB_FAIL(net_.load_ssl_config(use_bkmi,
                        use_sm,
-                       client.get_root_ca(),
-                       client.public_cert_.content_,
-                       client.private_key_.content_))) {
+                       ca_cert,
+                       public_cert,
+                       private_key))) {
           OB_LOG(WARN, "load_ssl_config failed", K(ret), K(use_bkmi), K(use_sm));
         } else {
           mysql_handler_.ez_handler()->is_ssl = 1;

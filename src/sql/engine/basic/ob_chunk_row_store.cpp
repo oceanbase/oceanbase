@@ -995,19 +995,27 @@ int ObChunkRowStore::load_next_chunk_blocks(ChunkIterator& it)
       read_size = it.file_size_ - it.cur_iter_pos_;
       chunk_size = read_size + read_off;
     }
-
     if (0 == read_size) {
       // ret end
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = read_file(it.chunk_mem_ + read_off, tmp_read_size, it.cur_iter_pos_))) {
+      if (OB_SUCCESS !=
+          (tmp_ret = read_file(
+               it.chunk_mem_ + read_off, tmp_read_size, it.cur_iter_pos_, it.file_size_, it.cur_iter_pos_))) {
         LOG_WARN("read blk info from file failed", K(tmp_ret), K_(it.cur_iter_pos));
       }
       if (OB_ITER_END != tmp_ret) {
-        LOG_WARN("unexpected status", K(ret), K(tmp_ret));
+        if (OB_UNLIKELY(OB_SUCCESS == tmp_ret)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected read succ", K(read_size), K(tmp_read_size), K(it), K(read_off));
+        } else {
+          ret = tmp_ret;
+          LOG_WARN("unexpected status", K(ret), K(tmp_ret));
+        }
       } else {
         ret = OB_ITER_END;
       }
-    } else if (OB_FAIL(read_file(it.chunk_mem_ + read_off, read_size, it.cur_iter_pos_))) {
+    } else if (OB_FAIL(
+                   read_file(it.chunk_mem_ + read_off, read_size, it.cur_iter_pos_, it.file_size_, it.cur_iter_pos_))) {
       LOG_WARN("read blk info from file failed", K(ret), K_(it.cur_iter_pos));
     } else {
       int64_t cur_pos = 0;
@@ -1144,7 +1152,6 @@ int ObChunkRowStore::load_next_block(ChunkIterator& it)
 
       if (OB_SUCC(ret)) {
         int64_t blk_cap = it.cur_iter_blk_buf_->capacity();
-
         LOG_DEBUG("RowStore need read file",
             K(it.cur_iter_blk_buf_->capacity()),
             K(it.cur_iter_blk_->blk_size_),
@@ -1153,7 +1160,7 @@ int ObChunkRowStore::load_next_block(ChunkIterator& it)
             K_(it.cur_iter_pos),
             K_(it.cur_iter_blk));
         // read a normal size of Block first
-        if (OB_FAIL(read_file(it.cur_iter_blk_, read_size, it.cur_iter_pos_))) {
+        if (OB_FAIL(read_file(it.cur_iter_blk_, read_size, it.cur_iter_pos_, it.file_size_, it.cur_iter_pos_))) {
           if (OB_ITER_END != ret) {
             LOG_WARN("read blk info from file failed", K(ret), K_(it.cur_iter_pos));
           }
@@ -1187,7 +1194,9 @@ int ObChunkRowStore::load_next_block(ChunkIterator& it)
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(read_file(static_cast<void*>(it.cur_iter_blk_->payload_ + read_size - sizeof(Block)),
                          ac_size - read_size,
-                         it.cur_iter_pos_ + read_size))) {
+                         it.cur_iter_pos_ + read_size,
+                         it.file_size_,
+                         it.cur_iter_pos_))) {
             if (OB_ITER_END != ret) {
               LOG_WARN("read blk info from file failed", K(ret), K_(it.cur_iter_pos));
             }
@@ -1636,7 +1645,8 @@ int ObChunkRowStore::write_file(void* buf, int64_t size)
   return ret;
 }
 
-int ObChunkRowStore::read_file(void* buf, const int64_t size, const int64_t offset)
+int ObChunkRowStore::read_file(
+    void *buf, const int64_t size, const int64_t offset, const int64_t file_size, const int64_t cur_pos)
 {
   int ret = OB_SUCCESS;
   int64_t timeout_ms = 0;
@@ -1649,9 +1659,12 @@ int ObChunkRowStore::read_file(void* buf, const int64_t size, const int64_t offs
   } else if (OB_FAIL(get_timeout(timeout_ms))) {
     LOG_WARN("get timeout failed", K(ret));
   }
-
-  if (OB_SUCC(ret) && size > 0) {
-    this->set_io(size, static_cast<char*>(buf));
+  if (OB_FAIL(ret)) {
+  } else if (0 >= size) {
+    CK(cur_pos >= file_size);
+    OX(ret = OB_ITER_END);
+  } else {
+    this->set_io(size, static_cast<char *>(buf));
     io_.io_desc_.category_ =
         GCONF._large_query_io_percentage.get_value() > 0 ? common::LARGE_QUERY_IO : common::USER_IO;
     io_.io_desc_.wait_event_no_ = ObWaitEventIds::ROW_STORE_DISK_READ;

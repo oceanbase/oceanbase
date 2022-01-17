@@ -260,7 +260,7 @@ int ObExprValuesOp::inner_get_next_row()
   if (OB_SUCC(ret)) {
     plan_ctx->set_autoinc_id_tmp(0);
     if (OB_FAIL(try_check_status())) {
-      LOG_WARN("check physical plan status faild", K(ret));
+      LOG_WARN("check physical plan status failed", K(ret));
     }
   }
 

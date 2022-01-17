@@ -22,7 +22,7 @@ class ObExprCGCtx;
 class ObExprRowNum : public ObFuncExprOperator {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   explicit ObExprRowNum(common::ObIAllocator& alloc);
   virtual ~ObExprRowNum();
   virtual int calc_result_type0(ObExprResType& type, common::ObExprTypeCtx& type_ctx) const;
@@ -36,7 +36,7 @@ class ObExprRowNum : public ObFuncExprOperator {
     operator_id_ = operator_id;
   }
 
-  private:
+private:
   uint64_t operator_id_;
   DISALLOW_COPY_AND_ASSIGN(ObExprRowNum);
 };

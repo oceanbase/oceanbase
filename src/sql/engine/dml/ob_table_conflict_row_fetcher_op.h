@@ -25,7 +25,7 @@ namespace sql {
 struct ObPartConflictDatumStore {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObPartConflictDatumStore() : part_key_(), conflict_datum_store_(NULL)
   {}
   TO_STRING_KV(K_(part_key), KPC_(conflict_datum_store));
@@ -38,7 +38,7 @@ class ObTCRFetcherOpInput : public ObOpInput {
   friend class ObTableConflictRowFetcherOp;
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTCRFetcherOpInput(ObExecContext& ctx, const ObOpSpec& spec)
       : ObOpInput(ctx, spec), part_conflict_rows_(), alloc_(NULL)
   {}
@@ -54,16 +54,16 @@ class ObTCRFetcherOpInput : public ObOpInput {
     alloc_ = alloc;
   }
 
-  private:
+private:
   common::ObSEArray<ObPartConflictDatumStore, 4> part_conflict_rows_;
   common::ObIAllocator* alloc_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTCRFetcherOpInput);
 };
 
 class ObConflictDatumIterator : public common::ObNewRowIterator {
-  public:
+public:
   ObConflictDatumIterator(const ObExpr* const* exprs, int64_t col_cnt, ObIAllocator* alloc)
       : exprs_(exprs), col_cnt_(col_cnt), alloc_(alloc)
   {}
@@ -78,7 +78,7 @@ class ObConflictDatumIterator : public common::ObNewRowIterator {
   }
   int init(sql::ObChunkDatumStore* conflict_datum_store);
 
-  private:
+private:
   const ObExpr* const* exprs_;
   int64_t col_cnt_;
   ObIAllocator* alloc_;
@@ -89,7 +89,7 @@ class ObConflictDatumIterator : public common::ObNewRowIterator {
 class ObTableConflictRowFetcherSpec : public ObOpSpec {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTableConflictRowFetcherSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type),
         table_id_(common::OB_INVALID_ID),
@@ -101,7 +101,7 @@ class ObTableConflictRowFetcherSpec : public ObOpSpec {
         only_data_table_(false)
   {}
 
-  public:
+public:
   uint64_t table_id_;
   uint64_t index_tid_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> conf_col_ids_;
@@ -110,18 +110,19 @@ class ObTableConflictRowFetcherSpec : public ObOpSpec {
   ExprFixedArray access_exprs_;
   bool only_data_table_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTableConflictRowFetcherSpec);
 };
 
 class ObTableConflictRowFetcherOp : public ObOperator {
-  public:
-  ObTableConflictRowFetcherOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
-      : ObOperator(ctx, spec, input),
-        dup_row_iter_arr_(),
-        row2exprs_projector_(ctx.get_allocator()),
-        cur_row_idx_(0),
-        cur_rowkey_id_(0)
+public:
+  ObTableConflictRowFetcherOp(ObExecContext &ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObOperator(ctx, spec, input),
+      dup_row_iter_arr_(),
+      row2exprs_projector_(ctx.get_allocator()),
+      gen_cols_(ctx.get_allocator()),
+      cur_row_idx_(0),
+      cur_rowkey_id_(0)
   {}
 
   virtual int inner_open() override;
@@ -133,13 +134,14 @@ class ObTableConflictRowFetcherOp : public ObOperator {
     dup_row_iter_arr_.reset();
   }
 
-  private:
+private:
   int fetch_conflict_rows(storage::ObDMLBaseParam& dml_para);
 
   DISALLOW_COPY_AND_ASSIGN(ObTableConflictRowFetcherOp);
 
   common::ObSEArray<common::ObNewRowIterator*, 4> dup_row_iter_arr_;
   storage::ObRow2ExprsProjector row2exprs_projector_;
+  ObFixedArray<ObExpr*, common::ObIAllocator> gen_cols_; //mark to save generated column exprs
   int64_t cur_row_idx_;
   int64_t cur_rowkey_id_;
 };

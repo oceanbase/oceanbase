@@ -21,7 +21,7 @@ namespace sql {
 class ObSelectLogPlan;
 class ObPartIdRowMapManager;
 class ObLogDupKeyChecker {
-  public:
+public:
   ObLogDupKeyChecker()
       : unique_index_cnt_(0),
         gui_lookup_root_(NULL),
@@ -100,7 +100,7 @@ class ObLogDupKeyChecker {
   TO_STRING_KV(
       K_(unique_index_cnt), KPC_(gui_lookup_root), KPC_(table_scan_root), K_(gui_scan_roots), KPC_(constraint_infos));
 
-  private:
+private:
   int64_t unique_index_cnt_;
   ObLogicalOperator* gui_lookup_root_;
   ObRawExpr* gui_lookup_calc_part_expr_;
@@ -112,7 +112,7 @@ class ObLogDupKeyChecker {
 };
 
 class ObLogInsert : public ObLogDelUpd {
-  public:
+public:
   ObLogInsert(ObLogPlan& plan)
       : ObLogDelUpd(plan),
         is_replace_(false),
@@ -133,7 +133,7 @@ class ObLogInsert : public ObLogDelUpd {
   virtual ~ObLogInsert()
   {}
 
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     out = NULL;
     return common::OB_SUCCESS;
@@ -149,7 +149,7 @@ class ObLogInsert : public ObLogDelUpd {
   virtual int inner_replace_generated_agg_expr(
       const ObIArray<std::pair<ObRawExpr*, ObRawExpr*> >& to_replace_exprs) override;
 
-  const char* get_name() const;
+  const char* get_name() const override;
 
   int calc_cost();
   inline const common::ObIArray<ObRawExpr*>* get_column_convert_exprs() const
@@ -233,9 +233,9 @@ class ObLogInsert : public ObLogDelUpd {
   /**
    *  Get the hash value of the INSERT operator
    */
-  virtual uint64_t hash(uint64_t seed) const;
+  virtual uint64_t hash(uint64_t seed) const override;
   int generate_sharding_info(ObShardingInfo& target_sharding_info);
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   int calculate_table_location();
 
   int get_join_keys(const AllocExchContext& ctx, ObIArray<ObRawExpr*>& target_keys, ObIArray<ObRawExpr*>& source_keys);
@@ -255,20 +255,20 @@ class ObLogInsert : public ObLogDelUpd {
     return value_exprs_;
   }
 
-  private:
+private:
   void calc_phy_location_type();
   int set_hash_dist_column_exprs(ObExchangeInfo& exch_info, uint64_t index_tid) const;
 
-  protected:
+protected:
   int add_exprs_without_column_conv(
       const common::ObIArray<ObRawExpr*>& src_exprs, common::ObIArray<ObRawExpr*>& dst_exprs);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   virtual int need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sharding_info, bool& is_needed) override;
   bool is_table_update_part_key() const;
   bool is_table_insert_sequence_part_key() const;
-  virtual int check_output_dep_specific(ObRawExprCheckDep& checker);
+  virtual int check_output_dep_specific(ObRawExprCheckDep& checker) override;
 
-  protected:
+protected:
   bool is_replace_;
   /**
    * @note These fields are added for the compatiblity of MySQL syntax and are not

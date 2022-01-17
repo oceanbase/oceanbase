@@ -40,7 +40,7 @@ class ObRebalanceTaskMgr;
 class ObServerRecoveryMachine;
 
 class ObRebalanceTaskQueue {
-  public:
+public:
   typedef common::ObDList<ObRebalanceTask> TaskList;
   typedef common::hash::ObHashMap<ObRebalanceTaskKey, ObRebalanceTaskInfo*, common::hash::NoPthreadDefendMode>
       TaskInfoMap;
@@ -69,7 +69,7 @@ class ObRebalanceTaskQueue {
   //
   // Set %task to NULL if in schedule task not found.
   int get_schedule_task(const ObRebalanceTask& input_task, ObRebalanceTask*& task);
-  int get_schedule_task(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, ObRebalanceTask*& task);
+  int check_rebalance_task_exist(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, bool& is_exist);
 
   // Get execute timeout task if exist.
   // Set %task to NULL if no timeout task.
@@ -126,14 +126,14 @@ class ObRebalanceTaskQueue {
 
   void reuse();
 
-  private:
+private:
   int do_push_task(ObRebalanceTaskMgr& task_mgr, const ObRebalanceTaskQueue& sibling_queue, const ObRebalanceTask& task,
       bool& has_task_info_in_schedule);
   int check_balance_task_can_pop(const ObRebalanceTaskInfo* task_info, const int64_t out_cnt_lmt,
       const int64_t in_cnt_lmt, bool& task_info_can_schedule);
   int check_backup_task_can_pop(const ObRebalanceTaskInfo* task_info, bool& task_info_can_schedule);
 
-  private:
+private:
   static const int64_t BACKUP_IN_CNT_LIMIT = 1;
   bool is_inited_;
   common::ObServerConfig* config_;
@@ -163,7 +163,7 @@ class ObRebalanceTaskQueue {
 //    task exists.
 // 3. Only one replication task and one migration task exist for any partition.
 class ObRebalanceTaskMgr : public ObRsReentrantThread {
-  public:
+public:
   const static int64_t TASK_QUEUE_LIMIT = 1 << 16;
   const static int64_t QUEUE_LOW_TASK_CNT = TASK_QUEUE_LIMIT / 4;
   const static int64_t ONCE_ADD_TASK_CNT = TASK_QUEUE_LIMIT / 2;
@@ -181,11 +181,11 @@ class ObRebalanceTaskMgr : public ObRsReentrantThread {
   int init(common::ObServerConfig& config, ObRebalanceTaskExecutor& executor);
 
   virtual void run3() override;
-  virtual int blocking_run()
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
-  void stop();
+  void stop() override;
 
   // add_task() will never block. Task with no source_ field will be executed immediately.
   //
@@ -253,11 +253,10 @@ class ObRebalanceTaskMgr : public ObRsReentrantThread {
   int check_dest_server_migrate_in_blocked(const ObRebalanceTask& task, bool& is_available);
   int check_dest_server_out_of_disk(const ObRebalanceTask& task, bool& is_available);
   int check_dest_server_has_too_many_partitions(const ObRebalanceTask& task, bool& is_available);
-  int get_schedule_task(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, common::ObIAllocator& allocator,
-      ObRebalanceTask*& task);
+  int check_rebalance_task_exist(const ObRebalanceTaskInfo& task_info, const ObAddr& dest, bool& is_exist);
   int64_t get_schedule_interval() const;
 
-  private:
+private:
   common::ObThreadCond& get_cond()
   {
     return cond_;
@@ -309,7 +308,7 @@ class ObRebalanceTaskMgr : public ObRsReentrantThread {
     return true;
   }
 
-  private:
+private:
   bool inited_;
   common::ObServerConfig* config_;
 

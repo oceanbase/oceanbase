@@ -207,6 +207,7 @@ OB_INLINE static int simple_fuse_row(
       nop_pos.reset();
       result.flag_ = former.flag_;
       result.from_base_ = former.from_base_;
+      result.dml_ = former.dml_;
       column_cnt = former.row_val_.count_;
     } else {
       column_cnt = nop_pos.count_;
@@ -215,6 +216,7 @@ OB_INLINE static int simple_fuse_row(
     if (common::ObActionFlag::OP_DEL_ROW == former.flag_) {
       final_result = true;
       if (first_val) {  // copy rowkey
+        result.row_val_.count_ = former.row_val_.count_;
         for (int i = 0; OB_SUCC(ret) && i < former.row_val_.count_; ++i) {
           if (OB_FAIL(obj_copy(former.row_val_.cells_[i], result.row_val_.cells_[i]))) {
             STORAGE_LOG(WARN, "failed to copy obj", K(ret), K(i), K(former.row_val_.cells_[i]));

@@ -265,8 +265,8 @@ int ObTableScan::ObTableScanCtx::init_table_allocator(ObExecContext& ctx)
     lib::ContextParam param;
     param.set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-    MemoryContext* mem_context = nullptr;
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    lib::MemoryContext mem_context = nullptr;
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("fail to create entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;
@@ -276,12 +276,12 @@ int ObTableScan::ObTableScanCtx::init_table_allocator(ObExecContext& ctx)
     }
   }
   if (OB_SUCC(ret)) {
-    MemoryContext* mem_context = nullptr;
+    lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     param.set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_TABLE_SCAN_ITER, ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("fail to create entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;
@@ -331,6 +331,7 @@ ObTableScan::ObTableScan(ObIAllocator& allocator)
       est_records_(allocator),
       available_index_name_(allocator),
       pruned_index_name_(allocator),
+      unstable_index_name_(allocator),
       gi_above_(false),
       is_vt_mapping_(false),
       use_real_tenant_id_(false),
@@ -861,6 +862,8 @@ int ObTableScan::inner_close(ObExecContext& ctx) const
     LOG_WARN("fail to get physical plan ctx", K(ret));
   } else if (get_batch_scan_flag() ? NULL == scan_ctx->result_iters_ : NULL == scan_ctx->result_) {
     // this is normal case, so we need NOT set ret or LOG_WARN.
+  } else if (OB_FAIL(ctx.remove_iter(scan_ctx->result_))) {
+    LOG_WARN("fail to remove iter", K(ret));
   } else {
     if (OB_FAIL(fill_storage_feedback_info(ctx))) {
       LOG_WARN("failed to fill storage feedback info", K(ret));
@@ -1607,6 +1610,14 @@ inline int ObTableScan::do_table_scan(ObExecContext& ctx, bool is_rescan, bool n
         LOG_DEBUG("table_scan begin", K(scan_ctx->scan_param_), K(*scan_ctx->result_), "op_id", get_id());
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(scan_ctx->result_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result should not be NULL", K(ret), K(scan_ctx->scan_param_));
+      } else if (OB_FAIL(ctx.push_back_iter(scan_ctx->result_))) {
+        LOG_WARN("failed to push back iter", K(ret));
+      }
+    }
   }
   if (OB_SUCC(ret)) {
     ret = sim_err(my_session);
@@ -2036,6 +2047,23 @@ int ObTableScan::set_available_index_name(const common::ObIArray<common::ObStrin
   return ret;
 }
 
+int ObTableScan::set_unstable_index_name(const common::ObIArray<common::ObString>& idx_name, ObIAllocator& phy_alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_array_size<>(unstable_index_name_, idx_name.count()))) {
+    LOG_WARN("init unstable_index_name failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < idx_name.count(); ++i) {
+    ObString name;
+    if (OB_FAIL(ob_write_string(phy_alloc, idx_name.at(i), name))) {
+      LOG_WARN("copy unstable index name failed", K(ret));
+    } else if (OB_FAIL(unstable_index_name_.push_back(name))) {
+      LOG_WARN("push unstable index name failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableScan::set_pruned_index_name(const common::ObIArray<common::ObString>& idx_name, ObIAllocator& phy_alloc)
 {
   int ret = OB_SUCCESS;
@@ -2103,6 +2131,30 @@ int ObTableScan::explain_index_selection_info(char* buf, int64_t buf_len, int64_
       if (OB_FAIL(BUF_PRINTF("%.*s", pruned_index_name_.at(i).length(), pruned_index_name_.at(i).ptr()))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (i != pruned_index_name_.count() - 1) {
+        if (OB_FAIL(BUF_PRINTF(","))) {
+          LOG_WARN("BUF_PRINTF fails", K(ret));
+        } else { /* do nothing*/
+        }
+      } else { /* do nothing*/
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(BUF_PRINTF("]"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else { /* Do nothing */
+      }
+    } else { /* Do nothing */
+    }
+  }
+
+  if (OB_SUCC(ret) && unstable_index_name_.count() > 0) {
+    if (OB_FAIL(BUF_PRINTF(", unstable_index_name["))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < unstable_index_name_.count(); ++i) {
+      if (OB_FAIL(BUF_PRINTF("%.*s", unstable_index_name_.at(i).length(), unstable_index_name_.at(i).ptr()))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (i != unstable_index_name_.count() - 1) {
         if (OB_FAIL(BUF_PRINTF(","))) {
           LOG_WARN("BUF_PRINTF fails", K(ret));
         } else { /* do nothing*/

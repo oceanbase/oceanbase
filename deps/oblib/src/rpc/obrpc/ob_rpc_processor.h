@@ -25,10 +25,10 @@ namespace obrpc {
 
 template <class T>
 class ObRpcProcessor : public ObRpcProcessorBase {
-  public:
+public:
   static constexpr ObRpcPacketCode PCODE = T::PCODE;
 
-  public:
+public:
   ObRpcProcessor()
   {}
   virtual ~ObRpcProcessor()
@@ -38,14 +38,14 @@ class ObRpcProcessor : public ObRpcProcessorBase {
     return m_check_timeout();
   }
 
-  protected:
+protected:
   virtual int process() = 0;
   virtual int preprocess_arg()
   {
     return common::OB_SUCCESS;
   }
 
-  protected:
+protected:
   int decode_base(const char* buf, const int64_t len, int64_t& pos)
   {
     return common::serialization::decode(buf, len, pos, arg_);
@@ -63,11 +63,11 @@ class ObRpcProcessor : public ObRpcProcessorBase {
     return common::serialization::encoded_length(result_);
   }
 
-  protected:
+protected:
   typename T::Request arg_;
   typename T::Response result_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcProcessor);
 };  // end of class ObRpcProcessor
 

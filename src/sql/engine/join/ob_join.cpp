@@ -349,10 +349,7 @@ int ObJoin::calc_equal_conds(
       ObCompareCtx cmp_ctx(ObMaxType, CS_TYPE_INVALID, true, tz_offset, default_null_pos());
       DLIST_FOREACH(node, equal_join_conds_)
       {
-        if (OB_ISNULL(node)) {
-          ret = OB_BAD_NULL_ERROR;
-          LOG_WARN("node or node expr is null", K(ret));
-        } else if (node->is_equijoin_cond(col1, col2, cmp_ctx.cmp_type_, cmp_ctx.cmp_cs_type_, is_null_safe)) {
+        if (node->is_equijoin_cond(col1, col2, cmp_ctx.cmp_type_, cmp_ctx.cmp_cs_type_, is_null_safe)) {
           // The character set saved by cmp_ctx.cmp_cs_type_ needs to be
           // used for type conversion, otherwise there is no setting. MySQL
           // mode will use utf8mb4_general_ci as default
@@ -439,10 +436,7 @@ int ObJoin::calc_other_conds(ObJoinCtx& join_ctx, bool& is_match) const
       ObSqlExpression* expr = NULL;
       DLIST_FOREACH(node, other_join_conds_)
       {
-        if (OB_ISNULL(node)) {
-          ret = OB_BAD_NULL_ERROR;
-          LOG_WARN("node or node expr is null", K(ret));
-        } else if (OB_FAIL(OB_I(t1) node->calc(expr_ctx, *join_ctx.left_row_, *join_ctx.right_row_, calc_ret))) {
+        if (OB_FAIL(OB_I(t1) node->calc(expr_ctx, *join_ctx.left_row_, *join_ctx.right_row_, calc_ret))) {
           LOG_WARN("failed to calc other cond expr", K(ret), K(expr));
         } else if (OB_FAIL(ObObjEvaluator::is_true(calc_ret, is_match))) {
           LOG_WARN("failed to get calc result", K(ret), K(calc_ret));
@@ -559,10 +553,7 @@ OB_DEF_SERIALIZE(ObJoin)
     } else {
       DLIST_FOREACH(node, equal_join_conds_)
       {
-        if (OB_ISNULL(node)) {
-          ret = OB_BAD_NULL_ERROR;
-          LOG_WARN("node or node expr is null", K(ret));
-        } else if (OB_FAIL(OB_I(t5) node->serialize(buf, buf_len, pos))) {
+        if (OB_FAIL(OB_I(t5) node->serialize(buf, buf_len, pos))) {
           LOG_WARN("failed to serialize equal join conds", K(ret));
         }
       }
@@ -575,10 +566,7 @@ OB_DEF_SERIALIZE(ObJoin)
     } else {
       DLIST_FOREACH(node, other_join_conds_)
       {
-        if (OB_ISNULL(node)) {
-          ret = OB_BAD_NULL_ERROR;
-          LOG_WARN("node or node expr is null", K(ret));
-        } else if (OB_FAIL(OB_I(t9) node->serialize(buf, buf_len, pos))) {
+        if (OB_FAIL(OB_I(t9) node->serialize(buf, buf_len, pos))) {
           LOG_WARN("failed to serialize equal join conds", K(ret));
         }
       }
@@ -693,23 +681,13 @@ OB_DEF_SERIALIZE_SIZE(ObJoin)
 
   DLIST_FOREACH_NORET(expr, equal_join_conds_)
   {
-    if (OB_ISNULL(expr)) {
-      len = -1;
-      LOG_WARN("expr is null", "ret", OB_BAD_NULL_ERROR);
-    } else {
-      OB_UNIS_ADD_LEN(*expr);
-    }
+    OB_UNIS_ADD_LEN(*expr);
   }
 
   OB_UNIS_ADD_LEN(other_join_conds_.get_size());
   DLIST_FOREACH_NORET(expr, other_join_conds_)
   {
-    if (OB_ISNULL(expr)) {
-      len = -1;
-      LOG_WARN("expr is null", "ret", OB_BAD_NULL_ERROR);
-    } else {
-      OB_UNIS_ADD_LEN(*expr);
-    }
+    OB_UNIS_ADD_LEN(*expr);
   }
 
   OB_UNIS_ADD_LEN(pump_row_desc_);

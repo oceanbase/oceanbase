@@ -27,7 +27,7 @@ typedef int (*ObDatumCmpFuncType)(const ObDatum& datum1, const ObDatum& datum2);
 typedef uint64_t (*ObDatumHashFuncType)(const ObDatum& datum, const uint64_t seed);
 
 class ObDatumFuncs {
-  public:
+public:
   static ObDatumCmpFuncType get_nullsafe_cmp_func(const ObObjType type1, const ObObjType type2,
       const ObCmpNullPos null_pos, const ObCollationType cs_type, const bool is_oracle_mode);
   static bool is_string_type(const ObObjType type);
@@ -74,7 +74,7 @@ class ObDatumFuncs {
     return sizeof(EXPR_BASIC_STR_FUNCS) / static_cast<int>(sizeof(void*));
   }
 
-  private:
+private:
   template <int, int>
   friend class InitTypeCmpArray;
   template <int>
@@ -97,7 +97,7 @@ class ObDatumFuncs {
 struct ObCmpFunc {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObCmpFunc() : cmp_func_(NULL)
   {}
   union {
@@ -110,7 +110,7 @@ struct ObCmpFunc {
 struct ObHashFunc {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObHashFunc() : hash_func_(NULL)
   {}
   union {

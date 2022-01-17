@@ -119,22 +119,6 @@ int ObLogUpdate::allocate_expr_pre(ObAllocExprContext& ctx)
   return ret;
 }
 
-int ObLogUpdate::allocate_expr_post(ObAllocExprContext& ctx)
-{
-  int ret = OB_SUCCESS;
-  if (is_pdml() && is_index_maintenance()) {
-    if (OB_FAIL(alloc_shadow_pk_column_for_pdml(ctx))) {
-      LOG_WARN("failed alloc generated column for pdml index maintain", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
-      LOG_WARN("failed to allocate expr post for delete", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObLogUpdate::check_output_dep_specific(ObRawExprCheckDep& checker)
 {
   int ret = OB_SUCCESS;
@@ -194,6 +178,9 @@ int ObLogUpdate::allocate_exchange_post(AllocExchContext* ctx)
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
         ObRawExpr* expr = NULL;
         OZ(gen_calc_part_id_expr(index_infos.at(i).loc_table_id_, index_infos.at(i).index_tid_, expr));
+        // calc part id expr's column reference expr need to be marked with explicit reference
+        // let TSC to produce its column expr
+        OZ(ObRawExprUtils::mark_column_explicited_reference(*expr));
         OZ(index_infos.at(i).calc_part_id_exprs_.push_back(expr));
         CK(OB_NOT_NULL(get_plan()));
         CK(OB_NOT_NULL(get_plan()->get_optimizer_context().get_session_info()));
@@ -217,20 +204,22 @@ int ObLogUpdate::allocate_exchange_post(AllocExchContext* ctx)
             LOG_WARN("fail to copy subpart expr", K(ret));
           } else {
             CK(PARTITION_LEVEL_MAX != part_level);
+            ObArray<ObRawExpr*> value_exprs;
             for (int64_t assign_idx = 0; OB_SUCC(ret) && assign_idx < index_infos.at(i).assignments_.count();
                  assign_idx++) {
               ObColumnRefRawExpr* col = index_infos.at(i).assignments_.at(assign_idx).column_expr_;
               ObRawExpr* value = index_infos.at(i).assignments_.at(assign_idx).expr_;
               if (PARTITION_LEVEL_ZERO != part_level) {
-                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_part_expr, col, value))) {
+                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_part_expr, col, value, NULL, &value_exprs))) {
                   LOG_WARN("fail to replace ref column", K(ret));
                 }
               }
               if (PARTITION_LEVEL_TWO == part_level) {
-                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_subpart_expr, col, value))) {
+                if (OB_FAIL(ObRawExprUtils::replace_ref_column(new_subpart_expr, col, value, NULL, &value_exprs))) {
                   LOG_WARN("fail to replace ref column", K(ret));
                 }
               }
+              OZ(value_exprs.push_back(index_infos.at(i).assignments_.at(assign_idx).expr_));
             }  // for assignments end
           }
           if (OB_SUCC(ret)) {
@@ -280,7 +269,7 @@ int ObLogUpdate::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
       LOG_WARN("schema guard is null");
     } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, tbl_schema))) {
       LOG_WARN("get table schema failed", K(ret));
-    } else if (is_update_part_key && tbl_schema->get_all_part_num() > 1) {
+    } else if (is_update_part_key && !ObSQLUtils::is_one_part_table_can_skip_part_calc(*tbl_schema)) {
       is_needed = true;
       sharding_info.reset();
     }
@@ -341,6 +330,25 @@ int ObLogUpdate::est_cost()
     set_op_cost(child->get_card() * UPDATE_ONE_ROW_COST);
     set_cost(child->get_cost() + get_op_cost());
     set_card(child->get_card());
+  }
+  return ret;
+}
+
+int ObLogUpdate::inner_replace_generated_agg_expr(
+    const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr *> > &to_replace_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(all_table_columns_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null all_table_columns", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_table_columns_->count(); i++) {
+      IndexDMLInfo &index_dml_info =
+          const_cast<common::ObIArray<TableColumns> *>(all_table_columns_)->at(i).index_dml_infos_.at(0);
+      if (OB_FAIL(replace_exprs_action(to_replace_exprs, index_dml_info.column_convert_exprs_))) {
+        LOG_WARN("failed to replace aggr exprs", K(ret));
+      }
+    }
   }
   return ret;
 }

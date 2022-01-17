@@ -103,6 +103,8 @@ int ObMergeJoinOp::inner_open()
   } else if (OB_FAIL(left_fetcher_.init(*left_, ctx_.get_allocator(), &left_row_joined_)) ||
              OB_FAIL(right_fetcher_.init(*right_, ctx_.get_allocator(), NULL))) {
     LOG_WARN("init row fetcher failed", K(ret));
+  } else {
+    LOG_TRACE("merge join left unique", K(MY_SPEC.id_), K(MY_SPEC.is_left_unique_));
   }
   return ret;
 }
@@ -671,7 +673,7 @@ int ObMergeJoinOp::trans_to_fill_cache()
       lib::ContextParam param;
       param.set_mem_attr(tenant_id, ObModIds::OB_SQL_MERGE_JOIN, ObCtxIds::WORK_AREA)
           .set_properties(lib::USE_TL_PAGE_OPTIONAL);
-      if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+      if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
         LOG_WARN("create entity failed", K(ret));
       } else if (OB_ISNULL(mem_context_)) {
         ret = OB_ERR_UNEXPECTED;

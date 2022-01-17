@@ -33,10 +33,10 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
   int ret = OB_SUCCESS;
   ObCreateUserStmt* create_user_stmt = NULL;
   if (OB_UNLIKELY(share::is_oracle_mode() && 5 != parse_tree.num_child_) ||
-      OB_UNLIKELY(share::is_mysql_mode() && 3 != parse_tree.num_child_) ||
+      OB_UNLIKELY(share::is_mysql_mode() && 4 != parse_tree.num_child_) ||
       OB_UNLIKELY(T_CREATE_USER != parse_tree.type_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("expect 3 child in mysql mode and 5 child in oracle mode, create user type",
+    LOG_WARN("expect 4 child in mysql mode and 5 child in oracle mode, create user type",
         "actual_num",
         parse_tree.num_child_,
         "type",
@@ -53,6 +53,7 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
     ParseNode* if_not_exist = const_cast<ParseNode*>(parse_tree.children_[0]);
     ParseNode* users = const_cast<ParseNode*>(parse_tree.children_[1]);
     ParseNode* require_info = const_cast<ParseNode*>(parse_tree.children_[2]);
+    ParseNode* resource_options = !share::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
     ParseNode* profile = share::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
     ParseNode* primary_zone = share::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[4]) : NULL;
     ParseNode* ssl_infos = NULL;
@@ -246,6 +247,32 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
             "SUBJECT",
             infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)],
             K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && NULL != resource_options) {
+      if (T_USER_RESOURCE_OPTIONS != resource_options->type_
+                || OB_ISNULL(resource_options->children_)) {
+        ret = common::OB_INVALID_ARGUMENT;
+        LOG_WARN(
+            "invalid resource options argument", K(ret), K(resource_options->type_), K(resource_options->children_));
+      } else {
+        for (int64_t i = 0; i < resource_options->num_child_; i++) {
+          ParseNode* res_option = resource_options->children_[i];
+          if (OB_ISNULL(res_option)) {
+            ret = common::OB_INVALID_ARGUMENT;
+            LOG_WARN("null res option", K(ret), K(i));
+          } else if (T_MAX_CONNECTIONS_PER_HOUR == res_option->type_) {
+            uint64_t max_connections_per_hour = static_cast<uint64_t>(res_option->value_);
+            max_connections_per_hour = max_connections_per_hour > MAX_CONNECTIONS ? MAX_CONNECTIONS
+                                       : max_connections_per_hour;
+            create_user_stmt->set_max_connections_per_hour(max_connections_per_hour);
+          } else if (T_MAX_USER_CONNECTIONS == res_option->type_) {
+            uint64_t max_user_connections = static_cast<uint64_t>(res_option->value_);
+            max_user_connections = max_user_connections > MAX_CONNECTIONS ? MAX_CONNECTIONS
+                                   : max_user_connections;
+            create_user_stmt->set_max_user_connections(max_user_connections);
+          }
+        }
       }
     }
 

@@ -35,16 +35,16 @@ class ObCond {
   static const int64_t SPIN_WAIT_NUM = 0;
   static const int64_t BUSY_INTERVAL = 1000;
 
-  public:
+public:
   explicit ObCond(const int64_t spin_wait_num = SPIN_WAIT_NUM);
   ~ObCond();
 
-  public:
+public:
   void signal();
   int timedwait(const int64_t time_us);
   int wait();
 
-  private:
+private:
   const int64_t spin_wait_num_;
   volatile bool bcond_;
   int64_t last_waked_time_;
@@ -89,14 +89,14 @@ class S2MQueueThread {
   typedef DRWLock::WRLockGuard WRLockGuard;
   typedef ObTCCounter Counter;
 
-  public:
+public:
   enum { HIGH_PRIO_QUEUE = 0, HOTSPOT_QUEUE = 1, NORMAL_PRIO_QUEUE = 2, LOW_PRIO_QUEUE = 3, QUEUE_COUNT = 4 };
 
-  public:
+public:
   S2MQueueThread();
   virtual ~S2MQueueThread();
 
-  public:
+public:
   int init(
       const int64_t thread_num, const int64_t task_num_limit, const bool queue_rebalance, const bool dynamic_rebalance);
   int set_prio_quota(v4si& quota);
@@ -114,7 +114,7 @@ class S2MQueueThread {
   };
   int wakeup();
 
-  public:
+public:
   int push(void* task, const int64_t prio = NORMAL_PRIV);
   int push(void* task, const uint64_t task_sign, const int64_t prio);
   int push_low_prio(void* task);
@@ -137,12 +137,12 @@ class S2MQueueThread {
     UNUSED(ptr);
   };
 
-  private:
+private:
   void* rebalance_(int64_t& idx, const ThreadConf& cur_thread);
   int launch_thread_(const int64_t thread_num, const int64_t task_num_limit);
   static void* thread_func_(void* data);
 
-  private:
+private:
   int64_t thread_num_;
   volatile uint64_t thread_conf_iter_;
   RWLock thread_conf_lock_;
@@ -157,15 +157,15 @@ typedef S2MCond M2SCond;
 class M2SQueueThread {
   static const int64_t QUEUE_WAIT_TIME;
 
-  public:
+public:
   M2SQueueThread();
   virtual ~M2SQueueThread();
 
-  public:
+public:
   int init(const int64_t task_num_limit, const int64_t idle_interval);
   void destroy();
 
-  public:
+public:
   int push(void* task);
   int64_t get_queued_num() const;
   virtual void handle(void* task, void* pdata) = 0;
@@ -179,10 +179,10 @@ class M2SQueueThread {
   };
   virtual void on_idle(){};
 
-  private:
+private:
   static void* thread_func_(void* data);
 
-  private:
+private:
   bool inited_;
   pthread_t pd_;
   volatile bool run_flag_;
@@ -195,15 +195,15 @@ class M2SQueueThread {
 class SeqQueueThread {
   static const int64_t QUEUE_WAIT_TIME = 10 * 1000;
 
-  public:
+public:
   SeqQueueThread();
   virtual ~SeqQueueThread();
 
-  public:
+public:
   int init(const int64_t task_num_limit, const int64_t idle_interval);
   void destroy();
 
-  public:
+public:
   virtual int push(void* task);
   int64_t get_queued_num() const;
   virtual void handle(void* task, void* pdata) = 0;
@@ -222,13 +222,13 @@ class SeqQueueThread {
   virtual void on_idle(){};
   virtual int64_t get_seq(void* task) = 0;
 
-  private:
+private:
   static void* thread_func_(void* data);
 
-  protected:
+protected:
   ObSeqQueue task_queue_;
 
-  private:
+private:
   bool inited_;
   pthread_t pd_;
   volatile bool run_flag_;

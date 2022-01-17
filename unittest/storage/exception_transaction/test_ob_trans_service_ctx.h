@@ -42,16 +42,16 @@ using namespace obrpc;
 
 namespace unittest {
 class ObTransServiceCtxThread : public share::ObThreadPool {
-  public:
+public:
   int setThreadParameter(const int threadCount, void* arg);
 
-  protected:
+protected:
   bool inited_;
   void* arg_;
 };
 
 class ObTransServiceCtx : public ObITransRpc, public ObIElectionRpc {
-  public:
+public:
   ObTransServiceCtx() : inited_(false), base_rpc_port_(0), scheduler_idx_(0), tenant_id_(0)
   {
     reset();
@@ -155,7 +155,7 @@ class ObTransServiceCtx : public ObITransRpc, public ObIElectionRpc {
     test_retry_end_trans_ = test_retry_end_trans;
   }
 
-  private:
+private:
   ObTransService* get_scheduler_()
   {
     return &txs_[scheduler_idx_];
@@ -168,17 +168,17 @@ class ObTransServiceCtx : public ObITransRpc, public ObIElectionRpc {
   int get_participant_(const ObAddr& addr, ObTransService*& participant);
   int check_major_freeze_(const int64_t msg_type, const ObPartitionKey& partition);
 
-  public:
+public:
   class ObGetLeaderThread : public ObTransServiceCtxThread {
-    public:
+  public:
     void run1();
   };
   class ObMajorfreezeThread : public ObTransServiceCtxThread {
-    public:
+  public:
     void run1();
   };
 
-  private:
+private:
   bool inited_;
   int32_t base_rpc_port_;
   char ip_[MAX_IP_ADDR_LENGTH];

@@ -24,7 +24,7 @@ namespace common {
 class ObMemstoreAllocatorMgr;
 class ObActiveList;
 class ObFifoArena {
-  public:
+public:
   static int64_t total_hold_;
   struct Page;
   struct Ref {
@@ -159,7 +159,7 @@ class ObFifoArena {
     int64_t allocated_;
   };
 
-  public:
+public:
   enum {
     MAX_CACHED_GROUP_COUNT = 16,
     MAX_CACHED_PAGE_COUNT = MAX_CACHED_GROUP_COUNT * Handle::MAX_NWAY,
@@ -171,6 +171,8 @@ class ObFifoArena {
         allocated_(0),
         reclaimed_(0),
         hold_(0),
+        last_query_time_(0),
+        remain_(INT64_MAX), 
         retired_(0),
         last_base_ts_(0),
         last_reclaimed_(0),
@@ -183,7 +185,7 @@ class ObFifoArena {
     reset();
   }
 
-  public:
+public:
   int init(uint64_t tenant_id);
   void reset();
   void update_nway_per_group(int64_t nway);
@@ -209,9 +211,9 @@ class ObFifoArena {
   }
 
   void set_memstore_threshold(int64_t memstore_threshold);
-  bool need_do_writing_throttle() const;
+  bool need_do_writing_throttle();
 
-  private:
+private:
   ObQSync& get_qs()
   {
     static ObQSync s_qs;
@@ -227,7 +229,7 @@ class ObFifoArena {
   }
 
   struct ObWriteThrottleInfo {
-    public:
+  public:
     ObWriteThrottleInfo()
     {
       reset();
@@ -241,7 +243,7 @@ class ObFifoArena {
     TO_STRING_KV(K(decay_factor_), K(alloc_duration_), K(trigger_percentage_), K(memstore_threshold_),
         K(period_throttled_count_), K(period_throttled_time_), K(total_throttled_count_), K(total_throttled_time_));
 
-    public:
+  public:
     // control info
     double decay_factor_;
     int64_t alloc_duration_;
@@ -254,7 +256,7 @@ class ObFifoArena {
     int64_t total_throttled_time_;
   };
 
-  private:
+private:
   void release_ref(Ref* ref);
   Page* alloc_page(int64_t size);
   void free_page(Page* ptr);
@@ -262,23 +264,33 @@ class ObFifoArena {
   void destroy_page(Page* page);
   void shrink_cached_page(int64_t nway);
   void speed_limit(int64_t cur_mem_hold, int64_t alloc_size);
-  int64_t get_throttling_interval(int64_t cur_mem_hold, int64_t alloc_size, int64_t trigger_mem_limit);
+  int64_t get_throttling_interval(const int64_t overused_mem,
+                                  const int64_t alloc_size,
+                                  const bool is_memstore_overused);
   int64_t get_actual_hold_size(Page* page);
   int64_t get_writing_throttling_trigger_percentage_() const;
   int64_t get_writing_throttling_maximum_duration_() const;
+  int64_t get_tenant_memory_remain_();
 
-  private:
+private:
   static const int64_t MAX_WAIT_INTERVAL = 20 * 1000 * 1000;  // 20s
   static const int64_t MEM_SLICE_SIZE = 2 * 1024 * 1024;      // Bytes per usecond
   static const int64_t MIN_INTERVAL = 20000;
   static const int64_t DEFAULT_TRIGGER_PERCENTAGE = 100;
   static const int64_t DEFAULT_DURATION = 60 * 60 * 1000 * 1000L;  // us
+  static const int64_t QUERY_MEM_INTERVAL = 100 * 1000L;//100ms
+  //sleep interval should be multipled by TENANT_MEMORY_EXHAUSTION_FACTOR when writing throttling is
+  //triggered by exhaustion of tenant memory
+  static const int64_t TENANT_MEMORY_EXHAUSTION_FACTOR = 10;
+  static const int64_t MIN_SLEEP_INTERVAL_WITH_TENANT_MEMORY_EXHAUSTION = 1000;
   lib::ObMemAttr attr_;
   ObIAllocator* allocator_;
   int64_t nway_;
   int64_t allocated_;
   int64_t reclaimed_;
   int64_t hold_;  // for single tenant
+  int64_t last_query_time_;//improve performance
+  int64_t remain_;//improve performance
   int64_t retired_;
   int64_t last_base_ts_;
 

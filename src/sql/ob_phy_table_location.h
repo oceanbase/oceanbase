@@ -30,7 +30,7 @@ typedef common::ObSEArray<share::ObPartitionReplicaLocation, 1> ObPartitionRepli
 class ObSplittedRanges {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   const common::ObIArray<common::ObNewRange>& get_ranges() const
   {
     return ranges_;
@@ -58,7 +58,7 @@ class ObSplittedRanges {
 
   TO_STRING_KV(K_(ranges), K_(offsets));
 
-  private:
+private:
   common::ObSEArray<common::ObNewRange, 1> ranges_;
   common::ObSEArray<int64_t, 1> offsets_;
 };
@@ -75,13 +75,13 @@ enum class ObDuplicateType : int64_t {
 class ObPhyTableLocation final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   static bool compare_phy_part_loc_info_asc(
       const ObPhyPartitionLocationInfo*& left, const ObPhyPartitionLocationInfo*& right);
   static bool compare_phy_part_loc_info_desc(
       const ObPhyPartitionLocationInfo*& left, const ObPhyPartitionLocationInfo*& right);
 
-  public:
+public:
   ObPhyTableLocation();
   void reset();
   int assign(const ObPhyTableLocation& other);
@@ -159,7 +159,7 @@ class ObPhyTableLocation final {
   static common::ObPartitionType get_partition_type(const common::ObPartitionKey& pkey,
       const common::ObIArray<ObPhyTableLocation>& table_locations, bool is_retry_for_dup_tbl);
 
-  private:
+private:
   uint64_t table_location_key_;
   uint64_t ref_table_id_;
   /* locations */
@@ -185,6 +185,41 @@ int ObPhyTableLocation::find_not_include_part_ids(const SrcArray& all_part_ids, 
   }
   return ret;
 }
+
+class ObPhyTableLocationGuard {
+public:
+  ObPhyTableLocationGuard() : loc_(nullptr){};
+  ~ObPhyTableLocationGuard()
+  {
+    if (loc_) {
+      loc_->~ObPhyTableLocation();
+      loc_ = nullptr;
+    }
+  }
+  int new_location(common::ObIAllocator &allocator)
+  {
+    int ret = common::OB_SUCCESS;
+    void *buf = nullptr;
+    if (OB_NOT_NULL(loc_)) {
+      // init twice
+      ret = common::OB_ERR_UNEXPECTED;
+    } else if (nullptr == (buf = allocator.alloc(sizeof(ObPhyTableLocation)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    } else if (NULL == (loc_ = new (buf) ObPhyTableLocation())) {
+      ret = common::OB_ERR_UNEXPECTED;
+    }
+    return ret;
+  }
+  // caller must ensure that the loc_ is not NULL before call get_loc()
+  ObPhyTableLocation *get_loc()
+  {
+    return loc_;
+  }
+
+private:
+  ObPhyTableLocation *loc_;
+};
+
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OCEANBASE_SQL_OB_PHY_TABLE_LOCATION_ */

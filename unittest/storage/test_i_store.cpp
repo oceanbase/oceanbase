@@ -22,12 +22,12 @@ using namespace share::schema;
 using namespace storage;
 using namespace common;
 class TestIStore : public ::testing::Test {
-  public:
+public:
   TestIStore();
   ~TestIStore();
   virtual void SetUp();
 
-  protected:
+protected:
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 8;
   static const int64_t TEST_COLUMN_CNT = ObExtendType - 1;
   void prepare_schema();

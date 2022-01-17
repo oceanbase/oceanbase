@@ -14,11 +14,13 @@
 #define OCEANBASE_COMMON_OB_OBJECT_TYPE_H_
 #include "lib/utility/ob_print_utils.h"
 #include "lib/charset/ob_charset.h"
-#include "lib/container/ob_iarray.h"
+
 namespace oceanbase {
 namespace common {
 class ObObjMeta;
 class ObAccuracy;
+template <class T>
+class ObIArray;
 
 // we can append new type only, do NOT delete nor change order,
 // modify ObObjTypeClass and ob_obj_type_class when append new object type.
@@ -1226,6 +1228,38 @@ inline bool ob_is_unsigned_type(ObObjType type)
 {
   return (ObUTinyIntType <= type && type <= ObUInt64Type) || ObYearType == type || ObUFloatType == type ||
          ObUDoubleType == type || ObUNumberType == type;
+}
+
+inline void convert_unsigned_type_to_signed(ObObjType &type)
+{
+  switch (type) {
+    case (ObUTinyIntType):
+      type = ObTinyIntType;
+      break;
+    case (ObUSmallIntType):
+      type = ObSmallIntType;
+      break;
+    case (ObUMediumIntType):
+      type = ObMediumIntType;
+      break;
+    case (ObUInt32Type):
+      type = ObInt32Type;
+      break;
+    case (ObUInt64Type):
+      type = ObIntType;
+      break;
+    case (ObUFloatType):
+      type = ObFloatType;
+      break;
+    case (ObUDoubleType):
+      type = ObDoubleType;
+      break;
+    case (ObUNumberType):
+      type = ObNumberType;
+      break;
+    default:
+      break;
+  }
 }
 
 inline bool ob_is_oracle_numeric_type(ObObjType type)

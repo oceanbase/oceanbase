@@ -27,7 +27,7 @@ class Iterator;
 
 template <typename T, typename AllocatorT = ObMalloc>
 class ObFixedArrayImpl : public ObIArray<T> {
-  public:
+public:
   using ObIArray<T>::count;
   using ObIArray<T>::at;
 
@@ -295,7 +295,7 @@ class ObFixedArrayImpl : public ObIArray<T> {
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  protected:
+protected:
   using ObIArray<T>::data_;
   using ObIArray<T>::count_;
 
@@ -303,13 +303,13 @@ class ObFixedArrayImpl : public ObIArray<T> {
   uint32_t init_cnt_;
   uint32_t capacity_;
 
-  private:
+private:
   int copy_assign_ret_;
 };
 
 template <typename T, typename AllocatorT = ObMalloc>
 class ObFixedArray final : public ObFixedArrayImpl<T, AllocatorT> {
-  public:
+public:
   // use ObArrayImpl constructors
   using ObFixedArrayImpl<T, AllocatorT>::ObFixedArrayImpl;
 };

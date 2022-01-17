@@ -20,7 +20,7 @@ namespace common {
 typedef ObLink QLink;
 
 class ObSpScLinkQueue {
-  public:
+public:
   typedef QLink Link;
   ObSpScLinkQueue() : tail_(&head_)
   {}
@@ -62,40 +62,40 @@ class ObSpScLinkQueue {
     return ret;
   }
 
-  private:
+private:
   Link head_;
   Link* tail_;
 };
 
 class ObSpLinkQueue {
-  public:
+public:
   typedef QLink Link;
   ObSpLinkQueue() : head_(&dummy_), tail_(&dummy_), dummy_()
   {}
   ~ObSpLinkQueue()
   {}
 
-  public:
+public:
   int top(Link*& p);
   int pop(Link*& p);
   int push(Link* p);
   int push_front(Link* p);
   bool is_empty() const;
 
-  private:
+private:
   int do_pop(Link*& p);
 
-  private:
+private:
   Link* head_ CACHE_ALIGNED;
   Link* tail_ CACHE_ALIGNED;
   Link dummy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSpLinkQueue);
 };
 
 class ObLinkQueue {
-  public:
+public:
   typedef QLink Link;
   enum { QUEUE_COUNT = 256 };
   ObLinkQueue() : queue_(), push_(0), pop_(0)
@@ -107,30 +107,30 @@ class ObLinkQueue {
   int pop(Link*& p);
   int64_t size() const;
 
-  private:
+private:
   static int64_t idx(int64_t x)
   {
     return x & (QUEUE_COUNT - 1);
   }
 
-  private:
+private:
   ObSpLinkQueue queue_[QUEUE_COUNT];
   uint64_t push_ CACHE_ALIGNED;
   uint64_t pop_ CACHE_ALIGNED;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLinkQueue);
 };
 
 class ObSimpleLinkQueue {
-  public:
+public:
   typedef QLink Link;
   ObSimpleLinkQueue() : head_(&dummy_), tail_(&dummy_), dummy_()
   {}
   ~ObSimpleLinkQueue()
   {}
 
-  public:
+public:
   int top(Link*& p);
   int pop(Link*& p);
   int push(Link* p);
@@ -139,15 +139,15 @@ class ObSimpleLinkQueue {
     return head_ == tail_;
   }
 
-  private:
+private:
   int do_pop(Link*& p);
 
-  private:
+private:
   Link* head_ CACHE_ALIGNED;
   Link* tail_ CACHE_ALIGNED;
   Link dummy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSimpleLinkQueue);
 };
 

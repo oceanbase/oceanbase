@@ -133,7 +133,7 @@ int ObDeleteLogPlan::generate_raw_plan()
   //                  EX OUT
   //                     DELETE (p1)
   //                        .....
-  // (2) norale delete plan:
+  // (2) normal delete plan:
   //      ....
   //         MULTI PART DELETE
   //                 EX IN
@@ -225,7 +225,8 @@ int ObDeleteLogPlan::generate_plan()
                  GEN_LOCATION_CONSTRAINT,
                  REORDER_PROJECT_COLUMNS,
                  PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     SQL_OPT_LOG(WARN, "failed to do plan traverse", K(ret));
   } else {
     SQL_OPT_LOG(DEBUG, "succ to do all plan traversals");

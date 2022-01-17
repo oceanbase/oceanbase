@@ -25,7 +25,7 @@ class ObMySQLProxy;
 namespace observer {
 // report local index build status to __all_local_index_status
 class ObIndexStatusReporter : public common::ObDLinkBase<ObIndexStatusReporter> {
-  public:
+public:
   const static int64_t RETRY_INTERVAL_US = 2l * 1000 * 1000;  // 2 seconds.
 
   ObIndexStatusReporter();
@@ -65,12 +65,22 @@ class ObIndexStatusReporter : public common::ObDLinkBase<ObIndexStatusReporter> 
     return false;
   }
 
+  inline bool need_assign_when_equal() const
+  {
+    return false;
+  }
+  inline int assign_when_equal(const ObIndexStatusReporter& other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
+
   TO_STRING_KV(K_(part_key), K_(self), K_(index_table_id), K_(index_status), K_(ret_code));
 
-  private:
+private:
   int do_process();
 
-  private:
+private:
   bool inited_;
   common::ObPartitionKey part_key_;
   common::ObAddr self_;
@@ -81,7 +91,7 @@ class ObIndexStatusReporter : public common::ObDLinkBase<ObIndexStatusReporter> 
   common::ObMySQLProxy* sql_proxy_;
 };
 class ObIndexStatusUpdater {
-  public:
+public:
   ObIndexStatusUpdater()
   {}
   ~ObIndexStatusUpdater()

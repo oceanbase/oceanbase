@@ -27,7 +27,7 @@ class ObDtlChannel;
 using obrpc::ObDtlRpcProxy;
 
 class ObDtlHashTableCell {
-  public:
+public:
   ObDtlHashTableCell()
   {}
   ~ObDtlHashTableCell()
@@ -41,12 +41,12 @@ class ObDtlHashTableCell {
 
   int foreach_refactored(std::function<int(ObDtlChannel* ch)> op);
 
-  private:
+private:
   ObDList<ObDtlChannel> chan_list_;
 };
 
 class ObDtlHashTable {
-  public:
+public:
   ObDtlHashTable() : bucket_num_(0), bucket_cells_(nullptr), allocator_()
   {}
   ~ObDtlHashTable();
@@ -63,14 +63,14 @@ class ObDtlHashTable {
     return bucket_num_;
   }
 
-  private:
+private:
   int64_t bucket_num_;
   ObDtlHashTableCell* bucket_cells_;
   common::ObFIFOAllocator allocator_;
 };
 
 class ObDtlChannelManager {
-  public:
+public:
   ObDtlChannelManager(int64_t idx, ObDtlHashTable& hash_table) : idx_(idx), spin_lock_(), hash_table_(hash_table)
   {}
   ~ObDtlChannelManager();
@@ -82,14 +82,14 @@ class ObDtlChannelManager {
   int foreach_refactored(int64_t interval, std::function<int(ObDtlChannel* ch)> op);
   TO_STRING_KV(K_(idx));
 
-  private:
+private:
   int64_t idx_;
   ObSpinLock spin_lock_;
   ObDtlHashTable& hash_table_;
 };
 
 class ObDtl {
-  public:
+public:
   ObDtl();
   virtual ~ObDtl();
 
@@ -129,7 +129,7 @@ class ObDtl {
   OB_INLINE ObDfcServer& get_dfc_server();
   OB_INLINE const ObDfcServer& get_dfc_server() const;
 
-  public:
+public:
   // NOTE: This function doesn't have mutex protection. Make sure the
   // first call is in a single thread and after that use it as you
   // like.
@@ -141,12 +141,12 @@ class ObDtl {
     return val & (BUCKET_NUM - 1);
   }
 
-  private:
+private:
   int new_channel(uint64_t tenant_id, uint64_t chid, const common::ObAddr& peer, ObDtlChannel*& chan, bool is_local);
   int init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr& peer, ObDtlChannel*& chan, ObDtlFlowControl* dfc);
   int get_dtl_channel_manager(uint64_t hash_val, ObDtlChannelManager*& ch_mgr);
 
-  private:
+private:
   // bucket number has to be a multiply of hash_cnt
   static const int64_t HASH_CNT = 256;
   static const int64_t BUCKET_NUM = 131072;

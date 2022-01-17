@@ -26,7 +26,7 @@ namespace lib {
 class ObSimpleRateLimiter : public lib::ObRateLimiter {
   static constexpr int64_t DEFAULT_RATE = 100;
 
-  public:
+public:
   ObSimpleRateLimiter(int64_t rate = DEFAULT_RATE) : last_ts_(0), permits_(rate)
   {
     last_ts_ = current_time();
@@ -41,12 +41,12 @@ class ObSimpleRateLimiter : public lib::ObRateLimiter {
   int acquire(int64_t permits = 1) override;
   int try_acquire(int64_t permits = 1) override;
 
-  public:
+public:
   // This is a copy of ObTimeUtility::current_time() that depends on
   // nothing other than system library.
   static int64_t current_time();
 
-  private:
+private:
   int64_t last_ts_;
   int64_t permits_;
 };

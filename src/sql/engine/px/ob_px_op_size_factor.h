@@ -22,7 +22,7 @@ namespace sql {
 struct PxOpSizeFactor {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   PxOpSizeFactor()
       : block_granule_child_(false),
         block_granule_parent_(false),

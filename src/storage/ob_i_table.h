@@ -35,7 +35,7 @@ class ObTableCompater;
 class ObITable {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   enum TableType {
     MEMTABLE = 0,
     MAJOR_SSTABLE = 1,
@@ -54,7 +54,7 @@ class ObITable {
   struct TableKey {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     TableKey();
     TableKey(const ObITable::TableType& table_type, const common::ObPartitionKey& pkey, const uint64_t table_id,
         const common::ObVersionRange& trans_version_range, const common::ObVersion& version,
@@ -243,10 +243,12 @@ class ObITable {
   {
     ATOMIC_INC(&ref_cnt_);
   }
-  inline int64_t dec_ref()
-  {
-    return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+  
+  virtual int64_t dec_ref() 
+  { 
+    return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); 
   }
+  
   inline int64_t get_ref() const
   {
     return ATOMIC_LOAD(&ref_cnt_);
@@ -396,17 +398,17 @@ class ObITable {
     return is_table_type_valid(table_type) ? table_type_name_[table_type] : nullptr;
   }
 
-  protected:
+protected:
   TableKey key_;
   int64_t ref_cnt_;
 
-  private:
+private:
   static const char* table_type_name_[TableType::MAX_TABLE_TYPE];
   DISALLOW_COPY_AND_ASSIGN(ObITable);
 };
 
 class ObTableHandle final {
-  public:
+public:
   ObTableHandle();
   ~ObTableHandle();
   storage::ObITable* get_table()
@@ -419,7 +421,6 @@ class ObTableHandle final {
   }
   int get_sstable(ObSSTable*& sstable);
   int get_sstable(const ObSSTable*& sstable) const;
-  int get_old_sstable(ObOldSSTable*& sstable);
   int get_memtable(memtable::ObMemtable*& memtable);
   int get_memtable(const memtable::ObMemtable*& memtable) const;
   int set_table(ObITable* table);
@@ -429,13 +430,13 @@ class ObTableHandle final {
   int get_sstable_schema_version(int64_t& schema_version) const;
   TO_STRING_KV(KP(table_), K(table_));
 
-  private:
+private:
   storage::ObITable* table_;
   DISALLOW_COPY_AND_ASSIGN(ObTableHandle);
 };
 
 class ObTablesHandle final {
-  public:
+public:
   typedef common::ObSEArray<storage::ObITable*, common::DEFAULT_STORE_CNT_IN_STORAGE> TableArray;
   ObTablesHandle();
   ~ObTablesHandle();
@@ -477,6 +478,7 @@ class ObTablesHandle final {
   int get_all_minor_sstables(common::ObIArray<ObSSTable*>& sstables);
   int get_all_memtables(common::ObIArray<memtable::ObMemtable*>& memtables);
   void reset();
+  void reset_tables();
   int reserve(const int64_t count);
   void set_retire_check();
   bool check_store_expire() const;
@@ -492,7 +494,7 @@ class ObTablesHandle final {
   int check_continues(const common::ObLogTsRange* log_ts_range);
   DECLARE_TO_STRING;
 
-  private:
+private:
   TableArray tables_;
   int64_t protection_cnt_;
   const bool* memstore_retired_;
@@ -509,7 +511,7 @@ OB_INLINE bool ObTablesHandle::check_store_expire() const
 }
 
 class ObTableProtector {
-  public:
+public:
   static void hold(ObITable& table);
   static void release(ObITable& table);
 };

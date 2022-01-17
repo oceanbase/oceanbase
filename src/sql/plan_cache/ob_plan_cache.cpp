@@ -1080,7 +1080,9 @@ void ObPlanCache::dec_ref_count()
   if (ref_count > 0) {
   } else if (0 == ref_count) {
     // delete
-    this->~ObPlanCache();
+    this->set_valid(false);
+    destroy();
+    // this->~ObPlanCache();
   } else if (ref_count < 0) {
     BACKTRACE(ERROR, true, "Plan Cache %p ref count < 0, ref_count = %ld", this, ref_count);
   }
@@ -1606,8 +1608,13 @@ int ObPlanCache::construct_plan_cache_key(ObPlanCacheCtx& plan_ctx, ObjNameSpace
 int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo& session, ObjNameSpace ns, ObPlanCacheKey& pc_key)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(session.get_database_id(pc_key.db_id_))) {
+  uint64_t database_id = OB_INVALID_ID;
+  if (OB_FAIL(session.get_database_id(database_id))) {
     LOG_WARN("get database id failed", K(ret));
+  } else if (FALSE_IT(pc_key.db_id_ = (database_id == OB_INVALID_ID) ? 
+                                            OB_OUTLINE_DEFAULT_DATABASE_ID 
+                                            : database_id)) {
+    // do nothing
   } else {
     pc_key.namespace_ = ns;
     pc_key.sys_vars_str_ = session.get_sys_var_in_pc_str();

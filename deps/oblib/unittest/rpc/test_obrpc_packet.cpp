@@ -17,7 +17,7 @@ using namespace oceanbase::rpc;
 using namespace oceanbase::obrpc;
 
 class TestObrpcPacket : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
 

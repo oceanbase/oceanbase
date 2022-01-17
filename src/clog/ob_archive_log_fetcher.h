@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace logservice {
 class ObArchiveLogFetcher : public ObLogFetcherImpl {
-  public:
+public:
   ObArchiveLogFetcher()
   {}
   ~ObArchiveLogFetcher()

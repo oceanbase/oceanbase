@@ -23,7 +23,7 @@ namespace oceanbase {
 namespace share {
 
 class ObFeedbackReplicaLocation : public ObAbstractFeedbackObject<ObFeedbackReplicaLocation> {
-  public:
+public:
   common::ObAddr server_;
   common::ObRole role_;  // ip && sql_port
   common::ObReplicaType replica_type_;
@@ -62,7 +62,7 @@ inline bool ObFeedbackReplicaLocation::is_valid_obj() const
 }
 
 class ObFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObFeedbackPartitionLocation> {
-  public:
+public:
   typedef common::ObSEArray<ObFeedbackReplicaLocation, 5> ObFeedbackReplicaLocationArray;
 
   ObFeedbackPartitionLocation() : ObAbstractFeedbackObject<ObFeedbackPartitionLocation>(PARTITION_LOCATION_FB_ELE)
@@ -158,7 +158,7 @@ class ObFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObFeedbackPa
 
   FB_OBJ_DEFINE_METHOD;
 
-  protected:
+protected:
   uint64_t table_id_;
   int64_t partition_id_;
   int64_t schema_version_;  // table schema version
@@ -166,7 +166,7 @@ class ObFeedbackPartitionLocation : public ObAbstractFeedbackObject<ObFeedbackPa
 };
 
 class ObFeedbackRerouteInfo : public ObAbstractFeedbackObject<ObFeedbackRerouteInfo> {
-  public:
+public:
   ObFeedbackRerouteInfo() : ObAbstractFeedbackObject<ObFeedbackRerouteInfo>(MIN_FB_ELE)
   {
     reset();
@@ -193,7 +193,7 @@ class ObFeedbackRerouteInfo : public ObAbstractFeedbackObject<ObFeedbackRerouteI
       K_(tbl_schema_version));
   FB_OBJ_DEFINE_METHOD;
 
-  public:
+public:
   common::ObAddr server_;
   common::ObRole role_;  // ip && sql_port
   common::ObReplicaType replica_type_;

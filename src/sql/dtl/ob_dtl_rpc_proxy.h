@@ -27,12 +27,12 @@ namespace dtl {
 class ObDtlRpcDataResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDtlRpcDataResponse() : is_block_(false), recode_(OB_SUCCESS)
   {}
   TO_STRING_KV(K_(is_block));
 
-  public:
+public:
   bool is_block_;
   int recode_;
 };
@@ -40,12 +40,12 @@ class ObDtlRpcDataResponse {
 class ObDtlBCRpcDataResponse {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObDtlBCRpcDataResponse() : resps_()
   {}
   TO_STRING_KV(K_(resps));
 
-  public:
+public:
   ObSEArray<ObDtlRpcDataResponse, 16> resps_;
 };
 
@@ -58,7 +58,7 @@ struct ObDtlRpcChanArgs {
 };
 
 class ObDtlSendArgs {
-  public:
+public:
   ObDtlSendArgs() = default;
   ObDtlSendArgs(int64_t chid, const ObDtlLinkedBuffer& buffer) : chid_(chid), buffer_(buffer)
   {}
@@ -66,19 +66,19 @@ class ObDtlSendArgs {
   ObDtlLinkedBuffer buffer_;
   TO_STRING_KV(K_(chid), KP(&buffer_));
 
-  private:
+private:
   OB_UNIS_VERSION(1);
 };
 
 class ObDtlBCSendArgs {
-  public:
+public:
   ObDtlBCSendArgs() : args_(), bc_buffer_()
   {}
   ObSEArray<ObDtlSendArgs, 16> args_;
   ObDtlLinkedBuffer bc_buffer_;
   TO_STRING_KV(K(args_.count()));
 
-  private:
+private:
   OB_UNIS_VERSION(1);
 };
 
@@ -87,7 +87,7 @@ class ObDtlBCSendArgs {
 
 namespace obrpc {
 class ObDtlRpcProxy : public ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObDtlRpcProxy);
 
   // RPC_S(PR5 create_channel, OB_DTL_CREATE_CHANNEL, (ObDtlRpcChanArgs));

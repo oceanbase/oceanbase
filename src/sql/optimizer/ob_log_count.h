@@ -19,12 +19,12 @@ namespace oceanbase {
 namespace sql {
 
 class ObLogCount : public ObLogicalOperator {
-  public:
+public:
   ObLogCount(ObLogPlan& plan) : ObLogicalOperator(plan), rownum_limit_expr_(NULL)
   {}
   virtual ~ObLogCount()
   {}
-  virtual int copy_without_child(ObLogicalOperator*& out);
+  virtual int copy_without_child(ObLogicalOperator*& out) override;
   virtual int allocate_exchange_post(AllocExchContext* ctx) override;
   virtual int generate_link_sql_pre(GenLinkStmtContext& link_ctx) override;
   inline ObRawExpr* get_rownum_limit_expr() const
@@ -37,13 +37,13 @@ class ObLogCount : public ObLogicalOperator {
   }
   int set_limit_size();
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
-  virtual uint64_t hash(uint64_t seed) const;
-  int check_output_dep_specific(ObRawExprCheckDep& checker);
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual uint64_t hash(uint64_t seed) const override;
+  int check_output_dep_specific(ObRawExprCheckDep& checker) override;
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
   virtual int allocate_expr_pre(ObAllocExprContext& ctx) override;
-  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
 
-  private:
+private:
   ObRawExpr* rownum_limit_expr_;
   DISALLOW_COPY_AND_ASSIGN(ObLogCount);
 };

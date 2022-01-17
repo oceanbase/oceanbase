@@ -67,12 +67,10 @@ int ObMergeLogPlan::generate_plan()
     if (OB_SUCC(ret) && OB_LIKELY(table_assign.count() == 1)) {
       ObIArray<IndexDMLInfo>& index_infos = table_columns.at(0).index_dml_infos_;
       for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); i++) {
-        if (OB_FAIL(index_infos.at(i).init_assignment_info(table_assign.at(0).assignments_))) {
+        bool use_static_typing_engine = optimizer_context_.get_session_info()->use_static_typing_engine();
+        if (OB_FAIL(index_infos.at(i).init_assignment_info(
+                table_assign.at(0).assignments_, optimizer_context_.get_expr_factory(), use_static_typing_engine))) {
           LOG_WARN("init index assignment info failed", K(ret));
-        } else if (optimizer_context_.get_session_info()->use_static_typing_engine()) {
-          if (OB_FAIL(index_infos.at(i).add_spk_assignment_info(optimizer_context_.get_expr_factory()))) {
-            LOG_WARN("fail to add spk assignment info", K(ret));
-          }
         }
       }
     }
@@ -95,7 +93,8 @@ int ObMergeLogPlan::generate_plan()
                  CG_PREPARE,
                  GEN_SIGNATURE,
                  GEN_LOCATION_CONSTRAINT,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     LOG_WARN("fail to travers logical plan", K(ret));
   } else if (location_type_ != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
     location_type_ = phy_plan_type_;
@@ -143,6 +142,12 @@ int ObMergeLogPlan::allocate_merge_subquery()
     LOG_WARN("failed to allocate delete condition subquery", K(ret));
   } else if (OB_FAIL(merge_stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt expr reference", K(ret));
+  } else if (condition_subquery_exprs.empty() && target_subquery_exprs.empty() &&
+             delete_subquery_exprs.empty() && !merge_stmt->get_match_condition_exprs().empty()) {
+    // alloc subplan filter for subquery in match condition
+    if (OB_FAIL(candi_allocate_subplan_filter(merge_stmt->get_match_condition_exprs(), false))) {
+      LOG_WARN("failed to allocate subplan filter", K(ret));
+    }
   } else if (!condition_subquery_exprs.empty() &&
              OB_FAIL(candi_allocate_subplan_filter(condition_subquery_exprs, false))) {
     LOG_WARN("failed to allocate subplan filter", K(ret));

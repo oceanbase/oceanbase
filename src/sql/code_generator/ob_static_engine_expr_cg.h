@@ -28,23 +28,23 @@ class ObDMLStmt;
 class ObRawExprUniqueSet;
 
 class ObExprCGCtx {
-  public:
+public:
   ObExprCGCtx() : allocator_(NULL), exec_ctx_(NULL)
   {}
   ObExprCGCtx(common::ObIAllocator* allocator, ObExecContext* exec_ctx) : allocator_(allocator), exec_ctx_(exec_ctx)
   {}
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprCGCtx);
 
-  public:
+public:
   common::ObIAllocator* allocator_;
   ObExecContext* exec_ctx_;
 };
 class ObRawExpr;
 class ObHiddenColumnItem;
 class ObStaticEngineExprCG {
-  public:
+public:
   static const int64_t STACK_OVERFLOW_CHECK_DEPTH = 16;
   static const int64_t DATUM_EVAL_INFO_SIZE = sizeof(ObDatum) + sizeof(ObEvalInfo);
   friend class ObRawExpr;
@@ -81,7 +81,7 @@ class ObStaticEngineExprCG {
     return op_cg_ctx_;
   }
 
-  private:
+private:
   static ObExpr* get_rt_expr(const ObRawExpr& raw_expr);
   int construct_exprs(const common::ObIArray<ObRawExpr*>& raw_exprs, common::ObIArray<ObExpr>& rt_exprs);
 
@@ -146,11 +146,11 @@ class ObStaticEngineExprCG {
   int inner_generate_calculable_exprs(
       const common::ObIArray<ObHiddenColumnItem>& calculable_exprs, ObPreCalcExprFrameInfo& expr_info);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStaticEngineExprCG);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   DatumParamStore* param_store_;
   ObExprCGCtx op_cg_ctx_;

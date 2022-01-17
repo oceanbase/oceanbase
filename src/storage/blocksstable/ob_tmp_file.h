@@ -26,7 +26,7 @@ class ObTmpFile;
 class ObTmpFileExtent;
 
 struct ObTmpFileIOInfo {
-  public:
+public:
   ObTmpFileIOInfo();
   virtual ~ObTmpFileIOInfo();
   void reset();
@@ -41,7 +41,7 @@ struct ObTmpFileIOInfo {
 };
 
 class ObTmpFileIOHandle {
-  public:
+public:
   struct ObIOReadHandle {
     ObIOReadHandle();
     ObIOReadHandle(const ObMacroBlockHandle& macro_handle, char* buf, const int64_t offset, const int64_t size);
@@ -118,7 +118,7 @@ class ObTmpFileIOHandle {
   }
   TO_STRING_KV(KP_(buf), K_(size), K_(is_read));
 
-  private:
+private:
   ObTmpFile* tmp_file_;
   common::ObSEArray<ObTmpFileIOHandle::ObIOReadHandle, 1> io_handles_;
   common::ObSEArray<ObTmpFileIOHandle::ObPageCacheHandle, 1> page_cache_handles_;
@@ -126,11 +126,12 @@ class ObTmpFileIOHandle {
   char* buf_;
   int64_t size_;  // has read or to write size.
   bool is_read_;
+  bool has_wait_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileIOHandle);
 };
 
 class ObTmpFileExtent {
-  public:
+public:
   explicit ObTmpFileExtent(ObTmpFile* file);
   virtual ~ObTmpFileExtent();
   virtual int read(
@@ -202,7 +203,7 @@ class ObTmpFileExtent {
   TO_STRING_KV(K_(is_alloced), K_(fd), K_(g_offset_start), K_(g_offset_end), KP_(owner), K_(start_page_id),
       K_(page_nums), K_(block_id), K_(offset), K_(is_closed));
 
-  private:
+private:
   bool is_alloced_;
   int64_t fd_;
   int64_t g_offset_start_;
@@ -218,7 +219,7 @@ class ObTmpFileExtent {
 };
 
 class ObTmpFileMeta {
-  public:
+public:
   explicit ObTmpFileMeta() : fd_(-1), dir_id_(-1), allocator_(NULL), extents_()
   {}
   virtual ~ObTmpFileMeta();
@@ -252,7 +253,7 @@ class ObTmpFileMeta {
   }
   TO_STRING_KV(K_(fd), K_(dir_id), K_(extents));
 
-  private:
+private:
   int64_t fd_;
   int64_t dir_id_;
   common::ObIAllocator* allocator_;
@@ -261,7 +262,7 @@ class ObTmpFileMeta {
 };
 
 class ObTmpFile {
-  public:
+public:
   enum FileWhence {
     SET_SEEK = 0,
     CUR_SEEK,
@@ -285,13 +286,14 @@ class ObTmpFile {
   inline int64_t get_deep_copy_size() const;
   TO_STRING_KV(K_(file_meta), K_(is_big), K_(tenant_id), K_(is_inited));
 
-  private:
+private:
   int write_file_extent(const ObTmpFileIOInfo& io_info, ObTmpFileExtent* file_extent, int64_t& size, char*& buf);
   int aio_pread_without_lock(const ObTmpFileIOInfo& io_info, int64_t& offset, ObTmpFileIOHandle& handle);
   int64_t small_file_prealloc_size();
   int64_t big_file_prealloc_size();
+  int64_t find_first_extent(const int64_t offset);
 
-  private:
+private:
   // NOTE:
   // 1.The pre-allocated macro should satisfy the following inequality:
   //      SMALL_FILE_MAX_THRESHOLD < BIG_FILE_PREALLOC_EXTENT_SIZE < block size
@@ -302,7 +304,10 @@ class ObTmpFile {
   bool is_big_;
   uint64_t tenant_id_;
   int64_t offset_;  // read offset
-  common::ObIAllocator* allocator_;
+  common::ObIAllocator *allocator_;
+  int64_t last_extent_id_;
+  int64_t last_extent_min_offset_;
+  int64_t last_extent_max_offset_;
   common::SpinRWLock lock_;
   bool is_inited_;
 
@@ -310,18 +315,18 @@ class ObTmpFile {
 };
 
 class ObTmpFileHandle : public storage::ObResourceHandle<ObTmpFile> {
-  public:
+public:
   ObTmpFileHandle();
   virtual ~ObTmpFileHandle();
   virtual void reset() override;
 
-  private:
+private:
   friend class ObTmpFileManager;
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileHandle);
 };
 
 class ObTmpFileManager {
-  public:
+public:
   static ObTmpFileManager& get_instance();
   int init();
   int start();
@@ -351,6 +356,8 @@ class ObTmpFileManager {
   int remove(const int64_t fd);
   int remove_tenant_file(const uint64_t tenant_id);
 
+  int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
+
   int sync(const int64_t fd, const int64_t timeout_ms);
 
   void destroy();
@@ -360,14 +367,14 @@ class ObTmpFileManager {
     return storage_file_.file_;
   }
 
-  private:
+private:
   class RmTenantTmpFileOp {
-    public:
+  public:
     RmTenantTmpFileOp(const uint64_t tenant_id, common::ObIArray<int64_t>* fd_list)
         : tenant_id_(tenant_id), fd_list_(fd_list)
     {}
     ~RmTenantTmpFileOp() = default;
-    bool operator()(common::hash::HashMapPair<int64_t, ObTmpFile*>& entry)
+    int operator()(common::hash::HashMapPair<int64_t, ObTmpFile *> &entry)
     {
       int ret = OB_SUCCESS;
       ObTmpFile* tmp_file = entry.second;
@@ -379,15 +386,15 @@ class ObTmpFileManager {
           STORAGE_LOG(WARN, "fd_list_ push back failed", K(ret));
         }
       }
-      return OB_SUCCESS == ret;
+      return ret;
     }
 
-    private:
+  private:
     const uint64_t tenant_id_;
     common::ObIArray<int64_t>* fd_list_;
   };
 
-  private:
+private:
   ObTmpFileManager();
   virtual ~ObTmpFileManager();
   int clear(const int64_t fd);
@@ -395,7 +402,7 @@ class ObTmpFileManager {
   int get_next_fd(int64_t& next_fd);
   void next_value(int64_t& current_val, int64_t& next_val);
 
-  private:
+private:
   static const int64_t DEFAULT_BUCKET_NUM = 10243L;
   static const int64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;

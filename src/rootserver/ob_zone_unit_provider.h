@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef __OCENABASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
-#define __OCENABASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
+#ifndef __OCEANBASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
+#define __OCEANBASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__
 
 #include "share/ob_define.h"
 #include "lib/list/ob_dlist.h"
@@ -31,7 +31,7 @@ typedef common::ObSEArray<UnitPtrArray, common::MAX_ZONE_NUM> ZoneUnitPtrArray;
 typedef common::ObSEArray<ZoneUnit, common::MAX_ZONE_NUM> ZoneUnitArray;
 
 class ObZoneUnitAdaptor {
-  public:
+public:
   virtual const share::ObUnitInfo* at(int64_t idx) const = 0;
   virtual int64_t count() const = 0;
   virtual int get_target_unit_idx(const int64_t unit_offset, common::hash::ObHashSet<int64_t>& unit_set,
@@ -40,7 +40,7 @@ class ObZoneUnitAdaptor {
 };
 
 class ObZoneUnitsProvider {
-  public:
+public:
   virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) = 0;
   virtual int get_all_zone_units(ZoneUnitArray& zone_unit) const = 0;
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& ptr_zone_unit) const = 0;
@@ -58,20 +58,20 @@ class ObZoneUnitsProvider {
 };
 
 class ObAliveZoneUnitAdaptor : public ObZoneUnitAdaptor {
-  public:
+public:
   ObAliveZoneUnitAdaptor()
   {}
   void set_zone_unit(const UnitPtrArray* my_zu)
   {
     zu_ = my_zu;
   }
-  virtual const share::ObUnitInfo* at(int64_t idx) const;
-  virtual int64_t count() const;
+  virtual const share::ObUnitInfo* at(int64_t idx) const override;
+  virtual int64_t count() const override;
   virtual int get_target_unit_idx(const int64_t unit_offset, common::hash::ObHashSet<int64_t>& unit_set,
       const bool is_primary_partition, int64_t& unit_idx) const override;
   virtual int update_tg_pg_count(const int64_t unit_idx, const bool is_primary_partition) override;
 
-  private:
+private:
   const UnitPtrArray* zu_;
 
   DISALLOW_COPY_AND_ASSIGN(ObAliveZoneUnitAdaptor);
@@ -79,7 +79,7 @@ class ObAliveZoneUnitAdaptor : public ObZoneUnitAdaptor {
 
 /* for ObReplicaCreator */
 class ObAliveZoneUnitsProvider : public ObZoneUnitsProvider {
-  public:
+public:
   ObAliveZoneUnitsProvider() : all_zone_unit_ptrs_(), zone_unit_adaptor_(), inited_(false)
   {}
   virtual ~ObAliveZoneUnitsProvider()
@@ -88,13 +88,13 @@ class ObAliveZoneUnitsProvider : public ObZoneUnitsProvider {
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const override;
   virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) override;
 
-  public:
+public:
   int init(const ZoneUnitPtrArray& all_zone_units);
   virtual int prepare_for_next_partition(const common::hash::ObHashSet<int64_t>& unit_set) override;
 
-  private:
+private:
   class UnitSortOp final {
-    public:
+  public:
     UnitSortOp() : ret_(common::OB_SUCCESS)
     {}
     ~UnitSortOp()
@@ -105,11 +105,11 @@ class ObAliveZoneUnitsProvider : public ObZoneUnitsProvider {
       return ret_;
     }
 
-    private:
+  private:
     int ret_;
   };
   class ZoneUnitSortOp final {
-    public:
+  public:
     ZoneUnitSortOp() : ret_(common::OB_SUCCESS)
     {}
     ~ZoneUnitSortOp()
@@ -120,11 +120,11 @@ class ObAliveZoneUnitsProvider : public ObZoneUnitsProvider {
       return ret_;
     }
 
-    private:
+  private:
     int ret_;
   };
 
-  private:
+private:
   ZoneUnitPtrArray all_zone_unit_ptrs_;
   ZoneUnitPtrArray available_zone_unit_ptrs_;
   ObAliveZoneUnitAdaptor zone_unit_adaptor_;
@@ -134,20 +134,20 @@ class ObAliveZoneUnitsProvider : public ObZoneUnitsProvider {
 };
 
 class ObAllZoneUnitAdaptor : public ObZoneUnitAdaptor {
-  public:
+public:
   ObAllZoneUnitAdaptor()
   {}
   void set_zone_unit(const UnitStatArray* all_unit)
   {
     all_unit_ = all_unit;
   }
-  virtual const share::ObUnitInfo* at(int64_t idx) const;
-  virtual int64_t count() const;
+  virtual const share::ObUnitInfo* at(int64_t idx) const override;
+  virtual int64_t count() const override;
   virtual int get_target_unit_idx(const int64_t unit_offset, common::hash::ObHashSet<int64_t>& unit_set,
       const bool is_primary_partition, int64_t& unit_idx) const override;
   virtual int update_tg_pg_count(const int64_t unit_idx, const bool is_primary_partition) override;
 
-  private:
+private:
   const UnitStatArray* all_unit_;
 
   DISALLOW_COPY_AND_ASSIGN(ObAllZoneUnitAdaptor);
@@ -156,17 +156,17 @@ class ObAllZoneUnitAdaptor : public ObZoneUnitAdaptor {
 /* for ObRereplication */
 // only provide logonly unit
 class ObZoneLogonlyUnitProvider : public ObZoneUnitsProvider {
-  public:
+public:
   ObZoneLogonlyUnitProvider(const ZoneUnitArray& all_zone_units) : all_zone_units_(all_zone_units)
   {}
   virtual ~ObZoneLogonlyUnitProvider()
   {}
-  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua);
+  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) override;
   virtual int get_all_zone_units(ZoneUnitArray& zone_unit) const override;
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const override;
   virtual bool exist(const ObZone& zone, const uint64_t unit_id) const override;
 
-  private:
+private:
   const ZoneUnitArray& all_zone_units_;
   UnitStatArray all_unit_;
   ObAllZoneUnitAdaptor zone_unit_adaptor_;
@@ -177,16 +177,16 @@ class ObZoneLogonlyUnitProvider : public ObZoneUnitsProvider {
 /* for ObRereplication */
 // filter the logonly unit
 class ObZoneUnitsWithoutLogonlyProvider : public ObZoneUnitsProvider {
-  public:
+public:
   ObZoneUnitsWithoutLogonlyProvider(const ZoneUnitArray& all_zone_units) : all_zone_units_(all_zone_units)
   {}
   virtual ~ObZoneUnitsWithoutLogonlyProvider()
   {}
   virtual int get_all_zone_units(ZoneUnitArray& zone_unit) const override;
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const override;
-  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua);
+  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) override;
 
-  private:
+private:
   const ZoneUnitArray& all_zone_units_;
   UnitStatArray all_unit_;
   ObAllZoneUnitAdaptor zone_unit_adaptor_;
@@ -196,16 +196,16 @@ class ObZoneUnitsWithoutLogonlyProvider : public ObZoneUnitsProvider {
 
 /* for ObRereplication */
 class ObAllZoneUnitsProvider : public ObZoneUnitsProvider {
-  public:
+public:
   ObAllZoneUnitsProvider(const ZoneUnitArray& all_zone_units) : all_zone_units_(all_zone_units)
   {}
   virtual ~ObAllZoneUnitsProvider()
   {}
-  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua);
+  virtual int find_zone(const common::ObZone& zone, const ObZoneUnitAdaptor*& zua) override;
   virtual int get_all_zone_units(ZoneUnitArray& zone_unit) const override;
   virtual int get_all_ptr_zone_units(ZoneUnitPtrArray& zone_unit_ptr) const override;
 
-  private:
+private:
   const ZoneUnitArray& all_zone_units_;
   UnitStatArray all_unit_;
   ObAllZoneUnitAdaptor zone_unit_adaptor_;
@@ -215,5 +215,5 @@ class ObAllZoneUnitsProvider : public ObZoneUnitsProvider {
 
 }  // namespace rootserver
 }  // namespace oceanbase
-#endif /* __OCENABASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__ */
+#endif /* __OCEANBASE_ROOTSERVER_OB_ZONE_UNIT_PROVIDER_H__ */
 //// end of header file

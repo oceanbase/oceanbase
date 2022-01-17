@@ -19,7 +19,7 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 class ObExprOracleNullif : public ObExprNullif {
-  public:
+public:
   explicit ObExprOracleNullif(common::ObIAllocator& alloc);
   virtual ~ObExprOracleNullif(){};
 
@@ -30,7 +30,7 @@ class ObExprOracleNullif : public ObExprNullif {
   static int eval_nullif(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
   static int eval_nullif_not_null(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprOracleNullif);
 
   bool is_same_type(const ObExprResType& type1, const ObExprResType& type2) const;

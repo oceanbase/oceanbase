@@ -24,12 +24,12 @@ class ObCreateTablegroupResolver : public ObTableGroupResolver {
   static const int64_t TABLEGROUP_OPTION = 2;
   static const int64_t PARTITION_OPTION = 3;
 
-  public:
+public:
   explicit ObCreateTablegroupResolver(ObResolverParams& params);
   virtual ~ObCreateTablegroupResolver();
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCreateTablegroupResolver);
 };

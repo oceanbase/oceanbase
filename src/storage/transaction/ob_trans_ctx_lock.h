@@ -30,7 +30,7 @@ class ObTransService;
 class ObTransCtx;
 
 class LocalTask : public common::ObDLinkBase<LocalTask> {
-  public:
+public:
   LocalTask(int64_t msg_type) : msg_(msg_type)
   {}
   ~LocalTask()
@@ -48,14 +48,14 @@ class LocalTask : public common::ObDLinkBase<LocalTask> {
     return msg_;
   }
 
-  private:
+private:
   ObTransMsgUnion msg_;
 };
 
 typedef common::ObDList<LocalTask> LocalTaskList;
 
 class CtxLockArg {
-  public:
+public:
   CtxLockArg()
       : task_list_(),
         end_trans_cb_(),
@@ -64,7 +64,7 @@ class CtxLockArg {
         p_mt_ctx_(NULL)
   {}
 
-  public:
+public:
   LocalTaskList task_list_;
 
   ObEndTransCallback end_trans_cb_;
@@ -76,7 +76,7 @@ class CtxLockArg {
 };
 
 class LocalTaskFactory {
-  public:
+public:
   static LocalTask* alloc(int64_t msg_type)
   {
     return op_reclaim_alloc_args(LocalTask, msg_type);
@@ -93,7 +93,7 @@ class LocalTaskFactory {
 };
 
 class CtxLock {
-  public:
+public:
   CtxLock() : lock_(), ctx_(NULL)
   {}
   ~CtxLock()
@@ -111,16 +111,16 @@ class CtxLock {
     return ctx_;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(CtxLock);
 
-  private:
+private:
   common::ObLatch lock_;
   ObTransCtx* ctx_;
 };
 
 class CtxLockGuard {
-  public:
+public:
   CtxLockGuard() : lock_(NULL)
   {}
   explicit CtxLockGuard(CtxLock& lock, const bool need_lock = true) : lock_(&lock)
@@ -132,15 +132,15 @@ class CtxLockGuard {
   void set(CtxLock& lock);
   void reset();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(CtxLockGuard);
 
-  private:
+private:
   CtxLock* lock_;
 };
 
 class TransTableSeqLock {
-  public:
+public:
   TransTableSeqLock() : seq_(0)
   {}
   ~TransTableSeqLock()
@@ -153,12 +153,12 @@ class TransTableSeqLock {
 
   DISABLE_COPY_ASSIGN(TransTableSeqLock);
 
-  private:
+private:
   uint64_t seq_;
 };
 
 class CtxTransTableLockGuard : public CtxLockGuard {
-  public:
+public:
   CtxTransTableLockGuard() : CtxLockGuard(), lock_(NULL)
   {}
   explicit CtxTransTableLockGuard(CtxLock& lock, TransTableSeqLock& seqlock, const bool need_lock = true)
@@ -174,7 +174,7 @@ class CtxTransTableLockGuard : public CtxLockGuard {
 
   DISABLE_COPY_ASSIGN(CtxTransTableLockGuard);
 
-  private:
+private:
   TransTableSeqLock* lock_;
 };
 

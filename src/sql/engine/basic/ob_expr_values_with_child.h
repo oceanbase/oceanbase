@@ -21,7 +21,7 @@ class ObIterExprRangeParam;
 class ObExprValuesWithChild : public ObSingleChildPhyOperator {
   class ObExprValuesWithChildCtx;
 
-  public:
+public:
   explicit ObExprValuesWithChild(common::ObIAllocator& alloc);
   virtual ~ObExprValuesWithChild();
 
@@ -51,10 +51,10 @@ class ObExprValuesWithChild : public ObSingleChildPhyOperator {
     return deserialize_(buf, data_len, pos);
   }
 
-  private:
+private:
   const static int64_t UNIS_VERSION = 1;
 
-  private:
+private:
   // function members
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
@@ -90,10 +90,10 @@ class ObExprValuesWithChild : public ObSingleChildPhyOperator {
   int calc_next_row(ObExecContext& ctx) const;
   int64_t get_serialize_size_(const ObPhyOpSeriCtx& seri_ctx) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValuesWithChild);
 
-  private:
+private:
   // data members
   common::ObFixedArray<ObSqlExpression*, common::ObIAllocator> values_;
 };

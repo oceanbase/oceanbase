@@ -36,7 +36,7 @@ class ObRootService;
 }
 namespace observer {
 class ObVTIterCreator {
-  public:
+public:
   ObVTIterCreator(rootserver::ObRootService& root_service, common::ObAddr& addr, common::ObServerConfig* config = NULL)
       : root_service_(root_service), addr_(addr), config_(config)
   {}
@@ -50,17 +50,17 @@ class ObVTIterCreator {
     return root_service_;
   }
 
-  private:
+private:
   int check_is_index(const share::schema::ObTableSchema& table, const char* index_name, bool& is_index) const;
 
-  private:
+private:
   rootserver::ObRootService& root_service_;
   common::ObAddr& addr_;
   common::ObServerConfig* config_;
 };
 
 class ObVirtualTableIteratorFactory : public sql::ObIVirtualTableIteratorFactory {
-  public:
+public:
   explicit ObVirtualTableIteratorFactory(ObVTIterCreator& vt_iter_creator);
   ObVirtualTableIteratorFactory(
       rootserver::ObRootService& root_service, common::ObAddr& addr, common::ObServerConfig* config = NULL);
@@ -73,7 +73,7 @@ class ObVirtualTableIteratorFactory : public sql::ObIVirtualTableIteratorFactory
     return vt_iter_creator_;
   }
 
-  private:
+private:
   ObVTIterCreator vt_iter_creator_;
   DISALLOW_COPY_AND_ASSIGN(ObVirtualTableIteratorFactory);
 };

@@ -19,18 +19,18 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 class ObExprLeastTest : public ::testing::Test {
-  public:
+public:
   ObExprLeastTest();
   virtual ~ObExprLeastTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExprLeastTest(const ObExprLeastTest& other);
   ObExprLeastTest& operator=(const ObExprLeastTest& other);
 
-  private:
+private:
   // data members
 };
 ObExprLeastTest::ObExprLeastTest()

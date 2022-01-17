@@ -22,7 +22,7 @@ class ObExprCtx;
 }  // namespace common
 namespace sql {
 class ObExprTrim : public ObStringExprOperator {
-  public:
+public:
   enum TrimType { TYPE_LRTRIM = 0, TYPE_LTRIM = 1, TYPE_RTRIM = 2 };
 
   explicit ObExprTrim(common::ObIAllocator& alloc);
@@ -41,7 +41,7 @@ class ObExprTrim : public ObStringExprOperator {
       const common::ObFixedArray<size_t, common::ObIAllocator>&);
 
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override
   {
     return deduce_result_type(type, types, param_num, type_ctx);
   }
@@ -49,8 +49,8 @@ class ObExprTrim : public ObStringExprOperator {
   static int deduce_result_type(
       ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx);
 
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
@@ -59,7 +59,7 @@ class ObExprTrim : public ObStringExprOperator {
   // fill ' ' to %buf with specified charset.
   static int fill_default_pattern(char* buf, const int64_t in_len, common::ObCollationType cs_type, int64_t& out_len);
 
-  private:
+private:
   // helper func
   static int lrtrim(const common::ObString src, const common::ObString pattern, int32_t& start, int32_t& end);
   static int ltrim(const common::ObString src, const common::ObString pattern, int32_t& start);
@@ -79,15 +79,16 @@ class ObExprTrim : public ObStringExprOperator {
 
 // Ltrim can use ObExprTrim's calc
 class ObExprLtrim : public ObExprTrim {
-  public:
+public:
   explicit ObExprLtrim(common::ObIAllocator& alloc);
   explicit ObExprLtrim(common::ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num);
   virtual ~ObExprLtrim();
 
-  virtual int calc_result_type1(ObExprResType& res_type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const;
+  virtual int calc_result_type1(
+      ObExprResType& res_type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const override;
 
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override
   {
     return deduce_result_type(type, types, param_num, type_ctx);
   }
@@ -95,12 +96,13 @@ class ObExprLtrim : public ObExprTrim {
   static int deduce_result_type(
       ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx);
 
-  virtual int calc_result1(common::ObObj& res_obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_result1(
+      common::ObObj& res_obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx) const override;
 
   int calc(common::ObObj& res_obj, const common::ObObj& obj1, common::ObExprCtx& expr_ctx, int64_t trim_type_val) const;
 
-  virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs_array, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+  virtual int calc_resultN(common::ObObj& result, const common::ObObj* objs_array, int64_t param_num,
+      common::ObExprCtx& expr_ctx) const override;
 
   static int calc_oracle_mode(common::ObObj& result, const int64_t trim_type, const common::ObString& pattern,
       const common::ObString& text, const common::ObObjType& res_type, common::ObExprCtx& expr_ctx,
@@ -108,12 +110,12 @@ class ObExprLtrim : public ObExprTrim {
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLtrim);
 };
 // Rtrim can use ObExprTrim's calc
 class ObExprRtrim : public ObExprLtrim {
-  public:
+public:
   explicit ObExprRtrim(common::ObIAllocator& alloc);
   virtual ~ObExprRtrim();
 
@@ -138,7 +140,7 @@ class ObExprRtrim : public ObExprLtrim {
     return ObExprLtrim::cg_expr(op_cg_ctx, raw_expr, rt_expr);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRtrim);
 };
 }  // namespace sql

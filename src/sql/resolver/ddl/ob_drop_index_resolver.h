@@ -20,13 +20,13 @@
 namespace oceanbase {
 namespace sql {
 class ObDropIndexResolver : public ObDDLResolver {
-  public:
+public:
   explicit ObDropIndexResolver(ObResolverParams& params);
   virtual ~ObDropIndexResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropIndexResolver);
 };
 }  // namespace sql

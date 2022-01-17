@@ -36,7 +36,7 @@ class ObRestoreArgs;
 namespace rootserver {
 class ObServerManager;
 class ObRestoreSQLModifierImpl : public observer::ObRestoreSQLModifier {
-  public:
+public:
   ObRestoreSQLModifierImpl(share::ObRestoreArgs& restore_args, common::hash::ObHashSet<uint64_t>& dropped_index_ids);
   virtual ~ObRestoreSQLModifierImpl();
   int modify(sql::ObResultSet& rs);
@@ -45,7 +45,7 @@ class ObRestoreSQLModifierImpl : public observer::ObRestoreSQLModifier {
     tenant_name_ = name;
   }
 
-  private:
+private:
   /* functions */
   int handle_create_tenant(sql::ObCreateTenantStmt* stmt);
   int handle_create_database(sql::ObCreateDatabaseStmt* stmt);

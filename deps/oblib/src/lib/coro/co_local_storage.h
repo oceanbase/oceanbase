@@ -44,7 +44,7 @@ class CoLocalStorage {
   template <class T, int N>
   class INode<T[N]>;
 
-  public:
+public:
   // Allocate `bytes' bytes memory space from co-routine local
   // storage. There's no free interface because memory allocated by
   // `alloc' interface would been freed whenever relating routine
@@ -56,7 +56,7 @@ class CoLocalStorage {
   template <class T, int idx = 0>
   static typename INode<T>::RETT* get_instance();
 
-  private:
+private:
   // Memory of the allocator object.
   static CoVar<char[sizeof(Allocator)]> buf_;
   // Pointer of allocator
@@ -70,7 +70,7 @@ inline void* CoLocalStorage::alloc(int64_t bytes)
 
 template <class T>
 class CoLocalStorage::INode {
-  public:
+public:
   using RETT = T;
   INode() : obj_([this] { this->create(); }, [this] { this->destroy(); })
   {}
@@ -79,7 +79,7 @@ class CoLocalStorage::INode {
     return obj_.get();
   }
 
-  private:
+private:
   void create()
   {
     void* ptr = CoLocalStorage::alloc(sizeof(T));
@@ -97,13 +97,13 @@ class CoLocalStorage::INode {
     }
   }
 
-  private:
+private:
   CoObj<T*> obj_;
 };
 
 template <class T, int N>
 class CoLocalStorage::INode<T[N]> {
-  public:
+public:
   using RETT = T;
   INode() : obj_([this] { this->create(); }, [this] { this->destroy(); })
   {}
@@ -112,7 +112,7 @@ class CoLocalStorage::INode<T[N]> {
     return obj_.get();
   }
 
-  private:
+private:
   void create()
   {
     void* ptr = CoLocalStorage::alloc(sizeof(T[N]));
@@ -131,7 +131,7 @@ class CoLocalStorage::INode<T[N]> {
     }
   }
 
-  private:
+private:
   CoObj<T*> obj_;
 };
 

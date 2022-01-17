@@ -33,18 +33,18 @@ using namespace oceanbase::observer;
 using namespace oceanbase::share;
 
 class ObExecContextTest : public ::testing::Test {
-  public:
+public:
   ObExecContextTest();
   virtual ~ObExecContextTest();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   ObExecContextTest(const ObExecContextTest& other);
   ObExecContextTest& operator=(const ObExecContextTest& other);
 
-  private:
+private:
   // data members
 };
 ObExecContextTest::ObExecContextTest()
@@ -60,7 +60,7 @@ void ObExecContextTest::TearDown()
 {}
 
 class ObPhyOperatorCtxFake : public ObPhyOperator::ObPhyOperatorCtx {
-  public:
+public:
   ObPhyOperatorCtxFake(ObExecContext& ctx);
   ~ObPhyOperatorCtxFake();
   virtual void destroy()
@@ -71,7 +71,7 @@ class ObPhyOperatorCtxFake : public ObPhyOperator::ObPhyOperatorCtx {
   void set_phy_op_ctx_a(int a);
   void set_phy_op_ctx_b(int b);
 
-  private:
+private:
   int phy_op_ctx_a_;
   int phy_op_ctx_b_;
 };
@@ -99,7 +99,7 @@ int ObPhyOperatorCtxFake::phy_op_calc()
 }
 
 class ObRootTransmitInput : public ObIPhyOperatorInput {
-  public:
+public:
   ObRootTransmitInput(ObExecContext& ctx) : input_param_a_(0)
   {
     UNUSED(ctx);
@@ -147,7 +147,7 @@ class ObRootTransmitInput : public ObIPhyOperatorInput {
     return PHY_ROOT_TRANSMIT;
   }
 
-  private:
+private:
   int64_t input_param_a_;
 };
 

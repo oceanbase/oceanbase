@@ -34,9 +34,9 @@ static ObArenaAllocator alloc_;
 class ObSingleChildOperatorFake : public ObSingleChildPhyOperator {
   friend class ObPhyOperatorTest;
 
-  protected:
+protected:
   class ObSingleOpCtx : public ObPhyOperator::ObPhyOperatorCtx {
-    public:
+  public:
     ObSingleOpCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {}
     virtual void destroy()
@@ -45,7 +45,7 @@ class ObSingleChildOperatorFake : public ObSingleChildPhyOperator {
     }
   };
 
-  public:
+public:
   ObSingleChildOperatorFake() : ObSingleChildPhyOperator(alloc_)
   {}
   ObPhyOperatorType get_type() const
@@ -69,7 +69,7 @@ class ObSingleChildOperatorFake : public ObSingleChildPhyOperator {
     return ret;
   }
 
-  protected:
+protected:
   virtual int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
   {
     int ret = OB_SUCCESS;
@@ -113,9 +113,9 @@ class ObSingleChildOperatorFake : public ObSingleChildPhyOperator {
   }
 };
 class ObTableScanFake : public ObNoChildrenPhyOperator {
-  protected:
+protected:
   class ObTableScanFakeCtx : public ObPhyOperatorCtx {
-    public:
+  public:
     ObTableScanFakeCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
     {}
     virtual void destroy()
@@ -124,7 +124,7 @@ class ObTableScanFake : public ObNoChildrenPhyOperator {
     }
   };
 
-  public:
+public:
   ObTableScanFake() : ObNoChildrenPhyOperator(alloc_), row_store_(NULL), store_size_(0), cur_index_(0)
   {}
   ObPhyOperatorType get_type() const
@@ -168,7 +168,7 @@ class ObTableScanFake : public ObNoChildrenPhyOperator {
     }
   }
 
-  protected:
+protected:
   virtual int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
   {
     UNUSED(ctx);
@@ -190,14 +190,14 @@ class ObTableScanFake : public ObNoChildrenPhyOperator {
     return ret;
   }
 
-  private:
+private:
   ObNewRow* row_store_;
   int64_t store_size_;
   mutable int64_t cur_index_;
 };
 
 class ObPhyOperatorTest : public ::testing::Test {
-  public:
+public:
   ObPhyOperatorTest();
   virtual ~ObPhyOperatorTest();
   virtual void SetUp();
@@ -222,12 +222,12 @@ class ObPhyOperatorTest : public ::testing::Test {
     return phy_op.wrap_expr_ctx(exec_ctx, expr_ctx);
   }
 
-  private:
+private:
   // disallow copy
   ObPhyOperatorTest(const ObPhyOperatorTest& other);
   ObPhyOperatorTest& operator=(const ObPhyOperatorTest& other);
 
-  private:
+private:
   // data members
 };
 ObPhyOperatorTest::ObPhyOperatorTest()

@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDeallocateResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObDeallocateResolver(ObResolverParams& params) : ObStmtResolver(params)
   {}
   virtual ~ObDeallocateResolver()
@@ -30,7 +30,7 @@ class ObDeallocateResolver : public ObStmtResolver {
     return static_cast<ObDeallocateStmt*>(stmt_);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDeallocateResolver);
 };
 

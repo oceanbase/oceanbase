@@ -23,7 +23,7 @@ class ObFreeSessionCtx;
 namespace observer {
 
 class ObSrvTask : public rpc::ObRequest {
-  public:
+public:
   ObSrvTask() : ObRequest(ObRequest::OB_TASK)
   {}
 
@@ -31,7 +31,7 @@ class ObSrvTask : public rpc::ObRequest {
 };  // end of class ObSrvTask
 
 class ObDisconnectTask : public ObSrvTask {
-  public:
+public:
   ObDisconnectTask(const sql::ObFreeSessionCtx& ctx) : proc_(ctx)
   {}
 
@@ -40,7 +40,7 @@ class ObDisconnectTask : public ObSrvTask {
     return proc_;
   }
 
-  private:
+private:
   ObMPDisconnect proc_;
 };  // end of class ObDisconnectTAsk
 

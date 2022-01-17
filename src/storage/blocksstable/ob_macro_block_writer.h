@@ -48,7 +48,7 @@ namespace blocksstable {
 //  |- MicroBlock index
 //  |- index endkey char stream
 class ObMacroBlockWriter {
-  public:
+public:
   ObMacroBlockWriter();
   virtual ~ObMacroBlockWriter();
   void reset();
@@ -70,10 +70,11 @@ class ObMacroBlockWriter {
   {
     return task_index_writer_->get_macro_block_write_ctx();
   }
+  int dump_micro_block_writer_buffer();
   TO_STRING_KV(K_(block_write_ctx));
 
   struct IndexMicroBlockBuilder {
-    public:
+  public:
     IndexMicroBlockBuilder()
     {}
     virtual ~IndexMicroBlockBuilder() = default;
@@ -82,7 +83,7 @@ class ObMacroBlockWriter {
     ObBlockIntermediateBuilder row_builder_;
   };
   struct IndexMicroBlockDesc {
-    public:
+  public:
     IndexMicroBlockDesc()
     {}
     virtual ~IndexMicroBlockDesc() = default;
@@ -92,7 +93,7 @@ class ObMacroBlockWriter {
     common::ObStoreRowkey last_key_;
   };
   struct IndexMicroBlockDescCompare final {
-    public:
+  public:
     IndexMicroBlockDescCompare()
     {}
     ~IndexMicroBlockDescCompare() = default;
@@ -103,7 +104,7 @@ class ObMacroBlockWriter {
     }
   };
 
-  private:
+private:
   int append_row(const storage::ObStoreRow& row, const int64_t split_size, const bool ignore_lob = false);
   int check_order(const storage::ObStoreRow& row);
   int build_micro_block(const bool force_split = false);
@@ -137,7 +138,7 @@ class ObMacroBlockWriter {
   int open_bf_cache_writer(const ObDataStoreDesc& desc);
   int flush_bf_to_cache(ObMacroBloomFilterCacheWriter& bf_cache_writer, const int32_t row_count);
 
-  private:
+private:
   int build_index_micro_block(const int32_t height, const storage::ObStoreRow*& mid_row);
   int build_intermediate_row(const ObString& rowkey, const ObBlockIntermediateHeader& header,
       ObBlockIntermediateBuilder& builder, const storage::ObStoreRow*& row);
@@ -159,9 +160,8 @@ class ObMacroBlockWriter {
 
   int prepare_micro_block_reader(const char* buf, const int64_t size, ObIMicroBlockReader*& micro_reader);
   int print_micro_block_row(ObIMicroBlockReader* micro_reader);
-  int dump_micro_block_writer_buffer();
 
-  private:
+private:
   static const int64_t DEFAULT_MACRO_BLOCK_COUNT = 128;
   static const int64_t DEFAULT_MICRO_BLOCK_TREE_HIGH = 4;
   static const int64_t DEFAULT_MICRO_BLOCK_WRITER_COUNT = 64;
@@ -170,7 +170,7 @@ class ObMacroBlockWriter {
   typedef common::ObSEArray<IndexMicroBlockBuilder*, DEFAULT_MICRO_BLOCK_TREE_HIGH> IndexMicroBlockBuildList;
   typedef common::ObSEArray<IndexMicroBlockDesc*, DEFAULT_MICRO_BLOCK_WRITER_COUNT> IndexMicroBlockDescList;
 
-  private:
+private:
   ObDataStoreDesc* data_store_desc_;
   ObDataStoreDesc* index_store_desc_;
   ObMicroBlockCompressor compressor_;

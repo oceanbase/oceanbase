@@ -44,7 +44,7 @@ TEST(sc, usability)
   // member function
   {
     class Foo {
-      public:
+    public:
       int dec()
       {
         if (i_ <= 0) {

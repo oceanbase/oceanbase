@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDeallocateStmt : public ObCMDStmt {
-  public:
+public:
   ObDeallocateStmt() : ObCMDStmt(stmt::T_DEALLOCATE), prepare_name_(), prepare_id_(OB_INVALID_ID)
   {}
   virtual ~ObDeallocateStmt()
@@ -44,7 +44,7 @@ class ObDeallocateStmt : public ObCMDStmt {
 
   TO_STRING_KV(N_STMT_NAME, prepare_name_, N_SQL_ID, prepare_id_);
 
-  private:
+private:
   common::ObString prepare_name_;
   ObPsStmtId prepare_id_;
   DISALLOW_COPY_AND_ASSIGN(ObDeallocateStmt);

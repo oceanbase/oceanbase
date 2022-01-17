@@ -84,7 +84,7 @@ inline uint32_t ob_fast_digits10(uint64_t v)
  *  ObFastFormatInt::format_unsigned(num, buf);
  */
 class ObFastFormatInt {
-  public:
+public:
   explicit ObFastFormatInt(const int8_t value)
   {
     format_signed(value);
@@ -183,7 +183,7 @@ class ObFastFormatInt {
   // Buffer should be large enough to hold all digits (digits10 + 1), a sign and a null character.
   static const int64_t MAX_DIGITS10_STR_SIZE = std::numeric_limits<uint64_t>::digits10 + 3;
 
-  private:
+private:
   /*
    * Formats value in reverse and returns a pointer to the beginning
    *
@@ -205,7 +205,7 @@ class ObFastFormatInt {
    */
   void format_signed(int64_t value);
 
-  private:
+private:
   static const char DIGITS[];
 
   mutable char buf_[MAX_DIGITS10_STR_SIZE];
@@ -216,7 +216,7 @@ class ObFastFormatInt {
 // ref: https://github.com/jsteemann/atoi
 template <typename T>
 class ObFastAtoi {
-  public:
+public:
   static inline T atoi_negative_unchecked(char const* p, char const* e)
   {
     T result = 0;

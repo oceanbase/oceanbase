@@ -33,7 +33,7 @@ class ObTempTableAccessOpInput : public ObOpInput {
   OB_UNIS_VERSION_V(1);
   friend class ObTempTableAccessOp;
 
-  public:
+public:
   ObTempTableAccessOpInput(ObExecContext& ctx, const ObOpSpec& spec);
   virtual ~ObTempTableAccessOpInput();
   virtual void reset() override;
@@ -44,21 +44,21 @@ class ObTempTableAccessOpInput : public ObOpInput {
   int check_finish(bool& is_end, int64_t& interm_res_ids);
   int check_closed_finish(bool& is_end);
 
-  protected:
+protected:
   common::ObIAllocator* deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTempTableAccessOpInput);
 
-  public:
+public:
   uint64_t closed_count_;
   uint64_t unfinished_count_ptr_;
   common::ObSEArray<uint64_t, 8> interm_result_ids_;
 };
 
 class ObTempTableAccessOpSpec : public ObOpSpec {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTempTableAccessOpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObOpSpec(alloc, type),
         output_indexs_(alloc),
@@ -112,7 +112,7 @@ class ObTempTableAccessOpSpec : public ObOpSpec {
 
   DECLARE_VIRTUAL_TO_STRING;
 
-  public:
+public:
   common::ObFixedArray<int64_t, common::ObIAllocator> output_indexs_;
   uint64_t temp_table_id_;
   bool is_distributed_;
@@ -122,7 +122,7 @@ class ObTempTableAccessOpSpec : public ObOpSpec {
 };
 
 class ObTempTableAccessOp : public ObOperator {
-  public:
+public:
   ObTempTableAccessOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObOperator(exec_ctx, spec, input), datum_store_(NULL), datum_store_it_(), is_started_(false)
   {}
@@ -139,7 +139,7 @@ class ObTempTableAccessOp : public ObOperator {
   int locate_interm_result(dtl::ObDTLIntermResultKey& dtl_int_key);
   int destory_interm_results();
 
-  private:
+private:
   ObChunkDatumStore* datum_store_;
   ObChunkDatumStore::Iterator datum_store_it_;
   bool is_started_;

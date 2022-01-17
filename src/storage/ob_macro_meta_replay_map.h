@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 struct ObMacroBlockKey final {
-  public:
+public:
   ObMacroBlockKey();
   ObMacroBlockKey(const ObITable::TableKey& table_key, const blocksstable::MacroBlockId& macro_block_id);
   ~ObMacroBlockKey() = default;
@@ -33,7 +33,7 @@ struct ObMacroBlockKey final {
 };
 
 class ObMacroMetaReplayMap final {
-  public:
+public:
   ObMacroMetaReplayMap();
   ~ObMacroMetaReplayMap();
 
@@ -44,7 +44,7 @@ class ObMacroMetaReplayMap final {
   int remove(const ObITable::TableKey& table_key, const blocksstable::MacroBlockId& block_id);
   int remove(const ObITable::TableKey& table_key, const common::ObIArray<blocksstable::MacroBlockId>& block_ids);
 
-  private:
+private:
   static const int64_t REPLAY_BUCKET_CNT = 10000;
   typedef common::hash::ObHashMap<ObMacroBlockKey, blocksstable::ObMacroBlockMetaV2*> MAP;
   MAP map_;

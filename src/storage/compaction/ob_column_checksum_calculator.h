@@ -22,7 +22,7 @@ class ObSSTableMeta;
 namespace compaction {
 
 class ObColumnChecksumCalculator {
-  public:
+public:
   ObColumnChecksumCalculator();
   virtual ~ObColumnChecksumCalculator();
   int init(const int64_t column_cnt);
@@ -38,11 +38,11 @@ class ObColumnChecksumCalculator {
   }
   TO_STRING_KV(KP_(column_checksum), K_(column_cnt));
 
-  private:
+private:
   int calc_column_checksum(const int64_t checksum_method, const common::ObNewRow& row, const bool new_row,
       const bool* column_changed, int64_t* column_checksum);
 
-  private:
+private:
   bool is_inited_;
   common::ObArenaAllocator allocator_;
   int64_t* column_checksum_;
@@ -50,7 +50,7 @@ class ObColumnChecksumCalculator {
 };
 
 class ObColumnChecksumAccumulator {
-  public:
+public:
   ObColumnChecksumAccumulator();
   virtual ~ObColumnChecksumAccumulator();
   int init(const int64_t column_cnt);
@@ -64,7 +64,7 @@ class ObColumnChecksumAccumulator {
     return column_cnt_;
   }
 
-  private:
+private:
   bool is_inited_;
   int64_t* column_checksum_;
   common::ObArenaAllocator allocator_;
@@ -73,7 +73,7 @@ class ObColumnChecksumAccumulator {
 };
 
 class ObSSTableColumnChecksum {
-  public:
+public:
   ObSSTableColumnChecksum();
   virtual ~ObSSTableColumnChecksum();
   int init(const int64_t concurrent_cnt, const share::schema::ObTableSchema& table_schema, const bool need_org_checksum,
@@ -89,13 +89,13 @@ class ObSSTableColumnChecksum {
     return accumulator_.get_column_count();
   }
 
-  private:
+private:
   int init_checksum_calculators(const int64_t concurrent_cnt, const share::schema::ObTableSchema& table_schema);
   int init_column_checksum(const share::schema::ObTableSchema& table_schema, const bool need_org_checksum,
       const int64_t checksum_method, const common::ObIArray<const blocksstable::ObSSTableMeta*>& org_sstable_metas);
   void destroy();
 
-  private:
+private:
   bool is_inited_;
   common::ObSEArray<compaction::ObColumnChecksumCalculator*, OB_DEFAULT_SE_ARRAY_COUNT> checksums_;
   ObColumnChecksumAccumulator accumulator_;

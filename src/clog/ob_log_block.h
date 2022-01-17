@@ -46,7 +46,7 @@
 //  ----------------------------------------------------------------
 //
 //  ObLogBlockMetaV2::MetaContent includes:
-//  1. maigc_, data_checksum_, meta_checksum_:checks block integrity
+//  1. magic_, data_checksum_, meta_checksum_:checks block integrity
 //  2. type_:uses ObBlockType;
 //  3. timestamp_:block generation time for debugging
 //  4. total_len_, padding_len_:block adds padding for 512 aligned
@@ -57,7 +57,7 @@
 namespace oceanbase {
 namespace clog {
 class ObLogBlockMetaV2 {
-  public:
+public:
   ObLogBlockMetaV2();
   ~ObLogBlockMetaV2();
 
@@ -137,13 +137,13 @@ class ObLogBlockMetaV2 {
   NEED_SERIALIZE_AND_DESERIALIZE;
   static const int16_t META_MAGIC = 0x4C42;  // BL means block
 
-  private:
+private:
   int generate_block(const char* buf, const int64_t data_len, const ObBlockType type);
   int64_t calc_data_checksum_(const char* buf, const int64_t data_len) const;
   int64_t calc_meta_checksum_() const;
   bool check_data_checksum_(const char* buf, const int64_t data_len) const;
 
-  private:
+private:
   static const int16_t BLOCK_VERSION = 1;
 
   int16_t magic_;
@@ -154,7 +154,7 @@ class ObLogBlockMetaV2 {
   int64_t timestamp_;      // block meta generation time, used for debug
   int64_t data_checksum_;  // data checksum
 
-  // memta checksum calculation requirements:
+  // meta checksum calculation requirements:
   // 1. Located in the last line of the member variable declaration
   // 2. no virtual function in class
   // 3. The member variable before this declaration is 64-bit aligned

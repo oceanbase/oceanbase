@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace share {
 
 class ObCompatModeGetter {
-  public:
+public:
   static ObCompatModeGetter& instance();
   // Provide global function interface
   static int get_tenant_mode(const uint64_t tenant_id, ObWorker::CompatMode& mode);
@@ -38,16 +38,16 @@ class ObCompatModeGetter {
   int set_tenant_compat_mode(const uint64_t tenant_id, ObWorker::CompatMode& mode);
   int reset_compat_getter_map();
 
-  private:
+private:
   typedef common::hash::ObHashMap<uint64_t, ObWorker::CompatMode, common::hash::SpinReadWriteDefendMode> MAP;
   static const int64_t bucket_num = common::OB_DEFAULT_TENANT_COUNT;
 
-  private:
+private:
   MAP id_mode_map_;
   common::ObMySQLProxy* sql_proxy_;
   bool is_inited_;
 
-  private:
+private:
   ObCompatModeGetter();
   ~ObCompatModeGetter();
   DISALLOW_COPY_AND_ASSIGN(ObCompatModeGetter);

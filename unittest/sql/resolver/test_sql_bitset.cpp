@@ -20,13 +20,13 @@ using namespace oceanbase::lib;
 using namespace oceanbase;
 
 class TestSqlBitSet : public ::testing::Test {
-  public:
+public:
   TestSqlBitSet();
   virtual ~TestSqlBitSet();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(TestSqlBitSet);
 };
 

@@ -19,7 +19,7 @@
 namespace oceanbase {
 namespace common {
 class ObITenantMgr {
-  public:
+public:
   virtual bool has_tenant(const uint64_t tenant_id) const = 0;
   virtual int get_all_tenant_id(ObIArray<uint64_t>& key) const = 0;
   virtual int get_tenant_mem_limit(const uint64_t tenant_id, int64_t& lower_limit, int64_t& upper_limit) const = 0;

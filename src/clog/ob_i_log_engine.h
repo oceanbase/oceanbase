@@ -31,16 +31,16 @@ class ObCommitLogEnv;
 class ObIndexLogEnv;
 class ObLogCache;
 class ObILogEngine {
-  public:
+public:
   typedef ObDiskBufferTask FlushTask;
 
-  public:
+public:
   ObILogEngine()
   {}
   virtual ~ObILogEngine()
   {}
 
-  public:
+public:
   virtual ObIRawLogIterator* alloc_raw_log_iterator(
       const file_id_t start_file_id, const file_id_t end_file_id, const offset_t offset, const int64_t timeout) = 0;
   virtual void revert_raw_log_iterator(ObIRawLogIterator* iter) = 0;
@@ -134,6 +134,10 @@ class ObILogEngine {
   virtual int notify_follower_log_missing(const common::ObAddr& server, const int64_t cluster_id,
       const common::ObPartitionKey& partition_key, const uint64_t start_log_id, const bool is_in_member_list,
       const int32_t msg_type) = 0;
+  virtual int send_restore_check_rqst(const common::ObAddr& server, const int64_t dst_cluster_id,
+      const common::ObPartitionKey& key, const ObRestoreCheckType restore_type) = 0;
+  virtual int send_query_restore_end_id_resp(const common::ObAddr& server, const int64_t cluster_id,
+      const common::ObPartitionKey& partition_key, const uint64_t last_restore_log_id) = 0;
   virtual void update_clog_info(const int64_t max_submit_timestamp) = 0;
   virtual void update_clog_info(
       const common::ObPartitionKey& partition_key, const uint64_t log_id, const int64_t submit_timestamp) = 0;
@@ -182,7 +186,8 @@ class ObILogEngine {
   virtual int get_ilog_file_id_range(file_id_t& min_file_id, file_id_t& max_file_id) = 0;
   virtual int query_next_ilog_file_id(file_id_t& next_ilog_file_id) = 0;
   virtual int get_index_info_block_map(const file_id_t file_id, IndexInfoBlockMap& index_info_block_map) = 0;
-  virtual int check_need_block_log(bool& is_need) const = 0;
+  virtual int check_need_block_log(const file_id_t cur_file_id, bool &is_need) const = 0;
+  virtual int check_clog_exist(const common::ObPartitionKey &partition_key, const uint64_t log_id, bool &exist) = 0;
 
   // want_size refers to the length in clog, which may be the length after compression, and the returned data is after
   // decompression
@@ -194,12 +199,12 @@ class ObILogEngine {
   virtual int check_is_clog_obsoleted(const common::ObPartitionKey& partition_key, const file_id_t file_id,
       const offset_t offset, bool& is_obsoleted) const = 0;
 
-  virtual bool is_clog_disk_error() const = 0;
+  virtual bool is_clog_disk_hang() const = 0;
   // ================== interface for ObIlogStorage end  ====================
 };
 
 class ObILogNetTask {
-  public:
+public:
   virtual ~ObILogNetTask()
   {}
   virtual const char* get_data_buffer() const = 0;
@@ -208,7 +213,7 @@ class ObILogNetTask {
 };
 
 class ObLogNetTask : public ObILogNetTask {
-  public:
+public:
   ObLogNetTask(common::ObProposalID proposal_id, const char* buff, int64_t data_len)
       : proposal_id_(proposal_id), buff_(buff), data_len_(data_len)
   {}
@@ -225,12 +230,12 @@ class ObLogNetTask : public ObILogNetTask {
     return data_len_;
   }
 
-  private:
+private:
   common::ObProposalID proposal_id_;
   const char* buff_;
   int64_t data_len_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogNetTask);
 };
 }  // end namespace clog

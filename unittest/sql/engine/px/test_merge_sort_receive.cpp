@@ -29,27 +29,27 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql::dtl;
 
 class ObMergeSortReceiveTest : public ::testing::Test {
-  public:
+public:
   void test_sort(int64_t n_channel, bool local_order, int64_t row_count);
   int mock_channel_loop(
       ObPxMergeSortReceive::ObPxMergeSortReceiveCtx* recv_ctx, int64_t n_channel, int64_t row_count, bool local_order);
   int init_merge_sort_input(ObExecContext& ctx, ObPxMergeSortReceive::ObPxMergeSortReceiveCtx* recv_ctx,
       ObPxMergeSortReceive& merge_sort_receive, int64_t n_channel);
 
-  private:
+private:
   int init_open(ObExecContext& ctx, ObPxMergeSortReceive& merge_sort_receive, int64_t n_channel, int64_t row_count,
       bool local_order);
 };
 
 class ObMockPxNewRow : public ObPxNewRow {
-  public:
+public:
   ObMockPxNewRow(int64_t count, bool local_order, int64_t n_channel)
       : count_(count), local_order_(local_order), cur_(0), n_channel_(n_channel)
   {}
   ~ObMockPxNewRow() = default;
   virtual int get_row(ObNewRow& row);
 
-  private:
+private:
   int64_t count_;
   bool local_order_;
   int64_t cur_;
@@ -57,7 +57,7 @@ class ObMockPxNewRow : public ObPxNewRow {
 };
 
 class ObMockChannelLoop : public ObDtlChannelLoop {
-  public:
+public:
   ObMockChannelLoop(int64_t n_channel) : n_channel_(n_channel), nth_process_channel_(0)
   {}
   ~ObMockChannelLoop() = default;
@@ -65,7 +65,7 @@ class ObMockChannelLoop : public ObDtlChannelLoop {
   virtual int process_one(int64_t& nth_channel, int64_t timeout);
   virtual int process_one_if(PredFunc pred, int64_t timeout, int64_t& nth_channel);
 
-  private:
+private:
   int64_t n_channel_;
   int64_t nth_process_channel_;
 };

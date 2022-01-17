@@ -99,7 +99,7 @@ struct ObWrsClusterHeartbeatResponse {
 };
 
 class ObWrsRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObWrsRpcProxy);
 
   // get CLUSTER level weak read version
@@ -113,30 +113,30 @@ class ObWrsRpcProxy : public obrpc::ObRpcProxy {
 
 ///////////////////////////////// RPC process functions /////////////////////////////////////
 class ObWrsGetClusterVersionP : public ObWrsRpcProxy::Processor<OB_WRS_GET_CLUSTER_VERSION> {
-  public:
+public:
   explicit ObWrsGetClusterVersionP(transaction::ObIWeakReadService* wrs) : wrs_(wrs)
   {}
   virtual ~ObWrsGetClusterVersionP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   transaction::ObIWeakReadService* wrs_;
 };
 
 class ObWrsClusterHeartbeatP : public ObWrsRpcProxy::Processor<OB_WRS_CLUSTER_HEARTBEAT> {
-  public:
+public:
   explicit ObWrsClusterHeartbeatP(transaction::ObIWeakReadService* wrs) : wrs_(wrs)
   {}
   virtual ~ObWrsClusterHeartbeatP()
   {}
 
-  protected:
+protected:
   int process();
 
-  private:
+private:
   transaction::ObIWeakReadService* wrs_;
 };
 

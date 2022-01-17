@@ -35,7 +35,7 @@ union AtomicCntAndState {
 };
 
 class ObIntermResultInfo {
-  public:
+public:
   ObIntermResultInfo() : slice_id_()
   {}
   virtual ~ObIntermResultInfo()
@@ -67,7 +67,7 @@ class ObIntermResultInfo {
 };
 
 class ObIntermResult {
-  public:
+public:
   friend class ObIntermResultIterator;
 
   static const int32_t STATE_NORMAL = 0;
@@ -169,7 +169,7 @@ class ObIntermResult {
 
   int get_item(const int64_t index, ObIIntermResultItem*& item);
 
-  private:
+private:
   int alloc_scanner();
   void free_scanner();
 
@@ -181,7 +181,7 @@ class ObIntermResult {
   int reset_and_init_cur_scanner();
   int check_and_init_cur_scanner();
 
-  private:
+private:
   static const int64_t DEFAULT_INTERM_RESULT_ITEM_NUM = 2;
   common::ObScanner* cur_scanner_;
   ObIntermResultItemPool* ir_item_pool_;
@@ -200,12 +200,12 @@ class ObIntermResult {
   int64_t offset_;
   ObPhyOperator::reclaim_row_t row_reclaim_func_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObIntermResult);
 };
 
 class ObIntermResultIterator {
-  public:
+public:
   friend class ObIntermResultManager;
   ObIntermResultIterator();
   virtual ~ObIntermResultIterator();
@@ -221,7 +221,7 @@ class ObIntermResultIterator {
     return ir_;
   }
   // int64_t get_col_count();
-  private:
+private:
   int set_interm_result(const ObIntermResultInfo& ir_info, ObIntermResult* ir, bool has_inc_cnt);
   int get_interm_result_info(ObIntermResultInfo& ir_info);
 

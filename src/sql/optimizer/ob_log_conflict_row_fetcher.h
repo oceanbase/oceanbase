@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObLogConflictRowFetcher : public ObLogicalOperator {
-  public:
+public:
   ObLogConflictRowFetcher(ObLogPlan& plan)
       : ObLogicalOperator(plan),
         table_id_(common::OB_INVALID_ID),
@@ -51,7 +51,7 @@ class ObLogConflictRowFetcher : public ObLogicalOperator {
   {
     return conflict_exprs_;
   }
-  uint64_t hash(uint64_t seed) const;
+  uint64_t hash(uint64_t seed) const override;
   void set_table_id(uint64_t table_id)
   {
     table_id_ = table_id;
@@ -79,10 +79,10 @@ class ObLogConflictRowFetcher : public ObLogicalOperator {
   virtual int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   TO_STRING_KV(K_(table_id), K_(index_tid), K_(only_data_table), K_(conflict_exprs), K_(access_exprs));
 
-  private:
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+private:
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
-  private:
+private:
   uint64_t table_id_;
   uint64_t index_tid_;
   bool only_data_table_;

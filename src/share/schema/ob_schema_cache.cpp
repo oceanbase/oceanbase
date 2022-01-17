@@ -229,7 +229,7 @@ int ObSchemaCache::init()
         .set_properties(lib::ALLOC_THREAD_SAFE)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE)
         .set_parallel(1);
-    if (OB_FAIL(ROOT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create memory entity failed");
     } else if (OB_ISNULL(mem_context_)) {
       ret = OB_ERR_UNEXPECTED;

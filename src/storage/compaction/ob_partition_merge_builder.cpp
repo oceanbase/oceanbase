@@ -45,7 +45,9 @@ ObMacroBlockBuilder::ObMacroBlockBuilder()
       need_build_bloom_filter_(false),
       bf_macro_writer_(),
       cols_id_map_(nullptr),
-      is_opened_(false)
+      is_opened_(false),
+      check_row_flag_status_(CHECK_FIRST_ROW),
+      last_compact_row_nop_cnt_(-1)
 {}
 
 ObMacroBlockBuilder::~ObMacroBlockBuilder()
@@ -87,11 +89,12 @@ int ObMacroBlockBuilder::open(storage::ObSSTableMergeCtx& ctx, const int64_t idx
     ObMacroDataSeq macro_start_seq(0);
     task_idx_ = idx;
     desc_.merge_info_ = &sstable_merge_info_;
+    desc_.iter_complement_ = iter_complement;
     mark_deletion_maker_ = NULL;
     if (desc_.need_prebuild_bloomfilter_) {
       ObIPartitionGroup* pg = ctx.pg_guard_.get_partition_group();
       if (OB_ISNULL(pg)) {
-        STORAGE_LOG(WARN, "Unexcepted null partition group", K(ctx));
+        STORAGE_LOG(WARN, "Unexpected null partition group", K(ctx));
         desc_.need_prebuild_bloomfilter_ = false;
       } else if (is_follower_state(pg->get_partition_state())) {
         desc_.need_prebuild_bloomfilter_ = false;
@@ -263,7 +266,7 @@ int ObMacroBlockBuilder::init_bloomfilter_if_need(storage::ObSSTableMergeCtx& ct
     for (int64_t i = 0; OB_SUCC(ret) && need_build_bloom_filter_ && i < ctx.tables_handle_.get_tables().count(); i++) {
       if (OB_ISNULL(table = ctx.tables_handle_.get_tables().at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexcepted null table", KP(table), K(ret));
+        STORAGE_LOG(WARN, "Unexpected null table", KP(table), K(ret));
       } else if (!table->is_sstable()) {
         break;
       } else if (FALSE_IT(sstable = reinterpret_cast<ObSSTable*>(table))) {
@@ -272,7 +275,7 @@ int ObMacroBlockBuilder::init_bloomfilter_if_need(storage::ObSSTableMergeCtx& ct
       } else if (!sstable->has_bloom_filter_macro_block()) {
         need_build_bloom_filter_ = false;
       } else if (OB_FAIL(sstable->get_bf_macro_block_ctx(bf_block_ctx))) {
-        STORAGE_LOG(WARN, "Faild to get bloomfilter block ctx", K(ret));
+        STORAGE_LOG(WARN, "Failed to get bloomfilter block ctx", K(ret));
       } else if (nullptr == file && OB_ISNULL(file = desc_.file_handle_.get_storage_file())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "fail to get pg_file", K(ret), K(desc_.file_handle_));
@@ -352,6 +355,8 @@ int ObMacroBlockBuilder::process(const blocksstable::ObMacroBlockCtx& macro_bloc
   } else if (OB_FAIL(writer_->append_macro_block(macro_block_ctx))) {
     STORAGE_LOG(WARN, "macro block writer fail to close.", K(ret));
   } else {
+    check_row_flag_status_ = CHECK_FIRST_ROW;
+    last_compact_row_nop_cnt_ = -1;
     STORAGE_LOG(DEBUG, "Success to append macro block, ", K(macro_block_ctx));
   }
   return ret;
@@ -423,12 +428,18 @@ int ObMacroBlockBuilder::check_flat_row_columns(const ObStoreRow& row)
 {
   int ret = OB_SUCCESS;
   if (ObActionFlag::OP_ROW_EXIST != row.flag_) {
+    if (row.row_type_flag_.is_last_multi_version_row()) { // meet last row
+      check_row_flag_status_ = CHECK_FIRST_ROW;
+      last_compact_row_nop_cnt_ = -1;
+    }
   } else if (row.row_val_.count_ != desc_.row_column_count_) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexcepte column count of store row", K(row), K_(desc), K(ret));
+    LOG_ERROR("Unexpected column count of store row", K(row), K_(desc), K(ret));
   } else {
     const int64_t interval = 4;
     int64_t i = 0;
+    int64_t nop_pos_cnt = 0;
+    bool check_nop_pos_flag = desc_.is_multi_version_minor_sstable();
     for (i = 0; i + interval < row.row_val_.count_; i += interval) {
       const int tmp0 = check_row_column(row, i + 0);
       const int tmp1 = check_row_column(row, i + 1);
@@ -438,14 +449,43 @@ int ObMacroBlockBuilder::check_flat_row_columns(const ObStoreRow& row)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to check row column", K(ret), K(i), K(interval), K(row));
         break;
+      } else if (check_nop_pos_flag) {
+        nop_pos_cnt += (row.row_val_.cells_[i].is_nop_value()
+            + row.row_val_.cells_[i + 1].is_nop_value()
+            + row.row_val_.cells_[i + 2].is_nop_value()
+            + row.row_val_.cells_[i + 3].is_nop_value());
       }
     }
-
     for (; OB_SUCC(ret) && i < row.row_val_.count_; ++i) {
       if (OB_FAIL(check_row_column(row, i))) {
         LOG_WARN("failed to check row column", K(ret), K(i));
+      } else if (check_nop_pos_flag) {
+        nop_pos_cnt += row.row_val_.cells_[i].is_nop_value();
       }
     }
+
+    if (OB_SUCC(ret) && check_nop_pos_flag) {
+      if (row.row_type_flag_.is_uncommitted_row()) {
+        // do nothing
+      } else if (CHECK_FIRST_ROW == check_row_flag_status_) { // meet first committed row
+        check_row_flag_status_ = CHECK_LAST_ROW;
+      } else if (CHECK_LAST_ROW == check_row_flag_status_) {
+        if (nop_pos_cnt < last_compact_row_nop_cnt_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("nop_cnt of current row is less than last compact row", K(ret), K(nop_pos_cnt),
+              K(row), K(last_compact_row_nop_cnt_));
+        }
+      }
+      if (row.row_type_flag_.is_last_multi_version_row()) { // meet last row
+        check_row_flag_status_ = CHECK_FIRST_ROW;
+        last_compact_row_nop_cnt_ = -1;
+      } else if (row.row_type_flag_.is_compacted_multi_version_row()
+          && ObActionFlag::OP_ROW_DOES_NOT_EXIST != row.flag_
+          && ObActionFlag::OP_DEL_ROW != row.flag_) {
+        last_compact_row_nop_cnt_ = nop_pos_cnt;
+      }
+    }
+
   }
 
   return ret;
@@ -460,7 +500,7 @@ OB_INLINE int ObMacroBlockBuilder::check_row_column(const storage::ObStoreRow& r
     // pass
   } else if (obj.get_type() != desc_.column_types_[idx].get_type()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexcepte column type of store row",
+    LOG_ERROR("Unexpected column type of store row",
         K(ret),
         K(idx),
         K(obj),
@@ -482,7 +522,7 @@ OB_INLINE int ObMacroBlockBuilder::check_sparse_row_column(const ObObj& obj, con
     // pass
   } else if (obj.get_type() != desc_.column_types_[idx].get_type()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexcepte column type of store row",
+    LOG_ERROR("Unexpected column type of store row",
         K(ret),
         K(idx),
         K(obj),
@@ -511,7 +551,7 @@ int ObMacroBlockBuilder::append_bloom_filter(const ObStoreRow& row)
     LOG_WARN("Major merge should not build bloomfilter for sstable", K(ret));
   } else if (OB_UNLIKELY(!need_build_bloom_filter_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexcepted status for append bloomfilter", K_(need_build_bloom_filter), K(ret));
+    LOG_WARN("Unexpected status for append bloomfilter", K_(need_build_bloom_filter), K(ret));
   } else if (OB_FAIL(bf_macro_writer_.append(row))) {
     if (OB_NOT_SUPPORTED == ret) {
       ret = OB_SUCCESS;
@@ -550,6 +590,7 @@ int ObMacroBlockBuilder::process(const ObStoreRow& row, const ObCompactRowType::
     STORAGE_LOG(WARN, "The row is invalid, ", K(row), K(ret));
   } else if (OB_FAIL(check_row_columns(row))) {
     STORAGE_LOG(WARN, "The row is invalid, ", K(row), K_(desc), K(ret));
+    writer_->dump_micro_block_writer_buffer();
   } else if (!is_multi_version_minor_merge(merge_type_)) {
     if ((ObActionFlag::OP_ROW_EXIST == row.flag_ || row.row_type_flag_.is_uncommitted_row()) &&
         OB_FAIL(writer_->append_row(row))) {
@@ -568,7 +609,7 @@ int ObMacroBlockBuilder::process(const ObStoreRow& row, const ObCompactRowType::
     } else if (OB_FAIL(writer_->append_row(row))) {  // del_row need been stored when minor merge
       STORAGE_LOG(WARN, "Fail to append row to builder_", K(ret), K_(merge_type));
     } else if (need_build_bloom_filter_ && OB_FAIL(append_bloom_filter(row))) {
-      STORAGE_LOG(WARN, "Faild to append row to bloomfilter", K(ret));
+      STORAGE_LOG(WARN, "Failed to append row to bloomfilter", K(ret));
     } else {
       STORAGE_LOG(DEBUG, "Success to append row to builder_", K(ret), K_(merge_type), K(row));
     }
@@ -604,7 +645,7 @@ int ObMacroBlockBuilder::close()
         STORAGE_LOG(WARN, "Failed to flush bloomfilter macro block", K(ret));
       } else if (OB_UNLIKELY(bf_macro_writer_.get_block_write_ctx().is_empty())) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexcepted macro block write ctx", K(ret));
+        STORAGE_LOG(WARN, "Unexpected macro block write ctx", K(ret));
       } else if (OB_FAIL(ObStorageCacheSuite::get_instance().get_bf_cache().put_bloom_filter(desc_.table_id_,
                      bf_macro_writer_.get_block_write_ctx().macro_block_list_.at(0),
                      merge_context_->get_file_id(),
@@ -690,6 +731,8 @@ void ObMacroBlockBuilder::reset()
   need_build_bloom_filter_ = false;
   bf_macro_writer_.reset();
   is_opened_ = false;
+  check_row_flag_status_ = CHECK_FIRST_ROW;
+  last_compact_row_nop_cnt_ = -1;
 }
 
 void ObMacroBlockBuilder::set_purged_count(const int64_t count)

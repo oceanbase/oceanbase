@@ -19,13 +19,13 @@
 namespace oceanbase {
 namespace sql {
 class ObExprRegexpCount : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprRegexpCount(common::ObIAllocator& alloc);
   virtual ~ObExprRegexpCount();
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
@@ -34,12 +34,12 @@ class ObExprRegexpCount : public ObFuncExprOperator {
   static int get_regexp_flags(
       const common::ObCollationType calc_cs_type, const common::ObString& match_param, int& flags, int& multi_flag);
 
-  private:
+private:
   static int calc(int64_t& ret_count, const common::ObString& text, const common::ObString& pattern, int64_t position,
       const common::ObCollationType calc_cs_type, const common::ObString& match_param, int64_t subexpr,
       bool has_null_argument, ObExprRegexContext* regexp_ptr, common::ObExprStringBuf& string_buf);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpCount);
 };
 }  // namespace sql

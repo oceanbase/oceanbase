@@ -37,7 +37,7 @@ class AChunkList {
   friend class ObMemoryCutter;
   DISALLOW_COPY_AND_ASSIGN(AChunkList);
 
-  public:
+public:
   static const int DEFAULT_MAX_CHUNK_CACHE_CNT = 500;
   AChunkList(const bool with_mutex = true)
       : max_chunk_cache_cnt_(DEFAULT_MAX_CHUNK_CACHE_CNT),
@@ -46,13 +46,22 @@ class AChunkList {
         pushes_(0),
         pops_(0),
         with_mutex_(with_mutex)
-  {}
+  {
+#ifdef OB_USE_ASAN
+    max_chunk_cache_cnt_ = 0;
+#endif
+  }
   virtual ~AChunkList()
   {}
 
   void set_max_chunk_cache_cnt(const int cnt)
   {
+#ifdef OB_USE_ASAN
+    UNUSED(cnt);
+    max_chunk_cache_cnt_ = 0;
+#else
     max_chunk_cache_cnt_ = cnt;
+#endif
   }
 
   inline bool push(AChunk* chunk)
@@ -108,7 +117,7 @@ class AChunkList {
     return pops_;
   }
 
-  private:
+private:
   int32_t max_chunk_cache_cnt_;
   ObMutex mutex_;
   AChunk* header_;
@@ -120,28 +129,28 @@ class AChunkList {
 const char* const use_large_pages_confs[] = {"true", "false", "only"};
 
 class ObLargePageHelper {
-  public:
+public:
   static const int INVALID_LARGE_PAGE_TYPE = -1;
   static const int NO_LARGE_PAGE = 0;
   static const int PREFER_LARGE_PAGE = 1;
   static const int ONLY_LARGE_PAGE = 2;
 
-  public:
+public:
   static void set_param(const char* param);
   static int get_type();
 
-  private:
+private:
   static int large_page_type_;
 };
 
 class AChunkMgr {
   friend class ObMemoryCutter;
 
-  private:
+private:
   static const int64_t DEFAULT_LIMIT = 4L << 30;           // 4GB
   static const int64_t LARGE_CHUNK_FREE_SPACE = 2L << 30;  // 2GB
 
-  public:
+public:
 #if MEMCHK_LEVEL >= 1
   static const uint64_t ALIGN_SIZE = MEMCHK_CHUNK_ALIGN;
 #else
@@ -150,7 +159,7 @@ class AChunkMgr {
 
   static AChunkMgr& instance();
 
-  public:
+public:
   AChunkMgr();
 
   AChunk* alloc_chunk(const uint64_t size = ACHUNK_SIZE, bool high_prio = false);
@@ -192,10 +201,10 @@ class AChunkMgr {
     return large_unmaps_;
   }
 
-  private:
+private:
   typedef ABitSet ChunkBitMap;
 
-  private:
+private:
   void* direct_alloc(const uint64_t size);
   void direct_free(const void* ptr, const uint64_t size);
   // wrap for mmap
@@ -204,7 +213,7 @@ class AChunkMgr {
 
   bool update_hold(int64_t bytes, bool high_prio);
 
-  protected:
+protected:
   AChunkList free_list_;
   ChunkBitMap* chunk_bitmap_;
 

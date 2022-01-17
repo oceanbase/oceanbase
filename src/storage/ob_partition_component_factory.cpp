@@ -147,16 +147,6 @@ ObPartGroupMigrationTask* ObPartitionComponentFactory::get_part_group_migration_
   return op_alloc(ObPartGroupMigrationTask);
 }
 
-ObPhysicalBaseMetaRestoreReader* ObPartitionComponentFactory::get_base_data_meta_restore_reader()
-{
-  return op_alloc(ObPhysicalBaseMetaRestoreReader);
-}
-
-ObPartitionMacroBlockRestoreReader* ObPartitionComponentFactory::get_macro_block_restore_reader()
-{
-  return op_alloc(ObPartitionMacroBlockRestoreReader);
-}
-
 ObPartitionBaseDataMetaRestoreReader* ObPartitionComponentFactory::get_meta_restore_reader()
 {
   return op_alloc(ObPartitionBaseDataMetaRestoreReader);
@@ -170,16 +160,6 @@ ObPartitionBaseDataMetaObReader* ObPartitionComponentFactory::get_old_rpc_base_d
 ObPGPartitionBaseDataMetaObReader* ObPartitionComponentFactory::get_pg_info_reader()
 {
   return op_alloc(ObPGPartitionBaseDataMetaObReader);
-}
-
-ObPGPartitionBaseDataMetaRestorReader* ObPartitionComponentFactory::get_pg_info_restore_reader()
-{
-  return op_alloc(ObPGPartitionBaseDataMetaRestorReader);
-}
-
-ObPartitionGroupMetaRestoreReader* ObPartitionComponentFactory::get_partition_group_meta_restore_reader()
-{
-  return op_alloc(ObPartitionGroupMetaRestoreReader);
 }
 
 ObPartGroupBackupTask* ObPartitionComponentFactory::get_part_group_backup_task()
@@ -375,8 +355,6 @@ void ObPartitionComponentFactory::free(ObIPhysicalBaseMetaReader* reader)
   if (NULL != reader) {
     if (ObIPhysicalBaseMetaReader::BASE_DATA_META_OB_READER == reader->get_type()) {
       component_free(static_cast<ObPhysicalBaseMetaReader*>(reader));
-    } else if (ObIPhysicalBaseMetaReader::BASE_DATA_META_RESTORE_READER == reader->get_type()) {
-      component_free(static_cast<ObPhysicalBaseMetaRestoreReader*>(reader));
     } else if (ObIPhysicalBaseMetaReader::BASE_DATA_META_OB_COMPAT_READER == reader->get_type()) {
       component_free(static_cast<ObPartitionBaseDataMetaObReader*>(reader));
     } else if (ObIPhysicalBaseMetaReader::BASE_DATA_META_RESTORE_READER_V1 == reader->get_type()) {
@@ -394,8 +372,6 @@ void ObPartitionComponentFactory::free(ObIPartitionMacroBlockReader* reader)
   if (NULL != reader) {
     if (ObIPartitionMacroBlockReader::MACRO_BLOCK_OB_READER == reader->get_type()) {
       component_free(static_cast<ObPartitionMacroBlockObReader*>(reader));
-    } else if (ObIPartitionMacroBlockReader::MACRO_BLOCK_RESTORE_READER == reader->get_type()) {
-      component_free(static_cast<ObPartitionMacroBlockRestoreReader*>(reader));
     } else if (ObIPartitionMacroBlockReader::MACRO_BLOCK_BACKUP_READER == reader->get_type()) {
       component_free(static_cast<ObPartitionMacroBlockBackupReader*>(reader));
     } else if (ObIPartitionMacroBlockReader::MACRO_BLOCK_RESTORE_READER_V2 == reader->get_type()) {
@@ -429,18 +405,11 @@ void ObPartitionComponentFactory::free(ObPGPartitionBaseDataMetaObReader* reader
   component_free(reader);
 }
 
-void ObPartitionComponentFactory::free(ObPGPartitionBaseDataMetaRestorReader* reader)
-{
-  component_free(reader);
-}
-
 void ObPartitionComponentFactory::free(ObIPGPartitionBaseDataMetaObReader* reader)
 {
   if (NULL != reader) {
     if (ObIPGPartitionBaseDataMetaObReader::BASE_DATA_META_OB_READER == reader->get_type()) {
       free(static_cast<ObPGPartitionBaseDataMetaObReader*>(reader));
-    } else if (ObIPGPartitionBaseDataMetaObReader::BASE_DATA_META_OB_RESTORE_READER == reader->get_type()) {
-      free(static_cast<ObPGPartitionBaseDataMetaRestorReader*>(reader));
     } else if (ObIPGPartitionBaseDataMetaObReader::BASE_DATA_META_OB_BACKUP_READER == reader->get_type()) {
       free(static_cast<ObPGPartitionBaseDataMetaBackupReader*>(reader));
     } else if (ObIPGPartitionBaseDataMetaObReader::BASE_DATA_META_OB_RESTORE_READER_V1 == reader->get_type()) {
@@ -451,11 +420,6 @@ void ObPartitionComponentFactory::free(ObIPGPartitionBaseDataMetaObReader* reade
       STORAGE_LOG(ERROR, "unknown reader type", "type", reader->get_type());
     }
   }
-}
-
-void ObPartitionComponentFactory::free(ObPartitionGroupMetaRestoreReader* reader)
-{
-  component_free(reader);
 }
 
 void ObPartitionComponentFactory::free(ObPartGroupBackupTask*& task)
@@ -533,9 +497,7 @@ void ObPartitionComponentFactory::free(ObPartitionGroupMetaRestoreReaderV1* read
 void ObPartitionComponentFactory::free(ObIPartitionGroupMetaRestoreReader* reader)
 {
   if (NULL != reader) {
-    if (ObIPartitionGroupMetaRestoreReader::PG_META_RESTORE_READER == reader->get_type()) {
-      component_free(static_cast<ObPartitionGroupMetaRestoreReader*>(reader));
-    } else if (ObIPartitionGroupMetaRestoreReader::PG_META_RESTORE_READER_V1 == reader->get_type()) {
+    if (ObIPartitionGroupMetaRestoreReader::PG_META_RESTORE_READER_V1 == reader->get_type()) {
       component_free(static_cast<ObPartitionGroupMetaRestoreReaderV1*>(reader));
     } else if (ObIPartitionGroupMetaRestoreReader::PG_META_RESTORE_READER_V2 == reader->get_type()) {
       component_free(static_cast<ObPartitionGroupMetaRestoreReaderV2*>(reader));

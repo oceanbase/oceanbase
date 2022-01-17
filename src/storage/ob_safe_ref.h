@@ -53,7 +53,7 @@ struct SafeRef2 {
 };
 
 class SafeRefAlloc {
-  public:
+public:
   typedef common::ObLinkQueue FreeList;
   SafeRef* alloc()
   {
@@ -74,12 +74,12 @@ class SafeRefAlloc {
     (void)free_list_.push(p);
   }
 
-  private:
+private:
   FreeList free_list_;
 };
 
 class ObSafeRefKeeper {
-  public:
+public:
   typedef SafeRefAlloc Alloc;
   ObSafeRefKeeper()
   {}
@@ -130,7 +130,7 @@ class ObSafeRefKeeper {
     }
   }
 
-  private:
+private:
   Alloc alloc_;
 };
 

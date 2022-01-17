@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace blocksstable {
 
 class ObFuseRowCacheKey : public common::ObIKVCacheKey {
-  public:
+public:
   ObFuseRowCacheKey();
   ObFuseRowCacheKey(const uint64_t table_id, const ObStoreRowkey& rowkey);
   virtual ~ObFuseRowCacheKey() = default;
@@ -32,7 +32,7 @@ class ObFuseRowCacheKey : public common::ObIKVCacheKey {
   bool is_valid() const;
   TO_STRING_KV(K_(table_id), K_(rowkey_size), K_(rowkey));
 
-  private:
+private:
   uint64_t table_id_;
   int64_t rowkey_size_;
   common::ObStoreRowkey rowkey_;
@@ -40,11 +40,11 @@ class ObFuseRowCacheKey : public common::ObIKVCacheKey {
 };
 
 class ObFuseRowCacheValue : public common::ObIKVCacheValue {
-  public:
+public:
   ObFuseRowCacheValue();
   virtual ~ObFuseRowCacheValue() = default;
   int init(const storage::ObStoreRow& row, const int64_t schema_version, const int64_t snapshot_version,
-      const int64_t partition_id, const int64_t sstable_end_log_ts, const storage::ObFastQueryContext& fq_ctx);
+      const int64_t partition_id, const int64_t sstable_end_log_ts);
   virtual int64_t size() const override;
   virtual int deep_copy(char* buf, const int64_t buf_len, ObIKVCacheValue*& value) const override;
   bool is_valid() const
@@ -80,14 +80,10 @@ class ObFuseRowCacheValue : public common::ObIKVCacheValue {
   {
     return sstable_end_log_ts_;
   }
-  const storage::ObFastQueryContext* get_fq_ctx() const
-  {
-    return &fq_ctx_;
-  }
   TO_STRING_KV(KP_(obj_array), K_(size), K_(column_cnt), K_(schema_version), K_(flag), K_(snapshot_version),
-      K_(partition_id), K_(sstable_end_log_ts), K(fq_ctx_));
+      K_(partition_id), K_(sstable_end_log_ts));
 
-  private:
+private:
   common::ObObj* obj_array_;
   int64_t size_;
   int32_t column_cnt_;
@@ -96,7 +92,6 @@ class ObFuseRowCacheValue : public common::ObIKVCacheValue {
   int64_t snapshot_version_;
   int64_t partition_id_;
   int64_t sstable_end_log_ts_;
-  storage::ObFastQueryContext fq_ctx_;
 };
 
 struct ObFuseRowValueHandle {
@@ -118,13 +113,13 @@ struct ObFuseRowValueHandle {
 };
 
 class ObFuseRowCache : public common::ObKVCache<ObFuseRowCacheKey, ObFuseRowCacheValue> {
-  public:
+public:
   ObFuseRowCache() = default;
   virtual ~ObFuseRowCache() = default;
   int get_row(const ObFuseRowCacheKey& key, const int64_t partition_id, ObFuseRowValueHandle& handle);
   int put_row(const ObFuseRowCacheKey& key, const ObFuseRowCacheValue& value);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFuseRowCache);
 };
 

@@ -25,17 +25,17 @@ namespace observer {
 class ObSMConnection;
 
 class ObMPConnect : public ObMPBase {
-  public:
+public:
   explicit ObMPConnect(const ObGlobalContext& gctx);
   virtual ~ObMPConnect();
 
-  protected:
+protected:
   int process();
   int deserialize();
 
   int load_privilege_info(sql::ObSQLSessionInfo& session);
 
-  private:
+private:
   int get_tenant_id(uint64_t& tenant_id);
   int64_t get_user_id();
   int64_t get_database_id();
@@ -86,7 +86,7 @@ class ObMPConnect : public ObMPBase {
 
   int setup_user_resource_group(ObSMConnection& conn, const uint64_t tenant_id, const uint64_t user_id);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMPConnect);
   obmysql::OMPKHandshakeResponse hsr_;
   common::ObString user_name_;

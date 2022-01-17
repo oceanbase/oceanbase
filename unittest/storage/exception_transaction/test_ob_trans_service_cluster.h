@@ -40,11 +40,11 @@ namespace unittest {
 //};
 
 class ObTransServiceCluster {
-  public:
+public:
   ObTransServiceCluster();
   ~ObTransServiceCluster();
 
-  public:
+public:
   bool is_inited()
   {
     return inited_;
@@ -56,7 +56,7 @@ class ObTransServiceCluster {
   int wait();
   int destroy();
 
-  public:
+public:
   ObTransRpcProxy* get_trans_proxy()
   {
     return &trans_proxy_;
@@ -91,7 +91,7 @@ class ObTransServiceCluster {
       const int64_t start_request_abort_time, const int64_t end_request_abort_time, const bool response_abort,
       const int64_t start_response_abort_time, const int64_t end_response_abort_time, const bool is_clear = true);
 
-  private:
+private:
   typedef common::hash::ObHashMap<common::ObAddr, common::ObPartitionLeaderArray> ObPartitionLeaderMap;
   int32_t get_scheduler_idx_()
   {
@@ -99,7 +99,7 @@ class ObTransServiceCluster {
   }
   int add_partition_(const ObPartitionKey& partition, const ObAddr& addr, ObPartitionLeaderMap& partition_leader_map);
 
-  private:
+private:
   int run_all_tests_(ObTransServiceCtx* trans_service_ctx);
   int run_local_single_partition_transaction_all_major_freeze_tests_(ObTransServiceCtx* trans_service_ctx);
   int run_local_single_partition_transaction_all_rpc_exp_tests_(ObTransServiceCtx* trans_service_ctx);
@@ -136,7 +136,7 @@ class ObTransServiceCluster {
       const bool is_local, const bool is_remote, const bool is_distributed, const bool is_rollback = false);
   int set_test_retry_end_trans(ObTransServiceCtx* trans_service_ctx, const bool test_retry_end_trans);
 
-  private:
+private:
   bool inited_;
   bool is_running_;
   bool is_add_partition_;

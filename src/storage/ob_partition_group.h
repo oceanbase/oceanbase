@@ -55,7 +55,7 @@ enum ObMigrateRetryFlag {
 };
 
 class ObPartitionGroup : public ObIPartitionGroup {
-  public:
+public:
   ObPartitionGroup();
   virtual ~ObPartitionGroup();
 
@@ -63,21 +63,21 @@ class ObPartitionGroup : public ObIPartitionGroup {
       share::schema::ObMultiVersionSchemaService* schema_service, transaction::ObTransService* txs,
       replayengine::ObILogReplayEngine* rp_eg, ObPartitionService* ps, ObPartitionGroupIndex* pg_index,
       ObPGPartitionMap* pg_partition_map) override;
-  virtual void destroy();
+  virtual void destroy() override;
   virtual void clear() override;
 
-  virtual const clog::ObIPartitionLogService* get_log_service() const;
-  virtual clog::ObIPartitionLogService* get_log_service();
+  virtual const clog::ObIPartitionLogService* get_log_service() const override;
+  virtual clog::ObIPartitionLogService* get_log_service() override;
   virtual ObIPartitionComponentFactory* get_cp_fty()
   {
     return cp_fty_;
   }
 
-  virtual ObPGStorage& get_pg_storage()
+  virtual ObPGStorage& get_pg_storage() override
   {
     return pg_storage_;
   }
-  virtual ObPartitionService* get_partition_service();
+  virtual ObPartitionService* get_partition_service() override;
   virtual ObPartitionGroupIndex* get_pg_index() override
   {
     return pg_index_;
@@ -86,37 +86,39 @@ class ObPartitionGroup : public ObIPartitionGroup {
   {
     return pg_partition_map_;
   };
-  virtual transaction::ObTransService* get_trans_service();
-  virtual const common::ObPartitionKey& get_partition_key() const;
-  virtual int get_pg_partition(const common::ObPartitionKey& pkey, ObPGPartitionGuard& guard);
+  virtual transaction::ObTransService* get_trans_service() override;
+  virtual const common::ObPartitionKey& get_partition_key() const override;
+  virtual int get_pg_partition(const common::ObPartitionKey& pkey, ObPGPartitionGuard& guard) override;
 
-  virtual int set_valid();
-  virtual void set_invalid();
-  virtual bool is_valid() const;
-  virtual bool is_pg() const
+  virtual int set_valid() override;
+  virtual void set_invalid() override;
+  virtual bool is_valid() const override;
+  virtual bool is_pg() const override
   {
     return pkey_.is_pg();
   }
 
-  virtual int table_scan(ObTableScanParam& param, common::ObNewRowIterator*& result);
+  virtual int table_scan(ObTableScanParam& param, common::ObNewRowIterator*& result) override;
   virtual int table_scan(ObTableScanParam& param, common::ObNewIterIterator*& result) override;
   virtual int join_mv_scan(ObTableScanParam& left_param, ObTableScanParam& right_param,
       ObIPartitionGroup& right_partition, common::ObNewRowIterator*& result) override;
   virtual int delete_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
-      const common::ObIArray<uint64_t>& column_ids, common::ObNewRowIterator* row_iter, int64_t& affected_rows);
+      const common::ObIArray<uint64_t>& column_ids, common::ObNewRowIterator* row_iter,
+      int64_t& affected_rows) override;
   virtual int delete_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& column_ids, const common::ObNewRow& row) override;
   virtual int put_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& column_ids, common::ObNewRowIterator* row_iter,
       int64_t& affected_rows) override;
   virtual int insert_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
-      const common::ObIArray<uint64_t>& column_ids, common::ObNewRowIterator* row_iter, int64_t& affected_rows);
+      const common::ObIArray<uint64_t>& column_ids, common::ObNewRowIterator* row_iter,
+      int64_t& affected_rows) override;
   virtual int insert_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& column_ids, const common::ObNewRow& row) override;
   virtual int insert_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& column_ids, const common::ObIArray<uint64_t>& duplicated_column_ids,
       const common::ObNewRow& row, const ObInsertFlag flag, int64_t& affected_rows,
-      common::ObNewRowIterator*& duplicated_rows);
+      common::ObNewRowIterator*& duplicated_rows) override;
   // Used to check whether the specified row conflicts in the storage
   // @in_column_ids is used to specify the column of the row to be checked.
   // Rowkey must be first and local unique index must be included.
@@ -126,40 +128,39 @@ class ObPartitionGroup : public ObIPartitionGroup {
   // to the number of rows to be checked
   virtual int fetch_conflict_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& in_column_ids, const common::ObIArray<uint64_t>& out_column_ids,
-      common::ObNewRowIterator& check_row_iter, common::ObIArray<common::ObNewRowIterator*>& dup_row_iters);
-  virtual int revert_insert_iter(const common::ObPartitionKey& pkey, common::ObNewRowIterator* iter);
+      common::ObNewRowIterator& check_row_iter, common::ObIArray<common::ObNewRowIterator*>& dup_row_iters) override;
+  virtual int revert_insert_iter(const common::ObPartitionKey& pkey, common::ObNewRowIterator* iter) override;
   virtual int update_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& column_ids, const common::ObIArray<uint64_t>& updated_column_ids,
-      common::ObNewRowIterator* row_iter, int64_t& affected_rows);
+      common::ObNewRowIterator* row_iter, int64_t& affected_rows) override;
   virtual int update_row(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param,
       const common::ObIArray<uint64_t>& column_ids, const common::ObIArray<uint64_t>& updated_column_ids,
       const common::ObNewRow& old_row, const common::ObNewRow& new_row) override;
   virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
-      common::ObNewRowIterator* row_iter, ObLockFlag lock_flag, int64_t& affected_rows);
+      common::ObNewRowIterator* row_iter, const ObLockFlag lock_flag, int64_t& affected_rows) override;
   virtual int lock_rows(const ObStoreCtx& ctx, const ObDMLBaseParam& dml_param, const int64_t abs_lock_timeout,
-      const common::ObNewRow& row, ObLockFlag lock_flag);
+      const common::ObNewRow& row, ObLockFlag lock_flag) override;
 
-  virtual int get_role(common::ObRole& role) const;
-  virtual int get_role_for_partition_table(common::ObRole& role) const;
-  virtual int get_role_unsafe(common::ObRole& role) const;
-  virtual int get_leader_curr_member_list(common::ObMemberList& member_list) const;
-  virtual int get_leader(common::ObAddr& leader) const;
-  virtual int get_curr_member_list(common::ObMemberList& member_list) const;
-  virtual int get_curr_member_list_for_report(common::ObMemberList& member_list) const;
+  virtual int get_role(common::ObRole& role) const override;
+  virtual int get_role_unsafe(common::ObRole& role) const override;
+  virtual int get_leader_curr_member_list(common::ObMemberList& member_list) const override;
+  virtual int get_leader(common::ObAddr& leader) const override;
+  virtual int get_curr_member_list(common::ObMemberList& member_list) const override;
+  virtual int get_curr_member_list_for_report(common::ObMemberList& member_list) const override;
   virtual int get_curr_leader_and_memberlist(common::ObAddr& leader, common::ObRole& role,
-      common::ObMemberList& curr_member_list, common::ObChildReplicaList& children_list) const;
-  virtual int get_dst_leader_candidate(common::ObMemberList& member_list) const;
-  virtual int get_log_archive_status(clog::ObPGLogArchiveStatus& status) const;
-  virtual int change_leader(const common::ObAddr& leader);
+      common::ObMemberList& curr_member_list, common::ObChildReplicaList& children_list) const override;
+  virtual int get_dst_leader_candidate(common::ObMemberList& member_list) const override;
+  virtual int get_log_archive_status(clog::ObPGLogArchiveStatus& status) const override;
+  virtual int change_leader(const common::ObAddr& leader) override;
   virtual int leader_takeover() override;
-  virtual int leader_revoke();
-  virtual int leader_active();
-  virtual ObReplayStatus* get_replay_status();
+  virtual int leader_revoke() override;
+  virtual int leader_active() override;
+  virtual ObReplayStatus* get_replay_status() override;
   // write ssstore objects @version tree to data file , used by write_check_point
-  virtual int serialize(ObArenaAllocator& allocator, char*& new_buf, int64_t& serialize_size);
+  virtual int serialize(ObArenaAllocator& allocator, char*& new_buf, int64_t& serialize_size) override;
 
   // read ssstore objects from data file to construct partition storage's version tree.
-  virtual int deserialize(const char* buf, const int64_t buf_len, int64_t& pos);
+  virtual int deserialize(const char* buf, const int64_t buf_len, int64_t& pos) override;
 
   virtual int report_clog_history_online() override;
   virtual int report_clog_history_offline() override;
@@ -171,96 +172,97 @@ class ObPartitionGroup : public ObIPartitionGroup {
   virtual int schema_drop(const bool for_replay, const uint64_t log_id, const bool is_physical_drop) override;
 
   // get create timestamp
-  virtual int get_create_ts(int64_t& create_ts);
+  virtual int get_create_ts(int64_t& create_ts) override;
 
   // role change status
-  virtual void replay_status_revoke();
+  virtual void replay_status_revoke() override;
 
-  virtual int get_replica_state(ObPartitionReplicaState& state);
+  virtual int get_replica_state(ObPartitionReplicaState& state) override;
 
-  virtual bool is_removed() const;
-  virtual int check_is_in_member_list(bool& is_in_member_list) const;
-  virtual int offline_itself(const bool is_physical_drop);
+  virtual bool is_removed() const override;
+  virtual int check_is_in_member_list(bool& is_in_member_list) const override;
+  virtual int offline_itself(const bool is_physical_drop) override;
   virtual int submit_add_partition_to_pg_log(const obrpc::ObCreatePartitionArg& arg, ObPartitionService* ps,
-      uint64_t& log_id, int64_t& log_timestamp, ObAddPartitionToPGLogCb*& out_cb);
-  virtual int submit_remove_partition_from_pg_log(const ObPartitionKey& pkey);
+      uint64_t& log_id, int64_t& log_timestamp, ObAddPartitionToPGLogCb*& out_cb) override;
+  virtual int submit_remove_partition_from_pg_log(const ObPartitionKey& pkey) override;
   virtual int submit_partition_schema_change_log(const common::ObPartitionKey& pkey, const int64_t schema_version,
       const uint64_t index_id, ObPartitionService* ps, uint64_t& log_id, int64_t& log_ts,
-      ObSchemaChangeClogCb*& out_cb);
+      ObSchemaChangeClogCb*& out_cb) override;
   virtual int remove_partition_from_pg(
-      const bool for_replay, const ObPartitionKey& pkey, const bool write_slog_trans, const uint64_t log_id);
+      const bool for_replay, const ObPartitionKey& pkey, const bool write_slog_trans, const uint64_t log_id) override;
 
   virtual int replay_partition_meta_log(
       const ObStorageLogType log_type, const int64_t log_id, const char* buf, const int64_t size) override;
-  virtual int set_wait_split();
-  virtual int save_split_state(const bool write_slog);
-  virtual int restore_split_state(const int state);
-  virtual int restore_split_info(const ObPartitionSplitInfo& split_info);
+  virtual int set_wait_split() override;
+  virtual int save_split_state(const bool write_slog) override;
+  virtual int restore_split_state(const int state) override;
+  virtual int restore_split_info(const ObPartitionSplitInfo& split_info) override;
   virtual int replay_split_source_log(
-      const ObPartitionSplitSourceLog& log, const uint64_t log_id, const int64_t log_ts);
-  virtual int replay_split_dest_log(const ObPartitionSplitDestLog& log);
-  virtual int sync_split_source_log_success(const int64_t log_id, const int64_t log_ts);
-  virtual int sync_split_dest_log_success();
+      const ObPartitionSplitSourceLog& log, const uint64_t log_id, const int64_t log_ts) override;
+  virtual int replay_split_dest_log(const ObPartitionSplitDestLog& log) override;
+  virtual int sync_split_source_log_success(const int64_t log_id, const int64_t log_ts) override;
+  virtual int sync_split_dest_log_success() override;
   virtual int prepare_splitting(
-      const ObPartitionSplitInfo& split_info, const common::ObMemberList& mlist, const common::ObAddr& leader);
+      const ObPartitionSplitInfo& split_info, const common::ObMemberList& mlist, const common::ObAddr& leader) override;
   virtual int split_source_partition(const int64_t schema_version, const share::ObSplitPartitionPair& info,
-      enum share::ObSplitProgress& partition_progress);
-  virtual int split_dest_partition(const ObPartitionSplitInfo& split_info, enum share::ObSplitProgress& progress);
+      enum share::ObSplitProgress& partition_progress) override;
+  virtual int split_dest_partition(
+      const ObPartitionSplitInfo& split_info, enum share::ObSplitProgress& progress) override;
   virtual int push_reference_tables(
-      const common::ObIArray<common::ObPartitionKey>& dest_array, const int64_t split_version);
-  virtual int replay_split_state_slog(const ObSplitPartitionStateLogEntry& log_entry);
-  virtual int replay_split_info_slog(const ObSplitPartitionInfoLogEntry& log_entry);
+      const common::ObIArray<common::ObPartitionKey>& dest_array, const int64_t split_version) override;
+  virtual int replay_split_state_slog(const ObSplitPartitionStateLogEntry& log_entry) override;
+  virtual int replay_split_info_slog(const ObSplitPartitionInfoLogEntry& log_entry) override;
   virtual int set_dest_partition_split_progress(
-      const int64_t schema_version, const common::ObPartitionKey& pkey, const int progress);
-  virtual int get_all_table_ids(const ObPartitionKey& pkey, common::ObIArray<uint64_t>& index_tables);
-  virtual int get_reference_tables(const ObPartitionKey& pkey, const int64_t index_id, ObTablesHandle& handle);
-  virtual int get_reference_memtables(ObTablesHandle& handle);
-  virtual int set_reference_tables(const ObPartitionKey& pkey, const int64_t index_id, ObTablesHandle& handle);
-  virtual int set_split_version(const int64_t split_version);
-  virtual int check_can_migrate(bool& can_migrate);
-  virtual bool is_splitting() const;
-  virtual bool is_split_source_partition() const;
-  virtual bool is_in_dest_split() const;
-  virtual bool is_dest_logical_split_finish() const;
-  virtual int check_split_state() const;
-  virtual int get_split_progress(const int64_t schema_version, int& progress);
-  virtual int set_split_progress(const common::ObAddr& replica, const int progress);
-  virtual int block_partition_split_by_mc();
-  virtual int unblock_partition_split_by_mc();
+      const int64_t schema_version, const common::ObPartitionKey& pkey, const int progress) override;
+  virtual int get_all_table_ids(const ObPartitionKey& pkey, common::ObIArray<uint64_t>& index_tables) override;
+  virtual int get_reference_tables(const ObPartitionKey& pkey, const int64_t index_id, ObTablesHandle& handle) override;
+  virtual int get_reference_memtables(ObTablesHandle& handle) override;
+  virtual int set_reference_tables(const ObPartitionKey& pkey, const int64_t index_id, ObTablesHandle& handle) override;
+  virtual int set_split_version(const int64_t split_version) override;
+  virtual int check_can_migrate(bool& can_migrate) override;
+  virtual bool is_splitting() const override;
+  virtual bool is_split_source_partition() const override;
+  virtual bool is_in_dest_split() const override;
+  virtual bool is_dest_logical_split_finish() const override;
+  virtual int check_split_state() const override;
+  virtual int get_split_progress(const int64_t schema_version, int& progress) override;
+  virtual int set_split_progress(const common::ObAddr& replica, const int progress) override;
+  virtual int block_partition_split_by_mc() override;
+  virtual int unblock_partition_split_by_mc() override;
   virtual int64_t get_freeze_snapshot_ts() const override;
-  virtual ObPartitionState get_partition_state() const;
-  virtual int switch_partition_state(const ObPartitionState state);
+  virtual ObPartitionState get_partition_state() const override;
+  virtual int switch_partition_state(const ObPartitionState state) override;
 
   virtual int try_switch_partition_state(const ObPartitionState state) override;
   virtual int get_latest_schema_version(share::schema::ObMultiVersionSchemaService* schema_service,
-      const common::ObPartitionKey& pkey, int64_t& latest_schema_version);
-  virtual int check_schema_version(share::schema::ObMultiVersionSchemaService* schema_service);
-  virtual int set_base_schema_version(int64_t base_schema_version);
-  virtual int do_warm_up_request(const ObIWarmUpRequest* request);
-  virtual int check_can_do_merge(bool& can_merge, bool& need_merge);
-  virtual int set_replica_type(const common::ObReplicaType& replica_type, const bool write_redo_log);
-  virtual common::ObReplicaType get_replica_type() const;
+      const common::ObPartitionKey& pkey, int64_t& latest_schema_version) override;
+  virtual int check_schema_version(share::schema::ObMultiVersionSchemaService* schema_service) override;
+  virtual int set_base_schema_version(int64_t base_schema_version) override;
+  virtual int do_warm_up_request(const ObIWarmUpRequest* request) override;
+  virtual int check_can_do_merge(bool& can_merge, bool& need_merge) override;
+  virtual int set_replica_type(const common::ObReplicaType& replica_type, const bool write_redo_log) override;
+  virtual common::ObReplicaType get_replica_type() const override;
   virtual common::ObReplicaProperty get_replica_property() const override;
   virtual int generate_weak_read_timestamp(const int64_t max_stale_time, int64_t& timestamp) override;
   virtual int do_partition_loop_work() override;
-  virtual int get_weak_read_timestamp(int64_t& timestamp);
-  virtual int update_last_checkpoint(const int64_t checkpoint);
-  virtual int set_replay_checkpoint(const int64_t checkpoint);
-  virtual int get_replay_checkpoint(int64_t& checkpoint);
-  virtual int64_t get_cur_min_log_service_ts();
-  virtual int64_t get_cur_min_trans_service_ts();
-  virtual int64_t get_cur_min_replay_engine_ts();
-  virtual void set_migrating_flag(const bool flag)
+  virtual int get_weak_read_timestamp(int64_t& timestamp) override;
+  virtual int update_last_checkpoint(const int64_t checkpoint) override;
+  virtual int set_replay_checkpoint(const int64_t checkpoint) override;
+  virtual int get_replay_checkpoint(int64_t& checkpoint) override;
+  virtual int64_t get_cur_min_log_service_ts() override;
+  virtual int64_t get_cur_min_trans_service_ts() override;
+  virtual int64_t get_cur_min_replay_engine_ts() override;
+  virtual void set_migrating_flag(const bool flag) override
   {
     partition_loop_worker_.set_migrating_flag(flag);
   }
-  virtual bool get_migrating_flag() const
+  virtual bool get_migrating_flag() const override
   {
     return partition_loop_worker_.get_migrating_flag();
   }
 
-  virtual int need_minor_freeze(const uint64_t& log_id, bool& need_freeze);
-  virtual int set_emergency_release();
+  virtual int need_minor_freeze(const uint64_t& log_id, bool& need_freeze) override;
+  virtual int set_emergency_release() override;
 
   virtual int freeze(const bool emergency, const bool force, int64_t& freeze_snapshot) override;
   // Mark dirty of transactions on the terminated memtable
@@ -269,7 +271,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
   virtual int get_curr_storage_info_for_migrate(const bool use_slave_safe_read_ts,
       const common::ObReplicaType replica_type, const int64_t src_cluster_id, ObSavedStorageInfoV2& info) override;
 
-  virtual int check_is_from_restore(bool& is_from_restore) const;
+  virtual int check_is_from_restore(bool& is_from_restore) const override;
   virtual int get_all_saved_info(ObSavedStorageInfoV2& info) const override;
   virtual int get_saved_clog_info(common::ObBaseStorageInfo& clog_info) const override;
   virtual int get_saved_data_info(ObDataStorageInfo& data_info) const override;
@@ -279,26 +281,26 @@ class ObPartitionGroup : public ObIPartitionGroup {
       const share::ObBuildIndexAppendLocalDataParam& param, common::ObNewRowIterator& iter) override;
   virtual int append_sstable(const common::ObPartitionKey& pkey, const share::ObBuildIndexAppendSSTableParam& param,
       common::ObNewRowIterator& iter) override;
-  virtual const ObPartitionSplitInfo& get_split_info()
+  virtual const ObPartitionSplitInfo& get_split_info() override
   {
     return split_info_;
   }
-  virtual int check_cur_partition_split(bool& is_split_partition);
-  virtual int get_trans_split_info(transaction::ObTransSplitInfo& split_info);
+  virtual int check_cur_partition_split(bool& is_split_partition) override;
+  virtual int get_trans_split_info(transaction::ObTransSplitInfo& split_info) override;
   virtual int check_single_replica_major_sstable_exist(
       const ObPartitionKey& pkey, const uint64_t index_table_id) override;
-  virtual int get_max_decided_trans_version(int64_t& max_decided_trans_version) const;
+  virtual int get_max_decided_trans_version(int64_t& max_decided_trans_version) const override;
 
   int create_memtable(const bool in_slog_trans = false, const bool is_replay = false,
       const bool ignore_memstore_percent = false) override;
-  virtual int get_table_stat(const common::ObPartitionKey& pkey, common::ObTableStat& stat);
+  virtual int get_table_stat(const common::ObPartitionKey& pkey, common::ObTableStat& stat) override;
   // The following two interface are used by ObGarbageCollector
-  virtual int allow_gc(bool& allow_gc);
-  virtual int gc_check_valid_member(const bool is_valid, const int64_t gc_seq, bool& need_gc);
-  virtual bool check_pg_partition_offline(const ObPartitionKey& pkey);
-  virtual int check_offline_log_archived(
-      const ObPartitionKey& pkey, const int64_t incarnation, const int64_t archive_round, bool& has_archived) const;
-  virtual int get_leader_epoch(int64_t& leader_epoch) const;
+  virtual int allow_gc(bool& allow_gc) override;
+  virtual int gc_check_valid_member(const bool is_valid, const int64_t gc_seq, bool& need_gc) override;
+  virtual bool check_pg_partition_offline(const ObPartitionKey& pkey) override;
+  virtual int check_offline_log_archived(const ObPartitionKey& pkey, const int64_t incarnation,
+      const int64_t archive_round, bool& has_archived) const override;
+  virtual int get_leader_epoch(int64_t& leader_epoch) const override;
   virtual int get_replica_status(share::ObReplicaStatus& status) override;
   virtual int is_replica_need_gc(bool& is_offline) override;
   virtual int set_storage_info(const ObSavedStorageInfoV2& info) override;
@@ -307,11 +309,11 @@ class ObPartitionGroup : public ObIPartitionGroup {
   virtual int fill_replica(share::ObPartitionReplica& replica) override;
   virtual int get_merge_priority_info(memtable::ObMergePriorityInfo& merge_priority_info) const override;
   virtual int64_t get_gc_schema_drop_ts() override;
-  virtual void set_need_rebuild()
+  virtual void set_need_rebuild() override
   {
     migrate_retry_flag_ = NEED_REBUILD;
   }
-  virtual bool is_need_rebuild() const
+  virtual bool is_need_rebuild() const override
   {
     return (NEED_REBUILD == migrate_retry_flag_);
   }
@@ -319,37 +321,36 @@ class ObPartitionGroup : public ObIPartitionGroup {
   {
     migrate_retry_flag_ = NEED_STANDBY_RESTORE;
   }
-  virtual bool is_need_standby_restore() const
+  virtual bool is_need_standby_restore() const override
   {
     return (NEED_STANDBY_RESTORE == migrate_retry_flag_);
   }
-  virtual void reset_migrate_retry_flag()
+  virtual void reset_migrate_retry_flag() override
   {
     migrate_retry_flag_ = NO_NEED_RETRY;
   }
-  virtual void set_need_gc()
+  virtual void set_need_gc() override
   {
     ATOMIC_STORE(&need_gc_, true);
   }
-  virtual bool is_need_gc() const
+  virtual bool is_need_gc() const override
   {
     return ATOMIC_LOAD(&need_gc_);
   }
-  virtual uint64_t get_offline_log_id() const
+  virtual uint64_t get_offline_log_id() const override
   {
     return ATOMIC_LOAD(&offline_log_id_);
   }
-  virtual int set_offline_log_id(const uint64_t log_id);
+  virtual int set_offline_log_id(const uint64_t log_id) override;
   virtual int retire_warmup_store(const bool is_disk_full) override;
   int has_active_memtable(bool& found);
   virtual int enable_write_log(const bool is_replay_old) override;
   virtual uint64_t get_min_replayed_log_id() override;
-  virtual void get_min_replayed_log(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) override;
   virtual int get_min_replayed_log_with_keepalive(uint64_t& min_replay_log_id, int64_t& min_replay_log_ts) override;
   virtual int check_dirty_txn(
       const int64_t min_log_ts, const int64_t max_log_ts, int64_t& freeze_ts, bool& is_dirty) override;
   // Create Partition Group
-  int create_partition_group(const ObCreatePGParam& param);
+  int create_partition_group(const ObCreatePGParam& param) override;
   int create_pg_partition(const common::ObPartitionKey& pkey, const int64_t multi_version_start,
       const uint64_t data_table_id, const obrpc::ObCreatePartitionArg& arg, const bool in_slog_trans,
       const bool is_replay, const uint64_t log_id, ObTablesHandle& sstables_handle) override;
@@ -361,8 +362,8 @@ class ObPartitionGroup : public ObIPartitionGroup {
   int check_release_memtable();
   virtual int add_sstable_for_merge(const ObPartitionKey& pkey, storage::ObSSTable* sstable,
       const int64_t max_kept_major_version_number, ObIPartitionReport& report,
-      ObSSTable* complement_minor_sstable = nullptr);
-  virtual int check_replica_ready_for_bounded_staleness_read(const int64_t snapshot_version);
+      ObSSTable* complement_minor_sstable = nullptr) override;
+  virtual int check_replica_ready_for_bounded_staleness_read(const int64_t snapshot_version) override;
   virtual bool is_replica_using_remote_memstore() const
   {
     return pg_storage_.is_replica_with_remote_memstore() && F_WORKING == get_partition_state();
@@ -392,13 +393,14 @@ class ObPartitionGroup : public ObIPartitionGroup {
   virtual int get_checkpoint_info(common::ObArenaAllocator& allocator, ObPGCheckpointInfo& pg_checkpoint_info) override;
   virtual int acquire_sstable(const ObITable::TableKey& table_key, ObTableHandle& table_handle) override;
   virtual int recycle_unused_sstables(const int64_t max_recycle_cnt, int64_t& recycled_cnt) override;
+  virtual int recycle_sstable(const ObITable::TableKey& table_key) override;
   virtual int check_can_free(bool& can_free) override;
 
-  virtual bool need_replay_redo() const;
-  virtual int try_clear_split_info();
-  virtual int check_complete(bool& is_complete);
+  virtual bool need_replay_redo() const override;
+  virtual int try_clear_split_info() override;
+  virtual int check_complete(bool& is_complete) override;
   virtual int try_update_clog_member_list(const uint64_t ms_log_id, const int64_t mc_timestamp,
-      const int64_t replica_num, const ObMemberList& mlist, const common::ObProposalID& ms_proposal_id);
+      const int64_t replica_num, const ObMemberList& mlist, const common::ObProposalID& ms_proposal_id) override;
   virtual int check_physical_flashback_succ(const obrpc::ObCheckPhysicalFlashbackArg& arg, const int64_t max_version,
       obrpc::ObPhysicalFlashbackResultArg& result) override;
   // Check if weak read is enabled.
@@ -410,10 +412,11 @@ class ObPartitionGroup : public ObIPartitionGroup {
   {
     return &partition_loop_worker_;
   }
-  virtual int save_split_info(const ObPartitionSplitInfo& split_info);
-  virtual int save_split_state(const int64_t split_state);
-  virtual int shutdown(const int64_t snapshot_version, const uint64_t replay_log_id, const int64_t schema_version);
-  virtual int physical_flashback(const int64_t flashback_scn);
+  virtual int save_split_info(const ObPartitionSplitInfo& split_info) override;
+  virtual int save_split_state(const int64_t split_state) override;
+  virtual int shutdown(
+      const int64_t snapshot_version, const uint64_t replay_log_id, const int64_t schema_version) override;
+  virtual int physical_flashback(const int64_t flashback_scn) override;
   virtual int set_meta_block_list(const common::ObIArray<blocksstable::MacroBlockId>& meta_block_list) override;
   virtual int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId>& meta_block_list) const override;
   virtual int get_all_tables(ObTablesHandle& tables_handle) override;
@@ -422,17 +425,18 @@ class ObPartitionGroup : public ObIPartitionGroup {
 
   int check_can_physical_flashback(const int64_t flashback_scn);
 
-  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id);
-  virtual int reset_for_replay();
+  virtual int clear_trans_after_restore_log(const uint64_t last_restore_log_id,
+      const int64_t last_restore_log_ts) override;
+  virtual int reset_for_replay() override;
 
-  virtual int inc_pending_batch_commit_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts);
-  virtual int inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts);
+  virtual int inc_pending_batch_commit_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) override;
+  virtual int inc_pending_elr_count(memtable::ObMemtableCtx& mt_ctx, const int64_t log_ts) override;
 
-  virtual int register_txs_change_leader(const common::ObAddr& server, ObTsWindows& changing_leader_windows);
-  virtual int check_physical_split(bool& finished);
+  virtual int register_txs_change_leader(const common::ObAddr& server, ObTsWindows& changing_leader_windows) override;
+  virtual int check_physical_split(bool& finished) override;
   TO_STRING_KV(K_(pkey), K_(replay_status), K_(partition_state));
 
-  private:
+private:
   // this structure is introduced by major freeze refactoring
   // to break the circular dependency of waiting schema in the process
   // of leader takeover.
@@ -443,23 +447,23 @@ class ObPartitionGroup : public ObIPartitionGroup {
   // In addition, schema version check is only limit to user tables, and
   // system or dummy tables will be skipped directly.
   class SchemaVersionContainer {
-    public:
+  public:
     SchemaVersionContainer() : schema_version_checked_(true), base_schema_version_(0)
     {}
     virtual ~SchemaVersionContainer()
     {}
 
-    public:
+  public:
     // This function is used to update schema_version. It will be called in the process
     // of leader_takeover
     int update_and_leader_takeover(int64_t base_schema_version);
     int check_base_schema_version(
         share::schema::ObMultiVersionSchemaService* schema_version, common::ObPartitionKey& pkey);
 
-    private:
+  private:
     static const int64_t INVALID_SCHEMA_RETRY_CNT = 10;
 
-    private:
+  private:
     // Used to identify whether the schema_version check has been completed.
     // It is set to false after leader takeover and set to true at the first
     // start_participants.
@@ -470,7 +474,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
     int64_t base_schema_version_;
   };
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObPartitionGroup);
   static const int64_t FREEZE_WAIT_TIME = 10L * 1000L;  // 10ms
@@ -485,7 +489,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
   static const int64_t WAIT_FREEZE_LOG_ELAPSE_CNT_LIMIT = 20L;               // 20
   static const int64_t WAIT_FREEZE_LOG_ELAPSE_SLEEP_TS = 50L * 1000L;        // 50ms
 
-  private:
+private:
   int check_init_(void* cp, const char* cp_name) const;
   // for clog history info
   int get_clog_service_range_for_clog_history_info_(
@@ -584,7 +588,7 @@ class ObPartitionGroup : public ObIPartitionGroup {
       ObSSTable& sstable);
   int get_base_storage_info_(common::ObBaseStorageInfo& base_storage_info);
 
-  protected:
+protected:
   bool is_inited_;
   common::ObPartitionKey pkey_;
 

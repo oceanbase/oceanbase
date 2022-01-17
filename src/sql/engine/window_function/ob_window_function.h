@@ -36,7 +36,7 @@ class ObSqlExpression;
 struct ExtBound {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ExtBound() : my_phy_plan_(NULL), is_preceding_(false), is_unbounded_(false), is_nmb_literal_(false), sql_expr_(NULL)
   {
     MEMSET(sql_exprs_, 0, sizeof(ObSqlExpression*) * BOUND_EXPR_MAX);
@@ -52,7 +52,7 @@ struct ExtBound {
 struct FuncInfo {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   FuncInfo()
       : my_phy_plan_(NULL),
         func_type_(T_MAX),
@@ -113,7 +113,7 @@ struct FuncInfo {
 class ObWindowFunction : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  private:
+private:
   struct WinFrame {
     WinFrame(const int64_t head = -1, const int64_t tail = -1) : head_(head), tail_(tail)
     {}
@@ -123,7 +123,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class IGetRow {
-    public:
+  public:
     inline int at(const int64_t row_idx, const common::ObNewRow*& row)
     {
       int ret = common::OB_SUCCESS;
@@ -138,7 +138,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
       return ret;
     }
 
-    protected:
+  protected:
     virtual int inner_get_row(const int64_t row_idx, const common::ObNewRow*& row) = 0;
   };
 
@@ -146,7 +146,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   class RowsWrapper : public IGetRow {
     friend class RowReader;
 
-    public:
+  public:
     RowsWrapper() : rows_buf_(NULL /*allocator*/, true /*keep_projector*/), begin_idx_(0), row_cnt_(0)
     {}
     inline int add_row(const common::ObNewRow& row)
@@ -175,30 +175,30 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
     }
     TO_STRING_KV(K_(begin_idx), K_(row_cnt));
 
-    private:
+  private:
     virtual int inner_get_row(const int64_t row_idx, const common::ObNewRow*& row)
     {
       return rows_buf_.get_row(row_idx - begin_idx_, row);
     }
 
-    private:
+  private:
     ObRARowStore rows_buf_;
     int64_t begin_idx_;
     int64_t row_cnt_;
   };
 
   class RowReader : public IGetRow {
-    public:
+  public:
     RowReader(RowsWrapper& rw) : rw_(rw), reader_(rw.rows_buf_)
     {}
 
-    private:
+  private:
     virtual int inner_get_row(const int64_t row_idx, const common::ObNewRow*& row)
     {
       return reader_.get_row(row_idx - rw_.begin_idx_, row);
     }
 
-    private:
+  private:
     RowsWrapper& rw_;
     ObRARowStore::Reader reader_;
   };
@@ -219,7 +219,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class BaseFunc : public common::ObDLinkBase<BaseFunc> {
-    public:
+  public:
     virtual ~BaseFunc()
     {}
     WinFrame last_valid_frame_;
@@ -236,13 +236,13 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
     }
     TO_STRING_EMPTY();
 
-    protected:
+  protected:
     virtual void reset_for_restart_self()
     {}
   };
 
   class AggFunc : public BaseFunc {
-    public:
+  public:
     virtual ~AggFunc();
     int trans(const common::ObNewRow& row)
     {
@@ -270,7 +270,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
     virtual int init_all_first();
     TO_STRING_EMPTY();
 
-    protected:
+  protected:
     virtual int trans_self(const common::ObNewRow& row);
     virtual int inv_trans_self(const common::ObNewRow& row)
     {
@@ -281,7 +281,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
     }
     virtual void reset_for_restart_self();
 
-    private:
+  private:
     bool prepare_;
     ObAggregateFunction aggr_func_;
     ObAggrExprList aggr_columns_;
@@ -291,7 +291,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class NonAggFunc : public BaseFunc {
-    public:
+  public:
     virtual int eval(RowReader& assist_reader, const int64_t row_idx, const common::ObNewRow& row,
         const WinFrame& frame, common::ObObj& val) = 0;
     virtual bool is_agg() const
@@ -302,7 +302,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class NonAggFuncRowNumber : public NonAggFunc {
-    public:
+  public:
     virtual int eval(RowReader& assist_reader, const int64_t row_idx, const common::ObNewRow& row,
         const WinFrame& frame, common::ObObj& val);
     virtual void reset_for_restart_self()
@@ -310,7 +310,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class NonAggFuncNtile : public NonAggFunc {
-    public:
+  public:
     virtual int eval(RowReader& assist_reader, const int64_t row_idx, const common::ObNewRow& row,
         const WinFrame& frame, common::ObObj& val);
     virtual void reset_for_restart_self()
@@ -318,7 +318,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class NonAggFuncNthValue : public NonAggFunc {
-    public:
+  public:
     virtual int eval(RowReader& assist_reader, const int64_t row_idx, const common::ObNewRow& row,
         const WinFrame& frame, common::ObObj& val);
     virtual void reset_for_restart_self()
@@ -326,14 +326,14 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class NonAggFuncLeadOrLag : public NonAggFunc {
-    public:
+  public:
     virtual int eval(RowReader& assist_reader, const int64_t row_idx, const common::ObNewRow& row,
         const WinFrame& frame, common::ObObj& val);
     virtual void reset_for_restart_self();
   };
 
   class NonAggFuncRankLike : public NonAggFunc {
-    public:
+  public:
     virtual int eval(RowReader& assist_reader, const int64_t row_idx, const common::ObNewRow& row,
         const WinFrame& frame, common::ObObj& val);
     virtual void reset_for_restart_self();
@@ -341,7 +341,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class NonAggFuncCumeDist : public NonAggFunc {
-    public:
+  public:
     virtual int eval(RowReader& assist_reader, const int64_t row_idx, const common::ObNewRow& row,
         const WinFrame& frame, common::ObObj& val);
     virtual void reset_for_restart_self()
@@ -349,7 +349,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class Utils {
-    public:
+  public:
     static int copy_new_row(common::ObIAllocator& allocator, const common::ObNewRow& src, common::ObNewRow*& dst);
     static int clone_cell(common::ObIAllocator& allocator, const common::ObObj& cell, common::ObObj& cell_clone);
     static int convert_stored_row(const common::ObNewRow& stored_row, common::ObNewRow& row);
@@ -363,7 +363,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   };
 
   class FuncAllocer {
-    public:
+  public:
     template <class FuncType>
     int alloc(BaseFunc*& return_func);
     common::ObIAllocator* local_allocator_;
@@ -373,7 +373,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
     friend class ObWindowFunction;
     typedef common::ObDList<BaseFunc> BaseFuncList;
 
-    public:
+  public:
     explicit ObWindowFunctionCtx(ObExecContext& ctx);
     virtual ~ObWindowFunctionCtx()
     {}
@@ -405,11 +405,11 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
     int input_first_row();
     int compute(RowReader& assist_reader, BaseFunc* func, const int64_t row_idx, common::ObObj& val);
 
-    private:
+  private:
     int parallel_winbuf_process();
     int get_whole_msg(bool is_end, ObWinbufWholeMsg& whole, const ObNewRow* res_row = NULL);
 
-    private:
+  private:
     RowsWrapper rw_;
     BaseFuncList func_list_;
     common::ObArenaAllocator local_allocator_;
@@ -448,7 +448,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
     bool finish_parallel_;
   };
 
-  public:
+public:
   explicit ObWindowFunction(common::ObIAllocator& alloc);
   virtual ~ObWindowFunction();
 
@@ -474,7 +474,7 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   }
   static int get_param_int_value(ObExprCtx& expr_ctx, const ObObj& tmp_obj, int64_t& value);
 
-  private:
+private:
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
    * @param ctx[in], execute context
@@ -500,11 +500,11 @@ class ObWindowFunction : public ObSingleChildPhyOperator {
   virtual int inner_close(ObExecContext& ctx) const;
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObWindowFunction);
 
-  private:
+private:
   common::ObFixedArray<FuncInfo, common::ObIAllocator> func_infos_;
   bool is_parallel_;
 };

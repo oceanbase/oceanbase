@@ -24,7 +24,7 @@ class ObOperator;
 class ObOpSpec;
 
 class ObIExecuteResult {
-  public:
+public:
   virtual ~ObIExecuteResult()
   {}
 
@@ -37,7 +37,7 @@ class ObExecuteResult : public ObIExecuteResult {
   friend class ObLocalTaskExecutor;
   friend class ObExecutor;
 
-  public:
+public:
   ObExecuteResult();
   virtual ~ObExecuteResult()
   {}
@@ -73,7 +73,7 @@ class ObExecuteResult : public ObIExecuteResult {
     root_op_ = root_op;
   }
 
-  private:
+private:
   int err_code_;
   ObPhyOperator* root_op_;
   ObOperator* static_engine_root_;
@@ -81,12 +81,12 @@ class ObExecuteResult : public ObIExecuteResult {
   // row used to adapt old get_next_row interface.
   mutable common::ObNewRow row_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExecuteResult);
 };
 
 class ObAsyncExecuteResult : public ObIExecuteResult {
-  public:
+public:
   ObAsyncExecuteResult();
   virtual ~ObAsyncExecuteResult()
   {}
@@ -113,7 +113,7 @@ class ObAsyncExecuteResult : public ObIExecuteResult {
     spec_ = spec;
   }
 
-  private:
+private:
   int64_t field_count_;
   common::ObScanner* scanner_;
   common::ObNewRow* cur_row_;

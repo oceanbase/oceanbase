@@ -54,18 +54,17 @@ int ObMicroBlockIndexTransformer::NodeArray::ensure_space(common::ObIAllocator& 
 }
 
 ObMicroBlockIndexTransformer::ObMicroBlockIndexTransformer()
-    : block_count_(0),
-      rowkey_column_count_(0),
-      data_offset_(0),
-      node_vector_(),
-      node_vector_count_(0),
-      node_array_(),
-      micro_index_mgr_(NULL),
-      allocator_(ObModIds::OB_SSTABLE_GET_SCAN)
+   : block_count_(0),
+     rowkey_column_count_(0),
+     data_offset_(0),
+     allocator_(ObModIds::OB_SSTABLE_GET_SCAN),
+     vec_allocator_(ObModIds::OB_MICRO_INDEX_TRANSFORMER),
+     node_vector_(),
+     node_vector_count_(0),
+     node_array_(),
+     vec_inited_(false)
 {
-  for (int64_t i = 0; i < common::OB_MAX_ROWKEY_COLUMN_NUMBER; ++i) {
-    node_vector_[i].set_label(ObModIds::OB_MICRO_INDEX_TRANSFORMER);
-  }
+  MEMSET(node_vector_, 0, OB_MAX_ROWKEY_COLUMN_NUMBER);
 }
 
 int ObMicroBlockIndexTransformer::transform(
@@ -93,9 +92,11 @@ int ObMicroBlockIndexTransformer::transform(const char* index_buf, const ObFullM
   if (OB_UNLIKELY(NULL == index_buf || !full_meta.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ", K(ret), KP(index_buf), K(full_meta));
+  } else if (!vec_inited_ && OB_FAIL(init_node_vector())) {
+    STORAGE_LOG(WARN, "Failed to init node vector", K(ret));
   } else {
-    reset();
-    const ObMacroBlockMetaV2& meta = *full_meta.meta_;
+    reuse();
+    const ObMacroBlockMetaV2 &meta = *full_meta.meta_;
     block_count_ = meta.micro_block_count_;
     rowkey_column_count_ = meta.rowkey_column_number_;
     node_vector_count_ = rowkey_column_count_;
@@ -112,20 +113,69 @@ int ObMicroBlockIndexTransformer::transform(const char* index_buf, const ObFullM
   return ret;
 }
 
+void ObMicroBlockIndexTransformer::reuse()
+{
+  index_reader_.reset();
+  block_count_ = 0;
+  rowkey_column_count_ = 0;
+  data_offset_ = 0;
+  if (vec_inited_) {
+    for (int i = 0; i < node_vector_count_; i++) {
+      if (OB_NOT_NULL(node_vector_[i])) {
+        node_vector_[i]->reset();
+      }
+    }
+  }
+  node_vector_count_ = 0;
+  node_array_.reset();
+  allocator_.reuse();
+}
+
 void ObMicroBlockIndexTransformer::reset()
 {
   index_reader_.reset();
   block_count_ = 0;
   rowkey_column_count_ = 0;
   data_offset_ = 0;
-  for (int i = 0; i < node_vector_count_; i++) {
-    node_vector_[i].reset();
-  }
   node_vector_count_ = 0;
+  for (int i = 0; i < OB_MAX_ROWKEY_COLUMN_NUMBER; i++) {
+    if (OB_NOT_NULL(node_vector_[i])) {
+      node_vector_[i]->~ObVector<MediumNode, ObArenaAllocator>();
+      node_vector_[i] = nullptr;
+    }
+  }
+  vec_inited_ = false;
   node_array_.reset();
   allocator_.reset();
-  // column_map_
-  // micro_index_mgr_
+  vec_allocator_.reset();
+}
+
+int ObMicroBlockIndexTransformer::init_node_vector()
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+
+  if (OB_UNLIKELY(vec_inited_)) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "ObMicroBlockIndexTransformer init node vector twice", K(ret), K_(vec_inited));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < OB_MAX_ROWKEY_COLUMN_NUMBER; i++) {
+      if (OB_NOT_NULL(node_vector_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected valid node vector", K(ret), K(i), KPC(node_vector_[i]));
+      } else if (OB_ISNULL(buf = vec_allocator_.alloc(sizeof(ObVector<MediumNode, ObArenaAllocator>)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "Failed to alloc memory for node vector", K(ret));
+      } else {
+        node_vector_[i] = new (buf) ObVector<MediumNode, ObArenaAllocator> (&vec_allocator_, ObModIds::OB_MICRO_INDEX_TRANSFORMER);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      vec_inited_ = true;
+    }
+  }
+
+  return ret;
 }
 
 int ObMicroBlockIndexTransformer::block_index_to_node_vector()
@@ -141,7 +191,7 @@ int ObMicroBlockIndexTransformer::block_index_to_node_vector()
 
   for (int64_t i = 0; OB_SUCC(ret) && i < block_count_; ++i) {
     if (OB_FAIL(index_reader_.get_end_key(i, rowkey_array[cur_rowkey_array_index]))) {
-      STORAGE_LOG(WARN, "transformer fail to get next roweky.", K(ret), K(i));
+      STORAGE_LOG(WARN, "transformer fail to get next rowkey.", K(ret), K(i));
     }
 
     if (OB_SUCC(ret)) {
@@ -152,7 +202,7 @@ int ObMicroBlockIndexTransformer::block_index_to_node_vector()
           cur_node.first_child_index_ = 0;
           cur_node.child_num_ = 0;
           if (OB_FAIL(add_node_to_vector(cur_node, j))) {
-            STORAGE_LOG(WARN, "trnasformer fail to add node to vector.", K(ret), K(cur_node), K(j));
+            STORAGE_LOG(WARN, "transformer fail to add node to vector.", K(ret), K(cur_node), K(j));
           }
         }
       } else {
@@ -178,7 +228,7 @@ int ObMicroBlockIndexTransformer::block_index_to_node_vector()
             cur_node.first_child_index_ = 0;
             cur_node.child_num_ = 0;
             if (OB_FAIL(add_node_to_vector(cur_node, j))) {
-              STORAGE_LOG(WARN, "trnasformer fail to add node to vector.", K(ret), K(cur_node), K(j));
+              STORAGE_LOG(WARN, "transformer fail to add node to vector.", K(ret), K(cur_node), K(j));
             }
           }
         } else {
@@ -206,7 +256,12 @@ int ObMicroBlockIndexTransformer::node_vector_to_node_array()
   int32_t node_index = 2;
 
   for (int64_t i = 0; i < rowkey_column_count_; ++i) {
-    node_num += node_vector_[i].size();
+    if (OB_ISNULL(node_vector_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected null node vector", K(ret), K(i), KP(node_vector_[i]));
+    } else {
+      node_num += node_vector_[i]->size();
+    }
   }
   if (OB_FAIL(node_array_.ensure_space(allocator_, node_num))) {
     STORAGE_LOG(WARN, "node array fail to ensure space.", K(ret), K(node_num));
@@ -215,7 +270,7 @@ int ObMicroBlockIndexTransformer::node_vector_to_node_array()
     node_array_[0].obj_.reset();
     node_array_[0].first_child_index_ = 2;
     node_array_[0].first_micro_index_ = 0;
-    node_array_[0].child_num_ = node_vector_[0].size();
+    node_array_[0].child_num_ = node_vector_[0]->size();
     node_array_.cur_count_++;
     node_array_[1].obj_.reset();
     node_array_[1].first_child_index_ = 0;
@@ -223,12 +278,13 @@ int ObMicroBlockIndexTransformer::node_vector_to_node_array()
     node_array_[1].child_num_ = 0;
     node_array_.cur_count_++;
     for (int32_t i = 0; i < rowkey_column_count_; ++i) {
-      cur_node_num = node_vector_[i].size();
+      cur_node_num = node_vector_[i]->size();
       for (int32_t j = 0; j < cur_node_num; ++j) {
-        tmp_node = node_vector_[i].at(j);
+        tmp_node = node_vector_[i]->at(j);
         node_array_[node_index + j].obj_ = tmp_node.obj_;
         if (0 != tmp_node.child_num_) {
-          node_array_[node_index + j].first_child_index_ = node_index + cur_node_num + tmp_node.first_child_index_;
+          node_array_[node_index + j].first_child_index_
+            = node_index + cur_node_num + tmp_node.first_child_index_;
         } else {
           node_array_[node_index + j].first_child_index_ = 0;
         }
@@ -252,17 +308,27 @@ inline int ObMicroBlockIndexTransformer::add_node_to_vector(MediumNode& cur_node
   if (!cur_node.is_valid() || index < 0 || index >= rowkey_column_count_) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument, ", K(ret), K(cur_node), K(index), K_(rowkey_column_count));
-  } else if (OB_FAIL(node_vector_[index].push_back(cur_node))) {
-    STORAGE_LOG(WARN, "node vector fail to push back cur node.", K(ret), K(index), K(cur_node));
+  } else if (OB_ISNULL(node_vector_[index])) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected null node vector", K(ret), K(index), KP(node_vector_[index]));
+  } else if (OB_FAIL(node_vector_[index]->push_back(cur_node))) {
+    STORAGE_LOG(WARN, "node vector fail to push back cur node.",
+        K(ret), K(index), K(cur_node));
   } else if (OB_FAIL(add_extra_space_size(cur_node.obj_))) {
     STORAGE_LOG(WARN, "transformer fail to add extra space size.", K(ret), "obj", cur_node.obj_);
   } else if (index > 0) {
-    parent_index = node_vector_[index - 1].size() - 1;
-    parent_node = &node_vector_[index - 1].at(parent_index);
-    if (0 == parent_node->child_num_) {
-      parent_node->first_child_index_ = node_vector_[index].size() - 1;
+    if (OB_ISNULL(node_vector_[index - 1])) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected null node vector", K(ret), K(index-1), KP(node_vector_[index-1]));
+    } else {
+
+      parent_index = node_vector_[index - 1]->size() - 1;
+      parent_node = &node_vector_[index - 1]->at(parent_index);
+      if (0 == parent_node->child_num_) {
+        parent_node->first_child_index_ = node_vector_[index]->size() - 1;
+      }
+      parent_node->child_num_ ++;
     }
-    parent_node->child_num_++;
   }
   return ret;
 }
@@ -305,32 +371,23 @@ int ObMicroBlockIndexTransformer::create_block_index_mgr(
     const ObFullMacroBlockMeta& meta, char* buffer, const int64_t size, const ObMicroBlockIndexMgr*& idx_mgr)
 {
   int ret = OB_SUCCESS;
-
+  ObMicroBlockIndexMgr *index_mgr = nullptr;
   idx_mgr = nullptr;
-  if (OB_ISNULL(micro_index_mgr_ = new (buffer) ObMicroBlockIndexMgr())) {
+  if (OB_ISNULL(index_mgr = new (buffer) ObMicroBlockIndexMgr())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "transformer fail to new block index mgr, ", K(ret));
-  } else if (OB_FAIL(
-                 micro_index_mgr_->init(meta, node_array_.get_node_array_size(), node_array_.get_extra_space_size()))) {
-    STORAGE_LOG(WARN,
-        "micro index mgr fail to init.",
-        K(ret),
-        K(block_count_),
-        "node_array_size",
-        node_array_.get_node_array_size(),
-        "extra_space_size",
-        node_array_.get_extra_space_size(),
-        "mark_deletion_flag size",
-        index_reader_.get_mark_deletion_flags_size(),
-        "delta size",
-        index_reader_.get_delta_size(),
-        K(rowkey_column_count_),
-        K(data_offset_),
-        K(meta));
+  } else if (OB_FAIL(index_mgr->init(
+      meta, node_array_.get_node_array_size(), node_array_.get_extra_space_size()))) {
+    STORAGE_LOG(WARN, "micro index mgr fail to init.",
+        K(ret), K(block_count_), "node_array_size", node_array_.get_node_array_size(),
+        "extra_space_size", node_array_.get_extra_space_size(),
+        "mark_deletion_flag size", index_reader_.get_mark_deletion_flags_size(),
+        "delta size", index_reader_.get_delta_size(),
+        K(rowkey_column_count_), K(data_offset_), K(meta));
   } else if (OB_FAIL(fill_block_index_mgr(buffer, size))) {
     STORAGE_LOG(WARN, "transformer fail to fill block index mgr.", K(ret));
   } else {
-    idx_mgr = micro_index_mgr_;
+    idx_mgr = index_mgr;
   }
   return ret;
 }

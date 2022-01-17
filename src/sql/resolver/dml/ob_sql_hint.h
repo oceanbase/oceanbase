@@ -122,7 +122,7 @@ const char* get_plan_cache_policy_str(ObPlanCachePolicy policy);
 struct ObQueryHint {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObQueryHint()
       : read_consistency_(common::INVALID_CONSISTENCY),
         dummy_(),
@@ -737,7 +737,7 @@ struct ObStmtHint {
   common::ObSEArray<ObRelIds, 3> valid_no_px_join_filter_idxs_;
   ObRelIds valid_pq_maps_idxs_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStmtHint);
 };
 

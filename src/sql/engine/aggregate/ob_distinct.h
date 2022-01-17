@@ -24,7 +24,7 @@ typedef common::ObColumnInfo ObDistinctColumn;
 class ObDistinct : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObDistinct(common::ObIAllocator& alloc);
   // ObDistinct();
   virtual ~ObDistinct();
@@ -43,10 +43,10 @@ class ObDistinct : public ObSingleChildPhyOperator {
     return ObPhyOperator::init_array_size<>(distinct_columns_, distinct_count);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistinct);
 
-  protected:
+protected:
   virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const;
   // data members
   common::ObFixedArray<ObDistinctColumn, common::ObIAllocator> distinct_columns_;

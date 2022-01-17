@@ -26,7 +26,7 @@ namespace common {
 static const int64_t OB_DEFAULT_RAW_SE_ARRAY_COUNT = 64;
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
 class ObRawSEArray final {
-  public:
+public:
   ObRawSEArray(int64_t block_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
       const BlockAllocatorT& alloc = BlockAllocatorT(ObModIds::OB_SE_ARRAY));
   ObRawSEArray(const lib::ObLabel& label, int64_t block_size);
@@ -203,11 +203,11 @@ class ObRawSEArray final {
     return offsetof(ObRawSEArray, block_allocator_) * 8;
   }
 
-  private:
+private:
   // types and constants
   static const int64_t DEFAULT_MAX_PRINT_COUNT = 32;
 
-  private:
+private:
   inline bool is_memcpy_safe() const
   {
     // no need to call constructor
@@ -222,7 +222,7 @@ class ObRawSEArray final {
   {
     if (OB_UNLIKELY(!has_alloc_)) {
       if (auto_free) {
-        mem_context_ = &CURRENT_CONTEXT;
+        mem_context_ = CURRENT_CONTEXT;
         block_allocator_ = BlockAllocatorT(mem_context_->get_allocator());
       }
       has_alloc_ = true;
@@ -242,7 +242,7 @@ class ObRawSEArray final {
     return block_allocator_.free(p);
   }
 
-  private:
+private:
   // data members
   T* local_data_;
   char local_data_buf_[LOCAL_ARRAY_SIZE * sizeof(T)];
@@ -253,7 +253,7 @@ class ObRawSEArray final {
   int error_;
   BlockAllocatorT block_allocator_;
   bool has_alloc_;
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
 };
 
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT, bool auto_free>

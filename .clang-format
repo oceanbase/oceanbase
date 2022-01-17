@@ -2,12 +2,12 @@
 Language: Cpp
 # BasedOnStyle:	LLVM
 SortIncludes: false
-AccessModifierOffset: 0
+AccessModifierOffset: -2
 AlignAfterOpenBracket: DontAlign
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
 DerivePointerAlignment: false
-PointerAlignment: Left
+PointerAlignment: Right
 ConstructorInitializerIndentWidth: 4
 AlignEscapedNewlinesLeft: true
 AlignTrailingComments: true

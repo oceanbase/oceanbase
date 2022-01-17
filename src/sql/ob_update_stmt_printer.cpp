@@ -132,7 +132,7 @@ int ObUpdateStmtPrinter::print_set()
           if (OB_ISNULL(assign.column_expr_) || OB_ISNULL(assign.expr_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column expr is null", K(ret), K(assign.column_expr_), K(assign.expr_));
-          } else if (assign.column_expr_->is_generated_column()) {
+          } else if (assign.is_implicit_) {
             continue;
           } else if (OB_FAIL(ObRawExprUtils::find_alias_expr(assign.expr_, alias))) {
             LOG_WARN("failed to find alias expr", K(ret));

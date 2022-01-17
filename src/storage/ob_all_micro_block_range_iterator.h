@@ -22,7 +22,7 @@ namespace storage {
 class ObAllMicroBlockRangeIterator {
   typedef blocksstable::ObBlockIndexIterator IndexCursor;
 
-  public:
+public:
   ObAllMicroBlockRangeIterator();
   ~ObAllMicroBlockRangeIterator();
   void reset();
@@ -30,7 +30,7 @@ class ObAllMicroBlockRangeIterator {
       const bool is_reverse_scan);
   int get_next_range(const common::ObStoreRange*& range);
 
-  private:
+private:
   int open_next_macro_block();
   int prefetch_block_index();
   int get_end_keys(common::ObIAllocator& allocator);
@@ -41,13 +41,12 @@ class ObAllMicroBlockRangeIterator {
   bool is_first_macro_block() const;
   bool is_last_macro_block() const;
 
-  private:
+private:
   static const int64_t PREFETCH_CNT = 1;
   static const int64_t HANDLE_CNT = PREFETCH_CNT + 1;
   ObMacroBlockIterator macro_block_iterator_;
   blocksstable::ObMicroBlockIndexReader index_reader_;
   blocksstable::ObMacroBlockHandle macro_handles_[HANDLE_CNT];
-  blocksstable::ObMacroBlockMetaHandle meta_handles_[HANDLE_CNT];
   common::ObArenaAllocator allocators_[HANDLE_CNT];
   common::ObStoreRowkey macro_block_start_keys_[HANDLE_CNT];
   common::ObArray<common::ObStoreRowkey> end_keys_;

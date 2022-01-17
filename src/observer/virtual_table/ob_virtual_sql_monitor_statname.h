@@ -19,13 +19,13 @@ namespace oceanbase {
 namespace observer {
 
 class ObVirtualSqlMonitorStatname : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObVirtualSqlMonitorStatname();
   virtual ~ObVirtualSqlMonitorStatname();
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   enum SYS_COLUMN {
     ID = common::OB_APP_MIN_COLUMN_ID,
     GROUP_ID,

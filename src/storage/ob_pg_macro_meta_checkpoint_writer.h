@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace storage {
 
 struct ObPGMacroBlockMetaCheckpointEntry final {
-  public:
+public:
   static const int64_t PG_MACRO_META_ENTRY_VERSION = 1;
   ObPGMacroBlockMetaCheckpointEntry(blocksstable::ObMacroBlockMetaV2& meta)
       : disk_no_(0), macro_block_id_(), table_key_(), meta_(meta)
@@ -34,7 +34,7 @@ struct ObPGMacroBlockMetaCheckpointEntry final {
   TO_STRING_KV(K_(table_key), K_(macro_block_id), K_(table_key), K_(meta));
   OB_UNIS_VERSION_V(PG_MACRO_META_ENTRY_VERSION);
 
-  public:
+public:
   int64_t disk_no_;
   blocksstable::MacroBlockId macro_block_id_;
   ObITable::TableKey table_key_;
@@ -42,7 +42,7 @@ struct ObPGMacroBlockMetaCheckpointEntry final {
 };
 
 class ObPGMacroMeta : public ObIPGMetaItem {
-  public:
+public:
   ObPGMacroMeta();
   virtual ~ObPGMacroMeta() = default;
   void set_meta_entry(ObPGMacroBlockMetaCheckpointEntry& entry);
@@ -52,10 +52,10 @@ class ObPGMacroMeta : public ObIPGMetaItem {
     return PG_MACRO_META;
   }
 
-  private:
+private:
   int extend_buf(const int64_t request_size);
 
-  private:
+private:
   common::ObArenaAllocator allocator_;
   char* buf_;
   int64_t buf_size_;
@@ -63,14 +63,14 @@ class ObPGMacroMeta : public ObIPGMetaItem {
 };
 
 class ObPGMacroMetaIterator : public ObIPGMetaItemIterator {
-  public:
+public:
   ObPGMacroMetaIterator();
   virtual ~ObPGMacroMetaIterator() = default;
   int init(ObTablesHandle& tables_handle);
   virtual int get_next_item(ObIPGMetaItem*& item) override;
   void reset();
 
-  private:
+private:
   bool is_inited_;
   ObTablesHandle tables_handle_;
   ObArray<blocksstable::ObMacroBlockInfoPair> block_infos_;
@@ -82,14 +82,14 @@ class ObPGMacroMetaIterator : public ObIPGMetaItemIterator {
 };
 
 class ObPGMacroMetaCheckpointWriter final {
-  public:
+public:
   ObPGMacroMetaCheckpointWriter();
   ~ObPGMacroMetaCheckpointWriter() = default;
   int init(ObTablesHandle& tables_handle, ObPGMetaItemWriter& writer);
   int write_checkpoint();
   void reset();
 
-  private:
+private:
   bool is_inited_;
   ObPGMetaItemWriter* writer_;
   ObPGMacroMetaIterator iter_;

@@ -21,9 +21,9 @@ namespace oceanbase {
 namespace common {
 
 class ObHazardPointer {
-  public:
+public:
   class ReclaimCallback {
-    public:
+  public:
     ReclaimCallback()
     {}
     virtual ~ReclaimCallback()
@@ -31,7 +31,7 @@ class ObHazardPointer {
     virtual void reclaim_ptr(uintptr_t ptr) = 0;
   };
 
-  public:
+public:
   inline ObHazardPointer() : hazard_list_(NULL), retire_list_(NULL), reclaim_callback_(NULL), is_inited_(false)
   {}
   inline ~ObHazardPointer();
@@ -41,10 +41,10 @@ class ObHazardPointer {
   inline int release(uintptr_t ptr);
   inline int retire(uintptr_t ptr);
 
-  private:
+private:
   inline int reclaim();
 
-  private:
+private:
   struct Node {
     Node() : ptr(0), next(NULL)
     {}
@@ -62,13 +62,13 @@ class ObHazardPointer {
     Node head[OB_MAX_THREAD_NUM] CACHE_ALIGNED;
   };
 
-  private:
+private:
   ThreadLocalNodeList* hazard_list_;
   ThreadLocalNodeList* retire_list_;
   ReclaimCallback* reclaim_callback_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObHazardPointer);
 };
 

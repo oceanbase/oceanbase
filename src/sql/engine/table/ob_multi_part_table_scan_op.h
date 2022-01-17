@@ -24,7 +24,7 @@ class ObMultiPartTableScanOpInput : public ObTableScanOpInput {
   OB_UNIS_VERSION_V(1);
   friend ObMultiPartTableScanOp;
 
-  public:
+public:
   ObMultiPartTableScanOpInput(ObExecContext& ctx, const ObOpSpec& spec);
   virtual ~ObMultiPartTableScanOpInput()
   {
@@ -36,7 +36,7 @@ class ObMultiPartTableScanOpInput : public ObTableScanOpInput {
 
   int reassign_ranges(int64_t table_location_key, int64_t ref_table_id, int64_t& partition_offset);
 
-  public:
+public:
   common::ObArenaAllocator allocator_;
   ObMultiPartitionsRangesWarpper partitions_ranges_;
 
@@ -46,18 +46,18 @@ class ObMultiPartTableScanOpInput : public ObTableScanOpInput {
 class ObMultiPartTableScanSpec : public ObTableScanSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMultiPartTableScanSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObTableScanSpec(alloc, type)
   {}
 
   virtual ~ObMultiPartTableScanSpec(){};
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiPartTableScanSpec);
 };
 
 class ObMultiPartTableScanOp : public ObTableScanOp {
-  public:
+public:
   ObMultiPartTableScanOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObMultiPartTableScanOp()
   {
@@ -84,17 +84,17 @@ class ObMultiPartTableScanOp : public ObTableScanOp {
 
   void get_used_range_count(int64_t& range_count) const;
 
-  private:
+private:
   enum MultiPartScanState { DO_PARTITION_SCAN, OUTPUT_ROWS, EXECUTION_FINISHED };
   int do_next_partition_scan();
 
-  private:
+private:
   static const int64_t NOT_INIT = 0;
   int64_t input_part_offset_;
   MultiPartScanState multi_part_scan_state_;
   int64_t scan_times_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiPartTableScanOp);
 };
 

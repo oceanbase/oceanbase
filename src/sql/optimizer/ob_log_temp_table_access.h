@@ -21,10 +21,10 @@
 namespace oceanbase {
 namespace sql {
 class ObLogTempTableAccess : public ObLogicalOperator {
-  public:
+public:
   ObLogTempTableAccess(ObLogPlan& plan);
   virtual ~ObLogTempTableAccess();
-  virtual int copy_without_child(ObLogicalOperator*& out)
+  virtual int copy_without_child(ObLogicalOperator*& out) override
   {
     return clone(out);
   }
@@ -59,7 +59,7 @@ class ObLogTempTableAccess : public ObLogicalOperator {
   {
     return is_last_access_;
   }
-  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const;
+  int inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs) const override;
   inline common::ObString& get_table_name()
   {
     return temp_table_name_;
@@ -72,12 +72,12 @@ class ObLogTempTableAccess : public ObLogicalOperator {
   {
     return access_exprs_;
   }
-  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type);
+  virtual int print_my_plan_annotation(char* buf, int64_t& buf_len, int64_t& pos, ExplainType type) override;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTempTableAccess);
 
-  private:
+private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
   common::ObString temp_table_name_;

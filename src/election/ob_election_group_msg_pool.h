@@ -31,10 +31,10 @@ class ObElection;
 
 template <class T>
 class ObElectionVoteMsgArray {
-  public:
+public:
   static const int64_t OB_MAX_ELECTION_MSG_COUNT = 2 * common::OB_MAX_MEMBER_NUMBER;
 
-  public:
+public:
   ObElectionVoteMsgArray()
   {
     reset();
@@ -52,7 +52,7 @@ class ObElectionVoteMsgArray {
     reset();
   }
 
-  public:
+public:
   int set_msg(const int64_t idx, const T& msg);
   int push_msg(const T& msg);
   int get_msg(const int64_t idx, T& msg) const;
@@ -62,7 +62,7 @@ class ObElectionVoteMsgArray {
   }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   T msg_array_[OB_MAX_ELECTION_MSG_COUNT];
   int64_t msg_count_;
 };
@@ -138,7 +138,7 @@ int64_t ObElectionVoteMsgArray<T>::to_string(char* buf, const int64_t buf_len) c
 }
 
 class ObEGVoteMsgPool {
-  public:
+public:
   ObEGVoteMsgPool() : lock_(common::ObLatchIds::ELECTION_MSG_LOCK)
   {
     reset();
@@ -159,7 +159,7 @@ class ObEGVoteMsgPool {
       const int64_t t1, const uint64_t eg_hash, const int64_t cur_ts);
   int get_eg_centralized_candidate(common::ObAddr& cur_leader, common::ObAddr& new_leader, const int64_t t1);
 
-  public:
+public:
   ObElectionVoteMsgArray<ObElectionMsgEGPrepare>& get_eg_prepare_msg_array()
   {
     return eg_prepare_array_;
@@ -170,7 +170,7 @@ class ObEGVoteMsgPool {
   }
   TO_STRING_KV(K_(eg_prepare_array), K_(eg_vote_array));
 
-  private:
+private:
   int get_eg_centralized_majority_(common::ObAddr& cur_leader, common::ObAddr& new_leader,
       const bool is_all_part_merged_in, bool& is_eg_majority, ObPartStateArray& part_state_array,
       const common::ObPartitionArray& partition_array, const int64_t self_version, const int64_t replica_num,
@@ -182,15 +182,15 @@ class ObEGVoteMsgPool {
   int process_vote_cnt_(const int64_t eg_vote_cnt, const int64_t replica_num, ObPartStateArray& part_state_array,
       bool& is_eg_majority, const int64_t cur_ts);
 
-  private:
+private:
   int store_(const ObElectionMsgEGPrepare& msg);
   int store_(const ObElectionMsgEGVote4Store& msg);
 
-  private:
+private:
   template <typename T>
   int do_store_(const T& msg, ObElectionVoteMsgArray<T>& array);
 
-  private:
+private:
   ObElectionVoteMsgArray<ObElectionMsgEGPrepare> eg_prepare_array_;
   ObElectionVoteMsgArray<ObElectionMsgEGVote4Store> eg_vote_array_;
   mutable common::ObSpinLock lock_;

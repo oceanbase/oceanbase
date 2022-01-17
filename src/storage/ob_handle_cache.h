@@ -19,14 +19,9 @@
 namespace oceanbase {
 namespace storage {
 
-constexpr int64_t next_pow2(const int64_t x)
-{
-  return x ? (1ULL << (8 * sizeof(int64_t) - __builtin_clzll(x - 1))) : 1;
-}
-
 template <typename Key, typename Handle>
 class ObHandleCacheNode : public common::ObDLinkBase<ObHandleCacheNode<Key, Handle>> {
-  public:
+public:
   ObHandleCacheNode() : bucket_idx_(-1)
   {}
   virtual ~ObHandleCacheNode()
@@ -50,7 +45,7 @@ class ObHandleCache {
   typedef ObHandleCacheNode<Key, Handle> CacheNode;
   typedef common::ObDList<CacheNode> LRUList;
 
-  public:
+public:
   ObHandleCache()
   {
     STATIC_ASSERT(N <= 8192, "number of bucket is larger than 8192");
@@ -124,8 +119,8 @@ class ObHandleCache {
     return ret;
   }
 
-  private:
-  static const uint64_t BUCKET_SIZE = next_pow2(N * 2);
+private:
+  static const uint64_t BUCKET_SIZE = common::next_pow2(N * 2);
   static const uint64_t MASK = BUCKET_SIZE - 1;
   CacheNode nodes_[N];
   int16_t buckets_[BUCKET_SIZE];

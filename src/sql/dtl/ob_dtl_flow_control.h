@@ -41,7 +41,7 @@ class ObDtlLocalFirstBufferCache;
 class ObDtlUnblockingMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::UNBLOCKING_DATA_FLOW> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDtlUnblockingMsg()
   {}
 
@@ -50,7 +50,7 @@ class ObDtlUnblockingMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::UNBLOCKIN
 };
 
 class ObDtlUnblockingMsgP : public dtl::ObDtlPacketProc<ObDtlUnblockingMsg> {
-  public:
+public:
   explicit ObDtlUnblockingMsgP(ObDtlFlowControl& dfc) : dfc_(dfc)
   {}
   virtual ~ObDtlUnblockingMsgP() = default;
@@ -62,7 +62,7 @@ class ObDtlUnblockingMsgP : public dtl::ObDtlPacketProc<ObDtlUnblockingMsg> {
 class ObDtlDrainMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::DRAIN_DATA_FLOW> {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObDtlDrainMsg()
   {}
 
@@ -71,7 +71,7 @@ class ObDtlDrainMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::DRAIN_DATA_FLO
 };
 
 class ObDtlDrainMsgP : public dtl::ObDtlPacketProc<ObDtlDrainMsg> {
-  public:
+public:
   explicit ObDtlDrainMsgP(ObDtlFlowControl& dfc) : dfc_(dfc)
   {}
   virtual ~ObDtlDrainMsgP() = default;
@@ -80,7 +80,7 @@ class ObDtlDrainMsgP : public dtl::ObDtlPacketProc<ObDtlDrainMsg> {
 };
 
 class ObDtlFlowControl {
-  public:
+public:
   ObDtlFlowControl()
       : tenant_id_(OB_INVALID_ID),
         timeout_ts_(0),
@@ -319,7 +319,7 @@ class ObDtlFlowControl {
     return compressor_type_;
   }
 
-  private:
+private:
   static const int64_t THRESHOLD_SIZE = 2097152;
   static const int64_t MAX_BUFFER_CNT = 3;
   static const int64_t MAX_BUFFER_FACTOR = 2;
@@ -352,7 +352,7 @@ class ObDtlFlowControl {
 
   ObDtlChTotalInfo* ch_info_;
 
-  private:
+private:
   // Todo: In DFC, it can monitor data size and so on
 };
 

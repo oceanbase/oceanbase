@@ -31,7 +31,7 @@ namespace sql {
 class ObPxMultiPartDeleteOpInput : public ObPxMultiPartModifyOpInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartDeleteOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxMultiPartModifyOpInput(ctx, spec)
   {}
   int init(ObTaskInfo& task_info) override
@@ -39,14 +39,14 @@ class ObPxMultiPartDeleteOpInput : public ObPxMultiPartModifyOpInput {
     return ObPxMultiPartModifyOpInput::init(task_info);
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartDeleteOpInput);
 };
 
 class ObPxMultiPartDeleteSpec : public ObTableModifySpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxMultiPartDeleteSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
       : ObTableModifySpec(alloc, type), row_desc_(), table_desc_(), delete_row_exprs_(&alloc), with_barrier_(false)
   {}
@@ -60,7 +60,7 @@ class ObPxMultiPartDeleteSpec : public ObTableModifySpec {
   }
   int register_to_datahub(ObExecContext& ctx) const override;
 
-  public:
+public:
   ObDMLOpRowDesc row_desc_;
   ObDMLOpTableDesc table_desc_;
   ExprFixedArray delete_row_exprs_;
@@ -76,10 +76,10 @@ class ObPxMultiPartDeleteSpec : public ObTableModifySpec {
 class ObPxMultiPartDeleteOp : public ObDMLOpDataReader, public ObDMLOpDataWriter, public ObTableModifyOp {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   /**ObPDMLOpRowIteratorWrapper**/
   class ObPDMLOpRowIteratorWrapper : public common::ObNewRowIterator {
-    public:
+  public:
     ObPDMLOpRowIteratorWrapper(ObExecContext& exec_ctx, ObPxMultiPartDeleteOp* op)
         : ctx_(exec_ctx), iter_(nullptr), delete_row_(), read_row_from_iter_(NULL), delete_row_exprs_(NULL), op_(op)
     {}
@@ -99,7 +99,7 @@ class ObPxMultiPartDeleteOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
     }
     int get_next_row(common::ObNewRow*& row) override;
 
-    private:
+  private:
     ObExecContext& ctx_;
     ObPDMLOpRowIterator* iter_;
     common::ObNewRow delete_row_;
@@ -108,14 +108,14 @@ class ObPxMultiPartDeleteOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
     ObPxMultiPartDeleteOp* op_;
   };
 
-  public:
+public:
   ObPxMultiPartDeleteOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
       : ObTableModifyOp(exec_ctx, spec, input),
         data_driver_(exec_ctx.get_eval_ctx(), exec_ctx.get_allocator(), op_monitor_info_),
         row_iter_wrapper_(exec_ctx, this)
   {}
 
-  public:
+public:
   virtual bool has_foreign_key() const
   {
     return false;
@@ -131,11 +131,11 @@ class ObPxMultiPartDeleteOp : public ObDMLOpDataReader, public ObDMLOpDataWriter
   virtual int inner_open();
   virtual int inner_close();
 
-  private:
+private:
   int fill_dml_base_param(uint64_t index_tid, ObSQLSessionInfo& my_session, const ObPhysicalPlan& my_phy_plan,
       const ObPhysicalPlanCtx& my_plan_ctx, storage::ObDMLBaseParam& dml_param) const;
 
-  private:
+private:
   ObPDMLOpDataDriver data_driver_;
   // Used to calc the child output row and return the row required by the DML operation
   ObPDMLOpRowIteratorWrapper row_iter_wrapper_;

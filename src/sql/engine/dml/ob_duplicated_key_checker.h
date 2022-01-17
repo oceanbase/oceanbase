@@ -22,7 +22,7 @@ typedef ObChunkDatumStore DupKeyCheckerDatumRowStore;
 typedef common::ObRowStore::Iterator DupKeyCheckerRowIter;
 typedef ObChunkDatumStore::Iterator DupKeyCheckerDatumRowIter;
 class ObIRowkeyIterator {
-  public:
+public:
   virtual ~ObIRowkeyIterator()
   {}
   virtual int get_next_conflict_row(common::ObNewRow& row) = 0;
@@ -129,7 +129,7 @@ struct ObConstraintValue {
 typedef common::hash::ObHashMap<ObConstraintKey, ObConstraintValue, common::hash::NoPthreadDefendMode>
     ObUniqueConstraintCtx;
 class ObDupKeyCheckerCtx {
-  public:
+public:
   friend class ObDuplicatedKeyChecker;
   static const int64_t ROW_BATCH_SIZE = 512;
   struct PartRowStore {
@@ -141,7 +141,7 @@ class ObDupKeyCheckerCtx {
     ObChunkDatumStore* datum_store_;
   };
 
-  public:
+public:
   ObDupKeyCheckerCtx(common::ObIAllocator& allocator, common::ObExprCtx* expr_ctx,
       ObDMLMiniTaskExecutor& index_executor, DupKeyCheckerRowStore* checker_row_store, ObEvalCtx* eval_ctx = NULL,
       DupKeyCheckerDatumRowStore* checker_datum_row_store = NULL);
@@ -207,10 +207,10 @@ class ObDupKeyCheckerCtx {
   template <class ShuffleOp>
   int shuffle_final_data(ObExecContext& ctx, const ObExprPtrIArray& output_exprs, ShuffleOp& shuffle_op);
 
-  private:
+private:
   int create_mini_task_info(ObTaskInfo*& task_info);
 
-  private:
+private:
   common::ObIAllocator& allocator_;
   common::ObExprCtx* expr_ctx_;
   ObEvalCtx* eval_ctx_;
@@ -281,9 +281,9 @@ class ObDupKeyCheckerCtx {
  *  Task to get other column data corresponding to this part of rowkey
  */
 class ObDuplicatedKeyChecker {
-  private:
+private:
   class ObUniqueIndexRowkeyIter : public ObIRowkeyIterator {
-    public:
+  public:
     ObUniqueIndexRowkeyIter(common::ObIAllocator& allocator, common::ObExprCtx* expr_ctx,
         DupKeyCheckerRowIter checker_row_iter, const ObUniqueIndexScanInfo& index_info)
         : allocator_(allocator),
@@ -315,7 +315,7 @@ class ObDuplicatedKeyChecker {
       return iter_output_;
     };
 
-    private:
+  private:
     common::ObIAllocator& allocator_;
     common::ObExprCtx* expr_ctx_;
     const ObUniqueIndexScanInfo& index_info_;
@@ -327,7 +327,7 @@ class ObDuplicatedKeyChecker {
   };
 
   class ObPrimaryRowkeyIter : public ObIRowkeyIterator {
-    public:
+  public:
     ObPrimaryRowkeyIter(common::ObRowStore::Iterator rowkey_iter, ObDupKeyCheckerCtx& checker_ctx)
         : rowkey_iter_(rowkey_iter), checker_ctx_(checker_ctx), iter_output_(NULL), eval_ctx_(NULL)
     {}
@@ -344,7 +344,7 @@ class ObDuplicatedKeyChecker {
     };
     int init(ObChunkDatumStore* datum_store);
 
-    private:
+  private:
     common::ObRowStore::Iterator rowkey_iter_;
     ObDupKeyCheckerCtx& checker_ctx_;
     // for static engine
@@ -353,7 +353,7 @@ class ObDuplicatedKeyChecker {
     ObEvalCtx* eval_ctx_;
   };
 
-  public:
+public:
   ObDuplicatedKeyChecker()
       : unique_index_cnt_(0),
         phy_plan_(NULL),
@@ -427,7 +427,7 @@ class ObDuplicatedKeyChecker {
   template <class ShuffleOp>
   int shuffle_final_data(ObExecContext& ctx, ObDupKeyCheckerCtx& checker_ctx, const ShuffleOp& shuffle_op) const;
 
-  private:
+private:
   int build_conflict_row_task_info(const ObUniqueIndexScanInfo& index_info, ObExecContext& ctx,
       ObIRowkeyIterator& rowkey_iter, ObDupKeyCheckerCtx& checker_ctx) const;
   int build_conflict_row_task_info_list(ObExecContext& ctx, ObDupKeyCheckerCtx& checker_ctx) const;
@@ -441,7 +441,7 @@ class ObDuplicatedKeyChecker {
   int extract_rowkey_info(const ObPhyUniqueConstraintInfo& constraint_info, ObEvalCtx& eval_ctx, char* buf,
       int64_t buf_len, const ObTimeZoneInfo* tz_info) const;
 
-  private:
+private:
   int64_t unique_index_cnt_;
   const ObPhysicalPlan* phy_plan_;
   // primary and local unique index scan plan root
@@ -507,7 +507,7 @@ int ObDupKeyCheckerCtx::shuffle_final_data(
           ret = OB_INVALID_ARGUMENT;
           SQL_ENG_LOG(WARN, "eval ctx is null", K(ret));
         } else if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr(output_exprs, *ctx.get_eval_ctx()))) {
-          SQL_ENG_LOG(WARN, "stored row to expr faild", K(ret));
+          SQL_ENG_LOG(WARN, "stored row to expr failed", K(ret));
         } else if (OB_FAIL(shuffle_op.shuffle_final_delete_row(ctx, output_exprs))) {
           SQL_ENG_LOG(WARN, "shuffle delete row failed", K(ret), K(constraint_value));
         }
@@ -518,7 +518,7 @@ int ObDupKeyCheckerCtx::shuffle_final_data(
           ret = OB_INVALID_ARGUMENT;
           SQL_ENG_LOG(WARN, "eval ctx is null", K(ret));
         } else if (OB_FAIL(constraint_value.current_datum_row_->to_expr(output_exprs, *ctx.get_eval_ctx()))) {
-          SQL_ENG_LOG(WARN, "stored row to expr faild", K(ret));
+          SQL_ENG_LOG(WARN, "stored row to expr failed", K(ret));
         } else if (OB_FAIL(shuffle_op.shuffle_final_insert_row(ctx, output_exprs))) {
           SQL_ENG_LOG(WARN, "shuffle insert row failed", K(ret), K(constraint_value));
         }

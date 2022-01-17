@@ -31,7 +31,7 @@ struct ObColDesc;
 namespace blocksstable {
 class ObFullMacroBlockMeta;
 class ObMacroBlockReader {
-  public:
+public:
   ObMacroBlockReader();
   virtual ~ObMacroBlockReader();
   int decompress_data(const ObFullMacroBlockMeta& meta, const char* buf, const int64_t size, const char*& uncomp_buf,
@@ -41,19 +41,19 @@ class ObMacroBlockReader {
   int decompress_data_with_prealloc_buf(const char* compressor_name, const char* buf, const int64_t size,
       char* uncomp_buf, const int64_t uncomp_buf_size);
 
-  private:
+private:
   int alloc_buf(const int64_t buf_size);
   common::ObCompressor* compressor_;
   char* uncomp_buf_;
   int64_t uncomp_buf_size_;
   common::ObArenaAllocator allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockReader);
 };
 
 class ObSSTableDataBlockReader {
-  public:
+public:
   ObSSTableDataBlockReader();
   virtual ~ObSSTableDataBlockReader();
 
@@ -61,7 +61,7 @@ class ObSSTableDataBlockReader {
   void reset();
   int dump();
 
-  private:
+private:
   int dump_macro_block_header();
   int dump_sstable_data_block();
   int dump_lob_data_block();
@@ -71,7 +71,7 @@ class ObSSTableDataBlockReader {
   int decompressed_micro_block(const char* micro_block_buf, const int64_t micro_block_size,
       const int16_t micro_header_magic, ObMicroBlockData& micro_data);
 
-  private:
+private:
   // raw data
   const char* data_;
   int64_t size_;
@@ -90,7 +90,7 @@ class ObSSTableDataBlockReader {
   bool is_trans_sstable_;
   bool is_inited_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSSTableDataBlockReader);
 };
 } /* namespace blocksstable */

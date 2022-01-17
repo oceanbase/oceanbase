@@ -33,7 +33,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::common::hash;
 
 class ObExprArithmaticTest : public ::testing::Test {
-  public:
+public:
   ObExprArithmaticTest();
   virtual ~ObExprArithmaticTest();
   virtual void SetUp();
@@ -63,7 +63,7 @@ class ObExprArithmaticTest : public ::testing::Test {
   static int truncate_number_precision(
       number::ObNumber& num, number::ObNumber& num_trunc, int16_t scale, ObIAllocator& buf);
 
-  private:
+private:
   // disallow copy
   ObExprArithmaticTest(const ObExprArithmaticTest& other);
   ObExprArithmaticTest& operator=(const ObExprArithmaticTest& other);
@@ -73,7 +73,7 @@ class ObExprArithmaticTest : public ::testing::Test {
   static ObHashMap<ObString, ObObjType> str_to_type_map_mysql_;
   static ObHashMap<ObString, EXPR_TYPE> str_to_expr_type_map_;
 
-  protected:
+protected:
   // data members
 };
 

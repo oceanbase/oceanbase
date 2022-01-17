@@ -20,12 +20,12 @@ namespace sql {
 class ObExecContext;
 class ObPhysicalPlan;
 class ObDistributedTaskRunner {
-  public:
+public:
   ObDistributedTaskRunner();
   virtual ~ObDistributedTaskRunner();
   int execute(ObExecContext& ctx, ObPhysicalPlan& phy_plan, common::ObIArray<ObSliceEvent>& slice_events);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDistributedTaskRunner);
 };
 }  // namespace sql

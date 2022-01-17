@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSysOpOpnsize : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprSysOpOpnsize(common::ObIAllocator& alloc)
       : ObFuncExprOperator(alloc, T_FUN_SYS_OP_OPNSIZE, "sys_op_opnsize", 1, NOT_ROW_DIMENSION)
   {}
@@ -32,7 +32,7 @@ class ObExprSysOpOpnsize : public ObFuncExprOperator {
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_sys_op_opnsize_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSysOpOpnsize);
 };
 

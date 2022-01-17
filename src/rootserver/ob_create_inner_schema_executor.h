@@ -33,20 +33,20 @@ namespace rootserver {
 class ObCreateInnerSchemaExecutor;
 class ObDDLService;
 class ObCreateInnerSchemaTask : public share::ObAsyncTask {
-  public:
+public:
   explicit ObCreateInnerSchemaTask(ObCreateInnerSchemaExecutor& executor) : executor_(&executor)
   {}
   virtual ~ObCreateInnerSchemaTask() = default;
-  virtual int64_t get_deep_copy_size() const;
-  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
+  virtual int64_t get_deep_copy_size() const override;
+  share::ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const override;
   virtual int process() override;
 
-  private:
+private:
   ObCreateInnerSchemaExecutor* executor_;
 };
 
 class ObCreateInnerSchemaExecutor {
-  public:
+public:
   ObCreateInnerSchemaExecutor();
   ~ObCreateInnerSchemaExecutor() = default;
   int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObMySQLProxy& sql_proxy,
@@ -69,12 +69,12 @@ class ObCreateInnerSchemaExecutor {
       share::schema::ObSchemaGetterGuard& schema_guard, common::ObMySQLProxy* sql_proxy,
       obrpc::ObCommonRpcProxy* rpc_proxy);
 
-  private:
+private:
   int set_execute_mark();
   int do_create_inner_schema();
   int check_stop();
 
-  private:
+private:
   bool is_inited_;
   bool is_stopped_;
   bool execute_;

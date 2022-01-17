@@ -23,7 +23,7 @@ using namespace share::schema;
 namespace unittest {
 
 class TestSSTableMultiGet : public ObSSTableTest {
-  public:
+public:
   TestSSTableMultiGet();
   void test_normal(const bool is_reverse_scan, const int64_t limit);
   void test_border(const bool is_reverse_scan, const int64_t limit);

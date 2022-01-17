@@ -24,7 +24,7 @@ namespace sql {
 static const int64_t TEST_MOCK_COL_NUM = 3;
 
 class ObMockSqlExecutorRpc : public ObExecutorRpcImpl {
-  public:
+public:
   ObMockSqlExecutorRpc();
   virtual ~ObMockSqlExecutorRpc();
   virtual int task_submit(ObExecContext& ctx, ObTask& task, const common::ObAddr& svr);
@@ -36,22 +36,22 @@ class ObMockSqlExecutorRpc : public ObExecutorRpcImpl {
   virtual int task_fetch_result(
       const ObSliceID& ob_slice_id, const common::ObAddr& svr, FetchResultStreamHandle& handler);
 
-  public:
+public:
   share::ObFakePartitionLocationCache partition_loc_cache_;
   storage::ObFakePartitionService partition_service_;
 
-  private:
+private:
   bool task_location_exist(ObTaskLocation task_loc);
 
-  private:
+private:
   common::ObArray<ObTaskLocation> task_loc_array_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMockSqlExecutorRpc);
 };
 
 class ObMockRemoteExecuteStreamHandle : public RemoteExecuteStreamHandle {
-  public:
+public:
   ObMockRemoteExecuteStreamHandle(common::ObIAllocator& alloc) : RemoteExecuteStreamHandle(alloc)
   {}
   ~ObMockRemoteExecuteStreamHandle()
@@ -61,7 +61,7 @@ class ObMockRemoteExecuteStreamHandle : public RemoteExecuteStreamHandle {
 };
 
 class ObMockFetchResultStreamHandle : public FetchResultStreamHandle {
-  public:
+public:
   ObMockFetchResultStreamHandle(common::ObIAllocator& alloc) : FetchResultStreamHandle(alloc)
   {}
   ~ObMockFetchResultStreamHandle()
@@ -78,10 +78,10 @@ class ObMockFetchResultStreamHandle : public FetchResultStreamHandle {
     ob_slice_id_ = ob_slice_id;
   }
 
-  private:
+private:
   bool task_location_exist(ObTaskLocation task_loc);
 
-  private:
+private:
   common::ObArray<ObTaskLocation> task_loc_array_;
   common::ObAddr server_;
   ObSliceID ob_slice_id_;
@@ -89,7 +89,7 @@ class ObMockFetchResultStreamHandle : public FetchResultStreamHandle {
 
 /************************************mock packet queue********************************/
 class ObMockPacketQueueThread : public share::ObThreadPool {
-  public:
+public:
   static const int64_t THREAD_COUNT = 1;
   static ObMockPacketQueueThread* get_instance();
 
@@ -101,7 +101,7 @@ class ObMockPacketQueueThread : public share::ObThreadPool {
 
   common::ObSPopMPushQueue packet_queue_;
 
-  private:
+private:
   static ObMockPacketQueueThread* instance_;
   static tbutil::Mutex locker_;
 };

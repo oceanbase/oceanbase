@@ -26,7 +26,7 @@ namespace schema {
 class ObUserInfo;
 
 class ObUserSqlService : public ObDDLSqlService {
-  public:
+public:
   ObUserSqlService(ObSchemaService& schema_service) : ObDDLSqlService(schema_service)
   {}
   virtual ~ObUserSqlService()
@@ -43,6 +43,8 @@ class ObUserSqlService : public ObDDLSqlService {
       const common::ObString* ddl_stmt_str, common::ObISQLClient& sql_client);
   virtual int set_passwd(const ObUserInfo& user_info, const int64_t new_schema_version,
       const common::ObString* ddl_stmt_str, common::ObISQLClient& sql_client);
+  virtual int set_max_connections(const ObUserInfo &user_info, const int64_t new_schema_version,
+      const ObString *ddl_stmt_str, ObISQLClient &sql_client);
   virtual int alter_user_require(const ObUserInfo& user_info, const int64_t new_schema_version,
       const common::ObString* ddl_stmt_str, common::ObISQLClient& sql_client);
   virtual int grant_revoke_user(const ObUserInfo& user_info, const int64_t new_schema_version,
@@ -59,12 +61,12 @@ class ObUserSqlService : public ObDDLSqlService {
   virtual int replace_user(const ObUserInfo& user, const int64_t new_schema_version,
       const common::ObString* ddl_stmt_str, common::ObISQLClient& sql_client, const ObSchemaOperationType type);
 
-  private:
+private:
   int drop_user_delete_role_grantee_map(const uint64_t tenant_id, bool is_role, const uint64_t new_schema_version,
       const ObUserInfo* user, const ObString* ddl_stmt_str, ObISQLClient& sql_client,
       share::schema::ObSchemaGetterGuard& schema_guard);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObUserSqlService);
 };
 

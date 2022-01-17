@@ -31,13 +31,13 @@ class ObZoneRecoveryTaskMgr;
 class ObZoneServerRecoveryMachine;
 
 class ObZoneRecoveryTaskKey {
-  public:
+public:
   ObZoneRecoveryTaskKey() : tenant_id_(OB_INVALID_ID), file_id_(-1), hash_value_(0)
   {}
   virtual ~ObZoneRecoveryTaskKey()
   {}
 
-  public:
+public:
   bool is_valid() const;
   bool operator==(const ObZoneRecoveryTaskKey& that) const;
   bool operator!=(const ObZoneRecoveryTaskKey& that) const
@@ -49,10 +49,10 @@ class ObZoneRecoveryTaskKey {
   int init(const uint64_t tenant_id, const int64_t file_id, const common::ObAddr& server);
   TO_STRING_KV(K_(tenant_id), K_(file_id), K_(server));
 
-  private:
+private:
   uint64_t inner_hash() const;
 
-  private:
+private:
   uint64_t tenant_id_;
   int64_t file_id_;
   common::ObAddr server_;
@@ -64,12 +64,12 @@ typedef common::hash::ObReferedMap<common::ObAddr, ObServerTaskStat> ObServerTas
 typedef common::hash::ObReferedMap<uint64_t, ObTenantTaskStat> ObTenantTaskStatMap;
 
 class ObZoneRecoveryTask : public common::ObDLinkBase<ObZoneRecoveryTask> {
-  public:
+public:
   typedef common::hash::ObHashMap<ObZoneRecoveryTaskKey, ObZoneRecoveryTask*, common::hash::NoPthreadDefendMode>
       TaskMap;
   friend class ObZoneRecoveryTaskMgr;
 
-  public:
+public:
   ObZoneRecoveryTask()
       : task_id_(),
         task_key_(),
@@ -90,7 +90,7 @@ class ObZoneRecoveryTask : public common::ObDLinkBase<ObZoneRecoveryTask> {
   virtual ~ObZoneRecoveryTask()
   {}
 
-  public:
+public:
   int build(const common::ObAddr& src_server, const int64_t src_svr_seq, const common::ObAddr& dest_server,
       const int64_t dest_svr_seq, const uint64_t tenant_id, const int64_t file_id, const uint64_t dest_unit_id);
   int build_by_task_result(const obrpc::ObFastRecoveryTaskReplyBatchArg& arg, int& ret_code);
@@ -176,10 +176,10 @@ class ObZoneRecoveryTask : public common::ObDLinkBase<ObZoneRecoveryTask> {
   TO_STRING_KV(K(task_id_), K(task_key_), K(generate_time_), K(schedule_time_), K(execute_time_), K(src_server_),
       K(src_svr_seq_), K(dest_server_), K(dest_svr_seq_), K(tenant_id_), K(file_id_), K(dest_unit_id_));
 
-  private:
+private:
   int set_task_id(const common::ObAddr& addr);
 
-  private:
+private:
   share::ObTaskId task_id_;
   ObZoneRecoveryTaskKey task_key_;
   ObServerTaskStatMap::Item* src_server_stat_;
@@ -198,7 +198,7 @@ class ObZoneRecoveryTask : public common::ObDLinkBase<ObZoneRecoveryTask> {
 };
 
 class ObZoneRecoveryTaskQueue {
-  public:
+public:
   typedef common::ObDList<ObZoneRecoveryTask> TaskList;
   typedef common::hash::ObHashMap<ObZoneRecoveryTaskKey, ObZoneRecoveryTask*, common::hash::NoPthreadDefendMode>
       TaskMap;
@@ -258,10 +258,10 @@ class ObZoneRecoveryTaskQueue {
   }
   void reuse();
 
-  private:
+private:
   int do_push_task(ObZoneRecoveryTaskMgr& task_mgr, const ObZoneRecoveryTask& task);
 
-  private:
+private:
   bool is_inited_;
   common::ObServerConfig* config_;
   ObTenantTaskStatMap* tenant_stat_map_;
@@ -271,12 +271,12 @@ class ObZoneRecoveryTaskQueue {
   TaskList schedule_list_;
   TaskMap task_map_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObZoneRecoveryTaskQueue);
 };
 
 class ObZoneRecoveryTaskMgr : public ObRsReentrantThread {
-  public:
+public:
   const static int64_t TASK_QUEUE_LIMIT = 1 << 16;
   const static int64_t QUEUE_LOW_TASK_CNT = TASK_QUEUE_LIMIT / 4;
   const static int64_t ONCE_ADD_TASK_CNT = TASK_QUEUE_LIMIT / 2;
@@ -284,10 +284,10 @@ class ObZoneRecoveryTaskMgr : public ObRsReentrantThread {
   const static int64_t DATA_IN_CLEAR_INTERVAL = 20 * 60 * 1000000;         // 60 min;
   const static int64_t CHECK_IN_PROGRESS_INTERVAL_PER_TASK = 5 * 1000000;  // task 5s every task
 
-  public:
+public:
   ObZoneRecoveryTaskMgr();
 
-  public:
+public:
   virtual void run3() override;
   virtual int blocking_run()
   {
@@ -295,7 +295,7 @@ class ObZoneRecoveryTaskMgr : public ObRsReentrantThread {
   }
   void stop();
 
-  public:
+public:
   int init(common::ObServerConfig& config, ObServerManager* server_mgr, ObUnitManager* unit_mgr,
       obrpc::ObSrvRpcProxy* rpc_proxy, ObZoneServerRecoveryMachine* server_recovery_machine);
 
@@ -323,7 +323,7 @@ class ObZoneRecoveryTaskMgr : public ObRsReentrantThread {
   }
   int get_all_tasks(common::ObIAllocator& allocator, common::ObIArray<ObZoneRecoveryTask*>& tasks);
 
-  private:
+private:
   common::ObThreadCond& get_cond()
   {
     return cond_;
@@ -345,7 +345,7 @@ class ObZoneRecoveryTaskMgr : public ObRsReentrantThread {
   void try_clear_server_data_in_limit(const ObAddr& addr);
   int notify_server_recovery_machine(const ObZoneRecoveryTask& task, const int ret_code);
 
-  private:
+private:
   bool inited_;
   volatile bool reach_concurrency_limited_;
   common::ObServerConfig* config_;
@@ -359,7 +359,7 @@ class ObZoneRecoveryTaskMgr : public ObRsReentrantThread {
   obrpc::ObSrvRpcProxy* rpc_proxy_;
   ObZoneServerRecoveryMachine* server_recovery_machine_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObZoneRecoveryTaskMgr);
 };
 

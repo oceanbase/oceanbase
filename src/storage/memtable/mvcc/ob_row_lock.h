@@ -23,10 +23,10 @@ class ObMemtableKey;
 class ObMvccRow;
 
 class ObRowLock {
-  public:
+public:
   friend class ObMvccRow;
 
-  public:
+public:
   explicit ObRowLock(ObMvccRow& row) : row_(row)
   {}
   ~ObRowLock()
@@ -71,7 +71,7 @@ class ObRowLock {
   }
   void after_unlock(const ObMemtableKey* key);
 
-  private:
+private:
   bool is_locked_()
   {
     return latch_.is_locked();
@@ -97,7 +97,7 @@ class ObRowLock {
     return latch_.wrlock(common::ObLatchIds::ROW_LOCK, abs_timeout, &uid);
   }
 
-  private:
+private:
   common::ObLatch latch_;
   ObMvccRow& row_;
 };

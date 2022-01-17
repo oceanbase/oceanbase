@@ -28,12 +28,12 @@ class ObArchiveThreadPool;
 // partition archive task management
 // single consumer model
 struct ObArchiveTaskStatus : common::ObLink {
-  public:
+public:
   ObArchiveTaskStatus();
   virtual ~ObArchiveTaskStatus();
   int64_t count();
   void inc_ref();
-  int push_unlock(common::ObLink* link);
+  int push(common::ObLink* task, ObArchiveThreadPool& worker);
   int pop(ObLink*& link, bool& task_exist);
   // remove from global task status queue
   int retire(bool& is_empty, bool& is_discarded);
@@ -42,10 +42,10 @@ struct ObArchiveTaskStatus : common::ObLink {
 
   VIRTUAL_TO_STRING_KV(K(issue_), K(ref_), K(num_), K(pg_key_));
 
-  private:
+private:
   int retire_unlock(bool& is_discarded);
 
-  protected:
+protected:
   bool issue_;  // flag of task status in global queue or not
   int64_t ref_;
   int64_t num_;  // num of this pg's total tasks
@@ -57,11 +57,10 @@ struct ObArchiveTaskStatus : common::ObLink {
 // Partition Send Task Status
 // clog_splitter produce, sender consume
 struct ObArchiveSendTaskStatus : public ObArchiveTaskStatus {
-  public:
+public:
   ObArchiveSendTaskStatus(const common::ObPGKey& pg_key);
   ~ObArchiveSendTaskStatus();
 
-  int push(ObArchiveSendTask& task, ObArchiveThreadPool& worker);
   int top(common::ObLink*& link, bool& task_exist);
   common::ObLink* next(common::ObLink& pre);
   int pop_front(const int64_t num);
@@ -70,7 +69,7 @@ struct ObArchiveSendTaskStatus : public ObArchiveTaskStatus {
   void clear_error_info();
   INHERIT_TO_STRING_KV("ObArchiveTaskStatus", ObArchiveTaskStatus, K(error_occur_timestamp_));
 
-  private:
+private:
   // first IO error occur timestamp when adjoint IO errors occur, reset when success
   int64_t error_occur_timestamp_;
   // IO error count when adjoint IO errors occur, reset when success
@@ -80,12 +79,9 @@ struct ObArchiveSendTaskStatus : public ObArchiveTaskStatus {
 // Partition Clog Split Task Status
 // ilog_fetcher produce, clog_splitter consume
 struct ObArchiveCLogTaskStatus : public ObArchiveTaskStatus {
-  public:
+public:
   ObArchiveCLogTaskStatus(const common::ObPGKey& pg_key);
   ~ObArchiveCLogTaskStatus();
-
-  public:
-  int push(ObPGArchiveCLogTask& task, ObArchiveThreadPool& worker);
 };
 
 }  // namespace archive

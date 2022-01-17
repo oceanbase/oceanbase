@@ -88,11 +88,13 @@ struct ObCollationWrapper {
 const char* ob_collation_type_str(ObCollationType collation_type);
 
 class ObCharset {
-  private:
+private:
   ObCharset(){};
   virtual ~ObCharset(){};
 
-  public:
+public:
+  static const int32_t MAX_MB_LEN = 5;
+  static const int32_t MIN_MB_LEN = 1;
   static const int64_t CHARSET_WRAPPER_COUNT = 2;
   static const int64_t COLLATION_WRAPPER_COUNT = 3;
 
@@ -243,19 +245,19 @@ class ObCharset {
   static bool is_cjk_charset(ObCollationType collation_type);
   static bool is_valid_connection_collation(ObCollationType collation_type);
 
-  public:
+public:
   static const int64_t VALID_COLLATION_TYPES = 3;
 
-  private:
+private:
   static bool is_argument_valid(const ObCharsetInfo* charset_info, const char* str, int64_t str_len);
   static bool is_argument_valid(
       const ObCollationType collation_type, const char* str1, int64_t str_len1, const char* str2, int64_t str_len2);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCharset);
 
-  private:
+private:
   static const ObCharsetWrapper charset_wrap_arr_[CHARSET_WRAPPER_COUNT];
   static const ObCollationWrapper collation_wrap_arr_[COLLATION_WRAPPER_COUNT];
   static void* charset_arr[CS_TYPE_MAX];  // CHARSET_INFO *
@@ -264,7 +266,7 @@ class ObCharset {
 };
 
 class ObCharsetUtils {
-  public:
+public:
   static int init(ObIAllocator& allocator);
   static ObString get_const_str(ObCollationType coll_type, int ascii)
   {
@@ -275,7 +277,7 @@ class ObCharsetUtils {
     return result;
   }
   template <typename foreach_char_func>
-  static int foreach_char(common::ObString& str, common::ObCollationType collation_type, foreach_char_func& func)
+  static int foreach_char(const common::ObString &str, common::ObCollationType collation_type, foreach_char_func &func)
   {
     int ret = common::OB_SUCCESS;
     int32_t wchar = 0;
@@ -297,25 +299,26 @@ class ObCharsetUtils {
     return ret;
   }
 
-  private:
+private:
   static ObString const_str_for_ascii_[CHARSET_MAX][INT8_MAX + 1];
 };
 
 class ObStringScanner {
-  public:
+public:
   ObStringScanner(const ObString& str, common::ObCollationType collation_type)
       : str_(str), collation_type_(collation_type)
   {}
-  int next_character(ObString& encoding, int32_t& wchar);
+  int next_character(ObString &encoding, int32_t &wchar);
+  bool next_character(ObString &encoding, int32_t &wchar, int &ret);
   TO_STRING_KV(K_(str), K_(collation_type));
 
-  private:
+private:
   const ObString& str_;
   common::ObCollationType collation_type_;
 };
 
 class ObCharSetString {
-  public:
+public:
   ObCharSetString(ObString str, ObCollationType cs_type) : str_(str), cs_type_(cs_type)
   {}
   ObString& get_string()
@@ -327,7 +330,7 @@ class ObCharSetString {
     return ObCharset::charset_convert(allocator, str_, cs_type_, target_cs_type, str_);
   }
 
-  protected:
+protected:
   ObString str_;
   ObCollationType cs_type_;
 };

@@ -30,11 +30,11 @@ namespace logservice {
  * case request from leader,   return <OB_SUCCESS,    next_served_log_id/ts>
  * case request from follower, return <OB_NOT_MASTER, next_served_log_id/ts>
  *
- * note: leader will process dounle check
+ * note: leader will process double check
  */
 
 class ObExtLeaderHeartbeatHandler {
-  public:
+public:
   ObExtLeaderHeartbeatHandler()
   {
     partition_service_ = NULL;
@@ -50,7 +50,7 @@ class ObExtLeaderHeartbeatHandler {
   }
   int leader_heartbeat(const obrpc::ObLogLeaderHeartbeatReq& req_msg, obrpc::ObLogLeaderHeartbeatResp& resp_msg);
 
-  private:
+private:
   inline int get_leader_info(const common::ObPartitionKey& pkey, clog::ObIPartitionLogService* pls,
       common::ObRole& role, int64_t& leader_epoch);
   inline int get_last_slide(const common::ObPartitionKey& pkey, clog::ObIPartitionLogService* pls,
@@ -63,7 +63,7 @@ class ObExtLeaderHeartbeatHandler {
       const common::ObPartitionKey& pkey, uint64_t& next_served_log_id, int64_t& next_served_ts);
   int do_req_heartbeat_info(const obrpc::ObLogLeaderHeartbeatReq& req_msg, obrpc::ObLogLeaderHeartbeatResp& resp_msg);
 
-  private:
+private:
   storage::ObPartitionService* partition_service_;
 };
 

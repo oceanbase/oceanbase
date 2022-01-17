@@ -22,7 +22,7 @@
 namespace oceanbase {
 namespace clog {
 class ObDir {
-  public:
+public:
   ObDir() : is_inited_(false), dir_fd_(-1)
   {
     dir_name_[0] = '\0';
@@ -83,21 +83,21 @@ class ObDir {
     return ret;
   }
 
-  public:
+public:
   TO_STRING_KV(K_(is_inited), K_(dir_fd), K_(dir_name));
 
-  private:
+private:
   static const int OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   static const int MKDIR_MODE = OPEN_MODE | S_IXUSR;
 
-  private:
+private:
   bool is_inited_;
   int dir_fd_;
   char dir_name_[common::MAX_PATH_SIZE];
 };
 
 class ObILogDir {
-  public:
+public:
   ObILogDir()
   {}
   virtual ~ObILogDir()
@@ -113,12 +113,12 @@ class ObILogDir {
   virtual int get_tmp_path(const file_id_t file_id, char* path, const int64_t size, int& dir_fd) const = 0;
   virtual int get_total_size(int64_t& total_size) const = 0;
 
-  public:
+public:
   VIRTUAL_TO_STRING_KV("", "");
 
-  protected:
+protected:
   class GetFileIdRange {
-    public:
+  public:
     explicit GetFileIdRange() : min_file_id_(common::OB_INVALID_FILE_ID), max_file_id_(common::OB_INVALID_FILE_ID)
     {}
     ~GetFileIdRange()
@@ -133,25 +133,25 @@ class ObILogDir {
       return max_file_id_;
     }
 
-    private:
+  private:
     file_id_t min_file_id_;
     file_id_t max_file_id_;
   };
   class GetFileSizeFunctor {
-    public:
+  public:
     explicit GetFileSizeFunctor(const ObILogDir* log_dir) : total_size_(0), log_dir_(log_dir)
     {}
     ~GetFileSizeFunctor()
     {}
 
-    public:
+  public:
     bool operator()(const char* dir_name, const char* entry);
     int64_t get_total_size() const
     {
       return total_size_;
     }
 
-    private:
+  private:
     int get_size_(const file_id_t file_id, int64_t& size);
     int64_t total_size_;
     const ObILogDir* log_dir_;
@@ -159,7 +159,7 @@ class ObILogDir {
 };
 
 class ObLogDir : public ObILogDir {
-  public:
+public:
   ObLogDir() : is_inited_(false), dir_()
   {}
   ~ObLogDir()
@@ -177,10 +177,10 @@ class ObLogDir : public ObILogDir {
   int get_tmp_path(const file_id_t file_id, char* path, const int64_t size, int& dir_fd) const;
   int get_total_size(int64_t& total_size) const;
 
-  public:
+public:
   TO_STRING_KV(K_(is_inited), K_(dir));
 
-  private:
+private:
   bool is_inited_;
   ObDir dir_;
 };

@@ -33,7 +33,7 @@ using namespace common;
 namespace sql {
 
 class ObSqcAsyncCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_ASYNC_INIT_SQC> {
-  public:
+public:
   ObSqcAsyncCB(ObThreadCond& cond, const ObCurTraceId::TraceId trace_id) : cond_(cond), trace_id_(trace_id)
   {
     reset();
@@ -57,7 +57,6 @@ class ObSqcAsyncCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_ASYNC_INIT
     is_timeout_ = false;
     is_invalid_ = false;
     is_visited_ = false;
-    need_retry_ = false;
   }
   void set_visited(bool value)
   {
@@ -83,14 +82,6 @@ class ObSqcAsyncCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_ASYNC_INIT
   {
     return is_processed_;
   }
-  void set_retry(bool value)
-  {
-    need_retry_ = value;
-  }
-  bool need_retry() const
-  {
-    return need_retry_;
-  }
   const obrpc::ObRpcResultCode get_ret_code() const
   {
     return rcode_;
@@ -108,18 +99,17 @@ class ObSqcAsyncCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_ASYNC_INIT
       "is_visited", is_visited(), "is_timeout", is_timeout(), "is_processed", is_processed(), "is_invalid",
       is_invalid());
 
-  private:
+private:
   bool is_processed_;
   bool is_timeout_;
   bool is_invalid_;
   bool is_visited_;
-  bool need_retry_;
-  ObThreadCond& cond_;
+  ObThreadCond &cond_;
   ObCurTraceId::TraceId trace_id_;
 };
 
 class ObPxSqcAsyncProxy {
-  public:
+public:
   ObPxSqcAsyncProxy(obrpc::ObPxRpcProxy& proxy, ObDfo& dfo, ObExecContext& exec_ctx, ObPhysicalPlanCtx* phy_plan_ctx,
       ObSQLSessionInfo* session, const ObPhysicalPlan* phy_plan, ObArray<ObPxSqcMeta*>& sqcs)
       : proxy_(proxy),
@@ -156,14 +146,13 @@ class ObPxSqcAsyncProxy {
     return error_index_;
   }
 
-  private:
+private:
   void destroy();
   // asynchronously request a single sqc rpc task
   int launch_one_rpc_request(int64_t idx, ObSqcAsyncCB* cb);
-  bool check_for_retry(ObSqcAsyncCB& callback);
   void fail_process();
 
-  private:
+private:
   obrpc::ObPxRpcProxy& proxy_;
   ObDfo& dfo_;
   ObExecContext& exec_ctx_;

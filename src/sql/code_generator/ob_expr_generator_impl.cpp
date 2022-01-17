@@ -690,7 +690,9 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr& expr, ObExprInOrNotIn
         bool param_all_is_ext = true;
         bool param_all_same_cs_level = true;
         for (int64_t j = 0; OB_SUCC(ret) && j < in_op->get_row_dimension(); ++j) {
-          param_all_const &= param1->get_param_expr(0)->get_param_expr(j)->has_const_or_const_expr_flag();
+          param_all_const &= (param1->get_param_expr(0)->get_param_expr(j)->has_const_or_const_expr_flag()
+                              && !param1->get_param_expr(0)->get_param_expr(j)
+                                                           ->has_flag(IS_EXEC_PARAM));
           ObObjType first_obj_type = param1->get_param_expr(0)->get_param_expr(j)->get_data_type();
           ObObjType cur_obj_type = ObMaxType;
           ObCollationType first_obj_cs_type = param1->get_param_expr(0)->get_param_expr(j)->get_collation_type();
@@ -707,7 +709,9 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr& expr, ObExprInOrNotIn
               first_obj_cs_type = cur_obj_cs_type;
             }
             if (ObNullType != first_obj_type && ObNullType != cur_obj_type) {
-              param_all_const &= param1->get_param_expr(i)->get_param_expr(j)->has_const_or_const_expr_flag();
+              param_all_const &= (param1->get_param_expr(i)->get_param_expr(j)->has_const_or_const_expr_flag()
+                                 && !param1->get_param_expr(i)->get_param_expr(j)
+                                                            ->has_flag(IS_EXEC_PARAM));
               param_all_same_type &= (first_obj_type == cur_obj_type);
               param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
               param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
@@ -738,7 +742,8 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr& expr, ObExprInOrNotIn
       }
     }
     if (OB_SUCC(ret)) {
-      bool param_all_const = param1->get_param_expr(0)->has_const_or_const_expr_flag();
+      bool param_all_const = (param1->get_param_expr(0)->has_const_or_const_expr_flag()
+                             && !param1->get_param_expr(0)->has_flag(IS_EXEC_PARAM));
       bool param_all_same_type = true;
       bool param_all_same_cs_type = true;
       bool param_all_is_ext = true;
@@ -759,7 +764,8 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr& expr, ObExprInOrNotIn
           first_obj_cs_type = cur_obj_cs_type;
         }
         if (ObNullType != first_obj_type && ObNullType != cur_obj_type) {
-          param_all_const &= param1->get_param_expr(i)->has_const_or_const_expr_flag();
+          param_all_const &= (param1->get_param_expr(i)->has_const_or_const_expr_flag()
+                             && !param1->get_param_expr(i)->has_flag(IS_EXEC_PARAM));
           param_all_same_type &= (first_obj_type == cur_obj_type);
           param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
           param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
@@ -950,12 +956,8 @@ int ObExprGeneratorImpl::visit_enum_set_expr(ObNonTerminalRawExpr& expr, ObExprT
     LOG_WARN("invalid old op", K(expr), K(ret));
   } else {
     ObExprTypeToStr* type_to_str = static_cast<ObExprTypeToStr*>(old_op);
-    if (OB_ISNULL(type_to_str)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to static cast ObExprOperator * to ObExprTypeToStr *", K(expr), K(ret));
-    } else if (OB_FAIL(enum_set_op->deep_copy_str_values(type_to_str->get_str_values()))) {
+    if (OB_FAIL(enum_set_op->deep_copy_str_values(type_to_str->get_str_values()))) {
       LOG_WARN("failed to deep_copy_str_values", K(expr), K(ret));
-    } else { /*do nothing*/
     }
   }
   return ret;

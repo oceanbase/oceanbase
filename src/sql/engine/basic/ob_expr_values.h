@@ -22,7 +22,7 @@ class ObIterExprRangeParam;
 class ObExprValuesInput : public ObIPhyOperatorInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObExprValuesInput() : partition_id_values_(0)
   {}
   virtual ~ObExprValuesInput()
@@ -38,14 +38,14 @@ class ObExprValuesInput : public ObIPhyOperatorInput {
     return PHY_EXPR_VALUES;
   }
 
-  public:
+public:
   int64_t partition_id_values_;
 };
 
 class ObExprValues : public ObNoChildrenPhyOperator {
   class ObExprValuesCtx;
 
-  public:
+public:
   explicit ObExprValues(common::ObIAllocator& alloc);
   virtual ~ObExprValues();
 
@@ -70,10 +70,10 @@ class ObExprValues : public ObNoChildrenPhyOperator {
     return deserialize_(buf, data_len, pos);
   }
 
-  private:
+private:
   const static int64_t UNIS_VERSION = 1;
 
-  private:
+private:
   // function members
   /**
    * @brief init operator context, will create a physical operator context (and a current row space)
@@ -102,10 +102,10 @@ class ObExprValues : public ObNoChildrenPhyOperator {
   int calc_next_row(ObExecContext& ctx) const;
   int calc_next_row_by_range_param(ObExprValuesCtx& value_ctx, const common::ObNewRow*& row) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprValues);
 
-  private:
+private:
   // data members
   common::ObFixedArray<ObSqlExpression*, common::ObIAllocator> values_;
   common::ObFixedArray<ObIterExprRangeParam*, common::ObIAllocator> range_params_;

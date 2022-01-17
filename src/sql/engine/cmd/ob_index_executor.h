@@ -27,13 +27,13 @@ class ObCreateIndexStmt;
 class ObSQLSessionInfo;
 
 class ObCreateIndexExecutor {
-  public:
+public:
   friend class ObAlterTableExecutor;
   ObCreateIndexExecutor();
   virtual ~ObCreateIndexExecutor();
   int execute(ObExecContext& ctx, ObCreateIndexStmt& stmt);
 
-  private:
+private:
   int set_drop_index_stmt_str(obrpc::ObDropIndexArg& drop_index_arg, common::ObIAllocator& allocator);
   int sync_check_index_status(sql::ObSQLSessionInfo& my_session, obrpc::ObCommonRpcProxy& common_rpc_proxy,
       const obrpc::ObCreateIndexArg& create_index_arg, common::ObIAllocator& allocator,
@@ -44,7 +44,7 @@ class ObCreateIndexExecutor {
 
 class ObDropIndexStmt;
 class ObDropIndexExecutor {
-  public:
+public:
   ObDropIndexExecutor();
   virtual ~ObDropIndexExecutor();
 
@@ -53,26 +53,26 @@ class ObDropIndexExecutor {
 
 class ObFlashBackIndexStmt;
 class ObFlashBackIndexExecutor {
-  public:
+public:
   ObFlashBackIndexExecutor()
   {}
   virtual ~ObFlashBackIndexExecutor()
   {}
   int execute(ObExecContext& ctx, ObFlashBackIndexStmt& stmt);
 
-  private:
+private:
 };
 
 class ObPurgeIndexStmt;
 class ObPurgeIndexExecutor {
-  public:
+public:
   ObPurgeIndexExecutor()
   {}
   virtual ~ObPurgeIndexExecutor()
   {}
   int execute(ObExecContext& ctx, ObPurgeIndexStmt& stmt);
 
-  private:
+private:
 };
 
 }  // namespace sql

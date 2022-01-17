@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExprTzOffset : public ObFuncExprOperator {
-  public:
+public:
   explicit ObExprTzOffset(common::ObIAllocator& alloc);
   virtual ~ObExprTzOffset()
   {}
@@ -30,7 +30,7 @@ class ObExprTzOffset : public ObFuncExprOperator {
   static int eval_tz_offset(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
   virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& expr) const override;
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTzOffset);
 };

@@ -128,16 +128,8 @@ int ObLocalityDistribution::ZoneSetReplicaDist::check_valid_replica_dist(
         }
       }
     } else {
-      // a single zone can deploy one and only one paxos replica for mixed zone deployment
-      // and the deployment of readonly replicas on mixed zone is not supported
-      is_valid = ((full_replica_num >= 0) && (logonly_replica_num >= 0) &&
-                  (full_replica_num + logonly_replica_num == zone_set_.count()));
-      if (!is_valid) {
-      } else {
-        for (int64_t i = 0; is_valid && i < all_replica_attr_array_[READONLY_REPLICA].count(); ++i) {
-          is_valid = all_replica_attr_array_[READONLY_REPLICA].at(i).num_ <= 0;
-        }
-      }
+      // do not support mixed-zone locality deployment versions to come
+      is_valid = false;
     }
   }
   return ret;

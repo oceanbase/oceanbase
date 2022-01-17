@@ -24,18 +24,18 @@ using namespace common;
 
 namespace test {
 class ObLogTestThread : public lib::ThreadPool {
-  public:
+public:
   static const int64_t NUM_OF_LOG = 500;
   void run1() final;
 };
 
 class ObLogTestThreadT : public lib::ThreadPool {
-  public:
+public:
   static const int64_t NUM_OF_LOG = 500;
   void run1() final;
 };
 class ObLoggerTest : public ::testing::Test {
-  public:
+public:
   static const int64_t BIG_LOG_FILE_SIZE = 256 * 1024 * 1024;
   static const int64_t S_LOG_FILE_SIZE = 16 * 1024;
   ObLoggerTest();
@@ -46,7 +46,7 @@ class ObLoggerTest : public ::testing::Test {
   void run_test_t_async();
   void run_test_t_async_multi();
 
-  protected:
+protected:
   ObLogTestThread thread_pool_;
   ObLogTestThreadT thread_pool_t_;
 };

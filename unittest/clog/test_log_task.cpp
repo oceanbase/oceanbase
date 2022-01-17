@@ -23,7 +23,7 @@ namespace oceanbase {
 using namespace common;
 namespace clog {
 class MockSlidingCallBack : public MockObSlidingCallBack {
-  public:
+public:
   MockSlidingCallBack() : err_no_(OB_SUCCESS)
   {}
   virtual ~MockSlidingCallBack()
@@ -38,19 +38,19 @@ class MockSlidingCallBack : public MockObSlidingCallBack {
     err_no_ = err_no;
   }
 
-  private:
+private:
   int err_no_;
 };
 }  // namespace clog
 namespace unittest {
 class ObLogTaskTest : public ::testing::Test {
-  protected:
+protected:
   ObLogTaskTest() : log_task_(NULL), alloc_mgr_(NULL)
   {}
   virtual ~ObLogTaskTest()
   {}
 
-  protected:
+protected:
   virtual void SetUp()
   {
     const uint64_t TABLE_ID = 15;
@@ -83,7 +83,7 @@ class ObLogTaskTest : public ::testing::Test {
     alloc_mgr_ = NULL;
   }
 
-  protected:
+protected:
   clog::ObLogTask* log_task_;
   clog::MockSlidingCallBack mock_sliding_cb_;
   common::ObTenantMutilAllocator* alloc_mgr_;

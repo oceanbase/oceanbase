@@ -32,7 +32,7 @@ class ObILogCallbackEngine;
 class ObILogAllocator;
 
 class MockObLogStateMgr : public ObLogStateMgr {
-  public:
+public:
   MockObLogStateMgr()
   {}
   ~MockObLogStateMgr()
@@ -40,7 +40,7 @@ class MockObLogStateMgr : public ObLogStateMgr {
     destroy();
   }
 
-  public:
+public:
   int init(ObILogSWForStateMgr* sw, ObILogReconfirm* reconfirm, ObILogEngine* log_engine, ObILogMembershipMgr* mm,
       election::ObIElectionMgr* election_mgr, ObILogReplayEngineWrapper* replay_engine, share::ObIPSCb* ps_cb,
       ObILogAllocator* alloc_mgr, const common::ObAddr& self, const common::ObProposalID& proposal_id,

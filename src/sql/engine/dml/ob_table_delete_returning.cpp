@@ -23,7 +23,7 @@ using namespace storage;
 using namespace share;
 namespace sql {
 class ObTableDeleteReturning::ObTableDeleteReturningCtx : public ObTableDeleteCtx {
-  public:
+public:
   explicit ObTableDeleteReturningCtx(ObExecContext& ctx) : ObTableDeleteCtx(ctx)
   {}
   ~ObTableDeleteReturningCtx()

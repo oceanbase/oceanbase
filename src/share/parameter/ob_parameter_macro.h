@@ -36,7 +36,7 @@
 // TODO: use parameter instead of config
 #define _DEF_PARAMETER_EASY(param, scope, name, args...)                                                    \
   class ObConfig##param##Item##_##name : public common::ObConfig##param##Item {                             \
-    public:                                                                                                 \
+  public:                                                                                                   \
     ObConfig##param##Item##_##name() : common::ObConfig##param##Item(local_container(), scope, #name, args) \
     {}                                                                                                      \
     template <class T>                                                                                      \
@@ -49,7 +49,7 @@
 
 #define _DEF_PARAMETER_RANGE_EASY(param, scope, name, args...)                                              \
   class ObConfig##param##Item##_##name : public common::ObConfig##param##Item {                             \
-    public:                                                                                                 \
+  public:                                                                                                   \
     ObConfig##param##Item##_##name() : common::ObConfig##param##Item(local_container(), scope, #name, args) \
     {}                                                                                                      \
     template <class T>                                                                                      \
@@ -62,7 +62,7 @@
 
 #define _DEF_PARAMETER_CHECKER_EASY(param, scope, name, def, checker, args...)                                   \
   class ObConfig##param##Item##_##name : public common::ObConfig##param##Item {                                  \
-    public:                                                                                                      \
+  public:                                                                                                        \
     ObConfig##param##Item##_##name() : common::ObConfig##param##Item(local_container(), scope, #name, def, args) \
     {                                                                                                            \
       add_checker(new (std::nothrow) checker());                                                                 \
@@ -166,5 +166,23 @@
 #define ERRSIM_DEF_LOG_LEVEL(args...)
 #define ERRSIM_DEF_WORK_AREA_POLICY(args...)
 #endif
+
+#define DEPRECATED_DEF_INT(args...)
+#define DEPRECATED_DEF_INT_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_DBL(args...)
+#define DEPRECATED_DEF_CAP(args...)
+#define DEPRECATED_DEF_CAP_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_TIME(args...)
+#define DEPRECATED_DEF_TIME_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_BOOL(args...)
+#define DEPRECATED_DEF_STR(args...)
+#define DEPRECATED_DEF_STR_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_IP(args...)
+#define DEPRECATED_DEF_MOMENT(args...)
+#define DEPRECATED_DEF_INT_LIST(args...)
+#define DEPRECATED_DEF_STR_LIST(args...)
+#define DEPRECATED_DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(args...)
+#define DEPRECATED_DEF_LOG_LEVEL(args...)
+#define DEPRECATED_DEF_WORK_AREA_POLICY(args...)
 
 #endif

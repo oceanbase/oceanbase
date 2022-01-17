@@ -304,7 +304,8 @@ int ObUpdateLogPlan::generate_plan()
                  GEN_LOCATION_CONSTRAINT,
                  REORDER_PROJECT_COLUMNS,
                  PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     SQL_OPT_LOG(WARN, "failed to do plan traverse", K(ret));
   } else if (OB_FAIL(plan_traverse_loop(GEN_SIGNATURE))) {
     SQL_OPT_LOG(WARN, "failed to get plan signature", K(ret));
@@ -414,7 +415,7 @@ int ObUpdateLogPlan::allocate_pdml_update_as_top(ObLogicalOperator*& top)
     } else {
       const ObTableAssignment& assign = one_table_assignment->at(0);
       const IndexDMLInfo& dml_info = update_stmt->get_all_table_columns().at(0).index_dml_infos_.at(idx);
-      if (assign.is_update_part_key_) {
+      if (assign.is_update_part_key_ || assign.is_update_unique_key_) {
 
         LOG_TRACE("partition key updated, gen delete-insert as raw plan", K(assign));
         int64_t binlog_row_image = share::ObBinlogRowImage::FULL;

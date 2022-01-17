@@ -88,7 +88,7 @@ typedef common::hash::ObHashSet<HashKey, common::hash::NoPthreadDefendMode> Uniq
 class ObPlanSet : public common::ObDLinkBase<ObPlanSet> {
   friend class ObPhyLocationGetter;
 
-  public:
+public:
   explicit ObPlanSet(ObPlanSetType type)
       : alloc_(common::ObNewModIds::OB_SQL_PLAN_CACHE),
         plan_cache_value_(NULL),
@@ -108,7 +108,7 @@ class ObPlanSet : public common::ObDLinkBase<ObPlanSet> {
   {}
   virtual ~ObPlanSet();
 
-  public:
+public:
   int match_params_info(const ParamStore* params, ObPlanCacheCtx& pc_ctx, int64_t outline_param_idx, bool& is_same);
   int match_params_info(
       const common::Ob2DArray<ObParamInfo, common::OB_MALLOC_BIG_BLOCK_SIZE, common::ObWrapperAllocator, false>& infos,
@@ -160,7 +160,7 @@ class ObPlanSet : public common::ObDLinkBase<ObPlanSet> {
     return !multi_stmt_rowkey_pos_.empty();
   }
 
-  private:
+private:
   bool is_match_outline_param(int64_t param_idx)
   {
     return outline_param_idx_ == param_idx;
@@ -196,7 +196,7 @@ class ObPlanSet : public common::ObDLinkBase<ObPlanSet> {
   DISALLOW_COPY_AND_ASSIGN(ObPlanSet);
   friend class ::test::TestPlanSet_basic_Test;
 
-  protected:
+protected:
   common::ObArenaAllocator alloc_;
   ObPlanCacheValue* plan_cache_value_;
   ObPlanSetType type_;
@@ -236,7 +236,7 @@ struct TablePart {
 };
 
 class ObSqlPlanSet : public ObPlanSet {
-  public:
+public:
   ObSqlPlanSet()
       : ObPlanSet(PST_SQL_CRSR),
         is_all_non_partition_(true),
@@ -256,7 +256,7 @@ class ObSqlPlanSet : public ObPlanSet {
   virtual ~ObSqlPlanSet()
   {}
 
-  public:
+public:
   virtual int add_cache_obj(ObCacheObject& cache_object, ObPlanCacheCtx& pc_ctx, int64_t ol_param_idx) override;
   virtual int select_plan(
       share::ObIPartitionLocationCache* location_cache, ObPlanCacheCtx& pc_ctx, ObCacheObject*& cache_obj) override;
@@ -287,7 +287,7 @@ class ObSqlPlanSet : public ObPlanSet {
       const ObSQLSessionInfo* session, const ParamStore& param_store, share::schema::ObSchemaGetterGuard* schema_guard,
       ObExecContext& exec_ctx, ObIArray<int64_t>& partition_ids);
 
-  private:
+private:
   enum {
     TRY_PLAN_LATE_MAT = 1,
     TRY_PLAN_OR_EXPAND = 1 << 1,
@@ -358,7 +358,7 @@ class ObSqlPlanSet : public ObPlanSet {
   bool is_local_plan_opt_allowed(int last_retry_err);
   int check_partition_status(const ObPartitionKey& pkey, bool& is_leader);
 
-  private:
+private:
   bool is_all_non_partition_;  // if plan is with non-part tables
   common::ObSEArray<ObTableLocation, 4> table_locations_;
   common::ObString params_info_str_;
@@ -387,13 +387,13 @@ class ObSqlPlanSet : public ObPlanSet {
 };
 
 class ObPLPlanSet : public ObPlanSet {
-  public:
+public:
   ObPLPlanSet() : ObPlanSet(PST_PRCD), pl_obj_(NULL)
   {}
   virtual ~ObPLPlanSet()
   {}
 
-  public:
+public:
   virtual int add_cache_obj(ObCacheObject& cache_object, ObPlanCacheCtx& pc_ctx, int64_t ol_param_idx) override;
   virtual int select_plan(
       share::ObIPartitionLocationCache* location_cache, ObPlanCacheCtx& pc_ctx, ObCacheObject*& cache_obj) override;
@@ -402,7 +402,7 @@ class ObPLPlanSet : public ObPlanSet {
   virtual int64_t get_mem_size() override;
   virtual void reset() override;
 
-  private:
+private:
   sql::ObCacheObject* pl_obj_;
 };
 

@@ -18,24 +18,27 @@
 namespace oceanbase {
 namespace sql {
 class ObVariableSetResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObVariableSetResolver(ObResolverParams& params);
   virtual ~ObVariableSetResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
+  int resolve_set_variable(const ParseNode &set_node, ObVariableSetStmt::VariableSetNode &var_node,
+                          ObVariableSetStmt* variable_set_stmt);
+  int resolve_set_names(const ParseNode &set_node, ObVariableSetStmt::NamesSetNode &names_node);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetResolver);
 };
 
 class ObAlterSessionSetResolver : public ObStmtResolver {
-  public:
+public:
   explicit ObAlterSessionSetResolver(ObResolverParams& params);
   virtual ~ObAlterSessionSetResolver();
 
   virtual int resolve(const ParseNode& parse_tree);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterSessionSetResolver);
 };
 

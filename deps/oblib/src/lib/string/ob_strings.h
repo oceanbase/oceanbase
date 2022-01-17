@@ -24,7 +24,7 @@ namespace common {
  *
  */
 class ObStrings {
-  public:
+public:
   ObStrings();
   virtual ~ObStrings();
   int add_string(const ObString& str, int64_t* idx = NULL);
@@ -35,7 +35,7 @@ class ObStrings {
   int64_t to_string(char* buf, const int64_t buf_len) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  private:
+private:
   ObStringBuf buf_;
   ObArray<ObString> strs_;
 

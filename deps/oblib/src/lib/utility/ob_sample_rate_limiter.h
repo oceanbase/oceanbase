@@ -27,7 +27,7 @@ namespace lib {
   it will be allowed every thereafter number
 */
 class ObSampleRateLimiter : public lib::ObRateLimiter {
-  public:
+public:
   ObSampleRateLimiter() : ObSampleRateLimiter(0, 0)
   {}
   ObSampleRateLimiter(int64_t initial, int64_t thereafter, int64_t duration = 1000L * 1000L /*1s*/)
@@ -41,12 +41,12 @@ class ObSampleRateLimiter : public lib::ObRateLimiter {
   int acquire(int64_t permits = 1) override;
   int try_acquire(int64_t permits = 1) override;
 
-  public:
+public:
   // This is a copy of ObTimeUtility::current_time() that depends on
   // nothing other than system library.
   static int64_t current_time();
 
-  private:
+private:
   int64_t initial_;
   int64_t thereafter_;
   int64_t duration_;

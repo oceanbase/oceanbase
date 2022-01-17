@@ -30,7 +30,7 @@ namespace sql {
 struct ObBKGDDistExecuteArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBKGDDistExecuteArg() : tenant_id_(OB_INVALID_ID), scheduler_id_(0)
   {}
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(scheduler_id), K_(return_addr), K(serialized_task_.length()));
@@ -51,7 +51,7 @@ struct ObBKGDDistExecuteArg {
 struct ObBKGDTaskCompleteArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObBKGDTaskCompleteArg() : scheduler_id_(0), return_code_(common::OB_SUCCESS)
   {}
   TO_STRING_KV(K_(task_id), K_(scheduler_id), K_(return_code), K_(event));
@@ -65,7 +65,7 @@ struct ObBKGDTaskCompleteArg {
 struct ObFetchIntermResultItemArg {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchIntermResultItemArg() : index_(OB_INVALID_INDEX)
   {}
 
@@ -78,7 +78,7 @@ struct ObFetchIntermResultItemArg {
 struct ObFetchIntermResultItemRes {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObFetchIntermResultItemRes() : total_item_cnt_(-1)
   {}
 
@@ -92,7 +92,7 @@ struct ObFetchIntermResultItemRes {
 
 namespace obrpc {
 class ObExecutorRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObExecutorRpcProxy);
 
   RPC_SS(@PR5 task_execute, obrpc::OB_REMOTE_EXECUTE, (sql::ObTask), common::ObScanner);

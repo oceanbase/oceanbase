@@ -27,7 +27,7 @@ namespace sql {
 class ObHashJoinSpec : public ObJoinSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObHashJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
 
   ExprFixedArray equal_join_conds_;
@@ -41,7 +41,7 @@ class ObHashJoinSpec : public ObJoinSpec {
 //  RIGHT: overwrite with blank_right_row() in JS_FILL_LEFT state, right child also iterated end.
 
 class ObHashJoinOp : public ObJoinOp {
-  public:
+public:
   ObHashJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   ~ObHashJoinOp()
   {}
@@ -49,7 +49,7 @@ class ObHashJoinOp : public ObJoinOp {
   using BucketFunc = std::function<int64_t(int64_t, int64_t)>;
   using NextFunc = std::function<int(const ObHashJoinStoredJoinRow*& right_read_row)>;
 
-  private:
+private:
   enum HJState { INIT, NORMAL, NEXT_BATCH };
   enum HJProcessor { NONE = 0, NEST_LOOP = 1, RECURSIVE = 2, IN_MEMORY = 4 };
   enum ObJoinState {
@@ -63,7 +63,7 @@ class ObHashJoinOp : public ObJoinOp {
   enum ObFuncType { FT_ITER_GOING = 0, FT_ITER_END, FT_TYPE_COUNT };
   enum HJLoopState { LOOP_START, LOOP_GOING, LOOP_RECURSIVE, LOOP_END };
 
-  private:
+private:
   struct HashTableCell {
     HashTableCell() = default;
     // do NOT init these members below in constructor, since we will set them
@@ -181,7 +181,7 @@ class ObHashJoinOp : public ObJoinOp {
     bool is_match_;
   };
   class HashJoinHistogram {
-    public:
+  public:
     HashJoinHistogram()
         : h1_(nullptr),
           h2_(nullptr),
@@ -257,7 +257,7 @@ class ObHashJoinOp : public ObJoinOp {
     void switch_histogram();
     void switch_prefix_hist_count();
 
-    public:
+  public:
     using HistItemArray = common::ObSegmentArray<HistItem, OB_MALLOC_BIG_BLOCK_SIZE, common::ModulePageAllocator>;
     using HistPrefixArray = common::ObSegmentArray<int64_t, OB_MALLOC_BIG_BLOCK_SIZE, common::ModulePageAllocator>;
     HistItemArray* h1_;
@@ -272,7 +272,7 @@ class ObHashJoinOp : public ObJoinOp {
     int64_t bucket_cnt_;
   };
   class PartitionSplitter {
-    public:
+  public:
     PartitionSplitter()
         : alloc_(nullptr),
           part_count_(0),
@@ -310,8 +310,8 @@ class ObHashJoinOp : public ObJoinOp {
       part_shift_ = part_shift;
       level_one_part_count_ = level1_part_count;
       level_two_part_count_ = level2_part_count;
-      level1_bit_ = __builtin_ctz(level1_part_count);
-      level2_bit_ = __builtin_ctz(level2_part_count);
+      level1_bit_ = (0 == level1_part_count) ? 0 : __builtin_ctz(level1_part_count);
+      level2_bit_ = (0 == level2_part_count) ? 0 : __builtin_ctz(level2_part_count);
     }
     bool is_valid()
     {
@@ -353,7 +353,7 @@ class ObHashJoinOp : public ObJoinOp {
       return total_row_count_;
     }
 
-    public:
+  public:
     ObIAllocator* alloc_;
     int64_t part_count_;
     ObHashJoinPartition* hj_parts_;
@@ -367,14 +367,14 @@ class ObHashJoinOp : public ObJoinOp {
     int64_t total_row_count_;
   };
 
-  public:
+public:
   virtual int inner_open() override;
   virtual int rescan() override;
   virtual int inner_get_next_row() override;
   virtual void destroy() override;
   virtual int inner_close() override;
 
-  private:
+private:
   void calc_cache_aware_partition_count();
   int recursive_postprocess();
   int insert_batch_row(const int64_t cur_partition_in_memory);
@@ -421,7 +421,7 @@ class ObHashJoinOp : public ObJoinOp {
   int next();
   int join_end_operate();
   int join_end_func_end();
-  int get_next_left_row();
+  int get_next_left_row() override;
   int reuse_for_next_chunk();
   int load_next_chunk();
   int build_hash_table_for_nest_loop(int64_t& num_left_rows);
@@ -448,7 +448,7 @@ class ObHashJoinOp : public ObJoinOp {
   int split_partition_and_build_hash_table(int64_t& num_left_rows);
   int recursive_process(bool& need_not_read_right);
   int adaptive_process(bool& need_not_read_right);
-  int get_next_right_row();
+  int get_next_right_row() override;
   int read_right_operate();
   int calc_hash_value(const ObIArray<ObExpr*>& join_keys, const ObIArray<ObHashFunc>& hash_funcs, uint64_t& hash_value);
   int calc_right_hash_value();
@@ -480,7 +480,7 @@ class ObHashJoinOp : public ObJoinOp {
   int get_match_row(bool& is_matched);
   int get_next_right_row_for_batch(NextFunc next_func);
 
-  private:
+private:
   OB_INLINE int64_t get_part_idx(const uint64_t hash_value)
   {
     return (hash_value >> part_shift_) & (part_count_ - 1);
@@ -585,7 +585,7 @@ class ObHashJoinOp : public ObJoinOp {
       bool is_build_side);
   int get_next_probe_partition();
 
-  private:
+private:
   typedef int (ObHashJoinOp::*ReadFunc)();
   typedef int (ObHashJoinOp::*state_function_func_type)();
   typedef int (ObHashJoinOp::*state_operation_func_type)();
@@ -667,7 +667,7 @@ class ObHashJoinOp : public ObJoinOp {
   PartHashJoinTable hash_table_;
   HashTableCell* cur_tuple_;       // null or last matched tuple
   common::ObNewRow cur_left_row_;  // like cur_row_ in operator, get row from rowstore
-  lib::MemoryContext* mem_context_;
+  lib::MemoryContext mem_context_;
   common::ObIAllocator* alloc_;  // for buckets
   ModulePageAllocator* bloom_filter_alloc_;
   ObGbyBloomFilter* bloom_filter_;
@@ -724,7 +724,7 @@ inline int ObHashJoinOp::init_mem_context(uint64_t tenant_id)
     lib::ContextParam param;
     param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_mem_attr(tenant_id, common::ObModIds::OB_ARENA_HASH_JOIN, common::ObCtxIds::WORK_AREA);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context_, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
       SQL_ENG_LOG(WARN, "mem entity is null", K(ret));

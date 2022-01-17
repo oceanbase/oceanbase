@@ -25,7 +25,7 @@ class ObSQLSessionInfo;
 }
 namespace observer {
 class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
-  public:
+public:
   ObShowProcesslist();
   virtual ~ObShowProcesslist();
   inline void set_session_mgr(sql::ObSQLSessionMgr* session_mgr)
@@ -35,7 +35,7 @@ class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   enum SESSION_INFO_COLUMN {
     ID = OB_APP_MIN_COLUMN_ID,
     USER,
@@ -56,12 +56,15 @@ class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
     USER_HOST,
     TRANS_ID,
     THREAD_ID,
-    SSL_CIPHER
+    SSL_CIPHER,
+    TRACE_ID
   };
   class FillScanner {
-    public:
+  public:
     FillScanner() : allocator_(NULL), scanner_(NULL), cur_row_(NULL), my_session_(NULL), output_column_ids_()
-    {}
+    {
+      trace_id_[0] = '\0';
+    }
     virtual ~FillScanner()
     {}
     bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
@@ -70,16 +73,17 @@ class ObShowProcesslist : public common::ObVirtualTableScannerIterator {
         share::schema::ObSchemaGetterGuard* schema_guard);
     inline void reset();
 
-    public:
+  public:
     bool has_process_privilege();
 
-    private:
+  private:
     ObIAllocator* allocator_;
     common::ObScanner* scanner_;
     common::ObNewRow* cur_row_;
     sql::ObSQLSessionInfo* my_session_;
     share::schema::ObSchemaGetterGuard* schema_guard_;
     ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
+    char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
     DISALLOW_COPY_AND_ASSIGN(FillScanner);
   };
   sql::ObSQLSessionMgr* session_mgr_;

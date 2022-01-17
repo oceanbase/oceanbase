@@ -121,36 +121,45 @@ int OMPKHandshakeResponse::decode()
           uint64_t key_len = 0;
           ret = ObMySQLUtil::get_length(pos, key_len, key_inc_len);
           // OB_ASSERT(OB_SUCC(ret) && all_attrs_len > key_inc_len);
-          if (OB_SUCC(ret) && all_attrs_len > key_inc_len) {
+          if (OB_SUCC(ret) && all_attrs_len > key_inc_len && pos < end) {
             all_attrs_len -= key_inc_len;
             str_kv.key_.assign_ptr(pos, static_cast<int32_t>(key_len));
             // OB_ASSERT(all_attrs_len > key_len);
             if (all_attrs_len > key_len) {
               all_attrs_len -= key_len;
-              pos += key_len;
-
-              // get value
-              uint64_t value_inc_len = 0;
-              uint64_t value_len = 0;
-              ret = ObMySQLUtil::get_length(pos, value_len, value_inc_len);
-              // OB_ASSERT(OB_SUCC(ret) && all_attrs_len > value_inc_len);
-              if (OB_SUCC(ret) && all_attrs_len > value_inc_len) {
-                all_attrs_len -= value_inc_len;
-                str_kv.value_.assign_ptr(pos, static_cast<int32_t>(value_len));
-                // OB_ASSERT(all_attrs_len >= value_len);
-                if (all_attrs_len >= value_len) {
-                  all_attrs_len -= value_len;
-                  pos += value_len;
-                  if (OB_FAIL(connect_attrs_.push_back(str_kv))) {
-                    LOG_WARN("fail to push back str_kv", K(str_kv), K(ret));
+              if (end - pos > key_len) {
+                pos += key_len;
+                // get value
+                uint64_t value_inc_len = 0;
+                uint64_t value_len = 0;
+                ret = ObMySQLUtil::get_length(pos, value_len, value_inc_len);
+                // OB_ASSERT(OB_SUCC(ret) && all_attrs_len > value_inc_len);
+                if (OB_SUCC(ret) && all_attrs_len > value_inc_len && pos < end) {
+                  all_attrs_len -= value_inc_len;
+                  str_kv.value_.assign_ptr(pos, static_cast<int32_t>(value_len));
+                  // OB_ASSERT(all_attrs_len >= value_len);
+                  if (all_attrs_len >= value_len) {
+                    all_attrs_len -= value_len;
+                    if (end - pos >= value_len) {
+                      pos += value_len;
+                      if (OB_FAIL(connect_attrs_.push_back(str_kv))) {
+                        LOG_WARN("fail to push back str_kv", K(str_kv), K(ret));
+                      }
+                    } else {
+                      ret = OB_INVALID_ARGUMENT;
+                      LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len), K((end - pos)));
+                    }
+                  } else {
+                    ret = OB_INVALID_ARGUMENT;
+                    LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len));
                   }
                 } else {
                   ret = OB_INVALID_ARGUMENT;
-                  LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_len));
+                  LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_inc_len));
                 }
               } else {
                 ret = OB_INVALID_ARGUMENT;
-                LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(value_inc_len));
+                LOG_ERROR("invalid packet", K(ret), K(all_attrs_len), K(key_len), K((end - pos)));
               }
             } else {
               ret = OB_INVALID_ARGUMENT;

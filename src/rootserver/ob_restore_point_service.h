@@ -22,7 +22,7 @@ class ObRestorePointService {
   static const int64_t RETRY_CNT = 10;
   static const int64_t MAX_RESTORE_POINT = 10;
 
-  public:
+public:
   ObRestorePointService();
   ~ObRestorePointService();
   int init(rootserver::ObDDLService& ddl_service, rootserver::ObFreezeInfoManager& freeze_info_mgr);
@@ -32,10 +32,10 @@ class ObRestorePointService {
   int drop_restore_point(const uint64_t tenant_id, const char* name);
   int drop_backup_point(const uint64_t tenant_id, const int64_t snapshot_version);
 
-  private:
+private:
   void convert_name(const char* name, char* tmp_name, const int64_t length);
 
-  private:
+private:
   bool is_inited_;
   rootserver::ObDDLService* ddl_service_;
   ObFreezeInfoManager* freeze_info_mgr_;

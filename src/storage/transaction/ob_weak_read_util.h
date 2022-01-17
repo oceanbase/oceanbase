@@ -22,7 +22,7 @@ class ObWeakReadUtil {
   static const int64_t DEFAULT_MAX_STALE_BUFFER_TIME = 500 * 1000L;
   static const int64_t DEFAULT_REPLICA_KEEPALIVE_INTERVAL = 3000 * 1000L;
 
-  public:
+public:
   static const int64_t IGNORE_TENANT_EXIST_WARN = 1;
   static int64_t replica_keepalive_interval();
   static int64_t generate_min_weak_read_version(const uint64_t tenant_id);
@@ -34,7 +34,7 @@ class ObWeakReadUtil {
     return DEFAULT_MAX_STALE_TIME_FOR_WEAK_CONSISTENCY;
   };
 
-  private:
+private:
   ObWeakReadUtil(){};
   virtual ~ObWeakReadUtil(){};
 };

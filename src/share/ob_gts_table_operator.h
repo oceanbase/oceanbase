@@ -21,11 +21,11 @@
 namespace oceanbase {
 namespace share {
 class ObGtsTableOperator {
-  public:
+public:
   ObGtsTableOperator();
   ~ObGtsTableOperator();
 
-  public:
+public:
   int init(common::ObMySQLProxy* proxy);
   int get_gts_infos(common::ObIArray<common::ObGtsInfo>& gts_infos) const;
   int get_gts_tenant_infos(common::ObIArray<common::ObGtsTenantInfo>& gts_tenant_infos) const;
@@ -40,7 +40,7 @@ class ObGtsTableOperator {
   int get_gts_info(const uint64_t gts_id, common::ObGtsInfo& gts_info) const;
   int try_update_standby(const common::ObGtsInfo& gts_info, const common::ObAddr& new_standby, bool& do_update);
 
-  private:
+private:
   int read_gts_infos_(const common::ObSqlString& sql, common::ObIArray<common::ObGtsInfo>& gts_infos) const;
   int read_gts_info_(const common::sqlclient::ObMySQLResult& result, common::ObGtsInfo& gts_info) const;
   int read_gts_tenant_infos_(
@@ -54,11 +54,11 @@ class ObGtsTableOperator {
   static int convert_member_list_(
       const common::ObMemberList& orig_member_list, ObPartitionReplica::MemberList& curr_member_list);
 
-  private:
+private:
   bool is_inited_;
   common::ObMySQLProxy* proxy_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObGtsTableOperator);
 };
 }  // namespace share

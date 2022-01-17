@@ -23,7 +23,7 @@ volatile int64_t max_used_itid = INVALID_ITID;
 class FreeItid {
   static pthread_key_t the_key;
 
-  public:
+public:
   FreeItid()
   {
     int ret = pthread_key_create(&the_key, [](void* arg) {

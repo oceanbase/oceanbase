@@ -21,19 +21,19 @@
 namespace oceanbase {
 namespace sql {
 class ObSpecificColumnsSort : public ObBaseSort {
-  public:
+public:
   explicit ObSpecificColumnsSort();
   ObSpecificColumnsSort(const char* label, uint64_t malloc_block_size, uint64_t tenant_id,
       oceanbase::common::ObCtxIds::ObCtxIdEnum ctx_id);
   virtual ~ObSpecificColumnsSort(){};
-  virtual void reset();
-  virtual void reuse();
-  virtual void rescan();
-  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t prefix_pos);
-  virtual int add_row(const common::ObNewRow& row, bool& need_sort);
+  virtual void reset() override;
+  virtual void reuse() override;
+  virtual void rescan() override;
+  virtual int set_sort_columns(const common::ObIArray<ObSortColumn>& sort_columns, const int64_t prefix_pos) override;
+  virtual int add_row(const common::ObNewRow& row, bool& need_sort) override;
   int add_row_without_copy(common::ObNewRow* row);
-  virtual int sort_rows();
-  virtual int get_next_row(common::ObNewRow& row);
+  virtual int sort_rows() override;
+  virtual int get_next_row(common::ObNewRow& row) override;
   int get_sort_result_array(common::ObArray<const common::ObNewRow*>& sort_result);
   virtual int64_t get_row_count() const override
   {
@@ -43,12 +43,12 @@ class ObSpecificColumnsSort : public ObBaseSort {
   {
     return row_alloc_.used();
   }
-  virtual int init_tenant_id(uint64_t tenant_id)
+  virtual int init_tenant_id(uint64_t tenant_id) override
   {
     row_alloc_.set_tenant_id(tenant_id);
     return common::OB_SUCCESS;
   }
-  virtual int get_next_compact_row(common::ObString& compact_row)
+  virtual int get_next_compact_row(common::ObString& compact_row) override
   {
     UNUSED(compact_row);
     return common::OB_SUCCESS;
@@ -65,13 +65,13 @@ class ObSpecificColumnsSort : public ObBaseSort {
   int deep_copy_new_row(const common::ObNewRow& row, common::ObNewRow*& new_row, common::ObArenaAllocator& alloc);
   TO_STRING_KV(K_(row_count), K_(prefix_keys_pos), K_(row_array_pos));
   // private funs
-  private:
+private:
   int init_specific_columns();
   static int specific_columns_cmp(const void* p1, const void* p2);
 
-  protected:
+protected:
   common::ObArenaAllocator row_alloc_;  // deep copy row
-  private:
+private:
   int64_t row_count_;
   int64_t prefix_keys_pos_;           // prefix columns keys pos
   int64_t row_array_pos_;             // for get next row, cur array pos

@@ -39,7 +39,7 @@ struct ObSSTableRowState {
 };
 
 struct ObSSTableReadHandle {
-  public:
+public:
   ObSSTableReadHandle();
   virtual ~ObSSTableReadHandle();
   void reset();
@@ -51,7 +51,7 @@ struct ObSSTableReadHandle {
   TO_STRING_KV(K_(is_get), K_(state), K_(range_idx), K_(macro_block_ctx), K_(macro_idx), K_(micro_begin_idx),
       K_(micro_end_idx), K_(is_left_border), K_(is_right_border));
 
-  public:
+public:
   union {
     uint16 flag_;
     struct {
@@ -67,10 +67,10 @@ struct ObSSTableReadHandle {
   blocksstable::ObMacroBlockCtx macro_block_ctx_;
   blocksstable::ObFullMacroBlockMeta full_meta_;
   int64_t macro_idx_;  // macro idx in range
-  private:
+private:
   ObMicroBlockIndexHandle index_handle_;
 
-  public:
+public:
   int64_t micro_begin_idx_;
   int64_t micro_end_idx_;
   union {
@@ -82,7 +82,7 @@ struct ObSSTableReadHandle {
 };
 
 class ObMicroInfoComparor {
-  public:
+public:
   ObMicroInfoComparor(common::ObIArray<blocksstable::ObMicroBlockInfo>& micro_infos) : micro_infos_(micro_infos)
   {}
   virtual ~ObMicroInfoComparor()
@@ -92,7 +92,7 @@ class ObMicroInfoComparor {
     return micro_infos_.at(i).offset_ < micro_infos_.at(j).offset_;
   }
 
-  private:
+private:
   common::ObIArray<blocksstable::ObMicroBlockInfo>& micro_infos_;
 };
 
@@ -107,7 +107,7 @@ struct ObSSTableMicroBlockInfo {
 };
 
 class ObSSTableMicroBlockInfoCmp {
-  public:
+public:
   ObSSTableMicroBlockInfoCmp()
   {}
   virtual ~ObSSTableMicroBlockInfoCmp()
@@ -121,7 +121,7 @@ class ObSSTableMicroBlockInfoCmp {
 };
 
 class ObSSTableMicroBlockInfoIterator {
-  public:
+public:
   ObSSTableMicroBlockInfoIterator();
   virtual ~ObSSTableMicroBlockInfoIterator();
   void reset();
@@ -134,7 +134,7 @@ class ObSSTableMicroBlockInfoIterator {
     step_ = is_reverse_ ? -1 : 1;
   }
 
-  private:
+private:
   OB_INLINE int64_t get_micro_block_info_count()
   {
     return !is_get_ ? micro_block_infos_.count() : (micro_info_.is_valid() ? 1 : 0);
@@ -144,7 +144,7 @@ class ObSSTableMicroBlockInfoIterator {
     return !is_get_ ? micro_block_infos_.at(idx) : micro_info_;
   }
 
-  private:
+private:
   bool is_reverse_;
   int64_t total_micro_cnt_;
   int64_t cur_micro_idx_;
@@ -158,7 +158,7 @@ class ObSSTableMicroBlockInfoIterator {
 };
 
 class ObISSTableRowIterator : public ObStoreRowIterator {
-  public:
+public:
   ObISSTableRowIterator()
       : sstable_(NULL),
         lob_allocator_(NULL),
@@ -182,7 +182,7 @@ class ObISSTableRowIterator : public ObStoreRowIterator {
   }
   virtual int read_lob_columns(const ObStoreRow* store_row);
 
-  protected:
+protected:
   virtual int inner_open(const ObTableIterParam& iter_param, ObTableAccessContext& access_ctx, ObITable* table,
       const void* query_range) = 0;
   virtual int inner_get_next_row(const ObStoreRow*& store_row) = 0;
@@ -190,7 +190,7 @@ class ObISSTableRowIterator : public ObStoreRowIterator {
 
   int batch_get_next_row(blocksstable::ObIMicroBlockRowScanner* scanner, const ObStoreRow*& store_row);
 
-  protected:
+protected:
   ObSSTable* sstable_;
   ObIAllocator* lob_allocator_;
   blocksstable::ObLobDataReader* lob_reader_;
@@ -200,7 +200,7 @@ class ObISSTableRowIterator : public ObStoreRowIterator {
 };
 
 struct ObSSTableSkipRangeCtx {
-  public:
+public:
   ObSSTableSkipRangeCtx()
       : range_idx_(-1),
         macro_idx_(-1),
@@ -235,7 +235,7 @@ struct ObSSTableSkipRangeCtx {
 
 template <typename T>
 class ObSimpleArray {
-  public:
+public:
   ObSimpleArray() : array_(nullptr), capacity_(0)
   {}
   ~ObSimpleArray()
@@ -250,7 +250,7 @@ class ObSimpleArray {
     array_ = nullptr;
     capacity_ = 0;
   }
-  int reserve(common::ObArenaAllocator& allocator, const int64_t count)
+  int reserve(common::ObIAllocator &allocator, const int64_t count)
   {
     int ret = common::OB_SUCCESS;
     if (capacity_ < count) {
@@ -271,7 +271,7 @@ class ObSimpleArray {
     return array_[i];
   }
 
-  private:
+private:
   T* array_;
   int64_t capacity_;
 };
@@ -316,10 +316,10 @@ class ObSSTableRowIterator : public ObISSTableRowIterator {
   typedef ObSimpleArray<ObMicroBlockDataHandle> BlockDataHandleArray;
   typedef ObSimpleArray<ObSSTableMicroBlockInfo> MicroInfoArray;
 
-  public:
+public:
   ObSSTableRowIterator();
   virtual ~ObSSTableRowIterator();
-  virtual void reset();
+  virtual void reset() override;
   virtual void reuse() override;
   virtual int get_skip_range_ctx(
       ObSSTableReadHandle& read_handle, const int64_t cur_micro_idx, ObSSTableSkipRangeCtx*& skip_ctx);
@@ -336,10 +336,10 @@ class ObSSTableRowIterator : public ObISSTableRowIterator {
     return is_base_;
   }
 
-  protected:
-  virtual int inner_open(
-      const ObTableIterParam& access_param, ObTableAccessContext& access_ctx, ObITable* table, const void* query_range);
-  virtual int inner_get_next_row(const ObStoreRow*& store_row);
+protected:
+  virtual int inner_open(const ObTableIterParam& access_param, ObTableAccessContext& access_ctx, ObITable* table,
+      const void* query_range) override;
+  virtual int inner_get_next_row(const ObStoreRow*& store_row) override;
   virtual int get_handle_cnt(const void* query_range, int64_t& read_handle_cnt, int64_t& micro_handle_cnt) = 0;
   virtual int prefetch_read_handle(ObSSTableReadHandle& read_handle) = 0;
   virtual int fetch_row(ObSSTableReadHandle& read_handle, const ObStoreRow*& store_row) = 0;
@@ -355,7 +355,7 @@ class ObSSTableRowIterator : public ObISSTableRowIterator {
   }
   virtual void set_row_snapshot(ObStoreRow& row);
 
-  private:
+private:
   int prefetch();
   int prefetch_handle(const int64_t prefetch_handle_cnt);
   int prefetch_block(const int64_t sstable_micro_cnt);
@@ -370,7 +370,7 @@ class ObSSTableRowIterator : public ObISSTableRowIterator {
   int set_row_scn(const ObStoreRow*& store_row);
   int check_block_row_lock(ObSSTableReadHandle& read_handle, ObStoreRowLockState& lock_state);
 
-  protected:
+protected:
   static const int64_t USE_HANDLE_CACHE_RANGE_COUNT_THRESHOLD = 300;
   static const int64_t LIMIT_PREFETCH_BLOCK_CACHE_THRESHOLD = 100;
   static const int64_t DEFAULT_PREFETCH_HANDLE_DEPTH = 4;
@@ -395,7 +395,7 @@ class ObSSTableRowIterator : public ObISSTableRowIterator {
   ObSSTableSkipRangeCtx skip_ctx_;
   blocksstable::ObStorageFile* storage_file_;
 
-  private:
+private:
   bool is_opened_;
   bool is_base_;
   blocksstable::ObIMicroBlockCache* block_cache_;

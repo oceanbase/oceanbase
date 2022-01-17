@@ -97,7 +97,7 @@ inline void databuff_simple_print_obj(
 }
 
 class ObParserResultTreePrintWrapper {
-  public:
+public:
   explicit ObParserResultTreePrintWrapper(const ParseNode& parse_tree) : parse_tree_(parse_tree)
   {}
   int64_t to_string(char* buf, const int64_t buf_len) const
@@ -108,15 +108,15 @@ class ObParserResultTreePrintWrapper {
     return pos;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObParserResultTreePrintWrapper);
 
-  private:
+private:
   const ParseNode& parse_tree_;
 };
 
 class ObParserResultPrintWrapper {
-  public:
+public:
   explicit ObParserResultPrintWrapper(const ParseNode& parse_tree) : parse_tree_(parse_tree)
   {}
   int64_t to_string(char* buf, const int64_t buf_len) const
@@ -126,10 +126,10 @@ class ObParserResultPrintWrapper {
     return pos;
   }
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObParserResultPrintWrapper);
 
-  private:
+private:
   const ParseNode& parse_tree_;
 };
 

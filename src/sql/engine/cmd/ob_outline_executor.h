@@ -35,13 +35,13 @@ class ObDMLStmt;
 class ObOptimizerContext;
 
 class ObOutlineExecutor {
-  public:
+public:
   ObOutlineExecutor()
   {}
   virtual ~ObOutlineExecutor()
   {}
 
-  protected:
+protected:
   int get_outline(ObExecContext& ctx, ObDMLStmt* outline_stmt, common::ObString& outline);
   int generate_outline_info(
       ObExecContext& ctx, ObCreateOutlineStmt* outline_stmt, share::schema::ObOutlineInfo& outline_info);
@@ -53,43 +53,43 @@ class ObOutlineExecutor {
   bool is_valid_outline_stmt_type(stmt::StmtType type);
   int print_outline(ObExecContext& ctx, ObLogPlan* log_plan, common::ObString& outline);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObOutlineExecutor);
 };
 
 class ObCreateOutlineExecutor : public ObOutlineExecutor {
-  public:
+public:
   ObCreateOutlineExecutor()
   {}
   virtual ~ObCreateOutlineExecutor()
   {}
   int execute(ObExecContext& ctx, ObCreateOutlineStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateOutlineExecutor);
 };
 
 class ObAlterOutlineExecutor : public ObOutlineExecutor {
-  public:
+public:
   ObAlterOutlineExecutor()
   {}
   virtual ~ObAlterOutlineExecutor()
   {}
   int execute(ObExecContext& ctx, ObAlterOutlineStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterOutlineExecutor);
 };
 
 class ObDropOutlineExecutor {
-  public:
+public:
   ObDropOutlineExecutor()
   {}
   virtual ~ObDropOutlineExecutor()
   {}
   int execute(ObExecContext& ctx, ObDropOutlineStmt& stmt);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDropOutlineExecutor);
 };
 

@@ -31,6 +31,13 @@ class ObRequest;
 }
 
 namespace omt {
+#define VIRTUAL_TENANTS_CPU_RESERVED_QUOTA \
+  (GCONF.system_cpu_quota \
+  + GCONF.election_cpu_quota \
+  + GCONF.user_location_cpu_quota() + GCONF.sys_location_cpu_quota() \
+  + GCONF.root_location_cpu_quota() + GCONF.core_location_cpu_quota() \
+  + EXT_LOG_TENANT_CPU + OB_MONITOR_CPU \
+  + OB_SVR_BLACKLIST_CPU + OB_DATA_CPU + OB_DTL_CPU + OB_RS_CPU + OB_DIAG_CPU)
 
 struct ObCtxMemConfig {
   ObCtxMemConfig() : ctx_id_(0), idle_size_(0)
@@ -41,12 +48,12 @@ struct ObCtxMemConfig {
 };
 
 class ObICtxMemConfigGetter {
-  public:
+public:
   virtual int get(common::ObIArray<ObCtxMemConfig>& configs) = 0;
 };
 
 class ObCtxMemConfigGetter : public ObICtxMemConfigGetter {
-  public:
+public:
   virtual int get(common::ObIArray<ObCtxMemConfig>& configs);
 };
 
@@ -60,13 +67,13 @@ typedef common::ObVector<uint64_t> TenantIdList;
 
 // This is the entry class of OMT module.
 class ObMultiTenant : public share::ObThreadPool {
-  public:
+public:
   const static int64_t DEFAULT_TIMES_OF_WORKERS = 10;
   const static int64_t TIME_SLICE_PERIOD = 10000;
   constexpr static double DEFAULT_NODE_QUOTA = 16.;
   constexpr static double DEFAULT_QUOTA2THREAD = 2.;
 
-  public:
+public:
   explicit ObMultiTenant(ObIWorkerProcessor& procor);
 
   int init(common::ObAddr myaddr, double node_quota = DEFAULT_NODE_QUOTA,
@@ -111,11 +118,11 @@ class ObMultiTenant : public share::ObThreadPool {
 
   void set_workers_per_cpu(int64_t v);
 
-  protected:
+protected:
   void run1();
   int get_tenant_unsafe(const uint64_t tenant_id, ObTenant*& tenant) const;
 
-  protected:
+protected:
   common::SpinRWLock lock_;
   double quota2token_;
   ObWorkerPool worker_pool_;
@@ -129,7 +136,7 @@ class ObMultiTenant : public share::ObThreadPool {
   bool has_synced_;
   static ObICtxMemConfigGetter* mcg_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiTenant);
 };  // end of class ObMultiTenant
 

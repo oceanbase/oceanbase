@@ -53,7 +53,7 @@ class ObShardingInfo;
 class ObTablePartitionInfo;
 struct SubPlanInfo;
 class ObOptimizerUtil {
-  public:
+public:
   static int is_prefix_ordering(const common::ObIArray<OrderItem>& pre, const common::ObIArray<OrderItem>& full,
       const EqualSets& equal_sets, const common::ObIArray<ObRawExpr*>& const_exprs, bool& is_prefix);
 
@@ -291,6 +291,7 @@ class ObOptimizerUtil {
     INDEX_STORE_RELATED = -2,  // has column not index column, but storing column
     MUL_INDEX_COL = -1,        // has more than one index columns in expr not row.some case present not prefix filter
   };
+
   static int get_subquery_id(const ObDMLStmt* upper_stmt, const ObSelectStmt* stmt, uint64_t& id);
 
   static int get_child_corresponding_exprs(const ObDMLStmt* upper_stmt, const ObSelectStmt* stmt,
@@ -465,7 +466,7 @@ class ObOptimizerUtil {
   static int flip_op_type(const ObItemType expr_type, ObItemType& rotated_expr_type);
 
   static int get_rownum_filter_info(
-      ObRawExpr* rownum_expr, ObItemType& expr_type, ObRawExpr*& const_expr, bool& is_const_filter);
+      ObRawExpr* rownum_expr, ObItemType& expr_type, ObRawExpr*& rownum, ObRawExpr*& const_expr, bool& is_const_filter);
 
   static int convert_rownum_filter_as_offset(ObRawExprFactory& expr_factory, ObSQLSessionInfo* session_info,
       const ObItemType filter_type, ObRawExpr* const_expr, ObRawExpr*& offset_int_expr);
@@ -668,7 +669,7 @@ class ObOptimizerUtil {
   static int check_pushdown_filter_to_base_table(ObLogPlan& plan, const uint64_t table_id,
       const ObIArray<ObRawExpr*>& pushdown_filters, const ObIArray<ObRawExpr*>& restrict_infos, bool& can_pushdown);
 
-  private:
+private:
   // disallow construct
   ObOptimizerUtil();
   ~ObOptimizerUtil();

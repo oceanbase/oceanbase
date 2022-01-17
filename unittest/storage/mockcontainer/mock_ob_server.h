@@ -107,7 +107,7 @@ class MockPartitionServiceVx : public ObPartitionService {
 namespace common {
 
 class MockObRsCb : public ObIPartitionReport {
-  public:
+public:
   MockObRsCb()
   {}
   ~MockObRsCb()
@@ -117,7 +117,7 @@ class MockObRsCb : public ObIPartitionReport {
     return OB_SUCCESS;
   }
 
-  public:
+public:
   int submit_pt_update_task(const ObPartitionKey& pkey, const bool)
   {
     UNUSED(pkey);
@@ -147,7 +147,7 @@ class MockObRsCb : public ObIPartitionReport {
 namespace unittest {
 
 class MockPartitionTableOperator : public ObPartitionTableOperator {
-  public:
+public:
   MockPartitionTableOperator(ObIPartPropertyGetter& prop_getter) : ObPartitionTableOperator(prop_getter)
   {}
 
@@ -158,7 +158,7 @@ class MockPartitionTableOperator : public ObPartitionTableOperator {
 };
 
 class MockRootRpcProxy : public obrpc::ObCommonRpcProxy {
-  public:
+public:
   MockRootRpcProxy()
   {}
   virtual ~MockRootRpcProxy()
@@ -182,7 +182,7 @@ class MockRootRpcProxy : public obrpc::ObCommonRpcProxy {
 };
 
 class MockObServer {
-  public:
+public:
   MockObServer(const ObServerOptions& opts)
       : is_inited_(false),
         location_cache_(&location_cache_def_),
@@ -216,7 +216,7 @@ class MockObServer {
   int stop();
   int wait();
 
-  public:
+public:
   ObPartitionService* get_partition_service();
   MockObLocationCache* get_location_cache();
   ObAddr& get_self()
@@ -229,13 +229,13 @@ class MockObServer {
     return restore_schema_.get_schema_guard();
   }
 
-  protected:
+protected:
   bool is_inited_;
 
-  protected:
+protected:
   MockObLocationCache* location_cache_;
 
-  protected:
+protected:
   ObPartitionComponentFactory partition_cfy_;
   // MockObSchemaService schema_service_;
   ObRestoreSchema restore_schema_;
@@ -258,7 +258,7 @@ class MockObServer {
   int64_t warm_up_start_time_;
   int64_t global_last_merged_version_;
 
-  protected:
+protected:
   ObServerOptions opts_;
   ObAddr self_addr_;
   ObServerConfig& config_;

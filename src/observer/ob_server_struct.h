@@ -60,6 +60,7 @@ class ObSQLSessionMgr;
 class ObQueryExecCtxMgr;
 class ObSql;
 class ObExecutorRpcImpl;
+class ObConnectResourceMgr;
 }  // end of namespace sql
 
 namespace storage {
@@ -84,9 +85,10 @@ class ObCgroupCtrl;
 namespace observer {
 class ObService;
 class ObVTIterCreator;
+class ObTableService;
 
 class ObServerOptions {
-  public:
+public:
   ObServerOptions()
       : rpc_port_(0),
         elect_port_(0),
@@ -197,6 +199,7 @@ struct ObGlobalContext {
   common::ObString* sort_dir_;
   obmysql::ObDiag* diag_;
   common::ObMysqlRandom* scramble_rand_;
+  ObTableService* table_service_;
   omt::ObCgroupCtrl* cgroup_ctrl_;
   bool inited_;
   int64_t split_schema_version_;
@@ -213,6 +216,7 @@ struct ObGlobalContext {
   // the number of partitions that failed to receive
   // the acks from strongly synchronized standby cluster during timeout
   volatile int64_t sync_timeout_partition_cnt_;
+  sql::ObConnectResourceMgr* conn_res_mgr_;
 
   ObGlobalContext()
   {
@@ -321,7 +325,7 @@ struct ObGlobalContext {
     return ATOMIC_LOAD(&sync_standby_redo_options_.net_timeout_);
   }
 
-  private:
+private:
   common::SpinRWLock cluster_info_rwlock_;
   share::ObClusterInfo cluster_info_;
   int64_t cluster_idx_;  // Internal identification of cluster
@@ -345,7 +349,7 @@ struct ObUseWeakGuard {
   ~ObUseWeakGuard();
   static bool did_use_weak();
 
-  private:
+private:
   struct TSIUseWeak {
     bool inited_;
     bool did_use_weak_;

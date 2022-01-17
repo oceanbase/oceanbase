@@ -14,12 +14,13 @@
 #define __OCEANBASE_SHARE_KV_PARSER_H__
 
 #include "share/ob_define.h"
+#include "lib/allocator/page_arena.h"
 
 namespace oceanbase {
 namespace share {
 
 class ObKVMatchCb {
-  public:
+public:
   virtual int match(const char* key, const char* value) = 0;
   virtual bool check() const
   {
@@ -28,7 +29,7 @@ class ObKVMatchCb {
 };
 
 class ObKVParser {
-  public:
+public:
   ObKVParser()
       : SYM_KV_SEP(':'),
         SYM_PAIR_SEP(','),
@@ -61,13 +62,13 @@ class ObKVParser {
   int parse(const char* data);
   int parse(const char* data, int64_t data_length);
 
-  private:
+private:
   int match(int sym);
   int emit(int sym);
   int get_token();  // Pre-reading symbol
   int kv_pair();
 
-  private:
+private:
   static const int MAX_TOKEN_SIZE = 1024;
   // Symbol table
   static const int SYM_END = 0;
@@ -85,10 +86,11 @@ class ObKVParser {
   char key_buf_[MAX_TOKEN_SIZE];
   char value_buf_[MAX_TOKEN_SIZE];
   const char* cur_;
-  const char* data_;     // Raw data
-  int64_t data_length_;  // Original data length
+  char* data_;
+  int64_t data_length_;
   // Call back every time a KV pair is parsed
   ObKVMatchCb* cb_;
+  common::ObArenaAllocator allocator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObKVParser);
 };

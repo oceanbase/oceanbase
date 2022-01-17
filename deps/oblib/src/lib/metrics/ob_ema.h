@@ -20,7 +20,7 @@ namespace common {
 // See https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
 template <int64_t TICK_INTERVAL_IN_SEC, int64_t SAMPLING_WINDOWN_IN_SEC>
 class ObExponentialMovingAverage {
-  public:
+public:
   ObExponentialMovingAverage() : inited_(false), ema_(0.0), uncounted_(0)
   {}
   ~ObExponentialMovingAverage()
@@ -61,13 +61,13 @@ class ObExponentialMovingAverage {
     return ATOMIC_LOAD64(&ema_) * static_cast<double>(rate_unit);
   }
 
-  private:
+private:
   // TICK_INTERVAL_IN_USEC is microsecond.
   // if need per_sec, set rate_unit = PER_SECOND when get_rate
   static const int64_t TICK_INTERVAL_IN_USEC = TICK_INTERVAL_IN_SEC * 1000000LL;
   static const double ALPHA;
 
-  private:
+private:
   bool inited_;         // atomic
   double ema_;          // atomic
   uint64_t uncounted_;  // atomic

@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObTransformEliminateOuterJoin : public ObTransformRule {
-  public:
+public:
   explicit ObTransformEliminateOuterJoin(ObTransformerCtx* ctx) : ObTransformRule(ctx, TransMethod::POST_ORDER)
   {}
 
@@ -30,7 +30,7 @@ class ObTransformEliminateOuterJoin : public ObTransformRule {
   virtual int transform_one_stmt(
       common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened) override;
 
-  private:
+private:
   int eliminate_outer_join(common::ObIArray<ObParentDMLStmt>& parent_stmts, ObDMLStmt*& stmt, bool& trans_happened);
 
   int recursive_eliminate_outer_join_in_table_item(ObDMLStmt* stmt, TableItem* cur_table_item,

@@ -130,7 +130,7 @@ int ObIPartitionMergeFuser::check_merge_param(const ObMergeParameter& merge_para
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Unexpected merge param with major fuser", K(merge_param), K(ret));
   } else if (OB_FAIL(inner_check_merge_param(merge_param))) {
-    STORAGE_LOG(WARN, "Unexcepted merge param to init merge fuser", K(merge_param), K(ret));
+    STORAGE_LOG(WARN, "Unexpected merge param to init merge fuser", K(merge_param), K(ret));
   }
 
   return ret;
@@ -404,7 +404,7 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
               K(ret));
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexcepted null generated expr", KP(expr), K(ret));
+          STORAGE_LOG(WARN, "Unexpected null generated expr", KP(expr), K(ret));
         } else if (OB_FAIL(dependent_exprs_.push_back(expr))) {
           STORAGE_LOG(WARN, "push back error", K(ret));
         } else {
@@ -417,7 +417,8 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
       }
     }
     if (OB_SUCC(ret) && has_generated_column) {
-      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(allocator_, expr_ctx_))) {
+      uint64_t tenant_id = extract_tenant_id(merge_param.table_schema_->get_table_id());
+      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator_, expr_ctx_))) {
         STORAGE_LOG(WARN, "Failed to make default expr context ", K(ret));
       }
     }
@@ -808,7 +809,7 @@ int ObIncrementMajorPartitionMergeFuser::calc_column_checksum(const bool rewrite
     STORAGE_LOG(WARN, "ObMajorPartitionMergeFuser is not inited", K_(is_inited), K(ret));
   } else if (OB_ISNULL(checksum_calculator_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null checksum calculator", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null checksum calculator", K(ret));
   } else if (!row_changed_) {
     // skip not changed row
   } else if (OB_FAIL(checksum_calculator_->calc_column_checksum(
@@ -901,10 +902,10 @@ int ObMinorPartitionMergeFuser::inner_init(const ObMergeParameter& merge_param)
     STORAGE_LOG(WARN, "Failed to generate multi version row info", K(ret));
   } else if (OB_ISNULL(multi_version_row_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null multi version row info", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null multi version row info", K(ret));
   } else if (OB_ISNULL(out_cols_project_ = multi_version_col_desc_gen_.get_out_cols_project())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexcepted null out cols project", K(ret));
+    STORAGE_LOG(WARN, "Unexpected null out cols project", K(ret));
   } else {
     column_cnt_ = multi_version_row_info_->column_cnt_;
     cur_first_dml_ = T_DML_UNKNOWN;
@@ -1363,7 +1364,7 @@ int ObMinorPartitionMergeFuser::set_multi_version_row_flag(
     const MERGE_ITER_ARRAY& macro_row_iters, ObStoreRow& store_row)
 {
   int ret = OB_SUCCESS;
-  store_row.row_type_flag_.set_compacted_multi_version_row(false);
+  store_row.row_type_flag_.set_compacted_multi_version_row(true);
   store_row.row_type_flag_.set_first_multi_version_row(true);
   if (need_check_curr_row_last_) {
     store_row.row_type_flag_.set_last_multi_version_row(true);
@@ -1372,9 +1373,8 @@ int ObMinorPartitionMergeFuser::set_multi_version_row_flag(
   }
 
   for (int64_t i = 0; i < macro_row_iters.count(); ++i) {
-    if (macro_row_iters.at(i)->get_curr_row()->row_type_flag_.is_compacted_multi_version_row() ||
-        !macro_row_iters.at(i)->get_table()->is_multi_version_table()) {
-      store_row.row_type_flag_.set_compacted_multi_version_row(true);
+    if (!macro_row_iters.at(i)->get_curr_row()->row_type_flag_.is_compacted_multi_version_row()) {
+      store_row.row_type_flag_.set_compacted_multi_version_row(false);
       break;
     }
   }

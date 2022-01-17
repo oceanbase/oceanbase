@@ -27,7 +27,7 @@ namespace allocator {}
 namespace observer {
 class ObMemLeakChecker;
 class ObMemLeakCheckerInfo : public common::ObVirtualTableIterator {
-  public:
+public:
   ObMemLeakCheckerInfo();
   virtual ~ObMemLeakCheckerInfo();
 
@@ -42,11 +42,11 @@ class ObMemLeakCheckerInfo : public common::ObVirtualTableIterator {
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
 
-  private:
+private:
   int sanity_check();
   int fill_row(common::ObNewRow*& row);
 
-  private:
+private:
   bool opened_;
   common::ObMemLeakChecker* leak_checker_;
   common::ObMemLeakChecker::mod_info_map_t::const_iterator it_;
@@ -55,7 +55,7 @@ class ObMemLeakCheckerInfo : public common::ObVirtualTableIterator {
   uint64_t tenant_id_;
   const char* label_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMemLeakCheckerInfo);
 };
 }  // namespace observer

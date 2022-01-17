@@ -22,7 +22,7 @@ class ObSnapshotInfo;
 namespace rootserver {
 class ObZoneManager;
 class ObSnapshotInfoManager {
-  public:
+public:
   ObSnapshotInfoManager() : self_addr_()
   {}
   virtual ~ObSnapshotInfoManager()
@@ -41,13 +41,13 @@ class ObSnapshotInfoManager {
   int get_snapshot_count(
       common::ObMySQLProxy& proxy, const int64_t tenant_id, share::ObSnapShotType snapshot_type, int64_t& count);
 
-  private:
+private:
   int set_index_building_snapshot(
       common::ObMySQLTransaction& trans, const int64_t index_table_id, const int64_t snapshot_ts);
 
   DISALLOW_COPY_AND_ASSIGN(ObSnapshotInfoManager);
 
-  private:
+private:
   common::ObAddr self_addr_;
 };
 }  // namespace rootserver

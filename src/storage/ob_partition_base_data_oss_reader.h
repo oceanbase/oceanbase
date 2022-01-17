@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/restore/ob_storage_path.h"
 #include "lib/thread/ob_dynamic_thread_pool.h"
+#include "blocksstable/ob_data_buffer.h"
 #include "storage/ob_i_partition_base_data_reader.h"
 
 namespace oceanbase {
@@ -27,7 +28,7 @@ class ObTableSchema;
 }  // namespace share
 namespace storage {
 class ObPartitionMetaStorageReader {
-  public:
+public:
   ObPartitionMetaStorageReader();
   virtual ~ObPartitionMetaStorageReader();
 
@@ -50,13 +51,13 @@ class ObPartitionMetaStorageReader {
     return is_inited_;
   }
 
-  private:
+private:
   // int read_one_file(const common::ObStoragePath &path, const share::ObRestoreArgs &args,
   //    ObIAllocator &allocator, char *&buf, int64_t &read_size);
   int read_all_sstable_meta();
   int read_table_keys();
 
-  private:
+private:
   bool is_inited_;
   int64_t sstable_index_;
   int64_t data_size_;
@@ -72,7 +73,7 @@ class ObPartitionMetaStorageReader {
 
 class ObMacroBlockStorageReader : public ObDynamicThreadTask {
   const static uint64_t DEFAULT_WAIT_TIME = 10 * 1000 * 1000;  // 10s
-  public:
+public:
   ObMacroBlockStorageReader();
   virtual ~ObMacroBlockStorageReader();
 
@@ -93,10 +94,10 @@ class ObMacroBlockStorageReader : public ObDynamicThreadTask {
   TO_STRING_KV(K_(is_inited), K_(args), K_(data_size), K_(result_code), K_(is_data_ready), K_(backup_pair),
       K_(backup_index_tid), KP_(meta), K_(data), K_(init_ts), K_(finish_ts), "limit time", finish_ts_ - init_ts_);
 
-  private:
+private:
   int wait_finish();
 
-  private:
+private:
   bool is_inited_;
   const share::ObRestoreArgs* args_;
   common::ObArenaAllocator allocator_;
@@ -118,7 +119,7 @@ class ObMacroBlockStorageReader : public ObDynamicThreadTask {
 };
 
 class ObPartitionGroupMetaReader {
-  public:
+public:
   ObPartitionGroupMetaReader();
   virtual ~ObPartitionGroupMetaReader()
   {}
@@ -134,11 +135,11 @@ class ObPartitionGroupMetaReader {
     return is_inited_;
   }
 
-  private:
+private:
   int read_one_file(const common::ObStoragePath& path, const share::ObRestoreArgs& args, ObIAllocator& allocator,
       char*& buf, int64_t& read_size);
 
-  private:
+private:
   bool is_inited_;
   int64_t data_size_;
   const share::ObRestoreArgs* args_;
@@ -147,7 +148,7 @@ class ObPartitionGroupMetaReader {
 };
 
 class ObOssReaderUtil {
-  public:
+public:
   static int read_one_file(const common::ObStoragePath& path, const share::ObRestoreArgs& args, ObIAllocator& allocator,
       char*& buf, int64_t& read_size);
 };

@@ -409,9 +409,14 @@ int ObTransformWinMagic::transform_child_stmt(ObDMLStmt& stmt, ObSelectStmt& sub
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> new_condition_list;
   ObSEArray<FromItem, 4> new_from_list;
-  if (OB_UNLIKELY(map_info.cond_map_.count() != subquery.get_condition_size()) ||
-      OB_UNLIKELY(map_info.from_map_.count() != subquery.get_from_item_size()) ||
-      OB_UNLIKELY(map_info.table_map_.count() != subquery.get_table_size())) {
+  ObRawExprFactory *expr_factory = NULL;
+  ObRawExpr *expr = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx_), K(expr_factory));
+  } else if (OB_UNLIKELY(map_info.cond_map_.count() != subquery.get_condition_size()) ||
+             OB_UNLIKELY(map_info.from_map_.count() != subquery.get_from_item_size()) ||
+             OB_UNLIKELY(map_info.table_map_.count() != subquery.get_table_size())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid map size",
         K(ret),
@@ -441,7 +446,14 @@ int ObTransformWinMagic::transform_child_stmt(ObDMLStmt& stmt, ObSelectStmt& sub
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_condition_size(); ++i) {
     if (!push_down_filter_ids.has_member(i)) {
       // do nothing
-    } else if (OB_FAIL(new_condition_list.push_back(stmt.get_condition_expr(i)))) {
+    } else if (OB_FAIL(ObRawExprUtils::copy_expr(*expr_factory, stmt.get_condition_expr(i),
+                                                 expr, COPY_REF_DEFAULT))) {
+      // condition expr may be shared in stmt, copy it here.
+      LOG_WARN("failed to copy expr", K(ret), K(expr));
+    } else if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(expr));
+    } else if (OB_FAIL(new_condition_list.push_back(expr))) {
       LOG_WARN("failed to push back new condition", K(ret));
     }
   }
@@ -473,16 +485,23 @@ int ObTransformWinMagic::transform_child_stmt(ObDMLStmt& stmt, ObSelectStmt& sub
     // add push down table
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
       ObSEArray<ObDMLStmt::PartExprItem, 4> part_exprs;
+      const ObPartHint *part_hint = NULL;
+      TableItem *table = NULL;
       if (!push_down_table_ids.has_member(i + 1)) {
         // do nothing
-      } else if (OB_FAIL(subquery.get_table_items().push_back(stmt.get_table_item(i)))) {
+      } else if (OB_ISNULL(table = stmt.get_table_item(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(table));
+      } else if (OB_FAIL(subquery.get_table_items().push_back(table))) {
         LOG_WARN("failed to push back table item", K(ret));
-      } else if (OB_FAIL(stmt.get_part_expr_items(stmt.get_table_item(i)->table_id_, part_exprs))) {
+      } else if (OB_FAIL(stmt.get_part_expr_items(table->table_id_, part_exprs))) {
         LOG_WARN("failed to get part expr items", K(ret));
-      } else if (part_exprs.empty()) {
-        // do nothing
-      } else if (OB_FAIL(subquery.set_part_expr_items(part_exprs))) {
+      } else if (!part_exprs.empty() && OB_FAIL(subquery.set_part_expr_items(part_exprs))) {
         LOG_WARN("failed to set part expr item", K(ret));
+      } else if (NULL == (part_hint = stmt.get_stmt_hint().get_part_hint(table->table_id_))) {
+        // do nothing
+      } else if (OB_FAIL(subquery.get_stmt_hint().part_hints_.push_back(*part_hint))) {
+        LOG_WARN("failed to push back hints", K(ret));
       }
     }
     // add push down column
@@ -902,6 +921,8 @@ int ObTransformWinMagic::wrap_case_when_if_necessary(
         aggr_expr.clear_child();
         if (OB_FAIL(aggr_expr.add_real_param_expr(case_expr))) {
           LOG_WARN("failed to add real param expr", K(ret));
+        } else if (OB_FAIL(aggr_expr.formalize(ctx_->session_info_))) {
+          LOG_WARN("formalize failed", K(ret));
         }
       }
     }

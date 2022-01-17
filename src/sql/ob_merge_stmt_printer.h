@@ -21,7 +21,7 @@ namespace oceanbase {
 namespace sql {
 
 class ObMergeStmtPrinter : public ObDMLStmtPrinter {
-  public:
+public:
   ObMergeStmtPrinter()
   {}
   ObMergeStmtPrinter(
@@ -34,7 +34,7 @@ class ObMergeStmtPrinter : public ObDMLStmtPrinter {
   void init(char* buf, int64_t buf_len, int64_t* pos, ObMergeStmt* stmt);
   virtual int do_print();
 
-  private:
+private:
   int print();
 
   int print_conds(const ObIArray<ObRawExpr*>& conds);
@@ -43,7 +43,7 @@ class ObMergeStmtPrinter : public ObDMLStmtPrinter {
 
   int print_insert_clause(const ObMergeStmt& merge_stmt);
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObMergeStmtPrinter);
 };

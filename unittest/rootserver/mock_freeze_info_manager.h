@@ -23,7 +23,7 @@ class ObFrozenStatus;
 namespace rootserver {
 
 class MockFreezeInfoManager : public ObFreezeInfoManager {
-  public:
+public:
   virtual int get_freeze_info(int64_t input_frozen_version, storage::ObFrozenStatus& frozen_status)
   {
     UNUSED(input_frozen_version);
@@ -36,7 +36,7 @@ class MockFreezeInfoManager : public ObFreezeInfoManager {
   MOCK_METHOD2(
       set_freeze_info, int(storage::ObFrozenStatus& src_frozen_status, storage::ObFrozenStatus& tgt_frozen_status));
 
-  private:
+private:
   static const int64_t ORIGIN_FROZEN_VERSION = 1;
   static const common::ObFreezeStatus ORIGIN_FREEZE_STATUS = common::COMMIT_SUCCEED;
   static const int64_t ORIGIN_FROZEN_TIMESTAMP = 1;

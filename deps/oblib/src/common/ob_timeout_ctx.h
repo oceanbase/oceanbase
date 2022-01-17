@@ -26,7 +26,7 @@ namespace common {
 // Pass timeout argument by thread local variable,
 // to avoid add timeout argument to all functions.
 class ObTimeoutCtx {
-  public:
+public:
   ObTimeoutCtx();
   virtual ~ObTimeoutCtx();
 
@@ -52,14 +52,14 @@ class ObTimeoutCtx {
 
   TO_STRING_KV(K_(abs_timeout_us));
 
-  private:
+private:
   explicit ObTimeoutCtx(bool link_self);
   void do_link_self();
 
-  private:
+private:
   static ObTimeoutCtx*& header();
 
-  private:
+private:
   int64_t abs_timeout_us_;  // query_timeout
   int64_t trx_timeout_us_;  // trx_timeout
   ObTimeoutCtx* next_;

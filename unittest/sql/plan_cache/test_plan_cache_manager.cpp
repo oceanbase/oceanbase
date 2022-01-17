@@ -40,7 +40,7 @@ void init_pcm()
 }
 
 class TestPlanCacheManager : public ::testing::Test {
-  public:
+public:
   TestPlanCacheManager()
   {}
   virtual ~TestPlanCacheManager()
@@ -50,7 +50,7 @@ class TestPlanCacheManager : public ::testing::Test {
   void TearDown()
   {}
 
-  private:
+private:
   // disallow copy
   TestPlanCacheManager(const TestPlanCacheManager& other);
   TestPlanCacheManager& operator=(const TestPlanCacheManager& other);
@@ -79,7 +79,7 @@ void test_plan_cache_manager()
 }
 
 class ObPlanCacheManagerRunnable : public share::ObThreadPool {
-  public:
+public:
   void run1()
   {
     test_plan_cache_manager();

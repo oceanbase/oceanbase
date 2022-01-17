@@ -16,23 +16,23 @@
 using namespace oceanbase::common;
 
 class ObLoserTreeTest : public ::testing::Test {
-  public:
+public:
   ObLoserTreeTest(){};
   virtual ~ObLoserTreeTest(){};
   virtual void SetUp(){};
   virtual void TearDown(){};
 
-  private:
+private:
   // disallow copy
   ObLoserTreeTest(const ObLoserTreeTest& other);
   ObLoserTreeTest& operator=(const ObLoserTreeTest& other);
 
-  private:
+private:
   // data members
 };
 
 class TestMaxComp {
-  public:
+public:
   int get_error_code()
   {
     return OB_SUCCESS;

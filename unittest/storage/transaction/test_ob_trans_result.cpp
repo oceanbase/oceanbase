@@ -21,17 +21,17 @@ using namespace common;
 using namespace transaction;
 namespace unittest {
 class TestObTransResult : public ::testing::Test {
-  public:
+public:
   virtual void SetUp()
   {}
   virtual void TearDown()
   {}
 
-  public:
+public:
   static void* wait_timeout(void* args);
   static void* wait_normal(void* args);
 
-  public:
+public:
   static const int64_t WAIT_TIMES_US = 5 * 1000 * 1000;
   static const int64_t VALID_WAIT_TIME = -1;
   static const int64_t SLEEP_TIME_OUT_MS = 6000;

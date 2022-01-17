@@ -18,7 +18,7 @@ namespace common {
 
 template <typename T, typename CompareFunctor, int64_t LOCAL_ARRAY_SIZE = 50>
 class ObBinaryHeapBase {
-  public:
+public:
   ObBinaryHeapBase(CompareFunctor& cmp, common::ObIAllocator* allocator = NULL);
   virtual ~ObBinaryHeapBase()
   { /* do nothing */
@@ -52,11 +52,11 @@ class ObBinaryHeapBase {
   }
   TO_STRING_KV(K_(array));
 
-  protected:
+protected:
   virtual int upheap(int64_t index) = 0;
   virtual int downheap(int64_t index) = 0;
 
-  protected:
+protected:
   virtual void reset_root_cmp_cache()
   {
     root_cmp_index_cache_ = INT64_MAX;
@@ -79,7 +79,7 @@ class ObBinaryHeapBase {
     return 2 * index + 2;
   }
 
-  protected:
+protected:
   ObSEArray<T, LOCAL_ARRAY_SIZE> array_;
   int64_t root_cmp_index_cache_;
   CompareFunctor& cmp_;
@@ -173,16 +173,16 @@ int ObBinaryHeapBase<T, CompareFunctor, LOCAL_ARRAY_SIZE>::replace_top(const T& 
 
 template <typename T, typename CompareFunctor, int64_t LOCAL_ARRAY_SIZE = 50>
 class ObBinaryHeap : public ObBinaryHeapBase<T, CompareFunctor, LOCAL_ARRAY_SIZE> {
-  public:
+public:
   ObBinaryHeap(CompareFunctor& cmp, common::ObIAllocator* allocator = NULL);
   virtual ~ObBinaryHeap()
   {}
 
-  protected:
+protected:
   virtual int upheap(int64_t index);
   virtual int downheap(int64_t index);
 
-  private:
+private:
   using ObBinaryHeapBase<T, CompareFunctor, LOCAL_ARRAY_SIZE>::array_;
   using ObBinaryHeapBase<T, CompareFunctor, LOCAL_ARRAY_SIZE>::cmp_;
   using ObBinaryHeapBase<T, CompareFunctor, LOCAL_ARRAY_SIZE>::root_cmp_index_cache_;

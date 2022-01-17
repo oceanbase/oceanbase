@@ -18,7 +18,7 @@ namespace oceanbase {
 
 namespace sql {
 class ObRawExprPartExprChecker : public ObRawExprVisitor {
-  public:
+public:
   ObRawExprPartExprChecker() : ObRawExprVisitor()
   {}
   virtual ~ObRawExprPartExprChecker()
@@ -36,9 +36,9 @@ class ObRawExprPartExprChecker : public ObRawExprVisitor {
   virtual int visit(ObSetOpRawExpr& expr);
   virtual int visit(ObAliasRefRawExpr& expr);
 
-  private:
+private:
   // types and constants
-  private:
+private:
   inline static bool is_time_expr(const ObRawExpr& expr);
   inline static bool is_date_expr(const ObRawExpr& expr);
   inline static bool is_timestamp_expr(const ObRawExpr& expr);

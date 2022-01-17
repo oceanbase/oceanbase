@@ -38,7 +38,7 @@ using namespace share;
 using namespace omt;
 
 class MockSqlExpression : public ObSqlExpression {
-  public:
+public:
   MockSqlExpression(ObIAllocator& alloc) : ObSqlExpression(alloc)
   {
     set_item_count(10);
@@ -49,10 +49,10 @@ class MockSqlExpression : public ObSqlExpression {
 #define TEST_SET_DUMP_SET_HASH_AREA_SIZE(size) (set_hash_area_size(size))
 
 class ObHashSetDumpTest : public blocksstable::TestDataFilePrepare, public ::testing::WithParamInterface<ObJoinType> {
-  public:
+public:
   enum TestAlgo { UNION = 0, INTERSECT, EXCEPT };
 
-  protected:
+protected:
   struct SetPlan {
     explicit SetPlan(ObIAllocator& alloc) : set_op_(nullptr), left_(alloc), right_(alloc), expr_(alloc)
     {}
@@ -68,7 +68,7 @@ class ObHashSetDumpTest : public blocksstable::TestDataFilePrepare, public ::tes
     MockSqlExpression expr_;
   };
 
-  public:
+public:
   ObHashSetDumpTest()
       : blocksstable::TestDataFilePrepare("TestDiskIR", 8 << 20, 5000),
         hash_union_(alloc_),
@@ -145,7 +145,7 @@ class ObHashSetDumpTest : public blocksstable::TestDataFilePrepare, public ::tes
   // iterate hash join result and verify result with merge join.
   void run_test(int64_t print_row_cnt = 0);
 
-  protected:
+protected:
   ObArenaAllocator alloc_;
 
   ObHashUnion hash_union_;

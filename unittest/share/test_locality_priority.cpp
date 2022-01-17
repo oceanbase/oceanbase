@@ -19,17 +19,17 @@ namespace share {
 using namespace common;
 
 class TestLocalityPriority : public ::testing::Test {
-  public:
+public:
   virtual void SetUp();
   virtual void TearDown();
   void get_primary_region_prioriry(const char* primary_zone,
       const common::ObIArray<ObLocalityRegion>& locality_region_array,
       common::ObIArray<ObLocalityRegion>& tenant_locality_region);
 
-  private:
+private:
   typedef common::ObFixedLengthString<common::MAX_ZONE_LENGTH> Zone;
 
-  protected:
+protected:
   common::ObSEArray<ObLocalityRegion, 5> locality_region_array_;
 };
 

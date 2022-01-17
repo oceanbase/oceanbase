@@ -21,7 +21,7 @@ class ObLogChecksum;
 }
 namespace unittest {
 class TestObLogChecksum : public ::testing::Test {
-  protected:
+protected:
   void SetUp()
   {
     const uint64_t TABLE_ID = 520;
@@ -32,7 +32,7 @@ class TestObLogChecksum : public ::testing::Test {
   void TearDown()
   {}
 
-  protected:
+protected:
   common::ObPartitionKey partition_key_;
   clog::ObLogChecksum check_sum_;
 };

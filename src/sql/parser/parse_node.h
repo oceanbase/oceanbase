@@ -249,6 +249,8 @@ typedef struct {
   const struct ObCharsetInfo* charset_info_;
   int last_well_formed_len_;
   bool may_bool_value_;  // used for true/false in sql parser
+  int connection_collation_;       // connection collation
+  bool mysql_compatible_comment_;  // whether the parser is parsing "/*! xxxx */"
 
 #ifdef SQL_PARSER_COMPILATION
   TokenPosInfo* comment_list_;

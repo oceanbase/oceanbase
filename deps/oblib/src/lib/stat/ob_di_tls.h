@@ -1,16 +1,12 @@
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software
- * according to the terms and conditions of the Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
- *
- * http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND,
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A
- * PARTICULAR PURPOSE.
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
 
@@ -24,13 +20,13 @@ namespace common {
 
 template <class T>
 class ObDITls {
-  public:
+public:
   static ObDITls& get_di_tls();
   void destroy();
   T* new_instance();
   static T* get_instance();
 
-  private:
+private:
   ObDITls() : key_(INT32_MAX)
   {
     if (0 != pthread_key_create(&key_, destroy_thread_data_)) {}
@@ -41,14 +37,15 @@ class ObDITls {
   }
   static void destroy_thread_data_(void* ptr);
 
-  private:
+private:
   pthread_key_t key_;
-  static __thread T* instance_;
+  static __thread T *instance_;
+  static __thread bool in_create_;
 };
 // NOTE: thread local diagnose information
 // TODO: check if multi-query execute within one thread.
-template <class T>
-__thread T* ObDITls<T>::instance_ = NULL;
+template <class T> __thread T *ObDITls<T>::instance_ = NULL;
+template <class T> __thread bool ObDITls<T>::in_create_ = false;
 
 template <class T>
 void ObDITls<T>::destroy_thread_data_(void* ptr)
@@ -57,6 +54,7 @@ void ObDITls<T>::destroy_thread_data_(void* ptr)
     T* tls = (T*)ptr;
     delete tls;
     instance_ = NULL;
+    in_create_ = false;
   }
 }
 
@@ -104,7 +102,11 @@ template <class T>
 T* ObDITls<T>::get_instance()
 {
   if (OB_UNLIKELY(NULL == instance_)) {
-    instance_ = get_di_tls().new_instance();
+    if (OB_LIKELY(!in_create_)) {
+      in_create_ = true;
+      instance_ = get_di_tls().new_instance();
+      in_create_ = false;
+    }
   }
   return instance_;
 }

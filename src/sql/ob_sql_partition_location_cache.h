@@ -19,7 +19,7 @@ namespace oceanbase {
 namespace sql {
 class ObTaskExecutorCtx;
 class ObSqlPartitionLocationCache : public share::ObIPartitionLocationCache {
-  public:
+public:
   enum LocationDistributedMode {
     LOC_DIST_MODE_INVALID = 0,
     LOC_DIST_MODE_ONLY_LOCAL,
@@ -27,7 +27,7 @@ class ObSqlPartitionLocationCache : public share::ObIPartitionLocationCache {
     LOC_DIST_MODE_ONLY_RS,
   };
 
-  public:
+public:
   ObSqlPartitionLocationCache();
   virtual ~ObSqlPartitionLocationCache(){};
 
@@ -35,7 +35,7 @@ class ObSqlPartitionLocationCache : public share::ObIPartitionLocationCache {
       share::schema::ObSchemaGetterGuard* guard_schema);
   bool is_inited() const;
 
-  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const
+  virtual ObIPartitionLocationCache::PartitionLocationCacheType get_type() const override
   {
     return ObIPartitionLocationCache::PART_LOC_CACHE_TYPE_SQL;
   }
@@ -80,7 +80,7 @@ class ObSqlPartitionLocationCache : public share::ObIPartitionLocationCache {
       const common::ObPartitionKey& partition, const int64_t expire_renew_time, bool& is_limited) override;
 
   // link table.
-  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location);
+  virtual int get_link_table_location(const uint64_t table_id, share::ObPartitionLocation& location) override;
 
   ObSqlPartitionLocationCache::LocationDistributedMode get_location_distributed_mode(const uint64_t table_id) const;
 
@@ -99,7 +99,7 @@ class ObSqlPartitionLocationCache : public share::ObIPartitionLocationCache {
     schema_guard_ = schema_guard;
   }
 
-  private:
+private:
   int virtual_get(const uint64_t table_id, const int64_t partition_id, share::ObPartitionLocation& location,
       const int64_t expire_renew_time, bool& is_cache_hit);
   int build_local_location(uint64_t table_id, share::ObPartitionLocation& location);
@@ -108,13 +108,13 @@ class ObSqlPartitionLocationCache : public share::ObIPartitionLocationCache {
   int get_phy_key(
       const uint64_t table_id, const int64_t partition_id, uint64_t& tg_id, int64_t& pg_id, common::ObPGKey& pg_key);
 
-  private:
+private:
   share::ObIPartitionLocationCache* loc_cache_;
   common::ObAddr self_addr_;
   ObTaskExecutorCtx* task_exec_ctx_;  // used for multi-partition virtual-table to get table_location from partition_id
   share::schema::ObSchemaGetterGuard* schema_guard_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlPartitionLocationCache);
 };
 

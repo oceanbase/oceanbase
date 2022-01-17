@@ -58,7 +58,7 @@ int ObMicroBlockGetReader::get_row(const uint64_t tenant_id, const ObMicroBlockD
         STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
       }
     } else if (OB_FAIL(row_reader.read_row(row_buf, row_len, 0, column_map, allocator_, row))) {
-      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey));
+      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey), K(macro_meta));
     }
   }
   return ret;
@@ -78,14 +78,14 @@ int ObMicroBlockGetReader::get_row(const uint64_t tenant_id, const ObMicroBlockD
     int64_t pos = 0;
     if (OB_FAIL(locate_row(rowkey, rowkey_helper, macro_meta.schema_->column_type_array_, row_buf, row_len))) {
       if (OB_BEYOND_THE_RANGE != ret) {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       ObFlatRowReader row_reader;
       row.row_val_.count_ = macro_meta.meta_->column_number_;
       if (OB_FAIL(row_reader.read_full_row(
               row_buf, row_len, pos, macro_meta.schema_->column_type_array_, allocator_, row))) {
-        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos));
+        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos), K(macro_meta));
       }
     }
   }
@@ -109,7 +109,7 @@ int ObMicroBlockGetReader::exist_row(const uint64_t tenant_id, const ObMicroBloc
       if (OB_BEYOND_THE_RANGE == ret) {
         ret = OB_SUCCESS;
       } else {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       const ObRowHeader* row_header = reinterpret_cast<const ObRowHeader*>(row_buf);
@@ -323,7 +323,7 @@ int ObMultiVersionBlockGetReader::get_row(const uint64_t tenant_id, const ObMicr
         STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
       }
     } else if (OB_FAIL(row_reader.read_row(row_buf, row_len, 0, column_map, allocator_, row))) {
-      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey));
+      STORAGE_LOG(WARN, "Fail to read row, ", K(ret), K(rowkey), K(macro_meta));
     }
   }
   return ret;
@@ -343,14 +343,14 @@ int ObMultiVersionBlockGetReader::get_row(const uint64_t tenant_id, const ObMicr
     int64_t pos = 0;
     if (OB_FAIL(locate_row(rowkey, rowkey_helper, macro_meta.schema_->column_type_array_, row_buf, row_len))) {
       if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       ObFlatRowReader row_reader;
       row.row_val_.count_ = macro_meta.schema_->column_number_;
       if (OB_FAIL(row_reader.read_full_row(
               row_buf, row_len, pos, macro_meta.schema_->column_type_array_, allocator_, row))) {
-        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos));
+        STORAGE_LOG(WARN, "failed to read full row, ", K(ret), K(rowkey), K(pos), K(macro_meta));
       }
     }
   }
@@ -374,7 +374,7 @@ int ObMultiVersionBlockGetReader::exist_row(const uint64_t tenant_id, const ObMi
       if (OB_LIKELY(OB_BEYOND_THE_RANGE == ret)) {
         ret = OB_SUCCESS;
       } else {
-        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey));
+        STORAGE_LOG(WARN, "failed to locate row, ", K(ret), K(rowkey), K(macro_meta));
       }
     } else {
       const ObRowHeader* row_header = reinterpret_cast<const ObRowHeader*>(row_buf);
@@ -644,7 +644,7 @@ int ObMicroBlockReader::base_init(const ObMicroBlockData& block_data)
 
 template <typename ReaderType>
 class PreciseCompare {
-  public:
+public:
   PreciseCompare(int& ret, bool& equal, ReaderType* reader, const char* data_begin, const int32_t* index_data,
       const ObColumnMap* column_map, const int64_t compare_column_count)
       : ret_(ret),
@@ -666,7 +666,7 @@ class PreciseCompare {
     return compare(row_idx, rowkey, false);
   }
 
-  private:
+private:
   inline bool compare(const int64_t row_idx, const ObStoreRowkey& rowkey, const bool lower_bound)
   {
     bool bret = false;
@@ -693,7 +693,7 @@ class PreciseCompare {
     return bret;
   }
 
-  private:
+private:
   int& ret_;
   bool& equal_;
   ReaderType* reader_;

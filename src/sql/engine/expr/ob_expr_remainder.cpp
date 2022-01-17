@@ -281,14 +281,14 @@ int ObExprRemainder::calc_remainder_expr(const ObExpr& expr, ObEvalCtx& ctx, ObD
         }
       }
     } else if (ObFloatTC == tc) {
-      if (0 == right->get_float()) {
+      if ((right->get_float() < 1e-6 && right->get_float() >= 0.0) || (right->get_float() > -(1e-6) && right->get_float() <= 0.0)) {
         ret = OB_ERR_DIVISOR_IS_ZERO;
         LOG_WARN("divisor is equal to zero on oracle mode", K(ret), K(right->get_float()));
       } else {
         res.set_float(remainder(left->get_float(), right->get_float()));
       }
     } else if (ObDoubleTC == tc) {
-      if (0 == right->get_double()) {
+      if ((right->get_double() < 1e-15 && right->get_double() >= 0.0) || (right->get_double() > -(1e-15) && right->get_double() <= 0.0)) {
         ret = OB_ERR_DIVISOR_IS_ZERO;
         LOG_WARN("divisor is equal to zero on oracle mode", K(ret), K(right->get_double()));
       } else {

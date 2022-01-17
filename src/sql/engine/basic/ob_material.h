@@ -30,12 +30,12 @@ namespace sql {
 class ObMaterialInput : public ObIPhyOperatorInput {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObMaterialInput() : bypass_(false)
   {}
   virtual ~ObMaterialInput() = default;
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
-  virtual ObPhyOperatorType get_phy_op_type() const;
+  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op) override;
+  virtual ObPhyOperatorType get_phy_op_type() const override;
   virtual void reset() override
   {
     bypass_ = false;
@@ -49,7 +49,7 @@ class ObMaterialInput : public ObIPhyOperatorInput {
     return bypass_;
   }
 
-  protected:
+protected:
   bool bypass_;
 };
 
@@ -57,7 +57,7 @@ class ObExecContext;
 class ObMaterial : public ObSingleChildPhyOperator {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   explicit ObMaterial(common::ObIAllocator& alloc) : ObSingleChildPhyOperator(alloc)
   {}
   virtual ~ObMaterial()
@@ -68,11 +68,11 @@ class ObMaterial : public ObSingleChildPhyOperator {
 
   int get_material_row_count(ObExecContext& exec_ctx, int64_t& row_count) const;
 
-  private:
+private:
   class ObMaterialCtx : public ObPhyOperatorCtx {
     friend class ObMaterial;
 
-    public:
+  public:
     explicit ObMaterialCtx(ObExecContext& ctx)
         : ObPhyOperatorCtx(ctx),
           mem_context_(nullptr),
@@ -103,8 +103,8 @@ class ObMaterial : public ObSingleChildPhyOperator {
       return sql_mem_processor_.get_data_size() > sql_mem_processor_.get_mem_bound();
     }
 
-    private:
-    lib::MemoryContext* mem_context_;
+  private:
+    lib::MemoryContext mem_context_;
     ObChunkRowStore row_store_;
     ObChunkRowStore::Iterator row_store_it_;
     int64_t row_id_;
@@ -114,7 +114,7 @@ class ObMaterial : public ObSingleChildPhyOperator {
     bool is_first_;
   };
 
-  private:
+private:
   virtual int inner_get_next_row(ObExecContext& exec_ctx, const common::ObNewRow*& row) const;
   /**
    * @brief open operator, not including children operators.
@@ -132,9 +132,9 @@ class ObMaterial : public ObSingleChildPhyOperator {
   int get_all_row_from_child(ObMaterialCtx& mat_ctx, ObSQLSessionInfo& session) const;
   int process_dump(ObMaterialCtx& mat_ctx) const;
 
-  private:
+private:
   // no data member
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMaterial);
 };
 

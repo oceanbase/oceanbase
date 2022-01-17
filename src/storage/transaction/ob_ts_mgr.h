@@ -51,7 +51,7 @@ class ObITsSource;
 class ObGtsRequestRpc;
 
 class ObTsCbTask : public common::ObLink {
-  public:
+public:
   ObTsCbTask()
   {}
   virtual ~ObTsCbTask()
@@ -66,7 +66,7 @@ class ObTsCbTask : public common::ObLink {
 };
 
 class ObITsMgr {
-  public:
+public:
   virtual int update_gts(const uint64_t tenant_id, const int64_t gts, bool& update) = 0;
   virtual int update_local_trans_version(const uint64_t tenant_id, const int64_t version, bool& update) = 0;
   virtual int get_gts(
@@ -87,13 +87,13 @@ class ObITsMgr {
   virtual int get_publish_version(const uint64_t tenant_id, int64_t& publish_version) = 0;
   virtual int get_gts_and_type(const uint64_t tenant_id, const MonotonicTs stc, int64_t& gts, int64_t& ts_type) = 0;
 
-  public:
+public:
   VIRTUAL_TO_STRING_KV("", "");
 };
 
 class ObTsSourceInfo;
 class ObTsSourceGuard {
-  public:
+public:
   ObTsSourceGuard() : ts_source_(NULL), ts_source_info_(NULL), ts_type_(0)
   {}
   ~ObTsSourceGuard();
@@ -124,14 +124,14 @@ class ObTsSourceGuard {
     return ts_type_;
   }
 
-  private:
+private:
   ObITsSource* ts_source_;
   ObTsSourceInfo* ts_source_info_;
   int ts_type_;
 };
 
 class ObQSyncLock {
-  public:
+public:
   ObQSyncLock() : write_flag_(0)
   {}
   ~ObQSyncLock()
@@ -141,7 +141,7 @@ class ObQSyncLock {
   void wrlock();
   void wrunlock();
 
-  private:
+private:
   int64_t write_flag_;
   common::ObQSync qsync_;
 };
@@ -151,7 +151,7 @@ typedef common::LinkHashValue<ObTsTenantInfo> ObTsTenantInfoValue;
 class ObTsSourceInfo : public ObTsTenantInfoValue {
   friend class ObTsSourceGuard;
 
-  public:
+public:
   ObTsSourceInfo();
   ~ObTsSourceInfo()
   {
@@ -160,7 +160,7 @@ class ObTsSourceInfo : public ObTsTenantInfoValue {
   int init(const uint64_t tenant_id);
   void destroy();
 
-  public:
+public:
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -190,15 +190,15 @@ class ObTsSourceInfo : public ObTsTenantInfoValue {
   int set_invalid();
   int switch_ts_source(const uint64_t tenant_id, const int ts_type);
 
-  private:
+private:
   int switch_ts_source_(const uint64_t tenant_id, const int ts_type);
   void revert_ts_source_(ObTsSourceGuard& guard);
 
-  private:
+private:
   static const int64_t DEFAULT_CHECK_SWITCH_INTERVAL_US = 100 * 1000;
   static const int64_t MAX_CHECK_SWITCH_INTERVAL_US = 3 * 1000 * 1000;
 
-  private:
+private:
   bool is_inited_;
   bool is_valid_;
   uint64_t tenant_id_;
@@ -215,7 +215,7 @@ class ObTsSourceInfo : public ObTsTenantInfoValue {
 };
 
 class ObTsSourceInfoAlloc {
-  public:
+public:
   static ObTsSourceInfo* alloc_value()
   {
     return NULL;
@@ -243,7 +243,7 @@ class ObTsSourceInfoAlloc {
 };
 
 class ObGtsRefreshFunctor {
-  public:
+public:
   ObGtsRefreshFunctor()
   {}
   ~ObGtsRefreshFunctor()
@@ -283,7 +283,7 @@ class ObGtsRefreshFunctor {
 };
 
 class GetObsoleteTenantFunctor {
-  public:
+public:
   GetObsoleteTenantFunctor(const int64_t obsolete_time, common::ObIArray<uint64_t>& array)
       : obsolete_time_(obsolete_time), array_(array)
   {
@@ -311,14 +311,14 @@ class GetObsoleteTenantFunctor {
     return true;
   }
 
-  private:
+private:
   const int64_t obsolete_time_;
   common::ObIArray<uint64_t>& array_;
 };
 
 class ObTsMgr;
 class ObTsSourceInfoGuard {
-  public:
+public:
   ObTsSourceInfoGuard() : ts_source_info_(NULL), mgr_(NULL), need_revert_(true)
   {}
   ~ObTsSourceInfoGuard();
@@ -349,7 +349,7 @@ class ObTsSourceInfoGuard {
     return need_revert_;
   }
 
-  private:
+private:
   ObTsSourceInfo* ts_source_info_;
   ObTsMgr* mgr_;
   bool need_revert_;
@@ -359,7 +359,7 @@ typedef common::ObLinkHashMap<ObTsTenantInfo, ObTsSourceInfo, ObTsSourceInfoAllo
 class ObTsMgr : public share::ObThreadPool, public ObITsMgr {
   friend class ObTsSourceInfoGuard;
 
-  public:
+public:
   ObTsMgr()
   {
     reset();
@@ -382,7 +382,7 @@ class ObTsMgr : public share::ObThreadPool, public ObITsMgr {
   int update_gts(const uint64_t tenant_id, const MonotonicTs srr, const int64_t gts, const int ts_type, bool& update);
   int delete_tenant(const uint64_t tenant_id);
 
-  public:
+public:
   int update_gts(const uint64_t tenant_id, const int64_t gts, bool& update);
   int update_local_trans_version(const uint64_t tenant_id, const int64_t version, bool& update);
   // Obtain the appropriate gts value according to stc, if the condition is not met,
@@ -411,17 +411,17 @@ class ObTsMgr : public share::ObThreadPool, public ObITsMgr {
   int handle_ha_gts_response(uint64_t tenant_id, MonotonicTs srr, int64_t gts);
   int refresh_gts_location(const uint64_t tenant_id);
 
-  public:
+public:
   TO_STRING_KV("ts_source", "GTS");
 
-  public:
+public:
   static ObTsMgr& get_instance();
 
-  private:
+private:
   static const int64_t TS_SOURCE_INFO_OBSOLETE_TIME = 120 * 1000 * 1000;
   static const int64_t TS_SOURCE_INFO_CACHE_NUM = 4096;
 
-  private:
+private:
   int get_ts_source_info_opt_(const uint64_t tenant_id, ObTsSourceInfoGuard& guard, const bool need_create_tenant,
       const bool need_update_access_ts);
   int get_ts_source_info_(const uint64_t tenant_id, ObTsSourceInfoGuard& guard, const bool need_create_tenant,
@@ -430,7 +430,7 @@ class ObTsMgr : public share::ObThreadPool, public ObITsMgr {
   int add_tenant_(const uint64_t tenant_id);
   int delete_tenant_(const uint64_t tenant_id);
 
-  private:
+private:
   bool is_inited_;
   bool is_running_;
   ObTsSourceInfoMap ts_source_info_map_;
@@ -445,7 +445,7 @@ class ObTsMgr : public share::ObThreadPool, public ObITsMgr {
 };
 
 class GetBaseTs {
-  public:
+public:
   GetBaseTs() : base_ts_(0), publish_version_(0)
   {}
   bool operator()(const ObTsTenantInfo& tenant, ObTsSourceInfo* ts_source_info)
@@ -477,13 +477,13 @@ class GetBaseTs {
     return publish_version_;
   }
 
-  private:
+private:
   int64_t base_ts_;
   int64_t publish_version_;
 };
 
 class UpdateBaseTs {
-  public:
+public:
   UpdateBaseTs(const int64_t base_ts, const int64_t publish_version)
       : base_ts_(base_ts), publish_version_(publish_version)
   {}
@@ -504,7 +504,7 @@ class UpdateBaseTs {
     return bool_ret;
   }
 
-  private:
+private:
   int64_t base_ts_;
   int64_t publish_version_;
 };

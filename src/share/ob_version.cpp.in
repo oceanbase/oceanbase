@@ -33,7 +33,7 @@ void get_package_and_svn(char *server_version, int64_t buf_len)
 extern "C" {
 #endif
 
-  const char* build_version() { return "@AONE_BUILD_NUMBER@-@GIT_REVISION@"; }
+  const char* build_version() { return "@OB_RELEASEID@-@GIT_REVISION@"; }
   const char* build_time() { return __TIME__; }
   const char* build_date() { return __DATE__; }
   const char* build_flags() { return "@BUILD_FLAGS@"; }

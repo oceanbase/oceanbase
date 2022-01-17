@@ -408,7 +408,7 @@ int PartitionLeaderCountBalancer::do_update_map_item_replica_attributes(SquareId
   common::ObSEArray<share::ObZoneReplicaAttrSet, 7> designated_zone_locality;
   bool compensate_readonly_all_server = false;
   if (!is_tablegroup_id(schema_id)) {
-    const ObTableSchema* table_schema = nullptr;
+    const ObSimpleTableSchemaV2* table_schema = nullptr;
     if (OB_FAIL(schema_guard_.get_table_schema(schema_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), "table_id", schema_id);
     } else if (OB_UNLIKELY(nullptr == table_schema)) {

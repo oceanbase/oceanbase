@@ -533,7 +533,7 @@ int ObLogMembershipMgr::force_set_member_list(const common::ObMemberList& member
 int ObLogMembershipMgr::set_membership_info(const common::ObMemberList& member_list, const int64_t membership_timestamp,
     const uint64_t membership_log_id, const int64_t replica_num, const common::ObProposalID& ms_proposal_id)
 {
-  // Migrator guarantees the base_storage_info is from same cluster.
+  // Migratory guarantees the base_storage_info is from same cluster.
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -987,7 +987,7 @@ int ObLogMembershipMgr::receive_recovery_log(
   int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "ObLogMembershioMgr is not inited", KR(ret), K_(partition_key), K(log_entry));
+    CLOG_LOG(WARN, "ObLogMembershipMgr is not inited", KR(ret), K_(partition_key), K(log_entry));
   } else if (OB_ISNULL(state_mgr_) || OB_ISNULL(sw_)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "state_mgr_ is NULL or sw_ is NULL", KR(ret), K_(partition_key), K(log_entry));
@@ -1034,7 +1034,7 @@ int ObLogMembershipMgr::write_start_membership(const ObLogType& log_type)
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObLogMembershipMgr is not inited", K(ret), K(partition_key_));
   } else if (OB_LOG_START_MEMBERSHIP == log_type) {
-    // To update memberhsip_log_id_ and other member, wlock is needed
+    // To update membership_log_id_ and other member, wlock is needed
     WLockGuard guard(lock_);
     if (!state_mgr_->can_submit_start_working_log()) {
       ret = OB_STATE_NOT_MATCH;
@@ -1051,7 +1051,7 @@ int ObLogMembershipMgr::write_start_membership(const ObLogType& log_type)
       membership_log_id_ = log_id;
     }
   } else if (OB_LOG_RENEW_MEMBERSHIP == log_type) {
-    // To update memberhsip_log_id_ and other member, wlock is needed
+    // To update membership_log_id_ and other member, wlock is needed
     WLockGuard guard(lock_);
     // standby_leader writes start_working log
     // set renew_ms_log_id to max_log_id+1
@@ -1672,7 +1672,7 @@ void ObLogMembershipMgr::submit_success_cb_task(const ObLogType& log_type, const
     CLOG_LOG(WARN, "ObLogMembershipMgr is not inited", K_(partition_key), K(tmp_ret));
   } else if (OB_ISNULL(state_mgr_) || OB_ISNULL(cb_engine_)) {
     tmp_ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid arugment", K_(partition_key), K(tmp_ret));
+    CLOG_LOG(WARN, "invalid argument", K_(partition_key), K(tmp_ret));
   } else if (OB_LOG_MEMBERSHIP == log_type || OB_LOG_START_MEMBERSHIP == log_type) {
     ObMembershipLog ms_log;
     if (OB_SUCCESS != (tmp_ret = ms_log.deserialize(log_buf, log_buf_len, pos))) {
@@ -1776,7 +1776,7 @@ void ObLogMembershipMgr::reset_follower_pending_entry()
     CLOG_LOG(WARN, "ObLogMembershipMgr is not inited", K_(partition_key), K(ret));
   } else if (OB_ISNULL(alloc_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid arugment", K_(partition_key), KP(alloc_mgr_));
+    CLOG_LOG(WARN, "invalid argument", K_(partition_key), KP(alloc_mgr_));
   } else {
     has_follower_pending_entry_ = false;
     char* prev_buff = const_cast<char*>(follower_pending_entry_.get_buf());

@@ -130,7 +130,8 @@ int ObLocalityChecker::try_accumulate_task_info(common::ObIArray<ObTypeTransform
       } else if (cur_replica.server_->server_ == this_task_info->get_dest().get_server() &&
                  cur_replica.replica_type_ == this_task_info->get_src_member().get_replica_type() &&
                  dst_type == this_task_info->get_dest().get_replica_type() && cur_leader == this_leader &&
-                 (is_standby && this_task_info->can_accumulate_in_standby(task_info))) {
+                 (!is_standby  // primary cluster or can accumulate in standby
+                     || (is_standby && this_task_info->can_accumulate_in_standby(task_info)))) {
         if (cur_partition->is_primary() && this_task.get_sub_task_count() >= MAX_BATCH_TYPE_TRANSFORM_COUNT) {
           if (OB_FAIL(task_mgr_->add_task(this_task, task_cnt))) {
             LOG_WARN("fail to add task", K(ret));
@@ -619,7 +620,7 @@ int ObLocalityChecker::check_can_modify_quorum(const balancer::HashIndexCollecti
     ret = OB_EAGAIN;
     LOG_WARN("locality changed, generate task next round", K(ret));
   } else if (!is_tablegroup_id(table_id)) {
-    const ObTableSchema* table_schema = NULL;
+    const ObSimpleTableSchemaV2* table_schema = NULL;
     if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(table_id));
     } else if (OB_ISNULL(table_schema)) {
@@ -738,7 +739,7 @@ int ObLocalityChecker::get_partition_locality(ObFilterLocalityUtility& checker, 
     ret = OB_EAGAIN;
     LOG_WARN("locality changed, generate task next round", K(ret));
   } else if (!is_tablegroup_id(table_id)) {
-    const ObTableSchema* table_schema = nullptr;
+    const ObSimpleTableSchemaV2* table_schema = nullptr;
     if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(table_id));
     } else if (OB_UNLIKELY(nullptr == table_schema)) {

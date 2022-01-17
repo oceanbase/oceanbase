@@ -34,14 +34,14 @@ namespace rootserver {
 class ObRootService;
 class ObPartitionSpliter;
 class ObPartitionSpliterIdling : public ObThreadIdling {
-  public:
+public:
   explicit ObPartitionSpliterIdling(volatile bool& stop, const ObPartitionSpliter& host)
       : ObThreadIdling(stop), host_(host)
   {}
 
   virtual int64_t get_idle_interval_us();
 
-  private:
+private:
   static const int64_t MIN_CHECK_SPLIT_INTERVAL_US = 50 * 1000LL;
   static const int64_t MAX_CHECK_SPLIT_INTERVAL_US = 10 * 1000LL * 1000LL;
 
@@ -49,7 +49,7 @@ class ObPartitionSpliterIdling : public ObThreadIdling {
 };
 
 class ObPartitionSpliter : public ObRsReentrantThread {
-  public:
+public:
   friend class ObPartitionSpliterIdling;
   ObPartitionSpliter()
       : inited_(false),
@@ -64,16 +64,16 @@ class ObPartitionSpliter : public ObRsReentrantThread {
       share::schema::ObMultiVersionSchemaService* schema_service, ObRootService* root_service);
   virtual void run3() override;
   void wakeup();
-  void stop();
-  virtual int blocking_run()
+  void stop() override;
+  virtual int blocking_run() override
   {
     BLOCKING_RUN_IMPLEMENT();
   }
 
-  private:
+private:
   int try_split_partition();
 
-  private:
+private:
   bool inited_;
   obrpc::ObCommonRpcProxy* rpc_proxy_;
   share::schema::ObMultiVersionSchemaService* schema_service_;
@@ -84,7 +84,7 @@ class ObPartitionSpliter : public ObRsReentrantThread {
 };
 
 class ObPartitionSplitExecutor {
-  public:
+public:
   ObPartitionSplitExecutor(obrpc::ObSrvRpcProxy& rpc_proxy)
       : result_row_(0),
         proxy_batch_(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_split_partition),
@@ -96,13 +96,14 @@ class ObPartitionSplitExecutor {
   int split_tablegroup_partition(share::schema::ObSchemaGetterGuard& schema_guard,
       const share::schema::ObTablegroupSchema& tablegroup_schema, common::ObISQLClient& client,
       share::ObSplitProgress& split_status);
-  int split_table_partition(const share::schema::ObTableSchema& schema, share::ObPartitionTableOperator& pt_operator,
-      obrpc::ObSrvRpcProxy& rpc_proxy, obrpc::ObSplitPartitionArg& arg, share::ObSplitProgress& split_process);
+  int split_table_partition(const share::schema::ObSimpleTableSchemaV2& schema,
+      share::ObPartitionTableOperator& pt_operator, obrpc::ObSrvRpcProxy& rpc_proxy, obrpc::ObSplitPartitionArg& arg,
+      share::ObSplitProgress& split_process);
   int split_binding_tablegroup_partition(const share::schema::ObTablegroupSchema& schema,
       share::ObPartitionTableOperator& pt_operator, obrpc::ObSrvRpcProxy& rpc_proxy, obrpc::ObSplitPartitionArg& arg,
       share::ObSplitProgress& split_process);
 
-  private:
+private:
   int check_result(share::ObSplitProgress& split_status);
   int send_rpc();
   int accumulate_split_info(const common::ObAddr& addr, const int64_t table_id, const int64_t partition_id,
@@ -111,7 +112,7 @@ class ObPartitionSplitExecutor {
   int get_split_status(const share::schema::ObPartitionSchema& schema, share::ObPartitionTableOperator& pt_operator,
       obrpc::ObSrvRpcProxy& rpc_proxy, obrpc::ObSplitPartitionArg& arg, share::ObSplitProgress& split_status);
 
-  private:
+private:
   int64_t result_row_;
   ObSplitPartitionBatchProxy proxy_batch_;
   common::ObArray<common::ObAddr> dest_addr_;

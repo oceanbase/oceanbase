@@ -21,7 +21,7 @@ using namespace oceanbase::sql;
 
 template <typename WholeMsg>
 class ObDhWholeeMsgProc {
-  public:
+public:
   ObDhWholeeMsgProc() = default;
   ~ObDhWholeeMsgProc() = default;
   int on_whole_msg(ObSqcCtx& sqc_ctx, const WholeMsg& pkt) const

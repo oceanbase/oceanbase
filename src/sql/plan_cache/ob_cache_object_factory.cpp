@@ -61,12 +61,12 @@ int ObCacheObjectFactory::alloc(
     mem_attr.label_ = ObNewModIds::OB_SQL_PHY_PLAN;
   }
   mem_attr.ctx_id_ = ObCtxIds::PLAN_CACHE_CTX_ID;
-  MemoryContext* entity = NULL;
+  MemoryContext entity = NULL;
 
   if (OB_UNLIKELY(co_type < T_CO_SQL_CRSR) || OB_UNLIKELY(co_type >= T_CO_MAX) || OB_ISNULL(plan_cache)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("co_type is invalid", K(co_type), K(plan_cache), K(tenant_id));
-  } else if (OB_FAIL(ROOT_CONTEXT.CREATE_CONTEXT(entity, lib::ContextParam().set_mem_attr(mem_attr)))) {
+  } else if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(entity, lib::ContextParam().set_mem_attr(mem_attr)))) {
     LOG_WARN("create entity failed", K(ret), K(mem_attr));
   } else if (NULL == entity) {
     ret = OB_ERR_UNEXPECTED;
@@ -79,7 +79,7 @@ int ObCacheObjectFactory::alloc(
       switch (co_type) {
         case T_CO_SQL_CRSR:
           if (NULL != (buf = entity->get_arena_allocator().alloc(sizeof(ObPhysicalPlan)))) {
-            cache_obj = new (buf) ObPhysicalPlan(*entity);
+            cache_obj = new (buf) ObPhysicalPlan(entity);
           }
           break;
         case T_CO_ANON:
@@ -106,7 +106,9 @@ int ObCacheObjectFactory::alloc(
        * then the atomicity of hashmap can ensure that only one thread does the removal action, and
        * only this thread gets the CacheObject pointer to do subsequent destructuring
        */
-      if (OB_FAIL(plan_cache->get_deleted_map().set_refactored(cache_obj_id, cache_obj))) {
+      if (!plan_cache->is_valid()) {
+        // do nothing
+      } else if (OB_FAIL(plan_cache->get_deleted_map().set_refactored(cache_obj_id, cache_obj))) {
         LOG_WARN("failed to add element to hashmap", K(ret));
         inner_free(cache_obj);
         cache_obj = NULL;
@@ -178,13 +180,13 @@ void ObCacheObjectFactory::inner_free(ObCacheObject* cache_obj)
 {
   int ret = OB_SUCCESS;
 
-  MemoryContext& entity = cache_obj->get_mem_context();
-  WITH_CONTEXT(&entity)
+  MemoryContext entity = cache_obj->get_mem_context();
+  WITH_CONTEXT(entity)
   {
     cache_obj->~ObCacheObject();
   }
   cache_obj = NULL;
-  DESTROY_CONTEXT(&entity);
+  DESTROY_CONTEXT(entity);
 }
 
 ObPlanCache* ObCacheObjectFactory::get_plan_cache(const uint64_t tenant_id)

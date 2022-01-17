@@ -26,7 +26,7 @@ namespace share {
 // store and dispatch root server address list by oceanbase config mechanism.
 // same with oceanbase 0.5
 class ObInnerConfigRootAddr : public ObRootAddrAgent {
-  public:
+public:
   ObInnerConfigRootAddr() : inited_(false), proxy_(NULL)
   {}
   virtual ~ObInnerConfigRootAddr()
@@ -35,10 +35,11 @@ class ObInnerConfigRootAddr : public ObRootAddrAgent {
   int init(common::ObMySQLProxy& sql_proxy, common::ObServerConfig& config);
 
   virtual int store(const ObIAddrList& addr_list, const ObIAddrList& readonly_addr_list, const bool force,
-      const common::ObClusterType cluster_type, const int64_t timestamp);
-  virtual int fetch(ObIAddrList& add_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ);
+      const common::ObClusterType cluster_type, const int64_t timestamp) override;
+  virtual int fetch(
+      ObIAddrList& add_list, ObIAddrList& readonly_addr_list, common::ObClusterType& cluster_typ) override;
   // innerconfig does not need to support delete cluster operations
-  virtual int delete_cluster(const int64_t cluster_id)
+  virtual int delete_cluster(const int64_t cluster_id) override
   {
     UNUSED(cluster_id);
     return common::OB_SUCCESS;
@@ -48,10 +49,10 @@ class ObInnerConfigRootAddr : public ObRootAddrAgent {
 
   static int format_rootservice_list(const ObIAddrList& addr_list, common::ObSqlString& str);
 
-  private:
+private:
   static int parse_rs_addr(char* addr_buf, common::ObAddr& addr, int64_t& sql_port);
 
-  private:
+private:
   bool inited_;
   common::ObMySQLProxy* proxy_;
 

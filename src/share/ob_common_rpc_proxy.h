@@ -28,7 +28,7 @@
 namespace oceanbase {
 namespace obrpc {
 class ObCommonRpcProxy : public obrpc::ObRpcProxy {
-  public:
+public:
   DEFINE_TO(ObCommonRpcProxy);
 
   // rootservice provided
@@ -239,6 +239,8 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
   RPC_S(PR5 backup_replica_batch_res, OB_BACKUP_REPLICA_BATCH_RES, (ObBackupBatchRes));
   RPC_S(PR5 validate_backup_batch_res, OB_VALIDATE_BACKUP_BATCH_RES, (ObValidateBatchRes));
   RPC_S(PR5 standby_cutdata_batch_task_res, OB_STANDBY_CUTDATA_BATCH_TASK_RES, (ObStandbyCutDataBatchTaskRes));
+  RPC_S(PR5 backup_archive_log_batch_res, OB_BACKUP_ARCHIVE_LOG_BATCH_RES, (ObBackupArchiveLogBatchRes));
+  RPC_S(PR5 backup_backupset_batch_res, OB_BACKUP_BACKUPSET_BATCH_RES, (ObBackupBackupsetBatchRes));
 
   RPC_S(
       PRD commit_alter_tenant_locality, OB_COMMIT_ALTER_TENANT_LOCALITY, (rootserver::ObCommitAlterTenantLocalityArg));
@@ -272,6 +274,9 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
   RPC_S(PR5 archive_log, obrpc::OB_ARCHIVE_LOG, (ObArchiveLogArg));
   RPC_S(PRD backup_database, obrpc::OB_BACKUP_DATABASE, (ObBackupDatabaseArg));  // use ddl thread
   RPC_S(PR5 backup_manage, obrpc::OB_BACKUP_MANAGE, (ObBackupManageArg));
+  RPC_S(PRD backup_backupset, obrpc::OB_BACKUP_BACKUPSET, (ObBackupBackupsetArg));
+  RPC_S(PRD backup_archive_log, obrpc::OB_BACKUP_ARCHIVE_LOG, (ObBackupArchiveLogArg));
+  RPC_S(PRD backup_backuppiece, obrpc::OB_BACKUP_BACKUPPIECE, (ObBackupBackupPieceArg));
   RPC_S(PRD standby_upgrade_virtual_schema, obrpc::OB_UPGRADE_STANDBY_SCHEMA,
       (ObDDLNopOpreatorArg));  // use ddl thread
   RPC_S(PRD modify_schema_in_restore, OB_MODIFY_SCHEMA_IN_RESTORE, (obrpc::ObRestoreModifySchemaArg));
@@ -284,7 +289,7 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
   RPC_S(PRD create_restore_point, obrpc::OB_CREATE_RESTORE_POINT, (ObCreateRestorePointArg));
   RPC_S(PRD drop_restore_point, obrpc::OB_DROP_RESTORE_POINT, (ObDropRestorePointArg));
 
-  public:
+public:
   void set_rs_mgr(share::ObRsMgr& rs_mgr)
   {
     rs_mgr_ = &rs_mgr;
@@ -307,13 +312,13 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
     return proxy;
   }
 
-  private:
+private:
   void reset_rs_mgr()
   {
     rs_mgr_ = NULL;
   }
 
-  protected:
+protected:
 #define CALL_WITH_RETRY(call_stmt)                                                                                    \
   common::ObAddr rs;                                                                                                  \
   do {                                                                                                                \
@@ -392,7 +397,7 @@ class ObCommonRpcProxy : public obrpc::ObRpcProxy {
   }
 #undef CALL_WIRTH_RETRY
 
-  private:
+private:
   share::ObRsMgr* rs_mgr_;
 };  // end of class ObCommonRpcProxy
 

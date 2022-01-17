@@ -100,8 +100,8 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
   }
   if (OB_SUCC(ret) && update_stmt->get_table_size() > 1) {
     // check multi table update conflict
-    if (OB_FAIL(check_multi_update_key_conflict())) {
-      LOG_WARN("check multi update key conflict failed", K(ret));
+    if (OB_FAIL(check_multi_update_table_conflict())) {
+      LOG_WARN("check multi update table conflict failed", K(ret));
     }
   }
 
@@ -231,8 +231,8 @@ int ObUpdateResolver::resolve(const ParseNode& parse_tree)
   }
 
   if (OB_SUCC(ret)) {
-    // Distribute the centralized assignment information to each index, and do assignment updates for each index
-    if (OB_FAIL(update_stmt->refill_index_assignment_info())) {
+    if (OB_FAIL(update_stmt->refill_global_index_dml_info(
+            *params_.expr_factory_, session_info_->use_static_typing_engine()))) {
       LOG_WARN("init index assignment info failed", K(ret));
     }
   }
@@ -336,7 +336,7 @@ int ObUpdateResolver::check_safe_update_mode(ObUpdateStmt* update_stmt)
   return ret;
 }
 
-int ObUpdateResolver::check_multi_update_key_conflict()
+int ObUpdateResolver::check_multi_update_table_conflict()
 {
   int ret = OB_SUCCESS;
   const ObUpdateStmt* update_stmt = get_update_stmt();
@@ -355,42 +355,8 @@ int ObUpdateResolver::check_multi_update_key_conflict()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tables are null", K(table1), K(table2));
         } else if (ta1.table_id_ != ta2.table_id_ && table1->ref_id_ == table2->ref_id_) {
-          uint64_t base_table_id =
-              table1->is_generated_table() ? table1->get_base_table_item().ref_id_ : table1->ref_id_;
-          for (int64_t k = 0; OB_SUCC(ret) && k < ta1.assignments_.count(); ++k) {
-            bool is_key = false;
-            uint64_t column_id = ta1.assignments_.at(k).column_expr_->get_column_id();
-            if (OB_FAIL(schema_checker_->column_is_key(base_table_id, column_id, is_key))) {
-              LOG_WARN("check column is key failed", K(ret), K(base_table_id), K(column_id));
-            } else if (is_key) {
-              // set error code
-              ret = OB_ERR_MULTI_UPDATE_KEY_CONFLICT;
-              const ObString concat_name1 = concat_table_name(table1->database_name_, table1->get_table_name());
-              const ObString concat_name2 = concat_table_name(table2->database_name_, table2->get_table_name());
-              LOG_USER_ERROR(OB_ERR_MULTI_UPDATE_KEY_CONFLICT,
-                  concat_name1.length(),
-                  concat_name1.ptr(),
-                  concat_name2.length(),
-                  concat_name2.ptr());
-            }
-          }
-          for (int64_t k = 0; OB_SUCC(ret) && k < ta2.assignments_.count(); ++k) {
-            bool is_key = false;
-            uint64_t column_id = ta2.assignments_.at(k).column_expr_->get_column_id();
-            if (OB_FAIL(schema_checker_->column_is_key(base_table_id, column_id, is_key))) {
-              LOG_WARN("check column is key failed", K(ret), K(base_table_id), K(column_id));
-            } else if (is_key) {
-              // set error code
-              ret = OB_ERR_MULTI_UPDATE_KEY_CONFLICT;
-              const ObString concat_name1 = concat_table_name(table1->database_name_, table1->get_table_name());
-              const ObString concat_name2 = concat_table_name(table2->database_name_, table2->get_table_name());
-              LOG_USER_ERROR(OB_ERR_MULTI_UPDATE_KEY_CONFLICT,
-                  concat_name1.length(),
-                  concat_name1.ptr(),
-                  concat_name2.length(),
-                  concat_name2.ptr());
-            }
-          }
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple aliases to same table");
         }
       }
     }
@@ -601,6 +567,7 @@ int ObUpdateResolver::resolve_multi_table_dml_info(const ObTableAssignment& ta, 
         index_dml_info.part_cnt_ = index_schema->get_partition_cnt();
         index_dml_info.all_part_num_ = index_schema->get_all_part_num();
         index_dml_info.rowkey_cnt_ = index_schema->get_rowkey_column_num();
+        index_dml_info.index_type_ = index_schema->get_index_type();
         if (OB_FAIL(index_schema->get_index_name(index_dml_info.index_name_))) {
           LOG_WARN("get index name from index schema failed", K(ret));
         } else if (OB_FAIL(update_stmt->add_multi_table_dml_info(index_dml_info))) {

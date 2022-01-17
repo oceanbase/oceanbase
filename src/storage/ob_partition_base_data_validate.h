@@ -47,7 +47,7 @@ class ObBackupChecksumChecker;
 
 // TODO : extract common interfaces
 class ObBackupMetaIndexStore {
-  public:
+public:
   ObBackupMetaIndexStore();
   virtual ~ObBackupMetaIndexStore()
   {}
@@ -60,23 +60,23 @@ class ObBackupMetaIndexStore {
   int get_meta_index(
       const common::ObPartitionKey& pkey, const share::ObBackupMetaType& type, share::ObBackupMetaIndex& meta_index);
 
-  private:
+private:
   int init_from_remote_file(const common::ObString& path, const common::ObString& storage_info);
 
-  private:
+private:
   typedef common::hash::ObHashMap<share::ObMetaIndexKey, share::ObBackupMetaIndex> MetaIndexMap;
 
   bool is_inited_;
   MetaIndexMap meta_index_map_;
   common::ObArenaAllocator allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupMetaIndexStore);
 };
 
 // TODO : extract common interfaces
 class ObBackupMacroIndexStore {
-  public:
+public:
   ObBackupMacroIndexStore();
   virtual ~ObBackupMacroIndexStore()
   {}
@@ -88,12 +88,12 @@ class ObBackupMacroIndexStore {
   void reset();
   int get_macro_block_index(const common::ObPGKey& pg_key, common::ObArray<share::ObBackupMacroIndex>*& index_list);
 
-  private:
+private:
   int init_from_remote_file(
       const common::ObPGKey& pg_key, const common::ObString& path, const common::ObString& storage_info);
   int add_sstable_index(const common::ObPGKey& pg_key, const common::ObIArray<share::ObBackupMacroIndex>& index_list);
 
-  private:
+private:
   typedef common::hash::ObHashMap<common::ObPGKey, common::ObArray<share::ObBackupMacroIndex>*> MacroIndexMap;
 
   bool is_inited_;
@@ -101,12 +101,12 @@ class ObBackupMacroIndexStore {
   MacroIndexMap macro_index_map_;
   common::ObArenaAllocator allocator_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupMacroIndexStore);
 };
 
 class ObValidateBackupPGCtx {
-  public:
+public:
   struct SubTask final {
     SubTask();
     virtual ~SubTask();
@@ -117,7 +117,7 @@ class ObValidateBackupPGCtx {
     common::ObPartitionKey pkey_;
   };
 
-  public:
+public:
   ObValidateBackupPGCtx();
   virtual ~ObValidateBackupPGCtx();
   int init(storage::ObMigrateCtx& migrate_ctx, common::ObInOutBandwidthThrottle& bandwidth_throttle);
@@ -141,10 +141,10 @@ class ObValidateBackupPGCtx {
   }
   TO_STRING_KV(K_(result), K_(pg_key), K_(sub_task_cnt), K_(path_info));
 
-  private:
+private:
   int fetch_next_sub_task(SubTask*& sub_task);
 
-  public:
+public:
   static const int64_t MAX_MACRO_BLOCK_COUNT_PER_SUB_TASK = 1 << 7;
   bool is_inited_;
   bool is_dropped_tenant_;
@@ -181,35 +181,35 @@ class ObValidateBackupPGCtx {
   share::ObBackupBaseDataPathInfo path_info_;
   storage::ObMigrateCtx* migrate_ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObValidateBackupPGCtx);
 };
 
 class ObValidatePrepareTask : public share::ObITask {
-  public:
+public:
   ObValidatePrepareTask();
   virtual ~ObValidatePrepareTask();
   int init(ObMigrateCtx& migrate_ctx, ObValidateBackupPGCtx& validate_pg_ctx);
   virtual int process() override;
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* migrate_ctx_;
   ObValidateBackupPGCtx* validate_pg_ctx_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObValidatePrepareTask);
 };
 
 class ObValidateClogDataTask : public share::ObITask {
-  public:
+public:
   ObValidateClogDataTask();
   virtual ~ObValidateClogDataTask();
   int init(const int64_t clog_id, ObMigrateCtx& migrate_ctx, ObValidateBackupPGCtx& validate_pg_ctx);
   virtual int generate_next_task(share::ObITask*& next_task) override;
   virtual int process() override;
 
-  private:
+private:
   const uint64_t TIMEOUT = 60 * 1000 * 1000L;
   bool is_inited_;
   int cur_clog_file_id_;
@@ -218,19 +218,19 @@ class ObValidateClogDataTask : public share::ObITask {
   ObValidateBackupPGCtx* validate_pg_ctx_;
   archive::ObArchiveLogFileStore* archive_log_file_store_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObValidateClogDataTask);
 };
 
 class ObValidateBaseDataTask : public share::ObITask {
-  public:
+public:
   ObValidateBaseDataTask();
   virtual ~ObValidateBaseDataTask();
   int init(const int64_t task_idx, ObMigrateCtx& migrate_ctx, ObValidateBackupPGCtx& validate_pg_ctx);
   virtual int generate_next_task(share::ObITask*& next_task) override;
   virtual int process() override;
 
-  private:
+private:
   int check_base_data_valid(bool& is_valid);
 
   int fetch_macro_block_with_retry(
@@ -241,7 +241,7 @@ class ObValidateBaseDataTask : public share::ObITask {
       blocksstable::ObBufferReader& macro_data);
   int checksum_macro_block_data(blocksstable::ObBufferReader& buffer_reader, bool& is_valid);
 
-  private:
+private:
   static const int64_t FETCH_MACRO_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;
   static const int64_t MAX_RETRY_TIME = 3L;
 
@@ -254,12 +254,12 @@ class ObValidateBaseDataTask : public share::ObITask {
   common::ObArenaAllocator* allocator_;
   ObBackupMacroIndexStore* macro_index_store_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObValidateBaseDataTask);
 };
 
 class ObValidateFinishTask : public share::ObITask {
-  public:
+public:
   ObValidateFinishTask();
   virtual ~ObValidateFinishTask();
   int init(ObMigrateCtx& migrate_ctx_);
@@ -269,18 +269,18 @@ class ObValidateFinishTask : public share::ObITask {
     return validate_pg_ctx_;
   }
 
-  private:
+private:
   bool is_inited_;
   ObMigrateCtx* migrate_ctx_;
   ObValidateBackupPGCtx validate_pg_ctx_;
   share::ObPGValidateTaskUpdater updater_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObValidateFinishTask);
 };
 
 class ObValidateBackupUtil {
-  public:
+public:
   static int read_single_file(const common::ObString& path, const common::ObString& storage_info,
       ObIAllocator& allocator, char*& buf, int64_t& read_size);
   static int read_part_file(const common::ObString& path, const common::ObString& storage_info, char* buf,

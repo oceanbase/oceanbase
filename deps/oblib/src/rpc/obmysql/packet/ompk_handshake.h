@@ -22,11 +22,11 @@ namespace oceanbase {
 namespace obmysql {
 
 class OMPKHandshake : public ObMySQLPacket {
-  public:
+public:
   static const int32_t SCRAMBLE_SIZE = 8;
   static const int64_t SCRAMBLE_TOTAL_SIZE = 20;
 
-  public:
+public:
   OMPKHandshake();
 
   // TODO use ob server info to init handshake packet
@@ -118,10 +118,10 @@ class OMPKHandshake : public ObMySQLPacket {
     uint16_t capability_;
   };
 
-  private:
+private:
   const char* get_handshake_inner_pulgin_name(const common::ObString outer_string) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(OMPKHandshake);
   static const char* SERVER_VERSION_STR;
 

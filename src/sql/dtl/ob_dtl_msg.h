@@ -79,7 +79,7 @@ OB_INLINE DEFINE_GET_SERIALIZE_SIZE(ObDtlMsgHeader)
 class ObDtlMsg {
   OB_UNIS_VERSION_PV();
 
-  public:
+public:
   virtual ObDtlMsgType get_type() const = 0;
   inline bool is_data_msg() const
   {
@@ -90,13 +90,13 @@ class ObDtlMsg {
     return ObDtlMsgType::DRAIN_DATA_FLOW == get_type();
   }
 
-  protected:
+protected:
   ~ObDtlMsg() = default;
 };
 
 template <ObDtlMsgType TYPE>
 class ObDtlMsgTemp : public ObDtlMsg {
-  public:
+public:
   ObDtlMsgType get_type() const override
   {
     return type();

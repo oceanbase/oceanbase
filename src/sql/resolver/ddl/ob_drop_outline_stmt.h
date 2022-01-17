@@ -18,7 +18,7 @@
 namespace oceanbase {
 namespace sql {
 class ObDropOutlineStmt : public ObDDLStmt {
-  public:
+public:
   ObDropOutlineStmt() : ObDDLStmt(stmt::T_DROP_OUTLINE), drop_outline_arg_()
   {}
   ~ObDropOutlineStmt()
@@ -45,7 +45,7 @@ class ObDropOutlineStmt : public ObDDLStmt {
   }
   TO_STRING_KV(K_(drop_outline_arg));
 
-  private:
+private:
   obrpc::ObDropOutlineArg drop_outline_arg_;
   DISALLOW_COPY_AND_ASSIGN(ObDropOutlineStmt);
 };

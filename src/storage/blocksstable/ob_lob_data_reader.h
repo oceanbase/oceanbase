@@ -18,7 +18,6 @@
 #include "ob_lob_struct.h"
 #include "ob_macro_block_reader.h"
 #include "ob_lob_micro_block_index_reader.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "ob_store_file.h"
 #include "storage/ob_pg_mgr.h"
 
@@ -28,17 +27,17 @@ class ObSSTable;
 }
 namespace blocksstable {
 class ObLobMicroBlockReader {
-  public:
+public:
   ObLobMicroBlockReader();
   virtual ~ObLobMicroBlockReader() = default;
   int read(const char* buf, const int64_t buf_len, const char*& out_buf, int64_t& out_buf_len);
 
-  private:
+private:
   int check_micro_header(const ObLobMicroBlockHeader* header);
 };
 
 class ObLobMacroBlockReader {
-  public:
+public:
   ObLobMacroBlockReader();
   virtual ~ObLobMacroBlockReader() = default;
   int init();
@@ -48,12 +47,12 @@ class ObLobMacroBlockReader {
   int read_next_micro_block(const char*& out_buf, int64_t& out_buf_len);
   void reset();
 
-  private:
+private:
   int open(const MacroBlockId& block_id, const bool is_sys_read, const ObFullMacroBlockMeta& meta,
       const common::ObPartitionKey& pkey, ObStorageFileHandle& file_handle);
   int check_macro_meta(const common::ObStoreRowkey& rowkey, const uint16_t column_id);
 
-  private:
+private:
   bool is_inited_;
   MacroBlockId curr_block_id_;
   ObLobMicroBlockIndexReader micro_index_reader_;
@@ -65,7 +64,7 @@ class ObLobMacroBlockReader {
 };
 
 class ObLobDataReader {
-  public:
+public:
   ObLobDataReader();
   virtual ~ObLobDataReader();
   int init(const bool is_sys_read, const storage::ObSSTable& sstable);
@@ -80,7 +79,7 @@ class ObLobDataReader {
     return is_sys_read_;
   }
 
-  private:
+private:
   void inner_reuse();
   int read_lob_data_impl(const common::ObStoreRowkey& rowkey, const uint16_t column_id, const common::ObObj& src_obj,
       common::ObObj& dst_obj);
@@ -89,7 +88,7 @@ class ObLobDataReader {
   int parse_lob_index(const char* buf, const int64_t buf_len, common::ObIArray<common::ObLobIndex>& lob_indexes);
   int read_all_direct_index(const common::ObLobIndex& index, common::ObIArray<common::ObLobIndex>& lob_indexes);
 
-  private:
+private:
   bool is_inited_;
   ObLobMacroBlockReader reader_;
   const common::hash::ObCuckooHashMap<common::ObLogicMacroBlockId, MacroBlockId>* logic2phy_map_;

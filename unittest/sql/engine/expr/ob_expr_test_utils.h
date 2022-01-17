@@ -24,7 +24,7 @@ static oceanbase::common::ObArenaAllocator g_alloc_;
 
 #define TEST_OPERATOR(expr_op)           \
   class Test##expr_op : public expr_op { \
-    public:                              \
+  public:                                \
     Test##expr_op() : expr_op(g_alloc_)  \
     {}                                   \
     ~Test##expr_op()                     \

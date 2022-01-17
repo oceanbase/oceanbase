@@ -26,7 +26,7 @@ namespace oceanbase {
 namespace observer {
 // implement interface of DefaultSimpleAllocerAllocator
 struct ObHighPrioMemAllocator {
-  public:
+public:
   explicit ObHighPrioMemAllocator(const char* label = common::ObModIds::OB_PARTITION_TABLE_TASK)
   {
     attr_.label_ = label;
@@ -44,12 +44,12 @@ struct ObHighPrioMemAllocator {
     attr_ = attr;
   }
 
-  private:
+private:
   common::ObMemAttr attr_;
 };
 template <typename T>
 struct Compare {
-  public:
+public:
   bool operator()(const T& a, const T& b) const
   {
     return a.compare_without_version(b);
@@ -61,7 +61,7 @@ struct Compare {
 // before process finish.
 template <typename Task, typename Process>
 class ObUniqTaskQueue : public share::ObThreadPool {
-  public:
+public:
   friend class TestBatchProcessQueue_test_reput_Test;
   friend class TestBatchProcessQueue_test_eput2_Test;
   friend class TestBatchProcessQueue_test_update_process_Test;
@@ -105,7 +105,7 @@ class ObUniqTaskQueue : public share::ObThreadPool {
     return task_count_;
   }
 
-  private:
+private:
   struct Group : public common::ObDLinkBase<Group> {
     Group()
     {}
@@ -243,8 +243,17 @@ int ObUniqTaskQueue<Task, Process>::add(const Task& task)
       const Task* stored_task = NULL;
       if (OB_FAIL(task_map_.set_refactored(task, task))) {
         if (common::OB_HASH_EXIST == ret) {
-          ret = common::OB_EAGAIN;
-          SERVER_LOG(TRACE, "same task exist", K(task));
+          if (task.need_assign_when_equal()) {
+            if (NULL == (stored_task = task_map_.get(task))) {
+              ret = common::OB_ERR_SYS;
+              SERVER_LOG(WARN, "get inserted task failed", K(ret), K(task));
+            } else if (OB_FAIL(const_cast<Task*>(stored_task)->assign_when_equal(task))) {
+              SERVER_LOG(WARN, "assign task failed", K(ret), K(task));
+            }
+          } else {
+            ret = common::OB_EAGAIN;
+            SERVER_LOG(TRACE, "same task exist", K(task));
+          }
         } else {
           SERVER_LOG(WARN, "insert into hash failed", K(ret), K(task));
         }
@@ -296,7 +305,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
     ret = common::OB_NOT_INIT;
     SERVER_LOG(WARN, "not init", K(ret));
   } else {
-    while (!has_set_stop()) {
+    while (!lib::this_thread::has_set_stop()) {
       Task* t = NULL;
       tasks.reuse();
       if (OB_SUCC(tasks.reserve(batch_exec_cnt))) {
@@ -422,10 +431,11 @@ template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::process_barrier(Task& task)
 {
   int ret = common::OB_SUCCESS;
+  bool stopped = lib::this_thread::has_set_stop();
   if (OB_ISNULL(updater_)) {
     ret = common::OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid updater", K(ret), K(updater_));
-  } else if (OB_FAIL(updater_->process_barrier(task, has_set_stop()))) {
+  } else if (OB_FAIL(updater_->process_barrier(task, stopped))) {
     SERVER_LOG(WARN, "fail to batch process task", K(ret));
   }
   return ret;
@@ -435,12 +445,13 @@ template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::batch_process_tasks(common::ObIArray<Task>& tasks)
 {
   int ret = common::OB_SUCCESS;
+  bool stopped = lib::this_thread::has_set_stop();
   if (0 == tasks.count()) {
     // nothing todo
   } else if (OB_ISNULL(updater_)) {
     ret = common::OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid updater", K(ret), K(updater_));
-  } else if (OB_FAIL(updater_->batch_process_tasks(tasks, has_set_stop()))) {
+  } else if (OB_FAIL(updater_->batch_process_tasks(tasks, stopped))) {
     SERVER_LOG(WARN, "fail to batch process task", K(ret));
   }
   return ret;

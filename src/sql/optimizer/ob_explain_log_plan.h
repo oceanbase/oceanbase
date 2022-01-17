@@ -17,7 +17,7 @@
 namespace oceanbase {
 namespace sql {
 class ObExplainLogPlan : public ObLogPlan {
-  public:
+public:
   ObExplainLogPlan(ObOptimizerContext& ctx, const ObDMLStmt* explain_stmt) : ObLogPlan(ctx, explain_stmt)
   {}
   virtual ~ObExplainLogPlan()
@@ -27,7 +27,7 @@ class ObExplainLogPlan : public ObLogPlan {
 
   virtual int generate_plan();
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExplainLogPlan);
 };
 }  // namespace sql

@@ -16,7 +16,7 @@
 namespace oceanbase {
 namespace common {
 class ObICallback {
-  public:
+public:
   ObICallback()
   {}
   virtual ~ObICallback()
@@ -25,7 +25,7 @@ class ObICallback {
 };
 
 class ObICallbackHandler {
-  public:
+public:
   ObICallbackHandler()
   {}
   virtual ~ObICallbackHandler()

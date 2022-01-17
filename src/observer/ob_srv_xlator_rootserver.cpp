@@ -267,6 +267,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(rootserver::ObArchiveLogP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObBackupDatabaseP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObBackupManageP, *gctx_.root_service_);
+  RPC_PROCESSOR(rootserver::ObBackupBackupsetP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObCheckStandbyCanAccessP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObRpcBackupdReplicaBatchResP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObUpgradeStandbySchemaP, *gctx_.root_service_);
@@ -279,4 +280,9 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator* xlator)
   // auto part ddl
   RPC_PROCESSOR(rootserver::ObExecuteRangePartSplitP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObUpdateStandbyClusterInfoP, *gctx_.root_service_);
+
+  RPC_PROCESSOR(rootserver::ObBackupArchiveLogP, *gctx_.root_service_);
+  RPC_PROCESSOR(rootserver::ObRpcBackupBackupsetBatchResP, *gctx_.root_service_);
+  RPC_PROCESSOR(rootserver::ObRpcBackupArchiveLogBatchResP, *gctx_.root_service_);
+  RPC_PROCESSOR(rootserver::ObBackupBackupPieceP, *gctx_.root_service_);
 }

@@ -25,9 +25,9 @@ class ObNLConnectByWithIndexOp;
 class ObConnectByOpBFSPump : public ObConnectByOpPumpBase {
   friend ObNLConnectByWithIndexOp;
 
-  private:
+private:
   class PathNode {
-    public:
+  public:
     PathNode() : prior_exprs_result_(NULL), paths_(), level_(0)
     {}
     ~PathNode()
@@ -51,7 +51,7 @@ class ObConnectByOpBFSPump : public ObConnectByOpPumpBase {
   };
 
   class PumpNode {
-    public:
+  public:
     PumpNode() : pump_row_(NULL), output_row_(NULL), path_node_()
     {}
     ~PumpNode()
@@ -69,7 +69,7 @@ class ObConnectByOpBFSPump : public ObConnectByOpPumpBase {
   };
 
   class RowComparer {
-    public:
+  public:
     explicit RowComparer(const common::ObIArray<ObSortFieldCollation>* sort_collations,
         const common::ObIArray<ObSortCmpFunc>* sort_cmp_funs, int& ret)
         : sort_collations_(sort_collations), sort_cmp_funs_(sort_cmp_funs), ret_(ret)
@@ -78,13 +78,13 @@ class ObConnectByOpBFSPump : public ObConnectByOpPumpBase {
     {}
     bool operator()(const PumpNode& pump_node1, const PumpNode& pump_node2);
 
-    private:
+  private:
     const common::ObIArray<ObSortFieldCollation>* sort_collations_;
     const common::ObIArray<ObSortCmpFunc>* sort_cmp_funs_;
     int& ret_;
   };
 
-  public:
+public:
   ObConnectByOpBFSPump()
       : ObConnectByOpPumpBase(),
         pump_stack_(),
@@ -118,7 +118,7 @@ class ObConnectByOpBFSPump : public ObConnectByOpPumpBase {
   void free_memory();
   void free_memory_for_rescan();
 
-  private:
+private:
   int push_back_row_to_stack(
       const common::ObIArray<ObExpr*>& root_exprs, const common::ObIArray<ObExpr*>& cur_output_exprs);
   int free_record_rows();
@@ -129,7 +129,7 @@ class ObConnectByOpBFSPump : public ObConnectByOpPumpBase {
   int free_path_stack();
   int free_pump_node_stack(ObIArray<PumpNode>& stack);
 
-  private:
+private:
   common::ObArray<PumpNode> pump_stack_;
   common::ObArray<PathNode> path_stack_;
   common::ObArray<PumpNode> sort_stack_;

@@ -31,18 +31,18 @@ class ObColumnRefRawExpr;
 class ObExprEqualCheckContext;
 typedef common::ObSEArray<int64_t, 1> RowkeyArray;
 class ObPartIdRowMapManager {
-  public:
+public:
   ObPartIdRowMapManager() : manager_(), part_idx_(common::OB_INVALID_INDEX)
   {}
   typedef common::ObSEArray<int64_t, 12> ObRowIdList;
   struct MapEntry {
-    public:
+  public:
     MapEntry() : list_()
     {}
     TO_STRING_KV(K_(list));
     int assign(const MapEntry& entry);
 
-    public:
+  public:
     ObRowIdList list_;
   };
   typedef common::ObSEArray<MapEntry, 1> ObPartRowManager;
@@ -76,12 +76,12 @@ class ObPartIdRowMapManager {
   }
   TO_STRING_KV(K_(manager), K_(part_idx));
 
-  private:
+private:
   ObPartRowManager manager_;
   int64_t part_idx_;  // used for parameter pass only.
   common::ObNewRow part_row_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObPartIdRowMapManager);
 };
 
@@ -337,7 +337,7 @@ struct TableLocationKey {
 
 class ObOptimizerContext;
 class ObTableLocation {
-  public:
+public:
   enum TablePartType {
     NONE,
     HASH,
@@ -357,7 +357,7 @@ class ObTableLocation {
   class PartProjector {
     OB_UNIS_VERSION(1);
 
-    public:
+  public:
     PartProjector(common::ObIAllocator& allocator, ObSqlExpressionFactory& sql_expr_factory,
         ObExprOperatorFactory& expr_op_factory)
         : allocator_(allocator), sql_expr_factory_(sql_expr_factory), expr_op_factory_(expr_op_factory)
@@ -388,11 +388,11 @@ class ObTableLocation {
         common::ObArrayWrap<int32_t>(part_projector_, part_projector_size_), "subpart_projector",
         common::ObArrayWrap<int32_t>(subpart_projector_, subpart_projector_size_));
 
-    private:
+  private:
     int init_part_projector(
         const ObRawExpr* part_expr, RowDesc& row_desc, int32_t*& projector, int64_t& projector_size);
 
-    private:
+  private:
     common::ObDList<ObSqlExpression> virtual_column_exprs_;
     int64_t column_cnt_;
     int32_t* part_projector_;
@@ -415,7 +415,7 @@ class ObTableLocation {
       ObExecContext& exec_ctx, const uint64_t ref_table_id, common::ObIArray<int64_t>* partition_ids, int64_t* fake_id);
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   // for array: new(&data_[count_]) T();
   // for normal usage, like plan set
   ObTableLocation()
@@ -482,7 +482,8 @@ class ObTableLocation {
         range_part_id_arr_(NULL),
         use_calc_part_by_rowid_(false),
         is_valid_range_columns_part_range_(false),
-        is_valid_range_columns_subpart_range_(false)
+        is_valid_range_columns_subpart_range_(false),
+        report_err_for_pruned_partition_not_exist_(false)
   {}
 
   // Used in situations where the optimizer does not adjust the destructor, to ensure that
@@ -555,7 +556,8 @@ class ObTableLocation {
         hash_part_array_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator_)),
         use_calc_part_by_rowid_(false),
         is_valid_range_columns_part_range_(false),
-        is_valid_range_columns_subpart_range_(false)
+        is_valid_range_columns_subpart_range_(false),
+        report_err_for_pruned_partition_not_exist_(false)
   {}
   virtual ~ObTableLocation()
   {
@@ -646,9 +648,9 @@ class ObTableLocation {
       share::schema::ObSchemaGetterGuard& schema_guard, uint64_t table_id, const common::ObIArray<ObRowkey>& rowkeys,
       common::ObIArray<int64_t>& part_ids, common::ObIArray<RowkeyArray>& rowkey_lists);
   int init_table_location(ObSqlSchemaGuard& schema_guard, uint64_t table_id, uint64_t ref_table_id, ObDMLStmt& stmt,
-      RowDesc& row_desc, const bool is_dml_table, const ObOrderDirection& direction = default_asc_direction());
+      const RowDesc& row_desc, const bool is_dml_table, const ObOrderDirection& direction = default_asc_direction());
   int init_table_location_with_rowkey(ObSqlSchemaGuard& schema_guard, uint64_t table_id, ObSQLSessionInfo& session_info,
-      const bool is_dml_table = false);
+      const bool is_dml_table = true);
   int calculate_partition_ids_by_row(ObExecContext& exec_ctx, ObPartMgr* part_mgr, const common::ObNewRow& row,
       ObIArray<int64_t>& part_ids, int64_t& part_idx) const;
   int calculate_partition_id_by_row(
@@ -817,7 +819,8 @@ class ObTableLocation {
       const ObSqlExpression* gen_col_expr = NULL) const;
 
   int init_table_location_with_row_desc(
-      ObSqlSchemaGuard& schema_guard, uint64_t table_id, RowDesc& input_row_desc, ObSQLSessionInfo& session_info);
+      ObSqlSchemaGuard& schema_guard, uint64_t table_id, RowDesc& input_row_desc, ObSQLSessionInfo& session_info,
+      const bool is_dml_table);
 
   int generate_row_desc_from_row_desc(ObDMLStmt& stmt, const uint64_t data_table_id, ObRawExprFactory& expr_factory,
       const RowDesc& input_row_desc, RowDesc& row_desc);
@@ -838,10 +841,17 @@ class ObTableLocation {
   int calculate_partition_ids_with_rowid(ObExecContext& exec_ctx, share::schema::ObSchemaGetterGuard& schema_guard,
       const ParamStore& params, common::ObIArray<int64_t>& part_ids) const;
 
+  inline bool is_all_partition() const
+  {
+    return (part_level_ == share::schema::PARTITION_LEVEL_ZERO) ||
+           (part_get_all_ && (part_level_ == share::schema::PARTITION_LEVEL_ONE)) ||
+           (part_get_all_ && subpart_get_all_ && (part_level_ == share::schema::PARTITION_LEVEL_TWO));
+  }
+
   TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(part_num), K_(is_global_index), K_(duplicate_type),
       K_(part_expr_param_idxs), K_(part_projector), K_(part_expr), K_(gen_col_expr));
 
-  private:
+private:
   // get partition columns and generate partition_expr_
   // partition_columns:partition columns
   // gen_cols: columns dependented by generated partition column
@@ -1037,7 +1047,7 @@ class ObTableLocation {
   int recursive_convert_generated_column(const ObIArray<ObColumnRefRawExpr*>& table_column,
       const ObIArray<ObRawExpr*>& column_conv_exprs, ObRawExpr*& expr);
 
-  private:
+private:
   bool inited_;
   uint64_t table_id_;
   uint64_t ref_table_id_;
@@ -1133,6 +1143,8 @@ class ObTableLocation {
   bool use_calc_part_by_rowid_;
   bool is_valid_range_columns_part_range_;
   bool is_valid_range_columns_subpart_range_;
+
+  bool report_err_for_pruned_partition_not_exist_;
 };
 
 }  // namespace sql

@@ -70,6 +70,7 @@ int ObPxMultiPartInsert::init_op_ctx(ObExecContext& ctx) const
   OZ(op_ctx->data_driver_.init(ctx.get_allocator(), table_desc_, this, this));
   OX(op_ctx->row_iter_wrapper_.set_insert_projector(insert_projector_, insert_projector_size_));
   OZ(op_ctx->row_iter_wrapper_.alloc_insert_row());
+  OX(op_ctx->row_iter_wrapper_.set_insert_op(this));
   if (OB_SUCC(ret) && with_barrier_) {
     ObPxModifyInput* input = GET_PHY_OP_INPUT(ObPxModifyInput, ctx, get_id());
     if (OB_ISNULL(input)) {
@@ -154,17 +155,6 @@ int ObPxMultiPartInsert::fill_dml_base_param(uint64_t index_tid, ObSQLSessionInf
   return ret;
 }
 
-int ObPxMultiPartInsert::process_row(
-    ObExecContext& ctx, ObPxMultiPartInsertCtx* insert_ctx, const ObNewRow*& insert_row) const
-{
-  int ret = OB_SUCCESS;
-  bool is_filtered = false;
-  OZ(check_row_null(ctx, *insert_row, column_infos_), *insert_row);
-  OZ(ObPhyOperator::filter_row_for_check_cst(insert_ctx->expr_ctx_, *insert_row, check_constraint_exprs_, is_filtered));
-  OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
-  return ret;
-}
-
 //////////// pdml data interface implementation: reader & writer ////////////
 
 int ObPxMultiPartInsert::read_row(ObExecContext& ctx, const ObNewRow*& row, int64_t& part_id) const
@@ -191,11 +181,6 @@ int ObPxMultiPartInsert::read_row(ObExecContext& ctx, const ObNewRow*& row, int6
       LOG_WARN("real_idx is invalid", "count", row->count_, K(real_idx), K(ret));
     } else if (OB_FAIL(row->cells_[real_idx].get_int(part_id))) {
       LOG_WARN("fail get part id", K(ret), K(real_idx), "obj", row->cells_[real_idx], K(*row));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(process_row(ctx, op_ctx, row))) {
-      LOG_WARN("fail process row", K(ret));
     }
   }
   return ret;
@@ -251,11 +236,25 @@ int ObPxMultiPartInsert::ObPDMLRowIteratorWrapper::alloc_insert_row()
   return ret;
 }
 
+int ObPxMultiPartInsert::process_row(
+    ObExecContext& ctx, ObPxMultiPartInsertCtx* insert_ctx, const ObNewRow& insert_row) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_pdml_index_maintain_) {
+    bool is_filtered = false;
+    OZ(check_row_null(ctx, insert_row, column_infos_), insert_row);
+    OZ(ObPhyOperator::filter_row_for_check_cst(
+        insert_ctx->expr_ctx_, insert_row, check_constraint_exprs_, is_filtered));
+    OV(!is_filtered, OB_ERR_CHECK_CONSTRAINT_VIOLATED);
+  }
+  return ret;
+}
+
 int ObPxMultiPartInsert::ObPDMLRowIteratorWrapper::get_next_row(common::ObNewRow*& row)
 {
   int ret = OB_SUCCESS;
   ObNewRow* full_row = nullptr;
-  if (OB_ISNULL(iter_)) {
+  if (OB_ISNULL(iter_) || OB_ISNULL(insert_op_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(iter_->get_next_row(full_row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -263,6 +262,8 @@ int ObPxMultiPartInsert::ObPDMLRowIteratorWrapper::get_next_row(common::ObNewRow
     }
   } else if (OB_FAIL(project_row(*full_row, insert_row_))) {
     LOG_WARN("fail project new old row", K(*full_row), K(ret));
+  } else if (OB_FAIL(insert_op_->process_row(op_ctx_.exec_ctx_, &op_ctx_, insert_row_))) {
+    LOG_WARN("fail process row", K(ret));
   } else {
     // todo OZ (validate_virtual_column(op_ctx->expr_ctx_, insert_row, 0));
     row = &insert_row_;

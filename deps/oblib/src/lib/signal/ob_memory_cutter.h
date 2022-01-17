@@ -18,17 +18,17 @@ namespace oceanbase {
 namespace lib {
 class AChunk;
 class ObIMemoryCutter {
-  public:
+public:
   virtual void cut(int64_t& total_size) = 0;
 };
 
 class ObMemoryCutter : public ObIMemoryCutter {
-  public:
+public:
   virtual void cut(int64_t& total_size) override;
   static void free_chunk(const void* ptr, const uint64_t size);
   static uint64_t chunk_size(AChunk* chunk);
 
-  private:
+private:
   void free_chunk(int64_t& total_size);
   void free_stack(int64_t& total_size);
   void free_memstore(int64_t& total_size);

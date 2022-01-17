@@ -34,7 +34,7 @@ namespace frame {
 using common::ObAddr;
 
 class SPAlloc {
-  public:
+public:
   explicit SPAlloc(easy_pool_t* pool) : pool_(pool)
   {}
   void* operator()(uint32_t size) const
@@ -42,19 +42,21 @@ class SPAlloc {
     return easy_pool_alloc(pool_, size);
   }
 
-  private:
+private:
   easy_pool_t* pool_;
 };
 
 class ObReqTransport {
-  public:
+public:
   // asynchronous callback class.
   //
   // Every asynchronous request will hold an object of this class that
   // been called after easy has detected the response packet.
   class AsyncCB {
-    public:
-    AsyncCB() : dst_(), timeout_(0), tenant_id_(0), req_(NULL), send_ts_(0), payload_(0)
+  public:
+    AsyncCB()
+        : dst_(), timeout_(0), tenant_id_(0),
+           err_(0), req_(NULL), send_ts_(0), payload_(0)
     {}
     virtual ~AsyncCB()
     {}
@@ -65,6 +67,10 @@ class ObReqTransport {
     {}
     virtual int decode(void* pkt) = 0;
     virtual int process() = 0;
+    virtual void reset_rcode() = 0;
+    virtual void set_cloned(bool cloned) = 0;
+    virtual bool get_cloned() = 0;
+    virtual int get_rcode() = 0;
 
     // invoke when get a valid packet on protocol level, but can't decode it.
     virtual void on_invalid()
@@ -77,7 +83,8 @@ class ObReqTransport {
       RPC_FRAME_LOG(DEBUG, "packet timeout");
     }
     virtual int on_error(int err);
-    int get_error() const;
+    void set_error(int err) { err_ = err; }
+    int get_error() const { return err_; }
 
     void set_dst(const ObAddr& dst)
     {
@@ -112,13 +119,14 @@ class ObReqTransport {
       return payload_;
     }
 
-    private:
+  private:
     static const int64_t REQUEST_ITEM_COST_RT = 100 * 1000;  // 100ms
-    protected:
+  protected:
     ObAddr dst_;
     int64_t timeout_;
     uint64_t tenant_id_;
-    const easy_request_t* req_;
+    int err_;
+    const easy_request_t *req_;
     int64_t send_ts_;
     int64_t payload_;
   };
@@ -127,7 +135,7 @@ class ObReqTransport {
   class Request {
     friend class ObReqTransport;
 
-    public:
+  public:
     Request()
     {
       reset();
@@ -192,12 +200,12 @@ class ObReqTransport {
 
     TO_STRING_KV("pkt", *pkt_);
 
-    public:
+  public:
     easy_session_t* s_;
     T* pkt_;
     AsyncCB* cb_;
 
-    private:
+  private:
     char* buf_;
     int64_t buf_len_;
     bool async_;
@@ -207,7 +215,7 @@ class ObReqTransport {
   class Result {
     friend class ObReqTransport;
 
-    public:
+  public:
     Result() : pkt_(NULL)
     {}
 
@@ -216,11 +224,11 @@ class ObReqTransport {
       return pkt_;
     }
 
-    private:
+  private:
     T* pkt_;
   };
 
-  public:
+public:
   ObReqTransport(easy_io_t* eio, easy_io_handler_pt* handler);
   void set_sgid(int32_t sgid)
   {
@@ -230,6 +238,11 @@ class ObReqTransport {
   {
     bucket_count_ = bucket_cnt;
   }
+  void enable_use_ssl()
+  {
+    enable_use_ssl_ = true;
+  }
+
   template <typename T>
   int create_request(Request<T>& req, const ObAddr& addr, int64_t size, int64_t timeout, const ObAddr& local_addr,
       const common::ObString& ssl_invited_nodes, const AsyncCB* cb = NULL) const;
@@ -246,21 +259,22 @@ class ObReqTransport {
       const ObAddr& local_addr, const common::ObString& ssl_invited_nodes, const AsyncCB* cb = NULL,
       AsyncCB** newcb = NULL) const;
 
-  private:
+private:
   int balance_assign() const;
   ObPacket* send_session(easy_session_t* s) const;
   int post_session(easy_session_t* s) const;
 
   easy_addr_t to_ez_addr(const ObAddr& addr) const;
 
-  private:
+private:
   static const int32_t OB_RPC_CONNECTION_COUNT_PER_THREAD = 1;
 
-  private:
+private:
   easy_io_t* eio_;
   easy_io_handler_pt* handler_;
   int32_t sgid_;
   int32_t bucket_count_;  // Control the number of buckets of batch_rpc_eio
+  bool enable_use_ssl_; // External client support enable ssl
 };                        // end of class ObReqTransport
 
 template <typename T>

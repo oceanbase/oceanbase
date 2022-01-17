@@ -55,12 +55,15 @@ int ObLogDelUpd::add_table_columns_to_ctx(ObAllocExprContext& ctx)
     LOG_WARN("invalid argument", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < all_table_columns_->count(); i++) {
-      if (OB_UNLIKELY(all_table_columns_->at(i).index_dml_infos_.count() <= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected array count", K(ret));
-      } else if (OB_FAIL(add_exprs_to_ctx(ctx, all_table_columns_->at(i).index_dml_infos_.at(0).column_exprs_))) {
-        LOG_WARN("failed to add exprs to ctx", K(ret));
-      } else { /*do nothing*/
+      for (int64_t j = 0; OB_SUCC(ret) && j < all_table_columns_->at(i).index_dml_infos_.count(); ++j) {
+        const IndexDMLInfo& index_dml_info = all_table_columns_->at(i).index_dml_infos_.at(j);
+        if (OB_FAIL(add_exprs_to_ctx(ctx, index_dml_info.column_exprs_))) {
+          LOG_WARN("add column exprs to ctx failed", K(ret));
+        } else if (OB_FAIL(add_exprs_to_ctx(ctx, index_dml_info.column_convert_exprs_))) {
+          LOG_WARN("add column convert exprs to ctx failed", K(ret));
+        } else if (OB_FAIL(add_exprs_to_ctx(ctx, index_dml_info.calc_part_id_exprs_))) {
+          LOG_WARN("add calc part id exprs failed", K(ret));
+        }
       }
     }
   }
@@ -624,12 +627,13 @@ int ObLogDelUpd::check_multi_table_dml_for_px(AllocExchContext& ctx, ObShardingI
     ObShardingInfo& sharding_info, const ObPhyTableLocationInfo* phy_table_locaion_info, bool& is_needed)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(phy_table_locaion_info)) {
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(phy_table_locaion_info) || OB_ISNULL(child = get_child(first_child))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy_table_locaion_info is null", K(ret));
+    LOG_WARN("phy_table_locaion_info is null", K(ret), K(phy_table_locaion_info), K(child));
   } else if (phy_table_locaion_info->get_partition_cnt() > 1) {
     LOG_TRACE("multi partition for px dml");
-    if (ctx.exchange_allocated_) {
+    if (ctx.exchange_allocated_ || NULL == child->get_sharding_info().get_phy_table_location_info()) {
       is_needed = true;
     } else {
       is_needed = false;
@@ -765,15 +769,28 @@ int ObLogDelUpd::check_output_dep_specific(ObRawExprCheckDep& checker)
   if (all_table_columns_ != NULL) {
     int64_t N = all_table_columns_->count();
     for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
-      const ObIArray<ObColumnRefRawExpr*>& columns = all_table_columns_->at(i).index_dml_infos_.at(0).column_exprs_;
-      int64_t M = columns.count();
-      for (int64_t j = 0; OB_SUCC(ret) && j < M; ++j) {
-        if (OB_ISNULL(columns.at(j))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("columns->at(j) contains null", K(ret), K(j));
-        } else if (OB_FAIL(checker.check(*static_cast<ObRawExpr*>(columns.at(j))))) {
-          LOG_WARN("failed to check column expr", K(ret), K(j));
-        } else {
+      const TableColumns& table_columns = all_table_columns_->at(i);
+      for (int64_t k = 0; OB_SUCC(ret) && k < table_columns.index_dml_infos_.count(); ++k) {
+        const IndexDMLInfo& index_dml_info = table_columns.index_dml_infos_.at(k);
+        if (0 == k) {
+          // index dml info中的expr是主表的expr的指针拷贝，所以这里只用检查主表的expr
+          const ObIArray<ObColumnRefRawExpr*>& columns = index_dml_info.column_exprs_;
+          int64_t M = columns.count();
+          for (int64_t j = 0; OB_SUCC(ret) && j < M; ++j) {
+            if (OB_ISNULL(columns.at(j))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("columns->at(j) contains null", K(ret), K(j));
+            } else if (OB_FAIL(checker.check(*static_cast<ObRawExpr*>(columns.at(j))))) {
+              LOG_WARN("failed to check column expr", K(ret), K(j));
+            } else { }
+          }
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < index_dml_info.calc_part_id_exprs_.count(); ++j) {
+          if (OB_ISNULL(index_dml_info.calc_part_id_exprs_.at(j))) {
+            // ignore nullptr calc part id expr, do nothing
+          } else if (OB_FAIL(checker.check(*index_dml_info.calc_part_id_exprs_.at(j)))) {
+            LOG_WARN("failed to check column expr", K(ret));
+          }
         }
       }
     }
@@ -1009,6 +1026,8 @@ int ObLogDelUpd::calculate_table_location(uint64_t loc_table_id, uint64_t ref_ta
     const common::ObDataTypeCastParams dtc_params =
         ObBasicSessionInfo::create_dtc_params(my_plan_->get_optimizer_context().get_session_info());
     ObTaskExecutorCtx* task_exec_ctx = my_plan_->get_optimizer_context().get_task_exec_ctx();
+    ObArray<ObRawExpr *> correlated_filters;
+    ObArray<ObRawExpr *> uncorrelated_filters;
     // initialized the table location
     if (OB_ISNULL(schema_guard) || OB_ISNULL(sql_schema_guard) || OB_ISNULL(stmt) || OB_ISNULL(exec_ctx) ||
         OB_ISNULL(task_exec_ctx) || OB_ISNULL(params) || OB_ISNULL(location_cache)) {
@@ -1022,10 +1041,16 @@ int ObLogDelUpd::calculate_table_location(uint64_t loc_table_id, uint64_t ref_ta
           K(task_exec_ctx),
           K(params),
           K(location_cache));
+    } else if (OB_FAIL(ObOptimizerUtil::extract_parameterized_correlated_filters(
+                is_first_dml_op_ ? stmt->get_condition_exprs() : get_filter_exprs(),
+                params->count(),
+                correlated_filters,
+                uncorrelated_filters))) {
+      LOG_WARN("Failed to extract correlated filters", K(ret));
     } else if (OB_FAIL(table_partition_info.init_table_location(*sql_schema_guard,
                    *stmt,
                    exec_ctx->get_my_session(),
-                   is_first_dml_op_ ? stmt->get_condition_exprs() : get_filter_exprs(),
+                   uncorrelated_filters,
                    loc_table_id,
                    ref_table_id,
                    part_hint,
@@ -1058,23 +1083,37 @@ int ObLogDelUpd::alloc_partition_id_expr(ObAllocExprContext& ctx)
   return ret;
 }
 
-int ObLogDelUpd::alloc_shadow_pk_column_for_pdml(ObAllocExprContext& ctx)
+int ObLogDelUpd::allocate_expr_post(ObAllocExprContext& ctx)
 {
   int ret = OB_SUCCESS;
-  bool found = false;
-  for (int64_t i = 0; i < ctx.expr_producers_.count() && OB_SUCC(ret) && !found; i++) {
+  if (OB_FAIL(alloc_shadow_pk_column_for_gui(ctx))) {
+    LOG_WARN("failed alloc generated column for pdml index maintain", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
+    LOG_WARN("failed to allocate expr post", K(ret));
+  }
+  return ret;
+}
+
+int ObLogDelUpd::alloc_shadow_pk_column_for_gui(ObAllocExprContext& ctx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < ctx.expr_producers_.count() && OB_SUCC(ret); i++) {
+    bool found = false;
     ExprProducer expr_producer = ctx.expr_producers_.at(i);
     if (expr_producer.consumer_id_ == id_ && expr_producer.expr_->is_column_ref_expr()) {
       ObColumnRefRawExpr* column_ref_expr = (ObColumnRefRawExpr*)(expr_producer.expr_);
       if (column_ref_expr->is_virtual_generated_column() && !OB_ISNULL(column_ref_expr->get_dependant_expr()) &&
-          column_ref_expr->get_dependant_expr()->get_expr_type() == T_OP_SHADOW_UK_PROJECT) {
+          is_shadow_column(column_ref_expr->get_column_id())) {
         if (OB_FAIL(mark_expr_produced(column_ref_expr, branch_id_, id_, ctx, found))) {
           LOG_WARN("failed to mark expr produce", K(ret), K(id_), K(get_name()), K(*column_ref_expr));
         } else if (!found) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("find error with mark expr produce for pdml", K(ret), K(id_), K(get_name()));
         } else {
-          LOG_TRACE("the generated column expr is producing, and not add to output exprs", K(id_), K(get_name()));
+          LOG_TRACE("the generated column expr is producing, and not add to output exprs",
+              K(id_),
+              K(get_name()),
+              KPC(column_ref_expr));
         }
       }
     }

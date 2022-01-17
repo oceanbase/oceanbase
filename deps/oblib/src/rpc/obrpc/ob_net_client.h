@@ -27,7 +27,7 @@ namespace obrpc {
 class ObRpcProxy;
 
 class ObNetClient {
-  public:
+public:
   ObNetClient();
   virtual ~ObNetClient();
 
@@ -36,16 +36,32 @@ class ObNetClient {
   void destroy();
   int get_proxy(ObRpcProxy& proxy);
 
-  private:
+  int load_ssl_config(const char *ca_cert,
+                      const char *public_cert,
+                      const char *private_key);
+  
+  void set_pkt_handler_ssl_opt()
+  {
+    pkt_handler_.ez_handler()->is_ssl = 1;
+    pkt_handler_.ez_handler()->is_ssl_opt = 0;
+  }
+
+  void set_transport_ssl_opt()
+  {
+    if (NULL != transport_) {
+      transport_->enable_use_ssl();
+    }
+  }
+private:
   int init_(const rpc::frame::ObNetOptions opts);
 
-  private:
+private:
   bool inited_;
   rpc::frame::ObNetEasy net_;
   ObRpcNetHandler pkt_handler_;
   rpc::frame::ObReqTransport* transport_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObNetClient);
 };  // end of class ObNetClient
 

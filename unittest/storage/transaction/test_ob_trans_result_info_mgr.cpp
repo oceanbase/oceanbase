@@ -35,7 +35,7 @@ static const int32_t PORT2 = 8888888;
 static const ObAddr::VER IP_TYPE = ObAddr::IPV4;
 
 class MyMockObPartition : public MockObIPartitionGroup {
-  public:
+public:
   MyMockObPartition() : pg_file_(NULL)
   {}
   virtual ~MyMockObPartition()
@@ -62,13 +62,13 @@ class MyMockObPartition : public MockObIPartitionGroup {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   blocksstable::ObStorageFile* pg_file_;
   blocksstable::ObStorageFileHandle file_handle_;
 };
 
 class MyMockObPartitionComponentFactory : public MockObIPartitionComponentFactory {
-  public:
+public:
   virtual void free(ObIPartitionGroup* partition)
   {
     UNUSED(partition);
@@ -77,7 +77,7 @@ class MyMockObPartitionComponentFactory : public MockObIPartitionComponentFactor
 };
 
 class MyMockObPartitionService2 : public MockObIPartitionService {
-  public:
+public:
   MyMockObPartitionService2()
   {
     partition_ = new MyMockObPartition();
@@ -118,7 +118,7 @@ class MyMockObPartitionService2 : public MockObIPartitionService {
     return OB_SUCCESS;
   }
 
-  private:
+private:
   MyMockObPartition* partition_;
 };
 

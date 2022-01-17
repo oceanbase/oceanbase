@@ -136,8 +136,8 @@ int ObTableScanOp::init_table_allocator()
   param.set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
       .set_properties(lib::USE_TL_PAGE_OPTIONAL)
       .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-  MemoryContext* mem_context = nullptr;
-  if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+  lib::MemoryContext mem_context = nullptr;
+  if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
     LOG_WARN("fail to create entity", K(ret));
   } else if (OB_ISNULL(mem_context)) {
     ret = OB_ERR_UNEXPECTED;
@@ -146,12 +146,12 @@ int ObTableScanOp::init_table_allocator()
     table_allocator_ = &mem_context->get_arena_allocator();
   }
   if (OB_SUCC(ret)) {
-    MemoryContext* mem_context = nullptr;
+    lib::MemoryContext mem_context = nullptr;
     lib::ContextParam param;
     param.set_mem_attr(my_session->get_effective_tenant_id(), ObModIds::OB_TABLE_SCAN_ITER, ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-    if (OB_FAIL(CURRENT_CONTEXT.CREATE_CONTEXT(mem_context, param))) {
+    if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param))) {
       LOG_WARN("fail to create entity", K(ret));
     } else if (OB_ISNULL(mem_context)) {
       ret = OB_ERR_UNEXPECTED;
@@ -219,6 +219,7 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator& alloc, const ObPhyOperatorType ty
       est_records_(alloc),
       available_index_name_(alloc),
       pruned_index_name_(alloc),
+      unstable_index_name_(alloc),
       gi_above_(false),
       expected_part_id_(NULL),
       need_scn_(false),
@@ -294,7 +295,20 @@ int ObTableScanSpec::set_available_index_name(const ObIArray<ObString>& idx_name
   return ret;
 }
 
-int ObTableScanSpec::set_pruned_index_name(const ObIArray<ObString>& idx_name, ObIAllocator& phy_alloc)
+int ObTableScanSpec::set_unstable_index_name(const ObIArray<ObString> &idx_name, ObIAllocator &phy_alloc)
+{
+  int ret = OB_SUCCESS;
+  OZ(unstable_index_name_.init(idx_name.count()));
+  FOREACH_CNT_X(n, idx_name, OB_SUCC(ret))
+  {
+    ObString name;
+    OZ(ob_write_string(phy_alloc, *n, name));
+    OZ(unstable_index_name_.push_back(name));
+  }
+  return ret;
+}
+
+int ObTableScanSpec::set_pruned_index_name(const ObIArray<ObString> &idx_name, ObIAllocator &phy_alloc)
 {
   int ret = OB_SUCCESS;
   OZ(pruned_index_name_.init(idx_name.count()));
@@ -357,6 +371,30 @@ int ObTableScanSpec::explain_index_selection_info(char* buf, int64_t buf_len, in
       if (OB_FAIL(BUF_PRINTF("%.*s", pruned_index_name_.at(i).length(), pruned_index_name_.at(i).ptr()))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (i != pruned_index_name_.count() - 1) {
+        if (OB_FAIL(BUF_PRINTF(","))) {
+          LOG_WARN("BUF_PRINTF fails", K(ret));
+        } else { /* do nothing*/
+        }
+      } else { /* do nothing*/
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(BUF_PRINTF("]"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else { /* Do nothing */
+      }
+    } else { /* Do nothing */
+    }
+  }
+
+  if (OB_SUCC(ret) && unstable_index_name_.count() > 0) {
+    if (OB_FAIL(BUF_PRINTF(", unstable_index_name["))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < unstable_index_name_.count(); ++i) {
+      if (OB_FAIL(BUF_PRINTF("%.*s", unstable_index_name_.at(i).length(), unstable_index_name_.at(i).ptr()))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (i != unstable_index_name_.count() - 1) {
         if (OB_FAIL(BUF_PRINTF(","))) {
           LOG_WARN("BUF_PRINTF fails", K(ret));
         } else { /* do nothing*/
@@ -866,6 +904,8 @@ int ObTableScanOp::inner_close()
 
   if (MY_SPEC.batch_scan_flag_ ? NULL == bnl_iters_ : NULL == result_) {
     // this is normal case, so we need NOT set ret or LOG_WARN.
+  } else if (OB_FAIL(ctx_.remove_iter(result_))) {
+    LOG_WARN("fail to remove iter", K(ret));
   } else {
     if (OB_FAIL(fill_storage_feedback_info())) {
       LOG_WARN("failed to fill storage feedback info", K(ret));
@@ -1480,6 +1520,14 @@ inline int ObTableScanOp::do_table_scan(bool is_rescan, bool need_prepare /*=tru
       } else {
         LOG_DEBUG("table_scan begin", K(scan_param_), K(*result_), "op_id", MY_SPEC.id_);
         LOG_DEBUG("debug trans", K(*scan_param_.trans_desc_), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(result_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result should not be NULL", K(ret), K(scan_param_));
+      } else if (OB_FAIL(ctx_.push_back_iter(result_))) {
+        LOG_WARN("failed to push back iter", K(ret), K(scan_param_));
       }
     }
   }

@@ -39,7 +39,7 @@ class ObStoreFileSystemWrapper;
 class ObStorageFileHandle;
 
 struct ObServerWorkingDir {
-  public:
+public:
   enum class DirStatus { NORMAL = 0, RECOVERING = 1, RECOVERED = 2, TEMPORARY = 3, DELETING = 4, MAX };
 
   ObServerWorkingDir();
@@ -65,7 +65,7 @@ struct ObServerWorkingDir {
 
   TO_STRING_KV(K(svr_addr_), K(start_ts_), K(status_));
 
-  public:
+public:
   common::ObAddr svr_addr_;
   int64_t start_ts_;
   DirStatus status_;
@@ -74,20 +74,20 @@ struct ObServerWorkingDir {
 };
 
 class ObFileSystemInspectBadBlockTask : public common::ObTimerTask {
-  public:
+public:
   ObFileSystemInspectBadBlockTask();
   virtual ~ObFileSystemInspectBadBlockTask();
   virtual void runTimerTask();
   void destroy();
 
-  private:
+private:
   int check_macro_block(const ObMacroBlockInfoPair& pair, const storage::ObTenantFileKey& file_key);
   int check_data_block(const MacroBlockId& macro_id, const blocksstable::ObFullMacroBlockMeta& full_meta,
       const storage::ObTenantFileKey& file_key);
   void inspect_bad_block();
   bool has_inited();
 
-  private:
+private:
   static const int64_t ACCESS_TIME_INTERVAL;
   static const int64_t MIN_OPEN_BLOCKS_PER_ROUND;
   static const int64_t MAX_SEARCH_COUNT_PER_ROUND;
@@ -96,12 +96,12 @@ class ObFileSystemInspectBadBlockTask : public common::ObTimerTask {
   int64_t last_macro_idx_;
   ObSSTableMacroBlockChecker macro_checker_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObFileSystemInspectBadBlockTask);
 };
 
 struct ObStorageFileWithRef final {
-  public:
+public:
   ObStorageFileWithRef() : ref_cnt_(0), file_(nullptr)
   {}
   ~ObStorageFileWithRef() = default;
@@ -114,7 +114,7 @@ struct ObStorageFileWithRef final {
 };
 
 struct ObStorageFileHandle final {
-  public:
+public:
   ObStorageFileHandle();
   ~ObStorageFileHandle();
   void reset();
@@ -133,7 +133,7 @@ struct ObStorageFileHandle final {
 };
 
 struct ObStorageFilesHandle final {
-  public:
+public:
   static const int64_t DEFAULT_FILE_CNT = 100;
   typedef common::ObSEArray<ObStorageFileWithRef*, DEFAULT_FILE_CNT> FileArray;
   ObStorageFilesHandle();
@@ -147,12 +147,12 @@ struct ObStorageFilesHandle final {
   }
   TO_STRING_KV(K_(file_array));
 
-  private:
+private:
   FileArray file_array_;
 };
 
 class ObStorageFile {
-  public:
+public:
   enum class FileType {
     SERVER_ROOT = 0,
     TMP_FILE,
@@ -215,7 +215,7 @@ class ObStorageFile {
 
   VIRTUAL_TO_STRING_KV(K(file_type_), K(fd_), K(tenant_id_), K(file_id_), K(is_inited_));
 
-  protected:
+protected:
   ObStorageFile();
   int init_base(const FileType file_type, const uint64_t tenant_id);
 
@@ -234,7 +234,7 @@ class ObStorageFile {
 
   typedef common::ObLinearHashMap<MacroBlockId, BlockInfo> MacroBlockInfo;
 
-  protected:
+protected:
   static const int64_t LOCK_BUCKET_CNT = 1000;
   uint64_t tenant_id_;
   int64_t file_id_;
@@ -246,7 +246,7 @@ class ObStorageFile {
   common::ObBucketLock lock_;
   storage::ObMacroMetaReplayMap replay_map_;  // used when replay slog
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFile);
 };
 
@@ -320,9 +320,9 @@ struct ObDiskStats final {
 };
 
 class ObStoreFileSystem {
-  public:
+public:
   static const int64_t RESERVED_MACRO_BLOCK_INDEX = 2;  // used for super block macro blocks
-  public:
+public:
   ObStoreFileSystem();
   virtual ~ObStoreFileSystem()
   {}
@@ -403,14 +403,14 @@ class ObStoreFileSystem {
 
   VIRTUAL_TO_STRING_KV("ObStoreFileSystem", "empty");
 
-  protected:
+protected:
   // file system can only be inited and destroy through ObStoreFileSystemWrapper
   friend class ObStoreFileSystemWrapper;
   friend class ObFileSystemInspectBadBlockTask;
   virtual int init(const ObStorageEnv& storage_env, storage::ObPartitionService& partition_service);
   virtual void destroy();
 
-  protected:
+protected:
   storage::ObPartitionService* partition_service_;
   ObServerSuperBlock super_block_;  // read only memory cache
   ObStorageFileWithRef svr_root_file_with_ref_;
@@ -419,18 +419,18 @@ class ObStoreFileSystem {
 };
 
 class ObStoreFileSystemWrapper final {
-  public:
+public:
   static ObStoreFileSystem& get_instance();
   static int init(const ObStorageEnv& storage_env, storage::ObPartitionService& partition_service);
   static void destroy();
 
-  private:
+private:
   static ObStoreFileSystem* fs_instance_;
 };
 
 template <class STORAGE_FILE>
 class ObStorageFileAllocator final {
-  public:
+public:
   ObStorageFileAllocator();
   virtual ~ObStorageFileAllocator();
   void destroy();
@@ -440,7 +440,7 @@ class ObStorageFileAllocator final {
 
   TO_STRING_KV(K(free_file_cnt_), K(used_file_cnt_));
 
-  private:
+private:
   static const int64_t MAX_FILE_CNT = 30000;
   STORAGE_FILE* free_files_[MAX_FILE_CNT];
   int64_t free_file_cnt_;

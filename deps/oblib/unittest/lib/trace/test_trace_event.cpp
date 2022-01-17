@@ -19,19 +19,19 @@
 
 using namespace oceanbase::common;
 class TestTraceEvent : public ::testing::Test {
-  public:
+public:
   TestTraceEvent();
   virtual ~TestTraceEvent();
   virtual void SetUp();
   virtual void TearDown();
 
-  private:
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestTraceEvent);
 
-  protected:
+protected:
   // function members
-  protected:
+protected:
   // data members
 };
 
@@ -89,7 +89,7 @@ struct ClassWithToYson {
   TO_YSON_KV(0, val1_, 1, val2_, 2, val3_, 3, val4_, 4, val5_);
   TO_STRING_KV("0", val1_, "1", val2_, "2", val3_, "3", val4_, "4", val5_);
 
-  public:
+public:
   int64_t val1_;
   int32_t val2_;
   bool val3_;

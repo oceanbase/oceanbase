@@ -22,13 +22,13 @@ namespace oceanbase {
 namespace sql {
 
 class ObPxChProviderUtil {
-  public:
+public:
   static int inner_get_data_ch(bool ch_map_opt, ObPxTaskChSets& ch_sets, dtl::ObDtlChTotalInfo& ch_total_info,
       const int64_t sqc_id, const int64_t task_id, ObPxTaskChSet& ch_set, bool is_transmit);
 };
 
 class ObPxTransmitChProvider {
-  public:
+public:
   ObPxTransmitChProvider() : msg_set_(false)
   {}
   virtual ~ObPxTransmitChProvider() = default;
@@ -41,19 +41,19 @@ class ObPxTransmitChProvider {
   int get_part_ch_map_nonblock(ObPxPartChInfo& map, int64_t timeout_ts);
   int add_msg(const ObPxTransmitDataChannelMsg& msg);
 
-  private:
+private:
   int wait_msg(int64_t timeout_ts);
   int check_status(int64_t timeout_ts);
   int inner_get_part_ch_map(ObPxPartChInfo& map);
 
-  private:
+private:
   bool msg_set_;
   ObPxTransmitDataChannelMsg msg_;
   common::ObThreadCond msg_ready_cond_;
 };
 
 class ObPxReceiveChProvider {
-  public:
+public:
   ObPxReceiveChProvider()
   {}
   virtual ~ObPxReceiveChProvider() = default;
@@ -64,16 +64,16 @@ class ObPxReceiveChProvider {
       ObPxTaskChSet& ch_set, dtl::ObDtlChTotalInfo* ch_info);
   int add_msg(const ObPxReceiveDataChannelMsg& msg);
 
-  private:
+private:
   /* functions */
   int wait_msg(int64_t child_dfo_id, int64_t timeout_ts);
   int check_status(int64_t timeout_ts);
   int reserve_msg_set_array_size(int64_t size);
 
-  private:
+private:
   static const int64_t MSG_SET_DEFAULT_SIZE = 16;
 
-  private:
+private:
   /* variables */
   common::ObSEArray<ObPxReceiveDataChannelMsg, 2> msgs_;
   common::ObThreadCond msg_ready_cond_;
@@ -84,7 +84,7 @@ class ObPxReceiveChProvider {
 
 // Root Dfo Provider
 class ObPxRootReceiveChProvider {
-  public:
+public:
   ObPxRootReceiveChProvider() : root_dfo_(NULL)
   {}
   ~ObPxRootReceiveChProvider() = default;
@@ -108,7 +108,7 @@ class ObPxRootReceiveChProvider {
     root_dfo_ = nullptr;
   }
 
-  private:
+private:
   ObDfo* root_dfo_;
 };
 

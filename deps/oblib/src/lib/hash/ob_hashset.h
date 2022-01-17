@@ -42,11 +42,11 @@ class ObHashSet {
       _bucket_array, _bucket_allocer, EXTEND_RATIO>
       hashtable;
 
-  public:
+public:
   typedef typename hashtable::iterator iterator;
   typedef typename hashtable::const_iterator const_iterator;
 
-  public:
+public:
   ObHashSet() : bucket_allocer_(ObModIds::OB_HASH_BUCKET), ht_()
   {
     static_assert(((EXTEND_RATIO <= 1) || (EXTEND_RATIO > 1 && std::is_same<_defendmode, NoPthreadDefendMode>::value)),
@@ -54,7 +54,7 @@ class ObHashSet {
   };
   ~ObHashSet(){};
 
-  public:
+public:
   iterator begin()
   {
     return ht_.begin();
@@ -183,7 +183,7 @@ class ObHashSet {
     return ht_.deserialization(archive, &allocer_);
   };
 
-  private:
+private:
   _allocer allocer_;
   _bucket_allocer bucket_allocer_;
   hashtable ht_;

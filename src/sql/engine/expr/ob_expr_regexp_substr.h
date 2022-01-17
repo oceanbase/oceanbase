@@ -19,25 +19,25 @@
 namespace oceanbase {
 namespace sql {
 class ObExprRegexpSubstr : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprRegexpSubstr(common::ObIAllocator& alloc);
   virtual ~ObExprRegexpSubstr();
   virtual int calc_result_typeN(
-      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const;
+      ObExprResType& type, ObExprResType* types, int64_t param_num, common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_resultN(
-      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const;
+      common::ObObj& result, const common::ObObj* objs, int64_t param_num, common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
   static int eval_regexp_substr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   static int calc(common::ObString& result, bool& is_null, const common::ObString& text,
       const common::ObString& pattern, int64_t position, int64_t occurrence, const common::ObCollationType cs_type,
       const common::ObString& match_param, int64_t subexpr, bool has_null_argument, ObExprRegexContext* regexp_ptr,
       common::ObExprStringBuf& string_buf);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpSubstr);
 };
 }  // namespace sql

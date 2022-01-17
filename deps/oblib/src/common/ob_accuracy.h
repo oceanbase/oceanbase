@@ -73,7 +73,7 @@ inline bool is_oracle_byte_length(const bool is_oracle_mode, const ObLengthSeman
 }
 
 class ObAccuracy {
-  public:
+public:
   ObAccuracy()
   {
     reset();
@@ -157,7 +157,7 @@ class ObAccuracy {
     accuracy_ = -1;
   }
 
-  public:
+public:
   OB_INLINE ObAccuracy& operator=(const ObAccuracy& other)
   {
     if (this != &other) {
@@ -174,7 +174,7 @@ class ObAccuracy {
     return accuracy_ != other.accuracy_;
   }
 
-  public:
+public:
   // why we expose this 3 arrays directly?
   // imagine that we add 'if ... else' statements in ddl_default_accuracy() first,
   // and 'int ret = OB_SUCCESS' and 'return ret' statements too.
@@ -188,7 +188,7 @@ class ObAccuracy {
   static const ObAccuracy DML_DEFAULT_ACCURACY[ObMaxType];
   static const ObAccuracy MAX_ACCURACY_OLD[ObMaxType];
 
-  public:
+public:
   TO_STRING_KV(N_LENGTH, length_, N_PRECISION, precision_, N_SCALE, scale_);
   NEED_SERIALIZE_AND_DESERIALIZE;
 

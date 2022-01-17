@@ -22,7 +22,7 @@ class ObPartitionService;
 }
 namespace obrpc {
 class ObBatchP : public ObRpcProcessor<obrpc::ObBatchRpcProxy::ObRpc<OB_BATCH> > {
-  public:
+public:
   ObBatchP(storage::ObPartitionService* partition_service) : ps_(partition_service)
   {}
   ~ObBatchP()
@@ -32,7 +32,7 @@ class ObBatchP : public ObRpcProcessor<obrpc::ObBatchRpcProxy::ObRpc<OB_BATCH> >
     return common::OB_SUCCESS;
   }
 
-  protected:
+protected:
   int process();
   int handle_clog_req(common::ObAddr& sender, const int64_t src_cluster_id, int type, common::ObPartitionKey& pkey,
       const char* buf, int32_t size);
@@ -42,7 +42,7 @@ class ObBatchP : public ObRpcProcessor<obrpc::ObBatchRpcProxy::ObRpc<OB_BATCH> >
   int handle_trx_req(common::ObAddr& sender, int type, common::ObPartitionKey& pkey, const char* buf, int32_t size);
   int handle_sql_req(common::ObAddr& sender, int type, common::ObPartitionKey& pkey, const char* buf, int32_t size);
 
-  private:
+private:
   storage::ObPartitionService* ps_;
   DISALLOW_COPY_AND_ASSIGN(ObBatchP);
 };

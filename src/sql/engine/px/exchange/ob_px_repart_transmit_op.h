@@ -21,10 +21,10 @@ namespace sql {
 class ObRepartSliceIdxCalc;
 
 class ObPxRepartTransmitOpInput : public ObPxTransmitOpInput {
-  public:
+public:
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxRepartTransmitOpInput(ObExecContext& ctx, const ObOpSpec& spec) : ObPxTransmitOpInput(ctx, spec)
   {}
   virtual ~ObPxRepartTransmitOpInput()
@@ -34,12 +34,12 @@ class ObPxRepartTransmitOpInput : public ObPxTransmitOpInput {
 class ObPxRepartTransmitSpec : public ObPxTransmitSpec {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObPxRepartTransmitSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type);
   ~ObPxRepartTransmitSpec()
   {}
 
-  public:
+public:
   // for pkey,pkey-hash,pkey-range etc..
   ObExpr* calc_part_id_expr_;
   // for pkey-hash
@@ -48,7 +48,7 @@ class ObPxRepartTransmitSpec : public ObPxTransmitSpec {
 };
 
 class ObPxRepartTransmitOp : public ObPxTransmitOp {
-  public:
+public:
   ObPxRepartTransmitOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
   virtual ~ObPxRepartTransmitOp()
   {}
@@ -66,7 +66,7 @@ class ObPxRepartTransmitOp : public ObPxTransmitOp {
 
   int do_transmit();
 
-  private:
+private:
   int do_repart_transmit(ObRepartSliceIdxCalc& repart_slice_calc);
 };
 

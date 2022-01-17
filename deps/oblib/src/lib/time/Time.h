@@ -16,7 +16,7 @@ namespace tbutil {
  * @brief Time class provide interface for time operation
  */
 class Time {
-  public:
+public:
   Time();
 
   enum Clock { Realtime, Monotonic };
@@ -238,7 +238,7 @@ class Time {
 
   Time(int64_t);
 
-  private:
+private:
   int64_t _usec;
 };
 }  // namespace tbutil

@@ -17496,18 +17496,26 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":6,
-          "str_val":"latin1"
-        },
-         { }
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":6,
+              "str_val":"latin1"
+            },
+             { }
+          ]
+        }
       ]
     }
   ]
@@ -17522,18 +17530,26 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":6,
-          "str_val":"latin1"
-        },
-         { }
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":6,
+              "str_val":"latin1"
+            },
+             { }
+          ]
+        }
       ]
     }
   ]
@@ -17548,22 +17564,30 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
-        },
-         {
-          "type":"T_COLLATION",
-          "int_val":9223372036854775807,
-          "str_len":15,
-          "str_val":"utf8_general_ci"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            },
+             {
+              "type":"T_COLLATION",
+              "int_val":9223372036854775807,
+              "str_len":15,
+              "str_val":"utf8_general_ci"
+            }
+          ]
         }
       ]
     }
@@ -17579,22 +17603,30 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_NAMES",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_NAMES",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
-        },
-         {
-          "type":"T_COLLATION",
-          "int_val":9223372036854775807,
-          "str_len":15,
-          "str_val":"utf8_general_ci"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            },
+             {
+              "type":"T_COLLATION",
+              "int_val":9223372036854775807,
+              "str_len":15,
+              "str_val":"utf8_general_ci"
+            }
+          ]
         }
       ]
     }
@@ -17610,16 +17642,24 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_CHARSET",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_CHARSET",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            }
+          ]
         }
       ]
     }
@@ -17635,16 +17675,24 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_CHARSET",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_CHARSET",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            }
+          ]
         }
       ]
     }
@@ -17660,16 +17708,24 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_SET_CHARSET",
+      "type":"T_VARIABLE_SET",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
          {
-          "type":"T_VARCHAR",
+          "type":"T_SET_CHARSET",
           "int_val":9223372036854775807,
-          "str_len":4,
-          "str_val":"utf8"
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":4,
+              "str_val":"utf8"
+            }
+          ]
         }
       ]
     }
@@ -22211,166 +22267,24 @@ question_mask_size: 0
   ]
 }
 **************   Case 166   ***************
-drop public synonym t1;
-question_mask_size: 0
-{
-  "type":"T_STMT_LIST",
-  "int_val":9223372036854775807,
-  "str_len":0,
-  "str_val":"",
-  "children": [
-     {
-      "type":"T_DROP_SYNONYM",
-      "int_val":0,
-      "str_len":0,
-      "str_val":"",
-      "children": [
-         {
-          "type":"T_PUBLIC",
-          "int_val":9223372036854775807,
-          "str_len":0,
-          "str_val":""
-        },
-         { },
-         {
-          "type":"T_IDENT",
-          "int_val":9223372036854775807,
-          "str_len":2,
-          "str_val":"t1"
-        },
-         { }
-      ]
-    }
-  ]
-}
-**************   Case 167   ***************
-drop public synonym t1 force;
-question_mask_size: 0
-{
-  "type":"T_STMT_LIST",
-  "int_val":9223372036854775807,
-  "str_len":0,
-  "str_val":"",
-  "children": [
-     {
-      "type":"T_DROP_SYNONYM",
-      "int_val":0,
-      "str_len":0,
-      "str_val":"",
-      "children": [
-         {
-          "type":"T_PUBLIC",
-          "int_val":9223372036854775807,
-          "str_len":0,
-          "str_val":""
-        },
-         { },
-         {
-          "type":"T_IDENT",
-          "int_val":9223372036854775807,
-          "str_len":2,
-          "str_val":"t1"
-        },
-         {
-          "type":"T_FORCE",
-          "int_val":9223372036854775807,
-          "str_len":0,
-          "str_val":""
-        }
-      ]
-    }
-  ]
-}
-**************   Case 168   ***************
-drop synonym t1 force;
-question_mask_size: 0
-{
-  "type":"T_STMT_LIST",
-  "int_val":9223372036854775807,
-  "str_len":0,
-  "str_val":"",
-  "children": [
-     {
-      "type":"T_DROP_SYNONYM",
-      "int_val":0,
-      "str_len":0,
-      "str_val":"",
-      "children": [
-         { },
-         { },
-         {
-          "type":"T_IDENT",
-          "int_val":9223372036854775807,
-          "str_len":2,
-          "str_val":"t1"
-        },
-         {
-          "type":"T_FORCE",
-          "int_val":9223372036854775807,
-          "str_len":0,
-          "str_val":""
-        }
-      ]
-    }
-  ]
-}
-**************   Case 169   ***************
-drop synonym database1.t1 force;
-question_mask_size: 0
-{
-  "type":"T_STMT_LIST",
-  "int_val":9223372036854775807,
-  "str_len":0,
-  "str_val":"",
-  "children": [
-     {
-      "type":"T_DROP_SYNONYM",
-      "int_val":0,
-      "str_len":0,
-      "str_val":"",
-      "children": [
-         { },
-         {
-          "type":"T_IDENT",
-          "int_val":9223372036854775807,
-          "str_len":9,
-          "str_val":"database1"
-        },
-         {
-          "type":"T_IDENT",
-          "int_val":9223372036854775807,
-          "str_len":2,
-          "str_val":"t1"
-        },
-         {
-          "type":"T_FORCE",
-          "int_val":9223372036854775807,
-          "str_len":0,
-          "str_val":""
-        }
-      ]
-    }
-  ]
-}
-**************   Case 170   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 171   ***************
+**************   Case 167   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t2.id!= t1.id when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 172   ***************
+**************   Case 168   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id < 3 delete where t1.id < 5 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 173   ***************
+**************   Case 169   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales delete where t1.sales =2 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 174   ***************
+**************   Case 170   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
-**************   Case 175   ***************
+**************   Case 171   ***************
 merge into targetTable t1 using sourceTable t2 on (1 = 2) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
-**************   Case 176   ***************
+**************   Case 172   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
-**************   Case 177   ***************
+**************   Case 173   ***************
 merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
-**************   Case 178   ***************
+**************   Case 174   ***************
 merge into targetTable using (select * from t1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
-**************   Case 179   ***************
+**************   Case 175   ***************
 select unique(c1), c2 from t1;
 question_mask_size: 0
 {
@@ -22513,7 +22427,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 180   ***************
+**************   Case 176   ***************
 select unique(c1+1), c2 from t1;
 question_mask_size: 0
 {
@@ -22670,7 +22584,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 181   ***************
+**************   Case 177   ***************
 select distinct unique(    max(c1)), c2 from t1;
 question_mask_size: 0
 {
@@ -22828,7 +22742,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 182   ***************
+**************   Case 178   ***************
 select unique distinct(    max(c1)), c2 from t1;
 question_mask_size: 0
 {
@@ -22986,9 +22900,9 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 183   ***************
+**************   Case 179   ***************
 select unique(*) from t1;
-**************   Case 184   ***************
+**************   Case 180   ***************
 create tablegroup tg1 primary_zone = 'z2';
 question_mask_size: 0
 {
@@ -23037,7 +22951,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 185   ***************
+**************   Case 181   ***************
 create tablegroup tg1 locality = 'z2';
 question_mask_size: 0
 {
@@ -23087,7 +23001,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 186   ***************
+**************   Case 182   ***************
 create tablegroup tg1 locality = 'z2', primary_zone='z2';
 question_mask_size: 0
 {
@@ -23151,7 +23065,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 187   ***************
+**************   Case 183   ***************
 alter tablegroup tg1 set primary_zone = "z1:z2";
 question_mask_size: 0
 {
@@ -23198,7 +23112,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 188   ***************
+**************   Case 184   ***************
 alter tablegroup tg1 set locality='f@z1,f@z3';
 question_mask_size: 0
 {
@@ -23246,7 +23160,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 189   ***************
+**************   Case 185   ***************
 alter tablegroup tg2 add table t1,t2;
 question_mask_size: 0
 {
@@ -23309,7 +23223,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 190   ***************
+**************   Case 186   ***************
 alter tablegroup tg1 set locality='f@z1,f@z3', set primary_zone = "z1:z2";
 question_mask_size: 0
 {
@@ -23371,7 +23285,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 191   ***************
+**************   Case 187   ***************
 insert into t1 values(X'');
 question_mask_size: 0
 {
@@ -23463,7 +23377,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 192   ***************
+**************   Case 188   ***************
 create table t1(`thedate` date NOT NULL COMMENT '日期');
 question_mask_size: 0
 {
@@ -23569,7 +23483,7 @@ question_mask_size: 0
     }
   ]
 }
-**************   Case 193   ***************
+**************   Case 189   ***************
 alter system bootstrap REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
 question_mask_size: 0
 {

@@ -32,7 +32,7 @@ enum ObTransServiceType {
 };
 
 class ObTransServiceHandler {
-  public:
+public:
   ObTransServiceHandler();
   ~ObTransServiceHandler();
 
@@ -42,17 +42,17 @@ class ObTransServiceHandler {
 
   void* get_trans_service_ctx();
 
-  private:
+private:
   static void destroy_thread_key(void* ptr);
   int create_thread_key();
   int delete_thread_key();
 
-  public:
+public:
   pthread_key_t key_;
 };
 
 class ObTransServiceThread : public share::ObThreadPool {
-  public:
+public:
   ObTransServiceThread() : inited_(false)
   {}
   ~ObTransServiceThread()
@@ -65,7 +65,7 @@ class ObTransServiceThread : public share::ObThreadPool {
   void* get_trans_service();
   void run1();
 
-  private:
+private:
   void* arg_;
   bool inited_;
   ObTransServiceHandler* chandler_;

@@ -48,7 +48,7 @@ namespace common {
 // DLinkNode should be a derived class of ObDLinkBase. See also ObDLinkNode and ObDLinkDerived
 template <typename DLinkNode>
 class ObDList {
-  public:
+public:
   typedef DLinkNode node_t;
 
   ObDList();
@@ -146,10 +146,10 @@ class ObDList {
   }
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObDList);
 
-  private:
+private:
   ObDLinkBase<DLinkNode> header_;
   int32_t size_;
 };
@@ -383,7 +383,7 @@ class ObDlistDeserialzeHelper;
 
 template <>
 class ObDlistDeserialzeHelper<true> {
-  public:
+public:
   template <typename DLinkNode, typename ALLOCATOR>
   int operator()(DLinkNode& node, ALLOCATOR& allocator, const char* buf, const int64_t data_len, int64_t& pos)
   {
@@ -401,7 +401,7 @@ class ObDlistDeserialzeHelper<true> {
 };
 template <>
 class ObDlistDeserialzeHelper<false> {
-  public:
+public:
   template <typename DLinkNode, typename ALLOCATOR>
   int operator()(DLinkNode& node, ALLOCATOR& allocator, const char* buf, const int64_t data_len, int64_t& pos)
   {
@@ -423,7 +423,7 @@ class ObDlistNodeDestoryHelper;
 
 template <>
 class ObDlistNodeDestoryHelper<true> {
-  public:
+public:
   template <typename DLinkNode, typename ALLOCATOR>
   int operator()(DLinkNode& node, ALLOCATOR& allocator)
   {
@@ -437,7 +437,7 @@ class ObDlistNodeDestoryHelper<true> {
 
 template <>
 class ObDlistNodeDestoryHelper<false> {
-  public:
+public:
   template <typename DLinkNode, typename ALLOCATOR>
   int operator()(DLinkNode& node, ALLOCATOR& allocator)
   {

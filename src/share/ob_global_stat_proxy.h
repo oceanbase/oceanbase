@@ -36,7 +36,7 @@ struct ObGlobalStatItem : public common::ObDLinkBase<ObGlobalStatItem> {
 
 static const char* OB_ALL_GLOBAL_STAT_TNAME = "__all_global_stat";
 class ObGlobalStatProxy {
-  public:
+public:
   ObGlobalStatProxy(common::ObISQLClient& client) : core_table_(OB_ALL_GLOBAL_STAT_TNAME, client)
   {}
   virtual ~ObGlobalStatProxy()
@@ -91,16 +91,16 @@ class ObGlobalStatProxy {
   int set_next_schema_version(const int64_t next_schema_version);
   int get_next_schema_version(int64_t& next_schema_version);
 
-  private:
+private:
   int update(const ObGlobalStatItem::ItemList& list, const bool is_incremental = false);
   int get(ObGlobalStatItem::ItemList& list, const int64_t frozen_version = -1);
 
-  private:
+private:
   static const char* OB_ALL_GC_SCHEMA_VERSION_TNAME;
   static const char* TENANT_ID_CNAME;
   static const char* GC_SCHEMA_VERSION_CNAME;
 
-  private:
+private:
   ObCoreTableProxy core_table_;
 };
 

@@ -152,7 +152,7 @@ TEST(RINGBUFFER_BASE, debug2)
 typedef ValSlot<int64_t> SlotT;
 typedef ObExtendibleRingBufferBase<int64_t, SlotT> I64RBBASE;
 class SetRunnable : public cotesting::DefaultRunnable {
-  public:
+public:
   void run1() final
   {
     for (int64_t idx = 0; idx < cnt_; ++idx) {
@@ -165,7 +165,7 @@ class SetRunnable : public cotesting::DefaultRunnable {
   int64_t cnt_;
 };
 class PopRunnable : public cotesting::DefaultRunnable {
-  public:
+public:
   struct PopCond {
     int64_t expect_;
     /*
@@ -292,7 +292,7 @@ TEST(RingBuffer, debug)
 
 // Hazrd Ptr Tests.
 struct TypeA : public erb::HazardBase {
-  public:
+public:
   virtual int purge()
   {
     return 0;
@@ -324,7 +324,7 @@ TEST(HazPtr, Basic0)
 }
 
 struct TypeB : public erb::HazardBase {
-  public:
+public:
   virtual int purge()
   {
     if (!alloc_) {
@@ -336,7 +336,7 @@ struct TypeB : public erb::HazardBase {
   bool alloc_;
 };
 class PurgeTestA : public cotesting::DefaultRunnable {
-  public:
+public:
   void run1() final
   {
     while (!ATOMIC_LOAD(&acquire_)) {

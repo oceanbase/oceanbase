@@ -36,7 +36,7 @@ class ObEvalCtx;
 class ObTaskSmallResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   const static int64_t MAX_DATA_BUF_LEN = 8 * 1024L;
 
   ObTaskSmallResult();
@@ -117,7 +117,7 @@ class ObTaskSmallResult {
   TO_STRING_KV(K_(has_data), K_(data_len), K_(affected_rows), K_(found_rows), K_(last_insert_id), K_(matched_rows),
       K_(duplicated_rows));
 
-  private:
+private:
   bool has_data_;
   int64_t data_len_;
   char data_buf_[MAX_DATA_BUF_LEN];
@@ -127,7 +127,7 @@ class ObTaskSmallResult {
   int64_t matched_rows_;
   int64_t duplicated_rows_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTaskSmallResult);
 };
 
@@ -142,7 +142,7 @@ enum ObShuffleType {
 class ObShuffleKey final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObShuffleKey() : type_(ST_NONE)
   {}
   void reset()
@@ -175,7 +175,7 @@ class ObShuffleKey final {
   int set_sub_shuffle_type(const share::schema::ObTableSchema& table_schema);
   DECLARE_TO_STRING;
 
-  private:
+private:
   ObShuffleType type_;
   common::ObObj values_[2];
   static const int64_t HASH_IDX;
@@ -187,7 +187,7 @@ class ObShuffleKey final {
 class ObShuffleKeys final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObShuffleKeys() : part_key_(), subpart_key_()
   {}
   void reset();
@@ -195,7 +195,7 @@ class ObShuffleKeys final {
   int compare(const ObShuffleKeys& other, bool cmp_part, bool cmp_subpart, int& cmp) const;
   TO_STRING_KV(K_(part_key), K_(subpart_key));
 
-  public:
+public:
   ObShuffleKey part_key_;
   ObShuffleKey subpart_key_;
 };
@@ -203,7 +203,7 @@ class ObShuffleKeys final {
 class ObSliceEvent final {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObSliceEvent() : ob_slice_id_(), shuffle_keys_(), shuffle_partition_key_(), small_result_()
   {}
 
@@ -289,20 +289,20 @@ class ObSliceEvent final {
 
   TO_STRING_KV(K_(ob_slice_id), K_(shuffle_keys), K_(shuffle_partition_key), K_(small_result));
 
-  private:
+private:
   ObSliceID ob_slice_id_;
   ObShuffleKeys shuffle_keys_;
   common::ObPartitionKey shuffle_partition_key_;
   ObTaskSmallResult small_result_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObSliceEvent);
 };
 
 class ObTaskEvent {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTaskEvent();
   virtual ~ObTaskEvent();
 
@@ -351,7 +351,7 @@ class ObTaskEvent {
   }
   TO_STRING_KV("task_loc", task_loc_, "err_code", err_code_, "inited", inited_, K_(slice_events));
 
-  protected:
+protected:
   ObTaskLocation task_loc_;
   int64_t err_code_;
   bool inited_;
@@ -360,14 +360,14 @@ class ObTaskEvent {
   int64_t ts_task_recv_done_;
   int64_t ts_result_send_begin_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTaskEvent);
 };
 
 class ObTaskCompleteEvent : public ObTaskEvent {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObTaskCompleteEvent() : ObTaskEvent(), extend_info_(), trans_result_(){};
   virtual ~ObTaskCompleteEvent(){};
 
@@ -400,19 +400,19 @@ class ObTaskCompleteEvent : public ObTaskEvent {
     return trans_result_;
   }
 
-  protected:
+protected:
   common::ObString extend_info_;
   TransResult trans_result_;
   common::ObSEArray<ObImplicitCursorInfo, 500> implicit_cursors_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObTaskCompleteEvent);
 };
 
 class ObTaskResultBuf {
   OB_UNIS_VERSION_V(1);
 
-  public:
+public:
   ObTaskResultBuf()
   {}
   virtual ~ObTaskResultBuf()
@@ -441,7 +441,7 @@ class ObTaskResultBuf {
   }
   TO_STRING_KV(K_(task_location), K_(slice_events_buf));
 
-  protected:
+protected:
   ObTaskLocation task_location_;
   common::ObSEArray<ObSliceEvent, 1> slice_events_buf_;
 };
@@ -449,7 +449,7 @@ class ObTaskResultBuf {
 class ObMiniTaskResult {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObMiniTaskResult(bool use_compact_row = true)
       : task_result_(common::ObModIds::OB_NEW_SCANNER, nullptr, common::ObScanner::DEFAULT_MAX_SERIALIZE_SIZE,
             common::OB_SERVER_TENANT_ID, use_compact_row),
@@ -509,7 +509,7 @@ class ObMiniTaskResult {
   }
   TO_STRING_KV(K_(task_result), K_(extend_result));
 
-  private:
+private:
   common::ObScanner task_result_;
   // mini task can taek a sub plan to get the rowkey of conflict rows caused by unique index,
   // extend_result_ will store these rowkeys as result, to reduce rpc times.
@@ -517,7 +517,7 @@ class ObMiniTaskResult {
 };
 
 class ObMiniTaskEvent {
-  public:
+public:
   ObMiniTaskEvent(const common::ObAddr& task_addr, int64_t task_id, int32_t ret_code)
       : task_addr_(task_addr), task_id_(task_id), ret_code_(ret_code), task_result_(false)
   {}
@@ -554,7 +554,7 @@ class ObMiniTaskEvent {
   }
   TO_STRING_KV(K_(task_addr), K_(task_id), K_(ret_code));
 
-  private:
+private:
   const ObAddr task_addr_;  // debug purpose when minitask async call fail
   int64_t task_id_;
   int32_t ret_code_;
@@ -562,7 +562,7 @@ class ObMiniTaskEvent {
 };
 
 class ObMiniTaskRetryInfo {
-  public:
+public:
   ObMiniTaskRetryInfo()
       : need_retry_(true),
         failed_task_lists_(),
@@ -632,7 +632,7 @@ class ObMiniTaskRetryInfo {
   TO_STRING_KV(K_(need_retry), K_(failed_task_lists), K_(retry_ret), K_(retry_times), K_(retry_execution),
       K_(retry_by_single_range));
 
-  private:
+private:
   bool need_retry_;
   // pair<task id : got rows count>
   common::ObSEArray<std::pair<int64_t, int64_t>, 16> failed_task_lists_;
@@ -642,14 +642,14 @@ class ObMiniTaskRetryInfo {
   bool retry_by_single_range_;
   common::ObSEArray<int64_t, 2> not_master_tasks_;
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMiniTaskRetryInfo);
 };
 
 class ObRemoteResult : public obrpc::ObIFill {
   OB_UNIS_VERSION(1);
 
-  public:
+public:
   ObRemoteResult() : task_id_(), result_(), has_more_(false)
   {}
   int init()
@@ -691,7 +691,7 @@ class ObRemoteResult : public obrpc::ObIFill {
   }
   TO_STRING_KV(K_(task_id), K_(result), K_(has_more));
 
-  private:
+private:
   ObTaskID task_id_;
   common::ObScanner result_;
   bool has_more_;

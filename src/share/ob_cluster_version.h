@@ -21,7 +21,7 @@ class ObServerConfig;
 class ObString;
 
 class ObClusterVersion {
-  public:
+public:
   ObClusterVersion();
   ~ObClusterVersion()
   {
@@ -36,7 +36,7 @@ class ObClusterVersion {
   uint64_t get_cluster_version();
   void update_cluster_version(const uint64_t cluster_version);
 
-  public:
+public:
   static ObClusterVersion& get_instance();
   static int is_valid(const char* verstr);
   static int get_version(const char* verstr, uint64_t& version);
@@ -45,7 +45,7 @@ class ObClusterVersion {
   static int64_t print_version_str(char* buf, const int64_t buf_len, uint64_t version);
   static const int64_t MAX_VERSION_ITEM = 16;
 
-  private:
+private:
   bool is_inited_;
   const common::ObServerConfig* config_;
   uint64_t cluster_version_;
@@ -89,11 +89,16 @@ uint64_t cal_version(const uint64_t major, const uint64_t minor, const uint64_t 
 #define CLUSTER_VERSION_2274 (oceanbase::common::cal_version(2, 2, 74))
 #define CLUSTER_VERSION_2275 (oceanbase::common::cal_version(2, 2, 75))
 #define CLUSTER_VERSION_2276 (oceanbase::common::cal_version(2, 2, 76))
+#define CLUSTER_VERSION_2277 (oceanbase::common::cal_version(2, 2, 77))
 #define CLUSTER_VERSION_3000 (oceanbase::common::cal_version(3, 0, 0))
 #define CLUSTER_VERSION_3100 (oceanbase::common::cal_version(3, 1, 0))
+#define CLUSTER_VERSION_311 (oceanbase::common::cal_version(3, 1, 1))
+#define CLUSTER_VERSION_312 (oceanbase::common::cal_version(3, 1, 2))
+#define CLUSTER_VERSION_MAX UINT64_MAX
 // FIXME If you update the above version, please update me, CLUSTER_CURRENT_VERSION & ObUpgradeChecker!!!!!!
+
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_3100
+#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_312
 #define GET_MIN_CLUSTER_VERSION() (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version())
 #define GET_UNIS_CLUSTER_VERSION() (::oceanbase::lib::get_unis_compat_version() ?: GET_MIN_CLUSTER_VERSION())
 
@@ -107,6 +112,8 @@ uint64_t cal_version(const uint64_t major, const uint64_t minor, const uint64_t 
   (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3000)
 #define IS_CLUSTER_VERSION_BEFORE_3100 \
   (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_3100)
+#define IS_CLUSTER_VERSION_BEFORE_311 \
+  (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_311)
 
 #define IS_CLUSTER_VERSION_AFTER_2274 \
   (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() > CLUSTER_VERSION_2274)

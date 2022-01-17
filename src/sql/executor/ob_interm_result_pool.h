@@ -23,7 +23,7 @@ class ObScanner;
 namespace sql {
 class ObIntermResult;
 class ObIntermResultPool {
-  public:
+public:
   // Assume than one interm result is 1MB and we need manage 10TB intermediate data,
   // we need 10TB/1MB =  10M interm result.
   static const int64_t INTERM_RESULT_CAPACITY = 10L << 20;  // 10M
@@ -46,10 +46,10 @@ class ObIntermResultPool {
   int alloc_scanner(common::ObScanner*& scanner);
   void free_scanner(common::ObScanner* scanner);
 
-  private:
+private:
   int init();
 
-  private:
+private:
   static ObIntermResultPool* instance_;
   // this interm result pool is initialized
   bool inited_;

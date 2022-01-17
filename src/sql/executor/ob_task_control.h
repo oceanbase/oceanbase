@@ -23,7 +23,7 @@ class ObAddrsProvider;
 class ObTaskEvent;
 
 class ObTaskResult {
-  public:
+public:
   ObTaskResult() : slice_events_(NULL)
   {}
   virtual ~ObTaskResult()
@@ -58,14 +58,14 @@ class ObTaskResult {
 
   TO_STRING_KV(K_(task_location), K_(slice_events));
 
-  protected:
+protected:
   ObTaskLocation task_location_;
   const common::ObIArray<ObSliceEvent>* slice_events_;
 };
 
 // Base class of all kinds of job control
 class ObTaskControl {
-  public:
+public:
   ObTaskControl();
   virtual ~ObTaskControl();
   int init_finish_queue(int64_t dop);
@@ -121,7 +121,7 @@ class ObTaskControl {
   }
   TO_STRING_KV("tasks", tasks_);
 
-  private:
+private:
   int get_task_by_state(common::ObIArray<ObTaskInfo*>& tasks, int state) const;
   inline void* id_to_ptr(uint64_t id)
   {
@@ -135,7 +135,7 @@ class ObTaskControl {
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObTaskControl);
 
-  private:
+private:
   common::ObSEArray<ObTaskInfo*, 4> tasks_;
   //  bool is_scan_job_;
   bool is_root_job_;

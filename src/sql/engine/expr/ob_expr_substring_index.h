@@ -19,19 +19,19 @@
 namespace oceanbase {
 namespace sql {
 class ObExprSubstringIndex : public ObStringExprOperator {
-  public:
+public:
   explicit ObExprSubstringIndex(common::ObIAllocator& alloc);
   virtual ~ObExprSubstringIndex();
   virtual int calc_result_type3(ObExprResType& type, ObExprResType& str, ObExprResType& delim, ObExprResType& count,
-      common::ObExprTypeCtx& type_ctx) const;
+      common::ObExprTypeCtx& type_ctx) const override;
   virtual int calc_result3(common::ObObj& result, const common::ObObj& str, const common::ObObj& delim,
-      const common::ObObj& count, common::ObExprCtx& expr_ctx) const;
+      const common::ObObj& count, common::ObExprCtx& expr_ctx) const override;
 
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
 
   static int eval_substring_index(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
 
-  private:
+private:
   /**
    * find m_count apperance of m_delim in m_str(from left or from right)
    * @param[in] result      calculated result
@@ -43,7 +43,7 @@ class ObExprSubstringIndex : public ObStringExprOperator {
   static int string_search(
       common::ObString& result, const common::ObString& m_str, const common::ObString& m_delim, const int64_t m_count);
 
-  private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubstringIndex);
 };
 

@@ -39,7 +39,7 @@ using namespace blocksstable;
 namespace storage {
 
 class MockObIPartitionService : public ObPartitionService {
-  public:
+public:
   MOCK_METHOD0(reload_config, int());
   MOCK_METHOD1(on_leader_revoke, int(const common::ObPartitionKey& partition_key));
   MOCK_METHOD1(on_leader_takeover, int(const common::ObPartitionKey& partition_key));
@@ -176,7 +176,7 @@ class MockObIPartitionService : public ObPartitionService {
   MOCK_METHOD2(get_partitions_by_file_key, int(const ObTenantFileKey& file_key, ObIPartitionArrayGuard& partitions));
   MOCK_CONST_METHOD1(get_partition_count, int(int64_t& partition_count));
 
-  virtual int get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key)
+  virtual int get_pg_key(const ObPartitionKey& pkey, ObPGKey& pg_key) const override
   {
     pg_key = pkey;
     return common::OB_SUCCESS;
@@ -256,7 +256,6 @@ class MockObIPartitionService : public ObPartitionService {
   MOCK_METHOD1(submit_freeze_log_finished, int(const ObPartitionKey& pkey));
   MOCK_METHOD1(is_freeze_replay_finished, bool(const ObPartitionKey& pkey));
   MOCK_CONST_METHOD2(get_role, int(const common::ObPartitionKey& pkey, common::ObRole& role));
-  MOCK_CONST_METHOD2(get_role_for_partition_table, int(const common::ObPartitionKey& pkey, common::ObRole& role));
   MOCK_CONST_METHOD2(
       get_leader_curr_member_list, int(const common::ObPartitionKey& pkey, common::ObMemberList& member_list));
   MOCK_CONST_METHOD7(get_curr_leader_and_memberlist,
@@ -320,7 +319,7 @@ class MockObIPartitionService : public ObPartitionService {
       int(const common::ObPartitionKey& pkey, const int64_t schema_version, int64_t& max_commit_version));
   MOCK_METHOD2(check_ctx_create_timestamp_elapsed, int(const common::ObPartitionKey& pkey, const int64_t ts));
 
-  public:
+public:
   ObPartitionGroup mock_pg_;
 };
 
