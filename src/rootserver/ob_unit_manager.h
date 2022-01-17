@@ -315,7 +315,7 @@ public:
       const common::ObZone& zone, common::ObArray<ObServerLoad>& server_loads, double* weights, int64_t weights_count);
   // get hard limit
   int get_hard_limit(double& hard_limit) const;
-  static int calc_sum_load(const common::ObArray<ObUnitLoad>* unit_loads, share::ObUnitConfig& sum_load); // TODO make private
+  static int calc_sum_load(const common::ObArray<ObUnitLoad>* unit_loads, share::ObUnitConfig& sum_load);
   int try_cancel_migrate_unit(const share::ObUnit& unit);
   int distrubte_for_unit_intersect(const uint64_t tenant_id, const common::ObIArray<share::ObResourcePoolName>& pools);
 

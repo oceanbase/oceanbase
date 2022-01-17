@@ -2671,8 +2671,6 @@ int ObRootService::request_heartbeats()
         } else if (OB_SUCCESS != (temp_ret = server_manager_.receive_hb(
                                       lease_request, server_id, to_alive, update_delay_time_flag))) {
           LOG_WARN("receive hb failed", K(lease_request), K(temp_ret));
-        } else {
-          LOG_INFO("receive hb success. ", K(lease_request));
         }
         ret = (OB_SUCCESS != ret) ? ret : temp_ret;
       }
