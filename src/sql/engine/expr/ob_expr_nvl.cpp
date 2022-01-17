@@ -156,8 +156,14 @@ int ObExprNvl::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2,
     LOG_WARN("invalid argument. allocator or session is NULL", K(ret), K(expr_ctx.calc_buf_), K(expr_ctx.my_session_));
   } else {
     p_res = obj1.is_null() ? &obj2 : &obj1;
+    //We cannot expect the framework to help us convert types 
+    //to ensure that they are consistent with the deduced results in old engine
+    //convert collations to avoid unexpected compares like gbk = utf8
+     bool need_cast = !p_res->is_null()
+                      && (p_res->get_type() != get_result_type().get_type()
+                         || p_res->get_collation_type() != get_result_type().get_collation_type());
     // no necessary to check p_res is NULL or not
-    if (!p_res->is_null() && p_res->get_type() != get_result_type().get_type()) {
+    if (need_cast) {
       EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
       cast_ctx.dest_collation_ = get_result_type().get_collation_type();
       if (OB_FAIL(ObObjCaster::to_type(get_result_type().get_type(), cast_ctx, *p_res, result))) {

@@ -502,7 +502,7 @@ int ObMicroBlockRowScanner::inner_get_next_row(const ObStoreRow*& row)
     ObStoreRow& dest_row = rows_[0];
     dest_row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
     if (OB_FAIL(reader_->get_row(current_, dest_row))) {
-      STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret));
+      STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret), K(macro_id_));
     } else {
       row = &dest_row;
       if (context_->query_flag_.is_multi_version_minor_merge()) {

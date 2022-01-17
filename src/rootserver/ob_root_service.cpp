@@ -8487,7 +8487,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   int ret = OB_SUCCESS;
   int64_t gc_snapshot_ts = OB_INVALID_TIMESTAMP;
   int64_t current_timestamp = ObTimeUtility::current_time();
-  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L;  // 防止恢复到未来的某个时间
+  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L;
   int64_t job_id = OB_INVALID_ID;
   ObSchemaGetterGuard schema_guard;
   if (!inited_) {
@@ -9762,6 +9762,49 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg)
   return ret;
 }
 
+	
+int ObRootService::wakeup_auto_delete(const obrpc::ObAdminSetConfigItem *item)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestOpt new_opt;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (NULL == item) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("item is null", K(ret)); 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(false/* is_backup_backup */))) {
+      LOG_WARN("failed init backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_BACKUP_DEST_OPT)) {
+    if (OB_FAIL(new_opt.init(true/* is_backup_backup */))) {
+      LOG_WARN("failed init backup backup dest option", K(ret), KPC(item));
+    } else if (true == new_opt.auto_delete_obsolete_backup_ && 0 != new_opt.recovery_window_) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_backup_dest_option parameters updated, wakeup backup_auto_delete", KPC(item)); 
+    }
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_AUTO_DELETE_EXPIRED_BACKUP)) {
+    ObString value(item->value_.ptr());
+    ObString false_str("FALSE");
+    if (0 != value.case_compare(false_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("auto_delete_expired_backup parameters updated, wakeup backup_auto_delete", KPC(item));
+    } 
+  } else if (0 == STRCMP(item->name_.ptr(), OB_STR_BACKUP_RECORVERTY_WINDOW)) {
+    ObString value(item->value_.ptr());
+    ObString zero_str("0");
+    if (0 != value.case_compare(zero_str)) {
+      backup_auto_delete_.wakeup();
+      LOG_INFO("backup_recovery_window parameters updated, wakeup backup_auto_delete", KPC(item));
+    }  
+  }
+  return ret;
+}
+
 int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -9811,6 +9854,8 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg)
     } else if (0 == STRCMP(item->name_.ptr(), SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
       schema_history_recycler_.wakeup();
       LOG_INFO("schema_history_recycle_interval parameters updated, wakeup schema_history_recycler", KPC(item));
+    } else if (OB_FAIL(wakeup_auto_delete(item))) {
+      LOG_WARN("failed to wakeup auto delete", K(ret), KPC(item));
     }
   }
   return ret;
@@ -11698,10 +11743,13 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
   // always passed
   int64_t expire_timeval = GCONF.recyclebin_object_expire_time;
   ObSEArray<uint64_t, 16> tenant_ids;
+  ObSchemaGetterGuard guard;
   if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_serviece_ is null", KR(ret));
-  } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+    LOG_WARN("fail to get sys schema guard", KR(ret));
+  } else if (OB_FAIL(guard.get_tenant_ids(tenant_ids))) {
     LOG_WARN("get all tenants failed", KR(ret));
   } else {
     const int64_t current_time = ObTimeUtility::current_time();
@@ -11711,19 +11759,36 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
     obrpc::Int64 affected_rows = 0;
     obrpc::ObPurgeRecycleBinArg arg;
     int64_t purge_sum = purge_each_time;
+    const bool is_standby = PRIMARY_CLUSTER != ObClusterInfoGetter::get_cluster_type_v2();
+    const ObSimpleTenantSchema *simple_tenant = NULL;
     // ignore ret
     for (int i = 0; i < tenant_ids.count() && in_service() && purge_sum > 0; ++i) {
       int64_t purge_time = GCONF._recyclebin_object_purge_frequency;
+      const uint64_t tenant_id = tenant_ids.at(i);
       if (purge_time <= 0) {
         break;
+      }
+      if (OB_SYS_TENANT_ID != tenant_id && is_standby) {
+        // standby cluster won't purge recyclebin automacially.
+        LOG_TRACE("user tenant won't purge recyclebin automacially in standby cluster", K(tenant_id));
+        continue;
+      } else if (OB_FAIL(guard.get_tenant_info(tenant_id, simple_tenant))) {
+        LOG_WARN("fail to get simple tenant schema", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(simple_tenant)) {
+        ret = OB_TENANT_NOT_EXIST;
+        LOG_WARN("simple tenant schema not exist", KR(ret), K(tenant_id));
+      } else if (!simple_tenant->is_normal()) {
+        // only deal with normal tenant.
+        LOG_TRACE("tenant which isn't normal won't purge recyclebin automacially", K(tenant_id));
+        continue;
       }
       // ignore error code of different tenant
       ret = OB_SUCCESS;
       affected_rows = 0;
-      arg.tenant_id_ = tenant_ids.at(i);
+      arg.tenant_id_ = tenant_id;
       arg.expire_time_ = expire_time;
       arg.auto_purge_ = true;
-      arg.exec_tenant_id_ = tenant_ids.at(i);
+      arg.exec_tenant_id_ = tenant_id;
       LOG_INFO("start purge recycle objects of tenant", K(arg), K(purge_sum));
       while (OB_SUCC(ret) && in_service() && purge_sum > 0) {
         int64_t start_time = ObTimeUtility::current_time();

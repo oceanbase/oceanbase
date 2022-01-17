@@ -210,8 +210,7 @@ ObPhysicalRestoreJob::ObPhysicalRestoreJob()
 bool ObPhysicalRestoreJob::is_valid() const
 {
   return OB_INVALID_ID != job_id_ && PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS != status_ &&
-         ((!multi_restore_path_list_.is_compat_backup_path() && strlen(backup_dest_) == 0) ||
-             (multi_restore_path_list_.is_compat_backup_path() && strlen(backup_dest_) > 0));
+         !(0 == strlen(backup_dest_) && 0 == multi_restore_path_list_.get_backup_set_path_list().count());
 }
 
 DEF_TO_STRING(ObPhysicalRestoreJob)

@@ -2806,7 +2806,8 @@ int ObBackupPhysicalPGCtx::fetch_prev_macro_index(const ObPhyRestoreMacroIndexSt
     ret = OB_NOT_OPEN;
     LOG_WARN("not opened yet", K(ret));
   } else if (OB_UNLIKELY(!macro_index_store.is_inited() || !macro_arg.is_valid() ||
-                         !macro_arg.table_key_ptr_->is_major_sstable())) {
+                         !macro_arg.table_key_ptr_->is_major_sstable() ||
+                         macro_arg.table_key_ptr_->is_trans_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(macro_index_store), K(macro_arg));
   } else {
@@ -3393,7 +3394,7 @@ int ObBackupCopyPhysicalTask::fetch_backup_macro_block_arg(const share::ObPhysic
       macro_arg.fetch_arg_.macro_block_index_ = macro_idx;
       macro_arg.fetch_arg_.data_version_ = full_meta.meta_->data_version_;
       macro_arg.fetch_arg_.data_seq_ = full_meta.meta_->data_seq_;
-      if (!table_key.is_major_sstable()) {
+      if (!table_key.is_major_sstable() || table_key.is_trans_sstable()) {
         macro_arg.need_copy_ = true;
       } else {
         switch (backup_arg.backup_type_) {
@@ -3616,7 +3617,7 @@ int ObBackupCopyPhysicalTask::get_datafile_appender(const ObITable::TableType& t
       STORAGE_LOG(WARN, "BandwidthThrottle should not be null here", K(ret));
     } else if (OB_FAIL(arg.get_backup_base_data_info(path_info))) {
       STORAGE_LOG(WARN, "get backup base data info fail", K(ret), K(arg), K(pg_key));
-    } else if (ObITable::is_major_sstable(table_type)) {
+    } else if (ObITable::is_major_sstable(table_type) && !ObITable::is_trans_sstable(table_type)) {
       if (OB_FAIL(ObBackupPathUtil::get_major_macro_block_file_path(path_info,
               pg_key.get_table_id(),
               pg_key.get_partition_id(),
@@ -3625,7 +3626,7 @@ int ObBackupCopyPhysicalTask::get_datafile_appender(const ObITable::TableType& t
               path))) {
         STORAGE_LOG(WARN, "failed to get macro file path", K(ret));
       }
-    } else if (ObITable::is_minor_sstable(table_type)) {
+    } else if (ObITable::is_minor_sstable(table_type) || ObITable::is_trans_sstable(table_type)) {
       if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(path_info,
               pg_key.get_table_id(),
               pg_key.get_partition_id(),
@@ -3742,7 +3743,7 @@ int ObBackupCopyPhysicalTask::reuse_block_index(
         } else if (OB_UNLIKELY(cur_index.data_length_ > 0)) {
           ret = OB_INIT_TWICE;
           STORAGE_LOG(WARN, "macro index is already init before reuse.", K(ret), K(i), K(cur_index));
-        } else if (!cur_index.table_key_ptr_->is_major_sstable()) {
+        } else if (!cur_index.table_key_ptr_->is_major_sstable() || cur_index.table_key_ptr_->is_trans_sstable()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "sstable is not major sstable, can not reuse block index", K(ret), K(cur_index));
         } else if (OB_FAIL(backup_pg_ctx_->fetch_prev_macro_index(*macro_index, macro_arg, prev_index))) {

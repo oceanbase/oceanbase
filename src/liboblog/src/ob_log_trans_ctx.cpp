@@ -438,7 +438,7 @@ int TransCtx::init_trans_id_str_(const transaction::ObTransID &trans_id)
       MEMCPY(buf, trans_id_buf, pos);
       buf[pos] = '\0';
 
-      trans_id_str_.assign(buf, static_cast<int32_t>(buf_len));
+      trans_id_str_.assign(buf, static_cast<int32_t>(pos));
     }
   }
 

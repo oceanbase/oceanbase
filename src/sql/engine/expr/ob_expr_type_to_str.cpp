@@ -254,7 +254,7 @@ int ObExprSetToStr::calc(common::ObObj& result, const ObObj& obj1, const ObObj& 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid element num", K(element_num), K(ret));
     } else if (OB_UNLIKELY(element_num < EFFECTIVE_COUNT && set_val >= (1ULL << element_num))) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_DATA_TRUNCATED;
       LOG_WARN("set value out of range", K(set_val), K(element_num));
     } else if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(expr_ctx.calc_buf_->alloc(BUF_LEN))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -393,8 +393,8 @@ int ObExprEnumToStr::calc(ObObj& result, const ObObj& obj1, const ObObj& obj2, O
       ObString empty_string;
       result.set_varchar(empty_string.make_empty_string());
     } else if (OB_UNLIKELY(element_idx > element_num - 1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid enum value", K(element_idx), K(element_num), K(ret));
+      ret = OB_ERR_DATA_TRUNCATED;
+      LOG_WARN("enum value out of range", K(element_idx), K(element_num), K(ret));
     } else {
       const ObString& element_str = str_values_.at(element_idx);
       if (element_str.empty()) {

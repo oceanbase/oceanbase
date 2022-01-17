@@ -604,6 +604,12 @@ int ObRestoreUtil::fill_multi_backup_path(
     LOG_WARN("failed to filter duplicate path list", KR(ret));
   } else if (OB_FAIL(job.multi_restore_path_list_.set(backup_set_list, backup_piece_list))) {
     LOG_WARN("failed to set mutli restore path list", KR(ret));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::check_can_restore_by_set_or_piece(backup_set_list, backup_piece_list))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      LOG_WARN("the backup file is missing and cannot be restored", K(ret));
+    } else {
+      LOG_WARN("failed to check can be restored", KR(ret));
+    }
   } else if (OB_FAIL(
                  get_multi_path_file_info_list(backup_set_list, backup_piece_list, set_info_list, piece_info_list))) {
     LOG_WARN("failed to get multi path file info list", KR(ret), K(backup_set_list), K(backup_piece_list));
@@ -643,7 +649,7 @@ int ObRestoreUtil::fill_compat_backup_path(
 
   if (OB_SUCC(ret)) {
     // for compat backup path, clog restore use multi restore path
-    if (OB_FAIL(fill_clog_path_list(arg.uri_, arg, job))) {
+    if (OB_FAIL(inner_fill_compat_backup_path(arg.uri_, arg, job))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -655,15 +661,14 @@ int ObRestoreUtil::fill_compat_backup_path(
   return ret;
 }
 
-int ObRestoreUtil::fill_clog_path_list(
-    const ObString& uri, const obrpc::ObPhysicalRestoreTenantArg& arg, share::ObPhysicalRestoreJob& job)
+int ObRestoreUtil::inner_fill_compat_backup_path(
+    const ObString &uri, const obrpc::ObPhysicalRestoreTenantArg &arg, share::ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
   ObArray<ObString> uri_list;
   uint64_t backup_tenant_id = OB_INVALID_ID;
   const int64_t restore_timestamp = arg.restore_timestamp_;
   ObArray<ObSimpleBackupSetPath> backup_set_list;
-  ObArray<ObSimpleBackupSetPath> fake_backup_set_list;
   ObArray<ObSimpleBackupPiecePath> backup_piece_list;
   if (OB_FAIL(uri_list.push_back(uri))) {
     LOG_WARN("failed to push back", KR(ret), K(uri));
@@ -684,8 +689,14 @@ int ObRestoreUtil::fill_clog_path_list(
                  backup_set_list,
                  backup_piece_list))) {
     LOG_WARN("failed to get backup path list", KR(ret), K(uri_list));
-  } else if (OB_FAIL(job.multi_restore_path_list_.set(fake_backup_set_list, backup_piece_list))) {
+  } else if (OB_FAIL(job.multi_restore_path_list_.set(backup_set_list, backup_piece_list))) {
     LOG_WARN("failed to set mutli restore path list", KR(ret));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::check_can_restore_by_set_or_piece(backup_set_list, backup_piece_list))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      LOG_WARN("the backup file is missing and cannot be restored", K(ret));
+    } else {
+      LOG_WARN("failed to check can be restored", KR(ret));
+    }
   }
   return ret;
 }

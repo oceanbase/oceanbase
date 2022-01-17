@@ -1178,7 +1178,7 @@ int ObRootBackup::do_extern_backup_set_infos(const ObBaseBackupInfoStruct &info,
                  inc_backup_set_id,
                  backup_dest,
                  extern_backup_info.date_,
-                 OB_BACKUP_COMPATIBLE_VERSION_V3,
+                 OB_BACKUP_CURRENT_COMPAITBLE_VERSION,
                  *backup_lease_service_))) {
     LOG_WARN("failed to init extern backup set info mgr", K(ret), K(tenant_id), K(full_backup_set_id));
   } else {
@@ -1233,7 +1233,7 @@ int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoS
                  inc_backup_set_id,
                  backup_dest,
                  extern_backup_info.date_,
-                 OB_BACKUP_COMPATIBLE_VERSION_V3,
+                 OB_BACKUP_CURRENT_COMPAITBLE_VERSION,
                  *backup_lease_service_))) {
     LOG_WARN("failed to init extern backup set info mgr", K(ret), K(tenant_id), K(full_backup_set_id));
   } else if (OB_FAIL(extern_tenant_locality_info.tenant_name_.assign(tenant_info->get_tenant_name()))) {
@@ -2897,7 +2897,7 @@ int ObRootBackup::calculate_tenant_start_replay_log_ts(const share::ObTenantBack
   const bool need_check_all_meta_files = true;
   const bool need_check_compeleted = true;
   ObArray<ObBackupMetaIndex> backup_meta_indexs;
-  ObBackupCompatibleVersion compatible = OB_BACKUP_COMPATIBLE_VERSION_V3;
+  ObBackupCompatibleVersion compatible = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
   start_replay_log_ts = 0;
 
   if (!tenant_task_info.is_valid() || ObTenantBackupTaskInfo::FINISH != tenant_task_info.status_) {

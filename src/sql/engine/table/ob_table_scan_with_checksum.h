@@ -58,7 +58,8 @@ protected:
     virtual void destroy();
     int get_output_col_ids(const share::schema::ObTableParam& table_param);
     int allocate_checksum_memory();
-    int add_row_checksum(const common::ObNewRow* row);
+    int calc_checksum(const ObObj &obj, int64_t &checksum) const;
+    int add_row_checksum(const common::ObNewRow *row);
     int report_checksum(const int64_t execution_id);
 
   public:

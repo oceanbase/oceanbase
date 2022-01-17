@@ -214,6 +214,12 @@ void ObTableEntityFactory<T>::free_all()
   }
 }
 
+enum class ObQueryOperationType : int { 
+  QUERY_START = 0, 
+  QUERY_NEXT = 1,
+  QUERY_MAX
+};
+
 /// Table Operation Type
 struct ObTableOperationType
 {
@@ -389,7 +395,6 @@ class ObNoRetry : public ObIRetryPolicy
 {};
 
 /// consistency levels
-/// @see https://www.atatech.org/articles/102030
 enum class ObTableConsistencyLevel
 {
   STRONG = 0,
@@ -571,7 +576,6 @@ public:
   int set_row_offset_per_column_family(int32_t offset);
   /// Apply the specified server-side filter when performing the Query.
   /// @param filter - a file string using the hbase filter language
-  /// @see the filter language at https://issues.apache.org/jira/browse/HBASE-4176
   int set_filter(const ObString &filter);
 
   const ObIArray<ObString> &get_columns() const { return select_column_qualifier_; }
@@ -793,6 +797,20 @@ public:
   // In the case of delete and insert_or_update, return the old rows before modified.
   // In the case of increment and append, return the new rows after modified.
   ObTableQueryResult affected_entity_;
+};
+
+class ObTableQuerySyncResult: public ObTableQueryResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableQuerySyncResult()
+    : is_end_(false),
+      query_session_id_(0) 
+  {}
+  virtual ~ObTableQuerySyncResult() {}
+public:
+  bool     is_end_;
+  uint64_t  query_session_id_; // from server gen
 };
 
 

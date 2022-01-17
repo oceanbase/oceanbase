@@ -275,7 +275,7 @@ DEF_BOOL(_enable_static_typing_engine, OB_CLUSTER_PARAMETER, "True",
     "specifies whether static typing sql execution engine is activated",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "True",
+DEF_BOOL(_enable_defensive_check, OB_CLUSTER_PARAMETER, "False",
     "specifies whether allow to do some defensive checks when the query is executed",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// tenant config
@@ -838,7 +838,7 @@ DEF_TIME(location_cache_refresh_sql_timeout, OB_CLUSTER_PARAMETER, "1s", "[1ms,)
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(all_server_list, OB_CLUSTER_PARAMETER, "", "all server addr in cluster",
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_auto_refresh_location_cache, OB_CLUSTER_PARAMETER, "False", "enable auto refresh location",
+DEF_BOOL(enable_auto_refresh_location_cache, OB_CLUSTER_PARAMETER, "True", "enable auto refresh location",
     ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(auto_refresh_location_cache_rate_limit, OB_CLUSTER_PARAMETER, "1000", "[1, 100000]",
     "Maximum number of partitions to refresh location automatically per second",
@@ -1188,6 +1188,9 @@ ERRSIM_DEF_TIME(max_wait_batch_member_change_done_us, OB_CLUSTER_PARAMETER, "300
 ERRSIM_DEF_BOOL(allow_major_sstable_merge, OB_CLUSTER_PARAMETER, "True", "allow_major_sstable_merge. ",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_BOOL(trigger_reuse_table_in_table_mgr, OB_CLUSTER_PARAMETER, "False", "trigger_reuse_table_in_table_mgr",
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_BOOL(fake_backup_date_for_incremental_backup, OB_CLUSTER_PARAMETER, "False",
+    "incremental backup use fake backup date",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_CAP(slog_size, OB_CLUSTER_PARAMETER, "256M", "[0M,256M]", "size of the slog file. Range: [0, 256M]",
     ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

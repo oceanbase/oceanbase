@@ -186,6 +186,7 @@ public:
 
   static const int64_t MIN_CUR_QUERY_LEN = 512;
   static const int64_t MAX_CUR_QUERY_LEN = 16 * 1024;
+  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024;
   class TransFlags {
   public:
     TransFlags() : flags_(0)
@@ -1273,7 +1274,8 @@ public:
   /// @}
   int64_t get_session_info_mem_size() const { return block_allocator_.get_total_mem_size(); }
   int64_t get_sys_var_mem_size() const { return base_sys_var_alloc_.total(); }
-  ObPartitionHitInfo &partition_hit() { return partition_hit_; } // 和上面的set_partition_hit没有任何关系
+  // no relationship with function set_partition_hit(const bool is_hit) above.
+  ObPartitionHitInfo &partition_hit() { return partition_hit_; }
   bool get_err_final_partition_hit(int err_ret)
   {
     bool is_partition_hit = partition_hit().get_bool();

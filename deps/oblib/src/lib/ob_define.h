@@ -1874,7 +1874,7 @@ enum ObJITEnableMode {
 
 #define DATABUFFER_SERIALIZE_INFO data_buffer_.get_data(), data_buffer_.get_capacity(), data_buffer_.get_position()
 
-#define DIO_ALIGN_SIZE 512
+#define DIO_ALIGN_SIZE 4096
 #define DIO_READ_ALIGN_SIZE 4096
 #define DIO_ALLOCATOR_CACHE_BLOCK_SIZE (OB_DEFAULT_MACRO_BLOCK_SIZE + DIO_READ_ALIGN_SIZE)
 #define CORO_INIT_PRIORITY 120

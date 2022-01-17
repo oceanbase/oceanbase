@@ -318,8 +318,10 @@ int ObExprInOrNotIn::ObExprInCtx::init_hashset_vecs(int64_t param_num, int64_t r
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
+    for (int64_t i = 0; i < (1 << row_dimension); ++i) {
+      new (&hashset_vecs_[i]) ObExprInHashMap<ObObj>();
+    }
     for (int i = 0; OB_SUCC(ret) && i < (1 << row_dimension); ++i) {
-      ObExprInHashMap<ObObj>* hashset_ptr = new (&hashset_vecs_[i]) ObExprInHashMap<ObObj>();
       hashset_vecs_[i].set_meta_idx(i);
       hashset_vecs_[i].set_meta_dimension(row_dimension);
       if (OB_FAIL(hashset_vecs_[i].create(param_num))) {
@@ -350,8 +352,10 @@ int ObExprInOrNotIn::ObExprInCtx::init_static_engine_hashset_vecs(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
+    for (int64_t i = 0; i < (1 << row_dimension); ++i) {
+      new (&static_engine_hashset_vecs_[i]) ObExprInHashMap<ObDatum>();
+    }
     for (int i = 0; OB_SUCC(ret) && i < (1 << row_dimension); ++i) {
-      ObExprInHashMap<ObDatum>* hashset_ptr = new (&static_engine_hashset_vecs_[i]) ObExprInHashMap<ObDatum>();
       static_engine_hashset_vecs_[i].set_meta_idx(i);
       static_engine_hashset_vecs_[i].set_meta_dimension(row_dimension);
       if (OB_FAIL(static_engine_hashset_vecs_[i].create(param_num))) {

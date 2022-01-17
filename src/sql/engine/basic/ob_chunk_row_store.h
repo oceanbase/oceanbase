@@ -635,7 +635,7 @@ private:
   inline int dump_one_block(BlockBuffer* item);
 
   int write_file(void* buf, int64_t size);
-  int read_file(void* buf, const int64_t size, const int64_t offset);
+  int read_file(void *buf, const int64_t size, const int64_t offset, const int64_t file_size, const int64_t cur_pos);
 
   bool need_dump(int64_t extra_size);
   BlockBuffer* new_block();

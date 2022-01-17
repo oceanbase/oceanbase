@@ -137,7 +137,8 @@ public:
         block_cache_hit_rate_(0),
         ref_table_id_(common::OB_INVALID_ID),
         partition_guard_(NULL),
-        iterator_mementity_(nullptr)
+        iterator_mementity_(nullptr),
+        is_thread_scope_(true)
   {}
   explicit ObTableScanParam(transaction::ObTransDesc& trans_desc)
       : common::ObVTableScanParam(),
@@ -152,7 +153,8 @@ public:
         block_cache_hit_rate_(0),
         ref_table_id_(common::OB_INVALID_ID),
         partition_guard_(NULL),
-        iterator_mementity_(nullptr)
+        iterator_mementity_(nullptr),
+        is_thread_scope_(true)
   {}
   virtual ~ObTableScanParam()
   {}
@@ -171,6 +173,7 @@ public:
   uint64_t ref_table_id_;  // main table id
   ObIPartitionGroupGuard* partition_guard_;
   lib::MemoryContext iterator_mementity_;
+  bool is_thread_scope_;
   OB_INLINE virtual bool is_valid() const
   {
     return (NULL != trans_desc_ && trans_desc_->is_valid_or_standalone_stmt() && ObVTableScanParam::is_valid());

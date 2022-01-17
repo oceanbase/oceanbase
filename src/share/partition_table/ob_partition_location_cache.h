@@ -81,6 +81,11 @@ public:
   {}
 
 public:
+  void reset()
+  {
+    server_.reset();
+    renew_ts_ = 0;
+  }
   bool is_valid() const
   {
     return server_.is_valid() && renew_ts_ > 0;
@@ -614,6 +619,7 @@ public:
   {}
   int get_strong_leader_info(const ObLocationCacheKey& key, LocationInfo& location_info);
   int set_strong_leader_info(const ObLocationCacheKey& key, const LocationInfo& location_info, bool force_update);
+  int flush_cache(const uint64_t tenant_id);
 
 private:
   static const int64_t CACHE_NUM = 10000;
@@ -694,6 +700,48 @@ public:
   };
 
   explicit ObPartitionLocationCache(ObILocationFetcher& location_fetcher);
+  class LeaderCacheKeyGetter {
+  public:
+    LeaderCacheKeyGetter() : tenant_id_(common::OB_INVALID_TENANT_ID), keys_()
+    {}
+    LeaderCacheKeyGetter(const uint64_t tenant_id) : tenant_id_(tenant_id), keys_()
+    {}
+    ~LeaderCacheKeyGetter()
+    {}
+    int operator()(common::hash::HashMapPair<ObLocationCacheKey, LocationInfo> &entry);
+    const common::ObIArray<ObLocationCacheKey> &get_keys() const
+    {
+      return keys_;
+    }
+
+  private:
+    // OB_INVALID_TENANT_ID means get all tenant's location key
+    uint64_t tenant_id_;
+    common::ObArray<ObLocationCacheKey> keys_;
+    DISALLOW_COPY_AND_ASSIGN(LeaderCacheKeyGetter);
+  };
+
+  class LocationCacheKeyGetter {
+  public:
+    LocationCacheKeyGetter() : tenant_id_(common::OB_INVALID_TENANT_ID), keys_()
+    {}
+    LocationCacheKeyGetter(const uint64_t tenant_id) : tenant_id_(tenant_id), keys_()
+    {}
+    ~LocationCacheKeyGetter()
+    {}
+    int operator()(common::hash::HashMapPair<ObLocationCacheKey, ObPartitionLocation> &entry);
+    const common::ObIArray<ObLocationCacheKey> &get_keys() const
+    {
+      return keys_;
+    }
+
+  private:
+    // OB_INVALID_TENANT_ID means get all tenant's location key
+    uint64_t tenant_id_;
+    common::ObArray<ObLocationCacheKey> keys_;
+    DISALLOW_COPY_AND_ASSIGN(LocationCacheKeyGetter);
+  };
+
   virtual ~ObPartitionLocationCache();
 
   int init(share::schema::ObMultiVersionSchemaService& schema_service, common::ObServerConfig& config,
@@ -784,6 +832,8 @@ public:
       const ObPartitionLocation& location, char* buf, const int64_t buf_size, ObLocationCacheValue& cache_value);
   static const int64_t OB_MAX_LOCATION_SERIALIZATION_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE;
 
+  int flush_cache(const uint64_t tenant_id);
+
 private:
   int remote_get(const common::ObPartitionKey& pkey, ObPartitionLocation& location);
 
@@ -799,6 +849,7 @@ private:
   /*-----batch async renew location end -----*/
 private:
   static const int64_t OB_SYS_LOCATION_CACHE_BUCKET_NUM = 512;
+  // default mode is LatchReadWriteDefendMode
   typedef common::hash::ObHashMap<ObLocationCacheKey, ObPartitionLocation> NoSwapCache;
   typedef common::hash::ObHashMap<ObLocationCacheKey, LocationInfo> NoSwapLeaderCache;
   typedef common::ObKVCache<ObLocationCacheKey, ObLocationCacheValue> KVCache;
@@ -829,7 +880,8 @@ private:
 
   // update location in cache
   int update_location(const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id,
-      const ObPartitionLocation& location);
+      const bool can_erase, const ObPartitionLocation& location);
+  int erase_location(const uint64_t table_id, const int64_t partition_id, const int64_t cluster_id);
   // clear location in cache
   int clear_location(
       const uint64_t table_id, const int64_t partiton_id, const int64_t expire_renew_time, const int64_t cluster_id);

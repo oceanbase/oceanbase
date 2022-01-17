@@ -1836,7 +1836,7 @@ int ObTenantValidate::fetch_all_pg_list(const ObClusterBackupDest& backup_dest, 
   ObExternPGListMgr extern_pg_list_mgr;
   ObBackupListDataMgr list_data_mgr;
   // TODO(yanfeng.yyy) full backup set id not use backup info
-  const int64_t compatible = OB_BACKUP_COMPATIBLE_VERSION_V3;
+  const int64_t compatible = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
   const int64_t fake_piece_id = 0;
   const int64_t fake_create_ts = 0;
 

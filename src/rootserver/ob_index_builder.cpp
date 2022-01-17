@@ -1335,13 +1335,12 @@ int ObIndexBuilder::submit_build_global_index_task(const ObTableSchema& index_sc
     // submit retry task if retryable, otherwise report error
     if (OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
       int record_ret = ret;
-      if (OB_FAIL(GCTX.ob_service_->submit_retry_ghost_index_task(inner_index_schema->get_table_id()))) {
+      if (OB_FAIL(GCTX.ob_service_->submit_retry_ghost_index_task(index_schema.get_table_id()))) {
         LOG_WARN("fail to submit retry ghost index task", K(ret));
         ret = OB_TIMEOUT;
       } else {
-        LOG_INFO("submit build global index task fail but fast retryable",
-            K(record_ret),
-            K(inner_index_schema->get_table_id()));
+        LOG_INFO(
+            "submit build global index task fail but fast retryable", K(record_ret), K(index_schema.get_table_id()));
       }
     } else if (OB_FAIL(ret)) {
       LOG_WARN("submit global index task fail, mark it as timeout", K(ret));

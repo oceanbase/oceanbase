@@ -910,9 +910,7 @@ int ObLogDiskManager::copy_file_content(
   int64_t read_len = 0;
   int64_t write_len = 0;
   int64_t offset = 0;
-  // CLOG and ILOG DIO aligned size are all CLOG_DIO_ALIGN_SIZE
-  // SLOG DIO aligned size is DIO_ALIGN_SIZE
-  int64_t align_size = SLOG_WRITE_POOL == pool_type_ ? DIO_ALIGN_SIZE : CLOG_DIO_ALIGN_SIZE;
+  const int64_t align_size = DIO_ALIGN_SIZE;
 
   if (!src_fd.is_valid() || file_offset < 0) {
     ret = OB_INVALID_ARGUMENT;

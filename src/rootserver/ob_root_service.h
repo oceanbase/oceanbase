@@ -1122,6 +1122,7 @@ public:
   int set_config_pre_hook(obrpc::ObAdminSetConfigArg& arg);
   // arg is readonly after take effect
   int set_config_post_hook(const obrpc::ObAdminSetConfigArg& arg);
+  int wakeup_auto_delete(const obrpc::ObAdminSetConfigItem *item);
 
   // @see ObReplicaControlCleanTask
   int submit_replica_control_clean_task();

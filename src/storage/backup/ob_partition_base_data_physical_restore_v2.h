@@ -167,6 +167,8 @@ private:
   int trans_macro_block(
       const uint64_t table_id, blocksstable::ObMacroBlockMetaV2 &meta, blocksstable::ObBufferReader &data);
   int get_macro_block_path(const ObBackupTableMacroIndex &macro_index, share::ObBackupPath &path);
+  int get_major_macro_block_path_(const ObBackupTableMacroIndex &macro_index, share::ObBackupPath &path);
+  int get_minor_macro_block_path_(const ObBackupTableMacroIndex &macro_index, share::ObBackupPath &path);
 
 private:
   bool is_inited_;

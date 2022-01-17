@@ -718,7 +718,7 @@ private:
   int convert_sp_trans_to_dist_trans_(ObTransDesc& trans_desc);
   int check_snapshot_for_start_stmt_(const ObTransDesc& trans_desc, const ObPartitionLeaderArray& pla);
   memtable::ObMemtableCtx* alloc_tc_memtable_ctx_();
-  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool is_fast_select, const uint64_t tenant_id,
+  int alloc_memtable_ctx_(const common::ObPartitionKey& pg_key, const bool tls_enable /*thread local storage*/, const uint64_t tenant_id,
       memtable::ObMemtableCtx*& mt_ctx);
   void release_memtable_ctx_(const common::ObPartitionKey& pg_key, memtable::ObMemtableCtx* mt_ctx);
   int handle_start_stmt_request_(const ObTransMsg& msg);

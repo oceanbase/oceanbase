@@ -246,12 +246,6 @@ alter system refresh time_zone_info;
 ### test for limit ##
 #select emp_id, mgr_id from emp where emp_id = 1 start with emp_id = 1 connect by prior c1 = 1 group by c1 having c1 > 1 limit 10;
 
-########################## test for drop synonym ###################################
-drop public synonym t1;
-drop public synonym t1 force;
-drop synonym t1 force;
-drop synonym database1.t1 force;
-
 #purge index t1_index;
 
 
