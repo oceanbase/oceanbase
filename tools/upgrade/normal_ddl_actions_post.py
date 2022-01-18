@@ -235,16 +235,6 @@ class NormalDDLActionPostReportInvisibleSysUnitResource(BaseDDLAction):
       ''')
 
   def skip_action(self):
-    (desc, results) = self._query_cursor.exec_query(
-      '''
-      select distinct value from oceanbase.__all_virtual_sys_parameter_stat
-      where name="_report_invisible_sys_unit_resource"
-      ''')
-    if results is not None and len(results) >= 2:
-      return True # at least one 'True' here
-
-    if len(results) == 1 and results[0][0].upper() == 'TRUE':
-      return True
 
     # read config items: server_cpu_quota_max & max_sys_tenant_memory
     server_cpu_quota_min, server_cpu_quota_max = self.get_server_cpu_quota()
@@ -300,7 +290,7 @@ class NormalDDLActionPostReportInvisibleSysUnitResource(BaseDDLAction):
                        'observer=%s, invisible sys unit=cpu (min=%s,max=%s),memory (min=%s,max=%s)',
                       str(observer_resource_result), str(server_cpu_quota_min), str(server_cpu_quota_max), 
                       str(min_sys_tenant_memory), str(max_sys_tenant_memory))
-          return True # skip the action
+          return False # skip the action
 
       else: # the observer with sys unit
         if (cpu_total - cpu_max_assigned + sys_unit_config['max_cpu'] - server_cpu_quota_max < -CPU_EPSILON or
@@ -313,21 +303,21 @@ class NormalDDLActionPostReportInvisibleSysUnitResource(BaseDDLAction):
                        'real sys unit config=%s',
                        str(observer_resource_result), str(server_cpu_quota_min), str(server_cpu_quota_max), 
                        str(min_sys_tenant_memory), str(max_sys_tenant_memory), str(sys_unit_config))
-          return True
+          return False
 
     logging.info('very good. all observer can success hold the invisible sys unit')
-    return False # do the action
+    return True # do the action
 
   def check_before_do_action(self):
     pass
 
   @staticmethod
   def get_action_ddl():
-    return 'alter system set _report_invisible_sys_unit_resource = "True"'
+    return 'alter system set _report_invisible_sys_unit_resource = "False"'
 
   @staticmethod
   def get_rollback_sql():
-    return 'alter system set _report_invisible_sys_unit_resource = "False"'
+    return 'alter system set _report_invisible_sys_unit_resource = "True"'
 
   def dump_after_do_action(self):
     self.dump_before_do_action()

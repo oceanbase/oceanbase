@@ -1048,7 +1048,7 @@ DEF_INT(_max_partition_cnt_per_server, OB_CLUSTER_PARAMETER, "500000", "[10000, 
     "specify max partition count on one observer",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_report_invisible_sys_unit_resource, OB_CLUSTER_PARAMETER, "False",
+DEF_BOOL(_report_invisible_sys_unit_resource, OB_CLUSTER_PARAMETER, "True",
     "Whether report the invisible sys unit resource(the observer without rootservice)",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
