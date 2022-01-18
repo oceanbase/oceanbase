@@ -637,7 +637,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd(int argc, char *argv[])
   int ret = OB_SUCCESS;
 
   int opt = 0;
-  const char* opt_string = "hd:s:o:l:f:q:c";
+  const char* opt_string = "hd:s:o:l:f:qc";
 
   struct option longopts[] = {
     // commands
@@ -1652,7 +1652,7 @@ void ObAdminDumpBackupDataExecutor::print_usage()
   printf("\tob_admin dump_backup -f/home/admin/macro_block_1.0 -o1024 -l2048\n");
 #ifdef _WITH_OSS
   printf("  dump data with -s: \n");
-  printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' -s'host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222'\n");
+  printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' -s'host=url&access_id=111&access_key=222'\n");
 #endif
 }
 
