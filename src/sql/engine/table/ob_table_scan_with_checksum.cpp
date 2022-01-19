@@ -123,7 +123,24 @@ int ObTableScanWithChecksum::ObTableScanWithChecksumCtx::allocate_checksum_memor
   return ret;
 }
 
-int ObTableScanWithChecksum::ObTableScanWithChecksumCtx::add_row_checksum(const common::ObNewRow* row)
+int ObTableScanWithChecksum::ObTableScanWithChecksumCtx::calc_checksum(const ObObj &obj, int64_t &checksum) const
+{
+  int ret = OB_SUCCESS;
+  if (obj.is_fixed_len_char_type()) {
+    ObObj trunc_obj;
+    const char *ptr = obj.get_string_ptr();
+    int32_t len = obj.get_string_len();
+    int32_t trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(obj.get_collation_type(), ptr, len));
+    trunc_obj.copy_meta_type(obj.get_meta());
+    trunc_obj.set_string(obj.get_type(), ObString(trunc_len_byte, ptr));
+    checksum = trunc_obj.checksum_v2(0);
+  } else {
+    checksum = obj.checksum_v2(0);
+  }
+  return ret;
+}
+
+int ObTableScanWithChecksum::ObTableScanWithChecksumCtx::add_row_checksum(const common::ObNewRow *row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(row)) {
@@ -139,7 +156,12 @@ int ObTableScanWithChecksum::ObTableScanWithChecksumCtx::add_row_checksum(const 
         row->count_);
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < row->count_; ++i) {
-      checksum_[i] += row->cells_[i].checksum_v2(0);
+      int64_t checksum = 0;
+      if (OB_FAIL(calc_checksum(row->cells_[i], checksum))) {
+        LOG_WARN("failed to calculate checksum", K(ret));
+      } else {
+        checksum_[i] += checksum;
+      }
     }
   }
   return ret;

@@ -34,6 +34,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_index_builder_util.h"
 #include "observer/ob_server_struct.h"
+#include "observer/ob_service.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "ob_server_manager.h"
 #include "ob_zone_manager.h"
@@ -618,7 +619,7 @@ int ObRSBuildIndexTask::wait_trans_end(bool& is_end)
     LOG_WARN("fail to get schema guard", K(ret), K(fetch_tenant_id), K_(index_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(index_id_));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
     // index table has been dropped
     ret = OB_SUCCESS;
     is_end = true;
@@ -732,7 +733,7 @@ int ObRSBuildIndexTask::wait_build_index_end(bool& is_end)
     LOG_WARN("fail to get schema guard", K(ret), K(fetch_tenant_id), K_(index_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(index_id_, index_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(index_id_));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || index_schema->is_dropped_schema()) {
     ret = OB_SUCCESS;
     is_end = true;
   } else if (OB_FAIL(schema_guard.get_table_schema(index_schema->get_data_table_id(), table_schema))) {
@@ -1025,6 +1026,9 @@ int ObRSBuildIndexTask::generate_index_build_stat_record()
   } else if (OB_FAIL(ddl_service_->get_sql_proxy().write(sql_string.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", K(ret));
   }
+#ifdef ERRSIM
+  ret = E(EventTable::EN_SUBMIT_INDEX_TASK_ERROR_AFTER_STAT_RECORD) OB_SUCCESS;
+#endif
   return ret;
 }
 
@@ -1077,7 +1081,12 @@ int ObRSBuildIndexScheduler::init(ObDDLService* ddl_service)
 int ObRSBuildIndexScheduler::push_task(ObRSBuildIndexTask& task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
+#ifdef ERRSIM
+  ret = E(EventTable::EN_SUBMIT_INDEX_TASK_ERROR_BEFORE_STAT_RECORD) OB_SUCCESS;
+#endif
+  if (OB_SUCCESS != ret) {
+    LOG_INFO("errsim mock push local index task fail", K(ret));
+  } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRSBuildIndexScheduler has not been inited", K(ret));
   } else if (is_stop_) {
@@ -1323,8 +1332,19 @@ int ObIndexBuilder::submit_build_global_index_task(const ObTableSchema& index_sc
         ret = OB_EAGAIN;
       }
     }
-    if (OB_FAIL(ret)) {
-      FORWARD_USER_ERROR(ret, "create global index failed, please drop and create another one");
+    // submit retry task if retryable, otherwise report error
+    if (OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
+      int record_ret = ret;
+      if (OB_FAIL(GCTX.ob_service_->submit_retry_ghost_index_task(index_schema.get_table_id()))) {
+        LOG_WARN("fail to submit retry ghost index task", K(ret));
+        ret = OB_TIMEOUT;
+      } else {
+        LOG_INFO(
+            "submit build global index task fail but fast retryable", K(record_ret), K(index_schema.get_table_id()));
+      }
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("submit global index task fail, mark it as timeout", K(ret));
+      ret = OB_TIMEOUT;
     }
   }
   return ret;
@@ -1413,7 +1433,17 @@ int ObIndexBuilder::submit_build_local_index_task(const ObTableSchema& index_sch
       LOG_WARN("fail to add task into ObRSBuildIndexScheduler", K(ret));
     }
 
-    if (OB_FAIL(ret)) {
+    // submit retry task if retryable, otherwise report error
+    if (OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
+      int record_ret = ret;
+      if (OB_FAIL(GCTX.ob_service_->submit_retry_ghost_index_task(index_schema.get_table_id()))) {
+        LOG_WARN("fail to submit retry ghost index task", K(ret));
+        ret = OB_TIMEOUT;
+      } else {
+        LOG_INFO(
+            "submit build local index task fail but fast retryable", K(record_ret), K(index_schema.get_table_id()));
+      }
+    } else if (OB_FAIL(ret)) {
       obrpc::ObUpdateIndexStatusArg arg;
       ObSchemaGetterGuard schema_guard;
       const ObTableSchema* new_index_schema = NULL;
@@ -1430,8 +1460,8 @@ int ObIndexBuilder::submit_build_local_index_task(const ObTableSchema& index_sch
       } else if (OB_FAIL(schema_guard.get_table_schema(arg.index_table_id_, new_index_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(arg.index_table_id_));
       } else if (OB_ISNULL(new_index_schema)) {
-        ret = OB_SUCCESS;
         LOG_WARN("can not find this index schema", K(ret), K(arg.index_table_id_));
+        ret = OB_SUCCESS;
       } else {
         LOG_INFO("update index status success", LITERAL_K(INDEX_STATUS_INDEX_ERROR), "index_schema", *new_index_schema);
       }

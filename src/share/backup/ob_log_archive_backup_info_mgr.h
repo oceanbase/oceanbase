@@ -222,7 +222,7 @@ public:
       share::ObIBackupLeaseService &backup_lease_service);
   int mark_extern_backup_piece_deleted(const ObClusterBackupDest &current_backup_dest, const uint64_t tenant_id,
       const common::ObIArray<share::ObBackupPieceInfoKey> &piece_keys, const bool is_backup_backup,
-      bool &is_all_deleted, share::ObIBackupLeaseService &backup_lease_service);
+      share::ObIBackupLeaseService &backup_lease_service);
   int get_extern_backup_info_path(
       const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id, share::ObBackupPath &path);
   int get_external_backup_piece_path(const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id,

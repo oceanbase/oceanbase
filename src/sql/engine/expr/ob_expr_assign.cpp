@@ -112,7 +112,7 @@ int ObExprAssign::calc_result_type2(
   type.set_scale(value.get_scale());
   // set length
   if (ob_is_string_type(type.get_type())) {
-    type.set_full_length(common::MAX_BUFFER_SIZE, value.get_length_semantics());
+   type.set_full_length(value.get_length(), value.get_length_semantics());
   }
 
   const ObSQLSessionInfo* session = dynamic_cast<const ObSQLSessionInfo*>(type_ctx.get_session());

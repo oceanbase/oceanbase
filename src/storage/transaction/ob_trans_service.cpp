@@ -883,7 +883,7 @@ int ObTransService::acquire_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx*& 
   } else if (!trans_desc.is_nested_stmt()) {
     TRANS_LOG(WARN, "Non-nested statements should not create a temporary scheduler", K(trans_desc));
   } else {
-    // 构建临时scheduler
+    // build temporary scheduler
     const ObTransID& trans_id = trans_desc.get_trans_id();
     const bool for_replay = false;
     bool alloc = true;
@@ -6210,12 +6210,12 @@ int ObTransService::init_memtable_ctx_(ObMemtableCtx* mem_ctx, const uint64_t te
 }
 
 int ObTransService::alloc_memtable_ctx_(
-    const ObPartitionKey& pkey, const bool is_fast_select, const uint64_t tenant_id, ObMemtableCtx*& ctx)
+    const ObPartitionKey& pkey, const bool tls_enable, const uint64_t tenant_id, ObMemtableCtx*& ctx)
 {
   int ret = OB_SUCCESS;
 
   ObMemtableCtx* memtable_ctx = NULL;
-  if (is_fast_select) {
+  if (!tls_enable) {
     memtable_ctx = static_cast<ObMemtableCtx*>(mt_ctx_factory_.alloc(tenant_id));
     if (NULL != memtable_ctx) {
       memtable_ctx->set_self_alloc_ctx(true);
@@ -6249,7 +6249,7 @@ int ObTransService::alloc_memtable_ctx_(
     }
   } else {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "allocate memory failed", K(ret), K(pkey), K(is_fast_select));
+    TRANS_LOG(WARN, "allocate memory failed", K(ret), K(pkey), K(tls_enable));
   }
   return ret;
 }
@@ -6328,6 +6328,7 @@ int ObTransService::get_store_ctx(const ObTransDesc& trans_desc, const ObPartiti
       if (trans_desc.is_fast_select() || trans_desc.is_not_create_ctx_participant(pg_key, user_specified_snapshot)) {
         int64_t part_snapshot_version = ObTransVersion::INVALID_TRANS_VERSION;
         store_ctx.trans_id_ = trans_desc.get_trans_id();
+        bool tls_enable = store_ctx.is_thread_scope_ && !trans_desc.is_fast_select();
         if (OB_FAIL(handle_snapshot_for_read_only_participant_(
                 trans_desc, pg_key, user_specified_snapshot, part_snapshot_version))) {
           TRANS_LOG(WARN,
@@ -6336,7 +6337,7 @@ int ObTransService::get_store_ctx(const ObTransDesc& trans_desc, const ObPartiti
               K(trans_desc),
               K(pg_key),
               K(user_specified_snapshot));
-        } else if (OB_FAIL(alloc_memtable_ctx_(pg_key, trans_desc.is_fast_select(), pg_key.get_tenant_id(), mt_ctx))) {
+        } else if (OB_FAIL(alloc_memtable_ctx_(pg_key, tls_enable, pg_key.get_tenant_id(), mt_ctx))) {
           TRANS_LOG(WARN, "allocate memory failed", K(ret), K(pg_key));
         } else if (!mt_ctx->is_self_alloc_ctx() && OB_FAIL(init_memtable_ctx_(mt_ctx, pg_key.get_tenant_id()))) {
           TRANS_LOG(WARN, "init mem ctx failed", K(ret), K(pg_key));

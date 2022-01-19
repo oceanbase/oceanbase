@@ -907,7 +907,7 @@ int ObPartitionStorage::malloc_rows_reshape_if_need(ObIAllocator& work_allocator
 
   for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
     const share::schema::ObColDesc& col_desc = col_descs.at(i);
-    if (col_desc.col_type_.is_char() || col_desc.col_type_.is_binary()) {
+    if (col_desc.col_type_.is_fixed_len_char_type() || col_desc.col_type_.is_binary()) {
       char_binary_exists = true;
       if (col_desc.col_type_.is_binary()) {
         char_only = false;
@@ -2186,14 +2186,14 @@ int ObPartitionStorage::check_new_row_shadow_pk(
       LOG_WARN(
           "index column count is invalid", K(ret), K(index_col_cnt), K(rowkey_cnt), K(spk_cnt), K(column_ids.count()));
     } else if (lib::is_mysql_mode()) {
-      // mysql兼容：只要unique index key中有null列，则需要填充shadow列
+      // mysql compatible: if the unique index key contains a null column, fill the shadow column
       bool rowkey_has_null = false;
       for (int64_t i = 0; !rowkey_has_null && i < index_col_cnt; i++) {
         rowkey_has_null = new_row.get_cell(i).is_null();
       }
       need_spk = rowkey_has_null;
     } else {
-      // oracle兼容：只有unique index key全为null列时，才需要填充shadow列
+      // oracle compatible: the shadow column needs to be filled only when all unique index keys are null columns
       bool is_rowkey_all_null = true;
       for (int64_t i = 0; is_rowkey_all_null && i < index_col_cnt; i++) {
         is_rowkey_all_null = new_row.get_cell(i).is_null();
@@ -3468,6 +3468,7 @@ int ObPartitionStorage::table_scan(
   ObTableScanIterator* iter = NULL;
   ObStoreCtx ctx;
   ctx.cur_pkey_ = pkey_;
+  ctx.is_thread_scope_ = param.is_thread_scope_;
 
   // STORAGE_LOG(DEBUG, "begin table scan", K(param));
   if (OB_UNLIKELY(!is_inited_)) {
@@ -3536,6 +3537,7 @@ int ObPartitionStorage::table_scan(
   ObTableScanIterIterator* iter = NULL;
   ObStoreCtx ctx;
   ctx.cur_pkey_ = pkey_;
+  ctx.is_thread_scope_ = param.is_thread_scope_;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -5723,25 +5725,6 @@ int ObPartitionStorage::local_sort_index_by_range(
                  *table_schema, *index_schema, col_ids, org_col_ids, projector, unique_key_cnt))) {
     STORAGE_LOG(WARN, "Fail to get column ids, ", K(ret));
   } else {
-    ObObj* cells_buf = NULL;
-    ObStoreRow default_row;
-    ObStoreRow tmp_row;
-    ObStoreRow new_row;
-
-    if (NULL == (cells_buf = reinterpret_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * org_col_ids.count() * 2)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(ERROR, "failed to alloc cells buf", K(ret), K(org_col_ids.count()));
-    } else {
-      cells_buf = new (cells_buf) ObObj[org_col_ids.count() * 2];
-      default_row.flag_ = ObActionFlag::OP_ROW_EXIST;
-      default_row.row_val_.cells_ = cells_buf;
-      default_row.row_val_.count_ = org_col_ids.count();
-      tmp_row.flag_ = ObActionFlag::OP_ROW_EXIST;
-      tmp_row.row_val_.cells_ = cells_buf + org_col_ids.count();
-      tmp_row.row_val_.count_ = org_col_ids.count();
-      new_row.flag_ = ObActionFlag::OP_ROW_EXIST;
-    }
-
     // extend col_ids for generated column
     ObArray<ObColDesc> extended_col_ids;
     ObArray<ObColDesc> org_extended_col_ids;
@@ -5750,9 +5733,7 @@ int ObPartitionStorage::local_sort_index_by_range(
     ObExprCtx expr_ctx;
     if (OB_SUCC(ret)) {
       ObArray<ObColDesc> index_table_columns;
-      if (OB_FAIL(index_schema->get_orig_default_row(org_col_ids, default_row.row_val_))) {
-        STORAGE_LOG(WARN, "Fail to get default row from table schema, ", K(ret));
-      } else if (OB_FAIL(append(extended_col_ids, col_ids))) {
+      if (OB_FAIL(append(extended_col_ids, col_ids))) {
         STORAGE_LOG(ERROR, "failed to clone col_ids", K(ret), K(col_ids), K(extended_col_ids));
       } else if (OB_FAIL(append(org_extended_col_ids, org_col_ids))) {
         STORAGE_LOG(WARN, "fail to append col array", K(ret));
@@ -5831,7 +5812,7 @@ int ObPartitionStorage::local_sort_index_by_range(
                         expr))) {
                   STORAGE_LOG(WARN,
                       "failed to make sql expression",
-                      K(default_row.row_val_.cells_[i].get_string()),
+                      K(column_schema->get_orig_default_value().get_string()),
                       K(*data_table_schema),
                       K(*column_schema),
                       K(extended_col_ids),
@@ -5853,7 +5834,44 @@ int ObPartitionStorage::local_sort_index_by_range(
         }
       }
     }
-    STORAGE_LOG(INFO, "output projector", K(extended_col_ids), K(output_projector));
+    LOG_INFO("output projector", K(extended_col_ids), K(org_extended_col_ids), K(output_projector));
+
+    int64_t buf_cells_cnt = org_extended_col_ids.count() + org_col_ids.count();
+    ObObj *cells_buf = NULL;
+    ObStoreRow default_row;
+    ObStoreRow tmp_row;
+    ObStoreRow new_row;
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(cells_buf = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * buf_cells_cnt)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to alloc cells buf", K(ret), K(org_extended_col_ids.count()), K(org_col_ids.count()));
+    } else {
+      cells_buf = new (cells_buf) ObObj[buf_cells_cnt];
+      default_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+      default_row.row_val_.cells_ = cells_buf;
+      default_row.row_val_.count_ = org_extended_col_ids.count();
+      tmp_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+      tmp_row.row_val_.cells_ = cells_buf + org_extended_col_ids.count();
+      tmp_row.row_val_.count_ = org_col_ids.count();
+      new_row.flag_ = ObActionFlag::OP_ROW_EXIST;
+    }
+
+    // fill default row
+    for (int64_t i = 0; OB_SUCC(ret) && i < org_extended_col_ids.count(); i++) {
+      const uint64_t col_id = org_extended_col_ids.at(i).col_id_;
+      const ObColumnSchemaV2 *col = index_schema->get_column_schema(col_id);
+      if (NULL == col) {
+        // generated column's depend column, get column schema from data table
+        col = table_schema->get_column_schema(col_id);
+      }
+      if (OB_ISNULL(col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(ret), K(col_id));
+      } else {
+        default_row.row_val_.cells_[i] = col->get_orig_default_value();
+      }
+    }
 
     ObArray<ObColumnParam*> col_params;
     for (int64_t i = 0; OB_SUCC(ret) && i < extended_col_ids.count(); i++) {
@@ -6001,7 +6019,15 @@ int ObPartitionStorage::local_sort_index_by_range(
       }
       ObTableSchemaParam schema_param(allocator);
       ObRelativeTable relative_table;
-      ObSQLMode ob_sql_mode = common::ob_compatibility_mode_to_sql_mode(static_cast<ObCompatibilityMode>(sql_mode));
+      ObSQLMode sql_mode_for_ddl_reshape = SMO_TRADITIONAL;
+      // Hack to prevent row reshaping from converting empty string to null.
+      //
+      // Supposing we have a row of type varchar with some spaces and an index on this column,
+      // and then we convert this column to char. In this case, the DDL routine will first rebuild
+      // the data table and then rebuilding the index table. The row may be reshaped as follows.
+      //
+      // - without hack: '  '(varchar) => ''(char) => null(char)
+      // - with hack: '  '(varchar) => ''(char) => ''(char)
       ObFixedArray<uint64_t, ObIAllocator> column_ids(allocator, org_col_ids.count());
       RowReshape *row_reshape_ins = nullptr;
       for (int64_t i = 0; OB_SUCC(ret) && i < org_col_ids.count(); i++) {
@@ -6017,7 +6043,7 @@ int ObPartitionStorage::local_sort_index_by_range(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to set schema param", K(ret));
       } else if (OB_FAIL(malloc_rows_reshape_if_need(
-                     allocator, org_col_ids, 1, relative_table, ob_sql_mode, row_reshape_ins))) {
+                     allocator, org_col_ids, 1, relative_table, sql_mode_for_ddl_reshape, row_reshape_ins))) {
         STORAGE_LOG(WARN, "failed to malloc for row reshape", K(ret));
       } else {
         // do nothing
@@ -6038,7 +6064,8 @@ int ObPartitionStorage::local_sort_index_by_range(
           for (int64_t k = 0; OB_SUCC(ret) && k < row->row_val_.count_; ++k) {
             if (row->row_val_.cells_[k].is_nop_value()) {
               if (k >= org_col_ids.count()) {
-                // do nothing
+                // e.g. columns that some generated columns in org_col_ids depend on
+                result_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];
               } else if (nullptr == dependent_exprs.at(k)) {
                 result_row.row_val_.cells_[k] = default_row.row_val_.cells_[k];
               }
@@ -6142,8 +6169,12 @@ int ObPartitionStorage::local_sort_index_by_range(
                   }
                 }
               }
-            } else if (OB_FAIL(reshape_table_rows(
-                           &tmp_row.row_val_, row_reshape_ins, org_col_ids.count(), &new_row, 1, ob_sql_mode))) {
+            } else if (OB_FAIL(reshape_table_rows(&tmp_row.row_val_,
+                           row_reshape_ins,
+                           org_col_ids.count(),
+                           &new_row,
+                           1,
+                           sql_mode_for_ddl_reshape))) {
               STORAGE_LOG(WARN, "failed to reshape rows", K(ret));
             } else {
               tmp_row = new_row;
@@ -7337,8 +7368,38 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
         STORAGE_LOG(WARN, "Fail to open macro block writer, ", K(ret));
       } else {
         ObStoreRow row;
-        ObNewRow* row_val = NULL;
+        ObNewRow *row_val = NULL;
+        ObArenaAllocator allocator(lib::ObLabel("PartStorageTmp"));
+        ObColDescArray col_descs;
+        ObTableSchemaParam schema_param(allocator);
+        ObRelativeTable relative_table;
+        ObSQLMode sql_mode_for_ddl_reshape = SMO_TRADITIONAL;  // see local_sort_index_by_range
+        ObFixedArray<uint64_t, ObIAllocator> column_ids(allocator, data_desc.row_column_count_);
+        RowReshape *row_reshape_ins = nullptr;
         row.flag_ = ObActionFlag::OP_ROW_EXIST;
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_desc.row_column_count_; i++) {
+          ObColDesc col_desc;
+          col_desc.col_id_ = data_desc.column_ids_[i];
+          col_desc.col_order_ = data_desc.column_orders_[i];
+          col_desc.col_type_ = data_desc.column_types_[i];
+          if (OB_FAIL(col_descs.push_back(col_desc))) {
+            LOG_WARN("failed to push back col desc", K(ret));
+          } else if (OB_FAIL(column_ids.push_back(col_desc.col_id_))) {
+            LOG_WARN("failed to push back column id", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(schema_param.convert(index_schema, column_ids))) {
+          LOG_WARN("failed to convert schema param", K(ret));
+        } else if (OB_UNLIKELY(false == relative_table.set_schema_param(&schema_param))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to set schema param", K(ret));
+        } else if (OB_FAIL(malloc_rows_reshape_if_need(
+                       allocator, col_descs, 1, relative_table, sql_mode_for_ddl_reshape, row_reshape_ins))) {
+          STORAGE_LOG(WARN, "failed to malloc for row reshape", K(ret));
+        } else {
+          // do nothing
+        }
         while (OB_SUCC(ret)) {
           if (OB_FAIL(THIS_WORKER.check_status())) {
             STORAGE_LOG(WARN, "failed to check status", K(ret));
@@ -7350,8 +7411,10 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
               break;
             }
           } else {
-            row.row_val_.assign(row_val->cells_, row_val->count_);
-            if (OB_FAIL(writer.append_row(row))) {
+            if (OB_FAIL(reshape_table_rows(
+                    row_val, row_reshape_ins, col_descs.count(), &row, 1, sql_mode_for_ddl_reshape))) {
+              STORAGE_LOG(WARN, "failed to reshape rows", K(ret));
+            } else if (OB_FAIL(writer.append_row(row))) {
               if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret && index_schema->is_unique_index()) {
                 LOG_USER_ERROR(
                     OB_ERR_PRIMARY_KEY_DUPLICATE, "", static_cast<int>(sizeof("UNIQUE IDX") - 1), "UNIQUE IDX");
@@ -7363,7 +7426,7 @@ int ObPartitionStorage::append_local_sort_data(const share::ObBuildIndexAppendLo
             }
           }
         }
-
+        free_row_reshape(allocator, row_reshape_ins, 1);
         if (OB_SUCC(ret)) {
           if (OB_FAIL(writer.close())) {
             STORAGE_LOG(WARN, "fail to close writer", K(ret));

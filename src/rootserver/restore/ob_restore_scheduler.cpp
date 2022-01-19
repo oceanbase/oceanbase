@@ -2610,6 +2610,7 @@ int ObRestoreScheduler::create_user_partitions(const ObPhysicalRestoreJob& job_i
     LOG_WARN("fail to get tenant tablegroup schemas", KR(ret), K(tenant_id));
   } else {
     // Only non-delay-deleted PG/Standalone partitions should be created.
+    DEBUG_SYNC(BEFORE_SEND_RESTORE_PARTITIONS_RPC);
     const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;  // 10s
     const int64_t TIMEOUT_PER_RPC = GCONF.rpc_timeout;  // 2s
     const int64_t PARTITION_CNT_PER_RPC = 5;

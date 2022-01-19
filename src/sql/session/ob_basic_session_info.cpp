@@ -3955,7 +3955,7 @@ int ObBasicSessionInfo::store_query_string(const ObString& stmt)
 int ObBasicSessionInfo::store_query_string_(const ObString& stmt)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_CUR_QUERY_LEN - 1, static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));

@@ -1699,19 +1699,20 @@ int ObLogger::init(const ObBaseLogWriterCfg& log_cfg)
     }
     allocator_ = new (buf) ObFIFOAllocator();
     error_allocator_ = new (allocator_ + 1) ObFIFOAllocator();
+    const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 2;  // 512M
     if (OB_FAIL(allocator_->init(lib::ObMallocAllocator::get_instance(),
             OB_MALLOC_BIG_BLOCK_SIZE,
             lib::ObMemAttr(OB_SERVER_TENANT_ID, "Logger", common::ObCtxIds::LOGGER_CTX_ID),
             NORMAL_LOG_INIT_MEM,
             NORMAL_LOG_INIT_MEM << 1,
-            NORMAL_LOG_INIT_MEM << 2))) {
+            limit))) {
       LOG_STDERR("init fifo error. ret=%d\n", ret);
     } else if (OB_FAIL(error_allocator_->init(lib::ObMallocAllocator::get_instance(),
                    OB_MALLOC_BIG_BLOCK_SIZE,
                    lib::ObMemAttr(OB_SERVER_TENANT_ID, "ErrorLogger", common::ObCtxIds::LOGGER_CTX_ID),
                    ERROR_LOG_INIT_MEM,
                    ERROR_LOG_INIT_MEM << 1,
-                   ERROR_LOG_INIT_MEM << 2))) {
+                   limit))) {
       LOG_STDERR("init error_fifo error. ret=%d\n", ret);
     }
     if (OB_SUCC(ret)) {

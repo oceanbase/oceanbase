@@ -1603,6 +1603,12 @@ static int float_number(
   if (OB_UNLIKELY(ObFloatTC != in.get_type_class() || ObNumberTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (std::isnan(value)) {
+    ret = OB_INVALID_NUMERIC;
+    LOG_WARN("float_number failed ", K(ret), K(value));
+  } else if (std::isinf(value)) {
+    ret = OB_NUMERIC_OVERFLOW;
+    LOG_WARN("float_number failed", K(ret), K(value));
   } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
   } else {
     char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
@@ -1902,6 +1908,12 @@ static int double_number(
   if (OB_UNLIKELY(ObDoubleTC != in.get_type_class() || ObNumberTC != ob_obj_type_class(expect_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (std::isnan(value) && lib::is_oracle_mode()) {
+    ret = OB_INVALID_NUMERIC;
+    LOG_WARN("float_number failed ", K(ret), K(value));
+  } else if (std::isinf(value) && lib::is_oracle_mode()) {
+    ret = OB_NUMERIC_OVERFLOW;
+    LOG_WARN("float_number failed", K(ret), K(value));
   } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
   } else {
     char buf[MAX_DOUBLE_STRICT_PRINT_SIZE];
@@ -8668,6 +8680,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
   params.warning_ = 1;
   if (ob_is_string_tc(expect_type)) {
     zero_obj.set_string(expect_type, "");
+  } else if (ob_is_text_tc(expect_type)) {
+    zero_obj.set_lob_value(expect_type, static_cast<const char *>(NULL), 0);
   } else if (ob_is_int_tc(expect_type)) {
     int64_t value = 0;
     SET_RES_INT(zero_obj);

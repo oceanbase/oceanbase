@@ -135,7 +135,7 @@ public:
                   const common::ObIArray<int64_t> &part_ids, int64_t timeout_ts);
   int end_trans(bool is_rollback, rpc::ObRequest *req, int64_t timeout_ts, bool use_sync = false);
   inline bool did_async_end_trans() const { return did_async_end_trans_; }
-  inline transaction::ObTransDesc& get_trans_desc() { return trans_desc_; }
+  inline transaction::ObTransDesc& get_trans_desc() { return *trans_desc_ptr_; }
   int get_partition_by_rowkey(uint64_t table_id, const ObIArray<common::ObRowkey> &rowkeys,
                               common::ObIArray<int64_t> &part_ids,
                               common::ObIArray<sql::RowkeyArray> &rowkeys_per_part);
@@ -190,7 +190,7 @@ protected:
   ObTableRetryPolicy retry_policy_;
   bool need_retry_in_queue_;
   int32_t retry_count_;
-private:
+protected:
   // trans control
   ObPartitionLeaderArray participants_;
   sql::TransState trans_state_;
@@ -200,6 +200,10 @@ private:
   transaction::ObPartitionEpochArray part_epoch_list_;
   bool did_async_end_trans_;
   ObTableConsistencyLevel consistency_level_;
+  ObPartitionLeaderArray *participants_ptr_;
+  sql::TransState *trans_state_ptr_;
+  transaction::ObTransDesc *trans_desc_ptr_;
+  transaction::ObPartitionEpochArray *part_epoch_list_ptr_;
 };
 
 template<class T>

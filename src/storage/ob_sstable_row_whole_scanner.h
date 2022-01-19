@@ -29,6 +29,7 @@ private:
     {}
     void reset();
     int get_block_data(const int64_t cur_micro_cursor, blocksstable::ObMicroBlockData& block_data);
+    TO_STRING_KV(K_(macro_block_id), K_(meta), K_(is_left_border), K_(is_right_border));
 
     blocksstable::MacroBlockId macro_block_id_;
     blocksstable::ObMacroBlockHandle macro_io_handle_;

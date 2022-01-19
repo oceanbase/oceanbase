@@ -2288,21 +2288,15 @@ int ObJoinOrder::add_cte_table(const uint64_t table_id, const uint64_t ref_id)
 int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper& helper, ObIArray<AccessPath*>& access_paths)
 {
   int ret = OB_SUCCESS;
-  ObSqlCtx* sql_ctx = NULL;
-  ObTaskExecutorCtx* task_exec_ctx = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_optimizer_context().get_exec_ctx()) ||
-      OB_ISNULL(task_exec_ctx = get_plan()->get_optimizer_context().get_task_exec_ctx()) ||
-      OB_ISNULL(sql_ctx = get_plan()->get_optimizer_context().get_exec_ctx()->get_sql_ctx())) {
+  if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(sql_ctx), K(ret));
+    LOG_WARN("get unexpected null", K(get_plan()), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
       AccessPath* ap = access_paths.at(i);
       if (OB_ISNULL(ap) || OB_ISNULL(ap->get_sharding_info())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ap), K(ret));
-      } else if (sql_ctx->is_remote_sql_ && ap->get_sharding_info()->is_remote_or_distribute()) {
-        /*do nothing*/
       } else if (OB_FAIL(ap->estimate_cost())) {
         LOG_WARN("failed to get index access info", K(*ap), K(ret));
       } else if (!ap->is_inner_path()) {
@@ -2322,35 +2316,6 @@ int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper& helper, ObIArray
         }
       }
     }  // add path end
-    if (OB_SUCC(ret) && sql_ctx->is_remote_sql_ && interesting_paths_.empty() && !helper.is_inner_path_) {
-      // for the purpose to refresh location cache
-      ObSEArray<ObTablePartitionInfo*, 8> table_partitions;
-      for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); i++) {
-        AccessPath* path = NULL;
-        if (OB_ISNULL(path = access_paths.at(i)) || OB_ISNULL(path->table_partition_info_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(path));
-        } else if (1 != path->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count()) {
-          // do nothing
-        } else if (is_contain(table_partitions, path->table_partition_info_)) {
-          /*do nothing*/
-        } else if (OB_FAIL(path->table_partition_info_->set_log_op_infos(path->index_id_, path->order_direction_))) {
-          LOG_WARN("failed to set log op infos", K(ret));
-        } else if (OB_FAIL(table_partitions.push_back(path->table_partition_info_))) {
-          LOG_WARN("failed to push back table partition", K(ret));
-        } else { /*do nothing*/
-        }
-      }
-      if (OB_FAIL(ret)) {
-        /*do nothing*/
-      } else if (OB_FAIL(task_exec_ctx->append_table_locations_no_dup(table_partitions))) {
-        LOG_WARN("failed to append table locations no dup", K(ret));
-      } else {
-        ret = (get_plan()->get_optimizer_context().is_cost_evaluation() ? OB_SQL_OPT_GEN_PLAN_FALIED
-                                                                        : OB_LOCATION_NOT_EXIST);
-        LOG_WARN("no available local path for remote sql", K(ret));
-      }
-    }
   }
   return ret;
 }

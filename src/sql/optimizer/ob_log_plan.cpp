@@ -305,7 +305,7 @@ int64_t ObLogPlan::to_string(char* buf, const int64_t buf_len, ExplainType type)
       } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {                                  /* Do nothing */
       } else if (OB_FAIL(BUF_PRINTF("-------------------------------------\n"))) { /* Do nothing */
       } else if (OB_FAIL(print_outline(plan))) {
-        databuff_printf(buf, buf_len, pos, "WARN failed to print outlien, ret=%d", ret);
+        databuff_printf(buf, buf_len, pos, "WARN failed to print outline, ret=%d", ret);
       } else {
         ret = BUF_PRINTF(NEW_LINE);
       }
@@ -320,7 +320,7 @@ int64_t ObLogPlan::to_string(char* buf, const int64_t buf_len, ExplainType type)
       } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {                                  /* Do nothing */
       } else if (OB_FAIL(BUF_PRINTF("-------------------------------------\n"))) { /* Do nothing */
       } else if (OB_FAIL(print_outline(plan))) {
-        databuff_printf(buf, buf_len, pos, "WARN failed to print outlien, ret=%d", ret);
+        databuff_printf(buf, buf_len, pos, "WARN failed to print outline, ret=%d", ret);
       } else {
         ret = BUF_PRINTF(NEW_LINE);
       }

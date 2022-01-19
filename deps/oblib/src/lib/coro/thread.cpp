@@ -47,7 +47,15 @@ Thread::Thread(int64_t stack_size) : Thread(nullptr, stack_size)
 {}
 
 Thread::Thread(Runnable runnable, int64_t stack_size)
-    : pth_(0), pid_(0), tid_(0), runnable_(runnable), stack_addr_(nullptr), stack_size_(stack_size), stop_(true)
+    : pth_(0),
+      pid_(0),
+      tid_(0),
+      runnable_(runnable),
+#ifndef OB_USE_ASAN
+      stack_addr_(nullptr),
+#endif
+      stack_size_(stack_size),
+      stop_(true)
 {}
 
 Thread::~Thread()
@@ -61,7 +69,9 @@ int Thread::start()
   if (OB_ISNULL(runnable_)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    void* stack_addr = nullptr;
+#ifndef OB_USE_ASAN
+    void *stack_addr = nullptr;
+#endif
     const auto crls_size = lib::coro::CoConfig::MAX_CRLS_SIZE;
     const int64_t count = ATOMIC_FAA(&total_thread_count_, 1);
     if (count >= OB_MAX_THREAD_NUM - OB_RESERVED_THREAD_NUM) {
@@ -71,18 +81,24 @@ int Thread::start()
     } else if (stack_size_ <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid stack_size", K(ret), K(stack_size_));
+#ifndef OB_USE_ASAN
     } else if (OB_ISNULL(
                    stack_addr = g_stack_allocer.alloc(OB_SERVER_TENANT_ID, stack_size_ + SIG_STACK_SIZE + crls_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc stack memory failed", K(ret), K(errno));
+#endif
     } else {
+#ifndef OB_USE_ASAN
       stack_addr_ = stack_addr;
+#endif
       pthread_attr_t attr;
       bool need_destroy = false;
       int pret = pthread_attr_init(&attr);
       if (pret == 0) {
         need_destroy = true;
+#ifndef OB_USE_ASAN
         pret = pthread_attr_setstack(&attr, stack_addr, stack_size_);
+#endif
       }
       if (pret == 0) {
         stop_ = false;
@@ -138,17 +154,21 @@ void Thread::destroy()
 
 void Thread::destroy_stack()
 {
+
+#ifndef OB_USE_ASAN
   if (stack_addr_ != nullptr) {
     g_stack_allocer.dealloc(stack_addr_);
     stack_addr_ = nullptr;
   }
+#endif
 }
 
 void* Thread::__th_start(void* arg)
 {
   Thread* const th = reinterpret_cast<Thread*>(arg);
   current_thread_ = th;
-  auto* stack_header = CoProtectedStackAllocator::stack_header(th->stack_addr_);
+#ifndef OB_USE_ASAN
+  auto *stack_header = CoProtectedStackAllocator::stack_header(th->stack_addr_);
   abort_unless(stack_header->check_magic());
 
   /**
@@ -186,6 +206,7 @@ void* Thread::__th_start(void* arg)
   stack_header->pth_ = (uint64_t)pthread_self();
   g_stack_mgr.insert(stack_header);
   DEFER(g_stack_mgr.erase(stack_header););
+#endif
 
   int ret = OB_SUCCESS;
   if (OB_ISNULL(th)) {

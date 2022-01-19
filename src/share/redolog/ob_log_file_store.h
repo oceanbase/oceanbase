@@ -182,7 +182,6 @@ public:
 protected:
   static const int MAX_IO_COUNT = 1024;
   static const int64_t AIO_TIMEOUT_SECOND = 30;
-  static const int64_t CLOG_AIO_TIMEOUT_SECOND = 300;
   static const int64_t AIO_RETRY_INTERVAL_US = 100 * 1000;  // 100ms
   static const int64_t MAX_DISK_COUNT = ObLogDiskManager::MAX_DISK_COUNT;
   static const int64_t MAX_IO_RETRY = LLONG_MAX;
@@ -283,6 +282,7 @@ private:
   bool process_retry(const int result, int64_t& retry);
   int process_failed_write();
   int fstat(const int64_t file_id, struct stat* file_stat) const;
+  void check_disk_warning(const int64_t begin_ts, const int64_t end_ts);
 
 private:
   bool is_inited_;

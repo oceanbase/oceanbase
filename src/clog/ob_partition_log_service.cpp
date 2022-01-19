@@ -7163,6 +7163,8 @@ int ObPartitionLogService::broadcast_info()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "is not inited", K(ret), K(partition_key_));
+  } else if (restore_mgr_.is_archive_restoring()) {
+    // archive restoring replica no need exec
   } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 || GCTX.is_primary_cluster()) {
     // Before the 226 version, the standby cluster did not have its own member_list,
     // and the logonly replica of the standby cluster can directly reclaim the logs according to the dump location,

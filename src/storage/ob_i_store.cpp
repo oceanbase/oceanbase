@@ -991,8 +991,10 @@ int ObTableAccessContext::init(ObTableScanParam& scan_param, const ObStoreCtx& c
   param
       .set_mem_attr(
           scan_param.pkey_.get_tenant_id(), common::ObModIds::OB_TABLE_SCAN_ITER, common::ObCtxIds::DEFAULT_CTX_ID)
-      .set_properties(lib::USE_TL_PAGE_OPTIONAL)
       .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
+  if (scan_param.is_thread_scope_) {
+    param.set_properties(lib::USE_TL_PAGE_OPTIONAL);
+  }
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));

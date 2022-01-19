@@ -17,6 +17,7 @@
 #include "rootserver/ob_root_balancer.h"
 #include "rootserver/ob_rebalance_task_mgr.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "rootserver/backup/ob_cancel_backup_backup_scheduler.h"
 #include "share/backup/ob_backup_lease_info_mgr.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/backup/ob_backup_operator.h"
@@ -154,6 +155,7 @@ int ObBackupBackupsetLoadBalancer::choose_server(
 
 ObBackupBackupset::ObBackupBackupset()
     : is_inited_(false),
+      is_working_(false),
       extern_device_error_(false),
       sql_proxy_(NULL),
       zone_mgr_(NULL),
@@ -208,6 +210,8 @@ int ObBackupBackupset::start()
     LOG_WARN("backup backupset do not init", KR(ret));
   } else if (OB_FAIL(ObReentrantThread::start())) {
     LOG_WARN("backup backupset start failed", KR(ret));
+  } else {
+    is_working_ = true;
   }
   return ret;
 }
@@ -1415,7 +1419,12 @@ int ObBackupBackupset::do_backup(const ObBackupBackupsetJobInfo& job_info)
   return ret;
 }
 
-int ObBackupBackupset::do_cancel(const ObBackupBackupsetJobInfo& job_info)
+bool ObBackupBackupset::is_force_cancel() const
+{
+  return GCONF.backup_dest.get_value_string().empty();
+}
+
+int ObBackupBackupset::do_cancel(const ObBackupBackupsetJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -1453,8 +1462,9 @@ int ObBackupBackupset::do_cancel(const ObBackupBackupsetJobInfo& job_info)
       }
     }
     if (OB_FAIL(ret)) {
-      if (ObBackupUtils::is_extern_device_error(ret)) {
-        LOG_WARN("extern device error, ignore error code, must update inner table", KR(ret));
+      // force cancel backup backupset.
+      if (is_force_cancel()) {
+        LOG_WARN("backup backupset task is force canceled", KR(ret));
         ret = OB_SUCCESS;
       }
     }
@@ -2812,6 +2822,29 @@ int ObBackupBackupset::do_external_backup_set_file_info(const share::ObTenantBac
   } else if (OB_FAIL(helper.sync_extern_backup_set_file_info())) {
     LOG_WARN("failed to sync extern backup set file info", KR(ret), K(src), K(dst), K(tenant_id));
   }
+
+  return ret;
+}
+
+int ObBackupBackupset::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObCancelBackupBackupScheduler cancel_scheduler;
+  ObCancelBackupBackupType cancel_type = ObCancelBackupBackupType::CANCEL_BACKUP_BACKUPSET;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup archive log scheduler do not init", KR(ret));
+  } else if (OB_FAIL(cancel_scheduler.init(tenant_id,
+                 *sql_proxy_,
+                 cancel_type,
+                 this,
+                 NULL /*rootserver::ObBackupArchiveLogScheduler *backup_backuppiece*/))) {
+    LOG_WARN("failed to init cancel backup backup scheduler", K(ret));
+  } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_backup_backup())) {
+    LOG_WARN("failed to start schedule cancel backup backup", K(ret));
+  }
+
+  FLOG_WARN("force_cancel backup backupset", K(ret), K(tenant_id));
   return ret;
 }
 
@@ -3613,7 +3646,6 @@ int ObTenantBackupBackupset::check_pg_list_complete(share::ObBackupMetaFileStore
         const ObPGKey& pg_key = backup_meta.partition_group_meta_.pg_key_;
         if (OB_FAIL(pg_set.erase_refactored(pg_key))) {
           if (OB_HASH_NOT_EXIST == ret) {
-            // 前面可能erase过了
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("failed to erase pg key", KR(ret), K(pg_key), K(pg_set.size()));

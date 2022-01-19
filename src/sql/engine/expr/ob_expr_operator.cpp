@@ -1841,7 +1841,7 @@ int ObRelationalExprOperator::calc_result2(
   int ret = OB_SUCCESS;
   // TODO:: raw
   //  bool need_cast = (share::is_oracle_mode() && obj1.get_collation_type() != obj2.get_collation_type());
-  bool need_cast = false;
+  bool need_cast = (share::is_oracle_mode() && obj1.get_type() != obj2.get_type());
   EXPR_DEFINE_CMP_CTX(result_type_.get_calc_meta(), is_null_safe, expr_ctx);
   /*
    * FIX ME,please. It seems that we must check obj1 and obj2 are null or not here

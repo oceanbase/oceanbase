@@ -708,13 +708,47 @@ int ObPartitionMacroBlockRestoreReaderV2::get_macro_block_path(
 {
   int ret = OB_SUCCESS;
   path.reset();
+  bool deal_trans_sstable_as_minor = false;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (!macro_index.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get macro block path get invalid argument", K(ret), K(macro_index));
+  } else if (backup_table_key_.is_trans_sstable()) {
+    if (OB_BACKUP_COMPATIBLE_VERSION_V4 == restore_info_->restore_info_.compatible_) {
+      if (OB_FAIL(get_minor_macro_block_path_(macro_index, path))) {
+        LOG_WARN("failed to get minor macro block path", K(ret), K(macro_index));
+      }
+    } else if (ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V3 == restore_info_->restore_info_.compatible_) {
+      if (OB_FAIL(get_major_macro_block_path_(macro_index, path))) {
+        LOG_WARN("failed to get major macro block path", K(ret), K(macro_index));
+      }
+    }
   } else if (backup_table_key_.is_major_sstable()) {
+    if (OB_FAIL(get_major_macro_block_path_(macro_index, path))) {
+      LOG_WARN("failed to get major macro block path", K(ret), K(macro_index));
+    }
+  } else if (backup_table_key_.is_minor_sstable()) {
+    if (OB_FAIL(get_minor_macro_block_path_(macro_index, path))) {
+      LOG_WARN("failed to get minor macro block path", K(ret), K(macro_index));
+    }
+  }
+  return ret;
+}
+
+int ObPartitionMacroBlockRestoreReaderV2::get_major_macro_block_path_(
+    const ObBackupTableMacroIndex &macro_index, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } else if (!macro_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get macro block path get invalid argument", K(ret), K(macro_index));
+  } else {
     ObSimpleBackupSetPath simple_backup_set_path;
     ObArray<ObSimpleBackupSetPath> path_list;
     const int64_t backup_set_id = macro_index.backup_set_id_;
@@ -745,16 +779,28 @@ int ObPartitionMacroBlockRestoreReaderV2::get_macro_block_path(
                    path))) {
       LOG_WARN("fail to get major macro block file path", K(ret), K(simple_backup_set_path), K(macro_index));
     }
-  } else if (backup_table_key_.is_minor_sstable()) {
-    if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(simple_path_,
-            backup_pgkey_.get_table_id(),
-            backup_pgkey_.get_partition_id(),
-            macro_index.backup_set_id_,
-            macro_indexs_->get_backup_task_id(),
-            macro_index.sub_task_id_,
-            path))) {
-      STORAGE_LOG(WARN, "fail to get meta file path", K(ret));
-    }
+  }
+  return ret;
+}
+
+int ObPartitionMacroBlockRestoreReaderV2::get_minor_macro_block_path_(
+    const ObBackupTableMacroIndex &macro_index, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } else if (!macro_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get macro block path get invalid argument", K(ret), K(macro_index));
+  } else if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(simple_path_,
+                 backup_pgkey_.get_table_id(),
+                 backup_pgkey_.get_partition_id(),
+                 macro_index.backup_set_id_,
+                 macro_indexs_->get_backup_task_id(),
+                 macro_index.sub_task_id_,
+                 path))) {
+    STORAGE_LOG(WARN, "fail to get meta file path", K(ret));
   }
   return ret;
 }
@@ -2082,7 +2128,7 @@ int ObPhyRestoreMacroIndexStoreV2::get_major_macro_index_array(
   } else {
     for (MacroIndexMap::const_iterator iter = index_map_.begin(); iter != index_map_.end(); ++iter) {
       const ObITable::TableKey &table_key = iter->first;
-      if (!table_key.is_major_sstable()) {
+      if (!table_key.is_major_sstable() || table_key.is_trans_sstable()) {
         // do nothing
       } else if (table_id == table_key.table_id_) {
         index_list = iter->second;

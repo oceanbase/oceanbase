@@ -4734,7 +4734,7 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
     need_print_trace_log_ = true;
   } else if (OB_UNLIKELY(!is_trans_valid_for_replay_(OB_LOG_START_MEMBERSHIP_STORAGE, timestamp))) {
-    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log), K(timestamp));
+    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(timestamp));
     ret = OB_TRANS_INVALID_STATE;
     need_print_trace_log_ = true;
   } else if (0 == submit_log_count_) {
@@ -11091,13 +11091,14 @@ int ObPartTransCtx::lock_for_read(
   ObTransStatusInfo trans_info;
   const int64_t MAX_SLEEP_US = 1000;
   const int64_t lock_wait_start_ts = ObTimeUtility::current_time();
+  memtable::ObMemtableCtx &read_ctx = lock_for_read_arg.read_ctx_;
 
   for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
     // leave this check here to make sure no lock is held
     int64_t abs_stmt_timeout =
-        mt_ctx_.get_trx_lock_timeout() < 0
-            ? mt_ctx_.get_abs_expired_time()
-            : MIN(lock_wait_start_ts + mt_ctx_.get_trx_lock_timeout(), mt_ctx_.get_abs_expired_time());
+        read_ctx.get_trx_lock_timeout() < 0
+            ? read_ctx.get_abs_expired_time()
+            : MIN(lock_wait_start_ts + read_ctx.get_trx_lock_timeout(), read_ctx.get_abs_expired_time());
 
     if (OB_FAIL(get_trans_state_and_version_without_lock(trans_info))) {
       TRANS_LOG(WARN, "failed to get trans table status", K(ret));

@@ -3419,8 +3419,8 @@ int ObPartitionStore::inner_remove_uncontinues_inc_tables(ObMultiVersionTableSto
                 K(*pg_memtable_mgr_),
                 K(pg_memtable_mgr_->get_memtable_count()),
                 K(param),
-                K(*new_table_store),
-                K(*param.table_));
+                KPC(new_table_store),
+                KPC(param.table_));
             new_table_store = NULL;
           }
         }

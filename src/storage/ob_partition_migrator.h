@@ -1106,8 +1106,9 @@ public:
 
 private:
   int check_sstable_meta(
-      const blocksstable::ObSSTableBaseMeta& src_meta, const blocksstable::ObSSTableBaseMeta& write_meta);
+      const blocksstable::ObSSTableBaseMeta& src_meta, const blocksstable::ObSSTableBaseMeta& write_meta, const bool is_check_in_advance);
   int acquire_sstable(const ObITable::TableKey& dest_table_key, ObTableHandle& handle);
+  int check_sstable_meta(const bool is_check_in_advance, ObTableHandle &handle);
 
 private:
   bool is_inited_;

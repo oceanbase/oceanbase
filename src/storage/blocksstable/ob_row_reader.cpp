@@ -107,7 +107,7 @@ int deserialize_trans_id(const char* buf, const int64_t row_end_pos, int64_t& po
   if (OB_FAIL(trans_id_ptr->deserialize(buf, row_end_pos, pos))) {
     STORAGE_LOG(WARN, "Failed to deserialize TransID", K(ret), K(buf), K(row_end_pos), K(pos));
   } else {
-    STORAGE_LOG(DEBUG, "Deserialize TransId success", K(*trans_id_ptr));
+    STORAGE_LOG(DEBUG, "Deserialize TransId success", KPC(trans_id_ptr));
   }
   return ret;
 }
@@ -300,7 +300,7 @@ OB_INLINE int ObFlatRowReader::analyze_row_header(const int64_t input_column_cnt
   } else {
     pos_ += row_header_size;  // move forward
     DESERIALIZE_TRANS_ID(trans_id_ptr);
-    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), K(*trans_id_ptr), K(row_header_->get_version()));
+    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), KPC(trans_id_ptr), KPC(row_header_));
   }
   return ret;
 }
@@ -1216,7 +1216,7 @@ OB_INLINE int ObSparseRowReader::analyze_row_header(transaction::ObTransID* tran
   } else {
     pos_ += row_header_size;  // move forward
     DESERIALIZE_TRANS_ID(trans_id_ptr);
-    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), KPC(trans_id_ptr), K(row_header_->get_version()));
+    STORAGE_LOG(DEBUG, "success to deserialize trans id", K(ret), KPC(trans_id_ptr), KPC(row_header_));
   }
   return ret;
 }

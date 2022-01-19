@@ -15,6 +15,7 @@
 #include "rootserver/ob_thread_idling.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 #include "rootserver/ob_server_manager.h"
+#include "rootserver/ob_i_backup_scheduler.h"
 #include "lib/queue/ob_link.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/hash/ob_hashmap.h"
@@ -42,7 +43,7 @@ private:
   int64_t idle_time_us_;
 };
 
-class ObBackupArchiveLogScheduler : public ObRsReentrantThread {
+class ObBackupArchiveLogScheduler : public ObIBackupScheduler {
   static const int64_t MAX_BUCKET_NUM = 1024;
   static const int64_t MAX_BATCH_SIZE = 1024;
   static const int64_t SERVER_LEASE_TIME = 2 * 60 * 1000 * 1000;  // 2min
@@ -182,6 +183,12 @@ public:
       const common::ObIArray<common::ObPGKey>& pg_list);
   int handle_enable_auto_backup(const bool is_enable);
 
+  virtual bool is_working() const
+  {
+    return is_working_;
+  }
+  virtual int force_cancel(const uint64_t tenant_id);
+
 private:
   int check_archive_beginning(const uint64_t tenant_id, bool& is_beginning);
   int do_if_pg_task_finished(
@@ -277,9 +284,9 @@ private:
       const int64_t timestamp,  // create ts
       const uint64_t tenant_id, common::ObIArray<common::ObPGKey>& pg_keys);
   int generate_backup_archive_log_task(const uint64_t tenant_id, const int64_t archive_round,
-      const int64_t piece_id,     // 备份拆分才会用
-      const int64_t create_date,  // 备份拆分才会用
-      const int64_t job_id,       // 备份拆分才会用
+      const int64_t piece_id,     
+      const int64_t create_date,  
+      const int64_t job_id,      
       const share::ObBackupDest& src, const share::ObBackupDest& dst, const common::ObAddr& server,
       common::ObArray<SimplePGWrapper*>& pg_keys);
   int do_backup_archive_log_rpc_failed(const uint64_t tenant_id, const int64_t round_id, const int64_t piece_id,
@@ -421,6 +428,8 @@ private:
   int on_fatal_error(const share::ObBackupBackupPieceJobInfo& job_info, const int64_t result);
   int check_normal_tenant_passed_sys_tenant(
       const uint64_t tenant_id, const int64_t local_sys_checkpoint_ts, bool& passed);
+
+  bool is_force_cancel() const;
 
 private:
   static const int64_t CHECK_NEED_RESCHEDULE_TIME_INTERVAL = 1000 * 1000 * 1000;

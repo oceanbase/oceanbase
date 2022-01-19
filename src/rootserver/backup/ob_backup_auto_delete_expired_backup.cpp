@@ -320,5 +320,12 @@ void ObBackupAutoDeleteExpiredData::switch_delete_obsolete_action()
   }
 }
 
+int ObBackupAutoDeleteExpiredData::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  FLOG_WARN("force_cancel auto delete expired data", K(ret), K(tenant_id));
+  return ret;
+}
+
 }  // namespace rootserver
 }  // namespace oceanbase

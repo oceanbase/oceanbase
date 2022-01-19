@@ -83,7 +83,8 @@ static const int64_t WAIT_INTERVAL_US = 1 * 1000 * 1000;  // 1s
  * target: insert_values_per_line_
  * according to: valid_insert_column_info_store_
  */
-int ObLoadDataImpl::collect_insert_row_strings()
+int ObLoadDataImpl::collect_insert_row_strings(ObIAllocator &allocator,
+                                               bool is_no_backslash_escapes/* default=false*/)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < insert_column_number_; ++i) {
@@ -98,12 +99,44 @@ int ObLoadDataImpl::collect_insert_row_strings()
       }
     } else {
       if (OB_LIKELY(value_info.array_ref_idx_ < file_column_number_)) {
-        target = parsed_field_strs_.at(value_info.array_ref_idx_);
+        if (is_no_backslash_escapes) {
+          if (OB_FAIL(transform_single_bs_to_double_bs(target,
+                                                       parsed_field_strs_.at(value_info.array_ref_idx_),
+                                                       allocator))) {
+            LOG_WARN("transfrom backslash fail", K(ret));
+          }
+        } else {
+          target = parsed_field_strs_.at(value_info.array_ref_idx_);
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid array index", K(ret), K(value_info.array_ref_idx_), K(parsed_field_strs_.count()));
       }
     }
+  }
+  return ret;
+}
+
+int ObLoadDataImpl::transform_single_bs_to_double_bs(ObString &target, ObString &source, ObIAllocator &allocator) {
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  int64_t strlen = source.length();  
+  if (strlen <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get_unexpected str");
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(2*strlen*sizeof(char))))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to allocate memory for escaped str");
+  } else {
+    int64_t pos = 0;
+    for (int64_t i = 0; i < source.length(); ++i) {
+      if (source[i] == '\\') {
+        buf[pos++] = '\\';
+      }
+      buf[pos++] = source[i];
+    }
+    buf[pos++] = 0;
+    target = ObString(pos, buf);
   }
   return ret;
 }
@@ -775,11 +808,29 @@ int ObLoadDataBase::memory_wait_local(ObExecContext &ctx,
 
       leader_addr.reset();
       res.reuse();
+  
+      bool force_renew = false;
+      do {
+        const int64_t retry_us = 200 * 1000;
 
-      if (OB_FAIL(ObLoadDataUtils::check_session_status(*session))) {
-        LOG_WARN("session is not valid during wait", K(ret));
-      } else if (OB_FAIL(loc_cache->get_strong_leader(part_key, leader_addr, force_renew))) {
-        LOG_WARN("get partition location cache failed", K(ret), K(part_key));
+        if (OB_FAIL(ObLoadDataUtils::check_session_status(*session))) {
+          LOG_WARN("session is not valid during wait", K(ret));
+        } else if (OB_FAIL(loc_cache->get_strong_leader(part_key, leader_addr, force_renew))) {
+          if (OB_LOCATION_LEADER_NOT_EXIST == ret && !force_renew) {
+            // retry one time
+            force_renew = true;
+            LOG_WARN("failed to get location and force renew", K(ret), K(part_key));
+          } else {
+            LOG_WARN("failed to get location", K(ret), K(part_key));
+            usleep(retry_us);
+          }
+        } else {
+          force_renew = false;
+          LOG_DEBUG("get participants", K(part_key), K(leader_addr));
+        }
+      } while (OB_LOCATION_LEADER_NOT_EXIST == ret && force_renew); 
+     
+      if (OB_FAIL(ret)) {  
       } else if (OB_FAIL(sql.assign_fmt(SERVER_TENANT_MEMORY_EXAMINE_SQL,
                      tenant_id,
                      (leader_addr.get_ipv4() >> 24) & 0XFF,
@@ -1046,10 +1097,31 @@ int ObLoadDataImpl::send_and_switch_buffer(
       ObAddr leader_addr;
       if (OB_FAIL(part_key.init(load_args_.table_id_, part_id, 0))) {
         LOG_WARN("partition key init failed", K(load_args_.table_id_), K(part_id), K(part_num_));
-      } else if (OB_FAIL(partition_locatition_cache->get_strong_leader(part_key, leader_addr))) {
-        LOG_WARN("get partition location cache failed", K(ret), K(part_key));
       } else {
-        // async rpc call send used buffer
+        bool force_renew = false;
+        do {
+          const int64_t retry_us = 200 * 1000;
+
+          if (OB_FAIL(ObLoadDataUtils::check_session_status(*ctx.get_my_session()))) {
+            LOG_WARN("session is not valid during wait", K(ret));
+          } else if (OB_FAIL(partition_locatition_cache->get_strong_leader(part_key, leader_addr, force_renew))) {
+            if (OB_LOCATION_LEADER_NOT_EXIST == ret && !force_renew) {
+              // retry one time
+              force_renew = true;
+              LOG_WARN("failed to get location and force renew", K(ret), K(part_key));
+            } else {
+              LOG_WARN("failed to get location", K(ret), K(part_key));
+              usleep(retry_us);
+            }
+          } else {
+            force_renew = false;
+            LOG_DEBUG("get participants", K(part_key), K(leader_addr));
+          }
+        } while (OB_LOCATION_LEADER_NOT_EXIST == ret && force_renew);
+      }
+
+      if (OB_SUCC(ret)) {
+        //async rpc call send used buffer
         buffer->set_addr(leader_addr);
         ObRpcLoadDataTaskCallBack mycallback(task_controller_, complete_task_array_, buffer);
         serialize_timer_.start_stat();
@@ -1132,11 +1204,12 @@ void ObLoadDataImpl::deal_with_irregular_line()
   }
 }
 
-int ObLoadDataImpl::handle_one_line_local(ObPhysicalPlanCtx& plan_ctx)
+int ObLoadDataImpl::handle_one_line_local(ObPhysicalPlanCtx& plan_ctx,
+                                          ObExecContext& ctx)
 {
   int ret = OB_SUCCESS;
   // LOAD_STOP_ON_DUP mode, single thread loading
-  if (OB_FAIL(collect_insert_row_strings())) {
+  if (OB_FAIL(collect_insert_row_strings(ctx.get_allocator()))) {
     LOG_WARN("cat strings into insert values failed", K(ret));
   } else if (OB_FAIL(do_local_sync_insert(plan_ctx))) {
     LOG_WARN("do local sync insert failed", K(ret));
@@ -1211,8 +1284,15 @@ int ObLoadDataImpl::handle_one_line(ObExecContext& ctx, ObPhysicalPlanCtx& plan_
       }
     }
   }
+  bool is_nbe = false;
+  ObSQLSessionInfo *session = NULL;
+  if (OB_ISNULL(session = ctx.get_my_session())) {
+    //do nothing;
+  } else {
+    IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), is_nbe);
+  }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(collect_insert_row_strings())) {
+    if (OB_FAIL(collect_insert_row_strings(ctx.get_allocator(), is_nbe))) {
       LOG_WARN("cat field strs into values failed", K(ret));
     } else if (OB_FAIL(buffer->store_row(insert_values_per_line_, parsed_line_count_))) {
       LOG_WARN("assign temp row failed", K(ret));
@@ -1650,7 +1730,7 @@ int ObLoadDataImpl::init_table_location_via_fake_insert_stmt(
       LOG_WARN("generate fake field failed", K(ret));
     } else if (OB_FAIL(generate_set_expr_strs(ctx.get_my_session()))) {
       LOG_WARN("assemble set expr strings failed", K(ret));
-    } else if (OB_FAIL(collect_insert_row_strings())) {
+    } else if (OB_FAIL(collect_insert_row_strings(ctx.get_allocator()))) {
       LOG_WARN("cat strings into insert values failed", K(ret));
     } else if (OB_FAIL(ObLoadDataBase::construct_insert_sql(insert_sql,
                    back_quoted_db_table_name_,
@@ -2919,6 +2999,7 @@ int ObLoadDataSPImpl::wait_shuffle_task_return(ToolBox& box)
       ret = OB_ERR_UNEXPECTED;
     } else {
       handle->result.reset();
+      handle->err_records.reuse();
     }
   }
 
@@ -2930,7 +3011,7 @@ int ObLoadDataSPImpl::handle_returned_shuffle_task(ToolBox& box, ObShuffleTaskHa
   UNUSED(box);
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(handle.result.task_id_ >= box.file_buf_row_num.count())) {
+  if (OB_UNLIKELY(handle.result.task_id_ >= box.file_buf_row_num.count() || handle.result.task_id_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid array index", K(ret), K(handle.result.task_id_), K(box.file_buf_row_num.count()));
   } else if (!box.file_appender.is_opened() && OB_FAIL(create_log_file(box))) {
@@ -3796,7 +3877,13 @@ void ObDataFragMgr::distory_datafrag(ObDataFrag* frag)
 int ObPartDataFragMgr::update_part_location(ObExecContext& ctx)
 {
   int ret = OB_SUCCESS;
-  ObIPartitionLocationCache* location_cache = NULL;
+  ObIPartitionLocationCache *location_cache = NULL;
+  const int64_t retry_us = 200 * 1000;
+  int64_t query_timeout = 0;
+  int64_t retry_timeout = 0;
+  ctx.get_my_session()->get_query_timeout(query_timeout);
+  retry_timeout = std::min(ObTimeUtil::current_time() + 30 * USECS_PER_SEC, // the RTO is 30s
+                           query_timeout);
 
   if (OB_UNLIKELY(!part_key_.is_valid())) {
     ret = OB_NOT_INIT;
@@ -3813,8 +3900,12 @@ int ObPartDataFragMgr::update_part_location(ObExecContext& ctx)
           force_renew = true;
           LOG_WARN("failed to get location and force renew", K(ret), K(part_key_));
         } else {
-          force_renew = false;
           LOG_WARN("failed to get location", K(ret), K(part_key_));
+          if (ObTimeUtil::current_time() + retry_us > retry_timeout) {
+            force_renew = false;
+          } else {
+            usleep(retry_us);
+          }
         }
       } else {
         LOG_DEBUG("get participants", K(part_key_), K(leader_addr_));

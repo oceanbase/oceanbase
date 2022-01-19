@@ -176,7 +176,7 @@ public:
 
 ////////////////////////////////////////////////////////////////
 // @see PCODE_DEF(OB_TABLE_API_EXECUTE_QUERY, 0x1104)
-class ObTableQueryRequest final
+class ObTableQueryRequest
 {
   OB_UNIS_VERSION(1);
 public:
@@ -187,7 +187,7 @@ public:
        consistency_level_(ObTableConsistencyLevel::STRONG)
   {}
 
-  TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
+  VIRTUAL_TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
                K_(table_name),
                K_(table_id),
                K_(partition_id),
@@ -213,6 +213,7 @@ public:
   virtual ~ObTableQueryResultIterator() {}
   virtual int get_next_result(ObTableQueryResult *&one_result) = 0;
   virtual bool has_more_result() const = 0;
+  virtual void set_one_result(ObTableQueryResult *result){ UNUSED(result); }
 };
 
 class ObTableQueryAndMutateRequest final
@@ -239,6 +240,23 @@ public:
   ObTableEntityType entity_type_;  // for optimize purpose
   ObTableQueryAndMutate query_and_mutate_;
   ObBinlogRowImageType binlog_row_image_type_;
+};
+
+class ObTableQuerySyncRequest : public ObTableQueryRequest
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableQuerySyncRequest()
+      :query_session_id_(0),
+       query_type_(ObQueryOperationType::QUERY_MAX)
+  {}
+  virtual ~ObTableQuerySyncRequest(){}
+  INHERIT_TO_STRING_KV("ObTableQueryRequest", ObTableQueryRequest,
+               K_(query_session_id),
+               K_(query_type));
+public:
+  uint64_t query_session_id_;
+  ObQueryOperationType query_type_;
 };
 
 } // end namespace table

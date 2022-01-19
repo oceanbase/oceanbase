@@ -169,7 +169,7 @@ int ObRestoreFileUtil::read_partition_meta(const ObString &path, const ObString 
         } else if (OB_FAIL(partition_meta.copy_from_old_meta(tmp_meta))) {
           LOG_WARN("failed to copy_from_old_meta", K(ret), K(tmp_meta));
         }
-      } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible) {
+      } else if (OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible || OB_BACKUP_COMPATIBLE_VERSION_V4 == compatible) {
         if (OB_FAIL(buffer_reader.read_serialize(partition_meta))) {
           STORAGE_LOG(WARN, "read partition meta fail", K(ret), K(path), K(meta_index));
         }
@@ -820,7 +820,8 @@ int ObPhyRestoreMetaIndexStore::check_meta_index_completed(
   if (ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V1 == compatible ||
       OB_BACKUP_COMPATIBLE_VERSION_V2 == compatible) {
     type = ObBackupMetaType::PARTITION_GROUP_META;
-  } else if (ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible) {
+  } else if (ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V3 == compatible ||
+             ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V4 == compatible) {
     type = ObBackupMetaType::PARTITION_GROUP_META_INFO;
   } else {
     ret = OB_ERR_UNEXPECTED;

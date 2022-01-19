@@ -4,9 +4,9 @@ include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
 project("OceanBase CE"
-  VERSION 3.1.1
+  VERSION 3.1.2
   DESCRIPTION "OceanBase distributed database system"
-  HOMEPAGE_URL "https://www.oceanbase.com/"
+  HOMEPAGE_URL "https://open.oceanbase.com/"
   LANGUAGES CXX C ASM)
 
 ob_define(WITH_OSS OFF)
@@ -32,15 +32,6 @@ if (ENABLE_FATAL_ERROR_HANG)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFATAL_ERROR_HANG")
 endif()
 
-message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
-message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
-
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-add_subdirectory(deps/easy)
-add_subdirectory(deps/oblib)
-add_subdirectory(src)
-
 include(CMakeDependentOption)
 # OB_BUILD_RPM => include tools and build them.
 # otherwise    => include tools but don't build them.
@@ -61,6 +52,27 @@ cmake_dependent_option(
   OB_INCLUDE_TEST "Include test" ON
   "NOT OB_BUILD_RPM" OFF)
 option(OB_BUILD_TEST "" OFF)
+
+# OB_BUILD_RPM => build sql proxy parser
+cmake_dependent_option(
+  OB_BUILD_LIBOB_SQL_PROXY_PARSER "Build lib_sql_proxy_parser" OFF
+  "NOT OB_BUILD_RPM;NOT OB_BUILD_LIBOB_SQL_PROXY_PARSER" ON
+)
+
+# OB_BUILD_RPM => build liboblog
+cmake_dependent_option(
+  OB_BUILD_LIBOBLOG "Build liboblog" OFF
+  "NOT OB_BUILD_RPM;NOT OB_BUILD_LIBOBLOG" ON
+)
+
+message(STATUS "This is BINARY dir " ${PROJECT_BINARY_DIR})
+message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+add_subdirectory(deps/easy)
+add_subdirectory(deps/oblib)
+add_subdirectory(src)
 
 include(CTest)
 if (OB_BUILD_UNITTEST)

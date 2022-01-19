@@ -179,6 +179,7 @@ private:
   int64_t offset_;
   int64_t data_length_;
   bool check_exist_;
+  bool check_tagging_;
 };
 
 

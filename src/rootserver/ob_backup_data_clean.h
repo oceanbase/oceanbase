@@ -18,6 +18,7 @@
 #include "ob_partition_group_coordinator.h"
 #include "ob_server_checker.h"
 #include "ob_root_utils.h"
+#include "ob_i_backup_scheduler.h"
 #include "ob_shrink_resource_pool_checker.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "share/backup/ob_backup_struct.h"
@@ -52,7 +53,7 @@ public:
   virtual int64_t get_idle_interval_us();
 };
 
-class ObBackupDataClean : public ObRsReentrantThread {
+class ObBackupDataClean : public ObIBackupScheduler {
 public:
   ObBackupDataClean();
   virtual ~ObBackupDataClean();
@@ -73,7 +74,9 @@ public:
   {
     return is_working_;
   }
-  int start() override;
+  virtual int force_cancel(const uint64_t tenant_id);
+  int start();
+
   share::ObIBackupLeaseService *get_backup_lease_service()
   {
     return backup_lease_service_;
@@ -89,6 +92,14 @@ public:
   share::ObBackupDest &get_backup_backup_dest()
   {
     return backup_backup_dest_;
+  }
+  const hash::ObHashSet<ObSimplePieceKey> &get_sys_tenant_deleted_backup_piece()
+  {
+    return sys_tenant_deleted_backup_piece_;
+  }
+  const hash::ObHashSet<ObSimpleArchiveRound> &get_sys_tenant_deleted_backup_round()
+  {
+    return sys_tenant_deleted_backup_round_;
   }
 
 private:
@@ -212,6 +223,8 @@ private:
       const ObBackupDataCleanElement &clean_element,
       common::ObIArray<ObLogArchiveRound> &log_archive_rounds,
       common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys);
+  int get_tenant_delete_piece(const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanElement &clean_element,
+      common::ObIArray<ObBackupPieceInfoKey> &backup_piece_keys);
 
   int delete_tenant_backup_meta_data(
       const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanTenant &clean_tenant);
@@ -258,6 +271,13 @@ private:
   int get_backup_clean_info(
       const uint64_t tenant_id, common::ObISQLClient &sql_proxy, share::ObBackupCleanInfo &clean_info);
   int get_backup_clean_info(const uint64_t tenant_id, share::ObBackupCleanInfo &clean_info);
+  int get_source_backup_set_file_info(const uint64_t tenant_id, const int64_t incarnation,
+      const ObBackupSetId &backup_set_id, ObBackupSetFileInfo &backup_set_file_info, bool &is_need_modify);
+  int get_source_backup_dest_from_piece_file(const common::ObIArray<ObBackupPieceInfoKey> &piece_keys,
+      ObClusterBackupDest &cluster_backup_dest, bool &is_need_modify);
+  int mark_extern_source_backup_set_info_of_backup_backup(const uint64_t tenant_id, const int64_t incarnation,
+      const ObBackupSetFileInfo &backup_set_file_info, const ObArray<ObBackupSetIdPair> &backup_set_id_pairs,
+      const bool is_deleting);
 
   void cleanup_prepared_infos();
   int check_need_cleanup_prepared_infos(const share::ObBackupCleanInfo &sys_backup_info, bool &need_clean);

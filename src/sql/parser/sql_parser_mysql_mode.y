@@ -278,7 +278,7 @@ END_P SET_VAR DELIMITER
         STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STD STDDEV STDDEV_POP STDDEV_SAMP STRONG
         SYNCHRONIZATION STOP STORAGE STORAGE_FORMAT_VERSION STORAGE_FORMAT_WORK_VERSION STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
-        SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS SYNONYM
+        SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
         SIZE
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_MAX_SIZE
@@ -304,7 +304,7 @@ END_P SET_VAR DELIMITER
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
 %type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option
-%type <node> create_synonym_stmt drop_synonym_stmt opt_public opt_force synonym_name synonym_object opt_dlink
+%type <node> opt_force
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
 %type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor
 %type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt
@@ -525,8 +525,6 @@ stmt:
   | rename_table_stmt       { $$ = $1; check_question_mark($$, result); }
   | truncate_table_stmt     { $$ = $1; check_question_mark($$, result); }
   | set_transaction_stmt    { $$ = $1; check_question_mark($$, result); }
-  | create_synonym_stmt     { $$ = $1; check_question_mark($$, result); }
-  | drop_synonym_stmt       { $$ = $1; check_question_mark($$, result); }
   | create_savepoint_stmt   { $$ = $1; check_question_mark($$, result); }
   | rollback_savepoint_stmt { $$ = $1; check_question_mark($$, result); }
   | release_savepoint_stmt  { $$ = $1; check_question_mark($$, result); }
@@ -1016,7 +1014,6 @@ bit_expr IN in_expr
 }
 | bit_expr LIKE STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
-  //在resolver时，如果发现只有两个children，会将escape 参数设置为‘\’
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $3, $4);
   ParseNode *string_list_node = NULL;
@@ -1041,7 +1038,6 @@ bit_expr IN in_expr
 }
 | bit_expr LIKE STRING_VALUE string_val_list ESCAPE simple_expr %prec LIKE
 {
-  // 如果escape 为空串 '', 则使用默认值'\'
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $3, $4);
   ParseNode *string_list_node = NULL;
@@ -1097,7 +1093,6 @@ bit_expr IN in_expr
 | bit_expr not LIKE STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
   (void)($2);
-  //在resolver时，如果发现只有两个children，会将escape 参数设置为‘\’
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $4, $5);
   ParseNode *string_list_node = NULL;
@@ -1131,7 +1126,6 @@ bit_expr IN in_expr
   ParseNode *concat_node = NULL;
   make_name_node(concat_node, result->malloc_pool_, "concat");
   malloc_non_terminal_node(concat_node, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
-  // 如果escape 为空串 '', 则使用默认值'\'
   if (OB_UNLIKELY(T_VARCHAR == $7->type_ && 0 == $7->str_len_)) {
     ParseNode *node = NULL;
     malloc_terminal_node(node, result->malloc_pool_, T_VARCHAR);
@@ -3812,142 +3806,6 @@ use_database_stmt:
 USE database_factor
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_USE_DATABASE, 1, $2);
-}
-;
-
-/*****************************************************************************
- *
- *	create synonym grammar
- *
- *****************************************************************************/
-
-create_synonym_stmt:
-CREATE opt_replace opt_public SYNONYM  synonym_name FOR synonym_object opt_dlink
-{
-  malloc_non_terminal_node($$,
-                           result->malloc_pool_,
-                           T_CREATE_SYNONYM,
-                           7,
-                           $2,                   /*or replace*/
-                           $3,                   /* public */
-                           NULL,                 /* opt schema name */
-                           $5,                   /* synonym name */
-                           NULL,                   /* opt schema name */
-                           $7,                   /* synonym object */
-                           $8);                  /* partition optition */
-}
-;
-
-| CREATE opt_replace opt_public SYNONYM database_factor '.' synonym_name FOR synonym_object opt_dlink
-{
-  malloc_non_terminal_node($$,
-                           result->malloc_pool_,
-                           T_CREATE_SYNONYM,
-                           7,
-                           $2,                   /*or replace*/
-                           $3,                   /* public */
-                           $5,                   /* opt schema name */
-                           $7,                   /* synonym name */
-                           NULL,                   /* opt schema name */
-                           $9,                   /* synonym object */
-                           $10);                  /* partition optition */
-}
-;
-
-| CREATE opt_replace opt_public SYNONYM  synonym_name FOR database_factor '.' synonym_object opt_dlink
-{
-  malloc_non_terminal_node($$,
-                           result->malloc_pool_,
-                           T_CREATE_SYNONYM,
-                           7,
-                           $2,                   /*or replace*/
-                           $3,                   /* public */
-                           NULL,                 /* opt schema name */
-                           $5,                   /* synonym name */
-                           $7,                   /* opt schema name */
-                           $9,                   /* synonym object */
-                           $10);                  /* partition optition */
-}
-;
-| CREATE opt_replace opt_public SYNONYM  database_factor '.' synonym_name FOR database_factor '.' synonym_object opt_dlink
-{
-  malloc_non_terminal_node($$,
-                           result->malloc_pool_,
-                           T_CREATE_SYNONYM,
-                           7,
-                           $2,                   /*or replace*/
-                           $3,                   /* public */
-                           $5,                 /* opt schema name */
-                           $7,                   /* synonym name */
-                           $9,                   /* opt schema name */
-                           $11,                   /* synonym object */
-                           $12);                  /* partition optition */
-}
-;
-
-opt_public:
-PUBLIC
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_PUBLIC); }
-| /* EMPTY */
-{ $$ = NULL; }
-;
-
-
-synonym_name:
-NAME_OB
-{ $$ = $1; }
-| unreserved_keyword
-{
-  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
-}
-;
-
-opt_dlink:
-'@' ip_port
-{
-  $$ = $2;}
-| /* EMPTY */
-{ $$ = NULL; }
-;
-
-synonym_object:
-NAME_OB
-{ $$ = $1; }
-| unreserved_keyword
-{
-  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
-}
-;
-
-/*****************************************************************************
- *
- *      DROP SYNONYM grammar
- *
- *****************************************************************************/
-drop_synonym_stmt:
-DROP opt_public SYNONYM synonym_name opt_force
-{
-  malloc_non_terminal_node($$,
-                           result->malloc_pool_,
-                           T_DROP_SYNONYM,
-                           4,
-                           $2,                   /*opt public*/
-                           NULL,                   /* opt schema name */
-                           $4,                   /* synonym name */
-                           $5);                  /* opt force */
-}
-;
-| DROP opt_public SYNONYM database_factor '.' synonym_name opt_force
-{
-  malloc_non_terminal_node($$,
-                           result->malloc_pool_,
-                           T_DROP_SYNONYM,
-                           4,
-                           $2,                   /*opt public*/
-                           $4,                   /* opt schema name */
-                           $6,                   /* synonym name */
-                           $7);                  /* opt force */
 }
 ;
 
@@ -10458,11 +10316,6 @@ ALTER
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = 0;
 }
-| CREATE SYNONYM
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
-  $$->value_ = OB_PRIV_CREATE_SYNONYM;
-}
 | FILEX
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
@@ -11940,6 +11793,17 @@ ALTER SYSTEM DELETE BACKUPROUND INTNUM opt_copy_id
   value->value_ = $5->value_;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 3, type, value, $6);
+}
+|
+ALTER SYSTEM CANCEL ALL BACKUP FORCE
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 15;
+  ParseNode *value = NULL;
+  malloc_terminal_node(value, result->malloc_pool_, T_INT);
+  value->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
 }
 |
 ALTER SYSTEM BACKUP BACKUPSET ALL opt_tenant_info opt_backup_backup_dest
@@ -13994,7 +13858,6 @@ ACCOUNT
 |       SYSTEM
 |       SYSTEM_USER
 |       SYSDATE
-|       SYNONYM
 |       TABLE_CHECKSUM
 |       TABLE_MODE
 |       TABLEGROUPS

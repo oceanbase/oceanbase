@@ -85,6 +85,41 @@ inline void load128(__uint128_t& target, types::uint128_t* source)
       __ATOMIC_SEQ_CST)
 #define LOAD128(dest, src) __atomic_load(((types::uint128_t*)(src)), ((types::uint128_t*)(&(dest))), __ATOMIC_SEQ_CST)
 
+#elif defined(__sw_64__)
+inline bool cas128(volatile types::uint128_t* target, types::uint128_t* cmp, types::uint128_t with)
+{
+  int ret = 0;
+
+  types::uint128_t tmp;
+  tmp.lo = cmp->lo;
+  tmp.hi = cmp->hi;
+  ret = __atomic_compare_exchange((types::uint128_t*)(target),
+      ((types::uint128_t*)&(tmp)),
+      ((types::uint128_t*)&(with)),
+      false,
+      __ATOMIC_SEQ_CST,
+      __ATOMIC_SEQ_CST);
+  return ret;
+}
+
+inline void load128(__uint128_t& target, types::uint128_t* source)
+{
+  __uint128_t* ptr = reinterpret_cast<__uint128_t*>(&target);
+  __uint128_t* desired = reinterpret_cast<__uint128_t*>(source);
+  __atomic_load((__uint128_t*)desired, ptr, __ATOMIC_SEQ_CST);
+}
+#define CAS128_tmp(src, cmp, with) \
+  cas128((types::uint128_t*)(src), ((types::uint128_t*)(&(cmp))), *((types::uint128_t*)(&(with))))
+#define LOAD128_asm(dest, src) load128((__uint128_t&)(dest), ((types::uint128_t*)(src)))
+#define CAS128(src, cmp, with)                          \
+  __atomic_compare_exchange(((types::uint128_t*)(src)), \
+      ((types::uint128_t*)(&(cmp))),                    \
+      ((types::uint128_t*)&(with)),                     \
+      false,                                            \
+      __ATOMIC_SEQ_CST,                                 \
+      __ATOMIC_SEQ_CST)
+#define LOAD128(dest, src) __atomic_load(((types::uint128_t*)(src)), ((types::uint128_t*)(&(dest))), __ATOMIC_SEQ_CST)
+
 #else
 #error arch unsupported
 #endif

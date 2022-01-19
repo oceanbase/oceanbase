@@ -22,7 +22,6 @@
 
 namespace oceanbase {
 using namespace common;
-
 namespace common {
 
 ObStorageOssStaticVar::ObStorageOssStaticVar() : compressor_(NULL), compress_type_(INVALID_COMPRESSOR)
@@ -274,7 +273,11 @@ void ObOssEnvIniter::global_destroy()
   }
 }
 
-ObStorageOssBase::ObStorageOssBase() : aos_pool_(NULL), oss_option_(NULL), is_inited_(false)
+ObStorageOssBase::ObStorageOssBase() : 
+    aos_pool_(NULL),
+    oss_option_(NULL), 
+    is_inited_(false),
+    delete_mode_(ObIStorageUtil::DELETE)
 {
   memset(oss_domain_, 0, OB_MAX_URI_LENGTH);
   memset(oss_endpoint_, 0, MAX_OSS_ENDPOINT_LENGTH);
@@ -293,6 +296,7 @@ void ObStorageOssBase::reset()
   memset(oss_endpoint_, 0, MAX_OSS_ENDPOINT_LENGTH);
   memset(oss_id_, 0, MAX_OSS_ID_LENGTH);
   memset(oss_key_, 0, MAX_OSS_KEY_LENGTH);
+  delete_mode_ = ObIStorageUtil::DELETE;
   if (is_inited_) {
     if (NULL != aos_pool_) {
       aos_pool_destroy(aos_pool_);
@@ -324,6 +328,23 @@ int ObStorageOssBase::init(const common::ObString& storage_info)
   return ret;
 }
 
+int ObStorageOssBase::set_delete_mode(const char *parameter)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == parameter) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(parameter));
+  } else if (0 == strcmp(parameter, "delete")) {
+    delete_mode_ = ObIStorageUtil::DELETE;
+  } else if (0 == strcmp(parameter, "tagging")) {
+    delete_mode_ = ObIStorageUtil::TAGGING;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "delete mode is invalid", K(ret), K(parameter));
+  }
+  return ret;
+}
+
 int ObStorageOssBase::parse_oss_arg(const common::ObString& storage_info)
 {
   int ret = OB_SUCCESS;
@@ -342,6 +363,7 @@ int ObStorageOssBase::parse_oss_arg(const common::ObString& storage_info)
     const char* HOST = "host=";
     const char* ACCESS_ID = "access_id=";
     const char* ASSCESS_KEY = "access_key=";
+    const char *DELETE_MODE = "delete_mode=";
 
     MEMCPY(tmp, storage_info.ptr(), storage_info.length());
     tmp[storage_info.length()] = '\0';
@@ -361,6 +383,10 @@ int ObStorageOssBase::parse_oss_arg(const common::ObString& storage_info)
       } else if (0 == strncmp(ASSCESS_KEY, token, strlen(ASSCESS_KEY))) {
         if (OB_FAIL(set_oss_field(token + strlen(ASSCESS_KEY), oss_key_, sizeof(oss_key_)))) {
           OB_LOG(WARN, "failed to set oss_key_", K(ret), K(token));
+        }
+      } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
+        if (OB_FAIL(set_delete_mode(token + strlen(DELETE_MODE)))) {
+          OB_LOG(WARN, "failed to set delete mode", K(ret), K(token)); 
         }
       } else {
         OB_LOG(DEBUG, "unkown oss info", K(*token), K(storage_info));
@@ -1224,6 +1250,117 @@ int ObStorageOssUtil::mkdir(const common::ObString& uri, const common::ObString&
   return ret;
 }
 
+int ObStorageOssUtil::delete_object(
+    const common::ObString &uri,
+    const common::ObString &bucket_str,
+    const common::ObString &object_str)
+{
+  int ret = OB_SUCCESS;
+  aos_string_t bucket;
+  aos_string_t object;
+  aos_str_set(&bucket, bucket_str.ptr());
+  aos_str_set(&object, object_str.ptr());
+  aos_table_t *resp_headers = NULL;
+  aos_status_t *aos_ret = NULL;
+
+  if (OB_ISNULL(aos_ret = oss_delete_object(oss_option_, &bucket, &object, &resp_headers))
+      || !aos_status_is_ok(aos_ret)) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "delete object fail", K(ret), K(uri));
+    print_oss_info(aos_ret);
+  } else {
+    OB_LOG(INFO, "delete object succ", K(uri));
+  }
+
+  return ret;
+}
+
+int ObStorageOssUtil::tagging_object(
+    const common::ObString &uri,
+    const common::ObString &bucket_str,
+    const common::ObString &object_str)
+{
+  int ret = OB_SUCCESS;
+  /*set object tagging*/
+  aos_string_t bucket;
+  aos_string_t object;
+  aos_table_t *head_resp_headers = NULL;
+  oss_tag_content_t *tag_content = NULL;
+  aos_list_t tag_list;
+  aos_status_t *aos_ret = NULL;
+  aos_str_set(&bucket, bucket_str.ptr());
+  aos_str_set(&object, object_str.ptr());
+  aos_list_init(&tag_list);
+  if (OB_ISNULL(tag_content = oss_create_tag_content(aos_pool_))) {
+    ret = OB_OSS_ERROR; 
+    OB_LOG(WARN, "tag content is null", K(ret), K(uri));
+  } else {
+    aos_str_set(&tag_content->key, "delete_mode");
+    aos_str_set(&tag_content->value, "tagging");
+    aos_list_add_tail(&tag_content->node, &tag_list);
+    if (OB_ISNULL(aos_ret = oss_put_object_tagging(oss_option_, &bucket, &object, &tag_list, &head_resp_headers))
+        || !aos_status_is_ok(aos_ret)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "set object tag fail", K(ret), K(uri));
+      print_oss_info(aos_ret);
+    } else {
+      OB_LOG(INFO, "set object tag succ", K(uri));
+    }
+  }
+  return ret;
+}
+
+int ObStorageOssUtil::is_tagging(const common::ObString &uri, const common::ObString &storage_info, bool &is_tagging)
+{
+  int ret = OB_SUCCESS;
+  const int64_t OB_MAX_TAGGING_STR_LENGTH = 16;
+  common::ObArenaAllocator allocator;
+  ObString bucket_str;
+  ObString object_str;
+  if (uri.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "name is empty", K(ret));
+  } else if (OB_FAIL(init(storage_info))) {
+    OB_LOG(WARN, "failed to init storage_info", K(ret), K(storage_info), K(uri));
+  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
+    OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
+  } else {
+    aos_string_t bucket;
+    aos_string_t object;
+    aos_table_t *head_resp_headers = NULL;
+    aos_list_t tag_list;
+    oss_tag_content_t *b;
+    aos_status_t *aos_ret = NULL;
+    aos_str_set(&bucket, bucket_str.ptr());
+    aos_str_set(&object, object_str.ptr());
+    aos_list_init(&tag_list);
+    if (OB_ISNULL(aos_ret = oss_get_object_tagging(oss_option_, &bucket, &object, &tag_list, &head_resp_headers)) ||
+        !aos_status_is_ok(aos_ret)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "get object tag fail", K(ret), K(uri));
+      print_oss_info(aos_ret);
+    } else {
+      aos_list_for_each_entry(oss_tag_content_t, b, &tag_list, node)
+      {
+        char key_str[OB_MAX_TAGGING_STR_LENGTH];
+        char value_str[OB_MAX_TAGGING_STR_LENGTH];
+        if (OB_FAIL(databuff_printf(key_str, OB_MAX_TAGGING_STR_LENGTH, "%.*s", b->key.len, b->key.data))) {
+          OB_LOG(WARN, "failed to databuff printf key str", K(ret));
+        } else if (OB_FAIL(databuff_printf(value_str, OB_MAX_TAGGING_STR_LENGTH, "%.*s", b->key.len, b->value.data))) {
+          OB_LOG(WARN, "failed to databuff printf value str", K(ret));
+        } else if (0 == strcmp("delete_mode", key_str) && 0 == strcmp("tagging", value_str)) {
+          is_tagging = true;
+        }
+        if (OB_FAIL(ret)) {
+          break;
+        }
+      }
+    }
+  }
+  reset();
+  return ret;
+}
+
 int ObStorageOssUtil::del_file(const common::ObString& uri, const common::ObString& storage_info)
 {
   int ret = OB_SUCCESS;
@@ -1238,22 +1375,17 @@ int ObStorageOssUtil::del_file(const common::ObString& uri, const common::ObStri
     OB_LOG(WARN, "failed to init storage_info", K(ret), K(storage_info));
   } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
-  } else {
-    aos_string_t bucket;
-    aos_string_t object;
-    aos_str_set(&bucket, bucket_str.ptr());
-    aos_str_set(&object, object_str.ptr());
-    aos_table_t* resp_headers = NULL;
-    aos_status_t* aos_ret = NULL;
-
-    if (OB_ISNULL(aos_ret = oss_delete_object(oss_option_, &bucket, &object, &resp_headers)) ||
-        !aos_status_is_ok(aos_ret)) {
-      ret = OB_OSS_ERROR;
-      OB_LOG(WARN, "delete object fail", K(ret), K(uri));
-      print_oss_info(aos_ret);
-    } else {
-      OB_LOG(INFO, "delete object succ", K(uri));
+ } else if (ObIStorageUtil::DELETE == get_delete_mode()) {
+    if (OB_FAIL(delete_object(uri, bucket_str, object_str))) {
+      OB_LOG(WARN, "failed to delete object", K(ret), K(uri));
     }
+  } else if (ObIStorageUtil::TAGGING == get_delete_mode()) {
+    if (OB_FAIL(tagging_object(uri, bucket_str, object_str))) {
+      OB_LOG(WARN, "failed to tagging file", K(ret), K(uri));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT; 
+    OB_LOG(WARN, "delete mode invalid", K(ret), K(uri)); 
   }
   // Finally reset to ensure that the interface can be called repeatedly
   reset();
@@ -1646,8 +1778,9 @@ int ObStorageOssUtil::is_empty_directory(
     }
   }
 
-  // 最后重置，保证该接口可重复调用
+
   OB_LOG(DEBUG, "is empty directory", K(dir_path));
+  reset();
   return ret;
 }
 
@@ -1912,7 +2045,6 @@ int ObStorageOssAppendWriter::close()
     OB_LOG(WARN, "oss writer cannot close before it is opened");
   } else {
     is_opened_ = false;
-    // 释放内存
     allocator_.clear();
 
     reset();

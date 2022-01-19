@@ -389,7 +389,7 @@ int ObLogFileStore::write(void* buf, int64_t count, int64_t offset)
   } else if (OB_FAIL(prepare_write_info(buf, count, offset))) {
     COMMON_LOG(ERROR, "prepare io info fail", K(ret));
   } else {
-    const int64_t write_begin_ts = common::ObTimeUtility::fast_current_time();
+    int64_t write_begin_ts = common::ObTimeUtility::fast_current_time();
     while (need_retry) {
       ret = OB_SUCCESS;
       new_req_cnt = 0;
@@ -400,18 +400,17 @@ int ObLogFileStore::write(void* buf, int64_t count, int64_t offset)
       } else if (OB_FAIL(process_io_getevents(submitted, io_ctx_, io_events_))) {
         COMMON_LOG(ERROR, "process get events fail", K(ret), K(new_req_cnt), K(submitted), K(retry_cnt), K_(write_fd));
       }
+
+      const int64_t write_end_ts = common::ObTimeUtility::fast_current_time();
       if (OB_SUCC(ret)) {
         if (is_disk_warning()) {
           set_disk_warning(false);
         }
-      } else if (!is_disk_warning()) {
-        const int64_t write_finish_ts = common::ObTimeUtility::fast_current_time();
-        const int64_t log_write_timeout_us = GCONF.data_storage_warning_tolerance_time;
-        if (write_finish_ts - write_begin_ts > log_write_timeout_us) {
-          set_disk_warning(true);
-        }
+      } else {
+        check_disk_warning(write_begin_ts, write_end_ts);
       }
       need_retry = process_retry(ret, retry_cnt);
+      write_begin_ts = write_end_ts;
     }
 
     // whatever success or failure, reset write requests, check and mark bad disk
@@ -483,7 +482,7 @@ int ObLogFileStore::read(void* buf, int64_t count, int64_t offset, int64_t& read
             event_sz += rd_size;
           } else if (event_res == 0) {  // read nothing from file
             ret = OB_READ_NOTHING;
-          } else if (event_res > 0 && event_res < rd_size && (0 == event_res % DIO_ALIGN_SIZE)) {  // partial complete
+          } else if (event_res > 0 && event_res < rd_size) {  // partial complete
             event_sz += event_res;
             COMMON_LOG(INFO, "re-submit read", K(i), K(event_res), K(rd_size), K(event_sz), K(count));
           } else {
@@ -990,24 +989,23 @@ int ObLogFileStore::process_io_getevents(int64_t& submitted, io_context_t ctx, s
   int gotten = 0;
   struct timespec timeout;
 
+  const int64_t begin_ts = common::ObTimeUtility::fast_current_time();
   while (submitted > 0 && OB_SUCC(ret) && !partial_write) {
-    timeout.tv_sec = (OB_REDO_TYPE_CLOG == log_type_ ? CLOG_AIO_TIMEOUT_SECOND : AIO_TIMEOUT_SECOND);
+    timeout.tv_sec = AIO_TIMEOUT_SECOND;
     timeout.tv_nsec = 0;
-    if (0 >= (gotten = ob_io_getevents(ctx, 1, submitted, events, &timeout))) {
-      // timeout or io error
-      if (0 == gotten) {
-        COMMON_LOG(WARN,
-            "io_getevents timeout",
-            K(ret),
-            K(gotten),
-            K(submitted),
-            K(write_fd_.file_id_),
-            LITERAL_K(AIO_TIMEOUT_SECOND));
-      } else {
-        ret = OB_IO_ERROR;
-        COMMON_LOG(
-            ERROR, "io_getevents fail", K(ret), K(gotten), K(submitted), K(write_fd_.file_id_), K(errno), KERRMSG);
-      }
+    gotten = ob_io_getevents(ctx, 1, submitted, events, &timeout);
+    if (0 == gotten) {
+      COMMON_LOG(WARN,
+          "io_getevents timeout",
+          K(ret),
+          K(gotten),
+          K(submitted),
+          K(write_fd_.file_id_),
+          K(timeout.tv_sec),
+          K(timeout.tv_nsec));
+    } else if (gotten < 0) {
+      ret = OB_IO_ERROR;
+      COMMON_LOG(ERROR, "io_getevents fail", K(ret), K(gotten), K(submitted), K(write_fd_.file_id_), K(errno), KERRMSG);
     } else {
       submitted -= gotten;
       for (int32_t i = 0; i < gotten; i++) {
@@ -1021,8 +1019,7 @@ int ObLogFileStore::process_io_getevents(int64_t& submitted, io_context_t ctx, s
         } else if (event_res == wr_info->size_) {  // full complete
           wr_info->complete_ = true;
           wr_info->ret_ = OB_SUCCESS;
-        } else if (event_res > 0 && event_res < wr_info->size_ &&
-                   (0 == event_res % DIO_ALIGN_SIZE)) {  // partial complete
+        } else if (event_res > 0 && event_res < wr_info->size_) {  // partial complete
           wr_info->buf_ = wr_info->buf_ + event_res;
           wr_info->size_ -= event_res;
           wr_info->offset_ += event_res;
@@ -1039,6 +1036,11 @@ int ObLogFileStore::process_io_getevents(int64_t& submitted, io_context_t ctx, s
           COMMON_LOG(WARN, "write error", K(wr_info->ret_), K(i), K(event_res), K(*wr_info), K(aio_ret));
         }
       }
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t end_ts = common::ObTimeUtility::fast_current_time();
+      check_disk_warning(begin_ts, end_ts);
     }
   }
 
@@ -1103,6 +1105,13 @@ int ObLogFileStore::process_failed_write()
     COMMON_LOG(ERROR, "write on all disk failed", K(ret), K(fd_cnt));
   }
   return ret;
+}
+
+void ObLogFileStore::check_disk_warning(const int64_t begin_ts, const int64_t end_ts)
+{
+  if (!is_disk_warning() && end_ts - begin_ts > GCONF.data_storage_warning_tolerance_time) {
+    set_disk_warning(true);
+  }
 }
 }  // namespace common
 }  // namespace oceanbase
