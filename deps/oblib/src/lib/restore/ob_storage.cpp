@@ -656,6 +656,39 @@ int ObStorageUtil::del_dir(const common::ObString &uri, const common::ObString &
   return ret;
 }
 
+int ObStorageUtil::is_tagging(const common::ObString &uri, const common::ObString &storage_info, bool &is_tagging)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  ObIStorageUtil *util = NULL;
+  is_tagging = false;
+  int64_t retry_times = 0;
+  bool need_retry = true;
+  if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret), K(uri));
+  } else if (OB_FAIL(get_util(uri, util))) {
+    STORAGE_LOG(WARN, "failed to get util", K(ret), K(uri));
+  } else {
+    while (OB_SUCC(ret) && need_retry) {
+      need_retry = false;
+      if (OB_FAIL(util->is_tagging(uri, storage_info, is_tagging))) {
+        const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        STORAGE_LOG(WARN, "failed to check is tagging", K(ret), K(cost_ts), K(retry_times), K(uri));
+        if (cost_ts < max_retry_duraion_us_) {
+          usleep(retry_sleep_us_);
+          ++retry_times;
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  print_access_storage_log("is_tagging", uri, start_ts);
+  return ret;
+}
+
 int ObStorageUtil::get_pkeys_from_dir(
     const common::ObString &uri, const common::ObString &storage_info, common::ObIArray<common::ObPartitionKey> &pkeys)
 {
