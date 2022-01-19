@@ -2168,11 +2168,11 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                   has_perf_audit = true;
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST)) {
-                if (OB_FAIL(check_backup_dest(item.value_.str()))) {
+                if (!session_info_->is_inner() && OB_FAIL(check_backup_dest(item.value_.str()))) {
                   LOG_WARN("failed to check backup dest", K(ret));
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_BACKUP_DEST)) {
-                if (OB_FAIL(check_backup_backup_dest(item.value_.str()))) {
+                if (!session_info_->is_inner() && OB_FAIL(check_backup_backup_dest(item.value_.str()))) {
                   LOG_WARN("failed to check backup backup dest", K(ret));
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {

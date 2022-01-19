@@ -4095,8 +4095,8 @@ public:
   common::ObString db_;
   common::ObString table_;
   ObPrivSet priv_set_;
-  common::ObSArray<common::ObString> users_passwd_;  // user_name1, pwd1; user_name2, pwd2
-  common::ObSArray<common::ObString> hosts_;         // hostname1, hostname2, ..
+  common::ObSArray<common::ObString> users_passwd_;  
+  common::ObSArray<common::ObString> hosts_;        
   bool need_create_user_;
   bool has_create_user_priv_;
   common::ObSArray<common::ObString> roles_;
@@ -4510,7 +4510,7 @@ public:
   common::ObString backup_tenant_name_;
   common::ObString passwd_array_;  // Password verification
   common::ObSArray<ObTableItem> table_items_;
-  common::ObString multi_uri_;  // 备份拆分用
+  common::ObString multi_uri_;  
 };
 
 struct ObRestoreTenantArg : public ObCmdArg {
@@ -7636,6 +7636,7 @@ public:
     DELETE_OBSOLETE_BACKUP_BACKUP = 12,
     CANCEL_BACKUP_BACKUPPIECE = 13,
     DELETE_BACKUPROUND = 14,
+    CANCEL_ALL_BACKUP_FORCE = 15,
     MAX_TYPE
   };
   ObBackupManageArg() : tenant_id_(OB_INVALID_TENANT_ID), type_(MAX_TYPE), value_(0), copy_id_(0)

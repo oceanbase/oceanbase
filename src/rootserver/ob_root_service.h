@@ -1296,9 +1296,10 @@ private:
   {
     return lhs < tenant_id;
   }
-  int handle_backup_delete_backup_data(const obrpc::ObBackupManageArg& arg);
-  int handle_cancel_delete_backup(const obrpc::ObBackupManageArg& arg);
-  int handle_cancel_backup_backup(const obrpc::ObBackupManageArg& arg);
+  int handle_backup_delete_backup_data(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_delete_backup(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_backup_backup(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg);
   int wait_refresh_config();
 
 private:

@@ -18,6 +18,7 @@
 #include "rootserver/ob_thread_idling.h"
 #include "rootserver/ob_rebalance_task.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
+#include "rootserver/ob_i_backup_scheduler.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_backup_meta_store.h"
 #include "share/schema/ob_multi_version_schema_service.h"
@@ -64,7 +65,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupBackupsetLoadBalancer);
 };
 
-class ObBackupBackupset final : public ObRsReentrantThread {
+class ObBackupBackupset final : public ObIBackupScheduler {
   friend class ObTenantBackupBackupset;
   typedef ObArray<share::ObTenantBackupTaskItem>::const_iterator BackupArrayIter;
 
@@ -85,6 +86,12 @@ public:
   }
   int get_check_time(const uint64_t tenant_id, int64_t& check_time);
   int update_check_time(const uint64_t tenant_id);
+
+  virtual bool is_working() const
+  {
+    return is_working_;
+  }
+  virtual int force_cancel(const uint64_t tenant_id);
 
 private:
   int insert_check_time(const uint64_t tenant_id);
@@ -213,6 +220,7 @@ private:
   int do_external_backup_set_file_info(const share::ObTenantBackupBackupsetTaskInfo& bb_task,
       const share::ObBackupSetFileInfo::BackupSetStatus& status, const share::ObBackupFileStatus::STATUS& file_status,
       const int64_t result);
+  bool is_force_cancel() const;
 
 private:
   struct CompareBackupTaskBackupSetId {
@@ -258,6 +266,7 @@ private:
 
 private:
   bool is_inited_;
+  bool is_working_;
   bool extern_device_error_;
   ObMySQLProxy* sql_proxy_;
   ObZoneManager* zone_mgr_;

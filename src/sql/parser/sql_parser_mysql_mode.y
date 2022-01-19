@@ -1014,7 +1014,6 @@ bit_expr IN in_expr
 }
 | bit_expr LIKE STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
-  //在resolver时，如果发现只有两个children，会将escape 参数设置为‘\’
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $3, $4);
   ParseNode *string_list_node = NULL;
@@ -1039,7 +1038,6 @@ bit_expr IN in_expr
 }
 | bit_expr LIKE STRING_VALUE string_val_list ESCAPE simple_expr %prec LIKE
 {
-  // 如果escape 为空串 '', 则使用默认值'\'
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $3, $4);
   ParseNode *string_list_node = NULL;
@@ -1095,7 +1093,6 @@ bit_expr IN in_expr
 | bit_expr not LIKE STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
   (void)($2);
-  //在resolver时，如果发现只有两个children，会将escape 参数设置为‘\’
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $4, $5);
   ParseNode *string_list_node = NULL;
@@ -1129,7 +1126,6 @@ bit_expr IN in_expr
   ParseNode *concat_node = NULL;
   make_name_node(concat_node, result->malloc_pool_, "concat");
   malloc_non_terminal_node(concat_node, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
-  // 如果escape 为空串 '', 则使用默认值'\'
   if (OB_UNLIKELY(T_VARCHAR == $7->type_ && 0 == $7->str_len_)) {
     ParseNode *node = NULL;
     malloc_terminal_node(node, result->malloc_pool_, T_VARCHAR);
@@ -11797,6 +11793,17 @@ ALTER SYSTEM DELETE BACKUPROUND INTNUM opt_copy_id
   value->value_ = $5->value_;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 3, type, value, $6);
+}
+|
+ALTER SYSTEM CANCEL ALL BACKUP FORCE
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 15;
+  ParseNode *value = NULL;
+  malloc_terminal_node(value, result->malloc_pool_, T_INT);
+  value->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
 }
 |
 ALTER SYSTEM BACKUP BACKUPSET ALL opt_tenant_info opt_backup_backup_dest

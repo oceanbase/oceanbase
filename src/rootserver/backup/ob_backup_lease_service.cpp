@@ -16,6 +16,7 @@
 #include "share/backup/ob_backup_manager.h"
 #include "rootserver/ob_rs_reentrant_thread.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "rootserver/ob_i_backup_scheduler.h"
 #include "share/backup/ob_backup_operator.h"
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
 
@@ -62,7 +63,7 @@ int ObBackupLeaseService::init(const ObAddr& addr, ObMySQLProxy& sql_proxy)
   return ret;
 }
 
-int ObBackupLeaseService::register_scheduler(ObRsReentrantThread& scheduler)
+int ObBackupLeaseService::register_scheduler(ObIBackupScheduler &scheduler)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
@@ -204,7 +205,7 @@ int ObBackupLeaseService::start_backup_scheduler_()
   FLOG_INFO("[BACKUP_LEASE] start_backup_scheduler");
 
   for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
-    ObRsReentrantThread* scheduler = backup_schedulers_.at(i);
+    ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
     FLOG_INFO("[BACKUP_LEASE] start scheduler", "name", scheduler->get_thread_name());
     if (OB_SUCCESS != (tmp_ret = scheduler->start())) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
@@ -218,7 +219,7 @@ void ObBackupLeaseService::stop_backup_scheduler_()
 {
   FLOG_INFO("[BACKUP_LEASE] stop_backup_scheduler");
   for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
-    ObRsReentrantThread* scheduler = backup_schedulers_.at(i);
+    ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
     FLOG_INFO("[BACKUP_LEASE] stop scheduler", "name", scheduler->get_thread_name());
     scheduler->stop();
   }
@@ -230,7 +231,7 @@ void ObBackupLeaseService::wait_backup_scheduler_stop_()
   FLOG_INFO("[BACKUP_LEASE] start wait_backup_scheduler_stop_");
 
   for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
-    ObRsReentrantThread* scheduler = backup_schedulers_.at(i);
+    ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
     FLOG_INFO("[BACKUP_LEASE] waiting scheduler stop", "name", scheduler->get_thread_name(), KP(scheduler));
     int64_t start_ts2 = ObTimeUtil::current_time();
     scheduler->wait();
@@ -421,5 +422,25 @@ int ObBackupLeaseService::check_sys_backup_info_()
     }
   }
   LOG_TRACE("finish check sys backup info", K(ret));
+  return ret;
+}
+
+int ObBackupLeaseService::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[BACKUP_LEASE] start force_cancel");
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("not inited", K(ret));
+  } else {
+    for (int64_t i = 0; i < backup_schedulers_.count(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      ObIBackupScheduler *scheduler = backup_schedulers_.at(i);
+      tmp_ret = scheduler->force_cancel(tenant_id);
+      FLOG_INFO("[BACKUP_LEASE] force_cancel", K(i), K(tmp_ret), K(tenant_id));
+    }
+  }
+
+  FLOG_INFO("[BACKUP_LEASE] end force_cancel");
   return ret;
 }

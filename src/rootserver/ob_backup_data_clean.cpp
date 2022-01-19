@@ -22,6 +22,7 @@
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "share/backup/ob_backup_operator.h"
 #include "share/backup/ob_backup_backupset_operator.h"
+#include "rootserver/backup/ob_cancel_delete_backup_scheduler.h"
 
 namespace oceanbase {
 
@@ -7102,6 +7103,22 @@ int ObBackupDataClean::duplicate_task_info(common::ObIArray<share::ObTenantBacku
       }
     }
   }
+  return ret;
+}
+
+int ObBackupDataClean::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObCancelDeleteBackupScheduler cancel_delete_backup_scheduler;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data clean do not init", K(ret));
+  } else if (OB_FAIL(cancel_delete_backup_scheduler.init(tenant_id, *sql_proxy_, this))) {
+    LOG_WARN("failed to init backup data clean scheduler", K(ret), K(tenant_id));
+  } else if (OB_FAIL(cancel_delete_backup_scheduler.start_schedule_cacel_delete_backup())) {
+    LOG_WARN("failed to start schedule backup data clean", K(ret), K(tenant_id));
+  }
+  FLOG_WARN("force_cancel backup data clean", K(ret), K(tenant_id));
   return ret;
 }
 

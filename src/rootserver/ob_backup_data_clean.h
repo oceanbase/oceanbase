@@ -18,6 +18,7 @@
 #include "ob_partition_group_coordinator.h"
 #include "ob_server_checker.h"
 #include "ob_root_utils.h"
+#include "ob_i_backup_scheduler.h"
 #include "ob_shrink_resource_pool_checker.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "share/backup/ob_backup_struct.h"
@@ -52,7 +53,7 @@ public:
   virtual int64_t get_idle_interval_us();
 };
 
-class ObBackupDataClean : public ObRsReentrantThread {
+class ObBackupDataClean : public ObIBackupScheduler {
 public:
   ObBackupDataClean();
   virtual ~ObBackupDataClean();
@@ -73,7 +74,9 @@ public:
   {
     return is_working_;
   }
-  int start() override;
+  virtual int force_cancel(const uint64_t tenant_id);
+  int start();
+
   share::ObIBackupLeaseService *get_backup_lease_service()
   {
     return backup_lease_service_;

@@ -11152,6 +11152,12 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg& arg)
         }
         break;
       };
+      case ObBackupManageArg::CANCEL_ALL_BACKUP_FORCE: {
+        if (OB_FAIL(handle_cancel_all_backup_force(arg))) {
+          LOG_WARN("failed to handle cancel all backup force", K(ret), K(arg));
+        }
+        break;
+      };
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid backup manage arg", K(ret), K(arg));
@@ -11474,6 +11480,50 @@ int ObRootService::handle_cancel_backup_backup(const obrpc::ObBackupManageArg& a
   } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_backup_backup())) {
     LOG_WARN("failed to start schedule cancel backup backup", K(ret));
   }
+  return ret;
+}
+
+int ObRootService::handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg)
+{
+  int ret = OB_SUCCESS;
+
+  FLOG_WARN("start cancel all backup force");
+  // clear backup_dest and backup_backup_dest in GCONF
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  if (OB_FAIL(sql.assign_fmt("alter system set backup_dest=''"))) {
+    LOG_WARN("failed to clear backup dest", K(ret));
+  } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to clear backup dest", K(ret), K(sql));
+  } else {
+    LOG_WARN("succeed to clear backup dest");
+  }
+
+  ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_dest", "result", ret, K_(self_addr));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.assign_fmt("alter system set backup_backup_dest=''"))) {
+      LOG_WARN("failed to clear backup backup dest", K(ret));
+    } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to clear backup backup dest", K(ret), K(sql));
+    } else {
+      LOG_WARN("succeed to clear backup backup dest");
+    }
+
+    ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_backup_dest", "result", ret, K_(self_addr));
+  }
+
+  ROOTSERVICE_EVENT_ADD("root_service", "force_cancel_backup", "result", ret, K_(self_addr));
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(wait_refresh_config())) {
+    LOG_WARN("failed to wait refresh schema", K(ret), K(arg));
+  } else if (OB_FAIL(backup_lease_service_.force_cancel(arg.tenant_id_))) {
+    LOG_WARN("failed to force stop", K(ret), K(arg));
+  }
+
+  FLOG_WARN("end cancel all backup force", K(ret));
+
   return ret;
 }
 
