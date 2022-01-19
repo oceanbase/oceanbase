@@ -4205,7 +4205,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
     } else if (OB_INVALID_ID == table_schema.get_database_id()) {
       ObString database_name = arg.db_name_;
       if (OB_FAIL(schema_guard.get_database_schema(table_schema.get_tenant_id(), database_name, db_schema))) {
-        LOG_WARN("get databas schema failed", K(arg));
+        LOG_WARN("get database schema failed", K(arg));
       } else if (OB_ISNULL(db_schema)) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_USER_ERROR(OB_ERR_BAD_DATABASE, database_name.length(), database_name.ptr());
