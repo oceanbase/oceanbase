@@ -4809,6 +4809,13 @@ int ObUnitManager::have_enough_resource(const ObServerStatus& server_status, con
     max_mem_assigned = sum_load.max_memory_ > report_resource.report_mem_max_assigned_
                            ? sum_load.max_memory_
                            : report_resource.report_mem_max_assigned_;
+
+    if (unit_config.unit_config_id_ == OB_SYS_UNIT_CONFIG_ID && GCONF._report_invisible_sys_unit_resource) {
+      min_cpu_assigned -= GCONF.server_cpu_quota_min;
+      max_cpu_assigned -= GCONF.server_cpu_quota_max;
+      min_mem_assigned -= GCONF.get_min_sys_tenant_memory();
+      max_mem_assigned -= GCONF.get_max_sys_tenant_memory();
+    }
   }
   if (OB_SUCC(ret)) {
     is_enough = true;

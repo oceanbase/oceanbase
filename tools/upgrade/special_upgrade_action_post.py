@@ -18,6 +18,223 @@ def do_special_upgrade(conn, cur, tenant_id_list, user, pwd):
 #这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 ####========******####======== actions begin ========####******========####
   run_upgrade_job(conn, cur, "3.1.2")
+
+  def get_bytes_from_readable_string(s):
+    unit = s[-1]
+    value = s[0 : -1]
+
+    unit = unit.upper()
+    if len(unit) == 0:
+      unit = 1
+    elif unit == 'G':
+      unit = 1 * 1024 * 1024 * 1024
+    elif unit == 'M':
+      unit = 1 * 1024 * 1024
+    elif unit == 'K':
+      unit = 1 * 1024
+    else:
+      raise MyError('unknown UNIT of {}'.format(s))
+
+    try:
+      return int(value) * unit
+    except ValueError as ex:
+      raise MyError('cannot convert {} to integer'.format(value))
+
+  def get_config(cur, config_name):
+    results = query(cur,
+      '''
+      select distinct value from oceanbase.__all_virtual_sys_parameter_stat
+      where name="{}"
+      '''.format(config_name))
+    
+    return results if results else []
+
+  def get_unique_config(cur, config_name):
+    '''
+    get one config of `config_name`
+    expect the result exists and only one
+    '''
+    values = get_config(cur, config_name)
+    if len(values) != 1:
+      logging.error('difference config of %s, values=%s', config_name, values)
+      raise MyError('difference config of {}, values={}'.format(config_name, values))
+
+    return values[0][0]
+
+  def get_float_config(cur, config_name):
+    '''
+    get one config of `config_name`
+    should one config values exists which is a float
+    '''
+    value = get_unique_config(cur, config_name)
+    try:
+      return float(value)
+    except Exception as ex:
+      raise MyError('cannot convert {} to float. value={}'.format(config_name, value))
+
+  def get_bytes_config(cur, config_name):
+    '''
+    get one config of `config_name`
+    should one config values exists which is a readable bytes value like '32G', '16M'
+    '''
+    value = get_unique_config(cur, config_name)
+    return get_bytes_from_readable_string(value)
+
+  def get_server_cpu_quota(cur):
+    min_config_name = 'server_cpu_quota_min'
+    max_config_name = 'server_cpu_quota_max'
+    return (get_float_config(cur, min_config_name), get_float_config(cur, max_config_name))
+
+  def get_sys_tenant_memory(cur):
+    '''
+    refer to ObServerConfig::get_max_sys_tenant_memory
+    '''
+    memory_limit = get_bytes_config(cur, 'memory_limit')
+    system_memory = get_bytes_config(cur, 'system_memory')
+
+    if memory_limit != 0:
+      server_memory_limit = memory_limit
+    else:
+      memory_limit_percentage = get_float_config(cur, 'memory_limit_percentage')
+      phy_memory = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+      server_memory_limit = phy_memory * memory_limit_percentage / 100
+
+    reserved_server_memory = system_memory
+    server_memory_available = server_memory_limit - reserved_server_memory
+
+    min_sys_tenant_mem_factor = 0.25
+    max_sys_tenant_mem_factor = 0.3
+    default_min_sys_memory = 12 << 30
+    default_max_sys_memory = 16 << 30
+
+    min_memory = min(int(server_memory_available * min_sys_tenant_mem_factor), default_min_sys_memory)
+    max_memory = min(int(server_memory_available * max_sys_tenant_mem_factor), default_max_sys_memory)
+    return (min_memory, max_memory)
+
+  def get_sys_unit_config(cur):
+    results = query(cur,
+      '''
+      select max_cpu, min_cpu, max_memory, min_memory
+      from oceanbase.__all_unit_config
+      where name="sys_unit_config"
+      ''')
+    if not results or len(results) != 1:
+      logging.error('failed to fetch sys unit config. results=%s', str(results))
+      raise MyError('faield to fetch sys unit config')
+
+    result = results[0]
+    max_cpu = float(result[0])
+    min_cpu = float(result[1])
+    max_memory = int(result[2])
+    min_memory = int(result[3])
+
+    return {"max_cpu": max_cpu, "min_cpu": min_cpu, 
+            "max_memory": max_memory, "min_memory": min_memory}
+
+  def get_observers_with_sys_unit(cur):
+    results = query(cur,
+      '''
+      select svr_ip,svr_port 
+      from oceanbase.__all_resource_pool as a, oceanbase.__all_unit as b 
+      where a.resource_pool_id=b.resource_pool_id and a.unit_config_id=1
+      '''
+    )
+
+    return results if results else []
+
+  def skip_action(cur):
+
+    # read config items: server_cpu_quota_max & max_sys_tenant_memory
+    server_cpu_quota_min, server_cpu_quota_max = get_server_cpu_quota(cur)
+    min_sys_tenant_memory, max_sys_tenant_memory = get_sys_tenant_memory(cur)
+
+    # get sys unit config
+    sys_unit_config = get_sys_unit_config(cur)
+
+    # get all observers with sys unit
+    observers_with_sys_unit = get_observers_with_sys_unit(cur)
+
+    CPU_EPSILON = 0.00001 # const value, copy from ob_unit_info.h
+
+    # check whether the observer can hold the invisible sys unit
+    all_observer_resource_results = query(cur,
+      '''
+      select 
+         svr_ip, svr_port, zone, 
+         cpu_total, cpu_assigned, cpu_assigned_percent, cpu_capacity, cpu_max_assigned, 
+         mem_total, mem_assigned, mem_assigned_percent, mem_capacity, mem_max_assigned,
+         unit_num, `load`, 
+         build_version,
+         with_rootserver
+      from oceanbase.__all_virtual_server_stat
+      ''')
+
+    if not all_observer_resource_results:
+      raise MyError('cannot fetch results of __all_virtual_server_stat')
+
+    for observer_resource_result in all_observer_resource_results:
+      cpu_total = float(observer_resource_result[3])
+      cpu_assigned = float(observer_resource_result[4])
+      cpu_max_assigned = float(observer_resource_result[7])
+      mem_total = int(observer_resource_result[8])
+      mem_assigned = int(observer_resource_result[9])
+      mem_max_assigned = int(observer_resource_result[12])
+      # with_rootserver = True if str(observer_resource_results[16]) == '1' else False
+      has_sys_unit = False
+      for observer_with_sys_unit in observers_with_sys_unit:
+        if (observer_with_sys_unit[0] == observer_resource_result[0] and
+            observer_with_sys_unit[1] == observer_resource_result[1]):
+          has_sys_unit = True
+          break
+
+      if not has_sys_unit:
+
+        if (cpu_total - cpu_max_assigned < -CPU_EPSILON or
+            cpu_total - cpu_assigned < -CPU_EPSILON or
+            mem_total < mem_max_assigned or
+            mem_total < mem_assigned ):
+
+          logging.warn('there is one observer cannot hold the invisible sys unit. ' \
+                       'observer=%s, invisible sys unit=cpu (min=%s,max=%s),memory (min=%s,max=%s)',
+                      str(observer_resource_result), str(server_cpu_quota_min), str(server_cpu_quota_max), 
+                      str(min_sys_tenant_memory), str(max_sys_tenant_memory))
+          return False
+
+      else: # the observer with sys unit
+        if (cpu_total - cpu_max_assigned + sys_unit_config['max_cpu'] - server_cpu_quota_max < -CPU_EPSILON or
+            cpu_total - cpu_assigned + sys_unit_config['min_cpu'] - server_cpu_quota_min < -CPU_EPSILON or
+            mem_total - mem_max_assigned + sys_unit_config['max_memory'] < max_sys_tenant_memory or
+            mem_total - mem_assigned + sys_unit_config['min_memory'] < min_sys_tenant_memory):
+
+          logging.warn('there is on observer with real sys unit cannot hold the invisible sys unit. ' \
+                       'observer=%s, invisible sys unit=cpu (min=%s,max=%s),memory (min=%s,max=%s), ' \
+                       'real sys unit config=%s',
+                       str(observer_resource_result), str(server_cpu_quota_min), str(server_cpu_quota_max), 
+                       str(min_sys_tenant_memory), str(max_sys_tenant_memory), str(sys_unit_config))
+          return False
+
+    logging.info('very good. all observers can hold the invisible sys unit')
+    return True
+
+  def check_before_do_action(cur):
+    from upgrade_checker import set_parameter
+    set_parameter(cur, 'enable_rebalance', 'False')
+    # 升级前关闭rebalance，升级后在 upgrade_post_checker 中会打开enable_rebalance
+
+  def get_action_ddl():
+    return 'alter system set _report_invisible_sys_unit_resource = "False"'
+
+  # 检查当前系统状态是否可以打开开关：不带实体sys unit的节点上报sys unit 相关的资源
+  if not skip_action(cur):
+    check_before_do_action(cur)
+    sql = get_action_ddl()
+    try:
+      logging.info('before running: %s', sql)
+      cur.execute(sql)
+    except Exception, ex:
+      logging.error('failed to run sql: %s. ', sql)
+      raise ex
+
   return
 ####========******####========= actions end =========####******========####
 
