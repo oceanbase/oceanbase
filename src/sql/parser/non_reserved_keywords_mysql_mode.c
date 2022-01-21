@@ -645,6 +645,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"weight_string", WEIGHT_STRING},
     {"whenever", WHENEVER},
     {"window", WINDOW},
+    {"wishes", WISHES},
     {"work", WORK},
     {"wrapper", WRAPPER},
     {"x509", X509},

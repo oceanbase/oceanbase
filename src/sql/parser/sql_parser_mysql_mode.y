@@ -222,7 +222,7 @@ END_P SET_VAR DELIMITER
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FROZEN FILE_ID
 
         GENERAL GEOMETRY GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
-        GLOBAL_NAME GLOBAL_ALIAS
+        GLOBAL_NAME GLOBAL_ALIAS WISHES
 
         HANDLER HASH HELP HISTOGRAM HOST HOSTS HOUR
 
@@ -9384,6 +9384,8 @@ SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_TRACE, 1, $3); }
 | SHOW COLLATION opt_show_condition
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_COLLATION, 1, $3); }
+| SHOW WISHES
+{ malloc_terminal_node($$, result->malloc_pool_, T_SHOW_WISHES); }
 /*
   | SHOW opt_all PARAMETERS opt_show_condition
   {
@@ -13503,6 +13505,7 @@ ACCOUNT
 |       GEOMETRY
 |       GEOMETRYCOLLECTION
 |       GET_FORMAT
+|       WISHES
 |       GLOBAL %prec LOWER_PARENS
 |       GLOBAL_NAME
 |       GRANTS
