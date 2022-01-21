@@ -277,7 +277,7 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
       is_same = false;
     } else {
       // number params in point and st_point can ignore scale check to share plancache
-      // please refrer to ObSqlParameterization::is_ignore_scale_check
+      // please refer to ObSqlParameterization::is_ignore_scale_check
       is_same = param_info.flag_.ignore_scale_check_
                 ? true
                 : (param.get_scale() == param_info.scale_);
@@ -734,7 +734,7 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
       }
     }
 
-    // init const param constriants
+    // init const param constraints
     ObPlanSetType ps_t = get_plan_set_type_by_cache_obj_type(plan.get_ns());
     if (PST_PRCD == ps_t) {
         // pl does not have any const param constraint
@@ -928,7 +928,7 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
       OB_ISNULL(equal_cons)) {
     is_matched = false;
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arugment", K(param_cons), K(possible_param_cons), K(equal_cons));
+    LOG_WARN("invalid argument", K(param_cons), K(possible_param_cons), K(equal_cons));
   } else if (param_cons->count() != all_plan_const_param_constraints_.count() ||
              possible_param_cons->count() != all_possible_const_param_constraints_.count() ||
              equal_cons->count() != all_equal_param_constraints_.count() ||
@@ -1082,7 +1082,7 @@ int ObPlanSet::init_pre_calc_exprs(const ObPlanCacheObject &phy_plan,
   void *buf = NULL;
 
   if (phy_plan.get_pre_calc_frames().get_size() == 0) {
-    // have no pre calculable expression, not initalize pre calculable expression handle.
+    // have no pre calculable expression, not initialize pre calculable expression handle.
     pre_cal_expr_handler_ = NULL;
   } else if (OB_ISNULL(pc_alloc_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1204,7 +1204,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
                                        candi_table_locs))) {
     LOG_WARN("fail to get physical locations", K(ret));
   } else if (OB_FAIL(set_concurrent_degree(outline_param_idx, plan))) {
-    LOG_WARN("fail to check oncurrent degree", K(ret));
+    LOG_WARN("fail to check concurrent degree", K(ret));
   } else {
     if (pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_or_expand_transformed()) {
       need_try_plan_ |= TRY_PLAN_OR_EXPAND;
@@ -1654,7 +1654,7 @@ int ObSqlPlanSet::get_physical_plan(const ObPhyPlanType plan_type,
     LOG_WARN("invalid plan type", K(ret), K(plan_type));
   } else if (OB_PHY_PLAN_LOCAL == plan_type) {
     if (OB_FAIL(try_get_local_evolution_plan(pc_ctx, plan, get_next))) {
-      LOG_WARN("failed to try get local evloution plan", K(ret));
+      LOG_WARN("failed to try get local evolution plan", K(ret));
     } else if (get_next) {
       plan = local_plan_;
     }
@@ -1663,7 +1663,7 @@ int ObSqlPlanSet::get_physical_plan(const ObPhyPlanType plan_type,
     }
   } else if (OB_PHY_PLAN_DISTRIBUTED == plan_type) {
     if (OB_FAIL(try_get_dist_evolution_plan(pc_ctx, plan, get_next))) {
-      LOG_WARN("failed to try get local evloution plan", K(ret));
+      LOG_WARN("failed to try get local evolution plan", K(ret));
     } else if (get_next && OB_FAIL(dist_plans_.get_plan(pc_ctx, plan))) {
       LOG_TRACE("failed to get dist plan", K(ret));
     }
@@ -2027,7 +2027,7 @@ void ObSqlPlanSet::reset()
 }
 
 //get plan used
-//need_check_on_same_server: out, 是否需要检查分区在同一sesrver, 如果里面检查过且不在同一server则置为false
+//need_check_on_same_server: out, 是否需要检查分区在同一server, 如果里面检查过且不在同一server则置为false
 int ObSqlPlanSet::get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                     ObPlanCacheCtx &pc_ctx,
                                     ObIArray<ObCandiTableLoc> &candi_table_locs,
@@ -2198,7 +2198,7 @@ int ObSqlPlanSet::is_partition_in_same_server(const ObIArray<ObCandiTableLoc> &c
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
-        SQL_PC_LOG(WARN, "there is no partition_locattion in this phy_location",
+        SQL_PC_LOG(WARN, "there is no partition_location in this phy_location",
                    K(candi_table_locs.at(i)));
       }
     }
