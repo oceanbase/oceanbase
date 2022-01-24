@@ -139,6 +139,7 @@ private:
   int get_candidate_source_replica(const bool need_refresh = false);
   int unique_index_checking(const bool is_leader);
   int rollback_state(const int state);
+  int get_data_size(int64_t &data_size);
 
 private:
   static const int64_t COPY_BUILD_INDEX_DATA_TIMEOUT = 10 * 1000 * 1000LL;  // 10s

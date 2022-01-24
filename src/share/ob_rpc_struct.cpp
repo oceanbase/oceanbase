@@ -2642,7 +2642,7 @@ bool ObCopySSTableBatchArg::is_valid() const
   return is_valid;
 }
 
-OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_);
+OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_, data_size_);
 
 bool ObServerCopyLocalIndexSSTableArg::is_valid() const
 {

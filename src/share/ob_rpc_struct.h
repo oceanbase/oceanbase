@@ -3485,12 +3485,12 @@ struct ObServerCopyLocalIndexSSTableArg {
 
 public:
   ObServerCopyLocalIndexSSTableArg()
-      : data_src_(), dst_(), pkey_(), index_table_id_(common::OB_INVALID_ID), cluster_id_(common::OB_INVALID_ID)
+      : data_src_(), dst_(), pkey_(), index_table_id_(common::OB_INVALID_ID), cluster_id_(common::OB_INVALID_ID), data_size_(0)
   {}
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id));
+  TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id), K_(data_size));
 
 public:
   common::ObAddr data_src_;
@@ -3498,6 +3498,7 @@ public:
   common::ObPartitionKey pkey_;
   uint64_t index_table_id_;
   int64_t cluster_id_;
+  int64_t data_size_;
 };
 
 struct ObBackupBatchArg {

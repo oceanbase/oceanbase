@@ -7762,7 +7762,7 @@ int ObRootService::observer_copy_local_index_sstable(const obrpc::ObServerCopyLo
           dest_replica.member_ =
               ObReplicaMember(r->server_, ObTimeUtility::current_time(), r->replica_type_, r->get_memstore_percent());
           dest_replica.unit_id_ = r->unit_id_;
-          data_size = r->data_size_;
+          data_size = arg.data_size_ != 0 ? arg.data_size_ : r->data_size_;
         } else if (r->server_ != data_src) {
           // by pass
         } else if (OB_FAIL(server_manager_.check_server_alive(r->server_, alive))) {
