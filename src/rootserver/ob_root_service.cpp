@@ -4918,20 +4918,52 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObA
   return ret;
 }
 
-int ObRootService::submit_build_index_task(const share::schema::ObTableSchema *index_schema)
+int ObRootService::submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskArg &arg)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(index_schema) || !index_schema->is_valid()) {
+  ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
+  const int64_t alloc_size = sizeof(ObTableSchema);
+  char *buf = nullptr;
+  ObTableSchema *deep_copy_index_schema = nullptr;
+  if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KPC(index_schema));
-  } else if (index_schema->is_global_index_table() &&
-             OB_FAIL(global_index_builder_.submit_build_global_index_task(index_schema))) {
-    LOG_WARN("fail to submit build global index task", K(ret), K(*index_schema));
-  } else if (index_schema->is_index_local_storage()) {
-    ObIndexBuilder index_builder(ddl_service_);
-    if (OB_FAIL(index_builder.submit_build_local_index_task(*index_schema))) {
-      LOG_WARN("fail to submit build local index task", K(ret), K(*index_schema));
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "fail to allocate memory for deep copy schema", K(ret), K(alloc_size));
+  } else {
+    const uint64_t index_tid = arg.index_tid_;
+    const ObTableSchema *index_schema = nullptr;
+    deep_copy_index_schema = new (buf) ObTableSchema(&allocator);
+    ObSchemaGetterGuard schema_guard;
+    int64_t latest_schema_version = 0;
+    // In DDL task, the schema version should be the latest, otherwise the schema can be already recycled
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_refreshed_schema_version(
+            extract_tenant_id(index_tid), latest_schema_version))) {
+      LOG_WARN("fail to get latest schema version", K(ret), K(arg));
+    } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
+                   extract_tenant_id(index_tid), schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K(index_tid));
+    } else if (OB_FAIL(schema_guard.get_table_schema(index_tid, index_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(index_tid));
+    } else if (OB_ISNULL(index_schema)) {
+      LOG_INFO("index schema is deleted, skip it");
+    } else if (OB_FAIL(deep_copy_index_schema->assign(*index_schema))) {
+      LOG_WARN("fail to assign index schema", K(ret), K(*index_schema));
+    } else if (FALSE_IT(deep_copy_index_schema->set_schema_version(latest_schema_version))) {
+    } else if (deep_copy_index_schema->is_global_index_table() &&
+               OB_FAIL(global_index_builder_.submit_build_global_index_task(deep_copy_index_schema))) {
+      LOG_WARN("fail to submit build global index task", K(ret), K(*deep_copy_index_schema));
+    } else if (deep_copy_index_schema->is_index_local_storage()) {
+      ObIndexBuilder index_builder(ddl_service_);
+      if (OB_FAIL(index_builder.submit_build_local_index_task(*deep_copy_index_schema))) {
+        LOG_WARN("fail to submit build local index task", K(ret), K(*deep_copy_index_schema));
+      }
     }
+  }
+  if (deep_copy_index_schema != nullptr) {
+    deep_copy_index_schema->~ObTableSchema();
+    allocator.free(deep_copy_index_schema);
   }
   return ret;
 }

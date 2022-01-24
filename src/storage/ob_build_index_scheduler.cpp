@@ -1791,6 +1791,9 @@ int ObRetryGhostIndexTask::process()
   const ObTableSchema *index_schema = nullptr;
   ObSchemaGetterGuard schema_guard;
   ObAddr rs_addr;
+  ObSubmitBuildIndexTaskArg arg;
+  arg.index_tid_ = index_id_;
+  arg.exec_tenant_id_ = is_inner_table(index_id_) ? OB_SYS_TENANT_ID : extract_tenant_id(index_id_);
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
           extract_tenant_id(index_id_), schema_guard))) {
     STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(index_id_));
@@ -1804,11 +1807,11 @@ int ObRetryGhostIndexTask::process()
     STORAGE_LOG(WARN, "fail to get rootservice address", K(ret));
   } else if (rs_addr != GCTX.self_addr_) {
     STORAGE_LOG(INFO, "rs is not on this observer, skip");
-  } else if (NULL == GCTX.root_service_) {
+  } else if (NULL == GCTX.rs_rpc_proxy_) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "root service is null", K(ret));
-  } else if (OB_FAIL(GCTX.root_service_->submit_build_index_task(index_schema))) {
-    STORAGE_LOG(WARN, "fail to submit build index task", K(ret));
+    STORAGE_LOG(WARN, "rs_rpc_proxy is null", K(ret));
+  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->submit_build_index_task(arg))) {
+    STORAGE_LOG(WARN, "fail to submit build index task", K(ret), K(arg));
   }
   return ret;
 }

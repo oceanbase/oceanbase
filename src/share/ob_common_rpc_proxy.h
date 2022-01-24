@@ -87,6 +87,7 @@ public:
   RPC_S(PRD purge_tenant, obrpc::OB_PURGE_TENANT, (ObPurgeTenantArg));
   RPC_S(PRD purge_expire_recycle_objects, obrpc::OB_PURGE_EXPIRE_RECYCLE_OBJECTS, (ObPurgeRecycleBinArg), Int64);
   RPC_S(PRD optimize_table, obrpc::OB_OPTIMIZE_TABLE, (ObOptimizeTableArg));
+  RPC_S(PR5 submit_build_index_task, obrpc::OB_SUBMIT_BUILD_INDEX_TASK, (ObSubmitBuildIndexTaskArg));
 
   //----Definitions for managing privileges----
   RPC_S(PRD create_user, obrpc::OB_CREATE_USER, (ObCreateUserArg), common::ObSArray<int64_t>);

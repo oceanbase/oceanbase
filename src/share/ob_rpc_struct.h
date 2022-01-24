@@ -8302,6 +8302,28 @@ public:
   int ret_;
 };
 
+struct ObSubmitBuildIndexTaskArg : public ObDDLArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSubmitBuildIndexTaskArg() : ObDDLArg(), index_tid_(0)
+  {}
+  ~ObSubmitBuildIndexTaskArg()
+  {}
+  bool is_valid() const
+  {
+    return index_tid_ > 0;
+  }
+  virtual int assign(const ObSubmitBuildIndexTaskArg &other);
+  TO_STRING_KV(K_(index_tid));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSubmitBuildIndexTaskArg);
+
+public:
+  uint64_t index_tid_;
+};
+
 }  // end namespace obrpc
 }  // end namespace oceanbase
 #endif
