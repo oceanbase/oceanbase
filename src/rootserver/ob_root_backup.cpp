@@ -2346,7 +2346,7 @@ int ObRootBackup::do_with_all_finished_info(const share::ObBaseBackupInfoStruct 
           LOG_WARN("failed to get stopped backup tenant result", K(ret), K(infos));
         } else if (FALSE_IT(
                        status = (OB_SUCCESS == result ? ObExternBackupInfo::SUCCESS : ObExternBackupInfo::FAILED))) {
-        } else if (FALSE_IT(is_force_stop = (OB_CANCELED == result && is_force_cancel_()))) {
+        } else if (FALSE_IT(is_force_stop = is_force_cancel_())) {
         } else if (OB_FAIL(update_extern_backup_infos(info, status, is_force_stop, extern_backup_info))) {
           LOG_WARN("failed to do extern backup infos", K(ret), K(info), K(status));
         } else if (OB_FAIL(update_sys_tenant_backup_task(sys_updater.get_trans(),
