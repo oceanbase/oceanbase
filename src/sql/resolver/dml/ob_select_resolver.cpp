@@ -172,8 +172,13 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
     select_stmt->add_set_query(left_select_stmt);
     select_stmt->add_set_query(right_select_stmt);
     select_stmt->set_calc_found_rows(left_select_stmt->is_calc_found_rows());
-    if (OB_FAIL(ObOptimizerUtil::gen_set_target_list(
-            allocator_, session_info_, params_.expr_factory_, *left_select_stmt, *right_select_stmt, select_stmt))) {
+    if (OB_FAIL(ObOptimizerUtil::gen_set_target_list(allocator_,
+            session_info_,
+            params_.expr_factory_,
+            *left_select_stmt,
+            *right_select_stmt,
+            select_stmt,
+            !is_oracle_mode()))) {
       LOG_WARN("failed to gen set target list.", K(ret));
     } else if (!right_resolver.cte_ctx_.is_recursive()) {
       /*do nothing*/
@@ -2169,9 +2174,9 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
   } else {
     int num_child = node->num_child_;
     if (node->value_ == 0)
-      params_.has_recursive_word = false;
+      params_.has_recursive_word_ = false;
     else
-      params_.has_recursive_word = true;
+      params_.has_recursive_word_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < num_child; ++i) {
       // alias tblname [(alia colname1, alia colname2)](subquery) [search clause][cycle clause]
       ParseNode* child_node = node->children_[i];
@@ -2186,7 +2191,13 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
         if (OB_FAIL(select_stmt->check_CTE_name_exist(table_name, duplicate_name))) {
           LOG_WARN("check cte name failed", K(ret));
         } else if (duplicate_name) {
-          // do nothing, oracle ignore the same define cte name.
+          if (is_oracle_mode()) {
+            // do nothing, oracle ignore the same define cte name.
+          } else {
+            ret = OB_ERR_NONUNIQ_TABLE;
+            LOG_WARN("not unique cte table name", K(ret));
+            LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_name.length(), table_name.ptr());
+          }
         } else if (OB_FAIL(resolve_with_clause_subquery(*child_node, table_item))) {
           LOG_WARN("resolver with_clause_as's subquery failed", K(ret));
         } else if (OB_FAIL(select_stmt->add_cte_table_item(table_item, duplicate_name))) {
@@ -3132,10 +3143,7 @@ int ObSelectResolver::resolve_recursive_cte_table(const ParseNode& parse_tree, T
 {
   int ret = OB_SUCCESS;
   ObSelectStmt* base_stmt = cte_ctx_.left_select_stmt_;
-  if (cte_ctx_.cte_col_names_.empty()) {
-    ret = OB_ERR_NEED_COLUMN_ALIAS_LIST_IN_RECURSIVE_CTE;
-    LOG_WARN("recursive WITH clause must have column alias list", K(ret));
-  } else if (OB_ISNULL(base_stmt) && cte_ctx_.is_set_left_resolver_) {
+  if (OB_ISNULL(base_stmt) && cte_ctx_.is_set_left_resolver_) {
     ret = OB_ERR_NEED_INIT_BRANCH_IN_RECURSIVE_CTE;
     LOG_WARN("recursive WITH clause needs an initialization branch", K(ret));
   } else if (OB_ISNULL(base_stmt)) {
@@ -3318,8 +3326,11 @@ int ObSelectResolver::resolve_basic_table(const ParseNode& parse_tree, TableItem
   ObString tblname(table_node->str_len_, table_node->str_value_);
   if (cte_ctx_.is_with_resolver() && ObCharset::case_insensitive_equal(cte_ctx_.current_cte_table_name_, tblname) &&
       tblname.length() && no_defined_database_name) {
-    TableItem* item = NULL;
-    if (OB_FAIL(resolve_recursive_cte_table(parse_tree, item))) {
+    TableItem *item = NULL;
+    if (!params_.has_recursive_word_) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("cte table shows in union stmt without recursive keyword", K(ret));
+    } else if (OB_FAIL(resolve_recursive_cte_table(parse_tree, item))) {
       LOG_WARN("revolve recursive set query's right child failed", K(ret));
     } else if (cte_ctx_.more_than_two_branch()) {
       ret = OB_ERR_NEED_ONLY_TWO_BRANCH_IN_RECURSIVE_CTE;
@@ -5504,9 +5515,12 @@ int ObSelectResolver::identify_anchor_member(
       need_swap_childa = true;
       if (is_oracle_mode()){
         ret = OB_SUCCESS;
-      } else if (params_.has_recursive_word) {
+      } else if (params_.has_recursive_word_) {
         ret = OB_ERR_CTE_NEED_QUERY_BLOCKS;  // mysql error: Recursive Common Table Expression 'cte' should have one or
                                              // more non-recursive query blocks followed by one or more recursive ones
+      } else {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("cte table shows in left union stmt without recursive keyword", K(ret));
       }
     } else {
       LOG_WARN("Failed to find anchor member", K(ret));

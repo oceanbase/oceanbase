@@ -12101,7 +12101,7 @@ static struct ObStrErrorInit
     ERROR_NAME[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "OB_ERR_CTE_NEED_QUERY_BLOCKS";
     ERROR_CAUSE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Internal Error";
     ERROR_SOLUTION[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Contact OceanBase Support";
-    MYSQL_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = -1;
+    MYSQL_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = 3574;
     SQLSTATE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "HY000";
     STR_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones";
     STR_USER_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s";
@@ -14009,6 +14009,8 @@ static struct ObStrErrorInit
     ORACLE_STR_ERROR[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous";
     ORACLE_STR_USER_ERROR[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous";
     ERROR_NAME[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED";
+    ERROR_CAUSE[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "Internal Error";
+    ERROR_SOLUTION[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "Contact OceanBase Support";
     MYSQL_ERRNO[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = -1;
     SQLSTATE[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "HY000";
     STR_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "deleting backup piece is not allowed";
