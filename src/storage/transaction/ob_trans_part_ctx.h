@@ -402,7 +402,7 @@ public:
       K(mt_ctx_.get_checksum_log_ts()), K_(is_changing_leader), K_(has_trans_state_log),
       K_(is_trans_state_sync_finished), K_(status), K_(same_leader_batch_partitions_count), K_(is_hazardous_ctx),
       K(mt_ctx_.get_callback_count()), K_(in_xa_prepare_state), K_(is_listener), K_(last_replayed_redo_log_id),
-      K_(status), K_(is_xa_trans_prepared));
+      K_(status), K_(is_xa_trans_prepared), K_(ctx_serialize_size));
 
 public:
   static const int64_t OP_LOCAL_NUM = 16;
@@ -608,6 +608,9 @@ private:
   bool is_xa_last_empty_redo_log_() const;
   int fake_kill_(const int64_t terminate_log_ts);
   int kill_v2_(const int64_t terminate_log_ts);
+  int calc_serialize_size_and_set_redo_log_(const int64_t log_id);
+  int calc_serialize_size_and_set_participants_(const ObPartitionArray &participants);
+  int calc_serialize_size_and_set_undo_(const int64_t undo_to, const int64_t undo_from);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartTransCtx);
@@ -623,7 +626,7 @@ private:
 private:
   bool is_inited_;
   ObIClogAdapter* clog_adapter_;
-  ObTransSubmitLogCb submit_log_cb_;
+ObTransSubmitLogCb submit_log_cb_;
   memtable::ObMemtableCtx mt_ctx_;
   memtable::ObIMemtableCtxFactory* mt_ctx_factory_;
   ObTransTaskWorker* big_trans_worker_;
@@ -743,6 +746,7 @@ private:
   bool is_xa_trans_prepared_;
   bool has_write_or_replay_mutator_redo_log_;
   bool is_in_redo_with_prepare_;
+  int64_t ctx_serialize_size_;
 };
 
 #if defined(__x86_64__)
