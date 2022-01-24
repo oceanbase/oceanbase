@@ -357,8 +357,13 @@ int ObTransformJoinElimination::create_missing_select_items(ObSelectStmt* source
       for (int64_t i = 0; OB_SUCC(ret) && i < table_map.count(); i++) {
         TableItem* temp_source_table = NULL;
         TableItem* temp_target_table = NULL;
-        if (OB_ISNULL(temp_source_table = source_stmt->get_table_item(i)) ||
-            OB_ISNULL(temp_target_table = target_stmt->get_table_item(table_map.at(i)))) {
+        int64_t idx = table_map.at(i);
+        if (idx < 0 || idx >= target_stmt->get_table_size() || 
+            i >= source_stmt->get_table_size()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect table idx", K(ret));
+        } else if (OB_ISNULL(temp_source_table = source_stmt->get_table_item(i)) ||
+            OB_ISNULL(temp_target_table = target_stmt->get_table_item(idx))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(temp_source_table), K(temp_target_table), K(ret));
         } else if ((temp_source_table->is_basic_table() && temp_target_table->is_basic_table()) ||
