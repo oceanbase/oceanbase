@@ -574,15 +574,18 @@ int ObExprFuncPartHash::calc_oracle_vt_part_id(ObTaskExecutorCtx& task_exec_ctx,
   } else {
     ObString ip = objs_stack[0].get_string();
     number::ObNumber port_num;
-    objs_stack[1].get_number(port_num);
-    int32_t port = atoi(port_num.format());
-    ObAddr addr;
-    addr.set_ip_addr(ip, port);
-    int64_t part_id = OB_INVALID_ID;
-    if (OB_FAIL(task_exec_ctx.calc_virtual_partition_id(table_id, addr, part_id))) {
-      LOG_WARN("calculate virtual table partition id failed", K(table_id), K(addr));
+    if (OB_FAIL(objs_stack[1].get_number(port_num))) {
+      LOG_WARN("Get port_number failed.", K(ret));
     } else {
-      result.set_int(part_id);
+      int32_t port = atoi(port_num.format());
+      ObAddr addr;
+      addr.set_ip_addr(ip, port);
+      int64_t part_id = OB_INVALID_ID;
+      if (OB_FAIL(task_exec_ctx.calc_virtual_partition_id(table_id, addr, part_id))) {
+        LOG_WARN("calculate virtual table partition id failed", K(table_id), K(addr));
+      } else {
+        result.set_int(part_id);
+      }
     }
   }
   return ret;

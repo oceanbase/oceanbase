@@ -8,131 +8,21 @@
 #               oceanbase admins. It's based on python curses library, and is a
 #               powerful tool for watching oceanbase cluster status with
 #               straightfoward vision.
-# Author: 符风 <fufeng.syd@alipay.com>
-# Created: 2013-07-23 21:05:08 (+0800)
-# Version: 2.1.2
-# Last-Updated: 2015-10-27T13:49:36+0800
-#           By: Shi Yudi
-#     Update #: 6933
-#
 
-# Change Log:
-# 2014-05-14    Shi Yudi
-#    Last-Updated: 2014-05-14T16:15:26+0800 #6913 (Shi Yudi)
-#    1. skip to select cluster if only one cluster
-#
-# 2014-04-24    Shi Yudi
-#    Last-Updated: 2014-04-24T18:57:09+0800 #6515 (Shi Yudi)
-#    1. support ob 0.5 updateserver columns
-#
-# 2014-04-22    Shi Yudi
-#    Last-Updated: 2014-04-22T19:57:35+0800 #6288 (Shi Yudi)
-#    1. add column filter for ups,ms,cs page
-#
-# 2014-04-01    Shi Yudi
-#    Last-Updated: 2014-04-01T13:41:45+0800 #5844 (Shi Yudi)
-#    1. fix oceanbase 0.5 gather stats mixed by all cluster
-#
-# 2014-02-27    Yudi Shi
-#    Last-Updated: Thu Feb 27 20:01:13 2014 (+0800) #5777 (Yudi Shi)
-#    1. add fail sql exec count in gallery page
-#
-# 2013-12-31    Shi Yudi
-#    Last-Updated: Tue Dec 31 13:10:39 2013 (+0800) #5770 (Shi Yudi)
-#    1. add error msg if geometry is not enough
-#    2. fix some msg output
-#
-# 2013-12-11    Shi Yudi
-#    Last-Updated: Wed Dec 11 14:51:43 2013 (+0800) #5745 (Shi Yudi)
-#    1. fix password decrypt bug (fill 8 width encoding str)
-#
-# 2013-10-25    Shi Yudi
-#    Last-Updated: Tue Dec  3 16:01:23 2013 (+0800) #5739 (Shi Yudi)
-#    1. add time to widget frame
-#
-# 2013-10-25    Shi Yudi
-#    Last-Updated: 2013-10-25 20:28:17 (+0800) #5647 (Shi Yudi)
-#    1. add http api support
-#    2. add obssh to login server
-#    3. using obconfig password
-#
-# 2013-09-04    Shi Yudi
-#    Last-Updated: 2013-09-04 10:52:02 (+0800) #4786 (Shi Yudi)
-#    1. add machine stat
-#    2. fix many bugs
-#    3. add ssh, mysql login
-#    4. add delete and restore widgets
-#
-# 2013-08-20    Shi Yudi
-#    Last-Updated: 2013-08-20 15:29:45 (+0800) #2012 (Shi Yudi)
-#    1. support instant statistics monitor for ups/cs/ms
-#    2. keyboard response for switch between widget
-#    3. rewrite help page
-#
-# 2013-08-16    Shi Yudi
-#    Last-Updated: 2013-08-16 16:07:32 (+0800) #1052 (Shi Yudi)
-#    1. add header column widget descripe each server
-#    2. add instant stat list (only for ms now)
-#    3. add mergeserver header info
-#
-# 2013-08-14    Shi Yudi
-#    Last-Updated: 2013-08-14 16:11:40 (+0800) #576 (Shi Yudi)
-#    1. add MessageBox for dooba, key 'p' for test
-#    2. add selective mode, TAB for swtich between widgets
-#    3. add supermode option, just a husk right now
-#
-# 2013-08-07    Shi Yudi
-#    Last-Updated: 2013-08-07 10:38:33 (+0800) #479 (Shi Yudi)
-#    1. fix term evironment setting bug
-#    2. fix getting appname bug
-#    3. refact main method
-#
-# 2013-08-06    Shi Yudi
-#    Last-Updated: 2013-08-06 20:47:35 (+0800) #443 (Shi Yudi)
-#    1. oceanbase alive checker before running
-#    2. colorfull widgets
-#    3. fix some promptions
-#    4. change header widget and status widget style with horizontal line
-#    5. remove page border
-#
-# 2013-08-06    Shi Yudi
-#    Last-Updated: 2013-08-06 16:46:39 (+0800) #347 (Shi Yudi)
-#    1. add chunkserver, mergeserver, updateserver info widgets
-#    2. fix non-lexical closures problem
-#    3. dynamic helper widget promption
-#    4. change some pages' index
-#
-# 2013-07-31    Shi Yudi
-#    Last-Updated: 2013-07-31 19:11:19 (+0800) #14 (Shi Yudi)
-#    1. redesign helper bar and status bar
-#    2. add more pages for dooba
-#    3. beauty python coding style
-#
-# 2013-07-23    Shi Yudi
-#    1. header with app name, and other mocks.
-#    2. sql rt, sql count, cs rt, ups rt are added to screen.
-#
-#
-
-#2015-03-26    Qu jinnan
-#    1. add group list
-#    2. add searching bar
 
 # This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 3, or
+# modify it under the terms of the GNU Lesser General Public License
+# as published by the Free Software Foundation; either version 3, or
 # (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
+# Lesser General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; see the file COPYING.  If not, write to
-# the Free Software Foundation, Inc., 51 Franklin Street, Fifth
-# Floor, Boston, MA 02110-1301, USA.
-#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this program; see the file COPYING. If not, see
+# <http://www.gnu.org/licenses/>. 
 #
 
 # Code:
@@ -210,8 +100,8 @@ class Global:
 
 class Options(object):
     host = '127.0.0.1'
-    port = 2828
-    user = None
+    port = 2881
+    user = root
     password = ""
     database = "oceanbase"
     supermode = False

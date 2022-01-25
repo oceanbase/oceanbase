@@ -73,7 +73,7 @@ void ObPartitionWorker::run1()
   int ret = OB_SUCCESS;
   int64_t total_time = 0;
   int64_t loop_count = 0;
-  static const int64_t INTERVAL_US = 50 * 1000;  // 50ms
+  int64_t INTERVAL_US = (lib::is_mini_mode() ? 500 : 50) * 1000; // 500ms or 50ms
   lib::set_thread_name("PartWorker");
 
   int64_t dump_elr_statistic_ts = 0;

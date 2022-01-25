@@ -103,6 +103,19 @@ int ObPGSSTableGarbageCollector::gc_free_sstable_by_pg_iter()
         left_recycle_cnt -= recycle_cnt;
       }
     }
+    if (OB_SUCC(ret)) {
+      while (OB_SUCC(ret) && free_sstables_queue_.size() > 0) {
+        ObLink *ptr = NULL;
+        if (OB_FAIL(free_sstables_queue_.pop(ptr))) {
+          LOG_WARN("fail to pop item", K(ret));
+        } else if (OB_ISNULL(ptr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, ptr is nullptr", K(ret), KP(ptr));
+        } else {
+          free_sstable_gc_item(static_cast<ObSSTableGCItem *>(ptr));
+        }
+      }
+    }
   }
   if (nullptr != partition_iter) {
     ObPartitionService::get_instance().revert_pg_iter(partition_iter);

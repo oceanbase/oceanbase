@@ -603,7 +603,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord& record)
         } break;
           // sql_id
         case SQL_ID: {
-          if (!record.data_.is_executor_rpc_) {
+          if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.sql_id_) && !record.data_.is_executor_rpc_) {
             cells[cell_idx].set_varchar(
                 record.data_.sql_id_, static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
           } else {

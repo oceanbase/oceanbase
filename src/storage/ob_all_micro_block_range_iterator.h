@@ -47,7 +47,6 @@ private:
   ObMacroBlockIterator macro_block_iterator_;
   blocksstable::ObMicroBlockIndexReader index_reader_;
   blocksstable::ObMacroBlockHandle macro_handles_[HANDLE_CNT];
-  blocksstable::ObMacroBlockMetaHandle meta_handles_[HANDLE_CNT];
   common::ObArenaAllocator allocators_[HANDLE_CNT];
   common::ObStoreRowkey macro_block_start_keys_[HANDLE_CNT];
   common::ObArray<common::ObStoreRowkey> end_keys_;

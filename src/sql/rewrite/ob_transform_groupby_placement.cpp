@@ -1015,10 +1015,36 @@ int ObTransformGroupByPlacement::push_down_group_by_into_view(ObSelectStmt* stmt
     if (OB_ISNULL(expr) || OB_UNLIKELY(!expr->is_aggr_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("aggr expr is null", K(ret));
-    } else if (OB_FAIL(sub_stmt->add_agg_item(static_cast<ObAggFunRawExpr&>(*expr)))) {
-      LOG_WARN("failed to add aggr item", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, expr, sub_stmt))) {
-      LOG_WARN("failed to add select item", K(ret));
+    } else {
+      ObSEArray<ObRawExpr *, 8> old_params;
+      ObSEArray<ObRawExpr *, 8> new_params;
+      ObRawExpr *old_param = NULL;
+      ObRawExpr *new_param = NULL;
+      for (uint8_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        if (OB_ISNULL(old_param = expr->get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr param should not be null", K(ret), K(*expr));
+        } else if (OB_FAIL(ObRawExprUtils::copy_expr(*ctx_->expr_factory_, old_param, new_param, COPY_REF_DEFAULT))) {
+          LOG_WARN("failed to copy expr", K(ret), K(*old_param), K(*new_param));
+        } else if (OB_ISNULL(new_param)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null expr", K(ret), K(*old_param), K(*new_param));
+        } else if (OB_FAIL(old_params.push_back(old_param))) {
+          LOG_WARN("failed to push pack old param", K(ret), K(*old_param));
+        } else if (OB_FAIL(new_params.push_back(new_param))) {
+          LOG_WARN("failed to push back new param", K(ret), K(*new_param));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObTransformUtils::replace_expr(old_params, new_params, expr))) {
+        LOG_WARN("failed to replace params", K(ret), K(old_params), K(new_params));
+      } else if (OB_FAIL(sub_stmt->add_agg_item(static_cast<ObAggFunRawExpr &>(*expr)))) {
+        LOG_WARN("failed to add aggr item", K(ret));
+      } else if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_, expr, sub_stmt))) {
+        LOG_WARN("failed to add select item", K(ret));
+      }
     }
   }
   return ret;
@@ -1548,6 +1574,7 @@ int ObTransformGroupByPlacement::check_groupby_pullup_validity(ObDMLStmt* stmt, 
 {
   int ret = OB_SUCCESS;
   bool can_pullup = false;
+  bool has_rand = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(stmt), K(table), K(ret));
@@ -1573,6 +1600,11 @@ int ObTransformGroupByPlacement::check_groupby_pullup_validity(ObDMLStmt* stmt, 
     } else if (OB_FAIL(check_null_propagate(stmt, sub_stmt, helper, can_pullup))) {
       LOG_WARN("failed to check null propagate select expr", K(ret));
     } else if (!can_pullup) {
+      // do nothing
+    } else if (OB_FAIL(sub_stmt->has_rand(has_rand))) {
+      LOG_WARN("failed to check stmt has rand func", K(ret));
+      // stmt不能包含rand函数 https://work.aone.alibaba-inc.com/issue/35875561
+    } else if (!(can_pullup = !has_rand)) {
       // do nothing
     } else if (OB_FALSE_IT(helper.need_merge_ = sub_stmt->get_stmt_hint().enable_view_merge())) {
     } else if (OB_FAIL(valid_views.push_back(helper))) {

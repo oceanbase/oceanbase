@@ -89,13 +89,19 @@ class ObExprTimestamp : public ObFuncExprOperator
 public:
   explicit ObExprTimestamp(common::ObIAllocator &alloc);
   virtual ~ObExprTimestamp();
-  virtual int calc_result_type1(ObExprResType &type,
-                                ObExprResType &type1,
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *types_array,
+                                int64_t param_num,
                                 common::ObExprTypeCtx &type_ctx) const;
-  virtual int calc_result1(common::ObObj &result,
-                           const common::ObObj &time,
+  virtual int calc_resultN(common::ObObj &result,
+                           const common::ObObj *objs_array,
+                           int64_t param_num,
                            common::ObExprCtx &expr_ctx) const;
   virtual common::ObCastMode get_cast_mode() const { return CM_NULL_ON_WARN;}
+  static int calc_timestamp1(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &result);
+  static int calc_timestamp2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &result);
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
 private :
   //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimestamp);

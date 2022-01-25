@@ -423,7 +423,7 @@ int ObSSTableMacroBlockChecker::check_micro_data(
           row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
           row.capacity_ = OB_ROW_MAX_COLUMNS_COUNT;
           if (OB_FAIL(reader->get_row(iter, row))) {
-            STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter));
+            STORAGE_LOG(WARN, "fail to get row", K(ret), K(iter), K(meta));
           } else if (row.row_val_.count_ != meta.meta_->column_number_) {
             ret = OB_INVALID_DATA;
             STORAGE_LOG(WARN, "column number not match", K(ret));

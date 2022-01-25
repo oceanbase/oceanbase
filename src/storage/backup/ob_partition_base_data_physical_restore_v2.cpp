@@ -53,9 +53,9 @@ void ObPartitionBaseDataMetaRestoreReaderV2::reset()
   schema_version_ = OB_INVALID_VERSION;
 }
 
-int ObPartitionBaseDataMetaRestoreReaderV2::init(const common::ObPartitionKey& pkey,
-    const ObPhysicalRestoreArg& restore_info, const ObPhyRestoreMacroIndexStoreV2& macro_indexs,
-    const ObBackupPartitionStoreMetaInfo& partition_store_meta_info, const int64_t schema_version)
+int ObPartitionBaseDataMetaRestoreReaderV2::init(const common::ObPartitionKey &pkey,
+    const ObPhysicalRestoreArg &restore_info, const ObPhyRestoreMacroIndexStoreV2 &macro_indexs,
+    const ObBackupPartitionStoreMetaInfo &partition_store_meta_info, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   ObPartitionKey src_pkey;
@@ -84,12 +84,12 @@ int ObPartitionBaseDataMetaRestoreReaderV2::init(const common::ObPartitionKey& p
   return ret;
 }
 
-int ObPartitionBaseDataMetaRestoreReaderV2::fetch_partition_meta(ObPGPartitionStoreMeta& partition_store_meta)
+int ObPartitionBaseDataMetaRestoreReaderV2::fetch_partition_meta(ObPGPartitionStoreMeta &partition_store_meta)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   uint64_t backup_table_id = 0;
-  const ObPGPartitionStoreMeta* backup_partition_store_meta = NULL;
+  const ObPGPartitionStoreMeta *backup_partition_store_meta = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
@@ -123,7 +123,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_partition_meta(ObPGPartitionSt
 }
 
 int ObPartitionBaseDataMetaRestoreReaderV2::trans_table_key(
-    const ObITable::TableKey& table_key, ObITable::TableKey& backup_table_key)
+    const ObITable::TableKey &table_key, ObITable::TableKey &backup_table_key)
 {
   int ret = OB_SUCCESS;
   uint64_t backup_index_id = 0;
@@ -146,7 +146,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::trans_table_key(
 }
 
 int ObPartitionBaseDataMetaRestoreReaderV2::get_backup_sstable_meta_info(
-    const ObITable::TableKey& backup_table_key, const ObBackupSSTableMetaInfo*& backup_sstable_meta_info)
+    const ObITable::TableKey &backup_table_key, const ObBackupSSTableMetaInfo *&backup_sstable_meta_info)
 {
   int ret = OB_SUCCESS;
   backup_sstable_meta_info = NULL;
@@ -157,7 +157,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::get_backup_sstable_meta_info(
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else {
     for (int64_t i = 0; i < partition_store_meta_info_->sstable_meta_info_array_.count() && !found; ++i) {
-      const ObBackupSSTableMetaInfo& tmp_sstable_meta_info = partition_store_meta_info_->sstable_meta_info_array_.at(i);
+      const ObBackupSSTableMetaInfo &tmp_sstable_meta_info = partition_store_meta_info_->sstable_meta_info_array_.at(i);
       if (backup_table_key == tmp_sstable_meta_info.table_key_) {
         backup_sstable_meta_info = &(partition_store_meta_info_->sstable_meta_info_array_.at(i));
         found = true;
@@ -175,7 +175,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::get_backup_sstable_meta_info(
 }
 
 int ObPartitionBaseDataMetaRestoreReaderV2::get_backup_table_keys(
-    const uint64_t backup_index_id, ObIArray<ObITable::TableKey>& table_keys)
+    const uint64_t backup_index_id, ObIArray<ObITable::TableKey> &table_keys)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -183,7 +183,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::get_backup_table_keys(
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_store_meta_info_->sstable_meta_info_array_.count(); ++i) {
-      const ObITable::TableKey& table_key = partition_store_meta_info_->sstable_meta_info_array_.at(i).table_key_;
+      const ObITable::TableKey &table_key = partition_store_meta_info_->sstable_meta_info_array_.at(i).table_key_;
       if (table_key.table_id_ == backup_index_id) {
         if (table_key.is_complement_minor_sstable() && !table_key.log_ts_range_.is_empty()) {
           // do nothing
@@ -197,12 +197,12 @@ int ObPartitionBaseDataMetaRestoreReaderV2::get_backup_table_keys(
 }
 
 int ObPartitionBaseDataMetaRestoreReaderV2::fetch_sstable_meta(
-    const ObITable::TableKey& table_key, blocksstable::ObSSTableBaseMeta& sstable_meta)
+    const ObITable::TableKey &table_key, blocksstable::ObSSTableBaseMeta &sstable_meta)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObITable::TableKey backup_table_key;
-  const ObBackupSSTableMetaInfo* backup_sstable_meta_info = NULL;
+  const ObBackupSSTableMetaInfo *backup_sstable_meta_info = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -238,12 +238,12 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_sstable_meta(
 }
 
 int ObPartitionBaseDataMetaRestoreReaderV2::fetch_sstable_pair_list(
-    const ObITable::TableKey& table_key, common::ObIArray<blocksstable::ObSSTablePair>& pair_list)
+    const ObITable::TableKey &table_key, common::ObIArray<blocksstable::ObSSTablePair> &pair_list)
 {
   int ret = OB_SUCCESS;
   ObITable::TableKey backup_table_key;
-  const common::ObArray<ObBackupTableMacroIndex>* index_list = NULL;
-  const ObBackupSSTableMetaInfo* backup_sstable_meta_info = NULL;
+  const common::ObArray<ObBackupTableMacroIndex> *index_list = NULL;
+  const ObBackupSSTableMetaInfo *backup_sstable_meta_info = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -280,7 +280,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_sstable_pair_list(
     STORAGE_LOG(WARN, "index list should not be NULL", K(ret), K(table_key), K(backup_table_key), KP(index_list));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < index_list->count(); ++i) {
-      const ObBackupTableMacroIndex& backup_macro_index = index_list->at(i);
+      const ObBackupTableMacroIndex &backup_macro_index = index_list->at(i);
       if (!backup_macro_index.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(
@@ -298,12 +298,12 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_sstable_pair_list(
   return ret;
 }
 
-int ObPartitionBaseDataMetaRestoreReaderV2::prepare(const common::ObPartitionKey& pkey)
+int ObPartitionBaseDataMetaRestoreReaderV2::prepare(const common::ObPartitionKey &pkey)
 {
   int ret = OB_SUCCESS;
   ObIPartitionGroupGuard guard;
   ObPGPartitionGuard pg_partition_guard;
-  ObPartitionStorage* partition_storage = NULL;
+  ObPartitionStorage *partition_storage = NULL;
 
   if (OB_FAIL(ObPartitionService::get_instance().get_partition(pkey, guard))) {
     STORAGE_LOG(WARN, "fail to get partition", K(ret), K(pkey));
@@ -315,7 +315,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::prepare(const common::ObPartitionKey
   } else if (OB_ISNULL(pg_partition_guard.get_pg_partition())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "pg_partition is null ", K(ret), K(pkey));
-  } else if (OB_ISNULL(partition_storage = reinterpret_cast<ObPartitionStorage*>(
+  } else if (OB_ISNULL(partition_storage = reinterpret_cast<ObPartitionStorage *>(
                            pg_partition_guard.get_pg_partition()->get_storage()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected error, the partition storage is NULL", K(ret), K(pkey));
@@ -326,7 +326,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::prepare(const common::ObPartitionKey
   return ret;
 }
 
-int ObPartitionBaseDataMetaRestoreReaderV2::fetch_all_table_ids(common::ObIArray<uint64_t>& table_id_array)
+int ObPartitionBaseDataMetaRestoreReaderV2::fetch_all_table_ids(common::ObIArray<uint64_t> &table_id_array)
 {
   int ret = OB_SUCCESS;
   uint64_t index_id = 0;
@@ -339,7 +339,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_all_table_ids(common::ObIArray
     STORAGE_LOG(WARN, "failed to create backup table id set", K(ret), K(*partition_store_meta_info_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_store_meta_info_->sstable_meta_info_array_.count(); ++i) {
-      const ObITable::TableKey& backup_table_key =
+      const ObITable::TableKey &backup_table_key =
           partition_store_meta_info_->sstable_meta_info_array_.at(i).table_key_;
       if (OB_FAIL(backup_table_id_set.set_refactored(backup_table_key.table_id_))) {
         if (OB_HASH_EXIST == ret) {
@@ -372,7 +372,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_all_table_ids(common::ObIArray
 }
 
 int ObPartitionBaseDataMetaRestoreReaderV2::fetch_table_keys(
-    const uint64_t index_id, obrpc::ObFetchTableInfoResult& table_res)
+    const uint64_t index_id, obrpc::ObFetchTableInfoResult &table_res)
 {
   int ret = OB_SUCCESS;
   int64_t min_multi_version_start = INT64_MAX;
@@ -387,7 +387,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_table_keys(
       STORAGE_LOG(WARN, "failed to get backup table keys", K(ret), K(backup_index_id));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < table_res.table_keys_.count(); ++i) {
-        ObITable::TableKey& table_key = table_res.table_keys_.at(i);
+        ObITable::TableKey &table_key = table_res.table_keys_.at(i);
         table_key.pkey_ = pkey_;
         table_key.table_id_ = index_id;
         if (table_key.is_minor_sstable()) {
@@ -412,11 +412,11 @@ int ObPartitionBaseDataMetaRestoreReaderV2::fetch_table_keys(
   return ret;
 }
 
-int ObPartitionBaseDataMetaRestoreReaderV2::do_filter_tables(ObIArray<uint64_t>& table_ids)
+int ObPartitionBaseDataMetaRestoreReaderV2::do_filter_tables(ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  ObMultiVersionSchemaService& schema_service = ObMultiVersionSchemaService::get_instance();
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   ObArray<uint64_t> restore_tables;
   bool filtered = false;
   const int64_t tenant_id = pkey_.get_tenant_id();
@@ -432,7 +432,7 @@ int ObPartitionBaseDataMetaRestoreReaderV2::do_filter_tables(ObIArray<uint64_t>&
     for (int i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
       uint64_t table_id = table_ids.at(i);
       is_exist = false;
-      const ObTableSchema* table_schema = NULL;
+      const ObTableSchema *table_schema = NULL;
       bool need_skip = false;
       if (is_trans_table_id(table_id)) {
         is_exist = true;
@@ -482,9 +482,9 @@ ObPhysicalBaseMetaRestoreReaderV2::ObPhysicalBaseMetaRestoreReaderV2()
       table_key_()
 {}
 
-int ObPhysicalBaseMetaRestoreReaderV2::init(common::ObInOutBandwidthThrottle& bandwidth_throttle,
-    const ObPhysicalRestoreArg& restore_info, const ObITable::TableKey& table_key,
-    ObIPartitionGroupMetaRestoreReader& reader)
+int ObPhysicalBaseMetaRestoreReaderV2::init(common::ObInOutBandwidthThrottle &bandwidth_throttle,
+    const ObPhysicalRestoreArg &restore_info, const ObITable::TableKey &table_key,
+    ObIPartitionGroupMetaRestoreReader &reader)
 {
   int ret = OB_SUCCESS;
 
@@ -504,7 +504,7 @@ int ObPhysicalBaseMetaRestoreReaderV2::init(common::ObInOutBandwidthThrottle& ba
   return ret;
 }
 
-int ObPhysicalBaseMetaRestoreReaderV2::fetch_sstable_meta(ObSSTableBaseMeta& sstable_meta)
+int ObPhysicalBaseMetaRestoreReaderV2::fetch_sstable_meta(ObSSTableBaseMeta &sstable_meta)
 {
   int ret = OB_SUCCESS;
 
@@ -520,7 +520,7 @@ int ObPhysicalBaseMetaRestoreReaderV2::fetch_sstable_meta(ObSSTableBaseMeta& sst
   return ret;
 }
 
-int ObPhysicalBaseMetaRestoreReaderV2::fetch_macro_block_list(ObIArray<ObSSTablePair>& macro_block_list)
+int ObPhysicalBaseMetaRestoreReaderV2::fetch_macro_block_list(ObIArray<ObSSTablePair> &macro_block_list)
 {
   int ret = OB_SUCCESS;
 
@@ -546,15 +546,16 @@ ObPartitionMacroBlockRestoreReaderV2::ObPartitionMacroBlockRestoreReaderV2()
       bandwidth_throttle_(nullptr),
       backup_pgkey_(),
       backup_table_key_(),
-      allocator_()
+      allocator_(),
+      restore_info_(nullptr)
 {}
 
 ObPartitionMacroBlockRestoreReaderV2::~ObPartitionMacroBlockRestoreReaderV2()
 {}
 
-int ObPartitionMacroBlockRestoreReaderV2::init(common::ObInOutBandwidthThrottle& bandwidth_throttle,
-    common::ObIArray<ObMigrateArgMacroBlockInfo>& list, const ObPhysicalRestoreArg& restore_info,
-    const ObPhyRestoreMacroIndexStoreV2& macro_indexs, const ObITable::TableKey& table_key)
+int ObPartitionMacroBlockRestoreReaderV2::init(common::ObInOutBandwidthThrottle &bandwidth_throttle,
+    common::ObIArray<ObMigrateArgMacroBlockInfo> &list, const ObPhysicalRestoreArg &restore_info,
+    const ObPhyRestoreMacroIndexStoreV2 &macro_indexs, const ObITable::TableKey &table_key)
 {
   int ret = OB_SUCCESS;
   uint64_t backup_table_id = 0;
@@ -604,6 +605,7 @@ int ObPartitionMacroBlockRestoreReaderV2::init(common::ObInOutBandwidthThrottle&
     bandwidth_throttle_ = &bandwidth_throttle;
     backup_table_key_ = table_key;
     backup_table_key_.table_id_ = backup_index_id;
+    restore_info_ = &restore_info;
 
     if (OB_FAIL(backup_table_key_.pkey_.init(backup_table_id, table_key.pkey_.get_partition_id(), 0))) {
       STORAGE_LOG(WARN, "failed to init backup partition key", K(ret), K(table_key));
@@ -614,14 +616,14 @@ int ObPartitionMacroBlockRestoreReaderV2::init(common::ObInOutBandwidthThrottle&
   return ret;
 }
 
-int ObPartitionMacroBlockRestoreReaderV2::get_next_macro_block(blocksstable::ObFullMacroBlockMeta& meta,
-    blocksstable::ObBufferReader& data, blocksstable::MacroBlockId& src_macro_id)
+int ObPartitionMacroBlockRestoreReaderV2::get_next_macro_block(blocksstable::ObFullMacroBlockMeta &meta,
+    blocksstable::ObBufferReader &data, blocksstable::MacroBlockId &src_macro_id)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
   ObBackupTableMacroIndex macro_index;
-  ObMacroBlockSchemaInfo* new_schema = nullptr;
-  ObMacroBlockMetaV2* new_meta = nullptr;
+  ObMacroBlockSchemaInfo *new_schema = nullptr;
+  ObMacroBlockMetaV2 *new_meta = nullptr;
 
   allocator_.reuse();
   src_macro_id.reset();  // src_macro_id only used for fast migrator on ofs
@@ -657,7 +659,7 @@ int ObPartitionMacroBlockRestoreReaderV2::get_next_macro_block(blocksstable::ObF
 }
 
 int ObPartitionMacroBlockRestoreReaderV2::trans_macro_block(
-    const uint64_t table_id, blocksstable::ObMacroBlockMetaV2& meta, blocksstable::ObBufferReader& data)
+    const uint64_t table_id, blocksstable::ObMacroBlockMetaV2 &meta, blocksstable::ObBufferReader &data)
 {
   int ret = OB_SUCCESS;
   ObMacroBlockCommonHeader common_header;
@@ -690,8 +692,8 @@ int ObPartitionMacroBlockRestoreReaderV2::trans_macro_block(
         "need_size",
         sizeof(ObSSTableMacroBlockHeader));
   } else {
-    ObSSTableMacroBlockHeader* sstable_macro_block_header =
-        reinterpret_cast<ObSSTableMacroBlockHeader*>(data.data() + pos);
+    ObSSTableMacroBlockHeader *sstable_macro_block_header =
+        reinterpret_cast<ObSSTableMacroBlockHeader *>(data.data() + pos);
     meta.table_id_ = table_id;
     sstable_macro_block_header->table_id_ = meta.table_id_;
     sstable_macro_block_header->data_version_ = meta.data_version_;
@@ -702,35 +704,103 @@ int ObPartitionMacroBlockRestoreReaderV2::trans_macro_block(
 }
 
 int ObPartitionMacroBlockRestoreReaderV2::get_macro_block_path(
-    const ObBackupTableMacroIndex& macro_index, ObBackupPath& path)
+    const ObBackupTableMacroIndex &macro_index, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   path.reset();
+  bool deal_trans_sstable_as_minor = false;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (!macro_index.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get macro block path get invalid argument", K(ret), K(macro_index));
+  } else if (backup_table_key_.is_trans_sstable()) {
+    if (OB_BACKUP_COMPATIBLE_VERSION_V4 == restore_info_->restore_info_.compatible_) {
+      if (OB_FAIL(get_minor_macro_block_path_(macro_index, path))) {
+        LOG_WARN("failed to get minor macro block path", K(ret), K(macro_index));
+      }
+    } else if (ObBackupCompatibleVersion::OB_BACKUP_COMPATIBLE_VERSION_V3 == restore_info_->restore_info_.compatible_) {
+      if (OB_FAIL(get_major_macro_block_path_(macro_index, path))) {
+        LOG_WARN("failed to get major macro block path", K(ret), K(macro_index));
+      }
+    }
   } else if (backup_table_key_.is_major_sstable()) {
-    if (OB_FAIL(ObBackupPathUtil::get_major_macro_block_file_path(simple_path_,
-            backup_pgkey_.get_table_id(),
-            backup_pgkey_.get_partition_id(),
-            macro_index.backup_set_id_,
-            macro_index.sub_task_id_,
-            path))) {
-      STORAGE_LOG(WARN, "fail to get meta file path", K(ret));
+    if (OB_FAIL(get_major_macro_block_path_(macro_index, path))) {
+      LOG_WARN("failed to get major macro block path", K(ret), K(macro_index));
     }
   } else if (backup_table_key_.is_minor_sstable()) {
-    if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(simple_path_,
-            backup_pgkey_.get_table_id(),
-            backup_pgkey_.get_partition_id(),
-            macro_index.backup_set_id_,
-            macro_indexs_->get_backup_task_id(),
-            macro_index.sub_task_id_,
-            path))) {
-      STORAGE_LOG(WARN, "fail to get meta file path", K(ret));
+    if (OB_FAIL(get_minor_macro_block_path_(macro_index, path))) {
+      LOG_WARN("failed to get minor macro block path", K(ret), K(macro_index));
     }
+  }
+  return ret;
+}
+
+int ObPartitionMacroBlockRestoreReaderV2::get_major_macro_block_path_(
+    const ObBackupTableMacroIndex &macro_index, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } else if (!macro_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get macro block path get invalid argument", K(ret), K(macro_index));
+  } else {
+    ObSimpleBackupSetPath simple_backup_set_path;
+    ObArray<ObSimpleBackupSetPath> path_list;
+    const int64_t backup_set_id = macro_index.backup_set_id_;
+    bool found = false;
+
+    if (OB_FAIL(restore_info_->get_restore_set_list(path_list))) {
+      STORAGE_LOG(WARN, "failed to get restore set list", K(ret));
+    } else {
+      for (int64_t i = 0; i < path_list.count() && !found; ++i) {
+        const ObSimpleBackupSetPath &path = path_list.at(i);
+        if (backup_set_id == path.backup_set_id_) {
+          simple_backup_set_path = path;
+          found = true;
+        }
+      }
+      if (!found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find backup path", K(ret), K(path_list), K(macro_index));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObBackupPathUtil::get_major_macro_block_file_path(simple_backup_set_path,
+                   backup_pgkey_.get_table_id(),
+                   backup_pgkey_.get_partition_id(),
+                   backup_set_id,
+                   macro_index.sub_task_id_,
+                   path))) {
+      LOG_WARN("fail to get major macro block file path", K(ret), K(simple_backup_set_path), K(macro_index));
+    }
+  }
+  return ret;
+}
+
+int ObPartitionMacroBlockRestoreReaderV2::get_minor_macro_block_path_(
+    const ObBackupTableMacroIndex &macro_index, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } else if (!macro_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get macro block path get invalid argument", K(ret), K(macro_index));
+  } else if (OB_FAIL(ObBackupPathUtil::get_minor_macro_block_file_path(simple_path_,
+                 backup_pgkey_.get_table_id(),
+                 backup_pgkey_.get_partition_id(),
+                 macro_index.backup_set_id_,
+                 macro_indexs_->get_backup_task_id(),
+                 macro_index.sub_task_id_,
+                 path))) {
+    STORAGE_LOG(WARN, "fail to get meta file path", K(ret));
   }
   return ret;
 }
@@ -764,7 +834,7 @@ void ObPartitionGroupMetaRestoreReaderV2::reset()
   bandwidth_throttle_ = NULL;
   last_read_size_ = 0;
   for (MetaReaderMap::iterator iter = partition_reader_map_.begin(); iter != partition_reader_map_.end(); ++iter) {
-    ObPartitionBaseDataMetaRestoreReaderV2* meta_reader = iter->second;
+    ObPartitionBaseDataMetaRestoreReaderV2 *meta_reader = iter->second;
     if (NULL != meta_reader) {
       meta_reader->~ObPartitionBaseDataMetaRestoreReaderV2();
     }
@@ -775,18 +845,18 @@ void ObPartitionGroupMetaRestoreReaderV2::reset()
   schema_version_ = 0;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::init(common::ObInOutBandwidthThrottle& bandwidth_throttle,
-    const ObPhysicalRestoreArg& restore_info, const ObPhyRestoreMetaIndexStore& meta_indexs,
-    const ObPhyRestoreMacroIndexStoreV2& macro_indexs)
+int ObPartitionGroupMetaRestoreReaderV2::init(common::ObInOutBandwidthThrottle &bandwidth_throttle,
+    const ObPhysicalRestoreArg &restore_info, const ObPhyRestoreMetaIndexStore &meta_indexs,
+    const ObPhyRestoreMacroIndexStoreV2 &macro_indexs)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const uint64_t tenant_id = restore_info.pg_key_.get_tenant_id();
-  ObIPartitionGroup* partition_group = NULL;
+  ObIPartitionGroup *partition_group = NULL;
   ObIPartitionGroupGuard pg_guard;
   int64_t restore_schema_version = OB_INVALID_VERSION;
   int64_t current_schema_version = OB_INVALID_VERSION;
-  const ObPartitionKey& pg_key = restore_info.pg_key_;
+  const ObPartitionKey &pg_key = restore_info.pg_key_;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -846,7 +916,7 @@ int ObPartitionGroupMetaRestoreReaderV2::init(common::ObInOutBandwidthThrottle& 
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::fetch_partition_group_meta(ObPartitionGroupMeta& pg_meta)
+int ObPartitionGroupMetaRestoreReaderV2::fetch_partition_group_meta(ObPartitionGroupMeta &pg_meta)
 {
   int ret = OB_SUCCESS;
 
@@ -864,7 +934,7 @@ int ObPartitionGroupMetaRestoreReaderV2::fetch_partition_group_meta(ObPartitionG
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::trans_backup_pgmeta(
-    const ObPhysicalRestoreArg& restore_info, ObPartitionGroupMeta& backup_pg_meta)
+    const ObPhysicalRestoreArg &restore_info, ObPartitionGroupMeta &backup_pg_meta)
 {
   int ret = OB_SUCCESS;
   ObPartitionArray current_partitions;
@@ -879,9 +949,9 @@ int ObPartitionGroupMetaRestoreReaderV2::trans_backup_pgmeta(
   } else if (OB_FAIL(trans_to_backup_partitions(restore_info, current_partitions, backup_pg_meta.partitions_))) {
     STORAGE_LOG(WARN, "failed to trans from backup partitions", K(ret), K(backup_pg_meta));
   } else {
-    const ObSavedStorageInfoV2& cur_info = pg_meta_.storage_info_;
+    const ObSavedStorageInfoV2 &cur_info = pg_meta_.storage_info_;
     const int64_t cur_schema_version = cur_info.get_data_info().get_schema_version();
-    ObSavedStorageInfoV2& backup_info = backup_pg_meta.storage_info_;
+    ObSavedStorageInfoV2 &backup_info = backup_pg_meta.storage_info_;
     backup_info.get_data_info().set_schema_version(cur_schema_version);
     STORAGE_LOG(INFO, "succeed trans backup pg meta", K(backup_pg_meta));
   }
@@ -889,7 +959,7 @@ int ObPartitionGroupMetaRestoreReaderV2::trans_backup_pgmeta(
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::read_partition_meta(
-    const ObPartitionKey& pkey, const ObPhysicalRestoreArg& restore_info, ObPGPartitionStoreMeta& partition_store_meta)
+    const ObPartitionKey &pkey, const ObPhysicalRestoreArg &restore_info, ObPGPartitionStoreMeta &partition_store_meta)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -904,7 +974,7 @@ int ObPartitionGroupMetaRestoreReaderV2::read_partition_meta(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_pg_meta_info_.partition_store_meta_info_array_.count() && !found;
          ++i) {
-      const ObPGPartitionStoreMeta& tmp_partition_store_meta =
+      const ObPGPartitionStoreMeta &tmp_partition_store_meta =
           backup_pg_meta_info_.partition_store_meta_info_array_.at(i).partition_store_meta_;
       if (tmp_partition_store_meta.pkey_ == pkey) {
         if (OB_FAIL(partition_store_meta.assign(tmp_partition_store_meta))) {
@@ -923,12 +993,12 @@ int ObPartitionGroupMetaRestoreReaderV2::read_partition_meta(
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::create_pg_partition_if_need(
-    const ObPhysicalRestoreArg& restore_info, const ObPartitionGroupMeta& backup_pg_meta)
+    const ObPhysicalRestoreArg &restore_info, const ObPartitionGroupMeta &backup_pg_meta)
 {
   int ret = OB_SUCCESS;
   ObIPartitionGroupGuard pg_guard;
-  ObIPartitionGroup* pg = NULL;
-  const ObPartitionKey& pg_key = restore_info.pg_key_;
+  ObIPartitionGroup *pg = NULL;
+  const ObPartitionKey &pg_key = restore_info.pg_key_;
 
   if (OB_UNLIKELY(!restore_info.is_valid() || !backup_pg_meta.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -939,11 +1009,11 @@ int ObPartitionGroupMetaRestoreReaderV2::create_pg_partition_if_need(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "partition group should not be null", K(ret), K(pg_key));
   } else {
-    const ObSavedStorageInfoV2& storage_info = backup_pg_meta.storage_info_;
+    const ObSavedStorageInfoV2 &storage_info = backup_pg_meta.storage_info_;
     ObPGPartitionStoreMeta partition_meta;
     bool succ_create_partition = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_pg_meta.partitions_.count(); ++i) {
-      const ObPartitionKey& src_pkey = backup_pg_meta.partitions_.at(i);
+      const ObPartitionKey &src_pkey = backup_pg_meta.partitions_.at(i);
       ObPartitionKey dst_pkey;
       ObIPartitionGroupGuard guard;
       int tmp_ret = OB_SUCCESS;
@@ -997,7 +1067,7 @@ int ObPartitionGroupMetaRestoreReaderV2::create_pg_partition_if_need(
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::prepare_pg_meta(const ObPhysicalRestoreArg& restore_info)
+int ObPartitionGroupMetaRestoreReaderV2::prepare_pg_meta(const ObPhysicalRestoreArg &restore_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1028,7 +1098,7 @@ int ObPartitionGroupMetaRestoreReaderV2::prepare_pg_meta(const ObPhysicalRestore
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::prepare(
-    const ObPhysicalRestoreArg& restore_info, const ObPhyRestoreMacroIndexStoreV2& macro_indexs)
+    const ObPhysicalRestoreArg &restore_info, const ObPhyRestoreMacroIndexStoreV2 &macro_indexs)
 {
   int ret = OB_SUCCESS;
 
@@ -1038,17 +1108,17 @@ int ObPartitionGroupMetaRestoreReaderV2::prepare(
   } else if (OB_FAIL(prepare_pg_meta(restore_info))) {
     STORAGE_LOG(WARN, "prepare pg meta fail", K(ret));
   } else {
-    const ObPartitionArray& partitions = pg_meta_.partitions_;
+    const ObPartitionArray &partitions = pg_meta_.partitions_;
     if (0 == partitions.count()) {
       STORAGE_LOG(INFO, "empty pg, no partitions");
     } else if (OB_FAIL(partition_reader_map_.create(partitions.count(), ObModIds::RESTORE))) {
       STORAGE_LOG(WARN, "failed to create partition reader map", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
-        const ObPartitionKey& pkey = partitions.at(i);
-        ObPartitionBaseDataMetaRestoreReaderV2* reader = NULL;
-        void* buf = NULL;
-        const ObBackupPartitionStoreMetaInfo* backup_partition_meta_info = NULL;
+        const ObPartitionKey &pkey = partitions.at(i);
+        ObPartitionBaseDataMetaRestoreReaderV2 *reader = NULL;
+        void *buf = NULL;
+        const ObBackupPartitionStoreMetaInfo *backup_partition_meta_info = NULL;
         if (OB_FAIL(get_backup_partition_meta_info(pkey, restore_info, backup_partition_meta_info))) {
           STORAGE_LOG(WARN, "failed to get backup partition meta info", K(ret), K(pkey));
         } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObPartitionBaseDataMetaRestoreReaderV2)))) {
@@ -1076,7 +1146,7 @@ int ObPartitionGroupMetaRestoreReaderV2::prepare(
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::get_partition_readers(
-    const ObPartitionArray& partitions, ObIArray<ObPartitionBaseDataMetaRestoreReaderV2*>& partition_reader_array)
+    const ObPartitionArray &partitions, ObIArray<ObPartitionBaseDataMetaRestoreReaderV2 *> &partition_reader_array)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1084,8 +1154,8 @@ int ObPartitionGroupMetaRestoreReaderV2::get_partition_readers(
     STORAGE_LOG(WARN, "partition group meta restore reader do not init", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
-      const ObPartitionKey& pkey = partitions.at(i);
-      ObPartitionBaseDataMetaRestoreReaderV2* reader = NULL;
+      const ObPartitionKey &pkey = partitions.at(i);
+      ObPartitionBaseDataMetaRestoreReaderV2 *reader = NULL;
       if (OB_FAIL(partition_reader_map_.get_refactored(pkey, reader))) {
         STORAGE_LOG(WARN, "failed to get partition base data meta restore reader", K(ret), K(pkey));
       } else if (OB_ISNULL(reader)) {
@@ -1100,10 +1170,10 @@ int ObPartitionGroupMetaRestoreReaderV2::get_partition_readers(
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::fetch_sstable_meta(
-    const ObITable::TableKey& table_key, blocksstable::ObSSTableBaseMeta& sstable_meta)
+    const ObITable::TableKey &table_key, blocksstable::ObSSTableBaseMeta &sstable_meta)
 {
   int ret = OB_SUCCESS;
-  ObPartitionBaseDataMetaRestoreReaderV2* reader = NULL;
+  ObPartitionBaseDataMetaRestoreReaderV2 *reader = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1123,11 +1193,11 @@ int ObPartitionGroupMetaRestoreReaderV2::fetch_sstable_meta(
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::fetch_sstable_pair_list(
-    const ObITable::TableKey& table_key, common::ObIArray<blocksstable::ObSSTablePair>& pair_list)
+    const ObITable::TableKey &table_key, common::ObIArray<blocksstable::ObSSTablePair> &pair_list)
 {
   int ret = OB_SUCCESS;
   ObArray<blocksstable::ObSSTablePair> backup_pair_list;
-  ObPartitionBaseDataMetaRestoreReaderV2* reader = NULL;
+  ObPartitionBaseDataMetaRestoreReaderV2 *reader = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1147,12 +1217,12 @@ int ObPartitionGroupMetaRestoreReaderV2::fetch_sstable_pair_list(
 }
 
 int ObPartitionGroupMetaRestoreReaderV2::check_backup_partitions_in_pg(
-    const ObPhysicalRestoreArg& restore_info, ObPartitionGroupMeta& backup_pg_meta)
+    const ObPhysicalRestoreArg &restore_info, ObPartitionGroupMeta &backup_pg_meta)
 {
   int ret = OB_SUCCESS;
   ObHashSet<uint64_t> restore_table_ids_set;
   ObSchemaGetterGuard schema_guard;
-  ObMultiVersionSchemaService& schema_service = ObMultiVersionSchemaService::get_instance();
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   const uint64_t tenant_id = restore_info.pg_key_.get_tenant_id();
   const uint64_t tablegroup_id = restore_info.pg_key_.get_tablegroup_id();
   ObArray<uint64_t> table_ids;
@@ -1194,7 +1264,7 @@ int ObPartitionGroupMetaRestoreReaderV2::check_backup_partitions_in_pg(
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
         const uint64_t table_id = table_ids.at(i);
-        const ObTableSchema* table_schema = NULL;
+        const ObTableSchema *table_schema = NULL;
         int hash_ret = OB_SUCCESS;
         if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
           STORAGE_LOG(WARN, "failed to get table schema", K(ret), K(table_id));
@@ -1230,7 +1300,7 @@ int ObPartitionGroupMetaRestoreReaderV2::check_backup_partitions_in_pg(
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::get_restore_tenant_id(uint64_t& tenant_id)
+int ObPartitionGroupMetaRestoreReaderV2::get_restore_tenant_id(uint64_t &tenant_id)
 {
   int ret = OB_SUCCESS;
   tenant_id = OB_INVALID_ID;
@@ -1243,8 +1313,8 @@ int ObPartitionGroupMetaRestoreReaderV2::get_restore_tenant_id(uint64_t& tenant_
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::get_backup_partition_meta_info(const ObPartitionKey& pkey,
-    const ObPhysicalRestoreArg& restore_info, const ObBackupPartitionStoreMetaInfo*& backup_partition_meta_info)
+int ObPartitionGroupMetaRestoreReaderV2::get_backup_partition_meta_info(const ObPartitionKey &pkey,
+    const ObPhysicalRestoreArg &restore_info, const ObBackupPartitionStoreMetaInfo *&backup_partition_meta_info)
 {
   int ret = OB_SUCCESS;
   backup_partition_meta_info = NULL;
@@ -1265,7 +1335,7 @@ int ObPartitionGroupMetaRestoreReaderV2::get_backup_partition_meta_info(const Ob
     backup_pkey.table_id_ = backup_table_id;
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_pg_meta_info_.partition_store_meta_info_array_.count() && !found;
          ++i) {
-      const ObPartitionKey& tmp_key =
+      const ObPartitionKey &tmp_key =
           backup_pg_meta_info_.partition_store_meta_info_array_.at(i).partition_store_meta_.pkey_;
       if (backup_pkey == tmp_key) {
         backup_partition_meta_info = &(backup_pg_meta_info_.partition_store_meta_info_array_.at(i));
@@ -1281,7 +1351,7 @@ int ObPartitionGroupMetaRestoreReaderV2::get_backup_partition_meta_info(const Ob
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::get_restore_schema_version(int64_t& schema_version)
+int ObPartitionGroupMetaRestoreReaderV2::get_restore_schema_version(int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
   schema_version = OB_INVALID_VERSION;
@@ -1295,13 +1365,13 @@ int ObPartitionGroupMetaRestoreReaderV2::get_restore_schema_version(int64_t& sch
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::trans_from_backup_partitions(const ObPhysicalRestoreArg& restore_info,
-    const common::ObPartitionArray& backup_partitions, common::ObPartitionArray& current_partitions)
+int ObPartitionGroupMetaRestoreReaderV2::trans_from_backup_partitions(const ObPhysicalRestoreArg &restore_info,
+    const common::ObPartitionArray &backup_partitions, common::ObPartitionArray &current_partitions)
 {
   int ret = OB_SUCCESS;
   current_partitions.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_partitions.count(); ++i) {
-    const ObPartitionKey& backup_pkey = backup_partitions.at(i);
+    const ObPartitionKey &backup_pkey = backup_partitions.at(i);
     ObPartitionKey current_pkey = backup_pkey;
     if (OB_FAIL(restore_info.trans_from_backup_schema_id(backup_pkey.table_id_, current_pkey.table_id_))) {
       STORAGE_LOG(WARN, "failed to trans from backup schema id", K(ret), K(backup_pkey));
@@ -1312,13 +1382,13 @@ int ObPartitionGroupMetaRestoreReaderV2::trans_from_backup_partitions(const ObPh
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::trans_to_backup_partitions(const ObPhysicalRestoreArg& restore_info,
-    const common::ObPartitionArray& current_partitions, common::ObPartitionArray& backup_partitions)
+int ObPartitionGroupMetaRestoreReaderV2::trans_to_backup_partitions(const ObPhysicalRestoreArg &restore_info,
+    const common::ObPartitionArray &current_partitions, common::ObPartitionArray &backup_partitions)
 {
   int ret = OB_SUCCESS;
   backup_partitions.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < current_partitions.count(); ++i) {
-    const ObPartitionKey& current_pkey = current_partitions.at(i);
+    const ObPartitionKey &current_pkey = current_partitions.at(i);
     ObPartitionKey backup_pkey = current_pkey;
     if (OB_FAIL(restore_info.trans_to_backup_schema_id(current_pkey.table_id_, backup_pkey.table_id_))) {
       STORAGE_LOG(WARN, "failed to trans to backup schema id", K(ret), K(current_pkey));
@@ -1329,11 +1399,11 @@ int ObPartitionGroupMetaRestoreReaderV2::trans_to_backup_partitions(const ObPhys
   return ret;
 }
 
-int ObPartitionGroupMetaRestoreReaderV2::do_filter_pg_partitions(const ObPGKey& pg_key, ObPartitionArray& partitions)
+int ObPartitionGroupMetaRestoreReaderV2::do_filter_pg_partitions(const ObPGKey &pg_key, ObPartitionArray &partitions)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  ObMultiVersionSchemaService& schema_service = ObMultiVersionSchemaService::get_instance();
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   const bool check_dropped_partition = false;
 
   if (!pg_key.is_valid()) {
@@ -1347,7 +1417,7 @@ int ObPartitionGroupMetaRestoreReaderV2::do_filter_pg_partitions(const ObPGKey& 
     bool filtered = false;
     ObPartitionArray exist_partitions;
     for (int i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
-      const ObPartitionKey& pkey = partitions.at(i);
+      const ObPartitionKey &pkey = partitions.at(i);
       if (pkey.is_trans_table()) {
         is_exist = true;
       } else if (OB_FAIL(schema_guard.check_partition_exist(
@@ -1395,7 +1465,7 @@ void ObPGPartitionBaseDataMetaRestoreReaderV2::reset()
 }
 
 int ObPGPartitionBaseDataMetaRestoreReaderV2::init(
-    const ObPartitionArray& partitions, ObPartitionGroupMetaRestoreReaderV2* reader)
+    const ObPartitionArray &partitions, ObPartitionGroupMetaRestoreReaderV2 *reader)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = 0;
@@ -1422,7 +1492,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::init(
 }
 
 int ObPGPartitionBaseDataMetaRestoreReaderV2::fetch_pg_partition_meta_info(
-    obrpc::ObPGPartitionMetaInfo& partition_meta_info)
+    obrpc::ObPGPartitionMetaInfo &partition_meta_info)
 {
   int ret = OB_SUCCESS;
   partition_meta_info.reset();
@@ -1433,7 +1503,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::fetch_pg_partition_meta_info(
   } else if (reader_index_ == partition_reader_array_.count()) {
     ret = OB_ITER_END;
   } else {
-    ObPartitionBaseDataMetaRestoreReaderV2* reader = partition_reader_array_.at(reader_index_);
+    ObPartitionBaseDataMetaRestoreReaderV2 *reader = partition_reader_array_.at(reader_index_);
     if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "partition base data meta restore reader is NULL", K(ret), KP(reader), K(reader_index_));
@@ -1464,7 +1534,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::fetch_pg_partition_meta_info(
 }
 
 int ObPGPartitionBaseDataMetaRestoreReaderV2::check_sstable_table_ids_in_table(
-    const ObPartitionKey& pkey, const common::ObIArray<uint64_t>& table_ids)
+    const ObPartitionKey &pkey, const common::ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
   ObHashSet<uint64_t> table_ids_set;
@@ -1472,7 +1542,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::check_sstable_table_ids_in_table(
   const uint64_t tenant_id = pkey.get_tenant_id();
   ObArray<ObIndexTableStat> index_stats;
   ObSchemaGetterGuard schema_guard;
-  ObMultiVersionSchemaService& schema_service = ObMultiVersionSchemaService::get_instance();
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   const int64_t MAX_BUCKET_SIZE = 1024;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1508,7 +1578,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::check_sstable_table_ids_in_table(
     // local index table
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < index_stats.count(); ++i) {
-        const ObIndexTableStat& index_stat = index_stats.at(i);
+        const ObIndexTableStat &index_stat = index_stats.at(i);
         const uint64_t index_table_id = index_stat.index_id_;
         if (OB_FAIL(check_sstable_ids_contain_schema_table_id(table_ids_set, index_table_id, schema_guard))) {
           STORAGE_LOG(WARN, "failed to check sstable ids contain schema table id", K(ret), K(index_table_id));
@@ -1520,8 +1590,8 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::check_sstable_table_ids_in_table(
 }
 
 int ObPGPartitionBaseDataMetaRestoreReaderV2::check_sstable_ids_contain_schema_table_id(
-    const hash::ObHashSet<uint64_t>& table_ids_set, const uint64_t schema_table_id,
-    schema::ObSchemaGetterGuard& schema_guard)
+    const hash::ObHashSet<uint64_t> &table_ids_set, const uint64_t schema_table_id,
+    schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1532,7 +1602,7 @@ int ObPGPartitionBaseDataMetaRestoreReaderV2::check_sstable_ids_contain_schema_t
     int hash_ret = table_ids_set.exist_refactored(schema_table_id);
     if (OB_HASH_EXIST == hash_ret) {
     } else if (OB_HASH_NOT_EXIST == hash_ret) {
-      const ObTableSchema* table_schema = NULL;
+      const ObTableSchema *table_schema = NULL;
       if (OB_FAIL(schema_guard.get_table_schema(schema_table_id, table_schema))) {
         STORAGE_LOG(WARN, "failed to get table schema", K(ret), K(schema_table_id));
       } else if (OB_ISNULL(table_schema)) {
@@ -1582,7 +1652,7 @@ bool ObPhyRestoreMacroIndexStoreV2::is_inited() const
 }
 
 int ObPhyRestoreMacroIndexStoreV2::init(
-    const int64_t backup_task_id, const share::ObPhysicalRestoreArg& arg, const ObReplicaRestoreStatus& restore_status)
+    const int64_t backup_task_id, const share::ObPhysicalRestoreArg &arg, const ObReplicaRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
   ObStorageUtil util(true /*need retry*/);
@@ -1631,8 +1701,8 @@ int ObPhyRestoreMacroIndexStoreV2::init(
   return ret;
 }
 
-int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartitionKey& backup_pg_key,
-    const ObBackupBaseDataPathInfo& path_info, const ObReplicaRestoreStatus& restore_status)
+int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartitionKey &backup_pg_key,
+    const ObBackupBaseDataPathInfo &path_info, const ObReplicaRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
   ObSimpleBackupSetPath simple_path;
@@ -1644,8 +1714,8 @@ int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartit
   return ret;
 }
 
-int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartitionKey& backup_pg_key,
-    const ObSimpleBackupSetPath& simple_path, const ObReplicaRestoreStatus& restore_status)
+int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartitionKey &backup_pg_key,
+    const ObSimpleBackupSetPath &simple_path, const ObReplicaRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
   bool is_exist = true;
@@ -1685,8 +1755,8 @@ int ObPhyRestoreMacroIndexStoreV2::init_major_macro_index(const common::ObPartit
 }
 
 int ObPhyRestoreMacroIndexStoreV2::init_minor_macro_index(const int64_t backup_task_id,
-    const common::ObPartitionKey& backup_pg_key, const ObBackupBaseDataPathInfo& path_info,
-    const ObReplicaRestoreStatus& restore_status)
+    const common::ObPartitionKey &backup_pg_key, const ObBackupBaseDataPathInfo &path_info,
+    const ObReplicaRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
   ObSimpleBackupSetPath simple_path;
@@ -1699,8 +1769,8 @@ int ObPhyRestoreMacroIndexStoreV2::init_minor_macro_index(const int64_t backup_t
 }
 
 int ObPhyRestoreMacroIndexStoreV2::init_minor_macro_index(const int64_t backup_task_id,
-    const common::ObPartitionKey& backup_pg_key, const ObSimpleBackupSetPath& simple_path,
-    const ObReplicaRestoreStatus& restore_status)
+    const common::ObPartitionKey &backup_pg_key, const ObSimpleBackupSetPath &simple_path,
+    const ObReplicaRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
   bool is_exist = true;
@@ -1749,8 +1819,8 @@ int ObPhyRestoreMacroIndexStoreV2::init_minor_macro_index(const int64_t backup_t
   return ret;
 }
 
-int ObPhyRestoreMacroIndexStoreV2::init(const int64_t backup_task_id, const common::ObPartitionKey& pkey,
-    const share::ObPhysicalBackupArg& arg, const ObBackupDataType& backup_data_type)
+int ObPhyRestoreMacroIndexStoreV2::init(const int64_t backup_task_id, const common::ObPartitionKey &pkey,
+    const share::ObPhysicalBackupArg &arg, const ObBackupDataType &backup_data_type)
 {
   int ret = OB_SUCCESS;
   ObBackupBaseDataPathInfo path_info;
@@ -1760,28 +1830,23 @@ int ObPhyRestoreMacroIndexStoreV2::init(const int64_t backup_task_id, const comm
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "physical restore macro index store init twice", K(ret));
-  } else if (backup_task_id < 0 || !pkey.is_valid() || OB_UNLIKELY(!arg.is_valid()) || !backup_data_type.is_valid()) {
+    STORAGE_LOG(WARN, "physcial restore macro index store init twice", K(ret));
+  } else if (backup_task_id < 0 || !pkey.is_valid() || OB_UNLIKELY(!arg.is_valid()) || !backup_data_type.is_valid() ||
+             backup_data_type.is_minor_backup()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN,
-        "init physical restore macro index get invalid argument",
+        "init physcial restore macro index get invalid argument",
         K(ret),
         K(backup_task_id),
         K(pkey),
         K(arg),
         K(backup_data_type));
-  } else if (OB_FAIL(arg.get_backup_base_data_info(path_info))) {
-    STORAGE_LOG(WARN, "get backup base data info fail", K(ret));
   } else if (OB_FAIL(index_map_.create(BUCKET_SIZE, ObModIds::RESTORE))) {
     STORAGE_LOG(WARN, "failed to create partition reader map", K(ret));
-  } else if (backup_data_type.is_major_backup()) {
-    if (OB_FAIL(init_major_macro_index(pkey, path_info, restore_status))) {
-      STORAGE_LOG(WARN, "failed to init major macro index", K(ret), K(pkey), K(path_info));
-    }
-  } else {
-    if (OB_FAIL(init_minor_macro_index(backup_task_id, pkey, path_info, restore_status))) {
-      STORAGE_LOG(WARN, "failed to init minor macro index", K(ret), K(backup_task_id), K(pkey));
-    }
+  } else if (OB_FAIL(arg.get_prev_base_data_info(path_info))) {
+    STORAGE_LOG(WARN, "get backup base data info fail", K(ret));
+  } else if (OB_FAIL(init_major_macro_index(pkey, path_info, restore_status))) {
+    STORAGE_LOG(WARN, "failed to init major macro index", K(ret), K(pkey), K(path_info));
   }
 
   if (OB_SUCC(ret)) {
@@ -1792,25 +1857,26 @@ int ObPhyRestoreMacroIndexStoreV2::init(const int64_t backup_task_id, const comm
   return ret;
 }
 
-int ObPhyRestoreMacroIndexStoreV2::init_one_file(const ObString& path, const ObString& storage_info)
+int ObPhyRestoreMacroIndexStoreV2::init_one_file(const ObString &path, const ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(ObModIds::RESTORE);
-  char* read_buf = NULL;
+  char *read_buf = NULL;
   int64_t read_size = 0;
+
   if (OB_FAIL(ObRestoreFileUtil::read_one_file(path, storage_info, allocator, read_buf, read_size))) {
     STORAGE_LOG(WARN, "fail to read index file", K(ret), K(path));
   } else if (read_size <= 0) {
     STORAGE_LOG(INFO, "may be empty block index file", K(ret), K(path));
   } else {
     ObBufferReader buffer_reader(read_buf, read_size, 0);
-    const ObBackupCommonHeader* common_header = NULL;
+    const ObBackupCommonHeader *common_header = NULL;
     ObBackupTableMacroIndex macro_index;
     ObArray<ObBackupTableMacroIndex> index_list;
     ObITable::TableKey cur_table_key;
     ObBackupTableKeyInfo table_key_info;
     int64_t sstable_macro_block_index = -1;
-    const ObITable::TableKey* table_key_ptr = NULL;
+    const ObITable::TableKey *table_key_ptr = NULL;
     while (OB_SUCC(ret) && buffer_reader.remain() > 0) {
       common_header = NULL;
       if (OB_FAIL(buffer_reader.get(common_header))) {
@@ -1904,11 +1970,11 @@ int ObPhyRestoreMacroIndexStoreV2::init_one_file(const ObString& path, const ObS
 }
 
 int ObPhyRestoreMacroIndexStoreV2::add_sstable_index(
-    const ObITable::TableKey& table_key, const common::ObIArray<ObBackupTableMacroIndex>& index_list)
+    const ObITable::TableKey &table_key, const common::ObIArray<ObBackupTableMacroIndex> &index_list)
 {
   int ret = OB_SUCCESS;
-  void* buf = NULL;
-  ObArray<ObBackupTableMacroIndex>* new_block_list = NULL;
+  void *buf = NULL;
+  ObArray<ObBackupTableMacroIndex> *new_block_list = NULL;
   int64_t block_count = index_list.count();
 
   if (!table_key.is_valid()) {
@@ -1938,7 +2004,7 @@ int ObPhyRestoreMacroIndexStoreV2::add_sstable_index(
   }
 
   for (int i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
-    const ObBackupTableMacroIndex& index = index_list.at(i);  // check
+    const ObBackupTableMacroIndex &index = index_list.at(i);  // check
     if (index.sstable_macro_index_ < new_block_list->count()) {
       // skip
     } else if (OB_UNLIKELY(index.sstable_macro_index_ != new_block_list->count())) {
@@ -1959,11 +2025,11 @@ int ObPhyRestoreMacroIndexStoreV2::add_sstable_index(
 }
 
 int ObPhyRestoreMacroIndexStoreV2::get_macro_index_array(
-    const ObITable::TableKey& table_key, const common::ObArray<ObBackupTableMacroIndex>*& index_list) const
+    const ObITable::TableKey &table_key, const common::ObArray<ObBackupTableMacroIndex> *&index_list) const
 {
   int ret = OB_SUCCESS;
   index_list = NULL;
-  common::ObArray<ObBackupTableMacroIndex>* tmp_list = NULL;
+  common::ObArray<ObBackupTableMacroIndex> *tmp_list = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "macro index store do not init", K(ret));
@@ -1979,11 +2045,11 @@ int ObPhyRestoreMacroIndexStoreV2::get_macro_index_array(
 }
 
 int ObPhyRestoreMacroIndexStoreV2::get_macro_index(
-    const ObITable::TableKey& table_key, const int64_t sstable_macro_idx, ObBackupTableMacroIndex& macro_index) const
+    const ObITable::TableKey &table_key, const int64_t sstable_macro_idx, ObBackupTableMacroIndex &macro_index) const
 {
   int ret = OB_SUCCESS;
   macro_index.reset();
-  common::ObArray<ObBackupTableMacroIndex>* index_list = NULL;
+  common::ObArray<ObBackupTableMacroIndex> *index_list = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "macro index store do not init", K(ret));
@@ -2013,10 +2079,10 @@ int ObPhyRestoreMacroIndexStoreV2::get_macro_index(
 }
 
 int ObPhyRestoreMacroIndexStoreV2::get_sstable_pair_list(
-    const ObITable::TableKey& table_key, common::ObIArray<blocksstable::ObSSTablePair>& pair_list) const
+    const ObITable::TableKey &table_key, common::ObIArray<blocksstable::ObSSTablePair> &pair_list) const
 {
   int ret = OB_SUCCESS;
-  common::ObArray<ObBackupTableMacroIndex>* index_list = NULL;
+  common::ObArray<ObBackupTableMacroIndex> *index_list = NULL;
   pair_list.reuse();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2048,11 +2114,11 @@ int ObPhyRestoreMacroIndexStoreV2::get_sstable_pair_list(
 }
 
 int ObPhyRestoreMacroIndexStoreV2::get_major_macro_index_array(
-    const uint64_t table_id, const common::ObArray<ObBackupTableMacroIndex>*& index_list) const
+    const uint64_t table_id, const common::ObArray<ObBackupTableMacroIndex> *&index_list) const
 {
   int ret = OB_SUCCESS;
   index_list = NULL;
-  common::ObArray<ObBackupTableMacroIndex>* tmp_list = NULL;
+  common::ObArray<ObBackupTableMacroIndex> *tmp_list = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "macro index store do not init", K(ret));
@@ -2061,8 +2127,8 @@ int ObPhyRestoreMacroIndexStoreV2::get_major_macro_index_array(
     STORAGE_LOG(WARN, "get macro index array get invalid argument", K(ret), K(table_id));
   } else {
     for (MacroIndexMap::const_iterator iter = index_map_.begin(); iter != index_map_.end(); ++iter) {
-      const ObITable::TableKey& table_key = iter->first;
-      if (!table_key.is_major_sstable()) {
+      const ObITable::TableKey &table_key = iter->first;
+      if (!table_key.is_major_sstable() || table_key.is_trans_sstable()) {
         // do nothing
       } else if (table_id == table_key.table_id_) {
         index_list = iter->second;
@@ -2081,7 +2147,7 @@ int ObPhyRestoreMacroIndexStoreV2::get_major_macro_index_array(
 }
 
 int ObPhyRestoreMacroIndexStoreV2::get_table_key_ptr(
-    const ObITable::TableKey& table_key, const ObITable::TableKey*& table_key_ptr)
+    const ObITable::TableKey &table_key, const ObITable::TableKey *&table_key_ptr)
 {
   int ret = OB_SUCCESS;
   table_key_ptr = NULL;
@@ -2091,7 +2157,7 @@ int ObPhyRestoreMacroIndexStoreV2::get_table_key_ptr(
   } else {
     bool found = false;
     for (int64_t i = 0; i < table_keys_ptr_.count() && !found; ++i) {
-      const ObITable::TableKey& tmp_table_key = *table_keys_ptr_.at(i);
+      const ObITable::TableKey &tmp_table_key = *table_keys_ptr_.at(i);
       if (tmp_table_key == table_key) {
         table_key_ptr = table_keys_ptr_.at(i);
         found = true;
@@ -2099,17 +2165,41 @@ int ObPhyRestoreMacroIndexStoreV2::get_table_key_ptr(
     }
 
     if (!found) {
-      void* buf = allocator_.alloc(sizeof(ObITable::TableKey));
+      void *buf = allocator_.alloc(sizeof(ObITable::TableKey));
       if (NULL == buf) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
       } else {
-        ObITable::TableKey* tmp_table_key_ptr = new (buf) ObITable::TableKey();
+        ObITable::TableKey *tmp_table_key_ptr = new (buf) ObITable::TableKey();
         *tmp_table_key_ptr = table_key;
         if (OB_FAIL(table_keys_ptr_.push_back(tmp_table_key_ptr))) {
           STORAGE_LOG(WARN, "failed to push table key into array", K(ret), K(*tmp_table_key_ptr));
         } else {
           table_key_ptr = tmp_table_key_ptr;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPhyRestoreMacroIndexStoreV2::check_table_exist(const ObITable::TableKey &table_key, bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (!table_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "check table exist get invalid argument", K(ret), K(table_key));
+  } else {
+    for (MacroIndexMap::const_iterator iter = index_map_.begin(); OB_SUCC(ret) && iter != index_map_.end(); ++iter) {
+      const uint64_t table_id = iter->first.table_id_;
+      if (table_id == table_key.table_id_) {
+        if (OB_ISNULL(iter->second)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "index list should not be NULL", K(ret), K(table_key), KP(iter->second));
+        } else {
+          is_exist = true;
+          break;
         }
       }
     }

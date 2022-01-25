@@ -48,8 +48,6 @@ ObFreezeInfoSnapshotMgr::ObFreezeInfoSnapshotMgr()
       schema_cache_(schema_query_set_),
       info_list_(),
       snapshots_(),
-      backup_snapshot_version_(0),
-      delay_delete_snapshot_version_(0),
       cur_idx_(0),
       lock_()
 {}
@@ -57,7 +55,7 @@ ObFreezeInfoSnapshotMgr::ObFreezeInfoSnapshotMgr()
 ObFreezeInfoSnapshotMgr::~ObFreezeInfoSnapshotMgr()
 {}
 
-int ObFreezeInfoSnapshotMgr::init(ObISQLClient& sql_proxy, bool is_remote)
+int ObFreezeInfoSnapshotMgr::init(ObISQLClient &sql_proxy, bool is_remote)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -124,7 +122,7 @@ int64_t ObFreezeInfoSnapshotMgr::get_latest_frozen_timestamp()
 {
   int64_t frozen_timestamp = 0;
   RLockGuard lock_guard(lock_);
-  ObIArray<FreezeInfoLite>& info_list = info_list_[cur_idx_];
+  ObIArray<FreezeInfoLite> &info_list = info_list_[cur_idx_];
 
   if (0 != info_list.count()) {
     frozen_timestamp = info_list.at(info_list.count() - 1).freeze_ts;
@@ -132,7 +130,7 @@ int64_t ObFreezeInfoSnapshotMgr::get_latest_frozen_timestamp()
   return frozen_timestamp;
 }
 
-int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version(const int64_t major_version, FreezeInfoLite& freeze_info)
+int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version(const int64_t major_version, FreezeInfoLite &freeze_info)
 {
   int ret = OB_SUCCESS;
   bool unused = false;
@@ -142,7 +140,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version(const int64_t majo
 }
 
 int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version(
-    const int64_t major_version, FreezeInfoLite& freeze_info, bool& is_first_major_version)
+    const int64_t major_version, FreezeInfoLite &freeze_info, bool &is_first_major_version)
 {
   int ret = OB_SUCCESS;
   is_first_major_version = false;
@@ -152,12 +150,12 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version(
 }
 
 int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version_(
-    const int64_t major_version, FreezeInfoLite& freeze_info, bool& is_first_major_version)
+    const int64_t major_version, FreezeInfoLite &freeze_info, bool &is_first_major_version)
 {
   int ret = OB_SUCCESS;
   is_first_major_version = false;
 
-  ObIArray<FreezeInfoLite>& info_list = info_list_[cur_idx_];
+  ObIArray<FreezeInfoLite> &info_list = info_list_[cur_idx_];
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -169,7 +167,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version_(
 
     while (l < r && !found) {
       int64_t mid = (l + r) >> 1;
-      FreezeInfoLite& tmp_info = info_list.at(mid);
+      FreezeInfoLite &tmp_info = info_list.at(mid);
       if (major_version < tmp_info.freeze_version) {
         r = mid;
       } else if (major_version > tmp_info.freeze_version) {
@@ -192,7 +190,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version_(
 }
 
 int ObFreezeInfoSnapshotMgr::get_freeze_info_behind_major_version(
-    const int64_t major_version, ObIArray<FreezeInfoLite>& freeze_infos)
+    const int64_t major_version, ObIArray<FreezeInfoLite> &freeze_infos)
 {
   int ret = OB_SUCCESS;
   RLockGuard lock_guard(lock_);
@@ -204,7 +202,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_behind_major_version(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to get freeze info", K(ret), K(major_version));
   } else {
-    ObIArray<FreezeInfoLite>& info_list = info_list_[cur_idx_];
+    ObIArray<FreezeInfoLite> &info_list = info_list_[cur_idx_];
     bool found = false;
     int64_t mid = 0;
     int64_t l = 0;
@@ -212,7 +210,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_behind_major_version(
 
     while (l < r && !found) {
       mid = (l + r) >> 1;
-      FreezeInfoLite& tmp_info = info_list.at(mid);
+      FreezeInfoLite &tmp_info = info_list.at(mid);
       if (major_version < tmp_info.freeze_version) {
         r = mid;
       } else if (major_version > tmp_info.freeze_version) {
@@ -236,7 +234,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_behind_major_version(
 }
 
 int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version(
-    const uint64_t table_id, const int64_t major_version, FreezeInfo& freeze_info)
+    const uint64_t table_id, const int64_t major_version, FreezeInfo &freeze_info)
 {
   uint64_t tenant_id = get_tenant_id(table_id);
   bool async = is_schema_cache_related_table(table_id);
@@ -244,13 +242,13 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_major_version(
 }
 
 int ObFreezeInfoSnapshotMgr::get_tenant_freeze_info_by_major_version(
-    const uint64_t tenant_id, const int64_t major_version, FreezeInfo& freeze_info)
+    const uint64_t tenant_id, const int64_t major_version, FreezeInfo &freeze_info)
 {
   return get_tenant_freeze_info_by_major_version_(tenant_id, major_version, true, freeze_info);
 }
 
 int ObFreezeInfoSnapshotMgr::get_tenant_freeze_info_by_major_version_(
-    const uint64_t tenant_id, const int64_t major_version, const bool async, FreezeInfo& freeze_info)
+    const uint64_t tenant_id, const int64_t major_version, const bool async, FreezeInfo &freeze_info)
 {
   int ret = OB_SUCCESS;
 
@@ -272,12 +270,12 @@ int ObFreezeInfoSnapshotMgr::get_tenant_freeze_info_by_major_version_(
 }
 
 int ObFreezeInfoSnapshotMgr::get_freeze_info_by_snapshot_version(
-    const int64_t snapshot_version, FreezeInfoLite& freeze_info)
+    const int64_t snapshot_version, FreezeInfoLite &freeze_info)
 {
   int ret = OB_SUCCESS;
 
   RLockGuard lock_guard(lock_);
-  ObIArray<FreezeInfoLite>& info_list = info_list_[cur_idx_];
+  ObIArray<FreezeInfoLite> &info_list = info_list_[cur_idx_];
 
   if (snapshot_version <= 0 || INT64_MAX == snapshot_version) {
     ret = OB_INVALID_ARGUMENT;
@@ -291,7 +289,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_snapshot_version(
   } else {
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < info_list.count(); ++i) {
-      FreezeInfoLite& tmp_info = info_list.at(i);
+      FreezeInfoLite &tmp_info = info_list.at(i);
       if (snapshot_version == tmp_info.freeze_ts) {
         freeze_info = tmp_info;
         found = true;
@@ -310,7 +308,7 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_snapshot_version(
 }
 
 int ObFreezeInfoSnapshotMgr::get_freeze_info_by_snapshot_version(
-    const uint64_t table_id, const int64_t snapshot_version, FreezeInfo& freeze_info)
+    const uint64_t table_id, const int64_t snapshot_version, FreezeInfo &freeze_info)
 {
   int ret = OB_SUCCESS;
 
@@ -334,13 +332,13 @@ int ObFreezeInfoSnapshotMgr::get_freeze_info_by_snapshot_version(
 }
 
 int ObFreezeInfoSnapshotMgr::inner_get_neighbour_major_freeze(
-    const int64_t snapshot_version, NeighbourFreezeInfoLite& info)
+    const int64_t snapshot_version, NeighbourFreezeInfoLite &info)
 {
   int ret = OB_SUCCESS;
 
   info.reset();
 
-  ObIArray<FreezeInfoLite>& info_list = info_list_[cur_idx_];
+  ObIArray<FreezeInfoLite> &info_list = info_list_[cur_idx_];
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -351,13 +349,13 @@ int ObFreezeInfoSnapshotMgr::inner_get_neighbour_major_freeze(
   } else {
     bool found = false;
     for (int64_t i = 0; i < info_list.count() && OB_SUCC(ret) && !found; ++i) {
-      FreezeInfoLite& next_info = info_list.at(i);
+      FreezeInfoLite &next_info = info_list.at(i);
       if (snapshot_version < next_info.freeze_ts) {
         found = true;
         if (0 == i) {
           ret = OB_ENTRY_NOT_EXIST;
-          STORAGE_LOG(WARN, "cannot get neighbour major freeze before bootstrap",
-                      K(ret), K(snapshot_version), K(next_info));
+          STORAGE_LOG(
+              WARN, "cannot get neighbour major freeze before bootstrap", K(ret), K(snapshot_version), K(next_info));
         } else {
           info.next = next_info;
           info.prev = info_list.at(i - 1);
@@ -375,14 +373,14 @@ int ObFreezeInfoSnapshotMgr::inner_get_neighbour_major_freeze(
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfoLite& info)
+int ObFreezeInfoSnapshotMgr::get_neighbour_major_freeze(const int64_t snapshot_version, NeighbourFreezeInfoLite &info)
 {
   RLockGuard lock_guard(lock_);
   return inner_get_neighbour_major_freeze(snapshot_version, info);
 }
 
 int ObFreezeInfoSnapshotMgr::get_neighbour_major_freeze(
-    const uint64_t table_id, const int64_t snapshot_version, NeighbourFreezeInfo& info)
+    const uint64_t table_id, const int64_t snapshot_version, NeighbourFreezeInfo &info)
 {
   int ret = OB_SUCCESS;
 
@@ -428,7 +426,7 @@ int ObFreezeInfoSnapshotMgr::get_neighbour_major_freeze(
 }
 
 static inline int is_snapshot_related_to_table(
-    const ObPartitionKey& pkey, const int64_t create_schema_version, const ObSnapshotInfo& snapshot, bool& related)
+    const ObPartitionKey &pkey, const int64_t create_schema_version, const ObSnapshotInfo &snapshot, bool &related)
 {
   int ret = OB_SUCCESS;
   related = false;
@@ -437,8 +435,8 @@ static inline int is_snapshot_related_to_table(
   if (!snapshot.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(snapshot));
-  } else if (snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT
-      || snapshot.snapshot_type_ == share::SNAPSHOT_FOR_BACKUP_POINT) {
+  } else if (snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT ||
+             snapshot.snapshot_type_ == share::SNAPSHOT_FOR_BACKUP_POINT) {
     if (snapshot.snapshot_type_ == share::SNAPSHOT_FOR_RESTORE_POINT && is_inner_table(table_id)) {
       related = false;
     } else if (extract_tenant_id(table_id) == snapshot.tenant_id_) {
@@ -465,14 +463,14 @@ static inline int is_snapshot_related_to_table(
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::get_multi_version_duration(const uint64_t tenant_id, int64_t& duration) const
+int ObFreezeInfoSnapshotMgr::get_multi_version_duration(const uint64_t tenant_id, int64_t &duration) const
 {
   int ret = OB_SUCCESS;
 
-  ObMultiVersionSchemaService& schema_service = ObMultiVersionSchemaService::get_instance();
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   ObSchemaGetterGuard guard;
   ObString var_name(share::OB_SV_UNDO_RETENTION);
-  const ObSysVarSchema* var_schema = NULL;
+  const ObSysVarSchema *var_schema = NULL;
   ObArenaAllocator allocator(ObModIds::OB_PARTITION_SERVICE);
   ObObj value;
 
@@ -495,18 +493,17 @@ int ObFreezeInfoSnapshotMgr::get_multi_version_duration(const uint64_t tenant_id
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::get_min_reserved_snapshot(const ObPartitionKey& pkey, const int64_t merged_version,
-    const int64_t create_schema_version, int64_t& snapshot_version, int64_t& backup_snapshot_version)
+int ObFreezeInfoSnapshotMgr::get_min_reserved_snapshot(const ObPartitionKey &pkey, const int64_t merged_version,
+    const int64_t create_schema_version, int64_t &snapshot_version)
 {
   int ret = OB_SUCCESS;
   FreezeInfoLite freeze_info;
   int64_t duration = 0;
   bool unused = false;
-  backup_snapshot_version = 0;
   const int64_t table_id = pkey.get_table_id();
 
   RLockGuard lock_guard(lock_);
-  ObIArray<ObSnapshotInfo>& snapshots = snapshots_[cur_idx_];
+  ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -526,10 +523,9 @@ int ObFreezeInfoSnapshotMgr::get_min_reserved_snapshot(const ObPartitionKey& pke
     }
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L);
     snapshot_version = std::min(snapshot_version, freeze_info.freeze_ts);
-    backup_snapshot_version = backup_snapshot_version_;
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
       bool related = false;
-      const ObSnapshotInfo& snapshot = snapshots.at(i);
+      const ObSnapshotInfo &snapshot = snapshots.at(i);
       if (OB_FAIL(is_snapshot_related_to_table(pkey, create_schema_version, snapshot, related))) {
         STORAGE_LOG(WARN, "fail to check snapshot relation", K(ret), K(table_id), K(snapshot));
       } else if (related) {
@@ -541,15 +537,15 @@ int ObFreezeInfoSnapshotMgr::get_min_reserved_snapshot(const ObPartitionKey& pke
 }
 
 int ObFreezeInfoSnapshotMgr::get_reserve_points(const int64_t tenant_id, const share::ObSnapShotType snapshot_type,
-    ObIArray<ObSnapshotInfo>& restore_points, int64_t& snapshot_gc_ts)
+    ObIArray<ObSnapshotInfo> &restore_points, int64_t &snapshot_gc_ts)
 {
   int ret = OB_SUCCESS;
   restore_points.reset();
   RLockGuard lock_guard(lock_);
   snapshot_gc_ts = snapshot_gc_ts_;
-  ObIArray<ObSnapshotInfo>& snapshots = snapshots_[cur_idx_];
+  ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
   for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
-    const ObSnapshotInfo& snapshot = snapshots.at(i);
+    const ObSnapshotInfo &snapshot = snapshots.at(i);
     if (snapshot.snapshot_type_ == snapshot_type && tenant_id == snapshot.tenant_id_) {
       if (OB_FAIL(restore_points.push_back(snapshot))) {
         STORAGE_LOG(WARN, "fail to push back snapshot", K(ret), K(snapshot));
@@ -579,7 +575,7 @@ int ObFreezeInfoSnapshotMgr::get_latest_freeze_version(int64_t &freeze_version)
   int ret = OB_SUCCESS;
 
   RLockGuard lock_guard(lock_);
-  ObIArray<FreezeInfoLite>& info_list = info_list_[cur_idx_];
+  ObIArray<FreezeInfoLite> &info_list = info_list_[cur_idx_];
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -636,12 +632,12 @@ int ObFreezeInfoSnapshotMgr::prepare_new_info_list(const int64_t min_major_versi
 }
 
 int ObFreezeInfoSnapshotMgr::update_next_gc_schema_version(
-    const ObIArray<SchemaPair>& gc_schema_version, const int64_t gc_snapshot_ts)
+    const ObIArray<SchemaPair> &gc_schema_version, const int64_t gc_snapshot_ts)
 {
   int ret = OB_SUCCESS;
 
   int64_t next_idx = get_next_idx();
-  hash::ObHashMap<uint64_t, GCSnapshotInfo>& next_gc_snapshot_info = gc_snapshot_info_[next_idx];
+  hash::ObHashMap<uint64_t, GCSnapshotInfo> &next_gc_snapshot_info = gc_snapshot_info_[next_idx];
 
   if (!next_gc_snapshot_info.created()) {
     if (OB_FAIL(next_gc_snapshot_info.create(1024, ObModIds::OB_FREEZE_INFO_CACHE))) {
@@ -650,7 +646,7 @@ int ObFreezeInfoSnapshotMgr::update_next_gc_schema_version(
   }
 
   for (int64_t i = 0; i < gc_schema_version.count() && OB_SUCC(ret); ++i) {
-    const SchemaPair& pair = gc_schema_version.at(i);
+    const SchemaPair &pair = gc_schema_version.at(i);
     if (OB_INVALID_VERSION != pair.schema_version) {
       if (OB_FAIL(next_gc_snapshot_info.set_refactored(
               pair.tenant_id, GCSnapshotInfo(gc_snapshot_ts, pair.schema_version), 1 /*overwrite*/))) {
@@ -671,17 +667,17 @@ int ObFreezeInfoSnapshotMgr::update_next_gc_schema_version(
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::update_next_info_list(const ObIArray<FreezeInfoLite>& info_list)
+int ObFreezeInfoSnapshotMgr::update_next_info_list(const ObIArray<FreezeInfoLite> &info_list)
 {
   int ret = OB_SUCCESS;
 
   int64_t next_idx = get_next_idx();
-  ObIArray<FreezeInfoLite>& next_info_list = info_list_[next_idx];
+  ObIArray<FreezeInfoLite> &next_info_list = info_list_[next_idx];
 
   for (int64_t i = 0; i < info_list.count() && OB_SUCC(ret); ++i) {
-    const FreezeInfoLite& next = info_list.at(i);
+    const FreezeInfoLite &next = info_list.at(i);
     if (next_info_list.count() > 0) {
-      FreezeInfoLite& prev = next_info_list.at(next_info_list.count() - 1);
+      FreezeInfoLite &prev = next_info_list.at(next_info_list.count() - 1);
       if (OB_UNLIKELY(prev.freeze_version > next.freeze_version)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "freeze verison decrease is not allowed", K(ret), K(prev), K(next));
@@ -699,12 +695,12 @@ int ObFreezeInfoSnapshotMgr::update_next_info_list(const ObIArray<FreezeInfoLite
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::update_next_snapshots(const ObIArray<ObSnapshotInfo>& snapshots)
+int ObFreezeInfoSnapshotMgr::update_next_snapshots(const ObIArray<ObSnapshotInfo> &snapshots)
 {
   int ret = OB_SUCCESS;
 
   int64_t next_idx = get_next_idx();
-  ObIArray<ObSnapshotInfo>& next_snapshots = snapshots_[next_idx];
+  ObIArray<ObSnapshotInfo> &next_snapshots = snapshots_[next_idx];
 
   for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
     if (OB_FAIL(next_snapshots.push_back(snapshots.at(i)))) {
@@ -717,10 +713,9 @@ int ObFreezeInfoSnapshotMgr::update_next_snapshots(const ObIArray<ObSnapshotInfo
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::update_info(const int64_t snapshot_gc_ts, const ObIArray<SchemaPair>& gc_schema_version,
-    const ObIArray<FreezeInfoLite>& info_list, const ObIArray<ObSnapshotInfo>& snapshots,
-    const int64_t backup_snapshot_version, const int64_t delay_delete_snapshot_version, const int64_t min_major_version,
-    bool& gc_snapshot_ts_changed)
+int ObFreezeInfoSnapshotMgr::update_info(const int64_t snapshot_gc_ts, const ObIArray<SchemaPair> &gc_schema_version,
+    const ObIArray<FreezeInfoLite> &info_list, const ObIArray<ObSnapshotInfo> &snapshots,
+    const int64_t min_major_version, bool &gc_snapshot_ts_changed)
 {
   int ret = OB_SUCCESS;
 
@@ -747,21 +742,6 @@ int ObFreezeInfoSnapshotMgr::update_info(const int64_t snapshot_gc_ts, const ObI
     switch_info();
     snapshot_gc_ts_ = snapshot_gc_ts;
   }
-
-  if (OB_SUCC(ret)) {
-    if (backup_snapshot_version_ != backup_snapshot_version) {
-      STORAGE_LOG(INFO, "update backup snapshot_version", K(backup_snapshot_version_), K(backup_snapshot_version));
-      backup_snapshot_version_ = backup_snapshot_version;
-    }
-    if (delay_delete_snapshot_version_ != delay_delete_snapshot_version) {
-      STORAGE_LOG(INFO,
-          "update delay_delete_snapshot_version",
-          K(delay_delete_snapshot_version_),
-          K(delay_delete_snapshot_version));
-      delay_delete_snapshot_version_ = delay_delete_snapshot_version;
-    }
-  }
-
   return ret;
 }
 
@@ -771,7 +751,7 @@ int64_t ObFreezeInfoSnapshotMgr::get_snapshot_gc_ts()
   return snapshot_gc_ts_;
 }
 
-ObFreezeInfoSnapshotMgr::SchemaQuerySet::SchemaQuerySet(SchemaCache& schema_cache)
+ObFreezeInfoSnapshotMgr::SchemaQuerySet::SchemaQuerySet(SchemaCache &schema_cache)
     : schema_querys_(), schema_cache_(schema_cache), lock_(), inited_(false)
 {}
 
@@ -847,7 +827,7 @@ int ObFreezeInfoSnapshotMgr::SchemaQuerySet::update_schema_cache()
   return ret;
 }
 
-int ObFreezeInfoSnapshotMgr::SchemaQuerySet::pop_schema_query(SchemaQuery& query)
+int ObFreezeInfoSnapshotMgr::SchemaQuerySet::pop_schema_query(SchemaQuery &query)
 {
   int ret = OB_SUCCESS;
 
@@ -865,7 +845,7 @@ int ObFreezeInfoSnapshotMgr::SchemaQuerySet::pop_schema_query(SchemaQuery& query
   return ret;
 }
 
-ObFreezeInfoSnapshotMgr::ReloadTask::ReloadTask(ObFreezeInfoSnapshotMgr& mgr, SchemaQuerySet& schema_query_set)
+ObFreezeInfoSnapshotMgr::ReloadTask::ReloadTask(ObFreezeInfoSnapshotMgr &mgr, SchemaQuerySet &schema_query_set)
     : inited_(false),
       is_remote_(false),
       mgr_(mgr),
@@ -876,7 +856,7 @@ ObFreezeInfoSnapshotMgr::ReloadTask::ReloadTask(ObFreezeInfoSnapshotMgr& mgr, Sc
       schema_query_set_(schema_query_set)
 {}
 
-int ObFreezeInfoSnapshotMgr::ReloadTask::init(ObISQLClient& sql_proxy, bool is_remote)
+int ObFreezeInfoSnapshotMgr::ReloadTask::init(ObISQLClient &sql_proxy, bool is_remote)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -892,7 +872,7 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::init(ObISQLClient& sql_proxy, bool is_r
 }
 
 int ObFreezeInfoSnapshotMgr::ReloadTask::get_global_info_compat_below_220(
-    int64_t& snapshot_gc_ts, ObIArray<SchemaPair>& gc_schema_version)
+    int64_t &snapshot_gc_ts, ObIArray<SchemaPair> &gc_schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -917,7 +897,7 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::get_global_info_compat_below_220(
 }
 
 int ObFreezeInfoSnapshotMgr::ReloadTask::get_global_info(
-    int64_t& snapshot_gc_ts, ObIArray<SchemaPair>& gc_schema_version)
+    int64_t &snapshot_gc_ts, ObIArray<SchemaPair> &gc_schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -928,7 +908,7 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::get_global_info(
     STORAGE_LOG(WARN, "fail to get global info", K(ret));
   } else {
     for (int64_t i = 0; i < tmp.count() && OB_SUCC(ret); ++i) {
-      TenantIdAndSchemaVersion& pair = tmp.at(i);
+      TenantIdAndSchemaVersion &pair = tmp.at(i);
       if (OB_FAIL(gc_schema_version.push_back(SchemaPair(pair.tenant_id_, pair.schema_version_)))) {
         STORAGE_LOG(WARN, "fail to push back schema pair", K(ret));
       }
@@ -939,7 +919,7 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::get_global_info(
 }
 
 int ObFreezeInfoSnapshotMgr::ReloadTask::get_freeze_info(
-    int64_t& min_major_version, ObIArray<FreezeInfoLite>& freeze_info)
+    int64_t &min_major_version, ObIArray<FreezeInfoLite> &freeze_info)
 {
   int ret = OB_SUCCESS;
 
@@ -954,56 +934,11 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::get_freeze_info(
     STORAGE_LOG(WARN, "fail to get freeze info", K(ret), K(freeze_version));
   } else {
     for (int64_t i = 0; i < tmp.count() && OB_SUCC(ret); ++i) {
-      ObSimpleFrozenStatus& status = tmp.at(i);
+      ObSimpleFrozenStatus &status = tmp.at(i);
       if (OB_FAIL(freeze_info.push_back(
               FreezeInfoLite(status.frozen_version_, status.frozen_timestamp_, status.cluster_version_)))) {
         STORAGE_LOG(WARN, "fail to push back freeze info", K(ret), K(status));
       }
-    }
-  }
-
-  return ret;
-}
-
-int ObFreezeInfoSnapshotMgr::ReloadTask::get_backup_snapshot_version(int64_t& backup_snapshot_version)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = OB_SYS_TENANT_ID;
-  const uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
-
-  if (cluster_version < CLUSTER_VERSION_2250) {
-    backup_snapshot_version = 0;
-    LOG_INFO("old cluster version, no need get_backup_snapshot_version", K(cluster_version));
-  } else if (OB_FAIL(ObTenantBackupInfoOperation::get_backup_snapshot_version(
-                 *sql_proxy_, tenant_id, backup_snapshot_version))) {
-    LOG_WARN("failed to get backup snapshot_version", K(ret));
-  }
-
-  return ret;
-}
-
-int ObFreezeInfoSnapshotMgr::get_local_backup_snapshot_version(int64_t& backup_snapshot_version)
-{
-  int ret = OB_SUCCESS;
-  RLockGuard lock_guard(lock_);
-
-  if (0 == snapshot_gc_ts_ || 1 == snapshot_gc_ts_) {
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      TRANS_LOG(INFO, "rs havenot send the snapshot or standby ob is starting", K(snapshot_gc_ts_));
-    }
-    ret = OB_EAGAIN;
-  } else {
-    // ATTENTION:
-    // 1. snapshot_gc_ts is updated incrementally
-    // 2. backup_snapshot_version is bigger than snapshot_gc_ts in rootservice heartbeat
-    // 3. it is guaranteed there exists a recover point smaller than snapshot_gc_ts
-    //
-    // Then, there should exist a recover point smaller than
-    // backup_snapshot_version when rootservice heartbeat is receive
-    if (0 == backup_snapshot_version_) {
-      backup_snapshot_version = snapshot_gc_ts_;
-    } else {
-      backup_snapshot_version = MIN(backup_snapshot_version_, snapshot_gc_ts_);
     }
   }
 
@@ -1030,10 +965,8 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::try_update_info()
     ObSEArray<FreezeInfoLite, 4> freeze_info;
     ObSEArray<ObSnapshotInfo, 4> snapshots;
     bool changed = false;
-    observer::ObService* ob_service = GCTX.ob_service_;
-    int64_t backup_snapshot_version = 0;
+    observer::ObService *ob_service = GCTX.ob_service_;
     int64_t min_major_version = INT64_MAX;
-    int64_t delay_delete_snapshot_version = 0;
 
     if (OB_FAIL(schema_query_set_.update_schema_cache())) {
       STORAGE_LOG(WARN, "fail to update schema cache", K(ret));
@@ -1046,18 +979,8 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::try_update_info()
       STORAGE_LOG(WARN, "failed to get freeze info", K(ret));
     } else if (OB_FAIL(snapshot_proxy_.get_all_snapshots(*sql_proxy_, snapshots))) {
       STORAGE_LOG(WARN, "failed to get snapshots", K(ret));
-    } else if (OB_FAIL(get_backup_snapshot_version(backup_snapshot_version))) {
-      LOG_WARN("failed to get backup snapshot version", K(ret));
-    } else if (OB_FAIL(ObBackupInfoMgr::get_instance().get_backup_snapshot_version(delay_delete_snapshot_version))) {
-      LOG_WARN("failed to get delay delete snapshot version", K(ret));
-    } else if (OB_FAIL(mgr_.update_info(snapshot_gc_ts,
-                   gc_schema_version,
-                   freeze_info,
-                   snapshots,
-                   backup_snapshot_version,
-                   delay_delete_snapshot_version,
-                   min_major_version,
-                   changed))) {
+    } else if (OB_FAIL(mgr_.update_info(
+                   snapshot_gc_ts, gc_schema_version, freeze_info, snapshots, min_major_version, changed))) {
       STORAGE_LOG(WARN, "update info failed", K(ret), K(snapshot_gc_ts), K(freeze_info), K(snapshots));
     } else {
       if (changed || ob_service->is_heartbeat_expired()) {
@@ -1086,12 +1009,7 @@ int ObFreezeInfoSnapshotMgr::ReloadTask::try_update_info()
         }
       }
 
-      STORAGE_LOG(DEBUG,
-          "reload freeze info and snapshots",
-          K(snapshot_gc_ts),
-          K(freeze_info),
-          K(snapshots),
-          K(backup_snapshot_version));
+      STORAGE_LOG(DEBUG, "reload freeze info and snapshots", K(snapshot_gc_ts), K(freeze_info), K(snapshots));
     }
   }
   return ret;
@@ -1102,7 +1020,7 @@ void ObFreezeInfoSnapshotMgr::ReloadTask::runTimerTask()
   try_update_info();
 }
 
-ObFreezeInfoSnapshotMgr::SchemaCache::SchemaCache(SchemaQuerySet& schema_query_set)
+ObFreezeInfoSnapshotMgr::SchemaCache::SchemaCache(SchemaQuerySet &schema_query_set)
     : lock_(),
       head_(NULL),
       tail_(NULL),
@@ -1120,15 +1038,15 @@ ObFreezeInfoSnapshotMgr::SchemaCache::~SchemaCache()
   reset();
 }
 
-int ObFreezeInfoSnapshotMgr::SchemaCache::init(ObISQLClient& sql_proxy)
+int ObFreezeInfoSnapshotMgr::SchemaCache::init(ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
 
-  schema_node* p = NULL;
+  schema_node *p = NULL;
 
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
-  } else if (NULL == (p = (schema_node*)allocator_.alloc())) {
+  } else if (NULL == (p = (schema_node *)allocator_.alloc())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to alloc head node", K(ret));
   } else {
@@ -1149,8 +1067,8 @@ void ObFreezeInfoSnapshotMgr::SchemaCache::reset()
 
   SpinLockGuard guard(lock_);
 
-  schema_node* curr = head_;
-  schema_node* t = NULL;
+  schema_node *curr = head_;
+  schema_node *t = NULL;
 
   while (curr) {
     t = curr;
@@ -1165,7 +1083,7 @@ void ObFreezeInfoSnapshotMgr::SchemaCache::reset()
 }
 
 int ObFreezeInfoSnapshotMgr::SchemaCache::get_freeze_schema_version(
-    const uint64_t tenant_id, const int64_t freeze_version, const bool async, int64_t& schema_version)
+    const uint64_t tenant_id, const int64_t freeze_version, const bool async, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -1256,7 +1174,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::update_schema_version(const uint64_t t
   return ret;
 }
 
-void ObFreezeInfoSnapshotMgr::SchemaCache::insert(schema_node* p)
+void ObFreezeInfoSnapshotMgr::SchemaCache::insert(schema_node *p)
 {
   p->next = head_->next;
   p->prev = head_;
@@ -1268,7 +1186,7 @@ void ObFreezeInfoSnapshotMgr::SchemaCache::insert(schema_node* p)
     tail_ = p;
 }
 
-void ObFreezeInfoSnapshotMgr::SchemaCache::move_forward(schema_node* p)
+void ObFreezeInfoSnapshotMgr::SchemaCache::move_forward(schema_node *p)
 {
   if (!p->next) {
     tail_ = p->prev;
@@ -1280,12 +1198,12 @@ void ObFreezeInfoSnapshotMgr::SchemaCache::move_forward(schema_node* p)
   insert(p);
 }
 
-ObFreezeInfoSnapshotMgr::SchemaCache::schema_node* ObFreezeInfoSnapshotMgr::SchemaCache::inner_find(
+ObFreezeInfoSnapshotMgr::SchemaCache::schema_node *ObFreezeInfoSnapshotMgr::SchemaCache::inner_find(
     const uint64_t tenant_id, const int64_t freeze_version)
 {
-  schema_node* node = NULL;
-  schema_node* prev = head_;
-  schema_node* curr = prev->next;
+  schema_node *node = NULL;
+  schema_node *prev = head_;
+  schema_node *curr = prev->next;
 
   while (curr) {
     if (curr->tenant_id == tenant_id && curr->freeze_version == freeze_version) {
@@ -1301,13 +1219,13 @@ ObFreezeInfoSnapshotMgr::SchemaCache::schema_node* ObFreezeInfoSnapshotMgr::Sche
 }
 
 int ObFreezeInfoSnapshotMgr::SchemaCache::find(
-    const uint64_t tenant_id, const int64_t freeze_version, int64_t& schema_version)
+    const uint64_t tenant_id, const int64_t freeze_version, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
 
   SpinLockGuard guard(lock_);
 
-  schema_node* node = inner_find(tenant_id, freeze_version);
+  schema_node *node = inner_find(tenant_id, freeze_version);
   if (NULL != node) {
     schema_version = node->schema_version;
     move_forward(node);
@@ -1322,7 +1240,7 @@ bool ObFreezeInfoSnapshotMgr::SchemaCache::freeze_info_exist(const int64_t freez
 
   SpinLockGuard guard(lock_);
 
-  schema_node* curr = head_;
+  schema_node *curr = head_;
   do {
     curr = curr->next;
     if (curr && curr->freeze_version == freeze_version) {
@@ -1345,7 +1263,7 @@ bool ObFreezeInfoSnapshotMgr::SchemaCache::inner_schema_exist(const uint64_t ten
   int ret = OB_SUCCESS;
   bool bool_ret = false;
 
-  schema_node* node = inner_find(tenant_id, freeze_version);
+  schema_node *node = inner_find(tenant_id, freeze_version);
   if (NULL != node) {
     bool_ret = true;
   }
@@ -1363,8 +1281,8 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::update_freeze_schema(
   if (inner_schema_exist(tenant_id, freeze_version)) {
     // skip
   } else if (cnt_ < MAX_SCHEMA_ENTRY) {
-    schema_node* p = NULL;
-    if (NULL == (p = (schema_node*)allocator_.alloc())) {
+    schema_node *p = NULL;
+    if (NULL == (p = (schema_node *)allocator_.alloc())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "fail to alloc schema node", K(ret));
     } else {
@@ -1374,7 +1292,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::update_freeze_schema(
       cnt_++;
     }
   } else {
-    schema_node* p = tail_;
+    schema_node *p = tail_;
     p->set(tenant_id, freeze_version, schema_version);
     move_forward(p);
   }
@@ -1387,12 +1305,12 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::update_freeze_schema(
 }
 
 int ObFreezeInfoSnapshotMgr::SchemaCache::update_freeze_schema(
-    const int64_t freeze_version, ObIArray<SchemaPair>& freeze_schema)
+    const int64_t freeze_version, ObIArray<SchemaPair> &freeze_schema)
 {
   int ret = OB_SUCCESS;
 
   for (int64_t i = 0; i < freeze_schema.count() && OB_SUCC(ret); ++i) {
-    SchemaPair& pair = freeze_schema.at(i);
+    SchemaPair &pair = freeze_schema.at(i);
     if (OB_FAIL(update_freeze_schema(pair.tenant_id, freeze_version, pair.schema_version))) {
       STORAGE_LOG(WARN, "fail to update freeze schema", K(ret), K(freeze_version), K(pair));
     }
@@ -1402,7 +1320,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::update_freeze_schema(
 }
 
 int ObFreezeInfoSnapshotMgr::SchemaCache::fetch_freeze_schema(
-    const uint64_t tenant_id, const int64_t freeze_version, int64_t& schema_version)
+    const uint64_t tenant_id, const int64_t freeze_version, int64_t &schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -1417,7 +1335,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::fetch_freeze_schema(
 }
 
 int ObFreezeInfoSnapshotMgr::SchemaCache::fetch_freeze_schema(const uint64_t tenant_id, const int64_t freeze_version,
-    int64_t& schema_version, ObIArray<SchemaPair>& freeze_schema)
+    int64_t &schema_version, ObIArray<SchemaPair> &freeze_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -1433,7 +1351,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::fetch_freeze_schema(const uint64_t ten
     }
   } else if (tmp.count() > 0) {
     for (int64_t i = 0; i < tmp.count() && OB_SUCC(ret); ++i) {
-      TenantIdAndSchemaVersion& pair = tmp.at(i);
+      TenantIdAndSchemaVersion &pair = tmp.at(i);
 
       if (tenant_id == pair.tenant_id_) {
         schema_version = pair.schema_version_;
@@ -1453,7 +1371,7 @@ int ObFreezeInfoSnapshotMgr::SchemaCache::fetch_freeze_schema(const uint64_t ten
   return ret;
 }
 
-ObFreezeInfoSnapshotMgr& ObFreezeInfoMgrWrapper::get_instance(const uint64_t table_id)
+ObFreezeInfoSnapshotMgr &ObFreezeInfoMgrWrapper::get_instance(const uint64_t table_id)
 {
   bool remote_table =
       OB_INVALID_ID != table_id && is_sys_table(table_id) && !ObMultiClusterUtil::is_cluster_private_table(table_id);
@@ -1467,7 +1385,7 @@ ObFreezeInfoSnapshotMgr& ObFreezeInfoMgrWrapper::get_instance(const uint64_t tab
   }
 }
 
-int ObFreezeInfoMgrWrapper::init(common::ObISQLClient& local_proxy, common::ObISQLClient& remote_proxy)
+int ObFreezeInfoMgrWrapper::init(common::ObISQLClient &local_proxy, common::ObISQLClient &remote_proxy)
 {
   int ret = OB_SUCCESS;
 

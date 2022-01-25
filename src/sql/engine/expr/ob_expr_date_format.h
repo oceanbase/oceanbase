@@ -35,7 +35,6 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateFormat);
 
-  static int set_cur_date(const common::ObTimeZoneInfo* tz_info, common::ObTime& ob_time);
   static const int64_t OB_MAX_DATE_FORMAT_BUF_LEN = 1024;
   static void check_reset_status(common::ObExprCtx& expr_ctx, int& ret, common::ObObj& result);
 };

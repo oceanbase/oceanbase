@@ -80,7 +80,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3], pruned_index_name[t4,idx_t4_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3], pruned_index_name[idx_t4_c3,idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -124,7 +124,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:100, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2], pruned_index_name[t4,idx_t4_c2_c3,idx_t4_c3]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:100, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2], pruned_index_name[idx_t4_c2_c3,idx_t4_c3,t4]
 Parameters
 -------------------------------------
 
@@ -168,7 +168,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[t4,idx_t4_c2_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[idx_t4_c2_c3,idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -373,7 +373,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -417,7 +417,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[t4,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -461,7 +461,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[t4,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -505,7 +505,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[t4,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -549,7 +549,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c3], pruned_index_name[idx_t4_c2_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3,t4], pruned_index_name[idx_t4_c2_c3,idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -619,10 +619,10 @@ Optimization Info:
 
 
 
-t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:300, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t5_c2], pruned_index_name[t5,idx_t5_c3]
+t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:300, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t5_c2], pruned_index_name[idx_t5_c3,t5]
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[t4,idx_t4_c2_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[idx_t4_c2_c3,idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -665,7 +665,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -709,7 +709,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[t4,idx_t4_c2_c3,idx_t4_c2]
+tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[idx_t4_c2_c3,idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -752,7 +752,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -796,7 +796,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[t4,idx_t4_c2_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c3], pruned_index_name[idx_t4_c2_c3,idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -840,7 +840,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3], pruned_index_name[idx_t4_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,t4], pruned_index_name[idx_t4_c3,idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -884,7 +884,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -929,7 +929,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3], pruned_index_name[idx_t4_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,t4], pruned_index_name[idx_t4_c3,idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -973,7 +973,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3], pruned_index_name[idx_t4_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,t4], pruned_index_name[idx_t4_c3,idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -1018,7 +1018,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3], pruned_index_name[idx_t4_c3,idx_t4_c2]
+tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,t4], pruned_index_name[idx_t4_c3,idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -1062,7 +1062,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3], pruned_index_name[idx_t4_c3,idx_t4_c2]
+tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,t4], pruned_index_name[idx_t4_c3,idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -1107,7 +1107,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[t4,idx_t4_c2]
+tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -1151,7 +1151,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[t4,idx_t4_c2]
+tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -1195,7 +1195,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[t4,idx_t4_c2]
+tt:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -1266,7 +1266,7 @@ Optimization Info:
 t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:0, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t5], pruned_index_name[idx_t5_c2,idx_t5_c3]
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -1333,7 +1333,7 @@ Optimization Info:
 -------------------------------------
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 
 
 
@@ -1406,7 +1406,7 @@ Optimization Info:
 -------------------------------------
 
 
-tt4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+tt4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 
 
 
@@ -1479,7 +1479,7 @@ Optimization Info:
 -------------------------------------
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 
 
 
@@ -1557,7 +1557,7 @@ Optimization Info:
 t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:0, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t5], pruned_index_name[idx_t5_c2,idx_t5_c3]
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -2459,7 +2459,7 @@ Optimization Info:
 t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:0, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t5], pruned_index_name[idx_t5_c2,idx_t5_c3]
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -2531,7 +2531,7 @@ Optimization Info:
 t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:0, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t5], pruned_index_name[idx_t5_c2,idx_t5_c3]
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -2621,7 +2621,7 @@ Optimization Info:
 
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,idx_t4_c2,t4]
 
 
 t7:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t7]
@@ -2730,7 +2730,7 @@ t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_r
 t7:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t7]
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3,idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,idx_t4_c2,t4]
 Parameters
 -------------------------------------
 
@@ -2796,7 +2796,7 @@ Optimization Info:
 -------------------------------------
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 
 
 
@@ -2874,7 +2874,7 @@ Optimization Info:
 t5:table_rows:300, physical_range_rows:300, logical_range_rows:300, index_back_rows:0, output_rows:300, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t5], pruned_index_name[idx_t5_c2,idx_t5_c3]
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -3355,7 +3355,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -3399,7 +3399,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -3443,7 +3443,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -3510,7 +3510,7 @@ Optimization Info:
 -------------------------------------
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 
 
 
@@ -3582,7 +3582,7 @@ Optimization Info:
 -------------------------------------
 
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 
 
 
@@ -3631,7 +3631,7 @@ LOCAL
 Optimization Info:
 -------------------------------------
 
-t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t4,idx_t4_c2_c3,idx_t4_c3], pruned_index_name[idx_t4_c2]
+t4:table_rows:100, physical_range_rows:100, logical_range_rows:100, index_back_rows:0, output_rows:100, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t4_c2_c3,idx_t4_c3,t4], pruned_index_name[idx_t4_c2]
 Parameters
 -------------------------------------
 
@@ -3687,7 +3687,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -3742,7 +3742,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -3798,7 +3798,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -3853,7 +3853,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -3908,7 +3908,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -3961,7 +3961,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -4016,7 +4016,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -4071,7 +4071,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 
@@ -4126,7 +4126,7 @@ Optimization Info:
 
 
 
-t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[t1,idx_t1_c2]
+t1:table_rows:500, physical_range_rows:500, logical_range_rows:500, index_back_rows:0, output_rows:500, est_method:local_storage, optimization_method=cost_based, avaiable_index_name[idx_t1_c2,t1]
 Parameters
 -------------------------------------
 

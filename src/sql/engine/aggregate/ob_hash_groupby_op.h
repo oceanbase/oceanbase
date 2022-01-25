@@ -112,7 +112,7 @@ public:
   {
     return aggr_processor_.get_aggr_hold_size();
   }
-  OB_INLINE int64_t get_local_hash_used_size() const
+  OB_INLINE int64_t get_hash_table_used_size() const
   {
     return local_group_rows_.mem_used();
   }
@@ -126,7 +126,11 @@ public:
   }
   OB_INLINE int64_t get_extra_size() const
   {
-    return get_local_hash_used_size() + get_dumped_part_used_size();
+    return get_dumped_part_used_size(); 
+  }
+  OB_INLINE int64_t get_data_size() const
+  { 
+    return get_aggr_used_size() + sql_mem_processor_.get_data_size();
   }
   OB_INLINE int64_t get_mem_used_size() const
   {
@@ -135,6 +139,10 @@ public:
   OB_INLINE int64_t get_mem_bound_size() const
   {
     return sql_mem_processor_.get_mem_bound();
+  }
+  OB_INLINE bool is_need_dump(double data_ratio)
+  {
+    return (get_mem_used_size() > get_mem_bound_size() * data_ratio);
   }
   OB_INLINE int64_t estimate_hash_bucket_size(const int64_t bucket_cnt) const
   {
@@ -152,6 +160,7 @@ public:
     }
     return (mem_size / sizeof(void*) / ObGroupRowHashTable::SIZE_BUCKET_SCALE);
   }
+  int init_group_store();
   int update_mem_status_periodically(
       const int64_t nth_cnt, const int64_t input_row, int64_t& est_part_cnt, bool& need_dump);
   int64_t detect_part_cnt(const int64_t rows) const;

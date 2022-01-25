@@ -266,6 +266,20 @@ void ObTransCtx::print_trace_log_()
   FORCE_PRINT_TRACE(tlog_, "[force print]");
 }
 
+void ObTransCtx::set_cur_stmt_type(const sql::stmt::StmtType stmt_type, const bool is_sfu)
+{
+  if (is_sfu) {
+    cur_stmt_type_ = ObStmtType::SFU;
+  } else if (sql::stmt::T_SELECT == stmt_type ||
+              sql::stmt::T_BUILD_INDEX_SSTABLE == stmt_type) {
+    cur_stmt_type_ = ObStmtType::READ;
+  } else if (sql::stmt::T_NONE == stmt_type ) {
+    cur_stmt_type_ = ObStmtType::UNKNOWN;
+  } else {
+    cur_stmt_type_ = ObStmtType::WRITE;
+  }
+}
+
 void ObTransCtx::reset()
 {
   // unknown
@@ -299,6 +313,7 @@ void ObTransCtx::reset()
   is_dup_table_trans_ = false;
   is_exiting_ = false;
   is_readonly_ = false;
+  cur_stmt_type_ = ObStmtType::UNKNOWN;
   for_replay_ = false;
   need_print_trace_log_ = false;
   is_bounded_staleness_read_ = false;

@@ -69,6 +69,9 @@ class AggreLogTask;
 class ObPartTransCtxMgr;
 class ObPartitionTransCtxMgr;
 
+// Reserve 50KB to store the fields in trans ctx except undo_status, participants and redo_log
+static const int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_USER_ROW_LENGTH - 51200;
+
 class ObTransErrsim {
 public:
   static inline bool is_memory_errsim()
@@ -765,7 +768,19 @@ public:
   {
     return ((sql::stmt::T_SELECT == stmt_type_ && !is_sfu_) || sql::stmt::T_BUILD_INDEX_SSTABLE == stmt_type_);
   }
-  const char* get_sql_id() const
+  bool is_sfu() const
+  {
+    return is_sfu_;
+  }
+  sql::stmt::StmtType get_stmt_type() const
+  {
+    return stmt_type_;
+  }
+  inline bool is_delete_stmt() const
+  {
+    return sql::stmt::T_DELETE == stmt_type_;
+  }
+  const char *get_sql_id() const
   {
     return sql_id_.ptr();
   }
@@ -2266,6 +2281,21 @@ private:
   {}
   ~ObSpState()
   {}
+};
+
+class ObStmtType
+{
+public:
+  static const int64_t UNKNOWN = -1;
+  static const int64_t READ = 0;
+  static const int64_t SFU = 1;
+  static const int64_t WRITE = 2;
+public:
+  static bool is_valid(const int64_t stmt_type)
+  { return READ == stmt_type || SFU == stmt_type || WRITE == stmt_type; }
+private:
+  ObStmtType() {}
+  ~ObStmtType() {}
 };
 
 class Ob2PCState {

@@ -18,14 +18,11 @@
 #include "share/ob_force_print_log.h"
 #include "storage/ob_partition_service.h"
 #include "storage/ob_partition_meta_block_reader.h"
-#include "storage/ob_table_mgr_meta_block_reader.h"
 #include "storage/ob_tenant_config_mgr.h"
 #include "storage/ob_tenant_config_meta_block_reader.h"
 #include "storage/ob_server_checkpoint_log_reader.h"
-#include "storage/ob_server_checkpoint_log_reader_v1.h"
 #include "storage/ob_server_checkpoint_writer.h"
 #include "storage/ob_data_macro_id_iterator.h"
-#include "ob_macro_meta_block_reader.h"
 #include "ob_storage_cache_suite.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "storage/compaction/ob_micro_block_iterator.h"
@@ -498,9 +495,6 @@ int ObStoreFile::open(const bool is_physical_flashback)
   } else if (OB_UNLIKELY(is_opened_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "The ObStoreFile has been started, ", K(ret));
-  } else if (OB_FAIL(
-                 ObMacroBlockMetaMgr::get_instance().init(store_file_system_->get_total_macro_block_count() + 16))) {
-    STORAGE_LOG(WARN, "Fail to init ObMacroBlockMetaMgr, ", K(ret));
   } else if (OB_FAIL(read_checkpoint_and_replay_log(is_replay_old))) {
     STORAGE_LOG(WARN, "fail to read checkpoint and replay log", K(ret));
   } else {
@@ -562,7 +556,6 @@ void ObStoreFile::destroy()
   TG_STOP(lib::TGDefIDs::StoreFileGC);
   TG_WAIT(lib::TGDefIDs::StoreFileGC);
   SLOGGER.destroy();
-  ObMacroBlockMetaMgr::get_instance().destroy();
 
   lib::ObMutexGuard bad_block_guard(bad_block_lock_);
   bad_block_infos_.reset();
@@ -1221,19 +1214,7 @@ int ObStoreFile::read_checkpoint_and_replay_log(bool& is_replay_old)
   if (OB_FAIL(store_file_system_->get_super_block_version(super_block_version))) {
     LOG_WARN("fail to get super block version", K(ret));
   } else {
-    if (OB_SUPER_BLOCK_V2 == super_block_version) {
-      ObServerCheckpointLogReaderV1 reader;
-      ObSuperBlockV2 old_super_block;
-      ObLogCursor cur_cursor;
-      if (OB_FAIL(store_file_system_->read_old_super_block(old_super_block))) {
-        LOG_WARN("fail to read old super block", K(ret));
-      } else if (OB_FAIL(
-                     reader.read_checkpoint_and_replay_log(old_super_block, meta_block_ids_[cur_meta_array_pos_]))) {
-        STORAGE_LOG(WARN, "fail to read checkpoint and replay log", K(ret));
-      } else {
-        is_replay_old = true;
-      }
-    } else if (OB_SUPER_BLOCK_V3 == super_block_version) {
+    if (OB_SUPER_BLOCK_V3 == super_block_version) {
       ObServerCheckpointLogReader reader;
       if (OB_FAIL(reader.read_checkpoint_and_replay_log())) {
         STORAGE_LOG(WARN, "fail to read checkpoint and replay log", K(ret));

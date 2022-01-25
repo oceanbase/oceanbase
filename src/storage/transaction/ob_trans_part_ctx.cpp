@@ -175,6 +175,8 @@ int ObPartTransCtx::init(const uint64_t tenant_id, const ObTransID& trans_id, co
     }
     is_listener_ = false;
     listener_handler_ = NULL;
+    ctx_serialize_size_ = undo_status_.get_serialize_size() + partition_log_info_arr_.get_serialize_size() +
+                          prev_redo_log_ids_.get_serialize_size();
   }
   if (OB_FAIL(ret)) {
     if (NULL != redo_sync_task_) {
@@ -388,6 +390,7 @@ void ObPartTransCtx::reset()
   last_redo_log_mutator_size_ = 0;
   has_write_or_replay_mutator_redo_log_ = false;
   is_in_redo_with_prepare_ = false;
+  ctx_serialize_size_ = 0;
 }
 
 int ObPartTransCtx::construct_context(const ObTransMsg& msg)
@@ -747,6 +750,7 @@ int ObPartTransCtx::start_task(const ObTransDesc& trans_desc, const int64_t snap
     pg_ = ob_partition;
     if (stmt_info_.main_stmt_change(sql_no) ||
         (cluster_version_before_2271_() && stmt_info_.main_stmt_change_compat(sql_no))) {
+      set_cur_stmt_type(trans_desc.get_cur_stmt_desc().get_stmt_type(), trans_desc.get_cur_stmt_desc().is_sfu());
       if (OB_FAIL(mt_ctx_.sub_trans_begin(snapshot_version_, expired_time, false, trx_lock_timeout))) {
         TRANS_LOG(ERROR,
             "sub transaction begin should never fail",
@@ -1208,7 +1212,7 @@ int ObPartTransCtx::handle_message(const ObTransMsg& msg)
       case OB_TRANS_CLEAR_REQUEST: {
         if (OB_FAIL(set_scheduler_(msg.get_scheduler()))) {
           TRANS_LOG(WARN, "set scheduler error", KR(ret), K(msg));
-        } else if (OB_FAIL(set_participants_(msg.get_participants()))) {
+        } else if (OB_FAIL(calc_serialize_size_and_set_participants_(msg.get_participants()))) {
           TRANS_LOG(WARN, "set participants error", KR(ret), K(msg));
         } else if (OB_FAIL(handle_trans_clear_request_(msg))) {
           TRANS_LOG(WARN, "handle trans clear request error", KR(ret), K(msg));
@@ -1247,7 +1251,7 @@ int ObPartTransCtx::handle_message(const ObTransMsg& msg)
           TRANS_LOG(WARN, "set scheduler error", KR(ret), K(msg));
         } else if (OB_FAIL(set_coordinator_(msg.get_coordinator()))) {
           TRANS_LOG(WARN, "set coordinator error", KR(ret), K(msg));
-        } else if (OB_FAIL(set_participants_(msg.get_participants()))) {
+        } else if (OB_FAIL(calc_serialize_size_and_set_participants_(msg.get_participants()))) {
           TRANS_LOG(WARN, "set participants error", KR(ret), K(msg));
         } else if (OB_FAIL(set_xid_(msg.get_xid()))) {
           TRANS_LOG(WARN, "set xid error", KR(ret), K(msg));
@@ -1295,7 +1299,7 @@ int ObPartTransCtx::handle_message(const ObTransMsg& msg)
             TRANS_LOG(WARN, "set scheduler error", KR(ret), K(msg));
           } else if (OB_FAIL(set_coordinator_(msg.get_coordinator()))) {
             TRANS_LOG(WARN, "set coordinator error", KR(ret), K(msg));
-          } else if (OB_FAIL(set_participants_(msg.get_participants()))) {
+          } else if (OB_FAIL(calc_serialize_size_and_set_participants_(msg.get_participants()))) {
             TRANS_LOG(WARN, "set participants error", KR(ret), K(msg));
           } else {
             // do nothing
@@ -1679,7 +1683,7 @@ int ObPartTransCtx::on_sync_log_success(
         // The log is completed, we need verify the txn checksum
         need_checksum_ = true;
       }
-      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
         TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
       } else if (!not_need_write_next_log_(log_type) &&
                  OB_FAIL(submit_log_task_(OB_LOG_SP_TRANS_COMMIT, has_redo_log))) {
@@ -1787,7 +1791,7 @@ int ObPartTransCtx::on_sync_log_success(
       if (OB_LOG_TRANS_REDO == log_type) {
         start_us = ObTimeUtility::fast_current_time();
         // record the redo log id
-        if (!is_xa_last_empty_redo_log_() && OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+        if (!is_xa_last_empty_redo_log_() && OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
           TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
         } else if (not_need_write_next_log_(log_type)) {
           // No need to write log for dup table in order to prevent the leader
@@ -1949,7 +1953,7 @@ int ObPartTransCtx::on_sync_log_success(
         need_checksum_ = true;
       }
       start_us = ObTimeUtility::fast_current_time();
-      if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+      if (OB_FAIL(calc_serialize_size_and_set_redo_log_(log_id))) {
         TRANS_LOG(WARN, "redo log id push back error", KR(ret), "context", *this, K(log_id));
       } else if ((OB_LOG_TRANS_STATE & log_type) != 0) {
         // do nothing
@@ -3095,12 +3099,14 @@ int ObPartTransCtx::leader_revoke(const bool first_check, bool& need_release, Ob
       if (!is_trans_state_sync_finished_) {
         TRANS_LOG(INFO, "transaction is killed", "context", *this);
       }
-    } else if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && 0 == submit_log_count_) {
-      // - When leader is revoking  and some non-2pc logs of txn has already been
+    } else if (has_logged_() && !is_in_2pc_() && !is_trans_state_sync_finished_ && 0 == submit_log_count_ &&
+               FALSE_IT(mt_ctx_.clean_dirty_callbacks())) {
+      // - When leader is revoking and some non-2pc logs of txn has already been
       //   submitted to sliding window:
-      //   - If no on-the-fly log and state log is not synced successfully, remove all
-      //     marked_log_cnts
-      (void)mt_ctx_.clean_dirty_callbacks();
+      //   - Case 2.1: We only solve the case with no on-the-fly logs(because we have no idea
+      //     whether the on-the-fly log is paxos-choosen or not)
+      //   - If the state is not synced successfully(txn need abort), so we remove all
+      //     marked trans node
     } else if (OB_FAIL(mt_ctx_.commit_to_replay())) {
       TRANS_LOG(WARN, "commit to replay error", KR(ret), "context", *this);
     } else {
@@ -4731,7 +4737,7 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_LOG(ERROR, "invalid state, transaction is not replaying", KR(ret), "context", *this);
     need_print_trace_log_ = true;
   } else if (OB_UNLIKELY(!is_trans_valid_for_replay_(OB_LOG_START_MEMBERSHIP_STORAGE, timestamp))) {
-    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(log), K(timestamp));
+    TRANS_LOG(WARN, "trans is not valid", K(*this), K(log_id), K(timestamp), K(timestamp));
     ret = OB_TRANS_INVALID_STATE;
     need_print_trace_log_ = true;
   } else if (0 == submit_log_count_) {
@@ -7113,7 +7119,7 @@ int ObPartTransCtx::post_stmt_response_(
               status,
               request_id_))) {
         TRANS_LOG(WARN, "message init error", K(ret), K_(scheduler), K_(tmp_scheduler), K(msg_type));
-        // 将request的发送时间戳记录到response中，用于scheduler对消息超时的校验
+        // record request timestamp into response for checking timeout in scheduler
       } else if (OB_FAIL(msg.set_msg_timeout(request_timeout))) {
         TRANS_LOG(INFO,
             "set message start timestamp error",
@@ -7395,7 +7401,8 @@ int ObPartTransCtx::handle_2pc_prepare_request_raw_(int status)
           // The coordinator will retry on failure
           ret = OB_SUCCESS;
         } else if (OB_SUCCESS != get_status_() || OB_SUCCESS != status) {
-          if (OB_FAIL(alloc_local_trans_version_(OB_LOG_TRANS_REDO_WITH_PREPARE))) {
+          TRANS_LOG(WARN, "2pc prepare status not ok, write prepare-no", K(status), K(status_), K(*this));
+          if (OB_FAIL(alloc_local_trans_version_(OB_LOG_TRANS_PREPARE))) {
             if (OB_EAGAIN != ret) {
               TRANS_LOG(WARN, "alloc log id and timestamp error", KR(ret), "context", *this);
             } else {
@@ -7852,7 +7859,7 @@ int ObPartTransCtx::handle_2pc_local_prepare_request(const int64_t request_id, c
     TRANS_LOG(WARN, "set scheduler error", K(ret), K(scheduler), "context", *this);
   } else if (OB_FAIL(set_coordinator_(coordinator))) {
     TRANS_LOG(WARN, "set coordinator error", K(ret), K(coordinator), "context", *this);
-  } else if (OB_FAIL(set_participants_(participants))) {
+  } else if (OB_FAIL(calc_serialize_size_and_set_participants_(participants))) {
     TRANS_LOG(WARN, "set participants error", K(ret), K(participants), "context", *this);
   } else if (Ob2PCState::INIT != get_state_()) {
     ret = OB_EAGAIN;
@@ -8032,7 +8039,7 @@ int ObPartTransCtx::handle_2pc_pre_prepare_request(const int64_t prepare_version
     TRANS_LOG(WARN, "set scheduler error", KR(ret), K(scheduler), "context", *this);
   } else if (OB_FAIL(set_coordinator_(coordinator))) {
     TRANS_LOG(WARN, "set coordinator error", KR(ret), K(coordinator), "context", *this);
-  } else if (OB_FAIL(set_participants_(participants))) {
+  } else if (OB_FAIL(calc_serialize_size_and_set_participants_(participants))) {
     TRANS_LOG(WARN, "set participants error", KR(ret), K(participants), "context", *this);
   } else if (Ob2PCState::INIT != get_state_()) {
     ret = OB_EAGAIN;
@@ -8369,7 +8376,7 @@ int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t ms
         TRANS_LOG(WARN, "set scheduler error", K(ret), K(*req));
       } else if (OB_FAIL(set_coordinator_(req->coordinator_))) {
         TRANS_LOG(WARN, "set coordinator error", K(ret), K(*req));
-      } else if (OB_FAIL(set_participants_(req->participants_))) {
+      } else if (OB_FAIL(calc_serialize_size_and_set_participants_(req->participants_))) {
         TRANS_LOG(WARN, "set participants error", K(ret), K(*req));
       } else {
         // do nothing
@@ -8423,7 +8430,7 @@ int ObPartTransCtx::handle_2pc_request(const ObTrxMsgBase& msg, const int64_t ms
     //  TRANS_LOG(WARN, "set scheduler error", K(ret), K(*req));
     if (OB_FAIL(set_coordinator_(req->coordinator_))) {
       TRANS_LOG(WARN, "set coordinator error", K(ret), K(*req));
-    } else if (OB_FAIL(set_participants_(req->participants_))) {
+    } else if (OB_FAIL(calc_serialize_size_and_set_participants_(req->participants_))) {
       TRANS_LOG(WARN, "set participants error", K(ret), K(*req));
     } else if (OB_FAIL(set_xid_(req->xid_))) {
       TRANS_LOG(WARN, "set xid error", K(ret), K(*this), K(*req));
@@ -10913,7 +10920,7 @@ int ObPartTransCtx::rollback_to_(const int32_t sql_no)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(undo_status_.undo(sql_no, curr_sql_no))) {
+      if (OB_FAIL(calc_serialize_size_and_set_undo_(sql_no, curr_sql_no))) {
         TRANS_LOG(WARN, "record rollback action failed", K(ret), K(sql_no), K(curr_sql_no));
       }
     }
@@ -11087,13 +11094,14 @@ int ObPartTransCtx::lock_for_read(
   ObTransStatusInfo trans_info;
   const int64_t MAX_SLEEP_US = 1000;
   const int64_t lock_wait_start_ts = ObTimeUtility::current_time();
+  memtable::ObMemtableCtx &read_ctx = lock_for_read_arg.read_ctx_;
 
   for (int32_t i = 0; OB_ERR_SHARED_LOCK_CONFLICT == ret; i++) {
     // leave this check here to make sure no lock is held
     int64_t abs_stmt_timeout =
-        mt_ctx_.get_trx_lock_timeout() < 0
-            ? mt_ctx_.get_abs_expired_time()
-            : MIN(lock_wait_start_ts + mt_ctx_.get_trx_lock_timeout(), mt_ctx_.get_abs_expired_time());
+        read_ctx.get_trx_lock_timeout() < 0
+            ? read_ctx.get_abs_expired_time()
+            : MIN(lock_wait_start_ts + read_ctx.get_trx_lock_timeout(), read_ctx.get_abs_expired_time());
 
     if (OB_FAIL(get_trans_state_and_version_without_lock(trans_info))) {
       TRANS_LOG(WARN, "failed to get trans table status", K(ret));
@@ -11332,6 +11340,9 @@ int ObPartTransCtx::cleanout_transnode(ObMvccTransNode& tnode, ObMvccRow& value,
 
 void ObPartTransCtx::set_exiting_()
 {
+  if (is_dirty_) {
+    partition_log_info_arr_.reset();
+  }
   return ObTransCtx::set_exiting_(is_dirty_);
 }
 
@@ -12069,6 +12080,59 @@ void ObPartTransCtx::DEBUG_SYNC_slow_txn_during_2pc_prepare_phase_for_physical_b
   if (mock_key == self_ && (OB_TRX_2PC_PREPARE_REQUEST == msg_type || OB_TRANS_2PC_PREPARE_REQUEST == msg_type)) {
     DEBUG_SYNC(SLOW_TXN_DURING_2PC_COMMIT_PHASE_FOR_PHYSICAL_BACKUP_1055);
   }
+}
+
+int ObPartTransCtx::calc_serialize_size_and_set_redo_log_(const int64_t log_id)
+{
+  int ret = OB_SUCCESS;
+  if ((ctx_serialize_size_ += serialization::encoded_length_vi64(log_id)) > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(WARN, "size overflow when set redo log.", KR(ret), K(ctx_serialize_size_), K(log_id));
+  } else if (OB_FAIL(prev_redo_log_ids_.push_back(log_id))) {
+    ctx_serialize_size_ -= serialization::encoded_length_vi64(log_id);
+    TRANS_LOG(WARN, "sp redo log id push back error", KR(ret), "context", *this, K(log_id));
+  } else {
+    // push back redo log success
+  }
+  return ret;
+}
+
+int ObPartTransCtx::calc_serialize_size_and_set_participants_(const ObPartitionArray &participants)
+{
+  int ret = OB_SUCCESS;
+  if ((ctx_serialize_size_ += participants.get_serialize_size()) > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    set_status_(OB_TRANS_NEED_ROLLBACK);
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(WARN,
+        "size overflow when set participants.",
+        KR(ret),
+        K(ctx_serialize_size_),
+        K(participants.get_serialize_size()));
+  } else if (OB_FAIL(set_participants_(participants))) {
+    ctx_serialize_size_ -= participants.get_serialize_size();
+    TRANS_LOG(WARN, "set participants error", KR(ret), K(participants));
+  }
+  return ret;
+}
+
+int ObPartTransCtx::calc_serialize_size_and_set_undo_(const int64_t undo_to, const int64_t undo_from)
+{
+  int ret = OB_SUCCESS;
+  ObUndoAction undo_action(undo_to, undo_from);
+  if ((ctx_serialize_size_ += undo_action.get_serialize_size()) > OB_MAX_TRANS_SERIALIZE_SIZE) {
+    set_status_(OB_TRANS_NEED_ROLLBACK);
+    ret = OB_SIZE_OVERFLOW;
+    TRANS_LOG(WARN,
+        "size overflow when set undo action",
+        KR(ret),
+        K(ctx_serialize_size_),
+        K(ctx_serialize_size_),
+        K(OB_MAX_TRANS_SERIALIZE_SIZE));
+  } else if (OB_FAIL(undo_status_.undo(undo_to, undo_from))) {
+    ctx_serialize_size_ -= undo_action.get_serialize_size();
+    TRANS_LOG(WARN, "record rollback action failed", K(ret), K(undo_to), K(undo_from));
+  }
+  return ret;
 }
 
 }  // namespace transaction

@@ -1403,6 +1403,28 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
         }
         break;
       }
+      case T_FUN_MAX:
+      case T_FUN_MIN: {
+        ObRawExpr *child_expr = NULL;
+        if (OB_ISNULL(child_expr = expr.get_param_expr(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param expr is null");
+        } else if (OB_UNLIKELY(ob_is_enumset_tc(child_expr->get_data_type()))) {
+          // To compatible with MySQL, we need to add cast expression that enumset to varchar
+          // to evalute MIN/MAX aggregate functions.
+          need_add_cast = true;
+          const ObExprResType& res_type = child_expr->get_result_type();
+          result_type.set_varchar();
+          result_type.set_length(res_type.get_length());
+          result_type.set_collation_type(res_type.get_collation_type());
+          result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+          expr.set_result_type(result_type);
+        } else {
+          expr.set_result_type(child_expr->get_result_type());
+          expr.unset_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+        }
+        break;
+      }
       default: {
         expr.set_result_type(expr.get_param_expr(0)->get_result_type());
         expr.unset_result_flag(OB_MYSQL_NOT_NULL_FLAG);

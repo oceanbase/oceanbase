@@ -114,7 +114,6 @@ void ObArchiveThreadPool::do_thread_task_()
 {
   int ret = OB_SUCCESS;
   void* data = NULL;
-  ObArchiveTaskStatus* task_status = NULL;
 
   if (REACH_TIME_INTERVAL(60 * 1000 * 1000L)) {
     ARCHIVE_LOG(INFO, "ObArchiveThreadPool is running", "thread_index", get_thread_idx(), K(thread_name_));
@@ -127,11 +126,11 @@ void ObArchiveThreadPool::do_thread_task_()
     }
   } else if (OB_ISNULL(data)) {
     ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "task_status is NULL", KR(ret), K(data));
+    ARCHIVE_LOG(ERROR, "data is NULL", KR(ret), K(data));
   } else {
-    task_status = static_cast<ObArchiveTaskStatus*>(data);
-    if (OB_FAIL(handle_task_list(task_status))) {
-      ARCHIVE_LOG(WARN, "handle_task_list fail", KR(ret), KPC(task_status));
+    if (OB_FAIL(handle_task_list(data))) {
+      // data will lose refrence protect in handle_task_list function
+      ARCHIVE_LOG(WARN, "handle_task_list fail", KR(ret));
     }
   }
 }

@@ -483,6 +483,9 @@ OB_INLINE int ObMPQuery::get_tenant_schema_info_(const uint64_t tenant_id, ObTen
 
   if (!cached_guard.is_inited()) {
     need_refresh = true;
+  } else if (tenant_id != cached_guard.get_tenant_id()) {
+    // change tenant
+    need_refresh = true;
   } else {
     int64_t tmp_tenant_version = 0;
     int64_t tmp_sys_version = 0;
@@ -739,13 +742,9 @@ OB_INLINE int ObMPQuery::do_process(
         } else {
           LOG_WARN("query failed", K(ret), K(retry_ctrl_.need_retry()));
         }
-        // 当need_retry=false时，可能给客户端回过包了，可能还没有回过任何包。
-        // 不过，可以确定：这个请求出错了，还没处理完。如果不是已经交给异步EndTrans收尾，
-        // 则需要在下面回复一个error_packet作为收尾。否则后面没人帮忙发错误包给客户端了，
-        // 可能会导致客户端挂起等回包。
         bool is_partition_hit = session.get_err_final_partition_hit(ret);
         int err = send_error_packet(ret, NULL, is_partition_hit, (void *)&ctx_.reroute_info_);
-        if (OB_SUCCESS != err) {  // 发送error包
+        if (OB_SUCCESS != err) {  // send error packet
           LOG_WARN("send error packet failed", K(ret), K(err));
         }
       }
@@ -984,7 +983,6 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet& result, bool& is_readonly)
     case stmt::T_SHOW_GRANTS:
     case stmt::T_SHOW_RECYCLEBIN:
     case stmt::T_USE_DATABASE:
-    case stmt::T_SET_NAMES:  // read only not restrict it
     case stmt::T_START_TRANS:
     case stmt::T_END_TRANS: {
       is_readonly = true;
@@ -1173,10 +1171,6 @@ void ObMPQuery::update_audit_info(const ObWaitEventStat& total_wait_desc, ObAudi
 int ObMPQuery::deserialize_com_field_list()
 {
   int ret = OB_SUCCESS;
-  /*
-   *
-   * Refer to : https://dev.mysql.com/doc/internals/en/com-field-list.html
-   */
   ObIAllocator* alloc = &THIS_WORKER.get_sql_arena_allocator();
   if (OB_ISNULL(alloc)) {
     ret = OB_ERR_UNEXPECTED;

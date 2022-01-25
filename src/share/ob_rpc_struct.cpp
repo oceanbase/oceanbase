@@ -2642,7 +2642,7 @@ bool ObCopySSTableBatchArg::is_valid() const
   return is_valid;
 }
 
-OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_);
+OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_, data_size_);
 
 bool ObServerCopyLocalIndexSSTableArg::is_valid() const
 {
@@ -4903,6 +4903,19 @@ int ObPartitionBroadcastResult::assign(const ObPartitionBroadcastResult& other)
   }
   return ret;
 }
+
+int ObSubmitBuildIndexTaskArg::assign(const ObSubmitBuildIndexTaskArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else {
+    index_tid_ = other.index_tid_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObSubmitBuildIndexTaskArg, ObDDLArg), index_tid_);
 
 }  // end namespace obrpc
 }  // namespace oceanbase

@@ -1041,7 +1041,12 @@ ObAuditRecordData& ObSQLSessionInfo::get_audit_record()
   return audit_record_;
 }
 
-const ObAuditRecordData& ObSQLSessionInfo::get_raw_audit_record() const
+ObAuditRecordData &ObSQLSessionInfo::get_raw_audit_record()
+{
+  return audit_record_;
+}
+
+const ObAuditRecordData &ObSQLSessionInfo::get_raw_audit_record() const
 {
   return audit_record_;
 }

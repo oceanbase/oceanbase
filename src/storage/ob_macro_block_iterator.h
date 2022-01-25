@@ -13,7 +13,6 @@
 #ifndef OB_MACRO_BLOCK_ITERATOR_H_
 #define OB_MACRO_BLOCK_ITERATOR_H_
 #include "blocksstable/ob_block_sstable_struct.h"
-#include "blocksstable/ob_macro_block_meta_mgr.h"
 #include "blocksstable/ob_store_file_system.h"
 
 namespace oceanbase {

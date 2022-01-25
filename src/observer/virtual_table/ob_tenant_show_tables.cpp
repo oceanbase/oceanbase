@@ -157,7 +157,8 @@ int ObTenantShowTables::inner_get_next_row()
                 }
                 case TABLE_TYPE: {
                   if (OB_MYSQL_SCHEMA_ID == extract_pure_id(table_schema->get_database_id())) {
-                    cells[cell_idx].set_varchar(ObString::make_string("BASE TABLE"));
+                    cells[cell_idx].set_varchar(table_schema->is_user_view() ?
+                    ObString::make_string("VIEW") : ObString::make_string("BASE TABLE"));
                   } else {
                     cells[cell_idx].set_varchar(
                         ObString::make_string(ob_mysql_table_type_str(table_schema->get_table_type())));

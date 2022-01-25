@@ -74,7 +74,7 @@ int async_cb(easy_request_t* r)
       cb->on_invalid();
       LOG_DEBUG("decode failed", K(ret));
     } else if (OB_PACKET_CLUSTER_ID_NOT_MATCH == cb->get_rcode()) {
-      LOG_ERROR("wrong cluster id", K(ret));
+      LOG_WARN("wrong cluster id", K(ret));
       cb->set_error(EASY_ERROR);
       ret = cb->on_error(EASY_ERROR);
       if (OB_ERROR == ret) {

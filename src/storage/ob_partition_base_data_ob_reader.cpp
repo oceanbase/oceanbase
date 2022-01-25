@@ -1651,7 +1651,6 @@ int ObPhysicalBaseMetaProducer::get_sstable_meta(ObSSTableBaseMeta& sstable_meta
   ObTableHandle tmp_handle;
   ObSSTable* sstable = NULL;
   blocksstable::ObSSTablePair pair;
-  blocksstable::ObMacroBlockMetaHandle meta_handle;
   ObFullMacroBlockMeta meta;
   pair_list.reuse();
 

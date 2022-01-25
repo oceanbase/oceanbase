@@ -1907,7 +1907,7 @@ Outputs & filters:
   2 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), dop=1
   3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       force partition granule, asc.
-  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), startup_filter([0]), 
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -1916,7 +1916,7 @@ Outputs & filters:
   7 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   8 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  9 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  9 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -2158,11 +2158,11 @@ SQL: select * from t1 where true;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -2184,11 +2184,11 @@ SQL: select * from t1 where 1=2;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -2257,22 +2257,22 @@ SQL: select * from t1 left join t2 t on t1.c1=t.c1 where false;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2], [t.c1], [t.c2], [t.c3]), filter(nil)
+  0 - output([t1.c1], [t1.c2], [t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([0])
   1 - output([t1.c1], [t1.c2], [t.c1], [t.c2], [t.c3]), filter(nil), dop=1
-  2 - output([t1.c1], [t1.c2], [t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([0]), 
+  2 - output([t1.c1], [t1.c2], [t.c1], [t.c2], [t.c3]), filter(nil), 
       equal_conds([t1.c1 = t.c1]), other_conds(nil)
   3 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), Local Order
   4 - (#keys=1, [t1.c1]), output([t1.c1], [t1.c2]), filter(nil), dop=1
   5 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  6 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  6 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
   7 - output([t.c1], [t.c2], [t.c3]), filter(nil), sort_keys([t.c1, ASC]), local merge sort
   8 - output([t.c1], [t.c2], [t.c3]), filter(nil), 
       affinitize, force partition granule, asc.
-  9 - output([t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([0]), 
+  9 - output([t.c1], [t.c2], [t.c3]), filter(nil), 
       access([t.c1], [t.c2], [t.c3]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t.c1]), range(MIN ; MAX)always true
@@ -2306,16 +2306,16 @@ Outputs & filters:
   2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   3 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  4 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  4 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t.c1], [t.c2], [t.c3]), filter(nil)
+  5 - output([t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([1])
   6 - output([t.c1], [t.c2], [t.c3]), filter(nil)
   7 - output([t.c1], [t.c2], [t.c3]), filter(nil), dop=1
   8 - output([t.c1], [t.c2], [t.c3]), filter(nil), 
       force partition granule, asc.
-  9 - output([t.c1], [t.c2], [t.c3]), filter(nil), startup_filter([1], [0]), 
+  9 - output([t.c1], [t.c2], [t.c3]), filter(nil), 
       access([t.c1], [t.c2], [t.c3]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t.c1]), range(MIN ; MAX)always true
@@ -6504,11 +6504,11 @@ SQL: select * from t1 where (1+ 1) in (2);
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -6606,11 +6606,11 @@ SQL: select * from t1 where (1+ 1) in (1);
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -9100,9 +9100,9 @@ SQL: SELECT (select max(t1.c1) from t1) as field from t1 group by field;
 ----------------------------------------------------------------
 |0 |HASH GROUP BY                   |           |1        |880 |
 |1 | NESTED-LOOP JOIN CARTESIAN     |           |500      |715 |
-|2 |  SUBPLAN SCAN                  |VIEW4      |1        |38  |
+|2 |  SUBPLAN SCAN                  |VIEW3      |1        |38  |
 |3 |   SCALAR GROUP BY              |           |1        |38  |
-|4 |    SUBPLAN SCAN                |VIEW5      |1        |37  |
+|4 |    SUBPLAN SCAN                |VIEW4      |1        |37  |
 |5 |     LIMIT                      |           |1        |37  |
 |6 |      PX COORDINATOR MERGE SORT |           |1        |37  |
 |7 |       EXCHANGE OUT DISTR       |:EX10000   |1        |37  |
@@ -9118,16 +9118,16 @@ SQL: SELECT (select max(t1.c1) from t1) as field from t1 group by field;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([VIEW4.max(t1.c1)]), filter(nil), 
-      group([VIEW4.max(t1.c1)]), agg_func(nil)
-  1 - output([VIEW4.max(t1.c1)]), filter(nil), 
+  0 - output([VIEW3.max(t1.c1)]), filter(nil), 
+      group([VIEW3.max(t1.c1)]), agg_func(nil)
+  1 - output([VIEW3.max(t1.c1)]), filter(nil), 
       conds(nil), nl_params_(nil), batch_join=false
-  2 - output([VIEW4.max(t1.c1)]), filter(nil), 
-      access([VIEW4.max(t1.c1)])
-  3 - output([T_FUN_MAX(VIEW5.c1)]), filter(nil), 
-      group(nil), agg_func([T_FUN_MAX(VIEW5.c1)])
-  4 - output([VIEW5.c1]), filter(nil), 
-      access([VIEW5.c1])
+  2 - output([VIEW3.max(t1.c1)]), filter(nil), 
+      access([VIEW3.max(t1.c1)])
+  3 - output([T_FUN_MAX(VIEW4.c1)]), filter(nil), 
+      group(nil), agg_func([T_FUN_MAX(VIEW4.c1)])
+  4 - output([VIEW4.c1]), filter(nil), 
+      access([VIEW4.c1])
   5 - output([t1.c1]), filter(nil), limit(1), offset(nil)
   6 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC])
   7 - output([t1.c1]), filter(nil), dop=1
@@ -9563,9 +9563,9 @@ Outputs & filters:
       access([t7.c1]), partitions(p0), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true
-  2 - output([VIEW1.c1]), filter(nil), 
+  2 - output([VIEW1.c1]), filter(nil), startup_filter([?]), 
       access([VIEW1.c1])
-  3 - output([t8.c1]), filter(nil), startup_filter([?]), 
+  3 - output([t8.c1]), filter(nil), 
       access([t8.c1]), partitions(p0), 
       is_index_back=false, 
       range_key([t8.c1]), range(MIN ; MAX)always true
@@ -10298,9 +10298,9 @@ Outputs & filters:
       access([t7.c1], [t7.c2]), partitions(p0), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true
-  2 - output([VIEW1.t8.c1]), filter(nil), 
+  2 - output([VIEW1.t8.c1]), filter(nil), startup_filter([?]), 
       access([VIEW1.t8.c1])
-  3 - output([t8.c1]), filter(nil), startup_filter([?]), 
+  3 - output([t8.c1]), filter(nil), 
       access([t8.c1]), partitions(p0), 
       is_index_back=false, 
       range_key([t8.c1]), range(MIN ; MAX)always true
@@ -11032,11 +11032,11 @@ SQL: select c1 from t15 where false;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t15.c1]), filter(nil)
+  0 - output([t15.c1]), filter(nil), startup_filter([0])
   1 - output([t15.c1]), filter(nil), dop=1
   2 - output([t15.c1]), filter(nil), 
       force partition granule, asc.
-  3 - output([t15.c1]), filter(nil), startup_filter([0]), 
+  3 - output([t15.c1]), filter(nil), 
       access([t15.c1]), partitions(p[0-3]), 
       is_index_back=false, 
       range_key([t15.__pk_increment], [t15.__pk_cluster_id], [t15.__pk_partition_id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -11062,13 +11062,13 @@ Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(?))]), filter(nil), 
       group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(?))])
-  1 - output([T_FUN_COUNT(?)]), filter(nil)
+  1 - output([T_FUN_COUNT(?)]), filter(nil), startup_filter([0])
   2 - output([T_FUN_COUNT(?)]), filter(nil), dop=1
   3 - output([T_FUN_COUNT(?)]), filter(nil), 
       group(nil), agg_func([T_FUN_COUNT(?)])
   4 - output([1]), filter(nil), 
       force partition granule, asc.
-  5 - output([1]), filter(nil), startup_filter([0]), 
+  5 - output([1]), filter(nil), 
       access([t15.__pk_increment]), partitions(p[0-3]), 
       is_index_back=false, 
       range_key([t15.__pk_increment], [t15.__pk_cluster_id], [t15.__pk_partition_id]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -11167,14 +11167,14 @@ SQL: select count(*) from t1 left outer join t2 using(c1) group by (t1.c1) havin
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([1]), filter(nil), sort_keys([t1.c1, DESC])
+  0 - output([1]), filter(nil), startup_filter([?]), sort_keys([t1.c1, DESC])
   1 - output([1], [t1.c1]), filter(nil), dop=1
-  2 - output([1], [t1.c1]), filter(nil), startup_filter([?]), 
+  2 - output([1], [t1.c1]), filter(nil), 
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   3 - output([t1.c1]), filter(nil), sort_keys([t1.c1, DESC]), local merge sort
   4 - output([t1.c1]), filter(nil), 
       affinitize, force partition granule, asc.
-  5 - output([t1.c1]), filter(nil), startup_filter([?]), 
+  5 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -11182,7 +11182,7 @@ Outputs & filters:
   7 - (#keys=1, [t2.c1]), output([t2.c1]), filter(nil), dop=1
   8 - output([t2.c1]), filter(nil), 
       force partition granule, asc.
-  9 - output([t2.c1]), filter(nil), startup_filter([?]), 
+  9 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -11782,12 +11782,12 @@ Outputs & filters:
 -------------------------------------
   0 - output([t7.c1], [t7.c2], [t8.c1], [t8.c2]), filter(nil), startup_filter([0]), 
       conds(nil), nl_params_(nil), batch_join=false
-  1 - output([t7.c1], [t7.c2]), filter(nil), startup_filter([0]), 
+  1 - output([t7.c1], [t7.c2]), filter(nil), 
       access([t7.c1], [t7.c2]), partitions(p0), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true
   2 - output([t8.c1], [t8.c2]), filter(nil)
-  3 - output([t8.c1], [t8.c2]), filter(nil), startup_filter([0]), 
+  3 - output([t8.c1], [t8.c2]), filter(nil), 
       access([t8.c1], [t8.c2]), partitions(p0), 
       is_index_back=false, 
       range_key([t8.c1]), range(MIN ; MAX)always true
@@ -13147,26 +13147,27 @@ Outputs & filters:
 
 SQL: select * from t4 join t7 on t4.c1 = t7.c1 where t4.c2 = 1; 
 
-====================================
-|ID|OPERATOR   |NAME|EST. ROWS|COST|
-------------------------------------
-|0 |MERGE JOIN |    |100      |286 |
-|1 | TABLE SCAN|t4  |100      |109 |
-|2 | TABLE SCAN|t7  |100      |90  |
-====================================
+================================================
+|ID|OPERATOR   |NAME            |EST. ROWS|COST|
+------------------------------------------------
+|0 |HASH JOIN  |                |100      |402 |
+|1 | TABLE SCAN|t7              |100      |90  |
+|2 | TABLE SCAN|t4(idx_t4_c2_c3)|100      |92  |
+================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t4.c1], [t4.c2], [t4.c3], [t7.c1], [t7.c2]), filter(nil), 
       equal_conds([t4.c1 = t7.c1]), other_conds(nil)
-  1 - output([t4.c1], [t4.c2], [t4.c3]), filter([t4.c2 = ?]), 
-      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0), 
-      is_index_back=false, filter_before_indexback[false], 
-      range_key([t4.c1], [t4.c2]), range(MIN,MIN ; MAX,MAX)always true
-  2 - output([t7.c1], [t7.c2]), filter(nil), 
+  1 - output([t7.c1], [t7.c2]), filter(nil), 
       access([t7.c1], [t7.c2]), partitions(p0), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true
+  2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
+      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t4.c2], [t4.c3], [t4.c1]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t4.c2 = ?])
 
 *************** Case 374(end)  ************** 
 
@@ -13260,26 +13261,27 @@ Outputs & filters:
 
 SQL: select * from t4 left join t7 on t4.c1 = t7.c1 where t4.c2 = 5; 
 
-=========================================
-|ID|OPERATOR        |NAME|EST. ROWS|COST|
------------------------------------------
-|0 |MERGE OUTER JOIN|    |100      |286 |
-|1 | TABLE SCAN     |t4  |100      |109 |
-|2 | TABLE SCAN     |t7  |100      |90  |
-=========================================
+==========================================================
+|ID|OPERATOR             |NAME            |EST. ROWS|COST|
+----------------------------------------------------------
+|0 |HASH RIGHT OUTER JOIN|                |100      |402 |
+|1 | TABLE SCAN          |t7              |100      |90  |
+|2 | TABLE SCAN          |t4(idx_t4_c2_c3)|100      |92  |
+==========================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t4.c1], [t4.c2], [t4.c3], [t7.c1], [t7.c2]), filter(nil), 
       equal_conds([t4.c1 = t7.c1]), other_conds(nil)
-  1 - output([t4.c1], [t4.c2], [t4.c3]), filter([t4.c2 = ?]), 
-      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0), 
-      is_index_back=false, filter_before_indexback[false], 
-      range_key([t4.c1], [t4.c2]), range(MIN,MIN ; MAX,MAX)always true
-  2 - output([t7.c1], [t7.c2]), filter(nil), 
+  1 - output([t7.c1], [t7.c2]), filter(nil), 
       access([t7.c1], [t7.c2]), partitions(p0), 
       is_index_back=false, 
       range_key([t7.c1]), range(MIN ; MAX)always true
+  2 - output([t4.c1], [t4.c2], [t4.c3]), filter(nil), 
+      access([t4.c1], [t4.c2], [t4.c3]), partitions(p0), 
+      is_index_back=false, 
+      range_key([t4.c2], [t4.c3], [t4.c1]), range(5,MIN,MIN ; 5,MAX,MAX), 
+      range_cond([t4.c2 = ?])
 
 *************** Case 378(end)  ************** 
 
@@ -13643,11 +13645,11 @@ SQL: select c1 from t1 having false;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil)
+  0 - output([t1.c1]), filter(nil), startup_filter([0])
   1 - output([t1.c1]), filter(nil), dop=1
   2 - output([t1.c1]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1]), filter(nil), startup_filter([0]), 
+  3 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -13740,11 +13742,11 @@ SQL: select c1 from t1 group by c1 having false;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil)
+  0 - output([t1.c1]), filter(nil), startup_filter([0])
   1 - output([t1.c1]), filter(nil), dop=1
   2 - output([t1.c1]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1]), filter(nil), startup_filter([0]), 
+  3 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -14184,11 +14186,11 @@ SQL: select c1 from t1 having 3<(select 2);
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil)
+  0 - output([t1.c1]), filter(nil), startup_filter([?])
   1 - output([t1.c1]), filter(nil), dop=1
   2 - output([t1.c1]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1]), filter(nil), startup_filter([?]), 
+  3 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -14239,7 +14241,7 @@ SQL: select c1 from t1 group by -1 having 3<(select 2);
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1]), filter(nil), 
+  0 - output([t1.c1]), filter(nil), startup_filter([?]), 
       group(nil), agg_func(nil)
   1 - output([t1.c1]), filter(nil)
   2 - output([t1.c1]), filter(nil), dop=1
@@ -14247,7 +14249,7 @@ Outputs & filters:
       group(nil), agg_func(nil)
   4 - output([t1.c1]), filter(nil), 
       force partition granule, asc.
-  5 - output([t1.c1]), filter(nil), startup_filter([?]), 
+  5 - output([t1.c1]), filter(nil), 
       access([t1.c1]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -16179,11 +16181,11 @@ SQL: select * from t1 where (1 = 1) or c1 = 1;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -16229,11 +16231,11 @@ SQL: select * from t1 where 1 or c1 = 1;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -16267,7 +16269,7 @@ Outputs & filters:
   2 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), dop=1
   3 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       force partition granule, asc.
-  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), startup_filter([1]), 
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), 
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -16276,7 +16278,7 @@ Outputs & filters:
   7 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   8 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  9 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  9 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -16328,8 +16330,8 @@ Outputs & filters:
       access([t2.c1], [t2.c2], [t2.c3]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true
-  11 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil)
-  12 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), startup_filter([0]), 
+  11 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), startup_filter([0])
+  12 - output([t3.c1], [t3.c2], [t3.c3]), filter(nil), 
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0), 
       is_index_back=false, 
       range_key([t3.c1]), range(MAX ; MIN)always false
@@ -21973,11 +21975,11 @@ SQL: select * from t17 where c1=1 and c2 is null and c3=1;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t17.c1], [t17.c2], [t17.c3]), filter(nil)
+  0 - output([t17.c1], [t17.c2], [t17.c3]), filter(nil), startup_filter([0])
   1 - output([t17.c2], [t17.c3], [t17.c1]), filter(nil), dop=1
   2 - output([t17.c2], [t17.c3], [t17.c1]), filter(nil), 
       force partition granule, asc.
-  3 - output([t17.c2], [t17.c3], [t17.c1]), filter(nil), startup_filter([0]), 
+  3 - output([t17.c2], [t17.c3], [t17.c1]), filter(nil), 
       access([t17.c2], [t17.c3], [t17.c1]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t17.c1], [t17.c2], [t17.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
@@ -22988,11 +22990,11 @@ SQL: select * from t1 where c1 is null;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([0]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -23067,11 +23069,11 @@ SQL: select * from t1 where c1 is not null;
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.c1], [t1.c2]), filter(nil)
+  0 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1])
   1 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   2 - output([t1.c1], [t1.c2]), filter(nil), 
       force partition granule, asc.
-  3 - output([t1.c1], [t1.c2]), filter(nil), startup_filter([1]), 
+  3 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
@@ -23460,18 +23462,18 @@ Outputs & filters:
 
 SQL: select c1 from t4 where c1 <=> null and c2 <=> null; 
 
-==================================
-|ID|OPERATOR |NAME|EST. ROWS|COST|
-----------------------------------
-|0 |TABLE GET|t4  |1        |52  |
-==================================
+===========================================
+|ID|OPERATOR |NAME         |EST. ROWS|COST|
+-------------------------------------------
+|0 |TABLE GET|t4(idx_t4_c2)|1        |52  |
+===========================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t4.c1]), filter(nil), 
       access([t4.c1]), partitions(p0), 
       is_index_back=false, 
-      range_key([t4.c1], [t4.c2]), range[NULL,NULL ; NULL,NULL], 
+      range_key([t4.c2], [t4.c1]), range[NULL,NULL ; NULL,NULL], 
       range_cond([t4.c1 <=> ?], [t4.c2 <=> ?])
 
 *************** Case 714(end)  ************** 
@@ -26418,23 +26420,22 @@ Outputs & filters:
 
 SQL: select * from t1 join t5 on t1.c1 = t5.c3 where t5.c3 > 0 and t5.c3 < 100 order by t5.c3 limit 100; 
 
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |LIMIT                           |        |100      |1610|
-|1 | PX COORDINATOR MERGE SORT      |        |100      |1596|
-|2 |  EXCHANGE OUT DISTR            |:EX10001|100      |1573|
-|3 |   LIMIT                        |        |100      |1573|
-|4 |    MERGE JOIN                  |        |100      |1559|
-|5 |     SORT                       |        |294      |608 |
-|6 |      PX PARTITION ITERATOR     |        |294      |197 |
-|7 |       TABLE SCAN               |t1      |294      |197 |
-|8 |     SORT                       |        |177      |827 |
-|9 |      EXCHANGE IN DISTR         |        |300      |348 |
-|10|       EXCHANGE OUT DISTR (PKEY)|:EX10000|300      |305 |
-|11|        PX PARTITION ITERATOR   |        |300      |305 |
-|12|         TABLE SCAN             |t5      |300      |305 |
-=============================================================
+===================================================================
+|ID|OPERATOR                         |NAME         |EST. ROWS|COST|
+-------------------------------------------------------------------
+|0 |LIMIT                            |             |100      |1910|
+|1 | PX COORDINATOR MERGE SORT       |             |100      |1896|
+|2 |  EXCHANGE OUT DISTR             |:EX10001     |100      |1872|
+|3 |   LIMIT                         |             |100      |1872|
+|4 |    MERGE JOIN                   |             |100      |1859|
+|5 |     EXCHANGE IN MERGE SORT DISTR|             |177      |1127|
+|6 |      EXCHANGE OUT DISTR (PKEY)  |:EX10000     |177      |1102|
+|7 |       PX PARTITION ITERATOR     |             |177      |1102|
+|8 |        TABLE SCAN               |t5(idx_t5_c3)|177      |1102|
+|9 |     SORT                        |             |294      |608 |
+|10|      PX PARTITION ITERATOR      |             |294      |197 |
+|11|       TABLE SCAN                |t1           |294      |197 |
+===================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -26444,23 +26445,23 @@ Outputs & filters:
   3 - output([t1.c1], [t1.c2], [t5.c1], [t5.c2], [t5.c3]), filter(nil), limit(100), offset(nil)
   4 - output([t1.c1], [t1.c2], [t5.c1], [t5.c2], [t5.c3]), filter(nil), 
       equal_conds([t1.c1 = t5.c3]), other_conds(nil)
-  5 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  6 - output([t1.c1], [t1.c2]), filter(nil), 
+  5 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), sort_keys([t5.c3, ASC]), Local Order
+  6 - (#keys=1, [t5.c3]), output([t5.c2], [t5.c3], [t5.c1]), filter(nil), dop=1
+  7 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
+      force partition granule, asc.
+  8 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
+      access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
+      is_index_back=true, 
+      range_key([t5.c3], [t5.c2]), range(0,MAX ; 100,MIN), 
+      range_cond([t5.c3 > ?], [t5.c3 < ?])
+  9 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
+  10 - output([t1.c1], [t1.c2]), filter(nil), 
       affinitize, force partition granule, asc.
-  7 - output([t1.c1], [t1.c2]), filter(nil), 
+  11 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(0 ; 100), 
       range_cond([t1.c1 < ?], [t1.c1 > ?])
-  8 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), sort_keys([t5.c3, ASC])
-  9 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
-  10 - (#keys=1, [t5.c3]), output([t5.c2], [t5.c3], [t5.c1]), filter(nil), dop=1
-  11 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
-      force partition granule, asc.
-  12 - output([t5.c2], [t5.c3], [t5.c1]), filter([t5.c3 > ?], [t5.c3 < ?]), 
-      access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
-      is_index_back=false, filter_before_indexback[false,false], 
-      range_key([t5.c2], [t5.c3]), range(MIN,MIN ; MAX,MAX)always true
 
 *************** Case 810(end)  ************** 
 
@@ -26468,23 +26469,22 @@ Outputs & filters:
 
 SQL: select * from t1 join t5 on t1.c1 = t5.c3 where t5.c3 > 0 and t5.c3 < 100 order by t5.c3 limit 10000; 
 
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |LIMIT                           |        |290      |2332|
-|1 | PX COORDINATOR MERGE SORT      |        |290      |2292|
-|2 |  EXCHANGE OUT DISTR            |:EX10001|290      |2223|
-|3 |   LIMIT                        |        |290      |2223|
-|4 |    MERGE JOIN                  |        |290      |2183|
-|5 |     SORT                       |        |500      |1074|
-|6 |      PX PARTITION ITERATOR     |        |500      |342 |
-|7 |       TABLE SCAN               |t1      |500      |342 |
-|8 |     SORT                       |        |300      |827 |
-|9 |      EXCHANGE IN DISTR         |        |300      |348 |
-|10|       EXCHANGE OUT DISTR (PKEY)|:EX10000|300      |305 |
-|11|        PX PARTITION ITERATOR   |        |300      |305 |
-|12|         TABLE SCAN             |t5      |300      |305 |
-=============================================================
+===================================================================
+|ID|OPERATOR                         |NAME         |EST. ROWS|COST|
+-------------------------------------------------------------------
+|0 |LIMIT                            |             |290      |3390|
+|1 | PX COORDINATOR MERGE SORT       |             |290      |3350|
+|2 |  EXCHANGE OUT DISTR             |:EX10001     |290      |3281|
+|3 |   LIMIT                         |             |290      |3281|
+|4 |    MERGE JOIN                   |             |290      |3241|
+|5 |     EXCHANGE IN MERGE SORT DISTR|             |300      |1885|
+|6 |      EXCHANGE OUT DISTR (PKEY)  |:EX10000     |300      |1842|
+|7 |       PX PARTITION ITERATOR     |             |300      |1842|
+|8 |        TABLE SCAN               |t5(idx_t5_c3)|300      |1842|
+|9 |     SORT                        |             |500      |1074|
+|10|      PX PARTITION ITERATOR      |             |500      |342 |
+|11|       TABLE SCAN                |t1           |500      |342 |
+===================================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -26494,23 +26494,23 @@ Outputs & filters:
   3 - output([t1.c1], [t1.c2], [t5.c1], [t5.c2], [t5.c3]), filter(nil), limit(10000), offset(nil)
   4 - output([t1.c1], [t1.c2], [t5.c1], [t5.c2], [t5.c3]), filter(nil), 
       equal_conds([t1.c1 = t5.c3]), other_conds(nil)
-  5 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
-  6 - output([t1.c1], [t1.c2]), filter(nil), 
+  5 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), sort_keys([t5.c3, ASC]), Local Order
+  6 - (#keys=1, [t5.c3]), output([t5.c2], [t5.c3], [t5.c1]), filter(nil), dop=1
+  7 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
+      force partition granule, asc.
+  8 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
+      access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
+      is_index_back=true, 
+      range_key([t5.c3], [t5.c2]), range(0,MAX ; 100,MIN), 
+      range_cond([t5.c3 > ?], [t5.c3 < ?])
+  9 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
+  10 - output([t1.c1], [t1.c2]), filter(nil), 
       affinitize, force partition granule, asc.
-  7 - output([t1.c1], [t1.c2]), filter(nil), 
+  11 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c1]), range(0 ; 100), 
       range_cond([t1.c1 < ?], [t1.c1 > ?])
-  8 - output([t5.c1], [t5.c2], [t5.c3]), filter(nil), sort_keys([t5.c3, ASC])
-  9 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil)
-  10 - (#keys=1, [t5.c3]), output([t5.c2], [t5.c3], [t5.c1]), filter(nil), dop=1
-  11 - output([t5.c2], [t5.c3], [t5.c1]), filter(nil), 
-      force partition granule, asc.
-  12 - output([t5.c2], [t5.c3], [t5.c1]), filter([t5.c3 > ?], [t5.c3 < ?]), 
-      access([t5.c2], [t5.c3], [t5.c1]), partitions(p[0-2]), 
-      is_index_back=false, filter_before_indexback[false,false], 
-      range_key([t5.c2], [t5.c3]), range(MIN,MIN ; MAX,MAX)always true
 
 *************** Case 811(end)  ************** 
 
@@ -26645,47 +26645,51 @@ SQL: select * from t1 where t1.c2 = 5 or exists (select 1 from t2 where t1.c1 = 
 ==================================================================
 |ID|OPERATOR                        |NAME         |EST. ROWS|COST|
 ------------------------------------------------------------------
-|0 |PX COORDINATOR                  |             |750      |1893|
-|1 | EXCHANGE OUT DISTR             |:EX10001     |750      |1786|
-|2 |  UNION ALL                     |             |750      |1786|
+|0 |UNION ALL                       |             |750      |1869|
+|1 | PX COORDINATOR                 |             |500      |389 |
+|2 |  EXCHANGE OUT DISTR            |:EX10000     |500      |342 |
 |3 |   PX PARTITION ITERATOR        |             |500      |342 |
 |4 |    TABLE SCAN                  |t1(idx_t1_c2)|500      |342 |
-|5 |   MERGE JOIN                   |             |251      |1158|
-|6 |    SORT                        |             |250      |729 |
-|7 |     PX PARTITION ITERATOR      |             |250      |384 |
-|8 |      TABLE SCAN                |t1           |250      |384 |
-|9 |    EXCHANGE IN MERGE SORT DISTR|             |300      |206 |
-|10|     EXCHANGE OUT DISTR (PKEY)  |:EX10000     |300      |192 |
-|11|      PX PARTITION ITERATOR     |             |300      |192 |
-|12|       TABLE SCAN               |t2           |300      |192 |
+|5 | PX COORDINATOR                 |             |251      |1194|
+|6 |  EXCHANGE OUT DISTR            |:EX20001     |251      |1158|
+|7 |   MERGE JOIN                   |             |251      |1158|
+|8 |    SORT                        |             |250      |729 |
+|9 |     PX PARTITION ITERATOR      |             |250      |384 |
+|10|      TABLE SCAN                |t1           |250      |384 |
+|11|    EXCHANGE IN MERGE SORT DISTR|             |300      |206 |
+|12|     EXCHANGE OUT DISTR (PKEY)  |:EX20000     |300      |192 |
+|13|      PX PARTITION ITERATOR     |             |300      |192 |
+|14|       TABLE SCAN               |t2           |300      |192 |
 ==================================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil)
-  1 - output([UNION([1])], [UNION([2])]), filter(nil), dop=1
-  2 - output([UNION([1])], [UNION([2])]), filter(nil)
+  1 - output([t1.c1], [t1.c2]), filter(nil)
+  2 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   3 - output([t1.c1], [t1.c2]), filter(nil), 
-      affinitize, partition wise, force partition granule, asc.
+      force partition granule, asc.
   4 - output([t1.c1], [t1.c2]), filter(nil), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, 
       range_key([t1.c2], [t1.c1]), range(5,MIN ; 5,MAX), 
       range_cond([t1.c2 = ?])
-  5 - output([t1.c1], [t1.c2]), filter(nil), 
-      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
-  6 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
+  5 - output([t1.c1], [t1.c2]), filter(nil)
+  6 - output([t1.c1], [t1.c2]), filter(nil), dop=1
   7 - output([t1.c1], [t1.c2]), filter(nil), 
-      affinitize, partition wise, force partition granule, asc.
-  8 - output([t1.c1], [t1.c2]), filter([lnnvl(t1.c2 = ?)]), 
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  8 - output([t1.c1], [t1.c2]), filter(nil), sort_keys([t1.c1, ASC]), local merge sort
+  9 - output([t1.c1], [t1.c2]), filter(nil), 
+      affinitize, force partition granule, asc.
+  10 - output([t1.c1], [t1.c2]), filter([lnnvl(t1.c2 = ?)]), 
       access([t1.c1], [t1.c2]), partitions(p[0-4]), 
       is_index_back=false, filter_before_indexback[false], 
       range_key([t1.c1]), range(MIN ; MAX)always true
-  9 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC]), Local Order
-  10 - (#keys=1, [t2.c1]), output([t2.c1]), filter(nil), dop=1
-  11 - output([t2.c1]), filter(nil), 
+  11 - output([t2.c1]), filter(nil), sort_keys([t2.c1, ASC]), Local Order
+  12 - (#keys=1, [t2.c1]), output([t2.c1]), filter(nil), dop=1
+  13 - output([t2.c1]), filter(nil), 
       force partition granule, asc.
-  12 - output([t2.c1]), filter(nil), 
+  14 - output([t2.c1]), filter(nil), 
       access([t2.c1]), partitions(p[0-2]), 
       is_index_back=false, 
       range_key([t2.c1]), range(MIN ; MAX)always true

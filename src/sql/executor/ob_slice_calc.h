@@ -135,6 +135,19 @@ public:
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> PartId2ArrayIdxMap;
   typedef common::hash::ObHashMap<int64_t, int64_t, common::hash::NoPthreadDefendMode> SubPartId2ArrayIdxMap;
 
+  class CalcTypeGuard {
+  public:
+    CalcTypeGuard(ObExecContext &exec_ctx) : exec_ctx_(exec_ctx)
+    {}
+    ~CalcTypeGuard()
+    {
+      exec_ctx_.set_partition_id_calc_type(CALC_NORMAL);
+    }
+
+  private:
+    ObExecContext &exec_ctx_;
+  };
+
   virtual ~ObRepartSliceIdxCalc()
   {}
   virtual int get_slice_idx(const common::ObNewRow& row, int64_t& slice_idx) override;

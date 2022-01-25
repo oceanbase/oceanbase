@@ -50,6 +50,7 @@
 #include "ob_expr_like.h"
 #include "ob_expr_lower.h"
 #include "ob_expr_md5.h"
+#include "ob_expr_crc32.h"
 #include "ob_expr_mid.h"
 #include "ob_expr_minus.h"
 #include "ob_expr_mod.h"
@@ -183,6 +184,14 @@
 #include "ob_expr_to_single_byte.h"
 #include "ob_expr_to_multi_byte.h"
 #include "ob_expr_convert_tz.h"
+#include "ob_expr_degrees.h"
+#include "ob_expr_weight_string.h"
+#include "ob_expr_any_value.h"
+#include "ob_expr_validate_password_strength.h"
+#include "ob_expr_benchmark.h"
+#include "ob_expr_uuid_short.h"
+#include "ob_expr_to_base64.h"
+#include "ob_expr_from_base64.h"
 
 namespace oceanbase {
 using namespace common;
@@ -668,9 +677,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprPeriodAdd::calc_periodadd,          /* 409 */
     NULL,                                     /* 410 */
     NULL,                                     /* 411 */
-    NULL,                                     /* 412 */
+    ObExprAnyValue::eval_any_value,           /* 412 */
     NULL,                                     /* 413 */
-    NULL,                                     /* 414 */
+    ObExprDegrees::calc_degrees_expr,         /* 414 */
     NULL,                                     /* 415 */
     NULL,                                     /* 416 */
     NULL,                                     /* 417 */
@@ -697,15 +706,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     NULL,                                     /* 438 */
     NULL,                                     /* 439 */
     NULL,                                     /* 440 */
-    NULL,                                     /* 441 */
-    NULL,                                     /* 442 */
-    NULL,                                     /* 443 */
+    ObExprTimestamp::calc_timestamp1,         /* 441 */
+    ObExprTimestamp::calc_timestamp2,         /* 442 */
+    ObExprValidatePasswordStrength::eval_password_strength, /* 443 */
     NULL,                                     /* 444 */
     NULL,                                     /* 445 */
     NULL,                                     /* 446 */
     NULL,                                     /* 447 */
-    NULL,                                     /* 448 */
-    NULL,                                     /* 449 */
+    ObExprUuidShort::eval_uuid_short,         /* 448 */
+    ObExprBenchmark::eval_benchmark,          /* 449 */
     ObExprExportSet::eval_export_set,         /* 450 */
     ObExprInet6Aton::calc_inet6_aton,         /* 451 */
     ObExprIsIpv4::calc_is_ipv4,               /* 452 */
@@ -714,7 +723,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
     ObExprIsIpv4Compat::calc_is_ipv4_compat,  /* 455 */
     ObExprInetAton::calc_inet_aton,           /* 456 */
     ObExprInet6Ntoa::calc_inet6_ntoa,         /* 457 */
-    ObExprConvertTZ::eval_convert_tz,         /* 458 */
+    ObExprWeightString::eval_weight_string,   /* 458 */
+    ObExprConvertTZ::eval_convert_tz,         /* 459 */
+    ObExprCrc32::calc_crc32_expr,             /* 460 */
+    ObExprToBase64::eval_to_base64,           /* 461 */
+    ObExprFromBase64::eval_from_base64        /* 462 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL, g_expr_eval_functions, ARRAYSIZEOF(g_expr_eval_functions));

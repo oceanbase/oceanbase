@@ -16,6 +16,7 @@
 #include "share/ob_define.h"
 #include "lib/restore/ob_storage_path.h"
 #include "lib/thread/ob_dynamic_thread_pool.h"
+#include "blocksstable/ob_data_buffer.h"
 #include "storage/ob_i_partition_base_data_reader.h"
 
 namespace oceanbase {

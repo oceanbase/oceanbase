@@ -960,6 +960,7 @@ ObTableLocation& ObTableLocation::operator=(const ObTableLocation& other)
     use_calc_part_by_rowid_ = other.use_calc_part_by_rowid_;
     is_valid_range_columns_part_range_ = other.is_valid_range_columns_part_range_;
     is_valid_range_columns_subpart_range_ = other.is_valid_range_columns_subpart_range_;
+    report_err_for_pruned_partition_not_exist_ = other.report_err_for_pruned_partition_not_exist_;
     for (int64_t i = 0; OB_SUCC(ret) && i < other.list_part_array_.count(); i++) {
       ObListPartMapValue value;
       value.part_id_ = other.list_part_array_.at(i).part_id_;
@@ -1214,6 +1215,7 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
     is_contain_mv_ = stmt.get_query_ctx()->is_contain_mv_;
     if (stmt.is_insert_stmt()) {
       set_simple_insert_or_replace();
+      report_err_for_pruned_partition_not_exist_ = true;
     }
   }
   if (OB_FAIL(ret)) {
@@ -1396,6 +1398,9 @@ int ObTableLocation::init(const ObTableSchema* table_schema, ObDMLStmt& stmt, Ob
   is_contain_mv_ = stmt.get_query_ctx()->is_contain_mv_;
   is_partitioned_ = true;
   // direction_ = direction;
+  if (stmt.is_insert_stmt()) {
+    report_err_for_pruned_partition_not_exist_ = true;
+  }
 
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
@@ -4055,13 +4060,12 @@ int ObTableLocation::calc_partition_id_by_func_value(ObExprCtx& expr_ctx, common
     } else {
     }
   } else {
-    bool insert_or_replace = is_simple_insert_or_replace();
     if (NULL == part_ids) {
       if (OB_FAIL(ObPartMgrAD::get_part(part_mgr,
               ref_table_id_,
               PARTITION_LEVEL_ONE,
               part_type_,
-              insert_or_replace,
+              report_err_for_pruned_partition_not_exist_,
               -1,
               result,
               partition_ids,
@@ -4074,7 +4078,7 @@ int ObTableLocation::calc_partition_id_by_func_value(ObExprCtx& expr_ctx, common
                 ref_table_id_,
                 PARTITION_LEVEL_TWO,
                 subpart_type_,
-                insert_or_replace,
+                report_err_for_pruned_partition_not_exist_,
                 part_ids->at(idx),
                 result,
                 partition_ids,
@@ -4138,6 +4142,7 @@ int ObTableLocation::calc_partition_ids_by_rowkey(ObExecContext& exec_ctx, ObPar
 int ObTableLocation::get_list_part(
     const ObNewRow& row, bool insert_or_replace, common::ObIArray<int64_t>& partition_ids, int64_t* part_idx) const
 {
+  UNUSED(insert_or_replace);
   int ret = OB_SUCCESS;
   ObListPartMapValue* value = NULL;
   ObListPartMapKey key;
@@ -4146,7 +4151,7 @@ int ObTableLocation::get_list_part(
   if (ret == OB_HASH_NOT_EXIST) {
     LOG_TRACE("get list part not exist", K(key));
     if (list_default_part_id_ == OB_INVALID_ID) {
-      if (insert_or_replace) {
+      if (report_err_for_pruned_partition_not_exist_) {
         ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       } else {
         ret = OB_SUCCESS;
@@ -4213,6 +4218,7 @@ int ObTableLocation::get_hash_part(
 int ObTableLocation::get_range_part(
     const ObNewRow& row, bool insert_or_replace, common::ObIArray<int64_t>& partition_ids, int64_t* part_idx) const
 {
+  UNUSED(insert_or_replace);
   int ret = OB_SUCCESS;
   int64_t high = partition_num_ - 1;
   int64_t low = 0;
@@ -4224,7 +4230,7 @@ int ObTableLocation::get_range_part(
     LOG_WARN("get range part with optimization should have 1 column", K(ret), K(row.get_count()));
   } else if (cur_obj.is_null()) {
     // For Insert or replace stmt, if no partition, report error
-    if (!range_obj_arr_[high].is_max_value() && insert_or_replace) {
+    if (!range_obj_arr_[high].is_max_value() && report_err_for_pruned_partition_not_exist_) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
     }
@@ -4243,7 +4249,7 @@ int ObTableLocation::get_range_part(
       if (!range_obj_arr_[res].is_max_value() &&
           !ObObjCmpFuncs::compare_oper_nullsafe(
               range_obj_arr_[res], cur_obj, range_obj_arr_[mid].get_collation_type(), CO_GT)) {
-        if (insert_or_replace) {  // For Insert or replace stmt, if no partition, report error
+        if (report_err_for_pruned_partition_not_exist_) {
           ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
           LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
         }
@@ -4312,11 +4318,11 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
         part_projector_.project_part_row(PARTITION_LEVEL_ONE, row);
         if (related_part_expr_idx_ == OB_INVALID_INDEX) {
           if (use_list_part_map_) {
-            if (OB_FAIL(get_list_part(row, insert_or_replace, partition_ids, &part_idx))) {
+            if (OB_FAIL(get_list_part(row, report_err_for_pruned_partition_not_exist_, partition_ids, &part_idx))) {
               LOG_WARN("fail to get list part", K(row), K(ret));
             }
           } else if (use_range_part_opt_) {
-            if (OB_FAIL(get_range_part(row, insert_or_replace, partition_ids, &part_idx))) {
+            if (OB_FAIL(get_range_part(row, report_err_for_pruned_partition_not_exist_, partition_ids, &part_idx))) {
               LOG_WARN("fail to get range part", K(row), K(ret));
             }
           } else {
@@ -4324,7 +4330,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
                     ref_table_id_,
                     PARTITION_LEVEL_ONE,
                     part_type_,
-                    insert_or_replace,
+                    report_err_for_pruned_partition_not_exist_,
                     -1,
                     row,
                     partition_ids,
@@ -4343,11 +4349,12 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
             LOG_WARN("Failed to calc hash expr", K(ret), K(row), K(ref_table_id_));
           } else {
             if (use_list_part_map_) {
-              if (OB_FAIL(get_list_part(func_result, insert_or_replace, partition_ids, &part_idx))) {
+              if (OB_FAIL(get_list_part(
+                      func_result, report_err_for_pruned_partition_not_exist_, partition_ids, &part_idx))) {
                 LOG_WARN("fail to get list part", K(ret));
               }
             } else if (use_range_part_opt_) {
-              if (OB_FAIL(get_range_part(row, insert_or_replace, partition_ids, &part_idx))) {
+              if (OB_FAIL(get_range_part(row, report_err_for_pruned_partition_not_exist_, partition_ids, &part_idx))) {
                 LOG_WARN("fail to get range part", K(ret));
               }
             } else {
@@ -4355,7 +4362,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
                       ref_table_id_,
                       PARTITION_LEVEL_ONE,
                       part_type_,
-                      insert_or_replace,
+                      report_err_for_pruned_partition_not_exist_,
                       -1,
                       func_result,
                       partition_ids,
@@ -4384,7 +4391,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
                 ref_table_id_,
                 PARTITION_LEVEL_TWO,
                 subpart_type_,
-                insert_or_replace,
+                report_err_for_pruned_partition_not_exist_,
                 part_ids->at(idx),
                 row,
                 partition_ids,
@@ -4406,7 +4413,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext& exec_ctx, common::O
     if (OB_FAIL(ret) || range_columns) {
     } else {
       if (use_hash_part_opt_) {
-        if (OB_FAIL(get_hash_part(func_result, insert_or_replace, partition_ids, &part_idx))) {
+        if (OB_FAIL(get_hash_part(func_result, report_err_for_pruned_partition_not_exist_, partition_ids, &part_idx))) {
           LOG_WARN("fail to get hash part", K(ret));
         }
       } else if (OB_FAIL(calc_partition_id_by_func_value(

@@ -286,6 +286,10 @@ public:
   int64_t get_partition_table_updater_user_queue_size() const;
   int64_t get_partition_table_updater_sys_queue_size() const;
   int64_t get_partition_table_updater_core_queue_size() const;
+  ObPartitionLocationUpdater &get_partition_location_updater()
+  {
+    return partition_location_updater_;
+  }
 
   int get_all_partition_status(int64_t& inactive_num, int64_t& total_num) const;
   int get_root_server_status(obrpc::ObGetRootserverRoleResult& get_role_result);
@@ -300,6 +304,7 @@ public:
   int submit_async_refresh_schema_task(const uint64_t tenant_id, const int64_t schema_version);
   int renew_in_zone_hb(const share::ObInZoneHbRequest& arg, share::ObInZoneHbResponse& result);
   int pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg& arg);
+  int submit_retry_ghost_index_task(const uint64_t index_id);
 
 private:
   int register_self();

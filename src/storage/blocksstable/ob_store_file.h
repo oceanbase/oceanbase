@@ -17,7 +17,6 @@
 #include "lib/atomic/ob_atomic.h"
 #include "ob_block_sstable_struct.h"
 #include "ob_local_file_system.h"
-#include "ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_micro_block_index_mgr.h"
 #include "share/ob_unit_getter.h"
 #include "share/ob_thread_mgr.h"

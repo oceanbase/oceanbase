@@ -192,6 +192,7 @@ private:
       uint64_t& candidate_method);
   int allocate_exchange_for_union_all(AllocExchContext* ctx);
   int check_if_match_partition_wise(bool& is_match);
+  int allocate_startup_expr_post() override;
 
   ObJoinType convert_set_op()
   {

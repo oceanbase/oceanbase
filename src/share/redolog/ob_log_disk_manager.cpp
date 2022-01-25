@@ -308,9 +308,16 @@ int ObLogDiskManager::sync_system_fd(const int64_t file_id, const int64_t disk_i
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, "unexpected scenario", K(ret), K(disk_id), K(file_id), K(fd_info), K(disk_slots_[disk_id]));
       }
-    } else if (enable_write && !is_tmp) {  // clog write, may reuse old log file
-      if (OB_FAIL(disk_slots_[disk_id].get_file_pool()->get_fd((uint32_t)file_id, tmp_fd))) {
-        COMMON_LOG(ERROR, "file pool get fd fail", K(ret), K(file_id));
+    } else if (enable_write && !is_tmp) {
+      if (ObLogWritePoolType::CLOG_WRITE_POOL == disk_slots_[disk_id].get_file_pool()->get_pool_type()) {
+        // clog write, may reuse old log file
+        if (OB_FAIL(disk_slots_[disk_id].get_file_pool()->get_fd((uint32_t)file_id, tmp_fd))) {
+          COMMON_LOG(ERROR, "file pool get fd fail", K(ret), K(file_id));
+        }
+      } else {
+        if (OB_FAIL(inner_open_fd(disk_id, file_id, OPEN_FLAG_WRITE, is_tmp, tmp_fd))) {
+          COMMON_LOG(ERROR, "open fd fail", K(ret), K(enable_write), K(is_tmp));
+        }
       }
     } else if (enable_write && is_tmp) {  // ilog write tmp file
       if (OB_FAIL(inner_open_fd(disk_id, file_id, OPEN_FLAG_WRITE, is_tmp, tmp_fd))) {
@@ -903,9 +910,7 @@ int ObLogDiskManager::copy_file_content(
   int64_t read_len = 0;
   int64_t write_len = 0;
   int64_t offset = 0;
-  // CLOG and ILOG DIO aligned size are all CLOG_DIO_ALIGN_SIZE
-  // SLOG DIO aligned size is DIO_ALIGN_SIZE
-  int64_t align_size = SLOG_WRITE_POOL == pool_type_ ? DIO_ALIGN_SIZE : CLOG_DIO_ALIGN_SIZE;
+  const int64_t align_size = DIO_ALIGN_SIZE;
 
   if (!src_fd.is_valid() || file_offset < 0) {
     ret = OB_INVALID_ARGUMENT;

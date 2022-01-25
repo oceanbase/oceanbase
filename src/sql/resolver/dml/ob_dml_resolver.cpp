@@ -2748,7 +2748,7 @@ int ObDMLResolver::resolve_is_expr(ObRawExpr*& expr)
         if (OB_FAIL(flag_expr->formalize(session_info_))) {
           LOG_WARN("formalize expr failed", K(ret));
         }
-      } else if (column_item->is_auto_increment()) {
+      } else if (column_item->is_auto_increment() && T_NULL == is_expr->get_param_expr(1)->get_expr_type()) {
         if (OB_FAIL(resolve_autoincrement_column_is_null(expr))) {
           LOG_WARN("fail to process autoincrement column is null", K(ret));
         } else {
@@ -2994,6 +2994,7 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode& node, ObIArray<Ob
     ObExprResolveContext ctx(*params_.expr_factory_, session_info_->get_timezone_info(), OB_NAME_CASE_INVALID);
     ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
     ctx.query_ctx_ = params_.query_ctx_;
+    ctx.session_info_ = params_.session_info_;
     ObRawExprCanonicalizerImpl canonicalizer(ctx);
     if (OB_FAIL(resolve_sql_expr(node, expr))) {
       LOG_WARN("resolve sql expr failed", K(ret));

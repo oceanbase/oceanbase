@@ -397,6 +397,8 @@ int ObPartitionService::init(const blocksstable::ObStorageEnv& env, const ObAddr
     LOG_WARN("failed to init ObTableMgr", K(ret));
   } else if (OB_FAIL(ObBuildIndexScheduler::get_instance().init())) {
     STORAGE_LOG(WARN, "fail to init ObBuildIndexScheduler", K(ret));
+  } else if (OB_FAIL(ObRetryGhostIndexScheduler::get_instance().init())) {
+    LOG_WARN("fail to init ObRetryGhostIndexScheduler", K(ret));
   } else if (OB_FAIL(ObFreezeInfoMgrWrapper::init(sql_proxy, remote_sql_proxy))) {
     STORAGE_LOG(WARN, "fail to init ObFreezeInfoSnapshotMgr", K(ret));
   } else if (OB_FAIL(garbage_collector_.init(this, txs_, schema_service, GCTX.srv_rpc_proxy_, &sql_proxy, self_addr))) {
@@ -1433,45 +1435,7 @@ int ObPartitionService::add_new_partition(ObIPartitionGroupGuard& partition_guar
   return ret;
 }
 
-int ObPartitionService::log_new_partition(ObIPartitionGroup* partition, const int64_t publish_version,
-    const int64_t restore_snapshot_version, const uint64_t last_restore_log_id, const int64_t last_restore_log_ts)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "partition service is not initialized", K(ret));
-  } else if (OB_ISNULL(partition) || publish_version < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(partition), K(publish_version), K(ret));
-  } else {
-    const ObPartitionKey pkey = partition->get_partition_key();
-    if (OB_FAIL(txs_->add_partition(pkey))) {
-      STORAGE_LOG(WARN, "add new partition to transaction service failed", K(ret), K(pkey));
-    } else if (OB_FAIL(txs_->update_publish_version(pkey, publish_version, true))) {
-      STORAGE_LOG(WARN, "update publish version failed", K(pkey), K(publish_version));
-    } else if (OB_FAIL(txs_->update_restore_replay_info(
-                   pkey, restore_snapshot_version, last_restore_log_id, last_restore_log_ts))) {
-      STORAGE_LOG(WARN,
-          "failed to update_restore_replay_info",
-          K(restore_snapshot_version),
-          K(last_restore_log_id),
-          K(last_restore_log_ts),
-          K(ret));
-    } else if (OB_FAIL(rp_eg_->add_partition(pkey))) {
-      STORAGE_LOG(WARN, "replay engine add partition failed", K(ret), K(pkey));
-    } else if (OB_FAIL(partition->set_valid())) {
-      STORAGE_LOG(WARN, "partition set valid failed", K(pkey), K(ret));
-    } else if (OB_FAIL(partition->get_pg_storage().restore_mem_trans_table())) {
-      LOG_WARN("failed to restore_mem_trans_table", K(pkey), K(ret));
-    } else {
-      partition->get_pg_storage().online();
-      STORAGE_LOG(INFO, "log new partition success", K(pkey));
-    }
-  }
-  return ret;
-}
-
-int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup*>& partitions)
+int ObPartitionService::add_partitions_to_mgr(common::ObIArray<ObIPartitionGroup *> &partitions)
 {
   int ret = OB_SUCCESS;
   int64_t added_pg_count = 0;
@@ -2068,7 +2032,7 @@ int ObPartitionService::replay_add_partition_to_pg_clog(
         ret = E(EventTable::EN_REPLAY_ADD_PARTITION_TO_PG_CLOG_AFTER_CREATE_SSTABLE) OB_SUCCESS;
 #endif
         if (OB_FAIL(ret)) {
-          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret), K(log));
+          LOG_WARN("failed to replay add partition to pg clog after create sstable", K(ret));
         } else if (sstables_handle.get_count() > 0) {
           if (OB_FAIL(pg->create_pg_partition(arg.partition_key_,
                   data_info.get_publish_version(),
@@ -3308,6 +3272,8 @@ int ObPartitionService::online_partition(const ObPartitionKey& pkey, const int64
   } else if (OB_ISNULL(pg = guard.get_partition_group())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get partition failed", K(pkey), K(ret));
+  } else if (!pg->is_valid() && OB_FAIL(pg->set_valid())) {
+    STORAGE_LOG(WARN, "partition set valid failed", K(pkey), K(ret));
   } else {
     // set a mark for the partiion, and cancel the mark after clog is tracked within 500ms
     (void)guard.get_partition_group()->set_migrating_flag(true);
@@ -3820,6 +3786,18 @@ int ObPartitionService::delete_rows(const transaction::ObTransDesc& trans_desc, 
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
+    //@NOTICE:(yuchen.wyc)为了规避外键自引用带来的防御检查不过的问题:
+    //由于目前delete语句的TableScan操作使用的快照点是语句级，无法看到本语句的最新修改，
+    //因此，对于外键自引用的级联删除时，同一行可能会被自己和外键级联操作多次删除，
+    //这个问题目前没有出现语义上的问题，但会导致delete的防御检查报错,详见：
+    // https://aone.alibaba-inc.com/issue/36022956
+    // DML的防御检查读使用的默认快照点是可以读到本语最新修改，因此对于该场景会出现两次读到的数据不一致的问题
+    //正确的做法是从外键的删除操作上规避掉多次删除同一行的情况，这要求delete的TableScan能够看到自己的最新修改
+    //由于担心这个修改的影响较大，3.2暂时从防御检查上规避掉这个问题，
+    // 4.0上delete改为读本语句的最新修改来避免同一行的多次删除
+    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
+      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
+    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_rows(
         ctx_guard.get_store_ctx(), dml_param, column_ids, row_iter, affected_rows);
@@ -3841,6 +3819,18 @@ int ObPartitionService::delete_row(const ObTransDesc& trans_desc, const ObDMLBas
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
+    //@NOTICE:(yuchen.wyc)为了规避外键自引用带来的防御检查不过的问题:
+    //由于目前delete语句的TableScan操作使用的快照点是语句级，无法看到本语句的最新修改，
+    //因此，对于外键自引用的级联删除时，同一行可能会被自己和外键级联操作多次删除，
+    //这个问题目前没有出现语义上的问题，但会导致delete的防御检查报错,详见：
+    // https://aone.alibaba-inc.com/issue/36022956
+    // DML的防御检查读使用的默认快照点是可以读到本语最新修改，因此对于该场景会出现两次读到的数据不一致的问题
+    //正确的做法是从外键的删除操作上规避掉多次删除同一行的情况，这要求delete的TableScan能够看到自己的最新修改
+    //由于担心这个修改的影响较大，3.2暂时从防御检查上规避掉这个问题，
+    // 4.0上delete改为读本语句的最新修改来避免同一行的多次删除
+    if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
+      const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
+    }
     ctx_guard.get_store_ctx().trans_id_ = trans_desc.get_trans_id();
     ret = guard.get_partition_group()->delete_row(ctx_guard.get_store_ctx(), dml_param, column_ids, row);
     AUDIT_PARTITION_V2(ctx_guard.get_store_ctx().mem_ctx_, PART_AUDIT_DELETE_ROW, 1);
@@ -10573,7 +10563,7 @@ int ObPartitionService::check_can_start_service(
         is_all_unreachable_partition = false;
         // if the partition is more than 10s behind, the server cannot provide
         // external services during the restart process
-        if (timestamp <= ObTimeUtility::current_time() - 10 * 1000 * 1000) {
+        if (timestamp <= ObTimeUtility::current_time() - 30 * 1000 * 1000) {
           can_start_service = false;
         }
         if (timestamp < tmp_safe_weak_read_snapshot) {
@@ -11614,6 +11604,9 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     common::ObMemberList member_list;
     const uint64_t fetch_tenant_id =
         is_inner_table(index_table_id) ? OB_SYS_TENANT_ID : extract_tenant_id(index_table_id);
+    const bool need_fail_list = false;
+    const int64_t cluster_id = OB_INVALID_ID;  // local cluster
+    const bool filter_flag_replica = false;
     if (OB_FAIL(schema_service_->get_tenant_full_schema_guard(fetch_tenant_id, schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(fetch_tenant_id));
     } else if (OB_FAIL(schema_guard.get_table_schema(index_table_id, index_schema))) {
@@ -11635,7 +11628,12 @@ int ObPartitionService::check_all_replica_major_sstable_exist(
     } else if (OB_ISNULL(GCTX.pt_operator_)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "error unexpected, pt operator must not be NULL", K(ret));
-    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(), pkey.get_partition_id(), partition_info))) {
+    } else if (OB_FAIL(GCTX.pt_operator_->get(pkey.get_table_id(),
+                   pkey.get_partition_id(),
+                   partition_info,
+                   need_fail_list,
+                   cluster_id,
+                   filter_flag_replica))) {
       STORAGE_LOG(WARN, "fail to get partition info", K(ret), K(pkey));
     } else if (OB_FAIL(partition_info.filter(filter))) {
       STORAGE_LOG(WARN, "fail to filter partition", K(ret));
@@ -12010,8 +12008,8 @@ void ObPartitionMigrationDataStatics::reset()
   reuse_count_ = 0;
   partition_count_ = 0;
   finish_partition_count_ = 0;
-  // input_bytes_;
-  // output_bytes_;
+  input_bytes_ = 0;
+  output_bytes_ = 0;
 }
 
 ObRestoreInfo::ObRestoreInfo()
@@ -13422,7 +13420,7 @@ int ObPartitionService::get_primary_cluster_migrate_src(const common::ObPartitio
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log service should not be NULL", K(ret), K(pkey));
     } else if (FALSE_IT(is_restore = partition->get_pg_storage().is_restore())) {
-    } else if (OB_FAIL(log_service->get_clog_parent(src_info.src_addr_, src_info.cluster_id_))) {
+    } else if (OB_FAIL(log_service->get_clog_parent_for_migration(src_info.src_addr_, src_info.cluster_id_))) {
       if (OB_NEED_RETRY == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -13499,7 +13497,7 @@ int ObPartitionService::get_standby_cluster_migrate_src(const common::ObPartitio
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log service should not be NULL", K(ret), K(pkey));
     } else if (ObRole::STANDBY_LEADER == role) {
-      if (OB_FAIL(log_service->get_clog_parent(src_info.src_addr_, src_info.cluster_id_))) {
+      if (OB_FAIL(log_service->get_clog_parent_for_migration(src_info.src_addr_, src_info.cluster_id_))) {
         if (OB_NEED_RETRY == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -13508,7 +13506,7 @@ int ObPartitionService::get_standby_cluster_migrate_src(const common::ObPartitio
       } else if (OB_FAIL(add_migrate_src(src_info, src_set, src_array))) {
         LOG_WARN("failed to add migrate src", K(ret), K(role), K(src_info), K(pkey));
       } else {
-        LOG_INFO("get_clog_parent", K(src_info));
+        LOG_INFO("get_clog_parent_for_migration", K(src_info));
         src_info.reset();
       }
     }
@@ -14088,6 +14086,70 @@ int ObPartitionService::check_standby_cluster_schema_condition(const ObPartition
             K(tenant_schema_version));
       } else { /*do nothing*/
       }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionService::standby_cut_data_batch(const obrpc::ObStandbyCutDataBatchTaskArg& arg)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObReplicaOpArg> task_list;
+  const ObReplicaOpType type = RESTORE_STANDBY_OP;
+  int64_t flashback_ts = 0;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "The ObPartitionService has not been inited, ", K(ret));
+  } else if (OB_UNLIKELY(!is_running_)) {
+    ret = OB_CANCELED;
+    STORAGE_LOG(WARN, "The service is not running, ", K(ret));
+  } else if (OB_UNLIKELY(!is_scan_disk_finished())) {
+    ret = OB_EAGAIN;
+    STORAGE_LOG(WARN, "rebooting, replica op not allow", K(ret));
+  } else if (!arg.is_valid() || arg.arg_array_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "failed args", K(ret), K(arg));
+  } else if (OB_FAIL(task_list.reserve(arg.arg_array_.count()))) {
+    STORAGE_LOG(WARN, "failed to reserve task list", K(ret));
+  } else if (FALSE_IT(flashback_ts = arg.flashback_ts_)) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.arg_array_.count(); ++i) {
+      const obrpc::ObStandbyCutDataTaskArg& single_arg = arg.arg_array_.at(i);
+      ObReplicaOpArg replica_op_arg;
+      replica_op_arg.data_src_ = single_arg.dst_;
+      replica_op_arg.dst_ = single_arg.dst_;
+      replica_op_arg.key_ = single_arg.pkey_;
+      replica_op_arg.priority_ = ObReplicaOpPriority::PRIO_LOW;
+      replica_op_arg.cluster_id_ = GCONF.cluster_id;
+      replica_op_arg.type_ = type;
+      replica_op_arg.switch_epoch_ = GCTX.get_switch_epoch2();
+      replica_op_arg.phy_restore_arg_.restore_info_.restore_snapshot_version_ = flashback_ts;
+      ObIPartitionGroupGuard guard;
+      ObIPartitionGroup* partition = NULL;
+      ObReplicaRestoreStatus restore_status;
+      if (OB_FAIL(get_partition(single_arg.pkey_, guard))) {
+        STORAGE_LOG(WARN, "get partition failed", K(single_arg), K(ret));
+      } else if (OB_ISNULL(guard.get_partition_group())) {
+        ret = OB_ENTRY_NOT_EXIST;
+        STORAGE_LOG(WARN, "partition not exist, maybe migrate out", K(single_arg), K(ret));
+      } else if (OB_ISNULL(partition = guard.get_partition_group())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "partition should not be NULL", K(ret), K(single_arg));
+      } else if (FALSE_IT(restore_status = partition->get_pg_storage().get_restore_status())) {
+      } else if (ObReplicaRestoreStatus::REPLICA_RESTORE_STANDBY_CUT != restore_status) {
+        LOG_INFO("partition restore status is not cut data, skip it", K(ret), K(single_arg));
+      } else if (OB_FAIL(task_list.push_back(replica_op_arg))) {
+        LOG_WARN("failed to push replica op arg into array", K(ret), K(replica_op_arg));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (task_list.empty()) {
+      LOG_INFO("has no replica need cut data, skip", K(ret), K(arg));
+    } else if (OB_FAIL(ObPartGroupMigrator::get_instance().schedule(task_list, arg.trace_id_))) {
+      STORAGE_LOG(WARN, "fail to schedule migrate task.", K(arg), K(ret));
     }
   }
   return ret;

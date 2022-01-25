@@ -197,7 +197,27 @@ int ObRelativeTable::get_rowkey_column_ids(ObIArray<ObColDesc>& column_ids) cons
   return ret;
 }
 
-int ObRelativeTable::get_column_data_length(const uint64_t column_id, int32_t& len) const
+int ObRelativeTable::get_rowkey_column_ids(ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), KPC(this));
+  } else {
+    if (!use_schema_param_) {
+      if (OB_FAIL(schema_->get_rowkey_column_ids(column_ids))) {
+        LOG_WARN("get rowkey column ids from schema fail", K(ret));
+      }
+    } else {
+      if (OB_FAIL(schema_param_->get_rowkey_column_ids(column_ids))) {
+        LOG_WARN("get rowkey column ids from param fail", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRelativeTable::get_column_data_length(const uint64_t column_id, int32_t &len) const
 {
   int ret = OB_SUCCESS;
   if (!is_valid()) {
@@ -250,7 +270,7 @@ int ObRelativeTable::is_rowkey_column_id(const uint64_t column_id, bool& is_rowk
   return ret;
 }
 
-int ObRelativeTable::is_column_nullable(const uint64_t column_id, bool& is_nullable) const
+int ObRelativeTable::is_column_nullable_for_write(const uint64_t column_id, bool& is_nullable) const
 {
   int ret = OB_SUCCESS;
   is_nullable = false;
@@ -271,6 +291,121 @@ int ObRelativeTable::is_column_nullable(const uint64_t column_id, bool& is_nulla
   } else {
     if (OB_FAIL(schema_param_->is_column_nullable(column_id, is_nullable))) {
       LOG_WARN("check is_rowkey fail", K(ret), K(column_id), K(*schema_param_));
+    }
+  }
+  return ret;
+}
+
+int ObRelativeTable::is_column_nullable_for_read(const uint64_t column_id, bool &is_nullable_for_read) const
+{
+  int ret = OB_SUCCESS;
+  is_nullable_for_read = false;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), K(*this));
+  } else if (OB_INVALID_ID == column_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column id", K(ret), K(column_id));
+  } else if (!use_schema_param_) {
+    const ObColumnSchemaV2 *col = NULL;
+    if (nullptr == (col = schema_->get_column_schema(column_id))) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("column schema is null", K(ret), K(column_id), K(*schema_));
+    } else {
+      is_nullable_for_read = col->is_nullable();
+    }
+  } else {
+    const ObColumnParam *col = schema_param_->get_column(column_id);
+    if (OB_ISNULL(col)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("column schema is null", K(ret), K(column_id), K(*schema_));
+    } else {
+      is_nullable_for_read = col->is_nullable();
+    }
+  }
+  return ret;
+}
+
+int ObRelativeTable::is_nop_default_value(const uint64_t column_id, bool &is_nop) const
+{
+  int ret = OB_SUCCESS;
+  is_nop = false;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), K(*this));
+  } else if (OB_HIDDEN_ROWID_COLUMN_ID == column_id) {
+    // rowid column need to compute on fly
+    is_nop = true;
+  } else if (!use_schema_param_) {
+    const ObColumnSchemaV2 *column = NULL;
+    if (OB_ISNULL(column = schema_->get_column_schema(column_id))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("wrong column id", K(ret), K(column_id));
+    } else if (column->is_generated_column()) {
+      // generated column need to compute on fly
+      is_nop = true;
+    }
+  } else {
+    const ObColumnParam *param = NULL;
+    if (OB_ISNULL(param = schema_param_->get_column(column_id))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("wrong column id", K(ret), K(column_id), K(*schema_param_));
+    } else if (param->get_cur_default_value().is_nop_value()) {
+      is_nop = true;
+    }
+  }
+  return ret;
+}
+
+int ObRelativeTable::is_hidden_column(const uint64_t column_id, bool &is_hidden) const
+{
+  int ret = OB_SUCCESS;
+  is_hidden = false;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), K(*this));
+  } else if (!use_schema_param_) {
+    const ObColumnSchemaV2 *col = NULL;
+    if (nullptr == (col = schema_->get_column_schema(column_id))) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("column schema is null", K(ret), K(column_id), K(*schema_));
+    } else {
+      is_hidden = col->is_hidden();
+    }
+  } else {
+    const ObColumnParam *col = schema_param_->get_column(column_id);
+    if (OB_ISNULL(col)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("column schema is null", K(ret), K(column_id), K(*schema_));
+    } else {
+      is_hidden = col->is_hidden();
+    }
+  }
+  return ret;
+}
+
+int ObRelativeTable::is_gen_column(const uint64_t column_id, bool &is_gen_col) const
+{
+  int ret = OB_SUCCESS;
+  is_gen_col = false;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("relative table is invalid", K(ret), K(*this));
+  } else if (!use_schema_param_) {
+    const ObColumnSchemaV2 *col = NULL;
+    if (nullptr == (col = schema_->get_column_schema(column_id))) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("column schema is null", K(ret), K(column_id), K(*schema_));
+    } else {
+      is_gen_col = col->is_generated_column();
+    }
+  } else {
+    const ObColumnParam *col = schema_param_->get_column(column_id);
+    if (OB_ISNULL(col)) {
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("column schema is null", K(ret), K(column_id), K(*schema_));
+    } else {
+      is_gen_col = col->is_gen_col();
     }
   }
   return ret;
@@ -513,33 +648,8 @@ int ObRelativeTable::check_index_column_in_map(const ColumnMap& col_map, const i
   return ret;
 }
 
-int ObRelativeTable::build_table_param(
-    const common::ObIArray<uint64_t>& out_col_ids, share::schema::ObTableParam& table_param) const
-{
-  int ret = OB_SUCCESS;
-  if (!is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("relative table is invalid", K(ret), K(*this));
-  } else if (0 == out_col_ids.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("output column ids count is 0", K(ret));
-  } else {
-    table_param.reset();
-    if (!use_schema_param_) {
-      if (OB_FAIL(table_param.convert(*schema_, *schema_, out_col_ids, false))) {
-        LOG_WARN("build table param from schema fail", K(ret), K(*schema_));
-      }
-    } else {
-      if (OB_FAIL(table_param.convert_schema_param(*schema_param_, out_col_ids))) {
-        LOG_WARN("build table param from param fail", K(ret), K(*schema_param_));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObRelativeTable::build_index_row(const ObNewRow& table_row, const ColumnMap& col_map, const bool only_rowkey,
-    ObNewRow& index_row, bool& null_idx_val, ObIArray<ObColDesc>* idx_columns)
+int ObRelativeTable::build_index_row(const ObNewRow &table_row, const ColumnMap &col_map, const bool only_rowkey,
+    ObNewRow &index_row, bool &null_idx_val, ObIArray<ObColDesc> *idx_columns)
 {
   int ret = OB_SUCCESS;
   if (!is_valid()) {
@@ -669,7 +779,11 @@ int ObRelativeTable::set_index_value(const ObNewRow& table_row, const ColumnMap&
 // ------ ObRelativeTables ------ //
 bool ObRelativeTables::set_table_param(const ObTableDMLParam* param)
 {
-  if (OB_ISNULL(param) || !param->is_valid()) {
+  if (OB_ISNULL(param) || !param->is_valid() || param->get_data_table().get_full_col_descs().empty()) {
+    // only when the full column descs in table_dml_param is not empty,
+    // we will use table_dml_param to generate dml running context
+    // otherwise we will generate dml running context from ObTableSchema
+    // because the full column descs maybe empty during the observer upgrade
     use_table_param_ = false;
     table_param_ = NULL;
   } else {

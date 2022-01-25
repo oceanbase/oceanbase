@@ -166,7 +166,7 @@ void* easy_pool_default_realloc(void* ptr, size_t size)
   if (size) {
     return realloc(ptr, size);
   } else if (ptr) {
-    // free(ptr);
+    free(ptr);
   }
 
   return 0;

@@ -17,7 +17,6 @@
 //#include "lib/timezone/ob_timezone_info.h"
 #include "lib/string/ob_string.h"
 #include "lib/ob_date_unit_type.h"
-#include "lib/container/ob_array_wrap.h"
 #include "common/object/ob_obj_type.h"
 #include "common/ob_accuracy.h"
 
@@ -223,11 +222,9 @@ public:
   {
     return ObString(strlen(tzd_abbr_), tzd_abbr_);
   }
-  int set_tz_name(const ObString& tz_name);
-  int set_tzd_abbr(const ObString& tz_abbr);
-  TO_STRING_KV(K(mode_), "parts", ObArrayWrap<int32_t>(parts_, TOTAL_PART_CNT), "tz_name",
-      ObString(OB_MAX_TZ_NAME_LEN, tz_name_), "tzd_abbr", ObString(OB_MAX_TZ_ABBR_LEN, tzd_abbr_), K_(time_zone_id),
-      K_(transition_type_id), K_(is_tz_name_valid));
+  int set_tz_name(const ObString &tz_name);
+  int set_tzd_abbr(const ObString &tz_abbr);
+  DECLARE_TO_STRING;
   ObDTMode mode_;
   int32_t parts_[TOTAL_PART_CNT];
   // year:    [1000, 9999].
@@ -416,7 +413,8 @@ public:
       const ObTimeZoneInfo* tz_info, const int64_t nmonth, ObOTimestampData& result_value);
   static int otimestamp_add_nsecond(const ObOTimestampData ori_value, const int64_t nsecond,
       const int32_t fractional_second, ObOTimestampData& result_value);
-  static int calc_last_date_of_the_month(const int64_t ori_date_value, int64_t& result_date_value, const ObObjType dest_type);
+  static int calc_last_date_of_the_month(
+      const int64_t ori_date_value, int64_t& result_date_value, const ObObjType dest_type, const bool is_dayofmonth);
   static int calc_next_date_of_the_wday(
       const int64_t ori_date_value, const ObString& wday_name, int64_t& result_date_value);
   static int calc_days_and_months_between_dates(

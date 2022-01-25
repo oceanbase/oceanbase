@@ -116,15 +116,17 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest& lease_request)
         (err_zone == lease_request.zone_ && enable_disk_error_test) ? LEASE_REQUEST_DATA_DISK_ERROR : 0;
 #else
     int tmp_ret = OB_SUCCESS;
-    bool is_disk_error = false;
-    if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error_definite(is_disk_error))) {
+    bool is_data_disk_error = false;
+    const bool is_slog_disk_warning = SLOGGER.is_disk_warning();
+    if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error_definite(is_data_disk_error))) {
       CLOG_LOG(WARN, "is_disk_error_definite failed", K(tmp_ret));
+    } else if (OB_UNLIKELY(is_data_disk_error) || OB_UNLIKELY(is_slog_disk_warning)) {
+      const int64_t PRINT_LOG_INTERVAL_IN_US = 60 * 1000 * 1000;  // 1min
+      if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL_IN_US)) {
+        LOG_WARN("error occurs on data disk or slog disk", K(is_data_disk_error), K(is_slog_disk_warning));
+      }
     }
-    bool is_slog_ok = true;
-    if (OB_SUCCESS != (tmp_ret = SLOGGER.is_logger_ok(is_slog_ok))) {
-      CLOG_LOG(WARN, "is_logger_ok failed", K(tmp_ret));
-    }
-    lease_request.server_status_ |= (is_disk_error || !is_slog_ok) ? LEASE_REQUEST_DATA_DISK_ERROR : 0;
+    lease_request.server_status_ |= (is_data_disk_error || is_slog_disk_warning) ? LEASE_REQUEST_DATA_DISK_ERROR : 0;
 #endif
   }
   return ret;

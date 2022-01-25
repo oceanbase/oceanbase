@@ -944,7 +944,8 @@ private:
   inline int dump_one_block(BlockBuffer* item);
 
   int write_file(void* buf, int64_t size);
-  int read_file(void* buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle& handle);
+  int read_file(void *buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle &handle,
+      const int64_t file_size, const int64_t cur_pos);
   int aio_read_file(void* buf, const int64_t size, const int64_t offset, blocksstable::ObTmpFileIOHandle& handle);
   int aio_read_file(ChunkIterator& it, int64_t read_size);
   bool need_dump(int64_t extra_size);

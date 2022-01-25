@@ -613,8 +613,6 @@ private:
   int check_flashback_partition_need_remove(
       const int64_t flashback_scn, ObPGPartition* pg_partition, bool& need_remove);
   int alloc_file_for_old_replay();
-  int transform_and_add_old_sstable_for_partition(ObPartitionStore& store);
-  int transform_and_add_old_sstable();
   int check_set_member_list_for_restore(ObIPartitionReport& report);
   int check_for_restore_(ObIPartitionReport& report);
   int check_restore_flag(const int16_t old_flag, const int16_t new_flag) const;

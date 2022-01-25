@@ -329,6 +329,7 @@ public:
     return estimate_method_;
   }
   int set_pruned_index_name(const common::ObIArray<common::ObString>& pruned_index_name, ObIAllocator& phy_alloc);
+  int set_unstable_index_name(const common::ObIArray<common::ObString>& unstable_index_name, ObIAllocator& phy_alloc);
   int set_available_index_name(const common::ObIArray<common::ObString>& available_index_name, ObIAllocator& phy_alloc);
   int set_est_row_count_record(const common::ObIArray<common::ObEstRowCountRecord>& est_records);
   inline const common::ObIArray<common::ObEstRowCountRecord>& get_est_row_count_record() const
@@ -673,6 +674,7 @@ protected:
   common::ObFixedArray<common::ObEstRowCountRecord, common::ObIAllocator> est_records_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> available_index_name_;
   common::ObFixedArray<common::ObString, common::ObIAllocator> pruned_index_name_;
+  common::ObFixedArray<common::ObString, common::ObIAllocator> unstable_index_name_;
   //***********************************
   bool gi_above_;
 

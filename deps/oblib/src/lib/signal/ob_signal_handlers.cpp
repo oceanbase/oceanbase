@@ -25,7 +25,7 @@ namespace oceanbase {
 namespace common {
 static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG};
 
-static inline void handler(int sig, siginfo_t* s, void* p)
+static inline void handler(int sig, siginfo_t *s, void *p)
 {
   if (tl_handler != nullptr) {
     tl_handler(sig, s, p);

@@ -2865,10 +2865,12 @@ int ObAggregateProcessor::check_rows_equal(const ObChunkDatumStore::LastStoredRo
 // When there is stored_row_ reserved_cells, use stored_row_'s reserved_cells_ for calc equal.
 // Other use row_.
 int ObGroupRowHashTable::init(ObIAllocator* allocator, lib::ObMemAttr& mem_attr, ObEvalCtx* eval_ctx,
-    const common::ObIArray<ObCmpFunc>* cmp_funcs, int64_t initial_size)
+    const common::ObIArray<ObCmpFunc>* cmp_funcs, ObSqlMemMgrProcessor *sql_mem_processor,
+    int64_t initial_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObExtendHashTable<ObGroupRowItem>::init(allocator, mem_attr, initial_size))) {
+  if (OB_FAIL(ObExtendHashTable<ObGroupRowItem>::init(allocator, mem_attr,
+                                                     sql_mem_processor, initial_size))) {
     LOG_WARN("failed to init extended hash table", K(ret));
   } else {
     eval_ctx_ = eval_ctx;

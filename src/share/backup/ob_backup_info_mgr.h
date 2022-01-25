@@ -48,23 +48,23 @@ struct ObLogArchiveSimpleInfo final {
 // 用于切主后确认pg的checkpoint ts，可能会触发内部表的访问。
 class ObLogArchiveInfoMgr final {
 public:
-  static ObLogArchiveInfoMgr& get_instance();
+  static ObLogArchiveInfoMgr &get_instance();
 
-  int init(common::ObMySQLProxy& sql_proxy);
-  int get_log_archive_status(const uint64_t tenant_id, const int64_t need_ts, ObLogArchiveSimpleInfo& status);
+  int init(common::ObMySQLProxy &sql_proxy);
+  int get_log_archive_status(const uint64_t tenant_id, const int64_t need_ts, ObLogArchiveSimpleInfo &status);
   TO_STRING_KV(K_(update_count));
 
 private:
   ObLogArchiveInfoMgr();
   ~ObLogArchiveInfoMgr();
-  int get_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo& status);
+  int get_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo &status);
   int try_retire_status_();
-  int renew_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo& status);
+  int renew_log_archive_status_(const uint64_t tenant_id, ObLogArchiveSimpleInfo &status);
 
 private:
   typedef common::hash::ObHashMap<uint64_t, ObLogArchiveSimpleInfo, common::hash::NoPthreadDefendMode> STATUS_MAP;
   bool is_inited_;
-  common::ObMySQLProxy* sql_proxy_;
+  common::ObMySQLProxy *sql_proxy_;
   common::SpinRWLock lock_;
   lib::ObMutex mutex_;
   STATUS_MAP status_map_;
@@ -75,41 +75,40 @@ private:
 class ObBackupInfoMgr final {
 public:
   typedef common::ObArray<ObPhysicalRestoreJob> RestoreJobArray;
-  static ObBackupInfoMgr& get_instance();
+  static ObBackupInfoMgr &get_instance();
 
-  int init(common::ObMySQLProxy& sql_proxy, ObBackupDestDetector& backup_dest_detector);
+  int init(common::ObMySQLProxy &sql_proxy, ObBackupDestDetector &backup_dest_detector);
   int start();
   void stop();
   void wait();
   void destroy();
-  int get_log_archive_backup_info(ObLogArchiveBackupInfo& info);
+  int get_log_archive_backup_info(ObLogArchiveBackupInfo &info);
   int get_log_archive_backup_info_and_piece(
-      ObLogArchiveBackupInfo& new_backup_info, ObNonFrozenBackupPieceInfo& new_backup_piece);
-  int get_backup_snapshot_version(int64_t& snapshot_version);
-  int get_log_archive_checkpoint(int64_t& snapshot_version);
+      ObLogArchiveBackupInfo &new_backup_info, ObNonFrozenBackupPieceInfo &new_backup_piece);
+  int get_backup_snapshot_version(int64_t &snapshot_version);
+  int get_log_archive_checkpoint(int64_t &snapshot_version);
   int get_delay_delete_schema_version(const uint64_t tenant_id,
-      share::schema::ObMultiVersionSchemaService& schema_service, bool& is_backup, int64_t& reserved_schema_version);
-  int check_if_doing_backup(bool& is_doing);
-  int check_if_doing_backup_backup(bool& is_doing);
-  int get_restore_info(const uint64_t tenant_id, ObPhysicalRestoreInfo& info);
+      share::schema::ObMultiVersionSchemaService &schema_service, bool &is_backup, int64_t &reserved_schema_version);
+  int check_if_doing_backup(bool &is_doing);
+  int check_if_doing_backup_backup(bool &is_doing);
+  int get_restore_info(const uint64_t tenant_id, ObPhysicalRestoreInfo &info);
   int get_restore_info(
-      const bool need_valid_restore_schema_version, const uint64_t tenant_id, ObPhysicalRestoreInfo& info);
-  int get_restore_status(const uint64_t tenant_id, PhysicalRestoreStatus& status);
-  int get_restore_job_id(const uint64_t tenant_id, int64_t& job_id);
-  int get_restore_piece_list(const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupPiecePath>& piece_list);
-  int get_restore_set_list(const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupSetPath>& set_list);
+      const bool need_valid_restore_schema_version, const uint64_t tenant_id, ObPhysicalRestoreInfo &info);
+  int get_restore_status(const uint64_t tenant_id, PhysicalRestoreStatus &status);
+  int get_restore_job_id(const uint64_t tenant_id, int64_t &job_id);
+  int get_restore_piece_list(const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupPiecePath> &piece_list);
+  int get_restore_set_list(const uint64_t tenant_id, common::ObIArray<share::ObSimpleBackupSetPath> &set_list);
   int reload();
-  int is_base_backup_start(bool& is_started);
-  int get_base_data_restore_schema_version(const uint64_t tenant_id, int64_t& schema_version);
-  static int fetch_sys_log_archive_backup_info_and_piece(common::ObMySQLProxy& sql_proxy,
-      ObLogArchiveBackupInfo& new_backup_info, ObNonFrozenBackupPieceInfo& new_backup_piece);
+  int get_base_data_restore_schema_version(const uint64_t tenant_id, int64_t &schema_version);
+  static int fetch_sys_log_archive_backup_info_and_piece(common::ObMySQLProxy &sql_proxy,
+      ObLogArchiveBackupInfo &new_backup_info, ObNonFrozenBackupPieceInfo &new_backup_piece);
   int64_t get_log_archive_checkpoint_interval() const;
 
 private:
   static const int64_t DEFAULT_UPDATE_INTERVAL_US = 10 * 1000 * 1000;  // 10s
-  int get_restore_info_from_cache(const uint64_t tenant_id, ObSimplePhysicalRestoreJob& simple_job_info);
-  int get_restore_status_from_cache(const uint64_t tenant_id, PhysicalRestoreStatus& status);
-  int check_backup_dest_(ObLogArchiveBackupInfo& backup_info);
+  int get_restore_info_from_cache(const uint64_t tenant_id, ObSimplePhysicalRestoreJob &simple_job_info);
+  int get_restore_status_from_cache(const uint64_t tenant_id, PhysicalRestoreStatus &status);
+  int check_backup_dest_(ObLogArchiveBackupInfo &backup_info);
   int update_log_archive_checkpoint_interval_();
 
 private:
@@ -127,22 +126,20 @@ private:
 
 private:
   bool is_inited_;
-  common::ObMySQLProxy* sql_proxy_;
+  common::ObMySQLProxy *sql_proxy_;
   common::ObTimer timer_;
   ObBackupInfoUpdateTask update_task_;
   ObLogArchiveBackupInfo backup_infos_[2];
-  ObLogArchiveBackupInfo* cur_backup_info_;
+  ObLogArchiveBackupInfo *cur_backup_info_;
   ObNonFrozenBackupPieceInfo backup_pieces_[2];
-  ObNonFrozenBackupPieceInfo* cur_backup_piece_;
+  ObNonFrozenBackupPieceInfo *cur_backup_piece_;
   RestoreJobArray restore_jobs_[2];
-  RestoreJobArray* cur_restore_job_;
-  bool is_base_backup_started_[2];
-  bool* cur_base_backup_started_;
+  RestoreJobArray *cur_restore_job_;
   common::SpinRWLock lock_;
   lib::ObMutex mutex_;
   bool is_backup_loaded_;
   bool is_restore_loaded_;
-  ObBackupDestDetector* backup_dest_detector_;
+  ObBackupDestDetector *backup_dest_detector_;
   int64_t log_archive_checkpoint_interval_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupInfoMgr);
 };
@@ -151,38 +148,38 @@ class ObRestoreBackupInfoUtil final {
 public:
   struct GetRestoreBackupInfoParam final {
     GetRestoreBackupInfoParam();
-    const char* backup_dest_;
-    const char* backup_cluster_name_;
+    const char *backup_dest_;
+    const char *backup_cluster_name_;
     int64_t cluster_id_;
     int64_t incarnation_;
-    const char* backup_tenant_name_;
+    const char *backup_tenant_name_;
     int64_t restore_timestamp_;
-    const char* passwd_array_;
+    const char *passwd_array_;
     common::ObArray<share::ObSimpleBackupSetPath> backup_set_path_list_;
     common::ObArray<share::ObSimpleBackupPiecePath> backup_piece_path_list_;
 
-    int get_largest_backup_set_path(share::ObSimpleBackupSetPath& simple_path) const;
-    int get_smallest_backup_piece_path(share::ObSimpleBackupPiecePath& simple_path) const;
+    int get_largest_backup_set_path(share::ObSimpleBackupSetPath &simple_path) const;
+    int get_smallest_backup_piece_path(share::ObSimpleBackupPiecePath &simple_path) const;
   };
-  static int get_restore_backup_info(const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info);
+  static int get_restore_backup_info(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info);
 
   static int get_restore_sys_table_ids(
-      const ObPhysicalRestoreInfo& info, common::ObIArray<common::ObPartitionKey>& pkey_list);
+      const ObPhysicalRestoreInfo &info, common::ObIArray<common::ObPartitionKey> &pkey_list);
 
 private:
   // get info from cluster backup dest level
-  static int get_restore_backup_info_v1_(const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info);
+  static int get_restore_backup_info_v1_(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info);
   // get info from simple path level
-  static int get_restore_backup_info_v2_(const GetRestoreBackupInfoParam& param, ObRestoreBackupInfo& info);
+  static int get_restore_backup_info_v2_(const GetRestoreBackupInfoParam &param, ObRestoreBackupInfo &info);
 };
 
 class ObRestoreFatalErrorReporter : public share::ObThreadPool {
 public:
-  static ObRestoreFatalErrorReporter& get_instance();
+  static ObRestoreFatalErrorReporter &get_instance();
 
-  int init(obrpc::ObCommonRpcProxy& rpc_proxy, share::ObRsMgr& rs_mgr);
-  int add_restore_error_task(const uint64_t tenant_id, const PhysicalRestoreMod& mod, const int32_t result,
-      const int64_t job_id, const common::ObAddr& addr);
+  int init(obrpc::ObCommonRpcProxy &rpc_proxy, share::ObRsMgr &rs_mgr);
+  int add_restore_error_task(const uint64_t tenant_id, const PhysicalRestoreMod &mod, const int32_t result,
+      const int64_t job_id, const common::ObAddr &addr);
   virtual int start() override;
   virtual void stop() override;
   virtual void wait() override;
@@ -192,13 +189,13 @@ private:
   virtual ~ObRestoreFatalErrorReporter();
   virtual void run1() override;
   int report_restore_errors();
-  int report_restore_error_(const obrpc::ObPhysicalRestoreResult& result);
-  int remove_restore_error_task_(const obrpc::ObPhysicalRestoreResult& result);
+  int report_restore_error_(const obrpc::ObPhysicalRestoreResult &result);
+  int remove_restore_error_task_(const obrpc::ObPhysicalRestoreResult &result);
 
 private:
   bool is_inited_;
-  obrpc::ObCommonRpcProxy* rpc_proxy_;
-  share::ObRsMgr* rs_mgr_;
+  obrpc::ObCommonRpcProxy *rpc_proxy_;
+  share::ObRsMgr *rs_mgr_;
   lib::ObMutex mutex_;
   common::ObSEArray<obrpc::ObPhysicalRestoreResult, 16> report_results_;  // assume most time less than 16 restore task
   DISALLOW_COPY_AND_ASSIGN(ObRestoreFatalErrorReporter);
@@ -206,21 +203,21 @@ private:
 
 class ObBackupDestDetector : public share::ObThreadPool {
 public:
-  static ObBackupDestDetector& get_instance();
+  static ObBackupDestDetector &get_instance();
   int init();
   virtual int start() override;
   virtual void stop() override;
   virtual void wait() override;
   void wakeup();
-  int get_is_backup_dest_bad(const int64_t round_id, bool& is_bad);
-  int update_backup_info(const ObLogArchiveBackupInfo& info);
+  int get_is_backup_dest_bad(const int64_t round_id, bool &is_bad);
+  int update_backup_info(const ObLogArchiveBackupInfo &info);
 
 private:
   ObBackupDestDetector();
   virtual ~ObBackupDestDetector();
   virtual void run1() override;
   int check_backup_dest();
-  int check_backup_dest_(ObLogArchiveBackupInfo& backup_info, bool& is_bad);
+  int check_backup_dest_(ObLogArchiveBackupInfo &backup_info, bool &is_bad);
   void idle();
 
 private:

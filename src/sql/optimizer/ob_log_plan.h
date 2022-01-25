@@ -1096,6 +1096,7 @@ protected:  // member variable
   common::ObSEArray<std::pair<ObRawExpr*, ObRawExpr*>, 4, common::ModulePageAllocator, true> group_replaced_exprs_;
 
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pushdown_filters_;
+  common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> startup_filters_;
 
 private:  // member variable
   ObQueryRefRawExpr* query_ref_;
@@ -1106,7 +1107,6 @@ private:  // member variable
   common::ObSEArray<SubPlanInfo*, 4, common::ModulePageAllocator, true> subplan_infos_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rownum_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> random_exprs_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> startup_filters_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> user_var_filters_;
 
 private:

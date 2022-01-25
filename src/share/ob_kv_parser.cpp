@@ -115,13 +115,18 @@ int ObKVParser::parse(const char* data, int64_t data_length)
 {
   int ret = OB_SUCCESS;
   bool finish = false;
-  if (OB_ISNULL(data)) {
+  const int64_t length = data_length + 1;
+  if (OB_ISNULL(data) || data_length <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null data ptr", K(ret));
+  } else if (OB_ISNULL(data_ = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret), K(length));
   } else {
-    cur_ = data;
-    data_length_ = data_length;
-    data_ = data;
+    MEMSET(data_, '\0', length);
+    STRNCPY(data_, data, data_length);
+    cur_ = data_;
+    data_length_ = length;
     if (OB_FAIL(get_token())) {
       LOG_WARN("failed to  get_token", K(ret));
     }

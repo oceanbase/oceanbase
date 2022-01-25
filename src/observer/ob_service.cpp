@@ -51,6 +51,7 @@
 #include "storage/ob_partition_scheduler.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "storage/ob_build_index_scheduler.h"
 #include "rootserver/ob_bootstrap.h"
 #include "observer/ob_server.h"
 #include "observer/ob_dump_task_generator.h"
@@ -1916,7 +1917,18 @@ int ObService::migrate_replica_batch(const obrpc::ObMigrateReplicaBatchArg& arg)
 int ObService::standby_cutdata_batch_task(const obrpc::ObStandbyCutDataBatchTaskArg& arg)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("receive standby_cutdata_batch_task request", K(arg));
+  LOG_INFO("receive standby cut data batch request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(gctx_.par_ser_->standby_cut_data_batch(arg))) {
+    LOG_WARN("add migrate batch fail", K(arg), K(ret));
+  } else {
+    LOG_INFO("standby cut data batch successfully", K(arg));
+  }
 
   return ret;
 }
@@ -3665,6 +3677,22 @@ int ObService::pre_process_server_reply(const obrpc::ObPreProcessServerReplyArg&
   return ret;
 }
 
+int ObService::submit_retry_ghost_index_task(const uint64_t index_id)
+{
+  int ret = OB_SUCCESS;
+  ObRetryGhostIndexScheduler &scheduler = ObRetryGhostIndexScheduler::get_instance();
+  ObRetryGhostIndexTask task;
+  if (OB_INVALID_ID == index_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index id", K(ret), K(index_id));
+  } else if (OB_FAIL(task.init(index_id))) {
+    LOG_WARN("fail to init ObRetryGhostIndexTask", K(ret), K(index_id));
+  } else if (OB_FAIL(scheduler.push_task(task))) {
+    LOG_WARN("fail to push ObRetryGhostIndexTask to scheduler", K(ret), K(task));
+  }
+  return ret;
+}
+
 int ObService::broadcast_rs_list(const ObRsListArg& arg)
 {
   int ret = OB_SUCCESS;
@@ -3728,3 +3756,4 @@ int ObService::broadcast_locations(const obrpc::ObPartitionBroadcastArg& arg, ob
 
 }  // end namespace observer
 }  // end namespace oceanbase
+

@@ -41,6 +41,7 @@ public:
   int init(const ObAddr& server);
   int init(ObMySQLProxy& sql_proxy, const ObAddr& server);
 
+  int check_header_change(const char* path, const char* buf) const;
   // manual dump to file named by path
   int dump2file(const char* path = NULL) const;
 

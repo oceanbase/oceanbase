@@ -80,7 +80,7 @@ int ObHashGroupByOp::inner_open()
       LOG_WARN("failed to get px size", K(ret));
     } else if (FALSE_IT(est_hash_mem_size = estimate_hash_bucket_size(est_group_cnt))) {
     } else if (FALSE_IT(estimate_mem_size = est_hash_mem_size + MY_SPEC.width_ * est_group_cnt)) {
-    } else if (OB_FAIL(sql_mem_processor_.init(&ctx_.get_allocator(),
+    } else if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(),
                    ctx_.get_my_session()->get_effective_tenant_id(),
                    estimate_mem_size,
                    MY_SPEC.type_,
@@ -93,7 +93,8 @@ int ObHashGroupByOp::inner_open()
     } else if (FALSE_IT(init_size = std::max((int64_t)MIN_GROUP_HT_INIT_SIZE, init_size))) {
     } else if (FALSE_IT(init_size = std::min((int64_t)MAX_GROUP_HT_INIT_SIZE, init_size))) {
     } else if (OB_FAIL(local_group_rows_.init(
-                   &mem_context_->get_malloc_allocator(), attr, &eval_ctx_, &MY_SPEC.cmp_funcs_, init_size))) {
+                   &mem_context_->get_malloc_allocator(), attr, &eval_ctx_,
+                   &MY_SPEC.cmp_funcs_, &sql_mem_processor_, init_size))) {
       LOG_WARN("fail to init hash map", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used_size()))) {
       LOG_WARN("fail to update_used_mem_size", "size", get_mem_used_size(), K(ret));
@@ -120,6 +121,25 @@ int ObHashGroupByOp::inner_open()
           K(profile_.get_cache_size()),
           K(sql_mem_processor_.get_mem_bound()));
     }
+  }
+  return ret;
+}
+
+int ObHashGroupByOp::init_group_store()
+{
+  int ret = OB_SUCCESS;
+  group_store_.reset();
+  if (OB_FAIL(group_store_.init(0,
+          ctx_.get_my_session()->get_effective_tenant_id(),
+          ObCtxIds::WORK_AREA,
+          ObModIds::OB_HASH_NODE_GROUP_ROWS,
+          false /* disable dump */,
+          0))) {
+    LOG_WARN("failed to init group store", K(ret));
+  } else {
+    group_store_.set_dir_id(sql_mem_processor_.get_dir_id());
+    group_store_.set_callback(&sql_mem_processor_);
+    group_store_.set_allocator(mem_context_->get_malloc_allocator());
   }
   return ret;
 }
@@ -188,7 +208,7 @@ int ObHashGroupByOp::inner_get_next_row()
   LOG_DEBUG("before inner_get_next_row",
       K(get_aggr_used_size()),
       K(get_aggr_used_size()),
-      K(get_local_hash_used_size()),
+      K(get_hash_table_used_size()),
       K(get_dumped_part_used_size()),
       K(get_dump_part_hold_size()),
       K(get_mem_used_size()),
@@ -243,7 +263,7 @@ int ObHashGroupByOp::inner_get_next_row()
   LOG_DEBUG("after inner_get_next_row",
       K(get_aggr_used_size()),
       K(get_aggr_used_size()),
-      K(get_local_hash_used_size()),
+      K(get_hash_table_used_size()),
       K(get_dumped_part_used_size()),
       K(get_dump_part_hold_size()),
       K(get_mem_used_size()),
@@ -279,15 +299,18 @@ int ObHashGroupByOp::load_data()
       part_id = cur_part->part_id_;
       part_shift = part_shift + part_id * CHAR_BIT;
       input_size = cur_part->datum_store_.get_file_size();
-      if (OB_FAIL(local_group_rows_.resize(&mem_context_->get_malloc_allocator(), max(2, input_rows)))) {
+      if (OB_FAIL(local_group_rows_.resize(&mem_context_->get_malloc_allocator(),
+                                           max(2, input_rows), &sql_mem_processor_))) {
         LOG_WARN("failed to reuse extended hash table", K(ret));
-      } else if (OB_FAIL(sql_mem_processor_.init(&ctx_.get_allocator(),
+      } else if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(),
                      ctx_.get_my_session()->get_effective_tenant_id(),
                      input_size,
                      MY_SPEC.type_,
                      MY_SPEC.id_,
                      &ctx_))) {
         LOG_WARN("failed to init sql mem processor", K(ret));
+      } else if (OB_FAIL(init_group_store())) {
+        LOG_WARN("failed to init group store", K(ret));
       } else {
         LOG_TRACE("scan new partition",
             K(part_id),
@@ -465,7 +488,8 @@ int ObHashGroupByOp::update_mem_status_periodically(
   bool updated = false;
   need_dump = false;
   if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
-          &ctx_.get_allocator(), [&](int64_t cur_cnt) { return nth_cnt > cur_cnt; }, updated))) {
+          &mem_context_->get_malloc_allocator(),
+          [&](int64_t cur_cnt) { return nth_cnt > cur_cnt; }, updated))) {
     LOG_WARN("failed to update usable memory size periodically", K(ret));
   } else if (updated) {
     if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used_size()))) {
@@ -475,7 +499,7 @@ int ObHashGroupByOp::update_mem_status_periodically(
       ;
       est_part_cnt = detect_part_cnt(input_row);
       calc_data_mem_ratio(est_part_cnt, data_ratio);
-      need_dump = (get_aggr_used_size() > get_mem_bound_size() * data_ratio);
+      need_dump = is_need_dump(data_ratio);
     }
   }
   return ret;
@@ -483,14 +507,12 @@ int ObHashGroupByOp::update_mem_status_periodically(
 
 int64_t ObHashGroupByOp::detect_part_cnt(const int64_t rows) const
 {
-  const double group_mem_avg = (double)get_aggr_used_size() / local_group_rows_.size();
+  const double group_mem_avg = (double)get_data_size() / local_group_rows_.size();
   int64_t data_size = rows * ((double)agged_group_cnt_ / agged_row_cnt_) * group_mem_avg;
   int64_t mem_bound = get_mem_bound_size();
-  const double part_skew_factor = 1.2;
-  data_size = data_size * part_skew_factor;
   int64_t part_cnt = (data_size + mem_bound) / mem_bound;
   part_cnt = next_pow2(part_cnt);
-  int64_t availble_mem_size = min(mem_bound - get_aggr_hold_size(), mem_bound * MAX_PART_MEM_RATIO);
+  int64_t availble_mem_size = mem_bound - get_mem_used_size();
   int64_t est_dump_size = part_cnt * ObChunkRowStore::BLOCK_SIZE;
   if (0 < availble_mem_size) {
     while (est_dump_size > availble_mem_size) {
@@ -508,13 +530,12 @@ int64_t ObHashGroupByOp::detect_part_cnt(const int64_t rows) const
       K(group_mem_avg),
       K(get_mem_used_size()),
       K(get_mem_bound_size()),
-      K(part_skew_factor),
       K(agged_group_cnt_),
       K(agged_row_cnt_),
       K(local_group_rows_.size()),
       K(part_cnt),
       K(get_aggr_used_size()),
-      K(get_local_hash_used_size()),
+      K(get_hash_table_used_size()),
       K(get_dumped_part_used_size()),
       K(get_aggr_hold_size()),
       K(get_dump_part_hold_size()),
@@ -526,11 +547,12 @@ int64_t ObHashGroupByOp::detect_part_cnt(const int64_t rows) const
 
 void ObHashGroupByOp::calc_data_mem_ratio(const int64_t part_cnt, double& data_ratio)
 {
-  int64_t extra_size = (get_local_hash_used_size() + part_cnt * FIX_SIZE_PER_PART) * (1 + EXTRA_MEM_RATIO);
-  int64_t data_size = max(get_aggr_used_size(), (get_mem_bound_size() - extra_size) * 0.8);
-  data_ratio = data_size * 1.0 / (extra_size + data_size);
+  int64_t est_extra_size = (get_mem_used_size() + part_cnt * FIX_SIZE_PER_PART);
+  int64_t data_size = get_mem_used_size();
+  data_ratio = data_size * 1.0 / est_extra_size;
   sql_mem_processor_.set_data_ratio(data_ratio);
-  LOG_TRACE("trace calc data ratio", K(data_ratio), K(extra_size), K(part_cnt), K(data_size), K(get_aggr_used_size()));
+  LOG_TRACE("trace calc data ratio", K(data_ratio), K(est_extra_size),
+                                     K(part_cnt), K(data_size), K(get_aggr_used_size()));
 }
 
 void ObHashGroupByOp::adjust_part_cnt(int64_t& part_cnt)
@@ -581,12 +603,18 @@ bool ObHashGroupByOp::need_start_dump(const int64_t input_rows, int64_t& est_par
     calc_data_mem_ratio(est_part_cnt, data_ratio);
   }
   // We continue do aggregation after we start dumping, reserve 1/8 memory for it.
-  if (get_aggr_used_size() > data_ratio * mem_bound || check_dump) {
+  if (is_need_dump(data_ratio) || check_dump) {
     int ret = OB_SUCCESS;
     need_dump = true;
     if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
-            &ctx_.get_allocator(),
-            [&](int64_t max_memory_size) { return get_aggr_used_size() > data_ratio * max_memory_size; },
+            &mem_context_->get_malloc_allocator(),
+            [&](int64_t max_memory_size) {
+              UNUSED(max_memory_size);
+              data_ratio = sql_mem_processor_.get_data_ratio();;
+              est_part_cnt = detect_part_cnt(input_rows);
+              calc_data_mem_ratio(est_part_cnt, data_ratio);
+              return is_need_dump(data_ratio);
+            },
             need_dump,
             mem_used))) {
       need_dump = true;
@@ -674,7 +702,7 @@ int ObHashGroupByOp::setup_dump_env(const int64_t part_id, const int64_t input_r
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(&ctx_.get_allocator()))) {
+    } else if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(&mem_context_->get_malloc_allocator()))) {
       LOG_WARN("failed to get max available memory size", K(ret));
     } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used_size()))) {
       LOG_WARN("failed to update mem size", K(ret));

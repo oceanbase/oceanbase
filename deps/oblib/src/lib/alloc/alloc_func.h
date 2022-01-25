@@ -32,6 +32,7 @@ void set_tenant_memory_limit(uint64_t tenant_id, int64_t bytes);
 int64_t get_tenant_memory_limit(uint64_t tenant_id);
 int64_t get_tenant_memory_hold(uint64_t tenant_id);
 int64_t get_tenant_memory_hold(const uint64_t tenant_id, const uint64_t ctx_id);
+int64_t get_tenant_memory_remain(uint64_t tenant_id);
 void get_tenant_mod_memory(uint64_t tenant_id, int mod_id, common::ObModItem& ObModItem);
 void ob_set_reserved_memory(const int64_t bytes);
 void ob_set_urgent_memory(const int64_t bytes);

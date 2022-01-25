@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #include <gtest/gtest.h>
 #include "lib/utility/ob_test_util.h"
 #include "lib/restore/ob_storage.h"
@@ -55,7 +67,7 @@ TEST_F(TestStorageOss, test_del)
       databuff_printf(
           storage_infos, sizeof(storage_infos), "host=%s&access_id=%s&access_key=%s", oss_host_, oss_id_, oss_key_));
   const ObString storage_info(storage_infos);
-  const char* dir_name = "test";
+  const char *dir_name = "test";
   char test_content[OB_MAX_URI_LENGTH] = "just_for_test";
   int64_t read_size = 0;
 
@@ -79,8 +91,9 @@ TEST_F(TestStorageOss, test_get_pkey_from_path)
   char storage_infos[OB_MAX_URI_LENGTH];
   ObArenaAllocator allocator;
 
-  ASSERT_EQ(OB_SUCCESS, databuff_printf(storage_infos, sizeof(storage_infos), "host=%s&access_id=%s&access_key=%s",
-        oss_host_, oss_id_, oss_key_));
+  ASSERT_EQ(OB_SUCCESS,
+      databuff_printf(
+          storage_infos, sizeof(storage_infos), "host=%s&access_id=%s&access_key=%s", oss_host_, oss_id_, oss_key_));
   const ObString storage_info(storage_infos);
   const char *dir_name = "test/pkeys";
   char test_content[OB_MAX_URI_LENGTH] = "just_for_test";
@@ -88,7 +101,14 @@ TEST_F(TestStorageOss, test_get_pkey_from_path)
   const ObPartitionKey pkey(1100611139403779, 0, 0);
   ObArray<ObPartitionKey> pkeys;
 
-  ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/%s/%lu/%ld/test_file", test_oss_bucket_, dir_name, pkey.get_table_id(), pkey.get_partition_id()));
+  ASSERT_EQ(OB_SUCCESS,
+      databuff_printf(uri,
+          sizeof(uri),
+          "%s/%s/%lu/%ld/test_file",
+          test_oss_bucket_,
+          dir_name,
+          pkey.get_table_id(),
+          pkey.get_partition_id()));
   ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/", test_oss_bucket_, dir_name));
   STORAGE_LOG(INFO, "uri and dir uri", K(uri), K(dir_uri));
 
@@ -114,8 +134,9 @@ TEST_F(TestStorageOss, test_get_bucket_lifecycle)
   ObArenaAllocator allocator;
   bool is_set_lifecycle = false;
 
-  ASSERT_EQ(OB_SUCCESS, databuff_printf(storage_infos, sizeof(storage_infos), "host=%s&access_id=%s&access_key=%s",
-        oss_host_, oss_id_, oss_key_));
+  ASSERT_EQ(OB_SUCCESS,
+      databuff_printf(
+          storage_infos, sizeof(storage_infos), "host=%s&access_id=%s&access_key=%s", oss_host_, oss_id_, oss_key_));
   const ObString storage_info(storage_infos);
   ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/xuanyi_61/hahaha", test_oss_bucket_));
 
@@ -123,7 +144,66 @@ TEST_F(TestStorageOss, test_get_bucket_lifecycle)
   ASSERT_EQ(true, is_set_lifecycle);
 }
 
+TEST_F(TestStorageOss, test_get_pkey_from_path)
+{
+  ObStorageUtil util(false);
+  char uri[OB_MAX_URI_LENGTH];
+  char dir_uri[OB_MAX_URI_LENGTH];
+  char storage_infos[OB_MAX_URI_LENGTH];
+  ObArenaAllocator allocator;
 
+  ASSERT_EQ(OB_SUCCESS,
+      databuff_printf(
+          storage_infos, sizeof(storage_infos), "host=%s&access_id=%s&access_key=%s", oss_host_, oss_id_, oss_key_));
+  const ObString storage_info(storage_infos);
+  const char *dir_name = "test/pkeys";
+  char test_content[OB_MAX_URI_LENGTH] = "just_for_test";
+  int64_t read_size = 0;
+  const ObPartitionKey pkey(1100611139403779, 0, 0);
+  ObArray<ObPartitionKey> pkeys;
+
+  ASSERT_EQ(OB_SUCCESS,
+      databuff_printf(uri,
+          sizeof(uri),
+          "%s/%s/%lu/%ld/test_file",
+          test_oss_bucket_,
+          dir_name,
+          pkey.get_table_id(),
+          pkey.get_partition_id()));
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/", test_oss_bucket_, dir_name));
+  STORAGE_LOG(INFO, "uri and dir uri", K(uri), K(dir_uri));
+
+  ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, storage_info, test_content, 0));
+  ASSERT_EQ(OB_SUCCESS, util.get_file_length(uri, storage_info, read_size));
+  ASSERT_EQ(OB_SUCCESS, util.get_pkeys_from_dir(dir_uri, storage_info, pkeys));
+  ASSERT_TRUE(!pkeys.empty());
+  bool found = false;
+  for (int64_t i = 0; pkeys.count() && !found; ++i) {
+    const ObPartitionKey &tmp_pkey = pkeys.at(i);
+    if (tmp_pkey == pkey) {
+      found = true;
+    }
+  }
+  ASSERT_TRUE(found);
+}
+
+TEST_F(TestStorageOss, test_get_bucket_lifecycle)
+{
+  ObStorageUtil util(false);
+  char uri[OB_MAX_URI_LENGTH];
+  char storage_infos[OB_MAX_URI_LENGTH];
+  ObArenaAllocator allocator;
+  bool is_set_lifecycle = false;
+
+  ASSERT_EQ(OB_SUCCESS,
+      databuff_printf(
+          storage_infos, sizeof(storage_infos), "host=%s&access_id=%s&access_key=%s", oss_host_, oss_id_, oss_key_));
+  const ObString storage_info(storage_infos);
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/xuanyi_61/hahaha", test_oss_bucket_));
+
+  ASSERT_EQ(OB_SUCCESS, util.check_bucket_lifecycle(uri, storage_info, is_set_lifecycle));
+  ASSERT_EQ(true, is_set_lifecycle);
+}
 
 int main(int argc, char **argv)
 {

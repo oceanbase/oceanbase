@@ -21,7 +21,6 @@
 #include "storage/blocksstable/ob_macro_block_reader.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_micro_block_index_mgr.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 
 namespace oceanbase {
 namespace blocksstable {

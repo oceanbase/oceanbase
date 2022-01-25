@@ -144,6 +144,10 @@ int ObStorageLogCommittedTransGetter::revise_log(const char* log_dir)
   if (OB_SUCC(ret)) {
     min_log_file_id_ = min_log_id;
   }
+
+  if (nullptr != store) {
+    ObLogStoreFactory::destroy(store);
+  }
   return ret;
 }
 

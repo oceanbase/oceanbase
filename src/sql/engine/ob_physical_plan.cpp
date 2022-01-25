@@ -589,62 +589,84 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData& record, const boo
         record.get_elapsed_time() - record.exec_record_.wait_time_end_ -
             (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
   }
-  if (stat_.is_bind_sensitive_ || stat_.enable_plan_expiration_) {
+  if (stat_.is_bind_sensitive_ && execute_count > 0) {
     int64_t pos = execute_count % ObPlanStat::MAX_SCAN_STAT_SIZE;
     ATOMIC_STORE(&(stat_.table_scan_stat_[pos].query_range_row_count_), record.table_scan_stat_.query_range_row_count_);
     ATOMIC_STORE(&(stat_.table_scan_stat_[pos].indexback_row_count_), record.table_scan_stat_.indexback_row_count_);
     ATOMIC_STORE(&(stat_.table_scan_stat_[pos].output_row_count_), record.table_scan_stat_.output_row_count_);
-    if (is_first) {
-      ATOMIC_STORE(&(stat_.first_exec_row_count_), record.table_scan_stat_.query_range_row_count_);
-    }
   }
 
   if (!is_expired() && stat_.enable_plan_expiration_) {
-    // if the first request is timeout, the execute_count is zero, the avg cpu time should be the cpu time
     if (record.is_timeout() || record.status_ == OB_SESSION_KILLED) {
       set_is_expired(true);
       LOG_INFO("query plan is expired due to execution timeout", K(stat_));
-    } else if (execute_count == 0 || (execute_count % SLOW_QUERY_SAMPLE_SIZE) != 0) {
-      // do nothing when query execution samples are not enough
-    } else if (stat_.cpu_time_ <= SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_) {
-      // do nothing for fast query
-    } else if (is_plan_unstable()) {
-      set_is_expired(true);
+    } else if (is_first) {
+      ATOMIC_STORE(&(stat_.sample_times_), 0);
+      ATOMIC_STORE(&(stat_.first_exec_row_count_),
+          record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+      ATOMIC_STORE(&(stat_.first_elapsed_time_), record.get_elapsed_time());
+    } else if (0 == stat_.sample_times_) {  // first sample query
+      ATOMIC_INC(&(stat_.sample_times_));
+      ATOMIC_STORE(&(stat_.sample_exec_row_count_),
+          record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+      ATOMIC_STORE(&(stat_.sample_exec_usec_),
+          record.get_elapsed_time() - record.exec_record_.wait_time_end_ -
+              (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+    } else {
+      int64_t sample_count = ATOMIC_AAF(&(stat_.sample_times_), 1);
+      int64_t sample_exec_row_count = ATOMIC_AAF(&(stat_.sample_exec_row_count_),
+          record.exec_record_.get_memstore_read_row_count() + record.exec_record_.get_ssstore_read_row_count());
+      int64_t sample_exec_usec = ATOMIC_AAF(&(stat_.sample_exec_usec_),
+          record.get_elapsed_time() - record.exec_record_.wait_time_end_ -
+              (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      if (sample_count < SLOW_QUERY_SAMPLE_SIZE) {
+        // do nothing when query execution samples are not enough
+      } else {
+        if (stat_.cpu_time_ <= SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * stat_.execute_times_) {
+          // do nothing for fast query
+        } else if (is_plan_unstable(sample_count, sample_exec_row_count, sample_exec_usec)) {
+          set_is_expired(true);
+        }
+        ATOMIC_STORE(&(stat_.sample_times_), 0);
+      }
     }
   }
 }
 
-bool ObPhysicalPlan::is_plan_unstable()
+bool ObPhysicalPlan::is_plan_unstable(
+    const int64_t sample_count, const int64_t sample_exec_row_count, const int64_t sample_exec_usec)
 {
   bool bret = false;
-  int64_t exec_count = 0;
-  int64_t total_index_back_rows = 0;
-  int64_t total_query_range_rows = 0;
-  int64_t first_query_range_rows = ATOMIC_LOAD(&stat_.first_exec_row_count_);
-  if (first_query_range_rows != -1) {
-    for (int64_t i = 0; i < SLOW_QUERY_SAMPLE_SIZE; ++i) {
-      int64_t query_range_rows = ATOMIC_LOAD(&(stat_.table_scan_stat_[i].query_range_row_count_));
-      int64_t index_back_rows = ATOMIC_LOAD(&(stat_.table_scan_stat_[i].indexback_row_count_));
-      if (query_range_rows != -1) {
-        exec_count++;
-        total_query_range_rows += query_range_rows;
-        total_index_back_rows += index_back_rows;
-      }
-    }
-    int64_t total_access_cost = (total_query_range_rows + 10 * total_index_back_rows);
-    if (total_access_cost <= SLOW_QUERY_ROW_COUNT_THRESOLD * exec_count) {
-      // the query plan does not accesses too many rows in the average
-    } else if (total_query_range_rows / exec_count > first_query_range_rows * 10) {
-      // the average query range row count increases great
+  if (sample_exec_usec <= SLOW_QUERY_TIME_FOR_PLAN_EXPIRE * sample_count) {
+    // sample query is fast query in the average
+  } else if (OB_PHY_PLAN_LOCAL == plan_type_) {
+    int64_t first_query_range_rows = ATOMIC_LOAD(&stat_.first_exec_row_count_);
+    if (sample_exec_row_count <= SLOW_QUERY_ROW_COUNT_THRESOLD * sample_count) {
+      // the sample query does not accesses too many rows in the average
+    } else if (sample_exec_row_count / sample_count > first_query_range_rows * 10) {
+      // the average sample query range row count increases great
       bret = true;
-      LOG_INFO("query plan is expired due to unstable performance",
+      LOG_INFO("local query plan is expired due to unstable performance",
           K(bret),
           K(stat_.execute_times_),
-          K(exec_count),
           K(first_query_range_rows),
-          K(total_query_range_rows),
-          K(total_index_back_rows));
+          K(sample_exec_row_count),
+          K(sample_count));
     }
+  } else if (OB_PHY_PLAN_DISTRIBUTED == plan_type_) {
+    int64_t first_elapsed_time = ATOMIC_LOAD(&stat_.first_elapsed_time_);
+    if (sample_exec_usec / sample_count > first_elapsed_time * 2) {
+      // the average sample query execute time increases great
+      bret = true;
+      LOG_INFO("distribute query plan is expired due to unstable performance",
+          K(bret),
+          K(stat_.execute_times_),
+          K(first_elapsed_time),
+          K(sample_exec_usec),
+          K(sample_count));
+    }
+  } else {
+    // do nothing
   }
   return bret;
 }

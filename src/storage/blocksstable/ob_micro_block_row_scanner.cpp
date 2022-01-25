@@ -502,7 +502,7 @@ int ObMicroBlockRowScanner::inner_get_next_row(const ObStoreRow*& row)
     ObStoreRow& dest_row = rows_[0];
     dest_row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
     if (OB_FAIL(reader_->get_row(current_, dest_row))) {
-      STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret));
+      STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret), K(macro_id_));
     } else {
       row = &dest_row;
       if (context_->query_flag_.is_multi_version_minor_merge()) {
@@ -767,9 +767,9 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObStoreRow
     }
   }
   if (OB_NOT_NULL(ret_row) && !ret_row->is_valid()) {
-    STORAGE_LOG(ERROR, "row is invalid", K(*ret_row));
+    STORAGE_LOG(ERROR, "row is invalid", KPC(ret_row));
   } else {
-    STORAGE_LOG(DEBUG, "row is valid", K(*ret_row));
+    STORAGE_LOG(DEBUG, "row is valid", KPC(ret_row));
   }
   return ret;
 }
@@ -809,6 +809,7 @@ void ObMultiVersionMicroBlockRowScanner::reuse_prev_micro_row()
   }
   prev_micro_row_.flag_ = ObActionFlag::OP_ROW_DOES_NOT_EXIST;
   prev_micro_row_.from_base_ = false;
+  prev_micro_row_.snapshot_version_ = 0;
   cell_allocator_.reuse();
 
   reserved_pos_ = ObIMicroBlockReader::INVALID_ROW_INDEX;
@@ -1089,6 +1090,7 @@ int ObMultiVersionMicroBlockRowScanner::cache_cur_micro_row(const bool found_fir
         prev_micro_row_.flag_ = cur_micro_row_.flag_;
         prev_micro_row_.from_base_ = cur_micro_row_.from_base_;
         prev_micro_row_.row_val_.count_ = cur_micro_row_.row_val_.count_;
+        prev_micro_row_.snapshot_version_ = cur_micro_row_.snapshot_version_;
       }
       // The positive scan scans from new to old (trans_version is negative), so cur_row is older than prev_row
       // So just add the nop column (column for which the value has not been decided)
@@ -1654,7 +1656,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::get_row_from_row_queue(const s
   } else if (OB_FAIL(row_queue_.get_next_row(row))) {
     STORAGE_LOG(WARN, "failed to get next row from prepared row queue", K(ret), KPC(this));
   } else {
-    STORAGE_LOG(DEBUG, "get row from row queue", K(ret), KPC(this), K(*row));
+    STORAGE_LOG(DEBUG, "get row from row queue", K(ret), KPC(this), KPC(row));
   }
   return ret;
 }
@@ -1976,7 +1978,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::compact_trans_row_to_one()
           "add one row for another trans",
           K(row_queue_.count()),
           K(committed_trans_version_),
-          K(*row_queue_.get_last()));
+          KPC(row_queue_.get_last()));
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(row_queue_.get_last())) {

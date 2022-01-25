@@ -117,7 +117,7 @@ int ObPartitionTableOperator::set_use_rpc_table(ObCommonRpcProxy& rpc_proxy, ObR
 }
 
 int ObPartitionTableOperator::get(const uint64_t table_id, const int64_t partition_id, ObPartitionInfo& partition_info,
-    const bool need_fetch_faillist, const int64_t cluster_id)
+    const bool need_fetch_faillist, const int64_t cluster_id, const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
@@ -140,7 +140,8 @@ int ObPartitionTableOperator::get(const uint64_t table_id, const int64_t partiti
     ObTimeoutCtx ctx;
     if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
-    } else if (OB_FAIL(pt->get(table_id, partition_id, partition_info, need_fetch_faillist, cluster_id))) {
+    } else if (OB_FAIL(pt->get(
+                   table_id, partition_id, partition_info, need_fetch_faillist, cluster_id, filter_flag_replica))) {
       LOG_WARN("get partition info failed", K(ret), KT(table_id), K(partition_id));
     }
   }
@@ -153,7 +154,8 @@ int ObPartitionTableOperator::get(const uint64_t table_id, const int64_t partiti
 }
 
 int ObPartitionTableOperator::prefetch_by_table_id(const uint64_t tenant_id, const uint64_t start_table_id,
-    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist)
+    const int64_t start_partition_id, ObIArray<ObPartitionInfo>& partition_infos, const bool need_fetch_faillist,
+    const bool filter_flag_replica)
 {
   int ret = OB_SUCCESS;
   ObIPartitionTable* pt = NULL;
@@ -171,9 +173,19 @@ int ObPartitionTableOperator::prefetch_by_table_id(const uint64_t tenant_id, con
   } else if (OB_ISNULL(pt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL partition table", K(ret));
-  } else if (OB_FAIL(pt->prefetch_by_table_id(
-                 tenant_id, start_table_id, start_partition_id, partition_infos, need_fetch_faillist))) {
-    LOG_WARN("partition_table prefetch failed", K(tenant_id), K(start_table_id), K(start_partition_id), K(ret));
+  } else if (OB_FAIL(pt->prefetch_by_table_id(tenant_id,
+                 start_table_id,
+                 start_partition_id,
+                 partition_infos,
+                 need_fetch_faillist,
+                 filter_flag_replica))) {
+    LOG_WARN("partition_table prefetch failed",
+        K(tenant_id),
+        K(start_table_id),
+        K(start_partition_id),
+        K(need_fetch_faillist),
+        K(filter_flag_replica),
+        K(ret));
   }
   LOG_DEBUG(
       "prefetch by table_id", K(ret), K(tenant_id), K(start_table_id), K(start_partition_id), K(need_fetch_faillist));

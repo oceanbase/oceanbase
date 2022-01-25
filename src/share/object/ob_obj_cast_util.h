@@ -26,10 +26,12 @@ OB_INLINE int numeric_range_check(
     const InType in_val, const OutType min_out_val, const OutType max_out_val, OutType& out_val)
 {
   int ret = OB_SUCCESS;
-  if (in_val < static_cast<InType>(min_out_val)) {
+  // Casting value from InType to OutType to prevent number overflow.
+  OutType cast_in_val = static_cast<OutType>(in_val);
+  if (cast_in_val < min_out_val) {
     ret = OB_DATA_OUT_OF_RANGE;
     out_val = min_out_val;
-  } else if (in_val > static_cast<InType>(max_out_val)) {
+  } else if (cast_in_val > max_out_val) {
     ret = OB_DATA_OUT_OF_RANGE;
     out_val = max_out_val;
   }

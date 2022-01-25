@@ -2620,58 +2620,65 @@ set names latin1;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[latin1], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[latin1], value=[9223372036854775807]
 
 **************   Case 126   ***************
 set names 'latin1';
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[latin1], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[latin1], value=[9223372036854775807]
 
 **************   Case 127   ***************
 set names utf8 collate 'utf8_general_ci';
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
-		|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
+			|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
 
 **************   Case 128   ***************
 set names utf8 collate utf8_general_ci;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_NAMES], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
-		|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_NAMES], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
+			|--[1],[T_COLLATION], str_value_=[utf8_general_ci], value=[9223372036854775807]
 
 **************   Case 129   ***************
 set character set utf8;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_CHARSET], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
 
 **************   Case 130   ***************
 set character set 'utf8';
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_CHARSET], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
 
 **************   Case 131   ***************
 set charset utf8;
 question_mask_size: 0
 
 |--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_SET_CHARSET], str_value_=[], value=[0]
-		|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
+	|--[0],[T_VARIABLE_SET], str_value_=[], value=[0]
+		|--[0],[T_SET_CHARSET], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[utf8], value=[9223372036854775807]
 
 **************   Case 132   ***************
 select _utf8 'abc', _utf8mb4 'def' collate utf8mb4_general_ci from t1 where c1 collate utf8_bin = 'xyz' collate utf8_bin;
@@ -3356,62 +3363,24 @@ question_mask_size: 0
 	|--[0],[T_REFRESH_TIME_ZONE_INFO], str_value_=[], value=[0]
 
 **************   Case 166   ***************
-drop public synonym t1;
-question_mask_size: 0
-
-|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_DROP_SYNONYM], str_value_=[], value=[0]
-		|--[0],[T_PUBLIC], str_value_=[], value=[9223372036854775807]
-		|--[2],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-
-**************   Case 167   ***************
-drop public synonym t1 force;
-question_mask_size: 0
-
-|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_DROP_SYNONYM], str_value_=[], value=[0]
-		|--[0],[T_PUBLIC], str_value_=[], value=[9223372036854775807]
-		|--[2],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[3],[T_FORCE], str_value_=[], value=[9223372036854775807]
-
-**************   Case 168   ***************
-drop synonym t1 force;
-question_mask_size: 0
-
-|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_DROP_SYNONYM], str_value_=[], value=[0]
-		|--[2],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[3],[T_FORCE], str_value_=[], value=[9223372036854775807]
-
-**************   Case 169   ***************
-drop synonym database1.t1 force;
-question_mask_size: 0
-
-|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
-	|--[0],[T_DROP_SYNONYM], str_value_=[], value=[0]
-		|--[1],[T_IDENT], str_value_=[database1], value=[9223372036854775807]
-		|--[2],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[3],[T_FORCE], str_value_=[], value=[9223372036854775807]
-
-**************   Case 170   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 171   ***************
+**************   Case 167   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t2.id!= t1.id when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 172   ***************
+**************   Case 168   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id < 3 delete where t1.id < 5 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 173   ***************
+**************   Case 169   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales delete where t1.sales =2 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
-**************   Case 174   ***************
+**************   Case 170   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
-**************   Case 175   ***************
+**************   Case 171   ***************
 merge into targetTable t1 using sourceTable t2 on (1 = 2) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
-**************   Case 176   ***************
+**************   Case 172   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
-**************   Case 177   ***************
+**************   Case 173   ***************
 merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
-**************   Case 178   ***************
+**************   Case 174   ***************
 merge into targetTable using (select * from t1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
-**************   Case 179   ***************
+**************   Case 175   ***************
 select unique(c1), c2 from t1;
 question_mask_size: 0
 
@@ -3431,7 +3400,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 180   ***************
+**************   Case 176   ***************
 select unique(c1+1), c2 from t1;
 question_mask_size: 0
 
@@ -3453,7 +3422,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 181   ***************
+**************   Case 177   ***************
 select distinct unique(    max(c1)), c2 from t1;
 question_mask_size: 0
 
@@ -3475,7 +3444,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 182   ***************
+**************   Case 178   ***************
 select unique distinct(    max(c1)), c2 from t1;
 question_mask_size: 0
 
@@ -3497,9 +3466,9 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 
-**************   Case 183   ***************
+**************   Case 179   ***************
 select unique(*) from t1;
-**************   Case 184   ***************
+**************   Case 180   ***************
 create tablegroup tg1 primary_zone = 'z2';
 question_mask_size: 0
 
@@ -3510,7 +3479,7 @@ question_mask_size: 0
 			|--[0],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_VARCHAR], str_value_=[z2], value=[9223372036854775807]
 
-**************   Case 185   ***************
+**************   Case 181   ***************
 create tablegroup tg1 locality = 'z2';
 question_mask_size: 0
 
@@ -3521,7 +3490,7 @@ question_mask_size: 0
 			|--[0],[T_LOCALITY], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_VARCHAR], str_value_=[z2], value=[9223372036854775807]
 
-**************   Case 186   ***************
+**************   Case 182   ***************
 create tablegroup tg1 locality = 'z2', primary_zone='z2';
 question_mask_size: 0
 
@@ -3534,7 +3503,7 @@ question_mask_size: 0
 			|--[1],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_VARCHAR], str_value_=[z2], value=[9223372036854775807]
 
-**************   Case 187   ***************
+**************   Case 183   ***************
 alter tablegroup tg1 set primary_zone = "z1:z2";
 question_mask_size: 0
 
@@ -3545,7 +3514,7 @@ question_mask_size: 0
 			|--[0],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_VARCHAR], str_value_=["z1":z2], value=[9223372036854775807]
 
-**************   Case 188   ***************
+**************   Case 184   ***************
 alter tablegroup tg1 set locality='f@z1,f@z3';
 question_mask_size: 0
 
@@ -3556,7 +3525,7 @@ question_mask_size: 0
 			|--[0],[T_LOCALITY], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_VARCHAR], str_value_=[f@z1,f@z3], value=[9223372036854775807]
 
-**************   Case 189   ***************
+**************   Case 185   ***************
 alter tablegroup tg2 add table t1,t2;
 question_mask_size: 0
 
@@ -3569,7 +3538,7 @@ question_mask_size: 0
 			|--[1],[T_RELATION_FACTOR], str_value_=[t2], value=[9223372036854775807]
 				|--[1],[T_IDENT], str_value_=[t2], value=[9223372036854775807]
 
-**************   Case 190   ***************
+**************   Case 186   ***************
 alter tablegroup tg1 set locality='f@z1,f@z3', set primary_zone = "z1:z2";
 question_mask_size: 0
 
@@ -3582,7 +3551,7 @@ question_mask_size: 0
 			|--[1],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_VARCHAR], str_value_=["z1":z2], value=[9223372036854775807]
 
-**************   Case 191   ***************
+**************   Case 187   ***************
 insert into t1 values(X'');
 question_mask_size: 0
 
@@ -3598,7 +3567,7 @@ question_mask_size: 0
 					|--[0],[T_HEX_STRING], str_value_=[], value=[9223372036854775807]
 		|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
 
-**************   Case 192   ***************
+**************   Case 188   ***************
 create table t1(`thedate` date NOT NULL COMMENT '日期');
 question_mask_size: 0
 
@@ -3616,7 +3585,7 @@ question_mask_size: 0
 					|--[1],[T_COMMENT], str_value_=[], value=[9223372036854775807]
 						|--[0],[T_VARCHAR], str_value_=[日期], value=[9223372036854775807]
 
-**************   Case 193   ***************
+**************   Case 189   ***************
 alter system bootstrap REGION 'sys_region' ZONE 'zone1' SERVER '10.101.74.122:41425';
 question_mask_size: 0
 

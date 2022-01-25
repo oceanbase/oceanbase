@@ -20,7 +20,7 @@ using namespace share;
 ObTenantBackupCleanInfoUpdater::ObTenantBackupCleanInfoUpdater() : is_inited_(false), sql_proxy_(NULL)
 {}
 
-int ObTenantBackupCleanInfoUpdater::init(common::ObISQLClient& sql_proxy)
+int ObTenantBackupCleanInfoUpdater::init(common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -34,7 +34,7 @@ int ObTenantBackupCleanInfoUpdater::init(common::ObISQLClient& sql_proxy)
 }
 
 int ObTenantBackupCleanInfoUpdater::insert_backup_clean_info(
-    const uint64_t tenant_id, const ObBackupCleanInfo& clean_info)
+    const uint64_t tenant_id, const ObBackupCleanInfo &clean_info)
 {
   int ret = OB_SUCCESS;
 
@@ -52,7 +52,7 @@ int ObTenantBackupCleanInfoUpdater::insert_backup_clean_info(
 }
 
 int ObTenantBackupCleanInfoUpdater::get_backup_clean_info(
-    const uint64_t tenant_id, const bool for_update, ObBackupCleanInfo& clean_info)
+    const uint64_t tenant_id, const bool for_update, ObBackupCleanInfo &clean_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -71,7 +71,7 @@ int ObTenantBackupCleanInfoUpdater::get_backup_clean_info(
 }
 
 int ObTenantBackupCleanInfoUpdater::update_backup_clean_info(
-    const uint64_t tenant_id, const ObBackupCleanInfo& src_clean_info, const ObBackupCleanInfo& dest_clean_info)
+    const uint64_t tenant_id, const ObBackupCleanInfo &src_clean_info, const ObBackupCleanInfo &dest_clean_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -92,7 +92,7 @@ int ObTenantBackupCleanInfoUpdater::update_backup_clean_info(
   return ret;
 }
 
-int ObTenantBackupCleanInfoUpdater::remove_clean_info(const uint64_t tenant_id, const ObBackupCleanInfo& clean_info)
+int ObTenantBackupCleanInfoUpdater::remove_clean_info(const uint64_t tenant_id, const ObBackupCleanInfo &clean_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -108,7 +108,7 @@ int ObTenantBackupCleanInfoUpdater::remove_clean_info(const uint64_t tenant_id, 
 }
 
 int ObTenantBackupCleanInfoUpdater::check_can_update_backup_clean_info(
-    const ObBackupCleanInfoStatus::STATUS& src_status, const ObBackupCleanInfoStatus::STATUS& dest_status)
+    const ObBackupCleanInfoStatus::STATUS &src_status, const ObBackupCleanInfoStatus::STATUS &dest_status)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -156,7 +156,7 @@ int ObTenantBackupCleanInfoUpdater::check_can_update_backup_clean_info(
 }
 
 int ObTenantBackupCleanInfoUpdater::get_backup_clean_info_status(
-    const uint64_t tenant_id, ObISQLClient& trans, ObBackupCleanInfoStatus::STATUS& status)
+    const uint64_t tenant_id, ObISQLClient &trans, ObBackupCleanInfoStatus::STATUS &status)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -169,7 +169,7 @@ int ObTenantBackupCleanInfoUpdater::get_backup_clean_info_status(
 }
 
 int ObTenantBackupCleanInfoUpdater::get_deleted_tenant_clean_infos(
-    common::ObIArray<ObBackupCleanInfo>& deleted_tenant_clean_infos)
+    common::ObIArray<ObBackupCleanInfo> &deleted_tenant_clean_infos)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -182,7 +182,7 @@ int ObTenantBackupCleanInfoUpdater::get_deleted_tenant_clean_infos(
   return ret;
 }
 
-int ObTenantBackupCleanInfoUpdater::check_clean_task_is_dong(bool& is_doing)
+int ObTenantBackupCleanInfoUpdater::check_clean_task_is_dong(bool &is_doing)
 {
   int ret = OB_SUCCESS;
   is_doing = false;
@@ -207,7 +207,7 @@ int ObTenantBackupCleanInfoUpdater::check_clean_task_is_dong(bool& is_doing)
 ObBackupCleanInfoHistoryUpdater::ObBackupCleanInfoHistoryUpdater() : is_inited_(false), sql_proxy_(NULL)
 {}
 
-int ObBackupCleanInfoHistoryUpdater::init(common::ObISQLClient& sql_proxy)
+int ObBackupCleanInfoHistoryUpdater::init(common::ObISQLClient &sql_proxy)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -220,7 +220,7 @@ int ObBackupCleanInfoHistoryUpdater::init(common::ObISQLClient& sql_proxy)
   return ret;
 }
 
-int ObBackupCleanInfoHistoryUpdater::insert_backup_clean_info(const ObBackupCleanInfo& clean_info)
+int ObBackupCleanInfoHistoryUpdater::insert_backup_clean_info(const ObBackupCleanInfo &clean_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {

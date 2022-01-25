@@ -468,7 +468,7 @@ inline int ObExprInet6Ntoa::calc_result_type1(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null",K(ret));
   } else {
-    type.set_collation_type(session->get_nls_collation());
+    type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
   }
   return ret;
 }

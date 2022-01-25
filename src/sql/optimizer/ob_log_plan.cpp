@@ -305,7 +305,7 @@ int64_t ObLogPlan::to_string(char* buf, const int64_t buf_len, ExplainType type)
       } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {                                  /* Do nothing */
       } else if (OB_FAIL(BUF_PRINTF("-------------------------------------\n"))) { /* Do nothing */
       } else if (OB_FAIL(print_outline(plan))) {
-        databuff_printf(buf, buf_len, pos, "WARN failed to print outlien, ret=%d", ret);
+        databuff_printf(buf, buf_len, pos, "WARN failed to print outline, ret=%d", ret);
       } else {
         ret = BUF_PRINTF(NEW_LINE);
       }
@@ -320,7 +320,7 @@ int64_t ObLogPlan::to_string(char* buf, const int64_t buf_len, ExplainType type)
       } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {                                  /* Do nothing */
       } else if (OB_FAIL(BUF_PRINTF("-------------------------------------\n"))) { /* Do nothing */
       } else if (OB_FAIL(print_outline(plan))) {
-        databuff_printf(buf, buf_len, pos, "WARN failed to print outlien, ret=%d", ret);
+        databuff_printf(buf, buf_len, pos, "WARN failed to print outline, ret=%d", ret);
       } else {
         ret = BUF_PRINTF(NEW_LINE);
       }
@@ -3405,6 +3405,7 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr* query_ref)
       ObArray<std::pair<int64_t, ObRawExpr*>> exec_params;
       ObLogPlan* logical_plan = NULL;
       if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create plan", K(ret), K(subquery->get_sql_stmt()));
       } else if (OB_FAIL(logical_plan->init_plan_info())) {
         LOG_WARN("failed to init equal sets", K(ret));
@@ -4145,12 +4146,6 @@ int ObLogPlan::allocate_access_path(AccessPath* ap, ObLogicalOperator*& out_acce
           OZ(scan->get_part_exprs(table_id, ref_table_id, part_level, part_expr, subpart_expr));
           scan->set_part_expr(part_expr);
           scan->set_subpart_expr(subpart_expr);
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(append(scan->get_startup_exprs(), get_startup_filters()))) {
-          LOG_WARN("failed to append startup filters", K(ret));
         }
       }
 
@@ -5451,6 +5446,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp& operation, void* ctx)
       case EXPLAIN_WRITE_BUFFER_OUTPUT:
       case EXPLAIN_WRITE_BUFFER_OUTLINE:
       case EXPLAIN_INDEX_SELECTION_INFO:
+      case ALLOC_STARTUP_EXPR:
       default:
         break;
     }
@@ -5748,6 +5744,8 @@ int ObLogPlan::extract_onetime_exprs(
   } else if (is_onetime_expr) {
     if (OB_FAIL(extract_subquery_ids(expr, idxs))) {
       LOG_WARN("fail to extract param from raw expr", K(ret));
+    } else if (0 <= ObOptimizerUtil::find_exec_param(onetime_exprs, expr)) {
+      /* expr has added */
     } else {
       int64_t param_num = ObOptimizerUtil::find_exec_param(get_onetime_exprs(), expr);
       if (param_num >= 0) {
@@ -6054,8 +6052,6 @@ int ObLogPlan::generate_subplan_filter_info(const ObIArray<ObRawExpr*>& subquery
   } else {
     ObSEArray<SubPlanInfo*, 4> subplan_infos;
     ObSEArray<SubPlanInfo*, 4> temp_subplan_infos;
-    ObBitSet<> temp_onetime_idxs;
-    ObSEArray<std::pair<int64_t, ObRawExpr*>, 4> temp_onetime_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
       ObRawExpr* temp_expr = NULL;
       temp_subplan_infos.reuse();
@@ -6099,20 +6095,12 @@ int ObLogPlan::generate_subplan_filter_info(const ObIArray<ObRawExpr*>& subquery
     }
     if (OB_SUCC(ret) && !subquery_ops.empty()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
-        temp_onetime_exprs.reuse();
-        temp_onetime_idxs.reuse();
         if (OB_ISNULL(subquery_exprs.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(extract_onetime_exprs(subquery_exprs.at(i), temp_onetime_exprs, temp_onetime_idxs))) {
+        } else if (OB_FAIL(extract_onetime_exprs(subquery_exprs.at(i), onetime_exprs, onetime_idxs))) {
           LOG_WARN("failed to extract onetime exprs", K(ret));
-        } else if (OB_FAIL(append(onetime_exprs, temp_onetime_exprs))) {
-          LOG_WARN("failed to append onetime exprs", K(ret));
-        } else if (OB_FAIL(onetime_idxs.add_members(temp_onetime_idxs))) {
-          LOG_WARN("failed to add member", K(ret));
-        } else {
-          LOG_TRACE("succeed to get onetime exprs", K(*subquery_exprs.at(i)), K(temp_onetime_idxs));
-        }
+        } else { /*do nothing*/ }
       }
     }
     if (OB_SUCC(ret)) {
@@ -7262,8 +7250,6 @@ int ObLogPlan::check_enable_plan_expiration(bool& enable) const
     LOG_WARN("stmt is null", K(ret));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
-  } else if (get_phy_plan_type() != OB_PHY_PLAN_LOCAL && get_phy_plan_type() != OB_PHY_PLAN_REMOTE) {
-    // do nothing
   } else if (OB_FAIL(session->get_adaptive_cursor_sharing(use_acs))) {
     LOG_WARN("failed to check is acs enabled", K(ret));
   } else if (use_acs) {
@@ -7272,21 +7258,10 @@ int ObLogPlan::check_enable_plan_expiration(bool& enable) const
     LOG_WARN("failed to check is spm enabled", K(ret));
   } else if (use_spm) {
     // do nothing
+  } else if (get_phy_plan_type() != OB_PHY_PLAN_LOCAL && get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
+    // do nothing
   } else {
-    const ObLogicalOperator* node = root_;
-    while (OB_SUCC(ret)) {
-      if (OB_ISNULL(node)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is null", K(ret));
-      } else if (node->get_num_of_child() == 1) {
-        node = node->get_child(ObLogicalOperator::first_child);
-      } else {
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && node->is_table_scan()) {
-      enable = (static_cast<const ObLogTableScan*>(node)->get_diverse_path_count() >= 2);
-    }
+    enable = true;
   }
   return ret;
 }

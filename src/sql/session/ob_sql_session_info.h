@@ -492,7 +492,8 @@ public:
     return inner_flag_;
   }
   void reset_audit_record();
-  ObAuditRecordData& get_audit_record();
+  ObAuditRecordData& get_audit_record();  // try_cnt will be changed !
+  ObAuditRecordData &get_raw_audit_record();
   const ObAuditRecordData& get_raw_audit_record() const;
   const ObAuditRecordData& get_final_audit_record(ObExecuteMode mode);
   ObSessionStat& get_session_stat()

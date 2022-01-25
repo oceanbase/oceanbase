@@ -184,6 +184,7 @@ class ObString;
   ACT(BLOCK_FREEZE_INFO_UPDATE, )                                  \
   ACT(BEFROE_DO_ROOT_BACKUP, )                                     \
   ACT(BEFROE_DO_LOG_ARCHIVE_SCHEDULER, )                           \
+  ACT(BEFROE_DO_STOP_TENANT_ARCHIVE, )                             \
   ACT(WRTIE_EXTERN_LOG_ARCHIVE_BACKUP_INFO, )                      \
   ACT(FAILED_TO_PROCESS_TO_PRIMARY, )                              \
   ACT(BEFORE_REFRESH_CLUSTER_ID, )                                 \
@@ -210,7 +211,7 @@ class ObString;
   ACT(BEFORE_PHYSICAL_RESTORE_REBUILD_INDEX, )                     \
   ACT(BEFORE_PHYSICAL_RESTORE_POST_CHECK, )                        \
   ACT(BACKUP_BEFROE_CHOOSE_SRC, )                                  \
-  ACT(BACKUP_BEFROE_BUILD_TABLE_PARTITION_INFO,)                   \
+  ACT(BACKUP_BEFROE_BUILD_TABLE_PARTITION_INFO, )                  \
   ACT(HANG_UPDATE_RS_LIST, )                                       \
   ACT(PARTITION_BACKUP_TASK_BEFORE_ADD_TASK_IN_MGR, )              \
   ACT(HANG_BEFORE_RESOLVER_FINISH, )                               \
@@ -274,7 +275,7 @@ class ObString;
   ACT(BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG, )                    \
   ACT(SLOW_TXN_DURING_2PC_COMMIT_PHASE_FOR_PHYSICAL_BACKUP_1055, ) \
   ACT(BEFORE_FORCE_DROP_SCHEMA, )                                  \
-  ACT(BLOCK_CLOG_PRIMARY_RECONFIRM,)                               \
+  ACT(BLOCK_CLOG_PRIMARY_RECONFIRM, )                              \
   ACT(BEFORE_DEAL_WITH_FAILED_BACKUP_BACKUPSET_TASK, )             \
   ACT(BEFORE_START_BACKUP_ARCHIVELOG_TASK, )                       \
   ACT(SYNC_REPORT, )                                               \
@@ -290,6 +291,9 @@ class ObString;
   ACT(BEFORE_BACKUP_BACKUPPIECE_TASK_COMMIT, )                     \
   ACT(BEFORE_CHECK_BACKUP_TASK_DATA_AVAILABLE, )                   \
   ACT(BACKUP_BACKUPPIECE_AFTER_SCHEDULE, )                         \
+  ACT(FOLLOWER_BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG, )           \
+  ACT(BEFORE_GLOBAL_INDEX_BUILDER_MOVE_TASK, )                     \
+  ACT(BEFORE_SEND_RESTORE_PARTITIONS_RPC, )                        \
   ACT(MAX_DEBUG_SYNC_POINT, )
 
 DECLARE_ENUM(ObDebugSyncPoint, debug_sync_point, OB_DEBUG_SYNC_POINT_DEF);

@@ -361,7 +361,9 @@ static void print_all_limits()
 
 int main(int argc, char* argv[])
 {
+#ifndef OB_USE_ASAN
   init_malloc_hook();
+#endif
   int64_t memory_used = get_virtual_memory_used();
   /**
     signal handler stack

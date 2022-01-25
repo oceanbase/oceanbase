@@ -81,7 +81,6 @@
 #include "sql/resolver/cmd/ob_show_resolver.h"
 #include "sql/resolver/cmd/ob_alter_system_resolver.h"
 #include "sql/resolver/cmd/ob_kill_resolver.h"
-#include "sql/resolver/cmd/ob_set_names_resolver.h"
 #include "sql/resolver/cmd/ob_set_transaction_resolver.h"
 #include "sql/resolver/cmd/ob_bootstrap_resolver.h"
 #include "sql/resolver/cmd/ob_empty_query_resolver.h"
@@ -641,12 +640,6 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       }
       case T_ALTER_SESSION_SET: {
         REGISTER_STMT_RESOLVER(AlterSessionSet);
-        break;
-      }
-      case T_SET_NAMES:
-        // fall through
-      case T_SET_CHARSET: {
-        REGISTER_STMT_RESOLVER(SetNames);
         break;
       }
       case T_KILL: {

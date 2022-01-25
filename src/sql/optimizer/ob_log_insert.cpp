@@ -690,6 +690,7 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   bool has_rand_part_key = false;
   bool has_subquery_part_key = false;
   bool trigger_exist = false;
+  bool is_one_part_table = false;
   bool is_match = false;
   ObInsertStmt* insert_stmt = static_cast<ObInsertStmt*>(get_stmt());
   is_needed = false;
@@ -702,9 +703,12 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   } else if (OB_ISNULL(tbl_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), K(insert_stmt));
+  } else if (FALSE_IT(is_one_part_table = ObSQLUtils::is_one_part_table_can_skip_part_calc(*tbl_schema))) {
+  } else if (insert_stmt->is_ignore() && !is_one_part_table) {
+    is_needed = true;
   } else if (modify_multi_tables()) {
     is_needed = true;
-  } else if (is_table_update_part_key() && tbl_schema->get_all_part_num() > 1) {
+  } else if (is_table_update_part_key() && !is_one_part_table) {
     is_needed = true;
   }
 
@@ -731,12 +735,16 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
   } else if (get_part_hint() != NULL && insert_stmt->value_from_select()) {
     is_needed = true;
   } else if (target_sharding_info.is_local()) {
-    is_needed = false;
-    sharding_info.copy_with_part_keys(target_sharding_info);
+    if (is_one_part_table || !table_partition_info_.get_table_location().is_all_partition()) {
+      is_needed = false;
+      sharding_info.copy_with_part_keys(target_sharding_info);
+    } else {
+      is_needed = true;
+    }
   } else if (OB_FAIL(input_sharding.push_back(&target_sharding_info)) ||
              OB_FAIL(input_sharding.push_back(&child->get_sharding_info()))) {
     LOG_WARN("failed to push back sharding info", K(ret));
-  } else if (ObLogicalOperator::compute_basic_sharding_info(input_sharding, output_sharding, is_basic)) {
+  } else if (OB_FAIL(ObLogicalOperator::compute_basic_sharding_info(input_sharding, output_sharding, is_basic))) {
     LOG_WARN("failed to compute basic sharding info", K(ret));
   } else if (is_basic) {
     is_needed = false;
@@ -761,6 +769,23 @@ int ObLogInsert::need_multi_table_dml(AllocExchContext& ctx, ObShardingInfo& sha
     if (target_sharding_info.is_remote() && child->get_sharding_info().is_local()) {
       ctx.plan_type_ = AllocExchContext::DistrStat::DISTRIBUTED;
       LOG_TRACE("set multi part insert plan to dist", K(ctx.plan_type_));
+    }
+  }
+
+  if (OB_SUCC(ret) && get_insert_up() && is_needed) {
+    // multi insert on duplicate key At present, the static engine has a correctness problem,
+    // and the old engine is no problem. Currently, it will fall back to the old engine for execution.
+    // create table t1(c1 int primary key, c2 int auto_increment) partition by key(c1) partitions 2;
+    // create table t2(c1 int, c2 int) partition by key(c1) partitions 3;
+    // insert into t2 values('1',1000),('1',-100), (1, -300),('1',-200);
+    // insert into t1 select t2.c1, t2.c2 from t2 on duplicate key update t1.c2 = t1.c2 + t2.c2;
+    ObSQLSessionInfo *session = NULL;
+    if (OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("session is null", K(ret));
+    } else if (session->use_static_typing_engine()) {
+      ret = STATIC_ENG_NOT_IMPLEMENT;
+      LOG_WARN("multi part insert up have some bug, must use old sql engine", K(ret), K(is_needed));
     }
   }
 
@@ -1015,17 +1040,28 @@ int ObLogInsert::set_hash_dist_column_exprs(ObExchangeInfo& exch_info, uint64_t 
               K(info),
               K(ret));
         }
+        ObSEArray<ObRawExpr *, 4> except_exprs;
         for (int64_t k = 0; OB_SUCC(ret) && k < info.rowkey_cnt_; ++k) {
-          ObRawExpr* target_expr = info.column_exprs_.at(k);
-          for (int64_t i = 0; OB_SUCC(ret) && i < column_convert_exprs_->count(); i++) {
+          ObRawExpr *target_expr = info.column_exprs_.at(k);
+          for (int64_t j = 0; OB_SUCC(ret) && j < column_convert_exprs_->count(); j++) {
             if (OB_FAIL(ObRawExprUtils::replace_ref_column(
-                    target_expr, table_columns_->at(i), column_convert_exprs_->at(i)))) {
+                    target_expr, table_columns_->at(j), column_convert_exprs_->at(j), NULL, &except_exprs))) {
               LOG_WARN("fail to replace ref column", K(ret));
+            } else if (OB_FAIL(except_exprs.push_back(column_convert_exprs_->at(j)))) {
+              LOG_WARN("push expr into array failed", K(ret));
             }
           }
-          OZ(rowkey_exprs.push_back(target_expr));
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(rowkey_exprs.push_back(target_expr))) {
+            LOG_WARN("push target expr into rowkey array failed", K(ret));
+          }
         }
-        OZ(exch_info.append_hash_dist_expr(rowkey_exprs));
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(exch_info.append_hash_dist_expr(rowkey_exprs))) {
+          LOG_WARN("append rowkey array after exch info array failed", K(ret));
+        }
         found = true;
         break;
       }

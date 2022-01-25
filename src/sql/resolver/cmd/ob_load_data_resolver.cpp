@@ -274,7 +274,13 @@ int ObLoadDataResolver::resolve(const ParseNode& parse_tree)
   if (OB_SUCC(ret)) {
     /* 5. opt_field */
     ObDataInFileStruct& data_struct_in_file = load_stmt->get_data_struct_in_file();
-    const ParseNode* child_node = node->children_[ENUM_OPT_FIELD];
+    bool no_default_escape = false;
+    IS_NO_BACKSLASH_ESCAPES(session_info_->get_sql_mode(), no_default_escape);
+    if (no_default_escape) {
+      data_struct_in_file.field_escaped_char_ = INT64_MAX;
+      data_struct_in_file.field_escaped_str_ = "";
+    }
+    const ParseNode *child_node = node->children_[ENUM_OPT_FIELD];
     if (NULL != child_node) {
       if (T_INTO_FIELD_LIST != child_node->type_) {
         ret = OB_ERR_UNEXPECTED;

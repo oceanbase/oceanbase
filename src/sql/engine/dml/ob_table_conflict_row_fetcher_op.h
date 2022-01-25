@@ -116,12 +116,13 @@ private:
 
 class ObTableConflictRowFetcherOp : public ObOperator {
 public:
-  ObTableConflictRowFetcherOp(ObExecContext& ctx, const ObOpSpec& spec, ObOpInput* input)
-      : ObOperator(ctx, spec, input),
-        dup_row_iter_arr_(),
-        row2exprs_projector_(ctx.get_allocator()),
-        cur_row_idx_(0),
-        cur_rowkey_id_(0)
+  ObTableConflictRowFetcherOp(ObExecContext &ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObOperator(ctx, spec, input),
+      dup_row_iter_arr_(),
+      row2exprs_projector_(ctx.get_allocator()),
+      gen_cols_(ctx.get_allocator()),
+      cur_row_idx_(0),
+      cur_rowkey_id_(0)
   {}
 
   virtual int inner_open() override;
@@ -140,6 +141,7 @@ private:
 
   common::ObSEArray<common::ObNewRowIterator*, 4> dup_row_iter_arr_;
   storage::ObRow2ExprsProjector row2exprs_projector_;
+  ObFixedArray<ObExpr*, common::ObIAllocator> gen_cols_; //mark to save generated column exprs
   int64_t cur_row_idx_;
   int64_t cur_rowkey_id_;
 };

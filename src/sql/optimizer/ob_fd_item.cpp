@@ -115,7 +115,7 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr* expr, const EqualSets& e
   } else if (expr->has_flag(CNT_AGG)) {
     //do nothing
   } else if (expr->get_expr_levels().has_member(stmt_level_)) {
-    if (child_tables_.is_superset(expr->get_relation_ids())) {
+    if (!expr->get_relation_ids().is_empty() && child_tables_.is_superset(expr->get_relation_ids())) {
       is_in_child = true;
     }
     for (int64_t i = 0; OB_SUCC(ret) && !is_in_child && i < equal_sets.count(); ++i) {
@@ -130,7 +130,8 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr* expr, const EqualSets& e
         if (OB_ISNULL(cur_expr = equal_set->at(j))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null expr", K(ret));
-        } else if (!child_tables_.is_superset(cur_expr->get_relation_ids())) {
+        } else if (cur_expr->get_relation_ids().is_empty() ||
+                   !child_tables_.is_superset(cur_expr->get_relation_ids())) {
           // do nothing
         } else if (OB_FAIL(ObRawExprUtils::expr_is_order_consistent(cur_expr, expr, is_consistent))) {
           LOG_WARN("failed to check expr is order consistent", K(ret));
@@ -424,20 +425,19 @@ int ObFdItemFactory::do_deduce_fd_item_set(const EqualSets& equal_sets, ObIArray
         ObRawExprSet* parent_exprs_ptr = NULL;
         if (OB_FAIL(ret) || 1 == const_parent_exprs.count()) {
           /*do nothing*/
-        } else if (OB_FAIL(get_parent_exprs_ptr(const_parent_exprs.at(0), parent_exprs_ptr))) {
-          LOG_WARN("failed to get parent exprs ptr", K(ret));
-        } else if (OB_FAIL(fd_item->get_parent_exprs()->assign(*parent_exprs_ptr))) {
-          LOG_WARN("failed to assign expr set", K(ret));
         } else {
-          for (int64_t j = 1; OB_SUCC(ret) && j < const_parent_exprs.count(); j++) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < const_parent_exprs.count(); j++) {
             if (OB_FAIL(get_parent_exprs_ptr(const_parent_exprs.at(j), parent_exprs_ptr))) {
               LOG_WARN("failed to get parent exprs ptr", K(ret));
             } else if (OB_FAIL(copy_fd_item(new_fd_item, *fd_item))) {
               LOG_WARN("failed to copy fd item", K(ret));
-            } else if (OB_FAIL(new_fd_item->get_parent_exprs()->assign(*parent_exprs_ptr))) {
-              LOG_WARN("failed to assign expr set", K(ret));
+            } else if (0 == j) {
+              new_fd_item->set_parent_exprs(parent_exprs_ptr);
+              fd_item_set.at(i) = new_fd_item;
             } else if (new_fd_items.push_back(new_fd_item)) {
               LOG_WARN("failed to push back fd item", K(ret));
+            } else {
+              new_fd_item->set_parent_exprs(parent_exprs_ptr);
             }
           }
         }
@@ -447,10 +447,14 @@ int ObFdItemFactory::do_deduce_fd_item_set(const EqualSets& equal_sets, ObIArray
         }
       } else if (final_deduce && !const_parent_exprs.empty()) {
         ObRawExprSet* parent_exprs_ptr = NULL;
+        ObFdItem *new_fd_item = NULL;
         if (OB_FAIL(get_parent_exprs_ptr(other_parent_exprs, parent_exprs_ptr))) {
           LOG_WARN("failed to get parent exprs ptr", K(ret));
-        } else if (OB_FAIL(fd_item->get_parent_exprs()->assign(*parent_exprs_ptr))) {
-          LOG_WARN("failed to assign expr set", K(ret));
+        } else if (OB_FAIL(copy_fd_item(new_fd_item, *fd_item))) {
+              LOG_WARN("failed to copy fd item", K(ret));
+        } else {
+          new_fd_item->set_parent_exprs(parent_exprs_ptr);
+          fd_item_set.at(i) = new_fd_item;
         }
       } else { /*do nothing*/
       }

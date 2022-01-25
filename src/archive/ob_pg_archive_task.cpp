@@ -855,6 +855,8 @@ void ObPGArchiveTask::free_task_status_()
       allocator_->free_send_task_status(send_task_queue_);
       send_task_queue_ = NULL;
     }
+    // task_status is not reuse in any cases, and it will be free by worker thread
+    send_task_queue_ = NULL;
   }
 
   if (NULL != clog_task_queue_) {
@@ -864,6 +866,8 @@ void ObPGArchiveTask::free_task_status_()
       allocator_->free_clog_task_status(clog_task_queue_);
       clog_task_queue_ = NULL;
     }
+    // task_status is not reuse in any cases, and it will be free by worker thread
+    clog_task_queue_ = NULL;
   }
 }
 

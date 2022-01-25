@@ -62,8 +62,16 @@ int ObPsSqlParamHelper::traverse(
     TraverseContext& ctx, ObIArray<int64_t>& no_check_type_offsets, ObIArray<int64_t>& not_param_offsets)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx.node_)) {
-    // ignore
+  bool is_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recusive", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(ctx.node_)) {
+    //ignore
   } else {
     bool is_set = false;
     const ParseNode& parent = *ctx.node_;

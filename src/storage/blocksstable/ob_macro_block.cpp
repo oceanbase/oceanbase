@@ -264,6 +264,7 @@ void ObDataStoreDesc::reset()
   progressive_merge_round_ = 0;
   major_working_cluster_version_ = 0;
   iter_complement_ = false;
+  is_unique_index_ = false;
 }
 
 int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
@@ -303,6 +304,7 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc& desc)
   pg_key_ = desc.pg_key_;
   need_check_order_ = desc.need_check_order_;
   major_working_cluster_version_ = desc.major_working_cluster_version_;
+  is_unique_index_ = desc.is_unique_index_;
   if (OB_FAIL(file_handle_.assign(desc.file_handle_))) {
     STORAGE_LOG(WARN, "failed to assign file handle", K(ret), K(desc.file_handle_));
   }

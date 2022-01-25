@@ -3158,85 +3158,6 @@ int ObSSTable::get_all_macro_info(ObIArray<ObMacroBlockInfoPair>& macro_infos)
   return ret;
 }
 
-int ObSSTable::convert_from_old_sstable(ObOldSSTable& src_sstable)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator allocator(ObModIds::OB_SSTABLE);
-  if (SSTABLE_NOT_INIT != status_) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "error unexpected, sstable is not in init status", K(ret), K(status_));
-  } else if (OB_UNLIKELY(!src_sstable.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid arguments", K(ret), K(src_sstable));
-  } else if (OB_FAIL(init(src_sstable.get_key()))) {
-    STORAGE_LOG(WARN, "fail to init sstable", K(ret), K(src_sstable));
-  } else if (OB_FAIL(open(src_sstable.get_meta()))) {
-    STORAGE_LOG(WARN, "fail to open sstable", K(ret), K(src_sstable));
-  } else if (OB_FAIL(meta_.macro_block_array_.assign(src_sstable.get_meta().macro_block_array_))) {
-    STORAGE_LOG(WARN, "fail to assign macro block array", K(ret));
-  } else if (OB_FAIL(meta_.lob_macro_block_array_.assign(src_sstable.get_meta().lob_macro_block_array_))) {
-    STORAGE_LOG(WARN, "fail to assign lob macro block array", K(ret));
-  } else if (OB_FAIL(meta_.macro_block_idx_array_.assign(src_sstable.get_meta().macro_block_idx_array_))) {
-    STORAGE_LOG(WARN, "fail to assign macro block idx array", K(ret));
-  } else if (OB_FAIL(meta_.lob_macro_block_idx_array_.assign(src_sstable.get_meta().lob_macro_block_idx_array_))) {
-    STORAGE_LOG(WARN, "fail to assign lob macro block idx array", K(ret));
-  } else if (OB_FAIL(convert_add_macro_block_meta(meta_.macro_block_array_, allocator))) {
-    STORAGE_LOG(WARN, "fail to convert add macro block meta", K(ret));
-  } else if (OB_FAIL(convert_add_macro_block_meta(meta_.lob_macro_block_array_, allocator))) {
-    STORAGE_LOG(WARN, "fail to convert add macro block meta", K(ret));
-  } else {
-    meta_.pg_key_ = src_sstable.get_meta().pg_key_;
-    meta_.file_ctx_.reset();
-    meta_.lob_file_ctx_.reset();
-    meta_.bloom_filter_file_ctx_.reset();
-    if (OB_FAIL(meta_.file_ctx_.assign(src_sstable.get_meta().file_ctx_))) {
-      STORAGE_LOG(WARN, "fail to assign meta file ctx", K(ret));
-    } else if (OB_FAIL(meta_.lob_file_ctx_.assign(src_sstable.get_meta().lob_file_ctx_))) {
-      STORAGE_LOG(WARN, "fail to assign lob file ctx", K(ret));
-    } else if (OB_FAIL(meta_.bloom_filter_file_ctx_.assign(src_sstable.get_meta().bloom_filter_file_ctx_))) {
-      STORAGE_LOG(WARN, "fail to assign bloom filter file ctx", K(ret));
-    } else {
-      sstable_merge_info_ = src_sstable.get_sstable_merge_info();
-      meta_.use_old_macro_block_count_ = src_sstable.get_meta().use_old_macro_block_count_;
-      meta_.lob_use_old_macro_block_count_ = src_sstable.get_meta().lob_use_old_macro_block_count_;
-      meta_.build_on_snapshot_ = src_sstable.get_meta().build_on_snapshot_;
-      meta_.create_index_base_version_ = src_sstable.get_meta().create_index_base_version_;
-      for (int64_t i = 0; i < meta_.column_cnt_; i++) {
-        meta_.column_metas_.at(i).column_checksum_ = src_sstable.get_meta().column_metas_.at(i).column_checksum_;
-      }
-      for (int64_t i = 0; i < src_sstable.get_meta().new_column_metas_.count(); i++) {
-        meta_.new_column_metas_.at(i).column_checksum_ =
-            src_sstable.get_meta().new_column_metas_.at(i).column_checksum_;
-      }
-      meta_.bloom_filter_block_id_ = src_sstable.get_meta().bloom_filter_block_id_;
-      meta_.bloom_filter_block_id_in_files_ = src_sstable.get_meta().bloom_filter_block_id_in_files_;
-      if (meta_.bloom_filter_block_id_.is_valid() &&
-          OB_FAIL(convert_add_macro_block_meta(meta_.bloom_filter_block_id_, allocator))) {
-        LOG_WARN("failed to add bloomfilter macro block meta", K(meta_.bloom_filter_block_id_), K(ret));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(close())) {
-      LOG_WARN("failed to close sstable", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(add_macro_ref())) {
-      LOG_WARN("fail to add macro ref", K(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to set sstable, clear dest sstable", K(ret), K(src_sstable), K(meta_.macro_block_array_));
-    clear();
-  }
-
-  return ret;
-}
-
 int ObSSTable::add_macro_ref()
 {
   int ret = OB_SUCCESS;
@@ -3280,53 +3201,21 @@ int ObSSTable::add_macro_ref()
   return ret;
 }
 
-int ObSSTable::convert_add_macro_block_meta(const blocksstable::MacroBlockId& block_id, common::ObIAllocator& allocator)
-{
-  int ret = OB_SUCCESS;
-  const ObMacroBlockMeta* meta = nullptr;
-  ObMacroBlockMetaHandle meta_handle;
-  ObMacroBlockMetaV2 new_meta;
-  ObMacroBlockSchemaInfo new_schema;
-  ObFullMacroBlockMeta full_meta;
-  if (OB_UNLIKELY(!block_id.is_valid())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("invalid arguments", K(ret), K(block_id));
-  } else if (OB_FAIL(ObMacroBlockMetaMgr::get_instance().get_old_meta(block_id, meta_handle))) {
-    LOG_WARN("fail to get macro meta", K(ret), K(block_id));
-  } else if (OB_ISNULL(meta = meta_handle.get_meta())) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, meta must not be null", K(ret));
-  } else if (OB_FAIL(full_meta.convert_from_old_macro_meta(*meta, allocator))) {
-    LOG_WARN("fail to convert from old macro meta", K(ret));
-  } else if (OB_FAIL(add_macro_block_meta(block_id, full_meta))) {
-    LOG_WARN("fail to add macro meta", K(ret));
-  }
-  return ret;
-}
-
-int ObSSTable::convert_add_macro_block_meta(
-    const common::ObIArray<blocksstable::MacroBlockId>& macro_block_ids, common::ObIAllocator& allocator)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < macro_block_ids.count(); ++i) {
-    if (OB_FAIL(convert_add_macro_block_meta(macro_block_ids.at(i), allocator))) {
-      LOG_WARN("fail to replay add macro meta", K(ret));
-    }
-  }
-  return ret;
-}
-
 int64_t ObSSTable::dec_ref()
 {
-  int64_t ref_cnt = ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
-
-  if (0 == ref_cnt) {
+  // If current ref_cnt is 1, it should be pushed into gc queue firstly. Then, decrease reference
+  // counts. The reason is that gc by iter may be faster than gc by queue.
+  if (1 == get_ref()) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ObPGSSTableGarbageCollector::get_instance().push_sstable_into_gc_queue(key_))) {
       LOG_WARN("fail to push sstable into gc queue", K(ret), K(key_));
     }
   }
 
+  int64_t ref_cnt = ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */);
+  if (OB_UNLIKELY(ref_cnt < 0)) {
+    LOG_ERROR("Unexpected ref cnt of sstable", K(ref_cnt), K(key_));
+  }
   return ref_cnt;
 }
 

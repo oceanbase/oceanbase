@@ -1876,7 +1876,6 @@ int ObPartitionGroup::replay_split_source_log(
         "replay split source log failed",
         K(ret),
         K_(pkey),
-        K(log),
         K(log_id),
         K(log_ts),
         "used_time",
@@ -1885,7 +1884,6 @@ int ObPartitionGroup::replay_split_source_log(
     STORAGE_LOG(INFO,
         "replay split source log success",
         K_(pkey),
-        K(log),
         K(log_id),
         K(log_ts),
         K(write_slog),
@@ -2475,7 +2473,7 @@ int ObPartitionGroup::split_dest_partition(const ObPartitionSplitInfo& split_inf
                     split_info.get_spp()))) {
               STORAGE_LOG(WARN, "split dest log init failed", K(ret));
             } else if (OB_FAIL(submit_split_dest_log_(log))) {
-              STORAGE_LOG(WARN, "submit split dest log failed", K(ret), K(log));
+              STORAGE_LOG(WARN, "submit split dest log failed", K(ret));
             } else {
               // do nothing
             }
@@ -2552,10 +2550,10 @@ int ObPartitionGroup::push_reference_tables(const ObIArray<ObPartitionKey>& dest
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(check_if_dest_pg_ready_(dest_array, is_dest_partition_ready))) {
-    STORAGE_LOG(WARN, "check if dest partition group ready failed", K(ret), K(log));
+    STORAGE_LOG(WARN, "check if dest partition group ready failed", K(ret));
   } else if (!is_dest_partition_ready) {
     ret = OB_EAGAIN;
-    STORAGE_LOG(WARN, "dest partition group is not ready, need retry", K(ret), K(log));
+    STORAGE_LOG(WARN, "dest partition group is not ready, need retry", K(ret));
   } else if (OB_FAIL(push_reference_tables_(dest_array, split_version))) {
     STORAGE_LOG(WARN, "failed to push reference tables", K(ret), K(dest_array), K(split_version));
   }
@@ -3942,12 +3940,11 @@ int ObPartitionGroup::freeze(const bool emergency, const bool force, int64_t& fr
   ObPartitionGroupLockGuard guard(lock_, 0, PGLOCKSTORAGE);
 
   if (with_data_()) {
-    // F replica, need freeze;
+    // https://open.oceanbase.com/docs/community/oceanbase-database/V3.1.1/replica-overview
+    // FULL（F）/ READONLY（R）replica have sstable and memtable, need to be frozen
     ret = freeze_log_and_data_v2_(emergency, force, freeze_snapshot);
-    // F/R replica are with data because they have sstable. The freeze operation will be skipped at
-    // lower layer because they do not have memtable.
   } else {
-    // L replica or empty PG
+    // LOGONLY（L）replica or empty PG
     ret = freeze_log_(force);
   }
 

@@ -17,7 +17,6 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "mockcontainer/mock_ob_iterator.h"
 #include "blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "ob_sstable_test.h"
 
 #define OK(ass) ASSERT_EQ(OB_SUCCESS, (ass))

@@ -307,7 +307,7 @@ int ObPartitionLogPacketHandler::receive_renew_ms_log(LogService* log_service, C
   int64_t pos = 0;
   if (OB_ISNULL(log_service) || !ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid arugment", KP(log_service), K(ctx));
+    CLOG_LOG(WARN, "invalid argument", KP(log_service), K(ctx));
   } else if (OB_FAIL(deserialize(ctx, req))) {
     CLOG_LOG(WARN, "deserialize ObPushLogReq error", K(ret), K(ctx));
   } else {
@@ -349,7 +349,7 @@ int ObPartitionLogPacketHandler::fake_ack_log(LogService* log_service, Context& 
   ObFakeAckReq req;
   if (OB_ISNULL(log_service) || !ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invlaid arugment", K(ret), K(log_service), K(ctx));
+    CLOG_LOG(WARN, "invlaid argument", K(ret), K(log_service), K(ctx));
   } else if (OB_FAIL(deserialize(ctx, req))) {
     CLOG_LOG(WARN, "deserialize failed", K(ret), K(ctx));
   } else if (OB_FAIL(log_service->fake_ack_log(ctx.server_, req.log_id_, req.proposal_id_))) {
@@ -365,7 +365,7 @@ int ObPartitionLogPacketHandler::fake_receive_log(LogService* log_service, Conte
   ObFakePushLogReq req;
   if (OB_ISNULL(log_service) || !ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invlaid arugment", K(ret), K(log_service), K(ctx));
+    CLOG_LOG(WARN, "invlaid argument", K(ret), K(log_service), K(ctx));
   } else if (OB_FAIL(deserialize(ctx, req))) {
     CLOG_LOG(WARN, "deserialize failed", K(ret), K(ctx));
   } else if (OB_FAIL(log_service->fake_receive_log(ctx.server_, req.log_id_, req.proposal_id_))) {

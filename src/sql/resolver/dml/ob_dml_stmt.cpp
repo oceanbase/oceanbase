@@ -635,6 +635,9 @@ int ObDMLStmt::deep_copy_stmt_struct(
   } else if (OB_FAIL(ObRawExprUtils::copy_expr(
                  expr_factory, other.limit_percent_expr_, limit_percent_expr_, COPY_REF_DEFAULT))) {
     LOG_WARN("deep copy limit percent expr failed", K(ret));
+  } else if (OB_FAIL(
+                 ObRawExprUtils::copy_exprs(expr_factory, other.user_var_exprs_, user_var_exprs_, COPY_REF_DEFAULT))) {
+    LOG_WARN("deep copy user var exprs failed", K(ret));
   } else if (OB_FAIL(from_items_.assign(other.from_items_))) {
     LOG_WARN("assign from items failed", K(ret));
   } else if (OB_FAIL(stmt_hint_.assign(other.stmt_hint_))) {
@@ -2993,7 +2996,19 @@ ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, const ObString &col_na
   return item;
 }
 
-int ObDMLStmt::add_column_item(ObIArray<ColumnItem>& column_items)
+ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, uint64_t column_id)
+{
+  ColumnItem *item = NULL;
+  for (int64_t i = 0; i < column_items_.count(); ++i) {
+    if (table_id == column_items_[i].table_id_ && column_id == column_items_[i].column_id_) {
+      item = &column_items_.at(i);
+      break;
+    }
+  }
+  return item;
+}
+
+int ObDMLStmt::add_column_item(ObIArray<ColumnItem> &column_items)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); i++) {

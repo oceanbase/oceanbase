@@ -1894,6 +1894,11 @@ DEF_TO_STRING(ObHexEscapeSqlStr)
           buf[buf_pos++] = *cur;
         }
       }
+    } else if (skip_escape_) {
+      // do not escape_ while in NO_BACKSLASH_ESCAPES mode
+      for (const char *cur = str_.ptr(); cur < end && buf_pos < buf_len; ++cur) {
+        buf[buf_pos++] = *cur;
+      }
     } else {
       for (const char* cur = str_.ptr(); cur < end && buf_pos < buf_len; ++cur) {
         switch (*cur) {

@@ -180,7 +180,7 @@ void ObDumpTaskGenerator::dump_memory_leak()
         pos += snprintf(buf + pos,
             buf_len - pos,
             "\n######## LEAK_CHECKER (origin_str = %s, label_ = %s, check_type = %d, "
-            "static_id_ = %d, current_ts = %ld)########\n",
+            "static_id_ = 0x%lx, current_ts = %ld)########\n",
             get_mem_leak_checker().get_str(),
             get_mem_leak_checker().get_label(),
             get_mem_leak_checker().get_check_type(),

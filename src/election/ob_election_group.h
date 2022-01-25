@@ -307,6 +307,10 @@ private:
   typedef common::RWLock::RLockGuard RLockGuard;
   typedef common::RWLock::WLockGuard WLockGuard;
   mutable common::RWLock lock_;
+#elif defined(__sw_64__)
+  typedef common::RWLock::RLockGuard RLockGuard;
+  typedef common::RWLock::WLockGuard WLockGuard;
+  mutable common::RWLock lock_;
 #endif
 private:
   common::ObTraceEventRecorder tlog_;

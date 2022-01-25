@@ -29,6 +29,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDayOfMonth);
 };
 
+class ObExprDay: public ObExprTimeBase {
+public:
+  ObExprDay();
+  explicit ObExprDay(common::ObIAllocator &alloc);
+  virtual ~ObExprDay();
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprDay);
+};
+
 class ObExprDayOfWeek : public ObExprTimeBase {
 public:
   ObExprDayOfWeek();

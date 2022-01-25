@@ -138,7 +138,12 @@ int ObSSTableRowWholeScanner::inner_open(
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(open_macro_block())) {
-        LOG_WARN("failed to open macro block", K(ret));
+        LOG_WARN("failed to open macro block",
+            K(ret),
+            K(cur_macro_cursor_),
+            K(cur_micro_cursor_),
+            "macro_block",
+            macro_blocks_[cur_macro_cursor_]);
       } else {
         cur_micro_cursor_ = 0;
         if (OB_FAIL(open_micro_block(true))) {
@@ -196,7 +201,12 @@ int ObSSTableRowWholeScanner::open(const ObTableIterParam& iter_param, ObTableAc
       } else if (OB_FAIL(prefetch())) {
         LOG_WARN("Fail to do prefetch, ", K(ret));
       } else if (OB_FAIL(open_macro_block())) {
-        LOG_WARN("failed to open macro block", K(ret));
+        LOG_WARN("failed to open macro block",
+            K(ret),
+            K(cur_macro_cursor_),
+            K(cur_micro_cursor_),
+            "macro_block",
+            macro_blocks_[cur_macro_cursor_]);
       } else {
         cur_micro_cursor_ = 0;
         if (OB_FAIL(open_micro_block(true))) {
@@ -295,14 +305,25 @@ int ObSSTableRowWholeScanner::inner_get_next_row(const ObStoreRow*& row)
             if (++cur_macro_cursor_ >= macro_blocks_.count()) {
               ret = OB_ITER_END;
             } else if (OB_FAIL(open_macro_block())) {
-              LOG_WARN("failed to open macro block", K(ret), K(cur_macro_cursor_), K(cur_micro_cursor_));
+              LOG_WARN("failed to open macro block",
+                  K(ret),
+                  K(cur_macro_cursor_),
+                  K(cur_micro_cursor_),
+                  "macro_block",
+                  macro_blocks_[cur_macro_cursor_]);
             } else {
               cur_micro_cursor_ = 0;
             }
           }
           if (OB_SUCC(ret)) {
             if (OB_FAIL(open_micro_block(false))) {
-              LOG_WARN("failed to open micro block, ", K(ret), K(cur_macro_cursor_), K(cur_micro_cursor_));
+              LOG_WARN("failed to open micro block, ",
+                  K(ret),
+                  K(cur_macro_cursor_),
+                  K(cur_micro_cursor_),
+                  "macro_block",
+                  macro_blocks_[cur_macro_cursor_],
+                  KPC(scan_handle));
             }
           }
         }
@@ -398,6 +419,8 @@ int ObSSTableRowWholeScanner::open_macro_block()
       if (OB_FAIL(prefetch())) {
         LOG_WARN("failed to do prefetch", K(ret));
       }
+    } else {
+      LOG_WARN("failed to open macro block", K(ret), KPC(scan_handle), K(cur_macro_cursor_));
     }
   }
   return ret;

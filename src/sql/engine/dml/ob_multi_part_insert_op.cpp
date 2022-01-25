@@ -127,7 +127,7 @@ int ObMultiPartInsertOp::shuffle_insert_row(bool& got_row)
         } else if (OB_FAIL(calc_part_id_expr->eval(eval_ctx_, partition_id_datum))) {
           LOG_WARN("fail to calc part id", K(ret), K(calc_part_id_expr));
         } else if (ObExprCalcPartitionId::NONE_PARTITION_ID == partition_id_datum->get_int()) {
-          ret = OB_INVALID_ARGUMENT;
+          ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
           LOG_WARN("no partition matched", K(ret), K(child_->get_spec().output_));
         } else {
           if (OB_FAIL(add_var_to_array_no_dup(part_ids, partition_id_datum->get_int(), &part_idx))) {

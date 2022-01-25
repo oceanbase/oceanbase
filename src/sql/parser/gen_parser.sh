@@ -19,9 +19,10 @@ fi
 
 # generate sql_parser
 bison -v -Werror -d ../../../src/sql/parser/sql_parser_mysql_mode.y -o ../../../src/sql/parser/sql_parser_mysql_mode_tab.c
-if [ $? -ne 0 ]
+BISON_RETURN="$?"
+if [ $BISON_RETURN -ne 0 ]
 then
-    echo Compile error[$?], abort.
+    echo Compile error[$BISON_RETURN], abort.
     exit 1
 fi
 flex -Cfa -B -8 -o ../../../src/sql/parser/sql_parser_mysql_mode_lex.c ../../../src/sql/parser/sql_parser_mysql_mode.l ../../../src/sql/parser/sql_parser_mysql_mode_tab.h

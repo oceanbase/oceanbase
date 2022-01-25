@@ -235,7 +235,7 @@ int64_t ObRenewMembershipLog::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   databuff_printf(buf, buf_len, pos, "replica_num:%ld,", replica_num_);
-  databuff_printf(buf, buf_len, pos, "timetamp:%ld,", timestamp_);
+  databuff_printf(buf, buf_len, pos, "timestamp:%ld,", timestamp_);
   databuff_printf(buf, buf_len, pos, "member_list:%s,", to_cstring(&member_list_));
   databuff_printf(buf, buf_len, pos, "prev_member_list:%s,", to_cstring(&prev_member_list_));
   databuff_printf(buf, buf_len, pos, "type:%ld", type_);

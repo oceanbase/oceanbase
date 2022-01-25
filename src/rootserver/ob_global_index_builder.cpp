@@ -154,7 +154,6 @@ int ObGlobalIndexTask::get_partition_col_checksum_stat(
 
 ObGlobalIndexBuilder::ObGlobalIndexBuilder()
     : inited_(false),
-      loaded_(false),
       rpc_proxy_(NULL),
       mysql_proxy_(NULL),
       server_mgr_(NULL),
@@ -313,8 +312,14 @@ int ObGlobalIndexBuilder::submit_build_global_index_task(const share::schema::Ob
   ObSqlString sql_string;
   const int64_t orig_snapshot = 0;
   int64_t affected_rows = 0;
-  ObGlobalIndexTask* task_ptr = NULL;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  ObGlobalIndexTask *task_ptr = NULL;
+  bool skip_set_task_map = false;
+#ifdef ERRSIM
+  ret = E(EventTable::EN_SUBMIT_INDEX_TASK_ERROR_BEFORE_STAT_RECORD) OB_SUCCESS;
+#endif
+  if (OB_SUCCESS != ret) {
+    LOG_INFO("errsim mock push global index task fail", K(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema)) {
@@ -349,11 +354,31 @@ int ObGlobalIndexBuilder::submit_build_global_index_task(const share::schema::Ob
     } else if (OB_FAIL(trans.start(mysql_proxy_))) {
       LOG_WARN("fail to start trans", K(ret));
     } else if (OB_FAIL(trans.write(OB_SYS_TENANT_ID, sql_string.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute write sql", K(ret));
-    } else {
-      if (1 != affected_rows) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("affected rows unexpected", K(ret), K(sql_string));
+      ObGlobalIndexTask *tmp_task_ptr = NULL;
+      int tmp_ret = OB_SUCCESS;
+      // Ghost index: index schema is existed but somehow the build index task is not there.
+      // the following logic is for ghost index retry, there could be an index being built in progress
+      // while the DDL retry scheduler thinks the index is a ghost. we add a new index task when
+      // this happens though it could lead to repeated task. The repeated task can be detected
+      // in the task itself.
+      if (OB_ERR_PRIMARY_KEY_DUPLICATE != ret) {
+        LOG_WARN("fail to execute write sql", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+        if (OB_HASH_NOT_EXIST == (tmp_ret = task_map_.get_refactored(index_schema->get_table_id(), tmp_task_ptr))) {
+          LOG_INFO(
+              "global index record in __all_index_build_stat, but not in task_map, add it to avoid unexpected miss");
+        } else {
+          skip_set_task_map = true;
+        }
+      }
+    }
+#ifdef ERRSIM
+    ret = E(EventTable::EN_SUBMIT_INDEX_TASK_ERROR_AFTER_STAT_RECORD) OB_SUCCESS;
+#endif
+    if (OB_SUCC(ret)) {
+      if (skip_set_task_map) {
+        LOG_INFO("task is already in task map, skip");
       } else {
         task_ptr->tenant_id_ = index_schema->get_tenant_id();
         task_ptr->data_table_id_ = index_schema->get_data_table_id();
@@ -518,7 +543,6 @@ int ObGlobalIndexBuilder::reload_building_indexes()
         ret = OB_SUCCESS;
       }
       if (OB_SUCCESS == ret) {
-        loaded_ = true;
         idling_.wakeup();
       }
     }
@@ -550,7 +574,7 @@ int ObGlobalIndexBuilder::check_and_get_index_schema(share::schema::ObSchemaGett
     const uint64_t index_table_id, const share::schema::ObTableSchema*& index_schema, bool& index_schema_exist)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
@@ -565,6 +589,8 @@ int ObGlobalIndexBuilder::check_and_get_index_schema(share::schema::ObSchemaGett
   } else if (OB_UNLIKELY(NULL == index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index schema ptr is null", K(ret), K(index_table_id));
+  } else if (index_schema->is_dropped_schema()) {
+    // table delay delete, do not build index
   } else {
   }  // no more to do
   return ret;
@@ -576,7 +602,7 @@ int ObGlobalIndexBuilder::generate_original_table_partition_leader_array(
 {
   int ret = OB_SUCCESS;
   UNUSED(schema_guard);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == data_schema)) {
@@ -656,7 +682,7 @@ int ObGlobalIndexBuilder::get_global_index_build_snapshot(ObGlobalIndexTask* tas
   common::ObArray<PartitionServer> partition_leader_array;
   const share::schema::ObTableSchema* data_schema = NULL;
   share::ObSimpleFrozenStatus frozen_status;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema || NULL == task)) {
@@ -692,7 +718,7 @@ int ObGlobalIndexBuilder::init_build_snapshot_ctx(const common::ObIArray<Partiti
     common::ObIArray<int64_t>& invalid_snapshot_id_array, common::ObIArray<int64_t>& snapshot_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(partition_leader_array.count() <= 0)) {
@@ -723,7 +749,7 @@ int ObGlobalIndexBuilder::do_get_associated_snapshot(PROXY& rpc_proxy, ARG& rpc_
   // an array which is used to record the partition leader array offset
   // of all the invalid snapshots
   common::ObArray<int64_t> invalid_snapshot_id_array;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(all_part_num <= 0 || NULL == task || partition_leader_array.count() <= 0)) {
@@ -799,7 +825,7 @@ int ObGlobalIndexBuilder::do_get_associated_snapshot(PROXY& rpc_proxy, ARG& rpc_
 int ObGlobalIndexBuilder::switch_state(ObGlobalIndexTask* task, const GlobalIndexBuildStatus next_status)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -879,7 +905,7 @@ int ObGlobalIndexBuilder::switch_state(ObGlobalIndexTask* task, const GlobalInde
 int ObGlobalIndexBuilder::pick_build_snapshot(const common::ObIArray<int64_t>& snapshot_array, int64_t& snapshot)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(snapshot_array.count() <= 0)) {
@@ -901,7 +927,7 @@ int ObGlobalIndexBuilder::update_partition_leader_array(common::ObIArray<Partiti
     const common::ObIArray<int>& ret_code_array, const common::ObIArray<int64_t>& invalid_snapshot_id_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(ret_code_array.count() != invalid_snapshot_id_array.count())) {
@@ -971,7 +997,7 @@ int ObGlobalIndexBuilder::update_build_snapshot_ctx(PROXY& proxy, const common::
     common::ObIArray<int64_t>& invalid_snapshot_id_array, common::ObIArray<int64_t>& snapshot_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (invalid_snapshot_id_array.count() != ret_code_array.count()) {
@@ -1033,7 +1059,7 @@ int ObGlobalIndexBuilder::update_build_snapshot_ctx(PROXY& proxy, const common::
 int ObGlobalIndexBuilder::update_task_global_index_build_snapshot(ObGlobalIndexTask* task, const int64_t snapshot)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -1084,7 +1110,7 @@ int ObGlobalIndexBuilder::drive_this_build_single_replica(const share::schema::O
 {
   int ret = OB_SUCCESS;
   UNUSED(schema_guard);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -1144,7 +1170,7 @@ int ObGlobalIndexBuilder::drive_this_build_single_replica(const share::schema::O
 int ObGlobalIndexBuilder::hold_snapshot(const ObGlobalIndexTask* task, const int64_t snapshot)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(nullptr == task || snapshot < 0)) {
@@ -1197,7 +1223,7 @@ int ObGlobalIndexBuilder::launch_new_build_single_replica(const share::schema::O
     share::schema::ObSchemaGetterGuard& schema_guard, ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -1231,8 +1257,8 @@ int ObGlobalIndexBuilder::do_build_single_replica(
     ObGlobalIndexTask* task, const share::schema::ObTableSchema* index_schema, const int64_t snapshot)
 {
   int ret = OB_SUCCESS;
-  ObRootService* root_service = NULL;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  ObRootService *root_service = NULL;
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -1261,7 +1287,7 @@ int ObGlobalIndexBuilder::do_build_single_replica(
 int ObGlobalIndexBuilder::try_build_single_replica(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -1325,7 +1351,7 @@ int ObGlobalIndexBuilder::check_partition_copy_replica_stat(int64_t& major_sstab
   int ret = OB_SUCCESS;
   const ObPartitionReplica* leader_replica = NULL;
   ObPartitionKey pkey;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == rpc_proxy_)) {
@@ -1393,7 +1419,7 @@ int ObGlobalIndexBuilder::build_replica_sstable_copy_task(
     PartitionSSTableBuildStat& part_sstable_build_stat, share::ObPartitionInfo& partition_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (CMRS_IDLE != part_sstable_build_stat.copy_multi_replica_stat_) {
@@ -1478,7 +1504,7 @@ int ObGlobalIndexBuilder::drive_this_copy_multi_replica(const share::schema::ObT
 {
   int ret = OB_SUCCESS;
   UNUSED(schema_guard);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -1487,6 +1513,9 @@ int ObGlobalIndexBuilder::drive_this_copy_multi_replica(const share::schema::ObT
   } else {
     bool all_copy_finish = true;
     int64_t major_sstable_exist_reply_ts = 0;
+    const bool need_fail_list = false;
+    const int64_t cluster_id = OB_INVALID_ID;  // local cluster
+    const bool filter_flag_replica = false;
     common::ObArray<PartitionSSTableBuildStat> partition_sstable_stat_array;
     {
       SpinWLockGuard item_guard(task->lock_);
@@ -1515,7 +1544,12 @@ int ObGlobalIndexBuilder::drive_this_copy_multi_replica(const share::schema::ObT
         if (!pkey.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("pkey invalid", K(ret), K(pkey));
-        } else if (OB_FAIL(pt_operator_->get(pkey.get_table_id(), pkey.get_partition_id(), info))) {
+        } else if (OB_FAIL(pt_operator_->get(pkey.get_table_id(),
+                       pkey.get_partition_id(),
+                       info,
+                       need_fail_list,
+                       cluster_id,
+                       filter_flag_replica))) {
           LOG_WARN("fail to get partition info", K(ret), K(pkey));
         } else if (OB_FAIL(filter.set_replica_status(REPLICA_STATUS_NORMAL))) {
           LOG_WARN("fail to set replica status", K(ret));
@@ -1579,7 +1613,7 @@ int ObGlobalIndexBuilder::launch_new_copy_multi_replica(const share::schema::ObT
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard item_guard(task->lock_);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema || NULL == task)) {
@@ -1598,7 +1632,7 @@ int ObGlobalIndexBuilder::generate_task_partition_sstable_array(share::schema::O
 {
   int ret = OB_SUCCESS;
   UNUSED(schema_guard);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema || NULL == task)) {
@@ -1652,7 +1686,7 @@ int ObGlobalIndexBuilder::build_task_partition_sstable_stat(share::schema::ObSch
 {
   int ret = OB_SUCCESS;
   common::ObArray<PartitionServer> partition_server_array;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema || NULL == task)) {
@@ -1669,7 +1703,7 @@ int ObGlobalIndexBuilder::try_copy_multi_replica(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_COPY_GLOBAL_INDEX);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -1741,7 +1775,7 @@ int ObGlobalIndexBuilder::send_check_unique_index_rpc(const share::schema::ObTab
     ObGlobalIndexTask* task, const common::ObPartitionKey& pkey, const share::ObPartitionReplica* replica)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema || NULL == task || !pkey.is_valid() || NULL == replica)) {
@@ -1769,7 +1803,7 @@ int ObGlobalIndexBuilder::drive_this_unique_index_calc_checksum(const share::sch
   int ret = OB_SUCCESS;
   UNUSED(data_schema);
   UNUSED(schema_guard);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -1876,7 +1910,7 @@ int ObGlobalIndexBuilder::launch_new_unique_index_check(const share::schema::ObT
 {
   int ret = OB_SUCCESS;
   UNUSED(schema_guard);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -1897,7 +1931,7 @@ int ObGlobalIndexBuilder::drive_this_unique_index_check(const share::schema::ObT
 {
   int ret = OB_SUCCESS;
   UNUSED(schema_guard);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -1977,8 +2011,8 @@ int ObGlobalIndexBuilder::get_checksum_calculation_snapshot(ObGlobalIndexTask* t
 {
   int ret = OB_SUCCESS;
   common::ObArray<PartitionServer> partition_leader_array;
-  const share::schema::ObTableSchema* data_schema = NULL;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  const share::schema::ObTableSchema *data_schema = NULL;
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema || NULL == task)) {
@@ -2013,7 +2047,7 @@ int ObGlobalIndexBuilder::build_task_partition_col_checksum_stat(const share::sc
   int ret = OB_SUCCESS;
   SpinWLockGuard item_guard(task->lock_);
 
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema || NULL == data_schema)) {
@@ -2153,7 +2187,7 @@ int ObGlobalIndexBuilder::send_col_checksum_calc_rpc(const share::schema::ObTabl
     const common::ObPartitionKey& pkey, const share::ObPartitionReplica* replica)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == index_schema || schema_version < 0 || checksum_snapshot < 0 || !pkey.is_valid() ||
@@ -2182,7 +2216,7 @@ int ObGlobalIndexBuilder::send_checksum_calculation_request(
 {
   int ret = OB_SUCCESS;
   uint64_t execution_id = OB_INVALID_ID;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -2267,7 +2301,7 @@ int ObGlobalIndexBuilder::do_checksum_calculation(ObGlobalIndexTask* task,
     const share::schema::ObTableSchema* index_schema, const share::schema::ObTableSchema* data_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema || NULL == data_schema)) {
@@ -2289,7 +2323,7 @@ int ObGlobalIndexBuilder::launch_new_unique_index_calc_checksum(const share::sch
     ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema || NULL == data_schema)) {
@@ -2323,7 +2357,7 @@ int ObGlobalIndexBuilder::try_unique_index_calc_checksum(ObGlobalIndexTask* task
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_CHECK_GLOBAL_UNIQUE_INDEX);
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -2400,7 +2434,7 @@ int ObGlobalIndexBuilder::try_unique_index_calc_checksum(ObGlobalIndexTask* task
 int ObGlobalIndexBuilder::try_unique_index_check(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -2477,7 +2511,7 @@ int ObGlobalIndexBuilder::pick_data_replica(
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObTableSchema* data_schema = nullptr;
   common::ObPartitionKey phy_part_key;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(!pkey.is_valid())) {
@@ -2559,7 +2593,7 @@ int ObGlobalIndexBuilder::pick_index_replica(
     const common::ObPartitionKey& pkey, const common::ObIArray<common::ObAddr>& previous, common::ObAddr& server)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(!pkey.is_valid())) {
@@ -2631,7 +2665,7 @@ static bool is_ob_sql_errno(int err)
 int ObGlobalIndexBuilder::on_build_single_replica_reply(const uint64_t index_table_id, int64_t snapshot, int ret_code)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(index_table_id == OB_INVALID_ID || snapshot <= 0)) {
@@ -2684,7 +2718,7 @@ int ObGlobalIndexBuilder::on_copy_multi_replica_reply(const ObRebalanceTask& reb
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == schema_service_)) {
@@ -2751,7 +2785,7 @@ int ObGlobalIndexBuilder::on_col_checksum_calculation_reply(
     const uint64_t index_table_id, const common::ObPartitionKey& pkey, const int ret_code)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == index_table_id || !pkey.is_valid())) {
@@ -2793,7 +2827,7 @@ int ObGlobalIndexBuilder::on_check_unique_index_reply(
     const ObPartitionKey& pkey, const int ret_code, const bool is_unique)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(!pkey.is_valid())) {
@@ -2839,7 +2873,7 @@ int ObGlobalIndexBuilder::send_check_unique_index_request(
     const share::schema::ObTableSchema* index_schema, ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -2882,7 +2916,7 @@ int ObGlobalIndexBuilder::build_task_partition_unique_stat(
     const share::schema::ObTableSchema* schema, ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == schema || NULL == task)) {
@@ -2926,7 +2960,7 @@ int ObGlobalIndexBuilder::build_task_partition_unique_stat(
 int ObGlobalIndexBuilder::clear_intermediate_result(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -2996,7 +3030,7 @@ int ObGlobalIndexBuilder::try_update_index_status_in_schema(
     const share::schema::ObTableSchema* index_schema, ObGlobalIndexTask* task, const ObIndexStatus new_status)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task || NULL == index_schema)) {
@@ -3024,7 +3058,7 @@ int ObGlobalIndexBuilder::try_update_index_status_in_schema(
 int ObGlobalIndexBuilder::try_handle_index_build_take_effect(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -3096,7 +3130,7 @@ int ObGlobalIndexBuilder::try_handle_index_build_take_effect(ObGlobalIndexTask* 
 int ObGlobalIndexBuilder::try_handle_index_build_failed(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -3174,7 +3208,7 @@ int ObGlobalIndexBuilder::try_handle_index_build_failed(ObGlobalIndexTask* task)
 int ObGlobalIndexBuilder::try_handle_index_build_finish(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -3261,7 +3295,7 @@ int ObGlobalIndexBuilder::try_handle_index_build_finish(ObGlobalIndexTask* task)
 int ObGlobalIndexBuilder::try_drive(ObGlobalIndexTask* task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
   } else if (OB_UNLIKELY(NULL == task)) {
@@ -3323,7 +3357,7 @@ int ObGlobalIndexBuilder::try_drive(ObGlobalIndexTask* task)
 int ObGlobalIndexBuilder::get_task_count_in_lock(int64_t& task_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
   } else {
     SpinRLockGuard guard(task_map_lock_);
@@ -3334,7 +3368,7 @@ int ObGlobalIndexBuilder::get_task_count_in_lock(int64_t& task_cnt)
 
 void ObGlobalIndexBuilder::run3()
 {
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_UNLIKELY(!inited_)) {
     int ret = OB_NOT_INIT;
     LOG_WARN("ObGlobalIndexBuilder not init", K(ret));
     idling_.idle(10 * 1000L * 1000L);
@@ -3344,11 +3378,7 @@ void ObGlobalIndexBuilder::run3()
       {
         int64_t task_cnt = 0;
         int tmp_ret = get_task_count_in_lock(task_cnt);
-        if (task_cnt <= 0 || OB_SUCCESS != tmp_ret) {
-          idling_.idle(10 * 1000000);
-        } else {
-          idling_.idle(1 * 1000000);
-        }
+        idling_.idle(1 * 100000);
       };
       ObClusterType cluster_type = ObClusterInfoGetter::get_cluster_type_v2();
       if (PRIMARY_CLUSTER != cluster_type) {

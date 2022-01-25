@@ -3029,7 +3029,8 @@ const uint64_t tenant_space_tables [] = {
   OB_GV_GLOBAL_TRANSACTION_ORA_TID,
   OB_V_GLOBAL_TRANSACTION_ORA_TID,
   OB_V_RESTORE_POINT_ORA_TID,
-  OB_V_RSRC_PLAN_ORA_TID,  };
+  OB_V_RSRC_PLAN_ORA_TID,
+  OB_TRIGGERS_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -3886,7 +3887,8 @@ const char* const tenant_space_table_names [] = {
   OB_GV_GLOBAL_TRANSACTION_ORA_TNAME,
   OB_V_GLOBAL_TRANSACTION_ORA_TNAME,
   OB_V_RESTORE_POINT_ORA_TNAME,
-  OB_V_RSRC_PLAN_ORA_TNAME,  };
+  OB_V_RSRC_PLAN_ORA_TNAME,
+  OB_TRIGGERS_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,

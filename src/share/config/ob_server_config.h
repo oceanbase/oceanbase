@@ -42,7 +42,7 @@ const char* const ENABLE_SQL_AUDIT = "enable_sql_audit";
 const char* const CONFIG_TRUE_VALUE = "1";
 const char* const CONFIG_FALSE_VALUE = "0";
 const char* const OBCONFIG_URL = "obconfig_url";
-const char* const _SCHEMA_HISTORY_RECYCLE_INTERVAL = "_schema_history_recycle_interval";
+const char* const SCHEMA_HISTORY_RECYCLE_INTERVAL = "schema_history_recycle_interval";
 const char* const _RECYCLEBIN_OBJECT_PURGE_FREQUENCY = "_recyclebin_object_purge_frequency";
 const char* const TDE_MODE = "tde_mode";
 const char* const EXTERNAL_KMS_INFO = "external_kms_info";
@@ -134,6 +134,11 @@ public:
     return enable_sql_operator_dump;
   }
   bool enable_static_engine_for_query() const;
+
+  bool enable_defensive_check() const
+  {
+    return _enable_defensive_check && lib::is_diagnose_info_enabled();
+  }
 
   bool is_major_version_upgrade() const
   {

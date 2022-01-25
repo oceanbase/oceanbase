@@ -359,7 +359,7 @@ int ObExpandAggregateUtils::expand_covar_expr(ObTransformerCtx* ctx, ObAggFunRaw
       ObRawExpr* minus_expr2 = NULL;
       ObRawExpr* ne_expr = NULL;
       ObRawExpr* case_when_expr = NULL;
-      if (OB_FAIL(OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr)))) {
+      if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr))) {
         LOG_WARN("failed to build null expr", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx->expr_factory_, ObIntType, 1, one_expr))) {
         LOG_WARN("failed to build const int expr", K(ret));
@@ -418,7 +418,7 @@ int ObExpandAggregateUtils::expand_corr_expr(ObTransformerCtx* ctx, ObAggFunRawE
     ObRawExpr* ne_expr = NULL;
     ObRawExpr* case_when_expr = NULL;
     ObConstRawExpr* zero_expr = NULL;
-    if (OB_FAIL(OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr)))) {
+    if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr))) {
       LOG_WARN("failed to build null expr", K(ret));
     } else if (OB_FAIL(build_special_case_when_expr(
                    *ctx->expr_factory_, parma_expr1, parma_expr2, parma_expr1, case_when_expr1))) {
@@ -653,7 +653,7 @@ int ObExpandAggregateUtils::expand_var_expr(ObTransformerCtx* ctx, ObAggFunRawEx
       ObRawExpr* ne_expr = NULL;
       ObRawExpr* case_when_expr = NULL;
       ObRawExpr* null_expr = NULL;
-      if (OB_FAIL(OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr)))) {
+      if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr))) {
         LOG_WARN("failed to build null expr", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx->expr_factory_, ObIntType, 1, one_expr))) {
         LOG_WARN("failed to build const int expr", K(ret));
@@ -766,7 +766,7 @@ int ObExpandAggregateUtils::expand_regr_slope_expr(ObTransformerCtx* ctx, ObAggF
         var_pop_expr->set_expr_level(aggr_expr->get_expr_level());
         if (OB_FAIL(expand_var_expr(ctx, var_pop_expr, right_div_expr, new_aggr_items))) {
           LOG_WARN("failed to expand var expr", K(ret));
-        } else if (OB_FAIL(OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr)))) {
+        } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr))) {
           LOG_WARN("failed to build null expr", K(ret));
         } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx->expr_factory_, ObIntType, 0, zero_expr))) {
           LOG_WARN("failed to build const int expr", K(ret));
@@ -947,7 +947,7 @@ int ObExpandAggregateUtils::expand_regr_r2_expr(ObTransformerCtx* ctx, ObAggFunR
     ObRawExpr* eq_expr2 = NULL;
     ObRawExpr* power_param_expr = NULL;
     ObSysFunRawExpr* power_expr = NULL;
-    if (OB_FAIL(OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr)))) {
+    if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx->expr_factory_, null_expr))) {
       LOG_WARN("failed to build null expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx->expr_factory_, ObIntType, 1, one_expr))) {
       LOG_WARN("failed to build const int expr", K(ret));
@@ -1173,9 +1173,10 @@ int ObExpandAggregateUtils::build_special_case_when_expr(ObRawExprFactory& expr_
     ObRawExpr* is_not_expr2 = NULL;
     ObRawExpr* and_expr = NULL;
     case_when_expr = NULL;
-    if (OB_FAIL(OB_FAIL(ObRawExprUtils::build_null_expr(expr_factory, null_expr)))) {
+    if (OB_FAIL(ObRawExprUtils::build_null_expr(expr_factory, null_expr))) {
       LOG_WARN("failed to build null expr", K(ret));
-    } else if (ObRawExprUtils::build_const_bool_expr(&expr_factory, false_expr, false)) {
+    } else if (OB_FAIL(
+                   ObRawExprUtils::build_const_bool_expr(&expr_factory, false_expr, false))) {
       LOG_WARN("failed to build const bool expr", K(ret));
     } else if (OB_FAIL(
                    ObRawExprUtils::build_is_not_expr(expr_factory, param_expr1, null_expr, false_expr, is_not_expr1))) {

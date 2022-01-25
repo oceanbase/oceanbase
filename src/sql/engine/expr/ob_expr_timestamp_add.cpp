@@ -73,6 +73,9 @@ int ObExprTimeStampAdd::calc_result3(
     LOG_WARN("unexpected error. calc buffer is null", K(ret));
   } else if (OB_UNLIKELY(unit.is_null() || interval.is_null() || timestamp.is_null())) {
     result.set_null();
+  } else if (OB_ISNULL(expr_ctx.exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx is null", K(ret));
   } else {
     int64_t ts = 0;
     int64_t interval_int = 0;
@@ -83,7 +86,8 @@ int ObExprTimeStampAdd::calc_result3(
     EXPR_GET_INT64_V2(interval, interval_int);
     ObTimeConvertCtx cvrt_ctx(get_timezone_info(expr_ctx.my_session_), true);
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ob_obj_to_ob_time_with_date(timestamp, cvrt_ctx.tz_info_, ot))) {
+      if (OB_FAIL(ob_obj_to_ob_time_with_date(
+              timestamp, cvrt_ctx.tz_info_, ot, get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx())))) {
         LOG_WARN("cast to ob time failed", K(ret), K(timestamp), K(expr_ctx.cast_mode_));
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ot, cvrt_ctx, ts))) {
         LOG_WARN("ob time to datetime failed", K(ret));

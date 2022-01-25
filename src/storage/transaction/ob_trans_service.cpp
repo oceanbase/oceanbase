@@ -501,7 +501,7 @@ int ObTransService::half_stmt_commit(const ObTransDesc& trans_desc, const ObPart
   } else {
     part_ctx = static_cast<ObPartTransCtx*>(ctx);
     if (OB_FAIL(part_ctx->half_stmt_commit())) {
-      TRANS_LOG(WARN, "half stmt commit error", K(ret), K(trans_desc), K(partition), K(*part_ctx));
+      TRANS_LOG(WARN, "half stmt commit error", K(ret), K(trans_desc), K(partition));
     }
     (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
   }
@@ -883,7 +883,7 @@ int ObTransService::acquire_sche_ctx_(ObTransDesc& trans_desc, ObScheTransCtx*& 
   } else if (!trans_desc.is_nested_stmt()) {
     TRANS_LOG(WARN, "Non-nested statements should not create a temporary scheduler", K(trans_desc));
   } else {
-    // 构建临时scheduler
+    // build temporary scheduler
     const ObTransID& trans_id = trans_desc.get_trans_id();
     const bool for_replay = false;
     bool alloc = true;
@@ -1409,7 +1409,7 @@ int ObTransService::start_stmt(const ObStmtParam& stmt_param, ObTransDesc& trans
         if (OB_TRANS_XA_BRANCH_FAIL == ret) {
           TRANS_LOG(INFO, "xa trans has terminated", K(ret), K(trans_desc));
         } else {
-          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret), K(*sche_ctx));
+          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret));
         }
       } else if (OB_SUCCESS != (ret = sche_ctx->xa_try_global_lock(xid))) {
         // ret = OB_TRANS_STMT_NEED_RETRY;
@@ -4188,10 +4188,10 @@ int ObTransService::can_replay_redo_(
           need_replay_redo = true;
         } else {
           need_replay_redo = false;
-          TRANS_LOG(INFO, "no need to replay this big row redo log", K(meta), K(*part_ctx));
+          TRANS_LOG(INFO, "no need to replay this big row redo log", K(meta));
         }
       } else {
-        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta), K(*part_ctx));
+        TRANS_LOG(ERROR, "invalid row flag, unexpected error", K(meta));
         ret = OB_ERR_UNEXPECTED;
       }
     }
@@ -4934,7 +4934,7 @@ int ObTransService::replay(const ObPartitionKey& partition, const char* logbuf, 
     } else {
       part_ctx = static_cast<ObPartTransCtx*>(ctx);
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = part_ctx->get_memtable_ctx()->sub_trans_end(false)))) {
-        TRANS_LOG(WARN, "sub trans abort error", K(tmp_ret), K(partition), K(log_id), K(*part_ctx));
+        TRANS_LOG(WARN, "sub trans abort error", K(tmp_ret), K(partition), K(log_id));
       }
       (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
     }
@@ -6210,12 +6210,12 @@ int ObTransService::init_memtable_ctx_(ObMemtableCtx* mem_ctx, const uint64_t te
 }
 
 int ObTransService::alloc_memtable_ctx_(
-    const ObPartitionKey& pkey, const bool is_fast_select, const uint64_t tenant_id, ObMemtableCtx*& ctx)
+    const ObPartitionKey& pkey, const bool tls_enable, const uint64_t tenant_id, ObMemtableCtx*& ctx)
 {
   int ret = OB_SUCCESS;
 
   ObMemtableCtx* memtable_ctx = NULL;
-  if (is_fast_select) {
+  if (!tls_enable) {
     memtable_ctx = static_cast<ObMemtableCtx*>(mt_ctx_factory_.alloc(tenant_id));
     if (NULL != memtable_ctx) {
       memtable_ctx->set_self_alloc_ctx(true);
@@ -6249,7 +6249,7 @@ int ObTransService::alloc_memtable_ctx_(
     }
   } else {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(WARN, "allocate memory failed", K(ret), K(pkey), K(is_fast_select));
+    TRANS_LOG(WARN, "allocate memory failed", K(ret), K(pkey), K(tls_enable));
   }
   return ret;
 }
@@ -6328,6 +6328,7 @@ int ObTransService::get_store_ctx(const ObTransDesc& trans_desc, const ObPartiti
       if (trans_desc.is_fast_select() || trans_desc.is_not_create_ctx_participant(pg_key, user_specified_snapshot)) {
         int64_t part_snapshot_version = ObTransVersion::INVALID_TRANS_VERSION;
         store_ctx.trans_id_ = trans_desc.get_trans_id();
+        bool tls_enable = store_ctx.is_thread_scope_ && !trans_desc.is_fast_select();
         if (OB_FAIL(handle_snapshot_for_read_only_participant_(
                 trans_desc, pg_key, user_specified_snapshot, part_snapshot_version))) {
           TRANS_LOG(WARN,
@@ -6336,7 +6337,7 @@ int ObTransService::get_store_ctx(const ObTransDesc& trans_desc, const ObPartiti
               K(trans_desc),
               K(pg_key),
               K(user_specified_snapshot));
-        } else if (OB_FAIL(alloc_memtable_ctx_(pg_key, trans_desc.is_fast_select(), pg_key.get_tenant_id(), mt_ctx))) {
+        } else if (OB_FAIL(alloc_memtable_ctx_(pg_key, tls_enable, pg_key.get_tenant_id(), mt_ctx))) {
           TRANS_LOG(WARN, "allocate memory failed", K(ret), K(pg_key));
         } else if (!mt_ctx->is_self_alloc_ctx() && OB_FAIL(init_memtable_ctx_(mt_ctx, pg_key.get_tenant_id()))) {
           TRANS_LOG(WARN, "init mem ctx failed", K(ret), K(pg_key));
@@ -8267,8 +8268,7 @@ int ObTransService::handle_elr_callback_(const int64_t task_type, const ObPartit
           K(partition),
           K(trans_id),
           K(prev_or_next_trans_id),
-          K(state),
-          K(*part_ctx));
+          K(state));
     }
     (void)part_trans_ctx_mgr_.revert_trans_ctx(ctx);
   }
@@ -8813,7 +8813,7 @@ int ObTransService::xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStm
     TRANS_LOG(WARN, "invalid argument", K(ret), K(trans_desc));
   } else if (OB_ISNULL(sche_ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "xa trans sche ctx is null", K(ret), K(*sche_ctx), K(trans_desc));
+    TRANS_LOG(WARN, "xa trans sche ctx is null", K(ret), K(trans_desc));
   } else if (OB_FAIL(trans_desc.set_cur_stmt_expired_time(expired_time))) {
     TRANS_LOG(WARN, "set statement expired time error", KR(ret), K(trans_desc), K(expired_time));
   } else if (sche_ctx->is_xa_tightly_coupled()) {
@@ -8823,7 +8823,7 @@ int ObTransService::xa_rollback_all_changes(ObTransDesc& trans_desc, const ObStm
         if (OB_TRANS_XA_BRANCH_FAIL == ret) {
           TRANS_LOG(INFO, "xa trans has terminated", K(ret), K(trans_desc));
         } else {
-          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret), K(*sche_ctx));
+          TRANS_LOG(WARN, "unexpected scheduler for xa execution", K(ret));
         }
       } else {
         int64_t retry_times = 0;

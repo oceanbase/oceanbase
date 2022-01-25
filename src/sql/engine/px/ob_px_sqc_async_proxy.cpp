@@ -206,19 +206,6 @@ int ObPxSqcAsyncProxy::wait_all()
           LOG_WARN("call rpc failed", K(ret), K(callback.get_ret_code()));
         }
       }
-
-      if (callback.need_retry() && OB_SUCC(ret)) {
-        // need retry the task.
-        // reset: visit, eturn_cb_count_
-        callback.set_visited(false);
-        return_cb_count_--;
-        if (check_for_retry(callback)) {
-          callback.reset();
-          if (OB_FAIL(launch_one_rpc_request(idx, &callback))) {
-            LOG_WARN("retrying to send sqc rpc failed");
-          }
-        }
-      }
     }
   }
 
@@ -242,18 +229,6 @@ void ObPxSqcAsyncProxy::destroy()
   allocator_.reuse();
   callbacks_.reuse();
   results_.reuse();
-}
-
-bool ObPxSqcAsyncProxy::check_for_retry(ObSqcAsyncCB& callback)
-{
-  bool retry = false;
-  int64_t timeout_us = phy_plan_ctx_->get_timeout_timestamp() - ObTimeUtility::current_time();
-  int64_t send_duration = ObTimeUtility::current_time() - callback.get_send_ts();
-  // avoid retry too mutch
-  if (timeout_us >= 100 * 1000L && send_duration >= 10 * 1000L) {
-    retry = true;
-  }
-  return retry;
 }
 
 void ObPxSqcAsyncProxy::fail_process()

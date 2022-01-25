@@ -52,7 +52,9 @@ public:
           part_key_(),
           part_row_cnt_(0),
           part_infos_(),
-          cur_part_idx_(0)
+          cur_part_idx_(0),
+          new_row_projector_(NULL),
+          new_row_projector_size_(0)
     {}
     ~ObTableUpdateCtx()
     {}
@@ -145,6 +147,8 @@ public:
   {
     return updated_column_infos_;
   }
+  const common::ObIArray<ColumnContent> &get_updated_column_infos() const
+  { return updated_column_infos_; }
 
   const common::ObIArray<uint64_t>* get_updated_column_ids() const
   {

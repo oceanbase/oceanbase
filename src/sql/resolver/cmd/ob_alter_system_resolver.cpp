@@ -1514,6 +1514,14 @@ int check_backup_dest(const ObString& backup_dest)
     LOG_WARN("failed to print backup dest buf", K(ret), K(backup_dest));
   } else if (OB_FAIL(dest.set(backup_dest_buf))) {
     LOG_WARN("failed to set dest", K(ret), K(backup_dest_buf));
+  } else if (dest.is_nfs_storage() && 0 != strlen(dest.storage_info_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup device is nfs, storage_info should be empty", K(ret), K_(dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup device is nfs, additional parameters are");
+  } else if (dest.is_nfs_storage() && strlen(dest.root_path_) != strlen(backup_dest_buf)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup device is nfs, backup dest should not set '?'", K(ret), K_(dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup device is nfs, setting '?' is"); 
   } else if (OB_FAIL(cluster_dest.set(dest, OB_START_INCARNATION))) {
     LOG_WARN("Failed to set cluster dest", K(ret), K(dest));
   } else if (OB_FAIL(backup_info_mgr.get_last_extern_log_archive_backup_info(
@@ -1632,7 +1640,7 @@ int check_backup_dest_opt(const bool is_backup_backup, const ObString& opt_str)
       }
     }
     if (OB_SUCC(ret)) {
-      if (new_opt.backup_copies_ < 0 || new_opt.backup_copies_ > OB_MAX_BACKUP_COPIES) {
+      if (0 != new_opt.backup_copies_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("invalid backup copies", K(ret), K(opt_str), K(new_opt));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup_copies out of range [0,8] is");
@@ -1698,6 +1706,14 @@ int check_backup_backup_dest(const ObString& backup_backup_dest)
     LOG_WARN("failed to set dest", K(ret), K(backup_dest_buf));
   } else if (OB_FAIL(dst_dest.set(backup_backup_dest_buf))) {
     LOG_WARN("failed to set dest", K(ret), K(backup_backup_dest_buf));
+  } else if (dst_dest.is_nfs_storage() && 0 != strlen(dst_dest.storage_info_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup backup device is nfs, storage_info should be empty", K(ret), K_(dst_dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup device is nfs, additional parameters are"); 
+  } else if (dst_dest.is_nfs_storage() && strlen(dst_dest.root_path_) != strlen(backup_backup_dest_buf)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("backup backup device is nfs, backup backup dest should not set '?'", K(ret), K_(dst_dest.storage_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup backup device is nfs, setting '?' is"); 
   } else if (dst_dest.is_cos_storage()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("backup backup do not support cos storage", KR(ret));
@@ -2152,11 +2168,11 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                   has_perf_audit = true;
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST)) {
-                if (OB_FAIL(check_backup_dest(item.value_.str()))) {
+                if (!session_info_->is_inner() && OB_FAIL(check_backup_dest(item.value_.str()))) {
                   LOG_WARN("failed to check backup dest", K(ret));
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_BACKUP_DEST)) {
-                if (OB_FAIL(check_backup_backup_dest(item.value_.str()))) {
+                if (!session_info_->is_inner() && OB_FAIL(check_backup_backup_dest(item.value_.str()))) {
                   LOG_WARN("failed to check backup backup dest", K(ret));
                 }
               } else if (0 == STRCMP(item.name_.ptr(), OB_STR_BACKUP_DEST_OPT)) {
@@ -3570,7 +3586,8 @@ int ObAlterSystemSetResolver::resolve(const ParseNode& parse_tree)
                   }
                 }
               }
-              if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+              if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(
+                                  ObVariableSetStmt::make_variable_name_node(var_node)))) {
                 LOG_WARN("Add set entry failed", K(ret));
               }
             }

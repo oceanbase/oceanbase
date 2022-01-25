@@ -89,6 +89,18 @@ struct ObSessionNLSParams  // oracle nls parameters
 
 #define CREATE_OBJ_PRINT_PARAM(session) (NULL != (session) ? (session)->create_obj_print_params() : ObObjPrintParams())
 
+// flag is a single bit, but marco(e.g., IS_NO_BACKSLASH_ESCAPES) compare two 64-bits int using '&';
+// if we directly assign the result to flag(single bit), only the last bit of the result is used,
+// which is equal to 'flag = result & 1;'.
+// So we first convert the result to bool(tmp_flag) and assign the bool to flag, which is equal to
+// 'flag = result!=0;'.
+#define GET_SQL_MODE_BIT(marco, sql_mode, flag) \
+  do {                                          \
+    bool tmp_flag = false;                      \
+    marco(sql_mode, tmp_flag);                  \
+    flag = tmp_flag;                            \
+  } while (0)
+
 #ifndef NDEBUG
 #define CHECK_COMPATIBILITY_MODE(session)    \
   do {                                       \
@@ -174,6 +186,7 @@ public:
 
   static const int64_t MIN_CUR_QUERY_LEN = 512;
   static const int64_t MAX_CUR_QUERY_LEN = 16 * 1024;
+  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024;
   class TransFlags {
   public:
     TransFlags() : flags_(0)
@@ -1261,7 +1274,8 @@ public:
   /// @}
   int64_t get_session_info_mem_size() const { return block_allocator_.get_total_mem_size(); }
   int64_t get_sys_var_mem_size() const { return base_sys_var_alloc_.total(); }
-  ObPartitionHitInfo &partition_hit() { return partition_hit_; } // 和上面的set_partition_hit没有任何关系
+  // no relationship with function set_partition_hit(const bool is_hit) above.
+  ObPartitionHitInfo &partition_hit() { return partition_hit_; }
   bool get_err_final_partition_hit(int err_ret)
   {
     bool is_partition_hit = partition_hit().get_bool();

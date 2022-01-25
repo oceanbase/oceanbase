@@ -156,7 +156,7 @@ int ObMultiPartUpdateOp::shuffle_update_row(bool& got_row)
           continue;
         }
       }
-      OZ(check_row_null(table_dml_info.assign_columns_.new_row_, sub_update->column_infos_));
+      OZ(check_row_null(table_dml_info.assign_columns_.new_row_, sub_update->column_infos_, sub_update->updated_column_infos_));
       OZ(check_updated_value(*this,
           table_dml_info.assign_columns_.get_assign_columns(),
           table_dml_info.assign_columns_.old_row_,

@@ -93,7 +93,8 @@ int ObInsertLogPlan::generate_plan()
                  GEN_SIGNATURE,
                  GEN_LOCATION_CONSTRAINT,
                  PX_ESTIMATE_SIZE,
-                 GEN_LINK_STMT))) {
+                 GEN_LINK_STMT,
+                 ALLOC_STARTUP_EXPR))) {
     LOG_WARN("failed to do plan traverse", K(ret));
   } else if (location_type_ != ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN) {
     location_type_ = phy_plan_type_;
@@ -493,10 +494,6 @@ int ObInsertLogPlan::generate_values_op_as_child(ObLogicalOperator*& top)
       /*do nothing*/
     } else if (OB_FAIL(values_op->add_values_expr(insert_stmt->get_value_vectors()))) {
       LOG_WARN("failed to add values expr", K(ret));
-    } else if (NULL != exec_ctx && NULL != exec_ctx->get_my_session() &&
-               exec_ctx->get_my_session()->use_static_typing_engine() &&
-               OB_FAIL(values_op->add_str_values_array(insert_stmt->get_column_conv_functions()))) {
-      LOG_WARN("fail to add_str_values_array", K(ret));
     } else { /*do nothing*/
     }
   }

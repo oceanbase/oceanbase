@@ -421,6 +421,8 @@ DEFINE_ERROR(OB_OBCONFIG_CLUSTER_NOT_EXIST, -4368, -1, "HY000", "cluster not exi
 DEFINE_ORACLE_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED, -4374, -1, "HY000", "value larger than specified precision allowed for this column", 1438, "value larger than specified precision allowed for this column");
 DEFINE_ERROR(OB_DISK_ERROR, -4375, -1, "HY000", "observer has disk error");
 DEFINE_ORACLE_ERROR(OB_UNIMPLEMENTED_FEATURE, -4376, -1, "HY000", "unimplemented feature", 3001, "unimplemented feature");
+DEFINE_ERROR_EXT(OB_ERR_DEFENSIVE_CHECK, -4377, -1, "HY000", "fatal internal error", "fatal internal error in [%.*s]");
+DEFINE_ERROR(OB_CLUSTER_NAME_HASH_CONFLICT, -4378, -1, "HY000", "cluster name conflict");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000
@@ -1323,7 +1325,7 @@ DEFINE_ERROR_EXT(OB_ERR_WINDOW_NAME_IS_NOT_DEFINE, -5929, -1, "HY000", "Window n
 DEFINE_ORACLE_ERROR(OB_ERR_OPEN_CURSORS_EXCEEDED, -5930, -1, "HY000", "maximum open cursors exceeded", 1000, "maximum open cursors exceeded");
 DEFINE_ORACLE_ERROR(OB_ERR_ARG_INVALID, -5931, -1, "HY000", "argument is null, invalid, or out of range", 21560, "argument %.*s is null, invalid, or out of range");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_NAME_STRING, -5932, -1, "HY000", "unexpected name string", 21560, "unexpected name string '%.*s'");
-DEFINE_ERROR_EXT(OB_ERR_CTE_NEED_QUERY_BLOCKS, -5933, -1, "HY000", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s");
+DEFINE_ERROR_EXT(OB_ERR_CTE_NEED_QUERY_BLOCKS, -5976, 3574, "HY000", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones", "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s");
 DEFINE_ERROR_EXT(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION, -5936, ER_WRONG_VALUE_FOR_TYPE, "HY000", "Incorrect value for function", "Incorrect %.*s value: '%.*s' for function %.*s");
 DEFINE_ERROR_EXT(OB_ERR_USER_EXCEED_RESOURCE, -5967, 1226, "42000", "User has exceeded the resource", "User '%.*s' has exceeded the '%s' resource (current value: %lu)");
 
@@ -1541,6 +1543,7 @@ DEFINE_ERROR_DEP(OB_IO_LIMIT, -9061, -1, "HY000", "IO limit");
 DEFINE_ERROR(OB_BACKUP_BACKUP_REACH_COPY_LIMIT, -9062, -1, "HY000", "reach backup backup copy limit");
 DEFINE_ERROR(OB_BACKUP_IO_PROHIBITED, -9063, -1, "HY000", "backup io is prohibited");
 DEFINE_ERROR(OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA, -9064, -1, "HY000", "the archive log and backup data are not continuous");
+DEFINE_ERROR(OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, -9069, -1, "HY000", "deleting backup piece is not allowed");
 
 ////////////////////////////////////////////////////////////////
 //error code for STORAGE3.0 -9100 ~

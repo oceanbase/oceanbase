@@ -561,7 +561,12 @@ int ObArchiveLogFileStore::search_log_in_single_index_file_(const ObPGKey& pg_ke
     ObArchiveFileUtils utils;
     if (OB_FAIL(utils.search_log_in_single_index_file(
             uri, storage_info, log_id, data_file_id, log_exist, max_valid_index_info))) {
-      ARCHIVE_LOG(WARN, "search_log_in_single_index_file fail", K(ret), K(pg_key), K(log_id), K(index_file_id));
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        ARCHIVE_LOG(WARN, "search_log_in_single_index_file fail", K(ret), K(pg_key), K(log_id), K(index_file_id));
+
+      } else {
+        ret = OB_SUCCESS;
+      }
     }
   }
 
@@ -605,7 +610,11 @@ int ObArchiveLogFileStore::get_target_index_file_for_clear_(const ObPGKey& pg_ke
   for (; file_id <= max_index_file_id && OB_SUCC(ret) && !done; file_id++) {
     bool exist = false;
     if (OB_FAIL(get_max_valid_index_info_in_single_index_file_(pg_key, file_id, info, exist))) {
-      ARCHIVE_LOG(WARN, "get_max_archive_info fail", K(ret), K(pg_key), K(file_id));
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        ARCHIVE_LOG(WARN, "get_max_archive_info fail", K(ret), K(pg_key), K(file_id));
+      } else {
+        ret = OB_SUCCESS;
+      }
     } else if (!exist) {
       ARCHIVE_LOG(INFO, "no index info exist", K(pg_key), K(file_id));
     } else {
@@ -723,6 +732,11 @@ int ObArchiveLogFileStore::get_max_archived_info_from_single_index_file_(
   } else {
     ObString uri(path);
     if (OB_FAIL(utils.get_max_archived_info_in_single_index_file(uri, storage_info, info))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        ARCHIVE_LOG(WARN, "get_max_archived_info_in_single_index_file fail", K(ret), K(pg_key));
+      } else {
+        ret = OB_SUCCESS;
+      }
       ARCHIVE_LOG(WARN, "get_max_archived_info_in_single_index_file fail", K(ret), K(pg_key));
     }
   }

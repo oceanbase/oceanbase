@@ -243,8 +243,10 @@ ObSqlCtx::ObSqlCtx()
       is_ddl_from_primary_(false),
       cur_stmt_(NULL),
       can_reroute_sql_(false),
-      reroute_info_()
+      reroute_info_(),
+      is_sensitive_(false)
 {
+  sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
 }
 
@@ -267,6 +269,7 @@ void ObSqlCtx::reset()
   force_print_trace_ = false;
   is_show_trace_stmt_ = false;
   retry_times_ = OB_INVALID_COUNT;
+  sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
   exec_type_ = InvalidType;
   is_prepare_protocol_ = false;
@@ -285,6 +288,7 @@ void ObSqlCtx::reset()
   is_ddl_from_primary_ = false;
   can_reroute_sql_ = false;
   reroute_info_.reset();
+  is_sensitive_ = false;
   clear();
 }
 

@@ -149,7 +149,8 @@ public:
   }
   inline bool check_if_is_expired(const int64_t first_exec_row_count, const int64_t current_row_count) const;
 
-  bool is_plan_unstable();
+  bool is_plan_unstable(
+      const int64_t sample_count, const int64_t sample_exec_row_count, const int64_t sample_exec_usec);
   bool is_expired() const
   {
     return stat_.is_expired_;

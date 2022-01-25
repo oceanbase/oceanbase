@@ -288,7 +288,7 @@ struct ObResolverParams {
         is_multi_table_insert_(false),
         is_resolve_table_function_expr_(false),
         has_cte_param_list_(false),
-        has_recursive_word(false),        
+        has_recursive_word_(false),
         is_column_ref_(true)
   {}
   bool is_force_trace_log()
@@ -343,7 +343,7 @@ public:
   bool is_multi_table_insert_;           // used to mark is multi table insert
   bool is_resolve_table_function_expr_;  // used to mark resolve table function expr.
   bool has_cte_param_list_;
-  bool has_recursive_word;
+  bool has_recursive_word_;
   bool is_column_ref_;                   // used to mark normal column ref
 };
 }  // end namespace sql

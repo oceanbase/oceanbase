@@ -392,7 +392,9 @@ int ObHashGroupBy::load_data(ObExecContext& ctx) const
         level = cur_part->level_;
         part_shift = part_shift + level * CHAR_BIT;
         input_size = cur_part->row_store_.get_file_size();
-        if (OB_FAIL(gby_ctx->group_rows_.resize(&gby_ctx->mem_context_->get_malloc_allocator(), max(2, input_rows)))) {
+        if (OB_FAIL(gby_ctx->group_rows_.resize(&gby_ctx->mem_context_->get_malloc_allocator(),
+                                                max(2, input_rows),
+                                                &gby_ctx->sql_mem_processor_))) {
           LOG_WARN("failed to reuse extended hash table", K(ret));
         } else if (OB_FAIL(init_sql_mem_mgr(gby_ctx, input_size))) {
           LOG_WARN("failed to init sql mem manager", K(ret));
@@ -784,7 +786,9 @@ int ObHashGroupBy::inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) 
           ObMemAttr attr(
               ctx.get_my_session()->get_effective_tenant_id(), ObModIds::OB_HASH_NODE_GROUP_ROWS, ObCtxIds::WORK_AREA);
           if (OB_FAIL(
-                  groupby_ctx->group_rows_.init(&groupby_ctx->mem_context_->get_malloc_allocator(), attr, init_size))) {
+                  groupby_ctx->group_rows_.init(&groupby_ctx->mem_context_->get_malloc_allocator(),
+                                                 attr, &groupby_ctx->sql_mem_processor_,
+                                                 init_size))) {
             LOG_WARN("fail to init hash map", K(ret));
           } else {
             groupby_ctx->op_monitor_info_.otherstat_1_value_ = init_size;

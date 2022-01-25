@@ -578,7 +578,7 @@ int ObCLogMgr::req_start_log_id_by_ts_with_breakpoint(const obrpc::ObLogReqStart
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(log_ext_executor_v2_.req_start_log_id_by_ts_with_breakpoint(req_msg, result))) {
-    CLOG_LOG(WARN, "log executorv2 req_start_log_id_by_ts_with_breakpoint failed", K(ret));
+    CLOG_LOG(WARN, "log executor req_start_log_id_by_ts_with_breakpoint failed", K(ret));
   } else {
     // success
   }
@@ -3174,11 +3174,16 @@ int ObCLogMgr::get_election_group_priority(const uint64_t tenant_id, election::O
     if (OB_SUCCESS != (tmp_ret = ObIOManager::get_instance().is_disk_error(is_data_disk_error))) {
       CLOG_LOG(WARN, "is_data_disk_error failed", K(tmp_ret));
     }
+    const bool is_slog_disk_warning = SLOGGER.is_disk_warning();
+
     if (is_clog_disk_hang) {
       priority.set_system_clog_disk_hang();
     }
     if (is_data_disk_error) {
       priority.set_system_data_disk_error();
+    }
+    if (is_slog_disk_warning) {
+      priority.set_system_slog_disk_warning();
     }
     if (!partition_service_->is_service_started()) {
       priority.set_system_service_not_started();

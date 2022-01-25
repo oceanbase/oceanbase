@@ -172,8 +172,13 @@ int ObSelectResolver::do_resolve_set_query_in_cte(const ParseNode& parse_tree)
     select_stmt->add_set_query(left_select_stmt);
     select_stmt->add_set_query(right_select_stmt);
     select_stmt->set_calc_found_rows(left_select_stmt->is_calc_found_rows());
-    if (OB_FAIL(ObOptimizerUtil::gen_set_target_list(
-            allocator_, session_info_, params_.expr_factory_, *left_select_stmt, *right_select_stmt, select_stmt))) {
+    if (OB_FAIL(ObOptimizerUtil::gen_set_target_list(allocator_,
+            session_info_,
+            params_.expr_factory_,
+            *left_select_stmt,
+            *right_select_stmt,
+            select_stmt,
+            !is_oracle_mode()))) {
       LOG_WARN("failed to gen set target list.", K(ret));
     } else if (!right_resolver.cte_ctx_.is_recursive()) {
       /*do nothing*/
@@ -1269,15 +1274,9 @@ int ObSelectResolver::resolve_order_item(const ParseNode& sort_node, OrderItem& 
     }
     if (OB_FAIL(resolve_sql_expr(*(sort_node.children_[0]), order_item.expr_))) {
       LOG_WARN("resolve sql expression failed", K(ret));
+    } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), order_item.expr_, order_item, select_stmt))) {
+        LOG_WARN("fail to resolve literal order item", K(ret), K(*order_item.expr_));
     } else {
-      ObRawExpr* expr = order_item.expr_;
-      if (expr->has_flag(CNT_SET_OP) && !expr->has_flag(IS_SET_OP)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Orderby expression after set operation");
-      } else if (OB_FAIL(resolve_literal_order_item(*(sort_node.children_[0]), expr, order_item, select_stmt))) {
-        LOG_WARN("fail to resolve literal order item", K(ret), K(*expr));
-      } else {
-      }
     }
   }
   if (OB_SUCC(ret) && is_only_full_group_by_on(session_info_->get_sql_mode())) {
@@ -2175,9 +2174,9 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
   } else {
     int num_child = node->num_child_;
     if (node->value_ == 0)
-      params_.has_recursive_word = false;
+      params_.has_recursive_word_ = false;
     else
-      params_.has_recursive_word = true;
+      params_.has_recursive_word_ = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < num_child; ++i) {
       // alias tblname [(alia colname1, alia colname2)](subquery) [search clause][cycle clause]
       ParseNode* child_node = node->children_[i];
@@ -2192,7 +2191,13 @@ int ObSelectResolver::resolve_with_clause(const ParseNode* node, bool same_level
         if (OB_FAIL(select_stmt->check_CTE_name_exist(table_name, duplicate_name))) {
           LOG_WARN("check cte name failed", K(ret));
         } else if (duplicate_name) {
-          // do nothing, oracle ignore the same define cte name.
+          if (is_oracle_mode()) {
+            // do nothing, oracle ignore the same define cte name.
+          } else {
+            ret = OB_ERR_NONUNIQ_TABLE;
+            LOG_WARN("not unique cte table name", K(ret));
+            LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_name.length(), table_name.ptr());
+          }
         } else if (OB_FAIL(resolve_with_clause_subquery(*child_node, table_item))) {
           LOG_WARN("resolver with_clause_as's subquery failed", K(ret));
         } else if (OB_FAIL(select_stmt->add_cte_table_item(table_item, duplicate_name))) {
@@ -3138,10 +3143,7 @@ int ObSelectResolver::resolve_recursive_cte_table(const ParseNode& parse_tree, T
 {
   int ret = OB_SUCCESS;
   ObSelectStmt* base_stmt = cte_ctx_.left_select_stmt_;
-  if (cte_ctx_.cte_col_names_.empty()) {
-    ret = OB_ERR_NEED_COLUMN_ALIAS_LIST_IN_RECURSIVE_CTE;
-    LOG_WARN("recursive WITH clause must have column alias list", K(ret));
-  } else if (OB_ISNULL(base_stmt) && cte_ctx_.is_set_left_resolver_) {
+  if (OB_ISNULL(base_stmt) && cte_ctx_.is_set_left_resolver_) {
     ret = OB_ERR_NEED_INIT_BRANCH_IN_RECURSIVE_CTE;
     LOG_WARN("recursive WITH clause needs an initialization branch", K(ret));
   } else if (OB_ISNULL(base_stmt)) {
@@ -3324,8 +3326,11 @@ int ObSelectResolver::resolve_basic_table(const ParseNode& parse_tree, TableItem
   ObString tblname(table_node->str_len_, table_node->str_value_);
   if (cte_ctx_.is_with_resolver() && ObCharset::case_insensitive_equal(cte_ctx_.current_cte_table_name_, tblname) &&
       tblname.length() && no_defined_database_name) {
-    TableItem* item = NULL;
-    if (OB_FAIL(resolve_recursive_cte_table(parse_tree, item))) {
+    TableItem *item = NULL;
+    if (!params_.has_recursive_word_) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("cte table shows in union stmt without recursive keyword", K(ret));
+    } else if (OB_FAIL(resolve_recursive_cte_table(parse_tree, item))) {
       LOG_WARN("revolve recursive set query's right child failed", K(ret));
     } else if (cte_ctx_.more_than_two_branch()) {
       ret = OB_ERR_NEED_ONLY_TWO_BRANCH_IN_RECURSIVE_CTE;
@@ -4513,23 +4518,30 @@ int ObSelectResolver::resolve_column_ref_in_group_by(const ObQualifiedName& q_na
     LOG_WARN("select stmt is null");
   } else if (!is_oracle_mode() && q_name.parent_aggr_level_ < current_level_) {
     // the column don't located in aggregate function in having clause
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_group_expr_size(); ++i) {
+    // resolve column refs from group by and rollup exprs
+    ObSEArray<ObRawExpr *, 16> group_and_rollup_exprs;
+    if (OB_FAIL(append(group_and_rollup_exprs, select_stmt->get_group_exprs()))) {
+      LOG_WARN("failed to append group exprs", K(ret));
+    } else if (OB_FAIL(append(group_and_rollup_exprs, select_stmt->get_rollup_exprs()))) {
+      LOG_WARN("failed to append rollup exprs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_and_rollup_exprs.count(); ++i) {
       bool is_hit = false;
-      ObRawExpr* group_expr = NULL;
-      ObColumnRefRawExpr* col_ref = NULL;
-      if (OB_ISNULL(group_expr = select_stmt->get_group_exprs().at(i))) {
+      ObRawExpr *expr = NULL;
+      ObColumnRefRawExpr *col_ref = NULL;
+      if (OB_ISNULL(expr = group_and_rollup_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("group expr is null");
-      } else if (group_expr->is_column_ref_expr()) {
-        col_ref = static_cast<ObColumnRefRawExpr*>(group_expr);
-        if (OB_FAIL(ObResolverUtils::check_column_name(session_info_, q_name, *col_ref, is_hit))) {
-          LOG_WARN("check column name failed", K(ret), K(q_name));
-        } else if (is_hit) {
-          if (NULL == real_ref_expr) {
-            real_ref_expr = col_ref;
-          } else if (real_ref_expr != col_ref) {
-            ret = OB_NON_UNIQ_ERROR;
-          }
+        LOG_WARN("expr is null", K(ret));
+      } else if (!expr->is_column_ref_expr()) {
+        // do nothing
+      } else if (OB_FALSE_IT(col_ref = static_cast<ObColumnRefRawExpr *>(expr))) {
+      } else if (OB_FAIL(ObResolverUtils::check_column_name(session_info_, q_name, *col_ref, is_hit))) {
+        LOG_WARN("check column name failed", K(ret), K(q_name));
+      } else if (is_hit) {
+        if (OB_ISNULL(real_ref_expr)) {
+          real_ref_expr = col_ref;
+        } else if (real_ref_expr != col_ref) {
+          ret = OB_NON_UNIQ_ERROR;
         }
       }
     }
@@ -4840,8 +4852,14 @@ inline bool ObSelectResolver::column_need_check_group_by(const ObQualifiedName& 
 int ObSelectResolver::wrap_alias_column_ref(const ObQualifiedName& q_name, ObRawExpr*& real_ref_expr)
 {
   int ret = OB_SUCCESS;
-  if (q_name.parent_aggr_level_ >= 0 && current_level_ <= q_name.parent_aggr_level_) {
-    ObAliasRefRawExpr* alias_expr = NULL;
+  // aggr in window function isn't used to wrap column ref, just only expand alias column, and do
+  // wrap alias column ref is used to help analyze aggregate pullup for alias column in aggr. the
+  // other situation should expand alias column directly.
+  // eg: select sum(t1.c1) from t1 order by (select sum(t1.c1) from t2);
+  // sum(t1.c1) in subquery is from parent stmt.
+  if (!q_name.parents_expr_info_.has_member(IS_WINDOW_FUNC) && q_name.parent_aggr_level_ >= 0 &&
+      current_level_ <= q_name.parent_aggr_level_) {
+    ObAliasRefRawExpr *alias_expr = NULL;
     if (OB_FAIL(ObRawExprUtils::build_alias_column_expr(
             *params_.expr_factory_, real_ref_expr, current_level_, alias_expr))) {
       LOG_WARN("build alias column expr failed", K(ret));
@@ -5497,9 +5515,12 @@ int ObSelectResolver::identify_anchor_member(
       need_swap_childa = true;
       if (is_oracle_mode()){
         ret = OB_SUCCESS;
-      } else if (params_.has_recursive_word) {
+      } else if (params_.has_recursive_word_) {
         ret = OB_ERR_CTE_NEED_QUERY_BLOCKS;  // mysql error: Recursive Common Table Expression 'cte' should have one or
                                              // more non-recursive query blocks followed by one or more recursive ones
+      } else {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("cte table shows in left union stmt without recursive keyword", K(ret));
       }
     } else {
       LOG_WARN("Failed to find anchor member", K(ret));

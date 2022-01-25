@@ -4109,6 +4109,7 @@ int ObCodeGeneratorImpl::convert_pdml_delete(ObLogDelete& op, const PhyOpsDesc& 
         pdml_delete->get_dml_row_desc().set_part_id_index(partition_expr_idx);
       }
       if (OB_SUCC(ret) && op.is_index_maintenance()) {
+        // find shadow pk expr and add it to out row desc and calc_exprs
         if (OB_FAIL(handle_pdml_shadow_pk(index_dml_info.column_exprs_, out_row_desc, out_row_desc, pdml_delete))) {
           LOG_WARN("failed to handle pdml shadow pk", K(ret), K(index_dml_info.column_exprs_));
         }
@@ -7007,7 +7008,7 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   }
 #endif
   // in any case, destroy row desc
-  if (NULL != table_scan_out_ops.at(0).second) {
+  if (table_scan_out_ops.count() > 0 && NULL != table_scan_out_ops.at(0).second) {
     ob_delete(table_scan_out_ops.at(0).second);
   }
   return ret;
@@ -7525,6 +7526,9 @@ int ObCodeGeneratorImpl::set_optimization_info(ObLogTableScan& log_ts, ObTableSc
       if (OB_FAIL(phy_ts->set_available_index_name(
               log_ts.get_table_opt_info()->available_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failed to set available index name", K(ret));
+      } else if (OB_FAIL(phy_ts->set_unstable_index_name(
+                     log_ts.get_table_opt_info()->unstable_index_name_, phy_plan_->get_allocator()))) {
+        LOG_WARN("failedd to set unstable index name", K(ret));
       } else if (OB_FAIL(phy_ts->set_pruned_index_name(
                      log_ts.get_table_opt_info()->pruned_index_name_, phy_plan_->get_allocator()))) {
         LOG_WARN("failedd to set prunned index name", K(ret));

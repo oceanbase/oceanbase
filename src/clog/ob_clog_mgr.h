@@ -214,14 +214,14 @@ public:
   //
   // The array size of all input parameters is equal in size and corresponds to one by one.
   // When the function returns OB_SUCCESS or OB_PARTIAL_FAILED, the array size of all output parameters is consistent
-  // with the input parameters and corresponds to one to one. When the function returns other error codes, ignore the
+  // with the input parameters and corresponds to one by one. When the function returns other error codes, ignore the
   // return values of ret_array and log_info_array.
   //
   // If an entry of ret_array is not OB_SUCCESS, log_info_array returns an invalid mc_log_info for the entry.
   //
   // ret code:
   // OB_NOT_INIT/OB_INVALID_ARGUMENT for normal case.
-  // OB_SUCCESS, all partitions execute success.
+  // OB_SUCCESS, all Partitions execute success.
   // OB_PARTIAL_FAILED, some Partition execution fails, the caller needs to check ret_array to determine the execution
   // state of each Partition.
   virtual int batch_add_member(const common::ObPartitionArray& partition_array,
@@ -245,7 +245,7 @@ public:
   //
   // ret code:
   // OB_NOT_INIT/OB_INVALID_ARGUMENT etc. for normal case.
-  // OB_SUCCESS, all Partititions execute success.
+  // OB_SUCCESS, all Partitions execute success.
   // OB_PARTIAL_FAILED, some Partition execution fails, the caller needs to check ret_array to determine the execution
   // state of each Partition.
   virtual int batch_is_member_change_done(const common::ObPartitionArray& partition_array,
@@ -254,7 +254,7 @@ public:
 
   // Function:
   // Single-machine distributed transaction batch commits log, performing one phase optimization.
-  // If return OB_SUCCESS, one phase commit successfully.
+  // If return OB_SUCCESS, one phase commits successfully.
   // If return code is not OB_SUCCESS, the transaction degenerates into a regular two-phase commit.
   //
   // Arguments:
@@ -384,7 +384,7 @@ public:
   // Query the accumulative checksum and submit_timestamp values corresponding to this log_id based on log_id.
   // use case:
   //     When minor freeze need obtain base_storage_info, only the log_id corresponding to the snapshot point is saved
-  //     in the transaction context At this time, the accumulative checksum and submit_timestamp corresponding to this
+  //     in the transaction context at this time, the accumulative checksum and submit_timestamp corresponding to this
   //     log_id need to be returned and saved in base_storage_info
   //
   //     accum_checksum and submit_timestamp are saved in ilog entry, so just need query ilog_storage.

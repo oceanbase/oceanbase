@@ -340,9 +340,9 @@ OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus& status)
 struct AddTableParam {
   AddTableParam();
   bool is_valid() const;
-  TO_STRING_KV(KP_(table), K_(max_kept_major_version_number), K_(multi_version_start), K_(in_slog_trans),
-      K_(need_prewarm), K_(is_daily_merge), K_(backup_snapshot_version), KP_(complement_minor_sstable),
-      K_(schema_version));
+  TO_STRING_KV(KP_(table), K_(max_kept_major_version_number), K_(multi_version_start),
+      K_(in_slog_trans), K_(need_prewarm), K_(is_daily_merge),
+      KP_(complement_minor_sstable), K_(schema_version));
 
   storage::ObSSTable* table_;
   int64_t max_kept_major_version_number_;
@@ -351,7 +351,6 @@ struct AddTableParam {
   bool need_prewarm_;
   bool is_daily_merge_;
   storage::ObSSTable* complement_minor_sstable_;
-  int64_t backup_snapshot_version_;
   int64_t schema_version_;
 };
 

@@ -23,6 +23,11 @@
 #endif
 using namespace oceanbase::common;
 
+// fix ob_error.cpp file requires at least 20g memory for release(-O2) compilation
+// it can be solved by introducing <iostream> header file temporarily
+// TODO: it is clang11 bug, the specific reason to be further located
+#include <iostream>
+
 static const char *ERROR_NAME[OB_MAX_ERROR_CODE];
 static const char *ERROR_CAUSE[OB_MAX_ERROR_CODE];
 static const char *ERROR_SOLUTION[OB_MAX_ERROR_CODE];
@@ -3293,6 +3298,26 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_UNIMPLEMENTED_FEATURE] = 3001;
     ORACLE_STR_ERROR[-OB_UNIMPLEMENTED_FEATURE] = "ORA-03001: unimplemented feature";
     ORACLE_STR_USER_ERROR[-OB_UNIMPLEMENTED_FEATURE] = "ORA-03001: unimplemented feature";
+    ERROR_NAME[-OB_ERR_DEFENSIVE_CHECK] = "OB_ERR_DEFENSIVE_CHECK";
+    ERROR_CAUSE[-OB_ERR_DEFENSIVE_CHECK] = "Internal Error";
+    ERROR_SOLUTION[-OB_ERR_DEFENSIVE_CHECK] = "Contact OceanBase Support";
+    MYSQL_ERRNO[-OB_ERR_DEFENSIVE_CHECK] = -1;
+    SQLSTATE[-OB_ERR_DEFENSIVE_CHECK] = "HY000";
+    STR_ERROR[-OB_ERR_DEFENSIVE_CHECK] = "fatal internal error";
+    STR_USER_ERROR[-OB_ERR_DEFENSIVE_CHECK] = "fatal internal error in [%.*s]";
+    ORACLE_ERRNO[-OB_ERR_DEFENSIVE_CHECK] = 600;
+    ORACLE_STR_ERROR[-OB_ERR_DEFENSIVE_CHECK] = "ORA-00600: internal error code, arguments: -4377, fatal internal error";
+    ORACLE_STR_USER_ERROR[-OB_ERR_DEFENSIVE_CHECK] = "ORA-00600: internal error code, arguments: -4377, fatal internal error in [%.*s]";
+    ERROR_NAME[-OB_CLUSTER_NAME_HASH_CONFLICT] = "OB_CLUSTER_NAME_HASH_CONFLICT";
+    ERROR_CAUSE[-OB_CLUSTER_NAME_HASH_CONFLICT] = "Internal Error";
+    ERROR_SOLUTION[-OB_CLUSTER_NAME_HASH_CONFLICT] = "Contact OceanBase Support";
+    MYSQL_ERRNO[-OB_CLUSTER_NAME_HASH_CONFLICT] = -1;
+    SQLSTATE[-OB_CLUSTER_NAME_HASH_CONFLICT] = "HY000";
+    STR_ERROR[-OB_CLUSTER_NAME_HASH_CONFLICT] = "cluster name conflict";
+    STR_USER_ERROR[-OB_CLUSTER_NAME_HASH_CONFLICT] = "cluster name conflict";
+    ORACLE_ERRNO[-OB_CLUSTER_NAME_HASH_CONFLICT] = 600;
+    ORACLE_STR_ERROR[-OB_CLUSTER_NAME_HASH_CONFLICT] = "ORA-00600: internal error code, arguments: -4378, cluster name conflict";
+    ORACLE_STR_USER_ERROR[-OB_CLUSTER_NAME_HASH_CONFLICT] = "ORA-00600: internal error code, arguments: -4378, cluster name conflict";
     ERROR_NAME[-OB_IMPORT_NOT_IN_SERVER] = "OB_IMPORT_NOT_IN_SERVER";
     ERROR_CAUSE[-OB_IMPORT_NOT_IN_SERVER] = "Internal Error";
     ERROR_SOLUTION[-OB_IMPORT_NOT_IN_SERVER] = "Contact OceanBase Support";
@@ -12053,16 +12078,6 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_ERR_ILL_NAME_STRING] = 21560;
     ORACLE_STR_ERROR[-OB_ERR_ILL_NAME_STRING] = "ORA-21560: unexpected name string '%.*s'";
     ORACLE_STR_USER_ERROR[-OB_ERR_ILL_NAME_STRING] = "ORA-21560: unexpected name string '%.*s'";
-    ERROR_NAME[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "OB_ERR_CTE_NEED_QUERY_BLOCKS";
-    ERROR_CAUSE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Internal Error";
-    ERROR_SOLUTION[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Contact OceanBase Support";
-    MYSQL_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = -1;
-    SQLSTATE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "HY000";
-    STR_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones";
-    STR_USER_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s";
-    ORACLE_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = 600;
-    ORACLE_STR_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "ORA-00600: internal error code, arguments: -5933, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones";
-    ORACLE_STR_USER_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "ORA-00600: internal error code, arguments: -5933, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s";
     ERROR_NAME[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "OB_ERR_INCORRECT_VALUE_FOR_FUNCTION";
     ERROR_CAUSE[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "Internal Error";
     ERROR_SOLUTION[-OB_ERR_INCORRECT_VALUE_FOR_FUNCTION] = "Contact OceanBase Support";
@@ -12083,6 +12098,16 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_ERR_USER_EXCEED_RESOURCE] = 600;
     ORACLE_STR_ERROR[-OB_ERR_USER_EXCEED_RESOURCE] = "ORA-00600: internal error code, arguments: -5967, User has exceeded the resource";
     ORACLE_STR_USER_ERROR[-OB_ERR_USER_EXCEED_RESOURCE] = "ORA-00600: internal error code, arguments: -5967, User '%.*s' has exceeded the '%s' resource (current value: %lu)";
+    ERROR_NAME[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "OB_ERR_CTE_NEED_QUERY_BLOCKS";
+    ERROR_CAUSE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Internal Error";
+    ERROR_SOLUTION[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Contact OceanBase Support";
+    MYSQL_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = 3574;
+    SQLSTATE[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "HY000";
+    STR_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones";
+    STR_USER_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s";
+    ORACLE_ERRNO[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = 600;
+    ORACLE_STR_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "ORA-00600: internal error code, arguments: -5976, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones";
+    ORACLE_STR_USER_ERROR[-OB_ERR_CTE_NEED_QUERY_BLOCKS] = "ORA-00600: internal error code, arguments: -5976, Recursive Common Table Expression should have one or more non-recursive query blocks followed by one or more recursive ones: %s";
     ERROR_NAME[-OB_TRANSACTION_SET_VIOLATION] = "OB_TRANSACTION_SET_VIOLATION";
     ERROR_CAUSE[-OB_TRANSACTION_SET_VIOLATION] = "Internal Error";
     ERROR_SOLUTION[-OB_TRANSACTION_SET_VIOLATION] = "Contact OceanBase Support";
@@ -13983,6 +14008,16 @@ static struct ObStrErrorInit
     ORACLE_ERRNO[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = 600;
     ORACLE_STR_ERROR[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous";
     ORACLE_STR_USER_ERROR[-OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA] = "ORA-00600: internal error code, arguments: -9064, the archive log and backup data are not continuous";
+    ERROR_NAME[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED";
+    ERROR_CAUSE[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "Internal Error";
+    ERROR_SOLUTION[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "Contact OceanBase Support";
+    MYSQL_ERRNO[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = -1;
+    SQLSTATE[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "HY000";
+    STR_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "deleting backup piece is not allowed";
+    STR_USER_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "deleting backup piece is not allowed";
+    ORACLE_ERRNO[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = 600;
+    ORACLE_STR_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "ORA-00600: internal error code, arguments: -9069, deleting backup piece is not allowed";
+    ORACLE_STR_USER_ERROR[-OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED] = "ORA-00600: internal error code, arguments: -9069, deleting backup piece is not allowed";
     ERROR_NAME[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "OB_NO_SUCH_FILE_OR_DIRECTORY";
     ERROR_CAUSE[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "Internal Error";
     ERROR_SOLUTION[-OB_NO_SUCH_FILE_OR_DIRECTORY] = "Contact OceanBase Support";

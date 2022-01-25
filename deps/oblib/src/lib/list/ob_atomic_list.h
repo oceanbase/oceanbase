@@ -104,6 +104,13 @@ union ObHeadNode {
 #define FREELIST_VERSION(x) ((static_cast<intptr_t>((x).data_)) >> 48)
 #define SET_FREELIST_POINTER_VERSION(x, p, v) \
   (x).data_ = (((reinterpret_cast<intptr_t>(p)) & 0x0000FFFFFFFFFFFFULL) | (((v)&0xFFFFULL) << 48))
+#elif defined(__sw_64__)
+#define FREELIST_POINTER(x)                                                     \
+  (reinterpret_cast<void*>((((static_cast<intptr_t>((x).data_)) << 16) >> 16) | \
+                           (((~(((static_cast<intptr_t>((x).data_)) << 16 >> 63) - 1)) >> 48) << 48)))  // sign extend
+#define FREELIST_VERSION(x) ((static_cast<intptr_t>((x).data_)) >> 48)
+#define SET_FREELIST_POINTER_VERSION(x, p, v) \
+  (x).data_ = (((reinterpret_cast<intptr_t>(p)) & 0x0000FFFFFFFFFFFFULL) | (((v)&0xFFFFULL) << 48))
 #else
 #error "unsupported processor"
 #endif

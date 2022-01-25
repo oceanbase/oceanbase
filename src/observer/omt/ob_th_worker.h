@@ -19,6 +19,7 @@
 #include "lib/coro/co.h"
 #include "rpc/ob_request.h"
 #include "lib/coro/co_user_thread.h"
+#include "lib/thread/ob_thread_name.h"
 
 namespace oceanbase {
 

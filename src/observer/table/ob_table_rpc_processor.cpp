@@ -19,6 +19,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/stat/ob_session_stat.h"
+#include "ob_htable_utils.h"
 #include "sql/ob_sql.h"
 #include "share/table/ob_table_rpc_proxy.h"
 #include "ob_table_rpc_processor_util.h"
@@ -241,17 +242,22 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      request_string_len_(0),
      need_retry_in_queue_(false),
      retry_count_(0),
-     did_async_end_trans_(false)
+     did_async_end_trans_(false),
+     consistency_level_(ObTableConsistencyLevel::STRONG)
 {
   need_audit_ = GCONF.enable_sql_audit;
+  participants_ptr_ = &participants_;
+  trans_state_ptr_ = &trans_state_;
+  trans_desc_ptr_ = &trans_desc_;
+  part_epoch_list_ptr_ = &part_epoch_list_;
 }
 
 void ObTableApiProcessorBase::reset_ctx()
 {
-  participants_.reset();
-  trans_state_.reset();
-  trans_desc_.reset();
-  part_epoch_list_.reset();
+  participants_ptr_->reset();
+  trans_state_ptr_->reset();
+  trans_desc_ptr_->reset();
+  part_epoch_list_ptr_->reset(); 
   did_async_end_trans_ = false;
 }
 
@@ -418,16 +424,40 @@ int ObTableApiProcessorBase::get_participants(uint64_t table_id, const common::O
   return get_participants_optimistic(table_id, part_ids, partition_leaders);
 }
 
+int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type, 
+                  const ObTableConsistencyLevel consistency_level, uint64_t table_id,
+                  const common::ObIArray<int64_t> &part_ids, int64_t timeout_ts)
+{
+  int ret = OB_SUCCESS;
+
+  if ((!is_readonly) && (ObTableConsistencyLevel::EVENTUAL == consistency_level)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("some options not supported yet", K(ret), K(is_readonly), K(consistency_level));
+    return ret;
+  }
+
+  set_consistency_level(consistency_level);
+  ret = start_trans(is_readonly, stmt_type, table_id, part_ids, timeout_ts);
+  return ret;
+}
+
 int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
                                          uint64_t table_id, const common::ObIArray<int64_t> &part_ids, int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
   NG_TRACE(T_start_trans_begin);
-  if (OB_FAIL(get_participants(table_id, part_ids, participants_))) {
+  if (OB_FAIL(get_participants(table_id, part_ids, *participants_ptr_))) {
     LOG_WARN("failed to get participants", K(ret));
   }
   const uint64_t tenant_id = credential_.tenant_id_;
   const int64_t trans_timeout_ts = timeout_ts;
+  const int64_t trans_consistency_level = (ObTableConsistencyLevel::STRONG == consistency_level_) ?  
+      transaction::ObTransConsistencyLevel::STRONG : 
+      transaction::ObTransConsistencyLevel::WEAK;
+  const int32_t trans_consistency_type = (ObTableConsistencyLevel::STRONG == consistency_level_) ? 
+      transaction::ObTransConsistencyType::CURRENT_READ :
+      transaction::ObTransConsistencyType::BOUNDED_STALENESS_READ;
+
   // 1. start transaction
   if (OB_SUCC(ret)) {
     transaction::ObStartTransParam start_trans_param;
@@ -436,11 +466,10 @@ int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::Stmt
     start_trans_param.set_type(transaction::ObTransType::TRANS_USER);
     start_trans_param.set_isolation(transaction::ObTransIsolation::READ_COMMITED);
     start_trans_param.set_autocommit(true);
-    // @todo ObTableConsistencyLevel::EVENTUAL
-    start_trans_param.set_consistency_type(transaction::ObTransConsistencyType::CURRENT_READ);
-    // By default only statement snapshot semantics,
-    // If need other semantics, please see ObTransConsistencyType and ObTransReadSnapshotType for reference
-    // ObSqlTransControl::decide_trans_read_interface_specs() decide the semantic of sql layer
+    start_trans_param.set_consistency_type(trans_consistency_type);
+    // use statement snapshot in default
+    // see ObTransConsistencyType and ObTransReadSnapshotType for more details 
+    // you can also refer to ObSqlTransControl::decide_trans_read_interface_specs of SQL layer
     start_trans_param.set_read_snapshot_type(transaction::ObTransReadSnapshotType::STATEMENT_SNAPSHOT);
     start_trans_param.set_cluster_version(GET_MIN_CLUSTER_VERSION());
 
@@ -448,7 +477,7 @@ int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::Stmt
     const uint64_t proxy_session_id = 1;  // ignore
     const uint64_t org_cluster_id = ObServerConfig::get_instance().cluster_id;
 
-    if (true == trans_state_.is_start_trans_executed()) {
+    if (true == trans_state_ptr_->is_start_trans_executed()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("start_trans is executed", K(ret));
     } else {
@@ -457,17 +486,18 @@ int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::Stmt
                                              start_trans_param,
                                              trans_timeout_ts,
                                              session_id,
-                                             proxy_session_id, trans_desc_))) {
+                                             proxy_session_id, *trans_desc_ptr_))) {
         LOG_WARN("fail start trans", K(ret), K(start_trans_param));
       }
-      trans_state_.set_start_trans_executed(OB_SUCC(ret));
+      trans_state_ptr_->set_start_trans_executed(OB_SUCC(ret));
     }
   }
   NG_TRACE(T_start_trans_end);
   // 2. start stmt
   if (OB_SUCC(ret)) {
-    transaction::ObStmtDesc &stmt_desc = trans_desc_.get_cur_stmt_desc();
+    transaction::ObStmtDesc &stmt_desc = trans_desc_ptr_->get_cur_stmt_desc();
     const bool is_sfu = false;
+    stmt_desc.stmt_tenant_id_ = tenant_id;
     stmt_desc.phy_plan_type_ = sql::OB_PHY_PLAN_LOCAL;
     stmt_desc.stmt_type_ = stmt_type;
     stmt_desc.is_sfu_ = is_sfu;
@@ -475,37 +505,37 @@ int ObTableApiProcessorBase::start_trans(bool is_readonly, const sql::stmt::Stmt
     // optimize out stmt_desc.set_sql_id_and_save_trace_id("");
     // stmt_desc.set_trans_app_trace_id_str(ObString::make_string(""));
     stmt_desc.inner_sql_ = false;
-    stmt_desc.consistency_level_ = transaction::ObTransConsistencyLevel::STRONG;
+    stmt_desc.consistency_level_ = trans_consistency_level;
     stmt_desc.is_contain_inner_table_ = false;
     const int64_t stmt_timeout_ts = trans_timeout_ts;
     const bool is_retry_sql = false;
     transaction::ObStmtParam stmt_param;
     ObPartitionArray unreachable_partitions;
-    if (true == trans_state_.is_start_stmt_executed()) {
+    if (true == trans_state_ptr_->is_start_stmt_executed()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("start_stmt is executed", K(ret));
     } else if (OB_FAIL(stmt_param.init(tenant_id, stmt_timeout_ts, is_retry_sql))) {
       LOG_WARN("ObStmtParam init error", K(ret), K(tenant_id), K(is_retry_sql));
     } else if (OB_FAIL(part_service_->start_stmt(stmt_param,
-                                                 trans_desc_,
-                                                 participants_, unreachable_partitions))) {
+                                                 *trans_desc_ptr_,
+                                                 *participants_ptr_, unreachable_partitions))) {
       LOG_WARN("failed to start stmt", K(ret), K(stmt_param));
     }
-    trans_state_.set_start_stmt_executed(OB_SUCC(ret));
+    trans_state_ptr_->set_start_stmt_executed(OB_SUCC(ret));
   }
 
   // 3. start participant
   NG_TRACE(T_start_part_begin);
   if (OB_SUCC(ret)) {
-    if (true == trans_state_.is_start_participant_executed()) {
+    if (true == trans_state_ptr_->is_start_participant_executed()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("start_participant is executed", K(ret));
-    } else if (OB_FAIL(part_service_->start_participant(trans_desc_,
-                                                        participants_.get_partitions(),
-                                                        part_epoch_list_))) {
+    } else if (OB_FAIL(part_service_->start_participant(*trans_desc_ptr_,
+                                                        participants_ptr_->get_partitions(),
+                                                        *part_epoch_list_ptr_))) {
       LOG_WARN("fail start participants", K(ret));
     }
-    trans_state_.set_start_participant_executed(OB_SUCC(ret));
+    trans_state_ptr_->set_start_participant_executed(OB_SUCC(ret));
   }
   NG_TRACE(T_start_part_end);
   return ret;
@@ -517,31 +547,31 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
   int ret = OB_SUCCESS;
   NG_TRACE(T_end_part_begin);
   int end_ret = OB_SUCCESS;
-  if (trans_state_.is_start_participant_executed() && trans_state_.is_start_participant_success()) {
+  if (trans_state_ptr_->is_start_participant_executed() && trans_state_ptr_->is_start_participant_success()) {
     if (OB_SUCCESS != (end_ret = part_service_->end_participant(
-                           is_rollback, trans_desc_, participants_.get_partitions()))) {
+                           is_rollback, *trans_desc_ptr_, participants_ptr_->get_partitions()))) {
       ret = (OB_SUCCESS == ret) ? end_ret : ret;
       LOG_WARN("fail to end participant", K(ret), K(end_ret),
                K(is_rollback));
     }
-    trans_state_.clear_start_participant_executed();
+    trans_state_ptr_->clear_start_participant_executed();
   }
   NG_TRACE(T_end_part_end);
-  if (trans_state_.is_start_stmt_executed() && trans_state_.is_start_stmt_success()) {
+  if (trans_state_ptr_->is_start_stmt_executed() && trans_state_ptr_->is_start_stmt_success()) {
     is_rollback = (is_rollback || OB_SUCCESS != ret);
     bool is_incomplete = false;
     ObPartitionArray discard_partitions;
     if (OB_SUCCESS != (end_ret = part_service_->end_stmt(
-                           is_rollback, is_incomplete, participants_.get_partitions(),
-                           part_epoch_list_, discard_partitions, participants_, trans_desc_))) {
+                           is_rollback, is_incomplete, participants_ptr_->get_partitions(),
+                           *part_epoch_list_ptr_, discard_partitions, *participants_ptr_, *trans_desc_ptr_))) {
       ret = (OB_SUCCESS == ret) ? end_ret : ret;
       LOG_WARN("fail to end stmt", K(ret), K(end_ret), K(is_rollback));
     }
-    trans_state_.clear_start_stmt_executed();
+    trans_state_ptr_->clear_start_stmt_executed();
   }
   NG_TRACE(T_end_trans_begin);
-  if (trans_state_.is_start_trans_executed() && trans_state_.is_start_trans_success()) {
-    if (trans_desc_.is_readonly() || use_sync) {
+  if (trans_state_ptr_->is_start_trans_executed() && trans_state_ptr_->is_start_trans_success()) {
+    if (trans_desc_ptr_->is_readonly() || use_sync) {
       ret = sync_end_trans(is_rollback, timeout_ts);
     } else {
       if (is_rollback) {
@@ -550,9 +580,9 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
         ret = async_commit_trans(req, timeout_ts);
       }
     }
-    trans_state_.clear_start_trans_executed();
+    trans_state_ptr_->clear_start_trans_executed();
   }
-  trans_state_.reset();
+  trans_state_ptr_->reset();
   NG_TRACE(T_end_trans_end);
   return ret;
 }
@@ -561,7 +591,7 @@ int ObTableApiProcessorBase::sync_end_trans(bool is_rollback, int64_t timeout_ts
 {
   int ret = OB_SUCCESS;
   sql::ObEndTransSyncCallback callback;
-  if (OB_FAIL(callback.init(&trans_desc_, NULL))) {
+  if (OB_FAIL(callback.init(trans_desc_ptr_, NULL))) {
     LOG_WARN("fail init callback", K(ret));
   } else {
     int wait_ret = OB_SUCCESS;
@@ -571,13 +601,13 @@ int ObTableApiProcessorBase::sync_end_trans(bool is_rollback, int64_t timeout_ts
     callback.handout();
     const int64_t stmt_timeout_ts = timeout_ts;
     // whether end_trans is success or not, the callback MUST be invoked
-    if (OB_FAIL(part_service_->end_trans(is_rollback, trans_desc_, callback, stmt_timeout_ts))) {
-      LOG_WARN("fail end trans when session terminate", K(ret), K_(trans_desc), K(stmt_timeout_ts));
+    if (OB_FAIL(part_service_->end_trans(is_rollback, *trans_desc_ptr_, callback, stmt_timeout_ts))) {
+      LOG_WARN("fail end trans when session terminate", K(ret), KP_(trans_desc_ptr), K(stmt_timeout_ts));
     }
     // MUST wait here
     if (OB_UNLIKELY(OB_SUCCESS != (wait_ret = callback.wait()))) {
       LOG_WARN("sync end trans callback return an error!", K(ret),
-               K(wait_ret), K_(trans_desc), K(stmt_timeout_ts));
+               K(wait_ret), KP_(trans_desc_ptr), K(stmt_timeout_ts));
     }
     ret = OB_SUCCESS != ret? ret : wait_ret;
     bool has_called_txs_end_trans = false;
@@ -613,8 +643,8 @@ int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t tim
     callback.handout();
     const int64_t stmt_timeout_ts = timeout_ts;
     // whether end_trans is success or not, the callback MUST be invoked
-    if (OB_FAIL(part_service_->end_trans(is_rollback, trans_desc_, callback, stmt_timeout_ts))) {
-      LOG_WARN("fail end trans when session terminate", K(ret), K_(trans_desc), K(stmt_timeout_ts));
+    if (OB_FAIL(part_service_->end_trans(is_rollback, *trans_desc_ptr_, callback, stmt_timeout_ts))) {
+      LOG_WARN("fail end trans when session terminate", K(ret), KP_(trans_desc_ptr), K(stmt_timeout_ts));
     }
     // ignore the return code of end_trans
     THIS_WORKER.disable_retry(); // can NOT retry after set end trans async to be true
@@ -876,6 +906,8 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_EXECUTE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_BATCH_EXECUTE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_EXECUTE_QUERY> >;
+template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_QUERY_AND_MUTATE> >;
+template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_EXECUTE_QUERY_SYNC> >;
 
 template<class T>
 int ObTableRpcProcessor<T>::deserialize()
@@ -959,16 +991,6 @@ void ObTableRpcProcessor<T>::set_req_has_wokenup()
 }
 
 template<class T>
-int64_t ObTableRpcProcessor<T>::get_timeout_ts() const
-{
-  int64_t ts = 0;
-  if (NULL != RpcProcessor::rpc_pkt_) {
-    ts = RpcProcessor::get_receive_timestamp() + RpcProcessor::rpc_pkt_->get_timeout();
-  }
-  return ts;
-}
-
-template<class T>
 void ObTableRpcProcessor<T>::save_request_string()
 {
   int ret = OB_SUCCESS;
@@ -997,6 +1019,579 @@ void ObTableRpcProcessor<T>::generate_sql_id()
   checksum = ob_crc64(checksum, &credential_.database_id_, sizeof(credential_.database_id_));
   snprintf(audit_record_.sql_id_, (int32_t)sizeof(audit_record_.sql_id_),
      "TABLEAPI0x%04Xvv%016lX", RpcProcessor::PCODE, checksum);
+}
+
+
+////////////////////////////////////////////////////////////////
+ObHTableDeleteExecutor::ObHTableDeleteExecutor(common::ObArenaAllocator &alloc,
+                                               uint64_t table_id,
+                                               uint64_t partition_id,
+                                               int64_t timeout_ts,
+                                               ObTableApiProcessorBase *processor,
+                                               ObTableService *table_service,
+                                               storage::ObPartitionService *part_service)
+    :table_service_(table_service),
+     part_service_(part_service),
+     query_ctx_(alloc),
+     mutate_ctx_(alloc)
+{
+  query_ctx_.param_table_id() = table_id;
+  query_ctx_.param_partition_id() = partition_id;
+  query_ctx_.init_param(timeout_ts, processor, &alloc,
+                        false/*ignored*/, table::ObTableEntityType::ET_HKV,
+                        table::ObBinlogRowImageType::MINIMAL/*ignored*/);
+  mutate_ctx_.param_table_id() = table_id;
+  mutate_ctx_.param_partition_id() = partition_id;
+  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+                         false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
+                         table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
+  mutations_result_.set_entity_factory(&entity_factory_);
+}
+
+int ObHTableDeleteExecutor::htable_delete(const ObTableBatchOperation &batch_operation, int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  affected_rows = 0;
+  ObHTableFilter &htable_filter = query_.htable_filter();
+  htable_filter.set_valid(true);
+  if (OB_FAIL(query_.add_select_column(ObHTableConstants::ROWKEY_CNAME_STR))) {
+    LOG_WARN("failed to add K", K(ret));
+  } else if (OB_FAIL(query_.add_select_column(ObHTableConstants::CQ_CNAME_STR))) {
+    LOG_WARN("failed to add Q", K(ret));
+  } else if (OB_FAIL(query_.add_select_column(ObHTableConstants::VERSION_CNAME_STR))) {
+    LOG_WARN("failed to add T", K(ret));
+  } else if (OB_FAIL(query_.add_select_column(ObHTableConstants::VALUE_CNAME_STR))) {
+    LOG_WARN("failed to add V", K(ret));
+  } else {
+    query_.set_batch(1);  // mutate for each row
+    query_.set_max_result_size(-1);
+  }
+  ObObj pk_objs_start[3];
+  ObObj pk_objs_end[3];
+  ObNewRange range;
+  range.start_key_.assign(pk_objs_start, 3);
+  range.end_key_.assign(pk_objs_end, 3);
+  range.border_flag_.set_inclusive_start();
+  range.border_flag_.set_inclusive_end();
+
+  const int64_t N = batch_operation.count();
+  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)  // for each delete
+  {
+    const ObTableOperation &del_op = batch_operation.at(i);
+    const ObITableEntity &entity = del_op.entity();
+    ObHTableCellEntity3 htable_cell(&entity);
+    ObString row = htable_cell.get_rowkey();
+    if (htable_cell.last_get_is_null()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("K is null", K(ret), K(entity));
+      break;
+    }
+    if (0 == i) {
+      // generate scan range by K
+      pk_objs_start[0].set_varbinary(row);
+      pk_objs_start[1].set_min_value();
+      pk_objs_start[2].set_min_value();
+      pk_objs_end[0].set_varbinary(row);
+      pk_objs_end[1].set_max_value();
+      pk_objs_end[2].set_max_value();
+      if (OB_FAIL(query_.add_scan_range(range))) {
+        LOG_WARN("failed to add range", K(ret));
+        break;
+      }
+    }
+    htable_filter.clear_columns();
+    ObString qualifier = htable_cell.get_qualifier();
+    if (htable_cell.last_get_is_null()) {
+      // delete column family, so we need to scan all qualifier
+      // wildcard scan
+    } else if (OB_FAIL(htable_filter.add_column(qualifier))) {
+      LOG_WARN("failed to add column", K(ret));
+      break;
+    }
+    int64_t timestamp = -htable_cell.get_timestamp();        // negative to get the original value
+    if (-ObHTableConstants::LATEST_TIMESTAMP == timestamp) {  // INT64_MAX
+      // delete the most recently added cell
+      htable_filter.set_max_versions(1);
+      htable_filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, ObHTableConstants::INITIAL_MAX_STAMP);
+    } else if (timestamp > 0) {
+      // delete the specific version
+      htable_filter.set_max_versions(1);
+      htable_filter.set_timestamp(timestamp);
+    } else if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) { // -INT64_MAX
+      // delete all version
+      htable_filter.set_max_versions(INT32_MAX);
+      htable_filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, ObHTableConstants::INITIAL_MAX_STAMP);
+    } else {
+      // delete all versions less than or equal to the timestamp
+      htable_filter.set_max_versions(INT32_MAX);
+      htable_filter.set_time_range(ObHTableConstants::INITIAL_MIN_STAMP, (-timestamp)+1);
+    }
+    // execute the query
+    ObTableQueryResultIterator *result_iterator = nullptr;
+    ObTableQueryResult *one_result = nullptr;
+    if (OB_FAIL(execute_query(query_, result_iterator))) {
+    } else {
+      ret = result_iterator->get_next_result(one_result);
+      if (OB_ITER_END == ret) {
+        // empty
+        ret = OB_SUCCESS;
+      } else if (OB_SUCCESS != ret) {
+        LOG_WARN("failed to query", K(ret));
+      } else if (OB_ISNULL(one_result)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("one_result is NULL", K(ret));
+      } else {
+        if (OB_FAIL(generate_delete_cells(*one_result, entity_factory_, mutations_))) {
+          LOG_WARN("failed to delete cells", K(ret));
+        } else if (OB_FAIL(execute_mutation(mutations_, mutations_result_))) {
+          LOG_WARN("failed to execute mutations", K(ret));
+        } else {
+          const int64_t result_num = mutations_result_.count();
+          affected_rows += result_num;
+        }
+      }  // end else
+    }
+    query_ctx_.reset_query_ctx(part_service_);
+    mutate_ctx_.reset_get_ctx();
+  }  // end for each delete op
+  return ret;
+}
+
+int ObHTableDeleteExecutor::execute_query(const table::ObTableQuery &query,
+                                          ObTableQueryResultIterator *&result_iterator)
+{
+  int ret = OB_SUCCESS;
+  one_result_.reset();
+  if (OB_FAIL(table_service_->execute_query(query_ctx_, query,
+                                            one_result_, result_iterator))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+      LOG_WARN("failed to execute query", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObHTableDeleteExecutor::generate_delete_cells(
+    ObTableQueryResult &one_row,
+    table::ObTableEntityFactory<table::ObTableEntity> &entity_factory,
+    ObTableBatchOperation &mutations_out)
+{
+  int ret = OB_SUCCESS;
+  mutations_out.reset();
+  entity_factory.free_and_reuse();
+  one_row.rewind();
+  ObObj rk, cq, ts;
+  ObObj key1, key2, key3;
+  // delete all the selected key-values
+  const ObITableEntity *key_value = nullptr;
+  while (OB_SUCC(ret) && OB_SUCC(one_row.get_next_entity(key_value))) {
+    // for each cell of the row
+    ObHTableCellEntity2 cell(key_value);
+    key1.set_varbinary(cell.get_rowkey());  // K
+    key2.set_varbinary(cell.get_qualifier());  // Q
+    key3.set_int(-cell.get_timestamp());        // T
+    ObITableEntity* new_entity = entity_factory.alloc();
+    if (NULL == new_entity) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("no memory", K(ret));
+    } else if (OB_FAIL(new_entity->add_rowkey_value(key1))) {
+    } else if (OB_FAIL(new_entity->add_rowkey_value(key2))) {
+    } else if (OB_FAIL(new_entity->add_rowkey_value(key3))) {
+    } else if (OB_FAIL(mutations_out.del(*new_entity))) {
+      LOG_WARN("failed to add delete operation", K(ret));
+    } else {
+      LOG_DEBUG("[yzfdebug] delete cell", K(ret), "htable_cell", *new_entity, "kv", *key_value);
+    }
+  }  // end while
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObHTableDeleteExecutor::execute_mutation(const ObTableBatchOperation &mutations,
+                                             ObTableBatchOperationResult &mutations_result)
+{
+  int ret = OB_SUCCESS;
+  mutations_result.reset();
+  if (OB_FAIL(table_service_->multi_delete(mutate_ctx_, mutations, mutations_result))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+      LOG_WARN("failed to multi_delete", K(ret));
+    }
+  }
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
+ObHTablePutExecutor::ObHTablePutExecutor(common::ObArenaAllocator &alloc,
+                                         uint64_t table_id,
+                                         uint64_t partition_id,
+                                         int64_t timeout_ts,
+                                         ObTableApiProcessorBase *processor,
+                                         ObTableService *table_service,
+                                         storage::ObPartitionService *part_service)
+    :table_service_(table_service),
+     part_service_(part_service),
+     mutate_ctx_(alloc)
+{
+  mutate_ctx_.param_table_id() = table_id;
+  mutate_ctx_.param_partition_id() = partition_id;
+  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+                         false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
+                         table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
+
+  mutations_result_.set_entity_factory(&entity_factory_);
+}
+
+int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int64_t &affected_rows, int64_t now_ms/*=0*/)
+{
+  int ret = OB_SUCCESS;
+  if (0 == now_ms) {
+    now_ms = -ObHTableUtils::current_time_millis();
+  }
+  //ObString htable_row;
+  const int64_t N = mutations.count();
+  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+  {
+    const ObTableOperation &mutation = mutations.at(i);
+    const ObITableEntity &entity = mutation.entity();
+    if (ObTableOperationType::INSERT_OR_UPDATE != mutation.type()) { // for insert_or_update only
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("htable put should use INSERT_OR_UPDATE", K(ret), K(mutation));
+    } else if (entity.get_rowkey_size() != 3) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("htable should be with 3 rowkey columns", K(ret), K(entity));
+    } else {
+      ObRowkey mutate_rowkey = const_cast<ObITableEntity&>(entity).get_rowkey();
+      ObObj &hbase_timestamp = const_cast<ObObj&>(mutate_rowkey.get_obj_ptr()[ObHTableConstants::COL_IDX_T]);  // column T
+      ObHTableCellEntity3 htable_cell(&entity);
+      bool row_is_null = htable_cell.last_get_is_null();
+      int64_t timestamp = htable_cell.get_timestamp();
+      bool timestamp_is_null = htable_cell.last_get_is_null();
+      if (row_is_null || timestamp_is_null) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument for htable put", K(ret), K(row_is_null), K(timestamp_is_null));
+      } else {
+        // update timestamp iff LATEST_TIMESTAMP
+        if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) {
+          hbase_timestamp.set_int(now_ms);
+        }
+      }
+    }
+  }  // end for
+  if (OB_SUCC(ret)) {
+    // do the multi_put
+    mutations_result_.reset();
+    affected_rows = 0;
+    if (OB_FAIL(table_service_->multi_insert_or_update(mutate_ctx_, mutations, mutations_result_))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("failed to multi_delete", K(ret));
+      }
+    } else {
+      affected_rows = 1;
+    }
+  }
+  return ret;
+}
+////////////////////////////////////////////////////////////////
+ObHTableIncrementExecutor::ObHTableIncrementExecutor(table::ObTableOperationType::Type type,
+                                                     common::ObArenaAllocator &alloc,
+                                                     uint64_t table_id,
+                                                     uint64_t partition_id,
+                                                     int64_t timeout_ts,
+                                                     ObTableApiProcessorBase *processor,
+                                                     ObTableService *table_service,
+                                                     storage::ObPartitionService *part_service)
+    :type_(type),
+     table_service_(table_service),
+     part_service_(part_service),
+     mutate_ctx_(alloc)
+{
+  mutate_ctx_.param_table_id() = table_id;
+  mutate_ctx_.param_partition_id() = partition_id;
+  mutate_ctx_.init_param(timeout_ts, processor, &alloc,
+                         false/*no affected rows*/, table::ObTableEntityType::ET_HKV,
+                         table::ObBinlogRowImageType::MINIMAL/*hbase cell can use put*/);
+  mutations_result_.set_entity_factory(&entity_factory_);
+}
+
+class ObHTableIncrementExecutor::ColumnIdxComparator
+{
+public:
+  bool operator()(const ColumnIdx &a, const ColumnIdx &b) const
+  {
+    return a.first.compare(b.first) < 0;
+  }
+};
+
+
+int ObHTableIncrementExecutor::sort_qualifier(const table::ObTableBatchOperation &increment)
+{
+  int ret = OB_SUCCESS;
+  const int64_t N = increment.count();
+  if (N <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty increment", K(ret));
+  }
+  ObString htable_row;
+  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+  {
+    const ObTableOperation &mutation = increment.at(i);
+    const ObITableEntity &entity = mutation.entity();
+    if (type_ != mutation.type()) { // increment or append
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("should use INCREMENT/APPEND", K(ret), K_(type), K(mutation));
+    } else if (entity.get_rowkey_size() != 3) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("htable should be with 3 rowkey columns", K(ret), K(entity));
+    } else {
+      ObHTableCellEntity3 htable_cell(&entity);
+      ObString row = htable_cell.get_rowkey();
+      bool row_is_null = htable_cell.last_get_is_null();
+      ObString qualifier = htable_cell.get_qualifier();
+      bool qualifier_is_null = htable_cell.last_get_is_null();
+      (void)htable_cell.get_timestamp();
+      bool timestamp_is_null = htable_cell.last_get_is_null();
+      if (row_is_null || timestamp_is_null || qualifier_is_null) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument for htable put", K(ret),
+                 K(row_is_null), K(timestamp_is_null), K(qualifier_is_null));
+      } else {
+        if (0 == i) {
+          htable_row = row;  // shallow copy
+        } else if (htable_row != row) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("rowkey not the same", K(ret), K(row), K(htable_row));
+          break;
+        }
+        if (OB_FAIL(columns_.push_back(std::make_pair(qualifier, i)))) {
+          LOG_WARN("failed to push back", K(ret));
+          break;
+        }
+      }
+    }
+  } // end for
+  if (OB_SUCC(ret)) {
+    // sort qualifiers
+    ColumnIdx *end = &columns_.at(columns_.count()-1);
+    ++end;
+    std::sort(&columns_.at(0), end, ColumnIdxComparator());
+  }
+  if (OB_SUCC(ret)) {
+    // check duplicated qualifiers
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N-1; ++i)
+    {
+      if (columns_.at(i).first == columns_.at(i+1).first) {
+        ret = OB_ERR_PARAM_DUPLICATE;
+        LOG_WARN("duplicated qualifiers", K(ret), "cq", columns_.at(i).first, K(i));
+      }
+    } // end for
+  }
+  return ret;
+}
+
+int ObHTableIncrementExecutor::htable_increment(ObTableQueryResult &row_cells,
+                                                const table::ObTableBatchOperation &increment,
+                                                int64_t &affected_rows,
+                                                table::ObTableQueryResult *results)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sort_qualifier(increment))) {
+    LOG_WARN("failed to sort qualifier", K(ret));
+  }
+  row_cells.rewind();
+  int64_t now_ms = -ObHTableUtils::current_time_millis();
+  ObObj rk, cq, ts;
+  const ObITableEntity *get_value = nullptr;
+  const int64_t N = increment.count();
+  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+  {
+    const ObTableOperation &mutation = increment.at(columns_.at(i).second);
+    const ObITableEntity &kv_entity = mutation.entity();
+    ObHTableCellEntity3 kv(&kv_entity);
+    ObString qualifier = kv.get_qualifier();
+    bool need_write = false;
+    int64_t delta_int = 0;
+    ObString delta_str = kv.get_value();
+    bool value_is_null = kv.last_get_is_null();
+    if (value_is_null) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("increment value is invalid", K(ret), K(kv_entity));
+      break;
+    }
+
+    if (type_ == ObTableOperationType::INCREMENT) {
+      if (OB_FAIL(ObHTableUtils::java_bytes_to_int64(delta_str, delta_int))) {
+        LOG_WARN("failed to convert bytes to integer", K(ret), K(delta_str));
+        break;
+      } else {
+        need_write = (0 != delta_int);
+      }
+    } else {  // ObTableOperationType::APPEND
+      need_write = true;  // always apply for APPEND
+    }
+
+    if (nullptr == get_value) {
+      if (OB_FAIL(row_cells.get_next_entity(get_value))) {
+        if (OB_ITER_END == ret) {
+          get_value = nullptr;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get next", K(ret));
+          break;
+        }
+      }
+    }
+    bool first_write = false;
+    int64_t orig_ts = -1;
+    ObString orig_str;
+    if (nullptr != get_value) {
+      ObHTableCellEntity2 cell(get_value);
+      ObString qualifier2 = cell.get_qualifier();
+      int cmp_ret = ObHTableUtils::compare_qualifier(qualifier, qualifier2);
+      if (0 == cmp_ret) {
+        // qualifier exists
+        orig_str = cell.get_value();
+        orig_ts = cell.get_timestamp();
+        if (type_ == ObTableOperationType::INCREMENT) {
+          int64_t orig_int = 0;
+          if (OB_FAIL(ObHTableUtils::java_bytes_to_int64(orig_str, orig_int))) {
+            LOG_WARN("failed to convert bytes to integer", K(ret), K(orig_str));
+            break;
+          } else {
+            delta_int += orig_int;
+          }
+        } else {  // APPEND
+          // nothing
+        }
+        get_value = nullptr;  // next cell
+      } else {
+        // qualifier not exist, first write
+        first_write = true;
+      }
+    } else {
+      // no more cells from get
+      first_write = true;
+    }
+
+    rk.set_varbinary(kv.get_rowkey());  // K
+    cq.set_varbinary(qualifier);  // Q
+    // generate timestamp
+    if (orig_ts >= 0) {
+      // already exists
+      ts.set_int(std::min(-orig_ts, now_ms));        // T
+    } else {
+      int64_t new_ts = kv.get_timestamp();
+      if (ObHTableConstants::LATEST_TIMESTAMP == new_ts) {
+        ts.set_int(now_ms);
+      } else {
+        ts.set_int(new_ts);
+      }
+    }
+
+    // generate V
+    ObObj value_obj;  // V
+    if (type_ == ObTableOperationType::INCREMENT) {
+      char* bytes = static_cast<char*>(allocator_.alloc(sizeof(int64_t)));
+      if (NULL == bytes) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no memory", K(ret), KP(bytes));
+      } else if (OB_FAIL(ObHTableUtils::int64_to_java_bytes(delta_int, bytes))) {
+        LOG_WARN("failed to convert bytes", K(ret), K(delta_int));
+      } else {
+        ObString v(sizeof(int64_t), bytes);
+        value_obj.set_varbinary(v);
+      }
+    } else {  // APPEND
+      if (orig_str.empty()) {
+        value_obj.set_varbinary(delta_str);
+      } else {
+        int32_t total_len = orig_str.length() + delta_str.length();
+        char* bytes = static_cast<char*>(allocator_.alloc(total_len));
+        if (NULL == bytes) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("no memory", K(ret), KP(bytes));
+        } else {
+          MEMCPY(bytes, orig_str.ptr(), orig_str.length());
+          MEMCPY(bytes+orig_str.length(), delta_str.ptr(), delta_str.length());
+          ObString new_str(total_len, bytes);
+          value_obj.set_varbinary(new_str);
+        }
+      }
+    }
+
+    // generate entity
+    ObITableEntity* new_entity = nullptr;
+    if (OB_FAIL(ret)) {
+    } else if (nullptr == (new_entity = entity_factory_.alloc())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("no memory", K(ret), KP(new_entity));
+    } else {
+      if (OB_FAIL(new_entity->add_rowkey_value(rk))) {
+      } else if (OB_FAIL(new_entity->add_rowkey_value(cq))) {
+      } else if (OB_FAIL(new_entity->add_rowkey_value(ts))) {
+      } else if (OB_FAIL(new_entity->set_property(ObHTableConstants::VALUE_CNAME_STR, value_obj))) {
+      }
+    }
+
+    if (OB_SUCC(ret) && (need_write || first_write)) {
+      if (OB_FAIL(mutations_.insert_or_update(*new_entity))) {
+        LOG_WARN("failed to add put operation", K(ret));
+      } else {
+        LOG_DEBUG("[yzfdebug] put cell", K(ret), "new_cell", *new_entity, "kv", kv);
+      }
+    }  // end if need_write
+    if (OB_SUCC(ret) && NULL != results) {
+      // Add to results to get returned to the Client. If null, cilent does not want results.
+      ret = add_to_results(*results, rk, cq, ts, value_obj);
+    }
+  }  // end for
+  if (OB_SUCC(ret) && mutations_.count() > 0) {
+    // do the multi_put
+    mutations_result_.reset();
+    affected_rows = 0;
+    if (OB_FAIL(table_service_->multi_insert_or_update(mutate_ctx_, mutations_, mutations_result_))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("failed to multi_delete", K(ret));
+      }
+    } else {
+      affected_rows = 1;
+    }
+  }
+  return ret;
+}
+
+int ObHTableIncrementExecutor::add_to_results(table::ObTableQueryResult &results,
+                                              const ObObj &rk, const ObObj &cq,
+                                              const ObObj &ts, const ObObj &value)
+{
+  int ret = OB_SUCCESS;
+  if (results.get_property_count() <= 0) {
+    if (OB_FAIL(results.add_property_name(ObHTableConstants::ROWKEY_CNAME_STR))) {
+      LOG_WARN("failed to copy name", K(ret));
+    } else if (OB_FAIL(results.add_property_name(ObHTableConstants::CQ_CNAME_STR))) {
+      LOG_WARN("failed to copy name", K(ret));
+    } else if (OB_FAIL(results.add_property_name(ObHTableConstants::VERSION_CNAME_STR))) {
+      LOG_WARN("failed to copy name", K(ret));
+    } else if (OB_FAIL(results.add_property_name(ObHTableConstants::VALUE_CNAME_STR))) {
+      LOG_WARN("failed to copy name", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObObj objs[4];
+    objs[0] = rk;
+    objs[1] = cq;
+    objs[2] = ts;
+    int64_t timestamp = 0;
+    objs[2].get_int(timestamp);
+    objs[2].set_int(-timestamp);  // negate_htable_timestamp
+    objs[3] = value;
+    common::ObNewRow row(objs, 4);
+    if (OB_FAIL(results.add_row(row))) {  // deep copy
+      LOG_WARN("failed to add row to results", K(ret), K(row));
+    }
+  }
+  return ret;
 }
 
 bool oceanbase::observer::is_bad_routing_err(const int err)

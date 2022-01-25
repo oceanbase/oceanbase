@@ -390,7 +390,7 @@ int ObInfixExpression::eval(
       const int64_t idx = item.get_column();
       if (OB_LIKELY(idx >= 0 && OB_LIKELY(idx < row.count_) && OB_LIKELY(NULL != row.cells_))) {
         stack[pos] = row.cells_[idx];
-        if (OB_UNLIKELY(ObBitType == stack[pos].get_type())) {
+        if (OB_UNLIKELY(ObBitType == stack[pos].get_type() && -1 != item.get_accuracy().get_precision())) {
           // use object scale to store bit length
           stack[pos].set_scale(item.get_accuracy().get_precision());
         } else if (OB_UNLIKELY(ob_is_text_tc(stack[pos].get_type()))) {
@@ -401,7 +401,7 @@ int ObInfixExpression::eval(
       } else if (NULL != ctx.row2_ && NULL != ctx.row2_->cells_ && idx >= row.count_ &&
                  idx - row.count_ < ctx.row2_->count_) {
         stack[pos] = ctx.row2_->cells_[idx - row.count_];
-        if (OB_UNLIKELY(ObBitType == stack[pos].get_type())) {
+        if (OB_UNLIKELY(ObBitType == stack[pos].get_type() && -1 != item.get_accuracy().get_precision())) {
           // use object scale to store bit length
           stack[pos].set_scale(item.get_accuracy().get_precision());
         } else if (-1 != item.get_accuracy().get_scale()) {
@@ -435,6 +435,12 @@ int ObInfixExpression::eval(
             item.get_item_type(),
             "type_name",
             get_type_name(item.get_item_type()));
+      } else {
+        // For expression op, we need set scale info after it has been evaluated.
+        if (OB_UNLIKELY(ObBitType == stack[pos].get_type() && -1 != item.get_accuracy().get_precision())) {
+          // use object scale to store bit length
+          stack[pos].set_scale(item.get_accuracy().get_precision());
+        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;

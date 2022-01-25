@@ -332,7 +332,6 @@ int ObLobMergeWriter::check_lob_macro_block(const MacroBlockId& macro_id, const 
     const ObStoreRowkey& rowkey, const int64_t column_id, bool& check_ret)
 {
   int ret = OB_SUCCESS;
-  ObMacroBlockMetaHandle meta_handle;
   const ObMacroBlockMetaV2* macro_meta = meta.meta_;
 
   check_ret = false;

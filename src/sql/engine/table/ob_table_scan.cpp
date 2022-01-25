@@ -331,6 +331,7 @@ ObTableScan::ObTableScan(ObIAllocator& allocator)
       est_records_(allocator),
       available_index_name_(allocator),
       pruned_index_name_(allocator),
+      unstable_index_name_(allocator),
       gi_above_(false),
       is_vt_mapping_(false),
       use_real_tenant_id_(false),
@@ -2046,6 +2047,23 @@ int ObTableScan::set_available_index_name(const common::ObIArray<common::ObStrin
   return ret;
 }
 
+int ObTableScan::set_unstable_index_name(const common::ObIArray<common::ObString>& idx_name, ObIAllocator& phy_alloc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_array_size<>(unstable_index_name_, idx_name.count()))) {
+    LOG_WARN("init unstable_index_name failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < idx_name.count(); ++i) {
+    ObString name;
+    if (OB_FAIL(ob_write_string(phy_alloc, idx_name.at(i), name))) {
+      LOG_WARN("copy unstable index name failed", K(ret));
+    } else if (OB_FAIL(unstable_index_name_.push_back(name))) {
+      LOG_WARN("push unstable index name failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableScan::set_pruned_index_name(const common::ObIArray<common::ObString>& idx_name, ObIAllocator& phy_alloc)
 {
   int ret = OB_SUCCESS;
@@ -2113,6 +2131,30 @@ int ObTableScan::explain_index_selection_info(char* buf, int64_t buf_len, int64_
       if (OB_FAIL(BUF_PRINTF("%.*s", pruned_index_name_.at(i).length(), pruned_index_name_.at(i).ptr()))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (i != pruned_index_name_.count() - 1) {
+        if (OB_FAIL(BUF_PRINTF(","))) {
+          LOG_WARN("BUF_PRINTF fails", K(ret));
+        } else { /* do nothing*/
+        }
+      } else { /* do nothing*/
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(BUF_PRINTF("]"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else { /* Do nothing */
+      }
+    } else { /* Do nothing */
+    }
+  }
+
+  if (OB_SUCC(ret) && unstable_index_name_.count() > 0) {
+    if (OB_FAIL(BUF_PRINTF(", unstable_index_name["))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < unstable_index_name_.count(); ++i) {
+      if (OB_FAIL(BUF_PRINTF("%.*s", unstable_index_name_.at(i).length(), unstable_index_name_.at(i).ptr()))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (i != unstable_index_name_.count() - 1) {
         if (OB_FAIL(BUF_PRINTF(","))) {
           LOG_WARN("BUF_PRINTF fails", K(ret));
         } else { /* do nothing*/

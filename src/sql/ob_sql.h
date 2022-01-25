@@ -209,7 +209,7 @@ private:
   int do_real_prepare(const ObString& stmt, ObSqlCtx& context, ObResultSet& result, bool is_inner_sql);
 
   int do_add_ps_cache(const ObString& sql, int64_t param_cnt, share::schema::ObSchemaGetterGuard& schema_guard,
-      stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql);
+      stmt::StmtType stmt_type, ObResultSet& result, bool is_inner_sql, bool is_sensitive_sql);
 
   int fill_result_set(ObResultSet& result, ObSqlCtx* context, const bool is_ps_mode, ObStmt& stmt);
 
@@ -291,7 +291,7 @@ private:
 
   int replace_const_expr(common::ObIArray<ObRawExpr*>& raw_exprs, ParamStore& param_store);
   int replace_const_expr(ObRawExpr* raw_expr, ParamStore& param_store);
-  int generate_sql_id(ObPlanCacheCtx& pc_ctx, bool add_plan_to_pc);
+  void generate_sql_id(ObPlanCacheCtx& pc_ctx, bool add_plan_to_pc, int err_code);
   int pc_add_plan(ObPlanCacheCtx& pc_ctx, ObResultSet& result, ObOutlineState& outline_state, ObPlanCache* plan_cache);
   // Check whether the parameterized template SQL can be prepared
   void check_template_sql_can_be_prepare(ObPlanCacheCtx& pc_ctx, ObPhysicalPlan& plan);

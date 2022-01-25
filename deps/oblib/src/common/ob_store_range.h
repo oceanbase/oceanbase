@@ -409,8 +409,8 @@ public:
       ObIAllocator& allocator, ObExtStoreRange& multi_version_range);
 
 private:
-  static int build_multi_version_store_rowkey(const ObStoreRowkey& rowkey, const int64_t trans_version,
-      ObIAllocator& allocator, ObStoreRowkey& multi_version_rowkey);
+  static int build_multi_version_store_rowkey(
+      const ObStoreRowkey &rowkey, const bool min_value, ObIAllocator &allocator, ObStoreRowkey &multi_version_rowkey);
 };
 
 }  // end namespace common

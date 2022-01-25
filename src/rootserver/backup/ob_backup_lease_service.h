@@ -18,20 +18,23 @@
 
 namespace oceanbase {
 namespace rootserver {
-class ObRsReentrantThread;
+class ObIBackupScheduler;
 
 class ObBackupLeaseService : public share::ObIBackupLeaseService, public lib::ThreadPool {
 public:
   ObBackupLeaseService();
   virtual ~ObBackupLeaseService();
 
-  int init(const common::ObAddr& addr, common::ObMySQLProxy& sql_proxy);
-  int register_scheduler(ObRsReentrantThread& scheduler);
+  int init(const common::ObAddr &addr, common::ObMySQLProxy &sql_proxy);
+  int register_scheduler(ObIBackupScheduler &scheduler);
   int schedule_renew_task();
   // start_lease/stop_lease control lease service's status: is_stop/expect_round
   int start_lease();
   int stop_lease();
   void wait_lease();
+
+  // force cancel backup/archive/backup backupset/backup piece/validate
+  int force_cancel(const uint64_t tenant_id);
 
   virtual int start() override;
   virtual void stop() override;
@@ -74,8 +77,8 @@ private:
   common::SpinRWLock lock_;
   share::ObBackupLeaseInfoMgr backup_lease_info_mgr_;
   share::ObBackupLeaseInfo lease_info_;  // Only single thread will change lease_info_
-  ObMySQLProxy* sql_proxy_;              // This is the sql proxy of the observer and is not controlled by rs stop
-  common::ObSEArray<ObRsReentrantThread*, 8> backup_schedulers_;  // There are less than 8 at present, can be adjusted
+  ObMySQLProxy *sql_proxy_;              // This is the sql proxy of the observer and is not controlled by rs stop
+  common::ObSEArray<ObIBackupScheduler *, 8> backup_schedulers_;  // There are less than 8 at present, can be adjusted
                                                                   // larger as needed
   ObBackupLeaseIdle idle_;
   common::ObAddr local_addr_;

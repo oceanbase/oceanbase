@@ -34,6 +34,8 @@ extern void obsql_mysql_parser_fatal_error(yyconst char *msg, yyscan_t yyscanner
 %x sq
 %x dq
 %x bt
+/* the adq is used to process dq in ANSI_QUOTES sql_mode*/
+%x adq
 
 U  [\x80-\xbf]
 U_2  [\xc2-\xdf]
@@ -79,6 +81,7 @@ dqbegin       {dquote}
 dqend         {dquote}
 dqdouble      {dquote}{dquote}
 dqcontent     [^\\\n\r"]+
+adqcontent    [^"]+
 dqnewline     {dquote}{whitespace}{dquote}
 
 backtick      `
@@ -311,7 +314,6 @@ STARTING                      { REPUT_TOKEN_NEG_SIGN(STARTING); }
 STORED                        { REPUT_TOKEN_NEG_SIGN(STORED); }
 STRAIGHT_JOIN                 { REPUT_TOKEN_NEG_SIGN(STRAIGHT_JOIN); }
 SUBJECT                       { REPUT_TOKEN_NEG_SIGN(SUBJECT); }
-SYNONYM                       { REPUT_TOKEN_NEG_SIGN(SYNONYM); }
 SYSDATE                       { REPUT_TOKEN_NEG_SIGN(SYSDATE); }
 TERMINATED                    { REPUT_TOKEN_NEG_SIGN(TERMINATED); }
 TEXT                          { REPUT_TOKEN_NEG_SIGN(TEXT); }
@@ -574,7 +576,10 @@ FALSE {
   COPY_STR_NODE_TO_TMP_LITERAL(yylval->node);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
@@ -628,20 +633,41 @@ FALSE {
 }
 
 {dqbegin} {
-  BEGIN(dq);
   ParseResult *p = (ParseResult *)yyextra;
-  p->start_col_ = yylloc->first_column;
-  char **tmp_literal = &p->tmp_literal_;
-  if (*tmp_literal == NULL)
-  {
-    *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
-    check_value(*tmp_literal);
-  }
-  malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
-  yylval->node->str_len_ = 0;
-  p->last_well_formed_len_ = 0;
-  if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
-    return OUTLINE_DEFAULT_TOKEN;
+  ObSQLMode mode = p->sql_mode_;
+  bool is_ansi_quotes = false;
+  IS_ANSI_QUOTES(mode, is_ansi_quotes);
+  if (is_ansi_quotes) {
+    BEGIN(adq); 
+    if (IS_FAST_PARAMETERIZE) {
+      COPY_WRITE();
+    } else {
+      check_value(yylval);
+      p->start_col_ = yylloc->first_column;
+      char **tmp_literal = &p->tmp_literal_;
+      if (*tmp_literal == NULL)
+      {
+        *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+        check_value(*tmp_literal);
+      }
+      malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
+      yylval->node->str_len_ = 0;
+    }
+  } else {
+    BEGIN(dq);
+    p->start_col_ = yylloc->first_column;
+    char **tmp_literal = &p->tmp_literal_;
+    if (*tmp_literal == NULL)
+    {
+      *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+      check_value(*tmp_literal);
+    }
+    malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
+    yylval->node->str_len_ = 0;
+    p->last_well_formed_len_ = 0;
+    if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
+      return OUTLINE_DEFAULT_TOKEN;
+    }
   }
 }
 
@@ -695,7 +721,11 @@ FALSE {
   check_value(yylval);
   bool is_real_escape = true;
   CHECK_REAL_ESCAPE(is_real_escape);
-  if (!is_real_escape) {
+  //check sql_mode
+  ObSQLMode mode = p->sql_mode_;
+  bool is_no_backslash_escapes = false;
+  IS_NO_BACKSLASH_ESCAPES(mode, is_no_backslash_escapes);
+  if (!is_real_escape || is_no_backslash_escapes) {
     HANDLE_FALSE_ESCAPE(p);
   } else {
     HANDLE_ESCAPE(p);
@@ -735,6 +765,56 @@ FALSE {
 
 <dq><<EOF>>  {
   yyerror(yylloc, yyextra, "unterminated doublequoted string\n");
+  return PARSER_SYNTAX_ERROR;
+}
+
+<adq>{dqdouble} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    ((ParseResult *)yyextra)->tmp_literal_[yylval->node->str_len_++] = '"';
+  }
+}
+
+<adq>{adqcontent} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    memmove(((ParseResult *)yyextra)->tmp_literal_ + yylval->node->str_len_, yytext, yyleng);
+    yylval->node->str_len_ += yyleng;
+  }
+}
+
+<adq>{dqend} {
+  BEGIN(INITIAL);
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    ParseResult *p = (ParseResult *)yyextra;
+    check_value(yylval);
+    yylloc->first_column = p->start_col_;
+    char *tmp_literal = p->tmp_literal_;
+    tmp_literal[yylval->node->str_len_] = '\0';
+
+    char *dup_value = NULL;
+    if (p->is_not_utf8_connection_) {
+      dup_value = parse_str_convert_utf8(p->charset_info_, tmp_literal, p->malloc_pool_, &(yylval->node->str_len_), &(p->extra_errno_));
+      check_identifier_convert_result(p->extra_errno_);
+      //fprintf(stderr, "parse identifier result, str=%s, str_len=%ld\n", node->str_value_, node->str_len_);
+    } else {
+      dup_value = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
+    }
+    check_value(dup_value);
+    yylval->node->str_value_ = dup_value;
+    setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->str_len_);
+    return NAME_OB;
+  }
+}
+
+<adq><<EOF>> {
+  yyerror(yylloc, yyextra, "unterminated backtick string\n");
   return PARSER_SYNTAX_ERROR;
 }
 

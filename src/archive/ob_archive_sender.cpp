@@ -33,8 +33,7 @@ ObArchiveSender::ObArchiveSender()
       pg_mgr_(NULL),
       archive_round_mgr_(NULL),
       archive_mgr_(NULL),
-      allocator_(NULL),
-      rwlock_()
+      allocator_(NULL)
 {}
 
 ObArchiveSender::~ObArchiveSender()
@@ -277,11 +276,11 @@ int ObArchiveSender::submit_send_task_(ObArchiveSendTask* task)
   return ret;
 }
 
-int ObArchiveSender::handle_task_list(ObArchiveTaskStatus* status)
+int ObArchiveSender::handle_task_list(void* data)
 {
   int ret = OB_SUCCESS;
   SendTaskArray task_array;
-  ObArchiveSendTaskStatus* task_status = static_cast<ObArchiveSendTaskStatus*>(status);
+  ObArchiveSendTaskStatus* task_status = static_cast<ObArchiveSendTaskStatus*>(data);
 
   if (OB_ISNULL(task_status)) {
     ret = OB_INVALID_ARGUMENT;
@@ -458,6 +457,15 @@ int ObArchiveSender::do_statisfy_converge_strategy_(const ObPGKey& pg_key, const
     } else if (ObTimeUtility::current_time() - checkpoint_ts >= max_delay_time) {
       can_send = true;
       ARCHIVE_LOG(TRACE, "can send due to pg checkpoint ts delay reach limit", K(pg_key));
+    } else if (log_id == 0) {
+      // For new pg created after archive starts, its checkpoint ts is faked while max archived log id is zero.
+      // Other modules depend on archive will be waited util max archived log id is bigger than zero,
+      // so this task should be archived immediately.
+      can_send = true;
+      ARCHIVE_LOG(TRACE, "can send due to max archived log id is zero", K(pg_key));
+    } else if (!is_first_record_finish) {
+      can_send = true;
+      ARCHIVE_LOG(TRACE, "can send due to kickoff log not finish", K(pg_key));
     }
   }
 

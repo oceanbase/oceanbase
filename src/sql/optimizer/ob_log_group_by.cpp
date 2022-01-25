@@ -1278,23 +1278,6 @@ int ObLogGroupBy::inner_append_not_produced_exprs(ObRawExprUniqueSet& raw_exprs)
   return ret;
 }
 
-int ObLogGroupBy::child_has_exchange(const ObLogicalOperator* op, bool& find)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(op) || find) {
-    /*do nothing*/
-  } else if (log_op_def::LOG_EXCHANGE == op->get_type()) {
-    find = true;
-  } else {
-    for (int i = 0; i < op->get_num_of_child() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(SMART_CALL(child_has_exchange(op->get_child(i), find)))) {
-        LOG_WARN("fail to find tsc recursive", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObLogGroupBy::compute_one_row_info()
 {
   int ret = OB_SUCCESS;
@@ -1303,6 +1286,17 @@ int ObLogGroupBy::compute_one_row_info()
   } else if (OB_FAIL(ObLogicalOperator::compute_one_row_info())) {
     LOG_WARN("failed to compute one row info", K(ret));
   } else { /*do nothing*/
+  }
+  return ret;
+}
+
+int ObLogGroupBy::allocate_startup_expr_post()
+{
+  int ret = OB_SUCCESS;
+  if (SCALAR_AGGREGATE == algo_) {
+    // do nothing
+  } else if (OB_FAIL(ObLogicalOperator::allocate_startup_expr_post())) {
+    LOG_WARN("failed to allocate startup exprs post", K(ret));
   }
   return ret;
 }

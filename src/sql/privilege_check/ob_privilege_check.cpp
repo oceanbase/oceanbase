@@ -46,7 +46,6 @@
 #include "sql/resolver/ddl/ob_truncate_table_stmt.h"
 #include "sql/resolver/ddl/ob_rename_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_table_like_stmt.h"
-#include "sql/resolver/cmd/ob_set_names_stmt.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 #include "sql/resolver/ddl/ob_drop_tablegroup_stmt.h"
 #include "sql/resolver/ddl/ob_alter_tablegroup_stmt.h"

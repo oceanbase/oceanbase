@@ -165,7 +165,7 @@ int ObHashExceptOp::inner_get_next_row()
         }
       } else {
         // insert and return row
-        if (OB_FAIL(OB_FAIL(hp_infras_.insert_row(*cur_exprs, exists, inserted)))) {
+        if (OB_FAIL(hp_infras_.insert_row(*cur_exprs, exists, inserted))) {
           LOG_WARN("failed to insert row", K(ret));
         } else if (inserted) {
           got_row = true;
