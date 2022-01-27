@@ -23,6 +23,7 @@
 #include "storage/ob_i_partition_group.h"
 #include "share/ob_debug_sync.h"
 #include "storage/ob_pg_storage.h"
+#include "share/backup/ob_backup_info_mgr.h"
 
 namespace oceanbase {
 using namespace oceanbase::common;
@@ -33,7 +34,7 @@ public:
       : start_flag_(true), archive_round_(archive_round), incarnation_(incarnation)
   {}
 
-  bool operator()(const ObPGKey& pg_key, ObPGArchiveTask* task)
+  bool operator()(const ObPGKey &pg_key, ObPGArchiveTask *task)
   {
     int ret = OB_SUCCESS;
     bool bret = true;
@@ -65,10 +66,10 @@ private:
 
 class ObArchivePGMgr::CheckDeletePGFunctor {
 public:
-  CheckDeletePGFunctor(ObArchivePGMgr* pg_mgr) : pg_mgr_(pg_mgr)
+  CheckDeletePGFunctor(ObArchivePGMgr *pg_mgr) : pg_mgr_(pg_mgr)
   {}
 
-  bool operator()(const ObPGKey& pg_key, ObPGArchiveTask* task)
+  bool operator()(const ObPGKey &pg_key, ObPGArchiveTask *task)
   {
     int ret = OB_SUCCESS;
     bool is_leader = true;
@@ -103,7 +104,7 @@ public:
   }
 
 private:
-  ObArchivePGMgr* pg_mgr_;
+  ObArchivePGMgr *pg_mgr_;
 };
 
 //============================== start of ObArchivePGMgr =============================//
@@ -132,8 +133,8 @@ ObArchivePGMgr::~ObArchivePGMgr()
   ARCHIVE_LOG(INFO, "ObArchivePGMgr destroy");
 }
 
-int ObArchivePGMgr::init(ObArchiveAllocator* allocator, ObArchiveLogWrapper* log_wrapper,
-    ObPartitionService* partition_service, ObArchiveRoundMgr* archive_round_mgr, ObArchiveMgr* archive_mgr)
+int ObArchivePGMgr::init(ObArchiveAllocator *allocator, ObArchiveLogWrapper *log_wrapper,
+    ObPartitionService *partition_service, ObArchiveRoundMgr *archive_round_mgr, ObArchiveMgr *archive_mgr)
 {
   int ret = OB_SUCCESS;
 
@@ -198,14 +199,14 @@ int ObArchivePGMgr::reset_tasks()
   // reset queue_
   for (int64_t i = 0; i < PG_MGR_QUEUE_SIZE; i++) {
     while (!pre_pg_queue_[i].is_empty()) {
-      ObLink* link = nullptr;
+      ObLink *link = nullptr;
       if (OB_FAIL(pre_pg_queue_[i].pop(link))) {
         ARCHIVE_LOG(ERROR, "pre_pg_queue_ pop fail", KR(ret), K(i));
       } else if (OB_ISNULL(link)) {
         ret = OB_ERR_UNEXPECTED;
         ARCHIVE_LOG(WARN, "link is NULL", KR(ret), K(link));
       } else {
-        ob_archive_free((void*)link);
+        ob_archive_free((void *)link);
       }
     }
   }
@@ -256,7 +257,7 @@ void ObArchivePGMgr::wait()
   ObThreadPool::wait();
 }
 
-int ObArchivePGMgr::add_pg_archive_task(storage::ObIPartitionGroup* partition, bool& is_added)
+int ObArchivePGMgr::add_pg_archive_task(storage::ObIPartitionGroup *partition, bool &is_added)
 {
   int ret = OB_SUCCESS;
   const bool is_add = true;
@@ -264,7 +265,7 @@ int ObArchivePGMgr::add_pg_archive_task(storage::ObIPartitionGroup* partition, b
   int64_t epoch = OB_INVALID_TIMESTAMP;
   ObRole role = ObRole::INVALID_ROLE;
   int64_t takeover_ts = OB_INVALID_TIMESTAMP;
-  ObIPartitionLogService* pls = NULL;
+  ObIPartitionLogService *pls = NULL;
   ObIPartitionGroupGuard guard;
   is_added = false;
 
@@ -275,7 +276,7 @@ int ObArchivePGMgr::add_pg_archive_task(storage::ObIPartitionGroup* partition, b
     ARCHIVE_LOG(WARN, "partition is NULL");
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const ObPGKey& pg_key = partition->get_partition_key();
+    const ObPGKey &pg_key = partition->get_partition_key();
     if (OB_SYS_TENANT_ID == pg_key.get_tenant_id()) {
       ret = OB_ERR_UNEXPECTED;
       ARCHIVE_LOG(WARN, "sys tenant do not need to do log archiving", KR(ret), K(pg_key));
@@ -320,13 +321,13 @@ int ObArchivePGMgr::add_all_pg_on_start_archive_task(const int64_t incarnation, 
         K(incarnation_));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    ObIPartitionGroupIterator* iter = NULL;
+    ObIPartitionGroupIterator *iter = NULL;
     if (OB_ISNULL(iter = partition_service_->alloc_pg_iter())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       ARCHIVE_LOG(WARN, "alloc_pg_iter fail", KR(ret));
     } else {
       while (OB_SUCCESS == ret && !has_set_stop()) {
-        ObIPartitionGroup* partition = NULL;
+        ObIPartitionGroup *partition = NULL;
         bool is_added = false;
         if (OB_FAIL(iter->get_next(partition))) {
           if (OB_ITER_END == ret) {
@@ -339,7 +340,7 @@ int ObArchivePGMgr::add_all_pg_on_start_archive_task(const int64_t incarnation, 
           ARCHIVE_LOG(ERROR, "iterate partition fail", KR(ret), K(partition));
         } else {
           const bool is_normal_pg = !partition->get_pg_storage().is_restore();
-          const ObPGKey& pg_key = partition->get_partition_key();
+          const ObPGKey &pg_key = partition->get_partition_key();
           // sys and restoring tenant not do archive
           if ((OB_SYS_TENANT_ID != pg_key.get_tenant_id()) && is_normal_pg) {
             if (OB_FAIL(add_pg_archive_task(partition, is_added))) {
@@ -367,7 +368,7 @@ int ObArchivePGMgr::add_all_pg_on_start_archive_task(const int64_t incarnation, 
   return ret;
 }
 
-int ObArchivePGMgr::delete_pg_archive_task(storage::ObIPartitionGroup* partition)
+int ObArchivePGMgr::delete_pg_archive_task(storage::ObIPartitionGroup *partition)
 {
   int ret = OB_SUCCESS;
   const bool is_add = false;
@@ -382,7 +383,7 @@ int ObArchivePGMgr::delete_pg_archive_task(storage::ObIPartitionGroup* partition
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "partition is NULL", KR(ret), K(partition));
   } else {
-    const ObPGKey& pg_key = partition->get_partition_key();
+    const ObPGKey &pg_key = partition->get_partition_key();
     if (OB_FAIL(put_pg_archive_task_(pg_key, unused_epoch, unused_takeover_ts, unused_create_ts, is_add))) {
       ARCHIVE_LOG(WARN, "put_pg_archive_task_ fail", KR(ret), K(pg_key));
     } else {
@@ -393,7 +394,7 @@ int ObArchivePGMgr::delete_pg_archive_task(storage::ObIPartitionGroup* partition
   return ret;
 }
 
-int ObArchivePGMgr::inner_delete_pg_archive_task(const ObPGKey& pg_key)
+int ObArchivePGMgr::inner_delete_pg_archive_task(const ObPGKey &pg_key)
 {
   int ret = OB_SUCCESS;
   const bool is_add = false;
@@ -416,7 +417,7 @@ int ObArchivePGMgr::inner_delete_pg_archive_task(const ObPGKey& pg_key)
   return ret;
 }
 
-int ObArchivePGMgr::revert_pg_archive_task(ObPGArchiveTask* pg_archive_task)
+int ObArchivePGMgr::revert_pg_archive_task(ObPGArchiveTask *pg_archive_task)
 {
   int ret = OB_SUCCESS;
 
@@ -441,10 +442,10 @@ bool ObArchivePGMgr::is_prepare_pg_empty()
   return bret;
 }
 
-int ObArchivePGMgr::get_pg_archive_task_guard(const ObPGKey& key, ObPGArchiveTaskGuard& guard)
+int ObArchivePGMgr::get_pg_archive_task_guard(const ObPGKey &key, ObPGArchiveTaskGuard &guard)
 {
   int ret = OB_SUCCESS;
-  ObPGArchiveTask* pg_archive_task = NULL;
+  ObPGArchiveTask *pg_archive_task = NULL;
 
   if (OB_UNLIKELY(!inited_)) {
     ARCHIVE_LOG(WARN, "ObArchivePGMgr not init");
@@ -464,10 +465,10 @@ int ObArchivePGMgr::get_pg_archive_task_guard(const ObPGKey& key, ObPGArchiveTas
 }
 
 // get pg_archive_task guard, return OB_ENTRY_NOT_EXIST if pg_archive_task mark delete
-int ObArchivePGMgr::get_pg_archive_task_guard_with_status(const ObPGKey& key, ObPGArchiveTaskGuard& guard)
+int ObArchivePGMgr::get_pg_archive_task_guard_with_status(const ObPGKey &key, ObPGArchiveTaskGuard &guard)
 {
   int ret = OB_SUCCESS;
-  ObPGArchiveTask* pg_archive_task = NULL;
+  ObPGArchiveTask *pg_archive_task = NULL;
   bool mark_delete = false;
 
   if (OB_UNLIKELY(!inited_)) {
@@ -492,11 +493,11 @@ int ObArchivePGMgr::get_pg_archive_task_guard_with_status(const ObPGKey& key, Ob
   return ret;
 }
 
-int ObArchivePGMgr::update_clog_split_progress(ObPGArchiveCLogTask* clog_task)
+int ObArchivePGMgr::update_clog_split_progress(ObPGArchiveCLogTask *clog_task)
 {
   int ret = OB_SUCCESS;
   ObPGArchiveTaskGuard guard(this);
-  ObPGArchiveTask* task = NULL;
+  ObPGArchiveTask *task = NULL;
   if (OB_ISNULL(clog_task)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(ERROR, "invalid clog task is NULL", KR(ret));
@@ -509,7 +510,7 @@ int ObArchivePGMgr::update_clog_split_progress(ObPGArchiveCLogTask* clog_task)
     const int64_t incarnation = clog_task->incarnation_;
     const int64_t log_archive_round = clog_task->log_archive_round_;
 
-    ObPGKey& pg_key = clog_task->pg_key_;
+    ObPGKey &pg_key = clog_task->pg_key_;
     if (OB_FAIL(get_pg_archive_task_guard_with_status(pg_key, guard))) {
       ARCHIVE_LOG(WARN, "get_pg_archive_task_guard_with_status fail", KR(ret), K(pg_key));
     } else if (OB_ISNULL(task = guard.get_pg_archive_task())) {
@@ -534,12 +535,12 @@ int ObArchivePGMgr::update_clog_split_progress(ObPGArchiveCLogTask* clog_task)
   return ret;
 }
 
-int ObArchivePGMgr::get_clog_split_info(const ObPGKey& key, const int64_t epoch, const int64_t incarnation,
-    const int64_t round, uint64_t& last_split_log_id, int64_t& last_split_log_ts, int64_t& last_checkpoint_ts)
+int ObArchivePGMgr::get_clog_split_info(const ObPGKey &key, const int64_t epoch, const int64_t incarnation,
+    const int64_t round, uint64_t &last_split_log_id, int64_t &last_split_log_ts, int64_t &last_checkpoint_ts)
 {
   int ret = OB_SUCCESS;
   ObPGArchiveTaskGuard guard(this);
-  ObPGArchiveTask* task = NULL;
+  ObPGArchiveTask *task = NULL;
 
   if (OB_FAIL(get_pg_archive_task_guard_with_status(key, guard))) {
     ARCHIVE_LOG(WARN, "get_pg_archive_task_guard_with_status fail", KR(ret), K(key));
@@ -584,11 +585,11 @@ int ObArchivePGMgr::set_server_start_archive_ts(const int64_t start_archive_ts)
 }
 
 int ObArchivePGMgr::mark_fatal_error(
-    const ObPGKey& pg_key, const int64_t epoch_id, const int64_t incarnation, const int64_t log_archive_round)
+    const ObPGKey &pg_key, const int64_t epoch_id, const int64_t incarnation, const int64_t log_archive_round)
 {
   int ret = OB_SUCCESS;
   ObPGArchiveTaskGuard guard(this);
-  ObPGArchiveTask* task = NULL;
+  ObPGArchiveTask *task = NULL;
 
   archive_mgr_->mark_encounter_fatal_err(pg_key, incarnation, log_archive_round);
   ARCHIVE_LOG(ERROR, "mark fatal error", K(pg_key), K(epoch_id), K(incarnation), K(log_archive_round));
@@ -615,7 +616,7 @@ int ObArchivePGMgr::mark_fatal_error(
 }
 
 int ObArchivePGMgr::check_if_task_expired(
-    const ObPGKey& pg_key, const int64_t incarnation, const int64_t log_archive_round, bool& is_expired)
+    const ObPGKey &pg_key, const int64_t incarnation, const int64_t log_archive_round, bool &is_expired)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -628,7 +629,7 @@ int ObArchivePGMgr::check_if_task_expired(
     is_expired = true;
   } else {
     ObPGArchiveTaskGuard guard(this);
-    ObPGArchiveTask* task = NULL;
+    ObPGArchiveTask *task = NULL;
     if (OB_FAIL(get_pg_archive_task_guard_with_status(pg_key, guard))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         ARCHIVE_LOG(WARN, "get_pg_archive_task_guard fail", KR(ret), K(pg_key));
@@ -651,7 +652,7 @@ int ObArchivePGMgr::check_if_task_expired(
   return ret;
 }
 
-int ObArchivePGMgr::get_archive_pg_map(PGArchiveMap*& map)
+int ObArchivePGMgr::get_archive_pg_map(PGArchiveMap *&map)
 {
   int ret = OB_SUCCESS;
 
@@ -669,12 +670,12 @@ int ObArchivePGMgr::get_archive_pg_map(PGArchiveMap*& map)
 //============================== start of private functions ========================//
 
 // put add/gc task into queue_
-int ObArchivePGMgr::put_pg_archive_task_(const ObPGKey& pg_key, const int64_t epoch, const int64_t takeover_ts,
+int ObArchivePGMgr::put_pg_archive_task_(const ObPGKey &pg_key, const int64_t epoch, const int64_t takeover_ts,
     const int64_t create_timestamp, const bool is_add)
 {
   int ret = OB_SUCCESS;
-  PreArchiveLinkedPGKey* link = NULL;
-  void* data = NULL;
+  PreArchiveLinkedPGKey *link = NULL;
+  void *data = NULL;
 
   if (OB_UNLIKELY(!inited_)) {
     ARCHIVE_LOG(ERROR, "ObArchivePGMgr not init");
@@ -704,11 +705,11 @@ int ObArchivePGMgr::put_pg_archive_task_(const ObPGKey& pg_key, const int64_t ep
   return ret;
 }
 
-int ObArchivePGMgr::check_pg_task_exist_(const ObPGKey& pg_key, bool& pg_exist)
+int ObArchivePGMgr::check_pg_task_exist_(const ObPGKey &pg_key, bool &pg_exist)
 {
   int ret = OB_SUCCESS;
   ObPGArchiveTaskGuard guard(this);
-  ObPGArchiveTask* task = NULL;
+  ObPGArchiveTask *task = NULL;
   pg_exist = false;
 
   if (OB_UNLIKELY(!pg_key.is_valid())) {
@@ -874,8 +875,8 @@ void ObArchivePGMgr::do_dispatch_pg_()
     ARCHIVE_LOG(ERROR, "archive_mgr_ is NULL");
   } else {
     while (OB_SUCC(ret) && !has_set_stop() && archive_mgr_->is_in_archive_status() && !is_pre_task_empty_()) {
-      ObLink* link = nullptr;
-      PreArchiveLinkedPGKey* link_pg_key = nullptr;
+      ObLink *link = nullptr;
+      PreArchiveLinkedPGKey *link_pg_key = nullptr;
 
       if (OB_FAIL(pop_pre_task_(link))) {
         ARCHIVE_LOG(WARN, "pop_pre_task_ fail", KR(ret));
@@ -883,7 +884,7 @@ void ObArchivePGMgr::do_dispatch_pg_()
         ARCHIVE_LOG(WARN, "link is NULL");
         ret = OB_ERR_UNEXPECTED;
       } else {
-        link_pg_key = static_cast<PreArchiveLinkedPGKey*>(link);
+        link_pg_key = static_cast<PreArchiveLinkedPGKey *>(link);
         const ObPGKey pg_key = link_pg_key->pg_key_;
         const bool is_add_task = link_pg_key->type_;
         const int64_t timestamp = link_pg_key->create_timestamp_;
@@ -902,7 +903,7 @@ void ObArchivePGMgr::do_dispatch_pg_()
         // push back all failed pg task, pg not satisfied can be removed in next retry
         if (OB_SUCC(ret)) {
           link_pg_key->~PreArchiveLinkedPGKey();
-          ob_archive_free((void*)link_pg_key);
+          ob_archive_free((void *)link_pg_key);
           link_pg_key = NULL;
         } else {
           (void)push_pre_task_(pg_key, link_pg_key);
@@ -924,11 +925,11 @@ void ObArchivePGMgr::do_dispatch_pg_()
 //   3) write kickoff log
 //   4) push pg to ilog_fetch queue
 int ObArchivePGMgr::handle_add_task_(
-    const ObPGKey& pg_key, const int64_t create_timestamp, const int64_t leader_epoch, const int64_t leader_takeover_ts)
+    const ObPGKey &pg_key, const int64_t create_timestamp, const int64_t leader_epoch, const int64_t leader_takeover_ts)
 {
   int ret = OB_SUCCESS;
   bool is_leader = false;
-  ObPGArchiveTask* task = NULL;
+  ObPGArchiveTask *task = NULL;
   bool pg_exist = false;
   bool compatible = false;
 
@@ -987,11 +988,11 @@ int ObArchivePGMgr::handle_add_task_(
   return ret;
 }
 
-int ObArchivePGMgr::check_active_pg_archive_task_exist_(const ObPGKey& pg_key, const int64_t epoch, bool& exist)
+int ObArchivePGMgr::check_active_pg_archive_task_exist_(const ObPGKey &pg_key, const int64_t epoch, bool &exist)
 {
   int ret = OB_SUCCESS;
   ObPGArchiveTaskGuard guard(this);
-  ObPGArchiveTask* task = NULL;
+  ObPGArchiveTask *task = NULL;
   int64_t task_epoch = OB_INVALID_TIMESTAMP;
   exist = false;
 
@@ -1016,7 +1017,7 @@ int ObArchivePGMgr::check_active_pg_archive_task_exist_(const ObPGKey& pg_key, c
   return ret;
 }
 
-bool ObArchivePGMgr::get_and_check_compatible_(bool& compatible)
+bool ObArchivePGMgr::get_and_check_compatible_(bool &compatible)
 {
   bool bret = true;
   int64_t incarnation = -1;
@@ -1036,10 +1037,10 @@ bool ObArchivePGMgr::get_and_check_compatible_(bool& compatible)
   return bret;
 }
 
-int ObArchivePGMgr::add_pg_to_ilog_fetch_queue_(StartArchiveHelper& helper)
+int ObArchivePGMgr::add_pg_to_ilog_fetch_queue_(StartArchiveHelper &helper)
 {
   int ret = OB_SUCCESS;
-  const ObPGKey& pg_key = helper.pg_key_;
+  const ObPGKey &pg_key = helper.pg_key_;
   const uint64_t start_log_id = helper.get_start_log_id();
   const file_id_t ilog_file_id = helper.start_ilog_file_id_;
   PGFetchTask task;
@@ -1049,7 +1050,7 @@ int ObArchivePGMgr::add_pg_to_ilog_fetch_queue_(StartArchiveHelper& helper)
   task.epoch_ = helper.epoch_;
   task.start_log_id_ = start_log_id;
   task.ilog_file_id_ = helper.start_ilog_file_id_;
-  ObArchiveIlogFetchTaskMgr* ilog_fetch_task_mgr = NULL;
+  ObArchiveIlogFetchTaskMgr *ilog_fetch_task_mgr = NULL;
 
   if (OB_ISNULL(archive_mgr_) || OB_ISNULL(ilog_fetch_task_mgr = &archive_mgr_->ilog_fetch_task_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1069,10 +1070,10 @@ int ObArchivePGMgr::add_pg_to_ilog_fetch_queue_(StartArchiveHelper& helper)
   return ret;
 }
 
-int ObArchivePGMgr::generate_and_submit_first_log_(StartArchiveHelper& helper)
+int ObArchivePGMgr::generate_and_submit_first_log_(StartArchiveHelper &helper)
 {
   int ret = OB_SUCCESS;
-  ObArchiveIlogFetcher* ilog_fetcher = NULL;
+  ObArchiveIlogFetcher *ilog_fetcher = NULL;
 
   if (OB_ISNULL(archive_mgr_) || OB_ISNULL(ilog_fetcher = &archive_mgr_->ilog_fetcher_) ||
       OB_UNLIKELY(!helper.is_valid())) {
@@ -1087,11 +1088,11 @@ int ObArchivePGMgr::generate_and_submit_first_log_(StartArchiveHelper& helper)
   return OB_SUCCESS;
 }
 
-int ObArchivePGMgr::handle_gc_task_(const ObPGKey& pg_key)
+int ObArchivePGMgr::handle_gc_task_(const ObPGKey &pg_key)
 {
   int ret = OB_SUCCESS;
   ObPGArchiveTaskGuard guard(this);
-  ObPGArchiveTask* task = NULL;
+  ObPGArchiveTask *task = NULL;
   bool is_leader = false;
 
   if (OB_ISNULL(archive_round_mgr_)) {
@@ -1122,7 +1123,7 @@ int ObArchivePGMgr::handle_gc_task_(const ObPGKey& pg_key)
   return ret;
 }
 
-int ObArchivePGMgr::insert_or_update_pg_(StartArchiveHelper& helper, ObPGArchiveTask*& pg_task)
+int ObArchivePGMgr::insert_or_update_pg_(StartArchiveHelper &helper, ObPGArchiveTask *&pg_task)
 {
   int ret = OB_SUCCESS;
   const ObPGKey pg_key = helper.pg_key_;
@@ -1134,7 +1135,7 @@ int ObArchivePGMgr::insert_or_update_pg_(StartArchiveHelper& helper, ObPGArchive
     // update pg task info
     ret = OB_SUCCESS;
     ObPGArchiveTaskGuard guard(this);
-    ObPGArchiveTask* task = NULL;
+    ObPGArchiveTask *task = NULL;
     if (OB_FAIL(get_pg_archive_task_guard(pg_key, guard))) {
       ARCHIVE_LOG(WARN, "get_pg_archive_task_guard fail", KR(ret), K(pg_key));
     } else if (OB_ISNULL(task = guard.get_pg_archive_task())) {
@@ -1146,7 +1147,7 @@ int ObArchivePGMgr::insert_or_update_pg_(StartArchiveHelper& helper, ObPGArchive
     }
   } else if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
-    ObPGArchiveTask* pg_archive_task = NULL;
+    ObPGArchiveTask *pg_archive_task = NULL;
     // const bool mandatory = true;
     if (OB_FAIL(pg_map_.alloc_value(pg_archive_task))) {
       ARCHIVE_LOG(WARN, "alloc_value fail", K(pg_key));
@@ -1178,7 +1179,7 @@ int ObArchivePGMgr::insert_or_update_pg_(StartArchiveHelper& helper, ObPGArchive
   return ret;
 }
 
-int ObArchivePGMgr::remove_pg_(const ObPGKey& pg_key)
+int ObArchivePGMgr::remove_pg_(const ObPGKey &pg_key)
 {
   int ret = OB_SUCCESS;
 
@@ -1206,13 +1207,13 @@ int ObArchivePGMgr::reconfirm_pg_add_()
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(ERROR, "invalid argument", KR(ret), K(archive_mgr_), K(partition_service_));
   } else {
-    ObIPartitionGroupIterator* iter = NULL;
+    ObIPartitionGroupIterator *iter = NULL;
     if (OB_ISNULL(iter = partition_service_->alloc_pg_iter())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       ARCHIVE_LOG(WARN, "alloc_pg_iter fail", KR(ret));
     } else {
       while (OB_SUCCESS == ret && !has_set_stop()) {
-        ObIPartitionGroup* partition = NULL;
+        ObIPartitionGroup *partition = NULL;
         bool pg_exist = false;
         bool is_added = false;
         if (OB_FAIL(iter->get_next(partition))) {
@@ -1225,7 +1226,7 @@ int ObArchivePGMgr::reconfirm_pg_add_()
           ret = OB_ERR_UNEXPECTED;
           ARCHIVE_LOG(ERROR, "iterate partition fail", KR(ret), K(partition));
         } else {
-          const ObPGKey& pg_key = partition->get_partition_key();
+          const ObPGKey &pg_key = partition->get_partition_key();
           const bool is_normal_pg = !partition->get_pg_storage().is_restore();
           // sys tenant and restoring tenant can not start archive
           if ((OB_SYS_TENANT_ID != pg_key.get_tenant_id()) && is_normal_pg) {
@@ -1278,13 +1279,13 @@ bool ObArchivePGMgr::is_pre_task_empty_()
   return pre_pg_queue_[thread_index - 1].is_empty();
 }
 
-int ObArchivePGMgr::pop_pre_task_(ObLink*& link)
+int ObArchivePGMgr::pop_pre_task_(ObLink *&link)
 {
   const int64_t thread_index = thread_index_();
   return pre_pg_queue_[thread_index - 1].pop(link);
 }
 
-int ObArchivePGMgr::push_pre_task_(const ObPGKey& pg_key, ObLink* link)
+int ObArchivePGMgr::push_pre_task_(const ObPGKey &pg_key, ObLink *link)
 {
   int ret = OB_SUCCESS;
   if (0 == queue_num_) {
@@ -1301,7 +1302,7 @@ int ObArchivePGMgr::push_pre_task_(const ObPGKey& pg_key, ObLink* link)
 //====================== end of ObArchivePGMgr =====================//
 
 //===================== PreArchiveLinkedPGKey =====================//
-PreArchiveLinkedPGKey::PreArchiveLinkedPGKey(const ObPGKey& pg_key, const int64_t epoch, const int64_t takeover_ts,
+PreArchiveLinkedPGKey::PreArchiveLinkedPGKey(const ObPGKey &pg_key, const int64_t epoch, const int64_t takeover_ts,
     const int64_t create_timestamp, const bool is_add)
 {
   pg_key_ = pg_key;

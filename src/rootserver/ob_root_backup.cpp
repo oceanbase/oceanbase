@@ -14,6 +14,8 @@
 #include "ob_root_backup.h"
 #include "share/backup/ob_backup_operator.h"
 #include "share/backup/ob_extern_backup_info_mgr.h"
+#include "share/schema/ob_schema_mgr.h"
+#include "share/schema/ob_schema_struct.h"
 #include "ob_root_balancer.h"
 #include "ob_rs_event_history_table_operator.h"
 #include "share/backup/ob_tenant_backup_clean_info_updater.h"
@@ -775,7 +777,7 @@ int ObRootBackup::do_tenant_backup(const share::ObBaseBackupInfoStruct &info, sh
 
     if (OB_FAIL(ret)) {
       if (ObBackupUtils::is_need_retry_error(ret)) {
-        //do nothing
+        // do nothing
       } else {
         dest_task_info = task_info;
         dest_task_info.result_ = ret;
