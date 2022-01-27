@@ -384,43 +384,31 @@ private:
 
 class TSIFactory;
 extern TSIFactory& get_tsi_fatcory();
-extern void tsi_factory_init();
-extern void tsi_factory_destroy();
 
 class TSIFactory {
   static const pthread_key_t INVALID_THREAD_KEY = INT32_MAX;
 
 public:
   TSIFactory() : key_(INVALID_THREAD_KEY)
-  {}
-  ~TSIFactory()
-  {}
-
-public:
-  int init()
   {
-    int ret = OB_SUCCESS;
     if (0 != pthread_key_create(&key_, destroy_thread_data_)) {
       _LIB_LOG(WARN, "pthread_key_create fail errno=%u", errno);
-      ret = OB_ERROR;
     }
-    return ret;
   }
-  int destroy()
+  ~TSIFactory()
   {
-    int ret = OB_SUCCESS;
     if (INVALID_THREAD_KEY != key_) {
       void* ptr = pthread_getspecific(key_);
       destroy_thread_data_(ptr);
       if (0 != pthread_key_delete(key_)) {
-        ret = OB_ERR_UNEXPECTED;
         _LIB_LOG(WARN, "pthread_key_delete fail errno=%u", errno);
       } else {
         key_ = INVALID_THREAD_KEY;
       }
     }
-    return ret;
   }
+
+public:
   template <class T>
   T* new_instance()
   {

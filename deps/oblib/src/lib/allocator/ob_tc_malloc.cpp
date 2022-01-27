@@ -139,8 +139,6 @@ namespace oceanbase {
 namespace common {
 
 ObIAllocator* global_default_allocator = NULL;
-extern void tsi_factory_init();
-extern void tsi_factory_destroy();
 int ob_init_memory_pool(int64_t block_size)
 {
   UNUSED(block_size);
@@ -175,17 +173,12 @@ void __attribute__((constructor(MALLOC_INIT_PRIORITY))) init_global_memory_pool(
     coro.get_context().get_stack(cls->stack_addr_, cls->stack_size_);
     return OB_SUCCESS;
   };
-  ObMallocAllocator* allocator = ObMallocAllocator::get_instance();
-  if (OB_ISNULL(allocator) || OB_FAIL(allocator->init())) {}
   global_default_allocator = ObMallocAllocator::get_instance();
-  tsi_factory_init();
   abort_unless(OB_SUCCESS == install_ob_signal_handler());
 }
 
 void __attribute__((destructor(MALLOC_INIT_PRIORITY))) deinit_global_memory_pool()
-{
-  tsi_factory_destroy();
-}
+{}
 
 }  // end namespace common
 }  // end namespace oceanbase

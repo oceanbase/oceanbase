@@ -121,7 +121,7 @@ void oceanbase::common::ob_free_align(void* ptr)
 {
   if (NULL == ptr) {
     _OB_LOG(WARN, "cannot free NULL pointer.");
-  } else {
+  } else if (oceanbase::lib::ObMallocAllocator::is_inited_) {
     uint8_t* sign_ptr = reinterpret_cast<uint8_t*>(static_cast<char*>(ptr) - 1);
     int64_t* header_ptr = reinterpret_cast<int64_t*>(static_cast<char*>(ptr) - 1 - sizeof(int64_t));
     char* origin_ptr = NULL;

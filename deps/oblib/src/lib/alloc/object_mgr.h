@@ -34,8 +34,8 @@ public:
         normal_locker_(mutex_),
         logger_locker_(mutex_),
         locker_(!for_logger ? static_cast<ISetLocker&>(normal_locker_) : static_cast<ISetLocker&>(logger_locker_)),
-        os_(),
-        bs_()
+        bs_(),
+        os_()
   {
     bs_.set_locker(&locker_);
     os_.set_locker(&locker_);
@@ -91,8 +91,8 @@ private:
   SetLocker normal_locker_;
   SetLockerForLogger logger_locker_;
   ISetLocker& locker_;
-  ObjectSet os_;
   BlockSet bs_;
+  ObjectSet os_;
 };
 
 template <int N>

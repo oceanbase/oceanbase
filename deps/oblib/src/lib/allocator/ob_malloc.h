@@ -42,18 +42,22 @@ inline void* ob_malloc(const int64_t nbyte, const ObMemAttr& attr = default_mema
 
 inline void ob_free(void* ptr)
 {
-  ObIAllocator* allocator = lib::ObMallocAllocator::get_instance();
-  abort_unless(!OB_ISNULL(allocator));
-  allocator->free(ptr);
-  ptr = NULL;
+  if (OB_LIKELY(lib::ObMallocAllocator::is_inited_)) {
+    ObIAllocator* allocator = lib::ObMallocAllocator::get_instance();
+    abort_unless(!OB_ISNULL(allocator));
+    allocator->free(ptr);
+    ptr = NULL;
+  }
 }
 
 inline void* ob_realloc(void* ptr, const int64_t nbyte, const ObMemAttr& attr)
 {
   void* nptr = NULL;
-  ObIAllocator* allocator = lib::ObMallocAllocator::get_instance();
-  if (!OB_ISNULL(allocator)) {
-    nptr = allocator->realloc(ptr, nbyte, attr);
+  if (OB_LIKELY(lib::ObMallocAllocator::is_inited_)) {
+    ObIAllocator* allocator = lib::ObMallocAllocator::get_instance();
+    if (!OB_ISNULL(allocator)) {
+      nptr = allocator->realloc(ptr, nbyte, attr);
+    }
   }
   return nptr;
 }

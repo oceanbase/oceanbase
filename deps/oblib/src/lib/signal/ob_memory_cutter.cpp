@@ -80,41 +80,39 @@ void ObMemoryCutter::free_stack(int64_t& total_size)
 
 void ObMemoryCutter::free_memstore(int64_t& total_size)
 {
-  if (ObMallocAllocator::instance_ != nullptr) {
-    for (int64_t slot = 0; slot < ObMallocAllocator::PRESERVED_TENANT_COUNT; ++slot) {
-      bool has_crash = false;
-      do_with_crash_restore(
-          [&]() {
-            ObTenantCtxAllocator* ta = ObMallocAllocator::instance_->allocators_[slot][ObCtxIds::MEMSTORE_CTX_ID];
-            while (ta != nullptr) {
-              bool has_crash = false;
-              do_with_crash_restore(
-                  [&]() {
-                    AChunk* cur = ta->using_list_head_.next2_;
-                    while (cur != &ta->using_list_head_) {
-                      if (cur->check_magic_code()) {
-                        AChunk* next = cur->next2_;
-                        uint64_t all_size = chunk_size(cur);
-                        free_chunk(cur, all_size);
-                        total_size += all_size;
-                        cur = next;
-                      } else {
-                        DLOG(WARN, "invalid chunk magic");
-                        break;
-                      }
-                    }
-                  },
-                  has_crash);
-              if (has_crash) {
-                DLOG(WARN, "restore from crash, let's goon~");
+  for (int64_t slot = 0; slot < ObMallocAllocator::PRESERVED_TENANT_COUNT; ++slot) {
+    bool has_crash = false;
+    do_with_crash_restore(
+      [&]() {
+        ObTenantCtxAllocator* ta = ObMallocAllocator::get_instance()->allocators_[slot][ObCtxIds::MEMSTORE_CTX_ID];
+        while (ta != nullptr) {
+          bool has_crash = false;
+          do_with_crash_restore(
+            [&]() {
+              AChunk* cur = ta->using_list_head_.next2_;
+              while (cur != &ta->using_list_head_) {
+                if (cur->check_magic_code()) {
+                  AChunk* next = cur->next2_;
+                  uint64_t all_size = chunk_size(cur);
+                  free_chunk(cur, all_size);
+                  total_size += all_size;
+                  cur = next;
+                } else {
+                  DLOG(WARN, "invalid chunk magic");
+                  break;
+                }
               }
-              ta = ta->get_next();
-            }
-          },
-          has_crash);
-      if (has_crash) {
-        DLOG(WARN, "restore from crash, let's goon~");
-      }
+            },
+            has_crash);
+          if (has_crash) {
+            DLOG(WARN, "restore from crash, let's goon~");
+          }
+          ta = ta->get_next();
+        }
+      },
+      has_crash);
+    if (has_crash) {
+      DLOG(WARN, "restore from crash, let's goon~");
     }
   }
 }
