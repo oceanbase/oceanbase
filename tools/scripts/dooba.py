@@ -1019,7 +1019,7 @@ class oceanbase(object):
     'block index cache hit',
     'block index cache miss',
     'bloom filter cache hit',
-    'bloom filter cache miss'
+    'bloom filter cache miss',
     'bloom filter filts',
     'bloom filter passes',
     'io read bytes',
