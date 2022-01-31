@@ -478,17 +478,37 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo& session)
         login_info.tenant_name_ = tenant_name_;
         login_info.user_name_ = user_name_;
         login_info.client_ip_ = client_ip_;
-        if (OB_SUCC(ret) && ORACLE_MODE == session.get_compatibility_mode() && db_name_.empty()) {
-          login_info.db_ = user_name_;
-        } else {
-          login_info.db_ = db_name_;
-        }
-        login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
-        login_info.passwd_ = hsr_.get_auth_response();
-
         SSL* ssl_st = req_->get_ssl_st();
         const ObUserInfo* user_info = NULL;
-        if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
+        if (OB_SUCC(ret) && ORACLE_MODE == session.get_compatibility_mode() && db_name_.empty()) {
+          login_info.db_ = user_name_;
+        } else if (!db_name_.empty()) {
+          ObString db_name = db_name_;
+          ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+          bool perserve_lettercase = true;
+          ObCollationType cs_type = CS_TYPE_INVALID;
+          if (OB_FAIL(session.get_collation_connection(cs_type))) {
+            LOG_WARN("fail to get collation_connection", K(ret));
+          } else if (OB_FAIL(session.get_name_case_mode(mode))) {
+            LOG_WARN("fail to get name case mode", K(mode), K(ret));
+          } else if (FALSE_IT(perserve_lettercase = ORACLE_MODE == session.get_compatibility_mode()
+                                                        ? true
+                                                        : (mode != OB_LOWERCASE_AND_INSENSITIVE))) {
+          } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(cs_type, perserve_lettercase, db_name))) {
+            LOG_WARN("fail to check and convert database name", K(db_name), K(ret));
+          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name))) {
+            LOG_WARN("fail to convert db name to org");
+          } else {
+            login_info.db_ = db_name;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
+          login_info.passwd_ = hsr_.get_auth_response();
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
 
           int inner_ret = OB_SUCCESS;
           bool is_unlocked = false;
