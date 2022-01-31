@@ -107,8 +107,6 @@ struct ObBackupDataCleanElement {
   void reset();
   bool is_same_element(
       const int64_t cluster_id, const int64_t incarnation, const share::ObBackupDest &backup_dest) const;
-  int set_backup_set_id(const ObBackupSetId &backup_set_id);
-  int set_log_archive_round(const ObLogArchiveRound &log_archive_round);
 
   TO_STRING_KV(K_(cluster_id), K_(incarnation), K_(backup_dest), K_(backup_set_id_array), K_(log_archive_round_array),
       K_(backup_dest_option));
@@ -295,8 +293,6 @@ private:
       const ObExternBackupInfo &extern_backup_info);
   int touch_backup_set_meta(const ObBackupDataCleanElement &clean_element, const ObBackupPath &path);
   int delete_backup_set_meta(const ObBackupDataCleanElement &clean_element, const ObBackupPath &path);
-  int get_table_id_list(
-      const storage::ObPhyRestoreMetaIndexStore::MetaIndexMap &index_map, hash::ObHashSet<int64_t> &table_id_set);
 
   // clean backup set
   int try_clean_backup_set_dir(const uint64_t tenant_id, const ObBackupDataCleanElement &clean_element,
@@ -333,30 +329,6 @@ public:
 private:
   int do_inner_clean(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
       const ObBackupDataCleanElement &clean_element, const int64_t start_replay_log_ts);
-  // TODO(muwei.ym) delete later
-  // do_inner_clean ~ try_clean_clog_data_dir
-  int do_inner_clean(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-      const ObBackupDataCleanElement &clean_element, const ObTenantBackupTaskInfo &clog_data_clean_point);
-  int clean_clog_data(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-      const ObBackupDataCleanElement &clean_element, const ObTenantBackupTaskInfo &clog_data_clean_point,
-      const ObLogArchiveRound &log_archive_round, const common::ObIArray<int64_t> &table_id_array,
-      ObBackupDataMgr &backup_data_mgr);
-  int do_clean_table_clog_data(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-      const ObBackupDataCleanElement &clean_element, const ObTenantBackupTaskInfo &clog_data_clean_point,
-      const ObLogArchiveRound &log_archive_round, const common::ObIArray<int64_t> &table_id,
-      ObBackupDataMgr &backup_data_mgr);
-  int set_partition_into_set(const common::ObIArray<ObBackupMetaIndex> &meta_index_array);
-  int check_and_delete_clog_data(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-      const ObBackupDataCleanElement &backup_clean_element, const int64_t clog_gc_snapshot);
-  int check_and_delete_clog_data_with_round(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-      const ObClusterBackupDest &cluster_backup_dest, const ObLogArchiveRound &log_archive_round,
-      const int64_t max_clean_clog_snapshot);
-  int get_clog_pkey_list_not_in_base_data(const ObClusterBackupDest &cluster_backup_dest,
-      const int64_t log_archive_round, const uint64_t tenant_id, common::ObIArray<ObPartitionKey> &pkey_list);
-  int clean_interrputed_clog_data(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
-      const ObBackupDataCleanElement &clean_element, const ObLogArchiveRound &log_archive_round);
-  int try_clean_clog_data_dir(const ObClusterBackupDest &cluster_backup_dest, const uint64_t tenant_id,
-      const int64_t log_archive_round, const char *storage_info, const common::ObStorageType &device_type);
   int generate_backup_piece_tasks(const ObSimpleBackupDataCleanTenant &simple_clean_tenant,
       const ObBackupDataCleanElement &clean_element, const ObLogArchiveRound &log_archive_round,
       const int64_t start_replay_log_ts);
