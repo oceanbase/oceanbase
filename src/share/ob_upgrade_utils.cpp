@@ -31,7 +31,8 @@ namespace share {
 #define CALC_CLUSTER_VERSION(major, minor, patch) (((major) << 32) + ((minor) << 16) + (patch))
 const uint64_t ObUpgradeChecker::UPGRADE_PATH[CLUTER_VERSION_NUM] = {
     CALC_CLUSTER_VERSION(3UL, 1UL, 1UL),    //3.1.1
-    CALC_CLUSTER_VERSION(3UL, 1UL, 2UL)   //3.1.2
+    CALC_CLUSTER_VERSION(3UL, 1UL, 2UL),   //3.1.2
+    CALC_CLUSTER_VERSION(3UL, 1UL, 3UL)   //3.1.3
 };
 
 bool ObUpgradeChecker::check_cluster_version_exist(const uint64_t version)
@@ -1088,6 +1089,7 @@ int ObUpgradeProcesserSet::init(ObBaseUpgradeProcessor::UpgradeMode mode, common
     // order by cluster version asc
     INIT_PROCESSOR_BY_VERSION(3, 1, 1);
     INIT_PROCESSOR_BY_VERSION(3, 1, 2);
+    INIT_PROCESSOR_BY_VERSION(3, 1, 3);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }
