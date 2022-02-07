@@ -101,7 +101,7 @@ class Global:
 class Options(object):
     host = '127.0.0.1'
     port = 2881
-    user = root
+    user = "root"
     password = ""
     database = "oceanbase"
     supermode = False
@@ -3295,12 +3295,12 @@ class HelpPage(Page):
             system_keys = [('q', 'quit dooba')]
             addgroup("Global Keys  -  System", system_keys)
             support = [
-                ('Author', 'Yudi Shi (fufeng.syd)'),
-                ('Mail', 'fufeng.syd@alipay.com'),
+                ('Author', ''),
+                ('Mail', ''),
                 (),
-                ('project page', ''),
-                ('bug report', ''),
-                ('feature req', '')
+                ('github page', 'https://github.com/oceanbase/oceanbase'),
+                ('bug report', 'https://github.com/oceanbase/oceanbase/issues'),
+                ('feature req', 'https://github.com/oceanbase/oceanbase/issues')
                 ]
             addgroup("Support", support)
         except curses.error:
