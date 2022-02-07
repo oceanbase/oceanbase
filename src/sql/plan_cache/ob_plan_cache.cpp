@@ -1496,6 +1496,7 @@ int ObPlanCache::get_ps_plan(
   UNUSED(stmt_id);
   ObSqlTraits sql_traits;
   ObCacheObject* cache_obj = NULL;
+  int64_t original_param_cnt = 0;
   pc_ctx.handle_id_ = ref_handle;
   if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_) || OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_) ||
       OB_ISNULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
@@ -1508,6 +1509,8 @@ int ObPlanCache::get_ps_plan(
         K(ret));
   } else if (FALSE_IT(pc_ctx.fp_result_.cache_params_ =
                           &(pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update()))) {
+    // do nothing
+  } else if (FALSE_IT(original_param_cnt = pc_ctx.fp_result_.cache_params_->count())) {
     // do nothing
   } else if (OB_FAIL(construct_plan_cache_key(pc_ctx, NS_CRSR))) {
     LOG_WARN("fail to construnct plan cache key", K(ret));
@@ -1528,6 +1531,7 @@ int ObPlanCache::get_ps_plan(
     ObPsStmtId new_stmt_id = pc_ctx.fp_result_.pc_key_.key_id_;
     pc_ctx.fp_result_.pc_key_.key_id_ = OB_INVALID_ID;
     pc_ctx.fp_result_.pc_key_.name_ = pc_ctx.raw_sql_;
+    pc_ctx.exec_ctx_.get_physical_plan_ctx()->restore_param_store(original_param_cnt);
     SQL_PC_LOG(
         DEBUG, "start to get plan by sql", K(new_stmt_id), K(pc_ctx.fp_result_.pc_key_), K(sql_pcvs_map_.size()));
     if (OB_FAIL(get_cache_obj(pc_ctx, cache_obj))) {

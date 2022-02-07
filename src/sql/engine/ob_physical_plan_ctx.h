@@ -135,6 +135,7 @@ public:
   {
     return consistency_level_;
   }
+  void restore_param_store(const int64_t param_count);
   // param store
   int reserve_param_space(int64_t param_count);
   const ParamStore& get_param_store() const
