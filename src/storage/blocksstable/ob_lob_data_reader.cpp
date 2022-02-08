@@ -302,9 +302,9 @@ int ObLobDataReader::read_lob_data_impl(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLobDataReader has not been inited", K(ret));
-  } else if (OB_ISNULL(index_data) || !src_obj.is_lob_outrow()) {
+  } else if (OB_ISNULL(index_data) || !(src_obj.is_lob_outrow() || src_obj.is_json_outrow())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(index_data), K(src_obj.is_lob_outrow()));
+    LOG_WARN("invalid arguments", K(ret), KP(index_data), K(src_obj.is_lob_outrow()), K(src_obj.is_json_outrow()));
   } else if (OB_ISNULL(buf_ = static_cast<char*>(allocator_.alloc(index_data->byte_size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(index_data->byte_size_));
@@ -359,9 +359,9 @@ int ObLobDataReader::read_lob_data(const ObObj& src_obj, ObObj& dst_obj)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLobDataReader has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!src_obj.is_lob_outrow())) {
+  } else if (OB_UNLIKELY(!(src_obj.is_lob_outrow() || src_obj.is_json_outrow()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(src_obj.is_lob_outrow()), K(src_obj));
+    LOG_WARN("invalid arguments", K(ret), K(src_obj.is_lob_outrow()), K(src_obj.is_json_outrow()), K(src_obj));
   } else if (OB_FAIL(read_lob_data_impl(rowkey, column_id, src_obj, dst_obj))) {
     LOG_WARN("fail to read lob data", K(ret));
   }
@@ -376,9 +376,11 @@ int ObLobDataReader::read_lob_data(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLobDataReader has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!rowkey.is_valid() || 0 == column_id || !src_obj.is_lob_outrow())) {
+  } else if (OB_UNLIKELY(!rowkey.is_valid() || 0 == column_id 
+                        || !(src_obj.is_lob_outrow() || src_obj.is_json_outrow()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(rowkey), K(column_id), K(src_obj.is_lob_outrow()));
+    LOG_WARN("invalid arguments", K(ret), K(rowkey), K(column_id), 
+        K(src_obj.is_lob_outrow()), K(src_obj.is_json_outrow()));
   } else if (OB_FAIL(read_lob_data_impl(rowkey, column_id, src_obj, dst_obj))) {
     LOG_WARN("fail to read lob data", K(ret));
   }

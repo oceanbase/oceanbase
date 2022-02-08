@@ -322,13 +322,13 @@ int ObRowWriter::write_sparse_row(const int64_t rowkey_column_count, const ObSto
   return ret;
 }
 
-int ObRowWriter::write_text_store(const ObObj& obj)
+int ObRowWriter::write_text_store_impl(const common::ObObj &obj, storage::ObDataStoreType store_type)
 {
   int ret = OB_SUCCESS;
 
   ObLobScale lob_scale(obj.get_scale());
   ObStoreMeta meta;
-  meta.type_ = static_cast<uint8_t>(ObTextStoreType);
+  meta.type_ = static_cast<uint8_t>(store_type);
   if (CS_TYPE_UTF8MB4_GENERAL_CI == obj.get_collation_type()) {
     meta.attr_ = STORE_WITHOUT_COLLATION;
   } else {
@@ -383,6 +383,16 @@ int ObRowWriter::write_text_store(const ObObj& obj)
     STORAGE_LOG(WARN, "[LOB] unexpected error, invalid lob obj scale", K(ret), K(obj), K(lob_scale));
   }
   return ret;
+}
+
+int ObRowWriter::write_text_store(const ObObj &obj)
+{
+  return write_text_store_impl(obj, ObTextStoreType);
+}
+
+int ObRowWriter::write_json_store(const ObObj &obj)
+{
+  return write_text_store_impl(obj, ObJsonStoreType);
 }
 
 int ObRowWriter::init_common(char* buf, const int64_t buf_size, const int64_t pos)
@@ -763,6 +773,10 @@ int ObRowWriter::append_column(const ObObj& obj)
       } else {
         ret = write_text_store(obj);
       }
+      break;
+    }
+    case ObJsonType: {
+      ret = write_json_store(obj);
       break;
     }
     case ObBitType:

@@ -198,6 +198,8 @@ int ObPlanSet::match_param_info(const ObParamInfo& param_info, const ObObjParam&
       is_same = false;
     } else if (ObSQLUtils::is_oracle_empty_string(param) && !param_info.is_oracle_empty_string_) {
       is_same = false;
+    } else if (param_info.flag_.is_boolean_ != param.is_boolean()) { //bool type not match int type
+      is_same = false;
     } else {
       is_same = (param.get_scale() == param_info.scale_);
     }

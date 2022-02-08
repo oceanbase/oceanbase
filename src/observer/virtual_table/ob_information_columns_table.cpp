@@ -482,7 +482,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name, cons
             break;
           }
           case CHARACTER_MAXIMUM_LENGTH: {
-            if (ob_is_string_type(column_schema->get_data_type())) {
+            if (ob_is_string_type(column_schema->get_data_type())
+              || ob_is_json(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();
@@ -498,7 +499,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name, cons
               } else {
                 cells[cell_idx].set_uint64(static_cast<uint64_t>(mbmaxlen * column_schema->get_data_length()));
               }
-            } else if (ob_is_text_tc(column_schema->get_data_type())) {
+            } else if (ob_is_text_tc(column_schema->get_data_type())
+                    || ob_is_json(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();

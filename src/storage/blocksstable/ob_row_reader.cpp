@@ -244,6 +244,13 @@ int ObIRowReader::read_text_store(const ObStoreMeta& store_meta, common::ObIAllo
   return ret;
 }
 
+int ObIRowReader::read_json_store(
+    const ObStoreMeta &store_meta,
+    common::ObIAllocator &allocator,
+    ObObj &obj) {
+  return read_text_store(store_meta, allocator, obj);
+}
+
 //----------------------ObFlatRowReader-----------------------------------
 
 ObFlatRowReader::ObFlatRowReader()
@@ -828,6 +835,15 @@ int ObFlatRowReader::read_obj(const ObObjMeta& src_meta, ObIAllocator& allocator
         empty_str = 0 == obj.get_val_len();
         break;
       }
+      case ObJsonStoreType: {
+        if (OB_FAIL(read_json_store(*meta, allocator, obj))) {
+          STORAGE_LOG(WARN, "fail to read json store", K(ret));
+        } else if (src_meta.is_json_outrow()) {
+          need_cast = false;
+        }
+        empty_str = 0 == obj.get_val_len();
+        break;
+      }
       case ObHexStoreType: {
         ObString value;
         const uint32_t* len = read<uint32_t>(buf_, pos_);
@@ -895,7 +911,7 @@ int ObFlatRowReader::read_obj(const ObObjMeta& src_meta, ObIAllocator& allocator
                  empty_str) {  // just change the type
         // extra bypaas path for raw, or data will be wrong
         obj.set_type(src_meta.get_type());
-        if (empty_str && ObTextTC == type_class) {
+        if (empty_str && (ObTextTC == type_class || ObJsonTC == type_class)) {
           obj.set_lob_inrow();
         }
       } else {
@@ -1083,6 +1099,14 @@ int ObFlatRowReader::read_obj_no_meta(
           if (OB_FAIL(read_text_store(*meta, allocator, obj))) {
             STORAGE_LOG(WARN, "fail to read text store", K(ret));
           } else if (src_meta.is_lob() && obj.get_collation_type() == src_meta.get_collation_type()) {
+            obj.set_type(src_meta.get_type());
+          }
+          break;
+        }
+        case ObJsonStoreType: {
+          if (OB_FAIL(read_json_store(*meta, allocator, obj))) {
+            STORAGE_LOG(WARN, "fail to read text store", K(ret));
+          } else if (src_meta.is_json()) {
             obj.set_type(src_meta.get_type());
           }
           break;

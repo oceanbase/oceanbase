@@ -453,7 +453,9 @@ int ObLogGroupBy::should_push_down_group_by(
                  T_FUN_AGG_UDF == aggr_expr->get_expr_type() || T_FUN_KEEP_MAX == aggr_expr->get_expr_type() ||
                  T_FUN_KEEP_MIN == aggr_expr->get_expr_type() || T_FUN_KEEP_SUM == aggr_expr->get_expr_type() ||
                  T_FUN_KEEP_COUNT == aggr_expr->get_expr_type() || T_FUN_KEEP_WM_CONCAT == aggr_expr->get_expr_type() ||
-                 T_FUN_WM_CONCAT == aggr_expr->get_expr_type()) {
+                 T_FUN_WM_CONCAT == aggr_expr->get_expr_type() ||
+                 T_FUN_JSON_ARRAYAGG == aggr_expr->get_expr_type() ||
+                 T_FUN_JSON_OBJECTAGG == aggr_expr->get_expr_type()) {
         should_push_groupby = false;
       } else if (!aggr_expr->is_param_distinct() && !distinct_exprs.empty()) {
         should_push_groupby = false;

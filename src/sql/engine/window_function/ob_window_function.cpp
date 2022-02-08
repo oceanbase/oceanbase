@@ -1944,7 +1944,9 @@ int ObWindowFunction::ObWindowFunctionCtx::init()
         case T_FUN_KEEP_SUM:
         case T_FUN_KEEP_COUNT:
         case T_FUN_KEEP_WM_CONCAT:
-        case T_FUN_WM_CONCAT: {
+        case T_FUN_WM_CONCAT:
+        case T_FUN_JSON_ARRAYAGG:
+        case T_FUN_JSON_OBJECTAGG: {
           ret = func_alloc.alloc<AggFunc>(func);
           break;
         }

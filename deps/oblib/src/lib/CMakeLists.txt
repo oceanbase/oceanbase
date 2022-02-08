@@ -98,6 +98,12 @@ ob_set_subtarget(oblib_lib common
   json/ob_json.cpp
   json/ob_json_print_utils.cpp
   json/ob_yson.cpp
+  json_type/ob_json_common.cpp
+  json_type/ob_json_path.cpp
+  json_type/ob_json_tree.cpp
+  json_type/ob_json_bin.cpp
+  json_type/ob_json_base.cpp
+  json_type/ob_json_parse.cpp
   lock/Cond.cpp
   lock/Mutex.cpp
   lock/ob_bucket_lock.cpp
@@ -320,6 +326,12 @@ ob_lib_add_pchs(lib
   profile/ob_trace_id_adaptor.h
   json/ob_yson.h
   json/ob_yson_encode.h
+  json_type/ob_json_common.h
+  json_type/ob_json_path.h
+  json_type/ob_json_tree.h
+  json_type/ob_json_bin.h
+  json_type/ob_json_base.h
+  json_type/ob_json_parse.h 
   container/ob_array_wrap.h
   trace/ob_trace_event.h
   timezone/ob_time_convert.h

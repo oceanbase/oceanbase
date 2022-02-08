@@ -492,6 +492,7 @@ int ObCellReader::parse(uint64_t* column_id)
       case ObTextType:
       case ObMediumTextType:
       case ObLongTextType:
+      case ObJsonType:
         READ_TEXT(static_cast<ObObjType>(meta->type_), obj_);
         break;
       case ObBitType:
@@ -687,6 +688,7 @@ int ObCellReader::read_cell(common::ObObj& obj)
       case ObTextType:
       case ObMediumTextType:
       case ObLongTextType:
+      case ObJsonType:
         READ_TEXT(static_cast<ObObjType>(meta->type_), obj);
         break;
       case ObBitType:

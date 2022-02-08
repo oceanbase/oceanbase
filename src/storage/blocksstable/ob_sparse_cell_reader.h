@@ -44,6 +44,7 @@ private:
   template <class T>
   int read(const T*& ptr);
   int read_text_store(const common::ObCellWriter::CellMeta& cell_meta, common::ObObj& obj);
+  int read_json_store(const common::ObCellWriter::CellMeta& cell_meta, common::ObObj& obj);
   template <class T>
   static const T* read(const char* row_buf, int64_t& pos);
 

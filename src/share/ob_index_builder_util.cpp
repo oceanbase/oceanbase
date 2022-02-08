@@ -134,6 +134,10 @@ int ObIndexBuilderUtil::add_shadow_pks(
       } else if (ob_is_text_tc(const_data_column->get_data_type())) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_WARN("Unexpected lob column in shadow pk", "table_id", data_schema.get_table_id(), K(column_id), K(ret));
+      } else if (ob_is_json_tc(const_data_column->get_data_type())) {
+        ret = OB_ERR_JSON_USED_AS_KEY;
+        LOG_WARN("Unexpected json column in shadow pk", "table_id", data_schema.get_table_id(),
+            K(column_id), K(ret));
       } else {
         data_column = *const_data_column;
         data_column.set_nullable(true);
@@ -212,6 +216,14 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
             "column length",
             sort_item.prefix_len_,
             K(ret));
+      } else if (ob_is_json_tc(data_column->get_data_type())) {
+        ret = OB_ERR_JSON_USED_AS_KEY;
+        LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+        LOG_WARN("JSON column cannot be used in key specification", "tenant_id", data_schema.get_tenant_id(),
+                 "database_id", data_schema.get_database_id(),
+                 "table_name", data_schema.get_table_name(),
+                 "column name", sort_item.column_name_,
+                 "column length", sort_item.prefix_len_, K(ret)); 
       } else if (OB_FAIL(add_column(data_column,
                      is_index_column,
                      is_rowkey,
@@ -267,6 +279,17 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
               K(is_index_column),
               K(is_rowkey),
               "order_in_rowkey",
+              data_column->get_order_in_rowkey(),
+              K(row_desc),
+              K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_WARN("JSON column cannot be used in key specification.", 
+              "data_column", 
+              *data_column, 
+              K(is_index_column),
+              K(is_rowkey), 
+              "order_in_rowkey", 
               data_column->get_order_in_rowkey(),
               K(row_desc),
               K(ret));
@@ -326,6 +349,19 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
               "column name",
               arg.store_columns_.at(i),
               K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+          LOG_WARN("JSON column cannot be used in key specification.", 
+              "tenant_id", 
+              data_schema.get_tenant_id(),
+              "database_id", 
+              data_schema.get_database_id(), 
+              "table_name",
+              data_schema.get_table_name(), 
+              "column name", 
+              arg.store_columns_.at(i), 
+              K(ret));
         } else if (OB_FAIL(
                        add_column(data_column, is_index_column, is_rowkey, order_in_rowkey, row_desc, index_schema))) {
           LOG_WARN("add_column failed",
@@ -372,6 +408,20 @@ int ObIndexBuilderUtil::set_index_table_columns(const ObCreateIndexArg& arg, con
               data_schema.get_table_name(),
               "column name",
               arg.hidden_store_columns_.at(i),
+              K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(
+              OB_ERR_JSON_USED_AS_KEY, arg.hidden_store_columns_.at(i).length(), arg.hidden_store_columns_.at(i).ptr());
+          LOG_WARN("JSON column '%.*s' cannot be used in key specification.",
+              "tenant_id", 
+              data_schema.get_tenant_id(),
+              "database_id", 
+              data_schema.get_database_id(), 
+              "table_name",
+              data_schema.get_table_name(), 
+              "column name", 
+              arg.hidden_store_columns_.at(i), 
               K(ret));
         } else if (OB_FAIL(add_column(
                        data_column, is_index_column, is_rowkey, order_in_rowkey, row_desc, index_schema, true))) {

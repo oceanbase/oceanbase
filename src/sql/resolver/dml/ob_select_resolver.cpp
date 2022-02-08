@@ -576,7 +576,9 @@ int ObSelectResolver::check_group_by()
         if (OB_ISNULL(group_by_expr = select_stmt->get_group_exprs().at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("group by expr is null", K(ret));
-        } else if (ObLongTextType == group_by_expr->get_data_type() || ObLobType == group_by_expr->get_data_type()) {
+        } else if (ObLongTextType == group_by_expr->get_data_type() 
+                  || ObLobType == group_by_expr->get_data_type()
+                  || ObJsonType == group_by_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("group by lob expr is not allowed", K(ret));
         }
@@ -604,8 +606,9 @@ int ObSelectResolver::check_group_by()
               if (OB_ISNULL(groupby_expr = groupby_exprs.at(k))) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("rollup expr is null", K(ret));
-              } else if (ObLongTextType == groupby_expr->get_data_type() ||
-                         ObLobType == groupby_expr->get_data_type()) {
+              } else if (ObLongTextType == groupby_expr->get_data_type() 
+                        || ObLobType == groupby_expr->get_data_type()
+                        || ObJsonType == groupby_expr->get_data_type()) {
                 ret = OB_ERR_INVALID_TYPE_FOR_OP;
                 LOG_WARN("group by lob expr is not allowed", K(ret));
               }
@@ -695,8 +698,9 @@ int ObSelectResolver::check_order_by()
       common::ObIArray<OrderItem>& order_items = select_stmt->get_order_items();
       // special case: select count(*) from t1 order by c1; --c1 is blob, but optimized to be remove
       for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
-        if (ob_is_text_tc(order_items.at(i).expr_->get_data_type()) ||
-            ob_is_lob_tc(order_items.at(i).expr_->get_data_type())) {
+        if (ob_is_text_tc(order_items.at(i).expr_->get_data_type()) 
+            || ob_is_lob_tc(order_items.at(i).expr_->get_data_type())
+            || ob_is_json_tc(order_items.at(i).expr_->get_data_type())) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("lob expr can't order", K(ret), K(*order_items.at(i).expr_));
         } else if (has_distinct) {
@@ -5346,8 +5350,9 @@ int ObSelectResolver::check_window_exprs()
       }
       if (OB_SUCC(ret) && share::is_oracle_mode()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < order_items.count(); ++i) {
-          if (ob_is_text_tc(order_items.at(i).expr_->get_data_type()) ||
-              ob_is_lob_tc(order_items.at(i).expr_->get_data_type())) {
+          if (ob_is_text_tc(order_items.at(i).expr_->get_data_type())
+              || ob_is_lob_tc(order_items.at(i).expr_->get_data_type())
+              || ob_is_json_tc(order_items.at(i).expr_->get_data_type())) {
             ret = OB_ERR_INVALID_TYPE_FOR_OP;
             LOG_WARN("lob expr can't order", K(ret), K(*order_items.at(i).expr_));
           }
@@ -5744,7 +5749,9 @@ int ObSelectResolver::check_multi_rollup_items_valid(const ObIArray<ObMultiRollu
         if (OB_ISNULL(groupby_expr = groupby_exprs.at(k))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("rollup expr is null", K(ret));
-        } else if (ObLongTextType == groupby_expr->get_data_type() || ObLobType == groupby_expr->get_data_type()) {
+        } else if (ObLongTextType == groupby_expr->get_data_type() 
+                || ObLobType == groupby_expr->get_data_type()
+                || ObJsonType == groupby_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("group by lob expr is not allowed", K(ret));
         }

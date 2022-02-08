@@ -245,6 +245,17 @@ int ObRawExprDeduceType::assign_var_exprs_result_type(ObNonTerminalRawExpr& expr
   return ret;
 }
 
+bool need_calc_json_as_text(ObItemType item_type)
+{
+  bool bool_ret = true;
+  if (T_FUN_SYS < item_type && item_type < T_FUN_SYS_END) {
+    if (T_FUN_SYS_JSON_OBJECT <= item_type && item_type <= T_FUN_SYS_JSON_VALUE) {
+      bool_ret = false; // json calc type is decided by json functions
+    }
+  }
+  return bool_ret; // json calc type set to long text in other sql functions
+}
+
 int ObRawExprDeduceType::calc_result_type(
     ObNonTerminalRawExpr& expr, ObIExprResTypes& types, ObCastMode& cast_mode, int32_t row_dimension)
 {
@@ -282,10 +293,13 @@ int ObRawExprDeduceType::calc_result_type(
     LOG_WARN("array assign failed", K(ret));
   } else {
     op->set_raw_expr(&expr);
-    FOREACH_CNT(type, types)
-    {
+    FOREACH_CNT(type, types) {
       if (ObLobType == type->get_type()) {
         type->set_type(ObLongTextType);
+      }
+      // ToDo: test and fix, not all sql functions need calc json as long text
+      if (ObJsonType == type->get_type() && need_calc_json_as_text(expr.get_expr_type())) {
+        type->set_calc_type(ObLongTextType);
       }
     }
     op->set_row_dimension(row_dimension);
@@ -1048,6 +1062,33 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
         }
         break;
       }
+      case T_FUN_JSON_ARRAYAGG: {
+        result_type.set_json();
+        expr.set_result_type(result_type);
+        break;
+      }
+      case T_FUN_JSON_OBJECTAGG: {
+        ObRawExpr *param_expr1 = NULL;
+        ObRawExpr *param_expr2 = NULL;
+        if (OB_UNLIKELY(expr.get_real_param_count() != 2) ||
+            OB_ISNULL(param_expr1 = expr.get_param_expr(0)) ||
+            OB_ISNULL(param_expr2 = expr.get_param_expr(1))) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()),
+                                           K(expr.get_real_param_count()), K(expr));
+        } else {
+          ObExprResType& expr_type1 = const_cast<ObExprResType&>(param_expr1->get_result_type());
+          if (expr_type1.get_type() == ObNullType) {
+            ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
+            LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
+          } else {
+            need_add_cast = true;
+          }
+          result_type.set_json();
+          expr.set_result_type(result_type);
+        }
+        break;
+      }
       case T_FUN_GROUP_CONCAT: {
         need_add_cast = true;
         ObSEArray<ObExprResType, 6> types;
@@ -1201,8 +1242,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr& expr)
               scale_increment_recover = result_type.get_scale();
               result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
             }
-          } else if (ob_is_float_tc(obj_type) || ob_is_double_tc(obj_type) || ob_is_string_type(obj_type) ||
-                     ob_is_enumset_tc(obj_type)) {
+          } else if (ob_is_float_tc(obj_type) || ob_is_double_tc(obj_type) || ob_is_json(obj_type)
+                    || ob_is_string_type(obj_type) || ob_is_enumset_tc(obj_type)) {
             result_type.set_double();
             // todo blob and text
             if (result_type.get_scale() >= 0) {
@@ -2309,9 +2350,12 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr& parent, const ObCast
       // do nothing
     } else if ((parent.get_expr_type() == T_FUN_REGR_SXX && i == 0) ||
                (parent.get_expr_type() == T_FUN_REGR_SYY && i == 1) ||
-               (parent.get_expr_type() == T_FUN_REGR_SXY && i == 1)) {
+               (parent.get_expr_type() == T_FUN_REGR_SXY && i == 1) ||
+               (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 1)) {
       // do nothing
-    } else if (parent.get_expr_type() == T_FUN_WM_CONCAT || parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT) {
+    } else if (parent.get_expr_type() == T_FUN_WM_CONCAT ||
+               parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT ||
+              (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 0)) {
       if (ob_is_string_type(child_ptr->get_result_type().get_type())) {
         /*do nothing*/
       } else {

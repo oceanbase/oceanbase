@@ -746,6 +746,7 @@ int ObUdfUtil::convert_mysql_type_to_udf_type(const obmysql::EMySQLFieldType& my
     case EMySQLFieldType::MYSQL_TYPE_BLOB:
     case EMySQLFieldType::MYSQL_TYPE_MEDIUM_BLOB:
     case EMySQLFieldType::MYSQL_TYPE_LONG_BLOB:
+    case EMySQLFieldType::MYSQL_TYPE_JSON:
       udf_type = STRING_RESULT;
       break;
     default:

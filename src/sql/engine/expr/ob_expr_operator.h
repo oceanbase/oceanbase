@@ -404,6 +404,8 @@ public:
   // parameter evaluation.
   // NOTICE: %param must in %params array which passed by eval().
   int param_eval(common::ObExprCtx& expr_ctx, const common::ObObj& param, const int64_t param_index) const;
+  int get_param_type(common::ObExprCtx &expr_ctx, const common::ObObj &param, ObItemType &param_type) const;
+  int get_param_is_boolean(common::ObExprCtx &expr_ctx, const common::ObObj &param, bool &is_boolean) const;
 
   static bool is_valid_nls_param(const common::ObString& nls_param_str);
   inline bool is_param_lazy_eval() const

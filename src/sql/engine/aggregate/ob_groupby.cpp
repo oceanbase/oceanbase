@@ -87,7 +87,8 @@ int ObGroupBy::init_group_by(ObExecContext& ctx) const
   int64_t optimizer_est_input_rows = 0;
   ObExprCtx expr_ctx;
   ObGroupByCtx* groupby_ctx = NULL;
-
+  int64_t dir_id = -1;
+  
   if (OB_FAIL(init_op_ctx(ctx))) {
     LOG_WARN("init operator context failed", K(ret));
   } else if (OB_FAIL(wrap_expr_ctx(ctx, expr_ctx))) {
@@ -98,6 +99,9 @@ int ObGroupBy::init_group_by(ObExecContext& ctx) const
   } else if (OB_ISNULL(my_phy_plan_) || OB_ISNULL(child_op_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K_(my_phy_plan), K_(child_op));
+	} else if (ObChunkStoreUtil::alloc_dir_id(dir_id)) {
+    LOG_WARN("failed to alloc dir id", K(ret));
+  } else if (FALSE_IT(groupby_ctx->get_aggr_func().set_dir_id(dir_id))) {
   } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(my_phy_plan_, expr_ctx.my_session_, expr_ctx.cast_mode_))) {
     LOG_WARN("set cast mode failed", K(ret));
   } else if (OB_ISNULL(get_child(0))) {

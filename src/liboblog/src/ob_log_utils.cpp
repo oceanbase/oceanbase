@@ -139,9 +139,7 @@ int get_local_ip(ObString &local_ip)
         LOG_WARN("no valid network device, set default IP", K(ifreq_num), KP(ifr));
         ret_ip = DEFAULT_IP;
       } else {
-        // 设置默认IP
         ret_ip = DEFAULT_IP;
-
         for (int64_t i = 0; i < ifreq_num; i++) {
           struct sockaddr_in *sin = reinterpret_cast<struct sockaddr_in *>(&ifr->ifr_addr);
 
@@ -521,6 +519,10 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_STRING";
       break;
 
+    case oceanbase::obmysql::MYSQL_TYPE_JSON:
+      sc_type = "MYSQL_TYPE_JSON";
+      break;
+
     case oceanbase::obmysql::MYSQL_TYPE_GEOMETRY:
       sc_type = "MYSQL_TYPE_GEOMETRY";
       break;
@@ -578,6 +580,11 @@ bool is_lob_type(const int ctype)
   }
 
   return bool_ret;
+}
+
+bool is_json_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_JSON);
 }
 
 double get_delay_sec(const int64_t tstamp)

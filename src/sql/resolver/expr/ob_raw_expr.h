@@ -1410,8 +1410,9 @@ public:
   int formalize(const ObSQLSessionInfo *my_session);
   int pull_relation_id_and_levels(int32_t cur_stmt_level);
   int extract_info();
-  int deduce_type(const ObSQLSessionInfo *my_session = NULL);
-  inline ObExprInfo &get_flags()
+  int deduce_type(const ObSQLSessionInfo* my_session = NULL);
+  bool is_bool_expr() const;
+  inline ObExprInfo& get_flags()
   {
     return info_;
   }
@@ -1656,17 +1657,27 @@ private:
 ////////////////////////////////////////////////////////////////
 class ObConstRawExpr : public ObTerminalRawExpr, public jit::expr::ObConstExpr {
 public:
-  ObConstRawExpr() : is_date_unit_(false) /*: precalc_expr_(NULL)*/
-  {
-    ObExpr::set_expr_class(ObExpr::EXPR_CONST);
+  ObConstRawExpr() 
+    : is_date_unit_(false), 
+      is_literal_bool_(false)/*: precalc_expr_(NULL)*/
+  { 
+    ObRawExpr::set_expr_class(ObRawExpr::EXPR_CONST); 
   }
-  ObConstRawExpr(common::ObIAllocator &alloc)
-      : ObExpr(alloc), ObTerminalRawExpr(alloc), ObConstExpr(), is_date_unit_(false)
+  ObConstRawExpr(common::ObIAllocator& alloc)
+      : ObExpr(alloc), 
+        ObTerminalRawExpr(alloc), 
+        ObConstExpr(), 
+        is_date_unit_(false),
+        is_literal_bool_(false)
   {
-    ObExpr::set_expr_class(ObExpr::EXPR_CONST);
+    ObRawExpr::set_expr_class(ObRawExpr::EXPR_CONST);
   }
-  ObConstRawExpr(const oceanbase::common::ObObj &val, ObItemType expr_type = T_INVALID)
-      : ObExpr(expr_type), ObTerminalRawExpr(expr_type), ObConstExpr(), is_date_unit_(false)
+  ObConstRawExpr(const oceanbase::common::ObObj& val, ObItemType expr_type = T_INVALID)
+      : ObExpr(expr_type), 
+        ObTerminalRawExpr(expr_type), 
+        ObConstExpr(), 
+        is_date_unit_(false),
+        is_literal_bool_(false)
   {
     set_value(val);
     set_expr_class(ObExpr::EXPR_CONST);
@@ -1705,13 +1716,17 @@ public:
   virtual int do_visit(ObRawExprVisitor &visitor) override;
 
   virtual uint64_t hash_internal(uint64_t seed) const override;
-  int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const override;
+  int get_name_internal(char* buf, const int64_t buf_len, int64_t& pos, ExplainType type) const override;
+  void set_is_literal_bool(const bool is_literal_bool) { is_literal_bool_ = is_literal_bool; }
+  bool is_literal_bool() const { return is_literal_bool_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
   common::ObString literal_prefix_;  // used in compile phase.
   common::ObObjMeta obj_meta_;
   bool is_date_unit_;
+  // for mysql mode to distinguish tinyint and literal bool
+  bool is_literal_bool_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConstRawExpr);
@@ -3123,7 +3138,8 @@ public:
   const common::ObString &get_func_name() const;
   virtual void clear_child() override;
   int check_param_num();
-  virtual ObExprOperator *get_op() override;
+  int check_param_num(int param_count);
+  virtual ObExprOperator* get_op() override;
   virtual void reset() override;
   virtual bool same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context = NULL) const override;
 
@@ -3151,6 +3167,7 @@ public:
       K_(expr_levels), N_FUNC, func_name_, N_CHILDREN, exprs_, K_(enum_set_values));
 
 private:
+  int check_param_num_internal(int32_t param_num, int32_t param_count, ObExprOperatorType type);
   DISALLOW_COPY_AND_ASSIGN(ObSysFunRawExpr);
   common::ObString func_name_;
   uint64_t operator_id_;

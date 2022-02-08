@@ -288,12 +288,20 @@ int ObSparseCellReader::read_text_store(const ObCellWriter::CellMeta& cell_meta,
   }
 
   if (OB_SUCC(ret)) {
-    if (0 == obj.get_val_len() && ObTextTC == ob_obj_type_class(store_type)) {
-      obj.set_lob_inrow();
-    }
+    if (0 == obj.get_val_len()) {
+      if (ObTextTC == ob_obj_type_class(store_type) || ObJsonTC == ob_obj_type_class(store_type)) {
+        obj.set_lob_inrow();
+      }
+     }
   }
 
   return ret;
+}
+
+int ObSparseCellReader::read_json_store(
+    const ObCellWriter::CellMeta &cell_meta,
+    ObObj &obj) {
+  return read_text_store(cell_meta, obj);
 }
 
 template <class T>
@@ -414,6 +422,9 @@ int ObSparseCellReader::read_cell(common::ObObj& obj)
       case ObMediumTextType:
       case ObLongTextType:
         ret = read_text_store(*meta, obj);
+        break;
+      case ObJsonType:
+        ret = read_json_store(*meta, obj);
         break;
       case ObBitType:
         READ_INT(set_bit, uint64_t, obj);

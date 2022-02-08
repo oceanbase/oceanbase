@@ -109,7 +109,7 @@ static int deep_copy_str_for_spliter(const ObObj& src, ObObj& dst, ObIAllocator&
     // do nothing
   } else if (OB_FAIL(ob_write_obj(allocator, src, dst))) {
     LOG_WARN("fail to write obj", K(ret), K(src));
-  } else if (ob_is_string_type(src.get_type()) && 0 == dst.get_string_len()) {
+  } else if ((ob_is_string_type(src.get_type()) || ob_is_json(src.get_type())) && 0 == dst.get_string_len()) {
     // NOTE::for empty varchar, will set ptr != NULL, len = 0.
     // spliter will use this obj for add_column
     const ObString SPLITER_EMPTY_STRING(0, 0, OB_EMPTY_STR);
@@ -702,7 +702,8 @@ int ObTableSchemaSpliter::batch_replace_rows(const uint64_t tenant_id, ObIArray<
                 break;
               }
               case ObVarcharType:
-              case ObLongTextType: {
+              case ObLongTextType: 
+              case ObJsonType: {
                 if (OB_FAIL(dml.add_column(column_name.ptr(), ObHexEscapeSqlStr(obj.get_varchar())))) {
                   LOG_WARN("fail to add column", K(ret), K(column_name), K(obj));
                 }

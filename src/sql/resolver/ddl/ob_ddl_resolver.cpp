@@ -338,7 +338,7 @@ int ObDDLResolver::resolve_default_value(ParseNode* def_node,
           // if (OB_FAIL(ObTimeConverter::str_to_otimestamp(time_str, cvrt_ctx, tmp_type, ot_data))) {
           if (OB_FAIL(ObTimeConverter::literal_timestamp_validate_oracle(time_str, cvrt_ctx, value_type, tz_value))) {
             ret = OB_INVALID_DATE_VALUE;
-            LOG_USER_ERROR(OB_INVALID_DATE_VALUE, "TIMESTAMP", to_cstring(time_str));
+            LOG_USER_ERROR(OB_INVALID_DATE_VALUE, 9, "TIMESTAMP", to_cstring(time_str));
           } else {
             /* use max scale bug:#18093350 */
             default_value.set_otimestamp_value(value_type, tz_value);
@@ -621,6 +621,9 @@ int ObDDLResolver::add_storing_column(const ObString& column_name, bool check_co
       } else if (ob_is_text_tc(column_schema->get_data_type())) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+      } else if (ob_is_json_tc(column_schema->get_data_type())) {
+        ret = OB_ERR_JSON_USED_AS_KEY;
+        LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_name.length(), column_name.ptr());
       } else if (ObTimestampTZType == column_schema->get_data_type()) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
@@ -1903,10 +1906,11 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2& column, ParseNode
           column.set_charset_type(ObCharset::charset_type_by_coll(coll_type));
         }
       }
-      if (OB_SUCC(ret) && column.is_string_type() && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
+      if (OB_SUCC(ret) && (column.is_string_type() || column.is_json()) 
+          && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
         if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
           SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
-        } else if (data_type.get_meta_type().is_lob()) {
+        } else if (data_type.get_meta_type().is_lob() || data_type.get_meta_type().is_json()) {
           if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
             SQL_RESV_LOG(WARN, "fail to check text or blob column length", K(ret), K(column));
           }
@@ -2115,6 +2119,10 @@ int ObDDLResolver::resolve_normal_column_attribute(
           LOG_USER_ERROR(
               OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be primary key", K(column), K(ret));
+        } else if (ob_is_json_tc(column.get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+          SQL_RESV_LOG(WARN, "JSON column can't be primary key", K(column), K(ret));
         } else if (ObTimestampTZType == column.get_data_type()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(
@@ -2139,6 +2147,10 @@ int ObDDLResolver::resolve_normal_column_attribute(
           LOG_USER_ERROR(
               OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be unique key", K(column), K(ret));
+        } else if (ob_is_json_tc(column.get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+          SQL_RESV_LOG(WARN, "JSON column can't be unique key", K(column), K(ret)); 
         } else if (ObTimestampTZType == column.get_data_type()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(
@@ -2197,6 +2209,11 @@ int ObDDLResolver::resolve_normal_column_attribute(
             LOG_USER_ERROR(
                 OB_INVALID_DEFAULT, column.get_column_name_str().length(), column.get_column_name_str().ptr());
             SQL_RESV_LOG(WARN, "BLOB, TEXT column can't have a default value", K(column), K(default_value), K(ret));
+          } else if (!default_value.is_null() && ob_is_json_tc(column.get_data_type())) {
+            ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+            LOG_USER_ERROR(
+                OB_ERR_BLOB_CANT_HAVE_DEFAULT, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+            SQL_RESV_LOG(WARN, "BLOB, TEXT or JSON column can't have a default value", K(column), K(default_value), K(ret));
           } else {
             if (T_CONSTR_DEFAULT == attr_node->type_) {
               resolve_stat.is_set_default_value_ = true;
@@ -2235,7 +2252,7 @@ int ObDDLResolver::resolve_normal_column_attribute(
         break;
       }
       case T_CONSTR_AUTO_INCREMENT:
-        if (ob_is_text_tc(column.get_data_type())) {
+        if (ob_is_text_tc(column.get_data_type()) || ob_is_json_tc(column.get_data_type())) {
           ret = OB_ERR_COLUMN_SPEC;
           LOG_USER_ERROR(OB_ERR_COLUMN_SPEC, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't set autoincrement", K(column), K(default_value), K(ret));
@@ -2361,6 +2378,11 @@ int ObDDLResolver::resolve_normal_column_attribute(
         }
         break;
       }
+      case T_EMPTY: {
+        // compatible with mysql 5.7 check (expr), do nothing
+        // alter table t modify c1 json check(xyz);
+        break;
+      }
       default:  // won't be here
         ret = OB_ERR_PARSER_SYNTAX;
         SQL_RESV_LOG(WARN, "Wrong column constraint", K(ret));
@@ -2480,6 +2502,11 @@ int ObDDLResolver::resolve_generated_column_attribute(
             column.set_column_id(column_id);
           }
         }
+        break;
+      }
+      case T_EMPTY: {
+        // compatible with mysql 5.7 check (expr), do nothing
+        // alter table t modify c1 json check(xyz);
         break;
       }
       default:  // won't be here
@@ -2951,7 +2978,8 @@ int ObDDLResolver::check_text_length(ObCharsetType cs_type, ObCollationType co_t
   int ret = OB_SUCCESS;
   int64_t mbmaxlen = 0;
   int32_t default_length = ObAccuracy::DDL_DEFAULT_ACCURACY[type].get_length();
-  if (!ob_is_text_tc(type) || CHARSET_INVALID == cs_type || CS_TYPE_INVALID == co_type) {
+  if(!(ob_is_text_tc(type) || ob_is_json_tc(type)) 
+    || CHARSET_INVALID == cs_type || CS_TYPE_INVALID == co_type) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(ERROR, "column infomation is error", K(cs_type), K(co_type), K(ret));
   } else if (!is_byte_length && OB_FAIL(ObCharset::get_mbmaxlen_by_coll(co_type, mbmaxlen))) {

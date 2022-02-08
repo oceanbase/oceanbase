@@ -139,7 +139,9 @@ int ObRawExprPullUpAggrExpr::visit(ObAggFunRawExpr& expr)
       case T_FUN_KEEP_SUM:
       case T_FUN_KEEP_VARIANCE:
       case T_FUN_KEEP_WM_CONCAT:
-      case T_FUN_WM_CONCAT: {
+      case T_FUN_WM_CONCAT:
+      case T_FUN_JSON_ARRAYAGG:
+      case T_FUN_JSON_OBJECTAGG: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Aggregation is not supported.", K(ret));
       } break;

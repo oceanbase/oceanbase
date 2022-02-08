@@ -85,7 +85,7 @@ int ObSqlExpression::assign(const ObSqlExpression& other)
   return ret;
 }
 
-int ObSqlExpression::add_expr_item(const ObPostExprItem& item)
+int ObSqlExpression::add_expr_item(const ObPostExprItem &item, const ObRawExpr *raw_expr)
 {
   int ret = OB_SUCCESS;
   if (!gen_infix_expr_) {
@@ -96,6 +96,11 @@ int ObSqlExpression::add_expr_item(const ObPostExprItem& item)
     }
   } else {
     ObInfixExprItem infix_item;
+    if (OB_NOT_NULL(raw_expr)) {
+      infix_item.set_is_boolean(raw_expr->is_bool_expr());
+    } else {
+      // unittest
+    }
     *static_cast<ObPostExprItem*>(&infix_item) = item;
     if (OB_FAIL(infix_expr_.add_expr_item(infix_item))) {
       LOG_WARN("add infix expr item failed", K(ret));
@@ -378,7 +383,7 @@ int ObAggregateExpression::calc_result_row(ObExprCtx& expr_ctx, const ObNewRow& 
         LOG_WARN("failed to calc result row", K(ret), K(row));
       }
     } else {
-      if (OB_FAIL(infix_expr_.calc_row(expr_ctx, row, result_row))) {
+      if (OB_FAIL(infix_expr_.calc_row(expr_ctx, row, get_aggr_func(), result_row))) {
         LOG_WARN("failed to calc row", K(ret), K(row));
       }
     }

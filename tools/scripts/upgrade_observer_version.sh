@@ -60,17 +60,31 @@ then
 fi
 
 # modify upgrade case
+old_version=
 curr_version_temp1=`echo $curr_version | sed 's/\./_/g'`
-echo $curr_version_temp1 >> tools/obtest/observer.list
+curr_version_ce=$curr_version_temp1"_ce"
+echo $curr_version_ce >> tools/obtest/observer.list
 num=`ls -l tools/obtest/t/compat_farm/*.test | wc -l`
 if [[ $num = 1 ]]
 then
   old_version=`ls tools/obtest/t/compat_farm/upgrade_from_*_lite.test | sed 's/tools\/obtest\/t\/compat_farm\/upgrade_from_\(.*\)_lite.test/\1/g'`
-  mv tools/obtest/t/compat_farm/upgrade_from_${old_version}_lite.test tools/obtest/t/compat_farm/upgrade_from_${curr_version_temp1}_lite.test
-  mv tools/obtest/r/compat_farm/upgrade_from_${old_version}_lite.result tools/obtest/r/compat_farm/upgrade_from_${curr_version_temp1}_lite.result
-  sed -i s/version=$old_version/version=$curr_version_temp1/g tools/obtest/t/compat_farm/upgrade_from_${curr_version_temp1}_lite.test
-  sed -i s/version=$old_version/version=$curr_version_temp1/g tools/obtest/r/compat_farm/upgrade_from_${curr_version_temp1}_lite.result
+  mv tools/obtest/t/compat_farm/upgrade_from_${old_version}_lite.test tools/obtest/t/compat_farm/upgrade_from_${curr_version_ce}_lite.test
+  mv tools/obtest/r/compat_farm/upgrade_from_${old_version}_lite.result tools/obtest/r/compat_farm/upgrade_from_${curr_version_ce}_lite.result
+  sed -i s/version=$old_version/version=$curr_version_ce/g tools/obtest/t/compat_farm/upgrade_from_${curr_version_ce}_lite.test
+  sed -i s/version=$old_version/version=$curr_version_ce/g tools/obtest/r/compat_farm/upgrade_from_${curr_version_ce}_lite.result
 else
   echo "compat_farm has more than one case, please confirm!"
   exit 1 
 fi 
+
+# modify upgrade_test.sh
+upgrade_test_path="tools/obtest/upgrade_test.sh"
+echo "$old_version"
+echo "$curr_version_ce"
+sed -i s/$old_version/$curr_version_ce/g $upgrade_test_path
+
+# sed admin to xxx
+upgrade_post_path="tools/upgrade/upgrade_post.py"
+upgrade_pre_path="tools/upgrade/upgrade_pre.py"
+sed -i s/admin/xxx/g $upgrade_post_path
+sed -i s/admin/xxx/g $upgrade_pre_path
