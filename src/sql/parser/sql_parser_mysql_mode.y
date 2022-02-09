@@ -4380,6 +4380,15 @@ BINARY opt_string_length_i_v2
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
   $$->param_num_ = $2[1];
 }
+| CHARACTER opt_string_length_i_v2 CHARACTER SET charset_name 
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
+  $$->param_num_ = $2[1];
+  $$->str_value_ = $5->str_value_;
+  $$->str_len_ = $5->str_len_;
+}
 | cast_datetime_type_i opt_datetime_fsp_i
 {
   malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
