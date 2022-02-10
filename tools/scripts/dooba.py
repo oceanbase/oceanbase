@@ -1079,7 +1079,13 @@ class oceanbase(object):
             self.app_info = ObConfigHelper().get_app_info(dataid)
 
     def dosql(self, sql, host=None, port=None, database=None):
-        if host is None:
+	cmd = "mysql -V"        
+	p = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+        err = p.wait()
+        if err:
+            raise Exception('please install mysql', cmd)	
+
+	if host is None:
             host = self.__host
         if port is None:
             port = self.__port
