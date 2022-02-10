@@ -542,9 +542,11 @@ int ObJoinOrder::get_query_range_info(
     range_info.set_equal_prefix_null_count(equal_prefix_null_count);
     range_info.set_index_column_count(
         index_schema->is_index_table() ? index_schema->get_index_column_num() : index_schema->get_rowkey_column_num());
-    if (OB_SUCCESS != ret && NULL != query_range) {
-      query_range->~ObQueryRange();
-      query_range = NULL;
+    if (OB_FAIL(ret)) {
+      if (NULL != query_range) {
+        query_range->~ObQueryRange();
+        query_range = NULL;
+      }
     } else {
       LOG_TRACE("succeed to get query range", K(ranges), K(*query_range), K(table_id), K(index_id));
     }
