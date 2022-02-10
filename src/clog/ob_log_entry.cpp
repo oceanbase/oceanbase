@@ -515,7 +515,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObCompressedLogEntry)
 {
   int64_t size = 0;
   size += header_.get_serialize_size();
-  ;
   size += header_.get_compressed_data_len();
   return size;
 }
