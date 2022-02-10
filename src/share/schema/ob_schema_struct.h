@@ -2173,12 +2173,12 @@ public:
   ObSchemaAllocator(common::ObIAllocator &allocator) : allocator_(&allocator)
   {}
 
-  virtual void *alloc(const int64_t sz)
+  virtual void* alloc(const int64_t sz) override
   {
     return alloc(sz, common::default_memattr);
   }
 
-  virtual void *alloc(const int64_t sz, const common::ObMemAttr &attr)
+  virtual void* alloc(const int64_t sz, const common::ObMemAttr& attr) override
   {
     void *ret = NULL;
     if (allocator_) {
@@ -2187,6 +2187,10 @@ public:
     return ret;
   }
 
+  virtual void free(void *p) override
+  {
+    allocator_->free(p);
+  }
   virtual ~ObSchemaAllocator(){};
 
 private:

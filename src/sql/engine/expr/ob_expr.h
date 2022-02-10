@@ -344,6 +344,15 @@ public:
   {}
 
   void* alloc(const int64_t size) override;
+  void* alloc(const int64_t size, const common::ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  void free(void* ptr) override
+  {
+    UNUSED(ptr);
+  }
 
 private:
   int64_t off_;

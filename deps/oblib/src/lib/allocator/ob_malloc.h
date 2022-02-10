@@ -156,7 +156,7 @@ public:
   {}
 
 public:
-  virtual void* alloc(int64_t sz)
+  virtual void* alloc(int64_t sz) override
   {
     char* ptr = NULL;
     if (OB_SUCCESS == mem_buf_.ensure_space(sz, label_)) {
@@ -164,12 +164,12 @@ public:
     }
     return ptr;
   }
-  virtual void* alloc(int64_t sz, const ObMemAttr& attr)
+  virtual void* alloc(int64_t sz, const ObMemAttr& attr) override
   {
     UNUSEDx(attr);
     return alloc(sz);
   }
-  virtual void free(char* ptr)
+  virtual void free(void* ptr) override
   {
     UNUSED(ptr);
   }
@@ -185,7 +185,7 @@ public:
   {}
 
 public:
-  virtual void* alloc(int64_t sz)
+  virtual void* alloc(int64_t sz) override
   {
     char* ptr = NULL;
     if (mem_buf_len_ >= sz) {
@@ -193,12 +193,12 @@ public:
     }
     return ptr;
   }
-  virtual void* alloc(int64_t sz, const ObMemAttr& attr)
+  virtual void* alloc(int64_t sz, const ObMemAttr& attr) override
   {
     UNUSEDx(attr);
     return alloc(sz);
   }
-  virtual void free(char* ptr)
+  virtual void free(void* ptr) override
   {
     UNUSED(ptr);
   }

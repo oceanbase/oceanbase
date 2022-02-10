@@ -49,6 +49,11 @@ public:
     return nullptr;
   }
 
+  virtual void free(void *p) override
+  {
+    UNUSED(p);
+  }
+
   virtual ~ObNullAllocator(){};
 };
 
@@ -61,6 +66,13 @@ static inline void init_block_allocator(lib::MemoryContext& mem_entity, ModulePa
 {
   block_allocator = ModulePageAllocator(mem_entity->get_allocator(), block_allocator.get_label());
 }
+static inline void init_block_allocator(lib::MemoryContext &mem_context, ObIAllocator &block_allocator)
+{
+  // this implement is invalid, just for compilation.
+  // protected by static_assert.
+  UNUSED(mem_context);
+  UNUSED(block_allocator);
+}
 
 // ObSEArrayImpl is a high performant array for OceanBase developers,
 // to guarantee performance, it should be used in this way
@@ -69,6 +81,8 @@ static inline void init_block_allocator(lib::MemoryContext& mem_entity, ModulePa
 static const int64_t OB_DEFAULT_SE_ARRAY_COUNT = 64;
 template <typename T, int64_t LOCAL_ARRAY_SIZE, typename BlockAllocatorT = ModulePageAllocator, bool auto_free = false>
 class ObSEArrayImpl : public ObIArray<T> {
+  static_assert(std::is_constructible<BlockAllocatorT>::value || !auto_free, "BlockAllocatorT can not be constructed.");
+
 public:
   using ObIArray<T>::count;
   using ObIArray<T>::at;

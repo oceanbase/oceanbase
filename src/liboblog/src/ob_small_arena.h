@@ -57,12 +57,16 @@ public:
   ObSmallArena();
   ~ObSmallArena();
   void *alloc_aligned(const int64_t size, const int64_t align);
-  void *alloc(const int64_t size, const common::ObMemAttr &attr)
+  virtual void *alloc(const int64_t size, const common::ObMemAttr &attr) override
   {
     UNUSEDx(attr);
     return alloc(size);
   }
-  void *alloc(const int64_t size);
+  virtual void *alloc(const int64_t size) override;
+  virtual void free(void *ptr) override
+  {
+    UNUSED(ptr);
+  }
   void reset();
   int64_t get_small_alloc_count() const;
   int64_t get_large_alloc_count() const;

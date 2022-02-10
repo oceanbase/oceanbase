@@ -17,41 +17,23 @@
 #include "lib/alloc/alloc_struct.h"
 
 namespace oceanbase {
-namespace lib {
-struct ObMemAttr;
-}  // end of namespace lib
-
 namespace common {
 using lib::ObMemAttr;
 extern ObMemAttr default_memattr;
 class ObIAllocator {
 public:
-  virtual ~ObIAllocator(){};
-
-public:
   /************************************************************************/
   /*                     New Interface (Under construction)               */
   /************************************************************************/
   // Use attr passed in by set_attr().
-  virtual void* alloc(const int64_t size)
-  {
-    UNUSED(size);
-    return NULL;
-  }
-
-  virtual void* alloc(const int64_t size, const ObMemAttr& attr)
-  {
-    UNUSED(size);
-    UNUSED(attr);
-    return NULL;
-  }
-
+  virtual void* alloc(const int64_t size) = 0;
+  virtual void* alloc(const int64_t size, const ObMemAttr& attr) = 0;
   virtual void* realloc(const void* ptr, const int64_t size, const ObMemAttr& attr)
   {
     UNUSED(ptr);
     UNUSED(size);
     UNUSED(attr);
-    return NULL;
+    return nullptr;
   }
 
   virtual void* realloc(void* ptr, const int64_t oldsz, const int64_t newsz)
@@ -59,13 +41,10 @@ public:
     UNUSED(ptr);
     UNUSED(oldsz);
     UNUSED(newsz);
-    return NULL;
+    return nullptr;
   }
 
-  virtual void free(void* ptr)
-  {
-    UNUSED(ptr);
-  }
+  virtual void free(void* ptr) = 0;
 
   virtual int64_t total() const
   {

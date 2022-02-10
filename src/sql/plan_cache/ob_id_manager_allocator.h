@@ -31,11 +31,16 @@ public:
 
   int init(const int64_t obj_size, const char* label, uint64_t tenant_id_);
 
-  void* alloc(int64_t sz)
+  void* alloc(const int64_t sz) override
   {
     return alloc_(sz);
   }
-  void free(void* ptr)
+  void* alloc(const int64_t size, const common::ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  void free(void* ptr) override
   {
     free_(ptr);
   }
