@@ -79,7 +79,6 @@ public:
   RPC_S(PRD create_table_like, obrpc::OB_CREATE_TABLE_LIKE, (ObCreateTableLikeArg));
   RPC_S(PRD flashback_table_from_recyclebin, obrpc::OB_FLASHBACK_TABLE_FROM_RECYCLEBIN,
       (ObFlashBackTableFromRecyclebinArg));
-  RPC_S(PRD flashback_table_to_time_point, obrpc::OB_FLASHBACK_TABLE_TO_SCN, (ObFlashBackTableToScnArg));
   RPC_S(PRD purge_table, obrpc::OB_PURGE_TABLE, (ObPurgeTableArg));
   RPC_S(PRD flashback_database, obrpc::OB_FLASHBACK_DATABASE, (ObFlashBackDatabaseArg));
   RPC_S(PRD purge_database, obrpc::OB_PURGE_DATABASE, (ObPurgeDatabaseArg));

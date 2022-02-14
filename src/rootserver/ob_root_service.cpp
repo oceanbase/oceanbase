@@ -5096,14 +5096,6 @@ int ObRootService::flashback_table_from_recyclebin(const ObFlashBackTableFromRec
   return ret;
 }
 
-int ObRootService::flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg& arg)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(arg);
-  LOG_INFO("receive flashback table arg", K(arg));
-  return ret;
-}
-
 int ObRootService::purge_table(const ObPurgeTableArg& arg)
 {
   int ret = OB_SUCCESS;

@@ -1883,26 +1883,6 @@ bool ObFlashBackTableFromRecyclebinArg::is_valid() const
 OB_SERIALIZE_MEMBER((ObFlashBackTableFromRecyclebinArg, ObDDLArg), tenant_id_, origin_table_name_, new_db_name_,
     new_table_name_, origin_db_name_);
 
-bool ObFlashBackTableToScnArg::is_valid() const
-{
-  int bret = true;
-  if (OB_INVALID_ID == tenant_id_) {
-    bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
-  } else if (OB_INVALID_ID == time_point_) {
-    bret = false;
-    LOG_WARN("timepoint is invalid", K_(time_point));
-  } else if (0 == tables_.count()) {
-    bret = false;
-    LOG_WARN("table is empty", K_(tables));
-  } else if (-1 == query_end_time_) {
-    bret = false;
-  }
-  return bret;
-}
-
-OB_SERIALIZE_MEMBER(ObFlashBackTableToScnArg, tenant_id_, time_point_, tables_, query_end_time_);
-
 bool ObFlashBackIndexArg::is_valid() const
 {
   int bret = true;

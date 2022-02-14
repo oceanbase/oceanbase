@@ -1995,22 +1995,6 @@ public:
       K_(origin_table_id));
 };
 
-struct ObFlashBackTableToScnArg : public ObDDLArg {
-  OB_UNIS_VERSION(1);
-
-public:
-  ObFlashBackTableToScnArg() : tenant_id_(common::OB_INVALID_ID), time_point_(-1), tables_(), query_end_time_(-1)
-  {}
-  bool is_valid() const;
-
-  uint64_t tenant_id_;
-  int64_t time_point_;
-  common::ObSArray<ObTableItem> tables_;
-  int64_t query_end_time_;
-
-  TO_STRING_KV(K_(tenant_id), K_(time_point), K_(tables), K_(query_end_time));
-};
-
 struct ObFlashBackIndexArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 

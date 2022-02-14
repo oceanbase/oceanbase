@@ -1578,6 +1578,29 @@ int get_alter_tablegroup_stmt_need_privs(
   return ret;
 }
 
+int get_flashback_table_stmt_need_privs(		
+    const ObSessionPrivInfo &session_priv,		
+    const ObStmt *basic_stmt,		
+    ObIArray<ObNeedPriv> &need_privs)		
+{		
+  UNUSED(session_priv);		
+  int ret = OB_SUCCESS;		
+  if (OB_ISNULL(basic_stmt)) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));		
+  } else if (stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN != basic_stmt->get_stmt_type()) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Stmt type should be T_FLASHBACK_TABLE",		
+             K(ret), "stmt type", basic_stmt->get_stmt_type());		
+  } else {		
+    ObNeedPriv need_priv;
+    need_priv.priv_set_ = OB_PRIV_SUPER;		
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;		
+    ADD_NEED_PRIV(need_priv);		
+  }		
+  return ret;		
+}		
+
 int get_purge_recyclebin_stmt_need_privs(
     const ObSessionPrivInfo& session_priv, const ObStmt* basic_stmt, ObIArray<ObNeedPriv>& need_privs)
 {
@@ -1596,6 +1619,52 @@ int get_purge_recyclebin_stmt_need_privs(
     ADD_NEED_PRIV(need_priv);
   }
   return ret;
+}
+
+int get_flashback_index_stmt_need_privs(		
+    const ObSessionPrivInfo &session_priv,		
+    const ObStmt *basic_stmt,		
+    ObIArray<ObNeedPriv> &need_privs)		
+{		
+  UNUSED(session_priv);		
+  int ret = OB_SUCCESS;		
+  if (OB_ISNULL(basic_stmt)) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Basic stmt should not be NULL", K(ret));		
+  } else if (OB_UNLIKELY(stmt::T_FLASHBACK_INDEX != basic_stmt->get_stmt_type())) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Stmt type should be T_FLASHBACK_TABLE",		
+             K(ret), "stmt type", basic_stmt->get_stmt_type());		
+  } else {		
+    ObNeedPriv need_priv;		
+    need_priv.priv_set_ = OB_PRIV_SUPER;		
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;		
+    ADD_NEED_PRIV(need_priv);		
+  }		
+  return ret;		
+}
+
+int get_flashback_database_stmt_need_privs(		
+    const ObSessionPrivInfo &session_priv,		
+    const ObStmt *basic_stmt,		
+    ObIArray<ObNeedPriv> &need_privs)		
+{		
+  UNUSED(session_priv);		
+  int ret = OB_SUCCESS;		
+  if (OB_ISNULL(basic_stmt)) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));		
+  } else if (OB_UNLIKELY(stmt::T_FLASHBACK_DATABASE != basic_stmt->get_stmt_type())) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Stmt type should be T_FLASHBACK_DATABASE",		
+             K(ret), "stmt type", basic_stmt->get_stmt_type());		
+  } else {		
+    ObNeedPriv need_priv;		
+    need_priv.priv_set_ = OB_PRIV_SUPER;		
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;		
+    ADD_NEED_PRIV(need_priv);		
+  }		
+  return ret;		
 }
 
 int get_purge_table_stmt_need_privs(
@@ -1656,6 +1725,34 @@ int get_purge_database_stmt_need_privs(
     ADD_NEED_PRIV(need_priv);
   }
   return ret;
+}
+
+int get_flashback_tenant_stmt_need_privs(		
+    const ObSessionPrivInfo &session_priv,		
+    const ObStmt *basic_stmt,		
+    ObIArray<ObNeedPriv> &need_privs)		
+{		
+  UNUSED(session_priv);		
+  int ret = OB_SUCCESS;		
+  if (OB_ISNULL(basic_stmt)) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));		
+  } else if (OB_UNLIKELY(stmt::T_FLASHBACK_TENANT != basic_stmt->get_stmt_type())) {		
+    ret = OB_INVALID_ARGUMENT;		
+    LOG_WARN("Stmt type should be T_FLASHBACK_TENANT",		
+             K(ret), "stmt type", basic_stmt->get_stmt_type());		
+  } else {		
+    ObNeedPriv need_priv;		
+    if (OB_SYS_TENANT_ID != session_priv.tenant_id_) {		
+      ret = OB_ERR_NO_PRIVILEGE;		
+      LOG_WARN("Only sys tenant can do this operation", K(ret));		
+    } else {		
+      need_priv.priv_set_ = OB_PRIV_SUPER;		
+      need_priv.priv_level_ = OB_PRIV_USER_LEVEL;		
+      ADD_NEED_PRIV(need_priv);		
+    }		
+  }		
+  return ret;		
 }
 
 int get_purge_tenant_stmt_need_privs(

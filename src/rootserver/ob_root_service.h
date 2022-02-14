@@ -977,7 +977,6 @@ public:
   int update_index_status(const obrpc::ObUpdateIndexStatusArg& arg);
   int purge_table(const obrpc::ObPurgeTableArg& arg);
   int flashback_table_from_recyclebin(const obrpc::ObFlashBackTableFromRecyclebinArg& arg);
-  int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg& arg);
   int purge_database(const obrpc::ObPurgeDatabaseArg& arg);
   int flashback_database(const obrpc::ObFlashBackDatabaseArg& arg);
   int check_tenant_in_alter_locality(const uint64_t tenant_id, bool& in_alter_locality);

@@ -406,7 +406,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_tablegroup_stmt drop_tablegroup_stmt alter_tablegroup_stmt default_tablegroup
 %type <node> set_transaction_stmt transaction_characteristics transaction_access_mode isolation_level
 %type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local
-%type <node> purge_stmt
+%type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
 %type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var
 %type <node> string_list text_string string_val_list
@@ -534,6 +534,7 @@ stmt:
   { $$ = $1; check_question_mark($$, result); $$->value_ = 1; }
   | unlock_tables_stmt
   { $$ = $1; check_question_mark($$, result); $$->value_ = 1; }
+  | flashback_stmt          { $$ = $1; check_question_mark($$, result); }
   | purge_stmt              { $$ = $1; check_question_mark($$, result); }
   | load_data_stmt          { $$ = $1; check_question_mark($$, result); }
   | xa_begin_stmt           { $$ = $1; check_question_mark($$, result); }
@@ -11269,6 +11270,43 @@ SET DEFAULT signed_literal
  *	RECYCLE grammar
  *
  *****************************************************************************/
+flashback_stmt:		
+FLASHBACK TABLE relation_factor TO BEFORE DROP opt_flashback_rename_table		
+{		
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_TABLE_FROM_RECYCLEBIN, 2, $3, $7);		
+}		
+|		
+FLASHBACK database_key database_factor TO BEFORE DROP opt_flashback_rename_database		
+{		
+  (void)($2);		
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_DATABASE, 2, $3, $7);		
+}		
+|		
+FLASHBACK TENANT relation_name TO BEFORE DROP opt_flashback_rename_tenant		
+{		
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_TENANT, 2, $3, $7);		
+}		
+
+opt_flashback_rename_table:		
+RENAME TO relation_factor		
+{		
+  $$ = $3;		
+}		
+| /*EMPTY*/  { $$ = NULL; }		
+
+opt_flashback_rename_database:		
+RENAME TO database_factor		
+{		
+  $$ = $3;		
+}		
+| /*EMPTY*/  { $$ = NULL; }		
+
+opt_flashback_rename_tenant:		
+RENAME TO relation_name		
+{		
+  $$ = $3;		
+}		
+| /*EMPTY*/  { $$ = NULL; }
 
 purge_stmt:
 PURGE TABLE relation_factor

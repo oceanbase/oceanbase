@@ -949,6 +949,9 @@ ob_set_subtarget(ob_sql resolver
   resolver/ddl/ob_drop_tenant_stmt.cpp
   resolver/ddl/ob_explain_resolver.cpp
   resolver/ddl/ob_explain_stmt.cpp
+  resolver/ddl/ob_flashback_resolver.cpp		
+  resolver/ddl/ob_flashback_resolver.h		
+  resolver/ddl/ob_flashback_stmt.h
   resolver/ddl/ob_lock_tenant_resolver.cpp
   resolver/ddl/ob_lock_tenant_stmt.cpp
   resolver/ddl/ob_modify_tenant_resolver.cpp

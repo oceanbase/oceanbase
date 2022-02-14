@@ -392,8 +392,6 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_TENANT, ObRpcFlashBackTenantP, f
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PURGE_TENANT, ObRpcPurgeTenantP, purge_tenant(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PURGE_EXPIRE_RECYCLE_OBJECTS, ObRpcPurgeExpireRecycleObjectsP,
     purge_expire_recycle_objects(arg_, result_));
-DEFINE_RS_RPC_PROCESSOR(
-    obrpc::OB_FLASHBACK_TABLE_TO_SCN, ObRpcFlashBackTableToScnP, flashback_table_to_time_point(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ROOT_SPLIT_PARTITION, ObRpcRootSplitPartitionP, root_split_partition(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ALTER_CLUSTER_ATTR_DDL, ObRpcAlterClusterAttrP, alter_cluster_attr(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(

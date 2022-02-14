@@ -189,6 +189,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {
     {"first", FIRST},
     {"first_value", FIRST_VALUE},
     {"fixed", FIXED},
+    {"flashback", FLASHBACK},
     {"flush", FLUSH},
     {"follower", FOLLOWER},
     {"format", FORMAT},

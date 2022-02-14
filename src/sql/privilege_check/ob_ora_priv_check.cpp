@@ -1776,6 +1776,10 @@ int ObOraSysChecker::check_ora_ddl_priv(ObSchemaGetterGuard& guard, const uint64
         DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TYPE);
         break;
       }
+      case stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN: {		
+        DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);		
+        break;		
+      }
       case stmt::T_PURGE_TABLE: {
         DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);
         break;
@@ -1814,7 +1818,7 @@ int ObOraSysChecker::check_ora_ddl_priv(ObSchemaGetterGuard& guard, const uint64
       }
       case stmt::T_CREATE_RESTORE_POINT:
       case stmt::T_DROP_RESTORE_POINT: {
-        DEFINE_PUB_CHECK_CMD(PRIV_ID_SELECT_ANY_DICTIONARY);
+        DEFINE_PURGE_CHECK_CMD(PRIV_ID_FLASHBACK_ANY_TABLE, PRIV_ID_SELECT_ANY_DICTIONARY);
         break;
       }
       default: {
