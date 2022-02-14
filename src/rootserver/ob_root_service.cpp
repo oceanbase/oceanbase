@@ -6533,7 +6533,7 @@ int ObRootService::create_outline(const ObCreateOutlineArg& arg)
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
       // if not specify database, set default database name and database id;
-      outline_info.set_database_id(OB_OUTLINE_DEFAULT_DATABASE_ID);
+      outline_info.set_database_id(combine_id(tenant_id, OB_OUTLINE_DEFAULT_DATABASE_ID));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
