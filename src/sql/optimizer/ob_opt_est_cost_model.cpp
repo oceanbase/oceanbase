@@ -86,7 +86,7 @@ double ObTableMetaInfo::get_micro_block_numbers() const
 {
   double ret = 0.0;
   if (micro_block_count_ <= 0) {
-    // calculate micore block count use storage statistics
+    // calculate micro block count use storage statistics
     ret = 0;
   } else {
     // get micro block count from optimizer statistics
@@ -1399,7 +1399,7 @@ int ObOptEstCostModel::cost_table_get_one_batch(const ObCostTableScanInfo &est_c
                    OB_FAIL(cost_table_lookup_rpc(index_back_row_count,
                                                 est_cost_info,
                                                 network_cost))) {
-          LOG_WARN("failed to get newwork transform cost for global index", K(ret));
+          LOG_WARN("failed to get network transform cost for global index", K(ret));
         } else {
           get_cost = base_cost + ib_cost + network_cost;
           get_index_back_cost = ib_cost + network_cost;

@@ -152,7 +152,7 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(generate_access_exprs())) {
-    LOG_WARN("failed to generate acess exprs", K(ret));
+    LOG_WARN("failed to generate access exprs", K(ret));
   } else if (NULL != limit_count_expr_ &&
              OB_FAIL(all_exprs.push_back(limit_count_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
@@ -317,7 +317,7 @@ int ObLogTableScan::copy_filter_before_index_back()
         } else {
           bool is_contain_vir_gen_column = false;
           // ObArray<ObRawExpr *> column_exprs;
-          // scan_pushdown before index back conculde virtual generated column
+          // scan_pushdown before index back conclude virtual generated column
           // need copy for avoiding shared expression.
           if (OB_FAIL(ObRawExprUtils::contain_virtual_generated_column(filters.at(i), is_contain_vir_gen_column))) {
             LOG_WARN("fail to contain virtual gen column", K(ret));
@@ -1836,7 +1836,7 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
         } else if (!is_skip_scan() && T_INDEX_SS_HINT == hint->get_hint_type()) {
           /* is not index skip scan but exist index_ss hint */
         } else if (OB_FAIL(hint->print_hint(plan_text))) {
-          LOG_WARN("failed to print indedx hint", K(ret), K(*hint));
+          LOG_WARN("failed to print index hint", K(ret), K(*hint));
         }
       }
     } else {// print all no index
@@ -1847,7 +1847,7 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL", K(ret), K(hint));
         } else if (OB_FAIL(hint->print_hint(plan_text))) {
-          LOG_WARN("failed to print indedx hint", K(ret), K(*hint));
+          LOG_WARN("failed to print index hint", K(ret), K(*hint));
         }
       }
     }

@@ -155,7 +155,7 @@ private:
                                             uint64_t &convertable_map,
                                             int64_t pos);
   // 1, find common prefix length of strings
-  // 2, find dynamix base and offset of strings
+  // 2, find dynamic base and offset of strings
   // 3, use dynamic base and offset to convert strings to scalars
   static int convert_strings_to_scalar(const common::ObIArray<common::ObString> &origin_strs,
                                        common::ObIArray<double> &scalars);
