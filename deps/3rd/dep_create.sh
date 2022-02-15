@@ -134,7 +134,7 @@ do
     else
         [[ "$line" != "" ]] && [[ "$line" != '\#*' ]] && content+=$'\n'"$line"
     fi
-done < oceanbase.el7.x86_64.deps 
+done < $DEP_FILE 
 save_content
 
 echo "download dependencies..."
