@@ -23,6 +23,8 @@
 #include "dumpsst/ob_admin_cmp_micro_executor.h"
 #include "archive_tool/ob_admin_log_archive_executor.h"
 #include "backup_tool/ob_admin_dump_backup_data_executor.h"
+## add server
+#include "server_tool/ob_admin_server_executor.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::tools;
@@ -36,7 +38,8 @@ void print_usage()
       "        ob_admin slog_tool\n"
       "        ob_admin dumpsst\n"
       "        ob_admin archive_tool\n"
-      "        ob_admin dump_backup\n");
+      "        ob_admin dump_backup\n"
+      "        ob_admin -h127.0.0.1 -p2883 (-sintl/-ssm -mbkmi/-mlocal) [command] 圆括号内为开启ssl时用法\n");
 }
 
 int main(int argc, char *argv[])
@@ -70,7 +73,9 @@ int main(int argc, char *argv[])
       executor = new ObAdminLogArchiveExecutor();
     } else if (0 == strcmp("dump_backup", argv[1])) {
       executor = new ObAdminDumpBackupDataExecutor();
-    } else {
+    } else if (0 == strncmp("-h", argv[1], 2)) {
+      executor = new ObAdminServerExecutor();
+    }else {
       print_usage();
     }
 
