@@ -23,7 +23,6 @@
 #include "dumpsst/ob_admin_cmp_micro_executor.h"
 #include "archive_tool/ob_admin_log_archive_executor.h"
 #include "backup_tool/ob_admin_dump_backup_data_executor.h"
-## add server
 #include "server_tool/ob_admin_server_executor.h"
 
 using namespace oceanbase::common;
