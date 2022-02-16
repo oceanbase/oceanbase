@@ -6157,13 +6157,13 @@ static int json_int(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     int64_t value = 0;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_int(value))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else if (expect_type < ObIntType && CAST_FAIL(int_range_check(expect_type, value, value))) {
@@ -6191,13 +6191,13 @@ static int json_uint(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     uint64_t value = 0;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_uint(value))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else if (CAST_FAIL(uint_upper_check(expect_type, value))) {
@@ -6248,13 +6248,13 @@ static int json_double(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     double value = 0.0;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_double(value))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else if (ObUDoubleType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
@@ -6281,13 +6281,13 @@ static int json_number(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     number::ObNumber value;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
-    } else if (CAST_FAIL(j_base->to_number(value))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
+    } else if (CAST_FAIL(j_base->to_number(params.allocator_v2_, value))) {
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
@@ -6313,13 +6313,13 @@ static int json_datetime(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     int64_t value;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_datetime(value))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else {
@@ -6343,13 +6343,13 @@ static int json_date(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     int32_t value;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_date(value))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else {
@@ -6373,13 +6373,13 @@ static int json_time(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     int64_t value;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_time(value))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else {
@@ -6404,13 +6404,13 @@ static int json_year(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     uint8_t value = 0;
     int64_t int_value = 0;
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_int(int_value, false, true))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else if (CAST_FAIL(ObTimeConverter::int_to_year(int_value, value))){
@@ -6444,13 +6444,13 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
     LOG_WARN("invalid allocator in json cast to other type", K(ret), K(params.allocator_v2_));
   } else {
     ObJsonBuffer j_buf(params.allocator_v2_);
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->print(j_buf, true))) {
-      LOG_WARN("fail to cast json to other type", K(ret), K(j_text), K(expect_type));
+      LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else {
@@ -6459,7 +6459,17 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
                                    (ObCharset::charset_type_by_coll(in.get_collation_type()) != 
                                     ObCharset::charset_type_by_coll(params.dest_collation_)));
       ObString temp_str_val(j_buf.length(), j_buf.ptr());
+
+      /* this function maybe called in json generated column 
+      * and the generated column may has limitaion constrain the string length */
+      uint64_t accuracy_max_len = 0; 
+      if (params.res_accuracy_ && params.res_accuracy_->get_length()) {
+        accuracy_max_len = params.res_accuracy_->get_length();
+      }
       if (!need_charset_convert) {
+        if (accuracy_max_len > 0 && accuracy_max_len < j_buf.length()) {
+          temp_str_val.assign_ptr(j_buf.ptr(), accuracy_max_len);
+        }
         ret = copy_string(params, expect_type, temp_str_val, out);
       } else {
         ObObj tmp_obj;
@@ -6467,6 +6477,10 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
         tmp_obj.set_collation_level(in.get_collation_level());
         tmp_obj.set_string(ObLongTextType, temp_str_val);
         ret = string_string(expect_type, params, tmp_obj, out, cast_mode);
+        if (accuracy_max_len && accuracy_max_len < out.get_string().length()) {
+          ObString tmp_str = out.get_string();
+          out.set_string(expect_type, tmp_str.ptr(), accuracy_max_len);
+        }
       }
     }
   }
@@ -6485,11 +6499,11 @@ static int json_bit(const ObObjType expect_type, ObObjCastParams &params,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
   } else {
-    ObString j_text = in.get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = in.get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_bit(value))) {
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);

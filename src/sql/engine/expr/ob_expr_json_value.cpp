@@ -130,8 +130,6 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
         types_stack[4].set_calc_type(temp_type.get_type());
         types_stack[4].set_calc_collation_type(temp_type.get_collation_type());
         types_stack[4].set_calc_collation_level(temp_type.get_collation_level());
-        // types_stack[4].set_calc_length(temp_type.get_length());
-        // types_stack[4].set_calc_length_semantics(temp_type.get_length_semantics());
         types_stack[4].set_calc_accuracy(temp_type.get_accuracy());
       }
     }
@@ -152,8 +150,6 @@ int ObExprJsonValue::calc_result_typeN(ObExprResType& type,
         types_stack[6].set_calc_type(temp_type.get_type());
         types_stack[6].set_calc_collation_type(temp_type.get_collation_type());
         types_stack[6].set_calc_collation_level(temp_type.get_collation_level());
-        // types_stack[6].set_calc_length(temp_type.get_length());
-        // types_stack[6].set_calc_length_semantics(temp_type.get_length_semantics());
         types_stack[6].set_calc_accuracy(temp_type.get_accuracy());
       }
     }
@@ -189,13 +185,13 @@ int ObExprJsonValue::calc_resultN(ObObj& result,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("input type error", K(type));
     } else {
-      ObString j_text = params[0].get_string();
+      ObString j_str = params[0].get_string();
       ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-      if (j_text.length() == 0) { // maybe input json doc is null type
+      if (j_str.length() == 0) { // maybe input json doc is null type
         is_null_result = true;
-      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_text, j_in_type,
+      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
           j_in_type, j_base))) {
-        LOG_WARN("fail to get json base.", K(ret), K(type), K(j_text), K(j_in_type));
+        LOG_WARN("fail to get json base.", K(ret), K(type), K(j_str), K(j_in_type));
         if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
           is_cover_by_error = false;
         }
@@ -238,8 +234,11 @@ int ObExprJsonValue::calc_resultN(ObObj& result,
     ret = get_on_empty_or_error_old(params, expr_ctx, dst_type, 5, is_cover_by_error,
                                     accuracy, error_type, &error_val);
   } else if (is_cover_by_error) { // always get error option for return default value on error
-    get_on_empty_or_error_old(params, expr_ctx, dst_type, 5, is_cover_by_error,
-                              accuracy, error_type, &error_val);
+    int temp_ret = get_on_empty_or_error_old(params, expr_ctx, dst_type, 5, is_cover_by_error,
+        accuracy, error_type, &error_val);
+    if (temp_ret != OB_SUCCESS) {
+      LOG_WARN("failed to get on empty or error.", K(ret), K(dst_type));
+    }
   }
 
   // parse json path and do seek
@@ -364,13 +363,13 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("input type error", K(type));
   } else {
-    ObString j_text = json_datum->get_string();
+    ObString j_str = json_datum->get_string();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-    if (j_text.length() == 0) { // maybe input json doc is null type
+    if (j_str.length() == 0) { // maybe input json doc is null type
       is_null_result = true;
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&temp_allocator, j_text, j_in_type,
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&temp_allocator, j_str, j_in_type,
         j_in_type, j_base))) {
-      LOG_WARN("fail to get json base.", K(ret), K(type), K(j_text), K(j_in_type));
+      LOG_WARN("fail to get json base.", K(ret), K(type), K(j_str), K(j_in_type));
       if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
         is_cover_by_error = false;
       }
@@ -999,7 +998,7 @@ int ObExprJsonValue::cast_to_number(common::ObIAllocator *allocator,
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
-  } else if (CAST_FAIL(j_base->to_number(val))) {
+  } else if (CAST_FAIL(j_base->to_number(allocator, val))) {
     LOG_WARN("fail to cast json as decimal", K(ret));
   } else if (ObUNumberType == dst_type && CAST_FAIL(numeric_negative_check(val))) {
     LOG_WARN("numeric_negative_check failed", K(ret), K(val));
@@ -1538,6 +1537,7 @@ int ObExprJsonValue::get_on_empty_or_error_old(const ObObj *params,
     expr_ctx.cast_mode_ &= ~CM_NO_RANGE_CHECK; // make cast check range
     expr_ctx.cast_mode_ &= ~CM_STRING_INTEGER_TRUNC; // make cast check range when string to uint
     expr_ctx.cast_mode_ |= CM_ERROR_ON_SCALE_OVER; // make cast check presion and scale
+    expr_ctx.cast_mode_ |= CM_EXPLICIT_CAST; // make cast json fail return error
     if (OB_FAIL(param_eval(expr_ctx, params[index + 1], index + 1))) {
       is_cover_by_error = false;
       LOG_WARN("eval json arg failed", K(ret));
@@ -1597,6 +1597,7 @@ int ObExprJsonValue::get_on_empty_or_error(const ObExpr &expr,
     json_arg->extra_ &= ~CM_NO_RANGE_CHECK; // make cast check range
     json_arg->extra_ &= ~CM_STRING_INTEGER_TRUNC; // make cast check range when string to uint
     json_arg->extra_ |= CM_ERROR_ON_SCALE_OVER; // make cast check presion and scale
+    json_arg->extra_ |= CM_EXPLICIT_CAST; // make cast json fail return error
     if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
       is_cover_by_error = false;
       LOG_WARN("eval json arg failed", K(ret));

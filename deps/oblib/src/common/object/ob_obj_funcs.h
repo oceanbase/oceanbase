@@ -1419,12 +1419,12 @@ DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
   {                                                                                \
     static uint64_t calc_hash_value(const P &param, const uint64_t hash) {         \
       int ret = OB_SUCCESS;                                                        \
-      common::ObString j_text = param.get_string();                                \
+      common::ObString j_bin_str = param.get_string();                             \
       uint64_t hash_res = 0;                                                       \
-      ObJsonBin j_bin(j_text.ptr(), j_text.length());                           \
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());                        \
       ObIJsonBase *j_base = &j_bin;                                                \
       if (OB_FAIL(j_bin.reset_iter())) {                                           \
-        COMMON_LOG(WARN, "fail to reset json bin iter", K(ret), K(j_text));        \
+        COMMON_LOG(WARN, "fail to reset json bin iter", K(ret), K(j_bin_str));     \
         right_to_die_or_duty_to_live();                                            \
       } else if (OB_FAIL(j_base->calc_json_hash_value(hash, T::hash, hash_res))) { \
         COMMON_LOG(ERROR, "fail to calc hash", K(ret), K(*j_base));                \

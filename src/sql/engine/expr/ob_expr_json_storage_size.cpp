@@ -69,20 +69,20 @@ int ObExprJsonStorageSize::calc(const T &data, ObObjType type, ObCollationType c
     LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
   } else {
     uint64_t size = 0;
-    common::ObString j_text = data.get_string();
+    common::ObString j_str = data.get_string();
     ObIJsonBase *j_base = NULL;
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-    if (j_text.length() == 0) {
+    if (j_str.length() == 0) {
       ret = OB_ERR_INVALID_JSON_TEXT;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_text, j_in_type,
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
         j_in_type, j_base))) {
       if (ret == OB_ERR_INVALID_JSON_TEXT) {
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
       }
-      LOG_WARN("fail to get json base", K(ret), K(type), K(j_text), K(j_in_type));
+      LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
     } else if (OB_FAIL(j_base->get_used_size(size))) {
-      LOG_WARN("fail to get used size", K(ret), K(type), K(j_text), K(j_in_type));
+      LOG_WARN("fail to get used size", K(ret), K(type), K(j_str), K(j_in_type));
     } else {
       res.set_int32(size);
     }

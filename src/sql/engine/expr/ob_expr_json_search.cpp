@@ -464,16 +464,8 @@ int ObExprJsonSearch::calc_resultN(ObObj& result,
       if (OB_FAIL(j_res->get_raw_binary(raw_bin, allocator))) {
         LOG_WARN("json_keys get result binary failed", K(ret));
       } else {
-        uint64_t length = raw_bin.length();
-        char *buf = reinterpret_cast<char *>(allocator->alloc(length));
-        if (OB_ISNULL(buf)){
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("json_search alloc jsonString failed", K(ret), K(length));
-        } else {
-          MEMCPY(buf, raw_bin.ptr(), length);
-          result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-          result.set_string(ObJsonType, buf, length);
-        }
+        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
       }
     }
   }

@@ -83,16 +83,19 @@ int ObExprJsonUnquote::calc(const T &data, ObObjType type, ObCollationType cs_ty
     LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
   } else {
     ObIJsonBase *j_base = NULL;
-    ObString j_text = data.get_string();
-    size_t len = j_text.length();
+    ObString j_str = data.get_string();
+    size_t len = j_str.length();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-    if (ob_is_string_type(type) && (len < 2 || j_text[0] != '"' || j_text[len - 1] != '"')) {
-      if (OB_FAIL(j_buf.append(j_text))) {
-        LOG_WARN("failed: copy original string", K(ret), K(j_text));
+    if (ob_is_string_type(type) && (len < 2 || j_str[0] != '"' || j_str[len - 1] != '"')) {
+      if (OB_FAIL(j_buf.append(j_str))) {
+        LOG_WARN("failed: copy original string", K(ret), K(j_str));
       }
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_text, j_in_type,
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
         j_in_type, j_base))) {
       LOG_WARN("failed: get json base", K(ret), K(type));
+      if (OB_ERR_INVALID_JSON_TEXT) {
+        ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+      }
       if (ret == OB_ERR_INVALID_JSON_TEXT_IN_PARAM) {
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
       }

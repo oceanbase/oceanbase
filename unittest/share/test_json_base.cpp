@@ -3055,28 +3055,28 @@ TEST_F(TestJsonBase, test_to_number)
   // 1. test json tree
   // number
   j_tree = &j_dec;
-  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(&allocator, res));
   ASSERT_EQ(false, res == res_int);
   // int
   j_tree = &j_int;
-  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(&allocator, res));
   ASSERT_EQ(true, res == res_int);
   // uint
   j_tree = &j_uint;
-  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(&allocator, res));
   ASSERT_EQ(true, res == res_int);
   // string
   j_tree = &j_str;
-  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(&allocator, res));
   ASSERT_EQ(false, res == res_int);
   // bool
   j_tree = &j_bool;
-  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(&allocator, res));
   res_int = 1;
   ASSERT_EQ(true, res == res_int);
   // double
   j_tree = &j_double;
-  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_tree->to_number(&allocator, res));
   res_int = 123;
   ASSERT_EQ(false, res == res_int);
 
@@ -3084,33 +3084,33 @@ TEST_F(TestJsonBase, test_to_number)
   // number
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_dec,
       ObJsonInType::JSON_BIN, j_bin));
-  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(&allocator, res));
   ASSERT_EQ(false, res == res_int);
   // int
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_int,
       ObJsonInType::JSON_BIN, j_bin));
-  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(&allocator, res));
   ASSERT_EQ(true, res == res_int);
   // uint
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_uint,
       ObJsonInType::JSON_BIN, j_bin));
-  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(&allocator, res));
   ASSERT_EQ(true, res == res_int);
   // string
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_str,
       ObJsonInType::JSON_BIN, j_bin));
-  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(&allocator, res));
   ASSERT_EQ(false, res == res_int);
   // bool
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_bool,
       ObJsonInType::JSON_BIN, j_bin));
-  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(&allocator, res));
   res_int = 1;
   ASSERT_EQ(true, res == res_int);
   // double
   ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, &j_double,
       ObJsonInType::JSON_BIN, j_bin));
-  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(res));
+  ASSERT_EQ(OB_SUCCESS, j_bin->to_number(&allocator, res));
   res_int = 123;
   ASSERT_EQ(false, res == res_int);
 }

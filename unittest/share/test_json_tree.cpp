@@ -989,7 +989,7 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   ASSERT_EQ(OB_SUCCESS, num.from(buf, allocator));
   ObJsonDecimal my_num(num);
   j_base = &my_num;
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(LLONG_MIN, to_int);
 
@@ -999,7 +999,7 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   ASSERT_EQ(OB_SUCCESS, num.from(buf, allocator));
   my_num.set_value(num);
   j_base = &my_num;
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(0, to_int);
 
@@ -1009,19 +1009,19 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   ASSERT_EQ(OB_SUCCESS, num.from(buf, allocator));
   my_num.set_value(num);
   j_base = &my_num;
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(0, nmb.compare(num));
 
   // uint -> number (10)
   j_base = &my_uint;
   my_uint.set_value(10);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(10, to_int);
 
   // uint -> number (ULLONG_MAX)
   my_uint.set_value(ULLONG_MAX);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, nmb.format(buf, sizeof(buf), pos, -1));
   char *endptr = NULL;
@@ -1032,19 +1032,19 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   // int -> number (LLONG_MIN)
   j_base = &my_int;
   my_int.set_value(LLONG_MIN);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(LLONG_MIN, to_int);
 
   // int -> number (0)
   my_int.set_value(0);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(0, to_int);
 
   // int -> number (LLONG_MAX)
   my_int.set_value(LLONG_MAX);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(LLONG_MAX, to_int);
 
@@ -1053,14 +1053,14 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   j_base = &my_str;
   ASSERT_EQ(strlen("abc"), sprintf(buf, "abc"));
   my_str.set_value(buf, strlen(buf));
-  ASSERT_EQ(OB_INVALID_NUMERIC, j_base->to_number(nmb));
+  ASSERT_EQ(OB_INVALID_NUMERIC, j_base->to_number(&alloc, nmb));
 
   // string -> number ("LLONG_MIN")
   MEMSET(buf, 0, sizeof(buf));
   j_base = &my_str;
   length = sprintf(buf, "%lld", LLONG_MIN);
   my_str.set_value(buf, length);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(LLONG_MIN, to_int);
 
@@ -1069,7 +1069,7 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   j_base = &my_str;
   length = sprintf(buf, "%llu", ULLONG_MAX);
   my_str.set_value(buf, length);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, nmb.format(buf, sizeof(buf), pos, -1));
   uint64_t ui = ObCharset::strntoullrnd(buf, sizeof(buf), true, &endptr, &err);
@@ -1080,21 +1080,21 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   j_base = &my_str;
   length = sprintf(buf, "%d", 0);
   my_str.set_value(buf, length);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(0, to_int);
 
   // boolean -> number (true)
   j_base = &my_bool;
   my_bool.set_value(true);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(true, to_int);
 
   // boolean -> number (false)
   j_base = &my_bool;
   my_bool.set_value(false);
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   ASSERT_EQ(OB_SUCCESS, nmb.cast_to_int64(to_int));
   ASSERT_EQ(false, to_int);
 
@@ -1102,7 +1102,7 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   MEMSET(buf, 0, sizeof(buf));
   my_double.set_value(-123.45678);
   j_base = &my_double;
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, nmb.format(buf, sizeof(buf), pos, -1));
   dou = ObCharset::strntod(buf, pos, &endptr, &err);
@@ -1112,7 +1112,7 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   MEMSET(buf, 0, sizeof(buf));
   my_double.set_value(123.45678);
   j_base = &my_double;
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
   pos = 0;
   ASSERT_EQ(OB_SUCCESS, nmb.format(buf, sizeof(buf), pos, -1));
   dou = ObCharset::strntod(buf, pos, &endptr, &err);
@@ -1121,12 +1121,12 @@ TEST_F(TestJsonTree, test_json_cast_to_number)
   // double -> number (DBL_MIN)
   my_double.set_value(DBL_MIN);
   j_base = &my_double;
-  ASSERT_EQ(OB_SUCCESS, j_base->to_number(nmb));
+  ASSERT_EQ(OB_SUCCESS, j_base->to_number(&alloc, nmb));
 
   // double -> number (DBL_MAN)
   my_double.set_value(DBL_MAX);
   j_base = &my_double;
-  ASSERT_EQ(OB_NUMERIC_OVERFLOW, j_base->to_number(nmb));
+  ASSERT_EQ(OB_NUMERIC_OVERFLOW, j_base->to_number(&alloc, nmb));
 }
 
 static bool ob_time_eq(const ObTime& ans, int64_t year, int64_t month, int64_t day,

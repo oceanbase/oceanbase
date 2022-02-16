@@ -90,9 +90,10 @@ int ObJsonNode::get_obtime(ObTime &t) const
   return OB_SUCCESS; // adapt json binary, so return OB_SUCCESS directly.
 }
 
-int ObJsonNode::object_add(const common::ObString &key, ObIJsonBase *value)
+
+int ObJsonNode::check_valid_object_op(ObIJsonBase *value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
@@ -100,9 +101,68 @@ int ObJsonNode::object_add(const common::ObString &key, ObIJsonBase *value)
   } else if (json_type() != ObJsonNodeType::J_OBJECT) { // check json node type
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected json type", K(ret), K(json_type()));
-  } else if (is_bin() || value->is_bin()) {
+  } else if (value->is_bin()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not support json binary", K(ret), K(is_bin()), K(value->is_bin()));
+    LOG_WARN("value is json bin, not supported", K(ret), K(*value));
+  }
+
+  return ret;
+}
+
+int ObJsonNode::check_valid_array_op(ObIJsonBase *value) const
+{
+  INIT_SUCC(ret);
+
+  if (OB_ISNULL(value)) { // check param
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("param value is NULL", K(ret));
+  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected json type", K(ret), K(json_type()));
+  } else if (value->is_bin()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("value is json bin, not supported", K(ret), K(*value));
+  } 
+
+  return ret;
+}
+
+int ObJsonNode::check_valid_object_op(uint64_t index) const
+{
+  INIT_SUCC(ret);
+
+  if (index >= element_count()) { // check param
+    ret = OB_OUT_OF_ELEMENT;
+    LOG_WARN("index is out of range in object", K(ret), K(index), K(element_count()));
+  } else if (json_type() != ObJsonNodeType::J_OBJECT) { // check json node type
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid json node type", K(ret), K(json_type()));
+  }
+
+  return ret;
+}
+
+int ObJsonNode::check_valid_array_op(uint64_t index) const
+{
+  INIT_SUCC(ret);
+
+  if (index >= element_count()) { // check param
+    ret = OB_OUT_OF_ELEMENT;
+    LOG_WARN("index is out of range in array", K(ret), K(index), K(element_count()));
+  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid json node type", K(ret), K(json_type()));
+  } 
+
+  return ret;
+}
+
+int ObJsonNode::object_add(const common::ObString &key, ObIJsonBase *value)
+{
+  INIT_SUCC(ret);
+
+  if (OB_FAIL(check_valid_object_op(value))) {
+    LOG_WARN("invalid json object operation", K(ret), K(key));
   } else {
     ObJsonObject *j_obj = static_cast<ObJsonObject *>(this);
     if (OB_FAIL(j_obj->add(key, static_cast<ObJsonNode *>(value)))) {
@@ -115,17 +175,10 @@ int ObJsonNode::object_add(const common::ObString &key, ObIJsonBase *value)
 
 int ObJsonNode::array_insert(uint64_t index, ObIJsonBase *value)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
-  if (OB_ISNULL(value)) { // check param
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("param value is NULL", K(ret));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpected json type", K(ret), K(json_type()));
-  } else if (is_bin() || value->is_bin()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not support json binary", K(ret), K(is_bin()), K(value->is_bin()));
+  if (OB_FAIL(check_valid_array_op(value))) {
+    LOG_WARN("invalid json array operation", K(ret), K(index));
   } else {
     ObJsonArray *j_arr = static_cast<ObJsonArray *>(this);
     if (OB_FAIL(j_arr->insert(index, static_cast<ObJsonNode *>(value)))) {
@@ -138,17 +191,10 @@ int ObJsonNode::array_insert(uint64_t index, ObIJsonBase *value)
 
 int ObJsonNode::array_append(ObIJsonBase *value)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
-  if (OB_ISNULL(value)) { // check param
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("param value is NULL", K(ret));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpected json type", K(ret), K(json_type()));
-  } else if (is_bin() || value->is_bin()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not support json binary", K(ret), K(is_bin()), K(value->is_bin()));
+  if (OB_FAIL(check_valid_array_op(value))) {
+    LOG_WARN("invalid json array operation", K(ret));
   } else {
     ObJsonArray *j_arr = static_cast<ObJsonArray *>(this);
     if (OB_FAIL(j_arr->append(static_cast<ObJsonNode *>(value)))) {
@@ -161,7 +207,7 @@ int ObJsonNode::array_append(ObIJsonBase *value)
 
 int ObJsonNode::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJsonBase *&result)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(allocator) || OB_ISNULL(other)) {
     ret = OB_INVALID_ARGUMENT;
@@ -218,7 +264,7 @@ int ObJsonNode::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJsonB
 
 int ObJsonNode::get_location(ObJsonBuffer &path) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   
   if (OB_ISNULL(parent_)) {
     ret = path.append("$");
@@ -260,7 +306,7 @@ int ObJsonNode::get_location(ObJsonBuffer &path) const
         } else if (OB_FAIL(path.append("["))) {
           LOG_WARN("path append [ failed", K(ret));
         } else if (OB_FAIL(path.append(res_ptr, static_cast<int32_t>(ptr - res_ptr)))) {
-            LOG_WARN("fail to append the index", K(ret));
+          LOG_WARN("fail to append the index", K(ret));
         } else if (OB_FAIL(path.append("]"))) {
           LOG_WARN("path append ] failed", K(ret));
         }
@@ -280,7 +326,7 @@ int ObJsonNode::get_location(ObJsonBuffer &path) const
 
 int ObJsonNode::replace(const ObIJsonBase *old_node, ObIJsonBase *new_node)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   
   if (OB_ISNULL(old_node) || OB_ISNULL(new_node)) { // check param
     ret = OB_INVALID_ARGUMENT;
@@ -312,7 +358,7 @@ int ObJsonNode::replace(const ObIJsonBase *old_node, ObIJsonBase *new_node)
 
 int ObJsonNode::object_remove(const common::ObString &key)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (json_type() != ObJsonNodeType::J_OBJECT) { // check json node type
     ret = OB_INVALID_ARGUMENT;
@@ -329,14 +375,10 @@ int ObJsonNode::object_remove(const common::ObString &key)
 
 int ObJsonNode::array_remove(uint64_t index)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
-  if (index >= element_count()) { // check param
-    ret = OB_ERR_WRONG_VALUE;
-    LOG_WARN("invalid input value", K(ret), K(index), K(element_count()));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid json node type", K(ret), K(json_type()));
+  if (OB_FAIL(check_valid_array_op(index))) {
+    LOG_WARN("invalid json array operation", K(ret), K(index));
   } else {
     ObJsonArray *j_arr = static_cast<ObJsonArray *>(this);
     if (OB_FAIL(j_arr->remove(index))) {
@@ -349,14 +391,10 @@ int ObJsonNode::array_remove(uint64_t index)
 
 int ObJsonNode::get_key(uint64_t index, common::ObString &key_out) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
-  if (index >= element_count()) { // check param
-    ret = OB_OUT_OF_ELEMENT;
-    LOG_WARN("index out of range", K(ret), K(index), K(element_count()));
-  } else if (json_type() != ObJsonNodeType::J_OBJECT) { // check json node type
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid json node type", K(ret), K(json_type()));
+  if (OB_FAIL(check_valid_object_op(index))) {
+    LOG_WARN("invalid json object operation", K(ret), K(index));
   } else {
     const ObJsonObject *j_obj = static_cast<const ObJsonObject *>(this);
     if (OB_FAIL(j_obj->get_key(index, key_out))) {
@@ -369,14 +407,10 @@ int ObJsonNode::get_key(uint64_t index, common::ObString &key_out) const
 
 int ObJsonNode::get_array_element(uint64_t index, ObIJsonBase *&value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
-  if (index >= element_count()) { // check param
-    ret = OB_ERR_WRONG_VALUE;
-    LOG_WARN("invalid input value", K(ret), K(index), K(element_count()));
-  } else if (json_type() != ObJsonNodeType::J_ARRAY) { // check json node type
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid json node type", K(ret), K(json_type()));
+  if (OB_FAIL(check_valid_array_op(index))) {
+    LOG_WARN("invalid json array operation", K(ret), K(index));
   } else {
     const ObJsonArray *j_arr = static_cast<const ObJsonArray *>(this);
     value = (*j_arr)[index];
@@ -387,14 +421,10 @@ int ObJsonNode::get_array_element(uint64_t index, ObIJsonBase *&value) const
 
 int ObJsonNode::get_object_value(uint64_t index, ObIJsonBase *&value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
-  if (index >= element_count()) { // check param
-    ret = OB_ERR_WRONG_VALUE;
-    LOG_WARN("invalid input value", K(ret), K(index), K(element_count()));
-  } else if (json_type() != ObJsonNodeType::J_OBJECT) { // check json node type
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid json node type", K(ret), K(json_type()));
+  if (OB_FAIL(check_valid_object_op(index))) {
+    LOG_WARN("invalid json object operation", K(ret), K(index));
   } else {
     const ObJsonObject *j_obj = static_cast<const ObJsonObject *>(this);
     if (OB_ISNULL(value = j_obj->get_value(index))) { // maybe not found.
@@ -408,7 +438,7 @@ int ObJsonNode::get_object_value(uint64_t index, ObIJsonBase *&value) const
 
 int ObJsonNode::get_object_value(const ObString &key, ObIJsonBase *&value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (json_type() != ObJsonNodeType::J_OBJECT) { // check json node type
     ret = OB_INVALID_ARGUMENT;
@@ -430,7 +460,7 @@ int ObJsonNode::get_object_value(const ObString &key, ObIJsonBase *&value) const
 // [key0][key1]...[keyn][value0][value1]...[valuen]
 void ObJsonObject::update_serialize_size(int64_t change_size)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (change_size != 0) {
     serialize_size_ += change_size;
@@ -484,7 +514,7 @@ void ObJsonObject::update_serialize_size(int64_t change_size)
 
 ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   ObJsonNode *new_node = ObJsonTreeUtil::clone_new_node<ObJsonObject>(allocator, allocator);
   if (OB_ISNULL(new_node)) {
@@ -506,7 +536,7 @@ ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator) const
 
 int ObJsonObject::get_key(uint64_t index, common::ObString &key_out) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (index >= object_array_.size()) {
     ret = OB_OUT_OF_ELEMENT;
@@ -547,7 +577,7 @@ ObJsonNode *ObJsonObject::get_value(uint64_t index) const
 
 int ObJsonObject::remove(const common::ObString &key)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonObjectPair pair(key, NULL);
   ObJsonKeyCompare cmp;
   ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
@@ -565,7 +595,7 @@ int ObJsonObject::remove(const common::ObString &key)
 
 int ObJsonObject::replace(const ObJsonNode *old_node, ObJsonNode *new_node)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   bool is_found = false;
 
   if (OB_ISNULL(old_node) || OB_ISNULL(new_node)) { // check param
@@ -594,7 +624,7 @@ int ObJsonObject::replace(const ObJsonNode *old_node, ObJsonNode *new_node)
 // the latter one will overwrite the former one
 int ObJsonObject::add(const common::ObString &key, ObJsonNode *value)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
@@ -636,7 +666,7 @@ void ObJsonObject::clear()
 
 int ObJsonObject::consume(ObIAllocator *allocator, ObJsonObject *other)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(allocator) || OB_ISNULL(other)) {
     ret = OB_INVALID_ARGUMENT;
@@ -677,7 +707,7 @@ int ObJsonObject::consume(ObIAllocator *allocator, ObJsonObject *other)
 
 int ObJsonObject::merge_patch(ObIAllocator *allocator, ObJsonObject *patch_obj)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(allocator) || OB_ISNULL(patch_obj)) {
     ret = OB_INVALID_ARGUMENT;
@@ -742,7 +772,7 @@ int ObJsonObject::merge_patch(ObIAllocator *allocator, ObJsonObject *patch_obj)
 // [noden_offset][noden_type][node0][node1]...[noden]
 void ObJsonArray::update_serialize_size(int64_t change_size)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (change_size != 0) {
     serialize_size_ += change_size;
@@ -783,7 +813,7 @@ void ObJsonArray::update_serialize_size(int64_t change_size)
 
 ObJsonNode *ObJsonArray::clone(ObIAllocator* allocator) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   ObJsonNode *new_node = ObJsonTreeUtil::clone_new_node<ObJsonArray>(allocator, allocator);
   if (OB_ISNULL(new_node)) {
@@ -835,7 +865,7 @@ ObJsonNode *ObJsonArray::operator[](uint64_t index) const
 
 int ObJsonArray::replace(const ObJsonNode *old_node, ObJsonNode *new_node)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   bool is_found = false;
 
   if (OB_ISNULL(old_node) || OB_ISNULL(new_node)) { // check param
@@ -861,7 +891,7 @@ int ObJsonArray::replace(const ObJsonNode *old_node, ObJsonNode *new_node)
 
 int ObJsonArray::append(ObJsonNode *value)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
@@ -880,7 +910,7 @@ int ObJsonArray::append(ObJsonNode *value)
 
 int ObJsonArray::insert(uint64_t index, ObJsonNode *value)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
@@ -908,7 +938,7 @@ void ObJsonArray::clear()
 int ObJsonArray::consume(ObIAllocator *allocator, ObJsonArray *other)
 {
   UNUSED(allocator);
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   uint64_t size = other->element_count();
 
   for (uint64_t i = 0; i < size && OB_SUCC(ret); i++){

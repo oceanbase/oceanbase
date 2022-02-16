@@ -245,6 +245,11 @@ int ObRawExprDeduceType::assign_var_exprs_result_type(ObNonTerminalRawExpr& expr
   return ret;
 }
 
+bool need_calc_json_as_int(ObItemType item_type) 
+{
+  return item_type == T_OP_BOOL;
+}
+
 bool need_calc_json_as_text(ObItemType item_type)
 {
   bool bool_ret = true;

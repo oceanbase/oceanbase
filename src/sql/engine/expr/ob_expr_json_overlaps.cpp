@@ -148,7 +148,7 @@ int ObExprJsonOverlaps::json_overlaps_object(ObIJsonBase *json_a,
   } else {
     JsonObjectIterator iter_a = json_a->object_iterator();
     JsonObjectIterator iter_b = json_b->object_iterator();
-    while (!iter_b.empty() && OB_SUCC(ret)) {
+    while (!iter_b.end() && OB_SUCC(ret)) {
       ObString key_b;
       ObIJsonBase *a_tmp = NULL;
       ObIJsonBase *b_tmp = NULL;
@@ -191,7 +191,8 @@ int ObExprJsonOverlaps::json_overlaps_array(ObIJsonBase *json_a,
   if (json_b->json_type() != ObJsonNodeType::J_ARRAY) {
     // convert to array if needed
     ObIJsonBase *jb_node = NULL;
-    if (ObJsonBaseFactory::transform(allocator, json_b, ObJsonInType::JSON_TREE, jb_node)) {
+    if (OB_FAIL(ObJsonBaseFactory::transform(allocator, json_b,
+        ObJsonInType::JSON_TREE, jb_node))) {
       LOG_WARN("fail to transform to tree", K(ret), K(*json_b));
     } else {
       ObJsonNode *j_node = static_cast<ObJsonNode *>(jb_node);

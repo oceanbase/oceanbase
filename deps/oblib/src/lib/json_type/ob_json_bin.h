@@ -170,6 +170,8 @@ public:
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
   int get_key(uint64_t index, common::ObString &key_out) const override;
   int get_raw_binary(common::ObString &out, ObIAllocator *allocator = NULL) const;
+  int get_use_size(uint64_t& obj_size, uint64_t& used_size) const;
+  int get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_t& max_offset) const ;
   int array_remove(uint64_t index) override;
   int object_remove(const common::ObString &key) override;
   int replace(const ObIJsonBase *old_node, ObIJsonBase *new_node) override;
@@ -465,9 +467,14 @@ private:
   int stack_pop(ObJsonBuffer& stack);
   int stack_push(ObJsonBuffer& stack, const ObJBNodeMeta& node);
   int stack_at(ObJsonBuffer& stack, uint32_t idx, ObJBNodeMeta& node);
-  int32_t stack_size(ObJsonBuffer& stack);
+  int32_t stack_size(const ObJsonBuffer& stack) const;
   void stack_reset(ObJsonBuffer& stack);
   int stack_back(ObJsonBuffer& stack, ObJBNodeMeta& node, bool is_pop = false);
+  int check_valid_object_op(ObIJsonBase *value) const;
+  int check_valid_array_op(ObIJsonBase *value) const;
+  int check_valid_object_op(uint64_t index) const;
+  int check_valid_array_op(uint64_t index) const;
+  int create_new_binary(ObIJsonBase *&value, ObJsonBin *&new_bin) const;
 /* data */
 private:
   common::ObIAllocator *allocator_;

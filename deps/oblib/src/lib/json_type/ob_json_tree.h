@@ -110,6 +110,11 @@ public:
   int array_insert(uint64_t index, ObIJsonBase *value) override;
   int object_add(const common::ObString &key, ObIJsonBase *value) override;
 private:
+  int check_valid_object_op(ObIJsonBase *value) const;
+  int check_valid_array_op(ObIJsonBase *value) const;
+  int check_valid_object_op(uint64_t index) const;
+  int check_valid_array_op(uint64_t index) const;
+private:
   ObJsonNode *parent_;
   uint64_t serialize_size_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonNode);
@@ -685,7 +690,7 @@ private:
 struct ObJsonKeyCompare {
   int operator()(const ObJsonObjectPair &left, const ObJsonObjectPair &right)
   {
-    int ret = OB_SUCCESS;
+    INIT_SUCC(ret);
 
     common::ObString left_key = left.get_key();
     common::ObString right_key = right.get_key();

@@ -19,7 +19,7 @@ namespace common {
 
 int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJsonNode *&j_tree)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   char buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
   const char *syntaxerr = buf;
   uint64_t offset = 0;
@@ -34,7 +34,7 @@ int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJson
 int ObJsonParser::get_tree(ObIAllocator *allocator, const char *text,
                     uint64_t length, ObJsonNode *&j_tree)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   char buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
   const char *syntaxerr = buf;
   uint64_t offset = 0;
@@ -55,7 +55,7 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
                                   const char *&syntaxerr, uint64_t *offset,
                                   ObJsonNode *&j_tree)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   char *buf = NULL;
   if (OB_ISNULL(allocator) || OB_ISNULL(text) || length == 0) {
@@ -110,7 +110,7 @@ bool ObJsonParser::is_json_doc_over_depth(uint64_t depth)
 
 int ObJsonParser::check_json_syntax(const ObString &j_doc, ObIAllocator *allocator)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   char syntax_buf[PARSE_SYNTAXERR_MESSAGE_LENGTH] = {0};
   const char *syntaxerr = syntax_buf;
   uint64_t offset = 0;
@@ -166,7 +166,7 @@ bool ObRapidJsonHandler::seeing_value(ObJsonNode *value)
       }
 
       case ObJsonExpectNextState::EXPECT_ARRAY_VALUE: {
-        int ret = OB_SUCCESS;
+        INIT_SUCC(ret);
         ObJsonArray *array = dynamic_cast<ObJsonArray *>(current_element_);
         if (OB_FAIL(array->append(value))) {
           LOG_WARN("fail to append element to json array", K(ret));
@@ -176,7 +176,7 @@ bool ObRapidJsonHandler::seeing_value(ObJsonNode *value)
       }
 
       case ObJsonExpectNextState::EXPECT_OBJECT_VALUE: {
-        int ret = OB_SUCCESS;
+        INIT_SUCC(ret);
         next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_KEY;
         ObJsonObject *object = dynamic_cast<ObJsonObject *>(current_element_);
         if (OB_FAIL(object->add(key_, value))) {

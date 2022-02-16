@@ -83,8 +83,8 @@ int ObExprJsonValid::calc(const T &data, ObObjType type, ObCollationType cs_type
   } else if (ob_is_string_type(type) && cs_type == CS_TYPE_BINARY) {
     is_invalid = true;
   } else {
-    common::ObString j_text = data.get_string();
-    if (OB_UNLIKELY(j_text == "")) {
+    common::ObString j_str = data.get_string();
+    if (OB_UNLIKELY(j_str == "")) {
       if (type == ObJsonType) {
         is_null = true;
       } else {
@@ -92,13 +92,13 @@ int ObExprJsonValid::calc(const T &data, ObObjType type, ObCollationType cs_type
       }
     } else if (type == ObJsonType) { // json bin
       ObIJsonBase *j_bin = NULL;
-      if (ObJsonBaseFactory::get_json_base(allocator, j_text, ObJsonInType::JSON_BIN,
-          ObJsonInType::JSON_BIN, j_bin)) {
-        LOG_WARN("fail to get json base", K(ret), K(type), K(j_text));
+      if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
+          ObJsonInType::JSON_BIN, j_bin))) {
+        LOG_WARN("fail to get json base", K(ret), K(type), K(j_str));
       }
     } else { // json tree
-      if (OB_FAIL(ObJsonParser::check_json_syntax(j_text, allocator))) {
-        LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_text));
+      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator))) {
+        LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
       }
     }
   }
