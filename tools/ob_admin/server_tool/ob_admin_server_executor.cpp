@@ -228,13 +228,13 @@ int ObAdminServerExecutor::load_ssl_config()
         }
     }
 
-    if (EASY_OK != easy_ssl_ob_config_check(ca_cert, public_cert, private_key, NULL, NULL, !use_bkmi, is_sm)) {
+    if (EASY_OK != easy_ssl_ob_config_check(ca_cert, public_cert, private_key,  !use_bkmi, is_sm)) {
       COMMON_LOG(ERROR, "Local file mode: key and cert not match");
       ret = OB_INVALID_CONFIG;
     } else if (OB_FAIL(observer::ObSrvNetworkFrame::extract_expired_time(OB_CLIENT_SSL_CERT_FILE, 
       ssl_key_expired_time))) {
       COMMON_LOG(ERROR, "extract_expired_time failed", KR(ret));
-    } else if (OB_FAIL(client_.load_ssl_config(use_bkmi, is_sm, ca_cert, public_cert, private_key, NULL, NULL))) {
+    } else if (OB_FAIL(client_.load_ssl_config(ca_cert, public_cert, private_key))) {
       COMMON_LOG(ERROR, "ObNetClient load_ssl_config failed", K(ret), K(is_sm), K(ssl_key_expired_time));
     }
   } else {

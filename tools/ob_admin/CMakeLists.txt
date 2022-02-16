@@ -17,6 +17,8 @@ add_executable(ob_admin
   archive_tool/ob_archive_fake_entry_iterator.cpp
   archive_tool/ob_archive_fake_file_store.cpp
   backup_tool/ob_admin_dump_backup_data_executor.cpp
+  server_tool/ob_admin_routine.cpp  
+  server_tool/ob_admin_server_executor.cpp
   ob_admin_executor.cpp
   main.cpp)
 
