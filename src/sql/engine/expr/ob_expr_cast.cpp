@@ -593,13 +593,8 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
             ret = OB_ERR_TRUNCATED_WRONG_VALUE;
           }
         }
-        LOG_WARN("failed to check accuracy",
-          K(obj1_round),
-          K(*res_obj),
-          K(dest_type),
-          K(accuracy),
-          K(ret),
-          K((expr_ctx).cast_mode_));
+        LOG_WARN("failed to check accuracy", K(obj1_round), K(dest_type), K(accuracy), K(ret),
+                  K((expr_ctx).cast_mode_));
       }
     }
     if (OB_SUCC(ret)) {
