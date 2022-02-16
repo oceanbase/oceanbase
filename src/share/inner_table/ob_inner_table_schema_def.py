@@ -7545,7 +7545,7 @@ def_table_schema(
 
   normal_columns = [
   ('tablegroup_name', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH'),
-  ('create_tablegroup', 'varchar:TABLEGROUP_DEFINE_LENGTH'),
+  ('create_tablegroup', 'longtext'),
   ],
 )
 
