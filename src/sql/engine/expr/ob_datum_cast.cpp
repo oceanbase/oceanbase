@@ -8403,11 +8403,12 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] = {
    },
 };
 
-ObExpr::EvalEnumSetFunc OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT[ObMaxTC][2] = {{
-                                                                                /*null -> enum_or_set*/
-                                                                                cast_identity_enum_set, /*enum*/
-                                                                                cast_identity_enum_set, /*set*/
-                                                                            },
+ObExpr::EvalEnumSetFunc OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT[ObMaxTC][2] = {
+    {
+        /*null -> enum_or_set*/
+        cast_identity_enum_set, /*enum*/
+        cast_identity_enum_set, /*set*/
+    },
     {
         /*int -> enum_or_set*/
         int_enum, /*enum*/
@@ -8487,7 +8488,33 @@ ObExpr::EvalEnumSetFunc OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT[ObMaxTC][2] = {{
         /*enumset_inner tc -> enum_or_set*/
         cast_not_expected_enum_set, /*enum*/
         cast_not_expected_enum_set, /*set*/
-    }};
+    },
+    {
+        /*unknow -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*unknow -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*unknow -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*unknow -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*unknow -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
+    }
+};
 
 int string_collation_check(
     const bool is_strict_mode, const ObCollationType check_cs_type, const ObObjType str_type, ObString& str)
