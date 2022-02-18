@@ -19,6 +19,8 @@ add_executable(ob_admin
   backup_tool/ob_admin_dump_backup_data_executor.cpp
   server_tool/ob_admin_routine.cpp  
   server_tool/ob_admin_server_executor.cpp
+  io_bench/ob_admin_io_executor.cpp
+  io_bench/ob_admin_io_executor.h
   ob_admin_executor.cpp
   main.cpp)
 

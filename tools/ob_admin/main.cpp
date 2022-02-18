@@ -24,6 +24,7 @@
 #include "archive_tool/ob_admin_log_archive_executor.h"
 #include "backup_tool/ob_admin_dump_backup_data_executor.h"
 #include "server_tool/ob_admin_server_executor.h"
+#include "io_bench/ob_admin_io_executor.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::tools;
@@ -58,7 +59,9 @@ int main(int argc, char *argv[])
   if (argc < 2) {
     print_usage();
   } else {
-    if (0 == strcmp("clog_tool", argv[1])) {
+    if (0 == strcmp("io_bench", argv[1])) {
+      executor = new ObAdminIOExecutor();
+    }else if (0 == strcmp("clog_tool", argv[1])) {
       executor = new ObAdminClogV2Executor();
     } else if (0 == strcmp("usec_tool", argv[1])) {
       executor = new ObAdminUsecExecutor();
