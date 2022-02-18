@@ -1441,7 +1441,7 @@ int ObDDLOperator::alter_table_drop_aux_column(ObSchemaService& schema_service, 
     RS_LOG(WARN, "table type not supporrted", K(ret), K(table_type));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     RS_LOG(WARN, "get schema guard failed", K(ret));
-  } else if (OB_FAIL(new_table_schema.get_simple_index_infos(simple_index_infos))) {
+  } else if (OB_FAIL(new_table_schema.get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
     LOG_WARN("get simple_index_infos without delay_deleted_tid failed", K(ret));
   }
   // update all aux table schema
