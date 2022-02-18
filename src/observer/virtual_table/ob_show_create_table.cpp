@@ -177,7 +177,8 @@ int ObShowCreateTable::fill_row_cells(uint64_t show_table_id, const ObTableSchem
                 type_is_lob = column_schema->get_meta_type().is_lob();
               }
             }
-            if (type_is_lob) {
+            if (OB_FAIL(ret)) {
+            } else if (type_is_lob) {
               cur_row_.cells_[cell_idx].set_lob_value(ObLongTextType, table_def_buf, static_cast<int32_t>(pos));
             } else {
               ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), table_def_buf);

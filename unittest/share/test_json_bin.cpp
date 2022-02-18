@@ -1461,6 +1461,7 @@ TEST_F(TestJsonBin, large_array_update)
     bin->element(0);
     ASSERT_EQ(bin->element_count(), 80000);
 
+    ASSERT_EQ(OB_SUCCESS, bin->move_parent_iter());
     bin->element(1);
     ASSERT_EQ(bin->element_count(), 80000);
   }
@@ -1660,7 +1661,7 @@ TEST_F(TestJsonBin, test_double_nan)
   ObJsonDouble left_val(value);
   ObIJsonBase *left_base = &left_val;
   ObIJsonBase *new_bin = NULL;
-  ASSERT_EQ(OB_SUCCESS, ObJsonBaseFactory::transform(&allocator, left_base,
+  ASSERT_EQ(OB_INVALID_NUMERIC, ObJsonBaseFactory::transform(&allocator, left_base,
       ObJsonInType::JSON_BIN, new_bin));
 }
 

@@ -103,12 +103,14 @@ int ObExprJsonMergePatch::calc_resultN(ObObj &result, const ObObj *objs, int64_t
           j_obj = new (buf) ObJsonObject(allocator);
         }
       }
-
-      if (OB_FAIL(j_obj->merge_patch(allocator, static_cast<ObJsonObject*>(j_patch_node)))) {
-        LOG_WARN("error, json merge patch failed", K(ret));
-      } else {
-        j_base = j_obj;
-        has_null = false; 
+      
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(j_obj->merge_patch(allocator, static_cast<ObJsonObject*>(j_patch_node)))) {
+          LOG_WARN("error, json merge patch failed", K(ret));
+        } else {
+          j_base = j_obj;
+          has_null = false; 
+        }
       }
     }
   }
@@ -120,16 +122,8 @@ int ObExprJsonMergePatch::calc_resultN(ObObj &result, const ObObj *objs, int64_t
     } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, allocator))) {
       LOG_WARN("fail to get json raw binary", K(ret));
     } else {
-      uint64_t length = raw_bin.length();
-      char *buf = reinterpret_cast<char *>(allocator->alloc(length));
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory for json insert result", K(ret), K(length));
-      } else {
-        MEMCPY(buf, raw_bin.ptr(), length);
-        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-        result.set_string(ObJsonType, buf, length);
-      }
+      result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
     }
   }
 
@@ -178,11 +172,13 @@ int ObExprJsonMergePatch::eval_json_merge_patch(const ObExpr &expr, ObEvalCtx &c
         }
       }
 
-      if (OB_FAIL(j_obj->merge_patch(&temp_allocator, static_cast<ObJsonObject*>(j_patch_node)))) {
-        LOG_WARN("error, json merge patch failed", K(ret));
-      } else {
-        j_base = j_obj;
-        has_null = false; 
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(j_obj->merge_patch(&temp_allocator, static_cast<ObJsonObject*>(j_patch_node)))) {
+          LOG_WARN("error, json merge patch failed", K(ret));
+        } else {
+          j_base = j_obj;
+          has_null = false; 
+        }
       }
     }
   }

@@ -224,13 +224,13 @@ int ObExprJsonContains::json_contains_object(ObIJsonBase* json_target, ObIJsonBa
   } else {
     JsonObjectIterator iter_t = json_target->object_iterator();
     JsonObjectIterator iter_c = json_candidate->object_iterator();
-    while (!iter_t.empty() && !iter_c.empty() && OB_SUCC(ret)) {
+    while (!iter_t.end() && !iter_c.end() && OB_SUCC(ret)) {
       // find the same key
       ObString key1;
       if (OB_FAIL(iter_c.get_key(key1))) {
         LOG_WARN("fail to get key from iterator", K(ret));
       } else {
-        while (!iter_t.empty() && OB_SUCC(ret)) {
+        while (!iter_t.end() && OB_SUCC(ret)) {
           ObString key2;
           if (OB_FAIL(iter_t.get_key(key2))) {
             LOG_WARN("fail to get key from iterator", K(ret));
@@ -240,7 +240,7 @@ int ObExprJsonContains::json_contains_object(ObIJsonBase* json_target, ObIJsonBa
             iter_t.next();
           }
         }
-        if (iter_t.empty()) {
+        if (iter_t.end()) {
           *result = false;
           break;
         }
@@ -278,7 +278,8 @@ int ObExprJsonContains::json_contains_array(ObIJsonBase* json_target,
   if (json_candidate->json_type() != ObJsonNodeType::J_ARRAY) {
     // convert to array
     ObIJsonBase *jb_node = NULL;
-    if (ObJsonBaseFactory::transform(allocator, json_candidate, ObJsonInType::JSON_TREE, jb_node)) {
+    if (OB_FAIL(ObJsonBaseFactory::transform(allocator, json_candidate,
+        ObJsonInType::JSON_TREE, jb_node))) {
       LOG_WARN("fail to transform to tree", K(ret), K(*json_candidate));
     } else {
       ObJsonNode *j_node = static_cast<ObJsonNode *>(jb_node);

@@ -107,9 +107,9 @@ int ObExprJsonExtract::calc_resultN(ObObj &result, const ObObj *objs,
                                                         objs[0].get_collation_type()))) {
     LOG_WARN("fail to ensure collation", K(ret), K(objs[0].get_type()), K(objs[0].get_collation_type()));
   } else {
-    ObString j_text = objs[0].get_string();
+    ObString j_str = objs[0].get_string();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(objs[0].get_type());
-    if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_text, j_in_type, j_in_type, j_base))) {
+    if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type, j_in_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT;
     }
@@ -163,9 +163,10 @@ int ObExprJsonExtract::calc_resultN(ObObj &result, const ObObj *objs,
         ObJsonNode *j_node = NULL;
         ObIJsonBase *jb_node = NULL;
         for (int32_t i = 0; OB_SUCC(ret) && i < hit_size; i++) {
-          if (ObJsonBaseFactory::transform(allocator, hit[i], ObJsonInType::JSON_TREE, jb_node)) { // to tree
+          if (OB_FAIL(ObJsonBaseFactory::transform(allocator, hit[i],
+              ObJsonInType::JSON_TREE, jb_node))) { // to tree
             LOG_WARN("fail to transform to tree", K(ret), K(i), K(*(hit[i])));
-          } else {
+          } else { // is_tree, need deep copy, cause array append will change parent of value.
             j_node = static_cast<ObJsonNode *>(jb_node);
             if (OB_FAIL(jb_res->array_append(j_node->clone(allocator)))) {
               LOG_WARN("result array append failed", K(ret), K(i), K(*j_node));
@@ -174,21 +175,14 @@ int ObExprJsonExtract::calc_resultN(ObObj &result, const ObObj *objs,
         }
       }
       
-      ObString raw_str;
+      ObString raw_bin;
       if (OB_FAIL(ret)) {
         LOG_WARN("json extarct get results failed", K(ret));
-      } else if (OB_FAIL(jb_res->get_raw_binary(raw_str, allocator))) {
+      } else if (OB_FAIL(jb_res->get_raw_binary(raw_bin, allocator))) {
         LOG_WARN("json extarct get result binary failed", K(ret));
       } else {
-        char *buf = static_cast<char*>(allocator->alloc(raw_str.length()));
-        if (OB_UNLIKELY(buf == NULL)){
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed:allocate memory for result", K(raw_str.length()), K(ret));
-        } else {
-          MEMCPY(buf, raw_str.ptr(), raw_str.length());
-          result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-          result.set_string(ObJsonType, buf, raw_str.length());
-        }
+        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
       }
     }
   }
@@ -227,9 +221,9 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
   } else {
-    ObString j_text = json_datum->get_string();
+    ObString j_str = json_datum->get_string();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
-    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_text, j_in_type, j_in_type, j_base))) {
+    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT;
     }
@@ -285,9 +279,10 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
         ObJsonNode *j_node = NULL;
         ObIJsonBase *jb_node = NULL;
         for (int32_t i = 0; OB_SUCC(ret) && i < hit_size; i++) {
-          if (ObJsonBaseFactory::transform(&allocator, hit[i], ObJsonInType::JSON_TREE, jb_node)) { // to tree
+          if (OB_FAIL(ObJsonBaseFactory::transform(&allocator, hit[i],
+              ObJsonInType::JSON_TREE, jb_node))) { // to tree
             LOG_WARN("fail to transform to tree", K(ret), K(i), K(*(hit[i])));
-          } else {
+          } else { // is_tree, need deep copy, cause array append will change parent of value.
             j_node = static_cast<ObJsonNode *>(jb_node);
             if (OB_FAIL(jb_res->array_append(j_node->clone(&allocator)))) {
               LOG_WARN("result array append failed", K(ret), K(i), K(*j_node));

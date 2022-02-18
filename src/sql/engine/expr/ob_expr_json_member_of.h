@@ -36,6 +36,9 @@ public:
                            const common::ObObj &obj1,
                            const common::ObObj &obj2,
                            common::ObExprCtx &expr_ctx) const;
+  static int check_json_member_of_array(const ObIJsonBase *json_a,
+                                        const ObIJsonBase *json_b,
+                                        bool &is_member_of);
   static int eval_json_member_of(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

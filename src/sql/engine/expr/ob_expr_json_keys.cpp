@@ -120,19 +120,12 @@ int ObExprJsonKeys::calc_resultN(ObObj &result,
     } else if (is_null_result){
       result.set_null();
     } else {
-      ObString str;
-      if (OB_FAIL(get_keys_from_wrapper(json_doc, allocator, str))) {
+      ObString raw_bin;
+      if (OB_FAIL(get_keys_from_wrapper(json_doc, allocator, raw_bin))) {
         LOG_WARN("get_keys_from_wrapper failed", K(ret));
       } else {
-        char *buf = reinterpret_cast<char *>(allocator->alloc(str.length()));
-        if (OB_UNLIKELY(OB_ISNULL(buf))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloc memory for json_keys result", K(ret), K(str.length()));
-        } else {
-          MEMCPY(buf, str.ptr(), str.length());
-          result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-          result.set_string(ObJsonType, buf, str.length());
-        }
+        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
       }
     }
   }
@@ -146,7 +139,7 @@ int ObExprJsonKeys::get_keys_from_wrapper(ObIJsonBase *json_doc,
   INIT_SUCC(ret);
   ObJsonArray res_array(allocator);
   JsonObjectIterator iter = json_doc->object_iterator();
-  while (!iter.empty() && OB_SUCC(ret)) {
+  while (!iter.end() && OB_SUCC(ret)) {
     ObString key;
     if (OB_FAIL(iter.get_key(key))) {
       LOG_WARN("fail to get key from iterator", K(ret));

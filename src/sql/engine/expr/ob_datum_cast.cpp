@@ -4812,7 +4812,6 @@ CAST_FUNC_NAME(json, int)
     int64_t out_val = 0;
     ObObjType out_type = expr.datum_meta_.type_;
     const uint64_t extra = CM_UNSET_STRING_INTEGER_TRUNC(CM_SET_WARN_ON_FAIL(expr.extra_));
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -4839,7 +4838,6 @@ CAST_FUNC_NAME(json, uint)
     int warning = OB_SUCCESS;
     uint64_t out_val = 0;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -4868,7 +4866,6 @@ CAST_FUNC_NAME(json, double)
     int warning = OB_SUCCESS;
     double out_val = 0.0;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -4896,7 +4893,6 @@ CAST_FUNC_NAME(json, float)
     double tmp_val = 0.0;
     float out_val = 0.0;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -4933,7 +4929,7 @@ CAST_FUNC_NAME(json, number)
 
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
-    } else if (CAST_FAIL(j_base->to_number(out_val))) {
+    } else if (CAST_FAIL(j_base->to_number(&temp_allocator, out_val))) {
       LOG_WARN("fail to cast json to number type", K(ret), K(j_text));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
@@ -4953,7 +4949,6 @@ CAST_FUNC_NAME(json, datetime)
     int warning = OB_SUCCESS;
     int64_t out_val;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -4978,7 +4973,6 @@ CAST_FUNC_NAME(json, date)
     int warning = OB_SUCCESS;
     int32_t out_val;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -5003,7 +4997,6 @@ CAST_FUNC_NAME(json, time)
     int warning = OB_SUCCESS;
     int64_t out_val;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -5029,7 +5022,6 @@ CAST_FUNC_NAME(json, year)
     uint8_t out_val = 0;
     int64_t int_val;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;
@@ -5098,16 +5090,16 @@ CAST_FUNC_NAME(json, bit)
   EVAL_STRING_ARG()
   {
     int warning = OB_SUCCESS;
-    ObString j_text = child_res->get_string();
-    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObString j_bin_str = child_res->get_string();
+    ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
     ObIJsonBase *j_base = &j_bin;
     uint64_t out_val;
     ObObjType out_type = expr.datum_meta_.type_;
 
     if (OB_FAIL(j_bin.reset_iter())) {
-      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
     } else if (CAST_FAIL(j_base->to_bit(out_val))) {
-      LOG_WARN("fail to cast json as bit", K(ret), K(j_text));
+      LOG_WARN("fail to cast json as bit", K(ret), K(j_bin_str));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
     } else {
@@ -5124,7 +5116,6 @@ CAST_FUNC_NAME(json, otimestamp)
     int warning = OB_SUCCESS;
     int64_t datetime_val;
     ObObjType out_type = expr.datum_meta_.type_;
-    common::ObArenaAllocator &temp_allocator = ctx.get_reset_tmp_alloc();
     ObString j_text = child_res->get_string();
     ObJsonBin j_bin(j_text.ptr(), j_text.length());
     ObIJsonBase *j_base = &j_bin;

@@ -56,20 +56,27 @@ int ObExprJsonMemberOf::calc_result_type2(ObExprResType &type,
   return ret;
 }
 
-static int json_member_of_array(const ObIJsonBase *json_a, const ObIJsonBase *json_b, bool *result)
+int ObExprJsonMemberOf::check_json_member_of_array(const ObIJsonBase *json_a,
+                                                   const ObIJsonBase *json_b,
+                                                   bool &is_member_of)
 {
   int ret = OB_SUCCESS;
-  int ret_tmp;
+  is_member_of = false;
 
-  uint64_t b_len = json_b->element_count();
-  for (uint64_t i = 0; i < b_len && OB_SUCC(ret); i++) {
-    ObIJsonBase *tmp = NULL;
-    if (OB_FAIL(json_b->get_array_element(i, tmp))) {
-      break;
-    } else {
-      if (OB_SUCC(json_a->compare(*tmp, ret_tmp)) && ret_tmp == 0) {
-        *result = true;
-        break;
+  if (OB_ISNULL(json_a) || OB_ISNULL(json_b)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("param is null", K(ret), KP(json_a), KP(json_b));
+  } else {
+    int cmp_res = 0;
+    uint64_t b_len = json_b->element_count();
+    for (uint64_t i = 0; i < b_len && OB_SUCC(ret) && !is_member_of; i++) {
+      ObIJsonBase *tmp = NULL;
+      if (OB_FAIL(json_b->get_array_element(i, tmp))) {
+        LOG_WARN("fail to get array element", K(ret), K(i), K(*json_b));
+      } else if (OB_FAIL(json_a->compare(*tmp, cmp_res))) {
+        LOG_WARN("fail to compare json", K(ret), K(i), K(*json_a), K((*tmp)));
+      } else if (cmp_res == 0) {
+        is_member_of = true;
       }
     }
   }
@@ -114,8 +121,8 @@ int ObExprJsonMemberOf::eval_json_member_of(const ObExpr &expr, ObEvalCtx &ctx, 
       } else {
         is_member_of = (result == 0);
       }
-    } else if (OB_FAIL(json_member_of_array(json_a, json_b, &is_member_of))) {
-      LOG_WARN("json_member_of_array failed", K(ret));
+    } else if (OB_FAIL(check_json_member_of_array(json_a, json_b, is_member_of))) {
+      LOG_WARN("check_json_member_of_array failed", K(ret));
     }
   }
 
@@ -171,8 +178,8 @@ int ObExprJsonMemberOf::calc_result2(common::ObObj &result,
         } else {
           is_member_of = (result == 0);
         }
-      } else if (OB_FAIL(json_member_of_array(json_a, json_b, &is_member_of))) {
-        LOG_WARN("json_member_of_array failed", K(ret));
+      } else if (OB_FAIL(check_json_member_of_array(json_a, json_b, is_member_of))) {
+        LOG_WARN("check_json_member_of_array failed", K(ret));
       }
     }
 

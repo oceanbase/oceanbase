@@ -34,6 +34,8 @@ struct ObJsonBaseCmp {
       is_eq = (a == b);
     } else if (a->is_bin() && b->is_bin()) {
       is_eq = (a->get_data() == b->get_data());
+    } else {
+      LOG_WARN("unexpected type", K(OB_ERR_UNEXPECTED), K(*a), K(*b));
     }
     return is_eq;
   }
@@ -51,9 +53,10 @@ struct ObJsonBaseUnique {
   }
 };
 
+// only use in seek, this can not from stack memory
 int ObIJsonBase::add_if_missing(ObJsonBaseSortedVector &dup, ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   ObJsonBaseCmp cmp;
   ObJsonBaseUnique unique;
   ObJsonBaseSortedVector::iterator pos = dup.end();
@@ -73,7 +76,7 @@ int ObIJsonBase::find_ellipsis(const JsonPathIterator &cur_node,
                                bool only_need_one, ObJsonBaseSortedVector &dup,
                                ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   bool is_done = false;
 
   if (OB_FAIL(find_child(next_node, last_node, is_auto_wrap, only_need_one, dup, res))) {
@@ -81,10 +84,6 @@ int ObIJsonBase::find_ellipsis(const JsonPathIterator &cur_node,
   } else if (json_type() == ObJsonNodeType::J_ARRAY) {
     uint64_t size = element_count();
     ObIJsonBase *jb_ptr = NULL;
-    if (is_bin()) {
-      ObJsonBin j_bin(allocator_);
-      jb_ptr = &j_bin;
-    }
     for (uint32_t i = 0; i < size && !is_done; ++i) {
       jb_ptr = NULL; // reset jb_ptr to NULL
       ret = get_array_element(i, jb_ptr);
@@ -125,7 +124,7 @@ int ObIJsonBase::find_array_range(const JsonPathIterator &next_node,
                                   bool only_need_one, ObJsonBaseSortedVector &dup,
                                   ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   SMART_VAR (ObArrayRange, range) {
     if (OB_FAIL(path_node->get_array_range(element_count(), range))) {
@@ -158,7 +157,7 @@ int ObIJsonBase::find_array_cell(const JsonPathIterator &next_node,
                                  bool only_need_one, ObJsonBaseSortedVector &dup,
                                  ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   SMART_VAR (ObJsonArrayIndex, idx) {
     if (OB_FAIL(path_node->get_first_array_index(element_count(), idx))) {
@@ -186,7 +185,7 @@ int ObIJsonBase::find_member_wildcard(const JsonPathIterator &next_node,
                                       bool only_need_one, ObJsonBaseSortedVector &dup,
                                       ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   bool is_done = false;
   ObIJsonBase *jb_ptr = NULL;
   uint64_t count = element_count();
@@ -212,7 +211,7 @@ int ObIJsonBase::find_member(const JsonPathIterator &next_node, const JsonPathIt
                              bool only_need_one, ObJsonBaseSortedVector &dup,
                              ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   ObString key_name(path_node->get_object().len_, path_node->get_object().object_name_);
   ObIJsonBase *jb_ptr = NULL;
 
@@ -235,7 +234,7 @@ int ObIJsonBase::find_child(const JsonPathIterator &cur_node, const JsonPathIter
                             bool is_auto_wrap, bool only_need_one, ObJsonBaseSortedVector &dup,
                             ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   // If the path expression is already at the end, the current DOM is the res, 
   // and it is added to the res
@@ -309,6 +308,8 @@ int ObIJsonBase::find_child(const JsonPathIterator &cur_node, const JsonPathIter
         }
 
         default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected json path type.", K(ret), K(path_node->get_node_type()));
           break;
       }
     }
@@ -320,7 +321,7 @@ int ObIJsonBase::find_child(const JsonPathIterator &cur_node, const JsonPathIter
 int ObIJsonBase::seek(const ObJsonPath &path, uint32_t node_cnt, bool is_auto_wrap,
                       bool only_need_one, ObJsonBaseVector &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   JsonPathIterator cur_node = path.begin();
   JsonPathIterator last_node = path.begin() + node_cnt;
   ObJsonBaseSortedVector dup;
@@ -334,7 +335,7 @@ int ObIJsonBase::seek(const ObJsonPath &path, uint32_t node_cnt, bool is_auto_wr
 
 int ObIJsonBase::print_jtime(ObJsonBuffer &j_buf, bool is_quoted) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (is_quoted) {
     if (OB_FAIL(j_buf.append("\""))) {
@@ -374,7 +375,7 @@ int ObIJsonBase::print_jtime(ObJsonBuffer &j_buf, bool is_quoted) const
 
 int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_FAIL(j_buf.append("["))) {
     LOG_WARN("fail to append [", K(ret), K(depth), K(is_pretty));
@@ -387,8 +388,8 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
         LOG_WARN("fail to append newline and indent", K(ret), K(depth));
       } else {
         ObIJsonBase *jb_ptr = NULL;
+        ObJsonBin j_bin(allocator_);
         if (is_bin()) {
-          ObJsonBin j_bin(allocator_);
           jb_ptr = &j_bin;
         }
         if (OB_FAIL(get_array_element(i, jb_ptr))) {
@@ -414,7 +415,7 @@ int ObIJsonBase::print_array(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty
 
 int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_pretty) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_FAIL(j_buf.append("{"))) {
     LOG_WARN("fail to append '{' to buffer", K(ret));
@@ -439,8 +440,8 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
           LOG_WARN("fail to append \" \"", K(ret), K(depth), K(i), K(key));
         } else {
           ObIJsonBase *jb_ptr = NULL;
+          ObJsonBin j_bin(allocator_);
           if (is_bin()) {
-            ObJsonBin j_bin(allocator_); // TODO: stack overflow
             jb_ptr = &j_bin;
           }
           if (OB_FAIL(get_object_value(i, jb_ptr))) {
@@ -467,7 +468,7 @@ int ObIJsonBase::print_object(ObJsonBuffer &j_buf, uint64_t depth, bool is_prett
 
 int ObIJsonBase::print_decimal(ObJsonBuffer &j_buf) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   int64_t pos = j_buf.length();
 
   if (OB_FAIL(j_buf.reserve(number::ObNumber::MAX_PRINTABLE_SIZE))) {
@@ -496,7 +497,7 @@ struct ObFindDoubleEscapeFunc {
 
 int ObIJsonBase::print_double(ObJsonBuffer &j_buf) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_FAIL(j_buf.reserve(DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE + 1))) {
     LOG_WARN("fail to reserve memory for j_buf", K(ret));
@@ -581,7 +582,7 @@ static const obmysql::EMySQLFieldType opaque_ob_type_to_mysql_type[ObMaxType] =
 
 int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quoted) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const char *data = get_data();
   uint64_t data_length = get_data_length();
   ObObjType f_type = field_type();
@@ -638,7 +639,7 @@ int ObIJsonBase::print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quote
 
 int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint64_t depth) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   ObJsonNodeType j_type = json_type();
 
   // consistent with mysql 5.7
@@ -757,7 +758,7 @@ int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint
 
 int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_t &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   ObJsonHashValue hash_value(val, hash_func);
   ObJsonNodeType j_type = json_type();
 
@@ -767,8 +768,8 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
       uint64_t arr_res = 0;
       uint64_t size = element_count();
       ObIJsonBase *jb_ptr = NULL;
+      ObJsonBin j_bin(allocator_);
       if (is_bin()) {
-        ObJsonBin j_bin(allocator_);
         jb_ptr = &j_bin;
       }
       for (uint64_t i = 0; i < size && OB_SUCC(ret); i++) {
@@ -792,8 +793,8 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
       uint64_t count = element_count();
       ObString key;
       ObIJsonBase *jb_ptr = NULL;
+      ObJsonBin j_bin(allocator_);
       if (is_bin()) {
-        ObJsonBin j_bin(allocator_); // TODO: stack overflow
         jb_ptr = &j_bin;
       }
       for (uint64_t i = 0; OB_SUCC(ret) && i < count; i++) {
@@ -901,7 +902,7 @@ int ObIJsonBase::calc_json_hash_value(uint64_t val, hash_algo hash_func, uint64_
 //    a[0, 1, 2] vs b[0, 1, 2, 1, 1, 1, 1] ----> a < b
 int ObIJsonBase::compare_array(const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
 
@@ -915,9 +916,9 @@ int ObIJsonBase::compare_array(const ObIJsonBase &other, int &res) const
     for (uint64_t i = 0; (res == 0) && OB_SUCC(ret) && i < min_size; i++) {
       ObIJsonBase *jb_a_ptr = NULL;
       ObIJsonBase *jb_b_ptr = NULL;
+      ObJsonBin j_bin_a(allocator_);
+      ObJsonBin j_bin_b(allocator_);
       if (is_bin()) {
-        ObJsonBin j_bin_a(allocator_);
-        ObJsonBin j_bin_b(allocator_);
         jb_a_ptr = &j_bin_a;
         jb_b_ptr = &j_bin_b;
       }
@@ -944,7 +945,7 @@ int ObIJsonBase::compare_array(const ObIJsonBase &other, int &res) const
 // 3. Compare each key-value pair and return the result of the first unequal encounter.
 int ObIJsonBase::compare_object(const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
 
@@ -967,9 +968,9 @@ int ObIJsonBase::compare_object(const ObIJsonBase &other, int &res) const
         if (res == 0) {
           ObIJsonBase *jb_a_ptr = NULL;
           ObIJsonBase *jb_b_ptr = NULL;
+          ObJsonBin j_bin_a(allocator_);
+          ObJsonBin j_bin_b(allocator_);
           if (is_bin()) {
-            ObJsonBin j_bin_a(allocator_); // TODO: stack overflow
-            ObJsonBin j_bin_b(allocator_);
             jb_a_ptr = &j_bin_a;
             jb_b_ptr = &j_bin_b;
           }
@@ -991,7 +992,7 @@ int ObIJsonBase::compare_object(const ObIJsonBase &other, int &res) const
 
 int ObIJsonBase::compare_int(const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
 
@@ -1046,7 +1047,7 @@ int ObIJsonBase::compare_int(const ObIJsonBase &other, int &res) const
 
 int ObIJsonBase::compare_uint(const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
 
@@ -1101,7 +1102,7 @@ int ObIJsonBase::compare_uint(const ObIJsonBase &other, int &res) const
 
 int ObIJsonBase::compare_double(const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
 
@@ -1156,7 +1157,7 @@ int ObIJsonBase::compare_double(const ObIJsonBase &other, int &res) const
 
 int ObIJsonBase::compare_decimal(const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
 
@@ -1213,7 +1214,7 @@ int ObIJsonBase::compare_decimal(const ObIJsonBase &other, int &res) const
 
 int ObIJsonBase::compare_datetime(ObDTMode dt_mode_a, const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
 
@@ -1270,7 +1271,7 @@ static constexpr int type_comparison[JSON_TYPE_NUM][JSON_TYPE_NUM] = {
 
 int ObIJsonBase::compare(const ObIJsonBase &other, int &res) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   const ObJsonNodeType j_type_a = json_type();
   const ObJsonNodeType j_type_b = other.json_type();
   res = 0;
@@ -1402,7 +1403,7 @@ int ObIJsonBase::compare(const ObIJsonBase &other, int &res) const
 
 uint32_t ObIJsonBase::depth()
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   uint32_t depth = 0;
 
   if (is_bin()) {
@@ -1422,7 +1423,7 @@ uint32_t ObIJsonBase::depth()
 
 int ObIJsonBase::get_location(ObJsonBuffer &path)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (is_bin()) {
     ObArenaAllocator allocator;
@@ -1443,7 +1444,7 @@ int ObIJsonBase::get_location(ObJsonBuffer &path)
 
 int ObIJsonBase::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJsonBase *&result)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(allocator) || OB_ISNULL(other)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1478,7 +1479,7 @@ int ObIJsonBase::merge_tree(ObIAllocator *allocator, ObIJsonBase *other, ObIJson
 
 int ObIJsonBase::get_used_size(uint64_t &size)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (is_bin()) {
     const ObJsonBin *j_bin = static_cast<const ObJsonBin *>(this);
@@ -1498,7 +1499,7 @@ int ObIJsonBase::get_used_size(uint64_t &size)
 
 int ObIJsonBase::get_free_space(uint64_t &size)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (is_bin()) {
     const ObJsonBin *j_bin = static_cast<const ObJsonBin *>(this);
@@ -1520,7 +1521,7 @@ int ObIJsonBase::get_free_space(uint64_t &size)
 
 int ObIJsonBase::get_raw_binary(common::ObString &out, ObIAllocator *allocator)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (is_bin()) {
     const ObJsonBin *j_bin = static_cast<const ObJsonBin *>(this);
@@ -1551,7 +1552,7 @@ JsonObjectIterator ObIJsonBase::object_iterator() const
 
 int ObIJsonBase::to_int(int64_t &value, bool check_range, bool force_convert) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   int64_t val = 0;
 
   switch (json_type()) {
@@ -1643,7 +1644,7 @@ int ObIJsonBase::to_int(int64_t &value, bool check_range, bool force_convert) co
 
 int ObIJsonBase::to_uint(uint64_t &value, bool fail_on_negative, bool check_range) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   uint64_t val = 0;
 
   switch (json_type()) {
@@ -1739,6 +1740,7 @@ int ObIJsonBase::to_uint(uint64_t &value, bool fail_on_negative, bool check_rang
       double d = get_double();
       if (d < 0 && fail_on_negative) {
         ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("double value is negative", K(ret), K(fail_on_negative), K(d));
       } else {
         ret = ObJsonBaseUtil::double_to_uint(d, val, check_range);
       }
@@ -1761,7 +1763,7 @@ int ObIJsonBase::to_uint(uint64_t &value, bool fail_on_negative, bool check_rang
 
 int ObIJsonBase::to_double(double &value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   double val = 0.0;
 
   switch (json_type()) {
@@ -1809,13 +1811,10 @@ int ObIJsonBase::to_double(double &value) const
             if ((OB_ISNULL(data) || OB_ISNULL(endptr)) && data != endptr) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("null pointer(s)", K(ret), KP(data), KP(endptr));
-            } else
-            // 2. data == endptr include NULL == NULL.
-            if (OB_UNLIKELY(data == endptr) || OB_UNLIKELY(EDOM == err)) {
+            } else if (OB_UNLIKELY(data == endptr) || OB_UNLIKELY(EDOM == err)) { // 2. data == endptr include NULL == NULL.
               ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD; //1366
               LOG_WARN("wrong value", K(ret), K(length), K(val));
-            } else {
-              // 3. so here we are sure that both data and endptr are not NULL.
+            } else { // 3. so here we are sure that both data and endptr are not NULL.
               endptr += ObCharset::scan_str(endptr, data + length, OB_SEQ_SPACES);
               if (endptr < data + length) {
                 ret = OB_ERR_DATA_TRUNCATED; //1265
@@ -1862,66 +1861,70 @@ int ObIJsonBase::to_double(double &value) const
   return ret;
 }
 
-int ObIJsonBase::to_number(number::ObNumber &number) const
+int ObIJsonBase::to_number(ObIAllocator *allocator, number::ObNumber &number) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   number::ObNumber num;
-  ObArenaAllocator allocator;
 
-  switch (json_type()) {
-    case ObJsonNodeType::J_DECIMAL: {
-      num = get_decimal_data();
-      break;
-    }
-
-    case ObJsonNodeType::J_STRING: {
-      uint64_t length = get_data_length();
-      const char *data = get_data();
-      if (OB_ISNULL(data)) {
-        ret = OB_ERR_NULL_VALUE;
-        LOG_WARN("data is null", K(ret));
-      } else if (OB_FAIL(num.from(data, length, allocator))) {
-        LOG_WARN("fail to create number from string", K(ret), KP(data));
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("allocator is null", K(ret));
+  } else {
+    switch (json_type()) {
+      case ObJsonNodeType::J_DECIMAL: {
+        num = get_decimal_data();
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_DOUBLE: {
-      double d = get_double();
-      if (OB_FAIL(ObJsonBaseUtil::double_to_number(d, allocator, num))) {
-        LOG_WARN("fail to cast double to number", K(ret), K(d));
+      case ObJsonNodeType::J_STRING: {
+        uint64_t length = get_data_length();
+        const char *data = get_data();
+        if (OB_ISNULL(data)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("data is null", K(ret));
+        } else if (OB_FAIL(num.from(data, length, *allocator))) {
+          LOG_WARN("fail to create number from string", K(ret), KP(data));
+        }
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_INT: {
-      int64_t i = get_int();
-      if (OB_FAIL(num.from(i, allocator))) {
-        LOG_WARN("fail to create number from int", K(ret), K(i));
+      case ObJsonNodeType::J_DOUBLE: {
+        double d = get_double();
+        if (OB_FAIL(ObJsonBaseUtil::double_to_number(d, *allocator, num))) {
+          LOG_WARN("fail to cast double to number", K(ret), K(d));
+        }
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_UINT: {
-      uint64_t ui = get_uint();
-      if (OB_FAIL(num.from(ui, allocator))) {
-        LOG_WARN("fail to number from uint", K(ret), K(ui));
+      case ObJsonNodeType::J_INT: {
+        int64_t i = get_int();
+        if (OB_FAIL(num.from(i, *allocator))) {
+          LOG_WARN("fail to create number from int", K(ret), K(i));
+        }
+        break;
       }
-      break;
-    }
 
-    case ObJsonNodeType::J_BOOLEAN: {
-      bool b = get_boolean();
-      if (OB_FAIL(num.from(static_cast<int64_t>(b), allocator))) {
-        LOG_WARN("fail to number from int(boolean)", K(ret), K(b));
+      case ObJsonNodeType::J_UINT: {
+        uint64_t ui = get_uint();
+        if (OB_FAIL(num.from(ui, *allocator))) {
+          LOG_WARN("fail to number from uint", K(ret), K(ui));
+        }
+        break;
       }
-      break;
-    }
-    
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to cast json type to double", K(ret), K(json_type()));
-      break;
+
+      case ObJsonNodeType::J_BOOLEAN: {
+        bool b = get_boolean();
+        if (OB_FAIL(num.from(static_cast<int64_t>(b), *allocator))) {
+          LOG_WARN("fail to number from int(boolean)", K(ret), K(b));
+        }
+        break;
+      }
+      
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to cast json type to double", K(ret), K(json_type()));
+        break;
+      }
     }
   }
 
@@ -1934,7 +1937,7 @@ int ObIJsonBase::to_number(number::ObNumber &number) const
 
 int ObIJsonBase::to_datetime(int64_t &value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   int64_t datetime;
 
   switch (json_type()) {
@@ -1983,7 +1986,7 @@ int ObIJsonBase::to_datetime(int64_t &value) const
 
 int ObIJsonBase::to_date(int32_t &value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   int32_t date;
 
   switch (json_type()) {
@@ -2030,7 +2033,7 @@ int ObIJsonBase::to_date(int32_t &value) const
 
 int ObIJsonBase::to_time(int64_t &value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   int64_t time;
 
   switch (json_type()) {
@@ -2075,7 +2078,7 @@ int ObIJsonBase::to_time(int64_t &value) const
 
 int ObIJsonBase::to_bit(uint64_t &value) const
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   uint64_t bit;
   const ObJsonNodeType j_type = json_type();
   ObDTMode dt_mode = 0;
@@ -2205,12 +2208,15 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
                                      ObJsonInType in_type, ObJsonInType expect_type,
                                      ObIJsonBase *&out)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   void *buf = NULL;
 
-  if (OB_ISNULL(allocator) || OB_ISNULL(ptr)) { // check allocator
+  if (OB_ISNULL(allocator)) { // check allocator
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("param allocator is NULL", K(ret), KP(allocator), KP(ptr));
+  } else if (OB_ISNULL(ptr) || length == 0) {
+    ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+    LOG_WARN("param is NULL", K(ret), KP(ptr), K(length));
   } else if (in_type != ObJsonInType::JSON_TREE && in_type != ObJsonInType::JSON_BIN) { // check in_type
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param in_type is invalid", K(ret), K(in_type));
@@ -2266,7 +2272,7 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
 int ObJsonBaseFactory::transform(ObIAllocator *allocator, ObIJsonBase *src,
                                  ObJsonInType expect_type, ObIJsonBase *&out)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   void *buf = NULL;
   ObJsonInType src_type = src->get_internal_type();
 
@@ -2318,7 +2324,7 @@ int ObJsonBaseFactory::transform(ObIAllocator *allocator, ObIJsonBase *src,
 
 int ObJsonBaseUtil::get_dt_mode_by_json_type(ObJsonNodeType j_type, ObDTMode &dt_mode)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   switch (j_type) {
     case ObJsonNodeType::J_DATETIME: {
@@ -2353,7 +2359,7 @@ int ObJsonBaseUtil::get_dt_mode_by_json_type(ObJsonNodeType j_type, ObDTMode &dt
 
 int ObJsonBaseUtil::append_comma(ObJsonBuffer &j_buf, bool is_pretty)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_FAIL(j_buf.append(","))) {
     LOG_WARN("fail to append \",\" to buffer", K(ret), K(is_pretty));
@@ -2369,7 +2375,7 @@ int ObJsonBaseUtil::append_comma(ObJsonBuffer &j_buf, bool is_pretty)
 int ObJsonBaseUtil::append_newline_and_indent(ObJsonBuffer &j_buf, uint64_t level)
 {
   // Append newline and two spaces per indentation level.
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (level > ObJsonParser::JSON_DOCUMENT_MAX_DEPTH) {
     ret = OB_ERR_JSON_OUT_OF_DEPTH;
@@ -2391,7 +2397,7 @@ int ObJsonBaseUtil::append_newline_and_indent(ObJsonBuffer &j_buf, uint64_t leve
 
 int ObJsonBaseUtil::escape_character(char c, ObJsonBuffer &j_buf)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_FAIL(j_buf.append("\\"))) {
     LOG_WARN("fail to append \"\\\" to j_buf", K(ret), K(c));
@@ -2474,7 +2480,7 @@ struct ObFindEscapeFunc {
 
 int ObJsonBaseUtil::add_double_quote(ObJsonBuffer &j_buf, const char *cptr, uint64_t length)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (OB_ISNULL(cptr)) {
     ret = OB_ERR_NULL_VALUE;
@@ -2521,7 +2527,7 @@ int ObJsonBaseUtil::add_double_quote(ObJsonBuffer &j_buf, const char *cptr, uint
 int ObJsonBaseUtil::append_string(ObJsonBuffer &j_buf, bool is_quoted,
                                 const char *data, uint64_t length)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (is_quoted) {
     if (OB_FAIL(ObJsonBaseUtil::add_double_quote(j_buf, data, length))) {
@@ -2551,7 +2557,7 @@ int ObJsonBaseUtil::compare_int_uint(int64_t a, uint64_t b)
 
 int ObJsonBaseUtil::compare_decimal_uint(const number::ObNumber &a, uint64_t b, int &res)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   const bool a_is_zero = a.is_zero();
   const bool a_is_negative = a.is_negative();
@@ -2583,7 +2589,7 @@ int ObJsonBaseUtil::compare_decimal_uint(const number::ObNumber &a, uint64_t b, 
 
 int ObJsonBaseUtil::compare_decimal_int(const number::ObNumber &a, int64_t b, int &res)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   const bool a_is_zero = a.is_zero();
   const bool a_is_negative = a.is_negative();
@@ -2614,7 +2620,7 @@ int ObJsonBaseUtil::compare_decimal_int(const number::ObNumber &a, int64_t b, in
 
 int ObJsonBaseUtil::compare_decimal_double(const number::ObNumber &a, double b, int &res)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   const bool a_is_zero = a.is_zero();
   const bool a_is_negative = a.is_negative();
@@ -2648,7 +2654,7 @@ int ObJsonBaseUtil::compare_decimal_double(const number::ObNumber &a, double b, 
 
 int ObJsonBaseUtil::compare_double_int(double a, int64_t b, int &res)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   double b_double = static_cast<double>(b);
   if (a < b_double) {
@@ -2678,9 +2684,21 @@ int ObJsonBaseUtil::compare_double_int(double a, int64_t b, int &res)
   return ret;
 }
 
+int ObJsonBaseUtil::compare_int_json(int a, ObIJsonBase* other, int& result)
+{
+  INIT_SUCC(ret);
+  if (other->json_type() != ObJsonNodeType::J_INT) {
+    result = 1;
+  } else {
+    int64_t value = other->get_int();
+    result = (a == value) ? 0 : (a > value ? 1 : -1);
+  }
+  return ret;
+}
+
 int ObJsonBaseUtil::compare_double_uint(double a, uint64_t b, int &res)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   double b_double = static_cast<double>(b);
   if (a < b_double) {
@@ -2713,7 +2731,7 @@ int ObJsonBaseUtil::compare_double_uint(double a, uint64_t b, int &res)
 template<class T>
 int ObJsonBaseUtil::double_to_number(double d, T &allocator, number::ObNumber &num)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
   char buf[DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE] = {0};
   uint64_t length = ob_gcvt(d, ob_gcvt_arg_type::OB_GCVT_ARG_DOUBLE,
                             sizeof(buf) - 1, buf, NULL);
@@ -2731,7 +2749,7 @@ int ObJsonBaseUtil::double_to_number(double d, T &allocator, number::ObNumber &n
 
 int ObJsonBaseUtil::number_to_uint(number::ObNumber &nmb, uint64_t &value)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   int64_t i = 0;
   uint64_t ui = 0;
@@ -2756,7 +2774,7 @@ int ObJsonBaseUtil::number_to_uint(number::ObNumber &nmb, uint64_t &value)
 
 int ObJsonBaseUtil::double_to_uint(double d, uint64_t &value, bool check_range)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (d <= LLONG_MIN) {
     if (check_range) {
@@ -2779,7 +2797,7 @@ int ObJsonBaseUtil::double_to_uint(double d, uint64_t &value, bool check_range)
 
 int ObJsonBaseUtil::get_bit_len(const ObString &str, int32_t &bit_len)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   if (str.empty()) {
     bit_len = 1;
@@ -2819,7 +2837,7 @@ uint64_t ObJsonBaseUtil::hex_to_uint64(const ObString &str)
 
 int ObJsonBaseUtil::string_to_bit(ObString &str, uint64_t &value)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   uint64_t bit;
   int32_t bit_len = 0;
@@ -2870,7 +2888,7 @@ bool ObJsonBaseUtil::binary_search(ObSortedVector<ObIJsonBase *> &vec, ObIJsonBa
 
 int ObJsonHashValue::calc_time(ObDTMode dt_mode, const ObIJsonBase *jb)
 {
-  int ret = OB_SUCCESS;
+  INIT_SUCC(ret);
 
   ObTime time_val;
   if (OB_FAIL(jb->get_obtime(time_val))) {
@@ -2892,7 +2910,7 @@ JsonObjectIterator::JsonObjectIterator(const ObIJsonBase *json_doc)
 }
 
 
-bool JsonObjectIterator::empty() const
+bool JsonObjectIterator::end() const
 {
   return curr_element_ >= element_count_;
 }

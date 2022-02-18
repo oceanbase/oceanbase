@@ -1299,17 +1299,41 @@ void ObJsonPathUtil::skip_whitespace(const ObString &path, uint64_t& idx)
 
 static constexpr unsigned UNICODE_COMBINING_MARK_MIN = 0x300;
 static constexpr unsigned UNICODE_COMBINING_MARK_MAX = 0x36F;
+static constexpr unsigned UNICODE_EXTEND_MARK_MIN = 0x2E80;
+static constexpr unsigned UNICODE_EXTEND_MARK_MAX = 0x9fff;
+
 static inline bool unicode_combining_mark(unsigned codepoint) {
   return ((UNICODE_COMBINING_MARK_MIN <= codepoint) && (codepoint <= UNICODE_COMBINING_MARK_MAX));
 }
 
-static bool is_letter(unsigned codepoint) {
+static bool is_utf8_unicode_charator(const char* ori, uint64_t& start, int64_t len)
+{
+  bool ret_bool = false;
+  int ret = OB_SUCCESS;
+  int32_t well_formed_error = 0;
+  int64_t well_formed_len = 0;
+  if (OB_FAIL(ObCharset::well_formed_len(CS_TYPE_UTF8MB4_BIN, ori + start, len, well_formed_len, well_formed_error))) {
+    ret_bool = false;
+  } else {
+    ret_bool = true;
+  }
+
+  return ret_bool;
+}
+
+static bool is_letter(unsigned codepoint, const char* ori, uint64_t start, uint64_t end) {
   bool ret_bool = true;
   if (unicode_combining_mark(codepoint)) {
     ret_bool = false;
   }
   ret_bool = isalpha(codepoint);
-  
+  if (ret_bool) {
+  } else if (!ret_bool && 
+      (codepoint >= UNICODE_EXTEND_MARK_MIN &&
+       codepoint <= UNICODE_EXTEND_MARK_MAX && 
+       is_utf8_unicode_charator(ori, start, end - start))) {
+    ret_bool = true;
+  }
   return ret_bool;
 }
 
@@ -1350,9 +1374,10 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
   */
   rapidjson::MemoryStream input_stream(name, length);
   unsigned codepoint = 0;
-
+  uint64_t last_pos = 0;
   while (ret_bool && (input_stream.Tell() < length)) {
-    bool first_codepoint = (input_stream.Tell() == 0);
+    last_pos = input_stream.Tell();
+    bool first_codepoint = (last_pos == 0);
     if (!rapidjson::UTF8<char>::Decode(input_stream, &codepoint)) { 
       ret_bool = false;
       LOG_WARN("fail to decode.", 
@@ -1361,7 +1386,8 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
     }
 
     // a unicode letter
-    if (is_letter(codepoint)) continue;
+    uint64_t curr_pos = input_stream.Tell();
+    if (is_letter(codepoint, name, last_pos, curr_pos - last_pos)) continue;
     // $ is ok
     if (codepoint == 0x24) continue;
     // _ is ok
@@ -1399,7 +1425,6 @@ bool ObJsonPathUtil::is_ecmascript_identifier(const char* name, uint64_t length)
 
   return ret_bool;
 }
-
 int ObJsonPathUtil::string_cmp_skip_charactor(ObString& lhs, ObString& rhs, char ch) {
   int res = 0;
   int i = 0, j = 0;

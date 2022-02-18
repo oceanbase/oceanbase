@@ -349,6 +349,11 @@ int ObMPUtils::get_literal_print_length(const ObObj& obj, bool is_plain, int64_t
     if (CHARSET_UTF8MB4 != ObCharset::charset_type_by_coll(obj.get_collation_type())) {
       len += len_of_string;
     }
+
+    if (obj.is_json()) {
+      // json add quote for stringbegin and end
+      len += 2;
+    }
   } else if (obj.is_binary() || obj.is_varbinary() || obj.is_hex_string() || obj.is_blob()) {
     // if is_plain is false, 'j' will be print as "X'6a'\0" (With Quotation Marks Here)
     // otherwise. as X'6a'\0 (Without Quotation Marks Here)

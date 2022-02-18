@@ -142,17 +142,17 @@ int ObExprJsonType::calc(const T &data, ObObjType type, ObCollationType cs_type,
       case ObMediumTextType:
       case ObJsonType:
       case ObLongTextType: {
-        common::ObString j_text = data.get_string(); // json text or json binary
+        common::ObString j_str = data.get_string(); // json text or json binary
         ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
         ObIJsonBase *j_base = NULL;
         if (OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
           LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
-        } else if (j_text.length() == 0) {
+        } else if (j_str.length() == 0) {
           ret = OB_ERR_INVALID_JSON_TEXT;
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
-        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_text, j_in_type,
+        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
             j_in_type, j_base))) {
-          LOG_WARN("fail to get json base", K(ret), K(type), K(j_text), K(j_in_type));
+          LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
           if (ret == OB_ERR_INVALID_JSON_TEXT) {
             LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
           }

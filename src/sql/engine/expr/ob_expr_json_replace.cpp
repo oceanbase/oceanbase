@@ -134,19 +134,12 @@ int ObExprJsonReplace::calc_resultN(common::ObObj &result,
     } else if (is_null_result) {
       result.set_null();
     } else {
-      ObString str;
-      if (OB_FAIL(json_doc->get_raw_binary(str, allocator))) {
+      ObString raw_bin;
+      if (OB_FAIL(json_doc->get_raw_binary(raw_bin, allocator))) {
       LOG_WARN("json_replace result to binary failed", K(ret));
       } else {
-        char *buf = reinterpret_cast<char *>(allocator->alloc(str.length()));
-        if (OB_ISNULL(buf)){
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("json_remove alloc jsonString failed", K(ret), K(str.length()));
-        } else {
-          MEMCPY(buf, str.ptr(), str.length());
-          result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-          result.set_string(ObJsonType, buf, str.length());
-        }
+        result.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        result.set_string(ObJsonType, raw_bin.ptr(), raw_bin.length());
       }
     }
   }

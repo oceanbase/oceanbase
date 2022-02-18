@@ -72,7 +72,7 @@ public:
   explicit JsonObjectIterator(const ObIJsonBase *wrapper);
   ~JsonObjectIterator() {}
 
-  bool empty() const;
+  bool end() const;
   int get_elem(ObJsonObjPair &elem);
   int get_key(ObString &key);
   int get_value(ObIJsonBase *&value);
@@ -282,7 +282,7 @@ public:
   int to_int(int64_t &value, bool check_range = false, bool force_convert = false) const;
   int to_uint(uint64_t &value, bool fail_on_negative = false, bool check_range = false) const;
   int to_double(double &value) const;
-  int to_number(number::ObNumber &number) const;
+  int to_number(ObIAllocator *allocator, number::ObNumber &number) const;
   int to_datetime(int64_t &value) const;
   int to_date(int32_t &value) const;
   int to_time(int64_t &value) const;
@@ -629,6 +629,14 @@ public:
   // @param [out] res     Less than returns -1, greater than 1, equal returns 0.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   static int compare_double_int(double a, int64_t b, int &res);
+
+    // Compare int with json.
+  //
+  // @param [in]  a       The first value with double to be compared.
+  // @param [in]  other   The decond value with json type to be compared.
+  // @param [out] result  Less than returns -1, greater than 1, equal returns 0.
+  // @return Returns OB_SUCCESS on success, error code otherwise.
+  static int compare_int_json(int a, ObIJsonBase* other, int& result);
 
   // Compare double with uint.
   //

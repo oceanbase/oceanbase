@@ -60,7 +60,7 @@ int ObExprJsonPretty::calc(const T &data, ObObjType type, ObCollationType cs_typ
   INIT_SUCC(ret);
   ObIJsonBase *j_base = NULL;
   ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-  common::ObString j_text = data.get_string(); // json text or json binary
+  common::ObString j_str = data.get_string(); // json text or json binary
 
   if (OB_ISNULL(allocator)) { // check allocator
     ret = OB_NOT_INIT;
@@ -72,11 +72,14 @@ int ObExprJsonPretty::calc(const T &data, ObObjType type, ObCollationType cs_typ
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_JSON, 1, "json_pretty");
   } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
-  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_text, j_in_type,
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
       j_in_type, j_base))) {
-    LOG_WARN("fail to get json base", K(ret), K(type), K(j_text), K(j_in_type));
+    if (ret == OB_ERR_INVALID_JSON_TEXT) {
+      ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+    }
+    LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
   } else if (OB_FAIL(j_base->print(j_buf, true, true))) {
-    LOG_WARN("fail to print json", K(ret), K(type), K(j_text), K(j_in_type));
+    LOG_WARN("fail to print json", K(ret), K(type), K(j_str), K(j_in_type));
   }
 
   return ret;

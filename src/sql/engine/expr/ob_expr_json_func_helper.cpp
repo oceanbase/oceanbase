@@ -60,10 +60,10 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
   } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
   } else {
-    ObString j_text = json_datum->get_string();
+    ObString j_str = json_datum->get_string();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
     ObJsonInType expect_type = need_to_tree ? ObJsonInType::JSON_TREE : j_in_type;
-    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_text, j_in_type,
+    if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
                                                  expect_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
@@ -89,10 +89,10 @@ int ObJsonExprHelper::get_json_doc(const ObObj *objs, common::ObIAllocator *allo
   } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
   } else {
-    ObString j_text = objs[index].get_string();
+    ObString j_str = objs[index].get_string();
     ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
     ObJsonInType expect_type = need_to_tree ? ObJsonInType::JSON_TREE : j_in_type;
-    if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_text, j_in_type,
+    if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
                                                  expect_type, j_base))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
@@ -108,7 +108,22 @@ int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExprCtx &ctx,
 {
   INIT_SUCC(ret);
   ObObjType val_type = data.get_type();
-  if (is_bool) {
+  if (data.is_null()) {
+    void *json_node_buf = allocator->alloc(sizeof(ObJsonNull));
+    if (OB_ISNULL(json_node_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed: alloscate jsonboolean", K(ret));
+    } else {
+      ObJsonNull *null_node = static_cast<ObJsonNull*>(new(json_node_buf) ObJsonNull());
+      if (to_bin) {
+        if (OB_FAIL(ObJsonBaseFactory::transform(allocator, null_node, ObJsonInType::JSON_BIN, j_base))) {
+          LOG_WARN("failed: json tree to bin", K(ret));
+        }
+      } else {
+        j_base = null_node;
+      }
+    }
+  } else if (is_bool) {
     void *json_node_buf = allocator->alloc(sizeof(ObJsonBoolean));
     if (OB_ISNULL(json_node_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -155,6 +170,21 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
   ObObjType val_type = json_arg->datum_meta_.type_;
   if (OB_UNLIKELY(OB_FAIL(json_arg->eval(ctx, json_datum)))) {
     LOG_WARN("eval json arg failed", K(ret), K(val_type));
+  } else if (json_datum->is_null()) {
+    void *json_node_buf = allocator->alloc(sizeof(ObJsonNull));
+    if (OB_ISNULL(json_node_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed: alloscate jsonboolean", K(ret));
+    } else {
+      ObJsonNull *null_node = static_cast<ObJsonNull*>(new(json_node_buf) ObJsonNull());
+      if (to_bin) {
+        if (OB_FAIL(ObJsonBaseFactory::transform(allocator, null_node, ObJsonInType::JSON_BIN, j_base))) {
+          LOG_WARN("failed: json tree to bin", K(ret));
+        }
+      } else {
+        j_base = null_node;
+      }
+    }  
   } else if (json_arg->is_boolean_ == 1) {
     void *json_node_buf = allocator->alloc(sizeof(ObJsonBoolean));
     if (OB_ISNULL(json_node_buf)) {
@@ -341,6 +371,23 @@ void ObJsonExprHelper::set_type_for_value(ObExprResType* types_stack, uint32_t i
   } else if  (in_type == ObJsonType) {
     types_stack[index].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
   }
+}
+
+int ObJsonExprHelper::is_json_zero(const ObString& data, int& result)
+{
+  INIT_SUCC(ret);
+  int tmp_result = 0;
+  ObJsonBin j_bin(data.ptr(), data.length());
+  if (data.length() == 0) {
+    result = 1; 
+  } else if (OB_FAIL(j_bin.reset_iter())) {
+    LOG_WARN("failed: reset iter", K(ret));
+  } else if (OB_FAIL(ObJsonBaseUtil::compare_int_json(0, &j_bin, tmp_result))) {
+    LOG_WARN("failed: cmp json", K(ret));
+  } else {
+    result = (tmp_result == 0) ? 0 : 1;
+  }
+  return ret;
 }
 
 template <typename T>
