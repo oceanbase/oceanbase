@@ -48,7 +48,7 @@ void ObInfoSchemaColumnsTable::reset()
   tenant_id_ = OB_INVALID_ID;
 }
 
-int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow*& row)
+int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
 
@@ -60,7 +60,7 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow*& row)
     SERVER_LOG(WARN, "tenant id is invalid_id", K(ret), K(tenant_id_));
   } else {
     if (!start_to_read_) {
-      void* tmp_ptr = NULL;
+      void *tmp_ptr = NULL;
       // If there is no db filter (is_filter_db_: false), At most one loop
       // in check_database_table_filter: start_key=MIN,MIN, end_key=MAX,MAX
       if (!is_filter_db_ && OB_FAIL(check_database_table_filter())) {
@@ -69,15 +69,17 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow*& row)
       } else if (!is_filter_db_ &&
                  OB_FAIL(schema_guard_->get_database_schemas_in_tenant(tenant_id_, database_schema_array_))) {
         SERVER_LOG(WARN, "fail to get database schemas in tenant", K(ret), K(tenant_id_));
-      } else if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char*>(allocator_->alloc(OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
+      } else if (OB_UNLIKELY(
+                     NULL == (tmp_ptr = static_cast<char *>(allocator_->alloc(OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
-      } else if (FALSE_IT(data_type_str_ = static_cast<char*>(tmp_ptr))) {
-      } else if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char*>(allocator_->alloc(OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
+      } else if (FALSE_IT(data_type_str_ = static_cast<char *>(tmp_ptr))) {
+      } else if (OB_UNLIKELY(
+                     NULL == (tmp_ptr = static_cast<char *>(allocator_->alloc(OB_MAX_SYS_PARAM_NAME_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
       } else {
-        column_type_str_ = static_cast<char*>(tmp_ptr);
+        column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_SYS_PARAM_NAME_LENGTH;
       }
 
@@ -91,7 +93,7 @@ int ObInfoSchemaColumnsTable::inner_get_next_row(common::ObNewRow*& row)
       }
       bool is_filter_table_schema = false;
       for (; OB_SUCC(ret) && i < database_schema_array_.count() && !has_more_; ++i) {
-        const ObDatabaseSchema* database_schema = database_schema_array_.at(i);
+        const ObDatabaseSchema *database_schema = database_schema_array_.at(i);
         if (OB_ISNULL(database_schema)) {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "database_schema is NULL", K(ret));
@@ -143,8 +145,8 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(
     const bool is_filter_table_schema, const int64_t last_db_schema_idx)
 {
   int ret = OB_SUCCESS;
-  const ObDatabaseSchema* database_schema = NULL;
-  ObArray<const ObTableSchema*> table_schema_array;
+  const ObDatabaseSchema *database_schema = NULL;
+  ObArray<const ObTableSchema *> table_schema_array;
   int64_t table_schema_array_size = 0;
   // Handling table_schema_array pagination
   int64_t i = 0;
@@ -172,7 +174,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(
     }
   }
   for (; OB_SUCC(ret) && i < table_schema_array_size && !has_more_; ++i) {
-    const ObTableSchema* table_schema = NULL;
+    const ObTableSchema *table_schema = NULL;
     if (is_filter_table_schema) {
       table_schema = filter_table_schema_array_.at(i);
     } else {
@@ -206,8 +208,8 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(
   return ret;
 }
 
-int ObInfoSchemaColumnsTable::iterate_column_schema_array(const ObString& database_name,
-    const share::schema::ObTableSchema& table_schema, const int64_t last_db_schema_idx, const int64_t last_table_idx,
+int ObInfoSchemaColumnsTable::iterate_column_schema_array(const ObString &database_name,
+    const share::schema::ObTableSchema &table_schema, const int64_t last_db_schema_idx, const int64_t last_table_idx,
     const bool is_filter_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -219,7 +221,7 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(const ObString& databa
     last_column_idx_ = -1;
   }
   ObColumnIterByPrevNextID iter(table_schema);
-  const ObColumnSchemaV2* column_schema = NULL;
+  const ObColumnSchemaV2 *column_schema = NULL;
   for (int j = 0; OB_SUCC(ret) && j < logical_index && OB_SUCC(iter.next(column_schema)); j++) {
     // do nothing
   }
@@ -282,10 +284,10 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges_.count(); ++i) {
-    const ObRowkey& start_key = key_ranges_.at(i).start_key_;
-    const ObRowkey& end_key = key_ranges_.at(i).end_key_;
-    const ObObj* start_key_obj_ptr = start_key.get_obj_ptr();
-    const ObObj* end_key_obj_ptr = end_key.get_obj_ptr();
+    const ObRowkey &start_key = key_ranges_.at(i).start_key_;
+    const ObRowkey &end_key = key_ranges_.at(i).end_key_;
+    const ObObj *start_key_obj_ptr = start_key.get_obj_ptr();
+    const ObObj *end_key_obj_ptr = end_key.get_obj_ptr();
     if (2 != start_key.get_obj_cnt() || 2 != end_key.get_obj_cnt()) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,
@@ -304,14 +306,14 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
       // is db_name + table_name, so there is no need to obtain all database_schema under the tenant
       is_filter_db_ = true;
       ObString database_name = start_key_obj_ptr[0].get_varchar();
-      const ObDatabaseSchema* filter_database_schema = NULL;
+      const ObDatabaseSchema *filter_database_schema = NULL;
       if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_, database_name, filter_database_schema))) {
         SERVER_LOG(WARN, "fail to get database schema", K(ret), K(tenant_id_), K(database_name));
       } else if (NULL == filter_database_schema) {
       } else if (start_key_obj_ptr[1].is_varchar_or_char() && end_key_obj_ptr[1].is_varchar_or_char() &&
                  start_key_obj_ptr[1] == end_key_obj_ptr[1]) {
         // Specify db_name and tbl_name at the same time
-        const ObTableSchema* filter_table_schema = NULL;
+        const ObTableSchema *filter_table_schema = NULL;
         ObString table_name = start_key_obj_ptr[1].get_varchar();
         if (OB_FAIL(schema_guard_->get_table_schema(tenant_id_,
                 filter_database_schema->get_database_id(),
@@ -333,8 +335,8 @@ int ObInfoSchemaColumnsTable::check_database_table_filter()
   return ret;
 }
 
-int ObInfoSchemaColumnsTable::get_type_str(const ObObjMeta& obj_meta, const ObAccuracy& accuracy,
-    const common::ObIArray<ObString>& type_info, const int16_t default_length_semantics, int64_t& pos)
+int ObInfoSchemaColumnsTable::get_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
+    const common::ObIArray<ObString> &type_info, const int16_t default_length_semantics, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
@@ -342,7 +344,7 @@ int ObInfoSchemaColumnsTable::get_type_str(const ObObjMeta& obj_meta, const ObAc
           obj_meta, accuracy, type_info, default_length_semantics, column_type_str_, column_type_str_len_, pos))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       if (OB_UNLIKELY(
-              NULL == (column_type_str_ = static_cast<char*>(allocator_->realloc(
+              NULL == (column_type_str_ = static_cast<char *>(allocator_->realloc(
                            column_type_str_, OB_MAX_SYS_PARAM_NAME_LENGTH, OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SERVER_LOG(ERROR, "fail to alloc memory", K(ret));
@@ -357,8 +359,8 @@ int ObInfoSchemaColumnsTable::get_type_str(const ObObjMeta& obj_meta, const ObAc
   return ret;
 }
 
-int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, const ObTableSchema* table_schema,
-    const ObColumnSchemaV2* column_schema, const uint64_t ordinal_position)
+int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name, const ObTableSchema *table_schema,
+    const ObColumnSchemaV2 *column_schema, const uint64_t ordinal_position)
 {
   int ret = OB_SUCCESS;
 
@@ -370,7 +372,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "table_schema or column_schema is NULL", K(ret));
   } else {
-    ObObj* cells = NULL;
+    ObObj *cells = NULL;
     const int64_t col_count = output_column_ids_.count();
     if (OB_ISNULL(cells = cur_row_.cells_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -416,17 +418,17 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
           }
           case COLUMN_DEFAULT: {
             casted_cell.reset();
-            const ObObj* res_cell = NULL;
+            const ObObj *res_cell = NULL;
             ObObj def_obj = column_schema->get_cur_default_value();
             if (IS_DEFAULT_NOW_OBJ(def_obj)) {
               ObObj def_now_obj;
               def_now_obj.set_varchar(ObString::make_string(N_UPPERCASE_CUR_TIMESTAMP));
               cells[cell_idx] = def_now_obj;
             } else if (def_obj.is_bit() || ob_is_enum_or_set_type(def_obj.get_type())) {
-              char* buf = NULL;
+              char *buf = NULL;
               int64_t buf_len = number::ObNumber::MAX_PRINTABLE_SIZE;
               int64_t pos = 0;
-              if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator_->alloc(buf_len))))) {
+              if (OB_UNLIKELY(NULL == (buf = static_cast<char *>(allocator_->alloc(buf_len))))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 SERVER_LOG(ERROR, "fail to allocate memory", K(ret));
               } else if (def_obj.is_bit()) {
@@ -480,7 +482,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
             break;
           }
           case CHARACTER_MAXIMUM_LENGTH: {
-            if (ob_is_string_type(column_schema->get_data_type())) {
+            if (ob_is_string_type(column_schema->get_data_type())
+              || ob_is_json(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();
@@ -496,7 +499,8 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
               } else {
                 cells[cell_idx].set_uint64(static_cast<uint64_t>(mbmaxlen * column_schema->get_data_length()));
               }
-            } else if (ob_is_text_tc(column_schema->get_data_type())) {
+            } else if (ob_is_text_tc(column_schema->get_data_type())
+                    || ob_is_json(column_schema->get_data_type())) {
               cells[cell_idx].set_uint64(static_cast<uint64_t>(column_schema->get_data_length()));
             } else {
               cells[cell_idx].reset();
@@ -594,10 +598,10 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString& database_name, cons
               if (0 == scale) {
                 extra = ObString::make_string("on update current_timestamp");
               } else {
-                char* buf = NULL;
+                char *buf = NULL;
                 int64_t buf_len = 32;
                 int64_t pos = 0;
-                if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator_->alloc(buf_len))))) {
+                if (OB_UNLIKELY(NULL == (buf = static_cast<char *>(allocator_->alloc(buf_len))))) {
                   ret = OB_ALLOCATE_MEMORY_FAILED;
                   SERVER_LOG(WARN, "fail to allocate memory", K(ret));
                 } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "on update current_timestamp(%d)", scale))) {

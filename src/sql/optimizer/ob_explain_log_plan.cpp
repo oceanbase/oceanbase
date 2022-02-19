@@ -70,7 +70,7 @@ int ObExplainLogPlan::generate_raw_plan()
         int64_t pos = 0;
         values->set_explain_plan(child_plan);
 
-        if (EXPLAIN_JSON == explain_stmt->get_explain_type()) {
+        if (EXPLAIN_FORMAT_JSON == explain_stmt->get_explain_type()) {
           char* pre_buf = NULL;
           if (NULL == (pre_buf = static_cast<char*>(get_allocator().alloc(ObLogValues::MAX_EXPLAIN_BUFFER_SIZE)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;

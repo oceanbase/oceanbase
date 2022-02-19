@@ -443,6 +443,7 @@ public:
   bool is_int_parts_valid_int64(int64_t& int_parts, int64_t& decimal_parts) const;
   int extract_valid_int64_with_trunc(int64_t& value) const;
   int extract_valid_uint64_with_trunc(uint64_t& value) const;
+  int extract_valid_int64_with_round(int64_t &value) const;
   static int64_t get_decode_exp(const uint32_t desc) __attribute__((always_inline));
   void set_digits(uint32_t* digits)
   {

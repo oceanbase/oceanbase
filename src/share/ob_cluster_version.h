@@ -94,11 +94,12 @@ uint64_t cal_version(const uint64_t major, const uint64_t minor, const uint64_t 
 #define CLUSTER_VERSION_3100 (oceanbase::common::cal_version(3, 1, 0))
 #define CLUSTER_VERSION_311 (oceanbase::common::cal_version(3, 1, 1))
 #define CLUSTER_VERSION_312 (oceanbase::common::cal_version(3, 1, 2))
+#define CLUSTER_VERSION_313 (oceanbase::common::cal_version(3, 1, 3))
 #define CLUSTER_VERSION_MAX UINT64_MAX
 // FIXME If you update the above version, please update me, CLUSTER_CURRENT_VERSION & ObUpgradeChecker!!!!!!
 
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_312
+#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_313
 #define GET_MIN_CLUSTER_VERSION() (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version())
 #define GET_UNIS_CLUSTER_VERSION() (::oceanbase::lib::get_unis_compat_version() ?: GET_MIN_CLUSTER_VERSION())
 

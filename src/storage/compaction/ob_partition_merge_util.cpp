@@ -555,7 +555,7 @@ int ObMacroRowIterator::next()
         K(curr_row_),
         K(*curr_row_));
   } else {
-    STORAGE_LOG(DEBUG, "next", K(ret), KP(this), KP(table_), KP(row_iter_), KP(curr_row_), K(*curr_row_));
+    STORAGE_LOG(DEBUG, "next", K(ret), KP(this), KP(table_), KP(row_iter_));
   }
   return ret;
 }

@@ -272,6 +272,10 @@ int ObSchema2DDLSql::type2str(const ObColumnSchemaV2& column_schema, char* str_b
           n = snprintf(str_buf, buf_size, "longtext");
           break;
         }
+        case ObJsonType: {
+          n = snprintf(str_buf, buf_size, "json");
+          break;
+        }
         default: {
           break;
         }

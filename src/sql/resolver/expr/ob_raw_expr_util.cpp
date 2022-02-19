@@ -2049,6 +2049,9 @@ int ObRawExprUtils::create_param_expr(
     if (is_exec_param) {
       c_expr->add_flag(IS_EXEC_PARAM);
     }
+    if (expr->is_bool_expr()) {
+      c_expr->set_is_literal_bool(true);
+    }
     if (ob_is_enumset_tc(expr->get_result_type().get_type())) {
       if (OB_FAIL(c_expr->set_enum_set_values(expr->get_enum_set_values()))) {
         LOG_WARN("failed to set enum_set_values", K(*expr), K(ret));
@@ -3299,7 +3302,9 @@ int ObRawExprUtils::init_column_expr(const ObColumnSchemaV2& column_schema, ObCo
       column_schema.get_column_name_str().ptr(), column_schema.get_column_name_str().length());
   column_expr.set_column_flags(column_schema.get_column_flags());
   column_expr.set_hidden_column(column_schema.is_hidden());
-  if (ob_is_string_type(column_schema.get_data_type()) || ob_is_enumset_tc(column_schema.get_data_type())) {
+  if (ob_is_string_type(column_schema.get_data_type()) 
+      || ob_is_enumset_tc(column_schema.get_data_type())
+      || ob_is_json_tc(column_schema.get_data_type())) {
     column_expr.set_collation_type(column_schema.get_collation_type());
     column_expr.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
@@ -3431,6 +3436,7 @@ int ObRawExprUtils::need_wrap_to_string(
         need_wrap = false;
         break;
       }
+      case ObJsonType:
       case ObDateTimeType:
       case ObTimestampType:
       case ObDateType:

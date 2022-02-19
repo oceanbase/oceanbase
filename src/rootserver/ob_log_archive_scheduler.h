@@ -56,7 +56,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveThreadIdling);
 };
 
-class ObLogArchiveScheduler final : public ObRsReentrantThread, public ObIBackupScheduler {
+class ObLogArchiveScheduler final : public ObIBackupScheduler {
 public:
   const int64_t OB_START_LOG_ARCHIVE_ROUND = 0;
   typedef hash::ObHashMap<uint64_t, share::ObTenantLogArchiveStatus*> COMPAT_TENANT_ARCHIVE_STATUS_MAP;
@@ -83,6 +83,7 @@ public:
   {
     return is_working_;
   }
+  virtual int force_cancel(const uint64_t tenant_id);
 
 private:
   void cleanup_();
@@ -205,6 +206,8 @@ private:
   int upgrade_backupset_files_();
   int upgrade_backup_info_();
   int clean_discard_log_archive_status_();
+
+  bool is_force_cancel_() const;
 
 private:
   bool is_inited_;

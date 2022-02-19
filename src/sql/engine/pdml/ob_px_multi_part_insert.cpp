@@ -112,7 +112,6 @@ int ObPxMultiPartInsert::inner_get_next_row(ObExecContext& ctx, const ObNewRow*&
       } while (OB_SUCC(ret));
     }
   }
-  LOG_TRACE("returned row", KPC(row));
   return ret;
 }
 

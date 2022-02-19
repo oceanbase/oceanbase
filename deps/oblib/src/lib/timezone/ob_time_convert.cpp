@@ -2707,7 +2707,7 @@ int ObTimeConverter::time_to_ob_time(int64_t value, ObTime& ob_time)
 #define DTAE_DIGIT_LEN 8
 #define TIME_DIGIT_LEN 6
 
-OB_INLINE int64_t ObTimeConverter::ob_time_to_int(const ObTime& ob_time, ObDTMode mode)
+int64_t ObTimeConverter::ob_time_to_int(const ObTime &ob_time, ObDTMode mode)
 {
   int64_t value = 0;
   if ((DT_TYPE_DATE & mode) != 0) {

@@ -18,6 +18,7 @@
 #include "ob_partition_group_coordinator.h"
 #include "ob_server_checker.h"
 #include "ob_root_utils.h"
+#include "ob_i_backup_scheduler.h"
 #include "ob_shrink_resource_pool_checker.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "share/backup/ob_backup_struct.h"
@@ -52,7 +53,7 @@ public:
   virtual int64_t get_idle_interval_us();
 };
 
-class ObBackupDataClean : public ObRsReentrantThread {
+class ObBackupDataClean : public ObIBackupScheduler {
 public:
   ObBackupDataClean();
   virtual ~ObBackupDataClean();
@@ -73,7 +74,9 @@ public:
   {
     return is_working_;
   }
-  int start() override;
+  virtual int force_cancel(const uint64_t tenant_id);
+  int start();
+
   share::ObIBackupLeaseService *get_backup_lease_service()
   {
     return backup_lease_service_;
@@ -102,30 +105,10 @@ public:
 private:
   int get_need_clean_tenants(common::ObIArray<ObBackupDataCleanTenant> &clean_tenants);
   int get_server_clean_tenants(common::ObIArray<ObBackupDataCleanTenant> &clean_tenants);
-  int get_extern_clean_tenants(hash::ObHashMap<uint64_t, ObSimpleBackupDataCleanTenant> &clean_tenants_map);
   int get_server_need_clean_info(const uint64_t tenant_id, bool &need_add);
   int get_all_tenant_ids(common::ObIArray<uint64_t> &tenant_ids);
-  int get_tenant_backup_task_his_info(const share::ObBackupCleanInfo &clean_info, common::ObISQLClient &trans,
-      common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_infos);
   int get_tenant_backup_task_info(const share::ObBackupCleanInfo &clean_info, common::ObISQLClient &trans,
       common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_infos);
-  int inner_get_tenant_backup_task_his_info(const share::ObBackupCleanInfo &clean_info, common::ObISQLClient &trans,
-      common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_infos);
-  int get_tenant_backup_backupset_task_his_info(const share::ObBackupCleanInfo &clean_info, common::ObISQLClient &trans,
-      common::ObIArray<share::ObTenantBackupBackupsetTaskInfo> &tenant_infos);
-  int convert_backup_backupset_task_to_backup_task(
-      const common::ObIArray<share::ObTenantBackupBackupsetTaskInfo> &backup_backupset_tasks,
-      common::ObIArray<share::ObTenantBackupTaskInfo> &backup_tasks);
-  int get_log_archive_info(const int64_t copy_id, const uint64_t tenant_id, common::ObISQLClient &trans,
-      common::ObIArray<share::ObLogArchiveBackupInfo> &log_archive_infos);
-  int get_log_archive_history_info(const int64_t copy_id, const uint64_t tenant_id, common::ObISQLClient &trans,
-      common::ObIArray<share::ObLogArchiveBackupInfo> &log_archive_infos);
-
-  int get_backup_clean_tenant(const share::ObTenantBackupTaskInfo &task_info,
-      hash::ObHashMap<uint64_t, ObSimpleBackupDataCleanTenant> &clean_tenants_map);
-  int get_archive_clean_tenant(const share::ObLogArchiveBackupInfo &log_archive_info,
-      hash::ObHashMap<uint64_t, ObSimpleBackupDataCleanTenant> &clean_tenants_map);
-
   int get_backup_clean_elements(const share::ObBackupCleanInfo &clean_info,
       const common::ObIArray<share::ObTenantBackupTaskInfo> &task_infos,
       const common::ObArray<share::ObLogArchiveBackupInfo> &log_archive_infos, ObBackupDataCleanTenant &clean_tenant);
@@ -152,30 +135,6 @@ private:
       const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanTenant &clean_tenant);
   int mark_backup_meta_data_deleting(
       const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanTenant &clean_tenant);
-  int mark_inner_table_his_data_deleted(
-      const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanTenant &clean_tenant);
-
-  int mark_backup_task_his_data_deleted(const share::ObBackupCleanInfo &clean_info,
-      const ObBackupDataCleanElement &clean_element, common::ObISQLClient &trans);
-  int inner_mark_backup_task_his_data_deleted(const uint64_t tenant_id, const int64_t incarnation,
-      const int64_t backup_set_id, const share::ObBackupDest &backup_dest, common::ObISQLClient &trans);
-  int inner_mark_backup_backup_task_his_data_deleted(const uint64_t tenant_id, const int64_t incarnation,
-      const int64_t backup_set_id, const int64_t copy_id, const share::ObBackupDest &backup_dest,
-      common::ObISQLClient &trans);
-  int inner_mark_backup_set_file_data_deleting(const uint64_t tenant_id, const int64_t incarnation,
-      const int64_t backup_set_id, const int64_t copy_id, common::ObISQLClient &trans);
-  int inner_mark_backup_set_file_data_deleted(const uint64_t tenant_id, const int64_t incarnation,
-      const int64_t backup_set_id, const int64_t copy_id, common::ObISQLClient &trans);
-
-  int mark_log_archive_stauts_his_data_deleted(const share::ObBackupCleanInfo &clean_info,
-      const ObBackupDataCleanElement &clean_element, const int64_t clog_gc_snapshot, common::ObISQLClient &trans);
-  int mark_log_archive_round_data_deleted(const share::ObBackupCleanInfo &clean_info, const int64_t log_archive_round,
-      const int64_t copy_id, const int64_t start_piece_id, const int64_t clog_gc_snapshot, common::ObISQLClient &trans);
-  int mark_log_archive_piece_data_deleting(const share::ObBackupCleanInfo &clean_info,
-      const ObBackupPieceInfo &backup_piece_info, const int64_t clog_gc_snapshot, common::ObISQLClient &trans);
-
-  int mark_extern_backup_info_deleted(
-      const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanElement &clean_element);
 
   // for new interface
   int mark_backup_set_infos_deleting(
@@ -186,7 +145,6 @@ private:
       const ObBackupDataCleanElement &clean_element, const common::ObIArray<ObBackupSetId> &backup_set_ids);
   int mark_extern_backup_set_info_deleting(const share::ObBackupCleanInfo &clean_info,
       const ObBackupDataCleanElement &clean_element, const common::ObIArray<ObBackupSetId> &backup_set_ids);
-
   int mark_log_archive_infos_deleting(
       const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanTenant &clean_tenant);
   int mark_log_archive_info_deleting(
@@ -229,21 +187,14 @@ private:
       const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanTenant &clean_tenant);
   int delete_inner_table_his_data(const share::ObBackupCleanInfo &clean_info,
       const ObBackupDataCleanTenant &clean_tenant, common::ObISQLClient &trans);
-  int delete_backup_extern_info(
-      const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanElement &clean_element);
-
   int delete_extern_backup_info_deleted(const share::ObBackupCleanInfo &clean_info,
       const ObBackupDataCleanElement &clean_element, const common::ObIArray<ObBackupSetId> &backup_set_ids);
   int delete_extern_clog_info_deleted(const share::ObBackupCleanInfo &clean_info,
       const ObBackupDataCleanElement &clean_element, const common::ObIArray<ObLogArchiveRound> &log_archive_rounds);
-
   int delete_marked_backup_task_his_data(const share::ObBackupCleanInfo &clean_info,
       const ObBackupDataCleanElement &clean_element, common::ObISQLClient &trans);
-  int inner_delete_marked_backup_backup_task_his_data(const uint64_t tenant_id, const int64_t job_id,
-      const int64_t copy_id, const int64_t backup_set_id, common::ObISQLClient &trans);
   int delete_marked_log_archive_status_his_data(const share::ObBackupCleanInfo &clean_info,
       const ObBackupDataCleanElement &clean_element, common::ObISQLClient &trans);
-
   // new interface
   int delete_extern_tmp_files(
       const share::ObBackupCleanInfo &clean_info, const ObBackupDataCleanElement &clean_element);
@@ -257,11 +208,9 @@ private:
   int update_clean_info(const uint64_t tenant_id, const share::ObBackupCleanInfo &src_clean_info,
       const share::ObBackupCleanInfo &dest_clean_info, common::ObISQLClient &trans);
   int do_with_status(const share::ObBackupCleanInfo &clean_info, ObBackupDataCleanTenant &clean_tenant);
-
   int do_clean_scheduler(common::ObIArray<ObBackupDataCleanTenant> &clean_tenants);
   int do_schedule_clean_tenants(common::ObIArray<ObBackupDataCleanTenant> &clean_tenants);
   int do_check_clean_tenants_finished(const common::ObIArray<ObBackupDataCleanTenant> &clean_tenants);
-
   int do_tenant_clean_scheduler(share::ObBackupCleanInfo &clean_info, ObBackupDataCleanTenant &clean_tenant);
   int get_backup_clean_info(const uint64_t tenant_id, const bool for_update, common::ObISQLClient &sql_proxy,
       share::ObBackupCleanInfo &clean_info);
@@ -301,7 +250,6 @@ private:
   int set_sys_clean_info_stop(const share::ObBackupCleanInfo &backup_clean_info, ObISQLClient &trans);
   int try_clean_tenant_backup_dir(const ObBackupDataCleanTenant &clean_tenant);
   int clean_tenant_backup_dir(const uint64_t tenant_id, const ObBackupDataCleanElement &clean_element);
-
   int clean_backup_tenant_info(const ObBackupDataCleanTenant &sys_clean_tenant,
       const common::ObIArray<ObSimpleBackupDataCleanTenant> &normal_clean_tenants);
   int inner_clean_backup_tenant_info(const ObBackupDataCleanElement &clean_element,
@@ -369,15 +317,8 @@ private:
   int set_tenant_clean_info_cancel(const share::ObBackupCleanInfo &clean_info);
   int set_normal_tenant_cancel(const uint64_t tenant_id, common::ObISQLClient &sys_tenant_trans);
   int set_deleted_tenant_cancel(const ObBackupCleanInfo &clean_info, common::ObISQLClient &sys_tenant_trans);
-  int get_sys_tenant_backup_dest(common::hash::ObHashSet<ObClusterBackupDest> &cluster_backup_dest_set);
   int do_scheduler_normal_tenant(share::ObBackupCleanInfo &clean_info, ObBackupDataCleanTenant &clean_tenant,
       common::ObIArray<ObTenantBackupTaskInfo> &task_infos,
-      common::ObIArray<ObLogArchiveBackupInfo> &log_archive_infos);
-  int do_scheduler_deleted_tenant(share::ObBackupCleanInfo &clean_info, ObBackupDataCleanTenant &clean_tenant,
-      common::ObIArray<ObTenantBackupTaskInfo> &task_infos,
-      common::ObIArray<ObLogArchiveBackupInfo> &log_archive_infos);
-  int do_inner_scheduler_delete_tenant(const ObClusterBackupDest &cluster_backup_dest,
-      ObBackupDataCleanTenant &clean_tenant, common::ObIArray<ObTenantBackupTaskInfo> &task_infos,
       common::ObIArray<ObLogArchiveBackupInfo> &log_archive_infos);
   int get_all_tenant_backup_infos(const share::ObBackupCleanInfo &clean_info,
       const ObSimpleBackupDataCleanTenant &simple_clean_tenant, common::ObISQLClient &trans,
@@ -395,11 +336,6 @@ private:
       const ObSimpleBackupDataCleanTenant &simple_clean_tenant, common::ObISQLClient &trans,
       common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_backup_infos,
       common::ObIArray<share::ObLogArchiveBackupInfo> &tenant_backup_log_infos);
-  int get_delete_backup_piece_infos(const share::ObBackupCleanInfo &clean_info,
-      const ObSimpleBackupDataCleanTenant &simple_clean_tenant, common::ObISQLClient &trans,
-      common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_backup_infos,
-      common::ObIArray<share::ObLogArchiveBackupInfo> &tenant_backup_log_infos);
-
   int get_tenant_backup_task_infos(const share::ObBackupCleanInfo &clean_info,
       const ObSimpleBackupDataCleanTenant &simple_clean_tenant, common::ObISQLClient &trans,
       common::ObIArray<share::ObTenantBackupTaskInfo> &tenant_infos);

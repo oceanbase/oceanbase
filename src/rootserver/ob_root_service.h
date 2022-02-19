@@ -964,7 +964,7 @@ public:
   int drop_tablegroup(const obrpc::ObDropTablegroupArg& arg);
   int drop_index(const obrpc::ObDropIndexArg& arg);
   int rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObAlterTableRes& res);
-  int submit_build_index_task(const share::schema::ObTableSchema *index_schema);
+  int submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskArg &arg);
   // the interface only for switchover: execute skip check enable_ddl
   int force_drop_index(const obrpc::ObDropIndexArg& arg);
   int flashback_index(const obrpc::ObFlashBackIndexArg& arg);
@@ -977,7 +977,6 @@ public:
   int update_index_status(const obrpc::ObUpdateIndexStatusArg& arg);
   int purge_table(const obrpc::ObPurgeTableArg& arg);
   int flashback_table_from_recyclebin(const obrpc::ObFlashBackTableFromRecyclebinArg& arg);
-  int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg& arg);
   int purge_database(const obrpc::ObPurgeDatabaseArg& arg);
   int flashback_database(const obrpc::ObFlashBackDatabaseArg& arg);
   int check_tenant_in_alter_locality(const uint64_t tenant_id, bool& in_alter_locality);
@@ -1296,9 +1295,10 @@ private:
   {
     return lhs < tenant_id;
   }
-  int handle_backup_delete_backup_data(const obrpc::ObBackupManageArg& arg);
-  int handle_cancel_delete_backup(const obrpc::ObBackupManageArg& arg);
-  int handle_cancel_backup_backup(const obrpc::ObBackupManageArg& arg);
+  int handle_backup_delete_backup_data(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_delete_backup(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_backup_backup(const obrpc::ObBackupManageArg &arg);
+  int handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg);
   int wait_refresh_config();
 
 private:

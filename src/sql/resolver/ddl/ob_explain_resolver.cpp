@@ -65,8 +65,8 @@ int ObExplainResolver::resolve(const ParseNode& parse_tree)
             case T_TRADITIONAL: {
               explain_stmt->set_explain_format(EXPLAIN_TRADITIONAL);
             } break;
-            case T_JSON: {
-              explain_stmt->set_explain_format(EXPLAIN_JSON);
+            case T_FORMAT_JSON: {
+              explain_stmt->set_explain_format(EXPLAIN_FORMAT_JSON);
             } break;
             case T_BASIC: {
               explain_stmt->set_explain_format(EXPLAIN_BASIC);

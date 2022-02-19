@@ -1995,22 +1995,6 @@ public:
       K_(origin_table_id));
 };
 
-struct ObFlashBackTableToScnArg : public ObDDLArg {
-  OB_UNIS_VERSION(1);
-
-public:
-  ObFlashBackTableToScnArg() : tenant_id_(common::OB_INVALID_ID), time_point_(-1), tables_(), query_end_time_(-1)
-  {}
-  bool is_valid() const;
-
-  uint64_t tenant_id_;
-  int64_t time_point_;
-  common::ObSArray<ObTableItem> tables_;
-  int64_t query_end_time_;
-
-  TO_STRING_KV(K_(tenant_id), K_(time_point), K_(tables), K_(query_end_time));
-};
-
 struct ObFlashBackIndexArg : public ObDDLArg {
   OB_UNIS_VERSION(1);
 
@@ -3485,12 +3469,12 @@ struct ObServerCopyLocalIndexSSTableArg {
 
 public:
   ObServerCopyLocalIndexSSTableArg()
-      : data_src_(), dst_(), pkey_(), index_table_id_(common::OB_INVALID_ID), cluster_id_(common::OB_INVALID_ID)
+      : data_src_(), dst_(), pkey_(), index_table_id_(common::OB_INVALID_ID), cluster_id_(common::OB_INVALID_ID), data_size_(0)
   {}
 
 public:
   bool is_valid() const;
-  TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id));
+  TO_STRING_KV(K_(data_src), K_(dst), K_(pkey), K_(index_table_id), K_(cluster_id), K_(data_size));
 
 public:
   common::ObAddr data_src_;
@@ -3498,6 +3482,7 @@ public:
   common::ObPartitionKey pkey_;
   uint64_t index_table_id_;
   int64_t cluster_id_;
+  int64_t data_size_;
 };
 
 struct ObBackupBatchArg {
@@ -4095,8 +4080,8 @@ public:
   common::ObString db_;
   common::ObString table_;
   ObPrivSet priv_set_;
-  common::ObSArray<common::ObString> users_passwd_;  // user_name1, pwd1; user_name2, pwd2
-  common::ObSArray<common::ObString> hosts_;         // hostname1, hostname2, ..
+  common::ObSArray<common::ObString> users_passwd_;  
+  common::ObSArray<common::ObString> hosts_;        
   bool need_create_user_;
   bool has_create_user_priv_;
   common::ObSArray<common::ObString> roles_;
@@ -4510,7 +4495,7 @@ public:
   common::ObString backup_tenant_name_;
   common::ObString passwd_array_;  // Password verification
   common::ObSArray<ObTableItem> table_items_;
-  common::ObString multi_uri_;  // 备份拆分用
+  common::ObString multi_uri_;  
 };
 
 struct ObRestoreTenantArg : public ObCmdArg {
@@ -7636,6 +7621,7 @@ public:
     DELETE_OBSOLETE_BACKUP_BACKUP = 12,
     CANCEL_BACKUP_BACKUPPIECE = 13,
     DELETE_BACKUPROUND = 14,
+    CANCEL_ALL_BACKUP_FORCE = 15,
     MAX_TYPE
   };
   ObBackupManageArg() : tenant_id_(OB_INVALID_TENANT_ID), type_(MAX_TYPE), value_(0), copy_id_(0)
@@ -8299,6 +8285,28 @@ private:
 
 public:
   int ret_;
+};
+
+struct ObSubmitBuildIndexTaskArg : public ObDDLArg {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObSubmitBuildIndexTaskArg() : ObDDLArg(), index_tid_(0)
+  {}
+  ~ObSubmitBuildIndexTaskArg()
+  {}
+  bool is_valid() const
+  {
+    return index_tid_ > 0;
+  }
+  virtual int assign(const ObSubmitBuildIndexTaskArg &other);
+  TO_STRING_KV(K_(index_tid));
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSubmitBuildIndexTaskArg);
+
+public:
+  uint64_t index_tid_;
 };
 
 }  // end namespace obrpc

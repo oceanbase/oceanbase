@@ -389,7 +389,10 @@ int main(int argc, char* argv[])
   CoSetSched sched;
   sched.CoMainRoutine::init();
   sched.active_routine_ = &sched;
+
+#ifndef OB_USE_ASAN
   get_mem_leak_checker().init();
+#endif
 
   // coroutine settings
   ::oceanbase::common::USE_CO_LATCH = false;

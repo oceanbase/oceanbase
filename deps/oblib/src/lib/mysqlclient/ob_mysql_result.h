@@ -700,7 +700,14 @@
         } else if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, def_obj, dest_obj))) {               \
           SQL_LOG(WARN, "cast obj failed, ", "src type", def_obj.get_type(), "dest type", data_type);     \
         } else {                                                                                          \
-          dest_obj.set_scale(column.get_data_scale());                                                    \
+          if (ob_is_json(data_type)) {                                                                    \
+            dest_obj.set_lob_inrow();                                                                     \
+            dest_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                                        \
+          }                                                                                               \
+          else                                                                                            \
+          {                                                                                               \
+            dest_obj.set_scale(column.get_data_scale());                                                  \
+          }                                                                                               \
           ret = (class_obj).set_##column_name(dest_obj);                                                  \
         }                                                                                                 \
       }                                                                                                   \
@@ -913,7 +920,6 @@ namespace sqlclient {
 class ObMySQLResult {
 public:
   // see this for template virtual function
-  // http://cxh.me/2014/07/01/nvi-usage-of-virtual-template/
   DEFINE_ALLOCATOR_WRAPPER
   ObMySQLResult();
   virtual ~ObMySQLResult();

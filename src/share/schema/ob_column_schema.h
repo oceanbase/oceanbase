@@ -340,6 +340,10 @@ public:
   {
     return meta_type_.is_string_type();
   }
+  inline bool is_json() const 
+  { 
+    return meta_type_.is_json(); 
+  }
   inline bool is_raw() const
   {
     return meta_type_.is_raw();

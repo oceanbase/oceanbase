@@ -22,7 +22,6 @@
 
 namespace oceanbase {
 using namespace common;
-
 namespace common {
 
 ObStorageOssStaticVar::ObStorageOssStaticVar() : compressor_(NULL), compress_type_(INVALID_COMPRESSOR)
@@ -1311,6 +1310,57 @@ int ObStorageOssUtil::tagging_object(
   return ret;
 }
 
+int ObStorageOssUtil::is_tagging(const common::ObString &uri, const common::ObString &storage_info, bool &is_tagging)
+{
+  int ret = OB_SUCCESS;
+  const int64_t OB_MAX_TAGGING_STR_LENGTH = 16;
+  common::ObArenaAllocator allocator;
+  ObString bucket_str;
+  ObString object_str;
+  if (uri.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "name is empty", K(ret));
+  } else if (OB_FAIL(init(storage_info))) {
+    OB_LOG(WARN, "failed to init storage_info", K(ret), K(storage_info), K(uri));
+  } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
+    OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
+  } else {
+    aos_string_t bucket;
+    aos_string_t object;
+    aos_table_t *head_resp_headers = NULL;
+    aos_list_t tag_list;
+    oss_tag_content_t *b;
+    aos_status_t *aos_ret = NULL;
+    aos_str_set(&bucket, bucket_str.ptr());
+    aos_str_set(&object, object_str.ptr());
+    aos_list_init(&tag_list);
+    if (OB_ISNULL(aos_ret = oss_get_object_tagging(oss_option_, &bucket, &object, &tag_list, &head_resp_headers)) ||
+        !aos_status_is_ok(aos_ret)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "get object tag fail", K(ret), K(uri));
+      print_oss_info(aos_ret);
+    } else {
+      aos_list_for_each_entry(oss_tag_content_t, b, &tag_list, node)
+      {
+        char key_str[OB_MAX_TAGGING_STR_LENGTH];
+        char value_str[OB_MAX_TAGGING_STR_LENGTH];
+        if (OB_FAIL(databuff_printf(key_str, OB_MAX_TAGGING_STR_LENGTH, "%.*s", b->key.len, b->key.data))) {
+          OB_LOG(WARN, "failed to databuff printf key str", K(ret));
+        } else if (OB_FAIL(databuff_printf(value_str, OB_MAX_TAGGING_STR_LENGTH, "%.*s", b->key.len, b->value.data))) {
+          OB_LOG(WARN, "failed to databuff printf value str", K(ret));
+        } else if (0 == strcmp("delete_mode", key_str) && 0 == strcmp("tagging", value_str)) {
+          is_tagging = true;
+        }
+        if (OB_FAIL(ret)) {
+          break;
+        }
+      }
+    }
+  }
+  reset();
+  return ret;
+}
+
 int ObStorageOssUtil::del_file(const common::ObString& uri, const common::ObString& storage_info)
 {
   int ret = OB_SUCCESS;
@@ -1728,8 +1778,9 @@ int ObStorageOssUtil::is_empty_directory(
     }
   }
 
-  // 最后重置，保证该接口可重复调用
+
   OB_LOG(DEBUG, "is empty directory", K(dir_path));
+  reset();
   return ret;
 }
 
@@ -1994,7 +2045,6 @@ int ObStorageOssAppendWriter::close()
     OB_LOG(WARN, "oss writer cannot close before it is opened");
   } else {
     is_opened_ = false;
-    // 释放内存
     allocator_.clear();
 
     reset();

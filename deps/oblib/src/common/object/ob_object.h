@@ -135,8 +135,11 @@ public:
       set_collation_type(CS_TYPE_INVALID);
     } else if (ObHexStringType == type_) {
       set_collation_type(CS_TYPE_BINARY);
-    } else if (!ob_is_string_type(static_cast<ObObjType>(type_)) && !ob_is_lob_locator(static_cast<ObObjType>(type_)) &&
-               !ob_is_raw(static_cast<ObObjType>(type_)) && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))) {
+    } else if (!ob_is_string_type(static_cast<ObObjType>(type_)) && 
+               !ob_is_lob_locator(static_cast<ObObjType>(type_)) &&
+               !ob_is_raw(static_cast<ObObjType>(type_)) && 
+               !ob_is_enum_or_set_type(static_cast<ObObjType>(type_)) && 
+               !ob_is_json(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
     }
@@ -419,6 +422,13 @@ public:
   {
     lob_scale_.set_out_row();
   }
+  OB_INLINE void set_json()
+  {
+    type_ = static_cast<uint8_t>(ObJsonType);
+    lob_scale_.set_in_row();
+    set_collation_level(CS_LEVEL_IMPLICIT);
+    set_collation_type(CS_TYPE_UTF8MB4_BIN);
+  }
   OB_INLINE void set_otimestamp_type(const ObObjType type)
   {
     type_ = static_cast<uint8_t>(type);
@@ -691,6 +701,18 @@ public:
   OB_INLINE bool is_lob_outrow() const
   {
     return is_lob() && lob_scale_.is_out_row();
+  }
+  OB_INLINE bool is_json() const 
+  { 
+    return type_ == static_cast<uint8_t>(ObJsonType); 
+  }
+  OB_INLINE bool is_json_inrow() const 
+  { 
+    return is_json() && lob_scale_.is_in_row(); 
+  }
+  OB_INLINE bool is_json_outrow() const 
+  { 
+    return is_json() && lob_scale_.is_out_row(); 
   }
   // combination of above functions.
   OB_INLINE bool is_varbinary_or_binary() const
@@ -1112,7 +1134,7 @@ public:
     meta_.set_type_simple(meta.get_type());
     meta_.set_collation_type(meta.get_collation_type());
     if (ObCharType == get_type() || ObVarcharType == get_type() || ob_is_text_tc(get_type()) ||
-        ob_is_lob_locator(get_type())) {
+        ob_is_lob_locator(get_type()) || ob_is_json(get_type()) ) {
       meta_.set_collation_level(ObCollationLevel::CS_LEVEL_IMPLICIT);
     } else {
       meta_.set_collation_level(meta.get_collation_level());
@@ -1135,6 +1157,7 @@ public:
       case ObMediumTextType:
       case ObLongTextType:
       case ObLobType:
+      case ObJsonType:
       case ObRawType: {
         obj.meta_.set_collation_level(meta_.get_collation_level());
         obj.meta_.set_scale(meta_.get_scale());
@@ -1296,6 +1319,8 @@ public:
   void set_set_inner(const char* ptr, const ObString::obstr_size_t size);
   void set_lob_value(const ObObjType type, const ObLobData* value, const int32_t length);
   void set_lob_value(const ObObjType type, const char* ptr, const int32_t length);
+  void set_json_value(const ObObjType type, const ObLobData *value, const int32_t length);
+  void set_json_value(const ObObjType type, const char *ptr, const int32_t length);
   void set_lob_locator(const ObLobLocator& value);
   void set_lob_locator(const ObObjType type, const ObLobLocator& value);
   inline void set_lob_inrow()
@@ -1909,7 +1934,18 @@ public:
   {
     return meta_.is_lob_outrow();
   }
-
+  OB_INLINE bool is_json() const 
+  { 
+    return meta_.is_json(); 
+  }
+  OB_INLINE bool is_json_inrow() const 
+  { 
+    return meta_.is_json_inrow(); 
+  }
+  OB_INLINE bool is_json_outrow() const 
+  { 
+    return meta_.is_json_outrow(); 
+  }
   OB_INLINE bool is_timestamp_tz() const
   {
     return meta_.is_timestamp_tz();
@@ -2800,6 +2836,18 @@ inline void ObObj::set_lob_value(const ObObjType type, const char* ptr, const in
   val_len_ = length;
 }
 
+inline void ObObj::set_json_value(const ObObjType type, const ObLobData *value, const int32_t length)
+{
+  set_lob_value(type, value, length);
+  meta_.set_collation_type(CS_TYPE_UTF8MB4_BIN); // for oracle it is decided by sys collation.
+}
+
+inline void ObObj::set_json_value(const ObObjType type, const char *ptr, const int32_t length)
+{
+  set_lob_value(type, ptr, length);
+  meta_.set_collation_type(CS_TYPE_UTF8MB4_BIN); // for oracle it is decided by sys collation.
+}
+
 inline void ObObj::set_lob_locator(const ObLobLocator& value)
 {
   meta_.set_type(ObLobType);
@@ -2981,10 +3029,13 @@ inline bool ObObj::is_false() const
 
 inline bool ObObj::need_deep_copy() const
 {
-  return (((ob_is_string_type(meta_.get_type()) || ob_is_lob_locator(meta_.get_type()) || ob_is_raw(meta_.get_type()) ||
-               ob_is_rowid_tc(meta_.get_type())) &&
-              0 != val_len_ && NULL != get_string_ptr()) ||
-          (ob_is_number_tc(meta_.get_type()) && 0 != nmb_desc_.len_ && NULL != get_number_digits()));
+  return (((ob_is_string_type(meta_.get_type()) || 
+            ob_is_lob_locator(meta_.get_type()) || 
+            ob_is_json(meta_.get_type()) ||
+            ob_is_raw(meta_.get_type()) ||
+            ob_is_rowid_tc(meta_.get_type())) &&
+            0 != val_len_ && NULL != get_string_ptr()) ||
+            (ob_is_number_tc(meta_.get_type()) && 0 != nmb_desc_.len_ && NULL != get_number_digits()));
 }
 
 inline int64_t ObObj::get_ext() const
@@ -3242,6 +3293,9 @@ inline int ObObj::get_string(ObString& v) const
       v.assign_ptr(v_.string_, val_len_);
     }
     ret = OB_SUCCESS;
+  } else if (meta_.is_json()) {
+    v.assign_ptr(v_.string_, val_len_);
+    ret = OB_SUCCESS;
   } else if (meta_.is_null()) {
     v.assign_ptr(NULL, 0);
     ret = OB_SUCCESS;
@@ -3342,7 +3396,7 @@ inline int ObObj::get_hex_string(ObString& v) const
 inline int ObObj::get_lob_value(const ObLobData*& value) const
 {
   int ret = OB_OBJ_TYPE_ERROR;
-  if (is_lob_outrow()) {
+  if (is_lob_outrow() || is_json_outrow()) {
     value = v_.lob_;
     ret = OB_SUCCESS;
   }
@@ -3498,7 +3552,8 @@ inline uint64_t ObObj::varchar_xx_hash(ObCollationType cs_type, uint64_t seed) c
 inline const void* ObObj::get_data_ptr() const
 {
   const void* ret = NULL;
-  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type())) {
+  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || 
+      ob_is_rowid_tc(get_type()) || ob_is_json(get_type())) {
     ret = const_cast<char*>(v_.string_);
   } else if (ob_is_number_tc(get_type())) {
     ret = const_cast<uint32_t*>(v_.nmb_digits_);
@@ -3512,7 +3567,8 @@ inline const void* ObObj::get_data_ptr() const
 
 inline void ObObj::set_data_ptr(void* data_ptr)
 {
-  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type())) {
+  if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || 
+      ob_is_rowid_tc(get_type()) || ob_is_json(get_type())) {
     v_.string_ = static_cast<char*>(data_ptr);
   } else if (ob_is_number_tc(get_type())) {
     v_.nmb_digits_ = static_cast<uint32_t*>(data_ptr);
@@ -3572,7 +3628,7 @@ inline int64_t ObObj::get_data_length() const
 {
   int64_t ret = sizeof(v_);
   if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) ||
-      ob_is_lob_locator(get_type())) {
+      ob_is_lob_locator(get_type()) || ob_is_json(get_type()) ) {
     ret = val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret = nmb_desc_.len_ * sizeof(uint32_t);
@@ -3748,6 +3804,7 @@ struct ParamFlag {
         expected_bool_value_(false),
         need_to_check_extend_type_(false),
         is_ref_cursor_type_(false),
+        is_boolean_(false),
         reserved_(0)
   {}
   TO_STRING_KV(K_(need_to_check_type), K_(need_to_check_bool_value), K_(expected_bool_value));
@@ -3767,7 +3824,9 @@ struct ParamFlag {
       uint8_t expected_bool_value_ : 1;        // bool value, effective only when need_to_check_bool_value_ is true
       uint8_t need_to_check_extend_type_ : 1;  // True if the extended type needs to be checked
       uint8_t is_ref_cursor_type_ : 1;         // in pl/sql context, this will be true if the local var is a ref cursor
-      uint8_t reserved_ : 3;
+      uint8_t is_pl_mock_default_param_ : 1; // UNUSED
+      uint8_t is_boolean_ : 1; // to distinguish T_BOOL and T_TINYINT
+      uint8_t reserved_ : 1;
     };
   };
 
@@ -3897,7 +3956,14 @@ public:
   {
     return flag_.is_ref_cursor_type_;
   }
-
+  OB_INLINE void set_is_boolean(bool flag) 
+  { 
+    flag_.is_boolean_ = flag; 
+  }
+  OB_INLINE bool is_boolean() const 
+  { 
+    return flag_.is_boolean_; 
+  }
   OB_INLINE void set_raw_text_info(int32_t pos, int32_t len)
   {
     raw_text_pos_ = pos;
@@ -4098,7 +4164,7 @@ public:
 OB_INLINE int64_t ObObj::get_deep_copy_size() const
 {
   int64_t ret = 0;
-  if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator()) {
+  if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator() || is_json()) {
     ret += val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret += (sizeof(uint32_t) * nmb_desc_.len_);

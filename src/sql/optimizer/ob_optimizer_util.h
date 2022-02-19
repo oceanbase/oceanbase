@@ -588,11 +588,12 @@ public:
   static int is_lossless_column_cast(const ObRawExpr* expr, bool& is_lossless);
 
   static int gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
-      ObRawExprFactory* expr_factory, ObSelectStmt& left_stmt, ObSelectStmt& right_stmt, ObSelectStmt* select_stmt);
+      ObRawExprFactory* expr_factory, ObSelectStmt& left_stmt, ObSelectStmt& right_stmt,
+      ObSelectStmt* select_stmt, const bool to_left_type = false);
 
   static int gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
       ObRawExprFactory* expr_factory, ObIArray<ObSelectStmt*>& left_stmts, ObIArray<ObSelectStmt*>& right_stmts,
-      ObSelectStmt* select_stmt);
+      ObSelectStmt* select_stmt, const bool to_left_type = false);
 
   static int gen_set_target_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
       ObRawExprFactory* expr_factory, ObSelectStmt* select_stmt);
@@ -602,7 +603,8 @@ public:
 
   static int try_add_cast_to_set_child_list(ObIAllocator* allocator, ObSQLSessionInfo* session_info,
       ObRawExprFactory* expr_factory, const bool is_distinct, ObIArray<ObSelectStmt*>& left_stmts,
-      ObIArray<ObSelectStmt*>& right_stmts, ObIArray<ObExprResType>* res_types);
+      ObIArray<ObSelectStmt*>& right_stmts, ObIArray<ObExprResType>* res_types,
+      const bool to_left_type = false);
 
   static int add_cast_to_set_list(ObSQLSessionInfo* session_info, ObRawExprFactory* expr_factory,
       ObIArray<ObSelectStmt*>& stmts, const ObExprResType& res_type, const int64_t idx);

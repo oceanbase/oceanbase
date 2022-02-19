@@ -276,7 +276,23 @@ int ObExprCast::calc_result_type2(
     if (is_explicit_cast && !lib::is_oracle_mode() && ObCharType == dst_type.get_type()) {
       // cast(x as binary(10)), in parser,binary->T_CHAR+bianry, but, result type should be varchar, so set it.
       type.set_type(ObVarcharType);
-    } else {
+    } else if (lib::is_mysql_mode() && ObFloatType == dst_type.get_type()) {
+      // Compatible with mysql. If the precision p is not specified, produces a result of type FLOAT. 
+      // If p is provided and 0 <=  p <= 24, the result is of type FLOAT. If 25 <= p <= 53, 
+      // the result is of type DOUBLE. If p < 0 or p > 53, an error is returned
+      // however, ob use -1 as default precision, so it is a valid value
+      type.set_collation_type(dst_type.get_collation_type());
+      ObPrecision float_precision = dst_type.get_precision();
+      if (float_precision < -1 || float_precision > OB_MAX_DOUBLE_FLOAT_PRECISION) {
+        ret = OB_ERR_TOO_BIG_PRECISION;
+        LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, float_precision, "CAST", OB_MAX_DOUBLE_FLOAT_PRECISION);
+      } else if (float_precision <= OB_MAX_FLOAT_PRECISION) {
+        type.set_type(ObFloatType);
+      } else {
+        type.set_type(ObDoubleType);
+      }
+    } 
+    else {
       type.set_type(dst_type.get_type());
       type.set_collation_type(dst_type.get_collation_type());
     }
@@ -292,13 +308,13 @@ int ObExprCast::calc_result_type2(
       ObCollationType collation_nation = session->get_nls_collation_nation();
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
-      if (ob_is_string_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type())) {
+      if (ob_is_string_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())) {
         type.set_collation_level(is_explicit_cast ? CS_LEVEL_IMPLICIT : type1.get_collation_level());
         int32_t len = dst_type.get_length();
-        int16_t length_semantics =
-            (dst_type.is_string_or_lob_locator_type()
-                    ? dst_type.get_length_semantics()
-                    : (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()
+        int16_t length_semantics = 
+            ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
+                ? dst_type.get_length_semantics()
+                : (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics()
                                                            : LS_BYTE));
         if (len > 0) {  // cast(1 as char(10))
           type.set_full_length(len, length_semantics);
@@ -430,6 +446,8 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2, ObExprResType& ds
       dst_type.set_length(parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX]);
     } else if (ob_is_extend(obj_type)) {
       ret = OB_NOT_SUPPORTED;
+    } else if (lib::is_mysql_mode() && ob_is_json(obj_type)) {
+      dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else {
       dst_type.set_precision(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]);
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
@@ -476,7 +494,7 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
       accuracy.set_full_length(node.int32_values_[1], result_type_.get_length_semantics(), share::is_oracle_mode());
     } else if (ObRawTC == dest_tc) {
       accuracy.set_length(node.int32_values_[1]);
-    } else if (ObTextTC == dest_tc || ObLobTC == dest_tc) {
+    } else if (ObTextTC == dest_tc || ObLobTC == dest_tc || ObJsonTC == dest_tc) {
       // TODO texttc should use default length
       accuracy.set_length(
           node.int32_values_[1] < 0 ? ObAccuracy::DDL_DEFAULT_ACCURACY[dest_type].get_length() : node.int32_values_[1]);
@@ -539,27 +557,45 @@ int ObExprCast::calc_result2(ObObj& result, const ObObj& obj1, const ObObj& obj2
         result_type_.get_collation_type());
     const ObObj* res_obj = NULL;
     ObObj buf_obj1;
-    if (OB_FAIL(ObObjCaster::to_type(dest_type, cast_ctx, obj1_round, buf_obj1, res_obj))) {
-      LOG_WARN("cast failed", K(ret), K(obj1_round), K(dest_type));
-    } else if (OB_ISNULL(res_obj)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("null pointer", K(ret), K(obj1_round), K(dest_type));
-    } else if (OB_FAIL(obj_accuracy_check(
-                   cast_ctx, accuracy, result_type_.get_collation_type(), *res_obj, buf_obj1, res_obj))) {
-      if (ob_is_string_type(dest_type) && OB_ERR_DATA_TOO_LONG == ret) {
-        if ((obj1_round.is_character_type() || obj1_round.is_clob()) && compatbility_mode) {
-          ret = OB_SUCCESS;
-        } else {
-          ret = OB_ERR_TRUNCATED_WRONG_VALUE;
-        }
+
+    bool is_bool = false;
+    ObItemType item_type_obj1 = T_NULL;
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && (ObIntTC == src_tc || src_tc == ObStringTC)
+        && ObJsonType == dest_type) {
+      // mysql bool to jsonbool or enumset to json
+      if (OB_FAIL(get_param_is_boolean(expr_ctx, obj1, is_bool))) {
+        LOG_WARN("get src is_boolean type failed, bool may be cast as json int", K(ret), K(obj1));
+      } else if (OB_FAIL(get_param_type(expr_ctx, obj1, item_type_obj1))) {
+        LOG_WARN("get param type failed", K(ret), K(obj1));
       }
-      LOG_WARN("failed to check accuracy",
-          K(obj1_round),
-          K(*res_obj),
-          K(dest_type),
-          K(accuracy),
-          K(ret),
-          K((expr_ctx).cast_mode_));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (is_bool) {
+        ret = ObObjCaster::bool_to_json(dest_type, cast_ctx, obj1_round, buf_obj1, res_obj);
+      } else if (OB_UNLIKELY(item_type_obj1 == T_FUN_SET_TO_STR)) {
+        ret = ObObjCaster::enumset_to_json(dest_type, cast_ctx, obj1_round, buf_obj1, res_obj);
+      } else {
+        ret = ObObjCaster::to_type(dest_type, cast_ctx, obj1_round, buf_obj1, res_obj);
+      }
+
+      if (OB_FAIL(ret)) {
+        LOG_WARN("cast failed", K(ret), K(obj1_round), K(dest_type));
+      } else if (OB_ISNULL(res_obj)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null pointer", K(ret), K(obj1_round), K(dest_type));
+      } else if (OB_FAIL(
+          obj_accuracy_check(cast_ctx, accuracy, result_type_.get_collation_type(), *res_obj, buf_obj1, res_obj))) {
+        if (ob_is_string_type(dest_type) && OB_ERR_DATA_TOO_LONG == ret) {
+          if ((obj1_round.is_character_type() || obj1_round.is_clob()) && compatbility_mode) {
+            ret = OB_SUCCESS;
+          } else {
+            ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+          }
+        }
+        LOG_WARN("failed to check accuracy", K(obj1_round), K(dest_type), K(accuracy), K(ret),
+                  K((expr_ctx).cast_mode_));
+      }
     }
     if (OB_SUCC(ret)) {
       switch (res_obj->get_type()) {

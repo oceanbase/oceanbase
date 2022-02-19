@@ -80,6 +80,7 @@ public:
 
 protected:
   int read_text_store(const storage::ObStoreMeta& store_meta, common::ObIAllocator& allocator, common::ObObj& obj);
+  int read_json_store(const storage::ObStoreMeta& store_meta, common::ObIAllocator& allocator, common::ObObj& obj);
   template <class T>
   static const T* read(const char* row_buf, int64_t& pos);
 

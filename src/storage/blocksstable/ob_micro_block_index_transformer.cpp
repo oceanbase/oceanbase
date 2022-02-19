@@ -340,8 +340,11 @@ int ObMicroBlockIndexTransformer::add_extra_space_size(ObObj& obj)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument, ", K(ret));
   } else {
-    if (ob_is_string_type(obj.get_type()) || ob_is_raw(obj.get_type()) || ob_is_number_tc(obj.get_type()) ||
-        ob_is_rowid_tc(obj.get_type())) {
+    if (ob_is_string_type(obj.get_type()) || 
+        ob_is_raw(obj.get_type()) || 
+        ob_is_number_tc(obj.get_type()) ||
+        ob_is_rowid_tc(obj.get_type()) || 
+        ob_is_json(obj.get_type())) {
       node_array_.extra_space_size_ += obj.get_data_length();
     }
   }
@@ -445,7 +448,7 @@ int ObMicroBlockIndexTransformer::fill_block_index_mgr(char* buffer, int64_t siz
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < node_array_.cur_count_; i++) {
           common::ObObj& tmp_obj = node_array_[i].obj_;
-          if (OB_UNLIKELY(ob_is_text_tc(tmp_obj.get_type()))) {
+          if (OB_UNLIKELY(ob_is_text_tc(tmp_obj.get_type()) || ob_is_json_tc(tmp_obj.get_type()))) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "Unexpected large lob type in micro block index", K(tmp_obj), K(ret));
           } else if (OB_FAIL(node_array[i].obj_.deep_copy(tmp_obj, buffer, size, pos))) {

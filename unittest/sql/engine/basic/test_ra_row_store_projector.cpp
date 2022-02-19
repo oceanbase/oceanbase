@@ -76,6 +76,10 @@ class ObEmptyAlloc : public ObIAllocator {
   {
     return NULL;
   }
+  void free(void *ptr) override
+  {
+    UNUSED(ptr);
+  }
 };
 
 TEST(RARowStore, alloc_project_fail)

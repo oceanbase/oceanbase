@@ -313,12 +313,12 @@ int ObExprGeneratorImpl::visit(ObConstRawExpr& expr)
 
     if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("failed to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret), K(item));
     }
   } else if (OB_FAIL(item.assign(expr.get_value()))) {
     LOG_WARN("failed to assign const value", K(ret));
-  } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+  } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
     LOG_WARN("failed to add expr item", K(ret));
   }
   return ret;
@@ -335,7 +335,7 @@ int ObExprGeneratorImpl::visit(ObVarRawExpr& expr)
     LOG_ERROR("sql_expr_ is NULL");
   } else if (OB_FAIL(item.assign(static_cast<ObItemType>(expr.get_data_type())))) {
     LOG_WARN("failed to assign const value", K(ret));
-  } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+  } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
     LOG_WARN("failed to add expr item", K(ret));
   }
   return ret;
@@ -355,7 +355,7 @@ int ObExprGeneratorImpl::visit(ObQueryRefRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("failed to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret), K(item));
     }
   } else {
@@ -387,7 +387,7 @@ int ObExprGeneratorImpl::visit(ObQueryRefRawExpr& expr)
         subquery_op->set_subquery_idx(expr.get_ref_id() - 1);
         if (OB_FAIL(item.assign(op))) {
           LOG_WARN("assign sql item failed", K(ret));
-        } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+        } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
           LOG_WARN("add expr item to sql expr failed", K(ret));
         }
       }
@@ -418,7 +418,7 @@ int ObExprGeneratorImpl::visit(ObColumnRefRawExpr& expr)
   } else if (expr.has_flag(IS_COLUMNLIZED) && OB_INVALID_INDEX != col_idx) {
     if (OB_FAIL(item.set_column(col_idx))) {
       LOG_WARN("failed to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret));
     }
   } else if (expr.is_generated_column() && expr.get_dependant_expr() != NULL) {
@@ -462,7 +462,7 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("fail to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret), K(item), K(expr));
     }
   } else if (OB_FAIL(factory_.alloc(expr.get_expr_type(), op))) {
@@ -483,7 +483,7 @@ int ObExprGeneratorImpl::visit_simple_op(ObNonTerminalRawExpr& expr)
       LOG_WARN("fail copy input types", K(ret));
     } else if (OB_FAIL(item.assign(op))) {
       LOG_WARN("failed to assign", K(ret));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret));
     } else {
       switch (expr.get_expr_type()) {
@@ -1216,7 +1216,7 @@ int ObExprGeneratorImpl::visit(ObOpRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("failed to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret), K(expr));
     }
   } else if (T_OP_ROW == expr.get_expr_type()) {
@@ -1286,7 +1286,7 @@ int ObExprGeneratorImpl::visit(ObOpRawExpr& expr)
           LOG_WARN("fail copy input types", K(ret));
         } else if (OB_FAIL(item.assign(op))) {
           LOG_WARN("failed to assign", K(ret));
-        } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+        } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
           LOG_WARN("failed to add expr item", K(ret));
         }
       }
@@ -1309,7 +1309,7 @@ int ObExprGeneratorImpl::visit(ObCaseOpRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("failed to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret));
     }
   } else {
@@ -1337,7 +1337,7 @@ int ObExprGeneratorImpl::visit(ObCaseOpRawExpr& expr)
         LOG_WARN("fail copy input types", K(ret));
       } else if (OB_FAIL(item.assign(op))) {
         LOG_WARN("failed to assign", K(ret));
-      } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+      } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
         LOG_WARN("failed to add expr item", K(ret));
       }
     }
@@ -1361,7 +1361,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("fail to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret), K(expr));
     }
   } else if (ObSqlExpression::EXPR_TYPE_AGGREGATE != sql_expr_->get_type()) {
@@ -1372,8 +1372,9 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
     aggr_expr->set_aggr_func(expr.get_expr_type(), expr.is_param_distinct());
     aggr_expr->set_collation_type(expr.get_collation_type());
     aggr_expr->set_accuracy(expr.get_accuracy());
-    aggr_expr->set_real_param_col_count(1);
-    aggr_expr->set_all_param_col_count(1);
+    int64_t col_count = (T_FUN_JSON_OBJECTAGG == expr.get_expr_type()) ?  2 : 1;
+    aggr_expr->set_real_param_col_count(col_count);
+    aggr_expr->set_all_param_col_count(col_count);
     const ObIArray<ObRawExpr*>& real_param_exprs = expr.get_real_param_exprs();
     if (aggr_expr->is_gen_infix_expr() && OB_FAIL(aggr_expr->init_aggr_cs_type_count(real_param_exprs.count()))) {
       LOG_WARN("failed to init aggr cs type count", K(ret));
@@ -1405,7 +1406,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
         T_FUN_GROUP_PERCENTILE_CONT == expr.get_expr_type() || T_FUN_GROUP_PERCENTILE_DISC == expr.get_expr_type() ||
         T_FUN_MEDIAN == expr.get_expr_type() || T_FUN_KEEP_SUM == expr.get_expr_type() ||
         T_FUN_KEEP_MAX == expr.get_expr_type() || T_FUN_KEEP_MIN == expr.get_expr_type() ||
-        T_FUN_KEEP_COUNT == expr.get_expr_type() || T_FUN_KEEP_WM_CONCAT == expr.get_expr_type()) {
+        T_FUN_KEEP_COUNT == expr.get_expr_type() || T_FUN_KEEP_WM_CONCAT == expr.get_expr_type() || 
+        (T_FUN_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)) {
       ObExprOperator* op = NULL;
       if (OB_FAIL(factory_.alloc(T_OP_AGG_PARAM_LIST, op))) {
         LOG_WARN("fail to alloc expr_op", K(ret));
@@ -1414,15 +1416,20 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
         LOG_ERROR("failed to alloc expr op", "expr type", get_type_name(T_OP_AGG_PARAM_LIST));
       } else {
         op->set_row_dimension(static_cast<int32_t>(expr.get_param_count()));
-        op->set_real_param_num(1);
+        op->set_real_param_num(col_count);
         op->set_result_type(expr.get_result_type());
         if (OB_FAIL(item.assign(op))) {
           LOG_WARN("failed to assign", K(ret));
-        } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+        } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
           LOG_WARN("failed to add expr item", K(ret));
         } else {
-          aggr_expr->set_real_param_col_count(expr.get_real_param_count());
-          aggr_expr->set_all_param_col_count(expr.get_param_count());
+          if (T_FUN_JSON_OBJECTAGG == expr.get_expr_type()) {
+            aggr_expr->set_real_param_col_count(expr.get_real_param_count());
+            aggr_expr->set_all_param_col_count(expr.get_param_count());  
+          } else {
+            aggr_expr->set_real_param_col_count(1);
+            aggr_expr->set_all_param_col_count(1);  
+          }
           if (OB_SUCCESS == ret &&
               (T_FUN_GROUP_CONCAT == expr.get_expr_type() || T_FUN_GROUP_RANK == expr.get_expr_type() ||
                   T_FUN_GROUP_DENSE_RANK == expr.get_expr_type() || T_FUN_GROUP_PERCENT_RANK == expr.get_expr_type() ||
@@ -1439,7 +1446,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr& expr)
               sep_item.set_accuracy(sep_expr->get_accuracy());
               if (OB_FAIL(sep_item.assign(sep_expr->get_value()))) {
                 LOG_WARN("failed to assign const value", K(ret));
-              } else if (OB_FAIL(aggr_expr->add_separator_param_expr_item(sep_item))) {
+              } else if (OB_FAIL(aggr_expr->add_separator_param_expr_item(sep_item, sep_expr))) {
                 LOG_WARN("failed to add sep expr item", K(ret));
               }
             } else {
@@ -1531,7 +1538,7 @@ int ObExprGeneratorImpl::visit(ObWinFunRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("fail to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("fail to add expr item", K(ret), K(expr));
     }
   } else {
@@ -1555,7 +1562,7 @@ int ObExprGeneratorImpl::visit(ObPseudoColumnRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("fail to set column", K(ret), K(expr), K(&expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret), K(expr));
     }
   } else if (T_PDML_PARTITION_ID == expr.get_expr_type()) {
@@ -1572,7 +1579,7 @@ int ObExprGeneratorImpl::visit(ObPseudoColumnRawExpr& expr)
       LOG_TRACE("alloc pdml partition id expr operator successfully", K(*pdml_partition_id_op));
       if (OB_FAIL(item.assign(pdml_partition_id_op))) {
         LOG_WARN("failed to assign pdml partition id expr operator", K(ret));
-      } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+      } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
         LOG_WARN("failed to add expr item", K(ret));
       } else {
         // do nothing
@@ -1612,7 +1619,7 @@ int ObExprGeneratorImpl::visit(ObSetOpRawExpr& expr)
       LOG_WARN("get index failed", K(ret));
     } else if (OB_FAIL(item.set_column(idx))) {
       LOG_WARN("failed to set column", K(ret), K(expr));
-    } else if (OB_FAIL(sql_expr_->add_expr_item(item))) {
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
       LOG_WARN("failed to add expr item", K(ret));
     }
   } else {

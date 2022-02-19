@@ -602,6 +602,19 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr& expr)
       expr.clear_flag(IS_CALCULABLE_EXPR);
     }
 
+    if (OB_SUCC(ret) && T_FUN_SYS_JSON_VALUE == expr.get_expr_type()) {
+      if (expr.get_param_count() == 7) {
+        ObRawExpr * sub_expr = expr.get_param_expr(6);
+        if (OB_NOT_NULL(sub_expr)) {
+          sub_expr->clear_flag(IS_CALCULABLE_EXPR);
+        }
+        sub_expr = expr.get_param_expr(4);
+        if (OB_NOT_NULL(sub_expr)) {
+          sub_expr->clear_flag(IS_CALCULABLE_EXPR);
+        }
+      }
+    }
+
     if (OB_SUCC(ret) && T_FUN_UDF == expr.get_expr_type() && expr.has_flag(IS_CALCULABLE_EXPR)) {}
   }
   return ret;

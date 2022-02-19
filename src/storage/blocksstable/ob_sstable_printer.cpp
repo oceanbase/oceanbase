@@ -123,7 +123,8 @@ static const char* OB_OBJ_TYPE_NAMES[ObMaxType] = {"ObNullType",
     "ObNVarchar2Type",
     "ObNCharType",
     "ObURowIDType",
-    "ObLobType"};
+    "ObLobType",
+    "ObJsonType"};
 
 void ObSSTablePrinter::print_title(const char* title, const int64_t level)
 {

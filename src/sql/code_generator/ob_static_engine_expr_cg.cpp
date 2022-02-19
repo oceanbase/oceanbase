@@ -145,6 +145,7 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr*>& raw_exprs)
     const ObObjMeta& result_meta = raw_expr->get_result_meta();
     // init type_
     rt_expr->type_ = raw_expr->get_expr_type();
+    rt_expr->is_boolean_ = raw_expr->is_bool_expr();
     if (T_OP_ROW != raw_expr->get_expr_type()) {
       // init datum_meta_
       rt_expr->datum_meta_ = ObDatumMeta(result_meta.get_type(),

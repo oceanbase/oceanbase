@@ -215,7 +215,9 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt>& parent_stm
       LOG_WARN("failed to deep copy stmt", K(ret));
     } else if (OB_FAIL(temp_stmt->formalize_stmt(session_info))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    } else if (OB_FAIL(trans.transform_heuristic_rule(reinterpret_cast<ObDMLStmt*&>(temp_stmt)))) {
+    } else if (OB_FAIL(temp_stmt->formalize_stmt_expr_reference())) {
+      LOG_WARN("failed to formalize stmt", K(ret));
+    } else if (OB_FAIL(trans.transform_heuristic_rule(reinterpret_cast<ObDMLStmt *&>(temp_stmt)))) {
       LOG_WARN("failed to transform heuristic rule", K(ret));
     } else if (OB_FAIL(temp_stmt->check_and_convert_hint(*session_info))) {
       LOG_WARN("failed to check and convert hint", K(ret));

@@ -2744,7 +2744,8 @@ int ObSSTable::clean_lob_column_checksum()
       STORAGE_LOG(WARN, "error sys, meta must not be null", K(ret));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < full_meta.meta_->column_number_; j++) {
-        if (!ob_is_large_text(full_meta.schema_->column_type_array_[j].get_type())) {
+        if (!ob_is_large_text(full_meta.schema_->column_type_array_[j].get_type())
+             && !ob_is_json(full_meta.schema_->column_type_array_[j].get_type())) {
           // tinytext/tinyblob skip
         } else if (!lob_col_bitset.has_member(full_meta.schema_->column_id_array_[j]) &&
                    OB_FAIL(lob_col_bitset.add_member(full_meta.schema_->column_id_array_[j]))) {

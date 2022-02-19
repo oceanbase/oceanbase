@@ -18941,7 +18941,7 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg& arg)
     if (OB_SUCC(ret)) {
       bool database_exist = false;
       if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
-        database_id = OB_OUTLINE_DEFAULT_DATABASE_ID;
+        database_id = combine_id(tenant_id, OB_OUTLINE_DEFAULT_DATABASE_ID);
         database_exist = true;
       } else if (OB_FAIL(
                      schema_service_->check_database_exist(tenant_id, database_name, database_id, database_exist))) {

@@ -87,7 +87,7 @@ public:
   {
     (void)set_data(buf_, MAX_MSGBUF_SIZE);
   }
-  ~ObElectionMsgBuffer()
+  virtual ~ObElectionMsgBuffer()
   {}
 
   TO_STRING_KV(K_(capacity), K_(position), K_(limit));

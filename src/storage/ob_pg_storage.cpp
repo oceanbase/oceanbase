@@ -194,6 +194,7 @@ void ObPGStorage::clear()
     free_meta_(meta_);
   }
   bucket_lock_.destroy();
+  recovery_point_data_mgr_.destroy();
 }
 
 #define PG_PARTITION_GUARD(g, k) \

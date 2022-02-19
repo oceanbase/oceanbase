@@ -255,18 +255,6 @@ public:
 private:
 };
 
-class ObFlashBackTableToScnStmt;
-class ObFlashBackTableToScnExecutor {
-public:
-  ObFlashBackTableToScnExecutor()
-  {}
-  virtual ~ObFlashBackTableToScnExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObFlashBackTableToScnStmt& stmt);
-
-private:
-};
-
 class ObPurgeTableStmt;
 class ObPurgeTableExecutor {
 public:

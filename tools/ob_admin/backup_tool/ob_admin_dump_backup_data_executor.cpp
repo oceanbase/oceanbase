@@ -528,7 +528,8 @@ ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor()
     is_quiet_(false),
     offset_(0),
     data_length_(0),
-    check_exist_(false)
+    check_exist_(false),
+    check_tagging_(false)
 {
   MEMSET(data_path_, 0, common::OB_MAX_URI_LENGTH);
   MEMSET(storage_info_, 0, OB_MAX_BACKUP_STORAGE_INFO_LENGTH);
@@ -637,7 +638,7 @@ int ObAdminDumpBackupDataExecutor::parse_cmd(int argc, char *argv[])
   int ret = OB_SUCCESS;
 
   int opt = 0;
-  const char* opt_string = "hd:s:o:l:f:q:c";
+  const char* opt_string = "hd:s:o:l:f:qct";
 
   struct option longopts[] = {
     // commands
@@ -649,7 +650,8 @@ int ObAdminDumpBackupDataExecutor::parse_cmd(int argc, char *argv[])
     { "data_length", 1, NULL, 'l'},
     { "file_uri", 1, NULL , 'f'},
     { "quiet", 0, NULL, 'q' },
-    { "check_exist", 0, NULL, 'c'}
+    { "check_exist", 0, NULL, 'c'},
+    { "check_tagging", 0, NULL, 't'},
   };
 
   int index = -1;
@@ -683,6 +685,10 @@ int ObAdminDumpBackupDataExecutor::parse_cmd(int argc, char *argv[])
       check_exist_ = true;
       break;
     }
+    case 't': {
+      check_tagging_ = true;
+      break;
+    }
     case 'f': {
       char current_absolute_path[MAX_PATH_SIZE] = "";
       if (optarg[0] != '/') {
@@ -697,7 +703,6 @@ int ObAdminDumpBackupDataExecutor::parse_cmd(int argc, char *argv[])
           current_absolute_path[length]= '/';
         }
       }
-
       if (OB_SUCC(ret)) {
         if (OB_FAIL(databuff_printf(data_path_, sizeof(data_path_), "%s%s%s", OB_FILE_PREFIX, current_absolute_path, optarg))) {
           STORAGE_LOG(WARN, "failed to printf file uri", K(ret), K(optarg));
@@ -1643,6 +1648,7 @@ void ObAdminDumpBackupDataExecutor::print_usage()
 #endif
   printf(HELP_FMT, "-q,--quiet", "log level: ERROR");
   printf(HELP_FMT, "-c,--check_exist", "check file is exist or not");
+  printf(HELP_FMT, "-t,--check_tagging", "check file is tagging or not");
   printf("samples:\n");
   printf("  dump meta: \n");
   printf("\tob_admin dump_backup -dfile:///home/admin/backup_info \n");
@@ -1652,7 +1658,7 @@ void ObAdminDumpBackupDataExecutor::print_usage()
   printf("\tob_admin dump_backup -f/home/admin/macro_block_1.0 -o1024 -l2048\n");
 #ifdef _WITH_OSS
   printf("  dump data with -s: \n");
-  printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' -s'host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222'\n");
+  printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' -s'host=url&access_id=111&access_key=222'\n");
 #endif
 }
 
@@ -1683,9 +1689,10 @@ int ObAdminDumpBackupDataExecutor::check_exist(const char *data_path, const char
   bool exist = false;
   const char *uri_str = "uri";
   const char *is_exist_str = "is_exist";
+  const char *is_tagging_str = "is_tagging";
   size_t data_path_len = strlen(data_path);
   char dir_data_path[common::OB_MAX_URI_LENGTH + 1] = {0};
-
+  bool tagging = false;
   if (data_path_len <= 0 || data_path[data_path_len - 1] == '/') {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "uri format not right", K(ret));
@@ -1702,6 +1709,15 @@ int ObAdminDumpBackupDataExecutor::check_exist(const char *data_path, const char
     if (exist) {
       PrintHelper::print_dump_line(uri_str, data_path);
       PrintHelper::print_dump_line(is_exist_str, "true");
+      if (check_tagging_) {
+        if (OB_FAIL(util.is_tagging(data_path, storage_info, tagging))) {
+          STORAGE_LOG(WARN, "failed to check is_tagging", K(ret), K(data_path));
+        } else if (tagging) {
+          PrintHelper::print_dump_line(is_tagging_str, "true");
+        } else {
+          PrintHelper::print_dump_line(is_tagging_str, "false");
+        }
+      }
     } else if (OB_FAIL(databuff_printf(dir_data_path, sizeof(dir_data_path), "%s/", data_path))) {
       STORAGE_LOG(WARN, "failed to printf file uri", K(ret), K(optarg));
     } else {
@@ -1716,9 +1732,12 @@ int ObAdminDumpBackupDataExecutor::check_exist(const char *data_path, const char
           PrintHelper::print_dump_line(uri_str, data_path);
           PrintHelper::print_dump_line(is_exist_str, "true");
         }
-        PrintHelper::print_end_line();
+        if (check_tagging_) {
+          PrintHelper::print_dump_line(is_tagging_str, "false");
+        }
       }
     }
+    PrintHelper::print_end_line();
   }
   return ret;
 }

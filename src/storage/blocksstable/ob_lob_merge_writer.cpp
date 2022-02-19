@@ -119,9 +119,9 @@ int ObLobMergeWriter::find_cand_lob_cols(const ObStoreRow& row, ObIArray<int64_t
     for (int64_t i = 0; OB_SUCC(ret) && i < row.row_val_.get_count(); i++) {
       const ObObj& obj = row.row_val_.get_cell(i);
       row_size += obj.get_data_length();
-      if (!ob_is_large_text(obj.get_type())) {
+      if (!ob_is_large_text(obj.get_type()) && !ob_is_json(obj.get_type())) {
         // tinytext should always inline
-      } else if (obj.is_lob_outrow()) {
+      } else if (obj.is_lob_outrow() || obj.is_json_outrow()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "[LOB] Unexcepeted outrow lob object, temporarily skip it", K(obj), K(ret));
       } else if (obj.get_data_length() < OB_MAX_LOB_HANDLE_LENGTH) {
@@ -369,11 +369,12 @@ int ObLobMergeWriter::write_lob_obj(
 {
   int ret = OB_SUCCESS;
 
-  if (!rowkey.is_valid() || column_id < 0 || column_id > OB_ROW_MAX_COLUMNS_COUNT ||
-      !ob_is_text_tc(src_obj.get_type())) {
+  if (!rowkey.is_valid() || column_id < 0 || column_id > OB_ROW_MAX_COLUMNS_COUNT
+      || !(ob_is_text_tc(src_obj.get_type()) || ob_is_json_tc(src_obj.get_type()))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid arguments to write lob obj", K(rowkey), K(column_id), K(src_obj), K(ret));
-  } else if (src_obj.is_lob_outrow() || src_obj.get_data_length() <= OB_MAX_LOB_HANDLE_LENGTH) {
+  } else if ((src_obj.is_lob_outrow() || src_obj.is_json_outrow()) 
+              || src_obj.get_data_length() <= OB_MAX_LOB_HANDLE_LENGTH) {
     src_obj.copy_value_or_obj(dst_obj, true);
   } else {
     ObArray<ObMacroBlockInfoPair> macro_blocks;

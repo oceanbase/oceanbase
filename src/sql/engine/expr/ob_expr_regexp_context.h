@@ -41,6 +41,15 @@ public:
   }
 
   virtual void* alloc(const int64_t size) override;
+  virtual void* alloc(const int64_t size, const common::ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  virtual void free(void* ptr) override
+  {
+    UNUSED(ptr);
+  }
 
 private:
   common::ObIAllocator* alloc_;

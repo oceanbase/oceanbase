@@ -348,6 +348,11 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
     // index
     SET_STMT_TYPE(T_CREATE_INDEX);
     SET_STMT_TYPE(T_DROP_INDEX);
+    // flashback
+    SET_STMT_TYPE(T_FLASHBACK_TENANT);		
+    SET_STMT_TYPE(T_FLASHBACK_DATABASE);
+    SET_STMT_TYPE(T_FLASHBACK_TABLE_FROM_RECYCLEBIN);
+    SET_STMT_TYPE(T_FLASHBACK_INDEX);	
     // purge
     SET_STMT_TYPE(T_PURGE_RECYCLEBIN);
     SET_STMT_TYPE(T_PURGE_TENANT);
@@ -4003,6 +4008,17 @@ int ObResolverUtils::resolve_data_type(const ParseNode& type_node, const ObStrin
         SQL_RESV_LOG(WARN, "fail to resolve string charset and collation", K(ret), K(data_type));
       } else {
         // do nothing
+      }
+      break;
+    case ObJsonTC:
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_313) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create json column before cluster min version 3.1.3.");
+      } else {
+        data_type.set_length(length);
+        data_type.set_scale(default_accuracy.get_scale());
+        data_type.set_charset_type(CHARSET_UTF8MB4);
+        data_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       }
       break;
     case ObBitTC:

@@ -4205,7 +4205,7 @@ int ObRootService::create_table(const ObCreateTableArg& arg, UInt64& table_id)
     } else if (OB_INVALID_ID == table_schema.get_database_id()) {
       ObString database_name = arg.db_name_;
       if (OB_FAIL(schema_guard.get_database_schema(table_schema.get_tenant_id(), database_name, db_schema))) {
-        LOG_WARN("get databas schema failed", K(arg));
+        LOG_WARN("get database schema failed", K(arg));
       } else if (OB_ISNULL(db_schema)) {
         ret = OB_ERR_BAD_DATABASE;
         LOG_USER_ERROR(OB_ERR_BAD_DATABASE, database_name.length(), database_name.ptr());
@@ -4918,20 +4918,52 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg& arg, obrpc::ObA
   return ret;
 }
 
-int ObRootService::submit_build_index_task(const share::schema::ObTableSchema *index_schema)
+int ObRootService::submit_build_index_task(const obrpc::ObSubmitBuildIndexTaskArg &arg)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(index_schema) || !index_schema->is_valid()) {
+  ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
+  const int64_t alloc_size = sizeof(ObTableSchema);
+  char *buf = nullptr;
+  ObTableSchema *deep_copy_index_schema = nullptr;
+  if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KPC(index_schema));
-  } else if (index_schema->is_global_index_table() &&
-             OB_FAIL(global_index_builder_.submit_build_global_index_task(index_schema))) {
-    LOG_WARN("fail to submit build global index task", K(ret), K(*index_schema));
-  } else if (index_schema->is_index_local_storage()) {
-    ObIndexBuilder index_builder(ddl_service_);
-    if (OB_FAIL(index_builder.submit_build_local_index_task(*index_schema))) {
-      LOG_WARN("fail to submit build local index task", K(ret), K(*index_schema));
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(alloc_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "fail to allocate memory for deep copy schema", K(ret), K(alloc_size));
+  } else {
+    const uint64_t index_tid = arg.index_tid_;
+    const ObTableSchema *index_schema = nullptr;
+    deep_copy_index_schema = new (buf) ObTableSchema(&allocator);
+    ObSchemaGetterGuard schema_guard;
+    int64_t latest_schema_version = 0;
+    // In DDL task, the schema version should be the latest, otherwise the schema can be already recycled
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_refreshed_schema_version(
+            extract_tenant_id(index_tid), latest_schema_version))) {
+      LOG_WARN("fail to get latest schema version", K(ret), K(arg));
+    } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
+                   extract_tenant_id(index_tid), schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret), K(index_tid));
+    } else if (OB_FAIL(schema_guard.get_table_schema(index_tid, index_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(index_tid));
+    } else if (OB_ISNULL(index_schema)) {
+      LOG_INFO("index schema is deleted, skip it");
+    } else if (OB_FAIL(deep_copy_index_schema->assign(*index_schema))) {
+      LOG_WARN("fail to assign index schema", K(ret), K(*index_schema));
+    } else if (FALSE_IT(deep_copy_index_schema->set_schema_version(latest_schema_version))) {
+    } else if (deep_copy_index_schema->is_global_index_table() &&
+               OB_FAIL(global_index_builder_.submit_build_global_index_task(deep_copy_index_schema))) {
+      LOG_WARN("fail to submit build global index task", K(ret), K(*deep_copy_index_schema));
+    } else if (deep_copy_index_schema->is_index_local_storage()) {
+      ObIndexBuilder index_builder(ddl_service_);
+      if (OB_FAIL(index_builder.submit_build_local_index_task(*deep_copy_index_schema))) {
+        LOG_WARN("fail to submit build local index task", K(ret), K(*deep_copy_index_schema));
+      }
     }
+  }
+  if (deep_copy_index_schema != nullptr) {
+    deep_copy_index_schema->~ObTableSchema();
+    allocator.free(deep_copy_index_schema);
   }
   return ret;
 }
@@ -5061,14 +5093,6 @@ int ObRootService::flashback_table_from_recyclebin(const ObFlashBackTableFromRec
   } else if (OB_FAIL(ddl_service_.flashback_table_from_recyclebin(arg))) {
     LOG_WARN("failed to flash back table", K(ret));
   }
-  return ret;
-}
-
-int ObRootService::flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg& arg)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(arg);
-  LOG_INFO("receive flashback table arg", K(arg));
   return ret;
 }
 
@@ -6509,7 +6533,7 @@ int ObRootService::create_outline(const ObCreateOutlineArg& arg)
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
       // if not specify database, set default database name and database id;
-      outline_info.set_database_id(OB_OUTLINE_DEFAULT_DATABASE_ID);
+      outline_info.set_database_id(combine_id(tenant_id, OB_OUTLINE_DEFAULT_DATABASE_ID));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -7730,7 +7754,7 @@ int ObRootService::observer_copy_local_index_sstable(const obrpc::ObServerCopyLo
           dest_replica.member_ =
               ObReplicaMember(r->server_, ObTimeUtility::current_time(), r->replica_type_, r->get_memstore_percent());
           dest_replica.unit_id_ = r->unit_id_;
-          data_size = r->data_size_;
+          data_size = arg.data_size_ != 0 ? arg.data_size_ : r->data_size_;
         } else if (r->server_ != data_src) {
           // by pass
         } else if (OB_FAIL(server_manager_.check_server_alive(r->server_, alive))) {
@@ -11152,6 +11176,12 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg& arg)
         }
         break;
       };
+      case ObBackupManageArg::CANCEL_ALL_BACKUP_FORCE: {
+        if (OB_FAIL(handle_cancel_all_backup_force(arg))) {
+          LOG_WARN("failed to handle cancel all backup force", K(ret), K(arg));
+        }
+        break;
+      };
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid backup manage arg", K(ret), K(arg));
@@ -11474,6 +11504,50 @@ int ObRootService::handle_cancel_backup_backup(const obrpc::ObBackupManageArg& a
   } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_backup_backup())) {
     LOG_WARN("failed to start schedule cancel backup backup", K(ret));
   }
+  return ret;
+}
+
+int ObRootService::handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg)
+{
+  int ret = OB_SUCCESS;
+
+  FLOG_WARN("start cancel all backup force");
+  // clear backup_dest and backup_backup_dest in GCONF
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  if (OB_FAIL(sql.assign_fmt("alter system set backup_dest=''"))) {
+    LOG_WARN("failed to clear backup dest", K(ret));
+  } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to clear backup dest", K(ret), K(sql));
+  } else {
+    LOG_WARN("succeed to clear backup dest");
+  }
+
+  ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_dest", "result", ret, K_(self_addr));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.assign_fmt("alter system set backup_backup_dest=''"))) {
+      LOG_WARN("failed to clear backup backup dest", K(ret));
+    } else if (OB_FAIL(sql_proxy_.write(sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to clear backup backup dest", K(ret), K(sql));
+    } else {
+      LOG_WARN("succeed to clear backup backup dest");
+    }
+
+    ROOTSERVICE_EVENT_ADD("root_service", "clear_backup_backup_dest", "result", ret, K_(self_addr));
+  }
+
+  ROOTSERVICE_EVENT_ADD("root_service", "force_cancel_backup", "result", ret, K_(self_addr));
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(wait_refresh_config())) {
+    LOG_WARN("failed to wait refresh schema", K(ret), K(arg));
+  } else if (OB_FAIL(backup_lease_service_.force_cancel(arg.tenant_id_))) {
+    LOG_WARN("failed to force stop", K(ret), K(arg));
+  }
+
+  FLOG_WARN("end cancel all backup force", K(ret));
+
   return ret;
 }
 

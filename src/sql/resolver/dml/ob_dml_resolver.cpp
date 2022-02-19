@@ -571,7 +571,9 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem& table_item, const 
       col_expr->set_database_name(table_item.database_name_);
       // column maybe from alias table, so must reset ref id by table id from table_item
       col_expr->set_ref_id(table_item.table_id_, col_schema->get_column_id());
-      col_expr->set_lob_column(ob_is_text_tc(col_schema->get_data_type()));
+      bool is_lob_column = (ob_is_text_tc(col_schema->get_data_type())
+                            || ob_is_json_tc(col_schema->get_data_type()));
+      col_expr->set_lob_column(is_lob_column);
       column_item.set_default_value(col_schema->get_cur_default_value());
     }
     if (OB_SUCC(ret)) {

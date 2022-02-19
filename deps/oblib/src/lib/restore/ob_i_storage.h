@@ -50,6 +50,7 @@ public:
   virtual int delete_tmp_files(const common::ObString& dir_path, const common::ObString& storage_info) = 0;
   virtual int is_empty_directory(
       const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory) = 0;
+  virtual int is_tagging(const common::ObString& uri, const common::ObString& storage_info, bool& is_tagging) = 0;
   virtual int check_backup_dest_lifecycle(
       const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle) = 0;
   virtual int list_directories(const common::ObString& dir_path, const common::ObString& storage_info,

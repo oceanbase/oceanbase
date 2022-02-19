@@ -134,7 +134,7 @@ int ObTableService::cons_column_type(const schema::ObColumnSchemaV2 &column_sche
   int ret = OB_SUCCESS;
   column_type.set_type(column_schema.get_data_type());
   column_type.set_result_flag(ObRawExprUtils::calc_column_result_flag(column_schema));
-  if (ob_is_string_type(column_schema.get_data_type())) {
+  if (ob_is_string_type(column_schema.get_data_type()) || ob_is_json(column_schema.get_data_type())) {
     column_type.set_collation_type(column_schema.get_collation_type());
     column_type.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {

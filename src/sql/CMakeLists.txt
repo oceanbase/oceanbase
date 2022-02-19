@@ -286,6 +286,35 @@ ob_set_subtarget(ob_sql engine
   engine/expr/ob_expr_ip2int.cpp
   engine/expr/ob_expr_inet.cpp
   engine/expr/ob_expr_is.cpp
+  engine/expr/ob_expr_json_func_helper.cpp
+  engine/expr/ob_expr_json_extract.cpp
+  engine/expr/ob_expr_json_contains.cpp
+  engine/expr/ob_expr_json_contains_path.cpp
+  engine/expr/ob_expr_json_depth.cpp
+  engine/expr/ob_expr_json_keys.cpp
+  engine/expr/ob_expr_json_overlaps.cpp
+  engine/expr/ob_expr_json_remove.cpp
+  engine/expr/ob_expr_json_replace.cpp
+  engine/expr/ob_expr_json_insert.cpp
+  engine/expr/ob_expr_json_member_of.cpp
+  engine/expr/ob_expr_json_merge_preserve.cpp
+  engine/expr/ob_expr_json_merge_patch.cpp
+  engine/expr/ob_expr_json_merge.cpp
+  engine/expr/ob_expr_json_pretty.cpp
+  engine/expr/ob_expr_json_object.cpp
+  engine/expr/ob_expr_json_search.cpp
+  engine/expr/ob_expr_json_array.cpp
+  engine/expr/ob_expr_json_array_append.cpp
+  engine/expr/ob_expr_json_array_insert.cpp
+  engine/expr/ob_expr_json_quote.cpp
+  engine/expr/ob_expr_json_unquote.cpp
+  engine/expr/ob_expr_json_valid.cpp
+  engine/expr/ob_expr_json_value.cpp
+  engine/expr/ob_expr_json_type.cpp
+  engine/expr/ob_expr_json_length.cpp
+  engine/expr/ob_expr_json_storage_size.cpp
+  engine/expr/ob_expr_json_storage_free.cpp
+  engine/expr/ob_expr_json_set.cpp
   engine/expr/ob_expr_is_serving_tenant.cpp
   engine/expr/ob_expr_last_exec_id.cpp
   engine/expr/ob_expr_last_insert_id.cpp
@@ -920,6 +949,9 @@ ob_set_subtarget(ob_sql resolver
   resolver/ddl/ob_drop_tenant_stmt.cpp
   resolver/ddl/ob_explain_resolver.cpp
   resolver/ddl/ob_explain_stmt.cpp
+  resolver/ddl/ob_flashback_resolver.cpp		
+  resolver/ddl/ob_flashback_resolver.h		
+  resolver/ddl/ob_flashback_stmt.h
   resolver/ddl/ob_lock_tenant_resolver.cpp
   resolver/ddl/ob_lock_tenant_stmt.cpp
   resolver/ddl/ob_modify_tenant_resolver.cpp

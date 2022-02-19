@@ -745,7 +745,9 @@ int ObWindowFunctionOp::init()
           case T_FUN_KEEP_SUM:
           case T_FUN_KEEP_COUNT:
           case T_FUN_KEEP_WM_CONCAT:
-          case T_FUN_WM_CONCAT: {
+          case T_FUN_WM_CONCAT: 
+          case T_FUN_JSON_ARRAYAGG:
+          case T_FUN_JSON_OBJECTAGG: {
             void* tmp_ptr = local_allocator_.alloc(sizeof(AggrCell));
             void* tmp_array = local_allocator_.alloc(sizeof(AggrInfoFixedArray));
             ObIArray<ObAggrInfo>* aggr_infos = NULL;

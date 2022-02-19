@@ -158,13 +158,14 @@ public:
   class GroupConcatExtraResult : public ExtraResult {
   public:
     explicit GroupConcatExtraResult(common::ObIAllocator& alloc)
-        : ExtraResult(alloc), row_count_(0), iter_idx_(0), sort_op_(NULL), separator_datum_(NULL)
+        : ExtraResult(alloc), row_count_(0), iter_idx_(0), sort_op_(NULL), separator_datum_(NULL), bool_mark_(alloc)
     {}
     virtual ~GroupConcatExtraResult();
     void reuse_self();
     virtual void reuse() override;
 
-    int init(const uint64_t tenant_id, const ObAggrInfo& aggr_info, ObEvalCtx& eval_ctx, const bool need_rewind);
+    int init(const uint64_t tenant_id, const ObAggrInfo& aggr_info,
+      ObEvalCtx& eval_ctx, const bool need_rewind, int64_t dir_id_);
 
     int add_row(const ObIArray<ObExpr*>& expr, ObEvalCtx& eval_ctx)
     {
@@ -207,6 +208,10 @@ public:
       return row_count_;
     }
     ObDatum *&get_separator_datum() { return separator_datum_; }
+    int reserve_bool_mark_count(int64_t count) { return bool_mark_.reserve(count); }
+    int get_bool_mark_size() { return bool_mark_.count(); }
+    int get_bool_mark(int64_t col_index, bool &is_bool);
+    int set_bool_mark(int64_t col_index, bool is_bool);
     DECLARE_VIRTUAL_TO_STRING;
 
   private:
@@ -218,6 +223,7 @@ public:
 
     ObSortOpImpl* sort_op_;
     ObDatum *separator_datum_;
+    common::ObFixedArray<bool, common::ObIAllocator> bool_mark_;
   };
 
   class AggrCell {
@@ -332,7 +338,6 @@ public:
       uint64_t tiny_num_uint_;
     };
     bool is_tiny_num_used_;
-
     // for T_FUN_APPROX_COUNT_DISTINCT
     ObDatum llc_bitmap_;
 
@@ -381,6 +386,7 @@ public:
   void destroy();
   void reuse();
 
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
   int prepare(GroupRow& group_row);
   int process(GroupRow& group_row);
   int collect(const int64_t group_id = 0, const ObExpr* diff_expr = NULL);
@@ -464,6 +470,14 @@ private:
       const ObAggrInfo& aggr_info, bool& is_equal);
   int get_wm_concat_result(
       const ObAggrInfo& aggr_info, GroupConcatExtraResult*& extra, bool is_keep_group_concat, ObDatum& concat_result);
+  int convert_datum_to_obj(const ObAggrInfo &aggr_info,
+                        const ObChunkDatumStore::StoredRow &stored_row,
+                        ObObj *tmp_obj,
+                        int64_t obj_cnt);
+  int get_json_arrayagg_result(const ObAggrInfo &aggr_info, GroupConcatExtraResult *&extra,
+                               ObDatum &concat_result);
+  int get_json_objectagg_result(const ObAggrInfo &aggr_info, GroupConcatExtraResult *&extra,
+                                ObDatum &concat_result);
 
   // HyperLogLogCount-related functions
   int llc_init(ObDatum& datum);
@@ -501,6 +515,7 @@ private:
   uint64_t concat_str_max_len_;
   uint64_t cur_concat_buf_len_;
   char* concat_str_buf_;
+  int64_t dir_id_;
   //  common::ObArenaAllocator aggr_udf_buf_;
   //  common::ObSEArray<ObAggUdfMeta, 16> aggr_udf_metas_;
   //  common::hash::ObHashMap<int64_t, ObAggUdfExeUnit, common::hash::NoPthreadDefendMode> aggr_udf_;
@@ -578,7 +593,9 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_KEEP_SUM:
     case T_FUN_KEEP_COUNT:
     case T_FUN_KEEP_WM_CONCAT:
-    case T_FUN_WM_CONCAT: {
+    case T_FUN_WM_CONCAT: 
+    case T_FUN_JSON_ARRAYAGG:
+    case T_FUN_JSON_OBJECTAGG: {
       need_extra = true;
       break;
     }

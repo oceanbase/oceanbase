@@ -25,6 +25,9 @@ int ObScalarAggregateOp::inner_open()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObGroupByOp::inner_open())) {
     LOG_WARN("failed to inner_open", K(ret));
+  } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    LOG_WARN("failed to alloc dir id", K(ret));
+  } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (OB_FAIL(aggr_processor_.init_one_group())) {
     LOG_WARN("failed to init one group", K(ret));
   } else {

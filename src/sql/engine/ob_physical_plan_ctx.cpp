@@ -86,6 +86,13 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator& allocator)
 ObPhysicalPlanCtx::~ObPhysicalPlanCtx()
 {}
 
+void ObPhysicalPlanCtx::restore_param_store(const int64_t original_param_cnt)
+{
+  for (int64_t i = param_store_.count(); i > original_param_cnt; --i) {
+    param_store_.pop_back();
+  }
+}
+
 int ObPhysicalPlanCtx::reserve_param_space(int64_t param_count)
 {
   int ret = OB_SUCCESS;

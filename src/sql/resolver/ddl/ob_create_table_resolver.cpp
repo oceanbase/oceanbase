@@ -86,6 +86,9 @@ int ObCreateTableResolver::add_primary_key_part(
     } else if (ob_is_text_tc(col->get_data_type())) {
       ret = OB_ERR_WRONG_KEY_COLUMN;
       LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+    } else if (ob_is_json_tc(col->get_data_type())) {
+      ret = OB_ERR_JSON_USED_AS_KEY;
+      LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_name.length(), column_name.ptr());
     } else if (ObTimestampTZType == col->get_data_type()) {
       ret = OB_ERR_WRONG_KEY_COLUMN;
       LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
@@ -209,7 +212,8 @@ int ObCreateTableResolver::set_partitioning_key(
       if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == primary_keys_.count()) {
         ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
         LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-      } else if (ob_is_text_tc(column_schema->get_data_type())) {
+      } else if (ob_is_text_tc(column_schema->get_data_type())
+                 || ob_is_json_tc(column_schema->get_data_type())) {
         ret = OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD;
         LOG_USER_ERROR(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD,
             column_schema->get_column_name_str().length(),
@@ -1323,6 +1327,8 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode* node, ObArray
         if (OB_FAIL(resolve_check_constraint_node(*element, csts))) {
           SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
         }
+      } else if (T_EMPTY == element->type_) {
+        // compatible with mysql 5.7 check (expr), do nothing
       } else {
         // won't be here
         ret = OB_ERR_UNEXPECTED;
@@ -1627,8 +1633,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode& p
                 LOG_DEBUG("reorder column successfully", K(new_column));
               }
             } else {
-              if (column.is_string_type()) {
-                if (column.get_meta_type().is_lob()) {
+              if (column.is_string_type() || column.is_json()) {
+                if (column.get_meta_type().is_lob() || column.get_meta_type().is_json()) {
                   if (OB_FAIL(check_text_column_length_and_promote(column, table_id_, true))) {
                     LOG_WARN("fail to check text or blob column length", K(ret), K(column));
                   }

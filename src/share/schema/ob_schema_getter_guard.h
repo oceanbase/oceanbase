@@ -513,6 +513,10 @@ public:
   {
     return common::OB_INVALID_TENANT_ID != tenant_id_;
   }
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
 
   int get_tenant_mv_ids(const uint64_t tenant_id, common::ObArray<uint64_t>& mv_ids) const;
   int get_all_mv_ids(common::ObArray<uint64_t>& mv_ids) const;

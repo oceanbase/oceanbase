@@ -501,4 +501,10 @@ utf8mb4_bin
 select collation(cast('A' as char)), cast('A' as char) < 'a';
 collation(cast('A' as char))	cast('A' as char) < 'a'
 utf8mb4_bin	1
+SELECT collation(CAST('A' AS char CHAR SET utf8mb4));
+collation(CAST('A' AS char CHAR SET utf8mb4))
+utf8mb4_general_ci
+SELECT collation(CAST('A' AS char CHAR SET binary));
+collation(CAST('A' AS char CHAR SET binary))
+binary
 drop table coll_test;

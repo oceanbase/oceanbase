@@ -1398,6 +1398,8 @@ BEGIN(in_c_comment);
 "!="|"<>" {return COMP_NE;}
 "<<"  {return SHIFT_LEFT;}
 ">>"  {return SHIFT_RIGHT;}
+"->"  {return JSON_EXTRACT;}
+"->>"  {return JSON_EXTRACT_UNQUOTED;}
 
 "?" {
   //use for outline now, means any value

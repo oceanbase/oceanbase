@@ -23,6 +23,7 @@
 #include "sql/resolver/ddl/ob_rename_table_stmt.h"
 #include "sql/resolver/ddl/ob_truncate_table_stmt.h"
 #include "sql/resolver/ddl/ob_create_table_like_stmt.h"
+#include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/resolver/ddl/ob_optimize_stmt.h"
 #include "sql/resolver/ob_resolver_utils.h"
@@ -2059,6 +2060,32 @@ int ObCreateTableLikeExecutor::execute(ObExecContext& ctx, ObCreateTableLikeStmt
       LOG_WARN("common rpc proxy should not be null", K(ret));
     } else if (OB_FAIL(common_rpc_proxy->create_table_like(create_table_like_arg))) {
       LOG_WARN("rpc proxy create table like failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObFlashBackTableFromRecyclebinExecutor::execute(ObExecContext &ctx, ObFlashBackTableFromRecyclebinStmt &stmt)		
+{		
+  int ret = OB_SUCCESS;
+  const obrpc::ObFlashBackTableFromRecyclebinArg &flashback_table_arg = stmt.get_flashback_table_arg();		
+  ObString first_stmt;		
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {		
+    LOG_WARN("get first statement failed", K(ret));		
+  } else {		
+    const_cast<obrpc::ObFlashBackTableFromRecyclebinArg&>(flashback_table_arg).ddl_stmt_str_ = first_stmt;		
+    ObTaskExecutorCtx *task_exec_ctx = NULL;
+    obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+    if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("get task executor context failed");
+    } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+      LOG_WARN("get common rpc proxy failed", K(ret));
+    } else if (OB_ISNULL(common_rpc_proxy)){
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("common rpc proxy should not be null", K(ret));
+    } else if (OB_FAIL(common_rpc_proxy->flashback_table_from_recyclebin(flashback_table_arg))) {
+      LOG_WARN("rpc proxy flashback table failed", K(ret));
     }
   }
   return ret;

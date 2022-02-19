@@ -90,6 +90,7 @@ public:
       case obmysql::MYSQL_TYPE_OB_UROWID:
       case obmysql::MYSQL_TYPE_ORA_BLOB:
       case obmysql::MYSQL_TYPE_ORA_CLOB:
+      case obmysql::MYSQL_TYPE_JSON:
         is_support = true;
         break;
       case obmysql::MYSQL_TYPE_COMPLEX:

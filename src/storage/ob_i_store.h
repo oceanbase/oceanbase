@@ -79,6 +79,7 @@ enum ObDataStoreType {
   ObIntervalYMStoreType = 15,
   ObIntervalDSStoreType = 16,
   ObRowIDStoreType = 17,
+  ObJsonStoreType = 18,
   ObExtendStoreType = 31
 };
 

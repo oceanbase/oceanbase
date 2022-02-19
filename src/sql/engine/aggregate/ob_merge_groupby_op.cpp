@@ -72,7 +72,10 @@ int ObMergeGroupByOp::init()
   int ret = OB_SUCCESS;
   const int64_t col_count =
       (MY_SPEC.has_rollup_ ? (MY_SPEC.group_exprs_.count() + MY_SPEC.rollup_exprs_.count() + 1) : 0);
-  if (OB_FAIL(aggr_processor_.init_group_rows(col_count))) {
+	if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    LOG_WARN("failed to alloc dir id", K(ret));
+  } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
+  } else if (OB_FAIL(aggr_processor_.init_group_rows(col_count))) {
     LOG_WARN("failed to initialize init_group_rows", K(ret));
   } else if (OB_FAIL(
                  curr_groupby_datums_.prepare_allocate(MY_SPEC.group_exprs_.count() + MY_SPEC.rollup_exprs_.count()))) {

@@ -24,6 +24,7 @@
 #include "sql/parser/ob_item_type_str.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/sort/ob_sort_op_impl.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 namespace oceanbase {
 using namespace common;
@@ -240,8 +241,8 @@ int ObAggregateProcessor::ExtraResult::init_distinct_set(
   return ret;
 }
 
-int ObAggregateProcessor::GroupConcatExtraResult::init(
-    const uint64_t tenant_id, const ObAggrInfo& aggr_info, ObEvalCtx& eval_ctx, const bool need_rewind)
+int ObAggregateProcessor::GroupConcatExtraResult::init(const uint64_t tenant_id,
+  const ObAggrInfo& aggr_info, ObEvalCtx& eval_ctx, const bool need_rewind, int64_t dir_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
@@ -272,6 +273,8 @@ int ObAggregateProcessor::GroupConcatExtraResult::init(
                      ObModIds::OB_SQL_AGGR_FUN_GROUP_CONCAT,
                      true /* enable dump */))) {
         LOG_WARN("row store failed", K(ret));
+      } else {
+        row_store_.set_dir_id(dir_id);
       }
     }
   }
@@ -305,6 +308,7 @@ void ObAggregateProcessor::GroupConcatExtraResult::reuse_self()
     row_store_iter_.reset();
     row_store_.reset();
   }
+  bool_mark_.reset();
   row_count_ = 0;
   iter_idx_ = 0;
 };
@@ -354,6 +358,33 @@ int64_t ObAggregateProcessor::GroupConcatExtraResult::to_string(char* buf, const
   return pos;
 }
 
+
+int ObAggregateProcessor::GroupConcatExtraResult::get_bool_mark(int64_t col_index, bool &is_bool)
+{
+  INIT_SUCC(ret);
+  if (col_index + 1 > bool_mark_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index is overflow", K(ret), K(col_index), K(bool_mark_.count()));
+  } else {
+    is_bool = bool_mark_[col_index];
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::GroupConcatExtraResult::set_bool_mark(int64_t col_index, bool is_bool)
+{
+  INIT_SUCC(ret);
+  if (col_index > bool_mark_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index is overflow", K(ret), K(col_index), K(bool_mark_.count()));
+  } else if (col_index == bool_mark_.count()) {
+    bool_mark_.push_back(is_bool);
+  } else {
+    bool_mark_[col_index] = is_bool;
+  }
+  return ret;
+}
+
 int64_t ObAggregateProcessor::ExtraResult::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -389,7 +420,8 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx& eval_ctx, ObIArray<ObAggrI
       group_rows_(),
       concat_str_max_len_(OB_DEFAULT_GROUP_CONCAT_MAX_LEN_FOR_ORACLE),
       cur_concat_buf_len_(0),
-      concat_str_buf_(NULL)
+      concat_str_buf_(NULL),
+      dir_id_(-1)
 {}
 
 int ObAggregateProcessor::init()
@@ -416,8 +448,11 @@ int ObAggregateProcessor::init()
     } else {
       has_distinct_ |= aggr_info.has_distinct_;
       has_group_concat_ |=
-          (T_FUN_GROUP_CONCAT == aggr_info.get_expr_type() || T_FUN_KEEP_WM_CONCAT == aggr_info.get_expr_type() ||
-              T_FUN_WM_CONCAT == aggr_info.get_expr_type());
+          (T_FUN_GROUP_CONCAT == aggr_info.get_expr_type() || 
+           T_FUN_KEEP_WM_CONCAT == aggr_info.get_expr_type() ||
+           T_FUN_WM_CONCAT == aggr_info.get_expr_type() || 
+           T_FUN_JSON_ARRAYAGG == aggr_info.get_expr_type() ||
+           T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type());
       has_order_by_ |= aggr_info.has_order_by_;
       if (!has_extra_) {
         has_extra_ |= aggr_info.has_distinct_;
@@ -935,7 +970,9 @@ int ObAggregateProcessor::init_one_group(const int64_t group_id)
         case T_FUN_KEEP_SUM:
         case T_FUN_KEEP_COUNT:
         case T_FUN_KEEP_WM_CONCAT:
-        case T_FUN_WM_CONCAT: {
+        case T_FUN_WM_CONCAT: 
+        case T_FUN_JSON_ARRAYAGG: 
+        case T_FUN_JSON_OBJECTAGG: {
           void* tmp_buf = NULL;
           if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(GroupConcatExtraResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -948,7 +985,7 @@ int ObAggregateProcessor::init_one_group(const int64_t group_id)
             if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
                     aggr_info,
                     eval_ctx_,
-                    need_rewind))) {
+                    need_rewind, dir_id_))) {
               LOG_WARN("init GroupConcatExtraResult failed", K(ret));
             } else if (aggr_info.separator_expr_ != NULL) {
               ObDatum* separator_result = NULL;
@@ -1142,7 +1179,9 @@ int ObAggregateProcessor::rollup_aggregation(
     case T_FUN_KEEP_MIN:
     case T_FUN_KEEP_SUM:
     case T_FUN_KEEP_WM_CONCAT:
-    case T_FUN_WM_CONCAT: {
+    case T_FUN_WM_CONCAT: 
+    case T_FUN_JSON_ARRAYAGG: 
+    case T_FUN_JSON_OBJECTAGG: {
       GroupConcatExtraResult* aggr_extra = NULL;
       GroupConcatExtraResult* rollup_extra = NULL;
       if (OB_ISNULL(aggr_extra = static_cast<GroupConcatExtraResult*>(aggr_cell.get_extra())) ||
@@ -1153,6 +1192,20 @@ int ObAggregateProcessor::rollup_aggregation(
         LOG_WARN("finish add row failed", K(ret));
       } else {
         const ObChunkDatumStore::StoredRow* stored_row = NULL;
+        if (aggr_fun == T_FUN_JSON_ARRAYAGG || aggr_fun == T_FUN_JSON_OBJECTAGG) {
+          int64_t len = aggr_extra->get_bool_mark_size();
+          if (OB_FAIL(rollup_extra->reserve_bool_mark_count(len))) {
+            LOG_WARN("reserve_bool_mark_count failed", K(ret), K(len));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < len; i++) {
+            bool is_bool = false;
+            if (OB_FAIL(aggr_extra->get_bool_mark(i, is_bool))) {
+              LOG_WARN("get_bool_mark failed", K(ret));
+            } else if (OB_FAIL(rollup_extra->set_bool_mark(i, is_bool))) {
+              LOG_WARN("set_bool_mark failed", K(ret));
+            }
+          }
+        }
         while (OB_SUCC(ret) && OB_SUCC(aggr_extra->get_next_row(stored_row))) {
           if (OB_ISNULL(stored_row)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1316,7 +1369,9 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
       case T_FUN_KEEP_COUNT:
       case T_FUN_KEEP_SUM:
       case T_FUN_KEEP_WM_CONCAT:
-      case T_FUN_WM_CONCAT: {
+      case T_FUN_WM_CONCAT: 
+      case T_FUN_JSON_ARRAYAGG:
+      case T_FUN_JSON_OBJECTAGG: {
         GroupConcatExtraResult* extra = NULL;
         if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult*>(aggr_cell.get_extra()))) {
           ret = OB_ERR_UNEXPECTED;
@@ -1328,6 +1383,23 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
           } else if (param_exprs != NULL && OB_FAIL(extra->add_row(*param_exprs, eval_ctx_))) {
             LOG_WARN("fail to add row", K(ret));
           } else {
+            if (aggr_fun == T_FUN_JSON_ARRAYAGG || aggr_fun == T_FUN_JSON_OBJECTAGG) {
+              int64_t len = param_exprs->count();
+              if (OB_FAIL(extra->reserve_bool_mark_count(len))) {
+                LOG_WARN("reserve_bool_mark_count failed", K(ret), K(len));
+              }
+              for (int64_t i = 0; OB_SUCC(ret) && i < len; i++) {
+                ObExpr *tmp = NULL;
+                if (OB_FAIL(param_exprs->at(i, tmp))){
+                  LOG_WARN("fail to get param_exprs[i]", K(ret));
+                } else {
+                  bool is_bool = (tmp->is_boolean_ == 1);
+                  if (OB_FAIL(extra->set_bool_mark(i, is_bool))){
+                    LOG_WARN("fail to set_bool_mark", K(ret));
+                  }
+                }
+              }
+            }
             LOG_DEBUG("succ to add row", K(stored_row), KPC(extra));
           }
         }
@@ -1482,7 +1554,9 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       case T_FUN_KEEP_COUNT:
       case T_FUN_KEEP_SUM:
       case T_FUN_KEEP_WM_CONCAT:
-      case T_FUN_WM_CONCAT: {
+      case T_FUN_WM_CONCAT: 
+      case T_FUN_JSON_ARRAYAGG:
+      case T_FUN_JSON_OBJECTAGG: {
         GroupConcatExtraResult* extra = NULL;
         if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult*>(aggr_cell.get_extra()))) {
           ret = OB_ERR_UNEXPECTED;
@@ -1653,7 +1727,24 @@ int ObAggregateProcessor::collect_aggr_result(AggrCell& aggr_cell, const ObExpr*
       }
       break;
     }
-
+    case T_FUN_JSON_ARRAYAGG: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_json_arrayagg_result(aggr_info, extra, result))) {
+        LOG_WARN("failed to get json_arrayagg result", K(ret));
+      } else {
+        eval_info.evaluated_ = true;
+      }
+      break;
+    }
+    case T_FUN_JSON_OBJECTAGG: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_json_objectagg_result(aggr_info, extra, result))) {
+        LOG_WARN("failed to get json_objectagg result", K(ret));
+      } else {
+        eval_info.evaluated_ = true;
+      }
+      break;
+    }
     case T_FUN_WM_CONCAT:
     case T_FUN_KEEP_WM_CONCAT: {
       GroupConcatExtraResult* extra = static_cast<GroupConcatExtraResult*>(aggr_cell.get_extra());
@@ -3167,6 +3258,276 @@ int ObAggregateProcessor::get_wm_concat_result(
         }
       } else {
         concat_result.set_null();  // set null if all skiped
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::convert_datum_to_obj(const ObAggrInfo &aggr_info,
+                                               const ObChunkDatumStore::StoredRow &stored_row,
+                                               ObObj *tmp_obj,
+                                               int64_t obj_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(obj_cnt != stored_row.cnt_ || obj_cnt != aggr_info.param_exprs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(obj_cnt), K(stored_row.cnt_),
+                                     K(aggr_info.param_exprs_.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stored_row.cnt_; ++i) {
+      if (OB_FAIL(stored_row.cells()[i].to_obj(tmp_obj[i],
+                                               aggr_info.param_exprs_.at(i)->obj_meta_))) {
+        LOG_WARN("failed to obj", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
+                                                   GroupConcatExtraResult *&extra,
+                                                   ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_alloc;
+  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unpexcted null", K(ret), K(extra));
+  } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
+    // Group concat row may be iterated in rollup_process(), rewind here.
+    LOG_WARN("rewind failed", KPC(extra), K(ret));
+  } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
+    LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else {
+    const ObChunkDatumStore::StoredRow *storted_row = NULL;
+    ObJsonArray json_array(&tmp_alloc);
+    bool is_bool = false;
+    if (OB_FAIL(extra->get_bool_mark(0, is_bool))) {
+      LOG_WARN("get_bool info failed, may not distinguish between bool and int", K(ret));
+    }
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+      if (OB_ISNULL(storted_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+      } else {
+        // get type
+        ObObj *tmp_obj = NULL;
+        if (OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(
+                                                    sizeof(ObObj) * (storted_row->cnt_))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret), K(tmp_obj));
+        } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
+          LOG_WARN("failed to convert datum to obj", K(ret));
+        } else if (storted_row->cnt_ < 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected column count", K(ret), K(storted_row));
+        } else {
+          ObObjType val_type = tmp_obj->get_type();
+          ObCollationType cs_type = tmp_obj->get_collation_type();
+          ObScale scale = tmp_obj->get_scale();
+          ObIJsonBase *json_val = NULL;
+          ObDatum converted_datum;
+          converted_datum.set_datum(storted_row->cells()[0]);
+          // convert string charset if needed
+          if (ob_is_string_type(val_type) 
+              && (ObCharset::charset_type_by_coll(cs_type) != CHARSET_UTF8MB4)) {
+            ObString origin_str = converted_datum.get_string();
+            ObString converted_str;
+            if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str, 
+                                                            CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
+              LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
+            } else {
+              converted_datum.set_string(converted_str);
+              cs_type = CS_TYPE_UTF8MB4_BIN;
+            }
+          }
+
+          // get json value
+          if (OB_FAIL(ret)) {
+          } else if (is_bool) {
+            void *json_node_buf = tmp_alloc.alloc(sizeof(ObJsonBoolean));
+            if (OB_ISNULL(json_node_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed: allocate jsonboolean", K(ret));
+            } else {
+              ObJsonBoolean *bool_node = (ObJsonBoolean*)new(json_node_buf)ObJsonBoolean(converted_datum.get_bool());
+              json_val = bool_node;
+            }
+          } else if (ObJsonExprHelper::is_convertible_to_json(val_type)) {
+            if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(converted_datum, val_type,
+                                                                          &tmp_alloc, cs_type,
+                                                                          json_val, false, true))) {
+              LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
+            }
+          } else {
+            if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(converted_datum, val_type,
+                                                                    &tmp_alloc, scale,
+                                                                    eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info(),
+                                                                    json_val, false))) {
+              LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
+            }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(json_array.array_append(json_val))) {
+            LOG_WARN("failed: json array append json value", K(ret));
+          } else if(json_array.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+            ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
+            LOG_WARN("result of json_arrayagg is too long", K(ret), K(json_array.get_serialize_size()),
+                                                            K(OB_MAX_PACKET_LENGTH));
+          }
+        }
+      }
+    }//end of while
+    if (ret != OB_ITER_END && ret != OB_SUCCESS) {
+      LOG_WARN("fail to get next row", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      ObString str;
+      // output res
+      if (OB_FAIL(json_array.get_raw_binary(str, &aggr_alloc_))) {
+        LOG_WARN("get result binary failed", K(ret));
+      } else {
+        concat_result.set_string(str);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
+                                                    GroupConcatExtraResult *&extra,
+                                                    ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  const int col_num = 2;
+  common::ObArenaAllocator tmp_alloc;
+  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unpexcted null", K(ret), K(extra));
+  } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
+    // Group concat row may be iterated in rollup_process(), rewind here.
+    LOG_WARN("rewind failed", KPC(extra), K(ret));
+  } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
+    LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else {
+    const ObChunkDatumStore::StoredRow *storted_row = NULL;
+    ObJsonObject json_object(&tmp_alloc);
+    ObObj tmp_obj[col_num];
+    bool is_bool = false;
+    if (OB_FAIL(extra->get_bool_mark(1, is_bool))) {
+      LOG_WARN("get_bool info failed, may not distinguish between bool and int", K(ret));
+    }
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+      if (OB_ISNULL(storted_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+      } else if(storted_row->cnt_ != col_num) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected column count", K(ret), K(storted_row->cnt_));
+      } else {
+        // get obj
+        if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
+          LOG_WARN("failed to convert datum to obj", K(ret));
+        } else if (tmp_obj[0].get_type() == ObNullType) {
+          ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
+          LOG_WARN("null type for json_objectagg key");
+        } else if (ob_is_string_type(tmp_obj[0].get_type()) 
+                   && tmp_obj[0].get_collation_type() == CS_TYPE_BINARY) {
+          // not support binary charset as mysql 
+          LOG_WARN("unsuport json string type with binary charset", 
+              K(tmp_obj[0].get_type()), K(tmp_obj[0].get_collation_type()));
+          ret = OB_ERR_INVALID_JSON_CHARSET;
+          LOG_USER_ERROR(OB_ERR_INVALID_JSON_CHARSET);
+        } else {
+          ObObjType val_type0 = tmp_obj[0].get_type();
+          ObCollationType cs_type0 = tmp_obj[0].get_collation_type();
+          ObObjType val_type1 = tmp_obj[1].get_type();
+          ObScale scale1 = tmp_obj[1].get_scale();
+          ObCollationType cs_type1 = tmp_obj[1].get_collation_type();
+          ObString key_string = tmp_obj[0].get_string();
+          if (OB_SUCC(ret) && ObCharset::charset_type_by_coll(cs_type0) != CHARSET_UTF8MB4) {
+            ObString converted_key_str;
+            if (OB_FAIL(ObExprUtil::convert_string_collation(key_string, cs_type0, converted_key_str, 
+                                                                  CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
+              LOG_WARN("convert key string collation failed", K(ret), K(cs_type0), K(key_string.length()));
+            } else {
+              key_string = converted_key_str;
+            }
+          }
+
+          // get key and value, and append to json_object
+          ObString key_data;
+          ObIJsonBase *json_val = NULL;
+          if (OB_SUCC(ret) && OB_FAIL(deep_copy_ob_string(tmp_alloc, key_string, key_data))) {
+            LOG_WARN("fail copy string", K(ret), K(key_string.length()));
+          } else {
+            ObDatum converted_datum;
+            converted_datum.set_datum(storted_row->cells()[1]);
+            if (ob_is_string_type(val_type1) 
+            && (ObCharset::charset_type_by_coll(cs_type1) != CHARSET_UTF8MB4)) {
+              ObString origin_str = converted_datum.get_string();
+              ObString converted_str;
+              if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type1, converted_str, 
+                                                              CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
+                LOG_WARN("convert string collation failed", K(ret), K(cs_type1), K(origin_str.length()));
+              } else {
+                converted_datum.set_string(converted_str);
+                cs_type1 = CS_TYPE_UTF8MB4_BIN;
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+            } else if (is_bool) {
+              void *json_node_buf = tmp_alloc.alloc(sizeof(ObJsonBoolean));
+              if (OB_ISNULL(json_node_buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("failed: allocate jsonboolean", K(ret));
+              } else {
+                ObJsonBoolean *bool_node = (ObJsonBoolean*)new(json_node_buf)ObJsonBoolean(storted_row->cells()[1].get_bool());
+                json_val = bool_node;
+              }
+            } else if (ObJsonExprHelper::is_convertible_to_json(val_type1)) {
+              if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(converted_datum, val_type1,
+                                                                            &tmp_alloc, cs_type1,
+                                                                            json_val, false, true))) {
+                LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type1));
+              }
+            } else {
+              if (OB_FAIL(ObJsonExprHelper::transform_scalar_2jsonBase(converted_datum, val_type1,
+                                                                      &tmp_alloc, scale1,
+                                                                      eval_ctx_.exec_ctx_.get_my_session()->get_timezone_info(),
+                                                                      json_val, false))) {
+                LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type1));
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(json_object.object_add(key_data, json_val))) {
+              LOG_WARN("failed: json object add json value", K(ret));
+            } else if(json_object.get_serialize_size() > OB_MAX_PACKET_LENGTH) {
+              ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
+              LOG_WARN("result of json_objectagg is too long", K(ret), K(json_object.get_serialize_size()),
+                                                                K(OB_MAX_PACKET_LENGTH));
+            }
+          }
+        }
+      }
+    }//end of while
+    if (ret == OB_ERR_JSON_DOCUMENT_NULL_KEY) {
+      LOG_USER_ERROR(OB_ERR_JSON_DOCUMENT_NULL_KEY);
+    }
+    if (ret != OB_ITER_END && ret != OB_SUCCESS) {
+      LOG_WARN("fail to get next row", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      ObString str;
+      // output res
+      if (OB_FAIL(json_object.get_raw_binary(str, &aggr_alloc_))) {
+        LOG_WARN("get result binary failed", K(ret));
+      } else {
+        concat_result.set_string(str);
       }
     }
   }

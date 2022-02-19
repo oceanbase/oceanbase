@@ -14,6 +14,7 @@
 #include "ob_extern_backup_info_mgr.h"
 #include "common/ob_record_header.h"
 #include "share/config/ob_server_config.h"
+#include "share/backup/ob_backup_operator.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -48,11 +49,11 @@ int64_t ObExternBackupInfos::get_write_buf_size() const
   return size;
 }
 
-int ObExternBackupInfos::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternBackupInfos::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -78,7 +79,7 @@ int ObExternBackupInfos::write_buf(char* buf, const int64_t buf_len, int64_t& po
   return ret;
 }
 
-int ObExternBackupInfos::read_buf(const char* buf, const int64_t buf_len)
+int ObExternBackupInfos::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -87,7 +88,7 @@ int ObExternBackupInfos::read_buf(const char* buf, const int64_t buf_len)
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -107,7 +108,7 @@ int ObExternBackupInfos::read_buf(const char* buf, const int64_t buf_len)
 }
 
 // in order to reuse, can not refer to last extern backup info' status is DOING
-int ObExternBackupInfos::update(const ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfos::update(const ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   ObExternBackupInfo last_backup_info;
@@ -127,7 +128,7 @@ int ObExternBackupInfos::update(const ObExternBackupInfo& extern_backup_info)
   return ret;
 }
 
-int ObExternBackupInfos::get_last(ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfos::get_last(ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   extern_backup_info.reset();
@@ -141,7 +142,7 @@ int ObExternBackupInfos::get_last(ObExternBackupInfo& extern_backup_info)
 }
 
 // TODO() change error code
-int ObExternBackupInfos::get_last_succeed_info(ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfos::get_last_succeed_info(ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   extern_backup_info.reset();
@@ -150,7 +151,7 @@ int ObExternBackupInfos::get_last_succeed_info(ObExternBackupInfo& extern_backup
   } else {
     bool found = false;
     for (int64_t i = extern_backup_info_array_.count() - 1; !found && i >= 0; --i) {
-      const ObExternBackupInfo& info = extern_backup_info_array_.at(i);
+      const ObExternBackupInfo &info = extern_backup_info_array_.at(i);
       if (ObExternBackupInfo::SUCCESS == info.status_) {
         extern_backup_info = info;
         found = true;
@@ -164,7 +165,7 @@ int ObExternBackupInfos::get_last_succeed_info(ObExternBackupInfo& extern_backup
   return ret;
 }
 
-int ObExternBackupInfos::get_extern_backup_infos(ObIArray<ObExternBackupInfo>& extern_backup_infos)
+int ObExternBackupInfos::get_extern_backup_infos(ObIArray<ObExternBackupInfo> &extern_backup_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(extern_backup_infos.assign(extern_backup_info_array_))) {
@@ -173,12 +174,12 @@ int ObExternBackupInfos::get_extern_backup_infos(ObIArray<ObExternBackupInfo>& e
   return ret;
 }
 
-int ObExternBackupInfos::get_extern_full_backup_infos(ObIArray<ObExternBackupInfo>& extern_backup_infos)
+int ObExternBackupInfos::get_extern_full_backup_infos(ObIArray<ObExternBackupInfo> &extern_backup_infos)
 {
   int ret = OB_SUCCESS;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < extern_backup_info_array_.count(); ++i) {
-    const ObExternBackupInfo& extern_backup_info = extern_backup_info_array_.at(i);
+    const ObExternBackupInfo &extern_backup_info = extern_backup_info_array_.at(i);
     if (extern_backup_info.full_backup_set_id_ == extern_backup_info.inc_backup_set_id_) {
       if (OB_FAIL(extern_backup_infos.push_back(extern_backup_info))) {
         LOG_WARN("failed to push extern backup info into array", K(ret), K(extern_backup_info));
@@ -188,7 +189,7 @@ int ObExternBackupInfos::get_extern_full_backup_infos(ObIArray<ObExternBackupInf
   return ret;
 }
 
-int ObExternBackupInfos::add_or_update(const ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfos::add_or_update(const ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   int old_index = 0;
@@ -199,7 +200,7 @@ int ObExternBackupInfos::add_or_update(const ObExternBackupInfo& extern_backup_i
     LOG_WARN("backup info is invalid", K(ret), K(extern_backup_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < extern_backup_info_array_.count(); ++i) {
-      const ObExternBackupInfo& info = extern_backup_info_array_.at(i);
+      const ObExternBackupInfo &info = extern_backup_info_array_.at(i);
       if (info.is_equal_without_status(extern_backup_info)) {
         exist_before = true;
         old_index = i;
@@ -220,7 +221,7 @@ int ObExternBackupInfos::add_or_update(const ObExternBackupInfo& extern_backup_i
   return ret;
 }
 
-int ObExternBackupInfos::add(const ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfos::add(const ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   ObExternBackupInfo last_backup_info;
@@ -248,7 +249,7 @@ int ObExternBackupInfos::add(const ObExternBackupInfo& extern_backup_info)
 }
 
 int ObExternBackupInfos::find_backup_info(
-    const int64_t restore_snapshot_version, const char* passwd_array, ObExternBackupInfo& backup_info)
+    const int64_t restore_snapshot_version, const char *passwd_array, ObExternBackupInfo &backup_info)
 {
   int ret = OB_SUCCESS;
   int64_t idx = -1;
@@ -258,7 +259,7 @@ int ObExternBackupInfos::find_backup_info(
     LOG_WARN("invalid args", K(ret), KP(passwd_array));
   }
   for (int64_t i = extern_backup_info_array_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    const ObExternBackupInfo& tmp_backup_info = extern_backup_info_array_.at(i);
+    const ObExternBackupInfo &tmp_backup_info = extern_backup_info_array_.at(i);
     if (ObExternBackupInfo::SUCCESS != tmp_backup_info.status_) {
       // do nothing
     } else if (tmp_backup_info.backup_snapshot_version_ <= restore_snapshot_version) {
@@ -274,7 +275,7 @@ int ObExternBackupInfos::find_backup_info(
   }
 
   for (int64_t i = idx; OB_SUCC(ret) && i >= 0; --i) {
-    const ObExternBackupInfo& tmp_backup_info = extern_backup_info_array_.at(i);
+    const ObExternBackupInfo &tmp_backup_info = extern_backup_info_array_.at(i);
     if (ObExternBackupInfo::SUCCESS != tmp_backup_info.status_) {
       // do nothing
     } else if (OB_FAIL(check_passwd(passwd_array, tmp_backup_info.passwd_.ptr()))) {
@@ -286,7 +287,7 @@ int ObExternBackupInfos::find_backup_info(
   return ret;
 }
 
-int ObExternBackupInfos::check_passwd(const char* passwd_array, const char* passwd)
+int ObExternBackupInfos::check_passwd(const char *passwd_array, const char *passwd)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBackupUtils::check_passwd(passwd_array, passwd))) {
@@ -299,7 +300,7 @@ int ObExternBackupInfos::mark_backup_info_deleted(const int64_t backup_set_id)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < extern_backup_info_array_.count(); ++i) {
-    ObExternBackupInfo& extern_backup_info = extern_backup_info_array_.at(i);
+    ObExternBackupInfo &extern_backup_info = extern_backup_info_array_.at(i);
     if (backup_set_id == extern_backup_info.inc_backup_set_id_) {
       extern_backup_info.is_mark_deleted_ = true;
     }
@@ -311,7 +312,7 @@ int ObExternBackupInfos::delete_marked_backup_info(const int64_t backup_set_id)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = extern_backup_info_array_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    const ObExternBackupInfo& extern_backup_info = extern_backup_info_array_.at(i);
+    const ObExternBackupInfo &extern_backup_info = extern_backup_info_array_.at(i);
     if (backup_set_id == extern_backup_info.inc_backup_set_id_) {
       if (!extern_backup_info.is_mark_deleted_) {
         ret = OB_ERR_UNEXPECTED;
@@ -330,12 +331,12 @@ int ObExternBackupInfos::delete_marked_backup_info(const int64_t backup_set_id)
 }
 
 int ObExternBackupInfos::get_extern_full_backup_info(
-    const int64_t full_backup_set_id, ObExternBackupInfo& extern_backup_info)
+    const int64_t full_backup_set_id, ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   bool found = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < extern_backup_info_array_.count() && !found; ++i) {
-    const ObExternBackupInfo& tmp_extern_backup_info = extern_backup_info_array_.at(i);
+    const ObExternBackupInfo &tmp_extern_backup_info = extern_backup_info_array_.at(i);
     if (full_backup_set_id == tmp_extern_backup_info.full_backup_set_id_ &&
         full_backup_set_id == tmp_extern_backup_info.inc_backup_set_id_) {
       extern_backup_info = tmp_extern_backup_info;
@@ -360,7 +361,7 @@ int ObExternBackupInfos::try_finish_extern_backup_info(const int64_t backup_set_
     LOG_WARN("try finish extern backup info get invalid argument", K(ret), K(backup_set_id));
   } else {
     for (int64_t i = extern_backup_info_array_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      ObExternBackupInfo& extern_info = extern_backup_info_array_.at(i);
+      ObExternBackupInfo &extern_info = extern_backup_info_array_.at(i);
       if (backup_set_id > extern_info.inc_backup_set_id_) {
         break;
       } else if (backup_set_id == extern_info.inc_backup_set_id_) {
@@ -377,7 +378,7 @@ int ObExternBackupInfos::try_finish_extern_backup_info(const int64_t backup_set_
 }
 
 int ObExternBackupInfos::get_extern_backup_info(
-    const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObExternBackupInfo& extern_backup_info)
+    const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -387,7 +388,7 @@ int ObExternBackupInfos::get_extern_backup_info(
     LOG_WARN("get extern backup info get invalid argument", K(ret), K(full_backup_set_id), K(inc_backup_set_id));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < extern_backup_info_array_.count() && !found; ++i) {
-      const ObExternBackupInfo& tmp_extern_backup_info = extern_backup_info_array_.at(i);
+      const ObExternBackupInfo &tmp_extern_backup_info = extern_backup_info_array_.at(i);
       if (tmp_extern_backup_info.full_backup_set_id_ == full_backup_set_id &&
           tmp_extern_backup_info.inc_backup_set_id_ == inc_backup_set_id) {
         extern_backup_info = tmp_extern_backup_info;
@@ -419,8 +420,8 @@ ObExternBackupInfoMgr::ObExternBackupInfoMgr()
 ObExternBackupInfoMgr::~ObExternBackupInfoMgr()
 {}
 
-int ObExternBackupInfoMgr::init(const uint64_t tenant_id, const ObClusterBackupDest& backup_dest,
-    share::ObIBackupLeaseService& backup_lease_service)
+int ObExternBackupInfoMgr::init(const uint64_t tenant_id, const ObClusterBackupDest &backup_dest,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -449,12 +450,12 @@ int ObExternBackupInfoMgr::init(const uint64_t tenant_id, const ObClusterBackupD
   return ret;
 }
 
-int ObExternBackupInfoMgr::get_extern_backup_infos(const uint64_t tenant_id, const ObClusterBackupDest& backup_dest)
+int ObExternBackupInfoMgr::get_extern_backup_infos(const uint64_t tenant_id, const ObClusterBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -470,7 +471,7 @@ int ObExternBackupInfoMgr::get_extern_backup_infos(const uint64_t tenant_id, con
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern backup info is empty", K(ret), K(tenant_id), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(
@@ -502,7 +503,7 @@ int ObExternBackupInfoMgr::get_last_succeed_info()
   return ret;
 }
 
-int ObExternBackupInfoMgr::get_last_info(ObExternBackupInfo& last_backup_info)
+int ObExternBackupInfoMgr::get_last_info(ObExternBackupInfo &last_backup_info)
 {
   int ret = OB_SUCCESS;
   last_backup_info.reset();
@@ -517,7 +518,7 @@ int ObExternBackupInfoMgr::get_last_info(ObExternBackupInfo& last_backup_info)
   return ret;
 }
 
-int ObExternBackupInfoMgr::check_can_backup(const ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfoMgr::check_can_backup(const ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   ObExternBackupInfo last_backup_info;
@@ -570,7 +571,7 @@ int ObExternBackupInfoMgr::check_can_backup(const ObExternBackupInfo& extern_bac
   return ret;
 }
 
-int ObExternBackupInfoMgr::upload_backup_info(const ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfoMgr::upload_backup_info(const ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
 
@@ -593,7 +594,7 @@ int ObExternBackupInfoMgr::upload_backup_info(const ObExternBackupInfo& extern_b
   return ret;
 }
 
-int ObExternBackupInfoMgr::upload_backup_info(const ObExternBackupInfo& extern_backup_info, const bool search)
+int ObExternBackupInfoMgr::upload_backup_info(const ObExternBackupInfo &extern_backup_info, const bool search)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -613,7 +614,7 @@ int ObExternBackupInfoMgr::upload_backup_info(const ObExternBackupInfo& extern_b
 }
 
 int ObExternBackupInfoMgr::get_backup_path(
-    const uint64_t tenant_id, const ObClusterBackupDest& backup_dest, ObBackupPath& path)
+    const uint64_t tenant_id, const ObClusterBackupDest &backup_dest, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (OB_SYS_TENANT_ID == tenant_id) {
@@ -628,8 +629,8 @@ int ObExternBackupInfoMgr::get_backup_path(
   return ret;
 }
 
-int ObExternBackupInfoMgr::get_extern_backup_info(const ObBaseBackupInfoStruct& info,
-    rootserver::ObFreezeInfoManager& freeze_info_mgr, ObExternBackupInfo& extern_backup_info)
+int ObExternBackupInfoMgr::get_extern_backup_info(const ObBaseBackupInfoStruct &info,
+    rootserver::ObFreezeInfoManager &freeze_info_mgr, ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   extern_backup_info.reset();
@@ -731,7 +732,7 @@ int ObExternBackupInfoMgr::get_extern_backup_info(const ObBaseBackupInfoStruct& 
 }
 
 int ObExternBackupInfoMgr::find_backup_info(
-    const int64_t restore_snapshot_version, const char* passwd_array, ObExternBackupInfo& extern_backup_info)
+    const int64_t restore_snapshot_version, const char *passwd_array, ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -747,7 +748,7 @@ int ObExternBackupInfoMgr::find_backup_info(
   return ret;
 }
 
-int ObExternBackupInfoMgr::get_extern_backup_infos(ObIArray<ObExternBackupInfo>& extern_backup_infos)
+int ObExternBackupInfoMgr::get_extern_backup_infos(ObIArray<ObExternBackupInfo> &extern_backup_infos)
 {
   int ret = OB_SUCCESS;
   extern_backup_infos.reset();
@@ -760,7 +761,7 @@ int ObExternBackupInfoMgr::get_extern_backup_infos(ObIArray<ObExternBackupInfo>&
   return ret;
 }
 
-int ObExternBackupInfoMgr::get_extern_full_backup_infos(ObIArray<ObExternBackupInfo>& extern_backup_infos)
+int ObExternBackupInfoMgr::get_extern_full_backup_infos(ObIArray<ObExternBackupInfo> &extern_backup_infos)
 {
   int ret = OB_SUCCESS;
   extern_backup_infos.reset();
@@ -778,7 +779,7 @@ int ObExternBackupInfoMgr::upload_backup_info()
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need_retry*/);
@@ -790,7 +791,7 @@ int ObExternBackupInfoMgr::upload_backup_info()
   } else if (OB_FAIL(get_backup_path(tenant_id_, backup_dest_, path))) {
     LOG_WARN("failed to get backup path", K(ret), K(tenant_id_), K(backup_dest_));
   } else if (FALSE_IT(buf_size = extern_backup_infos_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(extern_backup_infos_.write_buf(buf, buf_size, pos))) {
@@ -811,7 +812,7 @@ int ObExternBackupInfoMgr::upload_backup_info()
   return ret;
 }
 
-int ObExternBackupInfoMgr::mark_backup_info_deleted(const common::ObIArray<ObBackupSetIdPair>& backup_set_id_pairs)
+int ObExternBackupInfoMgr::mark_backup_info_deleted(const common::ObIArray<ObBackupSetIdPair> &backup_set_id_pairs)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -819,7 +820,7 @@ int ObExternBackupInfoMgr::mark_backup_info_deleted(const common::ObIArray<ObBac
     LOG_WARN("extern backup info mgr do not init", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_id_pairs.count(); ++i) {
-      const ObBackupSetIdPair& backup_set_id_pair = backup_set_id_pairs.at(i);
+      const ObBackupSetIdPair &backup_set_id_pair = backup_set_id_pairs.at(i);
       if (OB_FAIL(extern_backup_infos_.mark_backup_info_deleted(backup_set_id_pair.backup_set_id_))) {
         LOG_WARN("failed to mark backup info deleted", K(ret), K(backup_set_id_pair));
       }
@@ -834,7 +835,7 @@ int ObExternBackupInfoMgr::mark_backup_info_deleted(const common::ObIArray<ObBac
   return ret;
 }
 
-int ObExternBackupInfoMgr::delete_marked_backup_info(const common::ObIArray<int64_t>& backup_set_ids, bool& is_empty)
+int ObExternBackupInfoMgr::delete_marked_backup_info(const common::ObIArray<int64_t> &backup_set_ids, bool &is_empty)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -860,7 +861,7 @@ int ObExternBackupInfoMgr::delete_marked_backup_info(const common::ObIArray<int6
 }
 
 int ObExternBackupInfoMgr::get_extern_full_backup_info(
-    const int64_t full_backup_set_id, ObExternBackupInfo& extern_backup_info)
+    const int64_t full_backup_set_id, ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
   extern_backup_info.reset();
@@ -889,7 +890,7 @@ int ObExternBackupInfoMgr::try_finish_extern_backup_info(const int64_t backup_se
   return ret;
 }
 
-int ObExternBackupInfoMgr::get_lastest_incremental_backup_count(int32_t& incremental_backup_count)
+int ObExternBackupInfoMgr::get_lastest_incremental_backup_count(int32_t &incremental_backup_count)
 {
   int ret = OB_SUCCESS;
   incremental_backup_count = 0;
@@ -902,7 +903,7 @@ int ObExternBackupInfoMgr::get_lastest_incremental_backup_count(int32_t& increme
     LOG_WARN("failed to get extern backup infos", K(ret));
   } else {
     for (int64_t i = extern_backup_infos.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      const ObExternBackupInfo& extern_backup_info = extern_backup_infos.at(i);
+      const ObExternBackupInfo &extern_backup_info = extern_backup_infos.at(i);
       if (ObBackupType::is_full_backup(extern_backup_info.backup_type_)) {
         break;
       } else {
@@ -914,7 +915,7 @@ int ObExternBackupInfoMgr::get_lastest_incremental_backup_count(int32_t& increme
 }
 
 int ObExternBackupInfoMgr::get_extern_backup_info(
-    const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObExternBackupInfo& extern_backup_info)
+    const int64_t full_backup_set_id, const int64_t inc_backup_set_id, ObExternBackupInfo &extern_backup_info)
 {
   int ret = OB_SUCCESS;
 
@@ -929,7 +930,7 @@ int ObExternBackupInfoMgr::get_extern_backup_info(
 }
 
 int ObExternBackupInfoMgr::get_extern_backup_infos(
-    const int64_t backup_set_id, common::ObIArray<ObExternBackupInfo>& extern_backup_infos)
+    const int64_t backup_set_id, common::ObIArray<ObExternBackupInfo> &extern_backup_infos)
 {
   int ret = OB_SUCCESS;
   ObArray<ObExternBackupInfo> tmp_extern_backup_infos;
@@ -941,7 +942,7 @@ int ObExternBackupInfoMgr::get_extern_backup_infos(
     LOG_WARN("failed to get extern backup infos", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_extern_backup_infos.count(); ++i) {
-      const ObExternBackupInfo& extern_backup_info = tmp_extern_backup_infos.at(i);
+      const ObExternBackupInfo &extern_backup_info = tmp_extern_backup_infos.at(i);
       if (extern_backup_info.inc_backup_set_id_ != backup_set_id) {
         // do nothing
       } else if (OB_FAIL(extern_backup_infos.push_back(extern_backup_info))) {
@@ -952,7 +953,7 @@ int ObExternBackupInfoMgr::get_extern_backup_infos(
   return ret;
 }
 
-int ObExternBackupInfoMgr::get_backup_path(const ObClusterBackupDest& cluster_backup_dest, ObBackupPath& path)
+int ObExternBackupInfoMgr::get_backup_path(const ObClusterBackupDest &cluster_backup_dest, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   path.reset();
@@ -1032,11 +1033,11 @@ int64_t ObExternBackupSetInfos::get_write_buf_size() const
   return size;
 }
 
-int ObExternBackupSetInfos::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternBackupSetInfos::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -1062,7 +1063,7 @@ int ObExternBackupSetInfos::write_buf(char* buf, const int64_t buf_len, int64_t&
   return ret;
 }
 
-int ObExternBackupSetInfos::read_buf(const char* buf, const int64_t buf_len)
+int ObExternBackupSetInfos::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -1071,7 +1072,7 @@ int ObExternBackupSetInfos::read_buf(const char* buf, const int64_t buf_len)
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -1090,7 +1091,7 @@ int ObExternBackupSetInfos::read_buf(const char* buf, const int64_t buf_len)
   return ret;
 }
 
-int ObExternBackupSetInfos::add(const ObExternBackupSetInfo& extern_backup_set_info)
+int ObExternBackupSetInfos::add(const ObExternBackupSetInfo &extern_backup_set_info)
 {
   int ret = OB_SUCCESS;
   if (!extern_backup_set_info.is_valid()) {
@@ -1102,7 +1103,7 @@ int ObExternBackupSetInfos::add(const ObExternBackupSetInfo& extern_backup_set_i
   return ret;
 }
 
-int ObExternBackupSetInfos::get_extern_backup_set_infos(ObIArray<ObExternBackupSetInfo>& extern_backup_set_infos)
+int ObExternBackupSetInfos::get_extern_backup_set_infos(ObIArray<ObExternBackupSetInfo> &extern_backup_set_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(extern_backup_set_infos.assign(extern_backup_set_info_array_))) {
@@ -1127,8 +1128,8 @@ ObExternBackupSetInfoMgr::~ObExternBackupSetInfoMgr()
 {}
 
 int ObExternBackupSetInfoMgr::init(const uint64_t tenant_id, const int64_t full_backup_set_id,
-    const int64_t inc_backup_set_id, const ObClusterBackupDest& backup_dest, const int64_t backup_date,
-    const int64_t compatible, share::ObIBackupLeaseService& backup_lease_service)
+    const int64_t inc_backup_set_id, const ObClusterBackupDest &backup_dest, const int64_t backup_date,
+    const int64_t compatible, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -1173,11 +1174,11 @@ int ObExternBackupSetInfoMgr::init(const uint64_t tenant_id, const int64_t full_
 }
 
 int ObExternBackupSetInfoMgr::get_extern_backup_set_infos(
-    const ObClusterBackupDest& backup_dest, const ObBackupPath& path)
+    const ObClusterBackupDest &backup_dest, const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1191,7 +1192,7 @@ int ObExternBackupSetInfoMgr::get_extern_backup_set_infos(
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern backup info is empty", K(ret), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(
@@ -1209,11 +1210,11 @@ int ObExternBackupSetInfoMgr::get_extern_backup_set_infos(
   return ret;
 }
 
-int ObExternBackupSetInfoMgr::upload_backup_set_info(const ObExternBackupSetInfo& extern_backup_set_info)
+int ObExternBackupSetInfoMgr::upload_backup_set_info(const ObExternBackupSetInfo &extern_backup_set_info)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1234,7 +1235,7 @@ int ObExternBackupSetInfoMgr::upload_backup_set_info(const ObExternBackupSetInfo
   } else if (OB_FAIL(extern_backup_set_infos_.add(extern_backup_set_info))) {
     LOG_WARN("failed to push extern backup set info into array", K(ret), K(extern_backup_set_info));
   } else if (FALSE_IT(buf_size = extern_backup_set_infos_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(extern_backup_set_infos_.write_buf(buf, buf_size, pos))) {
@@ -1255,7 +1256,7 @@ int ObExternBackupSetInfoMgr::upload_backup_set_info(const ObExternBackupSetInfo
   return ret;
 }
 
-int ObExternBackupSetInfoMgr::get_extern_backup_set_infos(ObIArray<ObExternBackupSetInfo>& extern_backup_set_infos)
+int ObExternBackupSetInfoMgr::get_extern_backup_set_infos(ObIArray<ObExternBackupSetInfo> &extern_backup_set_infos)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1344,11 +1345,11 @@ int64_t ObExternPGList::get_write_buf_size() const
   return size;
 }
 
-int ObExternPGList::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternPGList::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -1373,7 +1374,7 @@ int ObExternPGList::write_buf(char* buf, const int64_t buf_len, int64_t& pos) co
   return ret;
 }
 
-int ObExternPGList::read_buf(const char* buf, const int64_t buf_len)
+int ObExternPGList::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -1382,7 +1383,7 @@ int ObExternPGList::read_buf(const char* buf, const int64_t buf_len)
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -1401,7 +1402,7 @@ int ObExternPGList::read_buf(const char* buf, const int64_t buf_len)
   return ret;
 }
 
-int ObExternPGList::add(const ObPGKey& pg_key)
+int ObExternPGList::add(const ObPGKey &pg_key)
 {
   int ret = OB_SUCCESS;
   if (!pg_key.is_valid()) {
@@ -1413,7 +1414,7 @@ int ObExternPGList::add(const ObPGKey& pg_key)
   return ret;
 }
 
-int ObExternPGList::get(ObIArray<ObPGKey>& pg_keys)
+int ObExternPGList::get(ObIArray<ObPGKey> &pg_keys)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(pg_keys.assign(pkeys_))) {
@@ -1430,7 +1431,7 @@ ObExternPGListMgr::~ObExternPGListMgr()
 {}
 
 int ObExternPGListMgr::init(
-    const share::ObSimpleBackupSetPath& simple_path, share::ObIBackupLeaseService& backup_lease_service)
+    const share::ObSimpleBackupSetPath &simple_path, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -1448,8 +1449,8 @@ int ObExternPGListMgr::init(
 }
 
 int ObExternPGListMgr::init(const uint64_t tenant_id, const int64_t full_backup_set_id, const int64_t inc_backup_set_id,
-    const ObClusterBackupDest& backup_dest, const int64_t backup_date, const int64_t compatible,
-    share::ObIBackupLeaseService& backup_lease_service)
+    const ObClusterBackupDest &backup_dest, const int64_t backup_date, const int64_t compatible,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupBaseDataPathInfo path_info;
@@ -1480,7 +1481,7 @@ int ObExternPGListMgr::init(const uint64_t tenant_id, const int64_t full_backup_
   return ret;
 }
 
-int ObExternPGListMgr::add_pg_key(const ObPGKey& pg_key)
+int ObExternPGListMgr::add_pg_key(const ObPGKey &pg_key)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1521,7 +1522,7 @@ int ObExternPGListMgr::upload_sys_pg_list()
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1533,7 +1534,7 @@ int ObExternPGListMgr::upload_sys_pg_list()
   } else if (OB_FAIL(get_tenant_sys_pg_list_path_(path))) {
     LOG_WARN("failed to get tenant sys pg list path", KR(ret));
   } else if (FALSE_IT(buf_size = extern_sys_pg_list_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(extern_sys_pg_list_.write_buf(buf, buf_size, pos))) {
@@ -1558,7 +1559,7 @@ int ObExternPGListMgr::upload_normal_pg_list()
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1570,7 +1571,7 @@ int ObExternPGListMgr::upload_normal_pg_list()
   } else if (OB_FAIL(get_tenant_normal_pg_list_path_(path))) {
     LOG_WARN("failed to get tenant normal pg list path", KR(ret));
   } else if (FALSE_IT(buf_size = extern_normal_pg_list_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(extern_normal_pg_list_.write_buf(buf, buf_size, pos))) {
@@ -1591,7 +1592,7 @@ int ObExternPGListMgr::upload_normal_pg_list()
   return ret;
 }
 
-int ObExternPGListMgr::get_sys_pg_list(common::ObIArray<common::ObPGKey>& pg_keys)
+int ObExternPGListMgr::get_sys_pg_list(common::ObIArray<common::ObPGKey> &pg_keys)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1605,7 +1606,7 @@ int ObExternPGListMgr::get_sys_pg_list(common::ObIArray<common::ObPGKey>& pg_key
   return ret;
 }
 
-int ObExternPGListMgr::get_normal_pg_list(common::ObIArray<common::ObPGKey>& pg_keys)
+int ObExternPGListMgr::get_normal_pg_list(common::ObIArray<common::ObPGKey> &pg_keys)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1624,7 +1625,7 @@ int ObExternPGListMgr::get_extern_sys_pg_list()
   int ret = OB_SUCCESS;
   ObBackupPath path;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1641,7 +1642,7 @@ int ObExternPGListMgr::get_extern_sys_pg_list()
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern sys pg list is empty", K(ret), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(
@@ -1664,7 +1665,7 @@ int ObExternPGListMgr::get_extern_normal_pg_list()
   int ret = OB_SUCCESS;
   ObBackupPath path;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1680,7 +1681,7 @@ int ObExternPGListMgr::get_extern_normal_pg_list()
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern sys pg list is empty", K(ret), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(
@@ -1698,7 +1699,7 @@ int ObExternPGListMgr::get_extern_normal_pg_list()
   return ret;
 }
 
-int ObExternPGListMgr::get_tenant_sys_pg_list_path_(share::ObBackupPath& path)
+int ObExternPGListMgr::get_tenant_sys_pg_list_path_(share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   path.reset();
@@ -1708,7 +1709,7 @@ int ObExternPGListMgr::get_tenant_sys_pg_list_path_(share::ObBackupPath& path)
   return ret;
 }
 
-int ObExternPGListMgr::get_tenant_normal_pg_list_path_(share::ObBackupPath& path)
+int ObExternPGListMgr::get_tenant_normal_pg_list_path_(share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   path.reset();
@@ -1748,11 +1749,11 @@ int64_t ObExternTenantInfos::get_write_buf_size() const
   return size;
 }
 
-int ObExternTenantInfos::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternTenantInfos::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -1778,7 +1779,7 @@ int ObExternTenantInfos::write_buf(char* buf, const int64_t buf_len, int64_t& po
   return ret;
 }
 
-int ObExternTenantInfos::read_buf(const char* buf, const int64_t buf_len)
+int ObExternTenantInfos::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -1787,7 +1788,7 @@ int ObExternTenantInfos::read_buf(const char* buf, const int64_t buf_len)
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -1806,7 +1807,7 @@ int ObExternTenantInfos::read_buf(const char* buf, const int64_t buf_len)
   return ret;
 }
 
-int ObExternTenantInfos::get_extern_tenant_infos(ObIArray<ObExternTenantInfo>& extern_tenant_infos)
+int ObExternTenantInfos::get_extern_tenant_infos(ObIArray<ObExternTenantInfo> &extern_tenant_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(extern_tenant_infos.assign(extern_tenant_info_array_))) {
@@ -1815,7 +1816,7 @@ int ObExternTenantInfos::get_extern_tenant_infos(ObIArray<ObExternTenantInfo>& e
   return ret;
 }
 
-int ObExternTenantInfos::add(const ObExternTenantInfo& extern_tenant_info)
+int ObExternTenantInfos::add(const ObExternTenantInfo &extern_tenant_info)
 {
   int ret = OB_SUCCESS;
   if (!extern_tenant_info.is_valid()) {
@@ -1824,7 +1825,7 @@ int ObExternTenantInfos::add(const ObExternTenantInfo& extern_tenant_info)
   } else {
     bool found = false;
     for (int64_t i = 0; !found && i < extern_tenant_info_array_.count(); ++i) {
-      ObExternTenantInfo& info = extern_tenant_info_array_.at(i);
+      ObExternTenantInfo &info = extern_tenant_info_array_.at(i);
       if (info.tenant_id_ == extern_tenant_info.tenant_id_) {
         found = true;
         if (info.tenant_name_ != extern_tenant_info.tenant_name_) {
@@ -1843,7 +1844,7 @@ int ObExternTenantInfos::add(const ObExternTenantInfo& extern_tenant_info)
   return ret;
 }
 
-int ObExternTenantInfos::find_tenant_info(const uint64_t tenant_id, ObExternTenantInfo& tenant_info)
+int ObExternTenantInfos::find_tenant_info(const uint64_t tenant_id, ObExternTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -1854,7 +1855,7 @@ int ObExternTenantInfos::find_tenant_info(const uint64_t tenant_id, ObExternTena
   }
 
   for (int64_t i = 0; !found && i < extern_tenant_info_array_.count(); ++i) {
-    const ObExternTenantInfo& tmp_tenant_info = extern_tenant_info_array_.at(i);
+    const ObExternTenantInfo &tmp_tenant_info = extern_tenant_info_array_.at(i);
     if (tmp_tenant_info.tenant_id_ == tenant_id) {
       tenant_info = tmp_tenant_info;
       found = true;
@@ -1876,7 +1877,7 @@ int ObExternTenantInfos::delete_tenant_info(const uint64_t tenant_id)
     LOG_WARN("invalid args", K(ret), K(tenant_id));
   } else {
     for (int64_t i = extern_tenant_info_array_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      const ObExternTenantInfo& tmp_tenant_info = extern_tenant_info_array_.at(i);
+      const ObExternTenantInfo &tmp_tenant_info = extern_tenant_info_array_.at(i);
       if (tmp_tenant_info.tenant_id_ == tenant_id) {
         if (OB_FAIL(extern_tenant_info_array_.remove(i))) {
           LOG_WARN("failed to remove exter tenant info", K(ret), K(tmp_tenant_info), K(tenant_id));
@@ -1898,7 +1899,7 @@ ObExternTenantInfoMgr::~ObExternTenantInfoMgr()
 {}
 
 int ObExternTenantInfoMgr::init(
-    const ObClusterBackupDest& backup_dest, share::ObIBackupLeaseService& backup_lease_service)
+    const ObClusterBackupDest &backup_dest, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -1925,12 +1926,12 @@ int ObExternTenantInfoMgr::init(
   return ret;
 }
 
-int ObExternTenantInfoMgr::get_extern_tenant_infos(const ObClusterBackupDest& backup_dest)
+int ObExternTenantInfoMgr::get_extern_tenant_infos(const ObClusterBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1946,7 +1947,7 @@ int ObExternTenantInfoMgr::get_extern_tenant_infos(const ObClusterBackupDest& ba
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern backup info is empty", K(ret), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(
@@ -1964,7 +1965,7 @@ int ObExternTenantInfoMgr::get_extern_tenant_infos(const ObClusterBackupDest& ba
   return ret;
 }
 
-int ObExternTenantInfoMgr::add_tenant_info(const ObExternTenantInfo& tenant_info)
+int ObExternTenantInfoMgr::add_tenant_info(const ObExternTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -1984,7 +1985,7 @@ int ObExternTenantInfoMgr::upload_tenant_infos()
   int ret = OB_SUCCESS;
 
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -1996,7 +1997,7 @@ int ObExternTenantInfoMgr::upload_tenant_infos()
   } else if (OB_FAIL(ObBackupPathUtil::get_tenant_info_path(backup_dest_, path))) {
     LOG_WARN("failed to get tenant data backup info path", K(ret), K(backup_dest_));
   } else if (FALSE_IT(buf_size = extern_tenant_infos_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(extern_tenant_infos_.write_buf(buf, buf_size, pos))) {
@@ -2018,7 +2019,7 @@ int ObExternTenantInfoMgr::upload_tenant_infos()
   return ret;
 }
 
-int ObExternTenantInfoMgr::get_extern_tenant_infos(ObIArray<ObExternTenantInfo>& tenant_infos)
+int ObExternTenantInfoMgr::get_extern_tenant_infos(ObIArray<ObExternTenantInfo> &tenant_infos)
 {
   int ret = OB_SUCCESS;
   tenant_infos.reset();
@@ -2031,7 +2032,7 @@ int ObExternTenantInfoMgr::get_extern_tenant_infos(ObIArray<ObExternTenantInfo>&
   return ret;
 }
 
-int ObExternTenantInfoMgr::find_tenant_info(const uint64_t tenant_id, ObExternTenantInfo& tenant_info)
+int ObExternTenantInfoMgr::find_tenant_info(const uint64_t tenant_id, ObExternTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -2090,11 +2091,11 @@ int64_t ObExternTenantLocality::get_write_buf_size() const
   return size;
 }
 
-int ObExternTenantLocality::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternTenantLocality::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -2119,7 +2120,7 @@ int ObExternTenantLocality::write_buf(char* buf, const int64_t buf_len, int64_t&
   return ret;
 }
 
-int ObExternTenantLocality::read_buf(const char* buf, const int64_t buf_len)
+int ObExternTenantLocality::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -2128,7 +2129,7 @@ int ObExternTenantLocality::read_buf(const char* buf, const int64_t buf_len)
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -2147,7 +2148,7 @@ int ObExternTenantLocality::read_buf(const char* buf, const int64_t buf_len)
   return ret;
 }
 
-int ObExternTenantLocality::set_tenant_locality_info(const ObExternTenantLocalityInfo& tenant_locality_info)
+int ObExternTenantLocality::set_tenant_locality_info(const ObExternTenantLocalityInfo &tenant_locality_info)
 {
   int ret = OB_SUCCESS;
   if (!tenant_locality_info.is_valid()) {
@@ -2167,7 +2168,7 @@ ObExternTenantLocalityInfoMgr::~ObExternTenantLocalityInfoMgr()
 {}
 
 int ObExternTenantLocalityInfoMgr::init(
-    const share::ObSimpleBackupSetPath& simple_path, share::ObIBackupLeaseService& backup_lease_service)
+    const share::ObSimpleBackupSetPath &simple_path, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -2185,8 +2186,8 @@ int ObExternTenantLocalityInfoMgr::init(
 }
 
 int ObExternTenantLocalityInfoMgr::init(const uint64_t tenant_id, const int64_t full_backup_set_id,
-    const int64_t inc_backup_set_id, const ObClusterBackupDest& backup_dest, const int64_t backup_date,
-    const int64_t compatible, share::ObIBackupLeaseService& backup_lease_service)
+    const int64_t inc_backup_set_id, const ObClusterBackupDest &backup_dest, const int64_t backup_date,
+    const int64_t compatible, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupBaseDataPathInfo path_info;
@@ -2216,12 +2217,12 @@ int ObExternTenantLocalityInfoMgr::init(const uint64_t tenant_id, const int64_t 
   return ret;
 }
 
-int ObExternTenantLocalityInfoMgr::upload_tenant_locality_info(const ObExternTenantLocalityInfo& tenant_locality_info)
+int ObExternTenantLocalityInfoMgr::upload_tenant_locality_info(const ObExternTenantLocalityInfo &tenant_locality_info)
 {
   int ret = OB_SUCCESS;
 
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -2238,7 +2239,7 @@ int ObExternTenantLocalityInfoMgr::upload_tenant_locality_info(const ObExternTen
   } else if (OB_FAIL(get_tenant_locality_info_path_(path))) {
     LOG_WARN("failed to get tenant locality info path", K(ret));
   } else if (FALSE_IT(buf_size = extern_tenant_locality_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(extern_tenant_locality_.write_buf(buf, buf_size, pos))) {
@@ -2260,14 +2261,14 @@ int ObExternTenantLocalityInfoMgr::upload_tenant_locality_info(const ObExternTen
   return ret;
 }
 
-int ObExternTenantLocalityInfoMgr::get_extern_tenant_locality_info(ObExternTenantLocalityInfo& tenant_locality_info)
+int ObExternTenantLocalityInfoMgr::get_extern_tenant_locality_info(ObExternTenantLocalityInfo &tenant_locality_info)
 {
   int ret = OB_SUCCESS;
   tenant_locality_info.reset();
 
   ObBackupPath path;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -2286,7 +2287,7 @@ int ObExternTenantLocalityInfoMgr::get_extern_tenant_locality_info(ObExternTenan
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern tenant locality info is empty", K(ret), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(
@@ -2305,7 +2306,7 @@ int ObExternTenantLocalityInfoMgr::get_extern_tenant_locality_info(ObExternTenan
   return ret;
 }
 
-int ObExternTenantLocalityInfoMgr::get_tenant_locality_info_path_(share::ObBackupPath& path)
+int ObExternTenantLocalityInfoMgr::get_tenant_locality_info_path_(share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   path.reset();
@@ -2338,11 +2339,11 @@ int64_t ObExternTenantBackupDiagnoseMgr::get_write_buf_size() const
 }
 
 int ObExternTenantBackupDiagnoseMgr::write_buf(
-    const ObExternBackupDiagnoseInfo& diagnose_info, char* buf, const int64_t buf_len, int64_t& pos) const
+    const ObExternBackupDiagnoseInfo &diagnose_info, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len), K(pos), K(need_size));
@@ -2374,8 +2375,8 @@ int ObExternTenantBackupDiagnoseMgr::write_buf(
 }
 
 int ObExternTenantBackupDiagnoseMgr::init(const uint64_t tenant_id, const int64_t full_backup_set_id,
-    const int64_t inc_backup_set_id, const ObClusterBackupDest& backup_dest, const int64_t backup_date,
-    share::ObIBackupLeaseService& backup_lease_service)
+    const int64_t inc_backup_set_id, const ObClusterBackupDest &backup_dest, const int64_t backup_date,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -2402,11 +2403,11 @@ int ObExternTenantBackupDiagnoseMgr::init(const uint64_t tenant_id, const int64_
   return ret;
 }
 
-int ObExternTenantBackupDiagnoseMgr::upload_tenant_backup_diagnose_info(const ObExternBackupDiagnoseInfo& diagnose_info)
+int ObExternTenantBackupDiagnoseMgr::upload_tenant_backup_diagnose_info(const ObExternBackupDiagnoseInfo &diagnose_info)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -2426,7 +2427,7 @@ int ObExternTenantBackupDiagnoseMgr::upload_tenant_backup_diagnose_info(const Ob
   } else if (OB_FAIL(ObBackupPathUtil::get_tenant_backup_diagnose_path(path_info, path))) {
     LOG_WARN("failed to get tenant data backup info path", K(ret), K(backup_dest_));
   } else if (FALSE_IT(buf_size = get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(write_buf(diagnose_info, buf, buf_size, pos))) {
@@ -2477,11 +2478,11 @@ int64_t ObExternBackupSetFileInfos::get_write_buf_size() const
   return size;
 }
 
-int ObExternBackupSetFileInfos::write_buf(char* buf, const int64_t buf_len, int64_t& pos) const
+int ObExternBackupSetFileInfos::write_buf(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t need_size = get_write_buf_size();
-  ObBackupCommonHeader* common_header = nullptr;
+  ObBackupCommonHeader *common_header = nullptr;
 
   if (OB_ISNULL(buf) || buf_len - pos < need_size) {
     ret = OB_INVALID_ARGUMENT;
@@ -2506,7 +2507,7 @@ int ObExternBackupSetFileInfos::write_buf(char* buf, const int64_t buf_len, int6
   return ret;
 }
 
-int ObExternBackupSetFileInfos::read_buf(const char* buf, const int64_t buf_len)
+int ObExternBackupSetFileInfos::read_buf(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -2515,7 +2516,7 @@ int ObExternBackupSetFileInfos::read_buf(const char* buf, const int64_t buf_len)
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t pos = 0;
-    const ObBackupCommonHeader* common_header = reinterpret_cast<const ObBackupCommonHeader*>(buf + pos);
+    const ObBackupCommonHeader *common_header = reinterpret_cast<const ObBackupCommonHeader *>(buf + pos);
     pos += common_header->header_length_;
     if (OB_FAIL(common_header->check_header_checksum())) {
       LOG_WARN("failed to check common header", K(ret));
@@ -2535,14 +2536,14 @@ int ObExternBackupSetFileInfos::read_buf(const char* buf, const int64_t buf_len)
 }
 
 int ObExternBackupSetFileInfos::get_backup_set_file_info_(const uint64_t tenant_id, const int64_t incarnation,
-    const int64_t backup_set_id, const int64_t copy_id, ObBackupSetFileInfo*& backup_set_file_info_ptr)
+    const int64_t backup_set_id, const int64_t copy_id, ObBackupSetFileInfo *&backup_set_file_info_ptr)
 {
   int ret = OB_SUCCESS;
   bool found = false;
   backup_set_file_info_ptr = NULL;
 
   for (int64_t i = backup_set_file_info_array_.count() - 1; i >= 0 && !found; --i) {
-    ObBackupSetFileInfo& backup_set_file_info = backup_set_file_info_array_.at(i);
+    ObBackupSetFileInfo &backup_set_file_info = backup_set_file_info_array_.at(i);
     if (backup_set_file_info.tenant_id_ == tenant_id && backup_set_file_info.incarnation_ == incarnation &&
         backup_set_file_info.backup_set_id_ == backup_set_id && backup_set_file_info.copy_id_ == copy_id) {
       backup_set_file_info_ptr = &backup_set_file_info;
@@ -2557,10 +2558,10 @@ int ObExternBackupSetFileInfos::get_backup_set_file_info_(const uint64_t tenant_
   return ret;
 }
 
-int ObExternBackupSetFileInfos::add(const ObBackupSetFileInfo& backup_set_file_info)
+int ObExternBackupSetFileInfos::add(const ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
-  ObBackupSetFileInfo* backup_set_file_info_ptr = NULL;
+  ObBackupSetFileInfo *backup_set_file_info_ptr = NULL;
 
   if (!backup_set_file_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -2591,10 +2592,10 @@ int ObExternBackupSetFileInfos::add(const ObBackupSetFileInfo& backup_set_file_i
   return ret;
 }
 
-int ObExternBackupSetFileInfos::update(const ObBackupSetFileInfo& backup_set_file_info)
+int ObExternBackupSetFileInfos::update(const ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
-  ObBackupSetFileInfo* backup_set_file_info_ptr = NULL;
+  ObBackupSetFileInfo *backup_set_file_info_ptr = NULL;
   ;
 
   if (!backup_set_file_info.is_valid()) {
@@ -2622,10 +2623,10 @@ int ObExternBackupSetFileInfos::update(const ObBackupSetFileInfo& backup_set_fil
 }
 
 int ObExternBackupSetFileInfos::get_backup_set_file_info(const int64_t tenant_id, const int64_t incarnation,
-    const int64_t backup_set_id, const int64_t copy_id, ObBackupSetFileInfo& backup_set_file_info)
+    const int64_t backup_set_id, const int64_t copy_id, ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
-  ObBackupSetFileInfo* backup_set_file_info_ptr = NULL;
+  ObBackupSetFileInfo *backup_set_file_info_ptr = NULL;
   if (OB_INVALID_ID == tenant_id || incarnation <= 0 || backup_set_id <= 0 || copy_id < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get backup set file info get invalid argument",
@@ -2646,7 +2647,7 @@ int ObExternBackupSetFileInfos::get_backup_set_file_info(const int64_t tenant_id
   return ret;
 }
 
-int ObExternBackupSetFileInfos::get_backup_set_file_infos(ObIArray<ObBackupSetFileInfo>& backup_set_file_infos)
+int ObExternBackupSetFileInfos::get_backup_set_file_infos(ObIArray<ObBackupSetFileInfo> &backup_set_file_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(backup_set_file_infos.assign(backup_set_file_info_array_))) {
@@ -2656,7 +2657,7 @@ int ObExternBackupSetFileInfos::get_backup_set_file_infos(ObIArray<ObBackupSetFi
 }
 
 int ObExternBackupSetFileInfos::find_backup_set_file_info(
-    const int64_t restore_snapshot_version, const char* passwd_array, ObBackupSetFileInfo& backup_set_file_info)
+    const int64_t restore_snapshot_version, const char *passwd_array, ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   backup_set_file_info.reset();
@@ -2668,7 +2669,7 @@ int ObExternBackupSetFileInfos::find_backup_set_file_info(
   }
 
   for (int64_t i = backup_set_file_info_array_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    const ObBackupSetFileInfo& tmp_backup_set_file_info = backup_set_file_info_array_.at(i);
+    const ObBackupSetFileInfo &tmp_backup_set_file_info = backup_set_file_info_array_.at(i);
     if (ObBackupSetFileInfo::SUCCESS != tmp_backup_set_file_info.status_ ||
         ObBackupFileStatus::BACKUP_FILE_AVAILABLE != tmp_backup_set_file_info.file_status_ ||
         OB_SUCCESS != tmp_backup_set_file_info.result_) {
@@ -2687,7 +2688,7 @@ int ObExternBackupSetFileInfos::find_backup_set_file_info(
   }
 
   for (int64_t i = idx; OB_SUCC(ret) && i >= 0; --i) {
-    const ObBackupSetFileInfo& tmp_backup_set_file_info = backup_set_file_info_array_.at(i);
+    const ObBackupSetFileInfo &tmp_backup_set_file_info = backup_set_file_info_array_.at(i);
     if (ObBackupSetFileInfo::SUCCESS != tmp_backup_set_file_info.status_ ||
         ObBackupFileStatus::BACKUP_FILE_AVAILABLE != tmp_backup_set_file_info.file_status_ ||
         OB_SUCCESS != tmp_backup_set_file_info.result_) {
@@ -2701,7 +2702,7 @@ int ObExternBackupSetFileInfos::find_backup_set_file_info(
   return ret;
 }
 
-int ObExternBackupSetFileInfos::check_passwd_(const char* passwd_array, const char* passwd)
+int ObExternBackupSetFileInfos::check_passwd_(const char *passwd_array, const char *passwd)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBackupUtils::check_passwd(passwd_array, passwd))) {
@@ -2710,7 +2711,7 @@ int ObExternBackupSetFileInfos::check_passwd_(const char* passwd_array, const ch
   return ret;
 }
 
-int ObExternBackupSetFileInfos::mark_backup_set_file_deleting(const ObBackupSetIdPair& backup_set_id_pair)
+int ObExternBackupSetFileInfos::mark_backup_set_file_deleting(const ObBackupSetIdPair &backup_set_id_pair)
 {
   int ret = OB_SUCCESS;
   const ObBackupFileStatus::STATUS file_status = ObBackupFileStatus::BACKUP_FILE_DELETING;
@@ -2720,7 +2721,7 @@ int ObExternBackupSetFileInfos::mark_backup_set_file_deleting(const ObBackupSetI
     LOG_WARN("mark backup set file deleting get invalid argument", K(ret), K(backup_set_id_pair));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_file_info_array_.count(); ++i) {
-      ObBackupSetFileInfo& backup_set_file_info = backup_set_file_info_array_.at(i);
+      ObBackupSetFileInfo &backup_set_file_info = backup_set_file_info_array_.at(i);
       if (backup_set_id_pair.backup_set_id_ == backup_set_file_info.backup_set_id_ &&
           backup_set_id_pair.copy_id_ == backup_set_file_info.copy_id_) {
         if (ObBackupFileStatus::BACKUP_FILE_DELETING == backup_set_file_info.file_status_ ||
@@ -2735,7 +2736,7 @@ int ObExternBackupSetFileInfos::mark_backup_set_file_deleting(const ObBackupSetI
   return ret;
 }
 
-int ObExternBackupSetFileInfos::mark_backup_set_file_deleted(const ObBackupSetIdPair& backup_set_id_pair)
+int ObExternBackupSetFileInfos::mark_backup_set_file_deleted(const ObBackupSetIdPair &backup_set_id_pair)
 {
   int ret = OB_SUCCESS;
   const ObBackupFileStatus::STATUS file_status = ObBackupFileStatus::BACKUP_FILE_DELETED;
@@ -2745,7 +2746,7 @@ int ObExternBackupSetFileInfos::mark_backup_set_file_deleted(const ObBackupSetId
     LOG_WARN("mark backup set file deleting get invalid argument", K(ret), K(backup_set_id_pair));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_file_info_array_.count(); ++i) {
-      ObBackupSetFileInfo& backup_set_file_info = backup_set_file_info_array_.at(i);
+      ObBackupSetFileInfo &backup_set_file_info = backup_set_file_info_array_.at(i);
       if (backup_set_id_pair.backup_set_id_ == backup_set_file_info.backup_set_id_ &&
           backup_set_id_pair.copy_id_ == backup_set_file_info.copy_id_) {
         if (ObBackupFileStatus::BACKUP_FILE_DELETED == backup_set_file_info.file_status_) {
@@ -2763,7 +2764,7 @@ bool ObExternBackupSetFileInfos::is_all_extern_backup_set_file_infos_deleted() c
 {
   bool ret = true;
   for (int64_t i = 0; i < backup_set_file_info_array_.count(); ++i) {
-    const ObBackupSetFileInfo& backup_set_file_info = backup_set_file_info_array_.at(i);
+    const ObBackupSetFileInfo &backup_set_file_info = backup_set_file_info_array_.at(i);
     if (ObBackupFileStatus::BACKUP_FILE_DELETED != backup_set_file_info.file_status_) {
       ret = false;
       break;
@@ -2789,8 +2790,8 @@ void ObExternBackupSetFileInfoMgr::clear()
   backup_set_file_infos_.reset();
 }
 
-int ObExternBackupSetFileInfoMgr::init(const uint64_t tenant_id, const ObClusterBackupDest& backup_dest,
-    const bool is_backup_backup, share::ObIBackupLeaseService& backup_lease_service)
+int ObExternBackupSetFileInfoMgr::init(const uint64_t tenant_id, const ObClusterBackupDest &backup_dest,
+    const bool is_backup_backup, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -2819,7 +2820,7 @@ int ObExternBackupSetFileInfoMgr::init(const uint64_t tenant_id, const ObCluster
 }
 
 int ObExternBackupSetFileInfoMgr::get_backup_path(
-    const uint64_t tenant_id, const ObClusterBackupDest& backup_dest, const bool is_backup_backup, ObBackupPath& path)
+    const uint64_t tenant_id, const ObClusterBackupDest &backup_dest, const bool is_backup_backup, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (OB_SYS_TENANT_ID == tenant_id) {
@@ -2836,11 +2837,11 @@ int ObExternBackupSetFileInfoMgr::get_backup_path(
 }
 
 int ObExternBackupSetFileInfoMgr::get_extern_backup_set_file_infos(
-    const uint64_t tenant_id, const ObBackupPath& path, const ObClusterBackupDest& backup_dest)
+    const uint64_t tenant_id, const ObBackupPath &path, const ObClusterBackupDest &backup_dest)
 {
   int ret = OB_SUCCESS;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -2854,7 +2855,7 @@ int ObExternBackupSetFileInfoMgr::get_extern_backup_set_file_infos(
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern backup info is empty", K(ret), K(tenant_id), K(path));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(path));
   } else if (OB_FAIL(
@@ -2871,7 +2872,7 @@ int ObExternBackupSetFileInfoMgr::get_extern_backup_set_file_infos(
   return ret;
 }
 
-int ObExternBackupSetFileInfoMgr::add_backup_set_file_info(const ObBackupSetFileInfo& backup_set_file_info)
+int ObExternBackupSetFileInfoMgr::add_backup_set_file_info(const ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -2886,7 +2887,7 @@ int ObExternBackupSetFileInfoMgr::add_backup_set_file_info(const ObBackupSetFile
   return ret;
 }
 
-int ObExternBackupSetFileInfoMgr::update_backup_set_file_info(const ObBackupSetFileInfo& backup_set_file_info)
+int ObExternBackupSetFileInfoMgr::update_backup_set_file_info(const ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
 
@@ -2903,7 +2904,7 @@ int ObExternBackupSetFileInfoMgr::update_backup_set_file_info(const ObBackupSetF
 }
 
 int ObExternBackupSetFileInfoMgr::get_backup_set_file_infos(
-    common::ObIArray<ObBackupSetFileInfo>& backup_set_file_infos)
+    common::ObIArray<ObBackupSetFileInfo> &backup_set_file_infos)
 {
   int ret = OB_SUCCESS;
   backup_set_file_infos.reset();
@@ -2917,7 +2918,7 @@ int ObExternBackupSetFileInfoMgr::get_backup_set_file_infos(
 }
 
 int ObExternBackupSetFileInfoMgr::get_backup_set_file_info(const uint64_t tenant_id, const int64_t incarnation,
-    const int64_t backup_set_id, const int64_t copy_id, ObBackupSetFileInfo& backup_set_file_info)
+    const int64_t backup_set_id, const int64_t copy_id, ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   backup_set_file_info.reset();
@@ -2945,7 +2946,7 @@ int ObExternBackupSetFileInfoMgr::upload_backup_set_file_info()
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need_retry*/);
@@ -2957,7 +2958,7 @@ int ObExternBackupSetFileInfoMgr::upload_backup_set_file_info()
   } else if (OB_FAIL(get_backup_path(tenant_id_, backup_dest_, is_backup_backup_, path))) {
     LOG_WARN("failed to get backup path", K(ret), K(tenant_id_), K(backup_dest_));
   } else if (FALSE_IT(buf_size = backup_set_file_infos_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(backup_set_file_infos_.write_buf(buf, buf_size, pos))) {
@@ -2978,7 +2979,7 @@ int ObExternBackupSetFileInfoMgr::upload_backup_set_file_info()
 }
 
 int ObExternBackupSetFileInfoMgr::find_backup_set_file_info(
-    const int64_t restore_snapshot_version, const char* passwd_array, ObBackupSetFileInfo& backup_set_file_info)
+    const int64_t restore_snapshot_version, const char *passwd_array, ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   backup_set_file_info.reset();
@@ -2996,7 +2997,7 @@ int ObExternBackupSetFileInfoMgr::find_backup_set_file_info(
 }
 
 int ObExternBackupSetFileInfoMgr::mark_backup_set_file_deleting(
-    const common::ObIArray<ObBackupSetIdPair>& backup_set_id_pairs)
+    const common::ObIArray<ObBackupSetIdPair> &backup_set_id_pairs)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -3004,7 +3005,7 @@ int ObExternBackupSetFileInfoMgr::mark_backup_set_file_deleting(
     LOG_WARN("extern backup set file info mgr do not init", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_id_pairs.count(); ++i) {
-      const ObBackupSetIdPair& backup_set_id_pair = backup_set_id_pairs.at(i);
+      const ObBackupSetIdPair &backup_set_id_pair = backup_set_id_pairs.at(i);
       if (OB_FAIL(backup_set_file_infos_.mark_backup_set_file_deleting(backup_set_id_pair))) {
         LOG_WARN("failed to mark backup set file deleting", K(ret), K(backup_set_id_pair));
       }
@@ -3029,7 +3030,7 @@ int ObExternBackupSetFileInfoMgr::mark_backup_set_file_deleted(
     LOG_WARN("extern backup set file info mgr do not init", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_id_pairs.count(); ++i) {
-      const ObBackupSetIdPair& backup_set_id_pair = backup_set_id_pairs.at(i);
+      const ObBackupSetIdPair &backup_set_id_pair = backup_set_id_pairs.at(i);
       if (OB_FAIL(backup_set_file_infos_.mark_backup_set_file_deleted(backup_set_id_pair))) {
         LOG_WARN("failed to mark backup set file deleted", K(ret), K(backup_set_id_pair));
       }
@@ -3080,7 +3081,7 @@ int ObExternBackupSetFileInfoMgr::update_backup_set_file_timestamp()
 }
 
 int ObExternBackupSetFileInfoMgr::get_backup_path(
-    const ObClusterBackupDest& backup_dest, const bool is_backup_backup, ObBackupPath& path)
+    const ObClusterBackupDest &backup_dest, const bool is_backup_backup, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -3112,7 +3113,7 @@ ObExternSingleBackupSetInfoMgr::~ObExternSingleBackupSetInfoMgr()
 {}
 
 int ObExternSingleBackupSetInfoMgr::init(
-    const share::ObSimpleBackupSetPath& simple_path, share::ObIBackupLeaseService& backup_lease_service)
+    const share::ObSimpleBackupSetPath &simple_path, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -3137,8 +3138,8 @@ int ObExternSingleBackupSetInfoMgr::init(
 }
 
 int ObExternSingleBackupSetInfoMgr::init(const uint64_t tenant_id, const int64_t full_backup_set_id,
-    const int64_t inc_backup_set_id, const int64_t backup_date, const ObClusterBackupDest& backup_dest,
-    share::ObIBackupLeaseService& backup_lease_service)
+    const int64_t inc_backup_set_id, const int64_t backup_date, const ObClusterBackupDest &backup_dest,
+    share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
@@ -3182,11 +3183,11 @@ int ObExternSingleBackupSetInfoMgr::init(const uint64_t tenant_id, const int64_t
 }
 
 int ObExternSingleBackupSetInfoMgr::get_extern_single_backup_set_info(
-    const common::ObString& uri, const common::ObString& storage_info)
+    const common::ObString &uri, const common::ObString &storage_info)
 {
   int ret = OB_SUCCESS;
   int64_t file_length = 0;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t read_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -3200,7 +3201,7 @@ int ObExternSingleBackupSetInfoMgr::get_extern_single_backup_set_info(
     }
   } else if (0 == file_length) {
     FLOG_INFO("extern single backup set info is empty", K(ret), K(uri));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_length)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(file_length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_length), K(uri));
   } else if (OB_FAIL(util.read_single_file(uri, storage_info, buf, file_length, read_size))) {
@@ -3217,11 +3218,11 @@ int ObExternSingleBackupSetInfoMgr::get_extern_single_backup_set_info(
   return ret;
 }
 
-int ObExternSingleBackupSetInfoMgr::upload_backup_set_file_info(const ObBackupSetFileInfo& backup_set_file_info)
+int ObExternSingleBackupSetInfoMgr::upload_backup_set_file_info(const ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   ObBackupPath path;
-  char* buf = nullptr;
+  char *buf = nullptr;
   int64_t buf_size = 0;
   ObArenaAllocator allocator;
   ObStorageUtil util(false /*need retry*/);
@@ -3249,7 +3250,7 @@ int ObExternSingleBackupSetInfoMgr::upload_backup_set_file_info(const ObBackupSe
   } else if (!is_empty && OB_FAIL(backup_set_file_infos_.update(backup_set_file_info))) {
     LOG_WARN("failed to push extern backup set info into array", K(ret), K(backup_set_file_info));
   } else if (FALSE_IT(buf_size = backup_set_file_infos_.get_write_buf_size())) {
-  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(buf_size)))) {
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(buf_size));
   } else if (OB_FAIL(backup_set_file_infos_.write_buf(buf, buf_size, pos))) {
@@ -3270,7 +3271,7 @@ int ObExternSingleBackupSetInfoMgr::upload_backup_set_file_info(const ObBackupSe
   return ret;
 }
 
-int ObExternSingleBackupSetInfoMgr::get_extern_backup_set_file_info(ObBackupSetFileInfo& backup_set_file_info)
+int ObExternSingleBackupSetInfoMgr::get_extern_backup_set_file_info(ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupSetFileInfo> backup_set_file_infos;
@@ -3292,7 +3293,7 @@ int ObExternSingleBackupSetInfoMgr::get_extern_backup_set_file_info(ObBackupSetF
 }
 
 int ObExternSingleBackupSetInfoMgr::get_extern_backup_set_file_info(
-    const char* passwd_array, ObBackupSetFileInfo& backup_set_file_info)
+    const char *passwd_array, ObBackupSetFileInfo &backup_set_file_info)
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupSetFileInfo> backup_set_file_infos;

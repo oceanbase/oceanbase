@@ -14,6 +14,7 @@
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/backup/ob_backup_archive_log_scheduler.h"
 #include "rootserver/backup/ob_backup_data_mgr.h"
+#include "rootserver/backup/ob_cancel_backup_backup_scheduler.h"
 #include "share/backup/ob_backup_backuppiece_operator.h"
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "share/backup/ob_extern_backup_info_mgr.h"
@@ -410,8 +411,6 @@ int ObBackupArchiveLogScheduler::get_checkpoint_ts_with_lock(const uint64_t tena
   return ret;
 }
 
-// current turn finished, 可以推checkpoint ts
-// current round finished，可以换round
 int ObBackupArchiveLogScheduler::set_pg_finish(const int64_t archive_round, const int64_t checkpoint_ts,
     const uint64_t tenant_id, const common::ObIArray<common::ObPGKey>& pg_list)
 {
@@ -1131,6 +1130,8 @@ int ObBackupArchiveLogScheduler::update_extern_backup_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log scheduler do not init", KR(ret));
+  } else if (is_force_cancel()) {
+    LOG_INFO("need not update_extern_backup_info when force cancel", KR(ret));
   } else if (OB_FAIL(src_dest.set(src, OB_START_INCARNATION))) {
     LOG_WARN("failed to set src cluster backup dest", KR(ret));
   } else if (OB_FAIL(dst_dest.set(dst, OB_START_INCARNATION))) {
@@ -1156,6 +1157,8 @@ int ObBackupArchiveLogScheduler::update_tenant_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log scheduler do not init", KR(ret));
+  } else if (is_force_cancel()) {
+    LOG_INFO("need not update tenant info when force cancel");
   } else if (OB_FAIL(src_mgr.init(src_dest, *backup_lease_service_))) {
     LOG_WARN("failed to init src extern tenant info mgr", KR(ret), K(src_dest));
   } else if (OB_FAIL(dst_mgr.init(dst_dest, *backup_lease_service_))) {
@@ -1187,6 +1190,8 @@ int ObBackupArchiveLogScheduler::update_tenant_name_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log scheduler do not init", KR(ret));
+  } else if (is_force_cancel()) {
+    LOG_INFO("need not update tenant name info when force cancel");
   } else if (OB_FAIL(tenant_name_mgr.init())) {
     LOG_WARN("failed to init tenant name simple mgr", KR(ret));
   } else if (OB_FAIL(tenant_name_mgr.read_backup_file(src_dest))) {
@@ -1278,6 +1283,8 @@ int ObBackupArchiveLogScheduler::update_extern_tenant_clog_backup_info(const uin
   } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("update tenant clog backup info get invalid argument", KR(ret), K(tenant_id));
+  } else if (is_force_cancel()) {
+    LOG_INFO("need not update tenant clog backup info when force cancel");
   } else if (OB_FAIL(get_round_start_ts(tenant_id, round_id, info.status_.start_ts_))) {
     LOG_WARN("failed to get round start ts", KR(ret), K(tenant_id), K(round_id));
   } else if (OB_FAIL(dst.get_backup_dest_str(info.backup_dest_, OB_MAX_BACKUP_DEST_LENGTH))) {
@@ -1459,11 +1466,6 @@ int ObBackupArchiveLogScheduler::check_tenant_is_dropped(const uint64_t tenant_i
   return ret;
 }
 
-// 为了防止在出错情况下总是第一个租户被调度，引入rebalance策略，
-// 每次数组作一个shift
-// 第1轮： 1001，1002，1003
-// 第2轮： 1002，1003，1001
-// 第3轮： 1003，1002，1001
 int ObBackupArchiveLogScheduler::rebalance_all_tenants(const int64_t shift_num, common::ObArray<uint64_t>& tenant_ids)
 {
   int ret = OB_SUCCESS;
@@ -1639,7 +1641,7 @@ int ObBackupArchiveLogScheduler::do_schedule(
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
-  bool all_tenant_passed_checkpoint = true;  // 所有租户都推过了某一个checkpoint ts
+  bool all_tenant_passed_checkpoint = true;  
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log do not init", KR(ret));
@@ -3625,7 +3627,7 @@ int ObBackupArchiveLogScheduler::do_clear_tenant_resource_if_dropped(const uint6
   return ret;
 }
 
-// 换backup backup dest
+// backup backup dest
 // backup_dest_1 round_1(copy_1)
 //               ---> change backup backup dest
 // backup_dest_2 round_1(copy_2) round_2(copy_1)
@@ -5239,6 +5241,8 @@ int ObBackupArchiveLogScheduler::do_extern_backup_piece_info(const share::ObBack
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log scheduler do not init", KR(ret));
+  } else if (is_force_cancel()) {
+    LOG_INFO("need not do_extern_backup_piece_info when force cancel");
   } else if (OB_FAIL(mgr.get_backup_piece(*sql_proxy_, false /*for_update*/, key, info))) {
     LOG_WARN("failed to get backup piece", KR(ret));
   } else if (OB_FAIL(job_info.backup_dest_.get_backup_dest_str(backup_backup_dest_str, OB_MAX_BACKUP_DEST_LENGTH))) {
@@ -5812,6 +5816,8 @@ int ObBackupArchiveLogScheduler::sync_backup_backup_piece_info(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup archive log scheduler do not init", KR(ret));
+  } else if (is_force_cancel()) {
+    LOG_INFO("need not sync backup backup piece info when force cancel");
   } else if (OB_FAIL(src_dest.set(src, OB_START_INCARNATION))) {
     LOG_WARN("failed to set src dest", KR(ret));
   } else if (OB_FAIL(dst_dest.set(dst, OB_START_INCARNATION))) {
@@ -5833,6 +5839,8 @@ int ObBackupArchiveLogScheduler::create_mount_file(const share::ObBackupDest& ba
   } else if (!backup_dest.is_valid() || round_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", KR(ret), K(backup_dest), K(round_id));
+  } else if (is_force_cancel()) {
+    LOG_INFO("need not create mount file when force cancel");
   } else if (!backup_dest.is_nfs_storage()) {
     // do nothing
   } else if (OB_FAIL(get_log_archive_round_info(OB_SYS_TENANT_ID, round_id, sys_info))) {
@@ -5987,6 +5995,33 @@ int ObBackupArchiveLogScheduler::check_normal_tenant_passed_sys_tenant(
     passed = normal_info.status_.checkpoint_ts_ >= local_sys_checkpoint_ts;
     LOG_INFO("normal tenant has passed sys tenant", K(normal_info));
   }
+  return ret;
+}
+
+bool ObBackupArchiveLogScheduler::is_force_cancel() const
+{
+  return GCONF.backup_dest.get_value_string().empty();
+}
+
+int ObBackupArchiveLogScheduler::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObCancelBackupBackupScheduler cancel_scheduler;
+  ObCancelBackupBackupType cancel_type = ObCancelBackupBackupType::CANCEL_BACKUP_BACKUPPIECE;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup archive log scheduler do not init", KR(ret));
+  } else if (OB_FAIL(cancel_scheduler.init(tenant_id,
+                 *sql_proxy_,
+                 cancel_type,
+                 NULL /*rootserver::ObBackupBackupset *backup_backupset*/,
+                 this))) {
+    LOG_WARN("failed to init cancel backup backup scheduler", K(ret));
+  } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_backup_backup())) {
+    LOG_WARN("failed to start schedule cancel backup backup", K(ret));
+  }
+
+  FLOG_WARN("force_cancel backup archive", K(ret), K(tenant_id));
   return ret;
 }
 

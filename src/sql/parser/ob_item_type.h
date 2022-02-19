@@ -18,7 +18,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-typedef enum ObItemType {
+typedef enum ObItemType 
+{
   T_INVALID = -1,  // Attention: add a new type after T_INVALID
 
   /* Literal data type tags, the same as ObObjType */
@@ -77,6 +78,7 @@ typedef enum ObItemType {
   T_NCHAR = 44,
   T_UROWID = 45,
   T_LOB = 46,
+  T_JSON = 47,
 
   T_BOOL = 63, /*@todo remove later*/
   T_MAX_CONST = 64,
@@ -596,8 +598,39 @@ typedef enum ObItemType {
   T_FUN_SYS_UTC_TIME = 1593,
   T_FUN_SYS_UTC_DATE = 1594,
   T_FUN_SYS_TIME_FORMAT = 1595,
-  ///< @note add new oracle only function type before this line
   T_FUN_SYS_CONVERT_TZ = 1596,
+  T_FUN_SYS_JSON_OBJECT = 1597,
+  T_FUN_SYS_JSON_EXTRACT = 1598,
+  T_FUN_SYS_JSON_CONTAINS = 1599,
+  T_FUN_SYS_JSON_CONTAINS_PATH = 1600,
+  T_FUN_SYS_JSON_DEPTH = 1601,
+  T_FUN_SYS_JSON_KEYS = 1602,
+  T_FUN_SYS_JSON_ARRAY = 1603,
+  T_FUN_SYS_JSON_QUOTE = 1604,
+  T_FUN_SYS_JSON_UNQUOTE = 1605,
+  T_FUN_SYS_JSON_OVERLAPS = 1606,
+  T_FUN_SYS_JSON_REMOVE = 1607,
+  T_FUN_SYS_JSON_SEARCH = 1608,
+  T_FUN_SYS_JSON_VALID = 1609,
+  T_FUN_SYS_JSON_ARRAY_APPEND = 1610,
+  T_FUN_SYS_JSON_ARRAY_INSERT = 1611,
+  T_FUN_SYS_JSON_REPLACE = 1612,
+  T_FUN_SYS_JSON_TYPE = 1613,
+  T_FUN_SYS_JSON_LENGTH = 1614,
+  T_FUN_SYS_JSON_INSERT = 1615,
+  T_FUN_SYS_JSON_STORAGE_SIZE = 1616,
+  T_FUN_SYS_JSON_STORAGE_FREE = 1617,
+  T_FUN_SYS_JSON_MERGE_PRESERVE = 1618,
+  T_FUN_SYS_JSON_MERGE = 1619,
+  T_FUN_SYS_JSON_MERGE_PATCH = 1620,
+  T_FUN_SYS_JSON_PRETTY = 1621, 
+  T_FUN_SYS_JSON_SET = 1622,
+  T_FUN_SYS_JSON_MEMBER_OF = 1623,
+  T_FUN_SYS_JSON_VALUE = 1624,
+  T_FUN_JSON_ARRAYAGG = 1625,
+  T_FUN_JSON_OBJECTAGG = 1626,
+  ///< @note add new oracle only function type before this line
+  
   T_FUN_SYS_END = 2000,
 
   T_MAX_OP = 3000,
@@ -1116,7 +1149,7 @@ typedef enum ObItemType {
   T_EXTENDED,
   T_PARTITIONS,
   T_TRADITIONAL,
-  T_JSON,
+  T_FORMAT_JSON,
   T_EXTENDED_NOADDR,
   T_PLANREGRESS,
 
@@ -1751,7 +1784,19 @@ typedef enum ObCacheType {
   CACHE_TYPE_MAX  // Attention: add a new type before CACHE_TYPE_MAX
 } ObCacheType;
 
-#define IS_BOOL_OP(op) (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN) || ((op) == T_OP_EXISTS) || ((op) == T_BOOL))
+#define IS_BOOL_OP(op) \
+  (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN && (op) != T_OP_POW) \
+    || ((op) == T_OP_EXISTS) \
+    || ((op) == T_OP_XOR) \
+    || ((op) == T_OP_NOT_EXISTS) \
+    || ((op) == T_FUN_SYS_STRCMP) \
+    || ((op) == T_FUN_SYS_JSON_VALID) \
+    || ((op) == T_FUN_SYS_JSON_CONTAINS) \
+    || ((op) == T_FUN_SYS_JSON_MEMBER_OF) \
+    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
+    || ((op) == T_FUN_SYS_JSON_CONTAINS) \
+    || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
+|| ((op) == T_BOOL)) \
 
 #define IS_RANGE_CMP_OP(op) ((op) >= T_OP_LE && (op) <= T_OP_GT)
 // we will extract query range from following OP expressions
@@ -1804,6 +1849,7 @@ extern const char* get_type_name(int type);
   (((op) >= T_FUN_MAX && (op) <= T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) ||                      \
       ((op) >= T_FUN_CORR && (op) <= T_FUN_REGR_SXY) ||                                              \
       ((op) >= T_FUN_GROUP_RANK && (op) <= T_FUN_GROUP_PERCENTILE_DISC) || (op) == T_FUN_GROUPING || \
+	    (op) == T_FUN_JSON_ARRAYAGG || (op) == T_FUN_JSON_OBJECTAGG || \
       (op) == T_FUN_KEEP_WM_CONCAT || (op) == T_FUN_WM_CONCAT)
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

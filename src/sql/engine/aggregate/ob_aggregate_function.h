@@ -89,7 +89,7 @@ public:
   ~ObGroupConcatRowStore();
 
   int init(const uint64_t tenant_id, const common::ObIArray<ObSortColumn>& sort_columns,
-      const ObSortImpl::SortExtraInfos* extra_infos, const bool rewind);
+      const ObSortImpl::SortExtraInfos* extra_infos, const bool rewind, int64_t dir_id);
   void reuse();
 
   int add_row(const common::ObNewRow& row)
@@ -190,6 +190,7 @@ public:
   ~ObAggregateFunction();
   void set_int_div_as_double(bool did);
   bool get_int_div_as_double() const;
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
   void set_sort_based_gby()
   {
     is_sort_based_gby_ = true;
@@ -299,6 +300,10 @@ private:
   int get_wm_concat_result(
       const ObAggregateExpression*& cexpr, ObGroupConcatCtx*& cell_ctx, bool is_keep_group_concat, ObObj& concat_obj);
 
+  int get_json_arrayagg_result(const ObAggregateExpression *&cexpr, ObGroupConcatCtx *&cell_ctx,
+                               ObObj &concat_obj);
+  int get_json_objectagg_result(const ObAggregateExpression *&cexpr, ObGroupConcatCtx *&cell_ctx,
+                                ObObj &concat_obj);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObAggregateFunction);
   typedef common::hash::ObHashSet<ObAggregateDistinctItem, common::hash::NoPthreadDefendMode> AggrDistinctBucket;
@@ -341,6 +346,7 @@ private:
   common::ObArenaAllocator agg_udf_buf_;
   common::ObSEArray<ObAggUdfMeta, 16> agg_udf_metas_;
   common::hash::ObHashMap<int64_t, ObAggUdfExeUnit, common::hash::NoPthreadDefendMode> agg_udf_;
+  int64_t dir_id_;
 };
 
 inline void ObAggregateFunction::set_int_div_as_double(bool did)

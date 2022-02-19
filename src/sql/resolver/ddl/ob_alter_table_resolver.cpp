@@ -3302,6 +3302,9 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode& node)
         } else if (!share::is_oracle_mode() && ob_is_text_tc(alter_column_schema.get_data_type())) {
           ret = OB_INVALID_DEFAULT;
           SQL_RESV_LOG(WARN, "BLOB/TEXT can't set default value!", K(ret));
+        } else if (!share::is_oracle_mode() && ob_is_json_tc(alter_column_schema.get_data_type())) {
+          ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+          SQL_RESV_LOG(WARN, "BLOB/TEXT or JSON can't set default value!", K(ret));
         } else if (OB_FAIL(resolve_default_value(default_node, default_value))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }

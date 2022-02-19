@@ -20,6 +20,9 @@
 #include "sql/engine/expr/ob_expr_regexp.h"
 #include "share/ob_unique_index_row_transformer.h"
 #include "sql/engine/expr/ob_sql_expression.h"
+#include "lib/json_type/ob_json_tree.h"
+#include "lib/json_type/ob_json_base.h"
+#include "lib/json_type/ob_json_bin.h"
 
 namespace oceanbase {
 using namespace common;
@@ -32,7 +35,8 @@ OB_DEF_SERIALIZE_SIZE(ObInfixExprItem)
   BASE_ADD_LEN((ObInfixExprItem, ObPostExprItem));
   bool param_lazy = false;
   bool is_called_in_sql = IS_EXPR_OP(get_item_type()) ? get_expr_operator()->is_called_in_sql() : true;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, param_idx_, param_num_, param_lazy, is_called_in_sql);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, param_idx_, param_num_, param_lazy,
+                               is_called_in_sql, is_boolean_);
   return len;
 }
 
@@ -42,7 +46,8 @@ OB_DEF_SERIALIZE(ObInfixExprItem)
   BASE_SER((ObInfixExprItem, ObPostExprItem));
   bool param_lazy = false;
   bool is_called_in_sql = IS_EXPR_OP(get_item_type()) ? get_expr_operator()->is_called_in_sql() : true;
-  LST_DO_CODE(OB_UNIS_ENCODE, param_idx_, param_num_, param_lazy, is_called_in_sql);
+  LST_DO_CODE(OB_UNIS_ENCODE, param_idx_, param_num_, param_lazy,
+                              is_called_in_sql, is_boolean_);
   return ret;
 }
 
@@ -54,7 +59,8 @@ OB_DEF_DESERIALIZE(ObInfixExprItem)
   } else {
     bool param_lazy = false;
     bool is_called_in_sql = true;
-    LST_DO_CODE(OB_UNIS_DECODE, param_idx_, param_num_, param_lazy, is_called_in_sql);
+    LST_DO_CODE(OB_UNIS_DECODE, param_idx_, param_num_, param_lazy,
+                                is_called_in_sql, is_boolean_);
     if (IS_EXPR_OP(get_item_type())) {
       param_lazy_eval_ = get_expr_operator()->is_param_lazy_eval();
       get_expr_operator()->set_is_called_in_sql(is_called_in_sql);
@@ -318,8 +324,8 @@ int ObInfixExpression::calc(
   return ret;
 }
 
-int ObInfixExpression::calc_row(
-    common::ObExprCtx& expr_ctx, const common::ObNewRow& row, common::ObNewRow& res_row) const
+int ObInfixExpression::calc_row(common::ObExprCtx& expr_ctx, 
+  const common::ObNewRow& row, ObItemType aggr_fun, common::ObNewRow &res_row) const
 {
   int ret = OB_SUCCESS;
 
@@ -337,6 +343,21 @@ int ObInfixExpression::calc_row(
       for (int64_t i = 0; i < item.get_param_num() && OB_SUCC(ret); i++) {
         if (OB_FAIL(eval(expr_ctx, row, stack, item.get_param_idx() + i))) {
           LOG_WARN("eval expr failed", K(ret), K(i));
+        } else if(aggr_fun == T_FUN_JSON_OBJECTAGG && i == 1) {
+          bool is_bool = false;
+          ObObj *tmp = stack + item.get_param_idx() + i;
+          if (OB_FAIL(get_param_is_boolean(expr_ctx, *tmp, is_bool))) {
+            LOG_WARN("get_param_is_boolean failed", K(ret));
+          } else if (is_bool) {
+            ObJsonBoolean j_bool(tmp->get_bool());
+            ObIJsonBase *j_base = &j_bool;
+            ObString raw_bin;
+            if (OB_FAIL(j_base->get_raw_binary(raw_bin, expr_ctx.calc_buf_))) {
+              LOG_WARN("get result binary failed", K(ret), K(*j_base));
+            } else {
+              tmp->set_string(ObJsonType, raw_bin);
+            }
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -350,7 +371,22 @@ int ObInfixExpression::calc_row(
     } else {
       if (OB_FAIL(eval(expr_ctx, row, stack, 0))) {
         LOG_WARN("expr evaluate failed", K(ret));
-      } else {
+      } else if (aggr_fun == T_FUN_JSON_ARRAYAGG) {
+        bool is_bool = false;
+        if (OB_FAIL(get_param_is_boolean(expr_ctx, *stack, is_bool))) {
+          LOG_WARN("get_param_is_boolean failed", K(ret));
+        } else if (is_bool) {
+          ObJsonBoolean j_bool(stack->get_bool());
+          ObIJsonBase *j_base = &j_bool;
+          ObString raw_bin;
+          if (OB_FAIL(j_base->get_raw_binary(raw_bin, expr_ctx.calc_buf_))) {
+            LOG_WARN("get result binary failed", K(ret), K(*j_base));
+          } else {
+            stack->set_string(ObJsonType, raw_bin);
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
         res_row.cells_[0] = *stack;
       }
     }

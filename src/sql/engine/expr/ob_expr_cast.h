@@ -20,7 +20,7 @@ namespace oceanbase {
 namespace sql {
 
 // The length of array need to be equal to the number of types defined at ObObjType
-static const int32_t CAST_STRING_DEFUALT_LENGTH[48] = {
+static const int32_t CAST_STRING_DEFUALT_LENGTH[49] = {
     0,   // null
     4,   // tinyint
     6,   // smallint
@@ -68,6 +68,7 @@ static const int32_t CAST_STRING_DEFUALT_LENGTH[48] = {
     1,   // nchar  share default length with char
     1,   // urowid
     1,   // lob
+    1,   // json
     0    // max, invalid type, or count of obj type
 };
 

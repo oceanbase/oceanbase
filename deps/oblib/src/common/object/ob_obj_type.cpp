@@ -89,6 +89,7 @@ const char* ob_sql_type_str(ObObjType type)
                                                                           "NCHAR",
                                                                           "ROWID",
                                                                           "LOB",
+                                                                          "JSON",
                                                                           ""},
       {"NULL",
           "TINYINT",
@@ -408,6 +409,7 @@ DEF_TYPE_STR_FUNCS(set, "set", "");
 DEF_TYPE_STR_FUNCS_PRECISION(number_float, "float", "");
 DEF_TYPE_TEXT_FUNCS_LENGTH(
     lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
+DEF_TYPE_TEXT_FUNCS_LENGTH(json, "json", "json");
 
 ///////////////////////////////////////////////////////////
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(null, "null", "");
@@ -457,6 +459,7 @@ DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(nchar, "nchar", "nchar");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_NON_STRING(urowid, "urowid", "");
 DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(
     lob, (lib::is_oracle_mode() ? "clob" : "longtext"), (lib::is_oracle_mode() ? "blob" : "longblob"));
+DEF_TYPE_STR_FUNCS_WITHOUT_ACCURACY_FOR_STRING(json, "json", "json");
 
 int ob_empty_str(char* buff, int64_t buff_length, ObCollationType coll_type)
 {
@@ -635,6 +638,7 @@ int ob_sql_type_str(char* buff, int64_t buff_length, int64_t& pos, ObObjType typ
       ob_nchar_str,           // NCHAR
       ob_urowid_str,          // urowid
       ob_lob_str,             // lob
+      ob_json_str,            //json
       ob_empty_str            // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
@@ -701,6 +705,7 @@ int ob_sql_type_str(char* buff, int64_t buff_length, ObObjType type, ObCollation
       ob_nchar_str_without_accuracy,           // NCHAR
       ob_urowid_str_without_accuracy,          // urowid
       ob_lob_str_without_accuracy,             // lob
+      ob_json_str_without_accuracy,            //json
       ob_empty_str                             // MAX
   };
   static_assert(
@@ -774,6 +779,7 @@ const char* ob_sql_tc_str(ObObjTypeClass tc)
       "INTERVAL",
       "ROWID",
       "LOB",
+      "JSON",
       ""};
   static_assert(sizeof(sql_tc_name) / sizeof(const char*) == ObMaxTC + 1, "Not enough initializer");
   return sql_tc_name[OB_LIKELY(tc < ObMaxTC) ? tc : ObMaxTC];

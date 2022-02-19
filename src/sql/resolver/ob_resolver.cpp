@@ -51,6 +51,7 @@
 #include "sql/resolver/ddl/ob_alter_outline_resolver.h"
 #include "sql/resolver/ddl/ob_drop_outline_resolver.h"
 #include "sql/resolver/ddl/ob_optimize_resolver.h"
+#include "sql/resolver/ddl/ob_flashback_resolver.h"
 #include "sql/resolver/ddl/ob_purge_resolver.h"
 #include "sql/resolver/ddl/ob_alter_baseline_resolver.h"
 #include "sql/resolver/ddl/ob_purge_resolver.h"
@@ -480,6 +481,22 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObS
       case T_TRUNCATE_TABLE: {
         REGISTER_STMT_RESOLVER(TruncateTable);
         break;
+      }
+      case T_FLASHBACK_TABLE_FROM_RECYCLEBIN: {		
+        REGISTER_STMT_RESOLVER(FlashBackTableFromRecyclebin);		
+        break;		
+      }
+      case T_FLASHBACK_INDEX: {		
+        REGISTER_STMT_RESOLVER(FlashBackIndex);		
+        break;		
+      }
+      case T_FLASHBACK_DATABASE: {		
+        REGISTER_STMT_RESOLVER(FlashBackDatabase);		
+        break;		
+      }
+      case T_FLASHBACK_TENANT: {		
+        REGISTER_STMT_RESOLVER(FlashBackTenant);		
+        break;		
       }
       case T_PURGE_TABLE: {
         REGISTER_STMT_RESOLVER(PurgeTable);

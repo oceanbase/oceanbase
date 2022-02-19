@@ -168,7 +168,7 @@ public:
     ATOMIC_STORE(&free_count_, 0);
     ATOMIC_STORE(&alloc_size_, 0);
   }
-  void* alloc(const int64_t size)
+  void* alloc(const int64_t size) override
   {
     void* ret = nullptr;
     if (OB_ISNULL(ret = allocator_.alloc(size))) {
@@ -179,7 +179,12 @@ public:
     }
     return ret;
   }
-  void free(void* ptr)
+  void* alloc(const int64_t size, const ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  void free(void* ptr) override
   {
     if (OB_ISNULL(ptr)) {
       // do nothing
@@ -244,7 +249,7 @@ public:
     ATOMIC_STORE(&free_count_, 0);
     ATOMIC_STORE(&alloc_size_, 0);
   }
-  void* alloc(const int64_t size)
+  void* alloc(const int64_t size) override
   {
     void* ret = nullptr;
     if (OB_ISNULL(ret = allocator_.alloc(size))) {
@@ -255,7 +260,12 @@ public:
     }
     return ret;
   }
-  void free(void* ptr)
+  void* alloc(const int64_t size, const ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  void free(void* ptr) override
   {
     if (OB_ISNULL(ptr)) {
       // do nothing

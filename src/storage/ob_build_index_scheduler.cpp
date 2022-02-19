@@ -994,6 +994,8 @@ int ObBuildIndexScheduleTask::send_copy_replica_rpc()
       // if the source and destination are the same, it means that this replica builds the index sstable itself,
       // just retry the scheduling process will get the right way to next state
       ret = OB_EAGAIN;
+    } else if (OB_FAIL(get_data_size(arg.data_size_))) {
+      STORAGE_LOG(WARN, "fail to get data size", K(ret));
     } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
                    extract_tenant_id(index_id_), schema_guard))) {
       STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(schema_version_));
@@ -1387,6 +1389,49 @@ int ObBuildIndexScheduleTask::schedule_dag()
     if (OB_FAIL(ret) && NULL != dag) {
       ObDagScheduler::get_instance().free_dag(*dag);
       dag = NULL;
+    }
+  }
+  return ret;
+}
+
+int ObBuildIndexScheduleTask::get_data_size(int64_t &data_size)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res)
+  {
+    sqlclient::ObMySQLResult *result = NULL;
+    char ip[common::OB_MAX_SERVER_ADDR_SIZE] = "";
+    if (OB_INVALID_ID == index_id_ || !pkey_.is_valid() || !candidate_replica_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(index_id_), K(pkey_), K(candidate_replica_));
+    } else if (!candidate_replica_.ip_to_string(ip, sizeof(ip))) {
+      LOG_WARN("fail to convert ObAddr to ip", K(ret));
+    } else if (OB_FAIL(sql.assign_fmt(
+                   "SELECT used_size, MAX(major_version) from %s "
+                   "WHERE tenant_id = %ld AND table_id = %ld AND partition_id = %ld  AND sstable_id = %ld "
+                   "AND svr_ip = '%s' AND svr_port = %d",
+                   OB_ALL_VIRTUAL_STORAGE_STAT_TNAME,
+                   extract_tenant_id(index_id_),
+                   pkey_.get_table_id(),
+                   pkey_.get_partition_id(),
+                   index_id_,
+                   ip,
+                   candidate_replica_.get_port()))) {
+      STORAGE_LOG(WARN, "fail to assign sql", K(ret));
+    } else if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", K(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "error unexpected, query result must not be NULL", K(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "used_size", data_size, int64_t);
     }
   }
   return ret;
@@ -1791,6 +1836,9 @@ int ObRetryGhostIndexTask::process()
   const ObTableSchema *index_schema = nullptr;
   ObSchemaGetterGuard schema_guard;
   ObAddr rs_addr;
+  ObSubmitBuildIndexTaskArg arg;
+  arg.index_tid_ = index_id_;
+  arg.exec_tenant_id_ = is_inner_table(index_id_) ? OB_SYS_TENANT_ID : extract_tenant_id(index_id_);
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_full_schema_guard(
           extract_tenant_id(index_id_), schema_guard))) {
     STORAGE_LOG(WARN, "fail to get schema guard", K(ret), K(index_id_));
@@ -1804,11 +1852,11 @@ int ObRetryGhostIndexTask::process()
     STORAGE_LOG(WARN, "fail to get rootservice address", K(ret));
   } else if (rs_addr != GCTX.self_addr_) {
     STORAGE_LOG(INFO, "rs is not on this observer, skip");
-  } else if (NULL == GCTX.root_service_) {
+  } else if (NULL == GCTX.rs_rpc_proxy_) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "root service is null", K(ret));
-  } else if (OB_FAIL(GCTX.root_service_->submit_build_index_task(index_schema))) {
-    STORAGE_LOG(WARN, "fail to submit build index task", K(ret));
+    STORAGE_LOG(WARN, "rs_rpc_proxy is null", K(ret));
+  } else if (OB_FAIL(GCTX.rs_rpc_proxy_->submit_build_index_task(arg))) {
+    STORAGE_LOG(WARN, "fail to submit build index task", K(ret), K(arg));
   }
   return ret;
 }
