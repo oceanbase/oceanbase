@@ -1213,7 +1213,12 @@ static int int_json(const ObObjType expect_type, ObObjCastParams &params,
     LOG_ERROR("NULL allocator in json cast function", K(ret), K(in), K(expect_type));
   } else {
     ObJsonInt j_int(in.get_int());
+    bool bool_val = (in.get_int() == 1) ? true : false;
+    ObJsonBoolean j_bool(bool_val);
     ObIJsonBase *j_base = &j_int;
+    if (CM_HAS_BOOLEAN_FLAG(cast_mode)) {
+      j_base = &j_bool;
+    }
     ObString raw_bin;
     if (OB_FAIL(j_base->get_raw_binary(raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));

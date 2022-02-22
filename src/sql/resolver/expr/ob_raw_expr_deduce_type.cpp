@@ -1768,7 +1768,11 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr& expr)
           LOG_WARN("fail to visit for column_conv", K(ret), K(i));
         }
       } else {
-        if (OB_FAIL(types.push_back(param_expr->get_result_type()))) {
+        ObExprResType res_type = param_expr->get_result_type();
+        if (param_expr->is_bool_expr()) {
+          res_type.set_result_flag(IS_BOOL_FLAG);
+        }
+        if (OB_FAIL(types.push_back(res_type))) {
           LOG_WARN("push back param type failed", K(ret));
         }
       }
