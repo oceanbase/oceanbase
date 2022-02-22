@@ -598,7 +598,7 @@ private:
   int try_respond_coordinator_(const ObTransMsgType msg_type, const ListenerAction action);
   int get_prepare_ack_arg_(int& status, int64_t& state, int64_t& prepare_version, uint64_t& prepare_log_id,
       int64_t& prepare_log_ts, int64_t& request_id, int64_t& remain_wait_interval_us, bool& is_xa_prepare);
-  int check_row_locked_(const ObTransStatusInfo& trans_info, const ObTransID& read_trans_id,
+  int check_row_locked_(const ObTransStatusInfo& trans_info,
       const ObTransID& data_trans_id, const int64_t sql_sequence, storage::ObStoreRowLockState& lock_state);
   int lock_for_read_(const ObTransStatusInfo& trans_info, const ObLockForReadArg& lock_for_read_arg, bool& can_read,
       int64_t& trans_version, bool& is_determined_state);

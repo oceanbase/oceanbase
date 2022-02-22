@@ -725,7 +725,8 @@ int ObMemtable::check_row_locked_by_myself(const ObStoreCtx& ctx, const uint64_t
         } else if (lock_state.is_locked_ && lock_state.lock_trans_id_ == ctx.trans_id_) {
           is_locked = true;
         }
-        TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(*sstable), K(is_locked));
+        TRANS_LOG(DEBUG, "check_row_locked meet sstable",
+                  K(ret), K(rowkey), K(*sstable), K(is_locked), K(lock_state));
       } else {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "unknown store type", K(ret));

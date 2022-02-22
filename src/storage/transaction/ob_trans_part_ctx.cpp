@@ -11201,7 +11201,7 @@ int ObPartTransCtx::check_sql_sequence_can_read(const int64_t sql_sequence, bool
   return ret;
 }
 
-int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info, const ObTransID& read_trans_id,
+int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info,
     const ObTransID& data_trans_id, const int64_t sql_sequence, ObStoreRowLockState& lock_state)
 {
   int ret = OB_SUCCESS;
@@ -11213,13 +11213,8 @@ int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info, const
       break;
     }
     case ObTransTableStatusType::RUNNING: {
-      if (read_trans_id == data_trans_id) {
-        lock_state.is_locked_ = true;
-        lock_state.trans_version_ = 0;
-      } else {
-        lock_state.is_locked_ = !trans_info.undo_status_.is_contain(sql_sequence);
-        lock_state.trans_version_ = 0;
-      }
+      lock_state.is_locked_ = !trans_info.undo_status_.is_contain(sql_sequence);
+      lock_state.trans_version_ = 0;
       break;
     }
     case ObTransTableStatusType::ABORT: {
@@ -11251,7 +11246,7 @@ int ObPartTransCtx::check_row_locked(const ObStoreRowkey& key, ObIMvccCtx& ctx, 
 
   if (OB_FAIL(get_trans_state_and_version_without_lock(trans_info))) {
     TRANS_LOG(WARN, "failed to get trans table status", K(ret));
-  } else if (OB_FAIL(check_row_locked_(trans_info, read_trans_id, data_trans_id, sql_sequence, lock_state))) {
+  } else if (OB_FAIL(check_row_locked_(trans_info, data_trans_id, sql_sequence, lock_state))) {
     TRANS_LOG(WARN, "failed to check transaction status", K(ret));
     // locked by other
   } else if (lock_state.is_locked_ && lock_state.lock_trans_id_ != read_trans_id) {
