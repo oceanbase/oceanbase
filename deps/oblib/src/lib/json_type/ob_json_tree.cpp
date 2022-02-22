@@ -583,10 +583,11 @@ int ObJsonObject::remove(const common::ObString &key)
   ObJsonObjectArray::iterator low_iter = std::lower_bound(object_array_.begin(),
                                                           object_array_.end(), pair, cmp);
   if (low_iter != object_array_.end() && low_iter->get_key() == key) {
+    int64_t delta_size = low_iter->get_value()->get_serialize_size();
     if (OB_FAIL(object_array_.remove(low_iter - object_array_.begin()))) {
       LOG_WARN("fail to remove json node", K(ret), K(key));
     } else {
-      low_iter->get_value()->update_serialize_size_cascade(low_iter->get_value()->get_serialize_size());
+      set_serialize_delta_size(-1 * delta_size);
     }
   }
 
@@ -646,7 +647,7 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value)
       // sort again.
       sort();
     }
-    value->update_serialize_size_cascade(value->get_serialize_size());
+    set_serialize_delta_size(value->get_serialize_size());
   }
 
   return ret;
@@ -834,17 +835,16 @@ ObJsonNode *ObJsonArray::clone(ObIAllocator* allocator) const
 
 int ObJsonArray::remove(uint64_t index)
 {
-  int ret = OB_SUCCESS;
-
-  if(index >= node_vector_.size()) {
-    ret = OB_ERROR_OUT_OF_RANGE;
-    LOG_WARN("fail to remove json node from array", K(ret), K(index));
-  } else if (OB_FAIL(node_vector_.remove(index))) {
-    LOG_WARN("fail to remove json node from array", K(ret), K(index));
-  } else {
-    node_vector_[index]->update_serialize_size_cascade(-1 * node_vector_[index]->get_serialize_size());
+  int ret = OB_ERROR_OUT_OF_RANGE;
+  if (index < node_vector_.size()) {
+    int64_t delta_size = node_vector_[index]->get_serialize_size();
+    if (OB_FAIL(node_vector_.remove(index))) {
+      LOG_WARN("fail to remove json node from array", K(ret), K(index));
+    } else {
+      set_serialize_delta_size(-1 * delta_size);
+      ret = OB_SUCCESS;
+    } 
   }
-
   return ret;
 }
 
