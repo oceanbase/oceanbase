@@ -1,4 +1,4 @@
-CREATE RESOURCE UNIT IF NOT EXISTS @OB_TENANT_NAME@ max_cpu = 9, max_memory = 2684354560, min_memory = 2684354560, max_iops = 10000, min_iops = 1280, max_session_num = 3000, max_disk_size = 5153960755;
+CREATE RESOURCE UNIT IF NOT EXISTS @OB_TENANT_NAME@ max_cpu = 9, max_memory = 2147483648, min_memory = 2147483648, max_iops = 10000, min_iops = 1280, max_session_num = 3000, max_disk_size = 5153960755;
 CREATE RESOURCE POOL IF NOT EXISTS @OB_TENANT_NAME@ UNIT = '@OB_TENANT_NAME@', UNIT_NUM = 1, ZONE_LIST = ('zone1');
 CREATE TENANT IF NOT EXISTS @OB_TENANT_NAME@ charset='utf8mb4', replica_num=1, zone_list=('zone1'), primary_zone='RANDOM', resource_pool_list=('@OB_TENANT_NAME@');
 

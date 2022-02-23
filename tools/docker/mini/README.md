@@ -6,7 +6,7 @@ You can deploy OceanBase databases by using many methods. But Docker is the easi
 
 Before you deploy obce-mini image, do a check of these:
 
-- Make sure that your machine has at least 2 physical core and 10GB memory.
+- Make sure that your machine has at least 2 physical core and 8GB memory.
 - Your machine has installed these applications:
 
     Application | Recommended version | Documentation
