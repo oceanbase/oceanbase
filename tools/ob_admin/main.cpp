@@ -33,6 +33,7 @@ void print_usage()
 {
   fprintf(stderr,
       "\nUSAGE:\n"
+      "        ob_admin io_bench\n"
       "        ob_admin clog_tool\n"
       "        ob_admin usec_tool\n"
       "        ob_admin slog_tool\n"

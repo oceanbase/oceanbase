@@ -304,6 +304,10 @@ const int64_t OB_SCHEMA_MGR_MAX_USED_TID_MAP_BUCKET_NUM = 64;
 const int64_t OB_MAX_SLAVE_READ_DELAY_TS = 5 * 1000 * 1000;
 const int64_t OB_SKIP_RANGE_LIMIT = 256;
 
+// add for path limit
+const int64_t OB_MAX_DIRECTORY_PATH_LENGTH = 4000;
+// add end
+
 // plan cache
 const int64_t OB_PC_NOT_PARAM_COUNT = 8;
 const int64_t OB_PC_SPECIAL_PARAM_COUNT = 16;

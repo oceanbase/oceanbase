@@ -48,7 +48,7 @@ int ObAdminIOExecutor::execute(int argc, char *argv[])
     } else {
       int exe_path_len = readlink("/proc/self/exe", exe_path, OB_MAX_DIRECTORY_PATH_LENGTH);
       if (exe_path_len < 0 || exe_path_len >= OB_MAX_DIRECTORY_PATH_LENGTH) {
-        ret = OB_ERR_INVALID_PATH;
+        ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(ERROR, "executable path is invalid", K(ret), K(exe_path));
       } else {
         for (int64_t i = exe_path_len - 1; i >= 0 ; --i) { // ignore ret
