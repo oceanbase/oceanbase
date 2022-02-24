@@ -2336,7 +2336,8 @@ int ObPGStorage::set_pg_replica_type(const ObReplicaType& replica_type, const bo
         }
       }
       switch_meta_(next_meta_ptr);
-      LOG_INFO("succeed to set replica type", K(*meta_));
+      ATOMIC_STORE(&cached_replica_type_, replica_type);
+      LOG_INFO("succeed to set replica type", K(*meta_), K(cached_replica_type_));
 
       if (need_clean_memtable) {
         pg_memtable_mgr_.clean_memtables();
