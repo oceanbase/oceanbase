@@ -6,7 +6,7 @@
  */
 
 #include "ob_admin_io_executor.h"
-#include "common/storage/ob_io_manager.h"
+#include "lib/ob_define.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
