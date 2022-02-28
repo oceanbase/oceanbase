@@ -996,6 +996,10 @@ int ObMySQLUtil::json_cell_str(char *buf, const int64_t len, const ObString &val
   if (OB_ISNULL(buf)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid input args", K(ret), KP(buf));
+  } else if (val.length() == 0) {
+    if (OB_FAIL(ObMySQLUtil::store_null(buf, len, pos))) {
+      OB_LOG(WARN, "fail to set null string", K(pos), K(len));
+    }
   } else if (OB_FAIL(j_bin.reset_iter())) {
     OB_LOG(WARN, "fail to reset json bin iter", K(ret), K(val));
   } else if (OB_FAIL(j_base->print(jbuf, true))) {

@@ -1423,7 +1423,9 @@ DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
       uint64_t hash_res = 0;                                                       \
       ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());                        \
       ObIJsonBase *j_base = &j_bin;                                                \
-      if (OB_FAIL(j_bin.reset_iter())) {                                           \
+      if (j_bin_str.length() ==0 || param.is_null()) {                             \
+        hash_res = hash;                                                           \
+      } else if (OB_FAIL(j_bin.reset_iter())) {                                    \
         COMMON_LOG(WARN, "fail to reset json bin iter", K(ret), K(j_bin_str));     \
         right_to_die_or_duty_to_live();                                            \
       } else if (OB_FAIL(j_base->calc_json_hash_value(hash, T::hash, hash_res))) { \
