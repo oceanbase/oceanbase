@@ -69,7 +69,7 @@ int ObExprToType::calc_result1(ObObj& result, const ObObj& obj1, ObExprCtx& expr
       bool is_bool = false;
       if (OB_FAIL(get_param_is_boolean(expr_ctx, obj1, is_bool))) {
         LOG_WARN("get is_boolean type failed, bool may be cast as json int", K(ret), K(obj1));
-      } else {
+      } else if (is_bool) {
         cast_ctx.cast_mode_ |= CM_TO_BOOLEAN;
       }
     }
