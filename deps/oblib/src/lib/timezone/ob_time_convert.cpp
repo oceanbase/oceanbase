@@ -5566,6 +5566,7 @@ int ObTimeConverter::apply_datetime_for_time_rule(
   return ret;
 }
 
+// for convert utc time to local time, use get_timezone_offset and no gap/overlap time exist.
 OB_INLINE int ObTimeConverter::add_timezone_offset(const ObTimeZoneInfo* tz_info, int64_t& value)
 {
   int ret = OB_SUCCESS;
@@ -5580,6 +5581,7 @@ OB_INLINE int ObTimeConverter::add_timezone_offset(const ObTimeZoneInfo* tz_info
   return ret;
 }
 
+// for convert local time to utc time, gap/overlap time may exist.
 OB_INLINE int ObTimeConverter::sub_timezone_offset(const ObTimeZoneInfo* tz_info, bool is_timestamp,
     const ObString& tz_abbr_str, int64_t& value, const bool is_oracle_mode)
 {

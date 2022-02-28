@@ -3565,6 +3565,21 @@ CAST_FUNC_NAME(year, string)
   return ret;
 }
 
+CAST_FUNC_NAME(year, datetime)
+{
+  EVAL_ARG()
+  {
+    uint8_t in_val = child_res->get_uint8();
+    int64_t val_int = 0;
+    if (OB_FAIL(common_year_int(expr, ObIntType, in_val, val_int))) {
+      LOG_WARN("common_year_int failed", K(ret), K(in_val));
+    } else if (OB_FAIL(common_int_datetime(expr, val_int, ctx, res_datum))) {
+      LOG_WARN("common_int_datetime failed", K(ret), K(val_int));
+    }
+  }
+  return ret;
+}
+
 CAST_FUNC_NAME(year, date)
 {
   EVAL_ARG()
@@ -8045,7 +8060,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] = {
         year_float,              /*float*/
         year_double,             /*double*/
         year_number,             /*number*/
-        cast_not_support,        /*datetime*/
+        year_datetime,           /*datetime*/
         year_date,               /*date*/
         cast_not_support,        /*time*/
         cast_eval_arg,           /*year*/

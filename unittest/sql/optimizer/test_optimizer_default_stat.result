@@ -9946,9 +9946,9 @@ SQL: select a1.c2 from t1 left join t2 a1 on (a1.c1= t1.c1) where least(t1.c2, a
 ===============================================================
 |ID|OPERATOR                       |NAME    |EST. ROWS|COST   |
 ---------------------------------------------------------------
-|0 |PX COORDINATOR                 |        |100000   |1928520|
-|1 | EXCHANGE OUT DISTR            |:EX10001|100000   |1909588|
-|2 |  MERGE JOIN                   |        |100000   |1909588|
+|0 |PX COORDINATOR                 |        |100000   |1903402|
+|1 | EXCHANGE OUT DISTR            |:EX10001|100000   |1884470|
+|2 |  MERGE JOIN                   |        |100000   |1884470|
 |3 |   SORT                        |        |500000   |1458906|
 |4 |    PX PARTITION ITERATOR      |        |500000   |309262 |
 |5 |     TABLE SCAN                |t1      |500000   |309262 |
@@ -10032,7 +10032,7 @@ SQL: select a2.c2, t1.c2, a1.c2 from t1  left join t2 a1 on (a1.c1 = t1.c1), t2 
 ==================================================================
 |ID|OPERATOR                        |NAME    |EST. ROWS|COST     |
 ------------------------------------------------------------------
-|0 |HASH JOIN                       |        |450000000|269601090|
+|0 |HASH JOIN                       |        |450000000|307293132|
 |1 | PX COORDINATOR                 |        |300000   |213977   |
 |2 |  EXCHANGE OUT DISTR            |:EX10000|300000   |185579   |
 |3 |   PX PARTITION ITERATOR        |        |300000   |185579   |
@@ -10090,7 +10090,7 @@ SQL: select f_acc.c2, a1.c2, a2.c2 from t2 left join t2 f1 on (f1.c1 = 1 and t2.
 ===========================================================
 |ID|OPERATOR                    |NAME    |EST. ROWS|COST  |
 -----------------------------------------------------------
-|0 |HASH JOIN                   |        |29403    |666559|
+|0 |HASH JOIN                   |        |29403    |674223|
 |1 | NESTED-LOOP JOIN CARTESIAN |        |30       |440690|
 |2 |  PX COORDINATOR            |        |1        |53    |
 |3 |   EXCHANGE OUT DISTR       |:EX10000|1        |52    |
@@ -10179,7 +10179,7 @@ SQL: select f_acc.c2, a1.c2, a2.c2 from t2 left join t2 f1 on (f1.c1 =1 and f1.c
 ==========================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST   |
 ----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN|        |2970000  |2823104|
+|0 |NESTED-LOOP JOIN CARTESIAN|        |2970000  |2839849|
 |1 | NESTED-LOOP JOIN         |        |2970     |440056 |
 |2 |  PX COORDINATOR          |        |1        |53     |
 |3 |   EXCHANGE OUT DISTR     |:EX10000|1        |52     |
@@ -10188,8 +10188,8 @@ SQL: select f_acc.c2, a1.c2, a2.c2 from t2 left join t2 f1 on (f1.c1 =1 and f1.c
 |6 |   EXCHANGE OUT DISTR     |:EX20000|300000   |185579 |
 |7 |    PX PARTITION ITERATOR |        |300000   |185579 |
 |8 |     TABLE SCAN           |t2      |300000   |185579 |
-|9 | MATERIAL                 |        |1000     |188297 |
-|10|  NESTED-LOOP JOIN        |        |1000     |187562 |
+|9 | MATERIAL                 |        |1000     |205042 |
+|10|  NESTED-LOOP JOIN        |        |1000     |204307 |
 |11|   PX COORDINATOR         |        |1        |53     |
 |12|    EXCHANGE OUT DISTR    |:EX30000|1        |52     |
 |13|     TABLE GET            |a1      |1        |52     |

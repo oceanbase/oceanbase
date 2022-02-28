@@ -57,13 +57,13 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObInt32Type, 		/* TinyIntType  */
     ObInt32Type,		/* SmallIntType  */
     ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
     ObInt32Type, 		/* UTinyIntType  */
     ObInt32Type,		/* USmallIntType  */
     ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObIntType,   		/* UInt32Type  */
+    ObNumberType,    /* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -109,13 +109,13 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObInt32Type, 		/* TinyIntType  */
     ObInt32Type,		/* SmallIntType  */
     ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
     ObInt32Type, 		/* UTinyIntType  */
     ObInt32Type,		/* USmallIntType  */
     ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObIntType,   		/* UInt32Type  */
+    ObNumberType,    /* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -161,13 +161,13 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObInt32Type, 		/* TinyIntType  */
     ObInt32Type,		/* SmallIntType  */
     ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
     ObInt32Type, 		/* UTinyIntType  */
     ObInt32Type,		/* USmallIntType  */
     ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObIntType,   		/* UInt32Type  */
+    ObNumberType,    /* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -210,16 +210,16 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
   /*Int32Type*/
   {
     ObDoubleType, 		/* NullType  */
-    ObInt32Type, 		/* TinyIntType  */
-    ObInt32Type,		/* SmallIntType  */
-    ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType, 		/* TinyIntType  */
+    ObIntType,		/* SmallIntType  */
+    ObIntType,		/* MediumIntType  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
-    ObInt32Type, 		/* UTinyIntType  */
-    ObInt32Type,		/* USmallIntType  */
-    ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObIntType, 		/* UTinyIntType  */
+    ObIntType,		/* USmallIntType  */
+    ObIntType,		/* UMediumIntType  */
+    ObIntType,   		/* UInt32Type  */
+    ObNumberType,     		/* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -262,16 +262,16 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
   /*IntType*/
   {
     ObDoubleType, 		/* NullType  */
-    ObIntType, 		  /* TinyIntType  */
-    ObIntType,		  /* SmallIntType  */
-    ObIntType,		  /* MediumIntType  */
+    ObIntType, 		/* TinyIntType  */
+    ObIntType,		/* SmallIntType  */
+    ObIntType,		/* MediumIntType  */
     ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
-    ObIntType, 		  /* UTinyIntType  */
-    ObIntType,		  /* USmallIntType  */
-    ObIntType,		  /* UMediumIntType  */
+    ObIntType, 		/* UTinyIntType  */
+    ObIntType,		/* USmallIntType  */
+    ObIntType,		/* UMediumIntType  */
     ObIntType,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObNumberType,     		/* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -317,13 +317,13 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObInt32Type, 		/* TinyIntType  */
     ObInt32Type,		/* SmallIntType  */
     ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
-    ObInt32Type, 		/* UTinyIntType  */
-    ObInt32Type,		/* USmallIntType  */
-    ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObUInt32Type, 		/* UTinyIntType  */
+    ObUInt32Type,		/* USmallIntType  */
+    ObUInt32Type,		/* UMediumIntType  */
+    ObUInt64Type,   		/* UInt32Type  */
+    ObUInt64Type,     		/* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -369,13 +369,13 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObInt32Type, 		/* TinyIntType  */
     ObInt32Type,		/* SmallIntType  */
     ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
-    ObInt32Type, 		/* UTinyIntType  */
-    ObInt32Type,		/* USmallIntType  */
-    ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObUInt32Type, 		/* UTinyIntType  */
+    ObUInt32Type,		/* USmallIntType  */
+    ObUInt32Type,		/* UMediumIntType  */
+    ObUInt64Type,   		/* UInt32Type  */
+    ObUInt64Type,     		/* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -421,13 +421,13 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObInt32Type, 		/* TinyIntType  */
     ObInt32Type,		/* SmallIntType  */
     ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
-    ObInt32Type, 		/* UTinyIntType  */
-    ObInt32Type,		/* USmallIntType  */
-    ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObUInt32Type, 		/* UTinyIntType  */
+    ObUInt32Type,		/* USmallIntType  */
+    ObUInt32Type,		/* UMediumIntType  */
+    ObUInt64Type,   		/* UInt32Type  */
+    ObUInt64Type,     		/* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -470,16 +470,16 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
   /*UInt32Type*/
   {
     ObDoubleType, 		/* NullType  */
-    ObInt32Type, 		/* TinyIntType  */
-    ObInt32Type,		/* SmallIntType  */
-    ObInt32Type,		/* MediumIntType  */
-    ObInt32Type,   		/* Int32Type  */
+    ObIntType, 		/* TinyIntType  */
+    ObIntType,		/* SmallIntType  */
+    ObIntType,		/* MediumIntType  */
+    ObIntType,   		/* Int32Type  */
     ObIntType,     		/* IntType  */
-    ObInt32Type, 		/* UTinyIntType  */
-    ObInt32Type,		/* USmallIntType  */
-    ObInt32Type,		/* UMediumIntType  */
-    ObInt32Type,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObUInt64Type, 		/* UTinyIntType  */
+    ObUInt64Type,		/* USmallIntType  */
+    ObUInt64Type,		/* UMediumIntType  */
+    ObUInt64Type,   		/* UInt32Type  */
+    ObUInt64Type,     		/* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */
@@ -522,16 +522,16 @@ static ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
   /*UIntType*/
   {
     ObDoubleType, 		/* NullType  */
-    ObIntType, 		  /* TinyIntType  */
-    ObIntType,		  /* SmallIntType  */
-    ObIntType,		  /* MediumIntType  */
-    ObIntType,   		/* Int32Type  */
-    ObIntType,     		/* IntType  */
-    ObIntType, 		  /* UTinyIntType  */
-    ObIntType,		  /* USmallIntType  */
-    ObIntType,		  /* UMediumIntType  */
-    ObIntType,   		/* UInt32Type  */
-    ObIntType,     		/* UIntType  */
+    ObNumberType, 		/* TinyIntType  */
+    ObNumberType,		/* SmallIntType  */
+    ObNumberType,		/* MediumIntType  */
+    ObNumberType,   		/* Int32Type  */
+    ObNumberType,     		/* IntType  */
+    ObUInt64Type, 		/* UTinyIntType  */
+    ObUInt64Type,		/* USmallIntType  */
+    ObUInt64Type,		/* UMediumIntType  */
+    ObUInt64Type,   		/* UInt32Type  */
+    ObUInt64Type,     		/* UIntType  */
     ObDoubleType,   		/* FloatType  */
     ObDoubleType,  		/* DoubleType  */
     ObDoubleType,   		/* UFloatType  */

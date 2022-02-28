@@ -3661,6 +3661,24 @@ static int year_number(
   return ret;
 }
 
+static int year_datetime(
+    const ObObjType expect_type, ObObjCastParams &params, const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  int64_t int_value = 0;
+  ObObj int64;
+  if (OB_UNLIKELY(ObYearTC != in.get_type_class() || ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::year_to_int(in.get_year(), int_value))) {
+    LOG_WARN("year to int failed", K(ret));
+  } else if (FALSE_IT(int64.set_int(int_value))) {
+  } else if (OB_FAIL(int_datetime(expect_type, params, int64, out, cast_mode))) {
+    LOG_WARN("int_datetime failed", K(ret));
+  }
+  return ret;
+}
+
 static int year_date(
     const ObObjType expect_type, ObObjCastParams& params, const ObObj& in, ObObj& out, const ObCastMode cast_mode)
 {
@@ -6824,7 +6842,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] = {
         year_float,              /*float*/
         year_double,             /*double*/
         year_number,             /*number*/
-        cast_not_support,        /*datetime*/
+        year_datetime,           /*datetime*/
         year_date,               /*date*/
         cast_not_support,        /*time*/
         cast_identity,           /*year*/
