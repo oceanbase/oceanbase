@@ -3786,15 +3786,7 @@ int ObPartitionService::delete_rows(const transaction::ObTransDesc& trans_desc, 
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
-    //@NOTICE:(yuchen.wyc)为了规避外键自引用带来的防御检查不过的问题:
-    //由于目前delete语句的TableScan操作使用的快照点是语句级，无法看到本语句的最新修改，
-    //因此，对于外键自引用的级联删除时，同一行可能会被自己和外键级联操作多次删除，
-    //这个问题目前没有出现语义上的问题，但会导致delete的防御检查报错,详见：
-    // https://aone.alibaba-inc.com/issue/36022956
-    // DML的防御检查读使用的默认快照点是可以读到本语最新修改，因此对于该场景会出现两次读到的数据不一致的问题
-    //正确的做法是从外键的删除操作上规避掉多次删除同一行的情况，这要求delete的TableScan能够看到自己的最新修改
-    //由于担心这个修改的影响较大，3.2暂时从防御检查上规避掉这个问题，
-    // 4.0上delete改为读本语句的最新修改来避免同一行的多次删除
+    //@NOTICE:(yuchen.wyc) avoid defensive check problem on foreign key self reference
     if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
       const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
     }
@@ -3819,15 +3811,7 @@ int ObPartitionService::delete_row(const ObTransDesc& trans_desc, const ObDMLBas
   } else if (OB_FAIL(check_query_allowed(pkey, trans_desc, ctx_guard, guard))) {
     STORAGE_LOG(WARN, "fail to check query allowed", K(ret));
   } else {
-    //@NOTICE:(yuchen.wyc)为了规避外键自引用带来的防御检查不过的问题:
-    //由于目前delete语句的TableScan操作使用的快照点是语句级，无法看到本语句的最新修改，
-    //因此，对于外键自引用的级联删除时，同一行可能会被自己和外键级联操作多次删除，
-    //这个问题目前没有出现语义上的问题，但会导致delete的防御检查报错,详见：
-    // https://aone.alibaba-inc.com/issue/36022956
-    // DML的防御检查读使用的默认快照点是可以读到本语最新修改，因此对于该场景会出现两次读到的数据不一致的问题
-    //正确的做法是从外键的删除操作上规避掉多次删除同一行的情况，这要求delete的TableScan能够看到自己的最新修改
-    //由于担心这个修改的影响较大，3.2暂时从防御检查上规避掉这个问题，
-    // 4.0上delete改为读本语句的最新修改来避免同一行的多次删除
+    //@NOTICE:(yuchen.wyc) avoid defensive check problem on foreign key self reference
     if (trans_desc.get_cur_stmt_desc().is_delete_stmt()) {
       const_cast<ObDMLBaseParam &>(dml_param).query_flag_.read_latest_ = 0;
     }
@@ -4268,32 +4252,6 @@ int ObPartitionService::inner_del_partition_impl(const ObPartitionKey& pkey, con
 
   STORAGE_LOG(INFO, "partition service delete partition", K(tenant_id), K(tenant_part_cnt), K(tenant_pg_cnt), K(pkey));
 
-  return ret;
-}
-
-int ObPartitionService::inner_del_partition(const ObPartitionKey& pkey)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_del_partition_impl(pkey, nullptr /*file_id*/))) {
-    STORAGE_LOG(WARN, "fail to inner del partition", K(ret), K(pkey));
-  }
-  return ret;
-}
-
-int ObPartitionService::inner_del_partition_for_replay(const ObPartitionKey& pkey, const int64_t file_id)
-{
-  int ret = OB_SUCCESS;
-  ObIPartitionGroupGuard guard;
-  if (OB_FAIL(get_partition(pkey, guard))) {
-    if (OB_PARTITION_NOT_EXIST == ret) {
-      LOG_INFO("pg not exist in partition image", K(pkey));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to get partition", K(ret), K(pkey));
-    }
-  } else if (OB_FAIL(inner_del_partition_impl(pkey, OB_INVALID_DATA_FILE_ID == file_id ? nullptr : &file_id))) {
-    STORAGE_LOG(WARN, "fail to inner del partition impl", K(ret));
-  }
   return ret;
 }
 

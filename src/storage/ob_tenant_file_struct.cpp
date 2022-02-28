@@ -175,6 +175,8 @@ int ObTenantFileInfo::add_pg(const ObPGKey& pg_key)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(pg_map_.set_refactored(pg_key, true))) {
       LOG_WARN("fail to add pg to pg map", K(ret), K(pg_key));
+    } else {
+      FLOG_INFO("add pg", K(tenant_key_), K(pg_key));
     }
   }
   return ret;
@@ -190,6 +192,8 @@ int ObTenantFileInfo::remove_pg(const ObPGKey& pg_key)
     ret = OB_ENTRY_NOT_EXIST;
   } else if (OB_FAIL(pg_map_.erase_refactored(pg_key))) {
     LOG_WARN("fail to erase pg from map", K(ret), K(pg_key));
+  } else {
+    FLOG_INFO("remove pg", K(tenant_key_), K(pg_key));
   }
   return ret;
 }
