@@ -4813,6 +4813,15 @@ string_length_i:
     } else {
       $$[0] = val;
     }
+  } else if (T_UINT64 == $2->type_) {
+    uint64_t value = $2->value_;
+    if (value > UINT32_MAX) {
+      $$[0] = OUT_OF_STR_LEN;;
+    } else if (value > INT32_MAX) {
+      $$[0] = DEFAULT_STR_LENGTH;
+    } else {
+      $$[0] = $2->value_;
+    }
   } else if ($2->value_ < 0) {
     yyerror(&@2, result, "length cannot < 0\n");
     YYABORT_UNEXPECTED;
