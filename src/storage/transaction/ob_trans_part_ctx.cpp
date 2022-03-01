@@ -11206,6 +11206,7 @@ int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info,
 {
   int ret = OB_SUCCESS;
 
+  // when lock_state.trans_version_ != 0 means cur trans is commit or abort
   switch (trans_info.status_) {
     case ObTransTableStatusType::COMMIT: {
       lock_state.is_locked_ = false;
@@ -11219,7 +11220,7 @@ int ObPartTransCtx::check_row_locked_(const ObTransStatusInfo& trans_info,
     }
     case ObTransTableStatusType::ABORT: {
       lock_state.is_locked_ = false;
-      lock_state.trans_version_ = 0;
+      lock_state.trans_version_ = OB_INVALID_VERSION;
       break;
     }
   }
