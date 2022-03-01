@@ -1099,7 +1099,7 @@ int ObBackupDataClean::add_delete_backup_set(const share::ObBackupCleanInfo &cle
         } else if (backup_dest_option.backup_copies_ > 1 &&
                    OB_FAIL(get_backup_set_file_copies_num(delete_backup_info, copies_num))) {
           LOG_WARN("failed to get backup set file copies num", K(ret), K(delete_backup_info));
-        } else if (copies_num < backup_dest_option.backup_copies_) {
+        } else if (backup_dest_option.backup_copies_ != 1 && copies_num < backup_dest_option.backup_copies_) {
           ret = OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED;
           LOG_WARN("backup set do not allow clean, because current finish copies_num is less than backup_copies in backup_dest_option",
               K(ret),
@@ -1377,7 +1377,7 @@ int ObBackupDataClean::deal_with_obsolete_backup_set(const share::ObBackupCleanI
     } else if (backup_dest_option.backup_copies_ > 1 &&
                OB_FAIL(get_backup_set_file_copies_num(task_info, copies_num))) {
       LOG_WARN("failed to get backup set file copies num", K(ret), K(task_info));
-    } else if (copies_num < backup_dest_option.backup_copies_) {
+    } else if (backup_dest_option.backup_copies_ != 1 && copies_num < backup_dest_option.backup_copies_) {
       backup_set_id.clean_mode_ = ObBackupDataCleanMode::TOUCH;
       LOG_INFO("backup copies is not reach required copies",
           K(task_info),
@@ -1592,7 +1592,7 @@ int ObBackupDataClean::add_delete_backup_piece(const share::ObBackupCleanInfo &c
       } else if (backup_dest_option.backup_copies_ > 1 &&
                  OB_FAIL(get_backup_piece_file_copies_num(backup_piece_info, copies_num))) {
         LOG_WARN("failed to get backup piece file copies num", K(ret), K(backup_piece_info));
-      } else if (copies_num < backup_dest_option.backup_copies_) {
+      } else if (backup_dest_option.backup_copies_ != 1 && copies_num < backup_dest_option.backup_copies_) {
         ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
         LOG_WARN("piece is not allowed to be deleted, because current finish copies_num is less than backup_copies in backup_dest_option",
             K(ret),
@@ -1688,7 +1688,7 @@ int ObBackupDataClean::add_delete_backup_round(const share::ObBackupCleanInfo &c
       } else if (backup_dest_option.backup_copies_ > 1 &&
                  OB_FAIL(get_backup_round_copies_num(log_archive_info, copies_num))) {
         LOG_WARN("failed to get backup round copies num", K(ret), K(log_archive_info));
-      } else if (copies_num < backup_dest_option.backup_copies_) {
+      } else if (backup_dest_option.backup_copies_ != 1 && copies_num < backup_dest_option.backup_copies_) {
         ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
         LOG_WARN("round is not allowed to be deleted, because current finish copies_num is less than backup_copies in backup_dest_option",
             K(ret),
