@@ -70,7 +70,7 @@ int ObConnectResourceMgr::init(ObMultiVersionSchemaService& schema_service)
   } else {
     schema_service_ = &schema_service;
     inited_ = true;
-    const int64_t delay = 3600000000;
+    const int64_t delay = ConnResourceCleanUpTask::SLEEP_USECONDS;
     const bool repeat = false;
     if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, cleanup_task_, delay, repeat))) {
       LOG_WARN("schedual connect resource mgr failed", K(ret));
@@ -240,7 +240,7 @@ int ObConnectResourceMgr::increase_user_connections_count(const uint64_t max_use
   return ret;
 }
 
-// max_connections：max connections per hour.
+// max_connections: max connections per hour.
 // max_user_connections: max concurrent connections.
 // 0 means no limit.
 int ObConnectResourceMgr::on_user_connect(const uint64_t tenant_id, const uint64_t user_id, const ObPrivSet& priv,
@@ -339,7 +339,12 @@ bool ObConnectResourceMgr::CleanUpConnResourceFunc::operator()(ObTenantUserKey k
   } else if (is_user_) {
     const ObUserInfo* user_info = NULL;
     if (OB_FAIL(schema_guard_.get_user_info(key.id_, user_info))) {
-      LOG_ERROR("get user info failed", K(ret), K(key.id_));
+      if (OB_TENANT_NOT_EXIST != ret) {
+        LOG_ERROR("get user info failed", K(ret), K(key.id_));
+      } else {
+        ret = OB_SUCCESS;
+        conn_res_map_.del(key);
+      }
     } else if (OB_ISNULL(user_info)) {
       conn_res_map_.del(key);
     }
@@ -358,15 +363,17 @@ bool ObConnectResourceMgr::CleanUpConnResourceFunc::operator()(ObTenantUserKey k
 void ObConnectResourceMgr::ConnResourceCleanUpTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard sys_schema_guard;
+  ObSchemaGetterGuard schema_guard;
   if (OB_ISNULL(conn_res_mgr_.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("schema service is null", K(ret));
-  } else if (OB_FAIL(conn_res_mgr_.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, sys_schema_guard))) {
+  } else if (OB_FAIL(conn_res_mgr_.schema_service_->get_schema_guard(schema_guard))) {
     LOG_WARN("get sys tenant schema guard failed", K(ret));
   } else {
-    CleanUpConnResourceFunc user_func(sys_schema_guard, conn_res_mgr_.user_res_map_, true);
-    CleanUpConnResourceFunc tenant_func(sys_schema_guard, conn_res_mgr_.user_res_map_, false);
+    LOG_INFO("clean up connection resource", K(schema_guard.get_tenant_id()),
+              K(conn_res_mgr_.user_res_map_.size()), K(conn_res_mgr_.tenant_res_map_.size()));
+    CleanUpConnResourceFunc user_func(schema_guard, conn_res_mgr_.user_res_map_, true);
+    CleanUpConnResourceFunc tenant_func(schema_guard, conn_res_mgr_.tenant_res_map_, false);
     if (OB_FAIL(conn_res_mgr_.user_res_map_.for_each(user_func))) {
       LOG_WARN("cleanup dropped user failed", K(ret));
     } else if (OB_FAIL(conn_res_mgr_.tenant_res_map_.for_each(tenant_func))) {
