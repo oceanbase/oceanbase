@@ -166,6 +166,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(rootserver::ObRpcRevokeDBP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObRpcRevokeTableP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObRpcRevokeSysPrivP, *gctx_.root_service_);
+  RPC_PROCESSOR(rootserver::ObRpcSubmitBuildIndexTaskP, *gctx_.root_service_);
 
   // profile
   RPC_PROCESSOR(rootserver::ObRpcAlterUserProfileP, *gctx_.root_service_);
@@ -253,7 +254,6 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator* xlator)
   RPC_PROCESSOR(rootserver::ObGetClusterStatsP, *gctx_.root_service_);
 
   RPC_PROCESSOR(rootserver::ObCheckMergeFinishP, *gctx_.root_service_);
-  RPC_PROCESSOR(rootserver::ObRpcFlashBackTableToScnP, *gctx_.root_service_);
   RPC_PROCESSOR(rootserver::ObCheckClusterValidToAddP, *gctx_.root_service_);
 
   RPC_PROCESSOR(rootserver::ObRpcCreateRestorePointP, *gctx_.root_service_);

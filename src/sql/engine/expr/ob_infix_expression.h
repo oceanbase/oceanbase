@@ -24,7 +24,7 @@ class ObInfixExprItem : public ObPostExprItem {
   OB_UNIS_VERSION(1);
 
 public:
-  ObInfixExprItem() : ObPostExprItem(), param_idx_(0), param_num_(0), param_lazy_eval_(false)
+  ObInfixExprItem() : ObPostExprItem(), param_idx_(0), param_num_(0), param_lazy_eval_(false), is_boolean_(false)
   {}
 
   uint16_t get_param_idx() const
@@ -53,6 +53,16 @@ public:
     param_lazy_eval_ = true;
   }
 
+  void set_is_boolean(bool is_boolean) 
+  { 
+    is_boolean_ = is_boolean; 
+  }
+
+  bool is_boolean() const 
+  { 
+    return is_boolean_; 
+  }
+
   // deep copy self with allocator
   int deep_copy(common::ObIAllocator& alloc, const bool only_obj = false);
 
@@ -65,6 +75,7 @@ protected:
   uint16_t param_num_;
   // parameters are evaluated by expression
   bool param_lazy_eval_;
+  bool is_boolean_;
 };
 
 // Infix expression, expr stored in %exprs_, expr's child stored in
@@ -99,7 +110,7 @@ public:
 
   // Only called in ObAggregateExpression, because it try to evaluate
   // T_OP_AGG_PARAM_LIST which return multi values.
-  int calc_row(common::ObExprCtx& expr_ctx, const common::ObNewRow& row, common::ObNewRow& res_row) const;
+  int calc_row(common::ObExprCtx &expr_ctx, const common::ObNewRow &row, ObItemType aggr_func, common::ObNewRow &res_row) const;
 
   int generate_idx_for_regexp_ops(int16_t& cur_regexp_op_count);
 
@@ -131,6 +142,38 @@ public:
       SQL_ENG_LOG(WARN, "some ctx is invalid", K(ret), KP(expr_ctx.stack_), KP(expr_ctx.row1_), K(pos));
     } else {
       ret = eval(expr_ctx, *expr_ctx.row1_, expr_ctx.stack_, pos);
+    }
+    return ret;
+  }
+
+  OB_INLINE int get_param_type(common::ObExprCtx &expr_ctx,
+                               const common::ObObj &param,
+                               ObItemType &param_type) const
+  {
+    int ret = common::OB_SUCCESS;
+    param_type = T_INVALID;
+    int64_t pos = &param - expr_ctx.stack_;
+    if (OB_UNLIKELY(pos < 0) || OB_UNLIKELY(pos >= exprs_.count())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "some ctx is invalid", K(ret), K(pos));
+    } else {
+      param_type = exprs_.at(pos).get_item_type();
+    }
+    return ret;
+  }
+
+  OB_INLINE int get_param_is_boolean(common::ObExprCtx &expr_ctx,
+                                         const common::ObObj &param,
+                                         bool &is_boolean) const
+  {
+    int ret = common::OB_SUCCESS;
+    is_boolean = false;
+    int64_t pos = &param - expr_ctx.stack_;
+    if (OB_UNLIKELY(pos < 0) || OB_UNLIKELY(pos >= exprs_.count())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "some ctx is invalid", K(ret), K(pos));
+    } else {
+      is_boolean = exprs_.at(pos).is_boolean();
     }
     return ret;
   }

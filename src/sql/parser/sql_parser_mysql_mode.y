@@ -102,6 +102,7 @@
 %left   '|'
 %left   '&'
 %left   SHIFT_LEFT SHIFT_RIGHT
+%left   JSON_EXTRACT JSON_EXTRACT_UNQUOTED MEMBER
 %left   '+' '-'
 %left   '*' '/' '%' MOD DIV POW
 %left   '^'
@@ -214,7 +215,7 @@ END_P SET_VAR DELIMITER
         DIRECTORY DISABLE DISCARD DISK DISKGROUP DO DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP
 
-        EFFECTIVE ENABLE ENCRYPTION END ENDS ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS
+        EFFECTIVE EMPTY ENABLE ENCRYPTION END ENDS ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED
 
@@ -230,7 +231,7 @@ END_P SET_VAR DELIMITER
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IO_THREAD IPC ISOLATE ISOLATION ISSUER
         IS_TENANT_SYS_POOL INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL INNER_PARSE ILOGCACHE INPUT
 
-        JOB JSON
+        JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_VALUE
 
         KEY_BLOCK_SIZE KEY_VERSION KVCACHE
 
@@ -246,7 +247,7 @@ END_P SET_VAR DELIMITER
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND
         MIGRATE MIN MIN_CPU MIN_IOPS MIN_MEMORY MINOR MIN_ROWS MINUS MINUTE MODE MODIFY MONTH MOVE
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
-        MATERIALIZED MEMSTORE_PERCENT
+        MATERIALIZED MEMBER MEMSTORE_PERCENT
 
         NAME NAMES NATIONAL NCHAR NDB NDBCLUSTER NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT
         NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NOPARALLEL
@@ -264,7 +265,7 @@ END_P SET_VAR DELIMITER
         REBUILD RECOVER RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL_LIST RESPECT RESTART
-        RESTORE RESUME RETURNED_SQLSTATE RETURNS REVERSE REWRITE_MERGE_VERSION ROLLBACK ROLLUP ROOT
+        RESTORE RESUME RETURNED_SQLSTATE RETURNING RETURNS REVERSE REWRITE_MERGE_VERSION ROLLBACK ROLLUP ROOT
         ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROW_COUNT ROW_FORMAT ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ONLY RECOVERY
@@ -347,7 +348,7 @@ END_P SET_VAR DELIMITER
 %type <node> tracing_num_list
 %type <node> qb_name_option
 %type <node> join_condition inner_join_type opt_inner outer_join_type opt_outer natural_join_type except_full_outer_join_type opt_full_table_factor
-%type <ival> string_length_i opt_string_length_i opt_string_length_i_v2 opt_int_length_i opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i opt_time_func_fsp_i
+%type <ival> string_length_i opt_string_length_i opt_string_length_i_v2 opt_int_length_i opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i opt_time_func_fsp_i opt_cast_float_precision
 %type <node> opt_float_precision opt_number_precision
 %type <node> opt_equal_mark opt_default_mark read_only_or_write not not2 opt_disk_alias
 %type <node> int_or_decimal
@@ -405,7 +406,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_tablegroup_stmt drop_tablegroup_stmt alter_tablegroup_stmt default_tablegroup
 %type <node> set_transaction_stmt transaction_characteristics transaction_access_mode isolation_level
 %type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local
-%type <node> purge_stmt
+%type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
 %type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var
 %type <node> string_list text_string string_val_list
@@ -429,6 +430,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_force_purge
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric get_format_unit
 %type <node> opt_copy_id opt_backup_dest opt_preview opt_backup_backup_dest opt_tenant_info opt_with_active_piece
+%type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr
 %type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
 
 %start sql_stmt
@@ -532,6 +534,7 @@ stmt:
   { $$ = $1; check_question_mark($$, result); $$->value_ = 1; }
   | unlock_tables_stmt
   { $$ = $1; check_question_mark($$, result); $$->value_ = 1; }
+  | flashback_stmt          { $$ = $1; check_question_mark($$, result); }
   | purge_stmt              { $$ = $1; check_question_mark($$, result); }
   | load_data_stmt          { $$ = $1; check_question_mark($$, result); }
   | xa_begin_stmt           { $$ = $1; check_question_mark($$, result); }
@@ -988,6 +991,11 @@ bool_pri IS NULLX %prec IS
 }
 ;
 
+opt_of:
+OF
+|
+;
+
 predicate:
 bit_expr IN in_expr
 {
@@ -1014,7 +1022,6 @@ bit_expr IN in_expr
 }
 | bit_expr LIKE STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
-  //在resolver时，如果发现只有两个children，会将escape 参数设置为‘\’
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $3, $4);
   ParseNode *string_list_node = NULL;
@@ -1039,7 +1046,6 @@ bit_expr IN in_expr
 }
 | bit_expr LIKE STRING_VALUE string_val_list ESCAPE simple_expr %prec LIKE
 {
-  // 如果escape 为空串 '', 则使用默认值'\'
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $3, $4);
   ParseNode *string_list_node = NULL;
@@ -1095,7 +1101,6 @@ bit_expr IN in_expr
 | bit_expr not LIKE STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
   (void)($2);
-  //在resolver时，如果发现只有两个children，会将escape 参数设置为‘\’
   ParseNode *str_node = NULL;
   malloc_non_terminal_node(str_node, result->malloc_pool_, T_LINK_NODE, 2, $4, $5);
   ParseNode *string_list_node = NULL;
@@ -1129,7 +1134,6 @@ bit_expr IN in_expr
   ParseNode *concat_node = NULL;
   make_name_node(concat_node, result->malloc_pool_, "concat");
   malloc_non_terminal_node(concat_node, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
-  // 如果escape 为空串 '', 则使用默认值'\'
   if (OB_UNLIKELY(T_VARCHAR == $7->type_ && 0 == $7->str_len_)) {
     ParseNode *node = NULL;
     malloc_terminal_node(node, result->malloc_pool_, T_VARCHAR);
@@ -1202,6 +1206,17 @@ bit_expr IN in_expr
   make_name_node(concat_node, result->malloc_pool_, "concat");
   malloc_non_terminal_node(concat_node, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
   malloc_non_terminal_node($$, result->malloc_pool_, T_OP_NOT_REGEXP, 2, $1, concat_node);
+}
+| bit_expr MEMBER opt_of '(' simple_expr ')' %prec LOWER_THAN_COMP
+{
+  (void)($2);
+  ParseNode *json_member_of_node = NULL;
+  make_name_node(json_member_of_node, result->malloc_pool_, "JSON_MEMBER_OF");
+  ParseNode *link_params = NULL;
+  malloc_non_terminal_node(link_params, result->malloc_pool_, T_LINK_NODE, 2, $1, $5);
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, link_params);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, json_member_of_node, params);
 }
 | bit_expr %prec LOWER_THAN_COMP
 { $$ = $1; }
@@ -1447,6 +1462,32 @@ simple_expr collation %prec NEG
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_OP_GET_USER_VAR, 1, $1);
 }
+| column_definition_ref JSON_EXTRACT complex_string_literal
+{
+  ParseNode *json_extract_node = NULL;
+  make_name_node(json_extract_node, result->malloc_pool_, "JSON_EXTRACT");
+  ParseNode *link_params = NULL;
+  malloc_non_terminal_node(link_params, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, link_params);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, json_extract_node, params);
+  store_pl_ref_object_symbol($$, result, REF_FUNC);
+}
+| column_definition_ref JSON_EXTRACT_UNQUOTED complex_string_literal
+{
+  ParseNode *json_extract_node = NULL;
+  make_name_node(json_extract_node, result->malloc_pool_, "JSON_EXTRACT");
+  ParseNode *link_params = NULL;
+  malloc_non_terminal_node(link_params, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_EXPR_LIST, link_params);
+  malloc_non_terminal_node(json_extract_node, result->malloc_pool_, T_FUN_SYS, 2, json_extract_node, params);
+  ParseNode *json_unquoted_node = NULL;
+  make_name_node(json_unquoted_node, result->malloc_pool_, "JSON_UNQUOTE");
+  merge_nodes(params, result, T_EXPR_LIST, json_extract_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, json_unquoted_node, params);
+  store_pl_ref_object_symbol($$, result, REF_FUNC);
+}
 ;
 
 opt_mode_flag:
@@ -1628,6 +1669,16 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG, 2, $3, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
+}
+| JSON_ARRAYAGG '(' opt_distinct_or_all expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_JSON_ARRAYAGG, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
+}
+| JSON_OBJECTAGG '(' expr ',' expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_JSON_OBJECTAGG, 2, $3, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $8);
 }
 | STD '(' opt_all expr ')' OVER new_generalized_window_clause
 {
@@ -2055,6 +2106,14 @@ MOD '(' expr ',' expr ')'
 | AVG '(' opt_distinct_or_all expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG, 2, $3, $4);
+}
+| JSON_ARRAYAGG '(' opt_distinct_or_all expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_JSON_ARRAYAGG, 2, $3, $4);
+}
+| JSON_OBJECTAGG  '(' expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_JSON_OBJECTAGG, 2, $3, $5);
 }
 | STD '(' opt_all expr ')'
 {
@@ -2549,6 +2608,10 @@ MOD '(' expr ',' expr ')'
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST , 5, $3 , $5 , $7, $9 ,$11);
   make_name_node($$, result->malloc_pool_, "weight_string");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
+}
+| json_value_expr
+{
+  $$ = $1;
 }
 ;
 
@@ -4079,6 +4142,12 @@ column_definition
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHECK_CONSTRAINT, 2, $2, $5);
   $$->value_ = 1;
 }
+| CHECK '(' expr ')'
+{
+  // just compatible with mysql, do nothing
+  (void)($3);
+  malloc_terminal_node($$, result->malloc_pool_, T_EMPTY);
+}
 | opt_constraint FOREIGN KEY opt_index_name '(' column_name_list ')' REFERENCES relation_factor '(' column_name_list ')' opt_match_option opt_reference_option_list
 {
   ParseNode *child_col_list= NULL;
@@ -4239,6 +4308,12 @@ NOT NULLX
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_ID, 1, $2);
 }
+| CHECK '(' expr ')'
+{
+  // just compatible with mysql, do nothing
+  (void)($3);
+  malloc_terminal_node($$, result->malloc_pool_, T_EMPTY);
+}
 ;
 
 opt_storage_type:
@@ -4306,6 +4381,15 @@ BINARY opt_string_length_i_v2
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
   $$->param_num_ = $2[1];
 }
+| CHARACTER opt_string_length_i_v2 CHARACTER SET charset_name 
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
+  $$->param_num_ = $2[1];
+  $$->str_value_ = $5->str_value_;
+  $$->str_len_ = $5->str_len_;
+}
 | cast_datetime_type_i opt_datetime_fsp_i
 {
   malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
@@ -4360,6 +4444,25 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = -1;    /* scale */
   $$->param_num_ = 0;
 }
+| FLOAT opt_cast_float_precision
+{ /* If p is provided and 0 <= < p <= 24, the result is of type FLOAT. */
+  /* If 25 <= p <= 53, the result is of type DOUBLE. If p < 0 or p > 53, an error is returned. */
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0; 
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_FLOAT;
+  $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = $2[0];  /* precision */
+  $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = -1;    /* scale */
+  $$->param_num_ = $2[1]; /* param only use to choose float or double convert */
+}
+| JSON
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_JSON; /* data type */
+  $$->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;        /* length */
+  $$->param_num_ = 0;
+}
 ;
 
 opt_integer:
@@ -4371,6 +4474,7 @@ cast_datetime_type_i:
 DATETIME    { $$[0] = T_DATETIME; $$[1] = 0; }
 | DATE        { $$[0] = T_DATE; $$[1] = 0; }
 | TIME        { $$[0] = T_TIME; $$[1] = 0; }
+| YEAR        { $$[0] = T_YEAR; $$[1] = 0; }
 ;
 
 get_format_unit:
@@ -4536,6 +4640,11 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = 0;//not used so far
   $$->int32_values_[1] = 0; /* is char */
 }
+| JSON
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_JSON);
+  $$->int32_values_[0] = 0; /* length */
+}
 ;
 
 string_list:
@@ -4672,7 +4781,12 @@ opt_year_i:
 
 opt_datetime_fsp_i:
 '(' INTNUM ')'  { $$[0] = $2->value_; $$[1] = 1; }
-| /*EMPTY*/       { $$[0] = 0; $$[1] = 0;}
+| /*EMPTY*/ { $$[0] = 0; $$[1] = 0; }
+;
+
+opt_cast_float_precision:
+'(' INTNUM  ')' { $$[0] = $2->value_; $$[1] = 1; }
+| /*EMPTY*/ { $$[0] = 0; $$[1] = 0;}
 ;
 
 string_length_i:
@@ -4698,6 +4812,15 @@ string_length_i:
       $$[0] = DEFAULT_STR_LENGTH;
     } else {
       $$[0] = val;
+    }
+  } else if (T_UINT64 == $2->type_) {
+    uint64_t value = $2->value_;
+    if (value > UINT32_MAX) {
+      $$[0] = OUT_OF_STR_LEN;;
+    } else if (value > INT32_MAX) {
+      $$[0] = DEFAULT_STR_LENGTH;
+    } else {
+      $$[0] = $2->value_;
     }
   } else if ($2->value_ < 0) {
     yyerror(&@2, result, "length cannot < 0\n");
@@ -4905,6 +5028,12 @@ not NULLX
 | ID INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_ID, 1, $2);
+}
+| CHECK '(' expr ')'
+{
+  // just compatible with mysql, do nothing
+  (void)($3);
+  malloc_terminal_node($$, result->malloc_pool_, T_EMPTY);
 }
 ;
 
@@ -9289,7 +9418,7 @@ format_name:
 TRADITIONAL
 { malloc_terminal_node($$, result->malloc_pool_, T_TRADITIONAL); }
 | JSON
-{ malloc_terminal_node($$, result->malloc_pool_, T_JSON); }
+{ malloc_terminal_node($$, result->malloc_pool_, T_FORMAT_JSON); }
 ;
 
 
@@ -11150,6 +11279,43 @@ SET DEFAULT signed_literal
  *	RECYCLE grammar
  *
  *****************************************************************************/
+flashback_stmt:		
+FLASHBACK TABLE relation_factor TO BEFORE DROP opt_flashback_rename_table		
+{		
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_TABLE_FROM_RECYCLEBIN, 2, $3, $7);		
+}		
+|		
+FLASHBACK database_key database_factor TO BEFORE DROP opt_flashback_rename_database		
+{		
+  (void)($2);		
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_DATABASE, 2, $3, $7);		
+}		
+|		
+FLASHBACK TENANT relation_name TO BEFORE DROP opt_flashback_rename_tenant		
+{		
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_TENANT, 2, $3, $7);		
+}		
+
+opt_flashback_rename_table:		
+RENAME TO relation_factor		
+{		
+  $$ = $3;		
+}		
+| /*EMPTY*/  { $$ = NULL; }		
+
+opt_flashback_rename_database:		
+RENAME TO database_factor		
+{		
+  $$ = $3;		
+}		
+| /*EMPTY*/  { $$ = NULL; }		
+
+opt_flashback_rename_tenant:		
+RENAME TO relation_name		
+{		
+  $$ = $3;		
+}		
+| /*EMPTY*/  { $$ = NULL; }
 
 purge_stmt:
 PURGE TABLE relation_factor
@@ -11797,6 +11963,17 @@ ALTER SYSTEM DELETE BACKUPROUND INTNUM opt_copy_id
   value->value_ = $5->value_;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 3, type, value, $6);
+}
+|
+ALTER SYSTEM CANCEL ALL BACKUP FORCE
+{
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 15;
+  ParseNode *value = NULL;
+  malloc_terminal_node(value, result->malloc_pool_, T_INT);
+  value->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
 }
 |
 ALTER SYSTEM BACKUP BACKUPSET ALL opt_tenant_info opt_backup_backup_dest
@@ -13297,6 +13474,145 @@ DAY
 }
 ;
 
+/*===========================================================
+ *
+ *	json value
+ *
+ *===========================================================*/
+
+json_value_expr:
+JSON_VALUE '(' simple_expr ',' complex_string_literal opt_returning_type opt_on_empty_or_error ')'
+{
+  ParseNode *empty_value = $7->children_[1];
+  ParseNode *error_value = $7->children_[3];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_JSON_VALUE, 7, $3, $5, $6, $7->children_[0], empty_value, $7->children_[2], error_value);
+}
+;
+
+opt_returning_type:
+RETURNING cast_data_type
+{
+  $$ = $2;
+}
+| // The default returning type is CHAR(512).
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; // to keep consitent with mysql
+  $$->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;        /* is char */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 512;        /* length */
+  $$->param_num_ = 1; /* 1 */
+  $$->is_hidden_const_ = 1;
+}
+;
+
+opt_on_empty_or_error:
+/* empty */
+{
+  ParseNode *empty_type = NULL;
+  malloc_terminal_node(empty_type, result->malloc_pool_, T_INT);
+  empty_type->value_ = 3;
+  empty_type->is_hidden_const_ = 1;
+
+  ParseNode *empty_node = NULL;
+  malloc_terminal_node(empty_node, result->malloc_pool_, T_NULL);
+  empty_node->is_hidden_const_ = 1;
+
+  ParseNode *error_type = NULL;
+  malloc_terminal_node(error_type, result->malloc_pool_, T_INT);
+  error_type->value_ = 3;
+  error_type->is_hidden_const_ = 1;
+
+  ParseNode *error_node = NULL;
+  malloc_terminal_node(error_node, result->malloc_pool_, T_NULL);
+  error_node->is_hidden_const_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 4, empty_type, empty_node, error_type, error_node);
+}
+| on_empty
+{
+  ParseNode *error_type = NULL;
+  malloc_terminal_node(error_type, result->malloc_pool_, T_INT);
+  error_type->value_ = 3;
+  error_type->is_hidden_const_ = 1;
+
+  ParseNode *error_node = NULL;
+  malloc_terminal_node(error_node, result->malloc_pool_, T_NULL);
+  error_node->is_hidden_const_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 4, $1->children_[0], $1->children_[1], error_type, error_node);
+}
+| on_error
+{
+  ParseNode *empty_type = NULL;
+  malloc_terminal_node(empty_type, result->malloc_pool_, T_INT);
+  empty_type->value_ = 3;
+  empty_type->is_hidden_const_ = 1;
+
+  ParseNode *empty_node = NULL;
+  malloc_terminal_node(empty_node, result->malloc_pool_, T_NULL);
+  empty_node->is_hidden_const_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 4, empty_type, empty_node, $1->children_[0], $1->children_[1]);
+}
+| on_empty on_error
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 4, $1->children_[0], $1->children_[1], $2->children_[0], $2->children_[1]);
+}
+
+on_empty:
+json_on_response ON EMPTY
+{
+  $$ = $1;
+}
+;
+
+on_error:
+json_on_response ON ERROR_P
+{
+  $$ = $1;
+}
+;
+
+// type : { error : 0, null : 1, default : 2, implict : 3 }
+json_on_response:
+ERROR_P
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 0;
+  type_node->is_hidden_const_ = 1;
+
+  ParseNode *v_node = NULL;
+  malloc_terminal_node(v_node, result->malloc_pool_, T_NULL);
+  v_node->is_hidden_const_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, type_node, v_node);
+}
+| NULLX
+{
+  (void)($1) ; /* make bison mute */
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 1;
+  type_node->is_hidden_const_ = 1;
+
+  ParseNode *v_node = NULL;
+  malloc_terminal_node(v_node, result->malloc_pool_, T_NULL);
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, type_node, v_node);
+}
+| DEFAULT signed_literal
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 2;
+  type_node->is_hidden_const_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, type_node, $2);
+}
+;
+
 unreserved_keyword:
 unreserved_keyword_normal { $$=$1;}
 | unreserved_keyword_special { $$=$1;}
@@ -13444,6 +13760,7 @@ ACCOUNT
 |       DYNAMIC
 |       DEFAULT_TABLEGROUP
 |       EFFECTIVE
+|       EMPTY
 |       ENABLE
 |       ENCRYPTION
 |       END
@@ -13536,6 +13853,9 @@ ACCOUNT
 |       ISSUER
 |       JOB
 |       JSON
+|       JSON_VALUE
+|       JSON_ARRAYAGG
+|       JSON_OBJECTAGG
 |       KEY_BLOCK_SIZE
 |       KEY_VERSION
 |       LAG
@@ -13597,6 +13917,7 @@ ACCOUNT
 |       MAX_UPDATES_PER_HOUR
 |       MAX_USER_CONNECTIONS
 |       MEDIUM
+|       MEMBER
 |       MEMORY
 |       MEMTABLE
 |       MERGE
@@ -13746,6 +14067,7 @@ ACCOUNT
 |       RESTORE
 |       RESUME
 |       RETURNED_SQLSTATE
+|       RETURNING
 |       RETURNS
 |       REVERSE
 |       REWRITE_MERGE_VERSION

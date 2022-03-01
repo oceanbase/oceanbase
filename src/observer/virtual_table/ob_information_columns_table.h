@@ -56,7 +56,7 @@ public:
   ObInfoSchemaColumnsTable();
   virtual ~ObInfoSchemaColumnsTable();
 
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
   inline void set_tenant_id(uint64_t tenant_id)
@@ -66,8 +66,8 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaColumnsTable);
-  int fill_row_cells(const common::ObString& database_name, const share::schema::ObTableSchema* table_schema,
-      const share::schema::ObColumnSchemaV2* column_schema, const uint64_t ordinal_position);
+  int fill_row_cells(const common::ObString &database_name, const share::schema::ObTableSchema *table_schema,
+      const share::schema::ObColumnSchemaV2 *column_schema, const uint64_t ordinal_position);
   int check_database_table_filter();
   /**
    * Iterate through all the tables and fill row cells,
@@ -76,8 +76,8 @@ private:
    */
   int iterate_table_schema_array(const bool is_filter_table_schema, const int64_t last_db_schema_idx);
   // Iterate through all the columns and fill cells
-  int iterate_column_schema_array(const common::ObString& database_name,
-      const share::schema::ObTableSchema& table_schema, const int64_t last_db_schema_idx, const int64_t last_table_idx,
+  int iterate_column_schema_array(const common::ObString &database_name,
+      const share::schema::ObTableSchema &table_schema, const int64_t last_db_schema_idx, const int64_t last_table_idx,
       const bool is_filter_table_schema);
   /**
    * If ob_sql_type_str failed to call, and the error code returned is OB_SIZE_OVERFLOW.
@@ -85,8 +85,8 @@ private:
    */
   int get_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy, const common::ObIArray<ObString> &type_info,
       const int16_t default_length_semantics, int64_t &pos);
-  int fill_col_privs(ObSessionPrivInfo &session_priv, ObNeedPriv &need_priv, ObPrivSet priv_set, const char *priv_str,
-      char *buf, const int64_t buf_len, int64_t &pos);
+  int fill_col_privs(share::schema::ObSessionPrivInfo &session_priv, share::schema::ObNeedPriv &need_priv,
+      ObPrivSet priv_set, const char *priv_str, char *buf, const int64_t buf_len, int64_t &pos);
 
 private:
   uint64_t tenant_id_;
@@ -94,14 +94,14 @@ private:
   int64_t last_table_idx_;
   int64_t last_column_idx_;
   bool has_more_;
-  char* data_type_str_;
-  char* column_type_str_;
+  char *data_type_str_;
+  char *column_type_str_;
   int64_t column_type_str_len_;
   bool is_filter_db_;
   int64_t last_filter_table_idx_;
   int64_t last_filter_column_idx_;
-  common::ObSEArray<const share::schema::ObDatabaseSchema*, 8> database_schema_array_;
-  common::ObSEArray<const share::schema::ObTableSchema*, 16> filter_table_schema_array_;
+  common::ObSEArray<const share::schema::ObDatabaseSchema *, 8> database_schema_array_;
+  common::ObSEArray<const share::schema::ObTableSchema *, 16> filter_table_schema_array_;
 };
 }  // namespace observer
 }  // namespace oceanbase

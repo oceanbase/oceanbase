@@ -278,6 +278,11 @@ public:
         // index
         || stmt_type == stmt::T_CREATE_INDEX ||
         stmt_type == stmt::T_DROP_INDEX
+        // flashback
+        || stmt_type == stmt::T_FLASHBACK_TENANT
+        || stmt_type == stmt::T_FLASHBACK_DATABASE
+        || stmt_type == stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN
+        || stmt_type == stmt::T_FLASHBACK_INDEX
         // purge
         || stmt_type == stmt::T_PURGE_RECYCLEBIN || stmt_type == stmt::T_PURGE_TENANT ||
         stmt_type == stmt::T_PURGE_DATABASE || stmt_type == stmt::T_PURGE_TABLE ||
@@ -351,6 +356,11 @@ public:
         || stmt_type == stmt::T_DROP_VIEW
         // index
         || stmt_type == stmt::T_DROP_INDEX
+        // flashback
+        || stmt_type == stmt::T_FLASHBACK_TENANT		
+        || stmt_type == stmt::T_FLASHBACK_DATABASE		
+        || stmt_type == stmt::T_FLASHBACK_TABLE_FROM_RECYCLEBIN		
+        || stmt_type == stmt::T_FLASHBACK_INDEX
         // purge
         || stmt_type == stmt::T_PURGE_RECYCLEBIN || stmt_type == stmt::T_PURGE_TENANT ||
         stmt_type == stmt::T_PURGE_DATABASE || stmt_type == stmt::T_PURGE_TABLE ||

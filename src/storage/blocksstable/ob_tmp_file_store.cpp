@@ -980,12 +980,12 @@ int ObTmpTenantFileStore::alloc_macro_block(const int64_t dir_id, const uint64_t
         STORAGE_LOG(WARN, "fail to put meta into block cache", K(ret), K(t_mblk));
       }
       if (OB_FAIL(ret)) {
-        tmp_block_manager_.free_macro_block(t_mblk->get_block_id());
         tmp_mem_block_manager_.free_macro_block(t_mblk->get_block_id());
         t_mblk->give_back_buf_into_cache();
       }
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(t_mblk)) {
+      tmp_block_manager_.free_macro_block(t_mblk->get_block_id());
       allocator_.free(t_mblk);
     }
   }

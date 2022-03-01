@@ -79,6 +79,7 @@ enum ObDataStoreType {
   ObIntervalYMStoreType = 15,
   ObIntervalDSStoreType = 16,
   ObRowIDStoreType = 17,
+  ObJsonStoreType = 18,
   ObExtendStoreType = 31
 };
 
@@ -963,6 +964,7 @@ struct ObStoreCtx {
     snapshot_info_.reset();
     trans_table_guard_ = NULL;
     log_ts_ = INT64_MAX;
+    is_thread_scope_ = true;
   }
   int get_snapshot_info(transaction::ObTransSnapInfo& snap_info) const;
   bool is_valid() const
@@ -975,7 +977,7 @@ struct ObStoreCtx {
     return common::is_valid_tenant_id(tenant_id_);
   }
   TO_STRING_KV(KP_(mem_ctx), KP_(warm_up_ctx), KP_(tables), K_(tenant_id), K_(trans_id), K_(is_sp_trans), K_(isolation),
-      K_(sql_no), K_(stmt_min_sql_no), K_(snapshot_info), KP_(trans_table_guard));
+      K_(sql_no), K_(stmt_min_sql_no), K_(snapshot_info), KP_(trans_table_guard), K_(is_thread_scope));
 
   memtable::ObIMemtableCtx* mem_ctx_;
   ObWarmUpCtx* warm_up_ctx_;
@@ -992,6 +994,8 @@ struct ObStoreCtx {
   int64_t log_ts_;
   transaction::ObTransSnapInfo snapshot_info_;
   transaction::ObTransStateTableGuard* trans_table_guard_;
+  // storage access lifetime span won't cross thread
+  bool is_thread_scope_;
 };
 
 struct ObTableAccessStat {

@@ -711,6 +711,9 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type, const ObExprResType
         bret = false;
         always_true = true;
       }
+    } else if (calc_type.is_json() && col_type.is_json()) {
+      bret = false;
+      always_true = true;
     }
   }
   return bret;

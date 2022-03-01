@@ -28,7 +28,7 @@ public:
   ObDataBuffer(char* data, const int64_t capacity) : data_(data), capacity_(capacity), position_(0), limit_(0)
   {}
 
-  ~ObDataBuffer()
+  virtual ~ObDataBuffer()
   {}
 
   inline bool set_data(char* data, const int64_t capacity)
@@ -55,7 +55,7 @@ public:
     limit_ = 0;
   }
 
-  inline void* alloc(const int64_t sz)
+  inline virtual void* alloc(const int64_t sz)
   {
     void* ret = NULL;
     if (OB_LIKELY(sz > 0 && capacity_ - position_ >= sz)) {
@@ -64,13 +64,13 @@ public:
     }
     return ret;
   }
-  inline void* alloc(const int64_t sz, const lib::ObMemAttr& attr)
+  inline virtual void* alloc(const int64_t sz, const lib::ObMemAttr& attr)
   {
     UNUSED(attr);
     return alloc(sz);
   }
 
-  inline void free()
+  inline virtual void free()
   {
     position_ = 0;
   }

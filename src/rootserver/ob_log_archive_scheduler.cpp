@@ -17,6 +17,7 @@
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "share/backup/ob_backup_lease_info_mgr.h"
 #include "share/backup/ob_backup_manager.h"
+#include "share/backup/ob_backup_operator.h"
 #include "ob_leader_coordinator.h"
 #include "ob_server_manager.h"
 #include "lib/utility/ob_tracepoint.h"
@@ -29,7 +30,7 @@ using namespace share;
 using namespace obrpc;
 using namespace rootserver;
 
-ObLogArchiveThreadIdling::ObLogArchiveThreadIdling(volatile bool& stop)
+ObLogArchiveThreadIdling::ObLogArchiveThreadIdling(volatile bool &stop)
     : ObThreadIdling(stop), idle_time_us_(MIN_IDLE_INTERVAL_US)
 {}
 
@@ -39,7 +40,7 @@ int64_t ObLogArchiveThreadIdling::get_idle_interval_us()
 }
 
 void ObLogArchiveThreadIdling::set_log_archive_checkpoint_interval(
-    const int64_t interval_us, const share::ObLogArchiveStatus::STATUS& status)
+    const int64_t interval_us, const share::ObLogArchiveStatus::STATUS &status)
 {
   const int64_t max_idle_us = interval_us / 2 - RESERVED_FETCH_US;
   int64_t idle_time_us = 0;
@@ -84,9 +85,9 @@ ObLogArchiveScheduler::~ObLogArchiveScheduler()
   destroy();
 }
 
-int ObLogArchiveScheduler::init(ObServerManager& server_mgr, ObZoneManager& zone_mgr,
-    share::schema::ObMultiVersionSchemaService* schema_service, ObSrvRpcProxy& rpc_proxy,
-    common::ObMySQLProxy& sql_proxy, share::ObIBackupLeaseService& backup_lease_service)
+int ObLogArchiveScheduler::init(ObServerManager &server_mgr, ObZoneManager &zone_mgr,
+    share::schema::ObMultiVersionSchemaService *schema_service, ObSrvRpcProxy &rpc_proxy,
+    common::ObMySQLProxy &sql_proxy, share::ObIBackupLeaseService &backup_lease_service)
 {
   int ret = OB_SUCCESS;
   const int64_t thread_cnt = 1;
@@ -195,7 +196,7 @@ int ObLogArchiveScheduler::handle_enable_log_archive(const bool is_enable)
   return ret;
 }
 
-int ObLogArchiveScheduler::handle_stop_log_archive_(const ObBackupInnerTableVersion& inner_table_version)
+int ObLogArchiveScheduler::handle_stop_log_archive_(const ObBackupInnerTableVersion &inner_table_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -255,7 +256,7 @@ int ObLogArchiveScheduler::handle_stop_log_archive_(const ObBackupInnerTableVers
   return ret;
 }
 
-int ObLogArchiveScheduler::handle_start_log_archive_(const ObBackupInnerTableVersion& inner_table_version)
+int ObLogArchiveScheduler::handle_start_log_archive_(const ObBackupInnerTableVersion &inner_table_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -360,7 +361,7 @@ int ObLogArchiveScheduler::check_gts_()
 }
 
 int ObLogArchiveScheduler::init_new_sys_info_(
-    const char* backup_dest, const int64_t max_piece_id, share::ObLogArchiveBackupInfo& sys_info)
+    const char *backup_dest, const int64_t max_piece_id, share::ObLogArchiveBackupInfo &sys_info)
 {
   int ret = OB_SUCCESS;
   bool is_backup_backup = false;
@@ -398,7 +399,7 @@ int ObLogArchiveScheduler::init_new_sys_info_(
 }
 
 int ObLogArchiveScheduler::init_new_sys_piece_(
-    const share::ObLogArchiveBackupInfo& sys_info, share::ObBackupPieceInfo& sys_piece)
+    const share::ObLogArchiveBackupInfo &sys_info, share::ObBackupPieceInfo &sys_piece)
 {
   int ret = OB_SUCCESS;
 
@@ -424,7 +425,7 @@ int ObLogArchiveScheduler::init_new_sys_piece_(
 }
 
 int ObLogArchiveScheduler::init_new_sys_piece_for_compat_(
-    const share::ObLogArchiveBackupInfo& sys_info, share::ObBackupPieceInfo& sys_piece)
+    const share::ObLogArchiveBackupInfo &sys_info, share::ObBackupPieceInfo &sys_piece)
 {
   int ret = OB_SUCCESS;
 
@@ -448,9 +449,9 @@ int ObLogArchiveScheduler::init_new_sys_piece_for_compat_(
   return ret;
 }
 
-int ObLogArchiveScheduler::init_next_sys_piece_(const share::ObLogArchiveBackupInfo& sys_info,
-    const share::ObBackupPieceInfo& sys_piece, share::ObLogArchiveBackupInfo& new_sys_info,
-    share::ObNonFrozenBackupPieceInfo& new_sys_pieces)
+int ObLogArchiveScheduler::init_next_sys_piece_(const share::ObLogArchiveBackupInfo &sys_info,
+    const share::ObBackupPieceInfo &sys_piece, share::ObLogArchiveBackupInfo &new_sys_info,
+    share::ObNonFrozenBackupPieceInfo &new_sys_pieces)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -532,12 +533,12 @@ int ObLogArchiveScheduler::init_next_sys_piece_(const share::ObLogArchiveBackupI
   return ret;
 }
 
-int ObLogArchiveScheduler::init_next_user_piece_array_(const share::ObNonFrozenBackupPieceInfo& new_sys_piece,
-    const TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map,
-    common::ObArray<share::ObNonFrozenBackupPieceInfo>& new_user_piece_array)
+int ObLogArchiveScheduler::init_next_user_piece_array_(const share::ObNonFrozenBackupPieceInfo &new_sys_piece,
+    const TENANT_ARCHIVE_STATUS_MAP &log_archive_status_map,
+    common::ObArray<share::ObNonFrozenBackupPieceInfo> &new_user_piece_array)
 {
   int ret = OB_SUCCESS;
-  share::ObServerTenantLogArchiveStatus* backup_status;
+  share::ObServerTenantLogArchiveStatus *backup_status;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); ++i) {
     const uint64_t tenant_id = tenant_ids_.at(i);
@@ -558,8 +559,8 @@ int ObLogArchiveScheduler::init_next_user_piece_array_(const share::ObNonFrozenB
   return ret;
 }
 
-int ObLogArchiveScheduler::init_next_user_piece_(const share::ObNonFrozenBackupPieceInfo& new_sys_piece,
-    const uint64_t tenant_id, const int64_t checkpoint_ts, ObNonFrozenBackupPieceInfo& user_piece)
+int ObLogArchiveScheduler::init_next_user_piece_(const share::ObNonFrozenBackupPieceInfo &new_sys_piece,
+    const uint64_t tenant_id, const int64_t checkpoint_ts, ObNonFrozenBackupPieceInfo &user_piece)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -591,13 +592,13 @@ int ObLogArchiveScheduler::init_next_user_piece_(const share::ObNonFrozenBackupP
 }
 
 int ObLogArchiveScheduler::update_external_user_piece_(
-    const common::ObIArray<share::ObNonFrozenBackupPieceInfo>& new_user_piece_array)
+    const common::ObIArray<share::ObNonFrozenBackupPieceInfo> &new_user_piece_array)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < new_user_piece_array.count(); ++i) {
-    const ObNonFrozenBackupPieceInfo& user_piece = new_user_piece_array.at(i);
+    const ObNonFrozenBackupPieceInfo &user_piece = new_user_piece_array.at(i);
     if (OB_FAIL(info_mgr.update_external_backup_piece(user_piece, *backup_lease_service_))) {
       LOG_WARN("failed to update external user piece", K(ret), K(user_piece));
     }
@@ -606,9 +607,9 @@ int ObLogArchiveScheduler::update_external_user_piece_(
   return ret;
 }
 
-int ObLogArchiveScheduler::update_inner_freeze_piece_info_(const share::ObLogArchiveBackupInfo& cur_sys_info,
-    const share::ObLogArchiveBackupInfo& new_sys_info, const share::ObNonFrozenBackupPieceInfo& new_sys_piece,
-    const ObArray<share::ObNonFrozenBackupPieceInfo>& new_user_piece_array)
+int ObLogArchiveScheduler::update_inner_freeze_piece_info_(const share::ObLogArchiveBackupInfo &cur_sys_info,
+    const share::ObLogArchiveBackupInfo &new_sys_info, const share::ObNonFrozenBackupPieceInfo &new_sys_piece,
+    const ObArray<share::ObNonFrozenBackupPieceInfo> &new_user_piece_array)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -642,7 +643,7 @@ int ObLogArchiveScheduler::update_inner_freeze_piece_info_(const share::ObLogArc
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < new_user_piece_array.count(); ++i) {
-      const ObNonFrozenBackupPieceInfo& user_piece = new_user_piece_array.at(i);
+      const ObNonFrozenBackupPieceInfo &user_piece = new_user_piece_array.at(i);
       if (OB_FAIL(info_mgr.update_backup_piece(trans, user_piece))) {
         LOG_WARN("failed to update external user piece", K(ret), K(user_piece));
       }
@@ -677,7 +678,7 @@ int ObLogArchiveScheduler::update_inner_freeze_piece_info_(const share::ObLogArc
   return ret;
 }
 
-int ObLogArchiveScheduler::wait_backup_dest_(char* buf, const int64_t buf_len)
+int ObLogArchiveScheduler::wait_backup_dest_(char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_INTERVAL_US = 1000 * 1000;  // 1s
@@ -884,7 +885,7 @@ int ObLogArchiveScheduler::upgrade_log_archive_status_()
 }
 
 int ObLogArchiveScheduler::upgrade_log_archive_status_(
-    const uint64_t tenant_id, const share::ObBackupPieceInfo& sys_piece)
+    const uint64_t tenant_id, const share::ObBackupPieceInfo &sys_piece)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -953,7 +954,7 @@ int ObLogArchiveScheduler::upgrade_frozen_piece_files_()
     LOG_WARN("failed to get all log archive history infos", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-      ObLogArchiveBackupInfo& info = infos.at(i);
+      ObLogArchiveBackupInfo &info = infos.at(i);
       piece.reset();
       if (OB_FAIL(check_can_do_work_())) {
         LOG_WARN("failed to check can backup", K(ret));
@@ -999,7 +1000,7 @@ int ObLogArchiveScheduler::upgrade_backupset_files_()
     LOG_WARN("failed to get all backup task infos", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-      ObTenantBackupTaskItem& info = infos.at(i);
+      ObTenantBackupTaskItem &info = infos.at(i);
       file_info.reset();
       if (OB_FAIL(check_can_do_work_())) {
         LOG_WARN("failed to check can backup", K(ret));
@@ -1014,6 +1015,11 @@ int ObLogArchiveScheduler::upgrade_backupset_files_()
   }
 
   return ret;
+}
+
+bool ObLogArchiveScheduler::is_force_cancel_() const
+{
+  return GCONF.backup_dest.get_value_string().empty();
 }
 
 int ObLogArchiveScheduler::upgrade_backup_info_()
@@ -1088,7 +1094,7 @@ int ObLogArchiveScheduler::check_backup_info_()
   return ret;
 }
 
-int ObLogArchiveScheduler::do_schedule_(share::ObLogArchiveStatus::STATUS& last_log_archive_status)
+int ObLogArchiveScheduler::do_schedule_(share::ObLogArchiveStatus::STATUS &last_log_archive_status)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1134,7 +1140,7 @@ int ObLogArchiveScheduler::do_schedule_(share::ObLogArchiveStatus::STATUS& last_
   }
 
   if (OB_FAIL(ret)) {
-    if ((is_io_error(ret) || OB_BACKUP_MOUNT_FILE_NOT_VALID == ret || OB_BACKUP_IO_PROHIBITED == ret) &&
+    if ((is_force_cancel_() || OB_BACKUP_MOUNT_FILE_NOT_VALID == ret || OB_BACKUP_IO_PROHIBITED == ret) &&
         ObLogArchiveStatus::STOPPING == sys_info.status_.status_) {
       if (OB_FAIL(stop_log_archive_backup_(true /*force stop*/, sys_info, sys_non_frozen_piece))) {
         LOG_WARN("failed to do force_stop", K(ret), K(sys_info));
@@ -1202,7 +1208,7 @@ int ObLogArchiveScheduler::do_schedule_(share::ObLogArchiveStatus::STATUS& last_
   return ret;
 }
 
-int ObLogArchiveScheduler::check_mount_file_(share::ObLogArchiveBackupInfo& sys_info)
+int ObLogArchiveScheduler::check_mount_file_(share::ObLogArchiveBackupInfo &sys_info)
 {
   int ret = OB_SUCCESS;
   bool need_check = false;
@@ -1235,7 +1241,7 @@ int ObLogArchiveScheduler::check_mount_file_(share::ObLogArchiveBackupInfo& sys_
 }
 
 int ObLogArchiveScheduler::start_log_archive_backup_(
-    share::ObLogArchiveBackupInfo& cur_sys_info, share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+    share::ObLogArchiveBackupInfo &cur_sys_info, share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int64_t user_tenant_count = 0;
@@ -1265,7 +1271,7 @@ int ObLogArchiveScheduler::start_log_archive_backup_(
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); ++i) {
     const uint64_t tenant_id = tenant_ids_.at(i);
-    ObServerTenantLogArchiveStatus* status = nullptr;
+    ObServerTenantLogArchiveStatus *status = nullptr;
     if (tenant_id < OB_USER_TENANT_ID) {
       continue;
     }
@@ -1319,7 +1325,7 @@ int ObLogArchiveScheduler::start_log_archive_backup_(
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); ++i) {
         const uint64_t tenant_id = tenant_ids_.at(i);
-        ObServerTenantLogArchiveStatus* status = nullptr;
+        ObServerTenantLogArchiveStatus *status = nullptr;
         ObLogArchiveBackupInfo tenant_info = sys_info;
         tenant_info.status_.tenant_id_ = tenant_id;
 
@@ -1369,8 +1375,8 @@ int ObLogArchiveScheduler::start_log_archive_backup_(
   return ret;
 }
 
-int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBackupInfo& sys_info,
-    const share::ObNonFrozenBackupPieceInfo& non_frozen_piece, const common::ObArray<uint64_t>& tenant_ids)
+int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBackupInfo &sys_info,
+    const share::ObNonFrozenBackupPieceInfo &non_frozen_piece, const common::ObArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
 
@@ -1408,8 +1414,8 @@ int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBac
 // 3. update inner piece info
 // 4. update inner backup info
 // The only exception is that, piece_id = 0 means use old procedure without piece, we will skip 1\3 steps.
-int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBackupInfo& sys_info,
-    const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece, const uint64_t tenant_id)
+int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBackupInfo &sys_info,
+    const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1489,7 +1495,7 @@ int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBac
 }
 
 int ObLogArchiveScheduler::update_tenant_non_frozen_backup_piece_(
-    const share::ObNonFrozenBackupPieceInfo& non_frozen_piece)
+    const share::ObNonFrozenBackupPieceInfo &non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1522,7 +1528,7 @@ int ObLogArchiveScheduler::update_tenant_non_frozen_backup_piece_(
   return ret;
 }
 
-int ObLogArchiveScheduler::check_need_prepare_new_tenant_status(const uint64_t tenant_id, bool& need_prepare)
+int ObLogArchiveScheduler::check_need_prepare_new_tenant_status(const uint64_t tenant_id, bool &need_prepare)
 {
   int ret = OB_SUCCESS;
   const bool for_update = false;
@@ -1545,9 +1551,9 @@ int ObLogArchiveScheduler::check_need_prepare_new_tenant_status(const uint64_t t
   return ret;
 }
 
-int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBackupInfo& sys_info,
-    const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece, const uint64_t tenant_id,
-    share::ObLogArchiveBackupInfo& tenant_info, ObNonFrozenBackupPieceInfo& tenant_non_frozen_piece)
+int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBackupInfo &sys_info,
+    const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece, const uint64_t tenant_id,
+    share::ObLogArchiveBackupInfo &tenant_info, ObNonFrozenBackupPieceInfo &tenant_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int64_t create_tenant_ts = 0;
@@ -1601,7 +1607,7 @@ int ObLogArchiveScheduler::prepare_new_tenant_info_(const share::ObLogArchiveBac
 }
 
 int ObLogArchiveScheduler::set_backup_piece_start_ts_(
-    const share::ObBackupPieceInfoKey& piece_key, const int64_t start_ts)
+    const share::ObBackupPieceInfoKey &piece_key, const int64_t start_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1647,7 +1653,7 @@ int ObLogArchiveScheduler::set_backup_piece_start_ts_(
   return ret;
 }
 
-int ObLogArchiveScheduler::start_tenant_log_archive_backup_info_(share::ObLogArchiveBackupInfo& new_info)
+int ObLogArchiveScheduler::start_tenant_log_archive_backup_info_(share::ObLogArchiveBackupInfo &new_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1687,7 +1693,7 @@ int ObLogArchiveScheduler::start_tenant_log_archive_backup_info_(share::ObLogArc
 }
 
 int ObLogArchiveScheduler::update_log_archive_backup_process_(
-    share::ObLogArchiveBackupInfo& cur_sys_info, share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+    share::ObLogArchiveBackupInfo &cur_sys_info, share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int64_t min_piece_id = INT64_MAX;
@@ -1720,9 +1726,9 @@ int ObLogArchiveScheduler::update_log_archive_backup_process_(
   return ret;
 }
 
-int ObLogArchiveScheduler::try_update_checkpoit_ts_(share::ObLogArchiveBackupInfo& cur_sys_info,
-    share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece, ObIAllocator& allocator,
-    TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map, int64_t& min_piece_id, int64_t& inactive_server_count)
+int ObLogArchiveScheduler::try_update_checkpoit_ts_(share::ObLogArchiveBackupInfo &cur_sys_info,
+    share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece, ObIAllocator &allocator,
+    TENANT_ARCHIVE_STATUS_MAP &log_archive_status_map, int64_t &min_piece_id, int64_t &inactive_server_count)
 {
   int ret = OB_SUCCESS;
   int64_t user_tenant_count = 0;
@@ -1740,7 +1746,7 @@ int ObLogArchiveScheduler::try_update_checkpoit_ts_(share::ObLogArchiveBackupInf
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); ++i) {
     const uint64_t tenant_id = tenant_ids_.at(i);
-    ObServerTenantLogArchiveStatus* status = nullptr;
+    ObServerTenantLogArchiveStatus *status = nullptr;
     ++user_tenant_count;
     if (tenant_id < OB_USER_TENANT_ID) {
       ret = OB_ERR_SYS;
@@ -1833,16 +1839,16 @@ int ObLogArchiveScheduler::try_update_checkpoit_ts_(share::ObLogArchiveBackupInf
   return ret;
 }
 
-int ObLogArchiveScheduler::try_update_backup_piece_(const share::ObLogArchiveBackupInfo& sys_info,
-    const TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map, const int64_t inactive_server_count,
-    share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece, int64_t& min_piece_id)
+int ObLogArchiveScheduler::try_update_backup_piece_(const share::ObLogArchiveBackupInfo &sys_info,
+    const TENANT_ARCHIVE_STATUS_MAP &log_archive_status_map, const int64_t inactive_server_count,
+    share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece, int64_t &min_piece_id)
 {
   int ret = OB_SUCCESS;
   bool is_backup_backup = false;
   ObBackupDestOpt backup_dest_opt;
   bool need_block_switch_piece_for_test = false;
   int64_t test_max_piece_id = 1;
-  ObBackupPieceInfo& sys_piece_info = sys_non_frozen_piece.cur_piece_info_;
+  ObBackupPieceInfo &sys_piece_info = sys_non_frozen_piece.cur_piece_info_;
 
   LOG_INFO("start try_update_backup_piece", K(sys_info), K(sys_non_frozen_piece));
 
@@ -1912,8 +1918,8 @@ int ObLogArchiveScheduler::try_update_backup_piece_(const share::ObLogArchiveBac
   return ret;
 }
 
-int ObLogArchiveScheduler::update_active_piece_checkpoint_ts_(const share::ObLogArchiveBackupInfo& sys_info,
-    const TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map, share::ObBackupPieceInfo& sys_piece_info)
+int ObLogArchiveScheduler::update_active_piece_checkpoint_ts_(const share::ObLogArchiveBackupInfo &sys_info,
+    const TENANT_ARCHIVE_STATUS_MAP &log_archive_status_map, share::ObBackupPieceInfo &sys_piece_info)
 {
   int ret = OB_SUCCESS;
   share::ObBackupPieceInfoKey tenant_key;
@@ -1928,7 +1934,7 @@ int ObLogArchiveScheduler::update_active_piece_checkpoint_ts_(const share::ObLog
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); ++i) {
       const uint64_t tenant_id = tenant_ids_.at(i);
-      share::ObServerTenantLogArchiveStatus* status = nullptr;
+      share::ObServerTenantLogArchiveStatus *status = nullptr;
       tenant_key = sys_piece_info.key_;
       tenant_key.tenant_id_ = tenant_id;
       if (OB_FAIL(log_archive_status_map.get_refactored(tenant_id, status))) {
@@ -1949,7 +1955,7 @@ int ObLogArchiveScheduler::update_active_piece_checkpoint_ts_(const share::ObLog
 }
 
 int ObLogArchiveScheduler::update_sys_active_piece_checkpoint_ts_(
-    const int64_t checkpoint_ts, share::ObBackupPieceInfo& sys_piece_info)
+    const int64_t checkpoint_ts, share::ObBackupPieceInfo &sys_piece_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1996,7 +2002,7 @@ int ObLogArchiveScheduler::update_sys_active_piece_checkpoint_ts_(
 }
 
 int ObLogArchiveScheduler::update_active_piece_checkpoint_ts_(
-    const share::ObBackupPieceInfoKey& piece_key, const int64_t checkpoint_ts)
+    const share::ObBackupPieceInfoKey &piece_key, const int64_t checkpoint_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2042,12 +2048,12 @@ int ObLogArchiveScheduler::update_active_piece_checkpoint_ts_(
   return ret;
 }
 
-int ObLogArchiveScheduler::frozen_old_piece_(const bool force_stop, const common::ObIArray<uint64_t>& tenant_ids,
-    const TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map, share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+int ObLogArchiveScheduler::frozen_old_piece_(const bool force_stop, const common::ObIArray<uint64_t> &tenant_ids,
+    const TENANT_ARCHIVE_STATUS_MAP &log_archive_status_map, share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int64_t max_gts = 0;
-  share::ObServerTenantLogArchiveStatus* status = nullptr;
+  share::ObServerTenantLogArchiveStatus *status = nullptr;
 
   DEBUG_SYNC(BACKUP_BEFORE_FROZEN_PIECES);
   if (!is_inited_) {
@@ -2093,8 +2099,8 @@ int ObLogArchiveScheduler::frozen_old_piece_(const bool force_stop, const common
 }
 
 int ObLogArchiveScheduler::frozen_old_piece_(const bool force_stop,
-    const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece, const uint64_t tenant_id,
-    const int64_t server_tenant_max_ts, int64_t& max_ts)
+    const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece, const uint64_t tenant_id,
+    const int64_t server_tenant_max_ts, int64_t &max_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2153,7 +2159,7 @@ int ObLogArchiveScheduler::frozen_old_piece_(const bool force_stop,
 }
 
 int ObLogArchiveScheduler::frozen_sys_old_piece_(
-    const bool force_stop, const int64_t max_gts, share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+    const bool force_stop, const int64_t max_gts, share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2211,8 +2217,8 @@ int ObLogArchiveScheduler::frozen_sys_old_piece_(
 // 4. update external sys piece info
 // 5. update external sys backup info
 // 6. update inner table user and sys piece in one transaction
-int ObLogArchiveScheduler::trigger_freeze_pieces_(const share::ObLogArchiveBackupInfo& sys_info,
-    const share::ObBackupPieceInfo& sys_piece_info, const TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map)
+int ObLogArchiveScheduler::trigger_freeze_pieces_(const share::ObLogArchiveBackupInfo &sys_info,
+    const share::ObBackupPieceInfo &sys_piece_info, const TENANT_ARCHIVE_STATUS_MAP &log_archive_status_map)
 {
   int ret = OB_SUCCESS;
   share::ObLogArchiveBackupInfo new_sys_info;
@@ -2241,9 +2247,9 @@ int ObLogArchiveScheduler::trigger_freeze_pieces_(const share::ObLogArchiveBacku
   return ret;
 }
 
-int ObLogArchiveScheduler::update_tenant_log_archive_backup_process_(const share::ObLogArchiveBackupInfo& sys_info,
-    const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece,
-    const share::ObServerTenantLogArchiveStatus& tenant_status)
+int ObLogArchiveScheduler::update_tenant_log_archive_backup_process_(const share::ObLogArchiveBackupInfo &sys_info,
+    const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece,
+    const share::ObServerTenantLogArchiveStatus &tenant_status)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2326,7 +2332,7 @@ int ObLogArchiveScheduler::update_tenant_log_archive_backup_process_(const share
 }
 
 int ObLogArchiveScheduler::check_dropped_tenant_(
-    const common::ObIArray<uint64_t>& tenant_ids, const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+    const common::ObIArray<uint64_t> &tenant_ids, const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -2365,8 +2371,8 @@ int ObLogArchiveScheduler::check_dropped_tenant_(
 }
 
 int ObLogArchiveScheduler::do_stop_log_archive_backup_v2_(const bool force_stop,
-    const common::ObIArray<uint64_t>& tenant_ids, const share::ObLogArchiveBackupInfo& cur_sys_info,
-    const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+    const common::ObIArray<uint64_t> &tenant_ids, const share::ObLogArchiveBackupInfo &cur_sys_info,
+    const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -2421,7 +2427,7 @@ int ObLogArchiveScheduler::do_stop_log_archive_backup_v2_(const bool force_stop,
 }
 
 int ObLogArchiveScheduler::do_stop_tenant_log_archive_backup_v2_(
-    const bool force_stop, const bool is_dropped_tenant, const share::ObBackupPieceInfoKey& cur_key, int64_t& max_ts)
+    const bool force_stop, const bool is_dropped_tenant, const share::ObBackupPieceInfoKey &cur_key, int64_t &max_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2524,7 +2530,7 @@ int ObLogArchiveScheduler::do_stop_tenant_log_archive_backup_v2_(
 }
 
 int ObLogArchiveScheduler::do_stop_sys_log_archive_backup_v2_(const bool force_stop,
-    const share::ObLogArchiveBackupInfo& cur_sys_info, const share::ObBackupPieceInfoKey& cur_key, const int64_t max_ts)
+    const share::ObLogArchiveBackupInfo &cur_sys_info, const share::ObBackupPieceInfoKey &cur_key, const int64_t max_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2607,8 +2613,8 @@ int ObLogArchiveScheduler::do_stop_sys_log_archive_backup_v2_(const bool force_s
 
   return ret;
 }
-int ObLogArchiveScheduler::stop_log_archive_backup_(const bool force_stop, share::ObLogArchiveBackupInfo& cur_sys_info,
-    share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+int ObLogArchiveScheduler::stop_log_archive_backup_(const bool force_stop, share::ObLogArchiveBackupInfo &cur_sys_info,
+    share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   common::ObArray<uint64_t> tenant_ids;
@@ -2649,12 +2655,12 @@ int ObLogArchiveScheduler::stop_log_archive_backup_(const bool force_stop, share
   return ret;
 }
 
-int ObLogArchiveScheduler::get_tenant_ids_from_schema_(common::ObIArray<uint64_t>& tenant_ids)
+int ObLogArchiveScheduler::get_tenant_ids_from_schema_(common::ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   int64_t user_tenant_count = 0;
   int64_t stop_tenant_count = 0;
-  hash::ObHashMap<uint64_t, ObTenantLogArchiveStatus*> log_archive_status_map;
+  hash::ObHashMap<uint64_t, ObTenantLogArchiveStatus *> log_archive_status_map;
   ObArenaAllocator allocator;
   ObLogArchiveBackupInfoMgr info_mgr;
 
@@ -2684,7 +2690,7 @@ int ObLogArchiveScheduler::get_tenant_ids_from_schema_(common::ObIArray<uint64_t
 }
 
 int ObLogArchiveScheduler::check_server_stop_backup_(
-    share::ObLogArchiveBackupInfo& sys_info, common::ObIArray<uint64_t>& tenant_ids, bool& is_all_stop)
+    share::ObLogArchiveBackupInfo &sys_info, common::ObIArray<uint64_t> &tenant_ids, bool &is_all_stop)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -2706,7 +2712,7 @@ int ObLogArchiveScheduler::check_server_stop_backup_(
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
     const uint64_t tenant_id = tenant_ids.at(i);
-    ObServerTenantLogArchiveStatus* status = nullptr;
+    ObServerTenantLogArchiveStatus *status = nullptr;
 
     if (tenant_id < OB_USER_TENANT_ID) {
       ret = OB_ERR_SYS;
@@ -2740,7 +2746,7 @@ int ObLogArchiveScheduler::check_server_stop_backup_(
 }
 
 int ObLogArchiveScheduler::frozen_active_piece_before_stop_(const bool force_stop,
-    share::ObLogArchiveBackupInfo& cur_sys_info, share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+    share::ObLogArchiveBackupInfo &cur_sys_info, share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int64_t max_gts = 0;
@@ -2772,7 +2778,7 @@ int ObLogArchiveScheduler::frozen_active_piece_before_stop_(const bool force_sto
 }
 
 int ObLogArchiveScheduler::frozen_active_piece_before_stop_(const bool force_stop,
-    const share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece, const uint64_t tenant_id, int64_t& max_gts)
+    const share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece, const uint64_t tenant_id, int64_t &max_gts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2831,7 +2837,7 @@ int ObLogArchiveScheduler::frozen_active_piece_before_stop_(const bool force_sto
 }
 
 int ObLogArchiveScheduler::frozen_sys_active_piece_before_stop_(const bool force_stop, const int64_t max_gts,
-    share::ObLogArchiveBackupInfo& cur_sys_info, share::ObNonFrozenBackupPieceInfo& sys_non_frozen_piece)
+    share::ObLogArchiveBackupInfo &cur_sys_info, share::ObNonFrozenBackupPieceInfo &sys_non_frozen_piece)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2871,7 +2877,7 @@ int ObLogArchiveScheduler::frozen_sys_active_piece_before_stop_(const bool force
 }
 
 int ObLogArchiveScheduler::do_stop_log_archive_backup_(const bool force_stop,
-    const common::ObIArray<uint64_t>& tenant_ids, const share::ObLogArchiveBackupInfo& cur_sys_info)
+    const common::ObIArray<uint64_t> &tenant_ids, const share::ObLogArchiveBackupInfo &cur_sys_info)
 {
   int ret = OB_SUCCESS;
   int64_t user_tenant_count = 0;
@@ -2892,7 +2898,7 @@ int ObLogArchiveScheduler::do_stop_log_archive_backup_(const bool force_stop,
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
     const uint64_t tenant_id = tenant_ids.at(i);
-    ObServerTenantLogArchiveStatus* status = nullptr;
+    ObServerTenantLogArchiveStatus *status = nullptr;
     if (tenant_id < OB_USER_TENANT_ID) {
       ret = OB_ERR_SYS;
       LOG_ERROR("invalid tenatn_id", K(ret), K(tenant_id), K(i), K(tenant_ids));
@@ -2951,7 +2957,7 @@ int ObLogArchiveScheduler::do_stop_log_archive_backup_(const bool force_stop,
 }
 
 int ObLogArchiveScheduler::do_stop_tenant_log_archive_backup_(
-    const uint64_t tenant_id, const ObLogArchiveBackupInfo& sys_info, const bool force_stop)
+    const uint64_t tenant_id, const ObLogArchiveBackupInfo &sys_info, const bool force_stop)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -3036,7 +3042,7 @@ int ObLogArchiveScheduler::do_stop_tenant_log_archive_backup_(
   return ret;
 }
 
-int ObLogArchiveScheduler::set_log_archive_backup_interrupted_(const share::ObLogArchiveBackupInfo& cur_sys_info)
+int ObLogArchiveScheduler::set_log_archive_backup_interrupted_(const share::ObLogArchiveBackupInfo &cur_sys_info)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -3062,7 +3068,7 @@ int ObLogArchiveScheduler::set_log_archive_backup_interrupted_(const share::ObLo
   return ret;
 }
 
-int ObLogArchiveScheduler::set_tenants_log_archive_backup_interrupted_(share::ObLogArchiveBackupInfo& sys_info)
+int ObLogArchiveScheduler::set_tenants_log_archive_backup_interrupted_(share::ObLogArchiveBackupInfo &sys_info)
 {
   int ret = OB_SUCCESS;
   ObLogArchiveBackupInfoMgr info_mgr;
@@ -3074,7 +3080,7 @@ int ObLogArchiveScheduler::set_tenants_log_archive_backup_interrupted_(share::Ob
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); ++i) {
     const uint64_t tenant_id = tenant_ids_.at(i);
-    ObTenantLogArchiveStatus* status = nullptr;
+    ObTenantLogArchiveStatus *status = nullptr;
     if (tenant_id < OB_USER_TENANT_ID) {
       continue;
     }
@@ -3098,7 +3104,7 @@ int ObLogArchiveScheduler::set_tenants_log_archive_backup_interrupted_(share::Ob
 }
 
 int ObLogArchiveScheduler::set_tenant_log_archive_backup_interrupted_(
-    const uint64_t tenant_id, const ObLogArchiveBackupInfo& sys_info)
+    const uint64_t tenant_id, const ObLogArchiveBackupInfo &sys_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -3156,7 +3162,7 @@ int ObLogArchiveScheduler::set_tenant_log_archive_backup_interrupted_(
   return ret;
 }
 
-int ObLogArchiveScheduler::check_server_status_(ObArray<common::ObAddr>& inactive_server_list)
+int ObLogArchiveScheduler::check_server_status_(ObArray<common::ObAddr> &inactive_server_list)
 {
   int ret = OB_SUCCESS;
   common::ObZone inactive_zone;
@@ -3175,7 +3181,7 @@ int ObLogArchiveScheduler::check_server_status_(ObArray<common::ObAddr>& inactiv
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < inactive_server_list.count(); ++i) {
-    const ObAddr& addr = inactive_server_list.at(i);
+    const ObAddr &addr = inactive_server_list.at(i);
     if (OB_FAIL(server_mgr_->get_server_zone(addr, tmp_zone))) {
       LOG_WARN("failed to get server zone", K(ret), K(addr));
     } else if (inactive_zone.is_empty()) {
@@ -3195,8 +3201,8 @@ int ObLogArchiveScheduler::check_server_status_(ObArray<common::ObAddr>& inactiv
   return ret;
 }
 
-int ObLogArchiveScheduler::fetch_log_archive_backup_status_map_(const share::ObLogArchiveBackupInfo& sys_info,
-    ObIAllocator& allocator, TENANT_ARCHIVE_STATUS_MAP& log_archive_status_map, int64_t& inactive_server_count)
+int ObLogArchiveScheduler::fetch_log_archive_backup_status_map_(const share::ObLogArchiveBackupInfo &sys_info,
+    ObIAllocator &allocator, TENANT_ARCHIVE_STATUS_MAP &log_archive_status_map, int64_t &inactive_server_count)
 {
   int ret = OB_SUCCESS;
   int hash_ret = OB_SUCCESS;
@@ -3230,7 +3236,7 @@ int ObLogArchiveScheduler::fetch_log_archive_backup_status_map_(const share::ObL
 
   // TODO(): [backup2] use async rpc
   for (int64_t server_idx = 0; OB_SUCC(ret) && server_idx < active_server_list.count(); ++server_idx) {
-    const common::ObAddr& addr = active_server_list.at(server_idx);
+    const common::ObAddr &addr = active_server_list.at(server_idx);
     if (OB_FAIL(check_can_do_work_())) {
       LOG_WARN("failed to check can do work", K(ret));
     } else if (OB_FAIL(fetch_server_tenant_log_archive_status_(addr, arg, result))) {
@@ -3246,7 +3252,7 @@ int ObLogArchiveScheduler::fetch_log_archive_backup_status_map_(const share::ObL
     }
     const int64_t count = result.status_array_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-      ObServerTenantLogArchiveStatus& status = result.status_array_.at(i);
+      ObServerTenantLogArchiveStatus &status = result.status_array_.at(i);
       if (!status.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid log archive status", K(ret), K(i), K(addr), K(status));
@@ -3273,7 +3279,7 @@ int ObLogArchiveScheduler::fetch_log_archive_backup_status_map_(const share::ObL
         }
 #endif
 
-        ObServerTenantLogArchiveStatus* value = nullptr;
+        ObServerTenantLogArchiveStatus *value = nullptr;
         hash_ret = log_archive_status_map.get_refactored(status.tenant_id_, value);
         if (OB_SUCCESS == hash_ret) {
           if (value->status_ != status.status_) {
@@ -3302,12 +3308,12 @@ int ObLogArchiveScheduler::fetch_log_archive_backup_status_map_(const share::ObL
             }
           }
         } else if (OB_HASH_NOT_EXIST == hash_ret) {
-          void* tmp = allocator.alloc(sizeof(ObServerTenantLogArchiveStatus));
+          void *tmp = allocator.alloc(sizeof(ObServerTenantLogArchiveStatus));
           if (OB_ISNULL(tmp)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to alloc buf", K(ret));
           } else {
-            ObServerTenantLogArchiveStatus* ptr = new (tmp) ObServerTenantLogArchiveStatus;
+            ObServerTenantLogArchiveStatus *ptr = new (tmp) ObServerTenantLogArchiveStatus;
             *ptr = status;
             if (OB_FAIL(log_archive_status_map.set_refactored(status.tenant_id_, ptr))) {
               LOG_WARN("Failed to set log_archive_status_map", K(ret), K(*ptr));
@@ -3336,8 +3342,8 @@ int ObLogArchiveScheduler::fetch_log_archive_backup_status_map_(const share::ObL
   return ret;
 }
 
-int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_(const common::ObAddr& addr,
-    const share::ObGetTenantLogArchiveStatusArg& arg, share::ObServerTenantLogArchiveStatusWrapper& result)
+int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_(const common::ObAddr &addr,
+    const share::ObGetTenantLogArchiveStatusArg &arg, share::ObServerTenantLogArchiveStatusWrapper &result)
 {
   int ret = OB_SUCCESS;
   const uint64_t cluster_observer_version = GET_MIN_CLUSTER_VERSION();
@@ -3362,8 +3368,8 @@ int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_(const common:
   return ret;
 }
 
-int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_v1_(const common::ObAddr& addr,
-    const share::ObGetTenantLogArchiveStatusArg& arg, share::ObServerTenantLogArchiveStatusWrapper& result)
+int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_v1_(const common::ObAddr &addr,
+    const share::ObGetTenantLogArchiveStatusArg &arg, share::ObServerTenantLogArchiveStatusWrapper &result)
 {
   int ret = OB_SUCCESS;
   share::ObTenantLogArchiveStatusWrapper tmp_result;
@@ -3388,8 +3394,8 @@ int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_v1_(const comm
   return ret;
 }
 
-int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_v2_(const common::ObAddr& addr,
-    const share::ObGetTenantLogArchiveStatusArg& arg, share::ObServerTenantLogArchiveStatusWrapper& result)
+int ObLogArchiveScheduler::fetch_server_tenant_log_archive_status_v2_(const common::ObAddr &addr,
+    const share::ObGetTenantLogArchiveStatusArg &arg, share::ObServerTenantLogArchiveStatusWrapper &result)
 {
   int ret = OB_SUCCESS;
   share::ObTenantLogArchiveStatusWrapper tmp_result;
@@ -3418,7 +3424,7 @@ int ObLogArchiveScheduler::check_can_do_work_()
   return ret;
 }
 
-int ObLogArchiveScheduler::commit_trans_(common::ObMySQLTransaction& trans)
+int ObLogArchiveScheduler::commit_trans_(common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
 
@@ -3431,7 +3437,7 @@ int ObLogArchiveScheduler::commit_trans_(common::ObMySQLTransaction& trans)
 }
 
 int ObLogArchiveScheduler::update_sys_backup_info_(
-    const share::ObLogArchiveBackupInfo& cur_info, share::ObLogArchiveBackupInfo& new_info)
+    const share::ObLogArchiveBackupInfo &cur_info, share::ObLogArchiveBackupInfo &new_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -3468,6 +3474,24 @@ int ObLogArchiveScheduler::update_sys_backup_info_(
       }
     }
   }
+
+  return ret;
+}
+
+int ObLogArchiveScheduler::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (tenant_id != OB_SYS_TENANT_ID) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only sys tenant can force cancel archive", K(ret));
+  } else if (OB_FAIL(handle_enable_log_archive(false))) {
+    LOG_WARN("failed to force cancel archive", K(ret));
+  }
+
+  FLOG_WARN("force_cancel archive", K(ret));
 
   return ret;
 }

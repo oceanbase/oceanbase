@@ -162,6 +162,9 @@ int ObExprColumnConv::convert_skip_null_check(ObObj& result, const ObObj& obj, c
   const ObObj* res_obj = NULL;
   cast_ctx.expect_obj_collation_ = collation_type;
   cast_ctx.dest_collation_ = collation_type;
+
+  ObAccuracy tmp_accuracy = accuracy;
+  cast_ctx.res_accuracy_ = &tmp_accuracy;
   if (OB_UNLIKELY(ob_is_enum_or_set_type(type))) {
     ObExpectType expect_type;
     expect_type.set_type(type);

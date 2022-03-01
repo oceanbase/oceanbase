@@ -289,6 +289,21 @@ int ObIMicroBlockRowScanner::read_lob_columns(const ObStoreRow* store_row)
               K(ret));
           obj.set_lob_inrow();
         }
+      } else if (ob_is_json_tc(obj.get_type())) {
+        if (obj.is_json_outrow()) {
+          if (OB_FAIL(lob_reader_.read_lob_data(obj, obj))) {
+            STORAGE_LOG(WARN, "Failed to read json lob obj", K(obj.get_scale()), K(obj.get_meta()),
+                K(obj.val_len_), K(macro_id_), K(ret));
+          } else {
+            STORAGE_LOG(DEBUG, "[LOB] Succ to load json lob obj", K(obj.get_scale()), K(obj.get_meta()), 
+                K(obj.val_len_), K(ret));
+          }
+        } else if (obj.is_json_inrow()) {
+        } else {
+          STORAGE_LOG(ERROR, "[LOB] Unexpected json lob obj scale, to compatible, change to inrow mode", 
+              K(obj), K(obj.get_scale()), K(ret));
+          obj.set_lob_inrow();
+        }
       }
     }
   }
@@ -502,7 +517,7 @@ int ObMicroBlockRowScanner::inner_get_next_row(const ObStoreRow*& row)
     ObStoreRow& dest_row = rows_[0];
     dest_row.row_val_.count_ = OB_ROW_MAX_COLUMNS_COUNT;
     if (OB_FAIL(reader_->get_row(current_, dest_row))) {
-      STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret));
+      STORAGE_LOG(WARN, "micro block reader fail to get row.", K(ret), K(macro_id_));
     } else {
       row = &dest_row;
       if (context_->query_flag_.is_multi_version_minor_merge()) {
@@ -767,9 +782,9 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObStoreRow
     }
   }
   if (OB_NOT_NULL(ret_row) && !ret_row->is_valid()) {
-    STORAGE_LOG(ERROR, "row is invalid", K(*ret_row));
+    STORAGE_LOG(ERROR, "row is invalid", KPC(ret_row));
   } else {
-    STORAGE_LOG(DEBUG, "row is valid", K(*ret_row));
+    STORAGE_LOG(DEBUG, "row is valid", KPC(ret_row));
   }
   return ret;
 }
@@ -1656,7 +1671,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::get_row_from_row_queue(const s
   } else if (OB_FAIL(row_queue_.get_next_row(row))) {
     STORAGE_LOG(WARN, "failed to get next row from prepared row queue", K(ret), KPC(this));
   } else {
-    STORAGE_LOG(DEBUG, "get row from row queue", K(ret), KPC(this), K(*row));
+    STORAGE_LOG(DEBUG, "get row from row queue", K(ret), KPC(this), KPC(row));
   }
   return ret;
 }
@@ -1978,7 +1993,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::compact_trans_row_to_one()
           "add one row for another trans",
           K(row_queue_.count()),
           K(committed_trans_version_),
-          K(*row_queue_.get_last()));
+          KPC(row_queue_.get_last()));
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(row_queue_.get_last())) {

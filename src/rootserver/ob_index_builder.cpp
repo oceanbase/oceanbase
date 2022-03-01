@@ -1669,6 +1669,10 @@ int ObIndexBuilder::generate_schema(const ObCreateIndexArg& arg, const int64_t f
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("fulltext index created on blob column is not supported", K(arg.index_type_), K(ret));
+        } else if (ob_is_json_tc(data_column->get_data_type())) {
+          ret = OB_ERR_JSON_USED_AS_KEY;
+          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("JSON column cannot be used in key specification.", K(arg.index_type_), K(ret));
         } else if (data_column->is_string_type()) {
           int64_t length = 0;
           if (data_column->is_fulltext_column()) {

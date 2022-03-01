@@ -106,7 +106,7 @@ public:
   virtual int64_t get_idle_interval_us();
 };
 
-class ObRootBackup : public ObRsReentrantThread, public ObIBackupScheduler {
+class ObRootBackup : public ObIBackupScheduler {
 public:
   ObRootBackup();
   virtual ~ObRootBackup();
@@ -131,7 +131,8 @@ public:
   {
     return is_working_;
   }
-  int start() override;
+  virtual int force_cancel(const uint64_t tenant_id);
+  int start();
   int update_tenant_backup_meta_info(
       const common::ObPartitionKey& pkey, const int64_t pg_count, const int64_t partition_count);
   int get_tenant_backup_meta_info(ObTenantBackupMetaInfo& meta_info);
@@ -275,7 +276,6 @@ private:
   bool need_switch_tenant_;
   bool is_working_;
   int32_t inner_error_;
-  int32_t extern_device_error_;
   ObTenantBackupMetaInfo backup_meta_info_;
   share::ObIBackupLeaseService* backup_lease_service_;
   ObRestorePointService* restore_point_service_;

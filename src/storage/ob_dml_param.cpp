@@ -16,6 +16,7 @@
 #include "share/ob_errno.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_dml_param.h"
+#include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase {
 namespace storage {
@@ -23,13 +24,13 @@ using namespace common;
 using namespace share::schema;
 
 int ObRow2ExprsProjector::init(
-    const sql::ObExprPtrIArray& exprs, sql::ObEvalCtx& eval_ctx, const common::ObIArray<int32_t>& projector)
+    const sql::ObExprPtrIArray &exprs, sql::ObEvalCtx &eval_ctx, const common::ObIArray<int32_t> &projector)
 {
   int ret = OB_SUCCESS;
   if (outputs_.empty()) {  // not inited
     // first traverse, treat MapConvert::start_ as count
     for (int64_t i = 0; i < exprs.count(); i++) {
-      sql::ObExpr* e = exprs.at(i);
+      sql::ObExpr *e = exprs.at(i);
       // output should always be T_COLUMN_REF, only virtual column has argument.
       if (e->arg_cnt_ > 0) {
         has_virtual_ = true;
@@ -60,7 +61,7 @@ int ObRow2ExprsProjector::init(
       int64_t other_end = other_idx_;
       // second traverse, setup MapConvert::end_ && outputs_
       for (int64_t i = 0; i < exprs.count(); i++) {
-        sql::ObExpr* e = exprs.at(i);
+        sql::ObExpr *e = exprs.at(i);
         const int32_t obj_idx = projector.at(i);
         int64_t item_idx = 0;
         if (e->arg_cnt_ == 0 && obj_idx >= 0) {
@@ -77,7 +78,7 @@ int ObRow2ExprsProjector::init(
         } else {
           item_idx = other_end++;
         }
-        Item& item = outputs_[item_idx];
+        Item &item = outputs_[item_idx];
         item.obj_idx_ = obj_idx;
         item.expr_idx_ = i;
         item.datum_ = &e->locate_datum_for_write(eval_ctx);
@@ -90,7 +91,7 @@ int ObRow2ExprsProjector::init(
 };
 
 int ObRow2ExprsProjector::project(
-    const sql::ObExprPtrIArray& exprs, const common::ObObj* cells, int16_t* nop_pos, int64_t& nop_cnt)
+    const sql::ObExprPtrIArray &exprs, const common::ObObj *cells, int16_t *nop_pos, int64_t &nop_cnt)
 {
   // performance critical, no parameter validity check.
   int ret = OB_SUCCESS;
@@ -99,8 +100,8 @@ int ObRow2ExprsProjector::project(
   int_.project(outputs_.get_data(), cells, nop_pos, nop_cnt);
 
   for (int64_t i = other_idx_; OB_SUCC(ret) && i < outputs_.count(); i++) {
-    const Item& item = outputs_.at(i);
-    const ObObj* cell = NULL;
+    const Item &item = outputs_.at(i);
+    const ObObj *cell = NULL;
     if (OB_UNLIKELY(item.obj_idx_ < 0 || (cell = &cells[item.obj_idx_])->is_nop_value()) || (cell->is_urowid())) {
       // need to calc urowid col every time. otherwise may get old value.
       nop_pos[nop_cnt++] = item.expr_idx_;
@@ -128,7 +129,7 @@ int ObTableScanParam::init_rowkey_column_orders()
 {
   int ret = OB_SUCCESS;
   int64_t rowkey_count = 0;
-  void* buf = NULL;
+  void *buf = NULL;
 
   if (!is_valid() || OB_NOT_NULL(column_orders_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -141,7 +142,7 @@ int ObTableScanParam::init_rowkey_column_orders()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "Failed to alloc memrory", K(ret));
   } else {
-    const common::ObIArray<ObColumnParam*>& rowkey_columns =
+    const common::ObIArray<ObColumnParam *> &rowkey_columns =
         scan_flag_.is_index_back() ? table_param_->get_index_columns() : table_param_->get_columns();
     rowkey_count =
         scan_flag_.is_index_back() ? table_param_->get_index_rowkey_cnt() : table_param_->get_main_rowkey_cnt();

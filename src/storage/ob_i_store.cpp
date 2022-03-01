@@ -327,7 +327,7 @@ int ObTableIterParam::has_lob_column_out(const bool is_get, bool& has_lob_column
     STORAGE_LOG(WARN, "failt to get out cols", K(ret));
   } else if (OB_NOT_NULL(out_cols)) {
     for (int64_t i = 0; !has_lob_column && i < out_cols->count(); i++) {
-      has_lob_column = out_cols->at(i).col_type_.is_lob();
+      has_lob_column = (out_cols->at(i).col_type_.is_lob() || out_cols->at(i).col_type_.is_json());
     }
   }
   return ret;
@@ -338,7 +338,7 @@ bool ObTableIterParam::enable_fuse_row_cache() const
   bool bret = nullptr != full_out_cols_;
   if (bret) {
     for (int64_t i = 0; bret && i < full_out_cols_->count(); i++) {
-      bret = !full_out_cols_->at(i).col_type_.is_lob();
+      bret = !(full_out_cols_->at(i).col_type_.is_lob() || full_out_cols_->at(i).col_type_.is_json());
     }
   }
   bret = bret && !need_scn_;
@@ -991,8 +991,10 @@ int ObTableAccessContext::init(ObTableScanParam& scan_param, const ObStoreCtx& c
   param
       .set_mem_attr(
           scan_param.pkey_.get_tenant_id(), common::ObModIds::OB_TABLE_SCAN_ITER, common::ObCtxIds::DEFAULT_CTX_ID)
-      .set_properties(lib::USE_TL_PAGE_OPTIONAL)
       .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
+  if (scan_param.is_thread_scope_) {
+    param.set_properties(lib::USE_TL_PAGE_OPTIONAL);
+  }
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));

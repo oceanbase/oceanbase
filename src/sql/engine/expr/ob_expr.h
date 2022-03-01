@@ -165,7 +165,7 @@ struct ObDynReserveBuf {
   {
     const common::ObObjTypeClass tc = common::ob_obj_type_class(type);
     return common::ObStringTC == tc || common::ObTextTC == tc || common::ObRawTC == tc || common::ObRowIDTC == tc ||
-           common::ObLobTC == tc;
+           common::ObLobTC == tc || common::ObJsonTC == tc;
   }
 
   ObDynReserveBuf() = default;
@@ -269,6 +269,7 @@ public:
   // type of ObObj memory layout to ObDatum memory layout mapping,
   // used to convert ObDatum to ObObj and vice versa.
   common::ObObjDatumMapType obj_datum_map_;
+  uint64_t is_boolean_; // to distinguish result of this expr between and int tc
   // expr evaluate function
   union {
     EvalFunc eval_func_;
@@ -343,6 +344,15 @@ public:
   {}
 
   void* alloc(const int64_t size) override;
+  void* alloc(const int64_t size, const common::ObMemAttr& attr) override
+  {
+    UNUSED(attr);
+    return alloc(size);
+  }
+  void free(void* ptr) override
+  {
+    UNUSED(ptr);
+  }
 
 private:
   int64_t off_;

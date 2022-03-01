@@ -1441,7 +1441,7 @@ int ObDDLOperator::alter_table_drop_aux_column(ObSchemaService& schema_service, 
     RS_LOG(WARN, "table type not supporrted", K(ret), K(table_type));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     RS_LOG(WARN, "get schema guard failed", K(ret));
-  } else if (OB_FAIL(new_table_schema.get_simple_index_infos(simple_index_infos))) {
+  } else if (OB_FAIL(new_table_schema.get_simple_index_infos_without_delay_deleted_tid(simple_index_infos))) {
     LOG_WARN("get simple_index_infos without delay_deleted_tid failed", K(ret));
   }
   // update all aux table schema
@@ -2955,7 +2955,14 @@ int ObDDLOperator::alter_table_column(const ObTableSchema& origin_table_schema,
                         new_column_schema.get_column_name_str().length(),
                         new_column_schema.get_column_name_str().ptr());
                     RS_LOG(WARN, "BLOB, TEXT column can't have a default value!", K(default_value), K(ret));
-                  } else if (!new_column_schema.is_nullable() && default_value.is_null()) {
+                  } else if (ob_is_json_tc(new_column_schema.get_data_type())) {
+                    // cannot alter json column to any default value
+                    // text column also cannot be alter to null in mysql
+                    ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
+                    LOG_USER_ERROR(OB_ERR_BLOB_CANT_HAVE_DEFAULT, new_column_schema.get_column_name_str().length(),
+                                   new_column_schema.get_column_name_str().ptr());
+                    RS_LOG(WARN, "JSON column can't have a default value!", K(default_value), K(ret));
+                   } else if (!new_column_schema.is_nullable() && default_value.is_null()) {
                     ret = OB_INVALID_DEFAULT;
                     LOG_USER_ERROR(OB_INVALID_DEFAULT,
                         new_column_schema.get_column_name_str().length(),
@@ -4031,7 +4038,6 @@ int ObDDLOperator::drop_table_for_inspection(const ObTableSchema& orig_table_sch
             recycle_objs))) {
       LOG_WARN("get_recycle_object failed", K(ret), K(recycle_type));
     } else if (0 == recycle_objs.size()) {
-      // bugfix: https://work.aone.alibaba-inc.com/issue/35723010
     } else if (recycle_objs.size() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected recycle object num", K(ret), K(recycle_objs.size()));
@@ -5519,7 +5525,6 @@ int ObDDLOperator::cleanup_autoinc_cache(const ObTableSchema& table_schema)
   if (OB_FAIL(schema_service_.check_tenant_is_restore(NULL, tenant_id, is_restore))) {
     LOG_WARN("fail to check if tenant is restore", KR(ret), K(tenant_id));
   } else if (is_restore) {
-    // bugfix:https://work.aone.alibaba-inc.com/issue/33571720
     // skip
   } else if (0 != table_schema.get_autoinc_column_id()) {
     uint64_t table_id = table_schema.get_table_id();

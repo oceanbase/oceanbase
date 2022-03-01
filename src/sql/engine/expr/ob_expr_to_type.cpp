@@ -64,6 +64,15 @@ int ObExprToType::calc_result1(ObObj& result, const ObObj& obj1, ObExprCtx& expr
         K_(expect_type));
   } else {
     EXPR_DEFINE_CAST_CTX(expr_ctx, cast_mode_);
+    if (ob_is_json(expect_type_)) {
+      cast_ctx.dest_collation_ = result_type_.get_collation_type();
+      bool is_bool = false;
+      if (OB_FAIL(get_param_is_boolean(expr_ctx, obj1, is_bool))) {
+        LOG_WARN("get is_boolean type failed, bool may be cast as json int", K(ret), K(obj1));
+      } else if (is_bool) {
+        cast_ctx.cast_mode_ |= CM_TO_BOOLEAN;
+      }
+    }
     if (OB_FAIL(ObObjCaster::to_type(expect_type_, cast_ctx, obj1, result))) {
       LOG_WARN("failed to cast obj", K(ret));
     }
@@ -114,6 +123,11 @@ int ObExprToType::calc_result_type_for_literal(ObExprResType& type, ObExprResTyp
       } else {
         cast_coll_type = type_ctx.get_coll_type();
       }
+    } else if (lib::is_mysql_mode() && ob_is_json(expect_type_)) {
+      cast_coll_type = CS_TYPE_UTF8MB4_BIN;
+      if (type1.has_result_flag(IS_BOOL_FLAG)) {
+        cast_mode |= CM_TO_BOOLEAN;
+      }
     }
 
     ObAccuracy res_accuracy;
@@ -131,7 +145,7 @@ int ObExprToType::calc_result_type_for_literal(ObExprResType& type, ObExprResTyp
       if (nonstring_to_string) {
         type.set_collation_level(CS_LEVEL_COERCIBLE);
         type.set_collation_type(out.get_collation_type());
-      } else if (ob_is_string_or_lob_type(expect_type_)) {
+      } else if (ob_is_string_or_lob_type(expect_type_) || ob_is_json(expect_type_)) {
         type.set_collation_level(out.get_collation_level());
         type.set_collation_type(out.get_collation_type());
       } else {
@@ -160,6 +174,9 @@ int ObExprToType::calc_result_type_for_column(ObExprResType& type, ObExprResType
   } else if (ob_is_string_or_lob_type(expect_type_)) {
     type.set_collation_level(type1.get_collation_level());
     type.set_collation_type(type1.get_collation_type());
+  } else if (lib::is_mysql_mode() && ob_is_json(expect_type_)) {
+    type.set_collation_level(type1.get_collation_level());
+    type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
   } else {
     type.set_collation_type(CS_TYPE_BINARY);
     type.set_collation_level(CS_LEVEL_NUMERIC);

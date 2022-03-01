@@ -4209,7 +4209,7 @@ int64_t ObMacroBlockMetaV2::get_meta_content_serialize_size() const
     if (NULL != column_checksum_) {
       size += sizeof(int64_t) * column_number_;  // column_checksum_ array
     }
-    if (NULL != endkey_) {
+    if (is_normal_data_block() && nullptr != endkey_) {
       ObRowkey rowkey(endkey_, rowkey_column_number_);
       size += rowkey.get_deep_copy_size();  // rowkey object array
     }

@@ -69,6 +69,9 @@ class AggreLogTask;
 class ObPartTransCtxMgr;
 class ObPartitionTransCtxMgr;
 
+// Reserve 50KB to store the fields in trans ctx except undo_status, participants and redo_log
+static const int64_t OB_MAX_TRANS_SERIALIZE_SIZE = common::OB_MAX_USER_ROW_LENGTH - 51200;
+
 class ObTransErrsim {
 public:
   static inline bool is_memory_errsim()

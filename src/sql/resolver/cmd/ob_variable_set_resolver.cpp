@@ -17,21 +17,22 @@
 #include "sql/resolver/cmd/ob_variable_set_resolver.h"
 #include "sql/resolver/cmd/ob_variable_set_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/resolver/cmd/ob_variable_set_resolver.h"
 namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace sql {
 
-ObVariableSetResolver::ObVariableSetResolver(ObResolverParams& params) : ObStmtResolver(params)
+ObVariableSetResolver::ObVariableSetResolver(ObResolverParams &params) : ObStmtResolver(params)
 {}
 
 ObVariableSetResolver::~ObVariableSetResolver()
 {}
 
-int ObVariableSetResolver::resolve(const ParseNode& parse_tree)
+int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObVariableSetStmt* variable_set_stmt = NULL;
+  ObVariableSetStmt *variable_set_stmt = NULL;
   if (OB_UNLIKELY(T_VARIABLE_SET != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree.type_ must be T_VARIABLE_SET", K(ret), K(parse_tree.type_));
@@ -44,7 +45,7 @@ int ObVariableSetResolver::resolve(const ParseNode& parse_tree)
   } else {
     stmt_ = variable_set_stmt;
     variable_set_stmt->set_actual_tenant_id(session_info_->get_effective_tenant_id());
-    ParseNode* set_node = NULL;
+    ParseNode *set_node = NULL;
     ObVariableSetStmt::VariableSetNode var_node;
     ObVariableSetStmt::NamesSetNode names_node;
     for (int64_t i = 0; OB_SUCC(ret) && i < parse_tree.num_child_; ++i) {
@@ -57,7 +58,7 @@ int ObVariableSetResolver::resolve(const ParseNode& parse_tree)
         }
       } else if (T_SET_NAMES == set_node->type_ || T_SET_CHARSET == set_node->type_) {
         if (OB_FAIL(resolve_set_names(*set_node, names_node)))
-        LOG_WARN("resolve set names failed", K(ret));
+          LOG_WARN("resolve set names failed", K(ret));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected set_node->type_ ", K(ret), K(set_node->type_));
@@ -74,12 +75,11 @@ int ObVariableSetResolver::resolve(const ParseNode& parse_tree)
   return ret;
 }
 
-int ObVariableSetResolver::resolve_set_variable(const ParseNode &set_node,
-                                                ObVariableSetStmt::VariableSetNode &var_node,
-                                                ObVariableSetStmt* variable_set_stmt)
+int ObVariableSetResolver::resolve_set_variable(
+    const ParseNode &set_node, ObVariableSetStmt::VariableSetNode &var_node, ObVariableSetStmt *variable_set_stmt)
 {
   int ret = OB_SUCCESS;
-  ParseNode* var = NULL;
+  ParseNode *var = NULL;
   switch (set_node.value_) {
     case 0:
       var_node.set_scope_ = ObSetVar::SET_SCOPE_SESSION;
@@ -105,7 +105,7 @@ int ObVariableSetResolver::resolve_set_variable(const ParseNode &set_node,
       var_node.is_system_variable_ = true;
       var_name.assign_ptr(var->str_value_, static_cast<int32_t>(var->str_len_));
     } else if (T_OBJ_ACCESS_REF == var->type_) {  // Oracle mode
-      const ParseNode* name_node = NULL;
+      const ParseNode *name_node = NULL;
       if (OB_ISNULL(name_node = var->children_[0]) || OB_UNLIKELY(var->children_[1] != NULL)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable name not an identifier type");
@@ -171,18 +171,15 @@ int ObVariableSetResolver::resolve_set_variable(const ParseNode &set_node,
       }
       if (OB_SUCC(ret)) {
         if (0 == var_node.variable_name_.case_compare("ob_compatibility_mode") &&
-            0 == strncasecmp(
-                      value_node.str_value_, "oracle", std::min(static_cast<int32_t>(value_node.str_len_), 6))) {
+            0 == strncasecmp(value_node.str_value_, "oracle", std::min(static_cast<int32_t>(value_node.str_len_), 6))) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not support oracle mode");
-        } else if (OB_FAIL(
-                        ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
+        } else if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
           LOG_WARN("resolve variable value failed", K(ret));
         }
       }
     } else {
-      if (OB_FAIL(ObResolverUtils::resolve_const_expr(
-              params_, *set_node.children_[1], var_node.value_expr_, NULL))) {
+      if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *set_node.children_[1], var_node.value_expr_, NULL))) {
         LOG_WARN("resolve variable value failed", K(ret));
       }
     }
@@ -190,8 +187,7 @@ int ObVariableSetResolver::resolve_set_variable(const ParseNode &set_node,
   return ret;
 }
 
-int ObVariableSetResolver::resolve_set_names(const ParseNode &set_node,
-                                             ObVariableSetStmt::NamesSetNode &names_node)
+int ObVariableSetResolver::resolve_set_names(const ParseNode &set_node, ObVariableSetStmt::NamesSetNode &names_node)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(set_node.children_)) {
@@ -209,8 +205,7 @@ int ObVariableSetResolver::resolve_set_names(const ParseNode &set_node,
       } else {
         names_node.is_default_charset_ = false;
         ObString charset;
-        charset.assign_ptr(
-            set_node.children_[0]->str_value_, static_cast<int32_t>(set_node.children_[0]->str_len_));
+        charset.assign_ptr(set_node.children_[0]->str_value_, static_cast<int32_t>(set_node.children_[0]->str_len_));
         if (0 == charset.case_compare("utf16")) {
           ret = OB_ERR_WRONG_VALUE_FOR_VAR;
           LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR,
@@ -240,8 +235,8 @@ int ObVariableSetResolver::resolve_set_names(const ParseNode &set_node,
         names_node.is_default_charset_ = true;
       } else {
         names_node.is_default_charset_ = false;
-        names_node.charset_.assign_ptr(set_node.children_[0]->str_value_,
-                                       static_cast<int32_t>(set_node.children_[0]->str_len_));
+        names_node.charset_.assign_ptr(
+            set_node.children_[0]->str_value_, static_cast<int32_t>(set_node.children_[0]->str_len_));
       }
     }
   }
@@ -249,19 +244,17 @@ int ObVariableSetResolver::resolve_set_names(const ParseNode &set_node,
   return ret;
 }
 
-
-
-ObAlterSessionSetResolver::ObAlterSessionSetResolver(ObResolverParams& params) : ObStmtResolver(params)
+ObAlterSessionSetResolver::ObAlterSessionSetResolver(ObResolverParams &params) : ObStmtResolver(params)
 {}
 
 ObAlterSessionSetResolver::~ObAlterSessionSetResolver()
 {}
 
 // for oracle mode grammer: alter session set sys_var = val
-int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
+int ObAlterSessionSetResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObVariableSetStmt* variable_set_stmt = NULL;
+  ObVariableSetStmt *variable_set_stmt = NULL;
   if (OB_UNLIKELY(T_ALTER_SESSION_SET != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree.type_ must be T_ALTER_SESSION_SET", K(ret), K(parse_tree.type_));
@@ -275,8 +268,8 @@ int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
     // start resolve
     stmt_ = variable_set_stmt;
     variable_set_stmt->set_actual_tenant_id(session_info_->get_effective_tenant_id());
-    ParseNode* set_clause_node = NULL;
-    ParseNode* set_param_node = NULL;
+    ParseNode *set_clause_node = NULL;
+    ParseNode *set_param_node = NULL;
     ObVariableSetStmt::VariableSetNode var_node;
     // resolve alter_session_set_clause
     if (OB_ISNULL(set_clause_node = parse_tree.children_[0])) {
@@ -296,7 +289,7 @@ int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
           LOG_WARN("set_node->type_ must be T_VAR_VAL", K(ret), K(set_param_node->type_));
         } else {
           // resolve set_system_parameter_clause
-          ParseNode* var = NULL;
+          ParseNode *var = NULL;
           var_node.set_scope_ = ObSetVar::SET_SCOPE_SESSION;
           if (OB_ISNULL(var = set_param_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
@@ -332,8 +325,8 @@ int ObAlterSessionSetResolver::resolve(const ParseNode& parse_tree)
               }
             }
           }
-          if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(
-                                      ObVariableSetStmt::make_variable_name_node(var_node)))) {
+          if (OB_SUCC(ret) &&
+              OB_FAIL(variable_set_stmt->add_variable_node(ObVariableSetStmt::make_variable_name_node(var_node)))) {
             LOG_WARN("Add set entry failed", K(ret));
           }
         }

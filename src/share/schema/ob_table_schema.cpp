@@ -2015,7 +2015,7 @@ bool ObTableSchema::is_valid() const
                   rowkey_varchar_col_length += column->get_data_length();
                 }
               }
-            } else if (ob_is_text_tc(column->get_data_type())) {
+            } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())) {
               ObLength max_length = 0;
               if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_) {
                 max_length = ObAccuracy::MAX_ACCURACY_OLD[column->get_data_type()].get_length();
@@ -3552,7 +3552,7 @@ int ObTableSchema::check_column_can_be_altered(const ObColumnSchemaV2* src_schem
             src_schema->get_charset_type() == dst_schema->get_charset_type() &&
             src_schema->get_collation_type() == dst_schema->get_collation_type())) {
       bool is_oracle_mode = false;
-      if (ob_is_large_text(src_schema->get_data_type()) && src_schema->get_data_type() != dst_schema->get_data_type()) {
+      if ((ob_is_large_text(src_schema->get_data_type())) && src_schema->get_data_type() != dst_schema->get_data_type()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify large text/lob column");
         LOG_WARN("The data of large text/lob column can not be altered", K(ret), KPC(dst_schema), KPC(src_schema));
@@ -3745,7 +3745,8 @@ int ObTableSchema::check_rowkey_column_can_be_altered(
             K(max_rowkey_length),
             K(ret));
       }
-    } else if (ObTextTC == dst_schema->get_data_type_class()) {
+    } else if (ObTextTC == dst_schema->get_data_type_class()
+               || ObJsonTC == dst_schema->get_data_type_class()) {     
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify rowkey column to text/clob/blob");
     }
@@ -3774,7 +3775,7 @@ int ObTableSchema::check_row_length(const ObColumnSchemaV2* src_schema, const Ob
       } else if (is_storage_index_table() && col->is_fulltext_column()) {
         // The full text column in the index only counts the length of one word segment
         row_length += OB_MAX_OBJECT_NAME_LENGTH;
-      } else if (ob_is_string_type(col->get_data_type())) {
+      } else if (ob_is_string_type(col->get_data_type()) || ob_is_json(col->get_data_type())) {
         int64_t length = 0;
         if (OB_FAIL(col->get_byte_length(length, true))) {
           SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
@@ -3915,6 +3916,8 @@ int ObTableSchema::has_lob_column(bool& has_lob, const bool check_large /*= fals
     if (OB_ISNULL(column_schema = *iter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Column schema is NULL", K(ret));
+    } else if (ob_is_json_tc(column_schema->get_data_type())) {
+      has_lob = true; // cannot know whether a json is lob or not from schema
     } else if (check_large) {
       if (ob_is_large_text(column_schema->get_data_type())) {
         has_lob = true;

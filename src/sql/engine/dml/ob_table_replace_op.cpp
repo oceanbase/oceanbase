@@ -278,6 +278,7 @@ int ObTableReplaceOp::do_replace(ObSQLSessionInfo& my_session, const ObPartition
     int64_t cur_affected = 0;
     ObNewRow old_del_row;
     while (OB_SUCC(ret) && OB_SUCC(scan_res->get_next_row())) {
+      clear_evaluated_flag();
       if (OB_FAIL(ForeignKeyHandle::do_handle_old_row(*this, MY_SPEC.get_fk_args(), MY_SPEC.table_column_exprs_))) {
         LOG_WARN("handle foreign key failed", K(ret), K(MY_SPEC.table_column_exprs_));
       } else if (OB_FAIL(project_row(

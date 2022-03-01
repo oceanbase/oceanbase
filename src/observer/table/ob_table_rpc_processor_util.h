@@ -57,6 +57,7 @@ enum ObTableProccessType
   // query
   TABLE_API_TABLE_QUERY,
   TABLE_API_HBASE_QUERY,
+  TABLE_API_TABLE_QUERY_SYNC,
 
   TABLE_API_PROCESS_TYPE_MAX
 };
@@ -237,6 +238,13 @@ public:
       EVENT_ADD(HBASEAPI_SCAN_ROW, rows);
       SET_AUDIT_SQL_STRING(hbase_scan);
       break;
+    // table query sync 
+    case ObTableProccessType::TABLE_API_TABLE_QUERY_SYNC:
+      EVENT_INC(TABLEAPI_QUERY_COUNT);
+      EVENT_ADD(TABLEAPI_QUERY_TIME, elapsed_us);
+      EVENT_ADD(TABLEAPI_QUERY_ROW, rows);
+      SET_AUDIT_SQL_STRING(table_query_sync);
+      break;  
 
     default:
       SET_AUDIT_SQL_STRING(unknown);

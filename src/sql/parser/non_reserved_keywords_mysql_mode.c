@@ -19,7 +19,8 @@ static t_node* mysql_none_reserved_keywords_root = NULL;
 static t_node* mysql_sql_keywords_in_pl_root = NULL;
 
 /* List of non-reserved keywords */
-static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACCESS},
+static const NonReservedKeyword Mysql_none_reserved_keywords[] = {
+    {"access", ACCESS},
     {"account", ACCOUNT},
     {"action", ACTION},
     {"activate", ACTIVATE},
@@ -150,6 +151,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"dynamic", DYNAMIC},
     {"default_tablegroup", DEFAULT_TABLEGROUP},
     {"effective", EFFECTIVE},
+    {"empty", EMPTY},
     {"enable", ENABLE},
     {"encryption", ENCRYPTION},
     {"end", END},
@@ -187,6 +189,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"first", FIRST},
     {"first_value", FIRST_VALUE},
     {"fixed", FIXED},
+    {"flashback", FLASHBACK},
     {"flush", FLUSH},
     {"follower", FOLLOWER},
     {"format", FORMAT},
@@ -242,6 +245,9 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"issuer", ISSUER},
     {"job", JOB},
     {"json", JSON},
+    {"json_arrayagg", JSON_ARRAYAGG},
+    {"json_objectagg", JSON_OBJECTAGG},
+    {"json_value", JSON_VALUE},
     {"key_block_size", KEY_BLOCK_SIZE},
     {"key_version", KEY_VERSION},
     {"kvcache", KVCACHE},
@@ -309,6 +315,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"max_used_part_id", MAX_USED_PART_ID},
     {"max_user_connections", MAX_USER_CONNECTIONS},
     {"medium", MEDIUM},
+    {"member", MEMBER},
     {"memory", MEMORY},
     {"memstore_percent", MEMSTORE_PERCENT},
     {"memtable", MEMTABLE},
@@ -461,6 +468,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] = {{"access", ACC
     {"restore", RESTORE},
     {"resume", RESUME},
     {"returned_sqlstate", RETURNED_SQLSTATE},
+    {"returning", RETURNING},
     {"returns", RETURNS},
     {"reverse", REVERSE},
     {"rewrite_merge_version", REWRITE_MERGE_VERSION},

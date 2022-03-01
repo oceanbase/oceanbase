@@ -481,6 +481,45 @@ int ObMultiBackupDestUtil::get_path_type(
   return ret;
 }
 
+int ObMultiBackupDestUtil::check_can_restore_by_set_or_piece(
+    const common::ObArray<share::ObSimpleBackupSetPath> &backup_set_list,
+    const common::ObArray<share::ObSimpleBackupPiecePath> &backup_piece_list)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath backup_set_path, backup_piece_path;
+  ObStorageUtil util(false /*need_retry*/);
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_list.count(); ++i) {
+    const ObSimpleBackupSetPath &simple_path = backup_set_list.at(i);
+    bool set_exist = false;
+    if (OB_FAIL(get_backup_set_info_path(simple_path.get_simple_path(), backup_set_path))) {
+      LOG_WARN("failed to get backup set info path", KR(ret), K_(simple_path.backup_dest));
+    } else if (OB_FAIL(util.is_exist(
+                   backup_set_path.get_obstr(), simple_path.get_storage_info(), set_exist))) {
+      LOG_WARN("failed to check set file exist", KR(ret), K(backup_set_path));
+    } else if (!set_exist) {
+      ret = OB_BACKUP_FILE_NOT_EXIST;
+      LOG_WARN("single_backup_set_info is not exist", KR(ret), K_(simple_path.backup_set_id), K(backup_set_path));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_list.count(); ++i) {
+    const ObSimpleBackupPiecePath &simple_path = backup_piece_list.at(i);
+    bool piece_exist = false;
+    if (OB_FAIL(get_backup_piece_info_path(simple_path.get_simple_path(), backup_piece_path))) {
+      LOG_WARN("failed to get backup piece info path", KR(ret), K_(simple_path.backup_dest));
+    } else if (OB_FAIL(util.is_exist(
+                   backup_piece_path.get_obstr(), simple_path.get_storage_info(), piece_exist))) {
+      LOG_WARN("failed to check piece file exist", KR(ret), K(backup_piece_path));
+    } else if (!piece_exist) {
+      ret = OB_BACKUP_FILE_NOT_EXIST;
+      LOG_WARN("single_piece_info is not exist", KR(ret), K_(simple_path.backup_piece_id), K(backup_piece_path));
+    }
+  }
+
+  return ret;
+}
+
 int ObMultiBackupDestUtil::inner_get_backup_tenant_id_from_set_or_piece(
     const common::ObArray<common::ObString> &path_list, const int64_t restore_timestamp, uint64_t &tenant_id)
 {

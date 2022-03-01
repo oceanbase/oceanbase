@@ -7008,7 +7008,7 @@ int ObCodeGeneratorImpl::convert_table_lookup(ObLogTableLookup& op, const PhyOps
   }
 #endif
   // in any case, destroy row desc
-  if (NULL != table_scan_out_ops.at(0).second) {
+  if (table_scan_out_ops.count() > 0 && NULL != table_scan_out_ops.at(0).second) {
     ob_delete(table_scan_out_ops.at(0).second);
   }
   return ret;

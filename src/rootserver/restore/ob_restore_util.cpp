@@ -604,6 +604,12 @@ int ObRestoreUtil::fill_multi_backup_path(
     LOG_WARN("failed to filter duplicate path list", KR(ret));
   } else if (OB_FAIL(job.multi_restore_path_list_.set(backup_set_list, backup_piece_list))) {
     LOG_WARN("failed to set mutli restore path list", KR(ret));
+  } else if (OB_FAIL(ObMultiBackupDestUtil::check_can_restore_by_set_or_piece(backup_set_list, backup_piece_list))) {
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      LOG_WARN("the backup file is missing and cannot be restored", K(ret));
+    } else {
+      LOG_WARN("failed to check can be restored", KR(ret));
+    }
   } else if (OB_FAIL(
                  get_multi_path_file_info_list(backup_set_list, backup_piece_list, set_info_list, piece_info_list))) {
     LOG_WARN("failed to get multi path file info list", KR(ret), K(backup_set_list), K(backup_piece_list));
@@ -685,6 +691,20 @@ int ObRestoreUtil::inner_fill_compat_backup_path(
     LOG_WARN("failed to get backup path list", KR(ret), K(uri_list));
   } else if (OB_FAIL(job.multi_restore_path_list_.set(backup_set_list, backup_piece_list))) {
     LOG_WARN("failed to set mutli restore path list", KR(ret));
+  } else {
+    // history reason, before 2277, the inc backup set is nested in full backup set
+    // so if the backup set list is empty and backup piece list is not empty
+    // it is compat path which the backup is from 2276 or before
+    const bool is_compat_path = backup_set_list.empty() && !backup_piece_list.empty();
+    if (!is_compat_path) {
+      if (OB_FAIL(ObMultiBackupDestUtil::check_can_restore_by_set_or_piece(backup_set_list, backup_piece_list))) {
+        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          LOG_WARN("the backup file is missing and cannot be restored", K(ret));
+        }
+      } else {
+        LOG_WARN("failed to check can be restored", KR(ret));
+      }
+    }
   }
   return ret;
 }

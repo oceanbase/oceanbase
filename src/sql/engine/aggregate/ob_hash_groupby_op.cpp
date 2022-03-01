@@ -87,6 +87,7 @@ int ObHashGroupByOp::inner_open()
                    MY_SPEC.id_,
                    &ctx_))) {
       LOG_WARN("failed to init sql mem processor", K(ret));
+    } else if (FALSE_IT(aggr_processor_.set_dir_id(sql_mem_processor_.get_dir_id()))) {
     } else if (FALSE_IT(init_size = estimate_hash_bucket_cnt_by_mem_size(est_group_cnt,
                             sql_mem_processor_.get_mem_bound(),
                             est_hash_mem_size * 1. / estimate_mem_size))) {

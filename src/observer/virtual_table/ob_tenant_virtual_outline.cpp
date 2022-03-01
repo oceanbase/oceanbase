@@ -48,13 +48,13 @@ int ObTenantVirtualOutlineBase::inner_open()
   return ret;
 }
 
-int ObTenantVirtualOutlineBase::set_database_infos_and_get_value(uint64_t database_id, bool& is_recycle)
+int ObTenantVirtualOutlineBase::set_database_infos_and_get_value(uint64_t database_id, bool &is_recycle)
 {
   int ret = OB_SUCCESS;
   is_recycle = false;
   DBInfo db_info;
   ObString db_name;
-  const ObDatabaseSchema* db_schema = NULL;
+  const ObDatabaseSchema *db_schema = NULL;
   if (OB_ISNULL(schema_guard_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameter is NULL", K(ret), K(schema_guard_), K(allocator_));
@@ -75,7 +75,7 @@ int ObTenantVirtualOutlineBase::set_database_infos_and_get_value(uint64_t databa
   return ret;
 }
 
-int ObTenantVirtualOutlineBase::is_database_recycle(uint64_t database_id, bool& is_recycle)
+int ObTenantVirtualOutlineBase::is_database_recycle(uint64_t database_id, bool &is_recycle)
 {
   int ret = OB_SUCCESS;
   DBInfo db_info;
@@ -104,10 +104,10 @@ void ObTenantVirtualOutline::reset()
   ObTenantVirtualOutlineBase::reset();
 }
 
-int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo* outline_info)
+int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = NULL;
+  ObObj *cells = NULL;
   if (OB_ISNULL(cells = cur_row_.cells_) || OB_ISNULL(allocator_) || OB_ISNULL(session_) || OB_ISNULL(outline_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("some data member is NULL", K(ret), K(cells), K(allocator_), K(session_), K(outline_info));
@@ -156,7 +156,8 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo* outline_info)
         }
         case DATABASE_NAME: {
           DBInfo db_info;
-          if (outline_info->get_database_id()==OB_OUTLINE_DEFAULT_DATABASE_ID) {
+          if (outline_info->get_database_id() ==
+              combine_id(outline_info->get_tenant_id(), OB_OUTLINE_DEFAULT_DATABASE_ID)) {
             cells[cell_idx].set_varchar(OB_OUTLINE_DEFAULT_DATABASE_NAME);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           } else if (OB_FAIL(database_infos_.get_refactored(outline_info->get_database_id(), db_info))) {
@@ -217,7 +218,7 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo* outline_info)
   return ret;
 }
 
-int ObTenantVirtualOutline::is_output_outline(const ObOutlineInfo* outline_info, bool& is_output)
+int ObTenantVirtualOutline::is_output_outline(const ObOutlineInfo *outline_info, bool &is_output)
 {
   int ret = OB_SUCCESS;
   is_output = false;
@@ -227,9 +228,10 @@ int ObTenantVirtualOutline::is_output_outline(const ObOutlineInfo* outline_info,
     LOG_WARN("parameter is NULL", K(ret), K(outline_info), K(schema_guard_));
   } else if (outline_info->get_outline_content_str().empty()) {
     is_output = false;
-  } else if (outline_info->get_database_id() == OB_OUTLINE_DEFAULT_DATABASE_ID) {
-    // __outline_default_db is a logical table and has no physical schema. 
-    // Therefore, always output this. 
+  } else if (outline_info->get_database_id() ==
+             combine_id(outline_info->get_tenant_id(), OB_OUTLINE_DEFAULT_DATABASE_ID)) {
+    // __outline_default_db is a logical table and has no physical schema.
+    // Therefore, always output this.
     is_output = true;
   } else if (OB_FAIL(is_database_recycle(outline_info->get_database_id(), is_recycle))) {
     LOG_WARN("fail to judge database recycle", K(ret), KPC(outline_info));
@@ -238,10 +240,10 @@ int ObTenantVirtualOutline::is_output_outline(const ObOutlineInfo* outline_info,
   }
   return ret;
 }
-int ObTenantVirtualOutline::inner_get_next_row(common::ObNewRow*& row)
+int ObTenantVirtualOutline::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  const ObOutlineInfo* outline_info = NULL;
+  const ObOutlineInfo *outline_info = NULL;
   bool is_output = false;
   if (outline_info_idx_ < 0) {
     ret = OB_ERR_UNEXPECTED;

@@ -299,8 +299,10 @@ int ObRowGenerate::generate_one_row(
       if (OB_SUCCESS != (ret = set_obj(column_type, column_id, seed, row.row_val_.cells_[i], trans_version))) {
         STORAGE_LOG(WARN, "fail to set obj.", K(ret), K(i), K(seed));
       } else {
-        if (ObTinyTextType == column_type || ObTextType == column_type || ObMediumTextType == column_type ||
-            ObLongTextType == column_type || ObNVarchar2Type == column_type || ObNCharType == column_type) {
+        if (ObTinyTextType == column_type || ObTextType == column_type 
+            || ObMediumTextType == column_type || ObLongTextType == column_type 
+            || ObNVarchar2Type == column_type || ObNCharType == column_type
+            || ObJsonType == column_type ) {
           row.row_val_.cells_[i].set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
           row.row_val_.cells_[i].set_collation_level(CS_LEVEL_IMPLICIT);
         } else if (ObVarcharType == column_type || ObCharType == column_type || ob_is_text_tc(column_type)) {
@@ -494,7 +496,8 @@ int ObRowGenerate::set_obj(
       case ObTinyTextType:
       case ObTextType:
       case ObMediumTextType:
-      case ObLongTextType: {
+      case ObLongTextType: 
+      case ObJsonType: {
         ObLobData* value = NULL;
         void* buf = NULL;
         if (OB_ISNULL(buf = p_allocator_->alloc(sizeof(ObLobData)))) {
@@ -747,7 +750,8 @@ int ObRowGenerate::compare_obj(const ObObjType& column_type, const int64_t value
     case ObTinyTextType:
     case ObTextType:
     case ObMediumTextType:
-    case ObLongTextType: {
+    case ObLongTextType:
+    case ObJsonType: {
       break;
     }
     case ObBitType: {

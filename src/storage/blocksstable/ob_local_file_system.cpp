@@ -394,10 +394,12 @@ int ObLocalFileSystem::open(bool& exist)
         ret = OB_CS_OUTOF_DISK_SPACE;
         STORAGE_LOG(ERROR, "data file size is too large, ", K(ret), K(free_space), K(data_file_size_));
       } else {
+        int sys_ret = 0;
         int64_t falloc_size = lower_align(data_file_size_, macro_block_size_);
-        if (OB_FAIL(fallocate(fd_.fd_, 0 /*MODE*/, 0 /*offset*/, falloc_size))) {
+        if (0 != (sys_ret = ::fallocate(fd_.fd_, 0 /*MODE*/, 0 /*offset*/, falloc_size))) {
           ret = OB_IO_ERROR;
-          STORAGE_LOG(ERROR, "allocate file error", K(store_path_), K(falloc_size), K(errno), KERRMSG, K(ret));
+          STORAGE_LOG(
+              ERROR, "allocate file error", K(ret), K(sys_ret), K(store_path_), K(falloc_size), K(errno), KERRMSG);
         }
       }
     }
@@ -911,10 +913,11 @@ int ObLocalFileSystem::resize_file(const int64_t new_data_file_size, const int64
           K(curr_aligned_file_size),
           K(new_aligned_file_size));
     } else {
+      int sys_ret = 0;
       const int64_t offset = curr_aligned_file_size;
       const int64_t delta_size = new_aligned_file_size - curr_aligned_file_size;
-      if (OB_FAIL(fallocate(fd_.fd_, 0, offset, delta_size))) {
-        LOG_WARN("fail to expand file size", K(ret), K(offset), K(delta_size), K(errno), KERRMSG);
+      if (0 != (sys_ret = ::fallocate(fd_.fd_, 0, offset, delta_size))) {
+        LOG_WARN("fail to expand file size", K(ret), K(sys_ret), K(offset), K(delta_size), K(errno), KERRMSG);
       } else {
         data_file_size_ = new_cal_data_file_size;
         datafile_disk_percentage_ = new_data_file_disk_percentage;

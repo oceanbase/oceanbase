@@ -47,7 +47,7 @@ public:
   virtual int64_t get_idle_interval_us();
 };
 
-class ObBackupAutoDeleteExpiredData : public ObRsReentrantThread, public ObIBackupScheduler {
+class ObBackupAutoDeleteExpiredData : public ObIBackupScheduler {
 public:
   ObBackupAutoDeleteExpiredData();
   virtual ~ObBackupAutoDeleteExpiredData();
@@ -66,7 +66,8 @@ public:
   {
     return is_working_;
   }
-  int start() override;
+  virtual int force_cancel(const uint64_t tenant_id);
+  int start();
   ;
 
 private:

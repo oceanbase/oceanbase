@@ -36,6 +36,7 @@ public:
   virtual int delete_tmp_files(const common::ObString& dir_path, const common::ObString& storage_info);
   virtual int is_empty_directory(
       const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);
+  virtual int is_tagging(const common::ObString& uri, const common::ObString& storage_info, bool& is_tagging);
   virtual int check_backup_dest_lifecycle(
       const common::ObString& dir_path, const common::ObString& storage_info, bool& is_set_lifecycle);
   virtual int list_directories(const common::ObString& uri, const common::ObString& storage_info,

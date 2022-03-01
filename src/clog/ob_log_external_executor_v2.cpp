@@ -281,7 +281,7 @@ int ObLogExternalExecutorWithBreakpoint::process_info_entry(const ObPartitionKey
     EXTLOG_LOG(ERROR, "invalid search type", K(ret), K(search_param));
   }
   if (OB_SUCC(ret)) {
-    EXTLOG_LOG(TRACE, "process info entry finish succes", K(min_log_id), K(submit_timestamp), K(progress));
+    EXTLOG_LOG(TRACE, "process info entry finish success", K(min_log_id), K(submit_timestamp), K(progress));
   } else {
     EXTLOG_LOG(WARN, "process info entry finish error", K(ret), K(min_log_id), K(submit_timestamp), K(progress));
   }
@@ -1034,7 +1034,7 @@ int ObLogExternalExecutorWithBreakpoint::do_req_start_pos_by_log_id(
     if (OB_FAIL(id_build_result(req_msg, search_map, progress, response))) {
       EXTLOG_LOG(WARN, "build result error", K(ret), K(req_msg));
     } else {
-      EXTLOG_LOG(INFO, "build result succes", K(ret), K(req_msg));
+      EXTLOG_LOG(INFO, "build result success", K(ret), K(req_msg));
     }
   }
   if (OB_SUCC(ret)) {

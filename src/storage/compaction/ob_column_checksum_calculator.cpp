@@ -128,7 +128,9 @@ int ObColumnChecksumCalculator::calc_column_checksum(const int64_t checksum_meth
   } else {
     int64_t tmp_checksum = 0;
     for (int64_t i = 0; i < row.count_; ++i) {
-      if ((NULL != column_changed && !column_changed[i]) || ob_is_large_text(row.cells_[i].get_type())) {
+      if ((NULL != column_changed && !column_changed[i])
+          || ob_is_large_text(row.cells_[i].get_type())
+          || ob_is_json(row.cells_[i].get_type())) {
         continue;
       }
       if (CCM_TYPE_AND_VALUE == checksum_method) {
@@ -305,7 +307,7 @@ int ObSSTableColumnChecksum::init_column_checksum(const share::schema::ObTableSc
               // skip virtual column
             } else {
               for (int64_t idx = 0; idx < sstable_metas.count(); idx++) {
-                if (ob_is_large_text(col_schema->get_data_type())) {
+                if (ob_is_large_text(col_schema->get_data_type()) || ob_is_json(col_schema->get_data_type())) {
                   column_checksum[col_idx] = 0;
                 } else {
                   bool is_new_column = true;

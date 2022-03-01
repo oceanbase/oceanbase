@@ -279,6 +279,7 @@ int ObStmtComparer::check_stmt_containment(
   } else if (first_sel->is_set_stmt() || second_sel->is_set_stmt() || first_sel->has_recusive_cte() ||
              second_sel->has_recusive_cte() || first_sel->has_hierarchical_query() ||
              second_sel->has_hierarchical_query() || first_sel->is_contains_assignment() ||
+             first_sel->get_semi_info_size() > 0 || second_sel->get_semi_info_size() > 0 ||
              second_sel->is_contains_assignment()) {
     /*do nothing*/
   } else if (first_sel->get_from_item_size() != second_sel->get_from_item_size()) {

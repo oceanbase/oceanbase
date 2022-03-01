@@ -15,6 +15,8 @@
 
 #include "lib/timezone/ob_timezone_info.h"
 #include "lib/timezone/ob_time_convert.h"
+#include "lib/json_type/ob_json_base.h"
+#include "lib/json_type/ob_json_bin.h"
 #include "common/object/ob_object.h"
 
 namespace oceanbase {
@@ -1380,6 +1382,148 @@ DEF_TEXT_FUNCS(ObTinyTextType, string, ObString);
 DEF_TEXT_FUNCS(ObTextType, string, ObString);
 DEF_TEXT_FUNCS(ObMediumTextType, string, ObString);
 DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
+
+#define DEF_JSON_CS_FUNCS(OBJTYPE)                                    \
+  template <>                                                           \
+  inline int64_t obj_crc64<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &type, sizeof(type));        \
+    ret = ob_crc64_sse42(ret, &cs, sizeof(cs));                         \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline int64_t obj_crc64_v2<OBJTYPE>(const ObObj &obj, const int64_t current)   \
+  {                                                                     \
+    int cs = obj.get_collation_type();                                  \
+    int64_t ret =  ob_crc64_sse42(current, &cs, sizeof(cs));        \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                     \
+  template <>                                                           \
+  inline void obj_batch_checksum<OBJTYPE>(const ObObj &obj, ObBatchChecksum &bc) \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int cs = obj.get_collation_type();                                  \
+    bc.fill(&type, sizeof(type));                                       \
+    bc.fill(&cs, sizeof(cs));                                           \
+    bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
+  }                                                                     \
+  template <>                                                           \
+  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  {                                                                     \
+    return varchar_murmurhash(obj, obj.get_collation_type(), hash);     \
+  }                                                                     \
+  template <typename T, typename P>                                                \
+  struct ObjHashCalculator<OBJTYPE, T, P>                                          \
+  {                                                                                \
+    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {         \
+      int ret = OB_SUCCESS;                                                        \
+      common::ObString j_bin_str = param.get_string();                             \
+      uint64_t hash_res = 0;                                                       \
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());                        \
+      ObIJsonBase *j_base = &j_bin;                                                \
+      if (j_bin_str.length() ==0 || param.is_null()) {                             \
+        hash_res = hash;                                                           \
+      } else if (OB_FAIL(j_bin.reset_iter())) {                                    \
+        COMMON_LOG(WARN, "fail to reset json bin iter", K(ret), K(j_bin_str));     \
+        right_to_die_or_duty_to_live();                                            \
+      } else if (OB_FAIL(j_base->calc_json_hash_value(hash, T::hash, hash_res))) { \
+        COMMON_LOG(ERROR, "fail to calc hash", K(ret), K(*j_base));                \
+        right_to_die_or_duty_to_live();                                            \
+      }                                                                            \
+                                                                                   \
+      return hash_res;                                                             \
+    }                                                                              \
+  };                                                                               \
+  template <>                                                               \
+  inline uint64_t obj_crc64_v3<OBJTYPE>(const ObObj &obj, const uint64_t current)  \
+  {                                                                         \
+    int cs = obj.get_collation_type();                                      \
+    uint64_t ret = ob_crc64_sse42(current, &cs, sizeof(cs));               \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len()); \
+  }                                                                         \
+
+#define DEF_JSON_FUNCS(OBJTYPE, TYPE, VTYPE)       \
+  DEF_JSON_CS_FUNCS(OBJTYPE);                      \
+  DEF_TEXT_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
+
+DEF_JSON_FUNCS(ObJsonType, string, ObString);
+ 
+template <>
+inline int obj_print_sql<ObJsonType>(const ObObj &obj, char *buffer, int64_t length,
+                                     int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  ObString str = obj.get_string();
+  ObArenaAllocator tmp_allocator;
+  ObJsonBuffer jbuf(&tmp_allocator);
+  ObIJsonBase *j_base = NULL;
+  ObJsonInType in_type = ObJsonInType::JSON_BIN;
+  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+    COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
+  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+    COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
+    COMMON_LOG(WARN, "fail to print \"'\"", K(ret), K(length), K(pos));
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, jbuf.ptr()))) {
+    COMMON_LOG(WARN, "fail to print json doc", K(ret), K(length), K(pos), K(jbuf.length()));
+  } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
+    COMMON_LOG(WARN, "fail to print \"'\"", K(ret), K(length), K(pos));
+  }
+  return ret;
+}
+
+template <>
+inline int obj_print_str<ObJsonType>(const ObObj &obj, char *buffer, int64_t length, int64_t &pos,
+                                  const ObObjPrintParams &params)
+{
+  return obj_print_sql<ObJsonType>(obj, buffer, length, pos, params); 
+}
+template <>
+inline int obj_print_plain_str<ObJsonType>(const ObObj &obj, char *buffer, int64_t length,
+                                        int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  ObString str = obj.get_string();
+  ObArenaAllocator tmp_allocator;
+  ObIJsonBase *j_base = NULL;
+  ObJsonBuffer jbuf(&tmp_allocator);
+  ObJsonInType in_type = ObJsonInType::JSON_BIN;
+  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+    COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
+  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+    COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
+  } else if (params.use_memcpy_) {
+    ret = databuff_memcpy(buffer, length, pos, jbuf.length(), jbuf.ptr());
+  } else {
+    int32_t length = jbuf.length();
+    ret = databuff_printf(buffer, length, pos, "%.*s", length, jbuf.ptr());
+  }
+  return ret;
+}
+template <>
+inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_len,
+                                  int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  ObString str = obj.get_string();
+  ObArenaAllocator tmp_allocator;
+  ObIJsonBase *j_base = NULL;
+  ObJsonInType in_type = ObJsonInType::JSON_BIN;
+  ObJsonBuffer jbuf(&tmp_allocator);
+  if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, str, in_type, in_type, j_base))) {
+    COMMON_LOG(WARN, "fail to get json base", K(ret), K(in_type));
+  } else if (OB_FAIL(j_base->print(jbuf, false))) { // json binary to string
+    COMMON_LOG(WARN, "fail to convert json to string", K(ret), K(obj));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, jbuf.ptr()))) {
+    COMMON_LOG(WARN, "fail to print json doc", K(ret), K(buf_len), K(pos), K(jbuf.length()));
+  }
+  return ret;
+}
 
 ////////////////
 // ObTimestampTZType=36,

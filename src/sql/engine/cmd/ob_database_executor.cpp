@@ -15,6 +15,7 @@
 #include "sql/resolver/ddl/ob_use_database_stmt.h"
 #include "sql/resolver/ddl/ob_alter_database_stmt.h"
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
+#include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -226,6 +227,33 @@ int ObDropDatabaseExecutor::execute(ObExecContext& ctx, ObDropDatabaseStmt& stmt
   }
   SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), K(stmt));
   return ret;
+}
+
+int ObFlashBackDatabaseExecutor::execute(ObExecContext &ctx, ObFlashBackDatabaseStmt &stmt)		
+{		
+  int ret = OB_SUCCESS;		
+  const obrpc::ObFlashBackDatabaseArg &flashback_database_arg = stmt.get_flashback_database_arg();		
+  ObTaskExecutorCtx *task_exec_ctx = NULL;		
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;		
+  ObString first_stmt;		
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {		
+     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));		
+  } else {		
+    const_cast<obrpc::ObFlashBackDatabaseArg&>(flashback_database_arg).ddl_stmt_str_ = first_stmt;		
+  }		
+  if (OB_FAIL(ret)) {		
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {		
+    ret = OB_NOT_INIT;		
+    SQL_ENG_LOG(WARN, "get task executor context failed");		
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {		
+    SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));		
+  } else if (OB_ISNULL(common_rpc_proxy)){		
+    ret = OB_ERR_UNEXPECTED;		
+    SQL_ENG_LOG(WARN, "common rpc proxy should not be null", K(ret));		
+  } else if (OB_FAIL(common_rpc_proxy->flashback_database(flashback_database_arg))) {		
+    SQL_ENG_LOG(WARN, "rpc proxy flashback database failed", K(ret));		
+  }		
+  return ret;		
 }
 
 int ObPurgeDatabaseExecutor::execute(ObExecContext& ctx, ObPurgeDatabaseStmt& stmt)

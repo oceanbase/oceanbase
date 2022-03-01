@@ -1,4 +1,4 @@
-[target]
+[target-default]
 os=7
 arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/7/aarch64/
@@ -11,6 +11,7 @@ devdeps-libunwind-static-1.5.0-3.el7.aarch64.rpm
 devdeps-mariadb-connector-c-3.1.12-3.el7.aarch64.rpm
 devdeps-openssl-static-1.0.1e-3.el7.aarch64.rpm
 devdeps-libaio-0.3.112-3.el7.aarch64.rpm
+devdeps-rapidjson-1.1.0-1.el7.aarch64.rpm
 
 [tools]
 obdevtools-binutils-2.30-3.el7.aarch64.rpm

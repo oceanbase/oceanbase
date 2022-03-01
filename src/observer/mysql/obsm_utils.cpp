@@ -86,6 +86,7 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] = {
     {EMySQLFieldType::MYSQL_TYPE_OB_NCHAR, 0, 0},                           /* ObNCharType */
     {EMySQLFieldType::MYSQL_TYPE_OB_UROWID, 0, 0},
     {EMySQLFieldType::MYSQL_TYPE_ORA_BLOB, 0, 0}, /* ObLobType */
+    {EMySQLFieldType::MYSQL_TYPE_JSON, BLOB_FLAG | NO_DEFAULT_VALUE_FLAG, 0}, /* ObJsonType */
                                                   /* ObMaxType */
 };
 
@@ -179,6 +180,10 @@ int ObSMUtils::cell_str(char* buf, const int64_t len, const ObObj& obj, MYSQL_PR
         ret = ObMySQLUtil::varchar_cell_str(buf, len, obj.get_string(), is_oracle_raw, pos);
         break;
       }
+      case ObJsonTC:{
+        ret = ObMySQLUtil::json_cell_str(buf, len, obj.get_string(), pos);
+        break;
+      }
       case ObBitTC: {
         int32_t bit_len = 0;
         if (OB_LIKELY(precision > 0)) {
@@ -259,6 +264,7 @@ int ObSMUtils::get_mysql_type(ObObjType ob_type, EMySQLFieldType& mysql_type, ui
       case EMySQLFieldType::MYSQL_TYPE_DATE:
       case EMySQLFieldType::MYSQL_TYPE_YEAR:
       case EMySQLFieldType::MYSQL_TYPE_BIT:
+      case EMySQLFieldType::MYSQL_TYPE_JSON: // mysql json and long text decimals are 0, we do not need it?
         num_decimals = 0;
         break;
 
@@ -407,6 +413,9 @@ int ObSMUtils::get_ob_type(ObObjType& ob_type, EMySQLFieldType mysql_type)
     case EMySQLFieldType::MYSQL_TYPE_ORA_BLOB:
     case EMySQLFieldType::MYSQL_TYPE_ORA_CLOB:
       ob_type = ObLobType;
+      break;
+    case EMySQLFieldType::MYSQL_TYPE_JSON:
+      ob_type = ObJsonType;
       break;
     default:
       _OB_LOG(WARN, "unsupport MySQL type %d", mysql_type);

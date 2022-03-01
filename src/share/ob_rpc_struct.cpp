@@ -1883,26 +1883,6 @@ bool ObFlashBackTableFromRecyclebinArg::is_valid() const
 OB_SERIALIZE_MEMBER((ObFlashBackTableFromRecyclebinArg, ObDDLArg), tenant_id_, origin_table_name_, new_db_name_,
     new_table_name_, origin_db_name_);
 
-bool ObFlashBackTableToScnArg::is_valid() const
-{
-  int bret = true;
-  if (OB_INVALID_ID == tenant_id_) {
-    bret = false;
-    LOG_WARN("tenant_id is invalid", K_(tenant_id));
-  } else if (OB_INVALID_ID == time_point_) {
-    bret = false;
-    LOG_WARN("timepoint is invalid", K_(time_point));
-  } else if (0 == tables_.count()) {
-    bret = false;
-    LOG_WARN("table is empty", K_(tables));
-  } else if (-1 == query_end_time_) {
-    bret = false;
-  }
-  return bret;
-}
-
-OB_SERIALIZE_MEMBER(ObFlashBackTableToScnArg, tenant_id_, time_point_, tables_, query_end_time_);
-
 bool ObFlashBackIndexArg::is_valid() const
 {
   int bret = true;
@@ -2642,7 +2622,7 @@ bool ObCopySSTableBatchArg::is_valid() const
   return is_valid;
 }
 
-OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_);
+OB_SERIALIZE_MEMBER(ObServerCopyLocalIndexSSTableArg, data_src_, dst_, pkey_, index_table_id_, cluster_id_, data_size_);
 
 bool ObServerCopyLocalIndexSSTableArg::is_valid() const
 {
@@ -4903,6 +4883,19 @@ int ObPartitionBroadcastResult::assign(const ObPartitionBroadcastResult& other)
   }
   return ret;
 }
+
+int ObSubmitBuildIndexTaskArg::assign(const ObSubmitBuildIndexTaskArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else {
+    index_tid_ = other.index_tid_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObSubmitBuildIndexTaskArg, ObDDLArg), index_tid_);
 
 }  // end namespace obrpc
 }  // namespace oceanbase

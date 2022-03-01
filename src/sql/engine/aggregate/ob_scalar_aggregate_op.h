@@ -50,6 +50,7 @@ private:
 
 private:
   bool started_;
+  int64_t dir_id_;
 };
 
 }  // end namespace sql

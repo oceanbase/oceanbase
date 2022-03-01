@@ -201,7 +201,8 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx& ctx)
     if (ctx.enable_contain_param_) {
       if ((T_NULL == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_) ||
           (T_VARCHAR == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_) ||
-          (T_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)) {
+          (T_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_) || 
+          (T_CAST_ARGUMENT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)) {
         ctx.is_fast_parse_const_ = false;
       } else {
         ctx.is_fast_parse_const_ =
@@ -393,6 +394,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx& ctx, const ObSQLSess
                 SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
               }
             }
+            ctx.tree_->is_literal_bool_ = (T_BOOL == ctx.tree_->type_);
+            value.set_is_boolean(value.is_boolean() || ctx.tree_->is_literal_bool_);
             ctx.tree_->type_ = T_QUESTIONMARK;
             ctx.tree_->value_ = ctx.question_num_++;
             ctx.tree_->raw_param_idx_ = ctx.sql_info_->total_++;
@@ -1094,7 +1097,7 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       }else if (0 == func_name.case_compare("weight_string")
           && (5 == node[1]->num_child_)) {
         const int64_t ARGS_NUMBER_FIVE = 5;
-        bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1}; //0表示参数化, 1 表示不参数化
+        bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1}; //0 for parameterization , 1 for not parameterization
         sql_info.sql_traits_.has_weight_string_func_stmt_ = true;
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_FIVE))) {
           SQL_PC_LOG(WARN, "fail to mark weight_string arg", K(ret));
@@ -1139,8 +1142,18 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       }
     } else { /*do nothing*/
     }
-  } else { /*do nothing*/
-  }
+  } else if(T_FUN_SYS_JSON_VALUE == tree->type_) {
+    if (7 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid json value expr argument", K(ret), K(tree->num_child_)); 
+    } else {
+      const int64_t ARGS_NUMBER_SEVEN = 7;
+      bool mark_arr[ARGS_NUMBER_SEVEN] = {1, 1, 1, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_SEVEN))) {
+        SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
+      }
+    }
+  } else { /*do nothing*/ }
   return ret;
 }
 

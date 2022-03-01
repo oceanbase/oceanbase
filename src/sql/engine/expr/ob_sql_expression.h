@@ -88,7 +88,7 @@ public:
    *
    * @return error code
    */
-  virtual int add_expr_item(const ObPostExprItem& item);
+  virtual int add_expr_item(const ObPostExprItem& item, const ObRawExpr *raw_expr = nullptr);
   inline const ObSqlFixedArray<ObInfixExprItem>& get_expr_items() const
   {
     return infix_expr_.get_exprs();
@@ -253,10 +253,11 @@ public:
 
   inline void set_aggr_func(ObItemType aggr_fun, bool is_distinct);
   inline int get_aggr_column(ObItemType& aggr_fun, bool& is_distinct, common::ObCollationType& cs_type) const;
-  inline int add_separator_param_expr_item(const ObPostExprItem& item)
-  {
-    return separator_param_expr_.add_expr_item(item);
+  inline int add_separator_param_expr_item(const ObPostExprItem &item, const ObRawExpr *raw_expr)
+  { 
+    return separator_param_expr_.add_expr_item(item, raw_expr); 
   }
+
   inline const ObSqlExpression& get_separator_param_expr() const
   {
     return separator_param_expr_;
@@ -379,8 +380,9 @@ public:
       : ObSqlExpression(*lib::ObMallocAllocator::get_instance(), 0), op_(NULL)
   {}
 
-  virtual int add_expr_item(const ObPostExprItem& item) override
+  virtual int add_expr_item(const ObPostExprItem &item, const ObRawExpr *raw_expr) override
   {
+    UNUSED(raw_expr);
     int ret = common::OB_SUCCESS;
     if (IS_EXPR_OP(item.get_item_type())) {
       if (NULL != op_) {

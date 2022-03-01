@@ -5,7 +5,7 @@ unalias -a
 
 PWD="$(cd $(dirname $0); pwd)"
 
-OS_ARCH="$(uname -p)" || exit 1
+OS_ARCH="$(uname -m)" || exit 1
 OS_RELEASE="0"
 
 if [[ ! -f /etc/os-release ]]; then
@@ -103,42 +103,78 @@ fi
 
 mkdir "${PWD}/pkg" >/dev/null 2>&1
 
-echo -e "check repository address in profile... \c"
-REPO="$(grep -Po '(?<=repo=).*' "${DEP_FILE}" 2>/dev/null)"
-if [[ $? -eq 0 ]]; then
-    echo "$REPO"
-else
-    echo "NOT FOUND" 1>&2
-    exit 3
-fi
+declare -A targets
+declare -A packages
+section="default"
+content=""
+
+function save_content {
+    if [[ "$content" != "" ]] 
+    then
+        if [[ $(echo "$section" | grep -E "^target\-") != "" ]]
+        then
+            target_name=$(echo $section | sed 's|^target\-\(.*\)$|\1|g')
+            targets["$target_name"]="$(echo "${content["$section"]}" | grep -Eo "repo=.*" | awk -F '=' '{ print $2 }')"
+            echo "target: $target_name, repo: ${targets["$target_name"]}"
+        else
+            packages["$section"]=$content
+        fi
+    fi
+}
+echo -e "check repository address in profile..."
+
+while read -r line
+do
+    if [[ $(echo "$line" | grep -E "\[.*\]") != "" ]]
+    then
+        save_content
+        content=""
+        # section=${line//\[\(.*\)\]/\1}
+        section=$(echo $line | sed 's|.*\[\(.*\)\].*|\1|g')
+    else
+        [[ "$line" != "" ]] && [[ "$line" != '\#*' ]] && content+=$'\n'"$line"
+    fi
+done < $DEP_FILE 
+save_content
 
 echo "download dependencies..."
-RPMS="$(grep '\.rpm' "${DEP_FILE}" | grep -Pv '^#')"
-
-for pkg in $RPMS
+for sect in "${!packages[@]}"
 do
-  if [[ -f "${PWD}/pkg/${pkg}" ]]; then
-    echo "find package <${pkg}> in cache"
-  else
-    echo -e "download package <${pkg}>... \c"
-    TEMP=$(mktemp -p "/" -u ".${pkg}.XXXX")
-    wget "$REPO/${pkg}" -q -O "${PWD}/pkg/${TEMP}"
-    if [[ $? -eq 0 ]]; then
-      mv -f "${PWD}/pkg/$TEMP" "${PWD}/pkg/${pkg}"
-      echo "SUCCESS"
-    else
-      rm -rf "${PWD}/pkg/$TEMP"
-      echo "FAILED" 1>&2
-      exit 4
+    if [[ "$1" != "all" ]]
+    then
+        [[ "$sect" == "test-utils" ]] && continue
     fi
-  fi
-  echo -e "unpack package <${pkg}>... \c"
-  rpm2cpio "${PWD}/pkg/${pkg}" | cpio -di -u --quiet
+    echo "${packages["$sect"]}" | while read -r line
+    do
+        [[ "$line" == "" ]] && continue
+        pkg=${line%%\ *}
+        target_name="default"
+        temp=$(echo "$line" | grep -Eo "target=(\S*)")
+        [[ "$temp" != "" ]] && target_name=${temp#*=}
+        if [[ -f "${PWD}/pkg/${pkg}" ]]; then
+            echo "find package <${pkg}> in cache"
+        else
+            echo -e "download package <${pkg}>... \c"
+            repo=${targets["$target_name"]}
+            TEMP=$(mktemp -p "/" -u ".${pkg}.XXXX")
+            wget "$repo/${pkg}" -q -O "${PWD}/pkg/${TEMP}"
+            if (( $? == 0 )); then
+                mv -f "${PWD}/pkg/$TEMP" "${PWD}/pkg/${pkg}"
+                echo "SUCCESS"
+            else
+                rm -rf "${PWD}/pkg/$TEMP"
+                echo "FAILED" 1>&2
+                exit 4
+            fi
+        fi
+        echo -e "unpack package <${pkg}>... \c"
+        rpm2cpio "${PWD}/pkg/${pkg}" | cpio -di -u --quiet
 
-  if [[ $? -eq 0 ]]; then
-    echo "SUCCESS"
-  else
-    echo "FAILED" 1>&2
-    exit 5
-  fi
+        if [[ $? -eq 0 ]]; then
+          echo "SUCCESS"
+        else
+          echo "FAILED" 1>&2
+          exit 5
+        fi
+    done
 done

@@ -293,6 +293,7 @@ class ObString;
   ACT(BACKUP_BACKUPPIECE_AFTER_SCHEDULE, )                         \
   ACT(FOLLOWER_BEFORE_UPDATE_RESTORE_FLAG_RESTORE_LOG, )           \
   ACT(BEFORE_GLOBAL_INDEX_BUILDER_MOVE_TASK, )                     \
+  ACT(BEFORE_SEND_RESTORE_PARTITIONS_RPC, )                        \
   ACT(MAX_DEBUG_SYNC_POINT, )
 
 DECLARE_ENUM(ObDebugSyncPoint, debug_sync_point, OB_DEBUG_SYNC_POINT_DEF);

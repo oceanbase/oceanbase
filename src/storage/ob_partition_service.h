@@ -991,9 +991,7 @@ private:
   int remove_pg_from_mgr(const ObIPartitionGroup* partition, const bool write_slog);
   int inner_add_partition(ObIPartitionGroup& partition, const bool need_check_tenant, const bool is_replay,
       const bool allow_multi_value) override;
-  int inner_del_partition(const common::ObPartitionKey& pkey) override;
-  int inner_del_partition_for_replay(const common::ObPartitionKey& pkey, const int64_t file_id) override;
-  int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id);
+  int inner_del_partition_impl(const common::ObPartitionKey& pkey, const int64_t* file_id) override;
   int create_sstables(const obrpc::ObCreatePartitionArg& arg, const bool in_slog_trans,
       ObIPartitionGroup& partition_group, ObTablesHandle& handle);
   int create_sstables(const ObCreatePartitionParam& arg, const bool in_slog_trans, ObIPartitionGroup& partition_group,

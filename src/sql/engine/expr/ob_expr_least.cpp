@@ -139,30 +139,19 @@ int ObExprBaseLeastGreatest::calc_result_typeN_mysql(
     ObExprOperator::calc_result_flagN(type, types, real_param_num);
     // don't cast parameter is all parameters are IntTC or UIntTC.
     bool all_integer = true;
-    bool big_int_result = false;
     for (int i = 0; i < real_param_num && all_integer; ++i) {
       ObObjType type = types[i].get_type();
-      if (!ob_is_integer_type(type)) {
+      if (!ob_is_integer_type(type) && ObNullType != type) {
         all_integer = false;
-      } else if (ObIntType == type || ObUInt64Type == type || ObUInt32Type == type) {
-        big_int_result = true;
       }
     }
-    if (all_integer) {
-      if (big_int_result) {
-        type.set_type(ObIntType);
-      } else {
-        type.set_type(ObInt32Type);
-      }
-    } else {
-      const ObLengthSemantics default_length_semantics =
-          (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
-      if (OB_FAIL(calc_result_meta_for_comparison(
-              type, types, real_param_num, type_ctx.get_coll_type(), default_length_semantics))) {
-        LOG_WARN("calc result meta for comparison failed");
-      }
+    const ObLengthSemantics default_length_semantics =
+        (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
+    if (OB_FAIL(calc_result_meta_for_comparison(
+            type, types, real_param_num, type_ctx.get_coll_type(), default_length_semantics))) {
+      LOG_WARN("calc result meta for comparison failed");
     }
-    if (!all_integer) {
+    if (!all_integer || !type.is_integer_type()) {
       // compatible with MySQL. compare type and result type may be different.
       // resolver makes two copies of parameters. First for comparison and second for output result.
       for (int64_t i = 0; i < real_param_num; i++) {
@@ -215,14 +204,25 @@ int ObExprBaseLeastGreatest::calc(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& e
     }
     // compare all params.
     if (all_integer) {
-      int64_t minmax_int = expr.locate_param_datum(ctx, cmp_param_start).get_int();
-      for (int i = cmp_param_start + 1; i <= cmp_param_end; ++i) {
-        int64_t cur_int = expr.locate_param_datum(ctx, i).get_int();
-        if ((!least && minmax_int < cur_int) || (least && minmax_int > cur_int)) {
-          minmax_int = cur_int;
+      if (ob_is_int_tc(expr.datum_meta_.type_)) {
+        int64_t minmax_value = expr.locate_param_datum(ctx, cmp_param_start).get_int();
+        for (int i = cmp_param_start + 1; i <= cmp_param_end; ++i) {
+          int64_t new_value =  expr.locate_param_datum(ctx, i).get_int();
+          if (least != (minmax_value < new_value)) {
+            minmax_value = new_value;
+          }
         }
+        expr_datum.set_int(minmax_value);
+      } else {
+        uint64_t minmax_value = expr.locate_param_datum(ctx, cmp_param_start).get_uint();
+        for (int i = cmp_param_start + 1; i <= cmp_param_end; ++i) {
+          uint64_t new_value =  expr.locate_param_datum(ctx, i).get_uint();
+          if (least != (minmax_value < new_value)) {
+            minmax_value = new_value;
+          }
+        }
+        expr_datum.set_uint(minmax_value);
       }
-      expr_datum.set_int(minmax_int);
     } else {
       int res_idx = cmp_param_start;
       ObDatum* minmax_param = static_cast<ObDatum*>(&expr.locate_param_datum(ctx, res_idx));

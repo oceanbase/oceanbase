@@ -93,9 +93,7 @@ test/tmp
 test/var
 *.ccls-cache/
 .cproject
-
-###### Docs website files
-docs/site
+.cache
 
 ##### Git Sub Module
 deps/logmessage

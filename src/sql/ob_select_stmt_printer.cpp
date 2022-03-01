@@ -825,7 +825,7 @@ int ObSelectStmtPrinter::print_for_update()
 int ObSelectStmtPrinter::print_with()
 {
   int ret = OB_SUCCESS;
-  DATA_PRINTF("WITH ");
+  DATA_PRINTF(is_oracle_mode() ? "WITH " : "WITH RECURSIVE");
   if (OB_SUCC(ret)) {
     const ObSelectStmt* select_stmt = static_cast<const ObSelectStmt*>(stmt_);
     const common::ObIArray<TableItem*>& cte_tables = select_stmt->get_CTE_table_items();

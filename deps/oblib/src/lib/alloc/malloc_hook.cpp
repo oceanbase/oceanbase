@@ -177,11 +177,24 @@ void *ob_memalign_hook(size_t alignment, size_t size, const void *)
 #define MALLOC_HOOK_MAYBE_VOLATILE __MALLOC_HOOK_VOLATILE
 #endif
 
-extern "C" {
+EXTERN_C_BEGIN
+
 __attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __malloc_hook)(size_t, const void *) = ob_malloc_hook;
 __attribute__((visibility("default"))) void (*MALLOC_HOOK_MAYBE_VOLATILE __free_hook)(void *, const void *) = ob_free_hook;
 __attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __realloc_hook)(void *, size_t, const void *) = ob_realloc_hook;
 __attribute__((visibility("default"))) void *(*MALLOC_HOOK_MAYBE_VOLATILE __memalign_hook)(size_t, size_t, const void *) = ob_memalign_hook;
+
+size_t malloc_usable_size(void *ptr)
+{
+  size_t ret = 0;
+  if (OB_LIKELY(ptr != nullptr)) {
+    auto *header = Header::ptr2header(ptr);
+    abort_unless(header->check_magic_code());
+    ret = header->data_size_;
+  }
+  return ret;
 }
+
+EXTERN_C_END
 
 void init_malloc_hook() {}

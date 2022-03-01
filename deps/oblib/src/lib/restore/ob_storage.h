@@ -126,6 +126,7 @@ public:
   int del_dir(const common::ObString& uri, const common::ObString& storage_info);
   int get_pkeys_from_dir(const common::ObString& uri, const common::ObString& storage_info,
       common::ObIArray<common::ObPartitionKey>& pkeys);
+  int is_tagging(const common::ObString& uri, const common::ObString& storage_info, bool& is_tagging);
   // uri is directory
   int delete_tmp_files(const common::ObString& uri, const common::ObString& storage_info);
   int is_empty_directory(const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory);

@@ -32,14 +32,12 @@ public:
   ObMallocAllocator();
   virtual ~ObMallocAllocator();
 
-  int init();
-
   void* alloc(const int64_t size);
   void* alloc(const int64_t size, const ObMemAttr& attr);
   void* realloc(const void* ptr, const int64_t size, const ObMemAttr& attr);
   void free(void* ptr);
 
-  int set_root_allocator(ObTenantCtxAllocator* allocator);
+  void set_root_allocator();
   static ObMallocAllocator* get_instance();
 
   ObTenantCtxAllocator* get_tenant_ctx_allocator(uint64_t tenant_id, uint64_t ctx_id = 0) const;
@@ -68,6 +66,8 @@ public:
       const uint64_t tenant_id, const uint64_t ctx_id, const int64_t size, const bool reserve = false);
   int get_chunks(AChunk** chunks, int cap, int& cnt);
   static uint64_t get_max_used_tenant_id() { return max_used_tenant_id_; }
+  static bool is_inited_;
+
 private:
   using InvokeFunc = std::function<int(ObTenantMemoryMgr*)>;
   static int with_resource_handle_invoke(uint64_t tenant_id, InvokeFunc func);
@@ -81,8 +81,6 @@ private:
   int64_t reserved_;
   int64_t urgent_;
   static uint64_t max_used_tenant_id_;
-
-  static ObMallocAllocator* instance_;
 };  // end of class ObMallocAllocator
 
 }  // end of namespace lib

@@ -6475,6 +6475,9 @@ int ObDDLService::create_table_partitions_for_physical_restore(const obrpc::ObRe
     LOG_WARN("root_balancer_ is null", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
     LOG_WARN("fail to get table", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist. table may be droppped concurrently in physical restore", KR(ret), K(table_id));
   } else if (OB_FAIL(root_balancer_->alloc_partitions_for_create(*table_schema, create_mode, table_addr))) {
     LOG_WARN("alloc partition address failed", K(ret), KPC(table_schema));
   } else if (OB_FAIL(create_partitions_for_physical_restore(
@@ -18938,7 +18941,7 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg& arg)
     if (OB_SUCC(ret)) {
       bool database_exist = false;
       if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
-        database_id = OB_OUTLINE_DEFAULT_DATABASE_ID;
+        database_id = combine_id(tenant_id, OB_OUTLINE_DEFAULT_DATABASE_ID);
         database_exist = true;
       } else if (OB_FAIL(
                      schema_service_->check_database_exist(tenant_id, database_name, database_id, database_exist))) {

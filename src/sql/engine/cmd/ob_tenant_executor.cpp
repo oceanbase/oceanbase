@@ -26,6 +26,7 @@
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_lock_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_modify_tenant_stmt.h"
+#include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "sql/resolver/ddl/ob_purge_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
@@ -500,6 +501,33 @@ int ObDropTenantExecutor::execute(ObExecContext& ctx, ObDropTenantStmt& stmt)
     LOG_WARN("rpc proxy drop tenant failed", K(ret));
   }
   return ret;
+}
+
+int ObFlashBackTenantExecutor::execute(ObExecContext &ctx, ObFlashBackTenantStmt &stmt)		
+{		
+  int ret = OB_SUCCESS;		
+  const obrpc::ObFlashBackTenantArg &flashback_tenant_arg = stmt.get_flashback_tenant_arg();		
+  ObTaskExecutorCtx *task_exec_ctx = NULL;		
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;		
+  ObString first_stmt;		
+  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {		
+     SQL_ENG_LOG(WARN, "fail to get first stmt" , K(ret));		
+  } else {		
+    const_cast<obrpc::ObFlashBackTenantArg&>(flashback_tenant_arg).ddl_stmt_str_ = first_stmt;		
+  }		
+  if (OB_FAIL(ret)) {		
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {		
+    ret = OB_NOT_INIT;		
+    SQL_ENG_LOG(WARN, "get task executor context failed");		
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {		
+    SQL_ENG_LOG(WARN, "get common rpc proxy failed", K(ret));		
+  } else if (OB_ISNULL(common_rpc_proxy)){		
+    ret = OB_ERR_UNEXPECTED;		
+    SQL_ENG_LOG(WARN, "common rpc proxy should not be null", K(ret));		
+  } else if (OB_FAIL(common_rpc_proxy->flashback_tenant(flashback_tenant_arg))) {		
+    SQL_ENG_LOG(WARN, "rpc proxy flashback tenant failed", K(ret));		
+  }		
+  return ret;		
 }
 
 int ObPurgeTenantExecutor::execute(ObExecContext& ctx, ObPurgeTenantStmt& stmt)

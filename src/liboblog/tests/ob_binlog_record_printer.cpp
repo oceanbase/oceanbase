@@ -543,6 +543,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
   bool is_generated_column = col_meta ? col_meta->isGenerated() : false;
   bool is_hidden_row_key_column = col_meta ? col_meta->isHiddenRowKey() : false;
   bool is_lob = is_lob_type(ctype);
+  bool is_json = is_json_type(ctype);
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);
@@ -577,7 +578,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
       }
 
       if (OB_FAIL(ret)) {
-      } else if (is_lob && enable_print_lob_md5) {
+      } else if ((is_lob || is_json) && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_new_md5:[%s](%ld)",
             column_index, calc_md5_cstr(new_col_value, new_col_value_len), new_col_value_len);
       } else {
@@ -620,7 +621,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(const bool is_serilized,
         if (OB_SUCCESS == ret && OB_FAIL(print_hex(old_col_value, old_col_value_len, ptr, size, pos))) {
           LOG_ERROR("print_hex fail", K(ret));
         }
-      } else if (is_lob && enable_print_lob_md5) {
+      } else if ((is_lob || is_json) && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_md5:[%s](%ld)",
             column_index, calc_md5_cstr(old_col_value, old_col_value_len), old_col_value_len);
       } else {
@@ -776,7 +777,8 @@ bool ObBinlogRecordPrinter::need_print_hex(int ctype)
       || obmysql::MYSQL_TYPE_VAR_STRING == ctype
       || obmysql::MYSQL_TYPE_STRING == ctype
       || obmysql::MYSQL_TYPE_OB_NVARCHAR2 == ctype
-      || obmysql::MYSQL_TYPE_OB_NCHAR == ctype);
+      || obmysql::MYSQL_TYPE_OB_NCHAR == ctype
+      || obmysql::MYSQL_TYPE_JSON == ctype);
 }
 
 int ObBinlogRecordPrinter::write_data_file(const int fd,

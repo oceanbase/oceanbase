@@ -139,7 +139,7 @@ TEST_F(TestRawExpr, basic_test)
   OK(const_expr1->postorder_replace(pvistor));
   _OB_LOG(INFO, "\nconst_expr------\n%s ", buf);
   int64_t pos = 0;
-  const_expr1->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_JSON);
+  const_expr1->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_FORMAT_JSON);
   raw_expr2->reset();
   const_expr2->reset();
 

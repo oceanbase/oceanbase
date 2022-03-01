@@ -885,6 +885,8 @@ int ObMacroBlockEstimator::update_estimator(const storage::ObStoreRow& row)
         // skip.
       } else if (row.row_val_.cells_[i].is_lob()) {
         // skip lob with colun stat
+      } else if (row.row_val_.cells_[i].is_json()) {
+        // skip json
       } else if (OB_FAIL(column_stats_.at(i)->add_value(row.row_val_.cells_[i]))) {
         LOG_WARN("fill column stat error.", K(ret), K(i), K(row.row_val_.cells_[i]));
       }

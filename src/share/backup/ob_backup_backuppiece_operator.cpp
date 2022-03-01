@@ -12,13 +12,14 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_backup_backuppiece_operator.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 using namespace oceanbase::share;
 
 namespace oceanbase {
 namespace share {
 
-int ObIBackupBackupPieceJobOperator::fill_one_item(const ObBackupBackupPieceJobInfo& item, ObDMLSqlSplicer& splicer)
+int ObIBackupBackupPieceJobOperator::fill_one_item(const ObBackupBackupPieceJobInfo &item, ObDMLSqlSplicer &splicer)
 {
   int ret = OB_SUCCESS;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
@@ -43,7 +44,7 @@ int ObIBackupBackupPieceJobOperator::fill_one_item(const ObBackupBackupPieceJobI
 }
 
 int ObIBackupBackupPieceJobOperator::extract_one_item(
-    sqlclient::ObMySQLResult* result, ObBackupBackupPieceJobInfo& item)
+    sqlclient::ObMySQLResult *result, ObBackupBackupPieceJobInfo &item)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_real_str_len = 0;
@@ -77,13 +78,13 @@ int ObIBackupBackupPieceJobOperator::extract_one_item(
   return ret;
 }
 
-int ObIBackupBackupPieceJobOperator::get_item_list(const common::ObSqlString& sql, common::ObISQLClient& proxy,
-    common::ObIArray<ObBackupBackupPieceJobInfo>& item_list)
+int ObIBackupBackupPieceJobOperator::get_item_list(const common::ObSqlString &sql, common::ObISQLClient &proxy,
+    common::ObIArray<ObBackupBackupPieceJobInfo> &item_list)
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
     if (OB_UNLIKELY(!sql.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", KR(ret), K(sql));
@@ -113,7 +114,7 @@ int ObIBackupBackupPieceJobOperator::get_item_list(const common::ObSqlString& sq
   return ret;
 }
 
-int ObBackupBackupPieceJobOperator::insert_job_item(const ObBackupBackupPieceJobInfo& item, common::ObISQLClient& proxy)
+int ObBackupBackupPieceJobOperator::insert_job_item(const ObBackupBackupPieceJobInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -138,7 +139,7 @@ int ObBackupBackupPieceJobOperator::insert_job_item(const ObBackupBackupPieceJob
 }
 
 int ObBackupBackupPieceJobOperator::get_all_job_items(
-    common::ObISQLClient& proxy, common::ObIArray<ObBackupBackupPieceJobInfo>& items)
+    common::ObISQLClient &proxy, common::ObIArray<ObBackupBackupPieceJobInfo> &items)
 {
   int ret = OB_SUCCESS;
   items.reset();
@@ -152,7 +153,7 @@ int ObBackupBackupPieceJobOperator::get_all_job_items(
 }
 
 int ObBackupBackupPieceJobOperator::get_one_job(
-    common::ObISQLClient& proxy, common::ObIArray<ObBackupBackupPieceJobInfo>& items)
+    common::ObISQLClient &proxy, common::ObIArray<ObBackupBackupPieceJobInfo> &items)
 {
   int ret = OB_SUCCESS;
   items.reset();
@@ -166,7 +167,7 @@ int ObBackupBackupPieceJobOperator::get_one_job(
 }
 
 int ObBackupBackupPieceJobOperator::get_job_item(
-    const int64_t job_id, common::ObISQLClient& proxy, ObBackupBackupPieceJobInfo& item)
+    const int64_t job_id, common::ObISQLClient &proxy, ObBackupBackupPieceJobInfo &item)
 {
   int ret = OB_SUCCESS;
   item.reset();
@@ -193,7 +194,7 @@ int ObBackupBackupPieceJobOperator::get_job_item(
   return ret;
 }
 
-int ObBackupBackupPieceJobOperator::report_job_item(const ObBackupBackupPieceJobInfo& item, common::ObISQLClient& proxy)
+int ObBackupBackupPieceJobOperator::report_job_item(const ObBackupBackupPieceJobInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -224,7 +225,7 @@ int ObBackupBackupPieceJobOperator::report_job_item(const ObBackupBackupPieceJob
   return ret;
 }
 
-int ObBackupBackupPieceJobOperator::remove_job_item(const int64_t job_id, common::ObISQLClient& proxy)
+int ObBackupBackupPieceJobOperator::remove_job_item(const int64_t job_id, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -242,7 +243,7 @@ int ObBackupBackupPieceJobOperator::remove_job_item(const int64_t job_id, common
 }
 
 int ObBackupBackupPieceJobHistoryOperator::insert_job_item(
-    const ObBackupBackupPieceJobInfo& item, common::ObISQLClient& proxy)
+    const ObBackupBackupPieceJobInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -267,7 +268,7 @@ int ObBackupBackupPieceJobHistoryOperator::insert_job_item(
 }
 
 int ObBackupBackupPieceJobHistoryOperator::get_job_item(
-    const int64_t job_id, common::ObISQLClient& proxy, ObBackupBackupPieceJobInfo& item)
+    const int64_t job_id, common::ObISQLClient &proxy, ObBackupBackupPieceJobInfo &item)
 {
   int ret = OB_SUCCESS;
   item.reset();
@@ -295,7 +296,7 @@ int ObBackupBackupPieceJobHistoryOperator::get_job_item(
 }
 
 int ObBackupBackupPieceJobHistoryOperator::report_job_item(
-    const ObBackupBackupPieceJobInfo& item, common::ObISQLClient& proxy)
+    const ObBackupBackupPieceJobInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -323,7 +324,7 @@ int ObBackupBackupPieceJobHistoryOperator::report_job_item(
   return ret;
 }
 
-int ObBackupBackupPieceJobHistoryOperator::remove_job_item(const int64_t job_id, common::ObISQLClient& proxy)
+int ObBackupBackupPieceJobHistoryOperator::remove_job_item(const int64_t job_id, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -340,7 +341,7 @@ int ObBackupBackupPieceJobHistoryOperator::remove_job_item(const int64_t job_id,
   return ret;
 }
 
-int ObIBackupBackupPieceTaskOperator::fill_one_item(const ObBackupBackupPieceTaskInfo& item, ObDMLSqlSplicer& splicer)
+int ObIBackupBackupPieceTaskOperator::fill_one_item(const ObBackupBackupPieceTaskInfo &item, ObDMLSqlSplicer &splicer)
 {
   int ret = OB_SUCCESS;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
@@ -367,7 +368,7 @@ int ObIBackupBackupPieceTaskOperator::fill_one_item(const ObBackupBackupPieceTas
 }
 
 int ObIBackupBackupPieceTaskOperator::extract_one_item(
-    sqlclient::ObMySQLResult* result, ObBackupBackupPieceTaskInfo& item)
+    sqlclient::ObMySQLResult *result, ObBackupBackupPieceTaskInfo &item)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_real_str_len = 0;
@@ -405,13 +406,13 @@ int ObIBackupBackupPieceTaskOperator::extract_one_item(
   return ret;
 }
 
-int ObIBackupBackupPieceTaskOperator::get_item_list(const common::ObSqlString& sql, common::ObISQLClient& proxy,
-    common::ObIArray<ObBackupBackupPieceTaskInfo>& item_list)
+int ObIBackupBackupPieceTaskOperator::get_item_list(const common::ObSqlString &sql, common::ObISQLClient &proxy,
+    common::ObIArray<ObBackupBackupPieceTaskInfo> &item_list)
 {
   int ret = OB_SUCCESS;
   SMART_VAR(ObMySQLProxy::MySQLResult, res)
   {
-    sqlclient::ObMySQLResult* result = NULL;
+    sqlclient::ObMySQLResult *result = NULL;
     if (OB_UNLIKELY(!sql.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", KR(ret), K(sql));
@@ -442,13 +443,13 @@ int ObIBackupBackupPieceTaskOperator::get_item_list(const common::ObSqlString& s
 }
 
 int ObBackupBackupPieceTaskOperator::get_job_task_count(
-    const ObBackupBackupPieceJobInfo& job_info, common::ObISQLClient& sql_proxy, int64_t& task_count)
+    const ObBackupBackupPieceJobInfo &job_info, common::ObISQLClient &sql_proxy, int64_t &task_count)
 {
   int ret = OB_SUCCESS;
   const int64_t job_id = job_info.job_id_;
   task_count = 0;
   ObSqlString sql;
-  sqlclient::ObMySQLResult* result = NULL;
+  sqlclient::ObMySQLResult *result = NULL;
   SMART_VAR(ObMySQLProxy::ReadResult, res)
   {
     if (OB_FAIL(sql.assign_fmt(
@@ -472,7 +473,7 @@ int ObBackupBackupPieceTaskOperator::get_job_task_count(
 }
 
 int ObBackupBackupPieceTaskOperator::insert_task_item(
-    const ObBackupBackupPieceTaskInfo& item, common::ObISQLClient& proxy)
+    const ObBackupBackupPieceTaskInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -497,7 +498,7 @@ int ObBackupBackupPieceTaskOperator::insert_task_item(
 }
 
 int ObBackupBackupPieceTaskOperator::get_all_task_items(
-    const int64_t job_id, common::ObISQLClient& proxy, ObIArray<ObBackupBackupPieceTaskInfo>& items)
+    const int64_t job_id, common::ObISQLClient &proxy, ObIArray<ObBackupBackupPieceTaskInfo> &items)
 {
   int ret = OB_SUCCESS;
   items.reset();
@@ -511,7 +512,7 @@ int ObBackupBackupPieceTaskOperator::get_all_task_items(
 }
 
 int ObBackupBackupPieceTaskOperator::get_doing_task_items(const int64_t job_id, const uint64_t tenant_id,
-    common::ObISQLClient& proxy, common::ObIArray<ObBackupBackupPieceTaskInfo>& items)
+    common::ObISQLClient &proxy, common::ObIArray<ObBackupBackupPieceTaskInfo> &items)
 {
   int ret = OB_SUCCESS;
   items.reset();
@@ -531,7 +532,7 @@ int ObBackupBackupPieceTaskOperator::get_doing_task_items(const int64_t job_id, 
 }
 
 int ObBackupBackupPieceTaskOperator::get_task_item(const int64_t job_id, const int64_t tenant_id,
-    const int64_t piece_id, common::ObISQLClient& proxy, ObBackupBackupPieceTaskInfo& item)
+    const int64_t piece_id, common::ObISQLClient &proxy, ObBackupBackupPieceTaskInfo &item)
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupBackupPieceTaskInfo> item_list;
@@ -560,7 +561,7 @@ int ObBackupBackupPieceTaskOperator::get_task_item(const int64_t job_id, const i
 }
 
 int ObBackupBackupPieceTaskOperator::get_smallest_doing_task(
-    const int64_t job_id, const uint64_t tenant_id, common::ObISQLClient& proxy, ObBackupBackupPieceTaskInfo& item)
+    const int64_t job_id, const uint64_t tenant_id, common::ObISQLClient &proxy, ObBackupBackupPieceTaskInfo &item)
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupBackupPieceTaskInfo> item_list;
@@ -589,7 +590,7 @@ int ObBackupBackupPieceTaskOperator::get_smallest_doing_task(
 }
 
 int ObBackupBackupPieceTaskOperator::update_task_finish(
-    const uint64_t tenant_id, const int64_t job_id, const int64_t piece_id, common::ObISQLClient& proxy)
+    const uint64_t tenant_id, const int64_t job_id, const int64_t piece_id, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -615,7 +616,7 @@ int ObBackupBackupPieceTaskOperator::update_task_finish(
 }
 
 int ObBackupBackupPieceTaskOperator::report_task_item(
-    const ObBackupBackupPieceTaskInfo& item, common::ObISQLClient& proxy)
+    const ObBackupBackupPieceTaskInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -646,7 +647,7 @@ int ObBackupBackupPieceTaskOperator::report_task_item(
   return ret;
 }
 
-int ObBackupBackupPieceTaskOperator::remove_task_items(const int64_t job_id, common::ObISQLClient& proxy)
+int ObBackupBackupPieceTaskOperator::remove_task_items(const int64_t job_id, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -664,7 +665,7 @@ int ObBackupBackupPieceTaskOperator::remove_task_items(const int64_t job_id, com
 }
 
 int ObBackupBackupPieceTaskHistoryOperator::insert_task_item(
-    const ObBackupBackupPieceTaskInfo& item, common::ObISQLClient& proxy)
+    const ObBackupBackupPieceTaskInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -689,7 +690,7 @@ int ObBackupBackupPieceTaskHistoryOperator::insert_task_item(
 }
 
 int ObBackupBackupPieceTaskHistoryOperator::get_task_items(
-    const int64_t job_id, common::ObISQLClient& proxy, common::ObIArray<ObBackupBackupPieceTaskInfo>& items)
+    const int64_t job_id, common::ObISQLClient &proxy, common::ObIArray<ObBackupBackupPieceTaskInfo> &items)
 {
   int ret = OB_SUCCESS;
   items.reset();
@@ -707,7 +708,7 @@ int ObBackupBackupPieceTaskHistoryOperator::get_task_items(
 }
 
 int ObBackupBackupPieceTaskHistoryOperator::report_task_item(
-    const ObBackupBackupPieceTaskInfo& item, common::ObISQLClient& proxy)
+    const ObBackupBackupPieceTaskInfo &item, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
@@ -736,7 +737,7 @@ int ObBackupBackupPieceTaskHistoryOperator::report_task_item(
 }
 
 int ObBackupBackupPieceTaskHistoryOperator::report_task_items(
-    const common::ObIArray<ObBackupBackupPieceTaskInfo>& items, common::ObISQLClient& proxy)
+    const common::ObIArray<ObBackupBackupPieceTaskInfo> &items, common::ObISQLClient &proxy)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -751,7 +752,7 @@ int ObBackupBackupPieceTaskHistoryOperator::report_task_items(
     const int64_t remain_cnt = items.count() - report_idx;
     int64_t cur_batch_cnt = remain_cnt < BATCH_CNT ? remain_cnt : BATCH_CNT;
     for (int64_t i = 0; OB_SUCC(ret) && i < cur_batch_cnt; ++i) {
-      const ObBackupBackupPieceTaskInfo& item = items.at(report_idx + i);
+      const ObBackupBackupPieceTaskInfo &item = items.at(report_idx + i);
       splicer.reuse();
       if (OB_FAIL(ObIBackupBackupPieceTaskOperator::fill_one_item(item, splicer))) {
         LOG_WARN("failed to fill one item", KR(ret), K(item));

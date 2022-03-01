@@ -377,6 +377,7 @@ int ObRawExprWrapEnumSet::visit_left_expr(
             LOG_WARN("failed to check_and_wrap_left", K(ret));
           } else if (NULL != wrapped_expr) {
             ref_stmt->get_select_item(i).expr_ = wrapped_expr;
+            left_ref->get_column_types().at(i) = wrapped_expr->get_result_type();
           } else { /*do nothing*/
           }
         }
@@ -528,6 +529,7 @@ int ObRawExprWrapEnumSet::visit_right_expr(
           LOG_WARN("failed to wrap_type_to_str_if_necessary", K(i), K(ret));
         } else if (NULL != wrapped_expr) {
           ref_stmt->get_select_item(i).expr_ = wrapped_expr;
+          right_ref.get_column_types().at(i) = wrapped_expr->get_result_type();
         } else { /*do nothing*/
         }
       }

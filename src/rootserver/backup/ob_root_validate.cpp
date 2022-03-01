@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/backup/ob_root_validate.h"
 #include "rootserver/backup/ob_backup_data_mgr.h"
+#include "rootserver/backup/ob_cancel_validate_scheduler.h"
 #include "share/ob_rpc_struct.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_extern_backup_info_mgr.h"
@@ -1354,6 +1355,40 @@ void ObRootValidate::update_prepare_flag(const bool is_prepare)
 bool ObRootValidate::get_prepare_flag() const
 {
   return is_prepare_flag_;
+}
+
+int ObRootValidate::force_cancel(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObBackupValidateTaskInfo> tasks;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("root validate do not init", K(ret));
+  } else if (OB_SYS_TENANT_ID != tenant_id) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only sys tenant can force cancel validate", K(ret));
+  } else if (OB_FAIL(get_need_validate_tasks(tasks))) {
+    LOG_WARN("failed to get validating tasks", K(ret));
+  } else if (tasks.empty()) {
+    LOG_INFO("no validation job need to cancel", K(ret));
+  } else {
+    // cancel all validate tasks
+    for (int64_t i = 0; i < tasks.count() && OB_SUCC(ret); i++) {
+      ObCancelValidateScheduler cancel_scheduler;
+      ObBackupValidateTaskInfo &task = tasks[i];
+      if (OB_FAIL(cancel_scheduler.init(tenant_id, task.job_id_, *sql_proxy_, *this))) {
+        LOG_WARN("failed to init cancel validate scheduler", K(ret), K(tenant_id), K(task));
+      } else if (OB_FAIL(cancel_scheduler.start_schedule_cancel_validate())) {
+        LOG_WARN("failed to schedule cancel validate", K(ret), K(tenant_id), K(task));
+      } else {
+        LOG_WARN("succeed to schedule cancel validate", K(ret), K(tenant_id), K(task));
+      }
+    }
+  }
+
+  FLOG_WARN("force_cancel validate", K(ret), K(tasks));
+
+  return ret;
 }
 
 ObTenantValidate::ObTenantValidate()
