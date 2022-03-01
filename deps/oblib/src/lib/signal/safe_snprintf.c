@@ -1,35 +1,16 @@
-/*
- * twemcache - Twitter memcached.
- * Copyright (c) 2012, Twitter, Inc.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * * Redistributions of source code must retain the above copyright
- *   notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- *   notice, this list of conditions and the following disclaimer in the
- *   documentation and/or other materials provided with the distribution.
- * * Neither the name of the Twitter nor the names of its contributors
- *   may be used to endorse or promote products derived from this software
- *   without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
  */
 
 #include "lib/signal/safe_snprintf.h"
-namespace oceanbase {
-namespace common {
 static const char HEX[] = "0123456789abcdef";
 
 static char* safe_utoa(int _base, uint64_t val, char* buf)
@@ -129,14 +110,14 @@ static char* safe_itoa(int base, int64_t val, char* buf)
 
 static const char* safe_check_longlong(const char* fmt, int32_t* have_longlong)
 {
-  *have_longlong = false;
+  *have_longlong = 0;
   if (*fmt == 'l') {
     fmt++;
     if (*fmt != 'l') {
       *have_longlong = (sizeof(long) == sizeof(int64_t));
     } else {
       fmt++;
-      *have_longlong = true;
+      *have_longlong = 1;
     }
   }
   return fmt;
@@ -147,7 +128,7 @@ int _safe_vsnprintf(char* to, size_t size, const char* format, va_list ap)
   char* start = to;
   char* end = start + size - 1;
   for (; *format; ++format) {
-    int32_t have_longlong = false;
+    int32_t have_longlong = 0;
     if (*format != '%') {
       if (to == end) { /* end of buffer */
         break;
@@ -228,5 +209,3 @@ int _safe_snprintf(char* to, size_t n, const char* fmt, ...)
   va_end(args);
   return result;
 }
-}  // namespace common
-}  // namespace oceanbase

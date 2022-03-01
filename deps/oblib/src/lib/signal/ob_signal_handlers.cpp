@@ -16,6 +16,7 @@
 #include <sys/prctl.h>
 #include "lib/profile/ob_trace_id.h"
 #include "lib/utility/utility.h"
+#include "lib/signal/ob_libunwind.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/signal/ob_signal_utils.h"
 #include "lib/signal/ob_memory_cutter.h"
@@ -80,7 +81,7 @@ void coredump_cb(int sig, siginfo_t* si)
     // backtrace
     char bt[256];
     int64_t len = 0;
-    safe_backtrace(bt, sizeof(bt) - 1, len);
+    safe_backtrace(bt, sizeof(bt) - 1, &len);
     bt[len++] = '\0';
     // trace_id
     const uint64_t* trace_id = ObCurTraceId::get();

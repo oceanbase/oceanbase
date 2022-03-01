@@ -11,6 +11,8 @@ ob_lib_add_target(oblib_lib_charset
   charset/ob_ctype_utf8.c
   charset/ob_dtoa.c
   hash/xxhash.c
+  signal/safe_snprintf.c
+  signal/ob_libunwind.c
 )
 disable_pch(oblib_lib_charset)
 
@@ -209,7 +211,6 @@ ob_set_subtarget(oblib_lib common
   word_segment/ob_word_segment.cpp
   encode/ob_base64_encode.cpp
   signal/ob_memory_cutter.cpp
-  signal/safe_snprintf.cpp
   signal/ob_signal_struct.cpp
   signal/ob_signal_utils.cpp
   signal/ob_signal_handlers.cpp

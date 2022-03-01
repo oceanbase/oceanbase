@@ -7,7 +7,7 @@ repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/7/x86_64/
 devdeps-gtest-1.8.0-3.el7.x86_64.rpm
 devdeps-isa-l-static-2.22.0-3.el7.x86_64.rpm
 devdeps-libcurl-static-7.29.0-3.el7.x86_64.rpm
-devdeps-libunwind-static-1.5.0-3.el7.x86_64.rpm
+devdeps-libunwind-static-1.6.2-11.el7.x86_64.rpm
 devdeps-mariadb-connector-c-3.1.12-3.el7.x86_64.rpm
 devdeps-openssl-static-1.0.1e-3.el7.x86_64.rpm
 devdeps-libaio-0.3.112-3.el7.x86_64.rpm
