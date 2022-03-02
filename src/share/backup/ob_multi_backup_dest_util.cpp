@@ -157,6 +157,7 @@ int ObMultiBackupDestUtil::get_multi_backup_path_list(const bool is_preview, con
       int64_t snapshot_version = 0;
       int64_t start_replay_log_ts = 0;
       bool is_compat_path = false;
+      bool is_snapshot_restore = false;
       if (OB_FAIL(get_backup_set_list(is_preview,
               cluster_name,
               cluster_id,
@@ -166,8 +167,11 @@ int ObMultiBackupDestUtil::get_multi_backup_path_list(const bool is_preview, con
               set_list,
               snapshot_version,
               start_replay_log_ts,
-              is_compat_path))) {
+              is_compat_path,
+              is_snapshot_restore))) {
         LOG_WARN("failed to get backup set", KR(ret), K(tenant_id), K(restore_timestamp), K(list));
+      } else if (is_snapshot_restore) {
+        LOG_INFO("tenant level backup no need get piece list", K(tenant_id));
       } else {
         if (is_compat_path) {
           if (OB_FAIL(get_compat_backup_piece_list(cluster_name,
@@ -675,7 +679,7 @@ int ObMultiBackupDestUtil::get_cluster_backup_dest(const ObBackupDest &backup_de
 int ObMultiBackupDestUtil::get_backup_set_list(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
     const common::ObString &backup_dest_str, common::ObArray<ObSimpleBackupSetPath> &list, int64_t &snapshot_version,
-    int64_t &start_replay_log_ts, bool &is_compat_path)
+    int64_t &start_replay_log_ts, bool &is_compat_path, bool &is_snapshot_restore)
 {
   int ret = OB_SUCCESS;
   snapshot_version = 0;
@@ -703,10 +707,13 @@ int ObMultiBackupDestUtil::get_backup_set_list(const bool is_preview, const char
                  tmp_list,
                  snapshot_version,
                  start_replay_log_ts,
-                 is_compat_path))) {
+                 is_compat_path,
+                 is_snapshot_restore))) {
     LOG_WARN("failed to inner get backup set list", KR(ret), K(tenant_id), K(backup_dest));
   } else if (OB_FAIL(append(list, tmp_list))) {
     LOG_WARN("failed to add array", KR(ret), K(tmp_list));
+  } else {
+    LOG_INFO("get backup set list", K(list));
   }
   return ret;
 }
@@ -714,7 +721,7 @@ int ObMultiBackupDestUtil::get_backup_set_list(const bool is_preview, const char
 int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
     const ObBackupDest &backup_dest, common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version,
-    int64_t &start_replay_log_ts, bool &is_compat_path)
+    int64_t &start_replay_log_ts, bool &is_compat_path, bool &is_snapshot_restore)
 {
   int ret = OB_SUCCESS;
   path_list.reset();
@@ -744,7 +751,8 @@ int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const c
                      backup_dest,
                      path_list,
                      snapshot_version,
-                     start_replay_log_ts))) {
+                     start_replay_log_ts,
+                     is_snapshot_restore))) {
         LOG_WARN("failed to do get cluster level backup set list",
             KR(ret),
             K(is_preview),
@@ -768,6 +776,8 @@ int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const c
         } else {
           LOG_WARN("failed to get extern backup set file infos", KR(ret), K(simple_path));
         }
+      } else if (OB_FAIL(check_is_snapshot_restore(info, restore_timestamp, is_snapshot_restore))) {
+        LOG_WARN("failed to check is snapshot backup", K(ret), K(info));
       } else {
         simple_path.backup_set_id_ = info.backup_set_id_;
         simple_path.copy_id_ = info.copy_id_;
@@ -787,7 +797,7 @@ int ObMultiBackupDestUtil::do_get_backup_set_list(const bool is_preview, const c
 int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool is_preview, const char *cluster_name,
     const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
     const ObBackupDest &backup_dest, common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version,
-    int64_t &start_replay_log_ts)
+    int64_t &start_replay_log_ts, bool &is_snapshot_restore)
 {
   int ret = OB_SUCCESS;
   ObClusterBackupDest cluster_backup_dest;
@@ -823,7 +833,8 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
                  file_infos,
                  path_list,
                  snapshot_version,
-                 start_replay_log_ts))) {
+                 start_replay_log_ts,
+                 is_snapshot_restore))) {
     LOG_WARN("failed to do inner get backup set list", KR(ret), K(restore_timestamp));
   } else {
     std::sort(path_list.begin(), path_list.end(), cmp_set);
@@ -869,8 +880,10 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
               ObClusterBackupDest cluster_backup_dest;
               ObBackupDest tmp_backup_dest;
               char tmp_simple_path_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
-              if (OB_FAIL(cluster_backup_dest.set(
-                      tmp_file_info.backup_dest_.ptr(), cluster_name, cluster_id, OB_START_INCARNATION))) {
+              if (OB_FAIL(check_is_snapshot_restore(tmp_file_info, restore_timestamp, is_snapshot_restore))) {
+                LOG_WARN("failed to check is snaptshot backup", K(ret), K(tmp_file_info));
+              } else if (OB_FAIL(cluster_backup_dest.set(
+                             tmp_file_info.backup_dest_.ptr(), cluster_name, cluster_id, OB_START_INCARNATION))) {
                 LOG_WARN("failed to set cluster backup dest");
               } else if (OB_FAIL(base_data_path_info.set(cluster_backup_dest,
                              tmp_file_info.tenant_id_,
@@ -908,7 +921,8 @@ int ObMultiBackupDestUtil::do_get_backup_set_list_from_cluster_level(const bool 
 
 int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char *cluster_name, const int64_t cluster_id,
     const int64_t restore_timestamp, const ObBackupDest &backup_dest, const ObArray<ObBackupSetFileInfo> &file_infos,
-    common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts)
+    common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts,
+    bool &is_snapshot_restore)
 {
   int ret = OB_SUCCESS;
   snapshot_version = -1;
@@ -939,6 +953,8 @@ int ObMultiBackupDestUtil::do_inner_get_backup_set_list(const char *cluster_name
     const ObBackupSetFileInfo &info = file_infos.at(i);
     if (OB_SUCCESS != info.result_) {
       // do nothing
+    } else if (OB_FAIL(check_is_snapshot_restore(info, restore_timestamp, is_snapshot_restore))) {
+      LOG_WARN("failed to check is snaptshot backup", K(ret), K(info), K(restore_timestamp));
     } else if (!ObBackupFileStatus::can_show_in_preview(info.file_status_)) {
       LOG_INFO("backup set info cannot list in preview", K(info));
     } else {
@@ -1422,6 +1438,19 @@ int ObMultiBackupDestUtil::check_backup_path_is_backup_backup(const char *cluste
     LOG_WARN("failed to check is file exist", KR(ret), K(backup_path), K(storage_info));
   } else {
     is_backup_backup = !exist;
+  }
+  return ret;
+}
+
+int ObMultiBackupDestUtil::check_is_snapshot_restore(
+    const share::ObBackupSetFileInfo &backup_set_info, const int64_t restore_timestamp, bool &is_snapshot_restore)
+{
+  int ret = OB_SUCCESS;
+  if (!backup_set_info.is_valid() || restore_timestamp <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(backup_set_info), K(restore_timestamp));
+  } else {
+    is_snapshot_restore = backup_set_info.snapshot_version_ == restore_timestamp;
   }
   return ret;
 }

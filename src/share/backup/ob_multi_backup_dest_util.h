@@ -89,18 +89,19 @@ private:
   static int get_backup_set_list(const bool is_preview, const char *cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t restore_timestamp, const common::ObString &backup_dest_str,
       common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts,
-      bool &is_compat_path);
+      bool &is_compat_path, bool &is_snapshot_restore);
   static int do_get_backup_set_list(const bool is_preview, const char *cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t restore_timestamp, const ObBackupDest &backup_dest,
       common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts,
-      bool &is_compat_path);
+      bool &is_compat_path, bool &is_snapshot_restore);
   static int do_get_backup_set_list_from_cluster_level(const bool is_preview, const char *cluster_name,
       const int64_t cluster_id, const uint64_t tenant_id, const int64_t restore_timestamp,
       const ObBackupDest &backup_dest, common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version,
-      int64_t &start_replay_log_ts);
+      int64_t &start_replay_log_ts, bool &is_snapshot_restore);
   static int do_inner_get_backup_set_list(const char *cluster_name, const int64_t cluster_id,
       const int64_t restore_timestamp, const ObBackupDest &backup_dest, const ObArray<ObBackupSetFileInfo> &file_infos,
-      common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts);
+      common::ObArray<ObSimpleBackupSetPath> &path_list, int64_t &snapshot_version, int64_t &start_replay_log_ts,
+      bool &is_snapshot_restore);
   static int get_backup_piece_list(const bool is_preview, const char *cluster_name, const int64_t cluster_id,
       const uint64_t tenant_id, const int64_t snapshot_version, const int64_t start_replay_log_ts,
       const int64_t restore_timestamp, const common::ObString &backup_dest_str,
@@ -125,6 +126,8 @@ private:
   static int check_backup_path_is_backup_backup(const char *cluster_name, const int64_t cluster_id,
       const common::ObString &root_path, const common::ObString &storage_info, const uint64_t tenant_id,
       bool &is_backup_backup);
+  static int check_is_snapshot_restore(
+      const share::ObBackupSetFileInfo &backup_set_info, const int64_t restore_timestamp, bool &is_snapshot_restore);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMultiBackupDestUtil);
