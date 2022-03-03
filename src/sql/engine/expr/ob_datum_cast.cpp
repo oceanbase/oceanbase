@@ -512,8 +512,12 @@ int ObDatumHexUtils::unhex(const ObExpr& expr, const ObString& in_str, ObEvalCtx
     while (OB_SUCC(ret) && i < in_str.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
-        c1 = in_str[++i];
-        c2 = in_str[++i];
+        if (i + 2 < in_str.length()) {
+          c1 = in_str[++i];
+          c2 = in_str[++i];
+        } else {
+          break;
+        }
       } else {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(in_str));

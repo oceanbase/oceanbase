@@ -538,8 +538,12 @@ int ObHexUtils::unhex(const ObString& text, ObCastCtx& cast_ctx, ObObj& result)
     while (OB_SUCC(ret) && i < text.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
-        c1 = text[++i];
-        c2 = text[++i];
+        if (i + 2 < text.length()) {
+          c1 = text[++i];
+          c2 = text[++i];
+        } else {
+          break;
+        }
       } else {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(text));
