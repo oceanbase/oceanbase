@@ -469,6 +469,10 @@ int ObRestoreScheduler::fill_backup_info(ObPhysicalRestoreJob &job, ObCreateTena
     // fill restore_pkeys/restore_log_pkeys
     if (OB_FAIL(arg.restore_pkeys_.assign(backup_info.sys_pg_key_list_))) {
       LOG_WARN("fail to assign pkeys", KR(ret), K(job));
+    } else if (backup_info.snapshot_version_ == param.restore_timestamp_ &&
+               backup_info.physical_restore_info_.cluster_version_ > CLUSTER_VERSION_3000) {
+      LOG_INFO("backup snapshot equal to restore timestamp, no need get pkeys from log",
+          K(backup_info), K(param.restore_timestamp_));
     } else if (OB_FAIL(fill_pkeys_for_physical_restore_log(job, arg))) {
       LOG_WARN("fail to fill pkeys for physical restore log", KR(ret), K(arg));
     }
