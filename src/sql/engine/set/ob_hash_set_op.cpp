@@ -32,7 +32,8 @@ ObHashSetOp::ObHashSetOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInpu
       has_got_part_(false),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_),
-      hp_infras_()
+      hp_infras_(),
+      iter_end_(false)
 {}
 
 int ObHashSetOp::inner_open()
@@ -52,6 +53,7 @@ void ObHashSetOp::reset()
   first_get_left_ = true;
   has_got_part_ = false;
   hp_infras_.reset();
+  iter_end_ = false;
 }
 
 int ObHashSetOp::inner_close()

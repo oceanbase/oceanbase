@@ -97,7 +97,9 @@ int ObHashExceptOp::inner_get_next_row()
   const ObChunkDatumStore::StoredRow* store_row = nullptr;
   const common::ObIArray<ObExpr*>* cur_exprs = nullptr;
   clear_evaluated_flag();
-  if (first_get_left_) {
+  if (iter_end_) {
+    ret = OB_ITER_END;
+  } else if (first_get_left_) {
     if (OB_FAIL(is_left_has_row(left_has_row))) {
       LOG_WARN("failed to judge left has row", K(ret));
     } else if (!left_has_row) {
@@ -177,6 +179,9 @@ int ObHashExceptOp::inner_get_next_row()
     if (OB_FAIL(convert_row(*cur_exprs, MY_SPEC.output_))) {
       LOG_WARN("copy current row failed", K(ret));
     }
+  }
+  if (OB_ITER_END == ret) {
+    iter_end_ = true;
   }
   return ret;
 }

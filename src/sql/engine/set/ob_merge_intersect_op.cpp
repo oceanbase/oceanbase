@@ -71,6 +71,9 @@ int ObMergeIntersectOp::inner_get_next_row()
   int cmp = 0;
   bool break_outer_loop = false;
   const ObIArray<ObExpr*>* left_row = NULL;
+  if (iter_end_) {
+    ret = OB_ITER_END;
+  }
   clear_evaluated_flag();
   while (OB_SUCC(ret) && OB_SUCC(do_strict_distinct(*left_, last_row_.store_row_, left_row))) {
     while (OB_SUCC(ret) && !right_iter_end_) {
@@ -111,6 +114,8 @@ int ObMergeIntersectOp::inner_get_next_row()
     } else if (OB_FAIL(last_row_.save_store_row(*left_row, eval_ctx_, 0))) {
       LOG_WARN("failed to save right row", K(ret));
     }
+  } else if (OB_ITER_END == ret) {
+    iter_end_ = true;
   }
   return ret;
 }
