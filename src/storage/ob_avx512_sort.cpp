@@ -1382,12 +1382,16 @@ inline int64_t get_pivot(const uint64_t* ptr, const int64_t left,
                            const int64_t right)
 {
   const int64_t middle = ((right-left) / 2) + left;
-  if(ptr[left] <= ptr[middle] && ptr[middle] <= ptr[right]) {
-    return middle;
-  } else if(ptr[middle] <= ptr[left] && ptr[left] <= ptr[right]) {
-    return left;
-  }
-  return right;
+  int64_t ret=0;
+  if((ptr[middle]>ptr[left] && ptr[left]>=ptr[right]) || (ptr[right]>=ptr[left] && ptr[left]>ptr[middle])) {
+    ret = left;
+  } else if((ptr[left]>=ptr[middle] && ptr[middle]>=ptr[right]) || (ptr[right]>=ptr[middle] && ptr[middle]>=ptr[left])) {
+    ret = middle;
+  } else if((ptr[left]>ptr[right] && ptr[right]>ptr[middle]) || (ptr[middle]>ptr[right] && ptr[right]>ptr[left])) {
+    ret = right;
+  }  
+
+  return ret;
 }
 
 inline int64_t quick_sort(uint64_t* keys, uint64_t* values, const int64_t left,
