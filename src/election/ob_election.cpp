@@ -36,7 +36,7 @@ namespace election {
 /**********should removed after a barrier version bigger than 3.1**********/
 bool ObElection::IS_CLUSTER_MIN_VSERDION_LESS_THAN_3_1 = true;
 /**************************************************************************************************/
-const char* const ObElection::REVOKE_REASON_STR[REVOKE_TYPE_MAX] = {"leader lease expired",
+const char *const ObElection::REVOKE_REASON_STR[REVOKE_TYPE_MAX] = {"leader lease expired",
     "self is not candidate",
     "disk error",
     "clog reconfirm timeout",
@@ -89,9 +89,9 @@ void ObElection::reset()
   cached_lease_end_ = 0;
 }
 
-int ObElection::init(const ObPartitionKey& partition, const ObAddr& self, ObIElectionRpc* rpc, ObTimeWheel* tw,
-    const int64_t replica_num, ObIElectionCallback* election_cb, ObIElectionGroupMgr* eg_mgr,
-    ObElectionEventHistoryArray* event_history_array)
+int ObElection::init(const ObPartitionKey &partition, const ObAddr &self, ObIElectionRpc *rpc, ObTimeWheel *tw,
+    const int64_t replica_num, ObIElectionCallback *election_cb, ObIElectionGroupMgr *eg_mgr,
+    ObElectionEventHistoryArray *event_history_array)
 {
   int ret = OB_SUCCESS;
 
@@ -289,7 +289,7 @@ int ObElection::stop()
   return ret;
 }
 
-int ObElection::process_devote_prepare_(const ObElectionMsgDEPrepare& msg)
+int ObElection::process_devote_prepare_(const ObElectionMsgDEPrepare &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -335,7 +335,7 @@ int ObElection::process_devote_prepare_(const ObElectionMsgDEPrepare& msg)
   return ret;
 }
 
-int ObElection::local_handle_devote_prepare_(const ObElectionMsgDEPrepare& msg)
+int ObElection::local_handle_devote_prepare_(const ObElectionMsgDEPrepare &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -370,7 +370,7 @@ int ObElection::local_handle_devote_prepare_(const ObElectionMsgDEPrepare& msg)
   return ret;
 }
 
-int ObElection::handle_devote_prepare(const ObElectionMsgDEPrepare& msg, ObElectionRpcResult& result)
+int ObElection::handle_devote_prepare(const ObElectionMsgDEPrepare &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
   const int64_t cur_ts = get_current_ts();
@@ -394,7 +394,7 @@ int ObElection::handle_devote_prepare(const ObElectionMsgDEPrepare& msg, ObElect
   } else if (current_leader_.is_valid() && OB_SUCCESS == verify_leader_valid_(cur_ts)) {
     // if current leader is valid, some one ask for decentralized voting, meaning the requester don't know the leader
     // notify him who is leader
-    const ObAddr& sender = msg.get_sender();
+    const ObAddr &sender = msg.get_sender();
     if (current_leader_ != sender && self_ != sender) {
       if (OB_FAIL(notify_leader_(sender))) {
         ELECT_ASYNC_LOG_(WARN, "notify leader error", K(ret), "election", *this, K(msg));
@@ -429,7 +429,7 @@ int ObElection::handle_devote_prepare(const ObElectionMsgDEPrepare& msg, ObElect
   return ret;
 }
 
-int ObElection::process_devote_vote_(const ObElectionMsgDEVote& msg)
+int ObElection::process_devote_vote_(const ObElectionMsgDEVote &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -469,7 +469,7 @@ int ObElection::process_devote_vote_(const ObElectionMsgDEVote& msg)
   return ret;
 }
 
-int ObElection::local_handle_devote_vote_(const ObElectionMsgDEVote& msg)
+int ObElection::local_handle_devote_vote_(const ObElectionMsgDEVote &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -500,7 +500,7 @@ int ObElection::local_handle_devote_vote_(const ObElectionMsgDEVote& msg)
   return ret;
 }
 
-int ObElection::handle_devote_vote(const ObElectionMsgDEVote& msg, ObElectionRpcResult& result)
+int ObElection::handle_devote_vote(const ObElectionMsgDEVote &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -538,7 +538,7 @@ int ObElection::handle_devote_vote(const ObElectionMsgDEVote& msg, ObElectionRpc
   return ret;
 }
 
-int ObElection::process_devote_success_(const ObElectionMsgDESuccess& msg)
+int ObElection::process_devote_success_(const ObElectionMsgDESuccess &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -554,7 +554,7 @@ int ObElection::process_devote_success_(const ObElectionMsgDESuccess& msg)
     ELECT_ASYNC_LOG_(WARN, "invalid argument", K(ret), K_(partition), K(msg));
   } else {
     const int64_t cur_ts = get_current_ts();
-    const ObAddr& msg_leader = msg.get_leader();
+    const ObAddr &msg_leader = msg.get_leader();
     const int64_t msg_t1 = msg.get_T1_timestamp();
     const int64_t msg_real_t1 = get_msg_real_T1_(msg);
     const int64_t lease_time = msg.get_lease_time();
@@ -582,7 +582,7 @@ int ObElection::process_devote_success_(const ObElectionMsgDESuccess& msg)
           (void)update_info_from_eg_();
         }
         ret = OB_ELECTION_WARN_PROTOCOL_ERROR;
-        FORCE_ELECT_LOG(WARN, "leader available but recevive devote_success message", K(ret), K(*this), K(msg));
+        FORCE_ELECT_LOG(WARN, "leader available but receive devote_success message", K(ret), K(*this), K(msg));
       }
     } else if (NULL != election_group_) {
       // current leader is invalid, need move out from election group
@@ -618,7 +618,7 @@ int ObElection::process_devote_success_(const ObElectionMsgDESuccess& msg)
   return ret;
 }
 
-int ObElection::local_handle_devote_success_(const ObElectionMsgDESuccess& msg)
+int ObElection::local_handle_devote_success_(const ObElectionMsgDESuccess &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -633,7 +633,7 @@ int ObElection::local_handle_devote_success_(const ObElectionMsgDESuccess& msg)
     ret = OB_INVALID_ARGUMENT;
     ELECT_ASYNC_LOG_(WARN, "invalid argument", K(ret), K_(partition), K(msg));
   } else if (OB_FAIL(process_devote_success_(msg))) {
-    ELECT_ASYNC_LOG_(WARN, "process_devote_success_ faield", K(ret), K_(partition), K(msg));
+    ELECT_ASYNC_LOG_(WARN, "process_devote_success_ failed", K(ret), K_(partition), K(msg));
   } else {
   }
 
@@ -645,7 +645,7 @@ int ObElection::local_handle_devote_success_(const ObElectionMsgDESuccess& msg)
   return ret;
 }
 
-int ObElection::handle_devote_success(const ObElectionMsgDESuccess& msg, ObElectionRpcResult& result)
+int ObElection::handle_devote_success(const ObElectionMsgDESuccess &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -679,7 +679,7 @@ int ObElection::handle_devote_success(const ObElectionMsgDESuccess& msg, ObElect
   return ret;
 }
 
-int ObElection::process_vote_prepare_(const ObElectionMsgPrepare& msg)
+int ObElection::process_vote_prepare_(const ObElectionMsgPrepare &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -770,7 +770,7 @@ int ObElection::process_vote_prepare_(const ObElectionMsgPrepare& msg)
   return ret;
 }
 
-int ObElection::local_handle_vote_prepare_(const ObElectionMsgPrepare& msg)
+int ObElection::local_handle_vote_prepare_(const ObElectionMsgPrepare &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -799,7 +799,7 @@ int ObElection::local_handle_vote_prepare_(const ObElectionMsgPrepare& msg)
   return ret;
 }
 
-int ObElection::handle_vote_prepare(const ObElectionMsgPrepare& msg, ObElectionRpcResult& result)
+int ObElection::handle_vote_prepare(const ObElectionMsgPrepare &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -838,7 +838,7 @@ int ObElection::handle_vote_prepare(const ObElectionMsgPrepare& msg, ObElectionR
   return ret;
 }
 
-int ObElection::process_vote_vote_(const ObElectionMsgVote& msg)
+int ObElection::process_vote_vote_(const ObElectionMsgVote &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -908,7 +908,7 @@ int ObElection::process_vote_vote_(const ObElectionMsgVote& msg)
   return ret;
 }
 
-int ObElection::local_handle_vote_vote_(const ObElectionMsgVote& msg)
+int ObElection::local_handle_vote_vote_(const ObElectionMsgVote &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -941,7 +941,7 @@ int ObElection::local_handle_vote_vote_(const ObElectionMsgVote& msg)
   return ret;
 }
 
-int ObElection::handle_vote_vote(const ObElectionMsgVote& msg, ObElectionRpcResult& result)
+int ObElection::handle_vote_vote(const ObElectionMsgVote &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -981,13 +981,13 @@ int ObElection::handle_vote_vote(const ObElectionMsgVote& msg, ObElectionRpcResu
   return ret;
 }
 
-int ObElection::process_vote_success_(const ObElectionMsgSuccess& msg)
+int ObElection::process_vote_success_(const ObElectionMsgSuccess &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
 
   if (msg.get_last_leader_epoch() != OB_INVALID_TIMESTAMP &&
-      (max_leader_epoch_ever_seen_ == OB_INVALID_TIMESTAMP ||  // avoid OB_INVALID_TIMESTAMP definded too large
+      (max_leader_epoch_ever_seen_ == OB_INVALID_TIMESTAMP ||  // avoid OB_INVALID_TIMESTAMP defined too large
           msg.get_last_leader_epoch() > max_leader_epoch_ever_seen_)) {
     max_leader_epoch_ever_seen_ = msg.get_last_leader_epoch();
   }
@@ -1011,8 +1011,8 @@ int ObElection::process_vote_success_(const ObElectionMsgSuccess& msg)
     const int64_t lease_time = msg.get_lease_time();
     const int64_t now_lease_time = (lease_time == 0) ? (OB_ELECTION_130_LEASE_TIME) : lease_time;
 
-    const ObAddr& msg_new_leader = msg.get_new_leader();
-    const ObAddr& msg_cur_leader = msg.get_cur_leader();
+    const ObAddr &msg_new_leader = msg.get_new_leader();
+    const ObAddr &msg_cur_leader = msg.get_cur_leader();
     ObAddr cur_leader;
 
     if (!IN_T0_RANGE(cur_ts, msg_real_t1)) {
@@ -1133,7 +1133,7 @@ int ObElection::process_vote_success_(const ObElectionMsgSuccess& msg)
   return ret;
 }
 
-int ObElection::local_handle_vote_success_(const ObElectionMsgSuccess& msg)
+int ObElection::local_handle_vote_success_(const ObElectionMsgSuccess &msg)
 {
   // requires caller to lock and check
   int ret = OB_SUCCESS;
@@ -1162,7 +1162,7 @@ int ObElection::local_handle_vote_success_(const ObElectionMsgSuccess& msg)
   return ret;
 }
 
-int ObElection::handle_vote_success(const ObElectionMsgSuccess& msg, ObElectionRpcResult& result)
+int ObElection::handle_vote_success(const ObElectionMsgSuccess &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -1198,7 +1198,7 @@ int ObElection::handle_vote_success(const ObElectionMsgSuccess& msg, ObElectionR
   return ret;
 }
 
-int ObElection::handle_query_leader(const ObElectionQueryLeader& msg, ObElectionRpcResult& result)
+int ObElection::handle_query_leader(const ObElectionQueryLeader &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -1215,10 +1215,10 @@ int ObElection::handle_query_leader(const ObElectionQueryLeader& msg, ObElection
     ELECT_ASYNC_LOG_(WARN, "election is not running", K(ret), K_(partition), K(msg));
   } else if (!msg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    ELECT_ASYNC_LOG_(WARN, "invalid argumenet", K(ret), K_(partition), K(msg));
+    ELECT_ASYNC_LOG_(WARN, "invalid argument", K(ret), K_(partition), K(msg));
   } else {
     const int64_t cur_ts = get_current_ts();
-    const ObAddr& sender = msg.get_sender();
+    const ObAddr &sender = msg.get_sender();
     // defense
     if (OB_SUCC(verify_leader_valid_(cur_ts))  // leader must be valid
         && current_leader_ != sender           // sender can't be leader
@@ -1236,7 +1236,7 @@ int ObElection::handle_query_leader(const ObElectionQueryLeader& msg, ObElection
   return ret;
 }
 
-int ObElection::handle_query_leader_response(const ObElectionQueryLeaderResponse& msg, ObElectionRpcResult& result)
+int ObElection::handle_query_leader_response(const ObElectionQueryLeaderResponse &msg, ObElectionRpcResult &result)
 {
   int ret = OB_SUCCESS;
 
@@ -1258,7 +1258,7 @@ int ObElection::handle_query_leader_response(const ObElectionQueryLeaderResponse
     ret = OB_STATE_NOT_MATCH;
     ELECT_ASYNC_LOG_(WARN, "already in election_group, ignore msg", K(ret), "election", *this, K(msg));
   } else {
-    const ObAddr& msg_leader = msg.get_leader();
+    const ObAddr &msg_leader = msg.get_leader();
     const int64_t t1 = msg.get_t1();
     const int64_t epoch = msg.get_epoch();
     const int64_t lease_time = msg.get_lease_time();
@@ -1313,7 +1313,7 @@ int ObElection::handle_query_leader_response(const ObElectionQueryLeaderResponse
 }
 
 int ObElection::set_candidate(
-    const int64_t replica_num, const ObMemberList& curr_mlist, const int64_t membership_version)
+    const int64_t replica_num, const ObMemberList &curr_mlist, const int64_t membership_version)
 {
   int ret = OB_SUCCESS;
 
@@ -1397,7 +1397,7 @@ int ObElection::force_leader_async()
   return ret;
 }
 
-int ObElection::change_leader_async(const ObAddr& leader, ObTsWindows& changing_leader_windows)
+int ObElection::change_leader_async(const ObAddr &leader, ObTsWindows &changing_leader_windows)
 {
   int ret = OB_SUCCESS;
 
@@ -1451,7 +1451,7 @@ int ObElection::change_leader_to_self()
   return ret;
 }
 
-int ObElection::get_curr_candidate(ObMemberList& mlist) const
+int ObElection::get_curr_candidate(ObMemberList &mlist) const
 {
   int ret = OB_SUCCESS;
 
@@ -1470,7 +1470,7 @@ int ObElection::get_curr_candidate(ObMemberList& mlist) const
 
 // only leader could call this interface
 // return OB_NOT_MASTER if caller is follower
-int ObElection::get_valid_candidate(ObMemberList& mlist) const
+int ObElection::get_valid_candidate(ObMemberList &mlist) const
 {
   int ret = OB_SUCCESS;
 
@@ -1503,8 +1503,8 @@ int ObElection::get_valid_candidate(ObMemberList& mlist) const
   return ret;
 }
 
-int ObElection::get_leader(ObAddr& leader, int64_t& leader_epoch, bool& is_elected_by_changing_leader,
-    ObTsWindows& changing_leader_windows) const
+int ObElection::get_leader(ObAddr &leader, int64_t &leader_epoch, bool &is_elected_by_changing_leader,
+    ObTsWindows &changing_leader_windows) const
 {
   int ret = OB_SUCCESS;
 
@@ -1534,7 +1534,7 @@ int ObElection::get_leader(ObAddr& leader, int64_t& leader_epoch, bool& is_elect
 }
 
 int ObElection::get_leader(
-    ObAddr& leader, ObAddr& previous_leader, int64_t& leader_epoch, bool& is_elected_by_changing_leader) const
+    ObAddr &leader, ObAddr &previous_leader, int64_t &leader_epoch, bool &is_elected_by_changing_leader) const
 {
   int ret = OB_SUCCESS;
 
@@ -1561,7 +1561,7 @@ int ObElection::get_leader(
   return ret;
 }
 
-int ObElection::get_current_leader(ObAddr& leader) const
+int ObElection::get_current_leader(ObAddr &leader) const
 {
   int ret = OB_SUCCESS;
 
@@ -1578,7 +1578,7 @@ int ObElection::get_current_leader(ObAddr& leader) const
   return ret;
 }
 
-int ObElection::get_election_info(ObElectionInfo& election_info) const
+int ObElection::get_election_info(ObElectionInfo &election_info) const
 {
   RLockGuard guard(lock_);
   election_info = *this;
@@ -1651,7 +1651,7 @@ int ObElection::cal_valid_candidates_()
 }
 
 // check if the corresponding lease is valid
-bool ObElection::verify_lease_start_valid_(const ObAddr& leader, const int64_t logic_lease_start_t1) const
+bool ObElection::verify_lease_start_valid_(const ObAddr &leader, const int64_t logic_lease_start_t1) const
 {
   bool bool_ret = false;
   if (!leader.is_valid() || logic_lease_start_t1 <= 0) {
@@ -1671,7 +1671,7 @@ bool ObElection::verify_lease_start_valid_(const ObAddr& leader, const int64_t l
 
 // call this interface to assign a leader
 // called when partition is created
-int ObElection::leader_takeover(const ObAddr& leader, const int64_t lease_start, int64_t& leader_epoch)
+int ObElection::leader_takeover(const ObAddr &leader, const int64_t lease_start, int64_t &leader_epoch)
 {
   int ret = OB_SUCCESS;
   const int64_t logic_t1 = ((lease_start - get_election_time_offset()) / T_ELECT2) * T_ELECT2;
@@ -1730,7 +1730,7 @@ int ObElection::force_leader_async_()
   return ret;
 }
 
-int ObElection::change_leader_async_(const ObAddr& server, ObTsWindows& changing_leader_windows)
+int ObElection::change_leader_async_(const ObAddr &server, ObTsWindows &changing_leader_windows)
 {
   int ret = OB_SUCCESS;
   int64_t delay = 0;
@@ -1810,7 +1810,7 @@ int ObElection::update_info_from_eg_()
   const int64_t cur_ts = get_current_ts();
   if (OB_FAIL(election_group_->get_leader_lease_info(
           partition_, eg_part_array_idx_, cur_ts, eg_lease_end, eg_takeover_t1_ts))) {
-    FORCE_ELECT_LOG(WARN, "get_leader_lease_info failed", K(ret), K_(partition), "eleciton", *this);
+    FORCE_ELECT_LOG(WARN, "get_leader_lease_info failed", K(ret), K_(partition), "election", *this);
   } else if (eg_lease_end < 0) {
     ret = OB_ERR_UNEXPECTED;
     FORCE_ELECT_LOG(ERROR, "eg_lease_end is invalid", K(ret), K(eg_lease_end), "election", *this);
@@ -1847,7 +1847,7 @@ void ObElection::change_leader_clear_()
 }
 
 // check if server is leader, check role and lease also
-bool ObElection::is_real_leader_(const ObAddr& server) const
+bool ObElection::is_real_leader_(const ObAddr &server) const
 {
   bool bool_ret = false;
   const int64_t cur_ts = get_current_ts();
@@ -1879,7 +1879,7 @@ bool ObElection::check_if_allowed_to_move_into_eg_()
   return bool_ret;
 }
 
-int ObElection::leader_elected_(const ObAddr& leader, const int64_t logic_T1_timestamp, const int64_t lease_time,
+int ObElection::leader_elected_(const ObAddr &leader, const int64_t logic_T1_timestamp, const int64_t lease_time,
     const bool is_elected_by_changing_leader)
 {
   int ret = OB_SUCCESS;
@@ -1959,7 +1959,7 @@ int ObElection::leader_elected_(const ObAddr& leader, const int64_t logic_T1_tim
   return ret;
 }
 
-int ObElection::leader_takeover_(const ObAddr& leader, const int64_t epoch, const int64_t logic_t1,
+int ObElection::leader_takeover_(const ObAddr &leader, const int64_t epoch, const int64_t logic_t1,
     const int64_t lease_time, const bool is_elected_by_changing_leader)
 {
   int ret = OB_SUCCESS;
@@ -1995,7 +1995,7 @@ int ObElection::leader_takeover_(const ObAddr& leader, const int64_t epoch, cons
   return ret;
 }
 
-int ObElection::leader_reappoint_(const ObAddr& leader, const int64_t logic_t1, const int64_t lease_time)
+int ObElection::leader_reappoint_(const ObAddr &leader, const int64_t logic_t1, const int64_t lease_time)
 {
   int ret = OB_SUCCESS;
   const int64_t cur_ts = get_current_ts();
@@ -2032,7 +2032,7 @@ int ObElection::verify_leader_valid_(const int64_t cur_ts) const
   return ret;
 }
 
-int ObElection::get_leader_(ObAddr& leader) const
+int ObElection::get_leader_(ObAddr &leader) const
 {
   int ret = OB_SUCCESS;
   const int64_t cur_ts = get_current_ts();
@@ -2185,12 +2185,12 @@ bool ObElection::lease_expired_too_long_(const int64_t cur_ts) const
   return (cur_ts - leader_revoke_timestamp_ > EXPIRED_TIME_FOR_WARNING);
 }
 
-void ObElection::set_unconfirmed_leader_(const ObAddr& unconfirmed_leader)
+void ObElection::set_unconfirmed_leader_(const ObAddr &unconfirmed_leader)
 {
   unconfirmed_leader_ = unconfirmed_leader;
 }
 
-int ObElection::move_out_election_group(const ObElectionGroupId& eg_id)
+int ObElection::move_out_election_group(const ObElectionGroupId &eg_id)
 {
   // called from election group
   int ret = OB_SUCCESS;
@@ -2261,16 +2261,16 @@ int ObElection::move_out_election_group_unlock_()
   return ret;
 }
 
-int ObElection::move_into_election_group(const ObElectionGroupId& eg_id)
+int ObElection::move_into_election_group(const ObElectionGroupId &eg_id)
 {
   WLockGuard guard(lock_);
   return move_into_election_group_unlock_(eg_id);
 }
 
-int ObElection::move_into_election_group_unlock_(const ObElectionGroupId& eg_id)
+int ObElection::move_into_election_group_unlock_(const ObElectionGroupId &eg_id)
 {
   int ret = OB_SUCCESS;
-  ObIElectionGroup* election_group = NULL;
+  ObIElectionGroup *election_group = NULL;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2292,7 +2292,7 @@ int ObElection::move_into_election_group_unlock_(const ObElectionGroupId& eg_id)
     }
   } else if (!current_leader_.is_valid() || current_leader_ != eg_id.get_server() ||
              !is_real_leader_(current_leader_)) {
-    // allow follower moive in only if leader is valid and match group's leader
+    // allow follower move in only if leader is valid and match group's leader
     ret = OB_STATE_NOT_MATCH;
     if (REACH_TIME_INTERVAL(100 * 1000)) {
       FORCE_ELECT_LOG(WARN, "current_leader_ not match with eg_id", K(ret), K(eg_id), "election", *this);
@@ -2502,7 +2502,7 @@ bool ObElection::can_elect_new_leader_() const
       bool_ret = false;
     } else if (common::PRIMARY_CLUSTER == cluster_type ||
                ObMultiClusterUtil::is_cluster_private_table(partition_.get_table_id())) {
-      // main datebase or private table allow elect
+      // main database or private table allow elect
       bool_ret = true;
     } else if (share::OBSERVER_INVALID_STATUS == server_status) {
       // server status unknown, non-private table not allow to elect
@@ -2538,7 +2538,7 @@ void ObElection::run_gt1_task(const int64_t real_T1_timestamp)
     election_time_offset_ = new_election_time_offset_;
     temp_election_time_offset_ = election_time_offset_;
     takeover_t1_timestamp_ = 0;
-    ELECT_ASYNC_LOG(INFO, "be dead, parameters conversion is compeleted", "election", *this);
+    ELECT_ASYNC_LOG(INFO, "be dead, parameters conversion is completed", "election", *this);
   } else {
   }
   /*********************************************************************************************/
@@ -2902,7 +2902,7 @@ void ObElection::run_gt1_task(const int64_t real_T1_timestamp)
   /*********************************************************************************************/
 }
 
-int ObElection::send_devote_prepare_(const ObElectionMsgDEPrepare& msg)
+int ObElection::send_devote_prepare_(const ObElectionMsgDEPrepare &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -2927,7 +2927,7 @@ int ObElection::send_devote_prepare_(const ObElectionMsgDEPrepare& msg)
 }
 
 // add lease time, make sure follower won't vote for others
-int ObElection::send_vote_prepare_(const ObElectionMsgPrepare& msg)
+int ObElection::send_vote_prepare_(const ObElectionMsgPrepare &msg)
 {
   int ret = OB_SUCCESS;
   ObAddr new_leader;
@@ -2951,7 +2951,7 @@ int ObElection::send_vote_prepare_(const ObElectionMsgPrepare& msg)
   return ret;
 }
 
-int ObElection::send_change_leader_vote_prepare_(const ObElectionMsgPrepare& msg)
+int ObElection::send_change_leader_vote_prepare_(const ObElectionMsgPrepare &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -3148,7 +3148,7 @@ void ObElection::run_gt2_task(const int64_t real_T2_timestamp)
   }
 }
 
-int ObElection::get_decentralized_candidate_(ObAddr& server, ObElectionPriority& priority, int64_t& lease_time)
+int ObElection::get_decentralized_candidate_(ObAddr &server, ObElectionPriority &priority, int64_t &lease_time)
 {
   int ret = msg_pool_.get_decentralized_candidate(server, priority, replica_num_, T1_timestamp_, lease_time);
   if (OB_FAIL(ret)) {
@@ -3157,7 +3157,7 @@ int ObElection::get_decentralized_candidate_(ObAddr& server, ObElectionPriority&
   return ret;
 }
 
-int ObElection::get_centralized_candidate_(ObAddr& cur_leader, ObAddr& new_leader, int64_t msg_t1)
+int ObElection::get_centralized_candidate_(ObAddr &cur_leader, ObAddr &new_leader, int64_t msg_t1)
 {
   int ret = msg_pool_.get_centralized_candidate(cur_leader, new_leader, msg_t1);
   if (OB_FAIL(ret)) {
@@ -3166,7 +3166,7 @@ int ObElection::get_centralized_candidate_(ObAddr& cur_leader, ObAddr& new_leade
   return ret;
 }
 
-int ObElection::send_devote_vote_(const ObAddr& server, const ObElectionMsgDEVote& msg)
+int ObElection::send_devote_vote_(const ObAddr &server, const ObElectionMsgDEVote &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -3281,7 +3281,7 @@ int ObElection::check_centralized_majority_()
     } else if (is_candidate_(self_) && is_real_leader_(self_) && cur_leader == current_leader_) {
       bool change_leader = false;
       if (cur_leader != new_leader) {  // change leader
-        // need new leader's message and its prioeity
+        // need new leader's message and its priority
         if (!new_leader_priority.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           FORCE_ELECT_LOG(WARN, "change leader but new leader priority is invalid", K(ret), K(new_leader_priority));
@@ -3329,7 +3329,7 @@ int ObElection::check_centralized_majority_()
   return ret;
 }
 
-int ObElection::send_vote_vote_(const ObAddr& server, const ObElectionMsgVote& msg)
+int ObElection::send_vote_vote_(const ObAddr &server, const ObElectionMsgVote &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -3348,7 +3348,7 @@ int ObElection::send_vote_vote_(const ObAddr& server, const ObElectionMsgVote& m
   return ret;
 }
 
-int ObElection::notify_leader_(const ObAddr& server)
+int ObElection::notify_leader_(const ObAddr &server)
 {
   int ret = OB_SUCCESS;
   int64_t lease_time = 0;
@@ -3448,7 +3448,7 @@ void ObElection::run_gt3_task(const int64_t real_T3_timestamp)
   }
 }
 
-int ObElection::check_decentralized_majority_(ObAddr& new_leader, int64_t& ticket)
+int ObElection::check_decentralized_majority_(ObAddr &new_leader, int64_t &ticket)
 {
   int ret = msg_pool_.check_decentralized_majority(new_leader, ticket, replica_num_, T1_timestamp_);
   if (OB_FAIL(ret)) {
@@ -3458,7 +3458,7 @@ int ObElection::check_decentralized_majority_(ObAddr& new_leader, int64_t& ticke
 }
 
 // return OB_SUCCESS, avoid no leader
-int ObElection::collect_valid_candidates_(const ObElectionMsgVote& msg)
+int ObElection::collect_valid_candidates_(const ObElectionMsgVote &msg)
 {
   int tmp_ret = OB_SUCCESS;
 
@@ -3487,7 +3487,7 @@ int ObElection::collect_valid_candidates_(const ObElectionMsgVote& msg)
   return OB_SUCCESS;
 }
 
-int ObElection::send_devote_success_(const ObElectionMsgDESuccess& msg)
+int ObElection::send_devote_success_(const ObElectionMsgDESuccess &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -3506,7 +3506,7 @@ int ObElection::send_devote_success_(const ObElectionMsgDESuccess& msg)
   return ret;
 }
 
-int ObElection::send_vote_success_(const ObElectionMsgSuccess& msg)
+int ObElection::send_vote_success_(const ObElectionMsgSuccess &msg)
 {
   int ret = OB_SUCCESS;
 
@@ -3620,7 +3620,7 @@ void ObElection::run_change_leader_task(const int64_t real_T1_timestamp)
 }
 
 int ObElection::post_election_msg_(
-    const common::ObMemberList& mlist, const common::ObPartitionKey& partition, const ObElectionMsg& msg)
+    const common::ObMemberList &mlist, const common::ObPartitionKey &partition, const ObElectionMsg &msg)
 {
   int ret = common::OB_SUCCESS;
   common::ObAddr server;
@@ -3653,7 +3653,7 @@ int ObElection::post_election_msg_(
 }
 
 int ObElection::post_election_msg_(
-    const common::ObAddr& server, const common::ObPartitionKey& partition, const ObElectionMsg& msg)
+    const common::ObAddr &server, const common::ObPartitionKey &partition, const ObElectionMsg &msg)
 {
   int ret = common::OB_SUCCESS;
   const int64_t dst_cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
@@ -3694,7 +3694,7 @@ bool ObElection::in_reappoint_period_(const int64_t ts)
   return bool_ret;
 }
 
-void ObElection::get_change_leader_window_(const int64_t ts, ObTsWindows& windows) const
+void ObElection::get_change_leader_window_(const int64_t ts, ObTsWindows &windows) const
 {
   const int64_t T_SWITCH_LEADER_RESERVED = ObServerConfig::get_instance().trx_force_kill_threshold;
   if (!GCONF.enable_smooth_leader_switch) {
@@ -3704,7 +3704,7 @@ void ObElection::get_change_leader_window_(const int64_t ts, ObTsWindows& window
   }
 }
 
-int ObElection::get_priority(ObElectionPriority& priority) const
+int ObElection::get_priority(ObElectionPriority &priority) const
 {
   int ret = OB_SUCCESS;
 
@@ -3719,7 +3719,7 @@ int ObElection::get_priority(ObElectionPriority& priority) const
   return ret;
 }
 
-int ObElection::get_timestamp(int64_t& gts, ObAddr& leader) const
+int ObElection::get_timestamp(int64_t &gts, ObAddr &leader) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -3755,20 +3755,20 @@ int ObElection::get_timestamp(int64_t& gts, ObAddr& leader) const
   return ret;
 }
 
-int64_t ObElection::get_msg_real_T1_(const ObElectionVoteMsg& msg) const
+int64_t ObElection::get_msg_real_T1_(const ObElectionVoteMsg &msg) const
 {
   int64_t result_ts = OB_INVALID_TIMESTAMP;
   // is msg is about change leader, T1 is strictly integer multiples of T_ELECT2
   // otherwise, just reduce election_time_offset_
   if ((msg.get_msg_type() == ObElectionMsgType::OB_ELECTION_VOTE_PREPARE &&
-          static_cast<const ObElectionMsgPrepare&>(msg).get_cur_leader() !=
-              static_cast<const ObElectionMsgPrepare&>(msg).get_new_leader()) ||
+          static_cast<const ObElectionMsgPrepare &>(msg).get_cur_leader() !=
+              static_cast<const ObElectionMsgPrepare &>(msg).get_new_leader()) ||
       (msg.get_msg_type() == ObElectionMsgType::OB_ELECTION_VOTE_VOTE &&
-          static_cast<const ObElectionMsgVote&>(msg).get_cur_leader() !=
-              static_cast<const ObElectionMsgVote&>(msg).get_new_leader()) ||
+          static_cast<const ObElectionMsgVote &>(msg).get_cur_leader() !=
+              static_cast<const ObElectionMsgVote &>(msg).get_new_leader()) ||
       (msg.get_msg_type() == ObElectionMsgType::OB_ELECTION_VOTE_SUCCESS &&
-          static_cast<const ObElectionMsgSuccess&>(msg).get_cur_leader() !=
-              static_cast<const ObElectionMsgSuccess&>(msg).get_new_leader())) {
+          static_cast<const ObElectionMsgSuccess &>(msg).get_cur_leader() !=
+              static_cast<const ObElectionMsgSuccess &>(msg).get_new_leader())) {
     result_ts = (msg.get_T1_timestamp() + election_time_offset_) / T_ELECT2 * T_ELECT2;
   } else {
     result_ts = real_ts_(msg.get_T1_timestamp());
@@ -3787,7 +3787,7 @@ int64_t ObElection::logic_ts_(int64_t real_ts) const
 }
 
 /**********should removed after a barrier version bigger than 3.1**********/
-void ObElection::insert_physical_condition_into_msg_(const ObElectionMsg& msg)
+void ObElection::insert_physical_condition_into_msg_(const ObElectionMsg &msg)
 {
   if (OB_SYS_TENANT_ID != extract_tenant_id(partition_.get_table_id())) {
     int64_t send_timestamp = msg.get_send_timestamp();
@@ -3811,12 +3811,12 @@ void ObElection::insert_physical_condition_into_msg_(const ObElectionMsg& msg)
     cond <<= 61;
     cond &= 0x6000000000000000;
     send_timestamp |= cond;
-    const_cast<ObElectionMsg&>(msg).set_send_timestamp(send_timestamp);
+    const_cast<ObElectionMsg &>(msg).set_send_timestamp(send_timestamp);
   } else {
   }
 }
 
-PhysicalCondition ObElection::fetch_others_condition_(const ObElectionMsg& msg)
+PhysicalCondition ObElection::fetch_others_condition_(const ObElectionMsg &msg)
 {
   int64_t send_timestamp = msg.get_send_timestamp();
   int64_t condition = send_timestamp & 0x6000000000000000;
@@ -3841,7 +3841,7 @@ PhysicalCondition ObElection::fetch_others_condition_(const ObElectionMsg& msg)
       break;
   }
   send_timestamp &= 0x9fffffffffffffff;
-  const_cast<ObElectionMsg&>(msg).set_send_timestamp(send_timestamp);
+  const_cast<ObElectionMsg &>(msg).set_send_timestamp(send_timestamp);
   return ret;
 }
 
@@ -3859,7 +3859,7 @@ void ObElection::register_gt1_with_neccessary_retry_(int64_t next_t1_timestamp)
   } while (OB_INVALID_ARGUMENT == temp_ret && delay < 0);
 }
 
-bool ObElection::update_condition_(const ObElectionMsg& msg, const int64_t msg_t1)
+bool ObElection::update_condition_(const ObElectionMsg &msg, const int64_t msg_t1)
 {
   PhysicalCondition cond = fetch_others_condition_(msg);
   if (physical_condition_ < cond) {
