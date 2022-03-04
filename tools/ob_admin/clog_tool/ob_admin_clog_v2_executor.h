@@ -31,10 +31,11 @@ private:
   int dump_all(int argc, char* argv[]);
   int dump_filter(int argc, char* argv[]);
   int dump_hex(int argc, char* argv[]);
-  int dump_inner(int argc, char* argv[], bool is_hex);
+  int dump_inner(int argc, char* argv[], bool is_hex, bool without_data);
   int dump_format(int argc, char* argv[]);
   int stat_clog(int argc, char* argv[]);
   int dump_ilog(int argc, char* argv[]);
+  int dump_meta(int argc, char* argv[]);
 
   void print_usage();
   int parse_options(int argc, char* argv[]);
@@ -42,7 +43,7 @@ private:
   int grep(int argc, char* argv[]);
   int encode_int(char* buf, int64_t& pos, int64_t buf_len, const char* encode_type, int64_t int_value);
 
-  int dump_single_clog(const char* path, bool is_hex);
+  int dump_single_clog(const char* path, bool is_hex, bool without_data);
   int dump_single_ilog(const char* path);
   int dump_format_single_file(const char* path);
   int stat_single_log(const char* path);
