@@ -1560,6 +1560,7 @@ int ObSysVarOnCheckFuncs::check_and_convert_timestamp_service(
               set_var.var_name_.ptr(),
               in_str.length(),
               in_str.ptr());
+          LOG_WARN("only LTS supported for sys tenant");
         }
       }
     } else {
