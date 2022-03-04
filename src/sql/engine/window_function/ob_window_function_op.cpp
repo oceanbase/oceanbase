@@ -1364,7 +1364,12 @@ int ObWindowFunctionOp::parallel_winbuf_process()
                 ObDatum& l_datum = new_row->cells()[idx];
                 const ObDatum& r_datum = row->cells()[idx];
                 ObDatumCmpFuncType cmp_func = cmp_funcs.at(cmp_index);
-                if (cmp_func(l_datum, r_datum) < 0) {
+                // null-last cmp func should ignore null in max calc
+                if (r_datum.is_null() && !l_datum.is_null()) {
+                  /*do nothing*/
+                } else if (!r_datum.is_null() && l_datum.is_null()) {
+                  l_datum = r_datum;
+                } else if (cmp_func(l_datum, r_datum) < 0) {
                   l_datum = r_datum;
                 }
                 cmp_index++;
@@ -1374,6 +1379,7 @@ int ObWindowFunctionOp::parallel_winbuf_process()
                 ObDatum& l_datum = new_row->cells()[idx];
                 const ObDatum& r_datum = row->cells()[idx];
                 ObDatumCmpFuncType cmp_func = cmp_funcs.at(cmp_index);
+                // null-last cmp func no need null special calc in min calc
                 if (cmp_func(l_datum, r_datum) > 0) {
                   l_datum = r_datum;
                 }
