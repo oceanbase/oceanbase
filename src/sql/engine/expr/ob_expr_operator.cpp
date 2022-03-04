@@ -1127,8 +1127,7 @@ int ObExprOperator::aggregate_temporal_accuracy_for_merge(
       }
     }
     if (OB_UNLIKELY(scale < 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected scale.", K(ret), K(scale));
+      type.set_scale(ObAccuracy::MAX_ACCURACY2[is_oracle_mode()][type.get_type()].get_scale());
     } else {
       type.set_scale(scale);
     }

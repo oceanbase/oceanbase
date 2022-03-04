@@ -98,8 +98,8 @@ int ObExprNvl::calc_result_type2(
     } else {
       type.set_accuracy(type2.get_accuracy());
     }
-    ObScale scale1 = type1.get_scale();
-    ObScale scale2 = type2.get_scale();
+    ObScale scale1 = type1.is_null() ? 0 : type1.get_scale();
+    ObScale scale2 = type2.is_null() ? 0 : type2.get_scale();
     if (-1 != scale1 && -1 != scale2) {
       type.set_scale(static_cast<ObScale>(max(scale1, scale2)));
     } else {
