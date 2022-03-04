@@ -109,7 +109,7 @@ int ObMergeIntersectOp::inner_get_next_row()
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(convert_row(*left_row, MY_SPEC.output_))) {
+    if (OB_FAIL(convert_row(*left_row, MY_SPEC.set_exprs_))) {
       LOG_WARN("failed to convert row", K(ret));
     } else if (OB_FAIL(last_row_.save_store_row(*left_row, eval_ctx_, 0))) {
       LOG_WARN("failed to save right row", K(ret));

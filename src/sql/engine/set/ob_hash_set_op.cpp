@@ -143,8 +143,10 @@ int ObHashSetOp::build_hash_table(bool from_child)
         LOG_WARN("failed to insert row", K(ret));
       }
     } else {
-      if (OB_FAIL(hp_infras_.get_right_next_row(store_row, get_spec().output_))) {
-      } else if (OB_FAIL(hp_infras_.insert_row(get_spec().output_, has_exists, inserted))) {
+      if (OB_FAIL(
+              hp_infras_.get_right_next_row(store_row, static_cast<const ObHashSetSpec &>(get_spec()).set_exprs_))) {
+      } else if (OB_FAIL(hp_infras_.insert_row(
+                     static_cast<const ObHashSetSpec &>(get_spec()).set_exprs_, has_exists, inserted))) {
         LOG_WARN("failed to insert row", K(ret));
       }
     }

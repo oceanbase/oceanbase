@@ -109,9 +109,9 @@ int ObHashIntersectOp::inner_get_next_row()
         cur_exprs = &left_->get_spec().output_;
       }
     } else {
-      if (OB_FAIL(hp_infras_.get_left_next_row(store_row, MY_SPEC.output_))) {
+      if (OB_FAIL(hp_infras_.get_left_next_row(store_row, MY_SPEC.set_exprs_))) {
       } else {
-        cur_exprs = &MY_SPEC.output_;
+        cur_exprs = &MY_SPEC.set_exprs_;
       }
     }
     if (OB_ITER_END == ret) {
@@ -162,7 +162,7 @@ int ObHashIntersectOp::inner_get_next_row()
     }
   }  // end of while
   if (OB_SUCC(ret) && !has_got_part_) {
-    if (OB_FAIL(convert_row(*cur_exprs, MY_SPEC.output_))) {
+    if (OB_FAIL(convert_row(*cur_exprs, MY_SPEC.set_exprs_))) {
       LOG_WARN("copy current row failed", K(ret));
     }
   }
