@@ -8532,6 +8532,11 @@ ObExpr::EvalEnumSetFunc OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT[ObMaxTC][2] = {
         /*unknow -> enum_or_set*/
         cast_not_support_enum_set, /*enum*/
         cast_not_support_enum_set, /*set*/
+    },
+    {
+        /*json -> enum_or_set*/
+        cast_not_support_enum_set, /*enum*/
+        cast_not_support_enum_set, /*set*/
     }
 };
 
