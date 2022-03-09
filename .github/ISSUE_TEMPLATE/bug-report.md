@@ -1,8 +1,12 @@
 ---
-name: Bug report	
+name: Bug report
 about: Help us to improve this project
+title: ''
+labels: bug
+assignees: caifeizhi
 
 ---
+
 **Please check the FAQ documentation before raising an issue**
 
 Please check the old issues before raising an issue in case someone has asked the same question that you are asking.
