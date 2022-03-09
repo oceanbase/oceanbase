@@ -1727,7 +1727,7 @@ int ObCreateTableResolver::generate_index_arg()
     if (is_oracle_temp_table_) {
       index_scope_ = LOCAL_INDEX;
     }
-    global_ = (index_scope_ != LOCAL_INDEX);
+    global_ = (GLOBAL_INDEX == index_scope_);
     ObCreateTableStmt* create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     ObTableSchema& table_schema = create_table_stmt->get_create_table_arg().schema_;
     if (OB_SUCC(ret)) {
