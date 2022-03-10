@@ -256,6 +256,9 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt& stmt, const ObSQLSessionInf
     is_use_pdml = false;
   } else if (stmt::T_INSERT == stmt.get_stmt_type() && !static_cast<const ObInsertStmt&>(stmt).value_from_select()) {
     is_use_pdml = false;
+  } else if ((stmt.is_update_stmt() || stmt.is_delete_stmt()) &&
+             static_cast<const ObDelUpdStmt &>(stmt).dml_source_from_join()) {
+    is_use_pdml = false;
   } else if (OB_FAIL(session.get_force_parallel_dml_dop(force_pdml_dop))) {
     LOG_WARN("fail get force parallel dml session val", K(ret));
   } else if (force_pdml_dop > 1) {
