@@ -52,6 +52,10 @@ int OMPKHandshakeResponse::decode()
       LOG_ERROR("ob only support mysql client protocol 4.1", K(ret));
     } else {
       ObMySQLUtil::get_uint4(pos, capability_.capability_);
+      // When the driver establishes a connection, it decides whether to open the CLIENT_MULTI_RESULTS
+      // capability according to the capability returned by the sever. Both mysql 5.6 and 8.0 versions
+      // are opened by default, and this behavior is compatible here by default.
+      capability_.cap_flags_.OB_CLIENT_MULTI_STATEMENTS = 1;
       ObMySQLUtil::get_uint4(pos, max_packet_size_);  // 16MB
       ObMySQLUtil::get_uint1(pos, character_set_);
       pos += HANDSHAKE_RESPONSE_RESERVED_SIZE;  // 23 bytes reserved
