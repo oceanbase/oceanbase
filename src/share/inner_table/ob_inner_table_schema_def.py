@@ -10517,7 +10517,7 @@ def_table_schema(
                     b.database_name as TABLE_SCHEMA,
                     a.table_name as TABLE_NAME,
                     case when a.database_id & 0xFFFFFFFFFF = 2 then 'SYSTEM VIEW' when (a.table_type = 1 or a.table_type = 4) then 'VIEW' when a.table_type = 2 then 'SYSTEM TABLE' when a.table_type = 1 then 'INDEX' else 'BASE TABLE' end as TABLE_TYPE,
-                    NULL as ENGINE,
+                    'OceanBase' as ENGINE,
                     NULL as VERSION,
                     NULL as ROW_FORMAT,
                     sum(c.row_count) as TABLE_ROWS,
