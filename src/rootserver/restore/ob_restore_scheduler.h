@@ -117,6 +117,7 @@ private:
   int update_index_status(const common::ObIArray<uint64_t>& index_ids, share::schema::ObIndexStatus index_status);
   int convert_parameters(const share::ObPhysicalRestoreJob& job_info);
   int log_nop_operation(const share::ObPhysicalRestoreJob& job_info);
+  int convert_column_statistic(const uint64_t tenant_id);
   /*------------------------*/
 
   /* filter schema */

@@ -1609,6 +1609,8 @@ int ObRestoreScheduler::modify_schema(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to convert parameters", K(ret), K(job_info));
   } else if (need_log_nop && OB_FAIL(log_nop_operation(job_info))) {
     LOG_WARN("fail to log nop operation", KR(ret), K(job_info));
+  } else if (OB_FAIL(convert_column_statistic(job_info.tenant_id_))) {
+    LOG_WARN("failed to convert column statistic", K(ret), K(job_info));
   } else {
     // reset __all_restore_progress
     ObPhysicalRestoreTableOperator restore_op;
@@ -2572,6 +2574,19 @@ int ObRestoreScheduler::log_nop_operation(const ObPhysicalRestoreJob &job_info)
     } else {
       LOG_INFO("success to log nop operation", KR(ret), K(arg));
     }
+  }
+  return ret;
+}
+
+int ObRestoreScheduler::convert_column_statistic(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObColumnStatisticOperator op;
+  const int64_t version = 1;
+  if (OB_FAIL(op.init(sql_proxy_))) {
+    LOG_WARN("fail init", K(ret));
+  } else if (OB_FAIL(op.update_column_statistic_version(tenant_id, version))) {
+    LOG_WARN("fail to get jobs", K(ret), K(tenant_id));
   }
   return ret;
 }
