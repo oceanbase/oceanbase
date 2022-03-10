@@ -20,9 +20,11 @@ not (10 > 5 and 100 < 9)
     }
   },
   "expr_info": [
+    "IS_OR",
     "IS_CALCULABLE_EXPR",
     "IS_CONST_EXPR",
     "CNT_CONST",
+    "CNT_OR",
     "CNT_CALCULABLE_EXPR"
   ],
   "rel_id": [
@@ -474,8 +476,7 @@ not a = b
     }
   },
   "expr_info": [
-    "CNT_COLUMN",
-    "IS_JOIN_COND"
+    "CNT_COLUMN"
   ],
   "rel_id": [
   ],
@@ -709,10 +710,8 @@ not a is true
     }
   },
   "expr_info": [
-    "IS_IS_EXPR",
     "CNT_CONST",
-    "CNT_COLUMN",
-    "CNT_IS_EXPR"
+    "CNT_COLUMN"
   ],
   "rel_id": [
   ],
@@ -847,8 +846,7 @@ not a between 1 and 100
   },
   "expr_info": [
     "CNT_CONST",
-    "CNT_COLUMN",
-    "IS_RANGE_COND"
+    "CNT_COLUMN"
   ],
   "rel_id": [
   ],
@@ -1166,11 +1164,9 @@ not a between 1 and 100
     }
   },
   "expr_info": [
-    "IS_OR",
     "IS_CALCULABLE_EXPR",
     "IS_CONST_EXPR",
     "CNT_CONST",
-    "CNT_OR",
     "CNT_CALCULABLE_EXPR"
   ],
   "rel_id": [
@@ -1352,6 +1348,11 @@ not a between 1 and 100
     }
   },
   "expr_info": [
+    "IS_CALCULABLE_EXPR",
+    "IS_CONST_EXPR",
+    "CNT_CONST",
+    "CNT_OR",
+    "CNT_CALCULABLE_EXPR"
   ],
   "rel_id": [
   ],
@@ -1615,6 +1616,10 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
+    "IS_OR",
+    "CNT_CONST",
+    "CNT_COLUMN",
+    "CNT_OR"
   ],
   "rel_id": [
   ],
@@ -1642,6 +1647,8 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
+        "IS_CONST",
+        "CNT_CONST"
       ],
       "rel_id": [
       ],
@@ -1716,6 +1723,7 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
+    "CNT_COLUMN"
   ],
   "rel_id": [
   ],
@@ -1832,6 +1840,7 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
+    "CNT_COLUMN"
   ],
   "rel_id": [
   ],
@@ -1948,6 +1957,7 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
+    "CNT_COLUMN"
   ],
   "rel_id": [
   ],

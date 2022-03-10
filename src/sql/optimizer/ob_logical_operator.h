@@ -261,9 +261,12 @@ static const char OPCOST[] = "OP_COST";
  * these operator never generate expr
  */
 
-#define IS_EXPR_PASSBY_OPER(type)                                                  \
-  (log_op_def::LOG_GRANULE_ITERATOR == (type) || log_op_def::LOG_LINK == (type) || \
-      log_op_def::LOG_EXCHANGE == (type) || log_op_def::LOG_MONITORING_DUMP == (type))
+#define IS_EXPR_PASSBY_OPER(type) (log_op_def::LOG_GRANULE_ITERATOR == (type)    \
+                                   || log_op_def::LOG_LINK == (type)             \
+                                   || log_op_def::LOG_EXCHANGE == (type)         \
+                                   || log_op_def::LOG_MONITORING_DUMP == (type)  \
+                                   || log_op_def::LOG_JOIN_FILTER == (type))
+
 
 struct FilterCompare {
   FilterCompare(common::ObIArray<ObExprSelPair>& predicate_selectivities)

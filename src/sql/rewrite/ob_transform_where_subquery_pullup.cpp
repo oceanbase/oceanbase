@@ -2166,6 +2166,8 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt* stmt, bool& tra
           OB_ISNULL(queries.at(j)->get_ref_stmt())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid subquery", K(ret));
+      } else if (queries.at(j)->get_ref_stmt()->is_eliminated()) {
+        // do nothing
       } else if (is_vector_query(queries.at(j))) {
         // not necessary limitation
       } else if (OB_FAIL(tmp.push_back(queries.at(j)))) {
@@ -2196,7 +2198,13 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt* stmt, bool& tra
       }
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < queries.count(); ++j) {
-      if (OB_FAIL(unnest_single_set_subquery(stmt, queries.at(j), true, is_vector_assign, is_select_expr))) {
+      ObSelectStmt *subquery = NULL;
+      if (OB_ISNULL(queries.at(j)) || OB_ISNULL(subquery = queries.at(j)->get_ref_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (subquery->is_eliminated()) {
+        //do nothing
+      } else if (OB_FAIL(unnest_single_set_subquery(stmt, queries.at(j), true, is_vector_assign, is_select_expr))) {
         LOG_WARN("failed to unnest single set subquery", K(ret));
       } else {
         trans_happened = true;
@@ -2260,7 +2268,8 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObSelectStmt* subquery, bool&
   if (OB_ISNULL(subquery)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subquery is null", K(ret), K(subquery));
-  } else if (!subquery->is_spj() || subquery->has_subquery() || subquery->get_stmt_hint().enable_no_unnest()) {
+  } else if (!subquery->is_spj() || subquery->has_subquery() || subquery->get_stmt_hint().enable_no_unnest() ||
+             subquery->is_eliminated()) {
     is_valid = false;
   } else if (OB_FAIL(subquery->get_column_exprs(columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
