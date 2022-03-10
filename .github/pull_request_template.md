@@ -1,5 +1,5 @@
 <!--
-Thank you for contributing to **OceanBase**! Please read the [CONTRIBUTING](https://github.com/oceanbase/oceanbase/blob/master/CONTRIBUTING.md) document **BEFORE** filing this PR.
+Thank you for contributing to **OceanBase**! Please read the [How to Contribute](https://github.com/oceanbase/oceanbase/wiki/how_to_contribute) document **BEFORE** filing this PR.
 -->
 
 ### What changes were proposed in this pull request?
