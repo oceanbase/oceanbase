@@ -7233,6 +7233,7 @@ def_table_schema(
   ('zone_type', 'varchar:MAX_ZONE_INFO_LENGTH'),
   ('merge_status', 'varchar:MAX_ZONE_INFO_LENGTH'),
   ('zone_status', 'varchar:MAX_ZONE_INFO_LENGTH'),
+  ('svr_min_log_timestamp', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
 )
