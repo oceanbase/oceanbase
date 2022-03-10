@@ -21,7 +21,8 @@
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "lib/restore/ob_storage.h"
 #include "share/backup/ob_backup_info_mgr.h"
-
+#include "lib/container/ob_array.h"
+#include "lib/container/ob_array_iterator.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 
@@ -499,8 +500,7 @@ int ObMultiBackupDestUtil::check_can_restore_by_set_or_piece(
     bool set_exist = false;
     if (OB_FAIL(get_backup_set_info_path(simple_path.get_simple_path(), backup_set_path))) {
       LOG_WARN("failed to get backup set info path", KR(ret), K_(simple_path.backup_dest));
-    } else if (OB_FAIL(util.is_exist(
-                   backup_set_path.get_obstr(), simple_path.get_storage_info(), set_exist))) {
+    } else if (OB_FAIL(util.is_exist(backup_set_path.get_obstr(), simple_path.get_storage_info(), set_exist))) {
       LOG_WARN("failed to check set file exist", KR(ret), K(backup_set_path));
     } else if (!set_exist) {
       ret = OB_BACKUP_FILE_NOT_EXIST;
@@ -513,8 +513,7 @@ int ObMultiBackupDestUtil::check_can_restore_by_set_or_piece(
     bool piece_exist = false;
     if (OB_FAIL(get_backup_piece_info_path(simple_path.get_simple_path(), backup_piece_path))) {
       LOG_WARN("failed to get backup piece info path", KR(ret), K_(simple_path.backup_dest));
-    } else if (OB_FAIL(util.is_exist(
-                   backup_piece_path.get_obstr(), simple_path.get_storage_info(), piece_exist))) {
+    } else if (OB_FAIL(util.is_exist(backup_piece_path.get_obstr(), simple_path.get_storage_info(), piece_exist))) {
       LOG_WARN("failed to check piece file exist", KR(ret), K(backup_piece_path));
     } else if (!piece_exist) {
       ret = OB_BACKUP_FILE_NOT_EXIST;

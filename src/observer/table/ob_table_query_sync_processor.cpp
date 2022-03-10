@@ -10,27 +10,28 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SERVER		
-#include "ob_table_query_sync_processor.h"		
-#include "ob_table_rpc_processor_util.h"		
-#include "observer/ob_service.h"		
-#include "storage/ob_partition_service.h"		
-#include "ob_table_end_trans_cb.h"		
-#include "sql/optimizer/ob_table_location.h"  // ObTableLocation		
-#include "lib/stat/ob_diagnose_info.h"		
-#include "lib/stat/ob_session_stat.h"		
-#include "observer/ob_server.h"		
-#include "lib/string/ob_strings.h"		
+#define USING_LOG_PREFIX SERVER
+#include "ob_table_query_sync_processor.h"
+#include "ob_table_rpc_processor_util.h"
+#include "observer/ob_service.h"
+#include "storage/ob_partition_service.h"
+#include "ob_table_end_trans_cb.h"
+#include "sql/optimizer/ob_table_location.h"  // ObTableLocation
+#include "lib/stat/ob_diagnose_info.h"
+#include "lib/stat/ob_session_stat.h"
+#include "observer/ob_server.h"
+#include "lib/string/ob_strings.h"
+#include "lib/rc/ob_rc.h"
 
-using namespace oceanbase::observer;		
-using namespace oceanbase::common;		
-using namespace oceanbase::table;		
-using namespace oceanbase::share;		
-using namespace oceanbase::sql;		
+using namespace oceanbase::observer;
+using namespace oceanbase::common;
+using namespace oceanbase::table;
+using namespace oceanbase::share;
+using namespace oceanbase::sql;
 
-/**		
- * ---------------------------------------- ObTableQuerySyncSession ----------------------------------------		
- */		
+/**
+ * ---------------------------------------- ObTableQuerySyncSession ----------------------------------------
+ */
 int ObTableQuerySyncSession::deep_copy_select_columns(const ObTableQuery &query)
 {
   int ret = OB_SUCCESS;
@@ -44,7 +45,7 @@ int ObTableQuerySyncSession::deep_copy_select_columns(const ObTableQuery &query)
     } else if (OB_FAIL(query_.add_select_column(tmp_str))) {
       LOG_WARN("failed to add column name", K(ret));
     }
-  } // end for
+  }  // end for
   return ret;
 }
 
@@ -57,7 +58,8 @@ void ObTableQuerySyncSession::set_result_iterator(ObNormalTableQueryResultIterat
   }
 }
 
-int ObTableQuerySyncSession::init() {
+int ObTableQuerySyncSession::init()
+{
   int ret = OB_SUCCESS;
   lib::MemoryContext mem_context = nullptr;
   lib::ContextParam param;
@@ -164,9 +166,9 @@ int ObQuerySyncMgr::get_query_session(uint64_t sessid, ObTableQuerySyncSession *
   } else if (OB_ISNULL(query_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null query session", K(ret), K(sessid));
-  } else if (query_session->is_in_use()) { // one session cannot be held concurrently
+  } else if (query_session->is_in_use()) {  // one session cannot be held concurrently
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query session already in use", K(sessid));  
+    LOG_WARN("query session already in use", K(sessid));
   } else {
     query_session->set_in_use(true);
   }
@@ -225,8 +227,7 @@ void ObQuerySyncMgr::clean_timeout_query_session()
         LOG_WARN("clean timeout query session success", K(ret), K(sess_id));
       }
       get_locker(sess_id).unlock();
-  }
-
+    }
   }
 }
 
@@ -249,7 +250,8 @@ ObTableQuerySyncSession *ObQuerySyncMgr::alloc_query_session()
   return query_session;
 }
 
-int ObQuerySyncMgr::ObGetAllSessionIdOp::operator()(QuerySessionPair& entry) {
+int ObQuerySyncMgr::ObGetAllSessionIdOp::operator()(QuerySessionPair &entry)
+{
   int ret = OB_SUCCESS;
   if (OB_FAIL(session_id_array_.push_back(entry.first))) {
     LOG_WARN("fail to push back query session id", K(ret));
@@ -429,7 +431,7 @@ int ObTableQuerySyncP::query_scan_with_new_context(
       ret = OB_SUCCESS;
       result_.is_end_ = true;
     }
-  } else if (result_iterator->has_more_result()){
+  } else if (result_iterator->has_more_result()) {
     result_.is_end_ = false;
     query_session->deep_copy_select_columns(arg_.query_);
     query_session->set_result_iterator(dynamic_cast<ObNormalTableQueryResultIterator *>(result_iterator));
@@ -445,8 +447,7 @@ int ObTableQuerySyncP::query_scan_with_init()
   table_service_ctx_ = query_session_->get_table_service_ctx();
   table_service_ctx_->scan_param_.is_thread_scope_ = false;
   uint64_t &table_id = table_service_ctx_->param_table_id();
-  table_service_ctx_->init_param(
-      timeout_ts_,
+  table_service_ctx_->init_param(timeout_ts_,
       this,
       query_session_->get_allocator(),
       false /*ignored*/,
@@ -465,8 +466,8 @@ int ObTableQuerySyncP::query_scan_with_init()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("should have one partition", K(ret), K(part_ids));
   } else if (FALSE_IT(table_service_ctx_->param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(
-                 is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, timeout_ts_))) {
+  } else if (OB_FAIL(
+                 start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, timeout_ts_))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(table_service_->execute_query(*table_service_ctx_, arg_.query_, result_, result_iterator))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -533,7 +534,7 @@ int ObTableQuerySyncP::try_process()
   } else {
     if (ObQueryOperationType::QUERY_START == arg_.query_type_) {
       ret = process_query_start();
-    } else if(ObQueryOperationType::QUERY_NEXT == arg_.query_type_) {
+    } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_) {
       ret = process_query_next();
     }
     if (OB_FAIL(ret)) {
@@ -581,7 +582,7 @@ int ObTableQuerySyncP::check_query_type()
 {
   int ret = OB_SUCCESS;
   if (arg_.query_type_ != table::ObQueryOperationType::QUERY_START &&
-            arg_.query_type_ != table::ObQueryOperationType::QUERY_NEXT){
+      arg_.query_type_ != table::ObQueryOperationType::QUERY_NEXT) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid query operation type", K(ret), K(arg_.query_type_));
   }
