@@ -537,6 +537,7 @@ public:
   int get_clog_using_disk_space(int64_t &space) const;
   int get_ilog_using_disk_space(int64_t &space) const;
   bool is_clog_disk_hang() const;
+  int get_server_min_log_ts(int64_t &server_min_log_ts);
 
 private:
   int fetch_log_from_server(
