@@ -1249,6 +1249,8 @@ int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int6
   if (0 == now_ms) {
     now_ms = -ObHTableUtils::current_time_millis();
   }
+  // store not set timestamp cell for tmp
+  ObArray<ObObj*> reset_timestamp_obj;
   //ObString htable_row;
   const int64_t N = mutations.count();
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
@@ -1275,6 +1277,7 @@ int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int6
         // update timestamp iff LATEST_TIMESTAMP
         if (ObHTableConstants::LATEST_TIMESTAMP == timestamp) {
           hbase_timestamp.set_int(now_ms);
+          reset_timestamp_obj.push_back(&hbase_timestamp);
         }
       }
     }
@@ -1286,6 +1289,14 @@ int ObHTablePutExecutor::htable_put(const ObTableBatchOperation &mutations, int6
     if (OB_FAIL(table_service_->multi_insert_or_update(mutate_ctx_, mutations, mutations_result_))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("failed to multi_delete", K(ret));
+      }
+      if ( OB_TRANSACTION_SET_VIOLATION == ret ) { 
+        // When OB_TRANSACTION_SET_VIOLATION happen, there will not refresh timestamp
+        // and will cover old row data in processor local retry. so here reset timestamp 
+        // to origin LATEST_TIMESTAMP in order to retry in queue and refresh timestamp force.
+        for (int64_t i = 0; i < reset_timestamp_obj.count(); i++) {
+          reset_timestamp_obj.at(i)->set_int(ObHTableConstants::LATEST_TIMESTAMP);
+        }
       }
     } else {
       affected_rows = 1;

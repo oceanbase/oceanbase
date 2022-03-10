@@ -362,6 +362,7 @@ int ObTableBatchExecuteP::htable_put()
       }
     }
   }
+  
   int tmp_ret = ret;
   if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
     LOG_WARN("failed to end trans");
