@@ -26,7 +26,6 @@ body:
   - type: textarea
     attributes:
       label: Fast Reproduce Steps(Required)
-      description: Steps to reproduce what you encountered.
     validations:
       required: true
   - type: textarea
@@ -44,9 +43,6 @@ body:
   - type: textarea
     attributes:
       label: other information
-      value: |
-        - Error Log or Core stack
-        - Others
-      render: markdown
+      description: what you expected.Error Log or Core stack
     validations:
       required: false
