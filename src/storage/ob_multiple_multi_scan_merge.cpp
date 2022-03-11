@@ -22,13 +22,13 @@ namespace storage {
 ObMultipleMultiScanMerge::ObMultipleMultiScanMerge()
     : ObMultipleScanMergeImpl(), get_num_(0), ranges_(NULL), cow_ranges_()
 {
-  memset(get_items_, 0, sizeof(ObStoreRow*) * MAX_TABLE_CNT_IN_STORAGE);
+  memset(get_items_, 0, sizeof(ObStoreRow *) * MAX_TABLE_CNT_IN_STORAGE);
 }
 
 ObMultipleMultiScanMerge::~ObMultipleMultiScanMerge()
 {}
 
-int ObMultipleMultiScanMerge::is_get_data_ready(bool& is_ready)
+int ObMultipleMultiScanMerge::is_get_data_ready(bool &is_ready)
 {
   int ret = OB_SUCCESS;
   int64_t cur_get_index_ = -1;
@@ -53,7 +53,7 @@ int ObMultipleMultiScanMerge::is_get_data_ready(bool& is_ready)
   return ret;
 }
 
-int ObMultipleMultiScanMerge::is_scan_data_ready(bool& is_ready)
+int ObMultipleMultiScanMerge::is_scan_data_ready(bool &is_ready)
 {
   int ret = OB_SUCCESS;
   is_ready = !is_scan_end();
@@ -66,10 +66,10 @@ void ObMultipleMultiScanMerge::reset()
   get_num_ = 0;
   ranges_ = NULL;
   cow_ranges_.reset();
-  memset(get_items_, 0, sizeof(ObStoreRow*) * MAX_TABLE_CNT_IN_STORAGE);
+  memset(get_items_, 0, sizeof(ObStoreRow *) * MAX_TABLE_CNT_IN_STORAGE);
 }
 
-int ObMultipleMultiScanMerge::open(const ObIArray<ObExtStoreRange>& ranges)
+int ObMultipleMultiScanMerge::open(const ObIArray<ObExtStoreRange> &ranges)
 {
   int ret = OB_SUCCESS;
 
@@ -138,12 +138,12 @@ int ObMultipleMultiScanMerge::calc_scan_range()
 
       cow_ranges_.reuse();
       for (int64_t i = l; i < r && OB_SUCC(ret); ++i) {
-        ObExtStoreRange& range = tmp_ranges.at(i);
+        ObExtStoreRange &range = tmp_ranges.at(i);
 
         if (curr_scan_index_ == i && range.get_range().include(rowkey_range)) {
           range.change_boundary(curr_rowkey_, is_reverse_scan, true);
           if (range.get_range().is_valid()) {
-            if (OB_FAIL(const_cast<ObExtStoreRange&>(range).to_collation_free_range_on_demand_and_cutoff_range(
+            if (OB_FAIL(const_cast<ObExtStoreRange &>(range).to_collation_free_range_on_demand_and_cutoff_range(
                     *access_ctx_->allocator_))) {
               STORAGE_LOG(WARN, "fail to get collation free rowkey", K(ret));
             } else if (OB_FAIL(cow_ranges_.push_back(range))) {
@@ -182,7 +182,7 @@ OB_INLINE int ObMultipleMultiScanMerge::prepare()
   return ObMultipleScanMergeImpl::prepare_loser_tree();
 }
 
-void ObMultipleMultiScanMerge::collect_merge_stat(ObTableStoreStat& stat) const
+void ObMultipleMultiScanMerge::collect_merge_stat(ObTableStoreStat &stat) const
 {
   stat.multi_scan_stat_.call_cnt_++;
   stat.multi_scan_stat_.output_row_cnt_ += table_stat_.output_row_cnt_;
@@ -191,7 +191,7 @@ void ObMultipleMultiScanMerge::collect_merge_stat(ObTableStoreStat& stat) const
 int ObMultipleMultiScanMerge::construct_iters()
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObITable*>& tables = tables_handle_.get_tables();
+  const ObIArray<ObITable *> &tables = tables_handle_.get_tables();
 
   consumer_.reset();
 
@@ -206,9 +206,9 @@ int ObMultipleMultiScanMerge::construct_iters()
         tables.count(),
         KP(this));
   } else if (tables.count() > 0) {
-    ObITable* table = NULL;
-    ObStoreRowIterator* iter = NULL;
-    const ObTableIterParam* iter_param = NULL;
+    ObITable *table = NULL;
+    ObStoreRowIterator *iter = NULL;
+    const ObTableIterParam *iter_param = NULL;
     bool use_cache_iter = iters_.count() > 0;
 
     if (OB_FAIL(loser_tree_.init(tables.count(), *access_ctx_->stmt_allocator_))) {
@@ -228,7 +228,7 @@ int ObMultipleMultiScanMerge::construct_iters()
           iter->~ObStoreRowIterator();
           STORAGE_LOG(WARN, "Fail to push iter to iterator array, ", K(ret), K(i));
         }
-      } else if (OB_ISNULL(iters_.at(tables.count() - 1 - i))) {
+      } else if (OB_ISNULL(iter = iters_.at(tables.count() - 1 - i))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null iter", K(ret), "idx", tables.count() - 1 - i, K_(iters));
       } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, ranges_))) {
@@ -263,7 +263,7 @@ int ObMultipleMultiScanMerge::supply_consume()
   const int64_t consumer_cnt = consumer_.get_consumer_num();
   for (int64_t i = 0; OB_SUCC(ret) && i < consumer_cnt; ++i) {
     const int64_t iter_idx = consumer_.get_consumer_iters()[i];
-    ObStoreRowIterator* iter = iters_.at(iter_idx);
+    ObStoreRowIterator *iter = iters_.at(iter_idx);
     if (NULL == iter) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected error", K(ret), K(iter));
@@ -322,10 +322,10 @@ int ObMultipleMultiScanMerge::supply_consume()
   return ret;
 }
 
-int ObMultipleMultiScanMerge::inner_get_next_row_for_get(ObStoreRow& row, bool& need_retry)
+int ObMultipleMultiScanMerge::inner_get_next_row_for_get(ObStoreRow &row, bool &need_retry)
 {
   int ret = OB_SUCCESS;
-  const ObStoreRow* tmp_row = NULL;
+  const ObStoreRow *tmp_row = NULL;
   bool final_result = false;
   nop_pos_.reset();
   row.row_val_.count_ = 0;
@@ -367,7 +367,7 @@ int ObMultipleMultiScanMerge::inner_get_next_row_for_get(ObStoreRow& row, bool& 
   return ret;
 }
 
-int ObMultipleMultiScanMerge::inner_get_next_row_for_scan(ObStoreRow& row, bool& need_retry)
+int ObMultipleMultiScanMerge::inner_get_next_row_for_scan(ObStoreRow &row, bool &need_retry)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMultipleScanMergeImpl::inner_get_next_row(row, need_retry))) {
@@ -377,7 +377,7 @@ int ObMultipleMultiScanMerge::inner_get_next_row_for_scan(ObStoreRow& row, bool&
   return ret;
 }
 
-int ObMultipleMultiScanMerge::inner_get_next_row(ObStoreRow& row)
+int ObMultipleMultiScanMerge::inner_get_next_row(ObStoreRow &row)
 {
   int ret = OB_SUCCESS;
   bool need_retry = true;
@@ -424,7 +424,7 @@ int ObMultipleMultiScanMerge::inner_get_next_row(ObStoreRow& row)
 }
 
 int ObMultipleMultiScanMerge::to_collation_free_range_on_demand(
-    const ObIArray<ObExtStoreRange>& ranges, common::ObIAllocator& allocator)
+    const ObIArray<ObExtStoreRange> &ranges, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (0 == ranges.count()) {
@@ -433,8 +433,8 @@ int ObMultipleMultiScanMerge::to_collation_free_range_on_demand(
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-    if (OB_FAIL(
-            const_cast<ObExtStoreRange&>(ranges.at(i)).to_collation_free_range_on_demand_and_cutoff_range(allocator))) {
+    if (OB_FAIL(const_cast<ObExtStoreRange &>(ranges.at(i))
+                    .to_collation_free_range_on_demand_and_cutoff_range(allocator))) {
       STORAGE_LOG(WARN, "fail to get collation free rowkey", K(ret), K(ranges.at(i).get_range()));
     }
   }
@@ -442,8 +442,8 @@ int ObMultipleMultiScanMerge::to_collation_free_range_on_demand(
 }
 
 int ObMultipleMultiScanMerge::estimate_row_count(const ObQueryFlag query_flag, const uint64_t table_id,
-    const common::ObIArray<common::ObExtStoreRange>& ranges, const common::ObIArray<ObITable*>& tables,
-    ObPartitionEst& part_estimate, common::ObIArray<common::ObEstRowCountRecord>& est_records)
+    const common::ObIArray<common::ObExtStoreRange> &ranges, const common::ObIArray<ObITable *> &tables,
+    ObPartitionEst &part_estimate, common::ObIArray<common::ObEstRowCountRecord> &est_records)
 {
   int ret = OB_SUCCESS;
 
@@ -460,7 +460,7 @@ int ObMultipleMultiScanMerge::estimate_row_count(const ObQueryFlag query_flag, c
     for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
       int64_t start_time = common::ObTimeUtility::current_time();
       table_est.reset();
-      ObITable* table = tables.at(i);
+      ObITable *table = tables.at(i);
       if (NULL == table) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected error, store shouldn't be null", K(ret), KP(table));
@@ -516,7 +516,7 @@ int ObMultipleMultiScanMerge::skip_to_range(const int64_t range_idx)
     }
     // skip data in heap and iterators
     const bool include_gap_key = ranges_->at(range_idx).get_range().get_border_flag().inclusive_start();
-    const ObStoreRowkey& rowkey = ranges_->at(range_idx).get_range().get_start_key();
+    const ObStoreRowkey &rowkey = ranges_->at(range_idx).get_range().get_start_key();
     STORAGE_LOG(DEBUG, "skip to range", K(include_gap_key), K(rowkey), K(range_idx));
     if (OB_FAIL(reset_range(0L /*skip all tables*/, range_idx, &rowkey, include_gap_key))) {
       STORAGE_LOG(WARN, "fail to reset range", K(ret));
