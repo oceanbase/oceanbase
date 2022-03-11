@@ -33,13 +33,13 @@ body:
   - type: textarea
     attributes:
       label: Actual Behavior
-      description: picture is allowed
+      description: What is the result? picture is allowed
     validations:
       required: true
   - type: textarea
     attributes:
       label: Expected Behavior
-      description: Describe what you expected.
+      description: what you expected.
     validations:
       required: false
   - type: textarea
