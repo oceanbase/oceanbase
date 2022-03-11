@@ -7,9 +7,9 @@ assignees:
 body:
   - type: checkboxes
     attributes:
-      label: Please check the issue list first for the same bug 
+      label: Please check the issue list for the same bug 
       options:
-        - label: I have checked this bug encountered for the first time.
+        - label: I have checked issue list and this bug is encountered for the first time.
           required: true
   - type: textarea
     attributes:
