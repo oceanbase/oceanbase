@@ -1441,7 +1441,8 @@ int ObTenantBackupClogDataCleanTask::generate_backup_piece_pg_tasks(
     if (ObLogArchiveStatus::STOP == log_archive_round.log_archive_status_) {
       if (log_archive_round.copies_num_ < backup_copies || 0 == start_replay_log_ts) {
         delete_clog_mode.mode_ = ObBackupDeleteClogMode::NONE;
-      } else if (start_replay_log_ts < log_archive_round.checkpoint_ts_) {
+      } else if (start_replay_log_ts < log_archive_round.checkpoint_ts_ ||
+                 start_replay_log_ts < backup_piece_info.max_ts_) {
         delete_clog_mode.mode_ = ObBackupDeleteClogMode::DELETE_ARCHIVE_LOG;
       } else {
         const hash::ObHashSet<ObSimpleArchiveRound> &sys_tenant_deleted_backup_round =

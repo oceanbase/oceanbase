@@ -2476,39 +2476,55 @@ int ObBackupDataClean::get_sys_tenant_prepare_clog_round_and_piece(const share::
           }
         }
       }
+
+      int piece_num = log_archive_round.piece_infos_.count();
       if (OB_FAIL(ret)) {
       } else if (ObLogArchiveStatus::STOP != log_archive_round.log_archive_status_) {
         // do nothing
       } else if (log_archive_round.checkpoint_ts_ > clog_gc_snapshot || log_archive_round.copies_num_ < backup_copies) {
         is_delete_inorder = false;
-      } else if (OB_FAIL(log_archive_rounds.push_back(log_archive_round))) {
-        LOG_WARN("failed to push log archive round into array", K(ret), K(log_archive_round));
+      } else if (piece_num < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("piece num is less than 0", K(piece_num), K(log_archive_round));
       } else {
-        char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
-        int trace_length = 0;
-        simple_archive_round.reset();
-        simple_archive_round.incarnation_ = clean_element.incarnation_;
-        simple_archive_round.round_id_ = log_archive_round.log_archive_round_;
-        simple_archive_round.copy_id_ = log_archive_round.copy_id_;
-        if (OB_FAIL(sys_tenant_deleted_backup_round_.set_refactored_1(simple_archive_round, overwrite_key))) {
-          LOG_WARN("failed to set sys tenant deleted backup round", K(ret), K(simple_archive_round));
-        } else if (FALSE_IT(trace_length = ObCurTraceId::get_trace_id()->to_string(
-                                trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
-        } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
+        if (0 == piece_num) {
+          is_delete_inorder = true;
         } else {
-          FLOG_INFO("[BACKUP_CLEAN]succ add backup clean round", K(simple_archive_round), K(clean_info));
-          ROOTSERVICE_EVENT_ADD("backup_clean",
-              "backup_round",
-              "tenant_id",
-              clean_info.tenant_id_,
-              "round_id",
-              simple_archive_round.round_id_,
-              "copy_id",
-              simple_archive_round.copy_id_,
-              "trace_id",
-              trace_id);
+          const ObSimplePieceInfo &simple_piece_info = log_archive_round.piece_infos_.at(piece_num - 1);
+          if (simple_piece_info.max_ts_ > clog_gc_snapshot) {
+            is_delete_inorder = false;
+          }
+        }
+        if (!is_delete_inorder) {
+        } else if (OB_FAIL(log_archive_rounds.push_back(log_archive_round))) {
+          LOG_WARN("failed to push log archive round into array", K(ret), K(log_archive_round));
+        } else {
+          char trace_id[common::OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+          int trace_length = 0;
+          simple_archive_round.reset();
+          simple_archive_round.incarnation_ = clean_element.incarnation_;
+          simple_archive_round.round_id_ = log_archive_round.log_archive_round_;
+          simple_archive_round.copy_id_ = log_archive_round.copy_id_;
+          if (OB_FAIL(sys_tenant_deleted_backup_round_.set_refactored_1(simple_archive_round, overwrite_key))) {
+            LOG_WARN("failed to set sys tenant deleted backup round", K(ret), K(simple_archive_round));
+          } else if (FALSE_IT(trace_length = ObCurTraceId::get_trace_id()->to_string(
+                                  trace_id, common::OB_MAX_TRACE_ID_BUFFER_SIZE))) {
+          } else if (trace_length > OB_MAX_TRACE_ID_BUFFER_SIZE) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get trace id", K(ret), K(*ObCurTraceId::get_trace_id()));
+          } else {
+            FLOG_INFO("[BACKUP_CLEAN]succ add backup clean round", K(simple_archive_round), K(clean_info));
+            ROOTSERVICE_EVENT_ADD("backup_clean",
+                "backup_round",
+                "tenant_id",
+                clean_info.tenant_id_,
+                "round_id",
+                simple_archive_round.round_id_,
+                "copy_id",
+                simple_archive_round.copy_id_,
+                "trace_id",
+                trace_id);
+          }
         }
       }
     }
