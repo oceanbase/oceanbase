@@ -7110,9 +7110,9 @@ int ObTransformUtils::extract_column_contained_expr(
       LOG_WARN("failed to extract stmt column contained expr", K(ret));
     } else { /*do nothing*/
     }
-  } else if (!expr->get_relation_ids().is_empty() && !expr->is_column_ref_expr() && !expr->is_aggr_expr() && !expr->is_win_func_expr() &&
-        expr->get_expr_levels().num_members() == 1 && !ObRawExprUtils::find_expr(contain_column_exprs, expr) &&
-        OB_FAIL(contain_column_exprs.push_back(expr))) {
+  } else if (!expr->is_column_ref_expr() && !expr->is_aggr_expr() && !expr->is_win_func_expr() &&
+        expr->get_expr_levels().num_members() == 1 && expr->get_expr_levels().has_member(stmt_level) &&
+        OB_FAIL(add_var_to_array_no_dup(contain_column_exprs, expr))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
