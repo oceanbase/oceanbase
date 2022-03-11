@@ -27,7 +27,6 @@ body:
     attributes:
       label: Fast Reproduce Steps(Required)
       description: Steps to reproduce what you encountered.
-      render: markdown
     validations:
       required: true
   - type: textarea
