@@ -43,6 +43,6 @@ body:
   - type: textarea
     attributes:
       label: other information
-      description: what you expected.Error Log or Core stack
+      description: Error Log or Core stack or Others
     validations:
       required: false
