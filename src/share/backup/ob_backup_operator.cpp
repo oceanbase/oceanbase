@@ -1811,6 +1811,8 @@ int ObBackupTaskHistoryOperator::remove_one_item(
     } else if (1 != affected_rows) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected affected rows", K(ret), K(tenant_id), K(backup_set_id), K(affected_rows));
+    } else {
+      LOG_INFO("succ remove backup task", K(tenant_id), K(backup_set_id), K(affected_rows));
     }
   }
   return ret;

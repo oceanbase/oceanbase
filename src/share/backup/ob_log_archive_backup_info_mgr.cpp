@@ -1977,6 +1977,8 @@ int ObLogArchiveBackupInfoMgr::delete_log_archive_info(
     LOG_WARN("failed to apend copy id", K(ret), K(sql));
   } else if (OB_FAIL(sql_client.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to write sql", K(ret), K(sql));
+  } else {
+    LOG_INFO("succeed to delete log archive info", K(affected_rows), K(sql), K(info));
   }
   return ret;
 }
