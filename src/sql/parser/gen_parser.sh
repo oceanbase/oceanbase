@@ -7,15 +7,6 @@
 set +x
 CURDIR="$(dirname $(readlink -f "$0"))"
 export PATH=$CURDIR/../../../deps/3rd/usr/local/oceanbase/devtools/bin:$PATH
-export BISON_PKGDATADIR=$CURDIR/../../../deps/3rd/usr/local/oceanbase/devtools/share/bison
-BISON_VERSION=`bison -V| grep 'bison (GNU Bison)'|awk '{ print  $4;}'`
-NEED_VERSION='2.4.1'
-
-if [ "$BISON_VERSION" != "$NEED_VERSION" ]; then
-  echo "bison version not match, please use bison-$NEED_VERSION"
-  exit 1
-fi
-
 
 # generate sql_parser
 bison -v -Werror -d ../../../src/sql/parser/sql_parser_mysql_mode.y -o ../../../src/sql/parser/sql_parser_mysql_mode_tab.c

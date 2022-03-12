@@ -10,11 +10,16 @@
  * See the Mulan PubL v2 for more details.
  */
 %define api.pure
-%parse-param {ParseResult *result}
-%name-prefix "obsql_mysql_yy"
+%code requires {
+#include "../../../src/sql/parser/parse_node.h"
+#define YYEMPTY         OBSQL_MYSQL_YYEMPTY
+}
+%param {ParseResult *result}
+%define api.prefix {obsql_mysql_yy}
 %locations
 %verbose
-%error-verbose
+%define parse.error verbose
+
 %{
 #include <stdint.h>
 #define YYDEBUG 1
@@ -9100,7 +9105,7 @@ table_factor %prec LOWER_COMMA
 natural_join_type:
 NATURAL outer_join_type
 {
-  $$ = $2
+  $$ = $2;
 }
 | NATURAL opt_inner JOIN
 {
@@ -12894,7 +12899,7 @@ FILE_ID opt_equal_mark INTNUM
 opt_file_id:
 file_id
 {
-  $$ = $1
+  $$ = $1;
 }
 |
 {
