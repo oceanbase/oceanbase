@@ -43,7 +43,7 @@ target_compile_options(easy_base
   INTERFACE
   -D_GLIBCXX_USE_CXX11_ABI=0 -D_GNU_SOURCE -D__STDC_LIMIT_MACROS
   ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
-  $<$<COMPILE_LANGUAGE:C>:-g -Wall -Werror -fPIC ${EASY_CC_WNO}>
+  $<$<COMPILE_LANGUAGE:C>:-g -Wall -fPIC ${EASY_CC_WNO}>
 )
 
 target_link_libraries(easy_base

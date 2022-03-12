@@ -21,8 +21,8 @@ if (OB_USE_CLANG)
     -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D_NO_EXCEPTION 
     -Wall -Wextra -Wformat -Wno-deprecated
     -fno-omit-frame-pointer ${MARCH_CFLAGS} ${MTUNE_CFLAGS}
-    -Wno-address-of-packed-member -Wno-sign-compare -Werror 
-    -Wno-inconsistent-missing-override 
+    -Wno-address-of-packed-member -Wno-sign-compare
+    -Wno-inconsistent-missing-override
     -fno-delete-null-pointer-checks
     -Wno-delete-non-virtual-dtor -Wno-dynamic-class-memaccess
     -Wno-format-security -Wno-reserved-user-defined-literal -Wno-sometimes-uninitialized

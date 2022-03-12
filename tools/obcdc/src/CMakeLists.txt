@@ -110,7 +110,7 @@ set(SRC_LIST
 add_library(obcdc_objects OBJECT ${SRC_LIST})
 target_link_libraries(obcdc_objects PUBLIC obcdc_base)
 target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
-target_compile_options(obcdc_objects PRIVATE -Werror)
+#target_compile_options(obcdc_objects PRIVATE -Werror)
 
 disable_pch(obcdc_objects)
 set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a -laio")

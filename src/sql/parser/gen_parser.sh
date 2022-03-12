@@ -9,7 +9,7 @@ CURDIR="$(dirname $(readlink -f "$0"))"
 export PATH=$CURDIR/../../../deps/3rd/usr/local/oceanbase/devtools/bin:$PATH
 
 # generate sql_parser
-bison -v -Werror -d ../../../src/sql/parser/sql_parser_mysql_mode.y -o ../../../src/sql/parser/sql_parser_mysql_mode_tab.c
+bison -v -d ../../../src/sql/parser/sql_parser_mysql_mode.y -o ../../../src/sql/parser/sql_parser_mysql_mode_tab.c
 BISON_RETURN="$?"
 if [ $BISON_RETURN -ne 0 ]
 then
