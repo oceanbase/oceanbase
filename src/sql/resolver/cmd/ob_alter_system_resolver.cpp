@@ -2148,7 +2148,8 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event and enable_sql_audit together");
                   LOG_WARN("enable_perf_event and enable_sql_audit should not set together", K(ret));
                 } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT) &&
-                           0 == STRCMP(item.value_.ptr(), CONFIG_FALSE_VALUE)) {
+                           (0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_BOOL) ||
+                               0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_STRING))) {
                   if (GCONF.enable_sql_audit) {
                     ret = OB_NOT_SUPPORTED;
                     LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event to false when enable_sql_audit is true");
@@ -2159,7 +2160,9 @@ int ObSetConfigResolver::resolve(const ParseNode& parse_tree)
                     LOG_WARN("add config item failed", K(ret), K(item));
                   }
                 } else if (0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT) &&
-                           0 == STRCMP(item.value_.ptr(), CONFIG_TRUE_VALUE) && !GCONF.enable_perf_event) {
+                           (0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_BOOL) ||
+                               0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_STRING)) &&
+                           !GCONF.enable_perf_event) {
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_sql_audit to true when enable_perf_event is false");
                   LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
