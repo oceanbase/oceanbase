@@ -26,6 +26,7 @@
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
 #include "storage/transaction/ob_ts_mgr.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
+#include "share/ob_global_stat_proxy.h"
 
 namespace oceanbase {
 using namespace common;
@@ -43,7 +44,6 @@ ObBackupScheduler::ObBackupScheduler()
       schema_version_map_(),
       backup_snapshot_version_(0),
       backup_data_version_(0),
-      frozen_timestamp_(0),
       max_backup_set_id_(0),
       root_backup_(NULL),
       freeze_info_manager_(nullptr),
@@ -61,7 +61,7 @@ int ObBackupScheduler::init(const obrpc::ObBackupDatabaseArg& arg, schema::ObMul
   int ret = OB_SUCCESS;
   ObFreezeInfoProxy freeze_info_proxy;
   ObSimpleFrozenStatus frozen_status;
-  const int64_t backup_snapshot_version = ObTimeUtil::current_time();
+  const int64_t current_ts = ObTimeUtil::current_time();
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup scheduler init twice", K(ret), K(is_inited_));
@@ -70,14 +70,13 @@ int ObBackupScheduler::init(const obrpc::ObBackupDatabaseArg& arg, schema::ObMul
     LOG_WARN("backup scheduler get invalid argument", K(ret), K(arg));
   } else if (OB_FAIL(schema_version_map_.create(MAX_TENANT_BUCKET, ObModIds::BACKUP))) {
     LOG_WARN("failed to create schema version map", K(ret));
-  } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(proxy, backup_snapshot_version, frozen_status))) {
-    LOG_WARN("failed to get frozen info less than backup snapshot version", K(ret), K(backup_snapshot_version));
+  } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(proxy, current_ts, frozen_status))) {
+    LOG_WARN("failed to get frozen info less than backup snapshot version", K(ret), K(current_ts));
   } else if (OB_FAIL(init_frozen_schema_versions_(freeze_info_manager, frozen_status.frozen_version_))) {
     LOG_WARN("failed to init frozen schema versions", K(ret), K(frozen_status));
   } else {
-    backup_snapshot_version_ = backup_snapshot_version;
+    backup_snapshot_version_ = 0;
     backup_data_version_ = frozen_status.frozen_version_;
-    frozen_timestamp_ = frozen_status.frozen_timestamp_;
     arg_ = arg;
     schema_service_ = &schema_service;
     proxy_ = &proxy;
@@ -86,7 +85,7 @@ int ObBackupScheduler::init(const obrpc::ObBackupDatabaseArg& arg, schema::ObMul
     freeze_info_manager_ = &freeze_info_manager;
     restore_point_service_ = &restore_point_service;
     is_inited_ = true;
-    LOG_INFO("success init backup scheduler", K(arg), K(backup_snapshot_version), K(frozen_status));
+    LOG_INFO("success init backup scheduler", K(arg), K(current_ts), K(frozen_status));
   }
   return ret;
 }
@@ -288,7 +287,6 @@ int ObBackupScheduler::check_can_backup(const ObIArray<ObBaseBackupInfoStruct>& 
 int ObBackupScheduler::schedule_backup(const ObIArray<uint64_t>& tenant_ids, ObBackupInfoManager& info_manager)
 {
   int ret = OB_SUCCESS;
-  const int64_t backup_snapshot_version = backup_snapshot_version_;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -302,7 +300,7 @@ int ObBackupScheduler::schedule_backup(const ObIArray<uint64_t>& tenant_ids, ObB
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("first info should be sys tenant backup info", K(ret), K(tenant_id));
     } else if (is_cluster_backup_) {
-      if (OB_FAIL(schedule_sys_tenant_backup(backup_snapshot_version, tenant_id, info_manager))) {
+      if (OB_FAIL(schedule_sys_tenant_backup(tenant_id, info_manager))) {
         LOG_WARN("failed to schedule sys tenant backup", K(ret));
       } else {
         ROOTSERVICE_EVENT_ADD("backup", "start backup cluster");
@@ -312,12 +310,19 @@ int ObBackupScheduler::schedule_backup(const ObIArray<uint64_t>& tenant_ids, ObB
     DEBUG_SYNC(BACKUP_INFO_PREPARE);
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(schedule_tenants_backup(backup_snapshot_version, tenant_ids, info_manager))) {
+      if (OB_FAIL(prepare_backup_point_(tenant_ids, info_manager))) {
+        LOG_WARN("failed to prepare backup point", K(ret), K(tenant_ids));
+      } else {
+        DEBUG_SYNC(BEFORE_BACKUP_INFO_SCHEDULER);
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(schedule_tenants_backup(tenant_ids, info_manager))) {
         LOG_WARN("failed to schedule tenants backup", K(ret));
+      } else {
+        DEBUG_SYNC(BACKUP_INFO_SCHEDULER);
       }
     }
-
-    DEBUG_SYNC(BACKUP_INFO_SCHEDULER);
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(start_backup(info_manager))) {
@@ -337,24 +342,21 @@ int ObBackupScheduler::schedule_backup(const ObIArray<uint64_t>& tenant_ids, ObB
   return ret;
 }
 
-int ObBackupScheduler::schedule_sys_tenant_backup(
-    const int64_t backup_snapshot_version, const uint64_t tenant_id, ObBackupInfoManager& info_manager)
+int ObBackupScheduler::schedule_sys_tenant_backup(const uint64_t tenant_id, ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard guard;
-  int64_t backup_schema_version = 0;
   ObBaseBackupInfoStruct info;
   ObBaseBackupInfoStruct dest_info;
   ObBackupItemTransUpdater updater;
+  const int64_t FAKE_BACKUP_SNAPSHOT_VERSION = 1;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler do not init", K(ret));
-  } else if (OB_SYS_TENANT_ID != tenant_id || backup_snapshot_version <= 0) {
+  } else if (OB_SYS_TENANT_ID != tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant id should be sys tenant id", K(ret), K(tenant_id), K(backup_snapshot_version));
-  } else if (OB_FAIL(get_tenant_schema_version(tenant_id, backup_schema_version))) {
-    LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
+    LOG_WARN("tenant id should be sys tenant id", K(ret), K(tenant_id));
   } else if (OB_FAIL(updater.start(*proxy_))) {
     LOG_WARN("failed to start trans", K(ret));
   } else {
@@ -362,9 +364,9 @@ int ObBackupScheduler::schedule_sys_tenant_backup(
       LOG_WARN("failed to get backup info", K(ret), K(tenant_id));
     } else {
       dest_info = info;
-      // dest_info.backup_dest_ added by log archive
-      dest_info.backup_snapshot_version_ = backup_snapshot_version;
-      dest_info.backup_schema_version_ = backup_schema_version;
+      // backup_snapshot_version_ should not be ZERO, here using FAKE VALUE
+      dest_info.backup_snapshot_version_ = FAKE_BACKUP_SNAPSHOT_VERSION;
+      dest_info.backup_schema_version_ = 0;
       dest_info.backup_type_.type_ =
           arg_.is_incremental_ ? ObBackupType::INCREMENTAL_BACKUP : ObBackupType::FULL_BACKUP;
       dest_info.backup_data_version_ = backup_data_version_;
@@ -391,8 +393,8 @@ int ObBackupScheduler::schedule_sys_tenant_backup(
   return ret;
 }
 
-int ObBackupScheduler::schedule_tenant_backup(const int64_t backup_snapshot_version, const uint64_t tenant_id,
-    const ObBaseBackupInfoStruct::BackupDest& backup_dest, ObISQLClient& sys_tenant_trans,
+int ObBackupScheduler::schedule_tenant_backup(const int64_t backup_snapshot_version,
+    const uint64_t tenant_id, const ObBaseBackupInfoStruct::BackupDest& backup_dest, ObISQLClient& sys_tenant_trans,
     ObBackupInfoManager& info_manager)
 {
   int ret = OB_SUCCESS;
@@ -451,18 +453,12 @@ int ObBackupScheduler::schedule_tenant_backup(const int64_t backup_snapshot_vers
       LOG_WARN("end transaction failed", K(tmp_ret), K(ret));
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(create_backup_point(tenant_id))) {
-        LOG_WARN("failed to create backup point", K(ret), K(tenant_id));
-      }
-    }
   }
   return ret;
 }
 
-int ObBackupScheduler::schedule_tenants_backup(const int64_t backup_snapshot_version,
-    const common::ObIArray<uint64_t>& tenant_ids, ObBackupInfoManager& info_manager)
+int ObBackupScheduler::schedule_tenants_backup(
+    const common::ObIArray<uint64_t> &tenant_ids, ObBackupInfoManager &info_manager)
 {
   int ret = OB_SUCCESS;
   ObBackupItemTransUpdater updater;
@@ -472,9 +468,9 @@ int ObBackupScheduler::schedule_tenants_backup(const int64_t backup_snapshot_ver
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler do not init", K(ret));
-  } else if (tenant_ids.empty()) {
+  } else if (tenant_ids.empty() || backup_snapshot_version_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("schedule get tenants backup get invalid argument", K(ret), K(tenant_ids));
+    LOG_WARN("schedule get tenants backup get invalid argument", K(ret), K(tenant_ids), K(backup_snapshot_version_));
   } else if (OB_FAIL(updater.start(*proxy_))) {
     LOG_WARN("failed to start trans", K(ret));
   } else {
@@ -498,7 +494,7 @@ int ObBackupScheduler::schedule_tenants_backup(const int64_t backup_snapshot_ver
         if (OB_SYS_TENANT_ID == tenant_id) {
           // do nothing
         } else if (OB_FAIL(schedule_tenant_backup(
-                       backup_snapshot_version, tenant_id, backup_dest, updater.get_trans(), info_manager))) {
+                       backup_snapshot_version_, tenant_id, backup_dest, updater.get_trans(), info_manager))) {
           LOG_WARN("failed to schedule tenant backup", K(ret), K(tenant_id));
         }
       }
@@ -760,7 +756,7 @@ int ObBackupScheduler::check_tenant_can_backup(
   return ret;
 }
 
-int ObBackupScheduler::create_backup_point(const uint64_t tenant_id)
+int ObBackupScheduler::create_backup_point(const uint64_t tenant_id, common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   char name[OB_MAX_RESERVED_POINT_NAME_LENGTH] = {0};
@@ -769,13 +765,13 @@ int ObBackupScheduler::create_backup_point(const uint64_t tenant_id)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler do not init", K(ret));
-  } else if (OB_INVALID_ID == tenant_id) {
+  } else if (OB_INVALID_ID == tenant_id || !trans.is_started()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create backup point get invalid argument", K(ret), K(tenant_id));
   } else if (OB_FAIL(get_tenant_schema_version(tenant_id, backup_schema_version))) {
     LOG_WARN("failed to get tenant schema version", K(ret), K(tenant_id));
   } else if (OB_FAIL(restore_point_service_->create_backup_point(
-                 tenant_id, name, backup_snapshot_version_, backup_schema_version))) {
+                 tenant_id, name, backup_snapshot_version_, backup_schema_version, trans))) {
     if (OB_ERR_BACKUP_POINT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
@@ -812,30 +808,12 @@ int ObBackupScheduler::check_log_archive_status()
     LOG_WARN("failed to get log archive backup info", K(ret));
   } else if (ObLogArchiveStatus::DOING != sys_log_archive_info_.status_.status_) {
     ret = OB_BACKUP_CAN_NOT_START;
-    LOG_WARN(
-        "failed to start backup", K(ret), K(sys_log_archive_info_), K(backup_snapshot_version_), K(frozen_timestamp_));
+    LOG_WARN("failed to start backup", K(ret), K(sys_log_archive_info_));
     if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg,
                            ERROR_MSG_LENGTH,
                            pos,
                            "log archive is not doing. log archive status : %s.",
                            ObLogArchiveStatus::get_str(sys_log_archive_info_.status_.status_)))) {
-      LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
-    } else {
-      LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, error_msg);
-    }
-  } else if (sys_log_archive_info_.status_.start_ts_ > frozen_timestamp_) {
-    ret = OB_BACKUP_CAN_NOT_START;
-    LOG_WARN(
-        "failed to start backup", K(ret), K(sys_log_archive_info_), K(backup_snapshot_version_), K(frozen_timestamp_));
-
-    if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg,
-                           ERROR_MSG_LENGTH,
-                           pos,
-                           "log archive start timestamp is bigger than frozen timestamp, need major freeze first. "
-                           "start timestamp : %ld, "
-                           "frozen timestamp : %ld .",
-                           sys_log_archive_info_.status_.start_ts_,
-                           frozen_timestamp_))) {
       LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
     } else {
       LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, error_msg);
@@ -862,6 +840,104 @@ int ObBackupScheduler::check_tenant_backup_data_version(
   } else if (backup_data_version_ < base_backup_version) {
     can_backup = false;
     FLOG_INFO("tenant can no join in backup, skip backup", K(backup_data_version_), K(base_backup_version));
+  }
+  return ret;
+}
+
+int ObBackupScheduler::prepare_backup_point_(
+    const common::ObIArray<uint64_t> &tenant_ids, ObBackupInfoManager &info_manager)
+{
+  int ret = OB_SUCCESS;
+  int64_t gc_timestamp = 0;
+  ObBaseBackupInfoStruct info;
+  ObBaseBackupInfoStruct dest_info;
+  ObBackupItemTransUpdater updater;
+  ObTimeoutCtx timeout_ctx;
+  const int64_t MAX_EXECUTE_TIMEOUT_US = 600L * 1000 * 1000;  // 600s
+  const int64_t stmt_timeout = MAX_EXECUTE_TIMEOUT_US;
+  const uint64_t sys_tenant_id = OB_SYS_TENANT_ID;
+  ObFreezeInfoProxy freeze_info_proxy;
+  ObSimpleFrozenStatus frozen_status;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup scheduler do not init", K(ret));
+  } else if (tenant_ids.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("prepare backup point get invalid argument", K(ret), K(tenant_ids));
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(stmt_timeout))) {
+    LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
+  } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
+    LOG_WARN("set timeout context failed", K(ret));
+  } else if (OB_FAIL(updater.start(*proxy_))) {
+    LOG_WARN("failed to start trans", K(ret));
+  } else {
+    if (OB_FAIL(info_manager.get_backup_info(sys_tenant_id, updater, info))) {
+      LOG_WARN("failed to get backup info", K(ret), K(sys_tenant_id));
+    } else if (OB_FAIL(ObGlobalStatProxy::select_gc_timestamp_for_update(updater.get_trans(), gc_timestamp))) {
+      LOG_WARN("fail to select gc timstamp for update", K(ret));
+    } else {
+      backup_snapshot_version_ = ObTimeUtil::current_time();
+      // because snapshot gc ts is :
+      // int64_t new_snapshot_gc_ts = ObTimeUtility::current_time() -
+      //    transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency();
+      if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(
+              updater.get_trans(), backup_snapshot_version_, frozen_status))) {
+        LOG_WARN("failed to get frozen info less than backup snapshot version", K(ret), K(backup_snapshot_version_));
+      } else if (frozen_status.frozen_version_ != backup_data_version_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("frozen version is not equal to backup data version. It may has multi RS",
+            K(ret),
+            K(frozen_status),
+            K(backup_data_version_));
+      } else if (backup_snapshot_version_ <= gc_timestamp) {
+        ret = OB_BACKUP_CAN_NOT_START;
+        LOG_WARN("failed to start backup", K(ret), K(backup_snapshot_version_), K(gc_timestamp));
+        const int64_t ERROR_MSG_LENGTH = 1024;
+        char error_msg[ERROR_MSG_LENGTH] = "";
+        int tmp_ret = OB_SUCCESS;
+        int64_t pos = 0;
+        if (OB_SUCCESS !=
+            (tmp_ret = databuff_printf(
+                 error_msg, ERROR_MSG_LENGTH, pos, "snapshot gc ts is bigger than backup snapshot version."))) {
+          LOG_WARN("failed to set error msg", K(tmp_ret), K(error_msg), K(pos));
+        } else {
+          LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, error_msg);
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+          const uint64_t tenant_id = tenant_ids.at(i);
+          if (OB_SYS_TENANT_ID == tenant_id) {
+            // do nothing
+          } else if (OB_FAIL(create_backup_point(tenant_id, updater.get_trans()))) {
+            LOG_WARN("failed to create backup point", K(ret), K(tenant_id));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int64_t backup_schema_version = 0;
+      if (OB_FAIL(get_tenant_schema_version(sys_tenant_id, backup_schema_version))) {
+        LOG_WARN("failed to get tenant schema version", K(ret), K(sys_tenant_id));
+      } else {
+        dest_info = info;
+        dest_info.backup_snapshot_version_ = backup_snapshot_version_;
+        dest_info.backup_schema_version_ = backup_schema_version;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(info_manager.check_can_update(info, dest_info))) {
+        LOG_WARN("failed to check can update", K(ret));
+      } else if (OB_FAIL(info_manager.update_backup_info(sys_tenant_id, dest_info, updater))) {
+        LOG_WARN("failed to update backup info", K(ret), K(sys_tenant_id), K(dest_info));
+      }
+    }
+
+    int tmp_ret = updater.end(OB_SUCC(ret));
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("end transaction failed", K(tmp_ret), K(ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
   }
   return ret;
 }
