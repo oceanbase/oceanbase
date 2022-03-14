@@ -9004,14 +9004,19 @@ table_reference inner_join_type opt_full_table_factor %prec LOWER_ON
   if ($1->type_ == T_ORG) {
     ParseNode *name_node = NULL;
     make_name_node(name_node, result->malloc_pool_, "full");
-    malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
-    for (int i = 0; i <= $1->num_child_; ++i) {
-      if (i == 0) {
-        $$->children_[i] = $1->children_[i];
-      } else if (i == 1) {
-        $$->children_[i] = name_node;
-      } else {
-        $$->children_[i] = $1->children_[i - 1];
+    $$ = new_node(result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
+    if (OB_UNLIKELY($$ == NULL)) {
+      yyerror(NULL, result, "No more space for malloc\n");
+      YYABORT_NO_MEMORY;
+    } else {
+      for (int i = 0; i <= $1->num_child_; ++i) {
+        if (i == 0) {
+          $$->children_[i] = $1->children_[i];
+        } else if (i == 1) {
+          $$->children_[i] = name_node;
+        } else {
+          $$->children_[i] = $1->children_[i - 1];
+        }
       }
     }
   } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
@@ -9046,14 +9051,19 @@ table_factor %prec LOWER_COMMA
   if ($1->type_ == T_ORG) {
     ParseNode *name_node = NULL;
     make_name_node(name_node, result->malloc_pool_, "full");
-    malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
-    for (int i = 0; i <= $1->num_child_; ++i) {
-      if (i == 0) {
-        $$->children_[i] = $1->children_[i];
-      } else if (i == 1) {
-        $$->children_[i] = name_node;
-      } else {
-        $$->children_[i] = $1->children_[i - 1];
+    $$ = new_node(result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
+    if (OB_UNLIKELY($$ == NULL)) {
+      yyerror(NULL, result, "No more space for malloc\n");
+      YYABORT_NO_MEMORY;
+    } else {
+      for (int i = 0; i <= $1->num_child_; ++i) {
+        if (i == 0) {
+          $$->children_[i] = $1->children_[i];
+        } else if (i == 1) {
+          $$->children_[i] = name_node;
+        } else {
+          $$->children_[i] = $1->children_[i - 1];
+        }
       }
     }
   } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&

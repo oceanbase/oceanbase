@@ -28,15 +28,15 @@ using namespace obmysql;
 using namespace share;
 namespace observer {
 
-ObSyncCmdDriver::ObSyncCmdDriver(const ObGlobalContext& gctx, const ObSqlCtx& ctx, sql::ObSQLSessionInfo& session,
-    ObQueryRetryCtrl& retry_ctrl, ObIMPPacketSender& sender)
+ObSyncCmdDriver::ObSyncCmdDriver(const ObGlobalContext &gctx, const ObSqlCtx &ctx, sql::ObSQLSessionInfo &session,
+    ObQueryRetryCtrl &retry_ctrl, ObIMPPacketSender &sender)
     : ObQueryDriver(gctx, ctx, session, retry_ctrl, sender)
 {}
 
 ObSyncCmdDriver::~ObSyncCmdDriver()
 {}
 
-int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
+int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
   bool process_ok = false;
@@ -77,7 +77,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
       }
     } else {
       OMPKEOF eofp;
-      const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+      const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       uint16_t warning_count = 0;
       if (OB_ISNULL(warnings_buf)) {
         LOG_WARN("can not get thread warnings buffer");
@@ -119,10 +119,10 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
     } else if (!result.is_with_rows() || (sender_.need_send_extra_ok_packet() && !result.has_more_result())) {
       process_ok = true;
       ObOKPParam ok_param;
-      ok_param.message_ = const_cast<char*>(result.get_message());
+      ok_param.message_ = const_cast<char *>(result.get_message());
       ok_param.affected_rows_ = result.get_affected_rows();
       ok_param.lii_ = result.get_last_insert_id_to_client();
-      const ObWarningBuffer* warnings_buf = common::ob_get_tsi_warning_buffer();
+      const ObWarningBuffer *warnings_buf = common::ob_get_tsi_warning_buffer();
       if (OB_ISNULL(warnings_buf)) {
         LOG_WARN("can not get thread warnings buffer");
       } else {
@@ -152,7 +152,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet& result)
 // two aspects:
 // - set session last_schema_version to proxy for part DDL
 // - promote local schema up to target version if last_schema_version is set
-int ObSyncCmdDriver::process_schema_version_changes(const ObMySQLResultSet& result)
+int ObSyncCmdDriver::process_schema_version_changes(const ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
 
@@ -171,11 +171,11 @@ int ObSyncCmdDriver::process_schema_version_changes(const ObMySQLResultSet& resu
     if (OB_SUCC(ret)) {
       // - promote local schema up to target version if last_schema_version is set
       if (result.get_stmt_type() == stmt::T_VARIABLE_SET) {
-        const ObVariableSetStmt* set_stmt = static_cast<const ObVariableSetStmt*>(result.get_cmd());
+        const ObVariableSetStmt *set_stmt = static_cast<const ObVariableSetStmt *>(result.get_cmd());
         if (NULL != set_stmt) {
           ObVariableSetStmt::VariableNamesSetNode tmp_node;  // just for init node
           for (int64_t i = 0; OB_SUCC(ret) && i < set_stmt->get_variables_size(); ++i) {
-            ObVariableSetStmt::VariableNamesSetNode& var_node = tmp_node;
+            ObVariableSetStmt::VariableNamesSetNode &var_node = tmp_node;
             ObString set_var_name(OB_SV_LAST_SCHEMA_VERSION);
             if (OB_FAIL(set_stmt->get_variable_node(i, var_node))) {
               LOG_WARN("fail to get_variable_node", K(i), K(ret));
@@ -218,12 +218,12 @@ int ObSyncCmdDriver::check_and_refresh_schema(uint64_t tenant_id)
   return ret;
 }
 
-int ObSyncCmdDriver::response_query_result(ObMySQLResultSet& result)
+int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
   session_.get_trans_desc().consistency_wait();
 
-  const common::ObNewRow* row = NULL;
+  const common::ObNewRow *row = NULL;
   if (OB_FAIL(result.next_row(row))) {
     LOG_WARN("fail to get next row", K(ret));
   } else if (OB_FAIL(response_query_header(result, result.has_more_result(), true))) {
@@ -232,9 +232,9 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet& result)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else {
-    ObNewRow* tmp_row = const_cast<ObNewRow*>(row);
+    ObNewRow *tmp_row = const_cast<ObNewRow *>(row);
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_row->get_count(); i++) {
-      ObObj& value = tmp_row->get_cell(i);
+      ObObj &value = tmp_row->get_cell(i);
       if (ob_is_string_type(value.get_type()) && CS_TYPE_INVALID != value.get_collation_type()) {
         OZ(convert_string_value_charset(value, result));
       } else if (value.is_clob_locator() && OB_FAIL(convert_lob_value_charset(value, result))) {
@@ -247,14 +247,15 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet& result)
 
     if (OB_SUCC(ret)) {
       MYSQL_PROTOCOL_TYPE protocol_type = result.is_ps_protocol() ? BINARY : TEXT;
-      const ObSQLSessionInfo* tmp_session = result.get_exec_context().get_my_session();
+      const ObSQLSessionInfo *tmp_session = result.get_exec_context().get_my_session();
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(tmp_session);
-      OMPKRow rp(ObSMRow(protocol_type,
+      ObSMRow sm_row(protocol_type,
           *row,
           dtc_params,
           result.get_field_columns(),
           ctx_.schema_guard_,
-          tmp_session->get_effective_tenant_id()));
+          tmp_session->get_effective_tenant_id());
+      OMPKRow rp(sm_row);
       if (OB_FAIL(sender_.response_packet(rp))) {
         LOG_WARN("response packet fail", K(ret), KP(row));
       }

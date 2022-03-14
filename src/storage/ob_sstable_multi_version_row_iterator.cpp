@@ -306,7 +306,7 @@ int ObSSTableMultiVersionRowMultiGetter::inner_open(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.allocator_))) {
+      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to new iterator", K(ret));
       } else if (OB_FAIL(iter_->init(iter_param, access_ctx, table, &multi_version_ranges_))) {
         LOG_WARN("failed to open multi scanner", K(ret));
@@ -431,7 +431,7 @@ int ObSSTableMultiVersionRowMultiScanner::inner_open(
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.allocator_))) {
+      } else if (OB_FAIL(new_iterator<ObSSTableRowMultiScanner>(*access_ctx.stmt_allocator_))) {
         LOG_WARN("failed to new iterator", K(ret));
       } else if (OB_FAIL(iter_->init(iter_param, access_ctx, table, &multi_version_ranges_))) {
         LOG_WARN("failed to open scanner", K(ret));
