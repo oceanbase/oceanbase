@@ -270,21 +270,22 @@ int ObTableMgr::release_table(ObITable* table)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), KP(table));
   } else {
-    int64_t ref = table->dec_ref();
+    const bool is_memtable = table->is_memtable();
+    const ObITable::TableKey key = table->get_key();
+    int64_t minor_merged_time = 0;
+    if (is_memtable) {
+      minor_merged_time = static_cast<ObMemtable *>(table)->get_minor_merged_time();
+    }
+    const int64_t ref = table->dec_ref();
     if (0 == ref) {
-      if (table->is_memtable()) {
-        const int64_t minor_merged_time = static_cast<ObMemtable*>(table)->get_minor_merged_time();
+      if (is_memtable) {
         if (0 < minor_merged_time) {
           const int64_t SLOW_RELEASE_THRESHOLD = 10L * 60L * 1000L * 1000L;  // 10 min
           const int64_t release_time = ObTimeUtility::current_time();
           const int64_t warmup_time = GCONF.minor_warm_up_duration_time;
           if (release_time - minor_merged_time > std::max(SLOW_RELEASE_THRESHOLD, warmup_time * 5)) {
             ObTaskController::get().allow_next_syslog();
-            LOG_WARN("memtable last ref release too late",
-                K(table->get_key()),
-                K(minor_merged_time),
-                K(release_time),
-                K(lbt()));
+            LOG_WARN("memtable last ref release too late", K(key), K(minor_merged_time), K(release_time), K(lbt()));
           }
         }
       }
