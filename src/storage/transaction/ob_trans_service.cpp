@@ -3394,9 +3394,9 @@ OB_INLINE int ObTransService::handle_start_participant_(const ObTransDesc& trans
                   trans_desc.is_can_elr()))) {
             TRANS_LOG(WARN, "init transaction context error", KR(ret), K(partition), K(trans_desc));
           } else {
-            part_ctx->set_session_id(trans_desc.get_session_id());
-            part_ctx->set_proxy_session_id(trans_desc.get_proxy_session_id());
-            part_ctx->set_scheduler(trans_id.get_addr());
+            (void)part_ctx->set_session_id(trans_desc.get_session_id());
+            (void)part_ctx->set_proxy_session_id(trans_desc.get_proxy_session_id());
+            (void)part_ctx->set_scheduler(trans_id.get_addr());
             (void)part_ctx->set_trans_app_trace_id_str(trans_desc.get_trans_app_trace_id_str());
             if (OB_FAIL(part_ctx->start_trans())) {
               TRANS_LOG(WARN, "start participant transaction error", KR(ret), K(partition), K(trans_desc));

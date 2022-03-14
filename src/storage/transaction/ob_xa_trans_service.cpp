@@ -1948,17 +1948,22 @@ int ObTransService::clear_branch_for_xa_terminate_(
   int ret = OB_SUCCESS;
   const int64_t tenant_id = trans_desc.get_tenant_id();
   const ObXATransID xid = trans_desc.get_xid();
-  trans_desc.set_sche_ctx(NULL);
-  trans_desc.set_trans_end();
-  if (need_delete_xa_record && OB_FAIL(delete_xa_all_tightly_branch(tenant_id, xid))) {
-    TRANS_LOG(WARN, "delete all tightly branch from inner table failed", K(ret), K(trans_desc));
+  if (OB_ISNULL(sche_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected, sche_ctx is null", K(ret), K(trans_desc));
+  } else {
+    trans_desc.set_sche_ctx(NULL);
+    trans_desc.set_trans_end();
+    if (need_delete_xa_record && OB_FAIL(delete_xa_all_tightly_branch(tenant_id, xid))) {
+      TRANS_LOG(WARN, "delete all tightly branch from inner table failed", K(ret), K(trans_desc));
+    }
+    if (0 == sche_ctx->dec_and_get_xa_ref_count()) {
+      // this may be repeated exit
+      TRANS_LOG(INFO, "sche ctx going to exit", K(xid));
+      sche_ctx->set_exiting();
+    }
+    (void)sche_trans_ctx_mgr_.revert_trans_ctx(sche_ctx);
   }
-  if (0 == sche_ctx->dec_and_get_xa_ref_count()) {
-    // this may be repeated exit
-    TRANS_LOG(INFO, "sche ctx going to exit", K(xid));
-    sche_ctx->set_exiting();
-  }
-  (void)sche_trans_ctx_mgr_.revert_trans_ctx(sche_ctx);
   TRANS_LOG(INFO, "clear branch for xa trans when terminate", K(xid), K(trans_desc));
   return ret;
 }
