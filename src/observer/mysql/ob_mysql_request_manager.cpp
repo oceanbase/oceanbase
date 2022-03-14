@@ -199,9 +199,12 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData& audit_record,
       }
 
       // push into queue
-      if (OB_SUCC(ret) && !is_sensitive) {
+      if (OB_SUCC(ret)) {
         int64_t req_id = 0;
-        if (OB_FAIL(queue_.push(record, req_id))) {
+        if (is_sensitive) {
+          free(record);
+          record = NULL;
+        } else if (OB_FAIL(queue_.push(record, req_id))) {
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
             SERVER_LOG(WARN, "push into queue failed", K(ret));
           }
