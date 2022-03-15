@@ -476,6 +476,7 @@ public:
   virtual int process_check_rebuild_req(
       const common::ObAddr& server, const uint64_t start_log_id, const int64_t cluster_id) = 0;
   virtual void get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const = 0;
+  virtual void try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts) = 0;
   virtual int set_archive_restore_state(const int16_t archive_restore_state) = 0;
   virtual uint64_t get_max_confirmed_log_id() const = 0;
   virtual bool is_archive_restoring() const = 0;
@@ -700,6 +701,7 @@ public:
   virtual int process_check_rebuild_req(
       const common::ObAddr& server, const uint64_t start_log_id, const int64_t cluster_id) override;
   virtual void get_max_majority_log(uint64_t& log_id, int64_t& log_ts) const override;
+  virtual void try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts) override;
   virtual uint64_t get_max_confirmed_log_id() const override;
 
 public:

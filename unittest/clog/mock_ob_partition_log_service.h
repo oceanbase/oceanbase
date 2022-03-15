@@ -189,6 +189,11 @@ public:
     UNUSED(idc);
     return OB_SUCCESS;
   }
+  virtual void try_update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+  {
+    UNUSED(log_id);
+    UNUSED(log_ts);
+  }
   virtual int fetch_register_server_resp_v2(const common::ObAddr& sender, const bool is_assign_parent_succeed,
       const share::ObCascadMemberList& candidate_list, const int32_t msg_type)
   {

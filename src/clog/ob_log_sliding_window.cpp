@@ -3155,10 +3155,12 @@ int ObLogSlidingWindow::majority_cb(
     ret = OB_ERR_NULL_VALUE;
   } else {
     log_task = static_cast<ObLogTask *>(log_data);
-    try_update_max_majority_log(log_id, log_task->get_submit_timestamp());
     if (OB_FAIL(log_task->submit_log_succ_cb(partition_key_, log_id, batch_committed, batch_first_participant))) {
       CLOG_LOG(WARN, "submit log majority_cb failed", K(ret), K_(partition_key), K(log_id), K(batch_committed));
       ret = OB_SUCCESS;
+    }
+    if (ObLogType::OB_LOG_START_MEMBERSHIP != log_task->get_log_type()) {
+      try_update_max_majority_log(log_id, log_task->get_submit_timestamp());
     }
   }
   if (NULL != ref && OB_SUCCESS != (tmp_ret = sw_.revert(ref))) {

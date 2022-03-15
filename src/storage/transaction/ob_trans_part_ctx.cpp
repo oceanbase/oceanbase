@@ -4779,7 +4779,34 @@ int ObPartTransCtx::replay_start_working_log(const int64_t timestamp, const uint
     TRANS_STAT_ABORT_TRANS_INC(tenant_id_);
   }
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(update_max_majority_log(log_id, timestamp))) {
+      TRANS_LOG(ERROR, "update max majority log failed", K(ret), K(*this));
+    }
+  }
+
   REC_TRANS_TRACE_EXT(tlog_, replay_start_working_log, OB_ID(ret), ret, OB_ID(uref), get_uref());
+
+  return ret;
+}
+
+int ObPartTransCtx::update_max_majority_log(const uint64_t log_id, const int64_t log_ts)
+{
+  int ret = OB_SUCCESS;
+  storage::ObIPartitionGroupGuard pg_guard;
+
+  if (OB_NOT_NULL(pg_)) {
+    if (OB_FAIL(pg_->update_max_majority_log(log_id, log_ts))) {
+      TRANS_LOG(WARN, "update max majority log error", K(*this));
+    }
+  } else if (OB_FAIL(partition_service_->get_partition(self_, pg_guard))) {
+    TRANS_LOG(WARN, "get partition error", KR(ret), "context", *this);
+  } else if (NULL == pg_guard.get_partition_group()) {
+    TRANS_LOG(ERROR, "partition is null, unexpected error", KP(pg_guard.get_partition_group()), "context", *this);
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(pg_guard.get_partition_group()->update_max_majority_log(log_id, log_ts))) {
+    TRANS_LOG(WARN, "update max majority log error", K(*this));
+  }
 
   return ret;
 }
