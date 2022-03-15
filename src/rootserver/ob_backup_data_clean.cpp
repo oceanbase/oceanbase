@@ -2325,7 +2325,7 @@ int ObBackupDataClean::get_need_delete_backup_set_ids(
       }
     }
     if (OB_SUCC(ret)) {
-      FLOG_WARN("succ get need delete backup set ids", K(backup_set_ids));
+      FLOG_INFO("[BACKUP_CLEAN]succ get need delete backup set ids", K(backup_set_ids));
     }
   }
   return ret;
@@ -2466,6 +2466,8 @@ int ObBackupDataClean::get_sys_tenant_prepare_clog_round_and_piece(const share::
                   "backup_piece",
                   "tenant_id",
                   clean_info.tenant_id_,
+                  "round_id",
+                  simple_piece_key.round_id_,
                   "backup_piece_id",
                   simple_piece_key.backup_piece_id_,
                   "copy_id",
@@ -5132,6 +5134,8 @@ int ObBackupDataClean::set_current_backup_dest()
     LOG_WARN("failed to set backup dest", K(ret), K(backup_dest_buf));
   } else if (OB_FAIL(backup_dest_option_.init(false /*is_backup_backup*/))) {
     LOG_WARN("failed to init backup dest option", K(ret));
+  } else {
+    LOG_INFO("[BACKUP_CLEAN]succ set current backup dest", K(backup_dest_buf));
   }
 
   if (OB_FAIL(ret)) {
@@ -5143,6 +5147,8 @@ int ObBackupDataClean::set_current_backup_dest()
     LOG_WARN("failed to set backup dest", K(ret), K(backup_dest_buf));
   } else if (OB_FAIL(backup_backup_dest_option_.init(true /*is_backup_backup*/))) {
     LOG_WARN("failed to init backup dest option", K(ret));
+  } else {
+    LOG_INFO("[BACKUP_CLEAN]succ set current backup backup dest", K(backup_backup_dest_buf));
   }
 
   return ret;
@@ -6115,6 +6121,8 @@ int ObBackupDataClean::get_tenant_delete_piece(const share::ObBackupCleanInfo &c
               "backup_piece",
               "tenant_id",
               clean_info.tenant_id_,
+              "round_id",
+              simple_piece_key.round_id_,
               "backup_piece_id",
               simple_piece_key.backup_piece_id_,
               "copy_id",
@@ -6303,6 +6311,8 @@ int ObBackupDataClean::prepare_delete_backup_piece_and_round(const ObBackupClean
               "backup_piece",
               "tenant_id",
               sys_clean_info.tenant_id_,
+              "round_id",
+              simple_piece_key.round_id_,
               "backup_piece_id",
               simple_piece_key.backup_piece_id_,
               "copy_id",
