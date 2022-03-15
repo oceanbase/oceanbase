@@ -135,12 +135,12 @@ private:
   int obj_increment(
       const common::ObObj &delta,
       const common::ObObj &src,
-      const sql::ObExprResType target_type,
+      const sql::ObExprResType &target_type,
       common::ObObj &target);
   int obj_append(
       const common::ObObj &delta,
       const common::ObObj &src,
-      const sql::ObExprResType target_type,
+      const sql::ObExprResType &target_type,
       common::ObObj &target);
   int int_add_int_with_check(
       int64_t old_int,

@@ -113,22 +113,32 @@ ObQuerySyncMgr::ObQuerySyncMgr() : session_id_(0)
 
 ObQuerySyncMgr &ObQuerySyncMgr::get_instance()
 {
+  int ret = OB_SUCCESS;
   ObQuerySyncMgr *instance = NULL;
   while (OB_UNLIKELY(once_ < 2)) {
     if (ATOMIC_BCAS(&once_, 0, 1)) {
       instance = OB_NEW(ObQuerySyncMgr, ObModIds::TABLE_PROC);
-      if (OB_LIKELY(OB_NOT_NULL(instance))) {
-        if (common::OB_SUCCESS != instance->init()) {
+      if (OB_NOT_NULL(instance)) {
+        if (OB_FAIL(instance->init())) {
           LOG_WARN("failed to init ObQuerySyncMgr instance");
           OB_DELETE(ObQuerySyncMgr, ObModIds::TABLE_PROC, instance);
           instance = NULL;
-          ATOMIC_BCAS(&once_, 1, 0);
+          if (OB_UNLIKELY(!ATOMIC_BCAS(&once_, 1, 0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected error, once_ should be 1", K(ret));
+          }
         } else {
           instance_ = instance;
-          (void)ATOMIC_BCAS(&once_, 1, 2);
+          if (OB_UNLIKELY(!ATOMIC_BCAS(&once_, 1, 2))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("unexpected error, once_ should be 1", K(ret));
+          }
         }
       } else {
-        (void)ATOMIC_BCAS(&once_, 1, 0);
+        if(OB_UNLIKELY(!ATOMIC_BCAS(&once_, 1, 0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected error, once_ should be 1", K(ret));
+        }
       }
     }
   }
@@ -268,7 +278,8 @@ ObTableQuerySyncP::ObTableQuerySyncP(const ObGlobalContext &gctx)
       result_row_count_(0),
       query_session_id_(0),
       allocator_(ObModIds::TABLE_PROC),
-      query_session_(nullptr)
+      query_session_(nullptr),
+      timeout_ts_(0)
 {}
 
 int ObTableQuerySyncP::deserialize()
@@ -562,19 +573,24 @@ int ObTableQuerySyncP::try_process()
 int ObTableQuerySyncP::destory_query_session(bool need_rollback_trans)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(end_trans(need_rollback_trans, req_, timeout_ts_))) {
+    LOG_WARN("failed to end trans", K(ret), K(need_rollback_trans));
+  }
+  int tmp_ret = ret;
   ObQuerySyncMgr::get_instance().get_locker(query_session_id_).lock();
   if (OB_ISNULL(query_session_) || OB_ISNULL(table_service_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null value", K(ret), K(query_session_), K(table_service_ctx_));
+    LOG_WARN("Unexpected null value", K(ret), KP_(query_session), KP_(table_service_ctx));
   } else if (OB_FAIL(ObQuerySyncMgr::get_instance().get_query_session_map()->erase_refactored(query_session_id_))) {
     LOG_WARN("fail to erase query session from query sync mgr", K(ret));
   } else {
     table_service_ctx_->destroy_result_iterator(part_service_);
-    end_trans(need_rollback_trans, req_, timeout_ts_);
     OB_DELETE(ObTableQuerySyncSession, ObModIds::TABLE_PROC, query_session_);
     LOG_DEBUG("destory query session success", K(ret), K(query_session_id_), K(need_rollback_trans));
   }
   ObQuerySyncMgr::get_instance().get_locker(query_session_id_).unlock();
+
+  ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
   return ret;
 }
 

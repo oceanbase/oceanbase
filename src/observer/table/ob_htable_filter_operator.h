@@ -66,7 +66,8 @@ public:
   ObHTableColumnTracker()
       :max_versions_(1),
        min_versions_(0),
-       oldest_stamp_(0)
+       oldest_stamp_(0),
+       tracker_scan_order_(common::ObQueryFlag::ScanOrder::ImplementedOrder)
   {}
   virtual ~ObHTableColumnTracker() {}
   virtual int init(const table::ObHTableFilter &htable_filter, common::ObQueryFlag::ScanOrder &scan_order) = 0;

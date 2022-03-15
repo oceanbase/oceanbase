@@ -936,7 +936,7 @@ int ObTableApiUpdateRowIterator::cons_new_row(const ObTableOperation &table_oper
 int ObTableApiUpdateRowIterator::obj_increment(
     const common::ObObj &delta,
     const common::ObObj &src,
-    const sql::ObExprResType target_type,
+    const sql::ObExprResType &target_type,
     common::ObObj &target)
 {
   int ret = OB_SUCCESS;
@@ -988,7 +988,7 @@ int ObTableApiUpdateRowIterator::obj_increment(
 int ObTableApiUpdateRowIterator::obj_append(
     const common::ObObj &delta,
     const common::ObObj &src,
-    const sql::ObExprResType target_type,
+    const sql::ObExprResType &target_type,
     common::ObObj &target)
 {
   int ret = OB_SUCCESS;
