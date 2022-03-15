@@ -108,9 +108,6 @@ int ObSQLUtils::md5(const ObString& stmt, char* sql_id, int32_t len)
         reinterpret_cast<unsigned char*>(md5_sum_buf));
     if (OB_ISNULL(res)) {
       // MD5() in openssl always return an pointer not NULL, so we need not check return value.
-      // see:
-      // http://www.openssl.org/docs/crypto/md5.html#DESCRIPTION
-      // http://www.openssl.org/docs/crypto/md5.html#RETURN_VALUES
       // Even so, we HAVE TO check it here. You know it.
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("md5 res null pointer", K(ret), K(res));
@@ -3237,10 +3234,7 @@ int ObVirtualTableResultConverter::convert_key_ranges(ObIArray<ObNewRange>& key_
   if (!key_ranges.empty()) {
     common::ObArray<common::ObNewRange> tmp_range;
     OZ(tmp_range.reserve(key_ranges.count()));
-    if (OB_ISNULL(key_types_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("key mapping is null", K(ret));
-    }
+    CK(OB_NOT_NULL(key_types_));
     for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
       ObNewRange new_range;
       new_range.table_id_ = key_ranges.at(i).table_id_;

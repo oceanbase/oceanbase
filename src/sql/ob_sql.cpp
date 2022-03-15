@@ -3066,6 +3066,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObP
           pctx->get_remote_sql_info().use_ps_ = true;
           pctx->get_remote_sql_info().remote_sql_ = pc_ctx.sql_ctx_.cur_sql_;
           pctx->get_remote_sql_info().ps_params_ = &param_store;
+          pctx->get_remote_sql_info().ps_param_cnt_ = static_cast<int32_t>(param_store.count());
         } else if (phy_plan->temp_sql_can_prepare() && pc_ctx.neg_param_index_.is_empty() &&
                    !pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
           LOG_DEBUG("after get plan",
@@ -3079,6 +3080,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session, ObP
           pctx->get_remote_sql_info().use_ps_ = true;
           pctx->get_remote_sql_info().remote_sql_ = phy_plan->get_constructed_sql();
           pctx->get_remote_sql_info().ps_params_ = &param_store;
+          pctx->get_remote_sql_info().ps_param_cnt_ = static_cast<int32_t>(param_store.count());
         } else {
           param_store.reset();
           pctx->get_remote_sql_info().use_ps_ = false;
