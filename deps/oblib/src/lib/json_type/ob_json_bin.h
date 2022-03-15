@@ -412,7 +412,7 @@ private:
   int deserialize_json_array_v0(const char *data, uint64_t length, ObJsonArray *array);
   inline int deserialize_json_array(const char *data, uint64_t length, ObJsonArray *array, ObJBVerType vertype);
 
-  int set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type);
+  int set_curr_by_type(int64_t new_pos, uint64_t val_offset, uint8_t type, uint8_t entry_size = 0);
   void parse_obj_header(const char *data, uint64_t &offset, uint8_t &node_type,
                         uint8_t &type, uint8_t& obj_size_type, uint64_t &count, uint64_t &obj_size) const;
   
@@ -513,7 +513,7 @@ public:
   static uint8_t get_var_type(uint64_t var);
   static int read_var(const char *data, uint8_t type, int64_t *var);
   static uint64_t var_int2uint(int64_t var);
-  static int64_t var_uint2int(uint64_t var);
+  static int64_t var_uint2int(uint64_t var, uint8_t entry_size = 0);
   static uint8_t get_var_type(int64_t var);
 };
 
