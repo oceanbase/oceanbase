@@ -9321,7 +9321,7 @@ int ObTransService::revert_store_ctx_(const ObStandaloneStmtDesc& desc, const Ob
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!desc.is_valid() || !pg_key.is_valid() || OB_ISNULL(part_mgr))) {
+  if (OB_UNLIKELY(!desc.is_valid() || !pg_key.is_valid())) {
     TRANS_LOG(WARN, "invalid argument", K(desc), K(pg_key));
     ret = OB_INVALID_ARGUMENT;
   } else {

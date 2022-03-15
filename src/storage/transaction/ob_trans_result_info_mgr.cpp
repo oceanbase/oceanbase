@@ -87,6 +87,7 @@ void ObTransResultInfo::reset()
   state_ = ObTransResultState::INVALID;
   commit_version_ = 0;
   min_log_id_ = UINT64_MAX;
+  min_log_ts_ = INT64_MAX;
   trans_id_.reset();
   next_ = NULL;
   prev_ = NULL;
