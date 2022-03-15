@@ -2299,6 +2299,12 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id, const ObString& na
       }
 #endif
     }
+    else if (0 == name.case_compare("datafile_size")) {
+      if(OB_FAIL(OB_STORE_FILE.validate_datafile_size(value.ptr()))){
+        ret = OB_INVALID_CONFIG;
+        LOG_WARN("datafile_size is not valid", K(ret));
+      }
+    }
   }
   return ret;
 }

@@ -361,6 +361,7 @@ public:
   int drop_disk(const common::ObString& diskgroup_name, const common::ObString& alias_name);
   int is_free_block(const int64_t block_index, bool& is_free);
   int resize_file(const int64_t new_data_file_size, const int64_t new_data_file_disk_percentage);
+  int validate_datafile_size(const char* config_data_file_size);
 
 private:
   friend class ObStoreFileGCTask;

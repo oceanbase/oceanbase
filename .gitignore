@@ -106,3 +106,7 @@ cmake-build-release
 
 ###### OSX dir files
 .DS_Store
+
+###### Debug bin and configuration
+tools/deploy/bin
+tools/deploy/config2.py
